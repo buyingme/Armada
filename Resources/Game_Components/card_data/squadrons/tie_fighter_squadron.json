@@ -1,0 +1,31 @@
+{
+  "_comment": "Pre-filled from Rules Reference v1.5.0 — verify against card image",
+  "_source": "Resources/Game_Components/Squadrons/Imperial/squadcard_tie-fighter-squadron.png",
+  "_status": "VERIFIED",
+
+  "squadron_name": "TIE Fighter Squadron",
+  "faction": "GALACTIC_EMPIRE",
+  "point_cost": 8,
+  "hull": 3,
+  "speed": 4,
+
+  "anti_squadron_armament": {
+    "BLUE": 3
+  },
+
+  "battery_armament": {
+    "BLUE": 1
+  },
+
+  "keywords": [
+    { "name": "Swarm" }
+  ],
+
+  "keyword_reminder_text": {
+    "Swarm": "While attacking a squadron engaged with another squadron, you may reroll 1 die."
+  },
+
+  "ability_text": "",
+  "is_unique": false,
+  "defense_tokens": []
+}

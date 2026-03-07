@@ -1,0 +1,33 @@
+{
+  "_comment": "Pre-filled from Rules Reference v1.5.0 — verify against card image",
+  "_source": "Resources/Game_Components/Squadrons/Rebel/squadcard_x-wing-squadron.png",
+  "_status": "VERIFIED",
+
+  "squadron_name": "X-wing Squadron",
+  "faction": "REBEL_ALLIANCE",
+  "point_cost": 13,
+  "hull": 5,
+  "speed": 3,
+
+  "anti_squadron_armament": {
+    "BLUE": 4
+  },
+
+  "battery_armament": {
+    "RED": 1
+  },
+
+  "keywords": [
+    { "name": "Bomber" },
+    { "name": "Escort" }
+  ],
+
+  "keyword_reminder_text": {
+    "Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+    "Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack."
+  },
+
+  "ability_text": "",
+  "is_unique": false,
+  "defense_tokens": []
+}

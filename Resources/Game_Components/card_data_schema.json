@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Star Wars: Armada Card Data Schemas",
+  "description": "Schemas for extracting ship and squadron card data from card images. These map directly to the Godot Resource classes ShipData and SquadronData.",
+
+  "definitions": {
+
+    "faction": {
+      "type": "string",
+      "enum": ["REBEL_ALLIANCE", "GALACTIC_EMPIRE"],
+      "description": "Rebel cards have the Rebel Alliance starbird icon. Imperial cards have the Imperial crest."
+    },
+
+    "ship_size": {
+      "type": "string",
+      "enum": ["SMALL", "MEDIUM", "LARGE", "HUGE"],
+      "description": "Small ships have a small base. Medium ships (e.g., Victory-class) have a medium base. Large ships have a large base."
+    },
+
+    "dice_color": {
+      "type": "string",
+      "enum": ["RED", "BLUE", "BLACK"],
+      "description": "Colors of attack dice shown as colored symbols on the card."
+    },
+
+    "defense_token": {
+      "type": "string",
+      "enum": ["EVADE", "REDIRECT", "BRACE", "SCATTER", "CONTAIN", "SALVO"],
+      "description": "Defense token types shown as circular icons on the card. Evade=curved arrow, Redirect=angled arrows, Brace=angular bracket, Scatter=starburst, Contain=circle, Salvo=three arrows."
+    },
+
+    "upgrade_slot": {
+      "type": "string",
+      "enum": [
+        "COMMANDER", "TITLE", "OFFICER", "WEAPONS_TEAM", "SUPPORT_TEAM",
+        "OFFENSIVE_RETROFIT", "DEFENSIVE_RETROFIT", "ORDNANCE", "ION_CANNONS",
+        "TURBOLASERS", "FLEET_COMMAND", "FLEET_SUPPORT", "EXPERIMENTAL_RETROFIT",
+        "SUPER_WEAPON"
+      ],
+      "description": "Upgrade slot icons shown in the upgrade bar at the bottom of the ship card."
+    },
+
+    "dice_pool": {
+      "type": "object",
+      "description": "A pool of dice expressed as count per color. Only include colors with count > 0.",
+      "properties": {
+        "RED":   { "type": "integer", "minimum": 0 },
+        "BLUE":  { "type": "integer", "minimum": 0 },
+        "BLACK": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "yaw_row": {
+      "type": "array",
+      "description": "Yaw values for one speed level. Index 0 = first joint (closest to ship), index 1 = second joint, etc. Each value is the max number of yaw 'clicks' (I or II) allowed at that joint. Use 0 if no yaw, 1 for one tick (I), 2 for two ticks (II). A '-' or empty on the card means 0.",
+      "items": { "type": "integer", "minimum": 0, "maximum": 2 }
+    },
+
+    "ship_card": {
+      "type": "object",
+      "required": [
+        "ship_name", "faction", "ship_size", "point_cost", "hull",
+        "command_value", "squadron_value", "engineering_value",
+        "max_speed", "shields", "battery_armament", "anti_squadron_armament",
+        "defense_tokens", "upgrade_slots", "navigation_chart"
+      ],
+      "properties": {
+        "ship_name": {
+          "type": "string",
+          "description": "Full display name, e.g. 'CR90 Corvette A', 'Victory II-class Star Destroyer'"
+        },
+        "faction": { "$ref": "#/definitions/faction" },
+        "ship_size": { "$ref": "#/definitions/ship_size" },
+        "point_cost": {
+          "type": "integer",
+          "description": "Fleet point cost shown in the lower-right corner of the card."
+        },
+        "hull": {
+          "type": "integer",
+          "description": "Hull value (large number, typically in the lower-center of the card)."
+        },
+        "command_value": {
+          "type": "integer",
+          "description": "Command value (number of command dials in command stack). Shown on the left stat column."
+        },
+        "squadron_value": {
+          "type": "integer",
+          "description": "Squadron value (how many squadrons this ship can activate). Shown on the left stat column."
+        },
+        "engineering_value": {
+          "type": "integer",
+          "description": "Engineering value (repair points). Shown on the left stat column."
+        },
+        "max_speed": {
+          "type": "integer",
+          "description": "Maximum speed from the speed chart. The highest speed number shown."
+        },
+        "shields": {
+          "type": "object",
+          "description": "Shield values per hull zone, shown as blue numbers around the ship silhouette on the card.",
+          "required": ["FRONT", "LEFT", "RIGHT", "REAR"],
+          "properties": {
+            "FRONT": { "type": "integer", "minimum": 0 },
+            "LEFT":  { "type": "integer", "minimum": 0 },
+            "RIGHT": { "type": "integer", "minimum": 0 },
+            "REAR":  { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "battery_armament": {
+          "type": "object",
+          "description": "Dice pool for each hull zone, shown as colored dice icons in each arc on the card.",
+          "required": ["FRONT", "LEFT", "RIGHT", "REAR"],
+          "properties": {
+            "FRONT": { "$ref": "#/definitions/dice_pool" },
+            "LEFT":  { "$ref": "#/definitions/dice_pool" },
+            "RIGHT": { "$ref": "#/definitions/dice_pool" },
+            "REAR":  { "$ref": "#/definitions/dice_pool" }
+          },
+          "additionalProperties": false
+        },
+        "anti_squadron_armament": {
+          "$ref": "#/definitions/dice_pool",
+          "description": "Dice used when attacking squadrons, shown in a separate section on the card (usually near the hull zone arcs)."
+        },
+        "defense_tokens": {
+          "type": "array",
+          "description": "List of defense token types. Include duplicates if the ship has multiple of the same type. E.g., ['EVADE', 'REDIRECT', 'REDIRECT'] means 1 evade + 2 redirects.",
+          "items": { "$ref": "#/definitions/defense_token" }
+        },
+        "upgrade_slots": {
+          "type": "array",
+          "description": "Upgrade slot icons shown in the upgrade bar at the bottom of the card, listed left to right.",
+          "items": { "$ref": "#/definitions/upgrade_slot" }
+        },
+        "navigation_chart": {
+          "type": "array",
+          "description": "Speed chart / navigation chart. One entry per speed level (index 0 = speed 1, index 1 = speed 2, etc.). Each entry is a yaw_row array showing max yaw at each joint for that speed.",
+          "items": { "$ref": "#/definitions/yaw_row" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "squadron_keyword": {
+      "type": "object",
+      "description": "A keyword ability on a squadron card. Keywords with a numeric value (Counter X, Snipe X, etc.) include that value. The rules_text is the full game rule from the Rules Reference (not the reminder text on the card).",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "Adept", "AI: Battery", "AI: Anti-Squadron", "Assault",
+            "Bomber", "Cloak", "Counter", "Dodge", "Escort", "Grit",
+            "Heavy", "Intel", "Relay", "Rogue", "Scout", "Screen",
+            "Snipe", "Strategic", "Swarm"
+          ],
+          "description": "The keyword name exactly as listed in the Rules Reference."
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Numeric value for keywords that have one (Counter X, Snipe X, Relay X, Adept X, Dodge X, AI X, Screen). Omit for keywords without a value (Bomber, Escort, etc.)."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "squadron_card": {
+      "type": "object",
+      "required": [
+        "squadron_name", "faction", "point_cost", "hull", "speed",
+        "anti_squadron_armament", "battery_armament", "keywords",
+        "is_unique", "defense_tokens"
+      ],
+      "properties": {
+        "squadron_name": {
+          "type": "string",
+          "description": "Full display name, e.g. 'X-wing Squadron', 'TIE Fighter Squadron'. Include 'Squadron' suffix for generic types."
+        },
+        "faction": { "$ref": "#/definitions/faction" },
+        "point_cost": {
+          "type": "integer",
+          "description": "Fleet point cost per squadron, shown in the lower-right corner."
+        },
+        "hull": {
+          "type": "integer",
+          "description": "Hull points, shown on the card."
+        },
+        "speed": {
+          "type": "integer",
+          "description": "Squadron speed value."
+        },
+        "anti_squadron_armament": {
+          "$ref": "#/definitions/dice_pool",
+          "description": "Dice used when attacking other squadrons."
+        },
+        "battery_armament": {
+          "$ref": "#/definitions/dice_pool",
+          "description": "Dice used when attacking ships (shown separately from anti-squadron dice, often with a different icon section)."
+        },
+        "keywords": {
+          "type": "array",
+          "description": "Keyword abilities as structured objects. Each keyword has a name and optional numeric value.",
+          "items": { "$ref": "#/definitions/squadron_keyword" }
+        },
+        "keyword_reminder_text": {
+          "type": "object",
+          "description": "The reminder text printed on the card for each keyword, keyed by keyword name. This text is displayed to the player in-game. Extract verbatim from the card.",
+          "additionalProperties": { "type": "string" }
+        },
+        "ability_text": {
+          "type": "string",
+          "description": "Special ability text for unique squadrons, beyond their keywords. Empty string for generic squadrons."
+        },
+        "is_unique": {
+          "type": "boolean",
+          "description": "True if the card has a bullet (•) before the name, indicating a unique/named squadron."
+        },
+        "defense_tokens": {
+          "type": "array",
+          "description": "Defense tokens (usually only for unique squadrons). Empty array for generic squadrons.",
+          "items": { "$ref": "#/definitions/defense_token" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

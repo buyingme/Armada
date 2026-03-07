@@ -1,0 +1,50 @@
+{
+"_comment": "Extracted from provided card image on 2026-03-07",
+"_source": "shipcard_victory-ii-class-star-destroyer.jpg",
+"_status": "VERIFIED",
+
+"ship_name": "Victory II-class Star Destroyer",
+"faction": "GALACTIC_EMPIRE",
+"ship_size": "MEDIUM",
+"point_cost": 85,
+
+"hull": 8,
+"command_value": 3,
+"squadron_value": 3,
+"engineering_value": 4,
+"max_speed": 2,
+
+"shields": {
+    "FRONT": 3,
+    "LEFT": 3,
+    "RIGHT": 3,
+    "REAR": 1
+},
+
+"battery_armament": {
+    "FRONT": { "RED": 3, "BLUE": 3 },
+    "LEFT":  { "RED": 2, "BLUE": 1 },
+    "RIGHT": { "RED": 2, "BLUE": 1 },
+    "REAR":  { "RED": 2 }
+},
+
+"anti_squadron_armament": {
+    "BLUE": 1
+},
+
+"defense_tokens": ["BRACE", "REDIRECT", "REDIRECT"],
+
+"upgrade_slots": [
+    "TITLE",
+    "OFFICER",
+    "WEAPONS_TEAM",
+    "OFFENSIVE_RETROFIT",
+    "ION_CANNONS",
+    "TURBOLASERS"
+],
+
+"navigation_chart": [
+    [1],
+    [0, 1]
+]
+}

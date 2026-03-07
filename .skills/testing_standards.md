@@ -2,8 +2,8 @@
 
 ## Framework
 
-- **GUT** (Godot Unit Testing) v9.3.0
-- Test runner: Godot editor panel or CLI
+- **GUT** (Godot Unit Testing) v9.6.0
+- Test runner: Godot editor panel or CLI (`scripts/quality_check.sh` runs all checks)
 - All test files extend `GutTest`
 
 ## Test Organization

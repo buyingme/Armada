@@ -1,0 +1,49 @@
+# EditorConfig — Star Wars: Armada Digital Edition
+# https://editorconfig.org
+
+root = true
+
+# Default for all files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = tab
+indent_size = 4
+
+# GDScript — Godot defaults to tabs
+[*.gd]
+indent_style = tab
+indent_size = 4
+
+# Scene and resource files
+[*.{tscn,tres}]
+indent_style = tab
+indent_size = 4
+
+# JSON — spaces for readability
+[*.json]
+indent_style = space
+indent_size = 2
+
+# YAML (GitHub Actions, configs)
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Markdown
+[*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+
+# Shell scripts
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# Godot project file
+[project.godot]
+indent_style = tab
+indent_size = 4

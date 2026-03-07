@@ -83,7 +83,15 @@ static func create_test_squadron() -> SquadronData:
 	squad.speed = 3
 	squad.anti_squadron_armament = {Constants.DiceColor.BLUE: 4}
 	squad.battery_armament = {Constants.DiceColor.RED: 1}
-	squad.keywords = ["Bomber", "Escort"]
+	squad.keywords = [
+		{"name": "Bomber"},
+		{"name": "Escort"},
+	]
+	squad.keyword_reminder_text = {
+		"Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+		"Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack.",
+	}
+	squad.ability_text = ""
 	squad.is_unique = false
 	return squad
 

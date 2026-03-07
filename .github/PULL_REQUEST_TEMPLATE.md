@@ -42,5 +42,5 @@
 - [ ] No hardcoded values — uses Constants
 - [ ] Cross-system communication uses EventBus signals
 - [ ] Core logic is scene-tree independent
-- [ ] No `print()` statements — uses Logger
+- [ ] No `print()` statements — uses GameLogger
 - [ ] No new Godot console warnings or errors

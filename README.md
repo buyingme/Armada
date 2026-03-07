@@ -37,7 +37,7 @@ Armada/
 │   ├── models/             # Data resources (ShipData, SquadronData, etc.)
 │   ├── scenes/             # Visual scenes with controllers
 │   ├── ui/                 # Reusable UI components
-│   └── utils/              # Utilities (Logger, helpers)
+│   └── utils/              # Utilities (GameLogger, helpers)
 ├── tests/                  # GUT tests
 │   ├── unit/               # Unit tests
 │   ├── integration/        # Integration tests

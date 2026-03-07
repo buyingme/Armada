@@ -112,4 +112,4 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
 - [ ] Signals used for cross-system communication (via EventBus)
 - [ ] Core logic doesn't depend on scene tree
 - [ ] Tests cover happy path and edge cases
-- [ ] No `print()` statements (use Logger instead)
+- [ ] No `print()` statements (use GameLogger instead)

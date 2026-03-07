@@ -1,8 +1,8 @@
-## Logger
+## Game Logger
 ##
 ## Centralized logging utility with severity levels.
 ## Provides consistent, formatted log output across the project.
-class_name Logger
+class_name GameLogger
 extends RefCounted
 
 

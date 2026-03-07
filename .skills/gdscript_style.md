@@ -82,7 +82,7 @@ signal ship_damaged(ship: Node, damage_amount: int, hull_zone: Constants.HullZon
 - Use `push_error()` for runtime errors that should be logged
 - Use `push_warning()` for suspicious but non-fatal conditions
 - Use `assert()` for programmer errors (debug-only checks)
-- **Never** use bare `print()` — use the `Logger` utility
+- **Never** use bare `print()` — use the `GameLogger` utility
 
 ## Code Organization Within Files
 
@@ -104,7 +104,7 @@ Order within a script file:
 
 ## Banned Patterns
 
-- ❌ `print()` — use `Logger` instead
+- ❌ `print()` — use `GameLogger` instead
 - ❌ Untyped function signatures
 - ❌ Direct cross-system references — use `EventBus` signals
 - ❌ Magic numbers — define in `Constants`

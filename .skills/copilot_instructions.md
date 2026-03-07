@@ -28,7 +28,7 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 - Use **static typing** for ALL parameters, return types, and variables
 - Add `## Doc comments` for every public class, method, signal, and export
 - Use `Constants` enums — never raw strings or magic numbers for game concepts
-- Use the `Logger` utility — never `print()`
+- Use the `GameLogger` utility — never `print()`
 - Follow the file ordering convention in `.skills/gdscript_style.md`
 - Keep functions under 30 lines
 - Use early returns to avoid deep nesting
@@ -171,7 +171,7 @@ var damage := _calculate_total_damage(dice_results)
 |---------|-----------|
 | Using `Node` for logic classes | Use `RefCounted` in `src/core/` |
 | Forgetting type annotations | Add types to ALL declarations |
-| Using `print()` for debugging | Use `Logger.debug()` |
+| Using `print()` for debugging | Use `GameLogger.debug()` |
 | Hardcoding game values | Use `Constants` |
 | Cross-system direct references | Use `EventBus` signals |
 | Writing tests without assertion messages | Always add description parameter |

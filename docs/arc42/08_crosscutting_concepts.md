@@ -18,7 +18,7 @@ Game content (ships, squadrons, upgrades, objectives) is defined as **Godot Reso
 
 ## 8.3 Logging
 
-A centralized `Logger` utility provides:
+A centralized `GameLogger` utility provides:
 
 - Severity levels: DEBUG, INFO, WARNING, ERROR
 - Context tagging (which system is logging)
@@ -71,7 +71,7 @@ src/
 ├── models/         # Data resources (ShipData, SquadronData, etc.)
 ├── scenes/         # Visual scenes (.tscn + .gd controllers)
 ├── ui/             # Reusable UI components
-└── utils/          # Utility classes (Logger, helpers)
+└── utils/          # Utility classes (GameLogger, helpers)
 ```
 
 **Key principle:** Core game logic (`src/core/`) must not depend on scene/UI code.

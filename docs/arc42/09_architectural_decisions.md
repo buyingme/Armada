@@ -84,3 +84,46 @@ Each decision follows this structure:
   - (+) Can be created programmatically or in the editor
   - (-) Resource format is Godot-specific (not portable JSON)
   - (-) For data import, may need JSON → Resource conversion layer
+
+---
+
+## ADR-006: 2D Top-Down Rendering
+
+- **Status:** Accepted
+- **Date:** 2026-03-07
+- **Context:** The tabletop game is played on a flat surface. Need to decide between 2D and 3D rendering.
+- **Decision:** Use 2D top-down rendering, faithful to the tabletop perspective.
+- **Consequences:**
+  - (+) Simpler to implement, faster development
+  - (+) Natural match for the tabletop game's viewing angle
+  - (+) Better performance, lower complexity
+  - (-) Less visually cinematic than a 3D approach
+  - (-) May limit future visual enhancements
+
+---
+
+## ADR-007: Network Multiplayer Architecture from Start
+
+- **Status:** Accepted
+- **Date:** 2026-03-07
+- **Context:** The game needs multiplayer support. Building networking later often requires major refactors.
+- **Decision:** Design the architecture with network multiplayer in mind from day one. Use authoritative server model with client-server separation.
+- **Consequences:**
+  - (+) Avoids costly refactoring later
+  - (+) Cleaner state management (everything must be serializable)
+  - (+) Enables both local and remote play with same code paths
+  - (-) More upfront architecture complexity
+  - (-) Slower initial development for single-player scenarios
+
+---
+
+## ADR-008: Initial Scope — Rebels and Empire
+
+- **Status:** Accepted
+- **Date:** 2026-03-07
+- **Context:** The game has 4 factions. Need to scope the initial implementation.
+- **Decision:** Start with Rebel Alliance and Galactic Empire (core box factions). Republic and Separatists added later.
+- **Consequences:**
+  - (+) Smaller scope, faster iteration
+  - (+) Core box has the most established rules and reference material
+  - (-) Must ensure architecture supports easy faction addition later

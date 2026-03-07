@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.5.1
+          use-dotnet: false
+
+      - name: Import project
+        run: godot --headless --import 2>&1 || true
+        timeout-minutes: 2
+
+      - name: Run unit tests
+        run: |
+          godot --headless -s addons/gut/gut_cmdln.gd \
+            -gdir=res://tests/unit \
+            -ginclude_subdirs \
+            -gexit \
+            -glog=2 \
+            -gjunit_xml_file=results/unit_tests.xml
+        timeout-minutes: 5
+
+      - name: Run integration tests
+        run: |
+          godot --headless -s addons/gut/gut_cmdln.gd \
+            -gdir=res://tests/integration \
+            -ginclude_subdirs \
+            -gexit \
+            -glog=2 \
+            -gjunit_xml_file=results/integration_tests.xml
+        timeout-minutes: 10
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: results/

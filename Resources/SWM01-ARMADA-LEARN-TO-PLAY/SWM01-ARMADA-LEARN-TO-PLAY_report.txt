@@ -1,0 +1,12 @@
+=== Validation Report: SWM01-ARMADA-LEARN-TO-PLAY ===
+  word_count: 17482
+  heading_count: 79
+  image_count: 126
+  table_count: 0
+  figures_with_captions: 0
+  figures_with_descriptions: 0
+  WARNING: Heading level skipped: h1 → h3 at 'PLAYING THE GAME'
+  WARNING: Heading level skipped: h1 → h4 at 'Move Ship'
+  WARNING: Heading level skipped: h1 → h4 at 'UPGRADE CARDS'
+  WARNING: No figure captions found in the document.
+  STATUS: 4 warning(s)

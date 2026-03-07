@@ -1,0 +1,37 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific ignores
+*.translation
+
+# Imported textures
+.import/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build outputs
+export/
+build/
+
+# Python virtual environments (for tooling)
+venv/
+.env/
+
+# Test results
+tests/results/
+*.log
+
+# Temporary files
+tmp/
+temp/

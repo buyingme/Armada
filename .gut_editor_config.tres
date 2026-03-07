@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="GutSettingsResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/gut/gut_settings_resource.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+_directory1 = "res://tests/unit"
+_directory2 = "res://tests/integration"
+_directory3 = ""
+_directory4 = ""
+_directory5 = ""
+_directory6 = ""
+_prefix = "test_"
+_suffix = ".gd"
+_log_level = 1
+_yield_between_tests = true
+_should_maximize = false
+_compact_mode = false
+_opacity = 100
+_font_name = 0
+_font_size = 16
+_font_color = Color(0.76, 0.76, 0.76, 1)
+_bg_color = Color(0.15, 0.15, 0.15, 1)
+_include_subdirs = true
+_double_strategy = 1
+_pre_run_script = ""
+_post_run_script = ""
+_color_output = true
+_junit_xml_file = ""
+_junit_xml_timestamp = false
+_paint_after = 0.1

@@ -1,0 +1,34 @@
+=== Validation Report: SWM-RULES-REFERENCE-GUIDE-150 ===
+  word_count: 34297
+  heading_count: 337
+  image_count: 186
+  table_count: 55
+  figures_with_captions: 0
+  figures_with_descriptions: 0
+  WARNING: Heading level skipped: h1 → h4 at 'Summary of Changes'
+  WARNING: Heading level skipped: h1 → h4 at 'GLOSSARY...................................... PAG'
+  WARNING: Heading level skipped: h1 → h4 at 'ACTIVATION'
+  WARNING: Heading level skipped: h1 → h4 at 'HULL ZONES'
+  WARNING: Heading level skipped: h1 → h4 at 'IGNITION [RANGE] KEYWORD'
+  WARNING: Heading level skipped: h1 → h4 at 'INITIATIVE'
+  WARNING: Heading level skipped: h1 → h4 at 'OVERLAPPING'
+  WARNING: Heading level skipped: h1 → h4 at 'UPGRADE CARD MAJOR ERRATA'
+  WARNING: Heading level skipped: h1 → h3 at '\*\*•\*\*commAnder sAto While a friendly ship is a'
+  WARNING: Heading level skipped: h1 → h4 at 'MON KARREN'
+  WARNING: Heading level skipped: h1 → h4 at 'COLONEL JENDON'
+  WARNING: Heading level skipped: h1 → h4 at 'MAJOR RHYMER This squadron's offo'
+  WARNING: Heading level skipped: h1 → h4 at 'ARMED STATION'
+  WARNING: Heading level skipped: h1 → h4 at 'Size Class, p.11'
+  WARNING: Heading level skipped: h1 → h4 at 'OPEN, DERIVED, AND HIDDEN INFORMATION'
+  WARNING: Heading level skipped: h1 → h4 at 'ACTIVATIONS'
+  WARNING: Heading level skipped: h1 → h4 at 'BUILD FLEETS'
+  WARNING: Heading level skipped: h1 → h4 at 'NEW OBSTACLES'
+  WARNING: Heading level skipped: h1 → h4 at 'DAMAGE CARDS'
+  WARNING: Heading level skipped: h1 → h4 at '*Defiance*'
+  WARNING: Heading level skipped: h1 → h4 at 'G-8 Experimental Projector'
+  WARNING: Heading level skipped: h1 → h4 at 'Rapid Launch Bays'
+  WARNING: Heading level skipped: h1 → h3 at 'slAVed turrets You cannot attack more than once pe'
+  WARNING: Heading level skipped: h1 → h4 at 'UNLIMITED ROUNDS'
+  WARNING: Heading level skipped: h1 → h4 at 'GAME ROUND'
+  WARNING: No figure captions found in the document.
+  STATUS: 26 warning(s)

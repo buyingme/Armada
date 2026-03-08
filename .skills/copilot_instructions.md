@@ -40,6 +40,33 @@ The implementation plan at `docs/implementation_plan.md` is the authoritative pr
 3. Add `**Status:** Complete — committed \`<hash>\`` under the header
 4. Update the tests-delivered line
 5. Include `docs/implementation_plan.md` in the phase commit
+6. **Update `docs/test_plan_manual.md`** — add or update the section for this phase (see below)
+
+### Manual Test Plan — What to Add After Each Phase
+
+`docs/test_plan_manual.md` is the canonical manual QA checklist. After completing a phase, append a new section (or update the existing one) following these rules:
+
+- **Format:** `## Phase N — <Name>` header, then one `### MT-N.X` block per test scenario.
+- **One table per scenario:** columns = Step | Action | Expected.
+- **Focus on what automated tests cannot cover:** visual output, input handling, rendering, layout, interaction. Skip anything already verified by GUT.
+- **Be specific:** state exact expected values (colours, counts, pixel positions, key names) rather than vague outcomes like "it looks correct".
+- **Keep it short:** 3–8 scenarios per phase is the target. More is not better.
+- **Include a temp-code pattern** when testing requires triggering an event or signal that has no UI yet — and explicitly note to remove it before committing.
+- **Update the Regression Checklist** at the bottom of the file with the new pass criteria and test count.
+- **Update the "Last updated" footer** line with the phase, commit hash and test count.
+
+**MT scenario template:**
+
+```markdown
+### MT-N.X — Short description of what is being tested
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | [Concrete thing to do] | [Concrete thing to see/measure] |
+| 2 | ... | ... |
+
+**Pass criteria:** [One-sentence summary of what "pass" means.]
+```
 
 ### When Starting a Phase
 

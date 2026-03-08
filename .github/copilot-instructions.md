@@ -108,8 +108,9 @@ GUT **silently drops test files that contain parse errors** — you see fewer te
 
 When completing a phase task or full phase:
 - Update `docs/implementation_plan.md` status markers (🔄 → ✅, add commit hash and test count)
-- Include `docs/implementation_plan.md` in the phase commit
-- See `.skills/copilot_instructions.md` for the exact update procedure
+- Update `docs/test_plan_manual.md` — add or update the section for the completed phase
+- Include both docs files in the phase commit
+- See `.skills/copilot_instructions.md` for the exact update procedure and the MT scenario template
 
 ## Code Generation Workflow
 
@@ -125,6 +126,7 @@ When asked to implement a feature or fix a bug:
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
    ```
 7. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
+8. **Update manual test plan** — Add phase section to `docs/test_plan_manual.md` (visual/interaction checks only — skip anything GUT already covers)
 
 ## Architecture Quick Reference
 

@@ -1,0 +1,20 @@
+{
+    "_comment": "Pixel measurements taken from range_ruler_range.png at working resolution.",
+    "_measured_by": "User (manual measurement, session 2025)",
+    "ruler_total_length_px": 720,
+    "range_bands": {
+        "close": {
+            "max_px": 292,
+            "label": "Close"
+        },
+        "medium": {
+            "max_px": 442,
+            "label": "Medium"
+        },
+        "long": {
+            "max_px": 720,
+            "label": "Long"
+        }
+    },
+    "distance_bands_px": [181, 294, 434, 577, 720]
+}

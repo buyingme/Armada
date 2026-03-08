@@ -123,7 +123,14 @@ src/
 
 ## Game Data
 
-- Ship/squadron card data: `Resources/Game_Components/card_data/`
+- Ship card data + art: `Resources/Game_Components/ships/`
+- Squadron card data + art: `Resources/Game_Components/squadrons/`
+- Defense tokens: `Resources/Game_Components/defense_tokens/`
+- Command tokens: `Resources/Game_Components/command_tokens/`
+- Dice faces: `Resources/Game_Components/dice/`
+- Maps: `Resources/Game_Components/maps/`
+- Range ruler: `Resources/Game_Components/tools/`
+- Scale calibration: `Resources/Game_Components/scale/scale_config.json`
 - Schema: `Resources/Game_Components/card_data_schema.json`
 - Rules Reference: `Resources/SWM-RULES-REFERENCE-GUIDE-150/`
 - Learn to Play: `Resources/SWM01-ARMADA-LEARN-TO-PLAY/`

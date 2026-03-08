@@ -9,9 +9,9 @@ extends GutTest
 var _test_config: Dictionary = {
 	"ruler_total_length_px": 720,
 	"range_bands": {
-		"close": { "max_px": 292 },
-		"medium": { "max_px": 442 },
-		"long": { "max_px": 720 },
+		"close": {"max_px": 292},
+		"medium": {"max_px": 442},
+		"long": {"max_px": 720},
 	},
 	"distance_bands_px": [181, 294, 434, 577, 720],
 }
@@ -46,7 +46,7 @@ func test_initialise_from_dict_sets_is_initialised() -> void:
 
 
 func test_initialise_from_dict_with_zero_ruler_stays_uninitialised() -> void:
-	var bad_config: Dictionary = { "ruler_total_length_px": 0 }
+	var bad_config: Dictionary = {"ruler_total_length_px": 0}
 	var script: GDScript = load("res://src/autoload/game_scale.gd")
 	var s: Node = script.new()
 	s.initialise_from_dict(bad_config)

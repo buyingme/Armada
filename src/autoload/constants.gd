@@ -70,9 +70,9 @@ enum DefenseToken {
 ## --- Defense Token States ---
 
 enum DefenseTokenState {
-	READY,       ## Green - available to use
-	EXHAUSTED,   ## Red - flipped, must be readied before reuse
-	DISCARDED,   ## Removed from play for this game
+	READY, ## Green - available to use
+	EXHAUSTED, ## Red - flipped, must be readied before reuse
+	DISCARDED, ## Removed from play for this game
 }
 
 ## --- Hull Zones ---

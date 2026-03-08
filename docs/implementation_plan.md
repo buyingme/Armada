@@ -196,44 +196,48 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ## Implementation Phases
 
-### Phase 0: Scale & Assets Foundation
+> **Progress Key:** ✅ Complete · 🔄 In Progress · ⏳ Not Started
+
+### Phase 0: Scale & Assets Foundation ✅
+**Status:** Complete — committed `3343768`
 **Goal:** Establish the pixel-to-game-unit scale and verify all assets load correctly.
 **Prerequisites:** All user-provided PNGs in place.
-**Duration estimate:** 1–2 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| Define `GameScale` autoload | Autoload | SU-001 | `src/autoload/game_scale.gd` — pixel constants for ruler, bases, play area |
-| Load & validate all PNGs | Data | SU-003 | Asset loading utility, error reporting for missing files |
-| Create scale calibration test | Test | — | Unit tests verifying all computed sizes are consistent |
-| Update `Constants` with scale | Autoload | — | Range/distance band pixel values in Constants |
+| Task | Status | Deliverable |
+|------|--------|-------------|
+| Define `GameScale` autoload | ✅ | `src/autoload/game_scale.gd` |
+| Asset validation utility | ✅ | `src/utils/asset_loader.gd` |
+| Scale calibration tests | ✅ | `tests/unit/test_game_scale.gd` (28 tests) |
+| Asset loader tests | ✅ | `tests/unit/test_asset_loader.gd` (21 tests) |
+| Update `Constants` with paths + bands | ✅ | `src/autoload/constants.gd` |
 
-**Tests:** ~10 (scale math, asset loading verification)
+**Requirements covered:** SU-001 (scale), SU-003 (asset loading)
+**Tests delivered:** 49 new (180 total, all passing)
 
 ---
 
-### Phase 1: Core Geometry Engine
+### Phase 1: Core Geometry Engine ✅
+**Status:** Complete — all 274 tests passing
 **Goal:** Build the mathematical foundation for positions, firing arcs, range measurement, and collisions.
 **Prerequisites:** Phase 0 (scale constants)
-**Duration estimate:** 2–3 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| `Geometry2DHelper` — point/line/polygon math | Core | AT-040–043 | `src/core/geometry_helper.gd` |
-| `ShipBase` — base shape, hull zone polygons, firing arc rays | Core | AT-040–043, GC-003 | `src/core/ship_base.gd` |
-| `SquadronBase` — circular base, overlap detection | Core | SM-001, SM-003 | `src/core/squadron_base.gd` |
-| `RangeMeasurer` — range/distance calculation between any two entities | Core | AT-010–014, AT-050–053 | `src/core/range_measurer.gd` |
-| `FiringArc` — point-in-arc tests, hull zone to target arc classification | Core | AT-040–043 | `src/core/firing_arc.gd` |
-| `ManeuverCalculator` — segment chain math, yaw angles, final position | Core | MV-001–006, MV-010–015 | `src/core/maneuver_calculator.gd` |
+| Task | Status | Deliverable |
+|------|--------|-------------|
+| `Geometry2DHelper` — point/line/polygon math | ✅ | `src/core/geometry_helper.gd` |
+| `ShipBase` — base shape, hull zone polygons, firing arc rays | ✅ | `src/core/ship_base.gd` |
+| `FiringArc` — point-in-arc tests, hull zone classification | ✅ | `src/core/firing_arc.gd` |
+| `RangeMeasurer` — range/distance calculation | ✅ | `src/core/range_measurer.gd` |
+| `SquadronBase` — circular base, overlap detection | ✅ | `src/core/squadron_base.gd` |
+| `ManeuverCalculator` — segment chain math, yaw angles | ✅ | `src/core/maneuver_calculator.gd` |
 
-**Future-proofing:** Build geometry primitives (line intersection, polygon overlap) that LOS system will reuse.
+**Requirements covered:** AT-040–043 (firing arcs), AT-010–014 (range/colour), AT-050–053 (measurement), GC-003 (bases), SM-001/003 (squadron base), MV-001–006/010–015 (maneuver)
+**Future-proofing:** Geometry primitives (line intersection, polygon overlap) reused by Phase 6 LOS system.
 
-**Tests:** ~40 (geometry is critical and must be exhaustively tested)
+**Tests delivered:** ~94 new (274 total, all passing)
 
 ---
 
-### Phase 2: Game Board & Token Display
-**Goal:** Render the play area with ship and squadron tokens, pannable/zoomable camera.
+### Phase 2: Game Board & Token Display ⏳ with ship and squadron tokens, pannable/zoomable camera.
 **Prerequisites:** Phase 0 (assets), Phase 1 (geometry for base shapes)
 **Duration estimate:** 2–3 sessions
 
@@ -250,8 +254,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 3: Game State Wiring
-**Goal:** Connect the existing `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.
+### Phase 3: Game State Wiring ⏳ `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.
 **Prerequisites:** Phase 2 (visual tokens exist), existing core classes
 **Duration estimate:** 2 sessions
 
@@ -269,8 +272,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 4: Command Phase
-**Goal:** Implement the secret-simultaneous command dial selection.
+### Phase 4: Command Phase ⏳ command dial selection.
 **Prerequisites:** Phase 3 (ShipInstance with dial stacks)
 **Duration estimate:** 2 sessions
 
@@ -286,8 +288,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 5: Ship Movement
-**Goal:** Implement the full ship movement system including the maneuver tool, speed chart, and Navigate command.
+### Phase 5: Ship Movement ⏳ system including the maneuver tool, speed chart, and Navigate command.
 **Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials)
 **Duration estimate:** 3–4 sessions
 
@@ -308,8 +309,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 6: Attack Resolution
-**Goal:** Implement the complete 6-step attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
+### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions
 
@@ -333,8 +333,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 7: Squadron Phase
-**Goal:** Implement squadron activation, movement, engagement, attacks, and keywords.
+### Phase 7: Squadron Phase ⏳, movement, engagement, attacks, and keywords.
 **Prerequisites:** Phase 1 (geometry), Phase 3 (SquadronInstance), Phase 6 (attack pipeline for squadron attacks)
 **Duration estimate:** 2–3 sessions
 
@@ -356,8 +355,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 8: Status Phase & Game Flow
-**Goal:** Complete the round cycle and victory conditions.
+### Phase 8: Status Phase & Game Flow ⏳ and victory conditions.
 **Prerequisites:** Phases 4–7 (all phase logic)
 **Duration estimate:** 1–2 sessions
 
@@ -376,8 +374,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 9: Repair Command & Damage Cards
-**Goal:** Implement the Repair command and damage card effects.
+### Phase 9: Repair Command & Damage Cards ⏳ and damage card effects.
 **Prerequisites:** Phase 3 (DamageDeck, ShipInstance), Phase 6 (damage cards used in attacks)
 **Duration estimate:** 1–2 sessions
 
@@ -395,8 +392,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 10: UI Polish & Network Foundation
-**Goal:** Complete UI features and lay network multiplayer groundwork.
+### Phase 10: UI Polish & Network Foundation ⏳ and lay network multiplayer groundwork.
 **Prerequisites:** All prior phases
 **Duration estimate:** 2–3 sessions
 
@@ -442,21 +438,21 @@ Phase 0 (Scale & Assets)
 
 ## Test Budget Summary
 
-| Phase | Estimated Tests | Cumulative |
-|-------|----------------|------------|
-| Existing | 131 | 131 |
-| Phase 0 | ~10 | ~141 |
-| Phase 1 | ~40 | ~181 |
-| Phase 2 | ~15 | ~196 |
-| Phase 3 | ~25 | ~221 |
-| Phase 4 | ~20 | ~241 |
-| Phase 5 | ~35 | ~276 |
-| Phase 6 | ~45 | ~321 |
-| Phase 7 | ~30 | ~351 |
-| Phase 8 | ~20 | ~371 |
-| Phase 9 | ~15 | ~386 |
-| Phase 10 | ~20 | ~406 |
-| **Total** | **~275 new** | **~406** |
+| Phase | Estimated Tests | Actual | Cumulative |
+|-------|----------------|--------|------------|
+| Existing | 131 | 131 | 131 |
+| Phase 0 | ~10 | **49** | **180** |
+| Phase 1 | ~40 | — | ~220 |
+| Phase 2 | ~15 | — | ~235 |
+| Phase 3 | ~25 | — | ~260 |
+| Phase 4 | ~20 | — | ~280 |
+| Phase 5 | ~35 | — | ~315 |
+| Phase 6 | ~45 | — | ~360 |
+| Phase 7 | ~30 | — | ~390 |
+| Phase 8 | ~20 | — | ~410 |
+| Phase 9 | ~15 | — | ~425 |
+| Phase 10 | ~20 | — | ~445 |
+| **Total** | **~275 new** | | **~445** |
 
 ---
 
@@ -481,21 +477,21 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 
 Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed:
 
-| Section | Reqs | Covered In Phase(s) |
-|---------|------|---------------------|
-| Game Overview (GO-001–006) | 6 | Phase 8 |
-| Setup (SU-001–030) | 18 | Phase 0, 2, 3 |
-| Game Flow (GF-001–004) | 4 | Phase 8 |
-| Command Phase (CP-001–008) | 8 | Phase 4 |
-| Ship Phase (SP-001–016) | 16 | Phase 5, 6 |
-| Squadron Phase (SQ-001–009) | 9 | Phase 7 |
-| Status Phase (ST-001–004) | 4 | Phase 8 |
-| Commands (CM-001–042) | 22 | Phase 4, 5, 6, 7, 9 |
-| Attack Resolution (AT-001–063) | 28 | Phase 6 |
-| Defense Tokens (DT-001–021) | 10 | Phase 6 |
-| Damage (DM-001–033) | 12 | Phase 6, 9 |
-| Ship Movement (MV-001–022) | 13 | Phase 5 |
-| Squadron Mechanics (SM-001–042) | 18 | Phase 7 |
+| Section | Reqs | Covered In Phase(s) | Status |
+|---------|------|---------------------|--------|
+| Game Overview (GO-001–006) | 6 | Phase 8 | ⏳ |
+| Setup (SU-001–030) | 18 | Phase 0, 2, 3 | 🔄 SU-001, SU-003 done |
+| Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
+| Command Phase (CP-001–008) | 8 | Phase 4 | ⏳ |
+| Ship Phase (SP-001–016) | 16 | Phase 5, 6 | ⏳ |
+| Squadron Phase (SQ-001–009) | 9 | Phase 7 | ⏳ |
+| Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
+| Commands (CM-001–042) | 22 | Phase 4, 5, 6, 7, 9 | ⏳ |
+| Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
+| Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
+| Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
+| Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ⏳ |
+| Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ⏳ |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 5, 6, 7 |

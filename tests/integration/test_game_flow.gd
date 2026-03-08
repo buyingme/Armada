@@ -102,16 +102,16 @@ func test_advance_phase_command_to_ship() -> void:
 func test_advance_phase_full_cycle() -> void:
 	GameManager.start_new_game()
 	# COMMAND -> SHIP -> SQUADRON -> STATUS -> (new round) COMMAND
-	GameManager.advance_phase()  # SHIP
+	GameManager.advance_phase() # SHIP
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP)
 
-	GameManager.advance_phase()  # SQUADRON
+	GameManager.advance_phase() # SQUADRON
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SQUADRON)
 
-	GameManager.advance_phase()  # STATUS
+	GameManager.advance_phase() # STATUS
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.STATUS)
 
-	GameManager.advance_phase()  # New round -> COMMAND
+	GameManager.advance_phase() # New round -> COMMAND
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.COMMAND)
 	assert_eq(GameManager.get_current_round(), 2, "Should be round 2 after full cycle")
 
@@ -121,7 +121,7 @@ func test_game_ends_after_six_rounds() -> void:
 
 	# Play through 6 full rounds
 	for round_num in range(6):
-		for phase in range(4):  # 4 phase transitions per round
+		for phase in range(4): # 4 phase transitions per round
 			if GameManager.is_game_active:
 				GameManager.advance_phase()
 

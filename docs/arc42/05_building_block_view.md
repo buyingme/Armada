@@ -37,7 +37,7 @@
 ### Planned Core Components
 
 - **GameState** — Immutable snapshot of the full game state
-- **RulesEngine** — Validates actions against game rules  
+- **RulesEngine** — Validates actions against game rules
 - **PhaseController** — Manages phase transitions
 - **CombatResolver** — Handles attack resolution, dice rolling, defense tokens
 - **MovementResolver** — Ship movement with maneuver tool simulation

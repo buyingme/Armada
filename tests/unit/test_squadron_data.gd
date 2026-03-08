@@ -96,7 +96,7 @@ func test_get_keyword_value_returns_zero_for_valueless_keyword() -> void:
 func test_get_keyword_value_returns_value_for_valued_keyword() -> void:
 	# Arrange
 	var squad := SquadronData.new()
-	squad.keywords = [{"name": "Counter", "value": 2}]
+	squad.keywords = [ {"name": "Counter", "value": 2}]
 
 	# Act
 	var value: int = squad.get_keyword_value("Counter")

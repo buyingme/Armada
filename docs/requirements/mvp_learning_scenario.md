@@ -73,7 +73,7 @@
 
 ### 2.4 Ship Card Data (Learning Scenario)
 
-All ship/squadron data is sourced from the verified JSON files in `Resources/Game_Components/card_data/`.
+All ship/squadron data is sourced from the verified JSON files in `Resources/Game_Components/ships/` and `Resources/Game_Components/squadrons/`.
 
 | Ship | Faction | Size | Hull | Cmd | Sqd | Eng | Speed | Shields (F/L/R/R) | Defense Tokens |
 |------|---------|------|------|-----|-----|-----|-------|-------------------|----------------|

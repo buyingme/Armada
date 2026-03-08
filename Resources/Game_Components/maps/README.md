@@ -14,6 +14,3 @@ Background map images for the play area.
 | `map_3x3_bluegreen_rift_v3.jpg` | `map_3x3_bluegreen-rift_v3.jpg` |
 | `map_3x3_distant_planet_v3.jpg` | `map_3x3_distant-planet_v3.jpg` |
 | `map_3x3_purple_nebula_v3.jpg` | `map_3x3_purple-nebula_v3.jpg` |
-
-> ⚠  **Assets missing** — JPG files were lost during reorganisation.
-> Please re-provide the 4 map JPGs. Rename hyphens to underscores when adding.

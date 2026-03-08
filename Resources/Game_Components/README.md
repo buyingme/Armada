@@ -1,82 +1,41 @@
-# Resources/Game_Components/
+# Game Components — README
 
-Flat, `snake_case` asset library for Star Wars: Armada Digital Edition.
-All files are co-located by component type — no faction sub-folders.
+All game assets organised in a **flat, snake_case** folder structure.
+Each sub-folder co-locates data (JSON), card art (PNG), and token art (PNG)
+for the same game concept so nothing drifts apart.
 
----
-
-## Directory Structure
+## Folder Structure
 
 ```
 Game_Components/
-├── card_data_schema.json   ← JSON schema for all card data files
-├── ships/                  ← Ship card data (JSON) + card art + ship tokens
-├── squadrons/              ← Squadron card data (JSON) + card art + tokens + base art
-├── defense_tokens/         ← Defense token PNGs (ready + exhausted states)
-├── command_tokens/         ← Command dial token PNGs
-├── dice/                   ← Dice face PNGs  ⚠ MISSING — see dice/README.md
-├── maps/                   ← Play-area background JPGs  ⚠ MISSING — see maps/README.md
-├── tools/                  ← Range ruler PNGs  ⚠ MISSING — see tools/README.md
-└── scale/                  ← Pixel calibration data (scale_config.json)
+├── ships/            → Ship card data (JSON), card art, ship tokens
+├── squadrons/        → Squadron card data (JSON), card art, tokens, shared base art
+├── dice/             → Attack dice face PNGs (4 per colour × 3 colours)
+├── defense_tokens/   → Defense token PNGs (ready + exhausted per type)
+├── command_tokens/   → Command dial token PNGs (one per command type)
+├── maps/             → Play area background JPGs
+├── tools/            → Range ruler PNGs (range side + distance side)
+├── scale/            → Scale calibration JSON (pixel measurements)
+└── card_data_schema.json  → JSON schema all ship/squadron data validates against
 ```
 
----
+## Naming Convention
 
-## Naming Conventions
+All file and folder names use **lower_snake_case** — no spaces, no hyphens,
+no PascalCase. See `.skills/file_organization.md` § Resource Assets for the
+full naming rules.
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Ship card data | `<name>.json` | `cr90_corvette_a.json` |
-| Ship card art | `<name>_card.png` | `cr90_corvette_a_card.png` |
-| Ship token | `<name>_token.png` | `cr90_corvette_a_token.png` |
-| Squadron card data | `<name>_squadron.json` | `x_wing_squadron.json` |
-| Squadron card art | `<name>_squadron_card.png` | `x_wing_squadron_card.png` |
-| Squadron token | `<name>_squadron_token.png` | `x_wing_squadron_token.png` |
-| Defense token | `token_<type>_<state>.png` | `token_evade_ready.png` |
-| Command token | `cmd_<type>.png` | `cmd_navigate.png` |
-| Die face | `die_<colour>_<face>.png` | `die_red_crit.png` |
-| Map background | `map_<grid>_<name>_vN.jpg` | `map_3x3_azure_v3.jpg` |
-| Range ruler | `range_ruler_<type>.png` | `range_ruler_range.png` |
+## What Goes Where
 
-All names: **lower_snake_case**, no spaces, no PascalCase, no faction prefixes.
+| Category | Folder | Status | Notes |
+|----------|--------|--------|-------|
+| Ship data + card art + tokens | `ships/` | 6 JSON, 6 card PNGs, 3 token PNGs | 2 ship tokens still needed |
+| Squadron data + card art + tokens | `squadrons/` | 2 JSON, 2 card/token PNGs, 5 base PNGs | Complete for MVP |
+| Dice faces | `dice/` | **MISSING** — 12 PNGs needed | Can be procedural |
+| Defense tokens | `defense_tokens/` | 10 PNGs (5 types × ready/exhausted) | Complete |
+| Command tokens | `command_tokens/` | 4 PNGs | Complete |
+| Play area backgrounds | `maps/` | 4 JPGs | Complete |
+| Range ruler | `tools/` | **MISSING** — 2 PNGs needed | Also used for scale calibration |
+| Scale config | `scale/` | 1 JSON | Pixel measurements from ruler |
 
----
-
-## Asset Status
-
-| Folder | Assets | Status |
-|--------|--------|--------|
-| `ships/` | 6 JSONs, 6 card PNGs, 3 token PNGs | ✅ Complete |
-| `squadrons/` | 2 JSONs, 2 card PNGs, 2 token PNGs, 5 base art | ✅ Complete |
-| `defense_tokens/` | 10 PNGs (5 types × ready/exhausted) | ✅ Complete |
-| `command_tokens/` | 4 PNGs | ✅ Complete |
-| `scale/` | scale_config.json | ✅ Complete |
-| `dice/` | 12 die face PNGs | ⚠ Missing — re-provide PNGs |
-| `maps/` | 4 background JPGs | ⚠ Missing — re-provide JPGs |
-| `tools/` | 2 range ruler PNGs | ⚠ Missing — re-provide PNGs |
-
----
-
-## GDScript Paths
-
-```gdscript
-const GC            := "res://Resources/Game_Components/"
-const SHIPS_PATH    := GC + "ships/"
-const SQUADS_PATH   := GC + "squadrons/"
-const DEF_TOK_PATH  := GC + "defense_tokens/"
-const CMD_TOK_PATH  := GC + "command_tokens/"
-const DICE_PATH     := GC + "dice/"
-const MAPS_PATH     := GC + "maps/"
-const TOOLS_PATH    := GC + "tools/"
-const SCALE_PATH    := GC + "scale/scale_config.json"
-const SCHEMA_PATH   := GC + "card_data_schema.json"
-```
-
----
-
-## Adding New Assets
-
-1. Place the file in the correct sub-folder using the naming convention above.
-2. If it is a JSON card data file, verify it validates against `card_data_schema.json`.
-3. Godot generates `.import` metadata automatically on first import — commit that too.
-4. Update the sub-folder `README.md` file list if appropriate.
+See `docs/implementation_plan.md` for full asset specifications.

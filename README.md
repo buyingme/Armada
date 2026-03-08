@@ -44,8 +44,11 @@ Armada/
 │   └── fixtures/           # Test data factories
 ├── assets/                 # Textures, audio, fonts, shaders
 ├── addons/gut/             # GUT testing framework
-├── docs/arc42/             # Architecture documentation (arc42)
-├── Resources/              # Reference materials (rules books)
+├── docs/                   # Architecture (arc42), requirements, implementation plan
+├── Resources/              # Game component assets + rules reference books
+│   ├── Game_Components/    # Ships, squadrons, dice, tokens, maps (flat snake_case)
+│   ├── SWM-RULES-…/        # Rules Reference Guide
+│   └── SWM01-ARMADA-…/     # Learn to Play
 ├── .github/                # CI/CD, issue templates, contributing guide
 └── .skills/                # Coding standards and AI instructions
 ```
@@ -93,7 +96,7 @@ Or use the GUT panel in the Godot editor.
 |-----------|-----------|
 | Game Engine | Godot 4.5+ |
 | Language | GDScript |
-| Testing | GUT (Godot Unit Testing) v9.3.0 |
+| Testing | GUT (Godot Unit Testing) v9.6.0 |
 | Documentation | arc42 |
 | CI/CD | GitHub Actions |
 

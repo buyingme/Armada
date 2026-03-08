@@ -33,7 +33,10 @@ Armada/
 │   ├── fonts/                 # Custom fonts
 │   └── shaders/               # Shader files
 │
-├── Resources/                 # Reference materials (rules books)
+├── Resources/                 # Reference materials + game component assets
+│   ├── Game_Components/       # All game assets (flat snake_case folders)
+│   ├── SWM-RULES-REFERENCE-GUIDE-150/  # Rules Reference book
+│   └── SWM01-ARMADA-LEARN-TO-PLAY/     # Learn to Play book
 │
 ├── docs/                      # Documentation
 │   └── arc42/                 # arc42 architecture documentation
@@ -97,51 +100,51 @@ When creating a new source file:
 4. ✅ Register in autoload if it's a singleton
 5. ✅ Update arc42 building block view if it's a new component
 
----
-
 ## Resource Assets (`Resources/Game_Components/`)
 
-All game art and card data lives in a flat, `snake_case` layout — no faction sub-folders.
+Game component assets live in a **flat, snake_case** folder structure.
+Each folder co-locates data, card art, and token art for one game concept.
 
-### Structure
+### Folder Layout
 
 ```
-Resources/Game_Components/
-├── card_data_schema.json
-├── ships/            ← <name>.json + <name>_card.png + <name>_token.png
-├── squadrons/        ← <name>_squadron.{json,card.png,token.png} + squad_*.png
-├── defense_tokens/   ← token_<type>_<state>.png  (state = ready | exhausted)
-├── command_tokens/   ← cmd_<type>.png
-├── dice/             ← die_<colour>_<face>.png
-├── maps/             ← map_<grid>_<name>_vN.jpg
-├── tools/            ← range_ruler_<type>.png
-└── scale/            ← scale_config.json
+Game_Components/
+├── ships/            → JSON + card PNGs + ship token PNGs
+├── squadrons/        → JSON + card PNGs + token PNGs + shared base art
+├── dice/             → Die face PNGs (4 per colour × 3 colours = 12)
+├── defense_tokens/   → Ready + exhausted PNGs (5 types × 2 states = 10)
+├── command_tokens/   → One PNG per command type (4)
+├── maps/             → Play area background JPGs
+├── tools/            → Range ruler PNGs (range side + distance side)
+├── scale/            → scale_config.json (pixel calibration data)
+└── card_data_schema.json
 ```
 
-### Naming Rules
+### Naming Convention
 
-| Pattern | Example | Used For |
-|---------|---------|---------|
-| `<ship_name>.json` | `cr90_corvette_a.json` | Ship card data |
-| `<ship_name>_card.png` | `cr90_corvette_a_card.png` | Ship card art |
-| `<ship_name>_token.png` | `cr90_corvette_a_token.png` | Ship top-down token |
-| `<name>_squadron.json` | `x_wing_squadron.json` | Squadron card data |
-| `<name>_squadron_card.png` | `x_wing_squadron_card.png` | Squadron card art |
-| `<name>_squadron_token.png` | `x_wing_squadron_token.png` | Squadron token |
-| `token_<type>_<state>.png` | `token_evade_ready.png` | Defense token |
-| `cmd_<type>.png` | `cmd_navigate.png` | Command token |
-| `die_<colour>_<face>.png` | `die_red_crit.png` | Die face |
-| `map_<grid>_<name>_vN.jpg` | `map_3x3_azure_v3.jpg` | Map background |
-| `range_ruler_<type>.png` | `range_ruler_range.png` | Measurement tool |
+All file and folder names use **lower_snake_case**:
 
-**Rules:**
-- All lowercase `snake_case` — no spaces, no PascalCase, no faction prefixes
-- No faction sub-folders (Rebel/Imperial distinction lives in the JSON data)
-- Every folder has a `README.md` documenting its contents
+- ✅ `cr90_corvette_a_card.png`
+- ✅ `token_brace_ready.png`
+- ❌ `CR90-Corvette-A-Card.png`
+- ❌ `token brace ready.png`
 
-### Adding a New Asset
+#### Per-Folder Patterns
 
-1. Drop the file in the correct sub-folder using the naming convention
-2. If JSON: validate it against `card_data_schema.json`
-3. Commit the Godot-generated `.import` file alongside the asset
-4. Update the sub-folder `README.md` file list
+| Folder | Pattern | Example |
+|--------|---------|---------|
+| `ships/` | `<ship_name>.json`, `<ship_name>_card.png`, `<ship_name>_token.png` | `cr90_corvette_a.json` |
+| `squadrons/` | `<name>_squadron.json`, `<name>_squadron_card.png`, `<name>_squadron_token.png` | `x_wing_squadron.json` |
+| `dice/` | `die_<colour>_<face>.png` | `die_red_crit.png` |
+| `defense_tokens/` | `token_<type>_<state>.png` | `token_evade_ready.png` |
+| `command_tokens/` | `cmd_<type>.png` | `cmd_navigate.png` |
+| `maps/` | `map_<grid>_<name>_v<ver>.jpg` | `map_3x3_azure_v3.jpg` |
+| `tools/` | `range_ruler_<side>.png` | `range_ruler_range.png` |
+
+### Adding New Assets
+
+1. ✅ Use `lower_snake_case` — no spaces, no hyphens, no PascalCase
+2. ✅ Place in the correct sub-folder (co-locate with related files)
+3. ✅ Update the sub-folder's `README.md` file table
+4. ✅ If adding a new ship/squadron, provide JSON + card PNG + token PNG together
+5. ✅ JSON files must validate against `card_data_schema.json`

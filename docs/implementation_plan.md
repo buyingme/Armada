@@ -62,7 +62,7 @@ All other component sizes derive from this single measurement:
 | Squadron base diameter | `PIXELS_PER_FOOT × (41/305)` ≈ 0.134 × ruler |
 | Maneuver segment length | `PIXELS_PER_FOOT / 5` |
 
-> Scale calibration is complete. Measurements are stored in `Resources/Game_Components/scale/scale_config.json` (ruler=720 px, close≤292, medium≤442, long≤720).
+> **ACTION REQUIRED:** Measure the range ruler PNG (total length in pixels) and provide the pixel positions of each band boundary. See `Resources/Game_Components/scale/README.md` for the exact measurements needed.
 
 ---
 
@@ -76,7 +76,7 @@ These assets require artistic work and cannot be generated programmatically with
 
 #### Ship Tokens (Top-Down View)
 
-These are **play area tokens** — NOT the card images already in `Ships/`. They represent the miniatures as seen from above on the game mat.
+These are **play area tokens** — NOT the card images already in `ships/`. They represent the miniatures as seen from above on the game mat.
 
 | Asset | Filename | Size Guidance | Notes |
 |-------|----------|---------------|-------|
@@ -106,7 +106,7 @@ These are **play area tokens** — NOT the card images already in `Ships/`. They
 |-------|----------|---------------|-------|
 | Space background | `space_background.png` | 3:3 aspect ratio, at least 2048×2048 | Star field, can tile or be a single large image |
 
-Alternatively, the map JPGs in `Resources/Game_Components/maps/` could be used (re-provide: see maps/README.md — files were lost in reorganisation).
+Alternatively, the existing map JPGs in `Resources/Game_Components/maps/` could be cropped/adapted.
 
 #### Range Ruler
 
@@ -121,9 +121,9 @@ These serve double duty: (1) visual overlay for measurement and (2) scale calibr
 
 | Asset | Filename Pattern | Count | Notes |
 |-------|-----------------|-------|-------|
-| Red die faces | `die_red_<face>.png` | 8 faces | hit, hit_hit, crit, hit_crit, accuracy, blank×3 |
-| Blue die faces | `die_blue_<face>.png` | 8 faces | hit, hit, crit, hit_crit, accuracy, blank×2, blank? |
-| Black die faces | `die_black_<face>.png` | 8 faces | hit, hit_hit, hit_crit, blank×4, crit? |
+| Red die faces | `die_red_<face>.png` | 4 faces | blank, hit, hit_hit, crit |
+| Blue die faces | `die_blue_<face>.png` | 4 faces | blank, hit, accuracy, hit_crit |
+| Black die faces | `die_black_<face>.png` | 4 faces | blank, hit, hit_hit, crit |
 
 > **Alternative:** Dice faces can be **procedural** (colored square + icon symbols drawn in code). If you prefer this, these PNGs can be skipped. See question below.
 
@@ -131,12 +131,13 @@ These serve double duty: (1) visual overlay for measurement and (2) scale calibr
 
 | Asset | Filename Pattern | States | Notes |
 |-------|-----------------|--------|-------|
-| Evade | `token_evade_ready.png` + `token_evade_exhausted.png` | 2 PNGs | Both states already provided |
-| Redirect | `token_redirect_ready.png` + `token_redirect_exhausted.png` | 2 PNGs | Both states already provided |
-| Brace | `token_brace_ready.png` + `token_brace_exhausted.png` | 2 PNGs | Both states already provided |
-| Scatter | `token_scatter_ready.png` + `token_scatter_exhausted.png` | 2 PNGs | Both states already provided |
+| Evade | `token_evade_ready.png` / `token_evade_exhausted.png` | Ready + exhausted PNGs provided |
+| Redirect | `token_redirect_ready.png` / `token_redirect_exhausted.png` | Ready + exhausted PNGs provided |
+| Brace | `token_brace_ready.png` / `token_brace_exhausted.png` | Ready + exhausted PNGs provided |
+| Scatter | `token_scatter_ready.png` / `token_scatter_exhausted.png` | Ready + exhausted PNGs provided |
+| Contain | `token_contain_ready.png` / `token_contain_exhausted.png` | Ready + exhausted PNGs provided |
 
-> **Alternative:** Can be procedural (geometric shapes + letters). See question below.
+> All 10 defense token PNGs (5 types × ready/exhausted) are already in `defense_tokens/`.
 
 #### Command Icons
 
@@ -147,7 +148,7 @@ These serve double duty: (1) visual overlay for measurement and (2) scale calibr
 | Repair icon | `cmd_repair.png` | Wrench icon |
 | Concentrate Fire icon | `cmd_concentrate_fire.png` | Crosshair icon |
 
-> **Alternative:** Can use Godot's built-in icon drawing or Unicode symbols.
+> All 4 command token PNGs are already in `command_tokens/`.
 
 #### Initiative Token
 
@@ -186,8 +187,8 @@ These will be drawn/composed programmatically. No PNGs needed.
 | Space background | 1 | Could use existing map JPGs |
 | Range ruler (both sides) | 2 | No — also used for scale calibration |
 | Dice faces | 0–24 | Yes — can be procedural |
-| Defense token icons | 0–4 | Yes — can be procedural |
-| Command icons | 0–4 | Yes — can be procedural |
+| Defense token icons | 0–4 | Already provided (10 PNGs in `defense_tokens/`) |
+| Command icons | 0–4 | Already provided (4 PNGs in `command_tokens/`) |
 | Initiative token | 0–2 | Yes — can be procedural |
 | **Hard minimum** | **8 PNGs** | Ship tokens + squadron tokens + background + range rulers |
 
@@ -383,7 +384,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
 | Repair command resolution | Core | CM-030–037 | Engineering points, shield/hull repair, damage discard |
-| Damage card data (52 cards) | Data | DM-005, DM-009, GC-012 | `Resources/Game_Components/ships/damage_cards.json` |
+| Damage card data (52 cards) | Data | DM-005, DM-009, GC-012 | `Resources/Game_Components/ships/damage_cards.json` (or dedicated folder TBD) |
 | Faceup damage card effects | Core | DM-005 | Effect system (hook points for future upgrade effects) |
 | Damage card UI (faceup/facedown display) | Presentation | UI-002 | Card detail view on click |
 | Repair command UI | Presentation | — | Engineering point allocation interface |

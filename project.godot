@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 GameManager="*res://src/autoload/game_manager.gd"
 EventBus="*res://src/autoload/event_bus.gd"
 Constants="*res://src/autoload/constants.gd"
+GameScale="*res://src/autoload/game_scale.gd"
 
 [display]
 

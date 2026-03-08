@@ -17,11 +17,35 @@ const MAX_FLEET_POINTS: int = 400
 const PLAYER_COUNT: int = 2
 
 ## --- Distance Constants ---
-## Distance bands in game units (to be calibrated with visual scale)
+## Pixel values are resolved at runtime by GameScale autoload.
+## These string keys match the range band names used in scale_config.json.
 
-const DISTANCE_CLOSE: float = 1.0
-const DISTANCE_MEDIUM: float = 2.0
-const DISTANCE_LONG: float = 3.0
+const RANGE_BAND_CLOSE: String = "close"
+const RANGE_BAND_MEDIUM: String = "medium"
+const RANGE_BAND_LONG: String = "long"
+const RANGE_BAND_BEYOND: String = "beyond"
+
+## --- Asset Paths ---
+
+const GAME_COMPONENTS_PATH: String = "res://Resources/Game_Components/"
+const SHIPS_PATH: String = "res://Resources/Game_Components/ships/"
+const SQUADRONS_PATH: String = "res://Resources/Game_Components/squadrons/"
+const DICE_PATH: String = "res://Resources/Game_Components/dice/"
+const DEFENSE_TOKENS_PATH: String = "res://Resources/Game_Components/defense_tokens/"
+const COMMAND_TOKENS_PATH: String = "res://Resources/Game_Components/command_tokens/"
+const MAPS_PATH: String = "res://Resources/Game_Components/maps/"
+const TOOLS_PATH: String = "res://Resources/Game_Components/tools/"
+const SCALE_PATH: String = "res://Resources/Game_Components/scale/"
+
+## --- Physical Dimensions ---
+## Real-world measurements in millimetres, used by GameScale to compute pixels.
+
+const RULER_LENGTH_MM: float = 305.0
+const SMALL_BASE_WIDTH_MM: float = 43.0
+const SMALL_BASE_LENGTH_MM: float = 71.0
+const MEDIUM_BASE_WIDTH_MM: float = 63.0
+const MEDIUM_BASE_LENGTH_MM: float = 102.0
+const SQUADRON_BASE_DIAMETER_MM: float = 41.0
 
 ## --- Command Types ---
 

@@ -1,16 +1,20 @@
 # tools/
 
-Measurement tool images (range ruler).
+Measurement and maneuver tool images.
 
-## Naming Convention
-
-`range_ruler_<type>.png`
+## Files
 
 | File | Description |
 |------|-------------|
 | `range_ruler_range.png` | Range bands — Close / Medium / Long |
 | `range_ruler_distance.png` | Distance measurement side |
+| `root_filled.png` | Maneuver tool root joint piece |
+| `segment_end.png` | Maneuver tool end segment piece |
+| `segment_filled.png` | Maneuver tool middle segment piece |
 
-> ⚠  **Assets missing** — PNG files were lost during reorganisation.
-> Please re-provide both range ruler PNGs using the file names above.
-> Pixel measurements from the original ruler are preserved in `scale/scale_config.json`.
+## Naming Convention
+
+- Range ruler: `range_ruler_<side>.png`
+- Maneuver tool pieces: `<part_name>.png`
+
+Pixel measurements from the range ruler are preserved in `scale/scale_config.json`.

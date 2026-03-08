@@ -39,4 +39,4 @@ echo "Launching game: $PROJECT_DIR"
 echo "Godot: $("$GODOT" --version 2>&1 | head -1)"
 echo ""
 
-exec "$GODOT" --path "$PROJECT_DIR" "${EXTRA_ARGS[@]}"
+exec "$GODOT" --path "$PROJECT_DIR" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

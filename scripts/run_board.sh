@@ -59,4 +59,4 @@ echo ""
 echo "Manual tests to run: docs/test_plan_manual.md § Phase 2 (MT-2.1 – MT-2.9)"
 echo ""
 
-exec "$GODOT" --path "$PROJECT_DIR" "$BOARD_SCENE" "${EXTRA_ARGS[@]}"
+exec "$GODOT" --path "$PROJECT_DIR" "$BOARD_SCENE" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

@@ -216,6 +216,16 @@ static func load_texture(subfolder: String, filename: String) -> Texture2D:
 	return null
 
 
+## Loads and parses a ship JSON data file into a [ShipData] resource.
+## [param key] is the snake_case ship identifier (e.g. "cr90_corvette_a").
+## Returns null if the file cannot be found or parsed.
+static func load_ship_data(key: String) -> ShipData:
+	var data: Dictionary = load_json("ships/", key + ".json")
+	if data.is_empty():
+		return null
+	return ShipData.from_dict(data)
+
+
 ## Loads a JSON asset and returns the parsed data as a Dictionary (or empty).
 static func load_json(subfolder: String, filename: String) -> Dictionary:
 	var path: String = BASE_PATH + subfolder + filename

@@ -106,3 +106,55 @@ func test_ship_point_cost_is_positive() -> void:
 func test_ship_hull_is_positive() -> void:
 	var ship: ShipData = TestFixtures.create_test_small_ship()
 	assert_true(ship.hull > 0, "Ship hull should be positive")
+
+
+# --- from_dict ---
+
+func test_from_dict_parses_ship_name() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_name": "CR90 Corvette A"})
+	assert_eq(ship.ship_name, "CR90 Corvette A",
+		"from_dict should parse ship_name")
+
+
+func test_from_dict_parses_ship_size_small() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_size": "SMALL"})
+	assert_eq(ship.ship_size, Constants.ShipSize.SMALL,
+		"from_dict should parse SMALL")
+
+
+func test_from_dict_parses_ship_size_medium() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_size": "MEDIUM"})
+	assert_eq(ship.ship_size, Constants.ShipSize.MEDIUM,
+		"from_dict should parse MEDIUM")
+
+
+func test_from_dict_parses_ship_size_large() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_size": "LARGE"})
+	assert_eq(ship.ship_size, Constants.ShipSize.LARGE,
+		"from_dict should parse LARGE")
+
+
+func test_from_dict_parses_rebel_faction() -> void:
+	var ship: ShipData = ShipData.from_dict({"faction": "REBEL_ALLIANCE"})
+	assert_eq(ship.faction, Constants.Faction.REBEL_ALLIANCE,
+		"from_dict should parse REBEL_ALLIANCE")
+
+
+func test_from_dict_parses_imperial_faction() -> void:
+	var ship: ShipData = ShipData.from_dict({"faction": "GALACTIC_EMPIRE"})
+	assert_eq(ship.faction, Constants.Faction.GALACTIC_EMPIRE,
+		"from_dict should parse GALACTIC_EMPIRE")
+
+
+func test_from_dict_parses_point_cost() -> void:
+	var ship: ShipData = ShipData.from_dict({"point_cost": 57})
+	assert_eq(ship.point_cost, 57,
+		"from_dict should parse point_cost")
+
+
+func test_from_dict_unknown_size_defaults_to_small_and_errors() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_size": "BOGUS"})
+	assert_eq(ship.ship_size, Constants.ShipSize.SMALL,
+		"Unknown ship_size should default to SMALL")
+	assert_push_error(1,
+		"Should log a push_error for unknown ship_size")

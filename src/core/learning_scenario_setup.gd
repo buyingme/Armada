@@ -58,8 +58,6 @@ func get_token_count() -> int:
 
 ## Victory II-class Star Destroyer: top-centre, facing south toward Rebels.
 ## Rules Reference: Setup Diagram, p.6.
-## Ship size: Medium (63mm × 102mm base).
-## Rules Reference: "Ship Tokens", p.3.
 func _make_victory_ii() -> TokenPlacement:
 	return TokenPlacement.new(
 			"victory_ii_class_star_destroyer",
@@ -67,7 +65,7 @@ func _make_victory_ii() -> TokenPlacement:
 			Constants.Faction.GALACTIC_EMPIRE,
 			0.50, 0.22,
 			PI,
-			Constants.ShipSize.MEDIUM
+			_load_ship_size("victory_ii_class_star_destroyer")
 	)
 
 
@@ -92,7 +90,7 @@ func _make_cr90_a() -> TokenPlacement:
 			Constants.Faction.REBEL_ALLIANCE,
 			0.38, 0.80,
 			0.0,
-			Constants.ShipSize.SMALL
+			_load_ship_size("cr90_corvette_a")
 	)
 
 
@@ -105,8 +103,19 @@ func _make_nebulon_b() -> TokenPlacement:
 			Constants.Faction.REBEL_ALLIANCE,
 			0.65, 0.80,
 			0.0,
-			Constants.ShipSize.MEDIUM
+			_load_ship_size("nebulon_b_escort_frigate")
 	)
+
+
+## Loads ship_size from the JSON data file for the given ship key.
+## Falls back to SMALL with a push_error if the file is missing.
+## Rules Reference: Resources/Game_Components/card_data_schema.json
+func _load_ship_size(key: String) -> Constants.ShipSize:
+	var ship_data: ShipData = AssetLoader.load_ship_data(key)
+	if ship_data == null:
+		push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
+		return Constants.ShipSize.SMALL
+	return ship_data.ship_size
 
 
 ## X-wing Squadron: between the two Rebel ships, slightly ahead of them.

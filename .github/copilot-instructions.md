@@ -79,6 +79,8 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Nesting deeper than 3 levels
 - ❌ Direct cross-system node references
 - ❌ Hardcoded game values
+- ❌ Mixing tabs and spaces in the same file
+- ❌ `if/elif` chains on enum values — use `match`
 
 ### 8. Game Rules Must Be Cited
 
@@ -87,10 +89,27 @@ When implementing game mechanics, always reference the source rule:
 ```gdscript
 ## Determines if a defense token can be spent.
 ## Rules Reference: "Defense Tokens", bullet 4, p.5
-## "If the defender's speed is '0,' he cannot spend any defense tokens."
+## "If the defender's speed is '‘0,' he cannot spend any defense tokens."
 func can_spend_defense_token(defender_speed: int) -> bool:
     return defender_speed > 0
 ```
+
+### 9. Verify Test Count After Every Change
+
+After editing source or test files, always run the full suite and confirm both the script count and the pass count:
+
+```bash
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+```
+
+GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
+
+### 10. Update Progress Tracking Per Phase
+
+When completing a phase task or full phase:
+- Update `docs/implementation_plan.md` status markers (🔄 → ✅, add commit hash and test count)
+- Include `docs/implementation_plan.md` in the phase commit
+- See `.skills/copilot_instructions.md` for the exact update procedure
 
 ## Code Generation Workflow
 
@@ -101,7 +120,11 @@ When asked to implement a feature or fix a bug:
 3. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
 4. **Write the tests first or alongside** — Never submit untested logic
 5. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
-6. **Verify** — Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit_on_success` and confirm all tests pass
+6. **Verify** — Run tests and confirm: 0 failures, expected script count, no parse errors:
+   ```bash
+   godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+   ```
+7. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
 
 ## Architecture Quick Reference
 

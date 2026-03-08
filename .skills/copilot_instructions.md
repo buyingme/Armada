@@ -21,6 +21,31 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 3. **Check existing tests** — See `tests/` for testing patterns used in this project.
 4. **Follow the architecture** — See `.skills/architecture_patterns.md`.
 
+## Progress Tracking
+
+The implementation plan at `docs/implementation_plan.md` is the authoritative progress tracker.
+
+### Status Markers
+
+| Marker | Meaning |
+|--------|--------|
+| ✅ | Complete — tests passing, committed |
+| 🔄 | In progress — started, not yet complete |
+| ⏳ | Planned — not yet started |
+
+### When Completing a Phase
+
+1. Update the phase header: `### Phase N: Name 🔄` → `### Phase N: Name ✅`
+2. Change all `🔄` rows in the phase table to `✅`
+3. Add `**Status:** Complete — committed \`<hash>\`` under the header
+4. Update the tests-delivered line
+5. Include `docs/implementation_plan.md` in the phase commit
+
+### When Starting a Phase
+
+1. Change phase header from `⏳` to `🔄`
+2. Confirm all prerequisites phases are `✅`
+
 ## When Writing GDScript
 
 ### Always Do
@@ -177,3 +202,17 @@ var damage := _calculate_total_damage(dice_results)
 | Writing tests without assertion messages | Always add description parameter |
 | Functions >30 lines | Split into smaller functions |
 | Missing doc comments | Add `##` to all public API |
+| Using `if/elif` chains on enum values | Use `match` statements |
+
+## GDScript Gotchas Learned in Development
+
+These are subtle bugs actually encountered in this project:
+
+| Gotcha | Symptom | Fix |
+|--------|---------|-----|
+| Mixing tabs and spaces in one file | GUT silently drops the entire test file — fewer tests with 0 failures | Use only tabs; audit every inserted block for 8-space indentation |
+| Wrong sign in boolean condition | Arc membership tests accept wrong quadrant | Re-derive from first principles on paper before coding; `lx - ly >= -tol` ≠ `lx - ly <= tol` |
+| Calling `.distance_to()` on wrong object | Geometry distance function returns 0 for all inputs | Verify both args are independent points; don't pass a point that is already on the segment as the reference |
+| Forgetting `static` on utility class method | `Method not found in base 'RefCounted'` at runtime | All methods in a static utility class must carry the `static` keyword |
+| `match` arm body indented at wrong level | Parse error or wrong arm executes | Each arm body must be exactly one tab deeper than the arm label |
+| GUT `-gexit` flag suppresses output | Exit code 1 on parse error but no visible summary | Use `2>&1 \| tail -20` instead of `-gexit` to see the full summary |

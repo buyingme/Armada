@@ -105,6 +105,28 @@ extends Resource
 @export var shields: Dictionary
 ```
 
+### Static Utility Pattern — Pure Computation
+
+For stateless math/geometry/helper modules, use all-static methods on a `RefCounted` class:
+
+```gdscript
+## Geometry2DHelper
+##
+## Pure mathematical helpers — no state, no instantiation.
+class_name Geometry2DHelper
+extends RefCounted
+
+## Returns minimum distance from [p] to segment [b1]–[b2].
+static func distance_point_to_segment(p: Vector2, b1: Vector2, b2: Vector2) -> float:
+	var closest := closest_point_on_segment(p, b1, b2)
+	return p.distance_to(closest)
+```
+
+- All methods carry the `static` keyword
+- Callers use `Geometry2DHelper.method()` — never `Geometry2DHelper.new().method()`
+- Tests call the methods directly; no setup/teardown needed
+- Never mix static and instance methods in the same utility class
+
 ### Observer Pattern — EventBus
 
 The EventBus pattern decouples systems:

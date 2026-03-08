@@ -96,8 +96,22 @@ func test_calculate_damage_two_hits() -> void:
   | Null check | `assert_null(obj, msg)` / `assert_not_null(obj, msg)` |
   | Contains | `assert_has(dict, key, msg)` |
   | Range | `assert_between(val, low, high, msg)` |
-  | Signals | `assert_signal_emitted(obj, signal_name)` |
+  | Signals | `assert_signal_emitted(obj, signal_name)` |  | Float (geometry) | `assert_almost_eq(a, b, delta, msg)` |
 
+### Floating-Point Assertions
+
+Always use `assert_almost_eq` for any value computed through floating-point math (distances, angles, pixel positions):
+
+```gdscript
+# GOOD — allows for floating-point rounding
+assert_almost_eq(distance, 100.0, 0.01, "Ship-to-ship distance should be ~100 px")
+assert_almost_eq(angle_deg, 45.0, 0.001, "Bearing should be 45 degrees")
+
+# BAD — will fail intermittently due to float rounding
+assert_eq(distance, 100.0, "Distance should be exactly 100")
+```
+
+For geometry tests, a tolerance of `0.01` px (sub-pixel) is appropriate. Use a tighter delta (`0.0001`) for pure angle/trig results.
 ## Coverage Targets
 
 | Layer | Target | Rationale |
@@ -164,7 +178,7 @@ stub(dice_double, "roll_die").to_return(Constants.DiceFace.HIT)
 
 ```bash
 # All tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
 
 # Unit tests only
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit
@@ -175,3 +189,43 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
 # Single test file
 godot --headless -s addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_dice.gd -gexit
 ```
+
+## Test Count Verification (Critical)
+
+After adding new test files, or after any fix, always confirm the GUT summary line shows the **expected script count and test count**:
+
+```
+Ran 16 test scripts
+274 passed, 0 failed
+```
+
+If fewer scripts load than expected, **GUT has silently dropped a file due to a parse error**.
+
+GUT prints no failure for dropped files — you only notice from a lower-than-expected count.
+
+### Diagnosing GUT Silent Test Omissions
+
+Symptom: Test total drops unexpectedly (e.g. 274 → 260 with "0 failed").
+
+1. Narrow down which file is missing from the output (GUT lists loaded scripts).
+2. The parse error is usually in the **source file**, not the test file:
+   ```bash
+   godot --headless res://src/core/suspect_file.gd
+   ```
+3. Look for `Parse Error:` in the output.
+4. Most common cause: **mixed tab/space indentation** — a function body using spaces in a tab-indented file. One such line silently breaks the entire file.
+5. Fix the indentation, re-run, and verify the script count returns to expected.
+
+## Before Committing
+
+Run the full test suite and check the tail output:
+
+```bash
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+```
+
+Requirements before any commit:
+- ✅ 0 failures
+- ✅ Total test count matches expectation (no silent drops)
+- ✅ No `Parse Error:` in output
+- ✅ Implementation plan updated if a phase task was completed

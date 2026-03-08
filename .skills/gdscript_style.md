@@ -5,6 +5,24 @@
 - Follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
 - Use **tabs** for indentation (Godot default)
 - Maximum line length: **100 characters** (soft limit)
+
+## Indentation — Critical Rule
+
+**Use ONLY tabs. Never mix tabs and spaces in the same file.**
+
+GDScript is whitespace-significant. A single line using 8-space indentation inside a tab-indented file produces a parse error with no helpful error message. GUT then **silently drops the entire test file** from the test run — you see fewer tests with no failure reported.
+
+```gdscript
+# GOOD — tabs throughout
+func _front_quadrant(lx: float, ly: float, tol: float) -> bool:
+	return (lx + ly <= tol) and (lx - ly >= -tol) and (ly <= tol)
+
+# CATASTROPHIC — looks fine in some editors, silently breaks GUT
+func _front_quadrant(lx: float, ly: float, tol: float) -> bool:
+        return (lx + ly <= tol) and (lx - ly >= -tol)  # 8 spaces!
+```
+
+**Rule:** When inserting code into an existing file, always inspect the file's indentation character first. Match it exactly.
 - Use **static typing** for all function parameters, return types, and variable declarations
 - Prefer **explicit types** over `Variant` wherever possible
 
@@ -77,6 +95,33 @@ signal ship_damaged(ship: Node, damage_amount: int, hull_zone: Constants.HullZon
 - Always use the fully qualified enum name: `Constants.HullZone.FRONT` (not just `FRONT`)
 - Use `match` statements (not `if/elif`) for enum branching
 
+### `match` Statement Pattern
+
+```gdscript
+# GOOD — clean enum dispatch with match
+func get_zone_name(zone: Constants.HullZone) -> String:
+	match zone:
+		Constants.HullZone.FRONT:
+			return "Front"
+		Constants.HullZone.LEFT:
+			return "Left"
+		Constants.HullZone.RIGHT:
+			return "Right"
+		Constants.HullZone.REAR:
+			return "Rear"
+		_:
+			push_error("Unknown hull zone: %d" % zone)
+			return ""
+
+# BAD — if/elif for enum branching
+if zone == Constants.HullZone.FRONT:
+	...
+elif zone == Constants.HullZone.LEFT:
+	...
+```
+
+Each `match` arm body must be indented **exactly one tab level deeper** than the arm label. Returning from inside a match arm is valid GDScript.
+
 ## Error Handling
 
 - Use `push_error()` for runtime errors that should be logged
@@ -102,6 +147,29 @@ Order within a script file:
 12. Private methods (`_prefixed`)
 13. Signal handler methods (`_on_<source>_<signal>`)
 
+## Static Utility Classes
+
+For pure computation with no state (geometry, math, string formatting), use a class with all-static methods:
+
+```gdscript
+## Geometry2DHelper
+##
+## Pure mathematical helpers for 2D polygon and segment operations.
+## No state — all methods are static. Do not instantiate.
+class_name Geometry2DHelper
+extends RefCounted
+
+
+## Returns the closest point on segment [b1, b2] to point [p].
+static func closest_point_on_segment(p: Vector2, b1: Vector2, b2: Vector2) -> Vector2:
+	...
+```
+
+- Placed in `src/core/` or `src/utils/`
+- All methods are `static`
+- No instance variables
+- Callers use `ClassName.method()` — never instantiate
+
 ## Banned Patterns
 
 - ❌ `print()` — use `GameLogger` instead
@@ -110,3 +178,6 @@ Order within a script file:
 - ❌ Magic numbers — define in `Constants`
 - ❌ Nested `if` deeper than 3 levels — refactor with early returns or helper functions
 - ❌ Functions longer than 30 lines — split into smaller functions
+- ❌ Mixing tabs and spaces in the same file
+- ❌ Using `if/elif` chains for enum dispatching — use `match`
+- ❌ Forgetting `static` on utility class methods (causes "method not found" at runtime)

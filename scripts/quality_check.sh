@@ -104,7 +104,7 @@ fi
 echo -n "Running GUT tests... "
 if command -v godot &> /dev/null; then
     TEST_OUTPUT=$(godot --headless -s addons/gut/gut_cmdln.gd \
-        -gdir=res://tests -ginclude_subdirs -gexit_on_success 2>&1)
+        -gdir=res://tests -ginclude_subdirs -gexit 2>&1)
     if echo "$TEST_OUTPUT" | grep -q "All tests passed"; then
         PASSED=$(echo "$TEST_OUTPUT" | grep "Passing Tests" | awk '{print $NF}')
         TOTAL=$(echo "$TEST_OUTPUT" | grep "^Tests " | awk '{print $NF}')

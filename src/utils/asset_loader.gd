@@ -143,6 +143,14 @@ const ASSET_MANIFEST: Array[Dictionary] = [
 		"optional": false,
 	},
 	{
+		"category": "scenarios",
+		"path": "scenarios/",
+		"files": [
+			"learning_scenario.json",
+		],
+		"optional": false,
+	},
+	{
 		"category": "scale",
 		"path": "scale/",
 		"files": [
@@ -224,6 +232,16 @@ static func load_ship_data(key: String) -> ShipData:
 	if data.is_empty():
 		return null
 	return ShipData.from_dict(data)
+
+
+## Loads and parses a squadron JSON data file into a [SquadronData] resource.
+## [param key] is the snake_case squadron identifier (e.g. "x_wing_squadron").
+## Returns null if the file cannot be found or parsed.
+static func load_squadron_data(key: String) -> SquadronData:
+	var data: Dictionary = load_json("squadrons/", key + ".json")
+	if data.is_empty():
+		return null
+	return SquadronData.from_dict(data)
 
 
 ## Loads a JSON asset and returns the parsed data as a Dictionary (or empty).

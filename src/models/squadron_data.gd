@@ -63,3 +63,41 @@ func get_keyword_value(keyword_name: String) -> int:
 		if kw.get("name", "") == keyword_name:
 			return kw.get("value", 0) as int
 	return 0
+
+
+## Creates a SquadronData from a raw JSON dictionary keyed by the field names in
+## card_data_schema.json. The faction string ("REBEL_ALLIANCE", etc.) is parsed
+## into its typed enum equivalent.
+## Rules Reference: Resources/Game_Components/card_data_schema.json
+static func from_dict(data: Dictionary) -> SquadronData:
+	var s: SquadronData = SquadronData.new()
+	s.squadron_name = data.get("squadron_name", "")
+	s.faction = _parse_faction(data.get("faction", "REBEL_ALLIANCE"))
+	s.point_cost = int(data.get("point_cost", 0))
+	s.hull = int(data.get("hull", 0))
+	s.speed = int(data.get("speed", 0))
+	s.anti_squadron_armament = data.get("anti_squadron_armament", {})
+	s.battery_armament = data.get("battery_armament", {})
+	var raw_kw: Array = data.get("keywords", [])
+	s.keywords.assign(raw_kw)
+	s.keyword_reminder_text = data.get("keyword_reminder_text", {})
+	s.ability_text = data.get("ability_text", "")
+	s.is_unique = bool(data.get("is_unique", false))
+	s.defense_tokens = data.get("defense_tokens", [])
+	return s
+
+
+## Parses a faction JSON string into the Faction enum.
+static func _parse_faction(value: String) -> Constants.Faction:
+	match value.to_upper():
+		"REBEL_ALLIANCE":
+			return Constants.Faction.REBEL_ALLIANCE
+		"GALACTIC_EMPIRE":
+			return Constants.Faction.GALACTIC_EMPIRE
+		"GALACTIC_REPUBLIC":
+			return Constants.Faction.GALACTIC_REPUBLIC
+		"SEPARATIST_ALLIANCE":
+			return Constants.Faction.SEPARATIST_ALLIANCE
+		_:
+			push_error("SquadronData: unknown faction '%s' — defaulting to REBEL_ALLIANCE" % value)
+			return Constants.Faction.REBEL_ALLIANCE

@@ -151,3 +151,49 @@ func test_fixture_squadron_has_positive_hull() -> void:
 func test_fixture_squadron_has_positive_speed() -> void:
 	var squad: SquadronData = TestFixtures.create_test_squadron()
 	assert_true(squad.speed > 0, "Squadron speed should be positive")
+
+
+# --- from_dict ---
+
+func test_from_dict_parses_squadron_name() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"squadron_name": "X-wing Squadron"})
+	assert_eq(squad.squadron_name, "X-wing Squadron",
+		"from_dict should parse squadron_name")
+
+
+func test_from_dict_parses_rebel_faction() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"faction": "REBEL_ALLIANCE"})
+	assert_eq(squad.faction, Constants.Faction.REBEL_ALLIANCE,
+		"from_dict should parse REBEL_ALLIANCE")
+
+
+func test_from_dict_parses_imperial_faction() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"faction": "GALACTIC_EMPIRE"})
+	assert_eq(squad.faction, Constants.Faction.GALACTIC_EMPIRE,
+		"from_dict should parse GALACTIC_EMPIRE")
+
+
+func test_from_dict_parses_hull() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"hull": 5})
+	assert_eq(squad.hull, 5,
+		"from_dict should parse hull")
+
+
+func test_from_dict_parses_speed() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"speed": 3})
+	assert_eq(squad.speed, 3,
+		"from_dict should parse speed")
+
+
+func test_from_dict_parses_is_unique_false() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"is_unique": false})
+	assert_false(squad.is_unique,
+		"from_dict should parse is_unique false")
+
+
+func test_from_dict_unknown_faction_defaults_to_rebel_and_errors() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"faction": "BOGUS"})
+	assert_eq(squad.faction, Constants.Faction.REBEL_ALLIANCE,
+		"Unknown faction should default to REBEL_ALLIANCE")
+	assert_push_error(1,
+		"Should log a push_error for unknown faction")

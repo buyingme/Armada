@@ -224,7 +224,9 @@ var damage := _calculate_total_damage(dice_results)
 | Using `Node` for logic classes | Use `RefCounted` in `src/core/` |
 | Forgetting type annotations | Add types to ALL declarations |
 | Using `print()` for debugging | Use `GameLogger.debug()` |
-| Hardcoding game values | Use `Constants` |
+| Hardcoding named scalars/enums in game logic | Use `Constants` for game-wide values (`MAX_ROUNDS`, hull zone names, dice colours) |
+| Hardcoding card properties in GDScript (faction, ship size, cost, stats) | Read from card JSON via `AssetLoader.load_ship_data()` / `load_squadron_data()` — these come from `ships/<key>.json`, `squadrons/<key>.json` |
+| Hardcoding scenario placement data in GDScript (positions, rotations, token list) | Create `scenarios/<name>.json` and load via `AssetLoader.load_json("scenarios/", file)` |
 | Cross-system direct references | Use `EventBus` signals |
 | Writing tests without assertion messages | Always add description parameter |
 | Functions >30 lines | Split into smaller functions |

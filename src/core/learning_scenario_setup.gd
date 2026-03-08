@@ -1,16 +1,19 @@
 ## LearningScenarioSetup
 ##
-## Provides fixed placement data for the Learning Scenario initial board state.
-## Returns ship and squadron positions as normalised coordinates (0.0–1.0)
-## relative to the play area, allowing the Presentation layer to place tokens
-## at the correct pixel positions regardless of screen resolution.
-##
-## Positions are derived from the Learning Scenario Setup Diagram in the
-## Learn to Play booklet (SWM01-ARMADA-LEARN-TO-PLAY, p.5–6).
+## Loads Learning Scenario token placements from
+## Resources/Game_Components/scenarios/learning_scenario.json.
+## Faction and ship size are resolved from the individual card JSON files
+## (ships/<key>.json, squadrons/<key>.json) — never hardcoded in GDScript.
 ##
 ## Rules Reference: "Learning Scenario Setup", steps 4 and 9, p.5–6.
 class_name LearningScenarioSetup
 extends RefCounted
+
+
+## Subfolder and filename for the scenario placement data.
+## Rules Reference: Resources/Game_Components/scenarios/learning_scenario.json
+const SCENARIO_SUBFOLDER: String = "scenarios/"
+const SCENARIO_FILENAME: String = "learning_scenario.json"
 
 
 ## Returns the complete list of token placements for the Learning Scenario.
@@ -19,13 +22,17 @@ extends RefCounted
 ##
 ## Rules Reference: "Learning Scenario Setup", step 9; diagram p.6.
 func get_all_placements() -> Array[TokenPlacement]:
-	var placements: Array[TokenPlacement] = []
-	placements.append(_make_victory_ii())
-	placements.append(_make_tie_fighter())
-	placements.append(_make_cr90_a())
-	placements.append(_make_nebulon_b())
-	placements.append(_make_x_wing())
-	return placements
+	var data: Dictionary = AssetLoader.load_json(SCENARIO_SUBFOLDER, SCENARIO_FILENAME)
+	if data.is_empty():
+		push_error("LearningScenarioSetup: could not load %s" % SCENARIO_FILENAME)
+		return []
+	var result: Array[TokenPlacement] = []
+	var tokens: Array = data.get("tokens", [])
+	for entry: Variant in tokens:
+		var p: TokenPlacement = _placement_from_entry(entry as Dictionary)
+		if p != null:
+			result.append(p)
+	return result
 
 
 ## Returns only ship token placements (is_ship == true).
@@ -52,79 +59,42 @@ func get_token_count() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Private placement factories — one per token.
-# All positions derived from the Setup Diagram, p.6.
+# Private helpers
 # ---------------------------------------------------------------------------
 
-## Victory II-class Star Destroyer: top-centre, facing south toward Rebels.
-## Rules Reference: Setup Diagram, p.6.
-func _make_victory_ii() -> TokenPlacement:
-	return TokenPlacement.new(
-			"victory_ii_class_star_destroyer",
-			true,
-			Constants.Faction.GALACTIC_EMPIRE,
-			0.50, 0.22,
-			PI,
-			_load_ship_size("victory_ii_class_star_destroyer")
-	)
-
-
-## TIE Fighter Squadron: upper area, left of Victory II.
-## Rules Reference: Setup Diagram, p.6.
-func _make_tie_fighter() -> TokenPlacement:
-	return TokenPlacement.new(
-			"tie_fighter_squadron",
-			false,
-			Constants.Faction.GALACTIC_EMPIRE,
-			0.35, 0.15,
-			PI
-	)
-
-
-## CR90 Corvette A: lower area, left-of-centre, facing north toward Imperials.
-## Rules Reference: Setup Diagram, p.6.
-func _make_cr90_a() -> TokenPlacement:
-	return TokenPlacement.new(
-			"cr90_corvette_a",
-			true,
-			Constants.Faction.REBEL_ALLIANCE,
-			0.38, 0.80,
-			0.0,
-			_load_ship_size("cr90_corvette_a")
-	)
-
-
-## Nebulon-B Escort Frigate: lower area, right-of-centre, facing north.
-## Rules Reference: Setup Diagram, p.6.
-func _make_nebulon_b() -> TokenPlacement:
-	return TokenPlacement.new(
-			"nebulon_b_escort_frigate",
-			true,
-			Constants.Faction.REBEL_ALLIANCE,
-			0.65, 0.80,
-			0.0,
-			_load_ship_size("nebulon_b_escort_frigate")
-	)
-
-
-## Loads ship_size from the JSON data file for the given ship key.
-## Falls back to SMALL with a push_error if the file is missing.
+## Builds a TokenPlacement from one JSON token entry.
+## Faction and ship size are resolved from the card data JSON.
+## Returns null and pushes an error if the card data cannot be found.
 ## Rules Reference: Resources/Game_Components/card_data_schema.json
-func _load_ship_size(key: String) -> Constants.ShipSize:
+func _placement_from_entry(entry: Dictionary) -> TokenPlacement:
+	var key: String = entry.get("key", "")
+	var is_ship: bool = (entry.get("type", "ship") == "ship")
+	var pos_x: float = float(entry.get("pos_x", 0.5))
+	var pos_y: float = float(entry.get("pos_y", 0.5))
+	var rot_rad: float = deg_to_rad(float(entry.get("rotation_deg", 0.0)))
+	if is_ship:
+		return _make_ship_placement(key, pos_x, pos_y, rot_rad)
+	return _make_squadron_placement(key, pos_x, pos_y, rot_rad)
+
+
+## Builds a ship TokenPlacement, reading faction and ship_size from card JSON.
+func _make_ship_placement(
+		key: String, pos_x: float, pos_y: float, rot_rad: float
+) -> TokenPlacement:
 	var ship_data: ShipData = AssetLoader.load_ship_data(key)
 	if ship_data == null:
 		push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
-		return Constants.ShipSize.SMALL
-	return ship_data.ship_size
-
-
-## X-wing Squadron: between the two Rebel ships, slightly ahead of them.
-## Rules Reference: Setup Diagram, p.6.
-func _make_x_wing() -> TokenPlacement:
+		return null
 	return TokenPlacement.new(
-			"x_wing_squadron",
-			false,
-			Constants.Faction.REBEL_ALLIANCE,
-			0.52, 0.68,
-			0.0
-	)
+			key, true, ship_data.faction, pos_x, pos_y, rot_rad, ship_data.ship_size)
+
+
+## Builds a squadron TokenPlacement, reading faction from card JSON.
+func _make_squadron_placement(
+		key: String, pos_x: float, pos_y: float, rot_rad: float
+) -> TokenPlacement:
+	var squad_data: SquadronData = AssetLoader.load_squadron_data(key)
+	if squad_data == null:
+		push_error("LearningScenarioSetup: missing squadron data for '%s'" % key)
+		return null
+	return TokenPlacement.new(key, false, squad_data.faction, pos_x, pos_y, rot_rad)

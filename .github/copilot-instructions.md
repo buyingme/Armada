@@ -78,7 +78,9 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Functions longer than 30 lines
 - ❌ Nesting deeper than 3 levels
 - ❌ Direct cross-system node references
-- ❌ Hardcoded game values
+- ❌ Hardcoded named game values (scalars, enums) in logic — use `Constants`
+- ❌ Hardcoded card properties (faction, ship size, cost, stats) in GDScript — read from `ships/<key>.json` or `squadrons/<key>.json` via `AssetLoader.load_ship_data()` / `load_squadron_data()`
+- ❌ Hardcoded scenario placement data (positions, rotations, token list) — write a `scenarios/<name>.json` and load via `AssetLoader.load_json()`
 - ❌ Mixing tabs and spaces in the same file
 - ❌ `if/elif` chains on enum values — use `match`
 

@@ -1,0 +1,45 @@
+{
+    "_comment": "Token placements for the Learning Scenario. Positions are normalised (0.0=top/left, 1.0=bottom/right). Rotation is in degrees: 0=facing up (-Y), 180=facing down (+Y toward enemy). Faction and ship size are NOT stored here — they are read from the individual card JSON files.",
+    "_source": "SWM01-ARMADA-LEARN-TO-PLAY, Setup Diagram p.6",
+    "_status": "VERIFIED",
+
+    "scenario_name": "Learning Scenario",
+
+    "tokens": [
+        {
+            "key": "victory_ii_class_star_destroyer",
+            "type": "ship",
+            "pos_x": 0.50,
+            "pos_y": 0.22,
+            "rotation_deg": 180.0
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "type": "squadron",
+            "pos_x": 0.35,
+            "pos_y": 0.15,
+            "rotation_deg": 180.0
+        },
+        {
+            "key": "cr90_corvette_a",
+            "type": "ship",
+            "pos_x": 0.38,
+            "pos_y": 0.80,
+            "rotation_deg": 0.0
+        },
+        {
+            "key": "nebulon_b_escort_frigate",
+            "type": "ship",
+            "pos_x": 0.65,
+            "pos_y": 0.80,
+            "rotation_deg": 0.0
+        },
+        {
+            "key": "x_wing_squadron",
+            "type": "squadron",
+            "pos_x": 0.52,
+            "pos_y": 0.68,
+            "rotation_deg": 0.0
+        }
+    ]
+}

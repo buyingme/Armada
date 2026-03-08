@@ -237,20 +237,23 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
-### Phase 2: Game Board & Token Display ⏳ with ship and squadron tokens, pannable/zoomable camera.
+### Phase 2: Game Board & Token Display ✅
+**Status:** Complete — 303 tests passing
+**Goal:** Visual game board with ship/squadron tokens, pannable/zoomable camera, and Learning Scenario initial placement.
 **Prerequisites:** Phase 0 (assets), Phase 1 (geometry for base shapes)
-**Duration estimate:** 2–3 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| Play area scene | Presentation | SU-001, SU-002, GC-001 | `src/scenes/game_board/game_board.tscn` + script |
-| Camera2D with pan/zoom | Presentation | UI-001 | Camera controller script |
-| Ship token scene | Presentation | GC-002, GC-003 | `src/scenes/tokens/ship_token.tscn` — loads PNG + draws base |
-| Squadron token scene | Presentation | GC-004 | `src/scenes/tokens/squadron_token.tscn` |
-| Firing arc overlay | Presentation | UI-011 | Toggleable semi-transparent wedge display |
-| Token placement from setup data | Presentation | SU-027 | Fixed positions per Learning Scenario diagram |
+| Task | Status | Deliverable |
+|------|--------|-------------|
+| Play area scene | ✅ | `src/scenes/game_board/game_board.tscn` + `game_board.gd` |
+| Camera2D with pan/zoom | ✅ | `src/scenes/game_board/board_camera.gd` |
+| Ship token scene | ✅ | `src/scenes/tokens/ship_token.tscn` + `ship_token.gd` |
+| Squadron token scene | ✅ | `src/scenes/tokens/squadron_token.tscn` + `squadron_token.gd` |
+| Firing arc overlay | ✅ | `src/scenes/tokens/firing_arc_overlay.gd` (toggleable wedge display) |
+| Token placement setup data | ✅ | `src/core/learning_scenario_setup.gd` + `src/models/token_placement.gd` |
+| EventBus `firing_arc_toggled` signal | ✅ | `src/autoload/event_bus.gd` |
 
-**Tests:** ~15 (scene instantiation, position verification, camera bounds)
+**Requirements covered:** SU-001, SU-002, GC-001–004, UI-001, UI-011, SU-027
+**Tests delivered:** 29 new (303 total, all passing)
 
 ---
 
@@ -442,9 +445,9 @@ Phase 0 (Scale & Assets)
 |-------|----------------|--------|------------|
 | Existing | 131 | 131 | 131 |
 | Phase 0 | ~10 | **49** | **180** |
-| Phase 1 | ~40 | — | ~220 |
-| Phase 2 | ~15 | — | ~235 |
-| Phase 3 | ~25 | — | ~260 |
+| Phase 1 | ~40 | **94** | **274** |
+| Phase 2 | ~15 | **29** | **303** |
+| Phase 3 | ~25 | — | ~328 |
 | Phase 4 | ~20 | — | ~280 |
 | Phase 5 | ~35 | — | ~315 |
 | Phase 6 | ~45 | — | ~360 |

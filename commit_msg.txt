@@ -1,0 +1,14 @@
+feat(presentation): implement Phase 2 - Game Board & Token Display
+
+- Add TokenPlacement data model (src/models/token_placement.gd)
+- Add LearningScenarioSetup core class with 5 Learning Scenario placements
+- Add BoardCamera (Camera2D) with pan/zoom and boundary clamping
+- Add FiringArcOverlay: 4-zone semi-transparent arc wedge display
+- Add ShipToken scene: loads PNG sprite, draws base rect + hull zone lines
+- Add SquadronToken scene: loads PNG sprite, draws circular base outline
+- Add GameBoard scene: spawns camera, draws play area, instantiates all tokens
+- Add EventBus signal: firing_arc_toggled(token)
+- Add 29 unit tests across 3 new test files (303 total, all passing)
+- Update implementation_plan.md: Phase 2 complete
+
+Tests: 19 scripts / 303 tests / 303 passing / 0 failures

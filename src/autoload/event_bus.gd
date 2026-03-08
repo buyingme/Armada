@@ -85,3 +85,8 @@ signal selection_cleared()
 
 ## Emitted when the player requests to view details of an element.
 signal detail_view_requested(element: Node)
+
+## Emitted when the player toggles the firing arc overlay for a ship token.
+## [param token] is the ShipToken node whose arcs should be toggled.
+## Rules Reference: UI-011 — player may show/hide firing arcs on a ship.
+signal firing_arc_toggled(token: Node)

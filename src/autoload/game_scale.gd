@@ -19,10 +19,13 @@ const SCALE_CONFIG_PATH: String = "res://Resources/Game_Components/scale/scale_c
 const RULER_MM: float = 305.0
 
 ## Real-world base dimensions in millimetres.
+## Rules Reference: "Ship Bases", p.12
 const SMALL_BASE_WIDTH_MM: float = 43.0
 const SMALL_BASE_LENGTH_MM: float = 71.0
 const MEDIUM_BASE_WIDTH_MM: float = 63.0
 const MEDIUM_BASE_LENGTH_MM: float = 102.0
+const LARGE_BASE_WIDTH_MM: float = 110.0
+const LARGE_BASE_LENGTH_MM: float = 152.0
 const SQUADRON_BASE_DIAMETER_MM: float = 41.0
 
 ## Number of maneuver tool segments.
@@ -55,6 +58,8 @@ var small_base_width_px: float = 0.0
 var small_base_length_px: float = 0.0
 var medium_base_width_px: float = 0.0
 var medium_base_length_px: float = 0.0
+var large_base_width_px: float = 0.0
+var large_base_length_px: float = 0.0
 
 ## Squadron base diameter in pixels.
 var squadron_base_diameter_px: float = 0.0
@@ -124,6 +129,8 @@ func get_base_size(ship_size: Constants.ShipSize) -> Vector2:
 			return Vector2(small_base_width_px, small_base_length_px)
 		Constants.ShipSize.MEDIUM:
 			return Vector2(medium_base_width_px, medium_base_length_px)
+		Constants.ShipSize.LARGE:
+			return Vector2(large_base_width_px, large_base_length_px)
 		_:
 			_log.error("Base size not defined for ship size %s" % ship_size)
 			return Vector2.ZERO

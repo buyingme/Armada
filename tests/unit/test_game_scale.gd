@@ -153,12 +153,12 @@ func test_get_base_size_medium() -> void:
 		"Medium base Vector2.y should match length")
 
 
-func test_get_base_size_large_returns_zero() -> void:
+func test_get_base_size_large() -> void:
 	var size: Vector2 = _scale.get_base_size(Constants.ShipSize.LARGE)
-	assert_eq(size, Vector2.ZERO,
-		"Large base not defined yet — should return ZERO")
-	assert_push_error(1,
-		"Should log a push_error for undefined ship size")
+	assert_almost_eq(size.x, _scale.large_base_width_px, 0.01,
+		"Large base Vector2.x should match width")
+	assert_almost_eq(size.y, _scale.large_base_length_px, 0.01,
+		"Large base Vector2.y should match length")
 
 
 # --- get_range_band ---

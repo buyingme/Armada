@@ -121,7 +121,7 @@ func _spawn_ship_token(
 	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
 	_token_container.add_child(token)
 	token.setup(placement)
-	token.token_clicked.connect(_on_token_clicked.bind(token))
+	token.token_clicked.connect(_on_token_clicked)
 
 
 ## Instantiates and configures a SquadronToken for the given placement.
@@ -130,7 +130,7 @@ func _spawn_squadron_token(
 	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
 	_token_container.add_child(token)
 	token.setup(placement)
-	token.token_clicked.connect(_on_squadron_clicked.bind(token))
+	token.token_clicked.connect(_on_squadron_clicked)
 
 
 ## Called when a ship token is clicked — emits global selection event.

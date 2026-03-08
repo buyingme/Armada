@@ -45,7 +45,13 @@ func reset_to_default_view() -> void:
 		return
 	var side: float = GameScale.play_area_side_px
 	position = Vector2(side * 0.5, side * 0.5)
-	zoom = Vector2.ONE
+	# Fit the entire play area into the viewport while keeping aspect ratio.
+	var vp_size: Vector2 = get_viewport_rect().size
+	if vp_size.x > 0.0 and vp_size.y > 0.0:
+		var fit_zoom: float = minf(vp_size.x / side, vp_size.y / side)
+		zoom = Vector2(fit_zoom, fit_zoom)
+	else:
+		zoom = Vector2.ONE
 
 
 ## Returns the play-area side length in pixels from [GameScale].

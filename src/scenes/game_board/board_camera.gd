@@ -1,7 +1,11 @@
 ## BoardCamera
 ##
 ## Camera2D controller for the game board.
-## Supports right-click drag to pan and scroll-wheel to zoom.
+## Supports the following input methods:
+##   - Right-click drag       → pan
+##   - Scroll wheel           → zoom
+##   - Two-finger trackpad swipe  → pan  (InputEventPanGesture, macOS)
+##   - Pinch gesture          → zoom (InputEventMagnifyGesture, macOS)
 ## Camera position is clamped to the play area with a configurable margin.
 ##
 ## Attach this script to a Camera2D node. Call [method reset_to_default_view]
@@ -20,6 +24,16 @@ const ZOOM_MAX: float = 5.0
 
 ## Zoom change applied per scroll-wheel tick.
 const ZOOM_STEP: float = 0.10
+
+## Scaling applied to the magnify gesture factor.
+## Factor arrives as a multiplier near 1.0 (e.g. 1.05 = 5% zoom in);
+## raising it to this power makes small pinches feel natural.
+const ZOOM_MAGNIFY_SENSITIVITY: float = 3.0
+
+## Scaling applied to the trackpad pan delta (screen px → world units).
+## The delta is already in screen pixels; dividing by zoom converts to world
+## space. This multiplier adjusts feel — 1.0 is a 1:1 finger-to-world ratio.
+const PAN_GESTURE_SENSITIVITY: float = 1.0
 
 ## Extra space in pixels beyond the play area edges within which
 ## the camera may still be positioned.
@@ -64,6 +78,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_mouse_button(event as InputEventMouseButton)
 	elif event is InputEventMouseMotion and _is_panning:
 		_handle_pan_motion(event as InputEventMouseMotion)
+	elif event is InputEventPanGesture:
+		_handle_pan_gesture(event as InputEventPanGesture)
+	elif event is InputEventMagnifyGesture:
+		_handle_magnify_gesture(event as InputEventMagnifyGesture)
 
 
 ## Handles mouse button press/release for pan and zoom.
@@ -86,6 +104,30 @@ func _handle_pan_motion(event: InputEventMouseMotion) -> void:
 	var world_delta: Vector2 = screen_delta / zoom
 	var new_pos: Vector2 = _drag_start_camera - world_delta
 	position = _clamp_position(new_pos)
+
+
+## Pans the camera from a two-finger trackpad swipe.
+## [InputEventPanGesture].delta is in screen pixels per frame.
+## Rules Reference: UI-001 (trackpad pan support).
+func _handle_pan_gesture(event: InputEventPanGesture) -> void:
+	var world_delta: Vector2 = event.delta * PAN_GESTURE_SENSITIVITY / zoom
+	position = _clamp_position(position + world_delta)
+
+
+## Zooms via pinch gesture, keeping the world point under the fingers fixed.
+## [InputEventMagnifyGesture].factor is a multiplier (>1 = zoom in).
+## Rules Reference: UI-001 (trackpad pinch-to-zoom support).
+func _handle_magnify_gesture(event: InputEventMagnifyGesture) -> void:
+	var old_zoom: float = zoom.x
+	# Apply sensitivity exponent so small pinches produce a usable zoom change.
+	var factor: float = pow(event.factor, ZOOM_MAGNIFY_SENSITIVITY)
+	var new_zoom: float = clampf(old_zoom * factor, ZOOM_MIN, ZOOM_MAX)
+	if is_equal_approx(new_zoom, old_zoom):
+		return
+	var world_before: Vector2 = _screen_to_world(event.position)
+	zoom = Vector2(new_zoom, new_zoom)
+	var world_after: Vector2 = _screen_to_world(event.position)
+	position = _clamp_position(position + world_before - world_after)
 
 
 ## Adjusts zoom by [delta], keeping the world point under [screen_pivot] fixed.

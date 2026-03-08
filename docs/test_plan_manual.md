@@ -187,16 +187,63 @@ func _input(event: InputEvent) -> void:
 
 ---
 
+### MT-2.10 — Trackpad two-finger pan
+
+macOS only. Requires a physical trackpad (Magic Trackpad or built-in).
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the GameBoard scene | Board fills the screen at fit zoom |
+| 2 | Place two fingers on the trackpad and **swipe left** | Board pans to the right (world moves with fingers) |
+| 3 | **Swipe right** | Board pans to the left |
+| 4 | **Swipe up** | Board pans downward |
+| 5 | **Swipe down** | Board pans upward |
+| 6 | Swipe toward an edge until clamped | Camera stops before losing the play area; further swiping has no effect |
+
+**Pass criteria:** Smooth, responsive pan in all four directions; boundary clamping prevents leaving the play area.
+
+---
+
+### MT-2.11 — Trackpad pinch-to-zoom
+
+macOS only. Requires a physical trackpad.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the GameBoard scene | Board at fit zoom |
+| 2 | Place two fingers on a **token** and **pinch open** (spread fingers) | Board zooms in; the token stays approximately under your fingers |
+| 3 | **Pinch closed** (bring fingers together) | Board zooms out; the point under fingers stays fixed |
+| 4 | Note the zoom level visible in the Remote Debugger or by feel | Zoom changes incrementally — no single large jump |
+
+**Pass criteria:** Smooth zoom; world point under fingers remains anchored; no jitter or sudden jumps.
+
+---
+
+### MT-2.12 — Trackpad pinch zoom clamps
+
+macOS only.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Zoom out fully with the scroll wheel, then continue with a pinch-close gesture | Zoom stops at `ZOOM_MIN = 0.20`; further pinching has no effect |
+| 2 | Zoom in fully with the scroll wheel, then continue with a pinch-open gesture | Zoom stops at `ZOOM_MAX = 5.0`; further spreading has no effect |
+
+**Pass criteria:** Pinch clamps at the same min/max as the scroll wheel.
+
+---
+
 ## Regression Checklist
 
 Run this quick checklist any time you merge changes that touch Phase 0–2 files:
 
-- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **303 tests, 0 failures**
+- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **318 tests, 0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
 - [ ] Run `game_board.tscn` → all 5 tokens appear in correct deployment zones
 - [ ] Right-click drag → board pans; boundary clamping works
 - [ ] Scroll wheel → zoom in/out; clamps at min/max
+- [ ] (macOS) Two-finger swipe on trackpad → board pans smoothly; clamping works
+- [ ] (macOS) Pinch gesture on trackpad → zooms in/out keeping world point under fingers; clamps at min/max
 
 ---
 
-*Last updated: Phase 2 complete — commit `5ec46ff`, 303 tests passing.*
+*Last updated: trackpad gesture support — commit pending, 318 tests passing.*

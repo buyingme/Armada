@@ -238,7 +238,7 @@ These will be drawn/composed programmatically. No PNGs needed.
 ---
 
 ### Phase 2: Game Board & Token Display ✅
-**Status:** Complete — 303 tests passing
+**Status:** Complete — committed `5ec46ff`, 303 tests passing
 **Goal:** Visual game board with ship/squadron tokens, pannable/zoomable camera, and Learning Scenario initial placement.
 **Prerequisites:** Phase 0 (assets), Phase 1 (geometry for base shapes)
 

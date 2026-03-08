@@ -58,6 +58,8 @@ func get_token_count() -> int:
 
 ## Victory II-class Star Destroyer: top-centre, facing south toward Rebels.
 ## Rules Reference: Setup Diagram, p.6.
+## Ship size: Medium (63mm × 102mm base).
+## Rules Reference: "Ship Tokens", p.3.
 func _make_victory_ii() -> TokenPlacement:
 	return TokenPlacement.new(
 			"victory_ii_class_star_destroyer",
@@ -65,7 +67,7 @@ func _make_victory_ii() -> TokenPlacement:
 			Constants.Faction.GALACTIC_EMPIRE,
 			0.50, 0.22,
 			PI,
-			Constants.ShipSize.LARGE
+			Constants.ShipSize.MEDIUM
 	)
 
 

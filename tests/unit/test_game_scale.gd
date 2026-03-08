@@ -157,7 +157,7 @@ func test_get_base_size_large_returns_zero() -> void:
 	var size: Vector2 = _scale.get_base_size(Constants.ShipSize.LARGE)
 	assert_eq(size, Vector2.ZERO,
 		"Large base not defined yet — should return ZERO")
-	assert_push_error_count(1,
+	assert_push_error(1,
 		"Should log a push_error for undefined ship size")
 
 

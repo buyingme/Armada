@@ -1,28 +1,24 @@
 var thepath = ''
 var subpath = ''
-var singleton_name = null
+var from_singleton = null
 var is_partial = null
 
 var double_ref : WeakRef = null
 var stubber_ref : WeakRef = null
 var spy_ref : WeakRef = null
 var gut_ref : WeakRef = null
-var singleton_ref : WeakRef = null
-var __gutdbl_values = {}
 
 const NO_DEFAULT_VALUE = '!__gut__no__default__value__!'
 func _init(double = null):
 	if(double != null):
 		var values = double.__gutdbl_values
-		__gutdbl_values = double.__gutdbl_values
 		double_ref = weakref(double)
 		thepath = values.thepath
 		subpath = values.subpath
 		stubber_ref = weakref_from_id(values.stubber)
 		spy_ref = weakref_from_id(values.spy)
 		gut_ref = weakref_from_id(values.gut)
-		singleton_ref = weakref_from_id(values.singleton)
-		singleton_name = values.singleton_name
+		from_singleton = values.from_singleton
 		is_partial = values.is_partial
 
 		if(gut_ref.get_ref() != null):
@@ -71,13 +67,4 @@ func default_val(method_name, p_index):
 	if(stubber_ref.get_ref() == null):
 		return null
 	else:
-		var result = stubber_ref.get_ref().get_default_value(double_ref.get_ref(), method_name, p_index)
-		return result
-
-
-func get_singleton():
-	var to_return = singleton_ref.get_ref()
-	if(to_return == null):
-		push_error("Trying to get a singleton reference on a non-singleton double: ",
-			__gutdbl_values.singleton_name, "/", __gutdbl_values.singleton)
-	return to_return
+		return stubber_ref.get_ref().get_default_value(double_ref.get_ref(), method_name, p_index)

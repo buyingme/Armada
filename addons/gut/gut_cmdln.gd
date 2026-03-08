@@ -20,8 +20,7 @@ func _init() -> void:
 	var max_iter := 20
 	var iter := 0
 
-	# Make a reference to gut_loader so its _static_init is run.
-	var Laoder : Object = load("res://addons/gut/gut_loader.gd")
+	var Loader : Object = load("res://addons/gut/gut_loader.gd")
 
 	# Not seen this wait more than 1.
 	while(Engine.get_main_loop() == null and iter < max_iter):
@@ -36,6 +35,7 @@ func _init() -> void:
 	var cli : Node = load('res://addons/gut/cli/gut_cli.gd').new()
 	get_root().add_child(cli)
 
+	Loader.restore_ignore_addons()
 	cli.main()
 
 

@@ -242,4 +242,4 @@ These are subtle bugs actually encountered in this project:
 | Calling `.distance_to()` on wrong object | Geometry distance function returns 0 for all inputs | Verify both args are independent points; don't pass a point that is already on the segment as the reference |
 | Forgetting `static` on utility class method | `Method not found in base 'RefCounted'` at runtime | All methods in a static utility class must carry the `static` keyword |
 | `match` arm body indented at wrong level | Parse error or wrong arm executes | Each arm body must be exactly one tab deeper than the arm label |
-| GUT `-gexit` flag suppresses output | Exit code 1 on parse error but no visible summary | Use `2>&1 \| tail -20` instead of `-gexit` to see the full summary |
+| GUT `-gexit` required in 9.5.0 | Headless process never terminates without it — tests run but the shell hangs | Always use `-gexit 2>&1 \| tail -20`; output IS visible through the pipe |

@@ -2,7 +2,7 @@
 
 > **Scope:** Phases 0–2. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
-> **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
+> **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
 ---
 
@@ -191,7 +191,7 @@ func _input(event: InputEvent) -> void:
 
 Run this quick checklist any time you merge changes that touch Phase 0–2 files:
 
-- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -10` → **303 tests, 0 failures**
+- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **303 tests, 0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
 - [ ] Run `game_board.tscn` → all 5 tokens appear in correct deployment zones
 - [ ] Right-click drag → board pans; boundary clamping works

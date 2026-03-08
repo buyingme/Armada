@@ -178,7 +178,7 @@ stub(dice_double, "roll_die").to_return(Constants.DiceFace.HIT)
 
 ```bash
 # All tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
 
 # Unit tests only
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit
@@ -221,7 +221,7 @@ Symptom: Test total drops unexpectedly (e.g. 274 → 260 with "0 failed").
 Run the full test suite and check the tail output:
 
 ```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
 ```
 
 Requirements before any commit:

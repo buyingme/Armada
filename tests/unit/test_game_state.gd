@@ -52,7 +52,7 @@ func test_get_player_state_invalid_index() -> void:
 	state.initialize()
 	var ps := state.get_player_state(5)
 	assert_null(ps, "Should return null for invalid index")
-	assert_push_error_count(1, "Should produce exactly 1 push_error for invalid index")
+	assert_push_error(1, "Should produce exactly 1 push_error for invalid index")
 
 
 func test_get_initiative_player_state() -> void:

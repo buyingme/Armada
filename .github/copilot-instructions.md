@@ -8,7 +8,7 @@
 - **Project:** Star Wars: Armada — Digital board game adaptation
 - **Engine:** Godot 4.5+ with GDScript (no C#, no GDExtension)
 - **Architecture:** Layered (Presentation → Application → Domain → Data)
-- **Testing:** GUT framework (v9.6.0), high coverage mandatory
+- **Testing:** GUT framework (v9.5.0), high coverage mandatory
 - **Documentation:** arc42 style in `docs/arc42/`
 
 ## Mandatory Reading Before Any Code Generation
@@ -99,7 +99,7 @@ func can_spend_defense_token(defender_speed: int) -> bool:
 After editing source or test files, always run the full suite and confirm both the script count and the pass count:
 
 ```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
 ```
 
 GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
@@ -123,7 +123,7 @@ When asked to implement a feature or fix a bug:
 5. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
 6. **Verify** — Run tests and confirm: 0 failures, expected script count, no parse errors:
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 2>&1 | tail -20
+   godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
    ```
 7. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
 8. **Update manual test plan** — Add phase section to `docs/test_plan_manual.md` (visual/interaction checks only — skip anything GUT already covers)

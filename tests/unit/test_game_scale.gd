@@ -14,6 +14,19 @@ var _test_config: Dictionary = {
 		"long": {"max_px": 720},
 	},
 	"distance_bands_px": [181, 294, 434, 577, 720],
+	"base_graphics": {
+		"small_ship": {
+			"base_region_width_px": 103,
+			"base_region_length_px": 171,
+		},
+		"medium_ship": {
+			"base_region_width_px": 148,
+			"base_region_length_px": 243,
+		},
+		"squadron_base": {
+			"base_region_diameter_px": 82,
+		},
+	},
 }
 
 ## System under test (fresh instance per test).
@@ -213,3 +226,96 @@ func test_get_distance_band_5_boundary() -> void:
 func test_get_distance_band_beyond_returns_zero() -> void:
 	assert_eq(_scale.get_distance_band(800.0), 0,
 		"800 px should return 0 (beyond all distance bands)")
+
+
+# --- Base graphics region data ---
+
+func test_small_base_region_width_loaded() -> void:
+	assert_eq(_scale.small_base_region_width_px, 103.0,
+		"Small base region width should be 103 px")
+
+
+func test_small_base_region_length_loaded() -> void:
+	assert_eq(_scale.small_base_region_length_px, 171.0,
+		"Small base region length should be 171 px")
+
+
+func test_medium_base_region_width_loaded() -> void:
+	assert_eq(_scale.medium_base_region_width_px, 148.0,
+		"Medium base region width should be 148 px")
+
+
+func test_medium_base_region_length_loaded() -> void:
+	assert_eq(_scale.medium_base_region_length_px, 243.0,
+		"Medium base region length should be 243 px")
+
+
+func test_squadron_base_region_diameter_loaded() -> void:
+	assert_eq(_scale.squadron_base_region_diameter_px, 82.0,
+		"Squadron base region diameter should be 82 px")
+
+
+# --- get_base_sprite_scale ---
+
+func test_get_base_sprite_scale_small_uses_per_axis() -> void:
+	# target: ~101.51 x ~167.54; region: 103 x 171
+	var tex_size: Vector2 = Vector2(143.0, 211.0)
+	var result: Vector2 = _scale.get_base_sprite_scale(
+			Constants.ShipSize.SMALL, tex_size)
+	var expected_sx: float = _scale.small_base_width_px / 103.0
+	var expected_sy: float = _scale.small_base_length_px / 171.0
+	assert_almost_eq(result.x, expected_sx, 0.001,
+		"Small ship sprite scale X should be target_w / region_w")
+	assert_almost_eq(result.y, expected_sy, 0.001,
+		"Small ship sprite scale Y should be target_l / region_l")
+
+
+func test_get_base_sprite_scale_medium_uses_per_axis() -> void:
+	var tex_size: Vector2 = Vector2(189.0, 283.0)
+	var result: Vector2 = _scale.get_base_sprite_scale(
+			Constants.ShipSize.MEDIUM, tex_size)
+	var expected_sx: float = _scale.medium_base_width_px / 148.0
+	var expected_sy: float = _scale.medium_base_length_px / 243.0
+	assert_almost_eq(result.x, expected_sx, 0.001,
+		"Medium ship sprite scale X should be target_w / region_w")
+	assert_almost_eq(result.y, expected_sy, 0.001,
+		"Medium ship sprite scale Y should be target_l / region_l")
+
+
+func test_get_base_sprite_scale_large_falls_back_to_uniform() -> void:
+	# Large base region not yet measured — should fall back to minf()
+	var tex_size: Vector2 = Vector2(200.0, 300.0)
+	var result: Vector2 = _scale.get_base_sprite_scale(
+			Constants.ShipSize.LARGE, tex_size)
+	var target: Vector2 = _scale.get_base_size(Constants.ShipSize.LARGE)
+	var expected_sf: float = minf(target.x / 200.0, target.y / 300.0)
+	assert_almost_eq(result.x, expected_sf, 0.001,
+		"Large ship fallback should use uniform scale")
+	assert_almost_eq(result.y, expected_sf, 0.001,
+		"Large ship fallback scale X and Y should be equal")
+
+
+func test_get_base_sprite_scale_zero_tex_returns_one() -> void:
+	var result: Vector2 = _scale.get_base_sprite_scale(
+			Constants.ShipSize.SMALL, Vector2.ZERO)
+	assert_eq(result, Vector2.ONE,
+		"Zero texture size should return Vector2.ONE")
+
+
+# --- get_squadron_sprite_scale ---
+
+func test_get_squadron_sprite_scale_uses_region() -> void:
+	# target diameter: ~96.79; region diameter: 82
+	var tex_size: Vector2 = Vector2(82.0, 82.0)
+	var result: Vector2 = _scale.get_squadron_sprite_scale(tex_size)
+	var expected_sf: float = _scale.squadron_base_diameter_px / 82.0
+	assert_almost_eq(result.x, expected_sf, 0.001,
+		"Squadron sprite scale X should be target_d / region_d")
+	assert_almost_eq(result.y, expected_sf, 0.001,
+		"Squadron sprite scale Y should be target_d / region_d")
+
+
+func test_get_squadron_sprite_scale_zero_tex_returns_one() -> void:
+	var result: Vector2 = _scale.get_squadron_sprite_scale(Vector2.ZERO)
+	assert_eq(result, Vector2.ONE,
+		"Zero texture size should return Vector2.ONE")

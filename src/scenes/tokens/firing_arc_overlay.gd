@@ -31,10 +31,10 @@ const ARC_SEGMENTS: int = 24
 ## FRONT=0 blue, LEFT=1 green, RIGHT=2 yellow, REAR=3 red.
 ## Rules Reference: UI-011 colour coding.
 const _ZONE_BASE_COLOURS: Array[Color] = [
-	Color(0.30, 0.70, 1.00),  # FRONT — blue
-	Color(0.30, 1.00, 0.40),  # LEFT  — green
-	Color(1.00, 0.90, 0.20),  # RIGHT — yellow
-	Color(1.00, 0.35, 0.30),  # REAR  — red
+	Color(0.30, 0.70, 1.00), # FRONT — blue
+	Color(0.30, 1.00, 0.40), # LEFT  — green
+	Color(1.00, 0.90, 0.20), # RIGHT — yellow
+	Color(1.00, 0.35, 0.30), # REAR  — red
 ]
 
 ## Arc angle ranges in radians [from, to] per hull zone.
@@ -48,10 +48,10 @@ const _ZONE_BASE_COLOURS: Array[Color] = [
 ##   lower-right diagonal =  π/4  → RIGHT/REAR boundary
 ##   lower-left diagonal  =  3π/4 → REAR/LEFT boundary
 const _ZONE_ANGLES: Array[Array] = [
-	[-2.35619449, -0.78539816],  # FRONT (0): -3π/4 to -π/4  (upper/forward quadrant)
-	[ 2.35619449,  3.92699082],  # LEFT  (1):  3π/4 to  5π/4 (port = left when facing -Y)
-	[-0.78539816,  0.78539816],  # RIGHT (2): -π/4 to   π/4  (starboard = right when facing -Y)
-	[ 0.78539816,  2.35619449],  # REAR  (3):  π/4 to   3π/4 (lower/aft quadrant)
+	[-2.35619449, -0.78539816], # FRONT (0): -3π/4 to -π/4  (upper/forward quadrant)
+	[2.35619449, 3.92699082], # LEFT  (1):  3π/4 to  5π/4 (port = left when facing -Y)
+	[-0.78539816, 0.78539816], # RIGHT (2): -π/4 to   π/4  (starboard = right when facing -Y)
+	[0.78539816, 2.35619449], # REAR  (3):  π/4 to   3π/4 (lower/aft quadrant)
 ]
 
 

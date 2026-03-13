@@ -63,7 +63,7 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			var local_pos: Vector2 = to_local(get_global_mouse_position())
 			if local_pos.length() <= _radius_px:
-				token_clicked.emit(self)
+				token_clicked.emit(self )
 				get_viewport().set_input_as_handled()
 
 
@@ -97,10 +97,10 @@ func _create_sprite(placement: TokenPlacement) -> void:
 	add_child(_sprite)
 
 
-## Scales [_sprite] to fit within the circular base.
+## Scales [_sprite] so the base region in the source PNG aligns with the
+## game-scale circular base. Uses [GameScale] measured base region.
 func _scale_sprite_to_base(tex: Texture2D) -> void:
-	var tex_size: float = maxf(float(tex.get_width()), float(tex.get_height()))
-	if tex_size <= 0.0:
+	var tex_size: Vector2 = Vector2(float(tex.get_width()), float(tex.get_height()))
+	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
 		return
-	var scale_factor: float = (_radius_px * 2.0) / tex_size
-	_sprite.scale = Vector2(scale_factor, scale_factor)
+	_sprite.scale = GameScale.get_squadron_sprite_scale(tex_size)

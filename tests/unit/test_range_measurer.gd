@@ -71,7 +71,7 @@ func test_ship_to_squadron_touching_hull_zone_is_near_zero() -> void:
 	var half_len: float = GameScale.small_base_length_px * 0.5
 	var third: float = half_len * 2.0 / 3.0
 	# Front zone extends from -half_len to (-half_len + third).
-	var front_edge_y: float = -half_len
+	var front_edge_y: float = - half_len
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var squadron_pos: Vector2 = Vector2(0.0, front_edge_y - radius)
 	var d: float = RangeMeasurer.measure_ship_to_squadron(
@@ -109,7 +109,7 @@ func test_get_ship_to_ship_band_close() -> void:
 	# Close range max is ~292 px. Put both ships adjacent.
 	var radius: float = GameScale.small_base_length_px * 0.5
 	var a: ShipBase = _make_ship(Vector2(0.0, 0.0))
-	var b: ShipBase = _make_ship(Vector2(0.0, -(2.0 * radius + 100.0)))
+	var b: ShipBase = _make_ship(Vector2(0.0, - (2.0 * radius + 100.0)))
 	var band: String = RangeMeasurer.get_ship_to_ship_band(
 			a, Constants.HullZone.FRONT, b, Constants.HullZone.REAR)
 	assert_eq(band, "close", "Ships within 292 px should be at close range")

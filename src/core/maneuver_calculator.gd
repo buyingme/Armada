@@ -92,7 +92,7 @@ static func compute_tool_joints(
 	# Move from the base centre to the front notch (leading edge).
 	# In local space, the front notch is at (0, -half_length_px).
 	# We advance the tool from there.
-	var ship_size: Constants.ShipSize = Constants.ShipSize.SMALL  # default
+	var ship_size: Constants.ShipSize = Constants.ShipSize.SMALL # default
 	var half_len: float = GameScale.get_base_size(ship_size).y * 0.5
 	var notch_fwd: Vector2 = current.basis_xform(Vector2(0.0, -half_len))
 	current = Transform2D(current.get_rotation(), current.origin + notch_fwd)

@@ -76,10 +76,10 @@ func get_arc_boundary_rays() -> Array[Array]:
 	var far: float = 10000.0
 	var rays: Array[Array] = []
 	var directions: Array[Vector2] = [
-		Vector2(1.0, -1.0).normalized(),   # FRONT/RIGHT boundary
-		Vector2(-1.0, -1.0).normalized(),  # FRONT/LEFT boundary
-		Vector2(-1.0, 1.0).normalized(),   # REAR/LEFT boundary
-		Vector2(1.0, 1.0).normalized(),    # REAR/RIGHT boundary
+		Vector2(1.0, -1.0).normalized(), # FRONT/RIGHT boundary
+		Vector2(-1.0, -1.0).normalized(), # FRONT/LEFT boundary
+		Vector2(-1.0, 1.0).normalized(), # REAR/LEFT boundary
+		Vector2(1.0, 1.0).normalized(), # REAR/RIGHT boundary
 	]
 	for dir: Vector2 in directions:
 		var world_dir: Vector2 = ship_transform.basis_xform(dir)
@@ -92,8 +92,8 @@ func get_arc_boundary_rays() -> Array[Array]:
 ## Rules Reference: "Maneuver", p.7; AT-040
 func get_notch_positions() -> Array[Vector2]:
 	# Notches are at the midpoints of the two short (width) edges.
-	var front_mid: Vector2 = Vector2(0.0, -half_length_px)   # leading edge centre
-	var rear_mid: Vector2 = Vector2(0.0, half_length_px)  # trailing edge centre
+	var front_mid: Vector2 = Vector2(0.0, -half_length_px) # leading edge centre
+	var rear_mid: Vector2 = Vector2(0.0, half_length_px) # trailing edge centre
 	# Two notches per edge, at ±1/4 of the widget
 	var result: Array[Vector2] = []
 	result.append(_world_point(Vector2(-half_width_px * 0.5, -half_length_px)))
@@ -130,9 +130,9 @@ func _local_base_polygon() -> PackedVector2Array:
 func _local_hull_zone_polygon(zone: Constants.HullZone) -> PackedVector2Array:
 	var hw: float = half_width_px
 	var hl: float = half_length_px
-	var third: float = hl * 2.0 / 3.0   # 1/3 of total length
-	var front_y: float = -hl             # topmost Y (front)
-	var rear_y: float = hl               # bottommost Y (rear)
+	var third: float = hl * 2.0 / 3.0 # 1/3 of total length
+	var front_y: float = - hl # topmost Y (front)
+	var rear_y: float = hl # bottommost Y (rear)
 	var mid_front_y: float = front_y + third
 	var mid_rear_y: float = rear_y - third
 

@@ -16,5 +16,20 @@
             "label": "Long"
         }
     },
-    "distance_bands_px": [181, 294, 434, 577, 720]
+    "distance_bands_px": [181, 294, 434, 577, 720],
+
+    "base_graphics": {
+        "_comment": "Measured pixel size of the base boundary edge-to-edge within each source PNG. Used to scale sprites so the base artwork aligns exactly with the computed game-scale bounding boxes.",
+        "small_ship": {
+            "base_region_width_px": 103,
+            "base_region_length_px": 171
+        },
+        "medium_ship": {
+            "base_region_width_px": 148,
+            "base_region_length_px": 243
+        },
+        "squadron_base": {
+            "base_region_diameter_px": 82
+        }
+    }
 }

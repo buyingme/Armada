@@ -24,8 +24,8 @@ const SMALL_BASE_WIDTH_MM: float = 43.0
 const SMALL_BASE_LENGTH_MM: float = 71.0
 const MEDIUM_BASE_WIDTH_MM: float = 63.0
 const MEDIUM_BASE_LENGTH_MM: float = 102.0
-const LARGE_BASE_WIDTH_MM: float = 110.0
-const LARGE_BASE_LENGTH_MM: float = 152.0
+const LARGE_BASE_WIDTH_MM: float = 77.5
+const LARGE_BASE_LENGTH_MM: float = 129.0
 const SQUADRON_BASE_DIAMETER_MM: float = 41.0
 
 ## Number of maneuver tool segments.
@@ -67,6 +67,15 @@ var squadron_base_diameter_px: float = 0.0
 ## Maneuver tool segment length in pixels.
 var maneuver_segment_px: float = 0.0
 
+## Source-PNG base region sizes (measured pixel spans of the base boundary
+## within each token image). Used to compute per-axis sprite scale factors so
+## the artwork aligns exactly with the game-scale bounding boxes.
+var small_base_region_width_px: float = 0.0
+var small_base_region_length_px: float = 0.0
+var medium_base_region_width_px: float = 0.0
+var medium_base_region_length_px: float = 0.0
+var squadron_base_region_diameter_px: float = 0.0
+
 ## Whether scale data was loaded and computed successfully.
 var is_initialised: bool = false
 
@@ -106,9 +115,22 @@ func _load_scale_config() -> void:
 	small_base_length_px = _mm_to_px(SMALL_BASE_LENGTH_MM)
 	medium_base_width_px = _mm_to_px(MEDIUM_BASE_WIDTH_MM)
 	medium_base_length_px = _mm_to_px(MEDIUM_BASE_LENGTH_MM)
+	large_base_width_px = _mm_to_px(LARGE_BASE_WIDTH_MM)
+	large_base_length_px = _mm_to_px(LARGE_BASE_LENGTH_MM)
 	squadron_base_diameter_px = _mm_to_px(SQUADRON_BASE_DIAMETER_MM)
 
 	maneuver_segment_px = ruler_length_px / float(MANEUVER_SEGMENTS)
+
+	# Base graphics (measured base region in source PNGs).
+	var bg: Dictionary = config.get("base_graphics", {})
+	var small_bg: Dictionary = bg.get("small_ship", {})
+	small_base_region_width_px = float(small_bg.get("base_region_width_px", 0))
+	small_base_region_length_px = float(small_bg.get("base_region_length_px", 0))
+	var medium_bg: Dictionary = bg.get("medium_ship", {})
+	medium_base_region_width_px = float(medium_bg.get("base_region_width_px", 0))
+	medium_base_region_length_px = float(medium_bg.get("base_region_length_px", 0))
+	var squad_bg: Dictionary = bg.get("squadron_base", {})
+	squadron_base_region_diameter_px = float(squad_bg.get("base_region_diameter_px", 0))
 
 	is_initialised = true
 	_log.info("Scale initialised — ruler %s px, play area %s px" % [
@@ -179,8 +201,22 @@ func initialise_from_dict(config: Dictionary) -> void:
 	small_base_length_px = _mm_to_px(SMALL_BASE_LENGTH_MM)
 	medium_base_width_px = _mm_to_px(MEDIUM_BASE_WIDTH_MM)
 	medium_base_length_px = _mm_to_px(MEDIUM_BASE_LENGTH_MM)
+	large_base_width_px = _mm_to_px(LARGE_BASE_WIDTH_MM)
+	large_base_length_px = _mm_to_px(LARGE_BASE_LENGTH_MM)
 	squadron_base_diameter_px = _mm_to_px(SQUADRON_BASE_DIAMETER_MM)
 	maneuver_segment_px = ruler_length_px / float(MANEUVER_SEGMENTS)
+
+	# Base graphics (from dict — mirrors _load_scale_config logic).
+	var bg: Dictionary = config.get("base_graphics", {})
+	var small_bg: Dictionary = bg.get("small_ship", {})
+	small_base_region_width_px = float(small_bg.get("base_region_width_px", 0))
+	small_base_region_length_px = float(small_bg.get("base_region_length_px", 0))
+	var medium_bg: Dictionary = bg.get("medium_ship", {})
+	medium_base_region_width_px = float(medium_bg.get("base_region_width_px", 0))
+	medium_base_region_length_px = float(medium_bg.get("base_region_length_px", 0))
+	var squad_bg: Dictionary = bg.get("squadron_base", {})
+	squadron_base_region_diameter_px = float(squad_bg.get("base_region_diameter_px", 0))
+
 	is_initialised = true
 
 
@@ -211,3 +247,53 @@ func _read_config_file() -> Dictionary:
 
 	_log.error("Scale config root must be a JSON object")
 	return {}
+
+
+## Returns the per-axis sprite scale for a ship base so the measured base
+## region in the source PNG maps exactly to the game-scale base size.
+## If base_graphics data is missing, falls back to uniform fit-to-box scaling
+## using the raw texture size.
+## [param ship_size] — the ship's size class.
+## [param tex_size] — the raw pixel size of the ship token texture.
+func get_base_sprite_scale(ship_size: Constants.ShipSize, tex_size: Vector2) -> Vector2:
+	var target: Vector2 = get_base_size(ship_size)
+	if target.x <= 0.0 or target.y <= 0.0 or tex_size.x <= 0.0 or tex_size.y <= 0.0:
+		return Vector2.ONE
+	var region: Vector2 = _get_base_region(ship_size)
+	if region.x <= 0.0 or region.y <= 0.0:
+		# Fallback: uniform scale (legacy behaviour).
+		var sf: float = minf(target.x / tex_size.x, target.y / tex_size.y)
+		return Vector2(sf, sf)
+	# Per-axis: scale so that [region] pixels in the source map to [target].
+	var sx: float = target.x / region.x
+	var sy: float = target.y / region.y
+	return Vector2(sx, sy)
+
+
+## Returns the per-axis sprite scale for a squadron base so the measured base
+## region in the source PNG maps exactly to the game-scale diameter.
+## [param tex_size] — the raw pixel size of the squadron token texture.
+func get_squadron_sprite_scale(tex_size: Vector2) -> Vector2:
+	var target_d: float = squadron_base_diameter_px
+	if target_d <= 0.0 or tex_size.x <= 0.0 or tex_size.y <= 0.0:
+		return Vector2.ONE
+	var region_d: float = squadron_base_region_diameter_px
+	if region_d <= 0.0:
+		# Fallback: uniform scale (legacy behaviour).
+		var sf: float = target_d / maxf(tex_size.x, tex_size.y)
+		return Vector2(sf, sf)
+	# Uniform scale using measured base region diameter.
+	var sf: float = target_d / region_d
+	return Vector2(sf, sf)
+
+
+## Returns the source-PNG base region size for the given ship size.
+func _get_base_region(ship_size: Constants.ShipSize) -> Vector2:
+	match ship_size:
+		Constants.ShipSize.SMALL:
+			return Vector2(small_base_region_width_px, small_base_region_length_px)
+		Constants.ShipSize.MEDIUM:
+			return Vector2(medium_base_region_width_px, medium_base_region_length_px)
+		_:
+			# Large base region not yet measured — return zero to trigger fallback.
+			return Vector2.ZERO

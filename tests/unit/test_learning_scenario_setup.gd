@@ -1,7 +1,7 @@
 ## Test: LearningScenarioSetup
 ##
 ## Unit tests for LearningScenarioSetup — verifies placement data for all
-## five tokens in the Learning Scenario: three ships and two squadrons.
+## six tokens in the Learning Scenario: three ships and three squadrons.
 ##
 ## Rules Reference: "Learning Scenario Setup", steps 4 and 9, p.5–6.
 extends GutTest
@@ -20,18 +20,18 @@ func after_each() -> void:
 
 # --- Token Count ---
 
-func test_get_all_placements_returns_five_tokens() -> void:
+func test_get_all_placements_returns_six_tokens() -> void:
 	# Arrange / Act
 	var placements: Array[TokenPlacement] = \
 			_setup.get_all_placements()
 	# Assert
-	assert_eq(placements.size(), 5,
-			"Learning Scenario has exactly 5 tokens (3 ships + 2 squadrons)")
+	assert_eq(placements.size(), 6,
+			"Learning Scenario has exactly 6 tokens (3 ships + 3 squadrons)")
 
 
-func test_get_token_count_returns_five() -> void:
-	assert_eq(_setup.get_token_count(), 5,
-			"get_token_count() should return 5")
+func test_get_token_count_returns_six() -> void:
+	assert_eq(_setup.get_token_count(), 6,
+			"get_token_count() should return 6")
 
 
 func test_get_ship_placements_returns_three_ships() -> void:
@@ -41,11 +41,11 @@ func test_get_ship_placements_returns_three_ships() -> void:
 			"Three ships: Victory II, CR90 Corvette A, Nebulon-B")
 
 
-func test_get_squadron_placements_returns_two_squadrons() -> void:
+func test_get_squadron_placements_returns_three_squadrons() -> void:
 	var squadrons: Array[TokenPlacement] = \
 			_setup.get_squadron_placements()
-	assert_eq(squadrons.size(), 2,
-			"Two squadrons: X-wing and TIE Fighter")
+	assert_eq(squadrons.size(), 3,
+			"Three squadrons: 2 TIE Fighters and 1 X-wing")
 
 
 # --- Factions ---

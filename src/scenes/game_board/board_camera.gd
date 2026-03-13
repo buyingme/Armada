@@ -28,12 +28,12 @@ const ZOOM_STEP: float = 0.10
 ## Scaling applied to the magnify gesture factor.
 ## Factor arrives as a multiplier near 1.0 (e.g. 1.05 = 5% zoom in);
 ## raising it to this power makes small pinches feel natural.
-const ZOOM_MAGNIFY_SENSITIVITY: float = 3.0
+const ZOOM_MAGNIFY_SENSITIVITY: float = 0.5
 
 ## Scaling applied to the trackpad pan delta (screen px → world units).
 ## The delta is already in screen pixels; dividing by zoom converts to world
 ## space. This multiplier adjusts feel — 1.0 is a 1:1 finger-to-world ratio.
-const PAN_GESTURE_SENSITIVITY: float = 1.0
+const PAN_GESTURE_SENSITIVITY: float = 20.0
 
 ## Extra space in pixels beyond the play area edges within which
 ## the camera may still be positioned.

@@ -83,7 +83,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if _is_point_in_base(get_global_mouse_position()):
-				token_clicked.emit(self)
+				token_clicked.emit(self )
 				get_viewport().set_input_as_handled()
 
 
@@ -116,8 +116,8 @@ func _draw_base_outline(colour: Color) -> void:
 ## Rules Reference: "Hull Zones", p.4; GC-003.
 func _draw_zone_lines() -> void:
 	var third: float = _half_l * 2.0 / 3.0
-	var front_y: float = -_half_l + third      # boundary between FRONT and sides
-	var rear_y: float = _half_l - third        # boundary between sides and REAR
+	var front_y: float = - _half_l + third # boundary between FRONT and sides
+	var rear_y: float = _half_l - third # boundary between sides and REAR
 	draw_line(Vector2(-_half_w, front_y), Vector2(_half_w, front_y),
 			ZONE_LINE_COLOUR, 1.0)
 	draw_line(Vector2(-_half_w, rear_y), Vector2(_half_w, rear_y),
@@ -138,14 +138,19 @@ func _create_sprite(placement: TokenPlacement) -> void:
 	add_child(_sprite)
 
 
-## Scales [_sprite] so its bounds fit within the base rectangle.
+## Scales [_sprite] so the base region in the source PNG aligns with the
+## game-scale bounding box. Uses per-axis scaling via [GameScale].
 func _scale_sprite_to_base(tex: Texture2D) -> void:
 	var tex_size: Vector2 = Vector2(tex.get_width(), tex.get_height())
 	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
 		return
-	var target: Vector2 = Vector2(_half_w * 2.0, _half_l * 2.0)
-	var scale_factor: float = minf(target.x / tex_size.x, target.y / tex_size.y)
-	_sprite.scale = Vector2(scale_factor, scale_factor)
+	if _placement:
+		_sprite.scale = GameScale.get_base_sprite_scale(
+				_placement.ship_size, tex_size)
+	else:
+		var target: Vector2 = Vector2(_half_w * 2.0, _half_l * 2.0)
+		var sf: float = minf(target.x / tex_size.x, target.y / tex_size.y)
+		_sprite.scale = Vector2(sf, sf)
 
 
 ## Creates the FiringArcOverlay child (initially hidden).

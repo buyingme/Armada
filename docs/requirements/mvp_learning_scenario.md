@@ -542,8 +542,9 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
-| DBG-020 | While moving, if the selected token's footprint would overlap another token, the selected token is slid to the **contact point** (touching but not overlapping). | Uses ShipBase / SquadronBase overlap geometry |
-| DBG-021 | If the mouse cursor moves **beyond** a blocking token (the selected token is stuck at contact), and the selected token's footprint would fit on the far side of the blocking token, the selected token **jumps past** to the far side and resumes following the cursor. | Prevents tokens getting permanently stuck |
+| DBG-020 | While moving, if the selected token's footprint at the mouse-cursor position would overlap another token, the selected token is displayed at the **closest legal position** whose centre has the **minimum Euclidean distance to the mouse cursor**, such that no overlap exists with any other token, deployment zone boundary, or play-area edge. The token must never penetrate another token's footprint. | Mirrors deployment-zone clamping behaviour (DBG-032); replaces the old "slide along movement vector" approach |
+| DBG-021 | *(Removed — subsumed by DBG-020/DBG-022.)* Jump-past is no longer a separate concept: if the mouse cursor is beyond a blocker and the footprint fits, the direct projection in DBG-020 naturally resolves to the mouse position itself (no overlap → no correction needed). | — |
+| DBG-022 | Closest-legal-position resolution uses **direct geometric projection**: for each blocking token, compute the nearest non-overlapping position by pushing the selected token outward from the blocker along the line connecting the blocker's centre to the mouse cursor, to the exact contact distance (Minkowski sum boundary). When multiple blockers constrain the position, the candidate closest to the mouse wins, provided it does not violate any other constraint. | Projection-based; independent of the token's previous position |
 
 ### 19.4 Deployment Zone Visualisation & Enforcement
 

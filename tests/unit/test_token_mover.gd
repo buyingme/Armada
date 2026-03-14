@@ -1,9 +1,10 @@
 ## Test: TokenMover
 ##
-## Unit tests for TokenMover — collision resolution, deployment zone enforcement,
-## and jump-past logic for debug-mode token placement.
+## Unit tests for TokenMover — projection-based collision resolution,
+## deployment zone enforcement, and closest-legal-position logic
+## for debug-mode token placement.
 ##
-## Requirements: DBG-011, DBG-020, DBG-021, DBG-032
+## Requirements: DBG-011, DBG-020, DBG-022, DBG-032
 extends GutTest
 
 
@@ -81,28 +82,30 @@ func test_resolve_squadron_free_move_returns_desired() -> void:
 # ---------------------------------------------------------------------------
 
 func test_resolve_squadron_blocked_by_other_squadron() -> void:
-	# Arrange — blocker at (500, 500), try to move to same position.
+	# Arrange — blocker at (500, 500), approach from the left.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
 	var current: Vector2 = Vector2(300.0, 500.0)
-	var desired: Vector2 = Vector2(500.0, 500.0)
-	# Act
+	var desired: Vector2 = Vector2(460.0, 500.0)
+	# Act — desired is inside the blocker's exclusion zone.
 	var result: Vector2 = _mover.resolve_squadron_position(
 			desired, current, radius,
 			Constants.Faction.REBEL_ALLIANCE,
 			[], blocker, -1.0, -1.0, GameScale.play_area_side_px)
-	# Assert — should stop before reaching the blocker.
-	assert_true(result.x < 500.0 - radius,
-			"Squadron should be stopped before the blocker centre")
-	assert_true(result.distance_to(current) > 0.0,
-			"Squadron should have moved toward blocker")
+	# Assert — pushed outward along blocker→desired direction (left of blocker).
+	var min_separation: float = radius * 2.0
+	var dist_to_blocker: float = result.distance_to(Vector2(500.0, 500.0))
+	assert_true(dist_to_blocker >= min_separation - 2.0,
+			"Squadron should be pushed to at least contact distance from blocker")
+	assert_true(result.x < 500.0,
+			"Squadron should be to the left of the blocker (push direction)")
 
 
 # ---------------------------------------------------------------------------
-# Squadron — jump past another squadron
+# Squadron — mouse beyond blocker (no overlap at desired → returns desired)
 # ---------------------------------------------------------------------------
 
-func test_resolve_squadron_jump_past_blocker() -> void:
+func test_resolve_squadron_beyond_blocker_returns_desired() -> void:
 	# Arrange — blocker at (500, 500), cursor at (700, 500) — far side is free.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
@@ -113,9 +116,11 @@ func test_resolve_squadron_jump_past_blocker() -> void:
 			desired, current, radius,
 			Constants.Faction.REBEL_ALLIANCE,
 			[], blocker, -1.0, -1.0, GameScale.play_area_side_px)
-	# Assert — should jump to the far side (near desired).
+	# Assert — desired has no overlap, so it is returned directly.
 	assert_almost_eq(result.x, desired.x, 1.0,
-			"Squadron should jump past the blocker to the far side")
+			"Squadron should reach desired X when no overlap exists")
+	assert_almost_eq(result.y, desired.y, 1.0,
+			"Squadron should reach desired Y when no overlap exists")
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +149,7 @@ func test_resolve_ship_free_move_returns_desired() -> void:
 # ---------------------------------------------------------------------------
 
 func test_resolve_ship_blocked_by_other_ship() -> void:
-	# Arrange — blocker small ship at (500, 500).
+	# Arrange — blocker small ship at (500, 500), approach from the left.
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
@@ -155,16 +160,85 @@ func test_resolve_ship_blocked_by_other_ship() -> void:
 		"half_l": hl,
 	}]
 	var current: Vector2 = Vector2(300.0, 500.0)
-	var desired: Vector2 = Vector2(500.0, 500.0)
+	var desired: Vector2 = Vector2(460.0, 500.0)
 	# Act
 	var result: Vector2 = _mover.resolve_ship_position(
 			desired, current,
 			Constants.ShipSize.SMALL, 0.0,
 			Constants.Faction.REBEL_ALLIANCE,
 			blocker, [], -1.0, -1.0, GameScale.play_area_side_px)
-	# Assert — should stop before reaching the blocker.
-	assert_true(result.x < 500.0 - hw,
-			"Ship should be stopped before the blocker")
+	# Assert — pushed to closest legal position (left of blocker).
+	assert_true(result.x < 500.0 - hw + 2.0,
+			"Ship should be pushed to the left of the blocker")
+
+
+# ---------------------------------------------------------------------------
+# DBG-020 / DBG-022 — closest-to-mouse projection tests
+# ---------------------------------------------------------------------------
+
+func test_squadron_pushout_direction_follows_mouse() -> void:
+	# Arrange — blocker at (500, 500), mouse above and right of blocker.
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var current: Vector2 = Vector2(300.0, 300.0)
+	var desired: Vector2 = Vector2(510.0, 480.0)  # just inside exclusion zone, above-right
+	# Act
+	var result: Vector2 = _mover.resolve_squadron_position(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], blocker, -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — pushed along blocker→desired direction: x > 500, y < 500.
+	assert_true(result.x >= 500.0,
+			"Push-out should be to the right of blocker (follows mouse)")
+	assert_true(result.y < 500.0,
+			"Push-out should be above blocker (follows mouse)")
+
+
+func test_squadron_pushout_independent_of_current_pos() -> void:
+	# Arrange — same desired and blocker, but different current positions.
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var desired: Vector2 = Vector2(510.0, 480.0)
+	# Act — approach from two very different current positions.
+	var result_a: Vector2 = _mover.resolve_squadron_position(
+			desired, Vector2(100.0, 100.0), radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], blocker, -1.0, -1.0, GameScale.play_area_side_px)
+	var result_b: Vector2 = _mover.resolve_squadron_position(
+			desired, Vector2(900.0, 900.0), radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], blocker, -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — both results should be the same (position is independent of
+	# the token's previous location).
+	assert_almost_eq(result_a.x, result_b.x, 2.0,
+			"Push-out X should be identical regardless of current_pos")
+	assert_almost_eq(result_a.y, result_b.y, 2.0,
+			"Push-out Y should be identical regardless of current_pos")
+
+
+func test_ship_pushout_closest_to_mouse_not_movement_line() -> void:
+	# Arrange — blocker at (500, 500), ship approaches from bottom-left but
+	# mouse is directly above the blocker → push-out should go upward.
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var hw: float = base_size.x * 0.5
+	var hl: float = base_size.y * 0.5
+	var blocker: Array = [{
+		"position": Vector2(500.0, 500.0),
+		"rotation": 0.0,
+		"half_w": hw,
+		"half_l": hl,
+	}]
+	var current: Vector2 = Vector2(200.0, 800.0)
+	var desired: Vector2 = Vector2(500.0, 450.0)  # above blocker centre
+	# Act
+	var result: Vector2 = _mover.resolve_ship_position(
+			desired, current,
+			Constants.ShipSize.SMALL, 0.0,
+			Constants.Faction.REBEL_ALLIANCE,
+			blocker, [], -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — pushed upward (above blocker), not along approach diagonal.
+	assert_true(result.y < 500.0,
+			"Ship push-out should follow mouse direction (above blocker)")
 
 
 # ---------------------------------------------------------------------------

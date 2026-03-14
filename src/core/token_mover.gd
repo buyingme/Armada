@@ -3,22 +3,32 @@
 ## Pure logic for debug-mode token movement: resolves a desired world position
 ## into a valid position respecting token–token and deployment-zone collisions.
 ##
-## Collision model:
-##   1. Move the token toward the target position.
-##   2. If the footprint overlaps ANY other token, slide to the contact point
-##      along the movement direction (DBG-020).
-##   3. If the target is BEYOND the blocker and the footprint fits on the far
-##      side, jump past to resume following the cursor (DBG-021).
-##   4. Deployment zone boundaries act as walls for faction-owned tokens
-##      (DBG-032).
+## Collision model (DBG-020, DBG-022, DBG-032):
+##   1. Apply boundary constraints (play area + deployment zone) to the desired
+##      position (the mouse cursor).
+##   2. If the constrained position does not overlap any token, return it.
+##   3. Otherwise, for EACH blocker the token overlaps, compute the closest
+##      non-overlapping position by projecting outward from the blocker along
+##      the direction from the blocker's centre to the desired position
+##      (Minkowski-sum boundary push-out).
+##   4. Among all push-out candidates that satisfy every constraint (no overlap
+##      with ANY token, within deployment zone, within play area), return the
+##      one whose centre is closest to the desired position.
+##   5. Fallback: if no single-blocker push-out is conflict-free, keep the
+##      token at its current position.
+##
+## Jump-past (former DBG-021) is subsumed: if the footprint fits at the desired
+## position, step 2 returns it immediately — no special case needed.
+##
+## Deployment zone boundaries continue to act as walls (DBG-032).
 ##
 ## This class is scene-tree independent (RefCounted).
 class_name TokenMover
 extends RefCounted
 
 
-## Maximum binary-search iterations for slide-to-contact resolution.
-const MAX_BINARY_STEPS: int = 16
+## Maximum binary-search iterations for push-out resolution.
+const MAX_BINARY_STEPS: int = 20
 
 ## Small epsilon for overlap tolerance (pixels).
 const OVERLAP_EPSILON: float = 1.0
@@ -26,10 +36,10 @@ const OVERLAP_EPSILON: float = 1.0
 
 ## Resolves a desired position for a ship token, accounting for collisions
 ## with other tokens and deployment zone boundaries.
-## Returns the best valid position.
+## Returns the best valid position — the closest legal position to the mouse.
 ##
 ## [param desired_pos] — where the mouse wants to place the token (world).
-## [param current_pos] — the token's current world position.
+## [param current_pos] — the token's current world position (fallback).
 ## [param ship_size] — the size class of the moving ship.
 ## [param rotation_rad] — the ship's current rotation.
 ## [param faction] — the moving token's faction (for deployment zone).
@@ -38,6 +48,7 @@ const OVERLAP_EPSILON: float = 1.0
 ## [param deploy_line_y_top] — Y of the top deployment line (-1 to disable).
 ## [param deploy_line_y_bottom] — Y of the bottom deployment line (-1 to disable).
 ## [param play_area_side] — play area side in pixels.
+## DBG-020, DBG-022
 func resolve_ship_position(
 		desired_pos: Vector2,
 		current_pos: Vector2,
@@ -54,40 +65,56 @@ func resolve_ship_position(
 	var half_w: float = base_size.x * 0.5
 	var half_l: float = base_size.y * 0.5
 
-	# First try the desired position.
+	# Step 1 — apply boundary constraints to the desired position.
 	var candidate: Vector2 = desired_pos
-
-	# Clamp to play area bounds.
 	candidate = _clamp_to_play_area(candidate, play_area_side)
-
-	# Check deployment zone boundary.
 	candidate = _apply_deploy_zone_ship(
 			candidate, half_w, half_l, rotation_rad, faction,
 			deploy_line_y_top, deploy_line_y_bottom)
 
-	# Check for overlap with other tokens at candidate position.
+	# Step 2 — if no overlap, return immediately.
 	if not _ship_overlaps_any(candidate, rotation_rad, half_w, half_l,
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Overlap detected — try jump-past first. If the cursor is beyond all
-	# blockers and the token fits on the far side, jump there.
-	var jump_pos: Vector2 = _try_jump_past_ship(
-			desired_pos, current_pos, rotation_rad, half_w, half_l,
-			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
-	if jump_pos != Vector2.INF:
-		return jump_pos
+	# Step 3 — for each blocker, compute the push-out candidate.
+	var best_pos: Vector2 = current_pos
+	var best_dist_sq: float = INF
 
-	# Fall back to slide-to-contact via binary search between current and desired.
-	return _binary_search_ship(
-			current_pos, desired_pos, rotation_rad, half_w, half_l,
-			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+	for other: Dictionary in other_ship_rects:
+		var pushed: Vector2 = _push_ship_from_ship(
+				candidate, rotation_rad, half_w, half_l, other)
+		pushed = _clamp_to_play_area(pushed, play_area_side)
+		pushed = _apply_deploy_zone_ship(
+				pushed, half_w, half_l, rotation_rad, faction,
+				deploy_line_y_top, deploy_line_y_bottom)
+		if not _ship_overlaps_any(pushed, rotation_rad, half_w, half_l,
+				other_ship_rects, other_squad_circles):
+			var d: float = pushed.distance_squared_to(desired_pos)
+			if d < best_dist_sq:
+				best_dist_sq = d
+				best_pos = pushed
+
+	for other: Dictionary in other_squad_circles:
+		var pushed: Vector2 = _push_ship_from_circle(
+				candidate, rotation_rad, half_w, half_l, other)
+		pushed = _clamp_to_play_area(pushed, play_area_side)
+		pushed = _apply_deploy_zone_ship(
+				pushed, half_w, half_l, rotation_rad, faction,
+				deploy_line_y_top, deploy_line_y_bottom)
+		if not _ship_overlaps_any(pushed, rotation_rad, half_w, half_l,
+				other_ship_rects, other_squad_circles):
+			var d: float = pushed.distance_squared_to(desired_pos)
+			if d < best_dist_sq:
+				best_dist_sq = d
+				best_pos = pushed
+
+	return best_pos
 
 
 ## Resolves a desired position for a squadron token.
-## Same logic as ship but with circular footprint.
+## Same projection-based approach as ship but with circular footprint.
+## DBG-020, DBG-022
 func resolve_squadron_position(
 		desired_pos: Vector2,
 		current_pos: Vector2,
@@ -100,7 +127,6 @@ func resolve_squadron_position(
 		play_area_side: float
 ) -> Vector2:
 	var candidate: Vector2 = desired_pos
-
 	candidate = _clamp_to_play_area(candidate, play_area_side)
 	candidate = _apply_deploy_zone_circle(
 			candidate, radius, faction,
@@ -110,19 +136,39 @@ func resolve_squadron_position(
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Try jump-past.
-	var jump_pos: Vector2 = _try_jump_past_circle(
-			desired_pos, current_pos, radius,
-			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
-	if jump_pos != Vector2.INF:
-		return jump_pos
+	# Push-out candidates from each blocker.
+	var best_pos: Vector2 = current_pos
+	var best_dist_sq: float = INF
 
-	# Binary search slide-to-contact.
-	return _binary_search_circle(
-			current_pos, desired_pos, radius,
-			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+	for other: Dictionary in other_ship_rects:
+		var pushed: Vector2 = _push_circle_from_ship(
+				candidate, radius, other)
+		pushed = _clamp_to_play_area(pushed, play_area_side)
+		pushed = _apply_deploy_zone_circle(
+				pushed, radius, faction,
+				deploy_line_y_top, deploy_line_y_bottom)
+		if not _circle_overlaps_any(pushed, radius,
+				other_ship_rects, other_squad_circles):
+			var d: float = pushed.distance_squared_to(desired_pos)
+			if d < best_dist_sq:
+				best_dist_sq = d
+				best_pos = pushed
+
+	for other: Dictionary in other_squad_circles:
+		var pushed: Vector2 = _push_circle_from_circle(
+				candidate, radius, other)
+		pushed = _clamp_to_play_area(pushed, play_area_side)
+		pushed = _apply_deploy_zone_circle(
+				pushed, radius, faction,
+				deploy_line_y_top, deploy_line_y_bottom)
+		if not _circle_overlaps_any(pushed, radius,
+				other_ship_rects, other_squad_circles):
+			var d: float = pushed.distance_squared_to(desired_pos)
+			if d < best_dist_sq:
+				best_dist_sq = d
+				best_pos = pushed
+
+	return best_pos
 
 
 # ---------------------------------------------------------------------------
@@ -252,98 +298,115 @@ func _clamp_to_play_area(pos: Vector2, side: float) -> Vector2:
 
 
 # ---------------------------------------------------------------------------
-# Binary search slide-to-contact
+# Push-out helpers — project the moving token to the nearest non-overlapping
+# position along the ray from a blocker's centre through the desired position.
+# DBG-022
 # ---------------------------------------------------------------------------
 
-## Binary searches between [start] and [end] to find the furthest position
-## along that line where the ship does NOT overlap anything.
-func _binary_search_ship(
-		start: Vector2, end: Vector2, rot: float, hw: float, hl: float,
-		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
-		top_y: float, bottom_y: float, side: float
+## Pushes a ship away from another ship blocker via binary search along the
+## blocker-centre → desired ray to find the closest clear position.
+func _push_ship_from_ship(
+		desired: Vector2, rot: float, hw: float, hl: float,
+		blocker: Dictionary
 ) -> Vector2:
-	var lo: float = 0.0
-	var hi: float = 1.0
-	var best: Vector2 = start
+	var b_pos: Vector2 = blocker.get("position", Vector2.ZERO) as Vector2
+	var dir: Vector2 = desired - b_pos
+	if dir.length_squared() < 0.01:
+		dir = Vector2.UP
+	dir = dir.normalized()
 
-	for _i: int in range(MAX_BINARY_STEPS):
-		var mid: float = (lo + hi) * 0.5
-		var candidate: Vector2 = start.lerp(end, mid)
-		candidate = _clamp_to_play_area(candidate, side)
-		candidate = _apply_deploy_zone_ship(
-				candidate, hw, hl, rot, faction, top_y, bottom_y)
-		if _ship_overlaps_any(candidate, rot, hw, hl, other_ships, other_squads):
-			hi = mid
-		else:
-			lo = mid
-			best = candidate
+	var b_hw: float = blocker.get("half_w", 0.0) as float
+	var b_hl: float = blocker.get("half_l", 0.0) as float
+	var max_dist: float = (
+			sqrt(hw * hw + hl * hl)
+			+ sqrt(b_hw * b_hw + b_hl * b_hl)
+			+ OVERLAP_EPSILON * 2.0)
 
-	return best
+	return _ray_binary_search_ship(
+			b_pos, dir, max_dist, rot, hw, hl, [blocker], [])
 
 
-## Binary search for circular (squadron) tokens.
-func _binary_search_circle(
-		start: Vector2, end: Vector2, radius: float,
-		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
-		top_y: float, bottom_y: float, side: float
+## Pushes a ship away from a circle (squadron) blocker.
+func _push_ship_from_circle(
+		desired: Vector2, rot: float, hw: float, hl: float,
+		blocker: Dictionary
 ) -> Vector2:
-	var lo: float = 0.0
-	var hi: float = 1.0
-	var best: Vector2 = start
+	var b_pos: Vector2 = blocker.get("position", Vector2.ZERO) as Vector2
+	var b_r: float = blocker.get("radius", 0.0) as float
+	var dir: Vector2 = desired - b_pos
+	if dir.length_squared() < 0.01:
+		dir = Vector2.UP
+	dir = dir.normalized()
 
-	for _i: int in range(MAX_BINARY_STEPS):
-		var mid: float = (lo + hi) * 0.5
-		var candidate: Vector2 = start.lerp(end, mid)
-		candidate = _clamp_to_play_area(candidate, side)
-		candidate = _apply_deploy_zone_circle(
-				candidate, radius, faction, top_y, bottom_y)
-		if _circle_overlaps_any(candidate, radius, other_ships, other_squads):
-			hi = mid
-		else:
-			lo = mid
-			best = candidate
+	var max_dist: float = (
+			sqrt(hw * hw + hl * hl) + b_r + OVERLAP_EPSILON * 2.0)
 
-	return best
+	return _ray_binary_search_ship(
+			b_pos, dir, max_dist, rot, hw, hl, [], [blocker])
+
+
+## Pushes a circle (squadron) away from another circle using the exact
+## Minkowski-sum formula (no binary search needed).
+func _push_circle_from_circle(
+		desired: Vector2, radius: float, blocker: Dictionary
+) -> Vector2:
+	var b_pos: Vector2 = blocker.get("position", Vector2.ZERO) as Vector2
+	var b_r: float = blocker.get("radius", 0.0) as float
+	var dir: Vector2 = desired - b_pos
+	if dir.length_squared() < 0.01:
+		dir = Vector2.UP
+	dir = dir.normalized()
+	var contact_dist: float = radius + b_r + OVERLAP_EPSILON
+	return b_pos + dir * contact_dist
+
+
+## Pushes a circle (squadron) away from a ship blocker by projecting outward
+## from the ship polygon along the desired direction.
+func _push_circle_from_ship(
+		desired: Vector2, radius: float, blocker: Dictionary
+) -> Vector2:
+	var b_pos: Vector2 = blocker.get("position", Vector2.ZERO) as Vector2
+	var b_rot: float = blocker.get("rotation", 0.0) as float
+	var b_hw: float = blocker.get("half_w", 0.0) as float
+	var b_hl: float = blocker.get("half_l", 0.0) as float
+
+	var b_xform: Transform2D = Transform2D(b_rot, b_pos)
+	var b_base: ShipBase = ShipBase.new(Constants.ShipSize.SMALL, b_xform)
+	b_base.half_width_px = b_hw
+	b_base.half_length_px = b_hl
+	var b_poly: PackedVector2Array = b_base.get_base_polygon()
+
+	var closest: Vector2 = Geometry2DHelper.closest_point_on_polygon(
+			desired, b_poly)
+	var dir: Vector2 = desired - closest
+	if dir.length_squared() < 0.01:
+		dir = desired - b_pos
+	if dir.length_squared() < 0.01:
+		dir = Vector2.UP
+	dir = dir.normalized()
+	return closest + dir * (radius + OVERLAP_EPSILON)
 
 
 # ---------------------------------------------------------------------------
-# Jump-past logic
+# Ray binary search — finds the closest point along a ray from [origin] in
+# [direction] (within [max_dist]) where the token does NOT overlap the
+# specified blocker(s).
 # ---------------------------------------------------------------------------
 
-## Tries to place the ship on the far side of all blockers.
-## Returns Vector2.INF if no valid jump-past position exists.
-## DBG-021 — jump past when cursor is beyond blocker and footprint fits.
-func _try_jump_past_ship(
-		desired: Vector2, current: Vector2,
+## Binary search along a ray for a ship footprint.
+func _ray_binary_search_ship(
+		origin: Vector2, direction: Vector2, max_dist: float,
 		rot: float, hw: float, hl: float,
-		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
-		top_y: float, bottom_y: float, side: float
+		ship_blockers: Array, circle_blockers: Array
 ) -> Vector2:
-	# The jump candidate is the desired position itself.
-	var candidate: Vector2 = _clamp_to_play_area(desired, side)
-	candidate = _apply_deploy_zone_ship(
-			candidate, hw, hl, rot, faction, top_y, bottom_y)
-	if not _ship_overlaps_any(candidate, rot, hw, hl, other_ships, other_squads):
-		return candidate
-	# Suppress unused variable warning.
-	var _c: Vector2 = current
-	return Vector2.INF
-
-
-## Tries to place a squadron on the far side of all blockers.
-func _try_jump_past_circle(
-		desired: Vector2, current: Vector2, radius: float,
-		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
-		top_y: float, bottom_y: float, side: float
-) -> Vector2:
-	var candidate: Vector2 = _clamp_to_play_area(desired, side)
-	candidate = _apply_deploy_zone_circle(
-			candidate, radius, faction, top_y, bottom_y)
-	if not _circle_overlaps_any(candidate, radius, other_ships, other_squads):
-		return candidate
-	var _c: Vector2 = current
-	return Vector2.INF
+	var lo: float = 0.0
+	var hi: float = max_dist
+	for _i: int in range(MAX_BINARY_STEPS):
+		var mid: float = (lo + hi) * 0.5
+		var test: Vector2 = origin + direction * mid
+		if _ship_overlaps_any(test, rot, hw, hl,
+				ship_blockers, circle_blockers):
+			lo = mid
+		else:
+			hi = mid
+	return origin + direction * hi

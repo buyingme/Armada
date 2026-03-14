@@ -285,23 +285,39 @@ startup. The refactoring removed 10 hardcoded constants from
 **Goal:** Interactive token drag/rotate with deployment zone enforcement and position persistence for development and visual testing during setup.
 **Prerequisites:** Phase 1 (geometry for overlap detection), Phase 2 (tokens on board)
 **Duration estimate:** 2 sessions
-**Completed:** 2025-03-14 · 23 scripts · 360 tests · 777 asserts
+**Completed:** 2025-03-14 · 23 scripts · 362 tests · 780 asserts
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
 | `DebugMode` autoload — global toggle + state | Autoload | DBG-001, DBG-002 | `src/autoload/debug_mode.gd` ✅ |
-| `TokenMover` — mouse-follow, collision, jump-past | Core | DBG-011, DBG-020, DBG-021 | `src/core/token_mover.gd` ✅ |
+| `TokenMover` — mouse-follow, projection-based push-out | Core | DBG-011, DBG-020, DBG-022 | `src/core/token_mover.gd` ✅ |
 | Token selection/deselection in debug mode | Application | DBG-010 | Extend `game_board.gd` click handler ✅ |
 | Token rotation via trackpad gesture | Presentation | DBG-012 | Input handling in `game_board.gd` ✅ |
-| Collision slide-to-contact logic | Core | DBG-020, DBG-032 | Uses `ShipBase.overlaps_*`, `SquadronBase.overlaps_*` ✅ |
-| Jump-past-blocking-token logic | Core | DBG-021, DBG-032 | Jump-past at desired position, binary search fallback ✅ |
+| Closest-legal-position collision resolution | Core | DBG-020, DBG-022 | Push-out along blocker→mouse direction; Minkowski boundary ✅ |
 | Deployment zone lines (2 × thin blue horizontal) | Presentation | DBG-030, DBG-031 | `src/scenes/game_board/deployment_zone_overlay.gd` ✅ |
 | Deployment zone boundary collision | Core | DBG-032 | Treat deployment line as wall in `TokenMover` ✅ |
 | Save token positions to scenario JSON | Application | DBG-040, DBG-041 | `src/utils/scenario_saver.gd` + Ctrl+S shortcut ✅ |
 | Debug HUD indicator | Presentation | DBG-002 | Label on `CanvasLayer` (layer 100) ✅ |
 | Camera conflict prevention | Presentation | DBG-003 | Input routing: debug drag vs camera pan ✅ |
 
-**Tests:** 31 new (10 debug_mode + 14 token_mover + 5 deployment_zone + 5 scenario_saver) — selection toggle, move-to-position, overlap slide-to-contact, jump-past, deployment zone blocking, play area clamping, save/load, debug toggle on/off
+#### Collision Resolution Refactoring
+
+The original implementation used binary-search along the **movement vector**
+(current_pos → desired_pos) to find a contact point, plus a separate "jump-past"
+step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG-022):
+
+- When a token at the desired (mouse) position overlaps a blocker, the resolver
+  computes the nearest non-overlapping position by projecting outward from the
+  **blocker's centre** along the direction toward the **mouse cursor**.
+- For circle↔circle: exact Minkowski formula (no binary search).
+- For ship↔ship and ship↔circle: binary search along the blocker→mouse ray.
+- For circle←ship: closest-point-on-polygon + radial push.
+- Among all push-out candidates, the one closest to the mouse that satisfies
+  all constraints (other tokens, deployment zone, play area) is returned.
+- Jump-past (former DBG-021) is subsumed: if the mouse is beyond a blocker and
+  the footprint fits, the desired position is returned directly (step 2).
+
+**Tests:** 16 token_mover tests (14 original + 3 new projection tests − 1 renamed) — 23 scripts, 365 tests, 786 asserts.
 
 ---
 

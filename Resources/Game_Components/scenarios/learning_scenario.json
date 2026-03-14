@@ -6,99 +6,94 @@
     "tokens": [
         {
             "key": "victory_ii_class_star_destroyer",
-            "type": "ship",
-            "pos_x": 0.50,
-            "pos_y": 0.22,
-            "rotation_deg": 180.0
-        },
-        {
-            "_comment": "TIE Fighter left cluster (3) — triangle west of Victory SD",
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.24,
-            "pos_y": 0.32,
-            "rotation_deg": 180.0
-        },
-        {
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.29,
-            "pos_y": 0.32,
-            "rotation_deg": 180.0
-        },
-        {
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.265,
-            "pos_y": 0.38,
-            "rotation_deg": 180.0
-        },
-        {
-            "_comment": "TIE Fighter right cluster (3) — triangle east of Victory SD",
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.71,
-            "pos_y": 0.32,
-            "rotation_deg": 180.0
-        },
-        {
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.76,
-            "pos_y": 0.32,
-            "rotation_deg": 180.0
-        },
-        {
-            "key": "tie_fighter_squadron",
-            "type": "squadron",
-            "pos_x": 0.735,
-            "pos_y": 0.38,
-            "rotation_deg": 180.0
+            "pos_x": 0.489,
+            "pos_y": 0.133,
+            "rotation_deg": 180.0,
+            "type": "ship"
         },
         {
             "key": "cr90_corvette_a",
-            "type": "ship",
-            "pos_x": 0.38,
-            "pos_y": 0.80,
-            "rotation_deg": 0.0
+            "pos_x": 0.69,
+            "pos_y": 0.85,
+            "rotation_deg": 0.0,
+            "type": "ship"
         },
         {
             "key": "nebulon_b_escort_frigate",
-            "type": "ship",
-            "pos_x": 0.65,
-            "pos_y": 0.80,
-            "rotation_deg": 0.0
+            "pos_x": 0.276,
+            "pos_y": 0.851,
+            "rotation_deg": 0.0,
+            "type": "ship"
         },
         {
-            "_comment": "X-Wing left cluster (1)",
-            "key": "x_wing_squadron",
-            "type": "squadron",
-            "pos_x": 0.42,
-            "pos_y": 0.70,
-            "rotation_deg": 0.0
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.285,
+            "pos_y": 0.158,
+            "rotation_deg": 180.0,
+            "type": "squadron"
         },
         {
-            "_comment": "X-Wing centre cluster (2)",
-            "key": "x_wing_squadron",
-            "type": "squadron",
-            "pos_x": 0.49,
-            "pos_y": 0.70,
-            "rotation_deg": 0.0
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.357,
+            "pos_y": 0.157,
+            "rotation_deg": 180.0,
+            "type": "squadron"
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.325,
+            "pos_y": 0.104,
+            "rotation_deg": 180.0,
+            "type": "squadron"
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.602,
+            "pos_y": 0.13,
+            "rotation_deg": 180.0,
+            "type": "squadron"
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.658,
+            "pos_y": 0.133,
+            "rotation_deg": 180.0,
+            "type": "squadron"
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "pos_x": 0.624,
+            "pos_y": 0.086,
+            "rotation_deg": 180.0,
+            "type": "squadron"
         },
         {
             "key": "x_wing_squadron",
-            "type": "squadron",
-            "pos_x": 0.54,
-            "pos_y": 0.70,
-            "rotation_deg": 0.0
+            "pos_x": 0.421,
+            "pos_y": 0.913,
+            "rotation_deg": 0.0,
+            "type": "squadron"
         },
         {
-            "_comment": "X-Wing right cluster (1)",
             "key": "x_wing_squadron",
-            "type": "squadron",
-            "pos_x": 0.61,
-            "pos_y": 0.70,
-            "rotation_deg": 0.0
+            "pos_x": 0.445,
+            "pos_y": 0.851,
+            "rotation_deg": 2.9,
+            "type": "squadron"
+        },
+        {
+            "key": "x_wing_squadron",
+            "pos_x": 0.519,
+            "pos_y": 0.836,
+            "rotation_deg": 0.0,
+            "type": "squadron"
+        },
+        {
+            "key": "x_wing_squadron",
+            "pos_x": 0.492,
+            "pos_y": 0.888,
+            "rotation_deg": 0.0,
+            "type": "squadron"
         }
     ]
 }

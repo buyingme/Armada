@@ -52,6 +52,9 @@ var _deploy_overlay: DeploymentZoneOverlay = null
 ## Debug HUD label (shows "DEBUG" in top-left corner).
 var _debug_label: Label = null
 
+## Debug help panel showing all keyboard shortcuts.
+var _debug_help_panel: DebugHelpPanel = null
+
 ## Core mover logic for collision resolution.
 var _token_mover: TokenMover = TokenMover.new()
 
@@ -155,7 +158,7 @@ func _create_deploy_overlay() -> void:
 	add_child(_deploy_overlay)
 
 
-## Creates the debug-mode HUD label on a CanvasLayer.
+## Creates the debug-mode HUD on a CanvasLayer (label + help panel).
 func _create_debug_label() -> void:
 	var layer: CanvasLayer = CanvasLayer.new()
 	layer.name = "DebugHUDLayer"
@@ -169,6 +172,12 @@ func _create_debug_label() -> void:
 	_debug_label.position = Vector2(10, 10)
 	_debug_label.visible = false
 	layer.add_child(_debug_label)
+
+	_debug_help_panel = DebugHelpPanel.new()
+	_debug_help_panel.name = "DebugHelpPanel"
+	_debug_help_panel.position = Vector2(10, 44)
+	_debug_help_panel.visible = false
+	layer.add_child(_debug_help_panel)
 
 
 ## Connects EventBus and DebugMode signals relevant to the board.
@@ -244,6 +253,8 @@ func _update_debug_visibility() -> void:
 		_deploy_overlay.visible = on
 	if _debug_label:
 		_debug_label.visible = on
+	if _debug_help_panel:
+		_debug_help_panel.visible = on
 
 
 ## Handles left-click in debug mode: clicks on empty space deselect.

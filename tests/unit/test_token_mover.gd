@@ -348,3 +348,95 @@ func test_disabled_deploy_zones_no_clamping() -> void:
 			[], [], -1.0, -1.0, GameScale.play_area_side_px)
 	assert_almost_eq(result.y, desired.y, 1.0,
 			"With deploy zones disabled, ship should reach desired Y")
+
+
+# ---------------------------------------------------------------------------
+# Bug fix — squadron centre inside ship polygon pushes outward correctly
+# ---------------------------------------------------------------------------
+
+func test_squadron_inside_ship_pushes_outward() -> void:
+	# Arrange — place a ship at (500, 500), drag a squadron so its centre
+	# lands INSIDE the ship polygon (to the left of the ship centre).
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var hw: float = base_size.x * 0.5
+	var hl: float = base_size.y * 0.5
+	var ship_blocker: Array = [{
+		"position": Vector2(500.0, 500.0),
+		"rotation": 0.0,
+		"half_w": hw,
+		"half_l": hl,
+	}]
+	# Desired is inside the ship polygon, slightly left of centre.
+	var desired: Vector2 = Vector2(480.0, 500.0)
+	var current: Vector2 = Vector2(300.0, 500.0)
+	# Act
+	var result: Vector2 = _mover.resolve_squadron_position(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			ship_blocker, [], -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — should be pushed LEFT (towards mouse), NOT right (into ship).
+	assert_true(result.x < 500.0 - hw,
+			"Squadron should be pushed left (outward from ship), not into it")
+	# Must not overlap the ship polygon.
+	var dist_to_ship: float = result.distance_to(Vector2(500.0, 500.0))
+	assert_true(dist_to_ship > hw,
+			"Squadron should be clear of the ship after push-out")
+
+
+func test_squadron_inside_ship_approaches_from_above() -> void:
+	# Arrange — squadron desired position is inside the ship polygon,
+	# approaching from above (y < ship centre).
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var hw: float = base_size.x * 0.5
+	var hl: float = base_size.y * 0.5
+	var ship_blocker: Array = [{
+		"position": Vector2(500.0, 500.0),
+		"rotation": 0.0,
+		"half_w": hw,
+		"half_l": hl,
+	}]
+	var desired: Vector2 = Vector2(500.0, 480.0)
+	var current: Vector2 = Vector2(500.0, 200.0)
+	# Act
+	var result: Vector2 = _mover.resolve_squadron_position(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			ship_blocker, [], -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — pushed upward (towards mouse direction from ship centre).
+	assert_true(result.y < 500.0 - hl,
+			"Squadron should be pushed above the ship (towards mouse)")
+
+
+# ---------------------------------------------------------------------------
+# Bug fix — cascade: token between two close blockers finds valid position
+# ---------------------------------------------------------------------------
+
+func test_squadron_cascade_between_two_blockers() -> void:
+	# Arrange — two squadron blockers close together. Desired is between them
+	# with a slight vertical offset so cascade push directions have a lateral
+	# component (axis-aligned setups keep all pushes collinear and can't escape).
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var gap: float = radius * 1.5  # tight gap — no horizontal fit at all
+	var blocker_a: Dictionary = {"position": Vector2(500.0, 500.0), "radius": radius}
+	var blocker_b: Dictionary = {"position": Vector2(500.0 + gap, 500.0), "radius": radius}
+	var desired: Vector2 = Vector2(500.0 + gap * 0.5, 490.0)  # slightly above midpoint
+	var current: Vector2 = Vector2(500.0 + gap * 0.5, 200.0)
+	# Act
+	var result: Vector2 = _mover.resolve_squadron_position(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], [blocker_a, blocker_b], -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — should NOT fall back to current_pos; cascade should find a
+	# valid position near the two blockers.
+	var dist_a: float = result.distance_to(blocker_a.position)
+	var dist_b: float = result.distance_to(blocker_b.position)
+	assert_true(dist_a >= radius * 2.0 - 2.0,
+			"Result should not overlap blocker A")
+	assert_true(dist_b >= radius * 2.0 - 2.0,
+			"Result should not overlap blocker B")
+	# Should be close to the desired position — not at current_pos (far away).
+	var dist_to_desired: float = result.distance_to(desired)
+	assert_true(dist_to_desired < 200.0,
+			"Cascade result should be near the desired position, not at current_pos")

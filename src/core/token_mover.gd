@@ -27,6 +27,9 @@ class_name TokenMover
 extends RefCounted
 
 
+## Logger for diagnostic output.
+var _log: GameLogger = GameLogger.new("TokenMover")
+
 ## Maximum binary-search iterations for push-out resolution.
 const MAX_BINARY_STEPS: int = 20
 
@@ -77,39 +80,30 @@ func resolve_ship_position(
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Step 3 — for each blocker, compute the push-out candidate.
-	var best_pos: Vector2 = current_pos
-	var best_dist_sq: float = INF
+	# Step 3 — primary push-outs from each blocker.
+	var primary: Dictionary = _collect_ship_pushouts(
+			candidate, rotation_rad, half_w, half_l,
+			other_ship_rects, other_squad_circles,
+			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+	var best: Vector2 = _pick_closest(primary.valid, desired_pos)
+	if best != Vector2.INF:
+		return best
 
-	for other: Dictionary in other_ship_rects:
-		var pushed: Vector2 = _push_ship_from_ship(
-				candidate, rotation_rad, half_w, half_l, other)
-		pushed = _clamp_to_play_area(pushed, play_area_side)
-		pushed = _apply_deploy_zone_ship(
-				pushed, half_w, half_l, rotation_rad, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
-		if not _ship_overlaps_any(pushed, rotation_rad, half_w, half_l,
-				other_ship_rects, other_squad_circles):
-			var d: float = pushed.distance_squared_to(desired_pos)
-			if d < best_dist_sq:
-				best_dist_sq = d
-				best_pos = pushed
+	# Step 4 — cascade: re-push each failed candidate from all blockers.
+	var all_secondary: Array = []
+	for pos: Vector2 in primary.invalid:
+		var secondary: Dictionary = _collect_ship_pushouts(
+				pos, rotation_rad, half_w, half_l,
+				other_ship_rects, other_squad_circles,
+				faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+		all_secondary.append_array(secondary.valid)
+	best = _pick_closest(all_secondary, desired_pos)
+	if best != Vector2.INF:
+		return best
 
-	for other: Dictionary in other_squad_circles:
-		var pushed: Vector2 = _push_ship_from_circle(
-				candidate, rotation_rad, half_w, half_l, other)
-		pushed = _clamp_to_play_area(pushed, play_area_side)
-		pushed = _apply_deploy_zone_ship(
-				pushed, half_w, half_l, rotation_rad, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
-		if not _ship_overlaps_any(pushed, rotation_rad, half_w, half_l,
-				other_ship_rects, other_squad_circles):
-			var d: float = pushed.distance_squared_to(desired_pos)
-			if d < best_dist_sq:
-				best_dist_sq = d
-				best_pos = pushed
-
-	return best_pos
+	_log.debug("Ship push-out fallback to current_pos (mouse=%.0f,%.0f)" % [
+			desired_pos.x, desired_pos.y])
+	return current_pos
 
 
 ## Resolves a desired position for a squadron token.
@@ -136,39 +130,30 @@ func resolve_squadron_position(
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Push-out candidates from each blocker.
-	var best_pos: Vector2 = current_pos
-	var best_dist_sq: float = INF
+	# Step 3 — primary push-outs from each blocker.
+	var primary: Dictionary = _collect_circle_pushouts(
+			candidate, radius,
+			other_ship_rects, other_squad_circles,
+			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+	var best: Vector2 = _pick_closest(primary.valid, desired_pos)
+	if best != Vector2.INF:
+		return best
 
-	for other: Dictionary in other_ship_rects:
-		var pushed: Vector2 = _push_circle_from_ship(
-				candidate, radius, other)
-		pushed = _clamp_to_play_area(pushed, play_area_side)
-		pushed = _apply_deploy_zone_circle(
-				pushed, radius, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
-		if not _circle_overlaps_any(pushed, radius,
-				other_ship_rects, other_squad_circles):
-			var d: float = pushed.distance_squared_to(desired_pos)
-			if d < best_dist_sq:
-				best_dist_sq = d
-				best_pos = pushed
+	# Step 4 — cascade: re-push each failed candidate from all blockers.
+	var all_secondary: Array = []
+	for pos: Vector2 in primary.invalid:
+		var secondary: Dictionary = _collect_circle_pushouts(
+				pos, radius,
+				other_ship_rects, other_squad_circles,
+				faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side)
+		all_secondary.append_array(secondary.valid)
+	best = _pick_closest(all_secondary, desired_pos)
+	if best != Vector2.INF:
+		return best
 
-	for other: Dictionary in other_squad_circles:
-		var pushed: Vector2 = _push_circle_from_circle(
-				candidate, radius, other)
-		pushed = _clamp_to_play_area(pushed, play_area_side)
-		pushed = _apply_deploy_zone_circle(
-				pushed, radius, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
-		if not _circle_overlaps_any(pushed, radius,
-				other_ship_rects, other_squad_circles):
-			var d: float = pushed.distance_squared_to(desired_pos)
-			if d < best_dist_sq:
-				best_dist_sq = d
-				best_pos = pushed
-
-	return best_pos
+	_log.debug("Squadron push-out fallback to current_pos (mouse=%.0f,%.0f)" % [
+			desired_pos.x, desired_pos.y])
+	return current_pos
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +283,82 @@ func _clamp_to_play_area(pos: Vector2, side: float) -> Vector2:
 
 
 # ---------------------------------------------------------------------------
+# Push-out candidate collection
+# ---------------------------------------------------------------------------
+
+## Collects push-out candidates for a ship from all blockers.
+## Returns {"valid": Array[Vector2], "invalid": Array[Vector2]}.
+func _collect_ship_pushouts(
+		from_pos: Vector2, rot: float, hw: float, hl: float,
+		other_ships: Array, other_squads: Array,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float
+) -> Dictionary:
+	var valid: Array = []
+	var invalid: Array = []
+	for other: Dictionary in other_ships:
+		var pushed: Vector2 = _push_ship_from_ship(from_pos, rot, hw, hl, other)
+		pushed = _clamp_to_play_area(pushed, side)
+		pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
+		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
+			invalid.append(pushed)
+		else:
+			valid.append(pushed)
+	for other: Dictionary in other_squads:
+		var pushed: Vector2 = _push_ship_from_circle(from_pos, rot, hw, hl, other)
+		pushed = _clamp_to_play_area(pushed, side)
+		pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
+		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
+			invalid.append(pushed)
+		else:
+			valid.append(pushed)
+	return {"valid": valid, "invalid": invalid}
+
+
+## Collects push-out candidates for a circle (squadron) from all blockers.
+## Returns {"valid": Array[Vector2], "invalid": Array[Vector2]}.
+func _collect_circle_pushouts(
+		from_pos: Vector2, radius: float,
+		other_ships: Array, other_squads: Array,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float
+) -> Dictionary:
+	var valid: Array = []
+	var invalid: Array = []
+	for other: Dictionary in other_ships:
+		var pushed: Vector2 = _push_circle_from_ship(from_pos, radius, other)
+		pushed = _clamp_to_play_area(pushed, side)
+		pushed = _apply_deploy_zone_circle(pushed, radius, faction, top_y, bottom_y)
+		if _circle_overlaps_any(pushed, radius, other_ships, other_squads):
+			invalid.append(pushed)
+		else:
+			valid.append(pushed)
+	for other: Dictionary in other_squads:
+		var pushed: Vector2 = _push_circle_from_circle(from_pos, radius, other)
+		pushed = _clamp_to_play_area(pushed, side)
+		pushed = _apply_deploy_zone_circle(pushed, radius, faction, top_y, bottom_y)
+		if _circle_overlaps_any(pushed, radius, other_ships, other_squads):
+			invalid.append(pushed)
+		else:
+			valid.append(pushed)
+	return {"valid": valid, "invalid": invalid}
+
+
+## Returns the candidate from [candidates] closest to [target].
+## Returns Vector2.INF if [candidates] is empty.
+func _pick_closest(candidates: Array, target: Vector2) -> Vector2:
+	var best: Vector2 = Vector2.INF
+	var best_d: float = INF
+	for c: Variant in candidates:
+		var pos: Vector2 = c as Vector2
+		var d: float = pos.distance_squared_to(target)
+		if d < best_d:
+			best_d = d
+			best = pos
+	return best
+
+
+# ---------------------------------------------------------------------------
 # Push-out helpers — project the moving token to the nearest non-overlapping
 # position along the ray from a blocker's centre through the desired position.
 # DBG-022
@@ -360,8 +421,10 @@ func _push_circle_from_circle(
 	return b_pos + dir * contact_dist
 
 
-## Pushes a circle (squadron) away from a ship blocker by projecting outward
-## from the ship polygon along the desired direction.
+## Pushes a circle (squadron) away from a ship blocker via binary search
+## along a ray from the ship's centre through the desired position.
+## Uses centre-based direction to avoid the inverted-direction bug that
+## occurs when desired is inside the ship polygon.
 func _push_circle_from_ship(
 		desired: Vector2, radius: float, blocker: Dictionary
 ) -> Vector2:
@@ -369,22 +432,15 @@ func _push_circle_from_ship(
 	var b_rot: float = blocker.get("rotation", 0.0) as float
 	var b_hw: float = blocker.get("half_w", 0.0) as float
 	var b_hl: float = blocker.get("half_l", 0.0) as float
-
-	var b_xform: Transform2D = Transform2D(b_rot, b_pos)
-	var b_base: ShipBase = ShipBase.new(Constants.ShipSize.SMALL, b_xform)
-	b_base.half_width_px = b_hw
-	b_base.half_length_px = b_hl
-	var b_poly: PackedVector2Array = b_base.get_base_polygon()
-
-	var closest: Vector2 = Geometry2DHelper.closest_point_on_polygon(
-			desired, b_poly)
-	var dir: Vector2 = desired - closest
-	if dir.length_squared() < 0.01:
-		dir = desired - b_pos
+	var dir: Vector2 = desired - b_pos
 	if dir.length_squared() < 0.01:
 		dir = Vector2.UP
 	dir = dir.normalized()
-	return closest + dir * (radius + OVERLAP_EPSILON)
+	var max_dist: float = (
+			sqrt(b_hw * b_hw + b_hl * b_hl)
+			+ radius + OVERLAP_EPSILON * 2.0)
+	return _ray_binary_search_circle(
+			b_pos, dir, max_dist, radius, [blocker], [])
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +461,25 @@ func _ray_binary_search_ship(
 		var mid: float = (lo + hi) * 0.5
 		var test: Vector2 = origin + direction * mid
 		if _ship_overlaps_any(test, rot, hw, hl,
+				ship_blockers, circle_blockers):
+			lo = mid
+		else:
+			hi = mid
+	return origin + direction * hi
+
+
+## Binary search along a ray for a circular (squadron) footprint.
+func _ray_binary_search_circle(
+		origin: Vector2, direction: Vector2, max_dist: float,
+		radius: float,
+		ship_blockers: Array, circle_blockers: Array
+) -> Vector2:
+	var lo: float = 0.0
+	var hi: float = max_dist
+	for _i: int in range(MAX_BINARY_STEPS):
+		var mid: float = (lo + hi) * 0.5
+		var test: Vector2 = origin + direction * mid
+		if _circle_overlaps_any(test, radius,
 				ship_blockers, circle_blockers):
 			lo = mid
 		else:

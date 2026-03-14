@@ -50,9 +50,7 @@ fi
 
 EXTRA_ARGS=()
 if [[ "${1:-}" == "--debug" ]]; then
-    EXTRA_ARGS+=(--remote-debug "tcp://127.0.0.1:6007")
     EXTRA_ARGS+=(-- --debug-mode)
-    echo "Remote debug enabled on tcp://127.0.0.1:6007"
     echo "In-game debug mode will be enabled on startup (F12 to toggle)"
 fi
 

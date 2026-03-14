@@ -109,6 +109,16 @@ func _process(_delta: float) -> void:
 	_move_selected_token_to_mouse()
 
 
+## Intercepts magnify gesture BEFORE the camera when a token is selected,
+## converting it to rotation and consuming the event so the camera does not zoom.
+## DBG-012 — pinch gesture rotates selected token.
+func _input(event: InputEvent) -> void:
+	if not DebugMode.has_selection():
+		return
+	if event is InputEventMagnifyGesture:
+		_handle_debug_rotate(event as InputEventMagnifyGesture)
+
+
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
@@ -117,8 +127,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		_handle_debug_click(event as InputEventMouseButton)
-	elif event is InputEventMagnifyGesture and DebugMode.has_selection():
-		_handle_debug_rotate(event as InputEventMagnifyGesture)
 
 
 # ---------------------------------------------------------------------------

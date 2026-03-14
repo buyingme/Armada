@@ -84,7 +84,7 @@ func test_resolve_squadron_free_move_returns_desired() -> void:
 func test_resolve_squadron_blocked_by_other_squadron() -> void:
 	# Arrange — blocker at (500, 500), approach from the left.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var blocker: Array = [ {"position": Vector2(500.0, 500.0), "radius": radius}]
 	var current: Vector2 = Vector2(300.0, 500.0)
 	var desired: Vector2 = Vector2(460.0, 500.0)
 	# Act — desired is inside the blocker's exclusion zone.
@@ -108,7 +108,7 @@ func test_resolve_squadron_blocked_by_other_squadron() -> void:
 func test_resolve_squadron_beyond_blocker_returns_desired() -> void:
 	# Arrange — blocker at (500, 500), cursor at (700, 500) — far side is free.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var blocker: Array = [ {"position": Vector2(500.0, 500.0), "radius": radius}]
 	var current: Vector2 = Vector2(300.0, 500.0)
 	var desired: Vector2 = Vector2(700.0, 500.0)
 	# Act
@@ -153,7 +153,7 @@ func test_resolve_ship_blocked_by_other_ship() -> void:
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
-	var blocker: Array = [{
+	var blocker: Array = [ {
 		"position": Vector2(500.0, 500.0),
 		"rotation": 0.0,
 		"half_w": hw,
@@ -179,9 +179,9 @@ func test_resolve_ship_blocked_by_other_ship() -> void:
 func test_squadron_pushout_direction_follows_mouse() -> void:
 	# Arrange — blocker at (500, 500), mouse above and right of blocker.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var blocker: Array = [ {"position": Vector2(500.0, 500.0), "radius": radius}]
 	var current: Vector2 = Vector2(300.0, 300.0)
-	var desired: Vector2 = Vector2(510.0, 480.0)  # just inside exclusion zone, above-right
+	var desired: Vector2 = Vector2(510.0, 480.0) # just inside exclusion zone, above-right
 	# Act
 	var result: Vector2 = _mover.resolve_squadron_position(
 			desired, current, radius,
@@ -197,7 +197,7 @@ func test_squadron_pushout_direction_follows_mouse() -> void:
 func test_squadron_pushout_independent_of_current_pos() -> void:
 	# Arrange — same desired and blocker, but different current positions.
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var blocker: Array = [{"position": Vector2(500.0, 500.0), "radius": radius}]
+	var blocker: Array = [ {"position": Vector2(500.0, 500.0), "radius": radius}]
 	var desired: Vector2 = Vector2(510.0, 480.0)
 	# Act — approach from two very different current positions.
 	var result_a: Vector2 = _mover.resolve_squadron_position(
@@ -222,14 +222,14 @@ func test_ship_pushout_closest_to_mouse_not_movement_line() -> void:
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
-	var blocker: Array = [{
+	var blocker: Array = [ {
 		"position": Vector2(500.0, 500.0),
 		"rotation": 0.0,
 		"half_w": hw,
 		"half_l": hl,
 	}]
 	var current: Vector2 = Vector2(200.0, 800.0)
-	var desired: Vector2 = Vector2(500.0, 450.0)  # above blocker centre
+	var desired: Vector2 = Vector2(500.0, 450.0) # above blocker centre
 	# Act
 	var result: Vector2 = _mover.resolve_ship_position(
 			desired, current,
@@ -249,7 +249,7 @@ func test_imperial_ship_blocked_by_deploy_zone() -> void:
 	# Arrange — top deploy line at distance band 3 = 434 px.
 	var top_y: float = 434.0
 	var bottom_y: float = GameScale.play_area_side_px - 434.0
-	var desired: Vector2 = Vector2(500.0, 800.0)  # deep into no-go zone
+	var desired: Vector2 = Vector2(500.0, 800.0) # deep into no-go zone
 	var current: Vector2 = Vector2(500.0, 200.0)
 	# Act
 	var result: Vector2 = _mover.resolve_ship_position(
@@ -259,7 +259,7 @@ func test_imperial_ship_blocked_by_deploy_zone() -> void:
 			[], [], top_y, bottom_y, GameScale.play_area_side_px)
 	# Assert — Y should be above top_y.
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
-	var extent_y: float = base_size.y * 0.5  # rotation=0, so extent = half_length
+	var extent_y: float = base_size.y * 0.5 # rotation=0, so extent = half_length
 	assert_true(result.y + extent_y <= top_y + 1.0,
 			"Imperial ship should be clamped above the top deployment line")
 
@@ -268,7 +268,7 @@ func test_rebel_ship_blocked_by_deploy_zone() -> void:
 	# Arrange — bottom deploy line.
 	var top_y: float = 434.0
 	var bottom_y: float = GameScale.play_area_side_px - 434.0
-	var desired: Vector2 = Vector2(500.0, 400.0)  # deep into no-go zone
+	var desired: Vector2 = Vector2(500.0, 400.0) # deep into no-go zone
 	var current: Vector2 = Vector2(500.0, 1900.0)
 	# Act
 	var result: Vector2 = _mover.resolve_ship_position(
@@ -361,7 +361,7 @@ func test_squadron_inside_ship_pushes_outward() -> void:
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
-	var ship_blocker: Array = [{
+	var ship_blocker: Array = [ {
 		"position": Vector2(500.0, 500.0),
 		"rotation": 0.0,
 		"half_w": hw,
@@ -391,7 +391,7 @@ func test_squadron_inside_ship_approaches_from_above() -> void:
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
-	var ship_blocker: Array = [{
+	var ship_blocker: Array = [ {
 		"position": Vector2(500.0, 500.0),
 		"rotation": 0.0,
 		"half_w": hw,
@@ -418,10 +418,10 @@ func test_squadron_cascade_between_two_blockers() -> void:
 	# with a slight vertical offset so cascade push directions have a lateral
 	# component (axis-aligned setups keep all pushes collinear and can't escape).
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var gap: float = radius * 1.5  # tight gap — no horizontal fit at all
+	var gap: float = radius * 1.5 # tight gap — no horizontal fit at all
 	var blocker_a: Dictionary = {"position": Vector2(500.0, 500.0), "radius": radius}
 	var blocker_b: Dictionary = {"position": Vector2(500.0 + gap, 500.0), "radius": radius}
-	var desired: Vector2 = Vector2(500.0 + gap * 0.5, 490.0)  # slightly above midpoint
+	var desired: Vector2 = Vector2(500.0 + gap * 0.5, 490.0) # slightly above midpoint
 	var current: Vector2 = Vector2(500.0 + gap * 0.5, 200.0)
 	# Act
 	var result: Vector2 = _mover.resolve_squadron_position(
@@ -491,7 +491,7 @@ func test_ship_pushout_uses_candidate_not_raw_mouse() -> void:
 	# Maximum Y for Imperial ship center: 434 - hl.
 	var max_y: float = top_y - hl
 	# Blocker ship near the deploy zone edge.
-	var blocker: Array = [{
+	var blocker: Array = [ {
 		"position": Vector2(500.0, max_y - 50.0), "rotation": 0.0,
 		"half_w": hw, "half_l": hl,
 	}]

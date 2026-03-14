@@ -106,7 +106,14 @@ func _draw() -> void:
 		return
 	var area: Rect2 = Rect2(Vector2.ZERO, Vector2(side, side))
 	if _map_texture != null:
-		draw_texture_rect(_map_texture, area, false)
+		# The map images contain a white border around the 3×3 ft play area.
+		# Extract the central 2160×2160 px region (matching the play area).
+		var tex_w: float = _map_texture.get_width()
+		var tex_h: float = _map_texture.get_height()
+		var crop: float = side  # 2160 — the play area we want
+		var src: Rect2 = Rect2(
+				(tex_w - crop) * 0.5, (tex_h - crop) * 0.5, crop, crop)
+		draw_texture_rect_region(_map_texture, area, src)
 	else:
 		draw_rect(area, PLAY_AREA_COLOUR, true)
 	draw_rect(area, BORDER_COLOUR, false, BORDER_WIDTH_PX)

@@ -16,8 +16,13 @@
             "label": "Long"
         }
     },
-    "distance_bands_px": [181, 294, 434, 577, 720],
-
+    "distance_bands_px": [
+        181,
+        294,
+        434,
+        577,
+        720
+    ],
     "base_graphics": {
         "_comment": "Measured pixel size of the base boundary edge-to-edge within each source PNG. Used to scale sprites so the base artwork aligns exactly with the computed game-scale bounding boxes.",
         "small_ship": {

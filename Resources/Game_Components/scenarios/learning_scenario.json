@@ -12,17 +12,47 @@
             "rotation_deg": 180.0
         },
         {
+            "_comment": "TIE Fighter left cluster (3) — triangle west of Victory SD",
             "key": "tie_fighter_squadron",
             "type": "squadron",
-            "pos_x": 0.35,
-            "pos_y": 0.35,
+            "pos_x": 0.24,
+            "pos_y": 0.32,
             "rotation_deg": 180.0
         },
         {
             "key": "tie_fighter_squadron",
             "type": "squadron",
-            "pos_x": 0.7,
-            "pos_y": 0.35,
+            "pos_x": 0.29,
+            "pos_y": 0.32,
+            "rotation_deg": 180.0
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "type": "squadron",
+            "pos_x": 0.265,
+            "pos_y": 0.38,
+            "rotation_deg": 180.0
+        },
+        {
+            "_comment": "TIE Fighter right cluster (3) — triangle east of Victory SD",
+            "key": "tie_fighter_squadron",
+            "type": "squadron",
+            "pos_x": 0.71,
+            "pos_y": 0.32,
+            "rotation_deg": 180.0
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "type": "squadron",
+            "pos_x": 0.76,
+            "pos_y": 0.32,
+            "rotation_deg": 180.0
+        },
+        {
+            "key": "tie_fighter_squadron",
+            "type": "squadron",
+            "pos_x": 0.735,
+            "pos_y": 0.38,
             "rotation_deg": 180.0
         },
         {
@@ -40,10 +70,34 @@
             "rotation_deg": 0.0
         },
         {
+            "_comment": "X-Wing left cluster (1)",
             "key": "x_wing_squadron",
             "type": "squadron",
-            "pos_x": 0.52,
-            "pos_y": 0.68,
+            "pos_x": 0.42,
+            "pos_y": 0.70,
+            "rotation_deg": 0.0
+        },
+        {
+            "_comment": "X-Wing centre cluster (2)",
+            "key": "x_wing_squadron",
+            "type": "squadron",
+            "pos_x": 0.49,
+            "pos_y": 0.70,
+            "rotation_deg": 0.0
+        },
+        {
+            "key": "x_wing_squadron",
+            "type": "squadron",
+            "pos_x": 0.54,
+            "pos_y": 0.70,
+            "rotation_deg": 0.0
+        },
+        {
+            "_comment": "X-Wing right cluster (1)",
+            "key": "x_wing_squadron",
+            "type": "squadron",
+            "pos_x": 0.61,
+            "pos_y": 0.70,
             "rotation_deg": 0.0
         }
     ]

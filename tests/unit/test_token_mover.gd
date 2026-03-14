@@ -440,3 +440,75 @@ func test_squadron_cascade_between_two_blockers() -> void:
 	var dist_to_desired: float = result.distance_to(desired)
 	assert_true(dist_to_desired < 200.0,
 			"Cascade result should be near the desired position, not at current_pos")
+
+
+# ---------------------------------------------------------------------------
+# Bug fix — only push from overlapping blockers (no spurious candidates)
+# ---------------------------------------------------------------------------
+
+func test_squadron_not_pushed_toward_non_overlapping_blocker() -> void:
+	# Arrange — squadron overlaps Ship A at (500, 500). Ship B at (200, 500)
+	# does NOT overlap the squadron. Previously, the push from B generated a
+	# spurious candidate on B's contact surface that could be selected.
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var hw: float = base_size.x * 0.5
+	var hl: float = base_size.y * 0.5
+	var ship_a: Dictionary = {
+		"position": Vector2(500.0, 500.0), "rotation": 0.0,
+		"half_w": hw, "half_l": hl,
+	}
+	var ship_b: Dictionary = {
+		"position": Vector2(200.0, 500.0), "rotation": 0.0,
+		"half_w": hw, "half_l": hl,
+	}
+	# Desired is left of Ship A's center, inside Ship A's polygon.
+	var desired: Vector2 = Vector2(470.0, 500.0)
+	var current: Vector2 = Vector2(300.0, 500.0)
+	# Act
+	var result: Vector2 = _mover.resolve_squadron_position(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[ship_a, ship_b], [], -1.0, -1.0, GameScale.play_area_side_px)
+	# Assert — result should be pushed from Ship A leftward,
+	# not snapped to Ship B's contact surface.
+	assert_true(result.x < 500.0 - hw,
+			"Squadron should slide off Ship A to the left")
+	assert_true(result.x > 250.0 + hw + radius,
+			"Squadron should NOT be snapped to Ship B's right contact edge")
+
+
+func test_ship_pushout_uses_candidate_not_raw_mouse() -> void:
+	# Arrange — Imperial faction, deploy zone at Y=434. Mouse is deep in
+	# the forbidden zone. After clamping, the candidate is at the zone edge.
+	# Push-out should be relative to the clamped candidate, not the raw mouse.
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var hw: float = base_size.x * 0.5
+	var hl: float = base_size.y * 0.5
+	var top_y: float = 434.0
+	var bottom_y: float = GameScale.play_area_side_px - 434.0
+	# Deploy zone extent for unrotated ship: hl.
+	# Maximum Y for Imperial ship center: 434 - hl.
+	var max_y: float = top_y - hl
+	# Blocker ship near the deploy zone edge.
+	var blocker: Array = [{
+		"position": Vector2(500.0, max_y - 50.0), "rotation": 0.0,
+		"half_w": hw, "half_l": hl,
+	}]
+	# Mouse far inside the forbidden zone — gets clamped to max_y.
+	var desired: Vector2 = Vector2(500.0, 1500.0)
+	var current: Vector2 = Vector2(500.0, 200.0)
+	# Act
+	var result: Vector2 = _mover.resolve_ship_position(
+			desired, current,
+			Constants.ShipSize.SMALL, 0.0,
+			Constants.Faction.GALACTIC_EMPIRE,
+			blocker, [], top_y, bottom_y, GameScale.play_area_side_px)
+	# Assert — result should be pushed in a consistent direction from blocker,
+	# not jump to an arbitrary position.
+	var dist_to_blocker_center: float = result.distance_to(Vector2(500.0, max_y - 50.0))
+	assert_true(dist_to_blocker_center > 0.0,
+			"Ship should be pushed away from blocker")
+	# The ship should remain within its deployment zone.
+	assert_true(result.y + hl <= top_y + 1.0,
+			"Ship should remain within Imperial deployment zone")

@@ -39,6 +39,7 @@ var _sprite: Sprite2D = null
 ## [param placement] must represent a squadron (is_ship == false).
 func setup(placement: TokenPlacement) -> void:
 	_placement = placement
+	set_meta("data_key", placement.data_key)
 	_radius_px = GameScale.squadron_base_diameter_px * 0.5
 	position = placement.get_pixel_position(GameScale.play_area_side_px)
 	rotation = placement.rotation_rad

@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–2. Updated after each phase completes.
+> **Scope:** Phases 0–2b. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -232,18 +232,130 @@ macOS only.
 
 ---
 
+## Phase 2b — Debug Token Placement
+
+**What this phase adds:** Debug mode (F12 toggle) with interactive token drag, rotation, collision prevention, deployment zone lines, and position saving (Ctrl+S).
+
+### Setup
+
+Open `/Users/Katharina/godot/Armada/src/scenes/game_board/game_board.tscn` in the editor and press **F6** to run it.
+
+---
+
+### MT-2b.1 — Debug mode toggle (F12)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the GameBoard scene | No "DEBUG" label visible; tokens are non-interactive |
+| 2 | Press **F12** | Red "DEBUG" label appears in the top-left corner of the screen |
+| 3 | Two thin blue horizontal lines appear across the board | Lines are at deployment zone boundaries (roughly 1/5 from top and bottom) |
+| 4 | Press **F12** again | "DEBUG" label and blue lines disappear |
+
+**Pass criteria:** F12 toggles debug mode on/off; HUD label and deployment zone overlay visibility toggle together.
+
+---
+
+### MT-2b.2 — Token selection and deselection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode (F12) | "DEBUG" label visible |
+| 2 | Left-click a ship token | Token becomes selected (it starts following the mouse) |
+| 3 | Move the mouse | Selected token follows the mouse cursor in real time |
+| 4 | Left-click the same token again | Token is deselected; stops following the mouse |
+| 5 | Left-click a squadron token | Squadron follows the mouse |
+| 6 | Left-click empty space | Token is deselected |
+
+**Pass criteria:** Single-click selects/deselects; selected token follows cursor; clicking empty space deselects.
+
+---
+
+### MT-2b.3 — Token rotation (trackpad magnify gesture)
+
+macOS only — requires Magic Trackpad or built-in trackpad.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode and select a ship token | Ship follows cursor |
+| 2 | Perform a two-finger **magnify gesture** (spread apart) | Ship rotates clockwise |
+| 3 | Perform the reverse (pinch together) | Ship rotates counter-clockwise |
+| 4 | Check that the base outline rotates with the ship art | Both rotate together |
+
+**Pass criteria:** Magnify gesture rotates the selected token smoothly around its centre.
+
+---
+
+### MT-2b.4 — Collision slide-to-contact
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode and select a ship token | Ship follows cursor |
+| 2 | Drag it directly toward another token | The dragged token stops just before overlapping — it "slides to contact" |
+| 3 | Continue dragging past the blocker | Once the cursor is far enough past the blocker, the token **jumps past** to the far side and resumes following |
+| 4 | Repeat with a squadron token | Same slide-to-contact and jump-past behaviour |
+
+**Pass criteria:** Tokens never overlap; slide-to-contact is smooth; jump-past works when target position is clear.
+
+---
+
+### MT-2b.5 — Deployment zone boundary enforcement
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode | Blue deployment zone lines visible |
+| 2 | Select an **Imperial** token (Victory II or TIE Fighter) | Follows cursor |
+| 3 | Drag it downward past the **top blue line** | Token stops at the blue line boundary — cannot cross it |
+| 4 | Select a **Rebel** token (CR90 or X-wing) | Follows cursor |
+| 5 | Drag it upward past the **bottom blue line** | Token stops at the blue line boundary — cannot cross it |
+
+**Pass criteria:** Faction tokens are confined to their deployment zone by the blue lines.
+
+---
+
+### MT-2b.6 — Save positions (Ctrl+S)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode and move several tokens to new positions | Tokens repositioned |
+| 2 | Press **Ctrl+S** | Console shows "Token positions saved successfully" |
+| 3 | Close the scene and re-run it | Tokens appear at the **new** saved positions |
+| 4 | Open `Resources/Game_Components/scenarios/learning_scenario.json` | `pos_x`, `pos_y`, `rotation_deg` values reflect the moved positions |
+
+**Pass criteria:** Positions persist in JSON; reloading the scene restores them.
+
+---
+
+### MT-2b.7 — Camera controls unaffected by debug mode
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode (F12) | "DEBUG" visible |
+| 2 | **Right-click drag** | Camera pans normally — no interference from debug mode |
+| 3 | **Scroll wheel** | Zoom works normally |
+| 4 | (macOS) Two-finger swipe | Pan works normally |
+| 5 | Select a token, then right-click drag | Camera pans — token does **not** move from right-click |
+
+**Pass criteria:** Camera controls (right-click pan, scroll/pinch zoom) work identically whether debug mode is on or off.
+
+---
+
 ## Regression Checklist
 
-Run this quick checklist any time you merge changes that touch Phase 0–2 files:
+Run this quick checklist any time you merge changes that touch Phase 0–2b files:
 
-- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **318 tests, 0 failures**
+- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **360 tests, 0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
-- [ ] Run `game_board.tscn` → all 5 tokens appear in correct deployment zones
+- [ ] Run `game_board.tscn` → all 13 tokens appear in correct deployment zones
 - [ ] Right-click drag → board pans; boundary clamping works
 - [ ] Scroll wheel → zoom in/out; clamps at min/max
 - [ ] (macOS) Two-finger swipe on trackpad → board pans smoothly; clamping works
 - [ ] (macOS) Pinch gesture on trackpad → zooms in/out keeping world point under fingers; clamps at min/max
+- [ ] F12 → "DEBUG" label + blue deployment lines appear; F12 again → disappear
+- [ ] Click token in debug mode → follows mouse; click again → deselects
+- [ ] Drag token into another → slide-to-contact; cursor past → jump-past
+- [ ] Drag faction token past deployment line → stops at boundary
+- [ ] Ctrl+S in debug mode → positions saved; reload confirms
 
 ---
 
-*Last updated: trackpad gesture support — commit pending, 318 tests passing.*
+*Last updated: Phase 2b — debug token placement, 360 tests passing.*

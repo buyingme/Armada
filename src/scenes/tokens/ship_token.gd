@@ -43,6 +43,7 @@ var _arc_overlay: FiringArcOverlay = null
 ## [param placement] must represent a ship (is_ship == true).
 func setup(placement: TokenPlacement) -> void:
 	_placement = placement
+	set_meta("data_key", placement.data_key)
 	var base_size: Vector2 = GameScale.get_base_size(placement.ship_size)
 	_half_w = base_size.x * 0.5
 	_half_l = base_size.y * 0.5
@@ -77,6 +78,16 @@ func get_ship_size() -> Constants.ShipSize:
 	if _placement:
 		return _placement.ship_size
 	return Constants.ShipSize.SMALL
+
+
+## Returns the half-width of the base in pixels.
+func get_half_width() -> float:
+	return _half_w
+
+
+## Returns the half-length of the base in pixels.
+func get_half_length() -> float:
+	return _half_l
 
 
 func _input(event: InputEvent) -> void:

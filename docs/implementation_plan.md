@@ -11,6 +11,7 @@
 - [Phase 0: Scale & Assets Foundation](#phase-0-scale--assets-foundation)
 - [Phase 1: Core Geometry Engine](#phase-1-core-geometry-engine)
 - [Phase 2: Game Board & Token Display](#phase-2-game-board--token-display)
+- [Phase 2b: Debug Token Placement](#phase-2b-debug-token-placement)
 - [Phase 3: Game State Wiring](#phase-3-game-state-wiring)
 - [Phase 4: Command Phase](#phase-4-command-phase)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
@@ -257,6 +258,30 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 ---
 
+### Phase 2b: Debug Token Placement ✅
+**Goal:** Interactive token drag/rotate with deployment zone enforcement and position persistence for development and visual testing during setup.
+**Prerequisites:** Phase 1 (geometry for overlap detection), Phase 2 (tokens on board)
+**Duration estimate:** 2 sessions
+**Completed:** 2025-03-14 · 23 scripts · 360 tests · 777 asserts
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|--------------|
+| `DebugMode` autoload — global toggle + state | Autoload | DBG-001, DBG-002 | `src/autoload/debug_mode.gd` ✅ |
+| `TokenMover` — mouse-follow, collision, jump-past | Core | DBG-011, DBG-020, DBG-021 | `src/core/token_mover.gd` ✅ |
+| Token selection/deselection in debug mode | Application | DBG-010 | Extend `game_board.gd` click handler ✅ |
+| Token rotation via trackpad gesture | Presentation | DBG-012 | Input handling in `game_board.gd` ✅ |
+| Collision slide-to-contact logic | Core | DBG-020, DBG-032 | Uses `ShipBase.overlaps_*`, `SquadronBase.overlaps_*` ✅ |
+| Jump-past-blocking-token logic | Core | DBG-021, DBG-032 | Jump-past at desired position, binary search fallback ✅ |
+| Deployment zone lines (2 × thin blue horizontal) | Presentation | DBG-030, DBG-031 | `src/scenes/game_board/deployment_zone_overlay.gd` ✅ |
+| Deployment zone boundary collision | Core | DBG-032 | Treat deployment line as wall in `TokenMover` ✅ |
+| Save token positions to scenario JSON | Application | DBG-040, DBG-041 | `src/utils/scenario_saver.gd` + Ctrl+S shortcut ✅ |
+| Debug HUD indicator | Presentation | DBG-002 | Label on `CanvasLayer` (layer 100) ✅ |
+| Camera conflict prevention | Presentation | DBG-003 | Input routing: debug drag vs camera pan ✅ |
+
+**Tests:** 31 new (10 debug_mode + 14 token_mover + 5 deployment_zone + 5 scenario_saver) — selection toggle, move-to-position, overlap slide-to-contact, jump-past, deployment zone blocking, play area clamping, save/load, debug toggle on/off
+
+---
+
 ### Phase 3: Game State Wiring ⏳ `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.
 **Prerequisites:** Phase 2 (visual tokens exist), existing core classes
 **Duration estimate:** 2 sessions
@@ -422,7 +447,8 @@ Phase 0 (Scale & Assets)
     │
     ├── Phase 1 (Geometry Engine)
     │       │
-    │       ├── Phase 2 (Board & Tokens) ──── Phase 3 (State Wiring)
+    │       ├── Phase 2 (Board & Tokens) ──┬── Phase 2b (Debug Token Placement)
+    │                               └── Phase 3 (State Wiring)
     │       │                                        │
     │       │                                 Phase 4 (Command Phase)
     │       │                                        │
@@ -447,7 +473,8 @@ Phase 0 (Scale & Assets)
 | Phase 0 | ~10 | **49** | **180** |
 | Phase 1 | ~40 | **94** | **274** |
 | Phase 2 | ~15 | **29** | **303** |
-| Phase 3 | ~25 | — | ~328 |
+| Phase 2b | ~20 | **31** | **360** |
+| Phase 3 | ~25 | — | ~348 |
 | Phase 4 | ~20 | — | ~280 |
 | Phase 5 | ~35 | — | ~315 |
 | Phase 6 | ~45 | — | ~360 |
@@ -455,7 +482,7 @@ Phase 0 (Scale & Assets)
 | Phase 8 | ~20 | — | ~410 |
 | Phase 9 | ~15 | — | ~425 |
 | Phase 10 | ~20 | — | ~445 |
-| **Total** | **~275 new** | | **~445** |
+| **Total** | **~295 new** | | **~465** |
 
 ---
 
@@ -500,3 +527,4 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 5, 6, 7 |
 | UI Requirements (UI-001–015) | 15 | Phase 2, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 10 |
+| Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |

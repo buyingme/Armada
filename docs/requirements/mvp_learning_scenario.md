@@ -23,6 +23,7 @@
 - [16. Game Components (Digital)](#16-game-components-digital)
 - [17. UI Requirements](#17-ui-requirements)
 - [18. Network Multiplayer Considerations](#18-network-multiplayer-considerations)
+- [19. Debug Mode](#19-debug-mode)
 
 ---
 
@@ -515,6 +516,50 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | NW-007 | Simultaneous actions (Command Phase) must use a "both submitted" gate before revealing. | Prevents information leak |
 | NW-008 | Turn timers should be configurable (optional) to prevent stalling. | Player settings |
 
+## 19. Debug Mode
+
+> **Scope:** Developer tooling for interactive token placement during setup.
+> Available in both the Learning Scenario setup and (future) main game setup.
+> All features in this section are gated behind a global debug mode toggle.
+
+### 19.1 Debug Mode Toggle
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-001 | A global debug mode toggle must exist, controllable at startup or runtime. When disabled, all debug interactions are inactive. | Project setting or autoload flag |
+| DBG-002 | When debug mode is active, a visible indicator (e.g. "DEBUG" label) must be displayed in the HUD. | Prevents confusion about active state |
+| DBG-003 | Debug mode must not interfere with existing camera controls (right-click pan, scroll/pinch zoom). | UI-001 |
+
+### 19.2 Token Selection & Movement
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-010 | In debug mode, left-clicking a token (ship or squadron) **selects** it. Left-clicking the same token again or clicking empty space **deselects** it. | Single-selection model |
+| DBG-011 | While a token is selected, it follows the mouse cursor position in real time. | Continuous movement |
+| DBG-012 | While a token is selected, a two-finger trackpad gesture (rotation / magnify gesture) **rotates** the token around its centre. | Uses same gesture type as camera zoom, but routed differently when a token is selected |
+
+### 19.3 Collision Prevention
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-020 | While moving, if the selected token's footprint would overlap another token, the selected token is slid to the **contact point** (touching but not overlapping). | Uses ShipBase / SquadronBase overlap geometry |
+| DBG-021 | If the mouse cursor moves **beyond** a blocking token (the selected token is stuck at contact), and the selected token's footprint would fit on the far side of the blocking token, the selected token **jumps past** to the far side and resumes following the cursor. | Prevents tokens getting permanently stuck |
+
+### 19.4 Deployment Zone Visualisation & Enforcement
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-030 | In debug mode, two thin blue horizontal lines are drawn across the play area, each at **distance band 3** (434 px at current 720 px ruler scale) inward from the **top** and **bottom** board edges respectively. | `GameScale.distance_bands_px[2]` |
+| DBG-031 | The **Imperial deployment zone** is the strip between the top board edge and the top blue line. The **Rebel deployment zone** is the strip between the bottom board edge and the bottom blue line. | Matches LTP p.5 setup diagram |
+| DBG-032 | When a token belonging to a faction is dragged toward its deployment zone boundary (the blue line), the boundary acts as a collision wall: the token slides to contact but cannot cross it. Same slide-to-contact / jump-past logic as token–token collisions (DBG-020, DBG-021). | Faction-aware boundary |
+
+### 19.5 Position Persistence
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-040 | In debug mode, a **"Save Positions"** action (button or keyboard shortcut) writes the current world-space positions and rotations of all tokens back to the active scenario JSON file (e.g. `learning_scenario.json`), overwriting the placement entries. | Enables iterative visual layout |
+| DBG-041 | The saved positions must use the same normalised coordinate format (`position_x`, `position_y` as fractions of play area, `rotation_degrees`) already used in scenario JSON files, so they are immediately reloadable. | Roundtrip consistency |
+
 ---
 
 ## Traceability Matrix
@@ -539,4 +584,5 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | Game Components | 18 | Derived |
 | UI Requirements | 15 | Derived |
 | Network Multiplayer | 8 | ADR-007 |
-| **Total** | **~193** | |
+| Debug Mode | 13 | Dev tooling |
+| **Total** | **~206** | |

@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–2b. Updated after each phase completes.
+> **Scope:** Phases 0–3. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -339,13 +339,150 @@ macOS only — requires Magic Trackpad or built-in trackpad.
 
 ---
 
+## Phase 3 — Game State Wiring
+
+**What this phase adds:** Runtime game state (`ShipInstance`, `SquadronInstance`, `DamageDeck`), shield/hull/speed value labels drawn on ship tokens, ship card panels on the sides of the board (Rebel left, Imperial right) with defense token sprite display, and EventBus-driven state↔visual sync.
+
+### Setup
+
+Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
+
+---
+
+### MT-3.1 — Shield values displayed on ship tokens ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the board scene and zoom in on the **CR90 Corvette** | Four white bold numbers visible near the edges of the token artwork |
+| 2 | Check the **front** shield value (top edge area) | Shows **2** |
+| 3 | Check the **left** shield value (left edge area) | Shows **2** |
+| 4 | Check the **right** shield value (right edge area) | Shows **2** |
+| 5 | Check the **rear** shield value (bottom edge area) | Shows **1** |
+
+**Pass criteria:** All four shield values are visible, white, bold, correctly positioned, and show the right integers for the CR90 Corvette A.
+
+---
+
+### MT-3.2 — Hull and speed values displayed on ship tokens ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Zoom in on the **CR90 Corvette** | Two numbers visible in the upper body of the token |
+| 2 | Check the **hull** value (left side, upper area) | Shows **4** |
+| 3 | Check the **speed** value (right side, upper area) | Shows **4** |
+| 4 | Zoom in on the **Nebulon-B Escort Frigate** | Hull = **5**, Speed = **3** |
+| 5 | Zoom in on the **Victory II Star Destroyer** | Hull = **8**, Speed = **2** |
+
+**Pass criteria:** Hull and speed are integer values (no decimals), white, bold, positioned correctly per ship type.
+
+---
+
+### MT-3.3 — Labels render on top of token artwork ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Zoom in closely on any ship token (zoom level 3–5×) | The white numbers are drawn **on top of** the ship token PNG, not behind it |
+| 2 | Check that no numbers are obscured by the token artwork | All 6 values (4 shields, hull, speed) are legible |
+
+**Pass criteria:** Labels are always in front of the token sprite, never hidden behind it.
+
+---
+
+### MT-3.4 — Ship card panels on sides of the board ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the board scene | A panel of ship cards appears on the **left** side of the viewport |
+| 2 | Identify the left-panel cards | Shows Rebel ships: **CR90 Corvette A**, **Nebulon-B Escort Frigate** (with card artwork) |
+| 3 | Look at the **right** side of the viewport | A panel of ship cards appears for Imperial ships |
+| 4 | Identify the right-panel cards | Shows **Victory II Star Destroyer** (with card artwork) |
+| 5 | Check that panels stay fixed when panning/zooming | Panels remain anchored to viewport edges, not the game board |
+| 6 | Check Rebel panel alignment | Panel is flush to the **left** screen edge + top |
+| 7 | Check Imperial panel alignment | Panel is flush to the **right** screen edge + top |
+
+**Pass criteria:** Rebel ship cards on the left, Imperial ship cards on the right; panels are viewport-fixed (CanvasLayer) and do not scroll with the board.
+
+---
+
+### MT-3.5 — Defense tokens displayed on ship card panels ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Look at the **CR90 Corvette A** entry on the left panel | A vertical column of defense token sprites appears **to the left** of the card image |
+| 2 | Count and identify the tokens | **3 tokens**: Evade, Evade, Redirect (matching the ship card) |
+| 3 | Check the **Victory II Star Destroyer** entry on the right panel | **3 tokens**: Brace, Redirect, Redirect |
+| 4 | Check the **Nebulon-B Escort Frigate** entry on the left panel | **3 tokens**: Evade, Brace, Brace |
+| 5 | Check token sprite appearance | Each shows the coloured "ready" state artwork |
+| 6 | Check token vertical alignment | Tokens align to the **top** of the card, not centered |
+| 7 | Zoom in on the ship tokens on the **board** itself | **No** defense token sprites on the board tokens |
+
+**Pass criteria:** Correct number and type of defense tokens per ship on the card panels; all in "ready" state; tokens in a vertical column to the left of each card, top-aligned; no defense tokens on board tokens.
+
+---
+
+### MT-3.6 — Labels follow the ship when dragged ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode (F12) | DEBUG label visible |
+| 2 | Select and drag a ship token | Shield/hull/speed labels move with the token |
+| 3 | Rotate the ship (magnify gesture on trackpad) | Labels rotate with the token |
+| 4 | Check the ship card panel | The card panel entry is unchanged — it does not move or rotate |
+
+**Pass criteria:** Value labels track the ship's position and rotation during debug-mode drag; card panels remain fixed on the viewport edge.
+
+---
+
+### MT-3.7 — Value labels on all ship types match card data ✅
+
+Cross-reference each ship's displayed values against the card data JSON files. All values should be integers.
+
+| Ship | Front Shield | Left Shield | Right Shield | Rear Shield | Hull | Speed |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| CR90 Corvette A | 2 | 2 | 2 | 1 | 4 | 4 |
+| Nebulon-B Escort Frigate | 3 | 1 | 1 | 2 | 5 | 3 |
+| Victory II Star Destroyer | 3 | 3 | 3 | 1 | 8 | 2 |
+
+**Pass criteria:** Every value matches the table above with no decimal points.
+
+---
+
+### MT-3.8 — Map background still displays correctly ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the board scene | The space/planet map background is visible beneath all tokens |
+| 2 | Check that value labels are legible against the map | White bold text is readable on the map background |
+
+**Pass criteria:** Map loads; labels remain legible over the background art.
+
+---
+
+### MT-3.9 — Ship card magnify on left-click ✅
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the board scene | Ship card panels visible on left and right sides |
+| 2 | Left-click on a **CR90 Corvette A** card entry | The card and its defense tokens enlarge to **3×** normal size |
+| 3 | Left-click on the same entry again | The card and tokens return to normal size |
+| 4 | Left-click on the **Victory II** entry on the right panel | That entry magnifies independently; other entries stay normal |
+| 5 | Check that defense tokens scale with the card | Token sprites grow/shrink proportionally with the card image |
+| 6 | Zoom out from the **Victory II** entry | Entry returns to normal size and **stays right-aligned** to the screen edge |
+
+**Pass criteria:** Each card entry toggles between normal and 3× magnified on click; only the clicked entry changes size; panel repositions correctly after resize on both left and right sides.
+
+---
+
 ## Regression Checklist
 
-Run this quick checklist any time you merge changes that touch Phase 0–2b files:
+Run this quick checklist any time you merge changes that touch Phase 0–3 files:
 
-- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **360 tests, 0 failures**
+- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **486 tests, 0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
-- [ ] Run `game_board.tscn` → all 13 tokens appear in correct deployment zones
+- [ ] Run `game_board.tscn` → all 5 tokens appear in correct deployment zones
+- [ ] Ship tokens show white bold shield / hull / speed numbers at correct positions
+- [ ] Ship card panels visible: Rebel cards on left (left-aligned), Imperial cards on right (right-aligned), with defense token columns to the left of each card
+- [ ] Defense tokens top-aligned to their card
 - [ ] Right-click drag → board pans; boundary clamping works
 - [ ] Scroll wheel → zoom in/out; clamps at min/max
 - [ ] (macOS) Two-finger swipe on trackpad → board pans smoothly; clamping works
@@ -358,4 +495,4 @@ Run this quick checklist any time you merge changes that touch Phase 0–2b file
 
 ---
 
-*Last updated: Phase 2b — debug token placement, 360 tests passing.*
+*Last updated: Phase 3 complete — game state wiring, ship card panels with defense token columns, magnify toggle, scale config. 486 tests passing (29 scripts, 1034 asserts).*

@@ -45,5 +45,14 @@
         [1],
         [1, 1],
         [0, 1, 2]
-    ]
+    ],
+
+    "token_label_offsets": {
+        "shield_front": [51, -9],
+        "shield_left": [-9, 85],
+        "shield_right": [112, 85],
+        "shield_rear": [51, 180],
+        "hull": [17, 56],
+        "speed": [87, 56]
+    }
 }

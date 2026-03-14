@@ -37,6 +37,8 @@ var _radius_px: float = 0.0
 var _base_sprite: Sprite2D = null
 ## The sprite showing the per-squadron token artwork PNG.
 var _token_sprite: Sprite2D = null
+## Runtime game-state instance (optional, set via [method bind_instance]).
+var _squadron_instance: SquadronInstance = null
 
 
 ## Configures this token from a [TokenPlacement].
@@ -63,6 +65,17 @@ func get_faction() -> Constants.Faction:
 ## Returns the base radius in pixels.
 func get_radius_px() -> float:
 	return _radius_px
+
+
+## Binds a [SquadronInstance] to this token for runtime game state tracking.
+## [param instance] — the runtime squadron state object.
+func bind_instance(instance: SquadronInstance) -> void:
+	_squadron_instance = instance
+
+
+## Returns the bound [SquadronInstance] or null.
+func get_squadron_instance() -> SquadronInstance:
+	return _squadron_instance
 
 
 func _input(event: InputEvent) -> void:

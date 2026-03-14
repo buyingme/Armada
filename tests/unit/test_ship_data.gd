@@ -158,3 +158,74 @@ func test_from_dict_unknown_size_defaults_to_small_and_errors() -> void:
 		"Unknown ship_size should default to SMALL")
 	assert_push_error(1,
 		"Should log a push_error for unknown ship_size")
+
+
+# --- token_label_offsets ---
+
+func test_default_token_label_offsets_is_empty() -> void:
+	var ship := ShipData.new()
+	assert_eq(ship.token_label_offsets.size(), 0,
+		"Default token_label_offsets should be empty")
+
+
+func test_from_dict_parses_token_label_offsets() -> void:
+	var data: Dictionary = {
+		"token_label_offsets": {
+			"shield_front": [51, -9],
+			"hull": [21, 34],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.token_label_offsets.size(), 2,
+		"Should parse 2 offset entries")
+
+
+func test_from_dict_offsets_are_vector2() -> void:
+	var data: Dictionary = {
+		"token_label_offsets": {
+			"shield_front": [51, -9],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	var offset: Vector2 = ship.token_label_offsets["shield_front"]
+	assert_eq(offset, Vector2(51, -9),
+		"shield_front offset should be Vector2(51, -9)")
+
+
+func test_from_dict_offsets_all_six_keys() -> void:
+	var data: Dictionary = {
+		"token_label_offsets": {
+			"shield_front": [51, -9],
+			"shield_left": [-9, 85],
+			"shield_right": [112, 85],
+			"shield_rear": [51, 180],
+			"hull": [21, 34],
+			"speed": [83, 34],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.token_label_offsets.size(), 6,
+		"Should parse all 6 offset keys")
+	assert_true(ship.token_label_offsets.has("shield_front"),
+		"Should have shield_front key")
+	assert_true(ship.token_label_offsets.has("hull"),
+		"Should have hull key")
+	assert_true(ship.token_label_offsets.has("speed"),
+		"Should have speed key")
+
+
+func test_from_dict_missing_offsets_gives_empty() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_name": "No Offsets"})
+	assert_eq(ship.token_label_offsets.size(), 0,
+		"Missing token_label_offsets should result in empty dict")
+
+
+func test_from_dict_offset_with_short_array_is_skipped() -> void:
+	var data: Dictionary = {
+		"token_label_offsets": {
+			"shield_front": [51],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.token_label_offsets.size(), 0,
+		"Array with fewer than 2 elements should be skipped")

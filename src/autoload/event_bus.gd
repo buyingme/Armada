@@ -41,11 +41,23 @@ signal ship_destroyed(ship: Node)
 ## Emitted when a ship reveals a command dial.
 signal command_revealed(ship: Node, command: Constants.CommandType)
 
+## Emitted when a ship's shields change in a hull zone.
+signal ship_shields_changed(ship_instance: RefCounted, zone: String, new_value: int)
+
+## Emitted when a ship's hull points change (damage taken or repaired).
+signal ship_hull_changed(ship_instance: RefCounted, new_hull: int)
+
 ## Emitted when a ship changes speed.
-signal ship_speed_changed(ship: Node, new_speed: int)
+signal ship_speed_changed(ship_instance: RefCounted, new_speed: int)
+
+## Emitted when a ship's defense token state changes.
+signal ship_defense_token_changed(ship_instance: RefCounted)
 
 ## Emitted when a ship completes movement.
 signal ship_moved(ship: Node)
+
+## Emitted when a squadron's hull points change.
+signal squadron_hull_changed(squadron_instance: RefCounted, new_hull: int)
 
 
 # --- Squadron Events ---

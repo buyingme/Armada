@@ -49,5 +49,16 @@
         "squadron_base": {
             "base_region_diameter_px": 82
         }
+    },
+    "card_panel": {
+        "_comment": "Direct pixel sizes for the ship card side panels (Rebel left, Imperial right). Defense tokens display as a vertical column to the left of each card. magnify_factor is the toggle-zoom multiplier on left-click (UI-018).",
+        "card_height_px": 160,
+        "card_width_px": 115,
+        "token_height_px": 28,
+        "token_gap_px": 3,
+        "entry_gap_px": 8,
+        "edge_padding_px": 8,
+        "top_padding_px": 8,
+        "magnify_factor": 3.0
     }
 }

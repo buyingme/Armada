@@ -490,7 +490,7 @@ These are the digital representations required for the MVP.
 | UI-003 | The current game phase and round number must always be visible. | HUD element |
 | UI-004 | The active player and which ship/squadron is being activated must be clearly indicated. | Visual highlight |
 | UI-005 | Command dial selection must use a secret UI (hidden from opponent in network play). | Dial picker widget |
-| UI-006 | Defense token states (ready/exhausted/discarded) must be clearly distinguishable. | Color coding: green/red/removed |
+| UI-006 | Defense token states (ready/exhausted/discarded) must be clearly distinguishable. | Shown next to ship card in side panel (UI-016/017); color coding: green/red/removed |
 | UI-007 | Shield dial values must be readable on ship bases. | Rotatable dial or numeric display |
 | UI-008 | Dice rolls must have visual feedback (rolling animation, result display). | Dice area + result summary |
 | UI-009 | The damage deck count must be visible. | Remaining cards in deck |
@@ -500,6 +500,9 @@ These are the digital representations required for the MVP.
 | UI-013 | Squadron engagement status must be visually indicated. | Line/glow between engaged squadrons |
 | UI-014 | Turn order / activation status must be shown for all ships and squadrons. | Sidebar or token markers |
 | UI-015 | Attack resolution steps must be presented sequentially with clear prompts for each decision point. | Step-by-step attack dialog |
+| UI-016 | Ship cards are displayed in side panels outside the play area: Rebel cards on the left, Imperial cards on the right. | CanvasLayer panels; always visible regardless of camera |
+| UI-017 | Defense tokens are displayed next to their ship card in the side panel, **not** on the ship token on the board. | Per SU-026; ready/exhausted/discarded states per UI-006 |
+| UI-018 | Left-clicking a ship card entry in the side panel toggles a magnified view (2.5× default, configurable via `scale_config.json` → `card_panel.magnify_factor`). A second click restores normal size. | Zoom toggle per entry; all components (card + tokens) scale together |
 
 ## 18. Network Multiplayer Considerations
 

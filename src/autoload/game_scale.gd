@@ -70,6 +70,25 @@ var squadron_base_region_diameter_px: float = 0.0
 ## Whether scale data was loaded and computed successfully.
 var is_initialised: bool = false
 
+# --- Card panel display values (loaded from card_panel config section) ---
+
+## Ship card display height in screen pixels.
+var card_panel_card_height_px: float = 160.0
+## Ship card display width in screen pixels.
+var card_panel_card_width_px: float = 115.0
+## Defense token display height in screen pixels.
+var card_panel_token_height_px: float = 28.0
+## Gap between defense token sprites in screen pixels.
+var card_panel_token_gap_px: float = 3.0
+## Vertical gap between ship card entries in screen pixels.
+var card_panel_entry_gap_px: float = 8.0
+## Horizontal padding from the screen edge in screen pixels.
+var card_panel_edge_padding_px: float = 8.0
+## Top padding from the screen top in screen pixels.
+var card_panel_top_padding_px: float = 8.0
+## Magnify factor for click-to-zoom on ship card entries.
+var card_panel_magnify_factor: float = 2.5
+
 
 func _ready() -> void:
 	_load_scale_config()
@@ -110,6 +129,9 @@ func _load_scale_config() -> void:
 
 	# Base graphics (measured base region in source PNGs).
 	_load_base_graphics(config)
+
+	# Card panel display sizes.
+	_load_card_panel(config)
 
 	is_initialised = true
 	_log.info("Scale initialised — ruler %s px, play area %s px" % [
@@ -180,6 +202,7 @@ func initialise_from_dict(config: Dictionary) -> void:
 	_load_physical_dimensions(config)
 	_compute_derived_values()
 	_load_base_graphics(config)
+	_load_card_panel(config)
 
 	is_initialised = true
 
@@ -233,6 +256,28 @@ func _load_base_graphics(config: Dictionary) -> void:
 	squadron_base_region_diameter_px = float(squad_bg.get("base_region_diameter_px", 0))
 
 
+## Loads card_panel section from the config dictionary.
+## All values are direct pixel measurements read straight from JSON.
+func _load_card_panel(config: Dictionary) -> void:
+	var cp: Dictionary = config.get("card_panel", {})
+	card_panel_card_height_px = float(cp.get("card_height_px",
+			card_panel_card_height_px))
+	card_panel_card_width_px = float(cp.get("card_width_px",
+			card_panel_card_width_px))
+	card_panel_token_height_px = float(cp.get("token_height_px",
+			card_panel_token_height_px))
+	card_panel_token_gap_px = float(cp.get("token_gap_px",
+			card_panel_token_gap_px))
+	card_panel_entry_gap_px = float(cp.get("entry_gap_px",
+			card_panel_entry_gap_px))
+	card_panel_edge_padding_px = float(cp.get("edge_padding_px",
+			card_panel_edge_padding_px))
+	card_panel_top_padding_px = float(cp.get("top_padding_px",
+			card_panel_top_padding_px))
+	card_panel_magnify_factor = float(cp.get("magnify_factor",
+			card_panel_magnify_factor))
+
+
 ## Reads and parses the JSON config file.
 func _read_config_file() -> Dictionary:
 	if not FileAccess.file_exists(SCALE_CONFIG_PATH):
@@ -270,7 +315,7 @@ func get_base_sprite_scale(ship_size: Constants.ShipSize, tex_size: Vector2) -> 
 	var target: Vector2 = get_base_size(ship_size)
 	if target.x <= 0.0 or target.y <= 0.0 or tex_size.x <= 0.0 or tex_size.y <= 0.0:
 		return Vector2.ONE
-	var region: Vector2 = _get_base_region(ship_size)
+	var region: Vector2 = get_base_region(ship_size)
 	if region.x <= 0.0 or region.y <= 0.0:
 		# Fallback: uniform scale (legacy behaviour).
 		var sf: float = minf(target.x / tex_size.x, target.y / tex_size.y)
@@ -311,8 +356,10 @@ func get_squadron_token_sprite_scale(tex_size: Vector2) -> Vector2:
 	return Vector2(sf, sf)
 
 
-## Returns the source-PNG base region size for the given ship size.
-func _get_base_region(ship_size: Constants.ShipSize) -> Vector2:
+## Returns the source-PNG base region size (width × length in pixels) for
+## the given ship size. Used to convert base-bounding-box pixel offsets to
+## local game coordinates.
+func get_base_region(ship_size: Constants.ShipSize) -> Vector2:
 	match ship_size:
 		Constants.ShipSize.SMALL:
 			return Vector2(small_base_region_width_px, small_base_region_length_px)

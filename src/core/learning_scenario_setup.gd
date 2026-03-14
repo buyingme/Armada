@@ -5,7 +5,12 @@
 ## Faction and ship size are resolved from the individual card JSON files
 ## (ships/<key>.json, squadrons/<key>.json) — never hardcoded in GDScript.
 ##
+## Also creates [ShipInstance] / [SquadronInstance] runtime objects and
+## populates [PlayerState] arrays, the shared [DamageDeck], and assigns
+## factions to player states.
+##
 ## Rules Reference: "Learning Scenario Setup", steps 4 and 9, p.5–6.
+## SU-010–030; DM-007.
 class_name LearningScenarioSetup
 extends RefCounted
 
@@ -15,9 +20,22 @@ extends RefCounted
 const SCENARIO_SUBFOLDER: String = "scenarios/"
 const SCENARIO_FILENAME: String = "learning_scenario.json"
 
+## Learning Scenario initial speed for all ships (SU-021).
+## Rules Reference: "Learning Scenario Setup", step 4, p.5:
+## "Set all speed dials to '2'."
+const LEARNING_SCENARIO_SPEED: int = 2
+
+## Player indices — Rebel has initiative (SU-020).
+## Rules Reference: "Learning Scenario Setup", step 1, p.5:
+## "The Rebel player has initiative."
+const REBEL_PLAYER: int = 0
+const IMPERIAL_PLAYER: int = 1
 
 ## Cached scenario data dictionary loaded once from JSON.
 var _data: Dictionary = {}
+
+## The shared damage deck, initialised once.
+var _damage_deck: DamageDeck = null
 
 
 ## Loads the scenario JSON into the internal cache.
@@ -79,6 +97,82 @@ func get_token_count() -> int:
 	return get_all_placements().size()
 
 
+## Returns the shared [DamageDeck] (initialised on first call).
+## Rules Reference: SU-029 — the damage deck is shuffled at setup.
+func get_damage_deck() -> DamageDeck:
+	if _damage_deck == null:
+		_damage_deck = DamageDeck.new()
+		_damage_deck.initialize()
+	return _damage_deck
+
+
+## Populates a [GameState] with the Learning Scenario starting state.
+## Creates [ShipInstance] / [SquadronInstance] objects, assigns them to
+## the correct [PlayerState], sets factions, and initialises the damage deck.
+## [param game_state] — an already-initialised GameState with 2 player states.
+## Rules Reference: SU-010–030; LTP p.5–6.
+func populate_game_state(game_state: GameState) -> void:
+	_ensure_loaded()
+	# Rebel: player 0, Empire: player 1 (SU-020).
+	game_state.initiative_player = REBEL_PLAYER
+	var rebel_state: PlayerState = game_state.get_player_state(REBEL_PLAYER)
+	var imperial_state: PlayerState = game_state.get_player_state(IMPERIAL_PLAYER)
+	rebel_state.faction = Constants.Faction.REBEL_ALLIANCE
+	imperial_state.faction = Constants.Faction.GALACTIC_EMPIRE
+	var tokens: Array = _data.get("tokens", [])
+	for entry: Variant in tokens:
+		var d: Dictionary = entry as Dictionary
+		var key: String = d.get("key", "")
+		var is_ship: bool = (d.get("type", "ship") == "ship")
+		if is_ship:
+			_create_ship_instance(key, rebel_state, imperial_state)
+		else:
+			_create_squadron_instance(key, rebel_state, imperial_state)
+
+
+## Creates [ShipInstance] objects for all ship placements.
+## Returns an Array mapping data_key → ShipInstance, keyed by placement order.
+func create_ship_instances() -> Array[ShipInstance]:
+	_ensure_loaded()
+	var result: Array[ShipInstance] = []
+	var tokens: Array = _data.get("tokens", [])
+	for entry: Variant in tokens:
+		var d: Dictionary = entry as Dictionary
+		if d.get("type", "ship") != "ship":
+			continue
+		var key: String = d.get("key", "")
+		var ship_data: ShipData = AssetLoader.load_ship_data(key)
+		if ship_data == null:
+			push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
+			continue
+		var player: int = _player_for_faction(ship_data.faction)
+		var inst: ShipInstance = ShipInstance.create_from_data(
+				key, ship_data, LEARNING_SCENARIO_SPEED, player)
+		result.append(inst)
+	return result
+
+
+## Creates [SquadronInstance] objects for all squadron placements.
+func create_squadron_instances() -> Array[SquadronInstance]:
+	_ensure_loaded()
+	var result: Array[SquadronInstance] = []
+	var tokens: Array = _data.get("tokens", [])
+	for entry: Variant in tokens:
+		var d: Dictionary = entry as Dictionary
+		if d.get("type", "ship") == "ship":
+			continue
+		var key: String = d.get("key", "")
+		var squad_data: SquadronData = AssetLoader.load_squadron_data(key)
+		if squad_data == null:
+			push_error("LearningScenarioSetup: missing squadron data '%s'" % key)
+			continue
+		var player: int = _player_for_faction(squad_data.faction)
+		var inst: SquadronInstance = SquadronInstance.create_from_data(
+				key, squad_data, player)
+		result.append(inst)
+	return result
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
@@ -119,3 +213,45 @@ func _make_squadron_placement(
 		push_error("LearningScenarioSetup: missing squadron data for '%s'" % key)
 		return null
 	return TokenPlacement.new(key, false, squad_data.faction, pos_x, pos_y, rot_rad)
+
+
+## Returns the player index for a given faction.
+## Rebel → 0 (initiative), Imperial → 1. SU-020.
+func _player_for_faction(faction: Constants.Faction) -> int:
+	if faction == Constants.Faction.GALACTIC_EMPIRE:
+		return IMPERIAL_PLAYER
+	return REBEL_PLAYER
+
+
+## Creates a ShipInstance and adds it to the correct PlayerState.
+func _create_ship_instance(
+		key: String, rebel_state: PlayerState,
+		imperial_state: PlayerState) -> void:
+	var ship_data: ShipData = AssetLoader.load_ship_data(key)
+	if ship_data == null:
+		push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
+		return
+	var player: int = _player_for_faction(ship_data.faction)
+	var inst: ShipInstance = ShipInstance.create_from_data(
+			key, ship_data, LEARNING_SCENARIO_SPEED, player)
+	if player == REBEL_PLAYER:
+		rebel_state.ships.append(inst)
+	else:
+		imperial_state.ships.append(inst)
+
+
+## Creates a SquadronInstance and adds it to the correct PlayerState.
+func _create_squadron_instance(
+		key: String, rebel_state: PlayerState,
+		imperial_state: PlayerState) -> void:
+	var squad_data: SquadronData = AssetLoader.load_squadron_data(key)
+	if squad_data == null:
+		push_error("LearningScenarioSetup: missing squadron data for '%s'" % key)
+		return
+	var player: int = _player_for_faction(squad_data.faction)
+	var inst: SquadronInstance = SquadronInstance.create_from_data(
+			key, squad_data, player)
+	if player == REBEL_PLAYER:
+		rebel_state.squadrons.append(inst)
+	else:
+		imperial_state.squadrons.append(inst)

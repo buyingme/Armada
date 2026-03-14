@@ -2,8 +2,12 @@
 ##
 ## Visual representation of a ship on the game board.
 ## Displays the ship token PNG centred on the physical base, draws the base
-## rectangle outline with hull zone dividing lines, and hosts the optional
+## rectangle outline with hull zone dividing lines, and renders shield / hull /
+## speed values at positions defined in the ship JSON. Hosts the optional
 ## firing arc overlay.
+##
+## Defense tokens are **not** shown on the board token; they are displayed
+## next to the ship card in a side panel (UI-016, UI-017).
 ##
 ## Usage:
 ##   var token: ShipToken = SHIP_TOKEN_SCENE.instantiate()
@@ -25,6 +29,8 @@ const IMPERIAL_COLOUR: Color = Color(0.50, 0.75, 0.55)
 const ZONE_LINE_COLOUR: Color = Color(1.0, 1.0, 1.0, 0.45)
 ## Base outline width in pixels.
 const OUTLINE_WIDTH_PX: float = 2.0
+## Font size for value labels in source-PNG pixels.
+const LABEL_FONT_SIZE_PNG_PX: int = 13
 
 ## Placement data assigned during [method setup].
 var _placement: TokenPlacement = null
@@ -36,6 +42,19 @@ var _half_l: float = 0.0
 var _sprite: Sprite2D = null
 ## Arc overlay child node.
 var _arc_overlay: FiringArcOverlay = null
+## Ship data loaded from JSON (holds shields, hull, speed, label offsets).
+var _ship_data: ShipData = null
+## Runtime game-state instance (optional, set via [method bind_instance]).
+## When set, labels read current values from here instead of from _ship_data.
+var _ship_instance: ShipInstance = null
+## Sprite scale factor (maps source-PNG base-region pixels → local game pixels).
+var _sprite_scale: Vector2 = Vector2.ONE
+## Base region size in source-PNG pixels (measured bounding box of the base).
+var _base_region: Vector2 = Vector2.ZERO
+## Bold font used for value labels.
+var _label_font: Font = null
+## Child node that draws value labels on top of the sprite.
+var _label_layer: Node2D = null
 
 
 ## Configures this token from a [TokenPlacement].
@@ -49,9 +68,28 @@ func setup(placement: TokenPlacement) -> void:
 	_half_l = base_size.y * 0.5
 	position = placement.get_pixel_position(GameScale.play_area_side_px)
 	rotation = placement.rotation_rad
+	_ship_data = AssetLoader.load_ship_data(placement.data_key)
+	_label_font = _create_bold_font()
 	_create_sprite(placement)
+	_create_label_layer()
 	_create_arc_overlay()
 	queue_redraw()
+
+
+## Binds a [ShipInstance] to this token so labels show current game values.
+## Connects EventBus signals to trigger label redraws when state changes.
+## [param instance] — the runtime ship state object.
+func bind_instance(instance: ShipInstance) -> void:
+	_ship_instance = instance
+	EventBus.ship_shields_changed.connect(_on_state_changed)
+	EventBus.ship_hull_changed.connect(_on_state_changed_hull)
+	EventBus.ship_speed_changed.connect(_on_state_changed_speed)
+	_refresh_labels()
+
+
+## Returns the bound [ShipInstance] or null.
+func get_ship_instance() -> ShipInstance:
+	return _ship_instance
 
 
 ## Toggles the firing arc overlay visibility.
@@ -88,6 +126,23 @@ func get_half_width() -> float:
 ## Returns the half-length of the base in pixels.
 func get_half_length() -> float:
 	return _half_l
+
+
+## Returns the loaded [ShipData] or null if not yet set up.
+func get_ship_data() -> ShipData:
+	return _ship_data
+
+
+## Returns the local-space position for a label offset key,
+## or Vector2.ZERO if the key is missing or data is not loaded.
+func get_label_local_position(key: String) -> Vector2:
+	if not _ship_data or _ship_data.token_label_offsets.is_empty():
+		return Vector2.ZERO
+	if not _ship_data.token_label_offsets.has(key):
+		return Vector2.ZERO
+	if _base_region.x <= 0.0 or _base_region.y <= 0.0:
+		return Vector2.ZERO
+	return _base_offset_to_local(_ship_data.token_label_offsets[key])
 
 
 func _input(event: InputEvent) -> void:
@@ -151,6 +206,7 @@ func _create_sprite(placement: TokenPlacement) -> void:
 
 ## Scales [_sprite] so the base region in the source PNG aligns with the
 ## game-scale bounding box. Uses per-axis scaling via [GameScale].
+## Also caches the base region and sprite scale for label positioning.
 func _scale_sprite_to_base(tex: Texture2D) -> void:
 	var tex_size: Vector2 = Vector2(tex.get_width(), tex.get_height())
 	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
@@ -158,10 +214,12 @@ func _scale_sprite_to_base(tex: Texture2D) -> void:
 	if _placement:
 		_sprite.scale = GameScale.get_base_sprite_scale(
 				_placement.ship_size, tex_size)
+		_base_region = GameScale.get_base_region(_placement.ship_size)
 	else:
 		var target: Vector2 = Vector2(_half_w * 2.0, _half_l * 2.0)
 		var sf: float = minf(target.x / tex_size.x, target.y / tex_size.y)
 		_sprite.scale = Vector2(sf, sf)
+	_sprite_scale = _sprite.scale
 
 
 ## Creates the FiringArcOverlay child (initially hidden).
@@ -175,3 +233,119 @@ func _create_arc_overlay() -> void:
 func _is_point_in_base(world_pos: Vector2) -> bool:
 	var local_pos: Vector2 = to_local(world_pos)
 	return (absf(local_pos.x) <= _half_w) and (absf(local_pos.y) <= _half_l)
+
+
+## Creates a bold SystemFont for value labels.
+func _create_bold_font() -> Font:
+	var sf: SystemFont = SystemFont.new()
+	sf.font_weight = 700
+	return sf
+
+
+## Creates a child Node2D that draws the value labels on top of the sprite.
+## Added as a child after the sprite so it renders in front.
+func _create_label_layer() -> void:
+	if not _ship_data or _ship_data.token_label_offsets.is_empty():
+		return
+	if _base_region.x <= 0.0 or _base_region.y <= 0.0:
+		return
+	_label_layer = Node2D.new()
+	_label_layer.draw.connect(_on_label_layer_draw)
+	add_child(_label_layer)
+	_label_layer.queue_redraw()
+
+
+## Called when the label layer child needs to redraw.
+## Draws shield, hull, and speed values at positions defined in the ship JSON.
+## When a [ShipInstance] is bound, reads current values from it; otherwise
+## falls back to the static template values.
+## Rules Reference: shield / hull / speed values shown on ship token artwork.
+func _on_label_layer_draw() -> void:
+	if not _ship_data or not _label_font:
+		return
+	var font_size: int = _get_scaled_font_size()
+	var offsets: Dictionary = _ship_data.token_label_offsets
+	if _ship_instance:
+		_draw_label_on(offsets, "shield_front",
+				str(_ship_instance.current_shields.get("FRONT", 0)), font_size)
+		_draw_label_on(offsets, "shield_left",
+				str(_ship_instance.current_shields.get("LEFT", 0)), font_size)
+		_draw_label_on(offsets, "shield_right",
+				str(_ship_instance.current_shields.get("RIGHT", 0)), font_size)
+		_draw_label_on(offsets, "shield_rear",
+				str(_ship_instance.current_shields.get("REAR", 0)), font_size)
+		_draw_label_on(offsets, "hull",
+				str(_ship_instance.current_hull), font_size)
+		_draw_label_on(offsets, "speed",
+				str(_ship_instance.current_speed), font_size)
+	else:
+		_draw_label_on(offsets, "shield_front",
+				str(int(_ship_data.shields.get("FRONT", 0))), font_size)
+		_draw_label_on(offsets, "shield_left",
+				str(int(_ship_data.shields.get("LEFT", 0))), font_size)
+		_draw_label_on(offsets, "shield_right",
+				str(int(_ship_data.shields.get("RIGHT", 0))), font_size)
+		_draw_label_on(offsets, "shield_rear",
+				str(int(_ship_data.shields.get("REAR", 0))), font_size)
+		_draw_label_on(offsets, "hull",
+				str(int(_ship_data.hull)), font_size)
+		_draw_label_on(offsets, "speed",
+				str(int(_ship_data.max_speed)), font_size)
+
+
+## Draws a single centred value label at the specified offset key.
+## Drawing happens on the [_label_layer] child node's canvas.
+func _draw_label_on(offsets: Dictionary, key: String, text: String,
+		font_size: int) -> void:
+	if not offsets.has(key):
+		return
+	var local_pos: Vector2 = _base_offset_to_local(offsets[key])
+	var text_size: Vector2 = _label_font.get_string_size(
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var draw_pos: Vector2 = Vector2(
+			local_pos.x - text_size.x * 0.5,
+			local_pos.y + text_size.y * 0.25)
+	_label_layer.draw_string(_label_font, draw_pos, text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+
+
+## Converts a base-bounding-box pixel offset to local Node2D space.
+## [param base_offset] — pixel position measured from the top-left corner
+## of the base region (not the full PNG), in source-PNG pixel scale.
+## The sprite_scale maps base-region pixels to game pixels,
+## so: local = (base_offset - base_region_center) * sprite_scale.
+func _base_offset_to_local(base_offset: Vector2) -> Vector2:
+	var from_center: Vector2 = base_offset - _base_region * 0.5
+	return from_center * _sprite_scale
+
+
+## Returns the font size in local pixels, scaled from PNG pixel space.
+func _get_scaled_font_size() -> int:
+	var avg_scale: float = (_sprite_scale.x + _sprite_scale.y) * 0.5
+	return maxi(1, roundi(float(LABEL_FONT_SIZE_PNG_PX) * avg_scale))
+
+
+## Triggers a redraw of the label layer to update displayed values.
+func _refresh_labels() -> void:
+	if _label_layer:
+		_label_layer.queue_redraw()
+
+
+## EventBus callback: shields changed on a ship instance.
+## Only redraws if the signal refers to *this* token's instance.
+func _on_state_changed(inst: RefCounted, _zone: String,
+		_new_value: int) -> void:
+	if inst == _ship_instance:
+		_refresh_labels()
+
+
+## EventBus callback: hull changed on a ship instance.
+func _on_state_changed_hull(inst: RefCounted, _new_hull: int) -> void:
+	if inst == _ship_instance:
+		_refresh_labels()
+
+
+## EventBus callback: speed changed on a ship instance.
+func _on_state_changed_speed(inst: RefCounted, _new_speed: int) -> void:
+	if inst == _ship_instance:
+		_refresh_labels()

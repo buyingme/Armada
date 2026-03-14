@@ -322,21 +322,27 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
-### Phase 3: Game State Wiring ⏳ `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.
+### Phase 3: Game State Wiring ✅
+**Status:** Complete — 486 tests passing (29 scripts, 1034 asserts)
+**Goal:** Wire `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.
 **Prerequisites:** Phase 2 (visual tokens exist), existing core classes
 **Duration estimate:** 2 sessions
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
-| `ShipInstance` — runtime ship state (hull, shields, tokens, dials) | Core | SU-021–026 | `src/core/ship_instance.gd` |
-| `SquadronInstance` — runtime squadron state | Core | SU-024–025 | `src/core/squadron_instance.gd` |
-| `DamageDeck` — shuffled 52-card deck with draw/discard | Core | SU-029, DM-007–009 | `src/core/damage_deck.gd` |
-| `LearningScenarioSetup` — creates exact starting state | Core | SU-010–030 | `src/core/learning_scenario_setup.gd` |
-| Wire `ShipInstance` ↔ `ShipToken` via EventBus | Application | — | Two-way sync: state changes → visual updates |
-| Shield display on bases | Presentation | GC-010, UI-007 | Shield value widgets on ship base |
-| Defense token display | Presentation | GC-011, UI-006 | Ready/exhausted/discarded visual states |
+| `ShipInstance` — runtime ship state (hull, shields, tokens, dials) | Core | SU-021–026 | `src/core/ship_instance.gd` ✅ |
+| `SquadronInstance` — runtime squadron state | Core | SU-024–025 | `src/core/squadron_instance.gd` ✅ |
+| `DamageDeck` — shuffled 52-card deck with draw/discard | Core | SU-029, DM-007–009 | `src/core/damage_deck.gd` ✅ |
+| `LearningScenarioSetup` — creates exact starting state | Core | SU-010–030 | `src/core/learning_scenario_setup.gd` ✅ |
+| Wire `ShipInstance` ↔ `ShipToken` via EventBus | Application | — | Two-way sync: state changes → visual updates ✅ |
+| Shield/hull/speed display on bases | Presentation | GC-010, UI-007 | Shield, hull, speed value labels on ship tokens ✅ |
+| Ship card side panels (Rebel left, Imperial right) | Presentation | GC-005, UI-016, UI-017 | `src/ui/ship_card_panel.gd` — CanvasLayer panels outside board ✅ |
+| Defense token column left of ship cards | Presentation | GC-011, UI-006, SU-026 | Integrated in `ship_card_panel.gd` (vertical token column) ✅ |
+| Click-to-magnify on ship card entries | Presentation | UI-018 | 2.5–3× toggle zoom per entry, configurable via `scale_config.json` ✅ |
+| All panel sizes from scale_config.json | Data | — | `card_panel` section in `scale_config.json`, loaded by `GameScale` ✅ |
 
-**Tests:** ~25 (ship init, squadron init, damage deck, setup verification, state↔display sync)
+**Requirements covered:** SU-010–030 (setup), GC-005 (ship cards), GC-010 (shield display), GC-011 (defense tokens), UI-006 (token states), UI-007 (shield values), UI-016 (card panels), UI-017 (tokens on panels not board), UI-018 (magnify toggle)
+**Tests delivered:** 126 new (486 total, 29 scripts, all passing)
 
 ---
 
@@ -514,7 +520,7 @@ Phase 0 (Scale & Assets)
 | Phase 1 | ~40 | **94** | **274** |
 | Phase 2 | ~15 | **29** | **303** |
 | Phase 2b | ~20 | **31** | **360** |
-| Phase 3 | ~25 | — | ~348 |
+| Phase 3 | ~25 | **126** | **486** |
 | Phase 4 | ~20 | — | ~280 |
 | Phase 5 | ~35 | — | ~315 |
 | Phase 6 | ~45 | — | ~360 |
@@ -550,7 +556,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Section | Reqs | Covered In Phase(s) | Status |
 |---------|------|---------------------|--------|
 | Game Overview (GO-001–006) | 6 | Phase 8 | ⏳ |
-| Setup (SU-001–030) | 18 | Phase 0, 2, 3 | 🔄 SU-001, SU-003 done |
+| Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4 | ⏳ |
 | Ship Phase (SP-001–016) | 16 | Phase 5, 6 | ⏳ |

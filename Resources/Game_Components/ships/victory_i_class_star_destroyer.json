@@ -46,5 +46,14 @@
 "navigation_chart": [
     [1],
     [0, 1]
-]
+],
+
+"token_label_offsets": {
+    "shield_front": [74, -9],
+    "shield_left": [-9, 122],
+    "shield_right": [157, 122],
+    "shield_rear": [74, 251],
+    "hull": [30, 27],
+    "speed": [119, 27]
+}
 }

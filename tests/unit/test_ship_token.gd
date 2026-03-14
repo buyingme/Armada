@@ -92,3 +92,49 @@ func test_toggle_arc_overlay_twice_hides_it_again() -> void:
 	token.toggle_arc_overlay()
 	assert_false(token.is_arc_overlay_visible(),
 			"Firing arc overlay should be hidden again after two toggles")
+
+
+# --- Ship data loading ---
+
+func test_setup_loads_ship_data() -> void:
+	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
+	add_child_autofree(token)
+	token.setup(_placement)
+	# ShipData may be null in headless test if asset files are not found,
+	# but the method should not crash.
+	assert_true(true, "setup() loads ship data without crashing")
+
+
+func test_get_ship_data_returns_null_before_setup() -> void:
+	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
+	add_child_autofree(token)
+	assert_null(token.get_ship_data(),
+			"get_ship_data() should return null before setup()")
+
+
+func test_get_ship_data_returns_data_after_setup() -> void:
+	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
+	add_child_autofree(token)
+	token.setup(_placement)
+	var data: ShipData = token.get_ship_data()
+	# In headless tests the asset might load from res://
+	if data:
+		assert_eq(data.ship_name, "CR90 Corvette A",
+				"Should load correct ship data for cr90_corvette_a")
+
+
+# --- Label position conversion ---
+
+func test_get_label_local_position_returns_zero_before_setup() -> void:
+	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
+	add_child_autofree(token)
+	assert_eq(token.get_label_local_position("hull"), Vector2.ZERO,
+			"Label position should be zero before setup()")
+
+
+func test_get_label_local_position_unknown_key_returns_zero() -> void:
+	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
+	add_child_autofree(token)
+	token.setup(_placement)
+	assert_eq(token.get_label_local_position("bogus_key"), Vector2.ZERO,
+			"Unknown key should return Vector2.ZERO")

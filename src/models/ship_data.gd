@@ -52,6 +52,13 @@ extends Resource
 ## Index 0 = speed 1, each entry is an Array of yaw values per joint.
 @export var navigation_chart: Array = []
 
+## Pixel offsets for label positions on the token PNG,
+## measured from the upper-left corner of the source image.
+## Keys: "shield_front", "shield_left", "shield_right", "shield_rear",
+##       "hull", "speed"
+## Values: Vector2 pixel coordinates in source-PNG space.
+@export var token_label_offsets: Dictionary = {}
+
 
 ## Creates a ShipData from a raw JSON dictionary keyed by the field names in
 ## card_data_schema.json. Enum string values ("SMALL", "MEDIUM", "LARGE",
@@ -74,7 +81,19 @@ static func from_dict(data: Dictionary) -> ShipData:
 	s.defense_tokens = data.get("defense_tokens", [])
 	s.upgrade_slots = data.get("upgrade_slots", [])
 	s.navigation_chart = data.get("navigation_chart", [])
+	s.token_label_offsets = _parse_label_offsets(data.get("token_label_offsets", {}))
 	return s
+
+
+## Parses token_label_offsets from the JSON dictionary.
+## Converts each [x, y] array into a Vector2.
+static func _parse_label_offsets(raw: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for key: String in raw:
+		var arr: Array = raw[key]
+		if arr.size() >= 2:
+			result[key] = Vector2(float(arr[0]), float(arr[1]))
+	return result
 
 
 ## Parses a ship_size JSON string into the ShipSize enum.

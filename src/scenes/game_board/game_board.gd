@@ -64,12 +64,18 @@ var _token_mover: TokenMover = TokenMover.new()
 ## Scenario saver utility.
 var _scenario_saver: ScenarioSaver = ScenarioSaver.new()
 
+## Ship card side panels: Rebel (left) and Imperial (right).
+## Rules Reference: SU-026, UI-016, UI-017.
+var _rebel_card_panel: ShipCardPanel = null
+var _imperial_card_panel: ShipCardPanel = null
+
 
 func _ready() -> void:
 	_create_camera()
 	_create_token_container()
 	_create_deploy_overlay()
 	_create_debug_label()
+	_create_ship_card_panels()
 	_connect_signals()
 	_spawn_learning_scenario_tokens()
 	_update_debug_visibility()
@@ -110,7 +116,7 @@ func _draw() -> void:
 		# Extract the central 2160×2160 px region (matching the play area).
 		var tex_w: float = _map_texture.get_width()
 		var tex_h: float = _map_texture.get_height()
-		var crop: float = side  # 2160 — the play area we want
+		var crop: float = side # 2160 — the play area we want
 		var src: Rect2 = Rect2(
 				(tex_w - crop) * 0.5, (tex_h - crop) * 0.5, crop, crop)
 		draw_texture_rect_region(_map_texture, area, src)
@@ -193,34 +199,96 @@ func _create_debug_label() -> void:
 	layer.add_child(_debug_help_panel)
 
 
+## Creates ship card side panels on a CanvasLayer.
+## Rebel cards on the left, Imperial cards on the right.
+## Rules Reference: SU-026, UI-016, UI-017.
+func _create_ship_card_panels() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "ShipCardPanelLayer"
+	layer.layer = 50
+	add_child(layer)
+
+	_rebel_card_panel = ShipCardPanel.new()
+	_rebel_card_panel.name = "RebelCardPanel"
+	_rebel_card_panel.setup(
+			Constants.Faction.REBEL_ALLIANCE, true)
+	layer.add_child(_rebel_card_panel)
+
+	_imperial_card_panel = ShipCardPanel.new()
+	_imperial_card_panel.name = "ImperialCardPanel"
+	_imperial_card_panel.setup(
+			Constants.Faction.GALACTIC_EMPIRE, false)
+	layer.add_child(_imperial_card_panel)
+
+
+## Adds a ship instance to the correct faction's card panel.
+## Rules Reference: SU-026 — defense tokens placed next to ship card.
+func _add_ship_to_card_panel(instance: ShipInstance) -> void:
+	if instance.ship_data == null:
+		return
+	match instance.ship_data.faction:
+		Constants.Faction.REBEL_ALLIANCE:
+			_rebel_card_panel.add_ship_entry(instance)
+		Constants.Faction.GALACTIC_EMPIRE:
+			_imperial_card_panel.add_ship_entry(instance)
+
+
+## Updates the position of both ship card panels based on viewport size.
+func _update_card_panel_positions() -> void:
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_rebel_card_panel.update_position(vp_size)
+	_imperial_card_panel.update_position(vp_size)
+
+
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
 	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
 	DebugMode.debug_mode_changed.connect(_on_debug_mode_changed)
 	DebugMode.save_positions_requested.connect(_on_save_positions)
+	get_tree().root.size_changed.connect(_on_viewport_resized)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
-## Rules Reference: "Learning Scenario Setup", step 9, p.5.
+## Also creates [ShipInstance] / [SquadronInstance] runtime objects, populates
+## [GameState] via [GameManager], binds instances to visual tokens, and adds
+## ship cards to the side panels.
+## Rules Reference: "Learning Scenario Setup", step 9, p.5; SU-010–030.
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	_load_map_texture(setup.get_map_image_filename())
-	for placement: TokenPlacement in setup.get_all_placements():
-		if placement.is_ship:
-			_spawn_ship_token(placement)
-		else:
-			_spawn_squadron_token(placement)
+	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
+	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
+	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
+	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
+	# Populate GameManager state if a game is active.
+	if GameManager.current_game_state:
+		setup.populate_game_state(GameManager.current_game_state)
+	# Spawn ship tokens and bind instances (same order as placements).
+	for i: int in range(ship_placements.size()):
+		var token: ShipToken = _spawn_ship_token(ship_placements[i])
+		if i < ship_instances.size():
+			token.bind_instance(ship_instances[i])
+			_add_ship_to_card_panel(ship_instances[i])
+	# Spawn squadron tokens and bind instances.
+	for i: int in range(squad_placements.size()):
+		var token: SquadronToken = _spawn_squadron_token(squad_placements[i])
+		if i < squad_instances.size():
+			token.bind_instance(squad_instances[i])
 	_log.info("Spawned %d tokens for the Learning Scenario." %
 			_token_container.get_child_count())
+	# Update panel positions now that entries have been added.
+	_update_card_panel_positions()
 
 
 ## Instantiates and configures a ShipToken for the given placement.
+## Returns the created token.
 func _spawn_ship_token(
-		placement: TokenPlacement) -> void:
+		placement: TokenPlacement) -> ShipToken:
 	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
 	_token_container.add_child(token)
 	token.setup(placement)
 	token.token_clicked.connect(_on_token_clicked)
+	return token
 
 
 ## Loads a map background texture from the maps/ folder.
@@ -237,12 +305,14 @@ func _load_map_texture(filename: String) -> void:
 
 
 ## Instantiates and configures a SquadronToken for the given placement.
+## Returns the created token.
 func _spawn_squadron_token(
-		placement: TokenPlacement) -> void:
+		placement: TokenPlacement) -> SquadronToken:
 	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
 	_token_container.add_child(token)
 	token.setup(placement)
 	token.token_clicked.connect(_on_squadron_clicked)
+	return token
 
 
 ## Called when a ship token is clicked.
@@ -266,6 +336,11 @@ func _on_squadron_clicked(token: SquadronToken) -> void:
 func _on_firing_arc_toggled(token: Node) -> void:
 	if token is ShipToken:
 		(token as ShipToken).toggle_arc_overlay()
+
+
+## Repositions ship card panels when the window is resized.
+func _on_viewport_resized() -> void:
+	_update_card_panel_positions()
 
 
 ## Updates visibility of debug-only UI elements.

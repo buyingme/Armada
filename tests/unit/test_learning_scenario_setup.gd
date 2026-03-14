@@ -184,3 +184,130 @@ func test_get_map_image_filename_is_valid_asset() -> void:
 	var texture: Texture2D = AssetLoader.load_texture("maps/", filename)
 	assert_not_null(texture,
 			"The configured map image should exist and load as a Texture2D")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Instance creation
+# ---------------------------------------------------------------------------
+
+func test_create_ship_instances_returns_three() -> void:
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	assert_eq(ships.size(), 3,
+			"Should create 3 ship instances (1 Imperial + 2 Rebel)")
+
+
+func test_create_ship_instances_speed_is_2() -> void:
+	## Rules Reference: SU-021 — all ships start at speed 2.
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for inst: ShipInstance in ships:
+		assert_eq(inst.current_speed, 2,
+				"All ships should start at speed 2 (SU-021): %s" % inst.data_key)
+
+
+func test_create_ship_instances_shields_at_max() -> void:
+	## Rules Reference: SU-022 — shields start at maximum.
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for inst: ShipInstance in ships:
+		for zone: String in inst.current_shields:
+			assert_eq(int(inst.current_shields[zone]),
+					inst.get_max_shields(zone),
+					"Shields should be max for %s zone %s" % [inst.data_key, zone])
+
+
+func test_create_ship_instances_hull_at_max() -> void:
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for inst: ShipInstance in ships:
+		assert_eq(inst.current_hull, inst.ship_data.hull,
+				"Hull should be max for %s" % inst.data_key)
+
+
+func test_create_ship_instances_defense_tokens_ready() -> void:
+	## Rules Reference: SU-026 — all tokens start READY.
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for inst: ShipInstance in ships:
+		for token: Dictionary in inst.defense_tokens:
+			assert_eq(token["state"], Constants.DefenseTokenState.READY,
+					"Defense tokens should start READY for %s" % inst.data_key)
+
+
+func test_create_ship_instances_owner_player() -> void:
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for inst: ShipInstance in ships:
+		if inst.ship_data.faction == Constants.Faction.GALACTIC_EMPIRE:
+			assert_eq(inst.owner_player, 1,
+					"Imperial ships should be player 1: %s" % inst.data_key)
+		else:
+			assert_eq(inst.owner_player, 0,
+					"Rebel ships should be player 0: %s" % inst.data_key)
+
+
+func test_create_squadron_instances_returns_ten() -> void:
+	var squads: Array[SquadronInstance] = _setup.create_squadron_instances()
+	assert_eq(squads.size(), 10,
+			"Should create 10 squadron instances (6 TIE + 4 X-wing)")
+
+
+func test_create_squadron_instances_hull_at_max() -> void:
+	var squads: Array[SquadronInstance] = _setup.create_squadron_instances()
+	for inst: SquadronInstance in squads:
+		assert_eq(inst.current_hull, inst.squadron_data.hull,
+				"Hull should be max for %s" % inst.data_key)
+
+
+func test_populate_game_state_sets_initiative() -> void:
+	## Rules Reference: SU-020 — Rebel player has initiative.
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.initiative_player, 0,
+			"Rebel player (0) should have initiative (SU-020)")
+
+
+func test_populate_game_state_sets_factions() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(0).faction, Constants.Faction.REBEL_ALLIANCE,
+			"Player 0 should be Rebel")
+	assert_eq(gs.get_player_state(1).faction, Constants.Faction.GALACTIC_EMPIRE,
+			"Player 1 should be Imperial")
+
+
+func test_populate_game_state_rebel_ships() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(0).ships.size(), 2,
+			"Rebel should have 2 ships (CR90 + Nebulon-B)")
+
+
+func test_populate_game_state_imperial_ships() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(1).ships.size(), 1,
+			"Imperial should have 1 ship (Victory II)")
+
+
+func test_populate_game_state_rebel_squadrons() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(0).squadrons.size(), 4,
+			"Rebel should have 4 squadrons (X-wings)")
+
+
+func test_populate_game_state_imperial_squadrons() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	_setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(1).squadrons.size(), 6,
+			"Imperial should have 6 squadrons (TIE Fighters)")
+
+
+func test_get_damage_deck_returns_initialized() -> void:
+	## Rules Reference: SU-029 — damage deck shuffled at setup.
+	var deck: DamageDeck = _setup.get_damage_deck()
+	assert_not_null(deck, "get_damage_deck should return a DamageDeck")
+	assert_eq(deck.get_draw_count(), DamageDeck.DECK_SIZE,
+			"Damage deck should have 52 cards")

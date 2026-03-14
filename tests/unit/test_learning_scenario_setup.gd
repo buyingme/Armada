@@ -167,3 +167,20 @@ func _find_by_key(key: String) -> TokenPlacement:
 		if p.data_key == key:
 			return p
 	return null
+
+
+# ---------------------------------------------------------------------------
+# Map image
+# ---------------------------------------------------------------------------
+
+func test_get_map_image_filename_returns_configured_value() -> void:
+	var filename: String = _setup.get_map_image_filename()
+	assert_eq(filename, "map_3x3_distant_planet_v3.jpg",
+			"Should return the map_image value from the scenario JSON")
+
+
+func test_get_map_image_filename_is_valid_asset() -> void:
+	var filename: String = _setup.get_map_image_filename()
+	var texture: Texture2D = AssetLoader.load_texture("maps/", filename)
+	assert_not_null(texture,
+			"The configured map image should exist and load as a Texture2D")

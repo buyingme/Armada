@@ -16,18 +16,39 @@ const SCENARIO_SUBFOLDER: String = "scenarios/"
 const SCENARIO_FILENAME: String = "learning_scenario.json"
 
 
+## Cached scenario data dictionary loaded once from JSON.
+var _data: Dictionary = {}
+
+
+## Loads the scenario JSON into the internal cache.
+## Called implicitly by the accessor methods; safe to call multiple times.
+func _ensure_loaded() -> void:
+	if not _data.is_empty():
+		return
+	_data = AssetLoader.load_json(SCENARIO_SUBFOLDER, SCENARIO_FILENAME)
+	if _data.is_empty():
+		push_error("LearningScenarioSetup: could not load %s" % SCENARIO_FILENAME)
+
+
+## Returns the map image filename declared in the scenario JSON
+## (e.g. "map_3x3_distant_planet_v3.jpg"), or an empty string if none.
+## The file is expected inside Resources/Game_Components/maps/.
+func get_map_image_filename() -> String:
+	_ensure_loaded()
+	return _data.get("map_image", "") as String
+
+
 ## Returns the complete list of token placements for the Learning Scenario.
 ## Imperial tokens occupy the top deployment zone (pos_y < 0.40);
 ## Rebel tokens occupy the bottom zone (pos_y > 0.60).
 ##
 ## Rules Reference: "Learning Scenario Setup", step 9; diagram p.6.
 func get_all_placements() -> Array[TokenPlacement]:
-	var data: Dictionary = AssetLoader.load_json(SCENARIO_SUBFOLDER, SCENARIO_FILENAME)
-	if data.is_empty():
-		push_error("LearningScenarioSetup: could not load %s" % SCENARIO_FILENAME)
+	_ensure_loaded()
+	if _data.is_empty():
 		return []
 	var result: Array[TokenPlacement] = []
-	var tokens: Array = data.get("tokens", [])
+	var tokens: Array = _data.get("tokens", [])
 	for entry: Variant in tokens:
 		var p: TokenPlacement = _placement_from_entry(entry as Dictionary)
 		if p != null:

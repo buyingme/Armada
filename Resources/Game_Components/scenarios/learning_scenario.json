@@ -3,6 +3,7 @@
     "_source": "SWM01-ARMADA-LEARN-TO-PLAY, Setup Diagram p.6",
     "_status": "VERIFIED",
     "scenario_name": "Learning Scenario",
+    "map_image": "map_3x3_distant_planet_v3.jpg",
     "tokens": [
         {
             "key": "victory_ii_class_star_destroyer",

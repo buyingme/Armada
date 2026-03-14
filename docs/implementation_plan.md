@@ -275,6 +275,7 @@ startup. The refactoring removed 10 hardcoded constants from
 | Firing arc overlay | ✅ | `src/scenes/tokens/firing_arc_overlay.gd` (toggleable wedge display) |
 | Token placement setup data | ✅ | `src/core/learning_scenario_setup.gd` + `src/models/token_placement.gd` |
 | EventBus `firing_arc_toggled` signal | ✅ | `src/autoload/event_bus.gd` |
+| Map background from scenario JSON | ✅ | `"map_image"` field in scenario JSON → `game_board.gd` draws texture |
 
 **Requirements covered:** SU-001, SU-002, GC-001–004, UI-001, UI-011, SU-027
 **Tests delivered:** 29 new (303 total, all passing)

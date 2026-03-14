@@ -26,7 +26,7 @@ const SHIP_TOKEN_SCENE: PackedScene = preload(
 const SQUADRON_TOKEN_SCENE: PackedScene = preload(
 		"res://src/scenes/tokens/squadron_token.tscn")
 
-## Background colour for the play area.
+## Fallback background colour when no map image is configured.
 const PLAY_AREA_COLOUR: Color = Color(0.05, 0.07, 0.14)
 ## Colour for the play area border line.
 const BORDER_COLOUR: Color = Color(0.40, 0.50, 0.70, 0.80)
@@ -54,6 +54,9 @@ var _debug_label: Label = null
 
 ## Debug help panel showing all keyboard shortcuts.
 var _debug_help_panel: DebugHelpPanel = null
+
+## Background map texture loaded from the scenario JSON (may be null).
+var _map_texture: Texture2D = null
 
 ## Core mover logic for collision resolution.
 var _token_mover: TokenMover = TokenMover.new()
@@ -102,7 +105,10 @@ func _draw() -> void:
 	if side <= 0.0:
 		return
 	var area: Rect2 = Rect2(Vector2.ZERO, Vector2(side, side))
-	draw_rect(area, PLAY_AREA_COLOUR, true)
+	if _map_texture != null:
+		draw_texture_rect(_map_texture, area, false)
+	else:
+		draw_rect(area, PLAY_AREA_COLOUR, true)
 	draw_rect(area, BORDER_COLOUR, false, BORDER_WIDTH_PX)
 
 
@@ -187,10 +193,11 @@ func _connect_signals() -> void:
 	DebugMode.save_positions_requested.connect(_on_save_positions)
 
 
-## Places all Learning Scenario tokens from setup data.
+## Places all Learning Scenario tokens from setup data and loads the map image.
 ## Rules Reference: "Learning Scenario Setup", step 9, p.5.
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
+	_load_map_texture(setup.get_map_image_filename())
 	for placement: TokenPlacement in setup.get_all_placements():
 		if placement.is_ship:
 			_spawn_ship_token(placement)
@@ -207,6 +214,19 @@ func _spawn_ship_token(
 	_token_container.add_child(token)
 	token.setup(placement)
 	token.token_clicked.connect(_on_token_clicked)
+
+
+## Loads a map background texture from the maps/ folder.
+## [param filename] — the image filename from the scenario JSON (may be empty).
+func _load_map_texture(filename: String) -> void:
+	if filename.is_empty():
+		_log.info("No map_image configured in scenario — using solid background.")
+		return
+	_map_texture = AssetLoader.load_texture("maps/", filename)
+	if _map_texture != null:
+		_log.info("Loaded map background: %s" % filename)
+	else:
+		_log.warn("Map image not found: maps/%s — using solid background." % filename)
 
 
 ## Instantiates and configures a SquadronToken for the given placement.

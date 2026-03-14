@@ -1,8 +1,9 @@
 ## SquadronToken
 ##
 ## Visual representation of a squadron on the game board.
-## Displays the squadron token PNG centred on the circular base and draws the
-## circular base outline.
+## Composites two sprite layers: a shared circular base (squad_base.png) and
+## the per-squadron token artwork drawn on top. The base determines the
+## game-scale circle used for range measurement and overlap detection.
 ##
 ## Usage:
 ##   var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate()
@@ -25,13 +26,17 @@ const OUTLINE_WIDTH_PX: float = 2.0
 const REBEL_COLOUR: Color = Color(0.95, 0.72, 0.25)
 ## Imperial squadron colour.
 const IMPERIAL_COLOUR: Color = Color(0.50, 0.75, 0.55)
+## Shared base image filename.
+const BASE_IMAGE_FILENAME: String = "squad_base.png"
 
 ## Placement data set during [method setup].
 var _placement: TokenPlacement = null
 ## Base radius in pixels (half of squadron_base_diameter_px from GameScale).
 var _radius_px: float = 0.0
-## The sprite showing the squadron token PNG.
-var _sprite: Sprite2D = null
+## The sprite showing the shared circular base PNG.
+var _base_sprite: Sprite2D = null
+## The sprite showing the per-squadron token artwork PNG.
+var _token_sprite: Sprite2D = null
 
 
 ## Configures this token from a [TokenPlacement].
@@ -43,7 +48,8 @@ func setup(placement: TokenPlacement) -> void:
 	_radius_px = GameScale.squadron_base_diameter_px * 0.5
 	position = placement.get_pixel_position(GameScale.play_area_side_px)
 	rotation = placement.rotation_rad
-	_create_sprite(placement)
+	_create_base_sprite()
+	_create_token_sprite(placement)
 	queue_redraw()
 
 
@@ -64,7 +70,7 @@ func _input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			var local_pos: Vector2 = to_local(get_global_mouse_position())
 			if local_pos.length() <= _radius_px:
-				token_clicked.emit(self )
+				token_clicked.emit(self)
 				get_viewport().set_input_as_handled()
 
 
@@ -87,21 +93,29 @@ func _get_faction_colour() -> Color:
 	return REBEL_COLOUR
 
 
-## Creates the Sprite2D child for the squadron token image.
-func _create_sprite(placement: TokenPlacement) -> void:
-	_sprite = Sprite2D.new()
+## Creates the Sprite2D child for the shared circular base image.
+## Scaled to match the game-scale base diameter.
+func _create_base_sprite() -> void:
+	_base_sprite = Sprite2D.new()
+	var tex: Texture2D = AssetLoader.load_texture("squadrons/", BASE_IMAGE_FILENAME)
+	if tex:
+		_base_sprite.texture = tex
+		var tex_size: Vector2 = Vector2(
+				float(tex.get_width()), float(tex.get_height()))
+		_base_sprite.scale = GameScale.get_squadron_sprite_scale(tex_size)
+	add_child(_base_sprite)
+
+
+## Creates the Sprite2D child for the per-squadron token artwork image.
+## Scaled to fit within the game-scale base circle (largest dimension
+## maps to the base diameter).
+func _create_token_sprite(placement: TokenPlacement) -> void:
+	_token_sprite = Sprite2D.new()
 	var filename: String = placement.data_key + "_token.png"
 	var tex: Texture2D = AssetLoader.load_texture("squadrons/", filename)
 	if tex:
-		_sprite.texture = tex
-		_scale_sprite_to_base(tex)
-	add_child(_sprite)
-
-
-## Scales [_sprite] so the base region in the source PNG aligns with the
-## game-scale circular base. Uses [GameScale] measured base region.
-func _scale_sprite_to_base(tex: Texture2D) -> void:
-	var tex_size: Vector2 = Vector2(float(tex.get_width()), float(tex.get_height()))
-	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
-		return
-	_sprite.scale = GameScale.get_squadron_sprite_scale(tex_size)
+		_token_sprite.texture = tex
+		var tex_size: Vector2 = Vector2(
+				float(tex.get_width()), float(tex.get_height()))
+		_token_sprite.scale = GameScale.get_squadron_token_sprite_scale(tex_size)
+	add_child(_token_sprite)

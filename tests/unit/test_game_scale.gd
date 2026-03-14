@@ -8,6 +8,18 @@ extends GutTest
 ## Test config matching the real scale_config.json values.
 var _test_config: Dictionary = {
 	"ruler_total_length_px": 720,
+	"physical_dimensions_mm": {
+		"ruler_length": 305.0,
+		"play_area_ruler_multiplier": 3.0,
+		"maneuver_segments": 5,
+		"small_base_width": 43.0,
+		"small_base_length": 71.0,
+		"medium_base_width": 63.0,
+		"medium_base_length": 102.0,
+		"large_base_width": 77.5,
+		"large_base_length": 129.0,
+		"squadron_base_diameter": 34.2,
+	},
 	"range_bands": {
 		"close": {"max_px": 292},
 		"medium": {"max_px": 442},
@@ -136,9 +148,9 @@ func test_medium_base_length() -> void:
 
 
 func test_squadron_base_diameter() -> void:
-	# 720 × (41 / 305) ≈ 96.79
-	assert_almost_eq(_scale.squadron_base_diameter_px, 96.79, 0.1,
-		"Squadron base diameter should be ~96.8 px")
+	# 720 × (34.2 / 305) ≈ 80.73
+	assert_almost_eq(_scale.squadron_base_diameter_px, 80.73, 0.1,
+		"Squadron base diameter should be ~80.7 px")
 
 
 # --- Maneuver segment ---
@@ -305,7 +317,7 @@ func test_get_base_sprite_scale_zero_tex_returns_one() -> void:
 # --- get_squadron_sprite_scale ---
 
 func test_get_squadron_sprite_scale_uses_region() -> void:
-	# target diameter: ~96.79; region diameter: 82
+	# target diameter: ~80.73; region diameter: 82
 	var tex_size: Vector2 = Vector2(82.0, 82.0)
 	var result: Vector2 = _scale.get_squadron_sprite_scale(tex_size)
 	var expected_sf: float = _scale.squadron_base_diameter_px / 82.0
@@ -317,5 +329,24 @@ func test_get_squadron_sprite_scale_uses_region() -> void:
 
 func test_get_squadron_sprite_scale_zero_tex_returns_one() -> void:
 	var result: Vector2 = _scale.get_squadron_sprite_scale(Vector2.ZERO)
+	assert_eq(result, Vector2.ONE,
+		"Zero texture size should return Vector2.ONE")
+
+
+# --- get_squadron_token_sprite_scale ---
+
+func test_get_squadron_token_sprite_scale_fits_max_dim() -> void:
+	# Token artwork is 78x67; should be scaled so max dim (78) = diameter.
+	var tex_size: Vector2 = Vector2(78.0, 67.0)
+	var result: Vector2 = _scale.get_squadron_token_sprite_scale(tex_size)
+	var expected_sf: float = _scale.squadron_base_diameter_px / 78.0
+	assert_almost_eq(result.x, expected_sf, 0.001,
+		"Token sprite scale X should be target_d / max(tex_w, tex_h)")
+	assert_almost_eq(result.y, expected_sf, 0.001,
+		"Token sprite scale Y should equal X (uniform)")
+
+
+func test_get_squadron_token_sprite_scale_zero_tex_returns_one() -> void:
+	var result: Vector2 = _scale.get_squadron_token_sprite_scale(Vector2.ZERO)
 	assert_eq(result, Vector2.ONE,
 		"Zero texture size should return Vector2.ONE")

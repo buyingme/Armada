@@ -8,6 +8,18 @@ extends GutTest
 
 var _scale_config: Dictionary = {
 	"ruler_total_length_px": 720,
+	"physical_dimensions_mm": {
+		"ruler_length": 305.0,
+		"play_area_ruler_multiplier": 3.0,
+		"maneuver_segments": 5,
+		"small_base_width": 43.0,
+		"small_base_length": 71.0,
+		"medium_base_width": 63.0,
+		"medium_base_length": 102.0,
+		"large_base_width": 77.5,
+		"large_base_length": 129.0,
+		"squadron_base_diameter": 34.2,
+	},
 	"range_bands": {
 		"close": {"max_px": 292},
 		"medium": {"max_px": 442},
@@ -64,6 +76,15 @@ func test_top_line_negative_when_no_bands() -> void:
 	# Arrange — reset to empty config.
 	GameScale.initialise_from_dict({
 		"ruler_total_length_px": 720,
+		"physical_dimensions_mm": {
+			"ruler_length": 305.0,
+			"play_area_ruler_multiplier": 3.0,
+			"maneuver_segments": 5,
+			"small_base_width": 43.0, "small_base_length": 71.0,
+			"medium_base_width": 63.0, "medium_base_length": 102.0,
+			"large_base_width": 77.5, "large_base_length": 129.0,
+			"squadron_base_diameter": 34.2,
+		},
 		"range_bands": {},
 		"distance_bands_px": [],
 	})
@@ -75,6 +96,15 @@ func test_top_line_negative_when_no_bands() -> void:
 func test_bottom_line_negative_when_no_bands() -> void:
 	GameScale.initialise_from_dict({
 		"ruler_total_length_px": 720,
+		"physical_dimensions_mm": {
+			"ruler_length": 305.0,
+			"play_area_ruler_multiplier": 3.0,
+			"maneuver_segments": 5,
+			"small_base_width": 43.0, "small_base_length": 71.0,
+			"medium_base_width": 63.0, "medium_base_length": 102.0,
+			"large_base_width": 77.5, "large_base_length": 129.0,
+			"squadron_base_diameter": 34.2,
+		},
 		"range_bands": {},
 		"distance_bands_px": [],
 	})

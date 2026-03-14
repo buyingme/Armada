@@ -12,6 +12,18 @@ var _mover: TokenMover = null
 ## Scale config mimicking 720 px ruler → 2160 px play area.
 var _scale_config: Dictionary = {
 	"ruler_total_length_px": 720,
+	"physical_dimensions_mm": {
+		"ruler_length": 305.0,
+		"play_area_ruler_multiplier": 3.0,
+		"maneuver_segments": 5,
+		"small_base_width": 43.0,
+		"small_base_length": 71.0,
+		"medium_base_width": 63.0,
+		"medium_base_length": 102.0,
+		"large_base_width": 77.5,
+		"large_base_length": 129.0,
+		"squadron_base_diameter": 34.2,
+	},
 	"range_bands": {
 		"close": {"max_px": 292},
 		"medium": {"max_px": 442},

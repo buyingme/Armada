@@ -35,7 +35,7 @@ The physical game uses these real-world measurements:
 | Play area (Learning) | 3' × 3' (914mm × 914mm) | Play area = 3 × range ruler length per side |
 | Small ship base | ~43mm × 71mm | CR90, Nebulon-B |
 | Medium ship base | ~63mm × 102mm | Victory-class |
-| Squadron base | ~41mm diameter (circular) | X-wing, TIE Fighter |
+| Squadron base | ~34.2mm diameter (circular) | X-wing, TIE Fighter |
 | Maneuver tool segment | ~61mm per segment | 5 segments, each ~1/5 of range ruler |
 
 ### How Scale Is Determined
@@ -60,7 +60,7 @@ All other component sizes derive from this single measurement:
 | Small base length | `PIXELS_PER_FOOT × (71/305)` ≈ 0.233 × ruler |
 | Medium base width | `PIXELS_PER_FOOT × (63/305)` ≈ 0.207 × ruler |
 | Medium base length | `PIXELS_PER_FOOT × (102/305)` ≈ 0.334 × ruler |
-| Squadron base diameter | `PIXELS_PER_FOOT × (41/305)` ≈ 0.134 × ruler |
+| Squadron base diameter | `PIXELS_PER_FOOT × (34.2/305)` ≈ 0.112 × ruler |
 | Maneuver segment length | `PIXELS_PER_FOOT / 5` |
 
 > **ACTION REQUIRED:** Measure the range ruler PNG (total length in pixels) and provide the pixel positions of each band boundary. See `Resources/Game_Components/scale/README.md` for the exact measurements needed.
@@ -90,15 +90,18 @@ These are **play area tokens** — NOT the card images already in `ships/`. They
 - Orientation: ship nose pointing **up** (toward Y-negative in Godot 2D)
 - Resolution: at least 2× the expected display size for crisp rendering at zoom
 
-#### Squadron Tokens (Top-Down View)
+#### Squadron Tokens (Two-Layer Composite)
 
-| Asset | Filename | Size Guidance | Notes |
-|-------|----------|---------------|-------|
-| X-wing Squadron | `x_wing_squadron_token.png` | Square, fits within circular base | Rebel styling |
-| TIE Fighter Squadron | `tie_fighter_squadron_token.png` | Square, fits within circular base | Imperial styling |
+Squadrons use **two** separate graphics: a shared circular base (`squad_base.png`, 82×82 px) and a per-squadron token artwork PNG drawn on top. The base determines game-scale sizing (range measurement, overlap detection). The token artwork is purely visual.
 
-- Transparent background
-- No base circle (procedural)
+| Asset | Filename | Size (px) | Notes |
+|-------|----------|-----------|-------|
+| Shared base | `squad_base.png` | 82×82 (circle) | Scaled to game-scale diameter; defines collision/range circle |
+| X-wing token | `x_wing_squadron_token.png` | 74×63 (content) | Drawn on top of base, fit within circle |
+| TIE Fighter token | `tie_fighter_squadron_token.png` | 70×51 (content) | Drawn on top of base, fit within circle |
+
+- Transparent backgrounds (PNG with alpha)
+- Token artwork: no base circle — the shared base PNG provides it
 - Orientation: nose pointing **up**
 
 #### Play Area
@@ -214,6 +217,26 @@ These will be drawn/composed programmatically. No PNGs needed.
 
 **Requirements covered:** SU-001 (scale), SU-003 (asset loading)
 **Tests delivered:** 49 new (180 total, all passing)
+
+#### Scale Centralisation Refactoring
+
+All physical dimensions (mm values) are now centralised in
+`Resources/Game_Components/scale/scale_config.json` under the
+`physical_dimensions_mm` section. GDScript files no longer contain
+hardcoded mm constants — `GameScale` loads everything from JSON at
+startup. The refactoring removed 10 hardcoded constants from
+`game_scale.gd` and 6 duplicate constants from `constants.gd`.
+
+**Changed files:**
+
+| File | Change |
+|------|--------|
+| `scale_config.json` | Added `physical_dimensions_mm` section (ruler, bases, squadron, segments, multiplier) |
+| `game_scale.gd` | Replaced 10 `const` values with vars loaded from JSON; added `_load_physical_dimensions()`, `_compute_derived_values()`, `_load_base_graphics()` helpers |
+| `constants.gd` | Removed 6 mm constants (`RULER_LENGTH_MM`, ship base mm values, `SQUADRON_BASE_DIAMETER_MM`) |
+| 4 test files | Added `physical_dimensions_mm` block to inline config dictionaries |
+
+**Tests:** 23 scripts, 362 tests, 780 asserts — all passing.
 
 ---
 

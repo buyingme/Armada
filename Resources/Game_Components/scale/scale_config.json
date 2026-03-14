@@ -1,7 +1,20 @@
 {
-    "_comment": "Pixel measurements taken from range_ruler_range.png at working resolution.",
+    "_comment": "Single source of truth for all game-scale data. Physical dimensions (mm) define the real-world game piece sizes. Pixel measurements are taken from range_ruler_range.png at working resolution. Base graphics are measured pixel spans of the base boundary within each source PNG.",
     "_measured_by": "User (manual measurement, session 2025)",
     "ruler_total_length_px": 720,
+    "physical_dimensions_mm": {
+        "_comment": "Real-world measurements in millimetres from the physical game. Rules Reference: 'Ship Bases', p.12; 'Setup', p.11.",
+        "ruler_length": 305.0,
+        "play_area_ruler_multiplier": 3.0,
+        "maneuver_segments": 5,
+        "small_base_width": 43.0,
+        "small_base_length": 71.0,
+        "medium_base_width": 63.0,
+        "medium_base_length": 102.0,
+        "large_base_width": 77.5,
+        "large_base_length": 129.0,
+        "squadron_base_diameter": 34.2
+    },
     "range_bands": {
         "close": {
             "max_px": 292,

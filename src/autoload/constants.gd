@@ -38,14 +38,8 @@ const TOOLS_PATH: String = "res://Resources/Game_Components/tools/"
 const SCALE_PATH: String = "res://Resources/Game_Components/scale/"
 
 ## --- Physical Dimensions ---
-## Real-world measurements in millimetres, used by GameScale to compute pixels.
-
-const RULER_LENGTH_MM: float = 305.0
-const SMALL_BASE_WIDTH_MM: float = 43.0
-const SMALL_BASE_LENGTH_MM: float = 71.0
-const MEDIUM_BASE_WIDTH_MM: float = 63.0
-const MEDIUM_BASE_LENGTH_MM: float = 102.0
-const SQUADRON_BASE_DIAMETER_MM: float = 41.0
+## All physical measurements (mm) are now in scale_config.json.
+## Access derived pixel values via the GameScale autoload.
 
 ## --- Command Types ---
 

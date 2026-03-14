@@ -29,6 +29,13 @@ var selected_token: Node2D = null
 var _log: GameLogger = GameLogger.new("DebugMode")
 
 
+func _ready() -> void:
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
+	if user_args.has("--debug-mode"):
+		enabled = true
+		_log.info("Debug mode auto-enabled via --debug-mode CLI flag")
+
+
 ## Keyboard shortcut: F12 toggles debug mode, Ctrl+S saves positions.
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:

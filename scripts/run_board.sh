@@ -9,13 +9,15 @@
 # Controls (in-game):
 #   Right-click drag   Pan camera
 #   Scroll wheel       Zoom in / out
+#   F12                Toggle debug mode (token drag / deploy zones)
+#   Ctrl+S             Save token positions (debug mode only)
 #
 # To test the firing arc overlay (MT-2.8), add the temporary input handler
 # documented in docs/test_plan_manual.md and rerun this script.
 #
 # Usage:
 #   ./scripts/run_board.sh
-#   ./scripts/run_board.sh --debug    Launch with remote debugger enabled
+#   ./scripts/run_board.sh --debug    Enable debug mode on startup + remote debugger
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -49,14 +51,16 @@ fi
 EXTRA_ARGS=()
 if [[ "${1:-}" == "--debug" ]]; then
     EXTRA_ARGS+=(--remote-debug "tcp://127.0.0.1:6007")
+    EXTRA_ARGS+=(-- --debug-mode)
     echo "Remote debug enabled on tcp://127.0.0.1:6007"
+    echo "In-game debug mode will be enabled on startup (F12 to toggle)"
 fi
 
 echo "Launching board scene for manual testing"
 echo "Scene   : $BOARD_SCENE"
 echo "Godot   : $("$GODOT" --version 2>&1 | head -1)"
 echo ""
-echo "Manual tests to run: docs/test_plan_manual.md § Phase 2 (MT-2.1 – MT-2.9)"
+echo "Manual tests to run: docs/test_plan_manual.md § Phase 2–2b (MT-2.1 – MT-2b.7)"
 echo ""
 
 exec "$GODOT" --path "$PROJECT_DIR" "$BOARD_SCENE" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

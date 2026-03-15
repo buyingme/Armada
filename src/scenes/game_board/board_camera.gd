@@ -111,18 +111,21 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 
 
 ## Pans the camera as the mouse moves during a right-click drag.
+## The screen delta is rotated by the camera's current rotation so
+## panning feels correct when the board is viewed at 180°.
 func _handle_pan_motion(event: InputEventMouseMotion) -> void:
 	var screen_delta: Vector2 = event.position - _drag_start_screen
-	var world_delta: Vector2 = screen_delta / zoom
+	var world_delta: Vector2 = screen_delta.rotated(-rotation) / zoom
 	var new_pos: Vector2 = _drag_start_camera - world_delta
 	position = _clamp_position(new_pos)
 
 
 ## Pans the camera from a two-finger trackpad swipe.
 ## [InputEventPanGesture].delta is in screen pixels per frame.
+## The delta is rotated by the camera's rotation for correct direction.
 ## Rules Reference: UI-001 (trackpad pan support).
 func _handle_pan_gesture(event: InputEventPanGesture) -> void:
-	var world_delta: Vector2 = event.delta * PAN_GESTURE_SENSITIVITY / zoom
+	var world_delta: Vector2 = (event.delta * PAN_GESTURE_SENSITIVITY).rotated(-rotation) / zoom
 	position = _clamp_position(position + world_delta)
 
 
@@ -155,9 +158,11 @@ func _apply_zoom(delta: float, screen_pivot: Vector2) -> void:
 
 
 ## Converts a screen-space position to world-space for this camera.
+## Accounts for camera rotation so zoom pivots work correctly at 180°.
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
 	var vp_size: Vector2 = get_viewport_rect().size
-	return position + (screen_pos - vp_size * 0.5) / zoom
+	var screen_offset: Vector2 = (screen_pos - vp_size * 0.5) / zoom
+	return position + screen_offset.rotated(-rotation)
 
 
 ## Smoothly rotates the camera so the board faces the given player.

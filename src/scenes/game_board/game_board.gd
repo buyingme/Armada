@@ -258,13 +258,13 @@ func _create_ship_card_panels() -> void:
 	_rebel_card_panel = ShipCardPanel.new()
 	_rebel_card_panel.name = "RebelCardPanel"
 	_rebel_card_panel.setup(
-			Constants.Faction.REBEL_ALLIANCE, true)
+			Constants.Faction.REBEL_ALLIANCE, true, 0)
 	layer.add_child(_rebel_card_panel)
 
 	_imperial_card_panel = ShipCardPanel.new()
 	_imperial_card_panel.name = "ImperialCardPanel"
 	_imperial_card_panel.setup(
-			Constants.Faction.GALACTIC_EMPIRE, false)
+			Constants.Faction.GALACTIC_EMPIRE, false, 1)
 	layer.add_child(_imperial_card_panel)
 
 
@@ -800,6 +800,12 @@ func _on_active_player_changed(player_index: int) -> void:
 		return
 
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
+
+	# Update viewer on both card panels so the active player can only
+	# inspect their own dial stacks.
+	# Requirements: UI-023 — cannot view opponent's unrevealed dials.
+	_rebel_card_panel.set_viewer_player(player_index)
+	_imperial_card_panel.set_viewer_player(player_index)
 
 	# Rotate camera to the new player's perspective.
 	# Requirements: BP-001 — camera rotates 180°.

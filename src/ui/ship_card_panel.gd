@@ -96,6 +96,15 @@ func set_side(left_side: bool) -> void:
 	_is_left_side = left_side
 
 
+## Updates the viewer player index.
+## When set, the dial order modal can only be opened for ships owned
+## by this player; opponent dials remain hidden.
+## [param player_index] — the player index who is currently viewing.
+## Requirements: UI-023 — cannot view opponent's unrevealed dials.
+func set_viewer_player(player_index: int) -> void:
+	_viewer_player = player_index
+
+
 ## Returns the number of ship entries in this panel.
 func get_entry_count() -> int:
 	return _entries.size()

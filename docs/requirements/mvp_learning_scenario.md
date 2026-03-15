@@ -29,6 +29,7 @@
 - [22. UI Requirements](#22-ui-requirements)
 - [23. Network Multiplayer Considerations](#23-network-multiplayer-considerations)
 - [24. Debug Mode](#24-debug-mode)
+- [25. Game Logging](#25-game-logging)
 
 ---
 
@@ -648,6 +649,62 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | DBG-040 | In debug mode, a **"Save Positions"** action (button or keyboard shortcut) writes the current world-space positions and rotations of all tokens back to the active scenario JSON file (e.g. `learning_scenario.json`), overwriting the placement entries. | Enables iterative visual layout |
 | DBG-041 | The saved positions must use the same normalised coordinate format (`position_x`, `position_y` as fractions of play area, `rotation_degrees`) already used in scenario JSON files, so they are immediately reloadable. | Roundtrip consistency |
 
+## 25. Game Logging
+
+> **Scope:** Structured file-based logging of game flow events (phase transitions,
+> player actions, state changes) for debugging and replay analysis.
+> Activated by a `--logging` CLI flag; adds no overhead when disabled.
+
+### 25.1 Activation & Lifecycle
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| LOG-001 | File logging is **off by default**. It is activated when the application is launched with the `--logging` user flag (via `OS.get_cmdline_user_args()`). | Same pattern as `--debug-mode` in DebugMode |
+| LOG-002 | When activated, a new log file is created at `user://logs/game_<YYYYMMDD>_<HHMMSS>.log` using the session start timestamp. The `logs/` directory is created if it does not exist. | Godot `user://` resolves to OS-specific app-data folder |
+| LOG-003 | The log file is opened once at application start and flushed after every write. It is closed cleanly when the application exits or the game ends. | Prevents data loss on crash |
+| LOG-004 | A **header block** is written as the first lines of every log file containing: application version (if available), Godot version, OS name, session start timestamp, and play mode (hot-seat / network). | Aids triage when sharing log files |
+| LOG-005 | When `--logging` is active, all existing `GameLogger` output (console) is **also** mirrored to the file. Console behaviour is unchanged. | Additive — does not replace `print()` / `push_warning()` |
+
+### 25.2 Log Format
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| LOG-006 | Each log line follows the format: `[<ISO-timestamp>] [<LEVEL>] [<context>] <message>`. This matches the existing `GameLogger` console format. | Human-readable, grep-friendly |
+| LOG-007 | The log supports the existing severity levels: `DEBUG`, `INFO`, `WARN`, `ERROR`. The minimum file-log level is configurable (default: `DEBUG`). | All levels are written in full-verbosity mode |
+
+### 25.3 Events to Log
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| LOG-010 | **Game lifecycle:** `game_started` (with player factions, initiative player), `game_ended` (with winner). | GameManager signals |
+| LOG-011 | **Round transitions:** `round_started(N)`, `round_ended(N)`. | GameManager signals |
+| LOG-012 | **Phase transitions:** `phase_changed(<phase_name>)` — logged every time the game phase changes. | EventBus.phase_changed |
+| LOG-013 | **Active player changes:** `active_player_changed(<player_index>)` with the player's faction name and the current phase. | EventBus.active_player_changed |
+| LOG-014 | **Command dial assignment:** each ship's dial pick logged as `command_dials_assigned(<ship_name>, [commands])` with the per-ship result. | EventBus.command_picker_confirmed |
+| LOG-015 | **Command phase submissions:** `command_dials_submitted(player=<idx>)` and `command_phase_complete`. | EventBus signals |
+| LOG-016 | **Player handoff events:** `handoff_requested(player=<idx>, phase=<name>)` and `handoff_accepted`. | EventBus signals |
+| LOG-017 | **Ship activation lifecycle:** `ship_activation_started(<ship_name>, player=<idx>)` and `ship_activation_ended(<ship_name>)`. | Future: fire when "End Activation" is pressed; for now log each `activation_ended` signal |
+| LOG-018 | **Squadron activation lifecycle:** same pattern as LOG-017 for squadrons. | Future: per-squadron granularity |
+| LOG-019 | **Auto-pass detection:** when a player is auto-passed because they have no unactivated ships/squadrons, log `auto_pass(player=<idx>, phase=<name>)`. | _advance_ship_phase_turn / _advance_squadron_phase_turn |
+| LOG-020 | **Phase state snapshot:** at each phase boundary (transition), log a summary of game state: round number, each player's ship count, unactivated ship/squadron counts, and score (when implemented). | Provides context for subsequent events |
+
+### 25.4 Launch Script Integration
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| LOG-021 | `scripts/run_board.sh` accepts a `--logging` flag that passes `--logging` as a Godot user argument (via `-- --logging`). | Same mechanism as `--debug` → `--debug-mode` |
+| LOG-022 | `scripts/run_game.sh` accepts the same `--logging` flag. | Consistency across launch scripts |
+| LOG-023 | The `--logging` and `--debug` flags are independent and can be combined. | Orthogonal features |
+
+### 25.5 Testing
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| LOG-030 | Unit tests verify that `GameLogger` writes to a file when file logging is enabled and does not write when disabled. | Core toggle test |
+| LOG-031 | Unit tests verify the log line format matches LOG-006. | Format compliance |
+| LOG-032 | Unit tests verify that the header block (LOG-004) is written at session start. | Header content test |
+| LOG-033 | Integration tests verify that phase transitions, active player changes, and command dial events produce the expected log lines in sequence. | End-to-end flow |
+
 ---
 
 ## Traceability Matrix
@@ -678,4 +735,5 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | UI Requirements | 15 | Derived |
 | Network Multiplayer | 8 | ADR-007 |
 | Debug Mode | 13 | Dev tooling |
-| **Total** | **~238** | |
+| Game Logging | 18 | Dev tooling |
+| **Total** | **~256** | |

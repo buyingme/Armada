@@ -15,6 +15,7 @@
 - [Phase 3: Game State Wiring](#phase-3-game-state-wiring)
 - [Phase 4: Command Phase](#phase-4-command-phase)
 - [Phase 4b: Turn Management & Board Perspective](#phase-4b-turn-management--board-perspective)
+- [Phase L: Game Logging Tooling](#phase-l-game-logging-tooling)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -399,6 +400,35 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
+### Phase L: Game Logging Tooling ⏳
+**Goal:** Extend the existing `GameLogger` utility with optional file-based output, activated by a `--logging` CLI flag. Log all game flow events (phase transitions, active player changes, command dial assignments, activations, auto-pass) to a timestamped file for debugging.
+**Prerequisites:** Phase 4b (turn management signals exist)
+**Duration estimate:** 1 session
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|--------------|
+| `LoggingMode` autoload | Autoload | LOG-001 | `src/autoload/logging_mode.gd` — parses `--logging` CLI flag, exposes `LoggingMode.enabled` |
+| Extend `GameLogger` with file output | Utils | LOG-002, LOG-003, LOG-005 | Add optional `FileAccess` sink to `GameLogger._log()`; open/flush/close lifecycle |
+| Session header block | Utils | LOG-004 | Write Godot version, OS, timestamp, play mode at file start |
+| Log format compliance | Utils | LOG-006, LOG-007 | Ensure file lines match `[timestamp] [LEVEL] [context] message` |
+| Game lifecycle logging | Core/App | LOG-010 | Log `game_started` (factions, initiative) and `game_ended` (winner) |
+| Round transition logging | Core/App | LOG-011 | Log `round_started(N)` and `round_ended(N)` |
+| Phase transition logging | Core/App | LOG-012 | Log every `phase_changed` with phase name |
+| Active player change logging | Core/App | LOG-013 | Log `active_player_changed` with faction and phase context |
+| Command dial event logging | Core/App | LOG-014, LOG-015 | Log each ship's dial pick and per-player submission |
+| Handoff event logging | Core/App | LOG-016 | Log `handoff_requested` and `handoff_accepted` |
+| Activation lifecycle logging | Core/App | LOG-017, LOG-018 | Log `activation_ended` with ship/squadron name |
+| Auto-pass detection logging | Core/App | LOG-019 | Log when a player is auto-passed (no unactivated units) |
+| Phase state snapshot | Core/App | LOG-020 | Log game state summary at each phase boundary |
+| Launch script `--logging` flag | Scripts | LOG-021, LOG-022, LOG-023 | Update `run_board.sh` and `run_game.sh` to accept `--logging` |
+| Unit tests | Tests | LOG-030–032 | File toggle, format compliance, header content |
+| Integration tests | Tests | LOG-033 | Phase transitions and events produce correct log sequence |
+
+**Requirements covered:** LOG-001–023 (activation, format, events, scripts), LOG-030–033 (tests)
+**Tests estimate:** ~20 new
+
+---
+
 ### Phase 5: Ship Movement ⏳ system including the maneuver tool, speed chart, and Navigate command.
 **Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials)
 **Duration estimate:** 3–4 sessions
@@ -537,6 +567,8 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       │                                 Phase 4b (Turn Mgmt & Perspective)
     │       │                                        │
+    │       │                                 Phase L (Game Logging Tooling)
+    │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
@@ -562,7 +594,8 @@ Phase 0 (Scale & Assets)
 | Phase 3 | ~25 | **126** | **486** |
 | Phase 4 | ~30 | **97** | **583** |
 | Phase 4b | ~25 | **52** | **635** |
-| Phase 5 | ~35 | — | ~340 |
+| Phase L | ~20 | — | ~655 |
+| Phase 5 | ~35 | — | ~690 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
 | Phase 8 | ~20 | — | ~410 |
@@ -619,3 +652,4 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 4b, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
+| Game Logging (LOG-001–033) | 18 | Phase L | ⏳ |

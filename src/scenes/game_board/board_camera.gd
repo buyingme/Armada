@@ -59,6 +59,9 @@ var _rotate_tween: Tween = null
 
 
 func _ready() -> void:
+	# Camera2D ignores Node2D rotation by default — disable that so
+	# rotate_to_player() actually rotates the viewport.
+	ignore_rotation = false
 	reset_to_default_view()
 
 

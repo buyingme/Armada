@@ -1,7 +1,7 @@
 ## Test: ShipInstance
 ##
 ## Unit tests for ShipInstance — runtime ship state.
-## Rules Reference: SU-021–026, DM-001–003, DT-001–002.
+## Rules Reference: SU-021–026, DM-001–003, DT-001–002, CP-001–007, CM-004–006.
 extends GutTest
 
 
@@ -278,3 +278,42 @@ func test_reset_activation() -> void:
 	_instance.reset_activation()
 	assert_false(_instance.activated_this_round,
 			"Activation flag should be reset")
+
+# --- Command Dial Stack ---
+
+func test_create_from_data_initialises_command_dial_stack() -> void:
+	assert_not_null(_instance.command_dial_stack,
+			"command_dial_stack should be initialized by factory")
+
+
+func test_command_dial_stack_command_value_matches() -> void:
+	_ship_data.command_value = 2
+	var inst: ShipInstance = ShipInstance.create_from_data(
+			"test", _ship_data, 2, 0)
+	assert_eq(inst.command_dial_stack.command_value, 2,
+			"Stack command_value should match ShipData.command_value")
+
+
+func test_command_dial_stack_starts_empty() -> void:
+	assert_eq(_instance.command_dial_stack.get_dial_count(), 0,
+			"Dial stack should start empty")
+
+
+# --- Command Tokens ---
+
+func test_create_from_data_initialises_command_tokens() -> void:
+	assert_not_null(_instance.command_tokens,
+			"command_tokens should be initialized by factory")
+
+
+func test_command_tokens_max_matches_command_value() -> void:
+	_ship_data.command_value = 2
+	var inst: ShipInstance = ShipInstance.create_from_data(
+			"test", _ship_data, 2, 0)
+	assert_eq(inst.command_tokens.max_tokens, 2,
+			"Token max should match ShipData.command_value (CM-004)")
+
+
+func test_command_tokens_starts_empty() -> void:
+	assert_eq(_instance.command_tokens.get_token_count(), 0,
+			"Command tokens should start empty")

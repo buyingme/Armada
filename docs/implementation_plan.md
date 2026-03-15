@@ -346,19 +346,29 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
-### Phase 4: Command Phase ⏳ command dial selection.
-**Prerequisites:** Phase 3 (ShipInstance with dial stacks)
-**Duration estimate:** 2 sessions
+### Phase 4: Command Phase ✅
+**Goal:** Implement command dial selection, command dial stack display, command tokens, picker modal, and command dial order modal.
+**Prerequisites:** Phase 3 (ShipInstance with dial stacks, ship card panels)
+**Duration estimate:** 3 sessions
+**Completed:** 583 tests passing (33 scripts, 1187 asserts)
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| `CommandDialStack` — ordered stack of facedown dials per ship | Core | CP-001–007 | `src/core/command_dial_stack.gd` |
-| Command dial picker UI | Presentation | UI-005, CP-005 | `src/ui/command_dial_picker.tscn` — 4-way selector |
-| "Both submitted" gate | Core/App | CP-008, NW-007 | Phase transition blocked until both players submit |
-| Command token management | Core | CM-004–006 | Token supply, assignment, duplicate/overflow rules |
-| Phase transition (Command → Ship) | Application | GF-002 | GameManager state update + EventBus signals |
+| Task | Layer | Requirements | Deliverables | Status |
+|------|-------|-------------|--------------|--------|
+| `CommandDialStack` — ordered stack of facedown dials per ship | Core | CP-001–007 | `src/core/command_dial_stack.gd` | ✅ |
+| Add dial + token sizes to `scale_config.json` | Data | — | `card_panel` section: `dial_height_px`, `dial_width_px`, `dial_stack_offset_px`, `cmd_token_height_px` | ✅ |
+| Command dial composite rendering (hidden/revealed/spent) | Presentation | GC-008, UI-019, UI-020 | Runtime composite: `cmd_dial_hidden.png` + `cmd_<type>.png` overlay | ✅ |
+| Command dial stack in ship card panel | Presentation | UI-019, UI-020 | Extend `ship_card_panel.gd` — vertical dial stack below defense tokens, 20 px overlap offset, all hidden dials facedown | ✅ |
+| Command Dial Picker modal (select + confirm) | Presentation | UI-005, UI-021, CP-005 | `src/ui/command_dial_picker.gd` — centred modal, 4 icons in cycle order, stack area, CONFIRM button | ✅ |
+| Round 1 multi-dial / Rounds 2+ single-dial picker logic | Core/Pres | CP-003, CP-004 | Picker enforces correct dial count per round | ✅ |
+| Command Dial Order modal (queued hidden dials in stack order) | Presentation | UI-022, UI-023 | `src/ui/command_dial_order_modal.gd` — click own stack to open, click to close | ✅ |
+| Opponent dial viewing restriction | Core/Pres | UI-023, NW-005 | Click on opponent stack has no effect | ✅ |
+| `CommandTokenManager` — command token management | Core | CM-004–006 | `src/core/command_token_manager.gd` — token supply, assignment, duplicate/overflow rules | ✅ |
+| Command token display (right of ship card in panel) | Presentation | GC-018 | Extend `ship_card_panel.gd` — vertical token stack right of card | ✅ |
+| "Both submitted" gate | Core/App | CP-008, NW-007 | Phase transition blocked until both players submit | ✅ |
+| Phase transition (Command → Ship) | Application | GF-002 | GameManager state update + EventBus signals | ✅ |
 
-**Tests:** ~20 (dial stacking, submission validation, token overflow, phase gate)
+**Requirements covered:** CP-001–008 (Command Phase rules), GC-008 (dial rendering), GC-018 (command tokens), UI-005 (secret picker), UI-019 (dial stack display), UI-020 (spent dial), UI-021 (picker modal), UI-022 (dial order modal), UI-023 (opponent restriction), CM-004–006 (token management)
+**Tests delivered:** 97 new (583 total, 33 scripts, all passing)
 
 ---
 
@@ -521,7 +531,7 @@ Phase 0 (Scale & Assets)
 | Phase 2 | ~15 | **29** | **303** |
 | Phase 2b | ~20 | **31** | **360** |
 | Phase 3 | ~25 | **126** | **486** |
-| Phase 4 | ~20 | — | ~280 |
+| Phase 4 | ~30 | **97** | **583** |
 | Phase 5 | ~35 | — | ~315 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
@@ -558,7 +568,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Overview (GO-001–006) | 6 | Phase 8 | ⏳ |
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
-| Command Phase (CP-001–008) | 8 | Phase 4 | ⏳ |
+| Command Phase (CP-001–008) | 8 | Phase 4 | ✅ |
 | Ship Phase (SP-001–016) | 16 | Phase 5, 6 | ⏳ |
 | Squadron Phase (SQ-001–009) | 9 | Phase 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
@@ -570,7 +580,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ⏳ |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
-| Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 5, 6, 7 |
-| UI Requirements (UI-001–015) | 15 | Phase 2, 5, 6, 7, 8, 10 |
+| Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
+| UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |

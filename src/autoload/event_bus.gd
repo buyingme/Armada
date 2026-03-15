@@ -102,3 +102,37 @@ signal detail_view_requested(element: Node)
 ## [param token] is the ShipToken node whose arcs should be toggled.
 ## Rules Reference: UI-011 — player may show/hide firing arcs on a ship.
 signal firing_arc_toggled(token: Node)
+
+
+# --- Command Phase Events ---
+
+## Emitted when a ship's command dial stack changes (dial assigned, revealed, or spent).
+## [param ship_instance] — the ShipInstance whose dials changed.
+signal command_dials_changed(ship_instance: RefCounted)
+
+## Emitted when a ship's command tokens change (token added or spent).
+## [param ship_instance] — the ShipInstance whose tokens changed.
+signal command_tokens_changed(ship_instance: RefCounted)
+
+## Emitted when a player submits all command dial assignments for the round.
+## [param player_index] — the player who submitted (0 or 1).
+signal command_dials_submitted(player_index: int)
+
+## Emitted when both players have submitted their dials and the Command Phase
+## can transition to the Ship Phase.
+## Rules Reference: CP-008 — both players must submit before proceeding.
+signal command_phase_complete()
+
+## Emitted to request the command dial picker for a specific ship.
+## [param ship_instance] — the ship to assign dials to.
+## [param current_round] — the current round number.
+signal command_picker_requested(ship_instance: RefCounted, current_round: int)
+
+## Emitted when the command dial picker is confirmed (dials assigned).
+## [param ship_instance] — the ship whose dials were assigned.
+## [param commands] — array of Constants.CommandType values assigned.
+signal command_picker_confirmed(ship_instance: RefCounted, commands: Array)
+
+## Emitted to request the command dial order modal for a specific ship.
+## [param ship_instance] — the ship to inspect.
+signal command_dial_order_requested(ship_instance: RefCounted)

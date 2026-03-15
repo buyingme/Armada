@@ -51,6 +51,14 @@ var activated_this_round: bool = false
 ## The player index that controls this ship (0 or 1).
 var owner_player: int = 0
 
+## The command dial stack for this ship.
+## Rules Reference: CP-001–007 — command dials per ship.
+var command_dial_stack: CommandDialStack = null
+
+## Command tokens held by this ship.
+## Rules Reference: CM-004–006 — command token management.
+var command_tokens: CommandTokenManager = null
+
 
 ## Creates a ShipInstance from a [ShipData] template and a data key.
 ## Shields start at max, hull starts at max, speed starts at [initial_speed]
@@ -71,6 +79,8 @@ static func create_from_data(
 	inst.owner_player = player
 	inst._init_shields(data)
 	inst._init_defense_tokens(data)
+	inst.command_dial_stack = CommandDialStack.create(data.command_value)
+	inst.command_tokens = CommandTokenManager.create(data.command_value)
 	return inst
 
 

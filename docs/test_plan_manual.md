@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–3. Updated after each phase completes.
+> **Scope:** Phases 0–4. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -473,16 +473,154 @@ Cross-reference each ship's displayed values against the card data JSON files. A
 
 ---
 
+## Phase 4 — Command Phase
+
+**What this phase adds:** Command dial stacks displayed below defense tokens in ship card panels, Command Dial Picker modal for assigning dials, Command Dial Order modal for reviewing own dials, command token display right of ship cards, and opponent viewing restrictions.
+
+### Setup
+
+Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**. The game must be in the Command Phase (round 1) for picker tests.
+
+---
+
+### MT-4.1 — Command dial stack displayed below defense tokens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete Command Phase dial assignment for all ships | Dials appear below defense token columns in ship card panel entries |
+| 2 | Check the **CR90 Corvette A** panel entry | **1** hidden dial (matching command value 1) below the token column |
+| 3 | Check the **Nebulon-B Escort Frigate** panel entry | **2** hidden dials stacked vertically with ~20 px overlap offset |
+| 4 | Check the **Victory II Star Destroyer** panel entry | **3** hidden dials stacked vertically with ~20 px overlap offset |
+| 5 | Verify all hidden dials show facedown art | Every hidden dial displays `cmd_dial_hidden.png` (no command icon) |
+| 6 | Verify dials stack downward | Dials overlap vertically, first dial at top |
+
+**Pass criteria:** Dial count matches command value per ship; all hidden dials show facedown art; dials stack downward with visible overlap.
+
+---
+
+### MT-4.2 — Command Dial Picker modal opens and closes
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a new game (round 1, Command Phase) | Picker modal appears centred on screen for the first ship |
+| 2 | Check selection area | 4 command icons in a row: Navigate, Squadron, Concentrate Fire, Repair |
+| 3 | Check stack area | Empty (no dials assigned yet) |
+| 4 | Check CONFIRM button | Greyed out / disabled |
+
+**Pass criteria:** Modal is centred; icons in correct cycle order; CONFIRM disabled when stack is empty.
+
+---
+
+### MT-4.3 — Dial Picker selection mechanic
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click the **Navigate** icon in the selection area | A Navigate dial appears in the stack area |
+| 2 | Click the **Repair** icon in the selection area | A Repair dial appears below the Navigate dial |
+| 3 | Click a dial in the stack area to remove it | The dial is removed; stack updates |
+| 4 | Add dials in a different order | Stack reflects the order dials were added |
+
+**Pass criteria:** Clicking adds dials to stack; dials can be removed by clicking them in the stack.
+
+---
+
+### MT-4.4 — Round 1 multi-dial assignment
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open picker for **Victory II** (command value 3) in round 1 | Stack area is empty; CONFIRM disabled |
+| 2 | Add 1 dial to the stack | CONFIRM still disabled (need 3 total) |
+| 3 | Add 2 more dials to the stack (3 total) | CONFIRM becomes enabled |
+| 4 | Click CONFIRM | Modal closes; dials assigned to ship |
+
+**Pass criteria:** Round 1 requires exactly N dials (command value); CONFIRM only enables when all dials are placed.
+
+---
+
+### MT-4.5 — Rounds 2+ single-dial assignment
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance to round 2, enter Command Phase | Picker opens for a ship |
+| 2 | Check the picker | Only 1 new dial slot available |
+| 3 | Add 1 dial and click CONFIRM | Modal closes; new dial placed under existing stack |
+
+**Pass criteria:** Rounds 2+ allow exactly 1 new dial; placed at bottom of existing stack.
+
+---
+
+### MT-4.6 — Command Dial Order modal (own dials)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After dials are assigned, click on a **friendly** ship’s command dial stack in the side panel | Command Dial Order modal opens |
+| 2 | Check the modal title | Shows “Command Dial Order — <ship name>” |
+| 3 | Check the modal layout | Queued (hidden) dials displayed in a **horizontal row**, in stack order (leftmost = top = next to be revealed), each showing its **command icon** |
+| 4 | Check below each dial | A **position label** (#1, #2, …) is displayed below each dial |
+| 5 | Click anywhere on the modal | Modal closes |
+
+**Pass criteria:** Modal shows all queued hidden dials in stack order with command icons and position labels; click dismisses.
+
+---
+
+### MT-4.7 — Opponent dial viewing restriction
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click on the **opponent's** command dial stack in the side panel | **Nothing happens** — no modal opens |
+| 2 | Check opponent's dial stack rendering | Dials show as hidden (`cmd_dial_hidden.png`) with no icon |
+
+**Pass criteria:** Cannot inspect opponent's unrevealed dials; no dial order modal for opponent.
+
+---
+
+### MT-4.8 — Command tokens displayed right of ship card
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Ship Phase, convert a revealed dial to a command token | A command token icon appears to the **right** of the ship card in the panel |
+| 2 | Convert a second (different type) dial to a token | A second token appears in a vertical stack |
+| 3 | Check token artwork | Uses `cmd_<type>.png` matching the command type |
+
+**Pass criteria:** Command tokens display in a vertical stack to the right of the ship card; correct icons per type.
+
+---
+
+### MT-4.9 — Spent dial as activation marker
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Ship Phase, activate a ship (reveal its top dial) | The hidden dial stack loses its top dial |
+| 2 | After the ship finishes activation | A faceup (revealed) dial appears **below** the remaining hidden dials in the panel |
+| 3 | Check the spent dial artwork | Shows `cmd_dial_hidden.png` + `cmd_<type>.png` icon composite (revealed state) |
+
+**Pass criteria:** Spent dial renders below hidden stack as an activation marker; shows the revealed command icon.
+
+---
+
+### MT-4.10 — Magnify includes dial stack and command tokens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Left-click a ship card entry that has dial stack and command tokens | The entry magnifies to 3× including the card, defense tokens, dial stack, and command tokens |
+| 2 | Left-click again to unmagnify | All components return to normal size together |
+
+**Pass criteria:** Magnify toggle scales all panel components (card, defense tokens, dial stack, command tokens) proportionally.
+
+---
+
 ## Regression Checklist
 
-Run this quick checklist any time you merge changes that touch Phase 0–3 files:
+Run this quick checklist any time you merge changes that touch Phase 0–4 files:
 
-- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **486 tests, 0 failures**
+- [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
 - [ ] Run `game_board.tscn` → all 5 tokens appear in correct deployment zones
 - [ ] Ship tokens show white bold shield / hull / speed numbers at correct positions
 - [ ] Ship card panels visible: Rebel cards on left (left-aligned), Imperial cards on right (right-aligned), with defense token columns to the left of each card
 - [ ] Defense tokens top-aligned to their card
+- [ ] Command dial stacks visible below defense tokens (after dial assignment)
+- [ ] Command tokens visible right of ship card (after token conversion)
 - [ ] Right-click drag → board pans; boundary clamping works
 - [ ] Scroll wheel → zoom in/out; clamps at min/max
 - [ ] (macOS) Two-finger swipe on trackpad → board pans smoothly; clamping works
@@ -495,4 +633,4 @@ Run this quick checklist any time you merge changes that touch Phase 0–3 files
 
 ---
 
-*Last updated: Phase 3 complete — game state wiring, ship card panels with defense token columns, magnify toggle, scale config. 486 tests passing (29 scripts, 1034 asserts).*
+*Last updated: Phase 4 implementation complete — CommandDialStack, CommandTokenManager, CommandDialPicker, CommandDialOrderModal, ShipCardPanel dial/token display, GameManager “both submitted” gate. 583 tests passing (33 scripts, 1187 asserts).*

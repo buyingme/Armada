@@ -60,6 +60,9 @@ var shields := {"front": 2, "left": 1}
 | `GameManager` | Game lifecycle, round/phase progression | `src/autoload/game_manager.gd` |
 | `EventBus` | Central signal hub | `src/autoload/event_bus.gd` |
 | `Constants` | Game-wide constants, enums, utility functions | `src/autoload/constants.gd` |
+| `GameScale` | Pixel-to-game-unit scale, UI sizes from `scale_config.json` | `src/autoload/game_scale.gd` |
+| `DebugMode` | Debug-mode toggle, editor-only features | `src/autoload/debug_mode.gd` |
+| `AssetLoader` | Loads textures and JSON from `Resources/Game_Components/` | `src/utils/asset_loader.gd` (not autoload, but global utility) |
 
 ### State Pattern — Game Phases
 

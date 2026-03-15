@@ -88,6 +88,14 @@ var card_panel_edge_padding_px: float = 8.0
 var card_panel_top_padding_px: float = 8.0
 ## Magnify factor for click-to-zoom on ship card entries.
 var card_panel_magnify_factor: float = 2.5
+## Command dial display height in screen pixels.
+var card_panel_dial_height_px: float = 30.0
+## Command dial display width in screen pixels.
+var card_panel_dial_width_px: float = 30.0
+## Vertical offset between stacked command dials in screen pixels.
+var card_panel_dial_stack_offset_px: float = 20.0
+## Command token display height in screen pixels.
+var card_panel_cmd_token_height_px: float = 24.0
 
 
 func _ready() -> void:
@@ -276,6 +284,14 @@ func _load_card_panel(config: Dictionary) -> void:
 			card_panel_top_padding_px))
 	card_panel_magnify_factor = float(cp.get("magnify_factor",
 			card_panel_magnify_factor))
+	card_panel_dial_height_px = float(cp.get("dial_height_px",
+			card_panel_dial_height_px))
+	card_panel_dial_width_px = float(cp.get("dial_width_px",
+			card_panel_dial_width_px))
+	card_panel_dial_stack_offset_px = float(cp.get("dial_stack_offset_px",
+			card_panel_dial_stack_offset_px))
+	card_panel_cmd_token_height_px = float(cp.get("cmd_token_height_px",
+			card_panel_cmd_token_height_px))
 
 
 ## Reads and parses the JSON config file.

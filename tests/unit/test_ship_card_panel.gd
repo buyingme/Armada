@@ -197,3 +197,67 @@ func test_sizes_read_from_game_scale() -> void:
 			"card_panel_token_height_px should be loaded from scale config")
 	assert_gt(GameScale.card_panel_magnify_factor, 1.0,
 			"card_panel_magnify_factor should be > 1.0")
+
+
+# --- Command dial stack display ---
+
+func test_entry_stores_dial_container() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["EVADE"])
+	var inst: ShipInstance = _make_instance("test_ship", data, 0)
+	panel.add_ship_entry(inst)
+	assert_true(panel._entries[0].has("dial_container"),
+			"Entry should have a dial_container key")
+	assert_true(panel._entries[0]["dial_container"] is Control,
+			"dial_container should be a Control node")
+
+
+func test_entry_stores_cmd_token_col() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["EVADE"])
+	var inst: ShipInstance = _make_instance("test_ship", data, 0)
+	panel.add_ship_entry(inst)
+	assert_true(panel._entries[0].has("cmd_token_col"),
+			"Entry should have a cmd_token_col key")
+	assert_true(panel._entries[0]["cmd_token_col"] is VBoxContainer,
+			"cmd_token_col should be a VBoxContainer")
+
+
+func test_entry_stores_left_col() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["EVADE"])
+	var inst: ShipInstance = _make_instance("test_ship", data, 0)
+	panel.add_ship_entry(inst)
+	assert_true(panel._entries[0].has("left_col"),
+			"Entry should have a left_col key")
+	assert_true(panel._entries[0]["left_col"] is VBoxContainer,
+			"left_col should be a VBoxContainer")
+
+
+func test_dial_scale_config_loaded() -> void:
+	# Verify the new scale config values for dials are loaded.
+	assert_gt(GameScale.card_panel_dial_height_px, 0.0,
+			"card_panel_dial_height_px should be loaded from scale config")
+	assert_gt(GameScale.card_panel_dial_width_px, 0.0,
+			"card_panel_dial_width_px should be loaded from scale config")
+	assert_gt(GameScale.card_panel_cmd_token_height_px, 0.0,
+			"card_panel_cmd_token_height_px should be loaded from scale config")
+
+
+# --- viewer restriction ---
+
+func test_setup_viewer_stores_player_index() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	assert_eq(panel._viewer_player, 0,
+			"Viewer player should be stored from setup()")

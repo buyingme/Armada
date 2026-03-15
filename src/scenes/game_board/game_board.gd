@@ -69,6 +69,29 @@ var _scenario_saver: ScenarioSaver = ScenarioSaver.new()
 var _rebel_card_panel: ShipCardPanel = null
 var _imperial_card_panel: ShipCardPanel = null
 
+## Command Dial Picker modal (shared, one at a time).
+var _command_dial_picker: CommandDialPicker = null
+
+## Command Dial Order Modal (shared, one at a time).
+var _command_dial_order_modal: CommandDialOrderModal = null
+
+## Phase / round HUD label shown at the top-centre of the screen.
+var _phase_hud_label: Label = null
+
+## Queue of ships still awaiting dial assignment during the Command Phase.
+## Populated at the start of each Command Phase, drained as each picker
+## is confirmed. Initiative player's ships come first.
+var _ships_needing_dials: Array[ShipInstance] = []
+
+## Human-readable names for each game phase.
+const PHASE_NAMES: Dictionary = {
+	Constants.GamePhase.SETUP: "Setup",
+	Constants.GamePhase.COMMAND: "Command Phase",
+	Constants.GamePhase.SHIP: "Ship Phase",
+	Constants.GamePhase.SQUADRON: "Squadron Phase",
+	Constants.GamePhase.STATUS: "Status Phase",
+}
+
 
 func _ready() -> void:
 	_create_camera()
@@ -76,10 +99,17 @@ func _ready() -> void:
 	_create_deploy_overlay()
 	_create_debug_label()
 	_create_ship_card_panels()
-	_connect_signals()
+	_create_command_phase_ui()
+	_create_phase_hud()
+	# Start game so GameState exists BEFORE tokens are spawned.
+	GameManager.start_new_game()
 	_spawn_learning_scenario_tokens()
+	_connect_signals()
 	_update_debug_visibility()
 	queue_redraw()
+	# The phase_changed signal fired inside start_new_game() before
+	# _connect_signals(), so trigger the initial phase UI manually.
+	_on_phase_changed(GameManager.get_current_phase())
 
 
 ## Returns all current ship tokens on the board.
@@ -246,12 +276,19 @@ func _connect_signals() -> void:
 	DebugMode.debug_mode_changed.connect(_on_debug_mode_changed)
 	DebugMode.save_positions_requested.connect(_on_save_positions)
 	get_tree().root.size_changed.connect(_on_viewport_resized)
+	# Command phase signals.
+	EventBus.phase_changed.connect(_on_phase_changed)
+	EventBus.round_started.connect(_on_round_started)
+	EventBus.command_picker_requested.connect(_on_command_picker_requested)
+	EventBus.command_picker_confirmed.connect(_on_picker_confirmed)
+	EventBus.command_dial_order_requested.connect(_on_command_dial_order_requested)
+	EventBus.command_phase_complete.connect(_on_command_phase_complete)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
-## Also creates [ShipInstance] / [SquadronInstance] runtime objects, populates
-## [GameState] via [GameManager], binds instances to visual tokens, and adds
-## ship cards to the side panels.
+## Also creates [ShipInstance] / [SquadronInstance] runtime objects, registers
+## them in [GameState] so GameManager tracks dial submission, binds instances
+## to visual tokens, and adds ship cards to the side panels.
 ## Rules Reference: "Learning Scenario Setup", step 9, p.5; SU-010–030.
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
@@ -260,9 +297,11 @@ func _spawn_learning_scenario_tokens() -> void:
 	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
 	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
 	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
-	# Populate GameManager state if a game is active.
-	if GameManager.current_game_state:
-		setup.populate_game_state(GameManager.current_game_state)
+	# Register the SAME instances in GameManager's GameState so that the
+	# auto-submit logic in GameManager sees the same objects the picker
+	# assigns dials to. Do NOT call populate_game_state() — that creates
+	# separate duplicate instances.
+	_register_instances_in_game_state(ship_instances, squad_instances)
 	# Spawn ship tokens and bind instances (same order as placements).
 	for i: int in range(ship_placements.size()):
 		var token: ShipToken = _spawn_ship_token(ship_placements[i])
@@ -479,3 +518,201 @@ func _on_save_positions() -> void:
 		_log.info("Token positions saved successfully.")
 	else:
 		_log.error("Failed to save token positions.")
+
+
+# ---------------------------------------------------------------------------
+# Game state registration
+# ---------------------------------------------------------------------------
+
+## Registers ship and squadron instances into the active [GameState] so
+## that [GameManager]'s auto-submit logic sees the same objects the UI
+## operates on. Also sets faction and initiative per the Learning Scenario.
+## Rules Reference: SU-020 — Rebel has initiative.
+func _register_instances_in_game_state(
+		ships: Array[ShipInstance],
+		squads: Array[SquadronInstance]) -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	gs.initiative_player = 0 # Rebel has initiative (SU-020).
+	var rebel_ps: PlayerState = gs.get_player_state(0)
+	var imperial_ps: PlayerState = gs.get_player_state(1)
+	rebel_ps.faction = Constants.Faction.REBEL_ALLIANCE
+	imperial_ps.faction = Constants.Faction.GALACTIC_EMPIRE
+	for ship: ShipInstance in ships:
+		if ship.ship_data == null:
+			continue
+		if ship.ship_data.faction == Constants.Faction.GALACTIC_EMPIRE:
+			imperial_ps.ships.append(ship)
+		else:
+			rebel_ps.ships.append(ship)
+	for squad: SquadronInstance in squads:
+		if squad.squadron_data == null:
+			continue
+		if squad.squadron_data.faction == Constants.Faction.GALACTIC_EMPIRE:
+			imperial_ps.squadrons.append(squad)
+		else:
+			rebel_ps.squadrons.append(squad)
+
+
+# ---------------------------------------------------------------------------
+# Command-phase UI creation
+# ---------------------------------------------------------------------------
+
+## Instantiates the [CommandDialPicker] and [CommandDialOrderModal] on a
+## CanvasLayer above the card panels so they overlay everything.
+func _create_command_phase_ui() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "CommandPhaseUILayer"
+	layer.layer = 60
+	add_child(layer)
+
+	_command_dial_picker = CommandDialPicker.new()
+	_command_dial_picker.name = "CommandDialPicker"
+	_command_dial_picker.visible = false
+	layer.add_child(_command_dial_picker)
+
+	_command_dial_order_modal = CommandDialOrderModal.new()
+	_command_dial_order_modal.name = "CommandDialOrderModal"
+	_command_dial_order_modal.visible = false
+	layer.add_child(_command_dial_order_modal)
+
+
+## Creates a phase / round HUD label at the top-centre of the screen.
+func _create_phase_hud() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "PhaseHUDLayer"
+	layer.layer = 90
+	add_child(layer)
+
+	_phase_hud_label = Label.new()
+	_phase_hud_label.name = "PhaseHUDLabel"
+	_phase_hud_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_phase_hud_label.add_theme_font_size_override("font_size", 20)
+	_phase_hud_label.add_theme_color_override(
+			"font_color", Color(0.9, 0.85, 0.6))
+	_phase_hud_label.text = ""
+	# Anchored to top-centre; position updated in _update_phase_hud().
+	layer.add_child(_phase_hud_label)
+	_update_phase_hud()
+
+
+# ---------------------------------------------------------------------------
+# Phase / round HUD
+# ---------------------------------------------------------------------------
+
+## Updates the phase HUD label text and position.
+func _update_phase_hud() -> void:
+	if _phase_hud_label == null:
+		return
+	var round_num: int = GameManager.get_current_round()
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+	var phase_name: String = PHASE_NAMES.get(phase, "Unknown")
+	if round_num > 0:
+		_phase_hud_label.text = "Round %d — %s" % [round_num, phase_name]
+	else:
+		_phase_hud_label.text = phase_name
+	# Centre the label horizontally.
+	var vp_size: Vector2 = Vector2(1280, 720)
+	if is_inside_tree():
+		vp_size = get_viewport().get_visible_rect().size
+	_phase_hud_label.position = Vector2(
+			(vp_size.x - _phase_hud_label.size.x) * 0.5, 8)
+
+
+# ---------------------------------------------------------------------------
+# Command-phase signal handlers
+# ---------------------------------------------------------------------------
+
+## Called when the game phase changes.
+## Updates the HUD and, if entering Command Phase, starts the dial flow.
+func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
+	_update_phase_hud()
+	if new_phase == Constants.GamePhase.COMMAND:
+		_begin_command_dial_flow()
+
+
+## Called when a new round begins.
+func _on_round_started(_round_number: int) -> void:
+	_update_phase_hud()
+
+
+## Builds the ordered queue of ships needing dials and opens the first
+## picker. Initiative player's ships come first.
+## Rules Reference: CP-001 — all ships must be assigned dials.
+func _begin_command_dial_flow() -> void:
+	_ships_needing_dials.clear()
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var current_round: int = gs.current_round
+	# Initiative player first, then second player.
+	for pi: int in [gs.initiative_player, 1 - gs.initiative_player]:
+		var ps: PlayerState = gs.get_player_state(pi)
+		if ps == null:
+			continue
+		for s: Variant in ps.ships:
+			if s is ShipInstance:
+				var si: ShipInstance = s as ShipInstance
+				if si.command_dial_stack == null:
+					continue
+				var needed: int = si.command_dial_stack.get_dials_needed(
+						current_round)
+				if needed > 0:
+					_ships_needing_dials.append(si)
+	_log.info("Command Phase: %d ships need dials." %
+			_ships_needing_dials.size())
+	_advance_picker_queue()
+
+
+## Opens the picker for the next ship in the queue, or does nothing
+## if the queue is empty (GameManager handles auto-submit).
+func _advance_picker_queue() -> void:
+	if _ships_needing_dials.is_empty():
+		return
+	var ship: ShipInstance = _ships_needing_dials[0]
+	var current_round: int = GameManager.get_current_round()
+	_command_dial_picker.open(ship, current_round)
+	_command_dial_picker.centre_on_screen(
+			get_viewport().get_visible_rect().size)
+
+
+## Called when the player explicitly requests the picker for a ship
+## (e.g. from the card panel). Opens the picker.
+func _on_command_picker_requested(
+		ship_ref: RefCounted, current_round: int) -> void:
+	if ship_ref is ShipInstance:
+		_command_dial_picker.open(
+				ship_ref as ShipInstance, current_round)
+		_command_dial_picker.centre_on_screen(
+				get_viewport().get_visible_rect().size)
+
+
+## Called when the picker confirms dials for a ship.
+## Removes the ship from the queue and advances to the next ship.
+## GameManager handles the actual dial assignment and auto-submit.
+func _on_picker_confirmed(
+		ship_ref: RefCounted, _commands: Array) -> void:
+	if ship_ref is ShipInstance:
+		var idx: int = _ships_needing_dials.find(
+				ship_ref as ShipInstance)
+		if idx >= 0:
+			_ships_needing_dials.remove_at(idx)
+	_advance_picker_queue()
+
+
+## Called when a ship's dial order is requested (from card panel click).
+## Opens the [CommandDialOrderModal].
+func _on_command_dial_order_requested(ship_ref: RefCounted) -> void:
+	if ship_ref is ShipInstance:
+		_command_dial_order_modal.open(ship_ref as ShipInstance)
+		_command_dial_order_modal.centre_on_screen(
+				get_viewport().get_visible_rect().size)
+
+
+## Called when the Command Phase completes (both players submitted).
+## Updates the HUD.
+func _on_command_phase_complete() -> void:
+	_ships_needing_dials.clear()
+	_log.info("Command Phase complete — advancing to Ship Phase.")
+	_update_phase_hud()

@@ -104,7 +104,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | CP-002 | Each ship must be assigned command dials until it has a number of dials equal to its command value. | RRG "Command Phase" |
 | CP-003 | In the first round, each ship receives its full complement of dials (CR90=1, Neb-B=2, VSD=3). | LTP p.7 |
 | CP-004 | In subsequent rounds, each ship receives exactly 1 new dial, placed **under** any existing dials. | LTP p.7; RRG "Command Phase" |
-| CP-005 | A command is chosen by setting the dial to one of 4 commands: Navigate (M), Squadron (O), Repair (Q), Concentrate Fire (P). | LTP p.7 |
+| CP-005 | A command is chosen by setting the dial to one of 4 commands, presented in this fixed cycle order: Navigate (M), Squadron (O), Concentrate Fire (P), Repair (Q). | LTP p.7 |
 | CP-006 | Dials are placed facedown (hidden from opponent). Players can view their own dials at any time but must preserve the order. | RRG "Command Dials" |
 | CP-007 | A ship with a faceup command dial on its ship card (i.e., already activated this round) cannot be activated again. | RRG "Command Dials" |
 | CP-008 | **[Network sync point]** Both players must submit all dial selections before proceeding to the Ship Phase. The server must validate that each ship has the correct number of dials. | ADR-007 |
@@ -469,7 +469,7 @@ These are the digital representations required for the MVP.
 | GC-005 | Ship cards | 3 | PNG or data-driven UI | All ship stats displayed |
 | GC-006 | Squadron cards | 2 | PNG or data-driven UI | All squadron stats displayed |
 | GC-007 | Attack dice | 3 colors × 3 | PNG with face textures | Red (8 faces), Blue (8 faces), Black (8 faces) |
-| GC-008 | Command dials | 4 icons | PNG | Navigate, Squadron, Repair, Conc. Fire |
+| GC-008 | Command dials | 3 states | PNG composite | **Hidden:** `cmd_dial_hidden.png` (60×58). **Revealed:** `cmd_dial_hidden.png` + centred `cmd_<type>.png` (45×45) icon overlay, composited at runtime. **Spent:** Same as revealed (faceup activation marker). |
 | GC-009 | Speed dials | 3 | UI widget | Speed 0–4 per ship |
 | GC-010 | Shield dials | 12 | UI widget | 4 per ship, showing current/max shields |
 | GC-011 | Defense tokens | ~9 | PNG | Evade, Redirect, Brace (ready/exhausted sides) |
@@ -479,7 +479,7 @@ These are the digital representations required for the MVP.
 | GC-015 | Maneuver tool | 1 | Procedural | 5 segments with clickable joints, speed number labels |
 | GC-016 | Initiative token | 1 | PNG | Two-sided (blue/red) |
 | GC-017 | Activation sliders | Visual indicator | UI widget | Toggle state on squadron bases |
-| GC-018 | Command tokens | 4 types | PNG | Navigate, Squadron, Repair, Conc. Fire |
+| GC-018 | Command tokens | 4 types | PNG | Navigate, Squadron, Repair, Conc. Fire. Displayed in a vertical stack to the right of the ship card in the side panel. Uses existing `cmd_<type>.png` (45×45) assets. |
 
 ## 17. UI Requirements
 
@@ -503,6 +503,11 @@ These are the digital representations required for the MVP.
 | UI-016 | Ship cards are displayed in side panels outside the play area: Rebel cards on the left, Imperial cards on the right. | CanvasLayer panels; always visible regardless of camera |
 | UI-017 | Defense tokens are displayed next to their ship card in the side panel, **not** on the ship token on the board. | Per SU-026; ready/exhausted/discarded states per UI-006 |
 | UI-018 | Left-clicking a ship card entry in the side panel toggles a magnified view (2.5× default, configurable via `scale_config.json` → `card_panel.magnify_factor`). A second click restores normal size. | Zoom toggle per entry; all components (card + tokens) scale together |
+| UI-019 | Command dial stack is displayed below the defense token column in each ship card panel entry. Each hidden dial is rendered using `cmd_dial_hidden.png`, offset 10 px vertically per dial. The topmost (active) dial shows its command icon (`cmd_<type>.png`) composited on the dial face. | Stack grows downward; top dial = next to be revealed |
+| UI-020 | When a command dial is spent (during Ship Phase activation), it is placed faceup (revealed composite) below the hidden dial stack. This serves as the activation marker for the current round. | Cleared during Status Phase (ST-004) |
+| UI-021 | **Command Dial Picker** is a modal dialog centred on screen. It contains a selection area with 4 command icons in cycle order (Navigate, Squadron, Concentrate Fire, Repair) and a stack area showing dials already in the stack. Players drag a command icon from the selection area into the stack to assign it. In round 1, the player must assign N dials (matching the ship's command value). In rounds 2+, the player assigns exactly 1 new dial (placed under existing dials). A CONFIRM button at the bottom is disabled until the correct number of new dials have been placed. Dials may be reordered or removed before confirming. | Secret from opponent; see NW-005 |
+| UI-022 | **Command Stack Modal** displays the queued (hidden / not-yet-spent) command dials for a ship in a horizontal row, in stack order (leftmost = top = next to be revealed). Each dial shows its command icon, with a position label (#1, #2, …) below. The modal opens when the owning player clicks on their ship's command dial stack in the ship card panel. Clicking anywhere on the modal closes it. | Read-only inspection of own queued dial order |
+| UI-023 | A player **cannot** view the opponent's unrevealed command dials. Clicking on an opponent's command dial stack has no effect (no dial order modal opens). | Information hiding; see NW-005 |
 
 ## 18. Network Multiplayer Considerations
 

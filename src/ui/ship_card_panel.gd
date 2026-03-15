@@ -1,25 +1,26 @@
 ## ShipCardPanel
 ##
-## Displays ship cards and their defense tokens in a vertical side panel
-## outside the play area. One panel per faction: Rebel cards on the left,
-## Imperial cards on the right.
+## Displays ship cards, defense tokens, command dial stacks, and command tokens
+## in a vertical side panel outside the play area. One panel per faction:
+## Rebel cards on the left, Imperial cards on the right.
 ##
 ## Each ship entry is a horizontal row:
-##   - A vertical column of defense token sprites (left of the card)
-##   - The ship card PNG (loaded from ships/<key>_card.png)
+##   - Left column: defense token sprites + command dial stack (below)
+##   - Centre: the ship card PNG (loaded from ships/<key>_card.png)
+##   - Right column: command token sprites
 ##
 ## Rebel panels align to the left screen edge + top.
 ## Imperial panels align to the right screen edge + top.
 ##
-## Left-clicking a ship card entry toggles a magnified view (2.5× by default,
-## configurable via scale_config.json → card_panel.magnify_factor).
+## Left-clicking a ship card entry toggles a magnified view (configurable via
+## scale_config.json → card_panel.magnify_factor).
 ##
 ## All display sizes are read from [GameScale] (loaded from scale_config.json).
 ## The panel lives on a CanvasLayer so it stays fixed on screen regardless
 ## of camera pan/zoom.
 ##
 ## Rules Reference: SU-026 — defense tokens placed next to ship card.
-## Requirements: GC-005, GC-011, UI-006, UI-016, UI-017, UI-018.
+## Requirements: GC-005, GC-008, GC-011, GC-018, UI-006, UI-016–023.
 class_name ShipCardPanel
 extends VBoxContainer
 
@@ -34,26 +35,45 @@ const TOKEN_FILENAMES: Dictionary = {
 	Constants.DefenseToken.SALVO: "token_salvo",
 }
 
+## Map from [Constants.CommandType] enum to icon filename.
+const CMD_ICON_FILENAMES: Dictionary = {
+	Constants.CommandType.NAVIGATE: "cmd_navigate.png",
+	Constants.CommandType.SQUADRON: "cmd_squadron.png",
+	Constants.CommandType.CONCENTRATE_FIRE: "cmd_concentrate_fire.png",
+	Constants.CommandType.REPAIR: "cmd_repair.png",
+}
+
+## Filename for the hidden (facedown) dial background.
+const CMD_DIAL_HIDDEN_FILE: String = "cmd_dial_hidden.png"
+
 ## The faction this panel represents.
 var _faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
 
 ## Whether this panel is on the left (Rebel) or right (Imperial) side.
 var _is_left_side: bool = true
 
-## Array of {instance: ShipInstance, container: HBoxContainer,
-##           token_col: VBoxContainer, magnified: bool}.
+## Array of entry dictionaries. Each entry:
+## {instance: ShipInstance, container: HBoxContainer,
+##  left_col: VBoxContainer, token_col: VBoxContainer,
+##  dial_container: Control, cmd_token_col: VBoxContainer, magnified: bool}
 var _entries: Array[Dictionary] = []
 
 ## Cached textures: {cache_key: Texture2D}.
 var _tex_cache: Dictionary = {}
 
+## The player index viewing this panel (for dial order modal access control).
+var _viewer_player: int = -1
+
 
 ## Creates a ShipCardPanel for the given faction.
 ## [param faction] — Rebel or Imperial.
 ## [param left_side] — true for left-side placement (Rebel), false for right.
-func setup(faction: Constants.Faction, left_side: bool) -> void:
+## [param viewer] — the player index viewing this panel (for opponent restriction).
+func setup(faction: Constants.Faction, left_side: bool,
+		viewer: int = -1) -> void:
 	_faction = faction
 	_is_left_side = left_side
+	_viewer_player = viewer
 	add_theme_constant_override("separation",
 			int(GameScale.card_panel_entry_gap_px))
 
@@ -69,7 +89,7 @@ func get_entry_count() -> int:
 
 
 ## Adds a ship entry to the panel.
-## Layout: [token_column | card_image] in a horizontal row.
+## Layout: [left_col(tokens + dial_stack) | card_image | cmd_token_col].
 ## [param instance] — the runtime ship state object.
 func add_ship_entry(instance: ShipInstance) -> void:
 	var card_h: float = GameScale.card_panel_card_height_px
@@ -81,14 +101,25 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	entry_container.add_theme_constant_override("separation",
 			int(token_gap))
 
-	# Create defense token column (left of the card).
+	# --- Left column: defense tokens + command dial stack ---
+	var left_col: VBoxContainer = VBoxContainer.new()
+	left_col.add_theme_constant_override("separation", int(token_gap))
+	left_col.alignment = BoxContainer.ALIGNMENT_BEGIN
+
 	var token_col: VBoxContainer = VBoxContainer.new()
 	token_col.add_theme_constant_override("separation", int(token_gap))
 	token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_populate_token_column(token_col, instance.defense_tokens, token_h)
-	entry_container.add_child(token_col)
+	left_col.add_child(token_col)
 
-	# Load and display ship card image.
+	var dial_container: VBoxContainer = VBoxContainer.new()
+	dial_container.add_theme_constant_override("separation", 0)
+	_populate_dial_stack(dial_container, instance, 1.0)
+	left_col.add_child(dial_container)
+
+	entry_container.add_child(left_col)
+
+	# --- Centre: ship card image ---
 	var card_texture: Texture2D = _load_card_texture(instance.data_key)
 	if card_texture:
 		var card_rect: TextureRect = TextureRect.new()
@@ -101,6 +132,13 @@ func add_ship_entry(instance: ShipInstance) -> void:
 		var log: GameLogger = GameLogger.new("ShipCardPanel")
 		log.info("No card texture found for '%s'" % instance.data_key)
 
+	# --- Right column: command tokens ---
+	var cmd_token_col: VBoxContainer = VBoxContainer.new()
+	cmd_token_col.add_theme_constant_override("separation", int(token_gap))
+	cmd_token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_populate_cmd_token_column(cmd_token_col, instance, 1.0)
+	entry_container.add_child(cmd_token_col)
+
 	# Make the entry clickable for magnify toggle.
 	entry_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	entry_container.gui_input.connect(
@@ -110,15 +148,14 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	_entries.append({
 		"instance": instance,
 		"container": entry_container,
+		"left_col": left_col,
 		"token_col": token_col,
+		"dial_container": dial_container,
+		"cmd_token_col": cmd_token_col,
 		"magnified": false,
 	})
 
-	# Listen for defense token state changes via EventBus.
-	if not EventBus.ship_defense_token_changed.is_connected(
-			_on_defense_tokens_changed):
-		EventBus.ship_defense_token_changed.connect(
-				_on_defense_tokens_changed)
+	_connect_eventbus_signals()
 
 
 ## Positions this panel on the correct side of the screen.
@@ -129,9 +166,6 @@ func update_position(viewport_size: Vector2) -> void:
 	var pad: float = GameScale.card_panel_edge_padding_px
 	var top: float = GameScale.card_panel_top_padding_px
 	var panel_size: Vector2 = _compute_panel_size()
-	# Set both custom_minimum_size and size to override any stale
-	# cached minimum the VBoxContainer might hold from a previous
-	# magnified state.
 	custom_minimum_size = panel_size
 	size = panel_size
 	if _is_left_side:
@@ -141,9 +175,7 @@ func update_position(viewport_size: Vector2) -> void:
 
 
 ## Computes the actual panel size by reading custom_minimum_size directly
-## from each TextureRect child.  This avoids relying on
-## get_combined_minimum_size() whose cache can be stale after resizing
-## nested grandchildren in the same frame.
+## from each child. Avoids relying on stale cached minimums.
 func _compute_panel_size() -> Vector2:
 	var max_w: float = 0.0
 	var total_h: float = 0.0
@@ -158,14 +190,27 @@ func _compute_panel_size() -> Vector2:
 		var card_w: float = GameScale.card_panel_card_width_px * factor
 		var card_h: float = GameScale.card_panel_card_height_px * factor
 
-		# Token column width = widest token TextureRect.
+		# Left column width = max of token column and dial container.
 		var col: VBoxContainer = entry["token_col"]
 		var col_w: float = 0.0
 		for child: Node in col.get_children():
 			if child is TextureRect:
 				col_w = maxf(col_w, child.custom_minimum_size.x)
+		# Dial stack is vertical — its width equals one dial width.
+		var dial_cont: VBoxContainer = entry["dial_container"]
+		var dial_w_: float = GameScale.card_panel_dial_width_px * factor
+		col_w = maxf(col_w, dial_w_)
+
+		# Right column width = command token column.
+		var cmd_col: VBoxContainer = entry["cmd_token_col"]
+		var cmd_col_w: float = 0.0
+		for child: Node in cmd_col.get_children():
+			if child is TextureRect:
+				cmd_col_w = maxf(cmd_col_w, child.custom_minimum_size.x)
 
 		var entry_w: float = col_w + token_gap + card_w
+		if cmd_col_w > 0.0:
+			entry_w += token_gap + cmd_col_w
 		max_w = maxf(max_w, entry_w)
 		total_h += card_h
 		if i > 0:
@@ -175,7 +220,8 @@ func _compute_panel_size() -> Vector2:
 
 
 ## Handles left-click on a ship card entry to toggle magnify.
-## Requirements: UI-018.
+## Also handles click on dial stack area for dial order modal.
+## Requirements: UI-018, UI-022, UI-023.
 func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 	if not event is InputEventMouseButton:
 		return
@@ -184,11 +230,40 @@ func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 		return
 	if index < 0 or index >= _entries.size():
 		return
+
+	var entry: Dictionary = _entries[index]
+	var dial_cont: VBoxContainer = entry["dial_container"] as VBoxContainer
+
+	# Check if click is within the dial container area (dial order modal).
+	if _is_click_in_dial_area(mb, dial_cont):
+		_handle_dial_stack_click(entry)
+		return
+
 	_toggle_magnify(index)
 
 
+## Returns true if the mouse event lands inside the dial container's rect.
+func _is_click_in_dial_area(mb: InputEventMouseButton,
+		dial_cont: VBoxContainer) -> bool:
+	if dial_cont.get_child_count() == 0:
+		return false
+	var dial_rect: Rect2 = dial_cont.get_global_rect()
+	return dial_rect.has_point(mb.global_position)
+
+
+## Handles click on a ship's dial stack. Opens dial order modal for own ships.
+## Rules Reference: UI-022 — click own stack to open dial order.
+## Rules Reference: UI-023 — cannot view opponent's unrevealed dials.
+func _handle_dial_stack_click(entry: Dictionary) -> void:
+	var instance: ShipInstance = entry["instance"]
+	# Only allow viewing own ship's dials.
+	if _viewer_player >= 0 and instance.owner_player != _viewer_player:
+		return
+	EventBus.command_dial_order_requested.emit(instance)
+
+
 ## Toggles between normal and magnified size for the entry at [param index].
-## Rules Reference: UI-018 — left-click toggles 2.5× magnification.
+## Rules Reference: UI-018 — left-click toggles magnification.
 func _toggle_magnify(index: int) -> void:
 	var entry: Dictionary = _entries[index]
 	var magnified: bool = entry["magnified"]
@@ -196,49 +271,82 @@ func _toggle_magnify(index: int) -> void:
 	var container: HBoxContainer = entry["container"]
 
 	if magnified:
-		# Restore normal size.
-		_apply_entry_size(container, 1.0)
+		_apply_entry_size(entry, 1.0)
 		entry["magnified"] = false
 	else:
-		# Apply magnified size.
-		_apply_entry_size(container, factor)
+		_apply_entry_size(entry, factor)
 		entry["magnified"] = true
 
-	# Recalculate panel layout.
 	var vp_size: Vector2 = Vector2.ZERO
 	if is_inside_tree():
 		vp_size = get_viewport().get_visible_rect().size
 	update_position(vp_size)
 
 
-## Sets the minimum size of all children in an entry container to
-## their base size multiplied by [param scale_factor].
-func _apply_entry_size(container: HBoxContainer,
+## Sets the minimum size of all children in an entry to their base size
+## multiplied by [param scale_factor].
+func _apply_entry_size(entry: Dictionary,
 		scale_factor: float) -> void:
 	var card_h: float = GameScale.card_panel_card_height_px * scale_factor
 	var card_w: float = GameScale.card_panel_card_width_px * scale_factor
 	var token_h: float = GameScale.card_panel_token_height_px * scale_factor
+	var container: HBoxContainer = entry["container"]
 
 	for child: Node in container.get_children():
 		if child is TextureRect:
+			# Card image.
 			var rect: TextureRect = child as TextureRect
 			rect.custom_minimum_size = Vector2(card_w, card_h)
 		elif child is VBoxContainer:
-			var col: VBoxContainer = child as VBoxContainer
-			for token_child: Node in col.get_children():
-				if token_child is TextureRect:
-					var tr: TextureRect = token_child as TextureRect
-					var tex: Texture2D = tr.texture
-					if tex:
-						var t_aspect: float = (
-								float(tex.get_width())
-								/ maxf(float(tex.get_height()), 1.0))
-						var tw: float = token_h * t_aspect
-						tr.custom_minimum_size = Vector2(tw, token_h)
+			_scale_vbox_textures(child as VBoxContainer, token_h)
+
+	# Re-populate dial stack at new scale.
+	var dial_cont: VBoxContainer = entry["dial_container"]
+	var instance: ShipInstance = entry["instance"]
+	_populate_dial_stack(dial_cont, instance, scale_factor)
+
+	# Re-populate command token column at new scale.
+	var cmd_col: VBoxContainer = entry["cmd_token_col"]
+	_populate_cmd_token_column(cmd_col, instance, scale_factor)
+
+
+## Scales all TextureRect children in a VBoxContainer to a given height.
+func _scale_vbox_textures(col: VBoxContainer, token_h: float) -> void:
+	for child: Node in col.get_children():
+		if child is VBoxContainer:
+			_scale_vbox_textures(child as VBoxContainer, token_h)
+		elif child is TextureRect:
+			var tr: TextureRect = child as TextureRect
+			var tex: Texture2D = tr.texture
+			if tex:
+				var t_aspect: float = (
+						float(tex.get_width())
+						/ maxf(float(tex.get_height()), 1.0))
+				var tw: float = token_h * t_aspect
+				tr.custom_minimum_size = Vector2(tw, token_h)
+
+
+# ---------------------------------------------------------------------------
+# EventBus connections
+# ---------------------------------------------------------------------------
+
+## Connects EventBus signals (idempotent).
+func _connect_eventbus_signals() -> void:
+	if not EventBus.ship_defense_token_changed.is_connected(
+			_on_defense_tokens_changed):
+		EventBus.ship_defense_token_changed.connect(
+				_on_defense_tokens_changed)
+	if not EventBus.command_dials_changed.is_connected(
+			_on_command_dials_changed):
+		EventBus.command_dials_changed.connect(
+				_on_command_dials_changed)
+	if not EventBus.command_tokens_changed.is_connected(
+			_on_command_tokens_changed):
+		EventBus.command_tokens_changed.connect(
+				_on_command_tokens_changed)
 
 
 ## EventBus callback: a ship's defense token state changed.
-## Updates the matching token column if the instance belongs to this panel.
 func _on_defense_tokens_changed(inst: RefCounted) -> void:
 	for entry: Dictionary in _entries:
 		if entry["instance"] == inst:
@@ -251,7 +359,58 @@ func _on_defense_tokens_changed(inst: RefCounted) -> void:
 			break
 
 
-## Fills a token column container with TextureRect sprites stacked vertically.
+## EventBus callback: a ship's command dials changed.
+func _on_command_dials_changed(inst: RefCounted) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] == inst:
+			var factor: float = (
+					GameScale.card_panel_magnify_factor
+					if entry["magnified"] else 1.0)
+			_populate_dial_stack(
+					entry["dial_container"], inst as ShipInstance, factor)
+			_refresh_panel_position()
+			break
+
+
+## EventBus callback: a ship's command tokens changed.
+func _on_command_tokens_changed(inst: RefCounted) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] == inst:
+			var factor: float = (
+					GameScale.card_panel_magnify_factor
+					if entry["magnified"] else 1.0)
+			_populate_cmd_token_column(
+					entry["cmd_token_col"], inst as ShipInstance, factor)
+			_refresh_panel_position()
+			break
+
+
+## Re-computes panel position after a content change.
+func _refresh_panel_position() -> void:
+	var vp_size: Vector2 = Vector2.ZERO
+	if is_inside_tree():
+		vp_size = get_viewport().get_visible_rect().size
+	update_position(vp_size)
+
+
+## Returns the pixel height occupied by a vertical dial stack container.
+## Overlapping dials with negative separation must be accounted for.
+func _compute_dial_stack_height(
+		dial_cont: VBoxContainer, scale_factor: float) -> float:
+	var n: int = dial_cont.get_child_count()
+	if n == 0:
+		return 0.0
+	var dial_h: float = GameScale.card_panel_dial_height_px * scale_factor
+	var off: float = GameScale.card_panel_dial_stack_offset_px * scale_factor
+	# Each extra dial overlaps: visible = dial_h - offset, first = full height.
+	return dial_h + maxf(0.0, float(n - 1) * (dial_h - off))
+
+
+# ---------------------------------------------------------------------------
+# Populate helpers
+# ---------------------------------------------------------------------------
+
+## Fills a token column container with defense token TextureRect sprites.
 ## Clears existing children first.
 ## [param token_h] — the display height for each token sprite.
 func _populate_token_column(col: VBoxContainer,
@@ -281,7 +440,114 @@ func _populate_token_column(col: VBoxContainer,
 		col.add_child(rect)
 
 
-## Loads (or returns cached) the texture for a given token type and state.
+## Populates the command dial stack display as a vertical column.
+## All hidden dials use cmd_dial_hidden.png. A revealed dial (during Ship
+## Phase) shows its command icon composited on the hidden background.
+## A spent dial (activation marker) is shown after a small gap.
+## [param container] — the VBoxContainer to populate.
+## [param instance] — the ShipInstance whose dials to display.
+## [param scale_factor] — current magnification factor.
+## Rules Reference: UI-019, UI-020; GC-008.
+func _populate_dial_stack(container: VBoxContainer,
+		instance: ShipInstance, scale_factor: float) -> void:
+	for child: Node in container.get_children():
+		child.queue_free()
+
+	if instance.command_dial_stack == null:
+		container.custom_minimum_size = Vector2.ZERO
+		return
+
+	var display: Dictionary = instance.command_dial_stack.get_display_state()
+	var hidden_dials: Array = display.get("hidden_dials", [])
+	var revealed: Dictionary = display.get("revealed", {})
+	var spent_marker: Dictionary = display.get("spent_marker", {})
+
+	var dial_h: float = GameScale.card_panel_dial_height_px * scale_factor
+	var dial_w: float = GameScale.card_panel_dial_width_px * scale_factor
+	var offset: int = int(GameScale.card_panel_dial_stack_offset_px
+			* scale_factor)
+
+	# Negative spacing gives the overlapping card-stack look.
+	container.add_theme_constant_override("separation", -offset)
+
+	# If there's a revealed dial, show it first (revealed = icon composite).
+	if not revealed.is_empty():
+		var rev_rect: TextureRect = _create_dial_rect(
+				int(revealed.get("command", 0)), true, dial_w, dial_h)
+		container.add_child(rev_rect)
+
+	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
+	# Rules Reference: CP-006 — dials are facedown.
+	for i: int in range(hidden_dials.size()):
+		var rect: TextureRect = _create_dial_rect(
+				0, false, dial_w, dial_h)
+		container.add_child(rect)
+
+	# Spent dial (activation marker) — shown revealed (icon composite).
+	if not spent_marker.is_empty():
+		var spent_rect: TextureRect = _create_dial_rect(
+				int(spent_marker.get("command", 0)), true, dial_w, dial_h)
+		container.add_child(spent_rect)
+
+
+## Creates a TextureRect for a single command dial.
+## [param cmd] — Constants.CommandType value.
+## [param show_icon] — true to composite the command icon on top.
+## [param w] — display width. [param h] — display height.
+func _create_dial_rect(cmd: int, show_icon: bool,
+		w: float, h: float) -> TextureRect:
+	var tex: Texture2D
+	if show_icon:
+		tex = _get_cmd_icon_texture(cmd)
+	else:
+		tex = _get_dial_hidden_texture()
+
+	var rect: TextureRect = TextureRect.new()
+	if tex:
+		rect.texture = tex
+	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.custom_minimum_size = Vector2(w, h)
+	return rect
+
+
+## Populates the command token column on the right of the ship card.
+## [param col] — the VBoxContainer to populate.
+## [param instance] — the ShipInstance whose tokens to display.
+## [param scale_factor] — current magnification factor.
+## Rules Reference: GC-018.
+func _populate_cmd_token_column(col: VBoxContainer,
+		instance: ShipInstance, scale_factor: float) -> void:
+	for child: Node in col.get_children():
+		child.queue_free()
+
+	if instance.command_tokens == null:
+		return
+
+	var tokens: Array[int] = instance.command_tokens.get_tokens()
+	var cmd_h: float = GameScale.card_panel_cmd_token_height_px * scale_factor
+
+	for cmd: int in tokens:
+		var tex: Texture2D = _get_cmd_icon_texture(cmd)
+		if tex == null:
+			continue
+		var rect: TextureRect = TextureRect.new()
+		rect.texture = tex
+		rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var t_aspect: float = (
+				float(tex.get_width())
+				/ maxf(float(tex.get_height()), 1.0))
+		var tw: float = cmd_h * t_aspect
+		rect.custom_minimum_size = Vector2(tw, cmd_h)
+		col.add_child(rect)
+
+
+# ---------------------------------------------------------------------------
+# Texture loading
+# ---------------------------------------------------------------------------
+
+## Loads (or returns cached) the texture for a defense token type and state.
 func _get_token_texture(token_type: Constants.DefenseToken,
 		token_state: Constants.DefenseTokenState) -> Texture2D:
 	var stem: String = TOKEN_FILENAMES.get(token_type, "")
@@ -295,6 +561,32 @@ func _get_token_texture(token_type: Constants.DefenseToken,
 		return _tex_cache[cache_key] as Texture2D
 	var filename: String = "%s_%s.png" % [stem, suffix]
 	var tex: Texture2D = AssetLoader.load_texture("defense_tokens/", filename)
+	if tex:
+		_tex_cache[cache_key] = tex
+	return tex
+
+
+## Loads (or returns cached) a command icon texture.
+func _get_cmd_icon_texture(cmd: int) -> Texture2D:
+	var filename: String = CMD_ICON_FILENAMES.get(cmd, "")
+	if filename.is_empty():
+		return null
+	var cache_key: String = "cmd_icon_%d" % cmd
+	if _tex_cache.has(cache_key):
+		return _tex_cache[cache_key] as Texture2D
+	var tex: Texture2D = AssetLoader.load_texture("command_tokens/", filename)
+	if tex:
+		_tex_cache[cache_key] = tex
+	return tex
+
+
+## Loads (or returns cached) the hidden dial background texture.
+func _get_dial_hidden_texture() -> Texture2D:
+	var cache_key: String = "dial_hidden"
+	if _tex_cache.has(cache_key):
+		return _tex_cache[cache_key] as Texture2D
+	var tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", CMD_DIAL_HIDDEN_FILE)
 	if tex:
 		_tex_cache[cache_key] = tex
 	return tex

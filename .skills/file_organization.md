@@ -137,7 +137,7 @@ All file and folder names use **lower_snake_case**:
 | `squadrons/` | `<name>_squadron.json`, `<name>_squadron_card.png`, `<name>_squadron_token.png` | `x_wing_squadron.json` |
 | `dice/` | `die_<colour>_<face>.png` | `die_red_crit.png` |
 | `defense_tokens/` | `token_<type>_<state>.png` | `token_evade_ready.png` |
-| `command_tokens/` | `cmd_<type>.png` | `cmd_navigate.png` |
+| `command_tokens/` | `cmd_<type>.png`, `cmd_dial_hidden.png` | `cmd_navigate.png` |
 | `maps/` | `map_<grid>_<name>_v<ver>.jpg` | `map_3x3_azure_v3.jpg` |
 | `tools/` | `range_ruler_<side>.png` | `range_ruler_range.png` |
 

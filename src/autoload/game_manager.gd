@@ -294,10 +294,13 @@ func _advance_ship_phase_turn() -> void:
 		return
 
 	if next_has:
+		if not curr_has:
+			_log.info("auto_pass(player=%d, phase=Ship) — no unactivated ships" % active_player)
 		_set_active_player(next)
 	elif curr_has:
 		# Opponent has no ships; current player continues.
 		# Requirements: TF-006 — auto-pass.
+		_log.info("auto_pass(player=%d, phase=Ship) — no unactivated ships" % next)
 		_set_active_player(active_player)
 	else:
 		advance_phase()
@@ -316,8 +319,11 @@ func _advance_squadron_phase_turn() -> void:
 		return
 
 	if next_has:
+		if not curr_has:
+			_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % active_player)
 		_set_active_player(next)
 	elif curr_has:
+		_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % next)
 		_set_active_player(active_player)
 	else:
 		advance_phase()

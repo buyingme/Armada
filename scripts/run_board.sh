@@ -18,6 +18,8 @@
 # Usage:
 #   ./scripts/run_board.sh
 #   ./scripts/run_board.sh --debug    Enable debug mode on startup + remote debugger
+#   ./scripts/run_board.sh --logging  Enable file logging to user://logs/
+#   ./scripts/run_board.sh --debug --logging  Both flags can be combined
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -49,9 +51,21 @@ if [[ ! -f "$BOARD_PATH" ]]; then
 fi
 
 EXTRA_ARGS=()
-if [[ "${1:-}" == "--debug" ]]; then
-    EXTRA_ARGS+=(-- --debug-mode)
-    echo "In-game debug mode will be enabled on startup (F12 to toggle)"
+USER_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --debug)
+            USER_ARGS+=(--debug-mode)
+            echo "In-game debug mode will be enabled on startup (F12 to toggle)"
+            ;;
+        --logging)
+            USER_ARGS+=(--logging)
+            echo "File logging enabled — logs written to user://logs/"
+            ;;
+    esac
+done
+if [[ ${#USER_ARGS[@]} -gt 0 ]]; then
+    EXTRA_ARGS+=(-- "${USER_ARGS[@]}")
 fi
 
 echo "Launching board scene for manual testing"

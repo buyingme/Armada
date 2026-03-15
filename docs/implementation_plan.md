@@ -400,10 +400,11 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
-### Phase L: Game Logging Tooling ⏳
+### Phase L: Game Logging Tooling ✅
 **Goal:** Extend the existing `GameLogger` utility with optional file-based output, activated by a `--logging` CLI flag. Log all game flow events (phase transitions, active player changes, command dial assignments, activations, auto-pass) to a timestamped file for debugging.
 **Prerequisites:** Phase 4b (turn management signals exist)
 **Duration estimate:** 1 session
+**Completed:** 671 tests passing (43 scripts, 1313 asserts)
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
@@ -425,7 +426,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 | Integration tests | Tests | LOG-033 | Phase transitions and events produce correct log sequence |
 
 **Requirements covered:** LOG-001–023 (activation, format, events, scripts), LOG-030–033 (tests)
-**Tests estimate:** ~20 new
+**Tests delivered:** 36 new (671 total, 43 scripts, all passing)
 
 ---
 
@@ -594,7 +595,7 @@ Phase 0 (Scale & Assets)
 | Phase 3 | ~25 | **126** | **486** |
 | Phase 4 | ~30 | **97** | **583** |
 | Phase 4b | ~25 | **52** | **635** |
-| Phase L | ~20 | — | ~655 |
+| Phase L | ~20 | **36** | **671** |
 | Phase 5 | ~35 | — | ~690 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
@@ -652,4 +653,4 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 4b, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
-| Game Logging (LOG-001–033) | 18 | Phase L | ⏳ |
+| Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4b. Updated after each phase completes.
+> **Scope:** Phases 0–4b, L. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -673,3 +673,53 @@ Run this quick checklist any time you merge changes that touch Phase 0–4b file
 ---
 
 *Last updated: Phase 4b implementation complete — PlayMode autoload, active player tracking, sequential command phase, board perspective rotation, card panel swap, HandoffOverlay, YourTurnBanner, EndActivationButton, GameManager turn management. 635 tests passing (40 scripts, 1246 asserts).*
+
+---
+
+## Phase L — Game Logging Tooling
+
+**Precondition:** Launch the game board scene via `./scripts/run_board.sh --logging` (or combine with `--debug`).
+
+#### MT-L.1 — Log File Creation
+- [ ] Run `./scripts/run_board.sh --logging` and play through at least one full round
+- [ ] Verify a log file was created at `user://logs/game_<YYYYMMDD>_<HHMMSS>.log` (on macOS: `~/Library/Application Support/Godot/app_userdata/Star Wars Armada/logs/`)
+- [ ] File name contains the session start timestamp
+
+#### MT-L.2 — Session Header Content
+- [ ] Open the log file and verify the first block contains:
+  - `=== Star Wars: Armada — Game Session Log ===`
+  - App version, Godot version, OS name
+  - Play mode (e.g. "hot_seat")
+  - A separator line (`---`)
+
+#### MT-L.3 — Round & Phase Logging
+- [ ] Log contains `round_started round=1` at the start of round 1
+- [ ] Phase transitions appear in order: `phase_changed … Command`, `… Ship`, `… Squadron`, `… Status`
+- [ ] `round_ended round=1` appears after the Status Phase completes
+
+#### MT-L.4 — Active Player & Command Logging
+- [ ] `active_player_changed player=1` / `player=2` entries appear at player transitions
+- [ ] `command_picker_confirmed` entries log the player and chosen command type
+- [ ] `command_dials_submitted` appears when a player's command dials are all assigned
+- [ ] `command_phase_complete` appears when both players finish dials
+
+#### MT-L.5 — Ship/Squadron Phase Logging
+- [ ] `activation_ended` entries appear when a ship or squadron ends activation
+- [ ] `auto_pass` entries appear when a player has no remaining unactivated ships/squads
+- [ ] `handoff_accepted` entries appear after the handoff overlay is dismissed
+
+#### MT-L.6 — Game End Logging
+- [ ] Play through to game end (or trigger it): `game_ended` entry appears in the log
+- [ ] State snapshot logged at end includes ship/squadron counts per player
+
+#### MT-L.7 — Logging Disabled by Default
+- [ ] Run `./scripts/run_board.sh` (no `--logging` flag)
+- [ ] Confirm no new log file is created in the logs directory
+
+#### MT-L.8 — Combined Flags
+- [ ] `./scripts/run_board.sh --debug --logging` enables both debug visuals and file logging
+- [ ] `./scripts/run_board.sh --logging --debug` (reversed order) also works
+
+---
+
+*Last updated: Phase L implementation complete — LoggingMode autoload, GameLogger file output, event-driven logging for all game phases, `--logging` CLI flag, launch script updates. 671 tests passing (43 scripts, 1313 asserts).*

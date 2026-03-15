@@ -8,6 +8,8 @@
 # Usage:
 #   ./scripts/run_game.sh
 #   ./scripts/run_game.sh --debug    Launch with remote debugger enabled
+#   ./scripts/run_game.sh --logging  Enable file logging to user://logs/
+#   ./scripts/run_game.sh --debug --logging  Both flags can be combined
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -30,9 +32,21 @@ fi
 cd "$PROJECT_DIR"
 
 EXTRA_ARGS=()
-if [[ "${1:-}" == "--debug" ]]; then
-    EXTRA_ARGS+=(--remote-debug "tcp://127.0.0.1:6007")
-    echo "Remote debug enabled on tcp://127.0.0.1:6007"
+USER_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --debug)
+            EXTRA_ARGS+=(--remote-debug "tcp://127.0.0.1:6007")
+            echo "Remote debug enabled on tcp://127.0.0.1:6007"
+            ;;
+        --logging)
+            USER_ARGS+=(--logging)
+            echo "File logging enabled — logs written to user://logs/"
+            ;;
+    esac
+done
+if [[ ${#USER_ARGS[@]} -gt 0 ]]; then
+    EXTRA_ARGS+=(-- "${USER_ARGS[@]}")
 fi
 
 echo "Launching game: $PROJECT_DIR"

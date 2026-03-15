@@ -78,6 +78,18 @@ var _command_dial_order_modal: CommandDialOrderModal = null
 ## Phase / round HUD label shown at the top-centre of the screen.
 var _phase_hud_label: Label = null
 
+## Handoff overlay for hot-seat turn transitions (Command Phase).
+## Requirements: HO-001, HO-002, HO-003.
+var _handoff_overlay: HandoffOverlay = null
+
+## Brief "Your Turn" banner (Ship / Squadron Phases).
+## Requirements: HO-004, HO-005.
+var _your_turn_banner: YourTurnBanner = null
+
+## "End Activation" button (Ship / Squadron Phases).
+## Requirements: TF-005, TF-011.
+var _end_activation_button: EndActivationButton = null
+
 ## Queue of ships still awaiting dial assignment during the Command Phase.
 ## Populated at the start of each Command Phase, drained as each picker
 ## is confirmed. Initiative player's ships come first.
@@ -100,6 +112,7 @@ func _ready() -> void:
 	_create_debug_label()
 	_create_ship_card_panels()
 	_create_command_phase_ui()
+	_create_turn_management_ui()
 	_create_phase_hud()
 	# Start game so GameState exists BEFORE tokens are spawned.
 	GameManager.start_new_game()
@@ -283,6 +296,9 @@ func _connect_signals() -> void:
 	EventBus.command_picker_confirmed.connect(_on_picker_confirmed)
 	EventBus.command_dial_order_requested.connect(_on_command_dial_order_requested)
 	EventBus.command_phase_complete.connect(_on_command_phase_complete)
+	# Turn management signals.
+	EventBus.active_player_changed.connect(_on_active_player_changed)
+	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -377,9 +393,17 @@ func _on_firing_arc_toggled(token: Node) -> void:
 		(token as ShipToken).toggle_arc_overlay()
 
 
-## Repositions ship card panels when the window is resized.
+## Repositions ship card panels and turn-management UI when the window is
+## resized.
 func _on_viewport_resized() -> void:
 	_update_card_panel_positions()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	if _handoff_overlay != null:
+		_handoff_overlay.update_size(vp_size)
+	if _your_turn_banner != null:
+		_your_turn_banner.update_size(vp_size)
+	if _end_activation_button != null:
+		_end_activation_button.update_position(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -578,6 +602,28 @@ func _create_command_phase_ui() -> void:
 	layer.add_child(_command_dial_order_modal)
 
 
+## Creates the turn-management UI: handoff overlay, "Your Turn" banner,
+## and "End Activation" button on a high-layer CanvasLayer.
+## Requirements: HO-001–005, TF-005, TF-011.
+func _create_turn_management_ui() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "TurnManagementLayer"
+	layer.layer = 80
+	add_child(layer)
+
+	_handoff_overlay = HandoffOverlay.new()
+	_handoff_overlay.name = "HandoffOverlay"
+	layer.add_child(_handoff_overlay)
+
+	_your_turn_banner = YourTurnBanner.new()
+	_your_turn_banner.name = "YourTurnBanner"
+	layer.add_child(_your_turn_banner)
+
+	_end_activation_button = EndActivationButton.new()
+	_end_activation_button.name = "EndActivationButton"
+	layer.add_child(_end_activation_button)
+
+
 ## Creates a phase / round HUD label at the top-centre of the screen.
 func _create_phase_hud() -> void:
 	var layer: CanvasLayer = CanvasLayer.new()
@@ -626,10 +672,18 @@ func _update_phase_hud() -> void:
 
 ## Called when the game phase changes.
 ## Updates the HUD and, if entering Command Phase, starts the dial flow.
+## Shows/hides the End Activation button as appropriate.
+## Requirements: TF-005, TF-011.
 func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 	_update_phase_hud()
-	if new_phase == Constants.GamePhase.COMMAND:
-		_begin_command_dial_flow()
+	match new_phase:
+		Constants.GamePhase.COMMAND:
+			_end_activation_button.hide_button()
+			_begin_command_dial_flow()
+		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
+			_show_end_activation_button()
+		_:
+			_end_activation_button.hide_button()
 
 
 ## Called when a new round begins.
@@ -638,16 +692,27 @@ func _on_round_started(_round_number: int) -> void:
 
 
 ## Builds the ordered queue of ships needing dials and opens the first
-## picker. Initiative player's ships come first.
+## picker. In hot-seat mode, only queues ships for the currently assigning
+## player; in network mode, queues both (initiative player first).
 ## Rules Reference: CP-001 — all ships must be assigned dials.
+## Requirements: TF-002 — initiative player assigns first in hot-seat.
 func _begin_command_dial_flow() -> void:
 	_ships_needing_dials.clear()
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
 	var current_round: int = gs.current_round
-	# Initiative player first, then second player.
-	for pi: int in [gs.initiative_player, 1 - gs.initiative_player]:
+	var assigning: int = GameManager.get_command_assigning_player()
+
+	# In hot-seat, only show ships for the assigning player.
+	var player_order: Array[int] = []
+	if PlayMode.is_hot_seat() and assigning >= 0:
+		player_order.append(assigning)
+	else:
+		player_order.append(gs.initiative_player)
+		player_order.append(1 - gs.initiative_player)
+
+	for pi: int in player_order:
 		var ps: PlayerState = gs.get_player_state(pi)
 		if ps == null:
 			continue
@@ -660,8 +725,8 @@ func _begin_command_dial_flow() -> void:
 						current_round)
 				if needed > 0:
 					_ships_needing_dials.append(si)
-	_log.info("Command Phase: %d ships need dials." %
-			_ships_needing_dials.size())
+	_log.info("Command Phase: %d ships need dials (player %d)." % [
+			_ships_needing_dials.size(), assigning])
 	_advance_picker_queue()
 
 
@@ -716,3 +781,70 @@ func _on_command_phase_complete() -> void:
 	_ships_needing_dials.clear()
 	_log.info("Command Phase complete — advancing to Ship Phase.")
 	_update_phase_hud()
+
+
+# ---------------------------------------------------------------------------
+# Turn management signal handlers
+# ---------------------------------------------------------------------------
+
+## Called when the active player changes.
+## In hot-seat mode, shows the handoff overlay (Command Phase) or "Your Turn"
+## banner (Ship / Squadron Phase), rotates the camera, and swaps card panels.
+## Requirements: TF-001, BP-001, BP-003, HO-001, HO-004.
+func _on_active_player_changed(player_index: int) -> void:
+	if not PlayMode.is_hot_seat():
+		return
+
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+
+	# Rotate camera to the new player's perspective.
+	# Requirements: BP-001 — camera rotates 180°.
+	_camera.rotate_to_player(player_index)
+
+	# Swap card panels so the active player's cards are on the left.
+	_swap_card_panels(player_index)
+
+	# Show appropriate overlay / banner.
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	match phase:
+		Constants.GamePhase.COMMAND:
+			var phase_name: String = PHASE_NAMES.get(phase, "Command Phase")
+			_handoff_overlay.show_handoff(player_index, phase_name)
+			_handoff_overlay.update_size(vp_size)
+		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
+			_your_turn_banner.show_banner(player_index)
+			_your_turn_banner.update_size(vp_size)
+
+
+## Called when the handoff overlay or banner is dismissed by the player.
+## Resumes the appropriate game flow for the current phase.
+## Requirements: HO-002, HO-004.
+func _on_handoff_accepted() -> void:
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+
+	match phase:
+		Constants.GamePhase.COMMAND:
+			# Restart the dial flow for the now-assigned player.
+			_begin_command_dial_flow()
+		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
+			_show_end_activation_button()
+
+
+## Swaps card panel sides so the active player's faction panel is on the
+## left and the opponent's is on the right.
+## Requirements: BP-003 — active player's cards always on the left.
+func _swap_card_panels(player_index: int) -> void:
+	# Player 0 = Rebel, Player 1 = Imperial (Learning Scenario mapping).
+	var rebel_left: bool = (player_index == 0)
+	_rebel_card_panel.set_side(rebel_left)
+	_imperial_card_panel.set_side(not rebel_left)
+	_update_card_panel_positions()
+
+
+## Shows and positions the End Activation button.
+func _show_end_activation_button() -> void:
+	if _end_activation_button == null:
+		return
+	_end_activation_button.show_button()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_end_activation_button.update_position(vp_size)

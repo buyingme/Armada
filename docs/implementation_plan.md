@@ -373,10 +373,11 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
-### Phase 4b: Turn Management & Board Perspective ⏳
+### Phase 4b: Turn Management & Board Perspective ✅
 **Goal:** Implement active player tracking, board perspective rotation, card panel swapping, player handoff overlay, sequential command phase for hot-seat, and the "End Activation" button. This is the foundational turn-management layer that all subsequent phases (Ship, Squadron, Status) depend on.
 **Prerequisites:** Phase 4 (Command Phase — both-submitted gate, phase transitions)
 **Duration estimate:** 2–3 sessions
+**Completed:** 635 tests passing (40 scripts, 1246 asserts)
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|-------------|
@@ -394,7 +395,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 | Network mode stub (no-op paths) | Application | PM-003, BP-005 | Conditional branches that skip perspective rotation and handoff in network mode |
 
 **Requirements covered:** PM-001–004 (play mode), TF-001–014 (turn flow), BP-001–006 (board perspective), HO-001–005 (player handoff), IN-001–003 (initiative)
-**Tests:** ~25 (active player transitions, auto-pass logic, sequential command phase, perspective state, handoff overlay visibility, panel swap)
+**Tests delivered:** 52 new (635 total, 40 scripts, all passing)
 
 ---
 
@@ -560,7 +561,7 @@ Phase 0 (Scale & Assets)
 | Phase 2b | ~20 | **31** | **360** |
 | Phase 3 | ~25 | **126** | **486** |
 | Phase 4 | ~30 | **97** | **583** |
-| Phase 4b | ~25 | — | ~608 |
+| Phase 4b | ~25 | **52** | **635** |
 | Phase 5 | ~35 | — | ~340 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
@@ -601,11 +602,11 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Ship Phase (SP-001–016) | 16 | Phase 4b, 5, 6 | ⏳ |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
-| Play Mode (PM-001–004) | 4 | Phase 4b | ⏳ |
-| Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ⏳ |
-| Board Perspective (BP-001–006) | 6 | Phase 4b | ⏳ |
-| Player Handoff (HO-001–005) | 5 | Phase 4b | ⏳ |
-| Initiative (IN-001–003) | 3 | Phase 4b | ⏳ |
+| Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
+| Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ✅ (core flow; activation steps in 5/7) |
+| Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |
+| Player Handoff (HO-001–005) | 5 | Phase 4b | ✅ |
+| Initiative (IN-001–003) | 3 | Phase 4b | ✅ |
 | Commands (CM-001–042) | 22 | Phase 4, 5, 6, 7, 9 | ⏳ |
 | Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |

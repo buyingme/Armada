@@ -83,6 +83,19 @@ func get_faction() -> Constants.Faction:
 	return _faction
 
 
+## Returns whether this panel is on the left side.
+func is_left_side() -> bool:
+	return _is_left_side
+
+
+## Moves this panel to the given side (left or right).
+## Call [method update_position] afterwards to reposition.
+## Requirements: BP-003 — active player's cards always on the left.
+## [param left_side] — true to place on the left, false for right.
+func set_side(left_side: bool) -> void:
+	_is_left_side = left_side
+
+
 ## Returns the number of ship entries in this panel.
 func get_entry_count() -> int:
 	return _entries.size()

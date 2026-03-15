@@ -39,6 +39,9 @@ const PAN_GESTURE_SENSITIVITY: float = 20.0
 ## the camera may still be positioned.
 const BOUNDARY_MARGIN_PX: float = 300.0
 
+## Duration of the rotation animation in seconds.
+const ROTATE_DURATION: float = 0.5
+
 ## Whether the player is currently dragging to pan.
 var _is_panning: bool = false
 
@@ -47,6 +50,12 @@ var _drag_start_screen: Vector2 = Vector2.ZERO
 
 ## Camera world-space position at the moment a pan drag began.
 var _drag_start_camera: Vector2 = Vector2.ZERO
+
+## The player index the camera currently faces (0 = Rebel, 1 = Imperial).
+var _current_player: int = 0
+
+## Active rotation tween (null when idle).
+var _rotate_tween: Tween = null
 
 
 func _ready() -> void:
@@ -146,6 +155,43 @@ func _apply_zoom(delta: float, screen_pivot: Vector2) -> void:
 func _screen_to_world(screen_pos: Vector2) -> Vector2:
 	var vp_size: Vector2 = get_viewport_rect().size
 	return position + (screen_pos - vp_size * 0.5) / zoom
+
+
+## Smoothly rotates the camera so the board faces the given player.
+## Player 0 (Rebel) = 0° rotation, Player 1 (Imperial) = 180° rotation.
+## The camera rotates around the centre of the play area.
+## Emits [signal EventBus.perspective_change_complete] when finished.
+## Requirements: BP-001, BP-002.
+## [param player_index] — 0 for Rebel perspective, 1 for Imperial.
+func rotate_to_player(player_index: int) -> void:
+	if player_index == _current_player:
+		EventBus.perspective_change_complete.emit()
+		return
+
+	_current_player = player_index
+
+	var target_rotation: float = 0.0 if player_index == 0 else PI
+	var side: float = GameScale.play_area_side_px
+	var centre: Vector2 = Vector2(side * 0.5, side * 0.5)
+
+	# Kill any running rotation tween.
+	if _rotate_tween != null and _rotate_tween.is_valid():
+		_rotate_tween.kill()
+
+	_rotate_tween = create_tween()
+	_rotate_tween.set_ease(Tween.EASE_IN_OUT)
+	_rotate_tween.set_trans(Tween.TRANS_CUBIC)
+	# Rotate around the play area centre: position stays centred, rotation
+	# changes. After the tween, re-centre to account for any drift.
+	position = centre
+	_rotate_tween.tween_property(self, "rotation", target_rotation,
+			ROTATE_DURATION)
+	_rotate_tween.tween_callback(EventBus.perspective_change_complete.emit)
+
+
+## Returns the player index the camera currently faces.
+func get_current_player() -> int:
+	return _current_player
 
 
 ## Clamps [pos] so the camera stays within the play area + margin.

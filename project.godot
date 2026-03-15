@@ -24,6 +24,7 @@ EventBus="*res://src/autoload/event_bus.gd"
 Constants="*res://src/autoload/constants.gd"
 GameScale="*res://src/autoload/game_scale.gd"
 DebugMode="*res://src/autoload/debug_mode.gd"
+PlayMode="*res://src/autoload/play_mode.gd"
 
 [display]
 

@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4. Updated after each phase completes.
+> **Scope:** Phases 0–4b. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -611,7 +611,7 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**. The game 
 
 ## Regression Checklist
 
-Run this quick checklist any time you merge changes that touch Phase 0–4 files:
+Run this quick checklist any time you merge changes that touch Phase 0–4b files:
 
 - [ ] `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` → **0 failures**
 - [ ] Open Godot editor → no red errors in Output panel
@@ -630,7 +630,46 @@ Run this quick checklist any time you merge changes that touch Phase 0–4 files
 - [ ] Drag token into another → slide-to-contact; cursor past → jump-past
 - [ ] Drag faction token past deployment line → stops at boundary
 - [ ] Ctrl+S in debug mode → positions saved; reload confirms
+- [ ] Round starts → initiative player (Rebel) assigns dials first; handoff overlay shows before Imperial player
+- [ ] Active player switch → board camera rotates 180° smoothly; card panels swap sides
+- [ ] Ship/Squadron phase → "Your Turn" banner appears briefly on player switch
+- [ ] "End Activation" button visible during Ship/Squadron phases only; click triggers player switch
+
+### MT-4b: Turn Management & Board Perspective
+
+**Precondition:** Launch the game board scene (`game_board.tscn`) in hot-seat mode.
+
+#### MT-4b.1 — Sequential Command Phase & Handoff Overlay
+- [ ] Round 1 starts: initiative player (Rebel) is assigned dials first
+- [ ] After Rebel finishes all dial assignments, a full-screen handoff overlay appears: "Imperial Player — Your Turn" with a "Ready" button
+- [ ] Clicking "Ready" dismisses the overlay and the Imperial player assigns dials
+- [ ] After Imperial finishes, the Command Phase completes and transitions to Ship Phase
+
+#### MT-4b.2 — Board Camera Perspective Rotation
+- [ ] When the active player changes, the board camera rotates 180° smoothly (~0.5 s)
+- [ ] Rebel perspective: Rebel ships at the bottom, Imperial at the top
+- [ ] Imperial perspective: Imperial ships at the bottom, Rebel at the top
+- [ ] Board stays centred during the rotation animation
+
+#### MT-4b.3 — Ship Card Panel Swap
+- [ ] When it's the Rebel player's turn: Rebel cards on the left, Imperial on the right
+- [ ] When it's the Imperial player's turn: Imperial cards on the left, Rebel on the right
+- [ ] Panels swap positions smoothly when the active player changes
+
+#### MT-4b.4 — "Your Turn" Banner (Ship/Squadron Phase)
+- [ ] When entering Ship Phase, a brief "Your Turn" banner appears for the active player
+- [ ] Banner auto-dismisses after ~2 seconds or on click
+- [ ] Banner shows correct player name ("Rebel Player" or "Imperial Player")
+
+#### MT-4b.5 — End Activation Button
+- [ ] "End Activation" button is visible during Ship and Squadron phases
+- [ ] Button is hidden during Command and Status phases
+- [ ] Clicking the button passes control to the other player (handoff appears)
+
+#### MT-4b.6 — Phase HUD Updates
+- [ ] Phase HUD shows correct phase name and round number at all times
+- [ ] Active player name is visible in the HUD during Ship/Squadron phases
 
 ---
 
-*Last updated: Phase 4 implementation complete — CommandDialStack, CommandTokenManager, CommandDialPicker, CommandDialOrderModal, ShipCardPanel dial/token display, GameManager “both submitted” gate. 583 tests passing (33 scripts, 1187 asserts).*
+*Last updated: Phase 4b implementation complete — PlayMode autoload, active player tracking, sequential command phase, board perspective rotation, card panel swap, HandoffOverlay, YourTurnBanner, EndActivationButton, GameManager turn management. 635 tests passing (40 scripts, 1246 asserts).*

@@ -136,3 +136,29 @@ signal command_picker_confirmed(ship_instance: RefCounted, commands: Array)
 ## Emitted to request the command dial order modal for a specific ship.
 ## [param ship_instance] — the ship to inspect.
 signal command_dial_order_requested(ship_instance: RefCounted)
+
+
+# --- Turn Management Events (Phase 4b) ---
+
+## Emitted when the active player changes.
+## [param player_index] — the new active player (0 or 1).
+## Requirements: TF-001 — only the active player can interact.
+signal active_player_changed(player_index: int)
+
+## Emitted when the active player presses "End Activation" during
+## Ship or Squadron Phase.
+## Requirements: TF-005, TF-011.
+signal activation_ended()
+
+## Emitted when a handoff overlay or "Your Turn" banner is dismissed
+## and the new active player is ready to proceed.
+## Requirements: HO-002, HO-004.
+signal handoff_accepted()
+
+## Emitted when the board perspective should switch to a given player.
+## [param player_index] — the player whose perspective to show.
+## Requirements: BP-001, BP-002.
+signal perspective_change_requested(player_index: int)
+
+## Emitted when the board perspective rotation animation finishes.
+signal perspective_change_complete()

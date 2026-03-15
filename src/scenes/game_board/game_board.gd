@@ -120,9 +120,13 @@ func _ready() -> void:
 	_connect_signals()
 	_update_debug_visibility()
 	queue_redraw()
-	# The phase_changed signal fired inside start_new_game() before
-	# _connect_signals(), so trigger the initial phase UI manually.
+	# The phase_changed and active_player_changed signals fired inside
+	# start_new_game() before _connect_signals(), so trigger the initial
+	# phase UI and handoff overlay manually.
 	_on_phase_changed(GameManager.get_current_phase())
+	# Show the initial handoff overlay so the first player must click
+	# "Ready" before dials appear — same UX as every subsequent handoff.
+	_on_active_player_changed(GameManager.get_active_player())
 
 
 ## Returns all current ship tokens on the board.
@@ -671,15 +675,15 @@ func _update_phase_hud() -> void:
 # ---------------------------------------------------------------------------
 
 ## Called when the game phase changes.
-## Updates the HUD and, if entering Command Phase, starts the dial flow.
-## Shows/hides the End Activation button as appropriate.
+## Updates the HUD and shows/hides the End Activation button.
+## For Command Phase, the dial flow is NOT started here — it is started
+## by _on_handoff_accepted() after the player dismisses the overlay.
 ## Requirements: TF-005, TF-011.
 func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 	_update_phase_hud()
 	match new_phase:
 		Constants.GamePhase.COMMAND:
 			_end_activation_button.hide_button()
-			_begin_command_dial_flow()
 		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
 			_show_end_activation_button()
 		_:

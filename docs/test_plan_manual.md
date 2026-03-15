@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4b, L. Updated after each phase completes.
+> **Scope:** Phases 0–4b, L, plus post-Phase-L bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -634,6 +634,9 @@ Run this quick checklist any time you merge changes that touch Phase 0–4b file
 - [ ] Active player switch → board camera rotates 180° smoothly; card panels swap sides
 - [ ] Ship/Squadron phase → "Your Turn" banner appears briefly on player switch
 - [ ] "End Activation" button visible during Ship/Squadron phases only; click triggers player switch
+- [ ] Game starts with handoff overlay ("Rebel Player — Your Turn") before any dials are assigned
+- [ ] Mouse/trackpad controls work correctly at both 0° and 180° camera rotation (no inversion)
+- [ ] Clicking opponent's command dial stack has no effect (no modal opens)
 
 ### MT-4b: Turn Management & Board Perspective
 
@@ -672,7 +675,7 @@ Run this quick checklist any time you merge changes that touch Phase 0–4b file
 
 ---
 
-*Last updated: Phase 4b implementation complete — PlayMode autoload, active player tracking, sequential command phase, board perspective rotation, card panel swap, HandoffOverlay, YourTurnBanner, EndActivationButton, GameManager turn management. 635 tests passing (40 scripts, 1246 asserts).*
+*Last updated: Phase 4b implementation complete — PlayMode autoload, active player tracking, sequential command phase, board perspective rotation, card panel swap, HandoffOverlay, YourTurnBanner, EndActivationButton, GameManager turn management. Post-Phase-L bug fixes applied (initial handoff, camera rotation, mouse controls, dial access). 672 tests passing (43 scripts, 1316 asserts).*
 
 ---
 
@@ -722,4 +725,81 @@ Run this quick checklist any time you merge changes that touch Phase 0–4b file
 
 ---
 
-*Last updated: Phase L implementation complete — LoggingMode autoload, GameLogger file output, event-driven logging for all game phases, `--logging` CLI flag, launch script updates. 671 tests passing (43 scripts, 1313 asserts).*
+*Last updated: Phase L implementation complete — LoggingMode autoload, GameLogger file output, event-driven logging for all game phases, `--logging` CLI flag, launch script updates. 672 tests passing (43 scripts, 1316 asserts).*
+
+---
+
+## Post-Phase-L Bug Fixes
+
+**What these fixes address:** Issues discovered during manual playtesting of hot-seat mode after Phase L. All fixes are in commits `581e030`–`5db1b48`.
+
+### Setup
+
+Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
+
+---
+
+### MT-BF.1 — Initial handoff overlay appears at game start
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game board scene | A full-screen handoff overlay appears immediately: **"Rebel Player — Your Turn"** with a "Ready" button |
+| 2 | Click "Ready" | Overlay dismisses; Command Dial Picker opens for the first Rebel ship |
+| 3 | Do **not** see any dials being assigned before the overlay | No picker opens before the "Ready" click |
+
+**Pass criteria:** Game starts with handoff overlay for Rebel player; dial assignment only begins after overlay is dismissed.
+
+---
+
+### MT-BF.2 — Board camera rotates on player switch
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete Rebel player's command dial assignment | Handoff overlay shows "Imperial Player — Your Turn" |
+| 2 | Click "Ready" | Board rotates 180° smoothly (~0.5 s) |
+| 3 | Check orientation | Imperial ships are now at the **bottom** of the screen; Rebel ships at the **top** |
+| 4 | Complete Imperial dial assignment | Phase transitions to Ship; board may rotate back for the initiative player |
+
+**Pass criteria:** Camera rotation is visually smooth; Imperial perspective has Imperial ships at bottom. No jitter or snap.
+
+---
+
+### MT-BF.3 — Mouse controls work correctly at 180° rotation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Switch to Imperial player (board rotated 180°) | Imperial perspective active |
+| 2 | **Right-click drag** to the right | Board pans to the **left** (same as at 0°, not inverted) |
+| 3 | **Right-click drag** downward | Board pans **upward** |
+| 4 | **Scroll wheel up** | Zooms in toward cursor position |
+| 5 | (macOS) **Two-finger swipe left** | Board pans right — direction matches finger movement, not inverted |
+| 6 | (macOS) **Pinch-to-zoom** | Zoom direction correct; world point under fingers stays anchored |
+
+**Pass criteria:** All mouse/trackpad controls behave identically at 0° and 180° rotation — no inversion.
+
+---
+
+### MT-BF.4 — Opponent command dial stacks are hidden
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | As Rebel player, assign command dials for all ships | Dials appear in Rebel panel |
+| 2 | Click on the **Imperial** ship's dial stack in the right panel | **Nothing happens** — no Command Dial Order modal opens |
+| 3 | Switch to Imperial player via handoff | Imperial is now active |
+| 4 | Click on the **Rebel** ship's dial stack in the right panel | **Nothing happens** — cannot view Rebel dials |
+| 5 | Click on the **Imperial** ship's own dial stack | Command Dial Order modal opens showing Imperial dials |
+
+**Pass criteria:** Active player can only view their own command dial stacks; clicking opponent stacks has no effect.
+
+---
+
+### MT-BF.5 — Phase sequence integrity (no double advance)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a new game; assign dials for all Rebel ships | Handoff to Imperial |
+| 2 | Assign dials for all Imperial ships | Phase transitions to **Ship Phase** |
+| 3 | Verify phase HUD | Shows "Ship Phase", **not** "Squadron Phase" |
+| 4 | Check the game log (if `--logging` enabled) | Phase sequence: Command → Ship (no skip to Squadron) |
+
+**Pass criteria:** After both players submit dials, the game advances to Ship Phase only — never skips directly to Squadron.

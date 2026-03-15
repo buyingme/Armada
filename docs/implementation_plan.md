@@ -404,7 +404,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 **Goal:** Extend the existing `GameLogger` utility with optional file-based output, activated by a `--logging` CLI flag. Log all game flow events (phase transitions, active player changes, command dial assignments, activations, auto-pass) to a timestamped file for debugging.
 **Prerequisites:** Phase 4b (turn management signals exist)
 **Duration estimate:** 1 session
-**Completed:** 671 tests passing (43 scripts, 1313 asserts)
+**Completed:** 672 tests passing (43 scripts, 1316 asserts)
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
@@ -427,6 +427,23 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 **Requirements covered:** LOG-001–023 (activation, format, events, scripts), LOG-030–033 (tests)
 **Tests delivered:** 36 new (671 total, 43 scripts, all passing)
+
+---
+
+### Post-Phase-L Bug Fixes ✅
+**Goal:** Address issues discovered during manual playtesting of the Phase 4b/L hot-seat flow.
+**Completed:** 672 tests passing (43 scripts, 1316 asserts)
+
+| Commit | Fix | Layer | Details |
+|--------|-----|-------|---------|
+| `581e030` | Double phase advance on dial submission | Application | `_on_command_picker_confirmed` emitted `command_dials_submitted` AND called `_check_command_phase_complete()` — synchronous signal delivery caused double advance (Command → Ship → Squadron). Removed redundant call; added defensive phase guard. +1 regression test. |
+| `4c3d2dd` | Camera not rotating for player switch | Presentation | `Camera2D.ignore_rotation` defaults to `true` in Godot 4; tween animated `rotation` but viewport ignored it. Set `ignore_rotation = false` in `_ready()`. |
+| `af2714b` | No initial handoff overlay at game start | Presentation | `active_player_changed` signal fired before `_connect_signals()` in `game_board._ready()`. Added manual initial call + deferred dial flow to handoff acceptance. |
+| `0606e16` | Inverted mouse controls at 180° rotation | Presentation | Screen-to-world conversions in `BoardCamera` didn't account for camera rotation. Applied `.rotated(-rotation)` to all pan/zoom screen-space offsets. |
+| `5db1b48` | Opponent command dial stacks viewable | Presentation | `ShipCardPanel._viewer_player` was `-1` (unset), disabling the access guard. Now set via `setup()` and updated on `active_player_changed`. |
+
+**Requirements reinforced:** BP-001/002 (camera rotation), HO-001/003 (handoff overlay), UI-023 (opponent dial restriction), CP-001 (phase sequence)
+**Tests delivered:** 1 new regression test (672 total, 43 scripts, all passing)
 
 ---
 
@@ -596,7 +613,8 @@ Phase 0 (Scale & Assets)
 | Phase 4 | ~30 | **97** | **583** |
 | Phase 4b | ~25 | **52** | **635** |
 | Phase L | ~20 | **36** | **671** |
-| Phase 5 | ~35 | — | ~690 |
+| Bug fixes | — | **1** | **672** |
+| Phase 5 | ~35 | — | ~707 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
 | Phase 8 | ~20 | — | ~410 |

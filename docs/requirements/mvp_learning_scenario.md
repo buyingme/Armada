@@ -12,18 +12,23 @@
 - [5. Ship Phase](#5-ship-phase)
 - [6. Squadron Phase](#6-squadron-phase)
 - [7. Status Phase](#7-status-phase)
-- [8. Commands](#8-commands)
-- [9. Attack Resolution](#9-attack-resolution)
-- [10. Defense Tokens](#10-defense-tokens)
-- [11. Damage](#11-damage)
-- [12. Ship Movement](#12-ship-movement)
-- [13. Squadron Mechanics](#13-squadron-mechanics)
-- [14. Overlapping](#14-overlapping)
-- [15. Winning and Scoring](#15-winning-and-scoring)
-- [16. Game Components (Digital)](#16-game-components-digital)
-- [17. UI Requirements](#17-ui-requirements)
-- [18. Network Multiplayer Considerations](#18-network-multiplayer-considerations)
-- [19. Debug Mode](#19-debug-mode)
+- [8. Play Mode](#8-play-mode)
+- [9. Active Player & Turn Flow](#9-active-player--turn-flow)
+- [10. Board Perspective](#10-board-perspective)
+- [11. Player Handoff](#11-player-handoff)
+- [12. Initiative](#12-initiative)
+- [13. Commands](#13-commands)
+- [14. Attack Resolution](#14-attack-resolution)
+- [15. Defense Tokens](#15-defense-tokens)
+- [16. Damage](#16-damage)
+- [17. Ship Movement](#17-ship-movement)
+- [18. Squadron Mechanics](#18-squadron-mechanics)
+- [19. Overlapping](#19-overlapping)
+- [20. Winning and Scoring](#20-winning-and-scoring)
+- [21. Game Components (Digital)](#21-game-components-digital)
+- [22. UI Requirements](#22-ui-requirements)
+- [23. Network Multiplayer Considerations](#23-network-multiplayer-considerations)
+- [24. Debug Mode](#24-debug-mode)
 
 ---
 
@@ -100,7 +105,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 
 | ID | Requirement | Rules Source |
 |----|-------------|--------------|
-| CP-001 | During this phase, players **secretly and simultaneously** choose commands on command dials for each of their ships. | LTP p.7; RRG "Command Phase" |
+| CP-001 | During this phase, players **secretly and simultaneously** choose commands on command dials for each of their ships. **Hot-seat adaptation:** players assign dials sequentially with a handoff screen between them (see TF-002, HO-003). **Network:** truly simultaneous. | LTP p.7; RRG "Command Phase" |
 | CP-002 | Each ship must be assigned command dials until it has a number of dials equal to its command value. | RRG "Command Phase" |
 | CP-003 | In the first round, each ship receives its full complement of dials (CR90=1, Neb-B=2, VSD=3). | LTP p.7 |
 | CP-004 | In subsequent rounds, each ship receives exactly 1 new dial, placed **under** any existing dials. | LTP p.7; RRG "Command Phase" |
@@ -155,7 +160,81 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | ST-003 | The first player places the round token with the next highest number (advancing the round counter). | LTP p.11; RRG "Status Phase" |
 | ST-004 | All faceup command dials on ship cards are cleared (ships become available for next round's activation). | Implied by CP-007 / activation flow |
 
-## 8. Commands
+## 8. Play Mode
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| PM-001 | The game supports two play modes: **Hot-seat** (shared screen) and **Network** (separate screens). The active mode is configured at game start. | ADR-007; User req |
+| PM-002 | In **Hot-seat mode**, both players share a single screen. The system manages screen transitions when control passes between players, including handoff screens that hide secret information. | User req |
+| PM-003 | In **Network mode**, each player has their own screen and always views the board from their own perspective. No handoff screens or perspective rotation occurs. | ADR-007 |
+| PM-004 | The MVP Learning Scenario implements Hot-seat mode. Network mode architecture hooks (sync points, authoritative state) are designed in but not active. | Scope decision |
+
+## 9. Active Player & Turn Flow
+
+### 9.1 General
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| TF-001 | The system tracks the **active player** — the player who currently has UI control and can make decisions. Only the active player can interact with game elements during their turn. | Game flow |
+| TF-002 | In the **Command Phase** (hot-seat), players assign dials **sequentially**: the initiative player assigns all their ships' dials first, then a handoff screen appears, then the second player assigns. The phase advances when both have submitted (existing CP-008 gate). | CP-001, CP-008; hot-seat adaptation |
+
+### 9.2 Ship Phase Turn Flow
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| TF-003 | In the **Ship Phase**, the initiative player activates first. Players alternate activating **one** ship per turn. The active player selects which of their unactivated ships to activate. | SP-001; LTP p.8 |
+| TF-004 | A ship activation consists of 3 sequential steps: (1) **Reveal Command Dial** — the top hidden dial is revealed and the player chooses to keep it or convert to token; (2) **Attack** — up to 2 attacks from different hull zones (may skip if no valid targets); (3) **Execute Maneuver** — mandatory movement. The revealed dial is placed faceup as the activation marker. | SP-010, SP-011; LTP p.8 |
+| TF-005 | After completing a ship's activation steps, the active player presses an **"End Activation"** button to signal completion. The system then passes control to the other player (with perspective transition). | User req |
+| TF-006 | If a player has no unactivated ships when it would be their turn, they automatically **pass**. The other player continues activating one ship at a time until the phase ends. | SP-003; RRG "Ship Phase" |
+| TF-007 | The Ship Phase ends when **all** ships from both players are activated (or both players have passed). The system transitions to the Squadron Phase. | SP-001; RRG "Ship Phase" |
+
+### 9.3 Squadron Phase Turn Flow
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| TF-008 | In the **Squadron Phase**, the initiative player takes the first turn. Players alternate activating up to **two** unactivated squadrons per turn. | SQ-003; LTP p.10 |
+| TF-009 | If a player has only 1 unactivated squadron when choosing, they activate only that one. If 0, they automatically pass. | SQ-004, SQ-005; RRG "Squadron Phase" |
+| TF-010 | A squadron activated during the Squadron Phase may **either** move **or** attack (not both). A squadron activated by a Squadron command during Ship Phase may move **and** attack. | SQ-006, SQ-007; LTP p.10 |
+| TF-011 | After the active player finishes their squadron activation(s), they press **"End Activation"** to pass control to the opponent. | User req |
+| TF-012 | The Squadron Phase ends when both players have activated all their squadrons (or passed). The system transitions to the Status Phase. | RRG "Squadron Phase" |
+
+### 9.4 Status Phase & Round Transition
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| TF-013 | The **Status Phase** is fully automatic: (1) ready all exhausted defense tokens, (2) flip the initiative token (changes unactivated slider color), (3) increment round counter, (4) clear all faceup command dials (un-activate ships). No player interaction required. | ST-001–004 |
+| TF-014 | After the Status Phase, if round < 6 the next round begins with a new Command Phase. If round 6 just completed, the game ends and scoring is resolved. | GF-003; GO-002 |
+
+## 10. Board Perspective
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| BP-001 | When a player becomes the active player, the **board camera rotates** to show the game from their point of view: their fleet appears at the **bottom** of the screen, the opponent's fleet at the **top**. | User req |
+| BP-002 | **Rebel perspective** (default): board camera at 0° rotation — Rebel ships (originally at bottom) face upward. **Imperial perspective**: board camera rotates 180° — Imperial ships (originally at top) now appear at the bottom facing upward. | User req; LTP p.5 diagram |
+| BP-003 | When the active player changes, the **ship card side panels swap**: the active player's cards are always on the **left** panel, the opponent's cards on the **right** panel. | User req; adapts UI-016 |
+| BP-004 | The perspective transition uses a brief smooth camera animation (rotation + re-centre) so the player can follow the spatial change. Duration is configurable (default ~0.5 s). | UX polish |
+| BP-005 | In **Network mode**, each player always sees their own perspective. No rotation or panel swapping occurs. | NW adaptation |
+| BP-006 | Within the Command Phase, perspective matches the player currently assigning dials. On handoff, the board rotates to the next player's view. | TF-002 + BP-001 |
+
+## 11. Player Handoff
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| HO-001 | In hot-seat mode, when control passes from one player to another, a **handoff overlay** covers the entire screen to prevent the incoming player from seeing the previous player's secret information. | Information hiding; NW-005 analog |
+| HO-002 | The handoff overlay shows: (a) which player should take control (e.g. "Imperial Player — Your Turn"), (b) the current phase name, and (c) a **"Ready"** button. It remains visible until "Ready" is pressed. | UX |
+| HO-003 | Handoff is **mandatory** during the **Command Phase** — it appears after the first player finishes assigning dials (secret) and before the second player begins assigning. | CP-006; information hiding |
+| HO-004 | During **Ship and Squadron Phases**, a brief **"Your Turn"** banner appears when control passes to the next player. The board rotates to their perspective, and the banner auto-dismisses after a short delay or on click. | TF-005, TF-011 |
+| HO-005 | If both players have passed or the phase is about to end, no handoff overlay appears — the system transitions directly to the next phase. | Edge case |
+
+## 12. Initiative
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------|
+| IN-001 | In the Learning Scenario, the **Rebel player always has initiative** for the entire game. The initiative token does not change hands. | LTP p.5 step 3; RRG "Initiative" |
+| IN-002 | The initiative player always activates first in the Ship Phase and Squadron Phase. | SP-001, SQ-003 |
+| IN-003 | The initiative token is flipped each Status Phase (ST-002), which changes the **squadron activation slider color** — but does **not** change which player has initiative. | RRG "Status Phase"; LTP p.11 |
+
+## 13. Commands
 
 ### 8.1 General Command Rules
 
@@ -207,7 +286,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | CM-041 | **Dial effect:** Add one attack die to the pool. That die must be a color already in the pool. | RRG "Commands"; LTP p.12 |
 | CM-042 | **Token effect:** Reroll one attack die in the pool. | RRG "Commands"; LTP p.12 |
 
-## 9. Attack Resolution
+## 14. Attack Resolution
 
 ### 9.1 Attack Steps
 
@@ -277,7 +356,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | AT-062 | A ship can attack an engaged squadron. | RRG "Attack" |
 | AT-063 | Ships and squadrons cannot attack friendly units. | RRG "Attack" |
 
-## 10. Defense Tokens
+## 15. Defense Tokens
 
 ### 10.1 General Rules
 
@@ -307,7 +386,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | DT-020 | **Contain (&):** Prevents attacker from resolving the standard critical effect. The architecture must support this token type. | RRG "Defense Tokens" |
 | DT-021 | **Salvo (e):** Defender performs a counter-attack after damage resolution. The architecture must support this token type. | RRG "Defense Tokens" |
 
-## 11. Damage
+## 16. Damage
 
 ### 11.1 Ship Damage
 
@@ -339,7 +418,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | DM-032 | Destroyed ships/squadrons are no longer in play. Their cards become inactive. | RRG "Destroyed Ships and Squadrons" |
 | DM-033 | If any portion of a ship's or squadron's base is outside the play area, it is destroyed (ignore activation sliders and shield dial frames). | RRG "Destroyed Ships and Squadrons" |
 
-## 12. Ship Movement
+## 17. Ship Movement
 
 ### 12.1 Determine Course
 
@@ -371,7 +450,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | MV-021 | Speed is constant until a Navigate command or card effect changes it. | RRG "Speed" |
 | MV-022 | Speed is tracked on the speed dial. | LTP p.8 |
 
-## 13. Squadron Mechanics
+## 18. Squadron Mechanics
 
 ### 13.1 Squadron Movement
 
@@ -420,7 +499,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | SM-041 | Toggling the slider after activation tracks whether the squadron has been activated this round. | LTP p.11; RRG "Squadron Activation" |
 | SM-042 | The initiative token's color/icon indicates which slider state means "not yet activated." | LTP p.11 |
 
-## 14. Overlapping
+## 19. Overlapping
 
 ### 14.1 Ship Overlaps Squadrons
 
@@ -447,7 +526,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | OV-020 | Squadrons cannot be placed overlapping other squadrons or ships. | RRG "Overlapping"; RRG "Squadron Movement" |
 | OV-021 | Ships and squadrons can move **through** other units without issue. Only final positions matter. | RRG "Overlapping" |
 
-## 15. Winning and Scoring
+## 20. Winning and Scoring
 
 | ID | Requirement | Rules Source |
 |----|-------------|--------------|
@@ -456,7 +535,7 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | WN-003 | A player's score = total fleet point cost of each destroyed enemy ship + each destroyed enemy squadron. | LTP p.11; RRG "Scoring" |
 | WN-004 | If scores are tied after 6 rounds, the second player (without initiative) wins. | RRG "Winning and Losing" |
 
-## 16. Game Components (Digital)
+## 21. Game Components (Digital)
 
 These are the digital representations required for the MVP.
 
@@ -481,7 +560,7 @@ These are the digital representations required for the MVP.
 | GC-017 | Activation sliders | Visual indicator | UI widget | Toggle state on squadron bases |
 | GC-018 | Command tokens | 4 types | PNG | Navigate, Squadron, Repair, Conc. Fire. Displayed in a vertical stack to the right of the ship card in the side panel. Uses existing `cmd_<type>.png` (45×45) assets. |
 
-## 17. UI Requirements
+## 22. UI Requirements
 
 | ID | Requirement | Notes |
 |----|-------------|-------|
@@ -500,7 +579,7 @@ These are the digital representations required for the MVP.
 | UI-013 | Squadron engagement status must be visually indicated. | Line/glow between engaged squadrons |
 | UI-014 | Turn order / activation status must be shown for all ships and squadrons. | Sidebar or token markers |
 | UI-015 | Attack resolution steps must be presented sequentially with clear prompts for each decision point. | Step-by-step attack dialog |
-| UI-016 | Ship cards are displayed in side panels outside the play area: Rebel cards on the left, Imperial cards on the right. | CanvasLayer panels; always visible regardless of camera |
+| UI-016 | Ship cards are displayed in side panels outside the play area: Rebel cards on the left, Imperial cards on the right. **Hot-seat:** panels swap when the active player changes so the active player's cards are always on the left (see BP-003). **Network:** the local player's cards are always on the left. | CanvasLayer panels; always visible regardless of camera |
 | UI-017 | Defense tokens are displayed next to their ship card in the side panel, **not** on the ship token on the board. | Per SU-026; ready/exhausted/discarded states per UI-006 |
 | UI-018 | Left-clicking a ship card entry in the side panel toggles a magnified view (2.5× default, configurable via `scale_config.json` → `card_panel.magnify_factor`). A second click restores normal size. | Zoom toggle per entry; all components (card + tokens) scale together |
 | UI-019 | Command dial stack is displayed below the defense token column in each ship card panel entry. Each hidden dial is rendered using `cmd_dial_hidden.png`, offset 10 px vertically per dial. The topmost (active) dial shows its command icon (`cmd_<type>.png`) composited on the dial face. | Stack grows downward; top dial = next to be revealed |
@@ -509,7 +588,7 @@ These are the digital representations required for the MVP.
 | UI-022 | **Command Stack Modal** displays the queued (hidden / not-yet-spent) command dials for a ship in a horizontal row, in stack order (leftmost = top = next to be revealed). Each dial shows its command icon, with a position label (#1, #2, …) below. The modal opens when the owning player clicks on their ship's command dial stack in the ship card panel. Clicking anywhere on the modal closes it. | Read-only inspection of own queued dial order |
 | UI-023 | A player **cannot** view the opponent's unrevealed command dials. Clicking on an opponent's command dial stack has no effect (no dial order modal opens). | Information hiding; see NW-005 |
 
-## 18. Network Multiplayer Considerations
+## 23. Network Multiplayer Considerations
 
 Per ADR-007, the architecture is designed with network multiplayer from day one.
 
@@ -524,7 +603,7 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | NW-007 | Simultaneous actions (Command Phase) must use a "both submitted" gate before revealing. | Prevents information leak |
 | NW-008 | Turn timers should be configurable (optional) to prevent stalling. | Player settings |
 
-## 19. Debug Mode
+## 24. Debug Mode
 
 > **Scope:** Developer tooling for interactive token placement during setup.
 > Available in both the Learning Scenario setup and (future) main game setup.
@@ -582,6 +661,11 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | Ship Phase | 6+10 = 16 | LTP, RRG |
 | Squadron Phase | 9 | LTP, RRG |
 | Status Phase | 4 | LTP, RRG |
+| Play Mode | 4 | ADR, User |
+| Turn Flow | 14 | LTP, RRG, User |
+| Board Perspective | 6 | User, UX |
+| Player Handoff | 5 | User, UX |
+| Initiative | 3 | LTP, RRG |
 | Commands | 22 | RRG, LTP |
 | Attack Resolution | 28 | RRG, LTP |
 | Defense Tokens | 10 | RRG, LTP, ADR |
@@ -594,4 +678,4 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | UI Requirements | 15 | Derived |
 | Network Multiplayer | 8 | ADR-007 |
 | Debug Mode | 13 | Dev tooling |
-| **Total** | **~206** | |
+| **Total** | **~238** | |

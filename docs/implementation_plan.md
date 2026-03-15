@@ -14,6 +14,7 @@
 - [Phase 2b: Debug Token Placement](#phase-2b-debug-token-placement)
 - [Phase 3: Game State Wiring](#phase-3-game-state-wiring)
 - [Phase 4: Command Phase](#phase-4-command-phase)
+- [Phase 4b: Turn Management & Board Perspective](#phase-4b-turn-management--board-perspective)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -372,6 +373,31 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
+### Phase 4b: Turn Management & Board Perspective ⏳
+**Goal:** Implement active player tracking, board perspective rotation, card panel swapping, player handoff overlay, sequential command phase for hot-seat, and the "End Activation" button. This is the foundational turn-management layer that all subsequent phases (Ship, Squadron, Status) depend on.
+**Prerequisites:** Phase 4 (Command Phase — both-submitted gate, phase transitions)
+**Duration estimate:** 2–3 sessions
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|-------------|
+| Play mode config (hot-seat / network stub) | Autoload | PM-001–004 | `src/autoload/play_mode.gd` — singleton with `PlayMode.HOT_SEAT` / `PlayMode.NETWORK` enum |
+| Active player tracking in GameManager | Core/App | TF-001 | `GameManager.active_player` property, `active_player_changed` signal on EventBus |
+| Sequential command phase (hot-seat) | Application | TF-002, HO-003, BP-006 | Retrofit `_begin_command_dial_flow()`: initiative player assigns first → handoff → second player assigns |
+| Board camera 180° rotation on player switch | Presentation | BP-001, BP-002 | Extend `BoardCamera` with `rotate_to_player()` — smooth animated rotation around board centre |
+| Card panel swap (active player → left) | Presentation | BP-003, UI-016 | `ShipCardPanel` swap logic: active player panels on left, opponent on right |
+| Perspective transition animation | Presentation | BP-004 | Configurable duration (default 0.5 s) in `scale_config.json` |
+| Handoff overlay (Command Phase — full) | Presentation | HO-001, HO-002, HO-003 | `src/ui/handoff_overlay.gd` — full-screen overlay with player name, phase, "Ready" button |
+| "Your Turn" banner (Ship/Squadron phases) | Presentation | HO-004 | Brief banner on player switch, auto-dismiss or click-dismiss |
+| Auto-pass detection | Core | TF-006, TF-009, HO-005 | Skip handoff when a player has no unactivated units |
+| "End Activation" button (shared UI) | Presentation | TF-005, TF-011 | `src/ui/end_activation_button.gd` — visible during Ship/Squadron phases, emits `activation_ended` signal |
+| Initiative tracking clarification | Core | IN-001–003 | Ensure `GameState.initiative_player` is distinct from slider-flip; Rebel always first |
+| Network mode stub (no-op paths) | Application | PM-003, BP-005 | Conditional branches that skip perspective rotation and handoff in network mode |
+
+**Requirements covered:** PM-001–004 (play mode), TF-001–014 (turn flow), BP-001–006 (board perspective), HO-001–005 (player handoff), IN-001–003 (initiative)
+**Tests:** ~25 (active player transitions, auto-pass logic, sequential command phase, perspective state, handoff overlay visibility, panel swap)
+
+---
+
 ### Phase 5: Ship Movement ⏳ system including the maneuver tool, speed chart, and Navigate command.
 **Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials)
 **Duration estimate:** 3–4 sessions
@@ -386,7 +412,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 | Speed 0 maneuver | Core | MV-015 | No movement, still counts as maneuver |
 | Ship–ship overlap handling | Core | OV-010–013 | Temp speed reduction loop, facedown damage to both |
 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons |
-| Activation tracking and alternation | Core | SP-001–004 | Initiative player first, alternating, pass when done |
+| Activation tracking and alternation | Core | SP-001–004, TF-003–007 | Initiative player first, alternating, auto-pass when done; uses Phase 4b turn management |
 | Command dial reveal step | Core | SP-010–012 | Reveal top dial, keep or convert to token |
 
 **Tests:** ~35 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command)
@@ -423,7 +449,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
-| Squadron activation alternation (2 at a time) | Core | SQ-001–005 | Alternating activation with pass logic |
+| Squadron activation alternation (2 at a time) | Core | SQ-001–005, TF-008–012 | Alternating activation with auto-pass logic; uses Phase 4b turn management |
 | Squadron movement (distance ruler) | Core | SM-001–005 | Place within distance band matching speed |
 | Range ruler visualization (distance side) | Presentation | GC-014, UI-012 | Draggable ruler for squadron movement |
 | Engagement system | Core | SM-010–015 | Distance 1 check, movement lock, attack constraint |
@@ -508,6 +534,8 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       │                                 Phase 4 (Command Phase)
     │       │                                        │
+    │       │                                 Phase 4b (Turn Mgmt & Perspective)
+    │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
@@ -516,7 +544,7 @@ Phase 0 (Scale & Assets)
     │               │
     │               └── Phase 9 (Repair & Damage Cards)
     │
-    └── Phase 8 (Status Phase & Game Flow) ◄── Phases 4–7
+    └── Phase 8 (Status Phase & Game Flow) ◄── Phases 4b–7
                 │
                 └── Phase 10 (UI Polish & Network) ◄── All phases
 ```
@@ -532,7 +560,8 @@ Phase 0 (Scale & Assets)
 | Phase 2b | ~20 | **31** | **360** |
 | Phase 3 | ~25 | **126** | **486** |
 | Phase 4 | ~30 | **97** | **583** |
-| Phase 5 | ~35 | — | ~315 |
+| Phase 4b | ~25 | — | ~608 |
+| Phase 5 | ~35 | — | ~340 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
 | Phase 8 | ~20 | — | ~410 |
@@ -568,10 +597,15 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Overview (GO-001–006) | 6 | Phase 8 | ⏳ |
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
-| Command Phase (CP-001–008) | 8 | Phase 4 | ✅ |
-| Ship Phase (SP-001–016) | 16 | Phase 5, 6 | ⏳ |
-| Squadron Phase (SQ-001–009) | 9 | Phase 7 | ⏳ |
+| Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
+| Ship Phase (SP-001–016) | 16 | Phase 4b, 5, 6 | ⏳ |
+| Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
+| Play Mode (PM-001–004) | 4 | Phase 4b | ⏳ |
+| Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ⏳ |
+| Board Perspective (BP-001–006) | 6 | Phase 4b | ⏳ |
+| Player Handoff (HO-001–005) | 5 | Phase 4b | ⏳ |
+| Initiative (IN-001–003) | 3 | Phase 4b | ⏳ |
 | Commands (CM-001–042) | 22 | Phase 4, 5, 6, 7, 9 | ⏳ |
 | Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
@@ -581,6 +615,6 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
-| UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 5, 6, 7, 8, 10 |
-| Network (NW-001–008) | 8 | Phase 4, 10 |
+| UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 4b, 5, 6, 7, 8, 10 |
+| Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |

@@ -221,12 +221,19 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	if all_assigned:
 		_command_submitted[player_index] = true
 		EventBus.command_dials_submitted.emit(player_index)
-		_check_command_phase_complete()
+		# NOTE: Do NOT call _check_command_phase_complete() here.
+		# The emit above synchronously triggers _on_command_dials_submitted,
+		# which already calls _check_command_phase_complete(). Calling it
+		# again would double-advance the phase (Command → Ship → Squadron).
 
 
 ## Checks whether both players have submitted and, if so, ends the Command
 ## Phase and advances to Ship Phase.
 func _check_command_phase_complete() -> void:
+	if not is_game_active or not current_game_state:
+		return
+	if current_game_state.current_phase != Constants.GamePhase.COMMAND:
+		return
 	for i: int in range(Constants.PLAYER_COUNT):
 		if not _command_submitted[i]:
 			return

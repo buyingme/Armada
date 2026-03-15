@@ -102,6 +102,48 @@ func test_command_assigning_player_reset_after_complete() -> void:
 			"Assigning player should be -1 after command phase completes")
 
 
+## Regression: _on_command_picker_confirmed previously called
+## _check_command_phase_complete() directly *and* emitted
+## command_dials_submitted (whose handler also calls the check), causing
+## Command → Ship → Squadron in a single frame.
+func test_picker_confirmed_path_does_not_double_advance_phase() -> void:
+	GameManager.start_new_game()
+	# Give each player exactly one ship with command_value 1.
+	var gs: GameState = GameManager.current_game_state
+	var rebel_ship: ShipInstance = ShipInstance.new()
+	rebel_ship.owner_player = 0
+	rebel_ship.activated_this_round = false
+	rebel_ship.ship_data = ShipData.new()
+	rebel_ship.ship_data.ship_name = "TestRebel"
+	rebel_ship.command_dial_stack = CommandDialStack.create(1)
+	gs.get_player_state(0).ships.append(rebel_ship)
+
+	var imp_ship: ShipInstance = ShipInstance.new()
+	imp_ship.owner_player = 1
+	imp_ship.activated_this_round = false
+	imp_ship.ship_data = ShipData.new()
+	imp_ship.ship_data.ship_name = "TestImperial"
+	imp_ship.command_dial_stack = CommandDialStack.create(1)
+	gs.get_player_state(1).ships.append(imp_ship)
+
+	# Simulate picker-confirmed path: player 0 assigns dial via picker.
+	EventBus.command_picker_confirmed.emit(
+			rebel_ship, [Constants.CommandType.NAVIGATE])
+	# Player 0 done → handoff to player 1 expected.
+	assert_eq(GameManager.get_command_assigning_player(), 1,
+			"Player 1 should be assigning after player 0 finishes")
+
+	# Player 1 assigns dial via picker.
+	EventBus.command_picker_confirmed.emit(
+			imp_ship, [Constants.CommandType.NAVIGATE])
+	# Should advance to Ship — NOT Squadron.
+	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP,
+			"Phase should be Ship after both players submit via picker "
+			+ "(not Squadron)")
+	assert_eq(_command_phase_complete_count, 1,
+			"command_phase_complete should fire exactly once")
+
+
 # --- Ship Phase Turn Management ---
 
 func test_ship_phase_starts_with_initiative_player() -> void:

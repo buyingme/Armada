@@ -55,9 +55,10 @@ var _base_region: Vector2 = Vector2.ZERO
 var _label_font: Font = null
 ## Child node that draws value labels on top of the sprite.
 var _label_layer: Node2D = null
-## Sprite showing the revealed command dial behind the ship base (Phase 4c).
+## Node2D showing the composite revealed command dial behind the ship base
+## (Phase 4c). Contains a background Sprite2D + icon Sprite2D.
 ## Requirements: UI-025.
-var _revealed_dial_sprite: Sprite2D = null
+var _revealed_dial_sprite: Node2D = null
 
 ## Map from [Constants.CommandType] enum to icon filename for board display.
 const CMD_BOARD_ICON_FILES: Dictionary = {
@@ -150,29 +151,51 @@ func is_point_in_base(world_pos: Vector2) -> bool:
 
 
 ## Shows the revealed command dial behind the ship base on the board.
-## The dial is positioned 1 cm (in game space) aft of the base edge.
+## The dial is a composite: hidden dial background + command icon on top.
+## Positioned 1 cm (in game space) aft of the base edge.
 ## Requirements: UI-025.
 ## [param command_type] — the Constants.CommandType value of the revealed dial.
 func show_revealed_dial(command_type: int) -> void:
 	hide_revealed_dial()
-	var filename: String = CMD_BOARD_ICON_FILES.get(command_type, "")
-	if filename.is_empty():
+	var icon_filename: String = CMD_BOARD_ICON_FILES.get(command_type, "")
+	if icon_filename.is_empty():
 		return
-	var tex: Texture2D = AssetLoader.load_texture("command_tokens/", filename)
-	if tex == null:
+	var bg_tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", "cmd_dial_hidden.png")
+	var icon_tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", icon_filename)
+	if bg_tex == null:
 		return
 
-	_revealed_dial_sprite = Sprite2D.new()
-	_revealed_dial_sprite.texture = tex
+	## Container Node2D holds background sprite + icon sprite.
+	_revealed_dial_sprite = Node2D.new()
 
 	## Scale the dial to game-scale size (~30 mm physical diameter).
 	## Rules Reference: physical command dial is ~30 mm.
 	## ruler_length_px / 305 mm per foot × 30 mm ≈ 70.8 px at 720px ruler.
 	var dial_game_px: float = GameScale.ruler_length_px * (30.0 / 305.0)
-	var tex_max: float = maxf(float(tex.get_width()), float(tex.get_height()))
-	if tex_max > 0.0:
-		var s: float = dial_game_px / tex_max
-		_revealed_dial_sprite.scale = Vector2(s, s)
+
+	# Background sprite (facedown dial graphic).
+	var bg_sprite: Sprite2D = Sprite2D.new()
+	bg_sprite.texture = bg_tex
+	var bg_max: float = maxf(float(bg_tex.get_width()),
+			float(bg_tex.get_height()))
+	if bg_max > 0.0:
+		var s: float = dial_game_px / bg_max
+		bg_sprite.scale = Vector2(s, s)
+	_revealed_dial_sprite.add_child(bg_sprite)
+
+	# Command icon sprite on top (slightly smaller to fit inside dial).
+	if icon_tex != null:
+		var icon_sprite: Sprite2D = Sprite2D.new()
+		icon_sprite.texture = icon_tex
+		var icon_max: float = maxf(float(icon_tex.get_width()),
+				float(icon_tex.get_height()))
+		var icon_dial_px: float = dial_game_px * 0.75
+		if icon_max > 0.0:
+			var si: float = icon_dial_px / icon_max
+			icon_sprite.scale = Vector2(si, si)
+		_revealed_dial_sprite.add_child(icon_sprite)
 
 	## Position: 1 cm behind the aft edge of the base.
 	## Aft direction = positive Y in local space (nose points toward -Y).

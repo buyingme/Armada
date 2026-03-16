@@ -489,6 +489,11 @@ func _perform_status_phase_cleanup() -> void:
 				var si: ShipInstance = s as ShipInstance
 				si.ready_defense_tokens()
 				si.reset_activation()
+				# Clear spent dial marker so it doesn't persist into the
+				# next round's card panel display.
+				if si.command_dial_stack != null:
+					si.command_dial_stack.clear_spent_history()
+					EventBus.command_dials_changed.emit(si)
 		for sq: Variant in ps.squadrons:
 			if sq is SquadronInstance:
 				var sqi: SquadronInstance = sq as SquadronInstance

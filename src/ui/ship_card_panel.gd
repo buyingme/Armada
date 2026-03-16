@@ -493,11 +493,12 @@ func _populate_token_column(col: VBoxContainer,
 ## Populates the command dial stack display as a vertical column.
 ## All hidden dials use cmd_dial_hidden.png. A revealed dial (during Ship
 ## Phase) shows its command icon composited on the hidden background.
-## A spent dial (activation marker) is shown after a small gap.
+## A spent dial (activation marker) is shown below the active stack with a
+## 0.5 cm gap (approximately 12 px at standard screen scale).
 ## [param container] — the VBoxContainer to populate.
 ## [param instance] — the ShipInstance whose dials to display.
 ## [param scale_factor] — current magnification factor.
-## Rules Reference: UI-019, UI-020; GC-008.
+## Rules Reference: UI-019, UI-020, UI-026; GC-008.
 func _populate_dial_stack(container: VBoxContainer,
 		instance: ShipInstance, scale_factor: float) -> void:
 	for child: Node in container.get_children():
@@ -517,48 +518,85 @@ func _populate_dial_stack(container: VBoxContainer,
 	var offset: int = int(GameScale.card_panel_dial_stack_offset_px
 			* scale_factor)
 
-	# Negative spacing gives the overlapping card-stack look.
-	container.add_theme_constant_override("separation", -offset)
+	# Use a zero-spacing outer container so we can control the gap between
+	# the active stack and the spent dial precisely.
+	container.add_theme_constant_override("separation", 0)
 
-	# If there's a revealed dial, show it first (revealed = icon composite).
+	# --- Active dial stack (revealed + hidden) with negative overlap ---
+	var active_stack: VBoxContainer = VBoxContainer.new()
+	active_stack.add_theme_constant_override("separation", -offset)
+
+	# If there's a revealed dial, show it first (revealed = composite).
 	if not revealed.is_empty():
-		var rev_rect: TextureRect = _create_dial_rect(
+		var rev_rect: Control = _create_dial_rect(
 				int(revealed.get("command", 0)), true, dial_w, dial_h)
-		container.add_child(rev_rect)
+		active_stack.add_child(rev_rect)
 
 	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
 	# Rules Reference: CP-006 — dials are facedown.
 	for i: int in range(hidden_dials.size()):
-		var rect: TextureRect = _create_dial_rect(
+		var rect: Control = _create_dial_rect(
 				0, false, dial_w, dial_h)
-		container.add_child(rect)
+		active_stack.add_child(rect)
 
-	# Spent dial (activation marker) — shown revealed (icon composite).
+	container.add_child(active_stack)
+
+	# --- Spent dial (activation marker) — below stack with ~0.5 cm gap ---
 	if not spent_marker.is_empty():
-		var spent_rect: TextureRect = _create_dial_rect(
+		var spent_gap_px: float = 12.0 * scale_factor
+		var spacer: Control = Control.new()
+		spacer.custom_minimum_size = Vector2(0, spent_gap_px)
+		container.add_child(spacer)
+		var spent_rect: Control = _create_dial_rect(
 				int(spent_marker.get("command", 0)), true, dial_w, dial_h)
 		container.add_child(spent_rect)
 
 
-## Creates a TextureRect for a single command dial.
+## Creates a Control for a single command dial.
+## When [param show_icon] is false, returns a [TextureRect] with the hidden
+## dial background. When true, returns a container that composites the dial
+## background with the command icon on top (centred).
 ## [param cmd] — Constants.CommandType value.
 ## [param show_icon] — true to composite the command icon on top.
 ## [param w] — display width. [param h] — display height.
 func _create_dial_rect(cmd: int, show_icon: bool,
-		w: float, h: float) -> TextureRect:
-	var tex: Texture2D
-	if show_icon:
-		tex = _get_cmd_icon_texture(cmd)
-	else:
-		tex = _get_dial_hidden_texture()
+		w: float, h: float) -> Control:
+	if not show_icon:
+		var bg_tex: Texture2D = _get_dial_hidden_texture()
+		var rect: TextureRect = TextureRect.new()
+		if bg_tex:
+			rect.texture = bg_tex
+		rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rect.custom_minimum_size = Vector2(w, h)
+		return rect
 
-	var rect: TextureRect = TextureRect.new()
-	if tex:
-		rect.texture = tex
-	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	rect.custom_minimum_size = Vector2(w, h)
-	return rect
+	# Composite: dial background + command icon on top.
+	var panel: Control = Control.new()
+	panel.custom_minimum_size = Vector2(w, h)
+
+	var bg_tex: Texture2D = _get_dial_hidden_texture()
+	if bg_tex:
+		var bg_rect: TextureRect = TextureRect.new()
+		bg_rect.texture = bg_tex
+		bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bg_rect.custom_minimum_size = Vector2(w, h)
+		panel.add_child(bg_rect)
+
+	var icon_tex: Texture2D = _get_cmd_icon_texture(cmd)
+	if icon_tex:
+		var icon_rect: TextureRect = TextureRect.new()
+		icon_rect.texture = icon_tex
+		icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var icon_size: float = h * 0.7
+		var icon_offset: float = (h - icon_size) * 0.5
+		icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
+		icon_rect.position = Vector2((w - icon_size) * 0.5, icon_offset)
+		panel.add_child(icon_rect)
+
+	return panel
 
 
 ## Populates the command token column on the right of the ship card.

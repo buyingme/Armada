@@ -205,7 +205,7 @@ func test_full_ship_phase_cycle_both_players_activate() -> void:
 	# Player 0 (initiative) activates.
 	GameManager.activate_ship(rebel)
 	EventBus.activation_ended.emit()
-	# Rebel's dial was spent (appears in spent history).
+	# Rebel's dial was spent (appears in spent history; no cascade yet).
 	assert_eq(rebel.command_dial_stack.get_spent_history().size(), 1,
 			"Rebel ship should have 1 spent dial after End Activation")
 	assert_eq(GameManager.get_active_player(), 1,
@@ -214,12 +214,11 @@ func test_full_ship_phase_cycle_both_players_activate() -> void:
 	# Player 1 activates.
 	GameManager.activate_ship(imperial)
 	EventBus.activation_ended.emit()
-	# Imperial's dial was spent.
-	assert_eq(imperial.command_dial_stack.get_spent_history().size(), 1,
-			"Imperial ship should have 1 spent dial after End Activation")
 
 	# Both done — phase cascades through Squadron+Status to next round.
-	# Note: Status Phase resets activated_this_round, so check round/phase.
+	# Status Phase clears spent history, so we verify round/phase instead.
+	assert_eq(imperial.command_dial_stack.get_spent_history().size(), 0,
+			"Status Phase should have cleared spent history")
 	assert_eq(GameManager.get_current_phase(),
 			Constants.GamePhase.COMMAND,
 			"Should cascade to Command Phase of next round")
@@ -313,14 +312,21 @@ func test_show_revealed_dial_creates_child_sprite() -> void:
 	token._half_w = 50.0
 	token._half_l = 80.0
 	token.show_revealed_dial(Constants.CommandType.NAVIGATE)
-	# The sprite is added as a child.
-	var found_sprite: bool = false
+	# The composite dial is added as a Node2D child with Sprite2D grandchildren.
+	var found_container: bool = false
 	for child: Node in token.get_children():
-		if child is Sprite2D:
-			found_sprite = true
+		if child is Node2D and not child is Sprite2D:
+			found_container = true
+			# Verify it contains two Sprite2D children (background + icon).
+			var sprite_count: int = 0
+			for grandchild: Node in child.get_children():
+				if grandchild is Sprite2D:
+					sprite_count += 1
+			assert_eq(sprite_count, 2,
+					"Composite dial should have 2 Sprite2D children (bg + icon)")
 			break
-	assert_true(found_sprite,
-			"show_revealed_dial should create a Sprite2D child")
+	assert_true(found_container,
+			"show_revealed_dial should create a Node2D composite child")
 
 
 func test_hide_revealed_dial_removes_sprite() -> void:
@@ -346,18 +352,18 @@ func test_show_revealed_dial_positions_behind_base() -> void:
 	token._half_w = 50.0
 	token._half_l = 80.0
 	token.show_revealed_dial(Constants.CommandType.NAVIGATE)
-	# The sprite should be positioned at positive Y (aft of base).
-	var sprite: Sprite2D = null
+	# The composite Node2D should be positioned at positive Y (aft of base).
+	var container: Node2D = null
 	for child: Node in token.get_children():
-		if child is Sprite2D:
-			sprite = child as Sprite2D
+		if child is Node2D and not child is Sprite2D:
+			container = child as Node2D
 			break
-	assert_not_null(sprite, "Sprite should exist")
-	if sprite:
-		assert_gt(sprite.position.y, token._half_l,
-				"Dial sprite Y should be beyond the aft edge of the base")
-		assert_almost_eq(sprite.position.x, 0.0, 0.1,
-				"Dial sprite should be centred horizontally")
+	assert_not_null(container, "Composite dial container should exist")
+	if container:
+		assert_gt(container.position.y, token._half_l,
+				"Dial container Y should be beyond the aft edge of the base")
+		assert_almost_eq(container.position.x, 0.0, 0.1,
+				"Dial container should be centred horizontally")
 
 
 # ---------------------------------------------------------------------------

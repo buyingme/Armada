@@ -144,6 +144,10 @@ func _build_ui() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(subtitle)
 
+	# Show existing dials already in the stack (from previous rounds).
+	# This gives the player context for what commands are coming up.
+	_build_existing_stack_display(vbox)
+
 	# Selection area: 4 command icons in cycle order.
 	_selection_container = HBoxContainer.new()
 	_selection_container.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -329,6 +333,59 @@ func _create_stack_entry(cmd: int, index: int) -> VBoxContainer:
 	col.add_child(pos_label)
 
 	return col
+
+
+## Builds a display of existing dials already in the command stack.
+## Only shown when there are hidden dials (rounds 2+). Gives the player
+## context about upcoming commands they assigned in prior rounds.
+func _build_existing_stack_display(parent: VBoxContainer) -> void:
+	if _ship_instance == null or _ship_instance.command_dial_stack == null:
+		return
+	var all_dials: Array[Dictionary] = _ship_instance.command_dial_stack \
+			.get_all_dials()
+	# Only show existing hidden dials (not revealed or spent).
+	var hidden_cmds: Array[int] = []
+	for dial: Dictionary in all_dials:
+		if dial.get("state", "") == CommandDialStack.STATE_HIDDEN:
+			hidden_cmds.append(int(dial.get("command", 0)))
+	if hidden_cmds.is_empty():
+		return
+
+	var existing_label: Label = Label.new()
+	existing_label.text = "Existing stack (top → bottom):"
+	existing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	existing_label.add_theme_font_size_override("font_size", 12)
+	existing_label.add_theme_color_override(
+			"font_color", Color(0.7, 0.7, 0.7, 0.8))
+	parent.add_child(existing_label)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	var small_size: Vector2 = STACK_ICON_SIZE * 0.80
+	for i: int in range(hidden_cmds.size()):
+		var cmd: int = hidden_cmds[i]
+		var col: VBoxContainer = VBoxContainer.new()
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.add_theme_constant_override("separation", 1)
+		var tex: Texture2D = _get_cmd_icon_texture(cmd)
+		if tex:
+			var icon_rect: TextureRect = TextureRect.new()
+			icon_rect.texture = tex
+			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_rect.custom_minimum_size = small_size
+			icon_rect.modulate.a = 0.6
+			col.add_child(icon_rect)
+		var pos_lbl: Label = Label.new()
+		pos_lbl.text = "#%d" % (i + 1)
+		pos_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pos_lbl.add_theme_font_size_override("font_size", 9)
+		pos_lbl.add_theme_color_override(
+				"font_color", Color(0.6, 0.6, 0.6, 0.7))
+		col.add_child(pos_lbl)
+		row.add_child(col)
+	parent.add_child(row)
 
 
 # ---------------------------------------------------------------------------

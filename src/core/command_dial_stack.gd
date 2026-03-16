@@ -159,6 +159,14 @@ func get_spent_history() -> Array[Dictionary]:
 	return _spent_history.duplicate()
 
 
+## Clears the spent dial history. Called at the start of a new round so the
+## spent activation marker from the previous round is removed.
+## Rules Reference: The spent dial is an "activation marker" for the current
+## round only; it should not persist into the next round's display.
+func clear_spent_history() -> void:
+	_spent_history.clear()
+
+
 ## Returns all dial info needed for the card panel display.
 ## Result: {"hidden_dials": Array[CommandType], "top_command": int,
 ##          "revealed": Dictionary or empty, "spent_this_round": Dictionary or empty}

@@ -2,57 +2,89 @@
     "_comment": "Extracted from provided card image on 2026-03-07",
     "_source": "Resources/Game_Components/Ships/Rebel/shipcard_nebulon-b-support-refit.png",
     "_status": "VERIFIED",
-
     "ship_name": "Nebulon-B Support Refit",
     "faction": "REBEL_ALLIANCE",
     "ship_size": "SMALL",
     "point_cost": 51,
-
     "hull": 5,
     "command_value": 2,
     "squadron_value": 1,
     "engineering_value": 3,
     "max_speed": 3,
-
     "shields": {
         "FRONT": 3,
         "LEFT": 1,
         "RIGHT": 1,
         "REAR": 2
     },
-
     "battery_armament": {
-        "FRONT": { "RED": 3 },
-        "LEFT":  { "RED": 1, "BLUE": 1 },
-        "RIGHT": { "RED": 1, "BLUE": 1 },
-        "REAR":  { "RED": 2 }
+        "FRONT": {
+            "RED": 3
+        },
+        "LEFT": {
+            "RED": 1,
+            "BLUE": 1
+        },
+        "RIGHT": {
+            "RED": 1,
+            "BLUE": 1
+        },
+        "REAR": {
+            "RED": 2
+        }
     },
-
     "anti_squadron_armament": {
         "BLUE": 1
     },
-
-    "defense_tokens": ["EVADE", "BRACE", "BRACE"],
-
+    "defense_tokens": [
+        "EVADE",
+        "BRACE",
+        "BRACE"
+    ],
     "upgrade_slots": [
         "TITLE",
         "OFFICER",
         "SUPPORT_TEAM",
         "TURBOLASERS"
     ],
-
     "navigation_chart": [
-        [1],
-        [1, 1],
-        [0, 1, 2]
+        [
+            1
+        ],
+        [
+            1,
+            1
+        ],
+        [
+            0,
+            1,
+            2
+        ]
     ],
-
     "token_label_offsets": {
-        "shield_front": [51, -9],
-        "shield_left": [-9, 85],
-        "shield_right": [112, 85],
-        "shield_rear": [51, 180],
-        "hull": [17, 56],
-        "speed": [87, 56]
+        "shield_front": [
+            51,
+            -9
+        ],
+        "shield_left": [
+            -9,
+            85
+        ],
+        "shield_right": [
+            112,
+            85
+        ],
+        "shield_rear": [
+            51,
+            180
+        ],
+        "hull": [
+            17,
+            56
+        ],
+        "speed": [
+            87,
+            56
+        ]
     }
 }

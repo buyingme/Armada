@@ -1,61 +1,95 @@
-
 {
-    "_comment": "Extracted from provided card image on 2026-03-07",
-    "_source": "Resources/Game_Components/Ships/Rebel/shipcard_cr90b-corvette.png",
-    "_status": "VERIFIED",
-
-    "ship_name": "CR90 Corvette B",
-    "faction": "REBEL_ALLIANCE",
-    "ship_size": "SMALL",
-    "point_cost": 39,
-
-    "hull": 4,
-    "command_value": 1,
-    "squadron_value": 1,
-    "engineering_value": 2,
-    "max_speed": 4,
-
-    "shields": {
-      "FRONT": 2,
-      "LEFT": 2,
-      "RIGHT": 2,
-      "REAR": 1
+  "_comment": "Extracted from provided card image on 2026-03-07",
+  "_source": "Resources/Game_Components/Ships/Rebel/shipcard_cr90b-corvette.png",
+  "_status": "VERIFIED",
+  "ship_name": "CR90 Corvette B",
+  "faction": "REBEL_ALLIANCE",
+  "ship_size": "SMALL",
+  "point_cost": 39,
+  "hull": 4,
+  "command_value": 1,
+  "squadron_value": 1,
+  "engineering_value": 2,
+  "max_speed": 4,
+  "shields": {
+    "FRONT": 2,
+    "LEFT": 2,
+    "RIGHT": 2,
+    "REAR": 1
+  },
+  "battery_armament": {
+    "FRONT": {
+      "BLUE": 3
     },
-
-    "battery_armament": {
-      "FRONT": { "BLUE": 3 },
-      "LEFT":  { "BLUE": 2 },
-      "RIGHT": { "BLUE": 2 },
-      "REAR":  { "BLUE": 1 }
+    "LEFT": {
+      "BLUE": 2
     },
-
-    "anti_squadron_armament": {
+    "RIGHT": {
+      "BLUE": 2
+    },
+    "REAR": {
       "BLUE": 1
-    },
-
-    "defense_tokens": ["EVADE", "EVADE", "REDIRECT"],
-
-    "upgrade_slots": [
-      "TITLE",
-      "OFFICER",
-      "SUPPORT_TEAM",
-      "DEFENSIVE_RETROFIT",
-      "ION_CANNONS"
-    ],
-
-    "navigation_chart": [
-      [2],
-      [1, 2],
-      [0, 1, 2],
-      [0, 0, 1, 2]
-    ],
-
-    "token_label_offsets": {
-      "shield_front": [51, -9],
-      "shield_left": [-9, 85],
-      "shield_right": [112, 85],
-      "shield_rear": [51, 180],
-      "hull": [21, 34],
-      "speed": [83, 34]
     }
+  },
+  "anti_squadron_armament": {
+    "BLUE": 1
+  },
+  "defense_tokens": [
+    "EVADE",
+    "EVADE",
+    "REDIRECT"
+  ],
+  "upgrade_slots": [
+    "TITLE",
+    "OFFICER",
+    "SUPPORT_TEAM",
+    "DEFENSIVE_RETROFIT",
+    "ION_CANNONS"
+  ],
+  "navigation_chart": [
+    [
+      2
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      0,
+      0,
+      1,
+      2
+    ]
+  ],
+  "token_label_offsets": {
+    "shield_front": [
+      51,
+      -9
+    ],
+    "shield_left": [
+      -9,
+      85
+    ],
+    "shield_right": [
+      112,
+      85
+    ],
+    "shield_rear": [
+      51,
+      180
+    ],
+    "hull": [
+      21,
+      34
+    ],
+    "speed": [
+      83,
+      34
+    ]
   }
+}

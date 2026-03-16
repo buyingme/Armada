@@ -95,7 +95,7 @@ func test_selecting_commands_adds_to_queue() -> void:
 
 
 func test_cannot_exceed_dials_needed() -> void:
-	_picker.open(_ship, 2)  # Needs 1 dial.
+	_picker.open(_ship, 2) # Needs 1 dial.
 	_picker._on_command_selected(Constants.CommandType.NAVIGATE)
 	_picker._on_command_selected(Constants.CommandType.REPAIR)
 	assert_eq(_picker._queued_commands.size(), 1,
@@ -103,7 +103,7 @@ func test_cannot_exceed_dials_needed() -> void:
 
 
 func test_can_select_same_command_multiple_times() -> void:
-	_picker.open(_ship, 1)  # Needs 3 dials.
+	_picker.open(_ship, 1) # Needs 3 dials.
 	_picker._on_command_selected(Constants.CommandType.NAVIGATE)
 	_picker._on_command_selected(Constants.CommandType.NAVIGATE)
 	_picker._on_command_selected(Constants.CommandType.NAVIGATE)
@@ -171,7 +171,7 @@ func test_confirm_emits_signal_and_closes() -> void:
 		received_cmds.append_array(cmds)
 	EventBus.command_picker_confirmed.connect(callback)
 
-	_picker.open(_ship, 2)  # Needs 1 dial.
+	_picker.open(_ship, 2) # Needs 1 dial.
 	_picker._on_command_selected(Constants.CommandType.CONCENTRATE_FIRE)
 	_picker._on_confirm_pressed()
 

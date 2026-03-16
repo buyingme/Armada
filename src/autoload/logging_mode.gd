@@ -119,7 +119,7 @@ func get_connected_signal_count() -> int:
 		"handoff_accepted", "activation_ended",
 	]
 	for sig_name: String in signals_to_check:
-		if EventBus.is_connected(sig_name, Callable(self, "_on_" + sig_name)):
+		if EventBus.is_connected(sig_name, Callable(self , "_on_" + sig_name)):
 			count += 1
 	return count
 

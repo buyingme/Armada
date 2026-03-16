@@ -87,7 +87,7 @@ func _rebuild_sprites() -> void:
 	var scale_factor: float = TOKEN_DISPLAY_HEIGHT_PX / src_h if src_h > 0 else 1.0
 	var token_w: float = src_w * scale_factor
 	var total_w: float = token_w * visible_count + TOKEN_GAP_PX * (visible_count - 1)
-	var x_start: float = -total_w * 0.5 + token_w * 0.5
+	var x_start: float = - total_w * 0.5 + token_w * 0.5
 	var idx: int = 0
 	for t: Dictionary in _tokens:
 		var state: int = int(t.get("state", 0))

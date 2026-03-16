@@ -101,31 +101,28 @@ func test_advance_phase_command_to_ship() -> void:
 
 func test_advance_phase_full_cycle() -> void:
 	GameManager.start_new_game()
-	# COMMAND -> SHIP -> SQUADRON -> STATUS -> (new round) COMMAND
+	# COMMAND → SHIP (manual) → SQUADRON (auto-pass) → STATUS (auto-cleanup) → COMMAND (round 2)
 	GameManager.advance_phase() # SHIP
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP)
 
-	GameManager.advance_phase() # SQUADRON
-	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SQUADRON)
-
-	GameManager.advance_phase() # STATUS
-	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.STATUS)
-
-	GameManager.advance_phase() # New round -> COMMAND
-	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.COMMAND)
+	GameManager.advance_phase() # SQUADRON → auto-pass → STATUS → auto-cleanup → COMMAND (round 2)
+	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.COMMAND,
+			"Squadron+Status should auto-cascade to next round's Command")
 	assert_eq(GameManager.get_current_round(), 2, "Should be round 2 after full cycle")
 
 
 func test_game_ends_after_six_rounds() -> void:
 	GameManager.start_new_game()
 
-	# Play through 6 full rounds
-	for round_num in range(6):
-		for phase in range(4): # 4 phase transitions per round
-			if GameManager.is_game_active:
-				GameManager.advance_phase()
+	# Play through 6 full rounds.
+	# Each round: advance_phase() twice (COMMAND→SHIP, SHIP→cascade→COMMAND).
+	for round_num: int in range(6):
+		if GameManager.is_game_active:
+			GameManager.advance_phase() # → SHIP
+		if GameManager.is_game_active:
+			GameManager.advance_phase() # → SQUADRON → STATUS → COMMAND (next round)
 
-	# After round 6's STATUS phase, advancing should trigger round 7 attempt → game end
+	# After round 6’s Status Phase, advancing triggers round 7 attempt → game end.
 	assert_true(_game_ended, "Game should end after 6 rounds")
 	assert_false(GameManager.is_game_active, "Game should no longer be active")
 
@@ -152,8 +149,8 @@ func test_round_started_signal_count() -> void:
 	GameManager.start_new_game()
 	assert_eq(_round_started_count, 1, "Should have 1 round_started after new game")
 
-	# Complete round 1
-	for i in range(4):
-		GameManager.advance_phase()
+	# Complete round 1: COMMAND→SHIP, then SHIP→cascade→COMMAND (round 2).
+	GameManager.advance_phase()
+	GameManager.advance_phase()
 
 	assert_eq(_round_started_count, 2, "Should have 2 round_started after completing round 1")

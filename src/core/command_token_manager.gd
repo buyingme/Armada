@@ -64,12 +64,12 @@ func add_token(command: Constants.CommandType) -> bool:
 func add_token_with_discard(command: Constants.CommandType,
 		discard_type: Constants.CommandType) -> Dictionary:
 	if has_token(command):
-		return {"added": false, "discarded": -1}
+		return {"added": false, "discarded": - 1}
 
 	var discarded: int = -1
 	if _tokens.size() >= max_tokens:
 		if not has_token(discard_type):
-			return {"added": false, "discarded": -1}
+			return {"added": false, "discarded": - 1}
 		remove_token(discard_type)
 		discarded = int(discard_type)
 

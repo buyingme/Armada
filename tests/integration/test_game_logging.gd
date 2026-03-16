@@ -175,9 +175,8 @@ func test_full_flow_produces_ordered_log_sequence() -> void:
 	# Command Phase: both players submit.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
-	# Ship Phase → activation_ended (no ships → advances).
-	EventBus.activation_ended.emit()
-	# Squadron Phase → activation_ended (no squadrons → advances).
+	# Ship Phase → activation_ended (no ships → cascades through
+	# Squadron auto-pass → Status auto-cleanup → round 2 Command).
 	EventBus.activation_ended.emit()
 	var content: String = _get_log_content()
 

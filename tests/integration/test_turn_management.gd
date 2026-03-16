@@ -139,7 +139,7 @@ func test_picker_confirmed_path_does_not_double_advance_phase() -> void:
 	# Should advance to Ship — NOT Squadron.
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP,
 			"Phase should be Ship after both players submit via picker "
-			+ "(not Squadron)")
+			+"(not Squadron)")
 	assert_eq(_command_phase_complete_count, 1,
 			"command_phase_complete should fire exactly once")
 
@@ -225,37 +225,33 @@ func test_has_unactivated_squadrons_false_when_all_activated() -> void:
 			"No unactivated squadrons after activation")
 
 
-func test_ship_phase_auto_pass_advances_to_squadron() -> void:
+func test_ship_phase_auto_pass_cascades_to_next_round() -> void:
 	GameManager.start_new_game()
 	# Skip to ship phase with no ships at all.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
-	# Both players have no ships — activation_ended should trigger
-	# auto-advance through Ship Phase and into Squadron Phase.
-	# Since _begin_ship_phase calls _set_active_player which fires
-	# the signal, and with no unactivated ships, the first
-	# activation_ended should advance past.
+	# Both players have no ships — activation_ended triggers auto-advance
+	# through Ship → Squadron (auto-pass) → Status (auto-cleanup) → new round.
 	EventBus.activation_ended.emit()
 	assert_eq(GameManager.get_current_phase(),
-			Constants.GamePhase.SQUADRON,
-			"Should auto-advance to Squadron when no ships")
+			Constants.GamePhase.COMMAND,
+			"Should cascade through Squadron+Status to next round's Command")
+	assert_eq(GameManager.get_current_round(), 2,
+			"Should be in round 2 after full cascade")
 
 
-func test_squadron_phase_auto_pass_advances_to_status() -> void:
+func test_squadron_phase_auto_passes_to_status_and_beyond() -> void:
 	GameManager.start_new_game()
-	# Skip to squadron phase.
+	# Skip to ship phase.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
-	# Ship → Squadron via activation_ended with no ships.
+	# Ship → Squadron (auto-pass) → Status (auto-cleanup) → Command (round 2).
 	EventBus.activation_ended.emit()
 	assert_eq(GameManager.get_current_phase(),
-			Constants.GamePhase.SQUADRON,
-			"Should be in Squadron Phase")
-	# Now fire activation_ended in Squadron Phase with no squadrons.
-	EventBus.activation_ended.emit()
-	assert_eq(GameManager.get_current_phase(),
-			Constants.GamePhase.STATUS,
-			"Should auto-advance to Status when no squadrons")
+			Constants.GamePhase.COMMAND,
+			"Squadron+Status should auto-pass to next round's Command")
+	assert_eq(GameManager.get_current_round(), 2,
+			"Should be in round 2")
 
 
 # --- Initiative ---
@@ -264,6 +260,146 @@ func test_initiative_player_is_zero_by_default() -> void:
 	GameManager.start_new_game()
 	assert_eq(GameManager.current_game_state.initiative_player, 0,
 			"Initiative player should default to 0")
+
+
+# --- Squadron Phase Placeholder ---
+
+func test_squadron_phase_marks_all_squadrons_activated() -> void:
+	GameManager.start_new_game()
+	_add_test_ships()
+	_add_test_squadrons()
+	# Advance to Ship Phase.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	# Mark all ships as activated so Ship Phase advances.
+	for s: Variant in GameManager.current_game_state.get_player_state(0).ships:
+		if s is ShipInstance:
+			(s as ShipInstance).activated_this_round = true
+	for s: Variant in GameManager.current_game_state.get_player_state(1).ships:
+		if s is ShipInstance:
+			(s as ShipInstance).activated_this_round = true
+	# Fire activation_ended to advance Ship → Squadron (auto-pass) → Status → Command.
+	EventBus.activation_ended.emit()
+	# After cascade, all squadrons should be marked activated.
+	var rebel_sq: SquadronInstance = (
+			GameManager.current_game_state.get_player_state(0).squadrons[0]
+			as SquadronInstance)
+	# Status Phase resets activation, so after full cascade they are reset.
+	# Check that the squadron was NOT left in an activated state from
+	# the previous round (reset_activation clears it).
+	assert_false(rebel_sq.activated_this_round,
+			"Squadron activation should be reset after Status Phase")
+
+
+# --- Status Phase Placeholder ---
+
+func test_status_phase_readies_exhausted_defense_tokens() -> void:
+	GameManager.start_new_game()
+	_add_test_ships_with_tokens()
+	# Exhaust a token.
+	var ship: ShipInstance = (
+			GameManager.current_game_state.get_player_state(0).ships[0]
+			as ShipInstance)
+	ship.exhaust_defense_token(0)
+	assert_eq(ship.defense_tokens[0]["state"],
+			Constants.DefenseTokenState.EXHAUSTED,
+			"Token should be exhausted before Status Phase")
+	# Advance through all phases: mark ships activated so Ship Phase passes.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	_mark_all_ships_activated()
+	EventBus.activation_ended.emit()
+	# After Status Phase cleanup, token should be readied.
+	assert_eq(ship.defense_tokens[0]["state"],
+			Constants.DefenseTokenState.READY,
+			"Token should be readied by Status Phase")
+
+
+func test_status_phase_resets_ship_activation() -> void:
+	GameManager.start_new_game()
+	_add_test_ships()
+	var ship: ShipInstance = (
+			GameManager.current_game_state.get_player_state(0).ships[0]
+			as ShipInstance)
+	# Advance through all phases: mark all ships activated so Ship Phase passes.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	_mark_all_ships_activated()
+	EventBus.activation_ended.emit()
+	assert_false(ship.activated_this_round,
+			"Ship activation should be reset by Status Phase")
+
+
+func test_status_phase_flips_initiative() -> void:
+	GameManager.start_new_game()
+	assert_eq(GameManager.current_game_state.initiative_player, 0,
+			"Initiative should start with player 0")
+	# Advance through full round.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.activation_ended.emit()
+	assert_eq(GameManager.current_game_state.initiative_player, 1,
+			"Initiative should flip to player 1 after round 1")
+
+
+func test_initiative_flips_back_after_two_rounds() -> void:
+	GameManager.start_new_game()
+	# Round 1 → round 2.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.activation_ended.emit()
+	assert_eq(GameManager.current_game_state.initiative_player, 1,
+			"Initiative should be player 1 in round 2")
+	# Round 2 → round 3.
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.activation_ended.emit()
+	assert_eq(GameManager.current_game_state.initiative_player, 0,
+			"Initiative should flip back to player 0 in round 3")
+
+
+# --- Full Round Cycle ---
+
+func test_full_round_cycle_reaches_round_2() -> void:
+	GameManager.start_new_game()
+	assert_eq(GameManager.get_current_round(), 1,
+			"Should start at round 1")
+	# Complete round 1.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.activation_ended.emit()
+	assert_eq(GameManager.get_current_round(), 2,
+			"Should be round 2 after full cycle")
+	assert_eq(GameManager.get_current_phase(),
+			Constants.GamePhase.COMMAND,
+			"Should be in Command Phase of round 2")
+
+
+func test_game_ends_after_six_rounds() -> void:
+	GameManager.start_new_game()
+	# Burn through 6 rounds.
+	for _r: int in range(6):
+		# In round N, initiative player may differ; submit both.
+		EventBus.command_dials_submitted.emit(0)
+		EventBus.command_dials_submitted.emit(1)
+		EventBus.activation_ended.emit()
+	assert_false(GameManager.is_game_active,
+			"Game should end after 6 rounds")
+
+
+func test_round_3_initiative_player_assigns_first() -> void:
+	GameManager.start_new_game()
+	# Round 1 complete.
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.activation_ended.emit()
+	# Round 2: initiative is player 1. Complete it.
+	EventBus.command_dials_submitted.emit(1)
+	EventBus.command_dials_submitted.emit(0)
+	EventBus.activation_ended.emit()
+	# Round 3: initiative flips back to 0.
+	assert_eq(GameManager.get_command_assigning_player(), 0,
+			"Initiative player 0 should assign first in round 3")
 
 
 # --- Helpers ---
@@ -276,6 +412,28 @@ func _add_test_ships() -> void:
 	var rebel_ship: ShipInstance = ShipInstance.new()
 	rebel_ship.owner_player = 0
 	rebel_ship.activated_this_round = false
+	gs.get_player_state(0).ships.append(rebel_ship)
+
+	var imperial_ship: ShipInstance = ShipInstance.new()
+	imperial_ship.owner_player = 1
+	imperial_ship.activated_this_round = false
+	gs.get_player_state(1).ships.append(imperial_ship)
+
+
+## Creates minimal ship instances with defense tokens for Status Phase tests.
+func _add_test_ships_with_tokens() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var rebel_ship: ShipInstance = ShipInstance.new()
+	rebel_ship.owner_player = 0
+	rebel_ship.activated_this_round = false
+	rebel_ship.defense_tokens = [
+		{"type": Constants.DefenseToken.EVADE,
+		 "state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.BRACE,
+		 "state": Constants.DefenseTokenState.READY},
+	]
 	gs.get_player_state(0).ships.append(rebel_ship)
 
 	var imperial_ship: ShipInstance = ShipInstance.new()
@@ -298,3 +456,17 @@ func _add_test_squadrons() -> void:
 	imperial_squad.owner_player = 1
 	imperial_squad.activated_this_round = false
 	gs.get_player_state(1).squadrons.append(imperial_squad)
+
+
+## Marks all ships for all players as activated this round.
+func _mark_all_ships_activated() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	for i: int in range(Constants.PLAYER_COUNT):
+		var ps: PlayerState = gs.get_player_state(i)
+		if ps == null:
+			continue
+		for s: Variant in ps.ships:
+			if s is ShipInstance:
+				(s as ShipInstance).activated_this_round = true

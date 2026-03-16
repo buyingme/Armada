@@ -12,7 +12,7 @@ extends Node
 ## Available play modes.
 enum Mode {
 	HOT_SEAT, ## Shared screen, sequential turns with handoff overlays.
-	NETWORK,  ## Separate screens, simultaneous where rules allow.
+	NETWORK, ## Separate screens, simultaneous where rules allow.
 }
 
 ## The currently active play mode. Defaults to HOT_SEAT for MVP.

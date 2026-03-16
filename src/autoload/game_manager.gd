@@ -98,6 +98,8 @@ func advance_phase() -> void:
 				_begin_ship_phase()
 			Constants.GamePhase.SQUADRON:
 				_begin_squadron_phase()
+			Constants.GamePhase.STATUS:
+				_begin_status_phase()
 
 
 ## Starts a new round.
@@ -387,10 +389,67 @@ func _begin_ship_phase() -> void:
 	_set_active_player(init_player)
 
 
-## Begins the Squadron Phase by setting the initiative player as active.
-## Requirements: TF-008, SQ-003 — initiative player activates first.
+## Begins the Squadron Phase.
+## --- Placeholder: auto-passes all squadron activations immediately. ---
+## Full squadron activation (movement, attacks, engagement, keywords)
+## will be implemented in Phase 7.
+## Requirements: TF-008, SQ-001–005.
 func _begin_squadron_phase() -> void:
 	if not current_game_state:
 		return
-	var init_player: int = current_game_state.initiative_player
-	_set_active_player(init_player)
+	_auto_pass_all_squadrons()
+	advance_phase()
+
+
+## Marks all squadrons as activated so the phase can advance.
+## Placeholder — Phase 7 will replace this with interactive activation.
+func _auto_pass_all_squadrons() -> void:
+	for i: int in range(Constants.PLAYER_COUNT):
+		var ps: PlayerState = current_game_state.get_player_state(i)
+		if ps == null:
+			continue
+		for sq: Variant in ps.squadrons:
+			if sq is SquadronInstance:
+				(sq as SquadronInstance).activated_this_round = true
+	_log.info("Squadron Phase: auto-passed all squadrons (placeholder).")
+
+
+## Begins the Status Phase.
+## Performs end-of-round cleanup (ready tokens, reset activations, flip
+## initiative) then auto-advances to the next round.
+## --- Placeholder: auto-advances immediately with no player interaction. ---
+## Full Status Phase UI (HUD updates, visual token readying) will be
+## implemented in Phase 8.
+## Rules Reference: "Status Phase", p.6; ST-001–004.
+func _begin_status_phase() -> void:
+	if not current_game_state:
+		return
+	_perform_status_phase_cleanup()
+	advance_phase()
+
+
+## Performs all end-of-round state changes.
+## ST-001: Ready all exhausted defense tokens.
+## ST-002: Pass initiative to the other player.
+## ST-004: Reset activation flags on all ships and squadrons.
+## Rules Reference: "Status Phase", p.6.
+func _perform_status_phase_cleanup() -> void:
+	for i: int in range(Constants.PLAYER_COUNT):
+		var ps: PlayerState = current_game_state.get_player_state(i)
+		if ps == null:
+			continue
+		for s: Variant in ps.ships:
+			if s is ShipInstance:
+				var si: ShipInstance = s as ShipInstance
+				si.ready_defense_tokens()
+				si.reset_activation()
+		for sq: Variant in ps.squadrons:
+			if sq is SquadronInstance:
+				var sqi: SquadronInstance = sq as SquadronInstance
+				sqi.ready_defense_tokens()
+				sqi.reset_activation()
+	# ST-002: Initiative passes to the other player each round.
+	current_game_state.initiative_player = (
+			1 - current_game_state.initiative_player)
+	_log.info("Status Phase: cleanup complete. Initiative → player %d." % [
+			current_game_state.initiative_player])

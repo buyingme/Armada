@@ -192,7 +192,7 @@ func rotate_to_player(player_index: int) -> void:
 	# Rotate around the play area centre: position stays centred, rotation
 	# changes. After the tween, re-centre to account for any drift.
 	position = centre
-	_rotate_tween.tween_property(self, "rotation", target_rotation,
+	_rotate_tween.tween_property(self , "rotation", target_rotation,
 			ROTATE_DURATION)
 	_rotate_tween.tween_callback(EventBus.perspective_change_complete.emit)
 

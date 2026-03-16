@@ -2,38 +2,46 @@
   "_comment": "Verified against physical card image on 2026-03-07",
   "_source": "Resources/Game_Components/Ships/Rebel/shipcard_cr90a-corvette.png",
   "_status": "VERIFIED",
-
   "ship_name": "CR90 Corvette A",
   "faction": "REBEL_ALLIANCE",
   "ship_size": "SMALL",
   "point_cost": 44,
-
   "hull": 4,
   "command_value": 1,
   "squadron_value": 1,
   "engineering_value": 2,
   "max_speed": 4,
-
   "shields": {
     "FRONT": 2,
     "LEFT": 2,
     "RIGHT": 2,
     "REAR": 1
   },
-
   "battery_armament": {
-    "FRONT": { "RED": 2, "BLUE": 1 },
-    "LEFT":  { "RED": 1, "BLUE": 1 },
-    "RIGHT": { "RED": 1, "BLUE": 1 },
-    "REAR":  { "RED": 1 }
+    "FRONT": {
+      "RED": 2,
+      "BLUE": 1
+    },
+    "LEFT": {
+      "RED": 1,
+      "BLUE": 1
+    },
+    "RIGHT": {
+      "RED": 1,
+      "BLUE": 1
+    },
+    "REAR": {
+      "RED": 1
+    }
   },
-
   "anti_squadron_armament": {
     "BLUE": 1
   },
-
-  "defense_tokens": ["EVADE", "EVADE", "REDIRECT"],
-
+  "defense_tokens": [
+    "EVADE",
+    "EVADE",
+    "REDIRECT"
+  ],
   "upgrade_slots": [
     "TITLE",
     "OFFICER",
@@ -41,20 +49,50 @@
     "DEFENSIVE_RETROFIT",
     "TURBOLASERS"
   ],
-
   "navigation_chart": [
-    [2],
-    [1, 2],
-    [0, 1, 2],
-    [0, 0, 1, 2]
+    [
+      2
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      0,
+      0,
+      1,
+      2
+    ]
   ],
-
   "token_label_offsets": {
-    "shield_front": [51, -9],
-    "shield_left": [-9, 85],
-    "shield_right": [112, 85],
-    "shield_rear": [51, 180],
-    "hull": [21, 34],
-    "speed": [83, 34]
+    "shield_front": [
+      51,
+      -9
+    ],
+    "shield_left": [
+      -9,
+      85
+    ],
+    "shield_right": [
+      112,
+      85
+    ],
+    "shield_rear": [
+      51,
+      180
+    ],
+    "hull": [
+      21,
+      34
+    ],
+    "speed": [
+      83,
+      34
+    ]
   }
 }

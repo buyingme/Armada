@@ -1,59 +1,88 @@
 {
-"_comment": "Extracted from provided card image on 2026-03-07",
-"_source": "shipcard_victory-i-class-star-destroyer.jpg",
-"_status": "VERIFIED",
-
-"ship_name": "Victory I-class Star Destroyer",
-"faction": "GALACTIC_EMPIRE",
-"ship_size": "MEDIUM",
-"point_cost": 73,
-
-"hull": 8,
-"command_value": 3,
-"squadron_value": 3,
-"engineering_value": 4,
-"max_speed": 2,
-
-"shields": {
-    "FRONT": 3,
-    "LEFT": 3,
-    "RIGHT": 3,
-    "REAR": 1
-},
-
-"battery_armament": {
-    "FRONT": { "RED": 3, "BLACK": 3 },
-    "LEFT":  { "RED": 2, "BLACK": 1 },
-    "RIGHT": { "RED": 2, "BLACK": 1 },
-    "REAR":  { "RED": 2 }
-},
-
-"anti_squadron_armament": {
-    "BLUE": 1
-},
-
-"defense_tokens": ["BRACE", "REDIRECT", "REDIRECT"],
-
-"upgrade_slots": [
-    "TITLE",
-    "OFFICER",
-    "WEAPONS_TEAM",
-    "OFFENSIVE_RETROFIT",
-    "ORDNANCE",
-    "TURBOLASERS"
-],
-
-"navigation_chart": [
-    [1],
-    [0, 1]
-],
-
-"token_label_offsets": {
-    "shield_front": [74, -9],
-    "shield_left": [-9, 122],
-    "shield_right": [157, 122],
-    "shield_rear": [74, 251],
-    "hull": [30, 27],
-    "speed": [119, 27]
-}
+    "_comment": "Extracted from provided card image on 2026-03-07",
+    "_source": "shipcard_victory-i-class-star-destroyer.jpg",
+    "_status": "VERIFIED",
+    "ship_name": "Victory I-class Star Destroyer",
+    "faction": "GALACTIC_EMPIRE",
+    "ship_size": "MEDIUM",
+    "point_cost": 73,
+    "hull": 8,
+    "command_value": 3,
+    "squadron_value": 3,
+    "engineering_value": 4,
+    "max_speed": 2,
+    "shields": {
+        "FRONT": 3,
+        "LEFT": 3,
+        "RIGHT": 3,
+        "REAR": 1
+    },
+    "battery_armament": {
+        "FRONT": {
+            "RED": 3,
+            "BLACK": 3
+        },
+        "LEFT": {
+            "RED": 2,
+            "BLACK": 1
+        },
+        "RIGHT": {
+            "RED": 2,
+            "BLACK": 1
+        },
+        "REAR": {
+            "RED": 2
+        }
+    },
+    "anti_squadron_armament": {
+        "BLUE": 1
+    },
+    "defense_tokens": [
+        "BRACE",
+        "REDIRECT",
+        "REDIRECT"
+    ],
+    "upgrade_slots": [
+        "TITLE",
+        "OFFICER",
+        "WEAPONS_TEAM",
+        "OFFENSIVE_RETROFIT",
+        "ORDNANCE",
+        "TURBOLASERS"
+    ],
+    "navigation_chart": [
+        [
+            1
+        ],
+        [
+            0,
+            1
+        ]
+    ],
+    "token_label_offsets": {
+        "shield_front": [
+            74,
+            -9
+        ],
+        "shield_left": [
+            -9,
+            122
+        ],
+        "shield_right": [
+            157,
+            122
+        ],
+        "shield_rear": [
+            74,
+            251
+        ],
+        "hull": [
+            30,
+            27
+        ],
+        "speed": [
+            119,
+            27
+        ]
+    }
 }

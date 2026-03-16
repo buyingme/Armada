@@ -496,6 +496,11 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 **Prerequisites:** Phase 1 (geometry), Phase 3 (SquadronInstance), Phase 6 (attack pipeline for squadron attacks)
 **Duration estimate:** 2–3 sessions
 
+> **Placeholder implemented (Phase 4b extension):** `_begin_squadron_phase()` currently
+> auto-marks all squadrons as activated and immediately advances to the Status Phase.
+> Phase 7 will replace this placeholder with the interactive alternating activation,
+> movement, engagement, and attack systems listed below.
+
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
 | Squadron activation alternation (2 at a time) | Core | SQ-001–005, TF-008–012 | Alternating activation with auto-pass logic; uses Phase 4b turn management |
@@ -517,6 +522,13 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 ### Phase 8: Status Phase & Game Flow ⏳ and victory conditions.
 **Prerequisites:** Phases 4–7 (all phase logic)
 **Duration estimate:** 1–2 sessions
+
+> **Placeholder implemented (Phase 4b extension):** `_begin_status_phase()` currently
+> performs the core cleanup automatically: readies exhausted defense tokens (ST-001),
+> flips initiative (ST-002), resets ship/squadron activation flags (ST-004), then
+> auto-advances to the next round. Game ends after round 6 (GF-001–003).
+> Phase 8 will add the remaining items: elimination checks, scoring, victory screen,
+> and the persistent HUD.
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
@@ -614,7 +626,8 @@ Phase 0 (Scale & Assets)
 | Phase 4b | ~25 | **52** | **635** |
 | Phase L | ~20 | **36** | **671** |
 | Bug fixes | — | **1** | **672** |
-| Phase 5 | ~35 | — | ~707 |
+| Phase 4b+ | — | **8** | **680** |
+| Phase 5 | ~35 | — | ~715 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
 | Phase 8 | ~20 | — | ~410 |

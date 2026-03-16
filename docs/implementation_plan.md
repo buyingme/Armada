@@ -16,6 +16,7 @@
 - [Phase 4: Command Phase](#phase-4-command-phase)
 - [Phase 4b: Turn Management & Board Perspective](#phase-4b-turn-management--board-perspective)
 - [Phase L: Game Logging Tooling](#phase-l-game-logging-tooling)
+- [Phase 4c: Ship Activation Trigger](#phase-4c-ship-activation-trigger)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -447,8 +448,44 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
-### Phase 5: Ship Movement ⏳ system including the maneuver tool, speed chart, and Navigate command.
-**Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials)
+### Phase 4c: Ship Activation Trigger ✅
+**Goal:** Enable players to activate ships during the Ship Phase by dragging the topmost command dial to the ship token on the board. This is the minimal activation flow that enables the turn loop to reach round 2+ interactively, without implementing movement or attacks.
+**Prerequisites:** Phase 4b (turn management, End Activation button), Phase 3 (ShipInstance, CommandDialStack)
+**Duration estimate:** 1–2 sessions
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|-------------|
+| Drag source on topmost dial in ShipCardPanel | Presentation | UI-024 | Extend `ship_card_panel.gd` — topmost hidden dial becomes draggable during Ship Phase |
+| Drag preview (floating dial graphic) | Presentation | UI-024 | Semi-transparent dial follows mouse during drag |
+| Drop target on ShipToken | Presentation | UI-024 | `ship_token.gd` accepts dial drop, validates ownership + not-yet-activated |
+| Reveal dial on successful drop | Core | SP-010, SP-011 | Call `CommandDialStack.reveal_top()`, emit `command_revealed` signal |
+| Show revealed dial behind ship base on board | Presentation | UI-025 | Sprite2D child of ShipToken positioned 1 cm aft of ship base (GameScale: ruler_length_px / 30.48) |
+| "End Activation" marks ship activated + spends dial | Core/App | UI-026, SP-002, TF-005 | Call `CommandDialStack.spend_revealed()`, set `activated_this_round = true`, remove board dial sprite |
+| Refresh card panel dial stack display | Presentation | UI-019, UI-020 | Emit `command_dials_changed` so ShipCardPanel updates (revealed → spent) |
+| Full-scope skip: Attack + Maneuver steps | — | SP-013–015 | **Deferred to Phase 5/6.** Activation currently goes directly from Reveal Dial → End Activation. |
+
+> **Full-scope gaps (for seamless Phase 5/6 integration):**
+>
+> The following activation sub-steps are intentionally skipped in Phase 4c and must be added later:
+>
+> 1. **Keep-or-convert choice (SP-011):** After revealing the dial, the player should choose to keep it (spend during activation) or convert it to a command token. Phase 4c always keeps the dial. Phase 5 must add the UI prompt.
+> 2. **Attack step (SP-013, SP-014):** Up to 2 attacks from different hull zones. Deferred entirely to Phase 6.
+> 3. **Execute Maneuver step (SP-015):** Mandatory movement using the maneuver tool. Deferred entirely to Phase 5.
+> 4. **Navigate command resolution (CM-010–013):** Speed/yaw modification during movement. Deferred to Phase 5.
+> 5. **Squadron command resolution (CM-020–022):** Activate squadrons at range after dial reveal. Deferred to Phase 7.
+> 6. **Repair command resolution (CM-030–037):** Engineering points for shield/hull recovery. Deferred to Phase 9.
+> 7. **Concentrate Fire (CM-040–042):** Extra die / reroll during attack. Deferred to Phase 6.
+> 8. **CM-007 (unused dial discard):** If the dial is not spent during activation, it should be discarded. Phase 4c always spends/discards on End Activation. Full logic in Phase 5.
+> 9. **Activation step gating:** "End Activation" should only be available after Attack + Maneuver are complete. Phase 4c allows immediate end. Phase 5 must add step-by-step gating.
+
+**Requirements covered:** UI-024 (drag-and-drop), UI-025 (dial behind base), UI-026 (spent transition), SP-010 (activate), SP-011 (reveal top — partial)
+**Tests:** ~12 (drag initiation, drop validation, reveal on drop, dial behind base position, spent on end activation, card panel refresh, invalid drop rejection, already-activated rejection, wrong-player rejection)
+
+---
+
+### Phase 5: Ship Movement ⏳
+**Goal:** Full ship movement system including the maneuver tool, speed chart, and Navigate command.
+**Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials), Phase 4c (activation trigger)
 **Duration estimate:** 3–4 sessions
 
 | Task | Layer | Requirements | Deliverables |
@@ -461,10 +498,15 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 | Speed 0 maneuver | Core | MV-015 | No movement, still counts as maneuver |
 | Ship–ship overlap handling | Core | OV-010–013 | Temp speed reduction loop, facedown damage to both |
 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons |
-| Activation tracking and alternation | Core | SP-001–004, TF-003–007 | Initiative player first, alternating, auto-pass when done; uses Phase 4b turn management |
-| Command dial reveal step | Core | SP-010–012 | Reveal top dial, keep or convert to token |
+| Activation step gating (Reveal → Attack → Move → End) | Core | SP-010, TF-004 | Enforce sequential activation sub-steps; "End Activation" only available after Move |
+| Keep-or-convert dial choice UI | Presentation | SP-011, SP-012 | Prompt after reveal: keep dial or convert to command token |
 
-**Tests:** ~35 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command)
+> **Note:** Activation trigger (drag-and-drop dial to ship) and basic reveal/spend flow
+> are handled by Phase 4c. Phase 5 extends this with the maneuver step, activation
+> gating, and the keep-or-convert choice. The "Activation tracking and alternation"
+> and "Command dial reveal step" tasks originally listed here moved to Phase 4c.
+
+**Tests:** ~35 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command, activation gating)
 
 ---
 
@@ -599,6 +641,8 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       │                                 Phase L (Game Logging Tooling)
     │       │                                        │
+    │       │                                 Phase 4c (Ship Activation Trigger)
+    │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
@@ -627,7 +671,8 @@ Phase 0 (Scale & Assets)
 | Phase L | ~20 | **36** | **671** |
 | Bug fixes | — | **1** | **672** |
 | Phase 4b+ | — | **8** | **680** |
-| Phase 5 | ~35 | — | ~715 |
+| Phase 4c | ~12 | **21** | **701** |
+| Phase 5 | ~35 | — | ~727 |
 | Phase 6 | ~45 | — | ~360 |
 | Phase 7 | ~30 | — | ~390 |
 | Phase 8 | ~20 | — | ~410 |
@@ -664,7 +709,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
-| Ship Phase (SP-001–016) | 16 | Phase 4b, 5, 6 | ⏳ |
+| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 5, 6 | ⏳ |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
@@ -681,7 +726,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
-| UI Requirements (UI-001–023) | 20 | Phase 2, 3, 4, 4b, 5, 6, 7, 8, 10 |
+| UI Requirements (UI-001–026) | 23 | Phase 2, 3, 4, 4b, 4c, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

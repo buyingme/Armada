@@ -162,3 +162,14 @@ signal perspective_change_requested(player_index: int)
 
 ## Emitted when the board perspective rotation animation finishes.
 signal perspective_change_complete()
+
+
+# --- Ship Activation Events (Phase 4c) ---
+
+## Emitted when the player starts dragging a command dial from the card panel.
+## [param ship_instance] — the ship whose topmost dial is being dragged.
+## Requirements: UI-024.
+signal dial_drag_started(ship_instance: RefCounted)
+
+## Emitted when a dial drag is cancelled (released on invalid target).
+signal dial_drag_cancelled()

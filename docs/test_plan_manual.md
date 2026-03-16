@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4b, L, plus post-Phase-L bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–4c, L, plus post-Phase-L bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -803,3 +803,65 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 4 | Check the game log (if `--logging` enabled) | Phase sequence: Command → Ship (no skip to Squadron) |
 
 **Pass criteria:** After both players submit dials, the game advances to Ship Phase only — never skips directly to Squadron.
+
+---
+
+## Phase 4c — Ship Activation via Dial Drag-and-Drop
+
+**What this phase adds:** Players activate ships during the Ship Phase by dragging the topmost command dial from the card panel onto the matching ship token on the board. The revealed dial appears behind the ship base. Pressing "End Activation" spends the dial, marks the ship activated, and advances the turn.
+
+### MT-4c.1 — Drag initiation from card panel
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete the Command Phase (assign dials for both players) | Ship Phase starts; "Your Turn" banner for Rebel |
+| 2 | Dismiss the banner | No "End Activation" button visible yet |
+| 3 | Click on the topmost dial in the Rebel ship's dial stack | A semi-transparent dial icon appears and follows the mouse cursor |
+| 4 | Move the mouse around | The floating dial tracks the cursor smoothly |
+
+**Pass criteria:** Clicking the top dial during Ship Phase starts a drag with a visible floating preview.
+
+### MT-4c.2 — Successful drop activates ship
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a dial drag (MT-4c.1) | Floating dial follows mouse |
+| 2 | Move the mouse over the matching Rebel ship token on the board and release | Floating preview disappears; a command icon appears behind the ship's aft edge (~1 cm gap) |
+| 3 | Check the card panel dial stack | Top dial now shows revealed (command icon instead of facedown) |
+| 4 | Check for End Activation button | "End Activation" button is now visible |
+
+**Pass criteria:** Dropping the dial on the correct ship reveals it on the board and in the panel, and shows the End Activation button.
+
+### MT-4c.3 — Invalid drop cancels drag
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a dial drag from Rebel ship | Floating dial follows mouse |
+| 2 | Release the mouse on empty space (not on any ship token) | Floating preview disappears; no activation occurs |
+| 3 | Verify no "End Activation" button | Button remains hidden |
+| 4 | Start a new drag and drop it on the **Imperial** ship token | Floating preview disappears; no activation occurs (wrong ship) |
+
+**Pass criteria:** Dropping the dial on invalid targets (empty space, wrong ship) cancels the drag without side effects.
+
+### MT-4c.4 — End Activation spends dial and advances turn
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Successfully activate a Rebel ship (MT-4c.2) | Dial shown behind ship, End Activation visible |
+| 2 | Click "End Activation" | Dial sprite removed from board; card panel shows spent dial icon below stack |
+| 3 | Observe turn transition | "Your Turn" banner appears for Imperial player |
+| 4 | Dismiss banner and activate Imperial ship the same way | Imperial ship activated |
+| 5 | Click "End Activation" for Imperial ship | Both ships activated; phase cascades to next round |
+| 6 | Check phase HUD | Shows "Round 2 — Command Phase" |
+
+**Pass criteria:** Full Ship Phase round-trip: both players activate one ship each, turns alternate correctly, phase advances to next round.
+
+### MT-4c.5 — Guard conditions prevent invalid activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Command Phase, click on a ship's dial stack | Opens dial order modal (no drag starts) |
+| 2 | During Ship Phase, try clicking the dial stack of an already-activated ship | Opens dial order modal (no drag) |
+| 3 | During Ship Phase, try clicking the opponent's dial stack | Nothing happens (viewer restriction) |
+
+**Pass criteria:** Dial drag only starts for unactivated ships owned by the active player during Ship Phase.

@@ -55,6 +55,17 @@ var _base_region: Vector2 = Vector2.ZERO
 var _label_font: Font = null
 ## Child node that draws value labels on top of the sprite.
 var _label_layer: Node2D = null
+## Sprite showing the revealed command dial behind the ship base (Phase 4c).
+## Requirements: UI-025.
+var _revealed_dial_sprite: Sprite2D = null
+
+## Map from [Constants.CommandType] enum to icon filename for board display.
+const CMD_BOARD_ICON_FILES: Dictionary = {
+	Constants.CommandType.NAVIGATE: "cmd_navigate.png",
+	Constants.CommandType.SQUADRON: "cmd_squadron.png",
+	Constants.CommandType.CONCENTRATE_FIRE: "cmd_concentrate_fire.png",
+	Constants.CommandType.REPAIR: "cmd_repair.png",
+}
 
 
 ## Configures this token from a [TokenPlacement].
@@ -131,6 +142,55 @@ func get_half_length() -> float:
 ## Returns the loaded [ShipData] or null if not yet set up.
 func get_ship_data() -> ShipData:
 	return _ship_data
+
+
+## Returns true if [param world_pos] falls inside the base rectangle.
+func is_point_in_base(world_pos: Vector2) -> bool:
+	return _is_point_in_base(world_pos)
+
+
+## Shows the revealed command dial behind the ship base on the board.
+## The dial is positioned 1 cm (in game space) aft of the base edge.
+## Requirements: UI-025.
+## [param command_type] — the Constants.CommandType value of the revealed dial.
+func show_revealed_dial(command_type: int) -> void:
+	hide_revealed_dial()
+	var filename: String = CMD_BOARD_ICON_FILES.get(command_type, "")
+	if filename.is_empty():
+		return
+	var tex: Texture2D = AssetLoader.load_texture("command_tokens/", filename)
+	if tex == null:
+		return
+
+	_revealed_dial_sprite = Sprite2D.new()
+	_revealed_dial_sprite.texture = tex
+
+	## Scale the dial to game-scale size (~30 mm physical diameter).
+	## Rules Reference: physical command dial is ~30 mm.
+	## ruler_length_px / 305 mm per foot × 30 mm ≈ 70.8 px at 720px ruler.
+	var dial_game_px: float = GameScale.ruler_length_px * (30.0 / 305.0)
+	var tex_max: float = maxf(float(tex.get_width()), float(tex.get_height()))
+	if tex_max > 0.0:
+		var s: float = dial_game_px / tex_max
+		_revealed_dial_sprite.scale = Vector2(s, s)
+
+	## Position: 1 cm behind the aft edge of the base.
+	## Aft direction = positive Y in local space (nose points toward -Y).
+	var one_cm_px: float = GameScale.ruler_length_px / 30.48
+	var dial_half_h: float = dial_game_px * 0.5
+	_revealed_dial_sprite.position = Vector2(
+			0.0, _half_l + one_cm_px + dial_half_h)
+
+	add_child(_revealed_dial_sprite)
+
+
+## Hides and removes the revealed command dial sprite from the board.
+## Requirements: UI-026.
+func hide_revealed_dial() -> void:
+	if _revealed_dial_sprite != null:
+		remove_child(_revealed_dial_sprite)
+		_revealed_dial_sprite.queue_free()
+		_revealed_dial_sprite = null
 
 
 ## Returns the local-space position for a label offset key,

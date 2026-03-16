@@ -37,6 +37,11 @@ var active_player: int = 0
 ## -1 means no player is assigning (phase not active or both done).
 var _command_assigning_player: int = -1
 
+## The ship currently being activated during Ship Phase.
+## Set when a command dial is dropped on a ship; cleared on End Activation.
+## Requirements: UI-024, UI-026.
+var _activating_ship: ShipInstance = null
+
 
 func _ready() -> void:
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
@@ -272,15 +277,56 @@ func get_command_assigning_player() -> int:
 	return _command_assigning_player
 
 
+## Returns the ship currently being activated, or null.
+## Requirements: UI-024, UI-026.
+func get_activating_ship() -> ShipInstance:
+	return _activating_ship
+
+
+## Starts a ship's activation by revealing its top command dial.
+## Called when a command dial is successfully dropped on a ship token.
+## Requirements: SP-010, SP-011, UI-024.
+## [param ship] — the ship to activate.
+func activate_ship(ship: ShipInstance) -> void:
+	if _activating_ship != null:
+		_log.warn("Cannot activate — already activating a ship.")
+		return
+	if ship.activated_this_round:
+		_log.warn("Cannot activate — ship already activated this round.")
+		return
+	if ship.command_dial_stack == null:
+		_log.warn("Cannot activate — ship has no command dial stack.")
+		return
+	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	if dial.is_empty():
+		_log.warn("Cannot activate — no dials to reveal.")
+		return
+	_activating_ship = ship
+	EventBus.command_dials_changed.emit(ship)
+	_log.info("Ship activated: %s (command: %d)" % [
+			ship.data_key, int(dial.get("command", -1))])
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------
 
 ## Called when the active player presses "End Activation" (Ship or Squadron).
-## Requirements: TF-005, TF-011.
+## During Ship Phase: spends the revealed dial, marks the ship as activated,
+## and advances the turn. During Squadron Phase: advances the turn.
+## Requirements: TF-005, TF-011, UI-026, SP-002.
 func _on_activation_ended() -> void:
 	if not is_game_active or not current_game_state:
 		return
+
+	# Ship Phase: spend revealed dial and mark ship as activated.
+	if current_game_state.current_phase == Constants.GamePhase.SHIP:
+		if _activating_ship != null:
+			_activating_ship.command_dial_stack.spend_revealed()
+			_activating_ship.activated_this_round = true
+			EventBus.command_dials_changed.emit(_activating_ship)
+			_log.info("Ship activation ended: %s" % _activating_ship.data_key)
+			_activating_ship = null
 
 	match current_game_state.current_phase:
 		Constants.GamePhase.SHIP:

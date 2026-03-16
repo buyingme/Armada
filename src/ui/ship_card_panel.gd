@@ -273,15 +273,43 @@ func _is_click_in_dial_area(mb: InputEventMouseButton,
 	return dial_rect.has_point(mb.global_position)
 
 
-## Handles click on a ship's dial stack. Opens dial order modal for own ships.
+## Handles click on a ship's dial stack. Opens dial order modal for own ships,
+## or starts a dial drag during Ship Phase for eligible ships.
 ## Rules Reference: UI-022 — click own stack to open dial order.
 ## Rules Reference: UI-023 — cannot view opponent's unrevealed dials.
+## Rules Reference: UI-024 — drag topmost dial to activate during Ship Phase.
 func _handle_dial_stack_click(entry: Dictionary) -> void:
 	var instance: ShipInstance = entry["instance"]
 	# Only allow viewing own ship's dials.
 	if _viewer_player >= 0 and instance.owner_player != _viewer_player:
 		return
+
+	# During Ship Phase: if this ship can be activated, start dial drag.
+	if _can_start_dial_drag(instance):
+		EventBus.dial_drag_started.emit(instance)
+		return
+
 	EventBus.command_dial_order_requested.emit(instance)
+
+
+## Returns true if a dial drag can be started for this ship.
+## Conditions: Ship Phase, ship owned by active player, not activated,
+## has hidden dials, and no other ship is currently being activated.
+## Requirements: UI-024.
+func _can_start_dial_drag(instance: ShipInstance) -> bool:
+	if GameManager.get_current_phase() != Constants.GamePhase.SHIP:
+		return false
+	if instance.owner_player != GameManager.get_active_player():
+		return false
+	if instance.activated_this_round:
+		return false
+	if instance.command_dial_stack == null:
+		return false
+	if instance.command_dial_stack.get_hidden_count() == 0:
+		return false
+	if GameManager.get_activating_ship() != null:
+		return false
+	return true
 
 
 ## Toggles between normal and magnified size for the entry at [param index].

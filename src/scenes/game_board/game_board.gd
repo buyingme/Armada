@@ -95,6 +95,17 @@ var _end_activation_button: EndActivationButton = null
 ## is confirmed. Initiative player's ships come first.
 var _ships_needing_dials: Array[ShipInstance] = []
 
+## --- Dial drag state (Phase 4c: Ship Activation Trigger) ---
+
+## Whether a command dial drag is currently in progress.
+var _drag_active: bool = false
+## The ShipInstance whose dial is being dragged.
+var _drag_ship_instance: ShipInstance = null
+## Floating preview TextureRect shown during drag (on TurnManagement layer).
+var _drag_preview: TextureRect = null
+## The ShipToken currently being activated (dial shown behind base).
+var _activating_ship_token: ShipToken = null
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -173,6 +184,11 @@ func _draw() -> void:
 
 
 func _process(_delta: float) -> void:
+	# Move dial drag preview to follow mouse (Phase 4c).
+	if _drag_active and _drag_preview:
+		var mouse: Vector2 = get_viewport().get_mouse_position()
+		_drag_preview.position = mouse - _drag_preview.size * 0.5
+
 	if not DebugMode.has_selection():
 		return
 	_move_selected_token_to_mouse()
@@ -181,7 +197,16 @@ func _process(_delta: float) -> void:
 ## Intercepts magnify gesture BEFORE the camera when a token is selected,
 ## converting it to rotation and consuming the event so the camera does not zoom.
 ## DBG-012 — pinch gesture rotates selected token.
+## Also intercepts mouse release during dial drag (Phase 4c).
 func _input(event: InputEvent) -> void:
+	# Handle dial drag release (Phase 4c).
+	if _drag_active and event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_handle_drag_release()
+			get_viewport().set_input_as_handled()
+			return
+
 	if not DebugMode.has_selection():
 		return
 	if event is InputEventMagnifyGesture:
@@ -303,6 +328,9 @@ func _connect_signals() -> void:
 	# Turn management signals.
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
+	# Ship activation drag-and-drop (Phase 4c).
+	EventBus.dial_drag_started.connect(_on_dial_drag_started)
+	EventBus.activation_ended.connect(_on_board_activation_ended)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -678,14 +706,20 @@ func _update_phase_hud() -> void:
 ## Updates the HUD and shows/hides the End Activation button.
 ## For Command Phase, the dial flow is NOT started here — it is started
 ## by _on_handoff_accepted() after the player dismisses the overlay.
+## For Ship Phase, the End Activation button is hidden until a ship is
+## activated via dial drag-and-drop (Phase 4c: UI-024).
 ## Requirements: TF-005, TF-011.
 func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 	_update_phase_hud()
 	match new_phase:
 		Constants.GamePhase.COMMAND:
 			_end_activation_button.hide_button()
-		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
-			_show_end_activation_button()
+		Constants.GamePhase.SHIP:
+			# Button hidden until a ship is activated via dial drag (Phase 4c).
+			_end_activation_button.hide_button()
+		Constants.GamePhase.SQUADRON:
+			# Placeholder — auto-passes immediately.
+			_end_activation_button.hide_button()
 		_:
 			_end_activation_button.hide_button()
 
@@ -836,8 +870,12 @@ func _on_handoff_accepted() -> void:
 		Constants.GamePhase.COMMAND:
 			# Restart the dial flow for the now-assigned player.
 			_begin_command_dial_flow()
-		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
-			_show_end_activation_button()
+		Constants.GamePhase.SHIP:
+			# Player is ready — they can now drag a dial to activate a ship.
+			# "End Activation" appears only after the dial is dropped (Phase 4c).
+			pass
+		Constants.GamePhase.SQUADRON:
+			pass
 
 
 ## Swaps card panel sides so the active player's faction panel is on the
@@ -858,3 +896,116 @@ func _show_end_activation_button() -> void:
 	_end_activation_button.show_button()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_end_activation_button.update_position(vp_size)
+
+
+# ---------------------------------------------------------------------------
+# Dial drag-and-drop — Ship Activation (Phase 4c)
+# ---------------------------------------------------------------------------
+
+## Called when the player clicks on a topmost command dial in the card panel.
+## Creates a floating preview and enters drag mode.
+## Requirements: UI-024.
+func _on_dial_drag_started(ship_ref: RefCounted) -> void:
+	if not ship_ref is ShipInstance:
+		return
+	if _drag_active:
+		return
+	_drag_active = true
+	_drag_ship_instance = ship_ref as ShipInstance
+	_create_drag_preview()
+	_log.info("Dial drag started for '%s'." % _drag_ship_instance.data_key)
+
+
+## Creates a semi-transparent floating dial preview on the TurnManagement layer.
+func _create_drag_preview() -> void:
+	_drag_preview = TextureRect.new()
+	var tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", "cmd_dial_hidden.png")
+	if tex:
+		_drag_preview.texture = tex
+	_drag_preview.custom_minimum_size = Vector2(50, 50)
+	_drag_preview.size = Vector2(50, 50)
+	_drag_preview.modulate.a = 0.75
+	_drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
+	if tm_layer:
+		tm_layer.add_child(_drag_preview)
+
+
+## Handles mouse button release during dial drag.
+## Converts screen position to world position, checks for a valid ship
+## token under the mouse, and either completes the activation or cancels.
+## Requirements: UI-024.
+func _handle_drag_release() -> void:
+	var world_pos: Vector2 = get_global_mouse_position()
+	var target_token: ShipToken = _find_ship_token_at(world_pos)
+
+	if target_token and _is_valid_drop_target(target_token):
+		_complete_ship_activation(target_token)
+	else:
+		_cancel_drag()
+
+
+## Finds the ship token whose base contains [param world_pos], or null.
+func _find_ship_token_at(world_pos: Vector2) -> ShipToken:
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var ship: ShipToken = child as ShipToken
+			if ship.is_point_in_base(world_pos):
+				return ship
+	return null
+
+
+## Returns true if [param token] is a valid drop target for the current drag.
+## The token must be bound to the same ShipInstance being dragged, and the
+## ship must not already be activated.
+func _is_valid_drop_target(token: ShipToken) -> bool:
+	if _drag_ship_instance == null:
+		return false
+	if token.get_ship_instance() != _drag_ship_instance:
+		return false
+	if _drag_ship_instance.activated_this_round:
+		return false
+	return true
+
+
+## Completes a ship activation: reveals the dial, shows it behind the base,
+## and enables the End Activation button.
+## Requirements: UI-024, UI-025, SP-010.
+func _complete_ship_activation(token: ShipToken) -> void:
+	GameManager.activate_ship(_drag_ship_instance)
+	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
+			.get_revealed_dial()
+	if not revealed.is_empty():
+		var cmd: int = int(revealed.get("command", 0))
+		token.show_revealed_dial(cmd)
+	_activating_ship_token = token
+	_clean_up_drag()
+	_show_end_activation_button()
+	_log.info("Ship activated via dial drop: '%s'." %
+			_drag_ship_instance.data_key if _drag_ship_instance else "?")
+
+
+## Cancels the current dial drag (invalid drop target or no target).
+func _cancel_drag() -> void:
+	_log.info("Dial drag cancelled.")
+	_clean_up_drag()
+	EventBus.dial_drag_cancelled.emit()
+
+
+## Cleans up drag state and removes the floating preview.
+func _clean_up_drag() -> void:
+	_drag_active = false
+	_drag_ship_instance = null
+	if _drag_preview:
+		_drag_preview.queue_free()
+		_drag_preview = null
+
+
+## Called when End Activation is pressed — cleans up the dial sprite on the
+## board and resets activation visual state.
+## Requirements: UI-026.
+func _on_board_activation_ended() -> void:
+	if _activating_ship_token:
+		_activating_ship_token.hide_revealed_dial()
+		_activating_ship_token = null

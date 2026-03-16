@@ -522,15 +522,11 @@ func _populate_dial_stack(container: VBoxContainer,
 	# the active stack and the spent dial precisely.
 	container.add_theme_constant_override("separation", 0)
 
-	# --- Active dial stack (revealed + hidden) with negative overlap ---
+	# --- Active dial stack (hidden only) with negative overlap ---
+	# The revealed dial is not rendered in the stack — it is already visible
+	# on the board token after the player drags it for activation.
 	var active_stack: VBoxContainer = VBoxContainer.new()
 	active_stack.add_theme_constant_override("separation", -offset)
-
-	# If there's a revealed dial, show it first (revealed = composite).
-	if not revealed.is_empty():
-		var rev_rect: Control = _create_dial_rect(
-				int(revealed.get("command", 0)), true, dial_w, dial_h)
-		active_stack.add_child(rev_rect)
 
 	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
 	# Rules Reference: CP-006 — dials are facedown.
@@ -549,6 +545,7 @@ func _populate_dial_stack(container: VBoxContainer,
 		container.add_child(spacer)
 		var spent_rect: Control = _create_dial_rect(
 				int(spent_marker.get("command", 0)), true, dial_w, dial_h)
+		spent_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		container.add_child(spent_rect)
 
 

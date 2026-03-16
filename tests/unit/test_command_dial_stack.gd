@@ -43,25 +43,35 @@ func test_create_starts_with_empty_history() -> void:
 
 # --- get_dials_needed() ---
 
-func test_get_dials_needed_round_1_equals_command_value() -> void:
-	assert_eq(_stack.get_dials_needed(1), 3,
-			"Round 1: should need command_value dials (CP-002)")
+func test_get_dials_needed_empty_stack_equals_command_value() -> void:
+	assert_eq(_stack.get_dials_needed(), 3,
+			"Empty stack: should need command_value dials (CP-002)")
 
 
-func test_get_dials_needed_round_2_equals_one() -> void:
-	assert_eq(_stack.get_dials_needed(2), 1,
-			"Rounds 2+: should need exactly 1 dial (CP-003)")
+func test_get_dials_needed_full_stack_equals_zero() -> void:
+	_stack.assign_dials([
+		Constants.CommandType.NAVIGATE,
+		Constants.CommandType.SQUADRON,
+		Constants.CommandType.REPAIR], 1)
+	assert_eq(_stack.get_dials_needed(), 0,
+			"Full stack: should need 0 dials")
 
 
-func test_get_dials_needed_round_6_equals_one() -> void:
-	assert_eq(_stack.get_dials_needed(6), 1,
-			"Round 6: should need exactly 1 dial")
+func test_get_dials_needed_after_spend_equals_one() -> void:
+	_stack.assign_dials([
+		Constants.CommandType.NAVIGATE,
+		Constants.CommandType.SQUADRON,
+		Constants.CommandType.REPAIR], 1)
+	_stack.reveal_top()
+	_stack.spend_revealed()
+	assert_eq(_stack.get_dials_needed(), 1,
+			"After spending 1 of 3: should need 1 dial")
 
 
-func test_get_dials_needed_cmd_value_1_round_1() -> void:
+func test_get_dials_needed_cmd_value_1_empty() -> void:
 	var small_stack: CommandDialStack = CommandDialStack.create(1)
-	assert_eq(small_stack.get_dials_needed(1), 1,
-			"Command value 1 ship needs 1 dial in round 1")
+	assert_eq(small_stack.get_dials_needed(), 1,
+			"Command value 1 empty stack needs 1 dial")
 
 
 # --- assign_dials() ---
@@ -82,14 +92,16 @@ func test_assign_dials_round_1_rejects_wrong_count() -> void:
 
 
 func test_assign_dials_round_2_accepts_one() -> void:
-	# First fill round 1.
+	# First fill round 1 and spend top dial (simulate activation).
 	_stack.assign_dials([
 		Constants.CommandType.NAVIGATE,
 		Constants.CommandType.SQUADRON,
 		Constants.CommandType.REPAIR], 1)
+	_stack.reveal_top()
+	_stack.spend_revealed()
 	var result: bool = _stack.assign_dials(
 			[Constants.CommandType.CONCENTRATE_FIRE], 2)
-	assert_true(result, "Should accept 1 dial in round 2")
+	assert_true(result, "Should accept 1 dial in round 2 after spending")
 
 
 func test_assign_dials_round_2_rejects_two() -> void:
@@ -97,11 +109,13 @@ func test_assign_dials_round_2_rejects_two() -> void:
 		Constants.CommandType.NAVIGATE,
 		Constants.CommandType.SQUADRON,
 		Constants.CommandType.REPAIR], 1)
+	_stack.reveal_top()
+	_stack.spend_revealed()
 	GameLogger.min_level = GameLogger.Level.ERROR
 	var result: bool = _stack.assign_dials(
 			[Constants.CommandType.NAVIGATE,
 			 Constants.CommandType.REPAIR], 2)
-	assert_false(result, "Should reject 2 dials in round 2")
+	assert_false(result, "Should reject 2 dials when only 1 needed in round 2")
 
 
 func test_assign_dials_adds_to_bottom() -> void:
@@ -121,10 +135,13 @@ func test_assign_dials_new_go_after_existing() -> void:
 		Constants.CommandType.NAVIGATE,
 		Constants.CommandType.SQUADRON,
 		Constants.CommandType.REPAIR], 1)
+	_stack.reveal_top()
+	_stack.spend_revealed()
 	_stack.assign_dials([Constants.CommandType.CONCENTRATE_FIRE], 2)
 	var dials: Array[Dictionary] = _stack.get_all_dials()
-	assert_eq(dials.size(), 4, "Should have 4 dials after round 1+2")
-	assert_eq(int(dials[3]["command"]), Constants.CommandType.CONCENTRATE_FIRE,
+	assert_eq(dials.size(), 3,
+			"Should have 3 dials after round-1 spend + round-2 assign")
+	assert_eq(int(dials[2]["command"]), Constants.CommandType.CONCENTRATE_FIRE,
 			"Round 2 dial should be at bottom (CP-004)")
 
 

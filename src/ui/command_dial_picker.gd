@@ -87,11 +87,9 @@ func open(ship: ShipInstance, current_round: int) -> void:
 	_queued_commands.clear()
 
 	if ship.command_dial_stack:
-		_dials_needed = ship.command_dial_stack.get_dials_needed(
-				current_round)
+		_dials_needed = ship.command_dial_stack.get_dials_needed()
 	else:
-		_dials_needed = ship.ship_data.command_value if current_round == 1 \
-				else 1
+		_dials_needed = ship.ship_data.command_value
 
 	_build_ui()
 	_update_confirm_state()

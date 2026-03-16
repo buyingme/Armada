@@ -63,9 +63,16 @@ func test_round_1_needs_command_value_dials() -> void:
 
 
 func test_round_2_needs_one_dial() -> void:
+	# Simulate round 1: assign full stack then spend top dial.
+	_ship.command_dial_stack.assign_dials([
+		Constants.CommandType.NAVIGATE,
+		Constants.CommandType.SQUADRON,
+		Constants.CommandType.REPAIR], 1)
+	_ship.command_dial_stack.reveal_top()
+	_ship.command_dial_stack.spend_revealed()
 	_picker.open(_ship, 2)
 	assert_eq(_picker._dials_needed, 1,
-			"Rounds 2+: should need 1 dial (CP-003)")
+			"Round 2 after spend: should need 1 dial (CP-003)")
 
 
 func test_round_1_cmd_value_1_needs_one() -> void:
@@ -95,7 +102,17 @@ func test_selecting_commands_adds_to_queue() -> void:
 
 
 func test_cannot_exceed_dials_needed() -> void:
-	_picker.open(_ship, 2) # Needs 1 dial.
+	# Ship with CV=1 only needs 1 dial.
+	var small_data: ShipData = ShipData.new()
+	small_data.ship_name = "Small Ship"
+	small_data.hull = 3
+	small_data.command_value = 1
+	small_data.max_speed = 3
+	small_data.shields = {"FRONT": 1, "LEFT": 1, "RIGHT": 1, "REAR": 1}
+	small_data.defense_tokens = []
+	var small_ship: ShipInstance = ShipInstance.create_from_data(
+			"small_ship", small_data, 2, 0)
+	_picker.open(small_ship, 1)
 	_picker._on_command_selected(Constants.CommandType.NAVIGATE)
 	_picker._on_command_selected(Constants.CommandType.REPAIR)
 	assert_eq(_picker._queued_commands.size(), 1,
@@ -171,6 +188,13 @@ func test_confirm_emits_signal_and_closes() -> void:
 		received_cmds.append_array(cmds)
 	EventBus.command_picker_confirmed.connect(callback)
 
+	# Simulate round 1 + spend so round 2 needs 1 dial.
+	_ship.command_dial_stack.assign_dials([
+		Constants.CommandType.NAVIGATE,
+		Constants.CommandType.SQUADRON,
+		Constants.CommandType.REPAIR], 1)
+	_ship.command_dial_stack.reveal_top()
+	_ship.command_dial_stack.spend_revealed()
 	_picker.open(_ship, 2) # Needs 1 dial.
 	_picker._on_command_selected(Constants.CommandType.CONCENTRATE_FIRE)
 	_picker._on_confirm_pressed()

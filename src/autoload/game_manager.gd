@@ -218,10 +218,7 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 			var si: ShipInstance = s as ShipInstance
 			if si.command_dial_stack == null:
 				continue
-			var needed: int = si.command_dial_stack.get_dials_needed(
-					current_game_state.current_round)
-			var hidden_count: int = si.command_dial_stack.get_hidden_count()
-			if hidden_count < needed:
+			if si.command_dial_stack.get_dials_needed() > 0:
 				all_assigned = false
 				break
 
@@ -476,9 +473,9 @@ func _begin_status_phase() -> void:
 
 ## Performs all end-of-round state changes.
 ## ST-001: Ready all exhausted defense tokens.
-## ST-002: Pass initiative to the other player.
 ## ST-004: Reset activation flags on all ships and squadrons.
-## Rules Reference: "Status Phase", p.6.
+## Rules Reference: "Status Phase", p.6; "Initiative", p.8 — initiative
+## does NOT change; the first player retains it for the entire game.
 func _perform_status_phase_cleanup() -> void:
 	for i: int in range(Constants.PLAYER_COUNT):
 		var ps: PlayerState = current_game_state.get_player_state(i)
@@ -499,8 +496,7 @@ func _perform_status_phase_cleanup() -> void:
 				var sqi: SquadronInstance = sq as SquadronInstance
 				sqi.ready_defense_tokens()
 				sqi.reset_activation()
-	# ST-002: Initiative passes to the other player each round.
-	current_game_state.initiative_player = (
-			1 - current_game_state.initiative_player)
-	_log.info("Status Phase: cleanup complete. Initiative → player %d." % [
+	# Rules Reference: "Initiative", p.8 — "The first player retains
+	# initiative for the entire game." Initiative does NOT change.
+	_log.info("Status Phase: cleanup complete. Initiative stays with player %d." % [
 			current_game_state.initiative_player])

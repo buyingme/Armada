@@ -58,13 +58,13 @@ func get_dial_count() -> int:
 	return _dials.size()
 
 
-## Returns how many new dials are needed for the given round.
-## Round 1: need command_value dials total.
-## Rounds 2+: need exactly 1 new dial (CP-003, CP-004).
-func get_dials_needed(current_round: int) -> int:
-	if current_round == 1:
-		return command_value
-	return 1
+## Returns how many new dials must be assigned to fill the stack.
+## A full stack has [command_value] dials. After activation spends one,
+## the stack is short by one and this returns 1.
+## Round 1 (empty stack): returns command_value.
+## Rules Reference: CP-002, CP-003, CP-004.
+func get_dials_needed() -> int:
+	return maxi(0, command_value - get_dial_count())
 
 
 ## Returns all dials (shallow copy) for inspection.
@@ -95,7 +95,7 @@ func get_top_command() -> int:
 ## [param current_round] — the current round number.
 ## Returns true if assignment was valid, false if rejected.
 func assign_dials(commands: Array, current_round: int) -> bool:
-	var needed: int = get_dials_needed(current_round)
+	var needed: int = get_dials_needed()
 	if commands.size() != needed:
 		_log.warn("Expected %d dials, got %d" % [needed, commands.size()])
 		return false

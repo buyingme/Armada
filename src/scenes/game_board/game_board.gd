@@ -759,8 +759,7 @@ func _begin_command_dial_flow() -> void:
 				var si: ShipInstance = s as ShipInstance
 				if si.command_dial_stack == null:
 					continue
-				var needed: int = si.command_dial_stack.get_dials_needed(
-						current_round)
+				var needed: int = si.command_dial_stack.get_dials_needed()
 				if needed > 0:
 					_ships_needing_dials.append(si)
 	_log.info("Command Phase: %d ships need dials (player %d)." % [

@@ -330,7 +330,7 @@ func test_status_phase_resets_ship_activation() -> void:
 			"Ship activation should be reset by Status Phase")
 
 
-func test_status_phase_flips_initiative() -> void:
+func test_status_phase_preserves_initiative() -> void:
 	GameManager.start_new_game()
 	assert_eq(GameManager.current_game_state.initiative_player, 0,
 			"Initiative should start with player 0")
@@ -338,24 +338,24 @@ func test_status_phase_flips_initiative() -> void:
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	EventBus.activation_ended.emit()
-	assert_eq(GameManager.current_game_state.initiative_player, 1,
-			"Initiative should flip to player 1 after round 1")
+	assert_eq(GameManager.current_game_state.initiative_player, 0,
+			"Initiative should stay with player 0 after round 1 (Rules Ref: Initiative)")
 
 
-func test_initiative_flips_back_after_two_rounds() -> void:
+func test_initiative_stays_after_two_rounds() -> void:
 	GameManager.start_new_game()
 	# Round 1 → round 2.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	EventBus.activation_ended.emit()
-	assert_eq(GameManager.current_game_state.initiative_player, 1,
-			"Initiative should be player 1 in round 2")
+	assert_eq(GameManager.current_game_state.initiative_player, 0,
+			"Initiative should be player 0 in round 2")
 	# Round 2 → round 3.
-	EventBus.command_dials_submitted.emit(1)
 	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
 	EventBus.activation_ended.emit()
 	assert_eq(GameManager.current_game_state.initiative_player, 0,
-			"Initiative should flip back to player 0 in round 3")
+			"Initiative should still be player 0 in round 3")
 
 
 # --- Full Round Cycle ---
@@ -393,11 +393,11 @@ func test_round_3_initiative_player_assigns_first() -> void:
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	EventBus.activation_ended.emit()
-	# Round 2: initiative is player 1. Complete it.
-	EventBus.command_dials_submitted.emit(1)
+	# Round 2: initiative stays with player 0. Complete it.
 	EventBus.command_dials_submitted.emit(0)
+	EventBus.command_dials_submitted.emit(1)
 	EventBus.activation_ended.emit()
-	# Round 3: initiative flips back to 0.
+	# Round 3: initiative still player 0.
 	assert_eq(GameManager.get_command_assigning_player(), 0,
 			"Initiative player 0 should assign first in round 3")
 

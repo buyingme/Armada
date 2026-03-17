@@ -677,6 +677,18 @@ func _get_dial_hidden_texture() -> Texture2D:
 	return tex
 
 
+## Returns the [ShipInstance] whose card entry contains [param screen_pos],
+## or null if the position is outside all entries.
+## Used by the dial drag-and-drop system to detect a card panel drop target.
+## Requirements: UI-028 — drag to card converts dial to command token.
+func get_ship_instance_at_screen_pos(screen_pos: Vector2) -> ShipInstance:
+	for entry: Dictionary in _entries:
+		var container: HBoxContainer = entry["container"] as HBoxContainer
+		if container and container.get_global_rect().has_point(screen_pos):
+			return entry["instance"] as ShipInstance
+	return null
+
+
 ## Loads the ship card texture from the ships/ asset folder.
 ## Convention: card filename is <data_key>_card.png.
 func _load_card_texture(data_key: String) -> Texture2D:

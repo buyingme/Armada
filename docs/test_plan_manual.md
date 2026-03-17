@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–4d, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -935,4 +935,56 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ---
 
-*Last updated: Phase 4c complete — drag-and-drop ship activation, composite dial rendering, spent dial positioning, initiative fix (Rebel retains for entire game), state-aware dial assignment. Post-4c bug fixes in commits `35f0f39`, `c666d52`, `36460b5`. 701 tests passing (44 scripts, 1358 asserts).*
+## Phase 4d — Keep-or-Convert Dial Choice
+
+**What this phase adds:** Two drag targets for dial activation — dragging to the **ship token on the board** keeps the dial for its full command effect (existing), while dragging to the **ship card panel entry** converts it to a command token. A help text label guides the player during drag.
+
+### MT-4d.1 — Help text appears during dial drag
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, reach Ship Phase | Active player's ship has a hidden dial |
+| 2 | Click the topmost dial in the card panel to begin dragging | Semi-transparent dial follows mouse AND a text label appears near the bottom of the screen |
+| 3 | Read the help text | Text says "Drag to ship for full command effect" / "Drag to ship card for command token" (two lines) |
+| 4 | Release the mouse on an empty area (cancel drag) | Help text disappears |
+
+**Pass criteria:** Help text is visible during the entire drag and disappears when drag ends (drop or cancel).
+
+### MT-4d.2 — Drag to ship token (board drop) still works
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start dial drag from card panel | Drag preview + help text appear |
+| 2 | Drop the dial onto the ship's token on the board | Ship activates normally: revealed dial appears behind the base, "End Activation" button appears |
+| 3 | Check the card panel | Dial stack shows revealed dial removed, activation marker below |
+| 4 | Press "End Activation" | Dial is spent, turn advances to next player |
+
+**Pass criteria:** Board drop activation works exactly as before Phase 4d, with the addition of help text.
+
+### MT-4d.3 — Drag to ship card (token conversion)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start dial drag from card panel | Drag preview + help text appear |
+| 2 | Drop the dial onto the same ship's card entry in the card panel | Ship activates |
+| 3 | Check the ship card panel | A new command token appears in the right column matching the dial's command type |
+| 4 | Check the board | NO revealed dial appears behind the ship's base on the board |
+| 5 | Check the card panel dial stack | The dial has moved to the spent area immediately (activation marker) |
+| 6 | Press "End Activation" | Activation ends, turn advances to next player |
+
+**Pass criteria:** Card drop converts dial to token, shows token in panel, no board dial, dial goes directly to spent area.
+
+### MT-4d.4 — Token conversion with duplicate token
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | (Requires a ship that already has a NAVIGATE token — may need to do a card drop conversion in a previous round) | Ship has an existing token |
+| 2 | Start a dial drag for the same command type as the existing token | Drag begins |
+| 3 | Drop onto the ship card entry | Ship still activates, but duplicate token is NOT added (CM-005) |
+| 4 | Verify token count in the right column | Same as before — no duplicate |
+
+**Pass criteria:** Duplicate token rejection per CM-005 does not prevent activation — the dial is still spent, but no new token appears.
+
+---
+
+*Last updated: Phase 4d complete — keep-or-convert dial choice via drag targets, help text overlay, token conversion path, defensive activation_ended handling. 716 tests passing (45 scripts, 1387 asserts).*

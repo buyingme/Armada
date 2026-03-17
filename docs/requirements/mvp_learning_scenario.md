@@ -588,9 +588,11 @@ These are the digital representations required for the MVP.
 | UI-021 | **Command Dial Picker** is a modal dialog centred on screen. It contains a selection area with 4 command icons in cycle order (Navigate, Squadron, Concentrate Fire, Repair) and a stack area showing dials already in the stack. Players drag a command icon from the selection area into the stack to assign it. In round 1, the player must assign N dials (matching the ship's command value). In rounds 2+, the player assigns exactly 1 new dial (placed under existing dials). A CONFIRM button at the bottom is disabled until the correct number of new dials have been placed. Dials may be reordered or removed before confirming. | Secret from opponent; see NW-005 |
 | UI-022 | **Command Stack Modal** displays the queued (hidden / not-yet-spent) command dials for a ship in a horizontal row, in stack order (leftmost = top = next to be revealed). Each dial shows its command icon, with a position label (#1, #2, …) below. The modal opens when the owning player clicks on their ship's command dial stack in the ship card panel. Clicking anywhere on the modal closes it. | Read-only inspection of own queued dial order |
 | UI-023 | A player **cannot** view the opponent's unrevealed command dials. Clicking on an opponent's command dial stack has no effect (no dial order modal opens). | Information hiding; see NW-005 |
-| UI-024 | During the Ship Phase, the active player **activates** a ship by dragging the topmost command dial from that ship's dial stack (in the card panel) and dropping it onto the corresponding ship token on the game board. On successful drop, the dial is revealed (SP-011) and the ship's activation begins. Dragging to empty space or an invalid target cancels the drag. | User req; SP-010, TF-003 |
+| UI-024 | During the Ship Phase, the active player **activates** a ship by dragging the topmost command dial from that ship's dial stack (in the card panel). There are two valid drop targets: (a) the corresponding **ship token on the board** — the dial is revealed and kept for its full command effect during activation (SP-011a); (b) the ship's **card panel entry** — the dial is converted to a matching command token (SP-011b, see UI-028). Dragging to empty space or an invalid target cancels the drag. | User req; SP-010, SP-011, TF-003 |
 | UI-025 | The revealed command dial is displayed visually **behind** the ship's base (aft direction) at a distance of 1 cm in game space (~23.6 px at 720 px ruler scale). The dial graphic remains visible on the board until the activation ends. | User req; adapts SP-002 |
 | UI-026 | When a ship's activation ends ("End Activation" pressed), the revealed command dial is removed from the board and moves to the **spent dials** area below the command stack in the ship card panel (see UI-020). The ship is marked as activated for the round. | User req; SP-002, CM-007, TF-005 |
+| UI-027 | As soon as the player initiates a drag on the topmost command dial, a **help text** is displayed on screen: *"Drag to ship for full command effect · Drag to ship card for command token"*. The help text remains visible for the duration of the drag and disappears when the drag ends (drop or cancel). | User req; aids SP-011 keep-or-convert decision |
+| UI-028 | If the command dial is dragged onto the ship's **card panel entry** (instead of the ship token on the board), the dial is **converted to a matching command token**: (1) a command token of the same type is added to the ship (subject to CM-004/CM-005 duplicate/overflow rules), (2) the dial is immediately moved to the **spent dials** area below the stack (same as UI-020), and (3) the ship's activation begins (same state as a board drop, minus the revealed dial on the board). The token is available for use in the current or a later round per CM-006. | User req; SP-011b, CM-004–006 |
 
 ## 23. Network Multiplayer Considerations
 
@@ -735,8 +737,8 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | Overlapping | 8 | LTP, RRG |
 | Winning/Scoring | 4 | LTP, RRG |
 | Game Components | 18 | Derived |
-| UI Requirements | 15 | Derived |
+| UI Requirements | 17 | Derived |
 | Network Multiplayer | 8 | ADR-007 |
 | Debug Mode | 13 | Dev tooling |
 | Game Logging | 18 | Dev tooling |
-| **Total** | **~256** | |
+| **Total** | **~258** | |

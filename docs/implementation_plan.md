@@ -17,6 +17,7 @@
 - [Phase 4b: Turn Management & Board Perspective](#phase-4b-turn-management--board-perspective)
 - [Phase L: Game Logging Tooling](#phase-l-game-logging-tooling)
 - [Phase 4c: Ship Activation Trigger](#phase-4c-ship-activation-trigger)
+- [Phase 4d: Keep-or-Convert Dial Choice](#phase-4d-keep-or-convert-dial-choice)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -470,7 +471,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 >
 > The following activation sub-steps are intentionally skipped in Phase 4c and must be added later:
 >
-> 1. **Keep-or-convert choice (SP-011):** After revealing the dial, the player should choose to keep it (spend during activation) or convert it to a command token. Phase 4c always keeps the dial. Phase 5 must add the UI prompt.
+> 1. **Keep-or-convert choice (SP-011):** After revealing the dial, the player should choose to keep it (spend during activation) or convert it to a command token. Phase 4c always keeps the dial. **→ Moved to Phase 4d** (drag-to-card = convert, drag-to-ship = keep).
 > 2. **Attack step (SP-013, SP-014):** Up to 2 attacks from different hull zones. Deferred entirely to Phase 6.
 > 3. **Execute Maneuver step (SP-015):** Mandatory movement using the maneuver tool. Deferred entirely to Phase 5.
 > 4. **Navigate command resolution (CM-010–013):** Speed/yaw modification during movement. Deferred to Phase 5.
@@ -495,9 +496,34 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 4d: Keep-or-Convert Dial Choice ✅
+**Goal:** Extend the dial drag-and-drop activation to support both SP-011 paths: dragging the dial to the **ship token on the board** keeps it for its full command effect (existing behaviour), while dragging it to the **ship card panel entry** converts it to a matching command token. A help text guides the player during the drag.
+**Prerequisites:** Phase 4c (dial drag-and-drop activation), Phase 4 (CommandTokenManager)
+**Duration estimate:** 1 session
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|-------------|
+| Drag help text overlay | Presentation | UI-027 | Show *"Drag to ship for full command effect · Drag to ship card for command token"* while dragging; disappears on drop/cancel |
+| Drop target on ShipCardPanel entry | Presentation | UI-028, UI-024 | `ship_card_panel.gd` accepts dial drop on the owning ship's card entry |
+| Convert dial to command token on card drop | Core/App | UI-028, SP-011, CM-004–006 | Call `CommandTokenManager.add_token()` with matching type; enforce duplicate/overflow rules (CM-004/CM-005) |
+| Move dial to spent area on card drop | Presentation | UI-028, UI-020 | Call `CommandDialStack.spend_revealed()` immediately; update card panel display |
+| Begin activation after card drop | Core/App | UI-028, SP-010 | Ship enters activated state (same as board drop), "End Activation" becomes available |
+| No revealed dial on board for card drop | Presentation | UI-028 | Skip the composite dial sprite behind ship base — no board visual since dial was converted |
+| Command token display update | Presentation | GC-018 | New token appears in the vertical token stack to the right of the ship card |
+
+> **Rules Reference:** "Command Dials", p.3: "When a ship's command dial is revealed,
+> the player can either resolve the command at the appropriate time during the
+> ship's activation or spend the command dial to gain a command token of the
+> same type." SP-011b implements the latter path.
+
+**Requirements covered:** UI-027 (help text), UI-028 (drag-to-card converts), SP-011 (full keep-or-convert), CM-004–006 (token rules)
+**Tests:** 15 (activate_ship_as_token domain tests, token overflow/duplicate rejection, activation ended after token convert, card panel hit detection, full cycle mix of board + card drops)
+
+---
+
 ### Phase 5: Ship Movement ⏳
 **Goal:** Full ship movement system including the maneuver tool, speed chart, and Navigate command.
-**Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials), Phase 4c (activation trigger)
+**Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials), Phase 4c/4d (activation trigger + keep-or-convert)
 **Duration estimate:** 3–4 sessions
 
 | Task | Layer | Requirements | Deliverables |
@@ -511,14 +537,13 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | Ship–ship overlap handling | Core | OV-010–013 | Temp speed reduction loop, facedown damage to both |
 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons |
 | Activation step gating (Reveal → Attack → Move → End) | Core | SP-010, TF-004 | Enforce sequential activation sub-steps; "End Activation" only available after Move |
-| Keep-or-convert dial choice UI | Presentation | SP-011, SP-012 | Prompt after reveal: keep dial or convert to command token |
 
 > **Note:** Activation trigger (drag-and-drop dial to ship) and basic reveal/spend flow
-> are handled by Phase 4c. Phase 5 extends this with the maneuver step, activation
-> gating, and the keep-or-convert choice. The "Activation tracking and alternation"
-> and "Command dial reveal step" tasks originally listed here moved to Phase 4c.
+> are handled by Phase 4c. Phase 4d adds the keep-or-convert choice (drag to card = token).
+> Phase 5 extends with the maneuver step and activation gating. The "Activation tracking
+> and alternation" and "Command dial reveal step" tasks originally listed here moved to Phase 4c.
 
-**Tests:** ~35 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command, activation gating)
+**Tests:** ~30 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command, activation gating)
 
 ---
 
@@ -658,6 +683,8 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       │                                 Phase 4c (Ship Activation Trigger)
     │       │                                        │
+    │       │                                 Phase 4d (Keep-or-Convert Dial Choice)
+    │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
@@ -687,13 +714,14 @@ Phase 0 (Scale & Assets)
 | Bug fixes | — | **1** | **672** |
 | Phase 4b+ | — | **8** | **680** |
 | Phase 4c | ~12 | **21** | **701** |
-| Phase 5 | ~35 | — | ~736 |
-| Phase 6 | ~45 | — | ~781 |
-| Phase 7 | ~30 | — | ~811 |
-| Phase 8 | ~20 | — | ~831 |
-| Phase 9 | ~15 | — | ~846 |
-| Phase 10 | ~20 | — | ~866 |
-| **Total** | **~295 new** | | **~866** |
+| Phase 4d | ~10 | **15** | **716** |
+| Phase 5 | ~30 | — | ~746 |
+| Phase 6 | ~45 | — | ~791 |
+| Phase 7 | ~30 | — | ~821 |
+| Phase 8 | ~20 | — | ~841 |
+| Phase 9 | ~15 | — | ~856 |
+| Phase 10 | ~20 | — | ~876 |
+| **Total** | **~300 new** | | **~876** |
 
 ---
 
@@ -724,7 +752,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
-| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 5, 6 | ⏳ SP-010/011 partial in 4c |
+| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 partial in 4c; SP-011 complete in 4d |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
@@ -732,7 +760,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |
 | Player Handoff (HO-001–005) | 5 | Phase 4b | ✅ |
 | Initiative (IN-001–003) | 3 | Phase 4b | ✅ |
-| Commands (CM-001–042) | 22 | Phase 4, 5, 6, 7, 9 | ⏳ |
+| Commands (CM-001–042) | 22 | Phase 4, 4d, 5, 6, 7, 9 | ⏳ CM-004–006 in 4d |
 | Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
 | Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
@@ -741,7 +769,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
-| UI Requirements (UI-001–026) | 23 | Phase 2, 3, 4, 4b, 4c, 5, 6, 7, 8, 10 |
+| UI Requirements (UI-001–028) | 28 | Phase 2, 3, 4, 4b, 4c, 4d, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

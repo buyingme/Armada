@@ -103,6 +103,9 @@ var _drag_active: bool = false
 var _drag_ship_instance: ShipInstance = null
 ## Floating preview TextureRect shown during drag (on TurnManagement layer).
 var _drag_preview: TextureRect = null
+## Help text label displayed during dial drag (on TurnManagement layer).
+## Requirements: UI-027 — guide player on drag-to-ship vs drag-to-card.
+var _drag_help_label: Label = null
 ## The ShipToken currently being activated (dial shown behind base).
 var _activating_ship_token: ShipToken = null
 
@@ -902,8 +905,8 @@ func _show_end_activation_button() -> void:
 # ---------------------------------------------------------------------------
 
 ## Called when the player clicks on a topmost command dial in the card panel.
-## Creates a floating preview and enters drag mode.
-## Requirements: UI-024.
+## Creates a floating preview and help text, then enters drag mode.
+## Requirements: UI-024, UI-027.
 func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	if not ship_ref is ShipInstance:
 		return
@@ -912,6 +915,7 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	_drag_active = true
 	_drag_ship_instance = ship_ref as ShipInstance
 	_create_drag_preview()
+	_create_drag_help_label()
 	_log.info("Dial drag started for '%s'." % _drag_ship_instance.data_key)
 
 
@@ -931,11 +935,60 @@ func _create_drag_preview() -> void:
 		tm_layer.add_child(_drag_preview)
 
 
+## Creates the help text label shown during dial drag.
+## Guides the player on the two drop targets (ship token vs card entry).
+## Requirements: UI-027.
+func _create_drag_help_label() -> void:
+	_drag_help_label = Label.new()
+	_drag_help_label.text = (
+			"Drag to ship for full command effect\n"
+			+ "Drag to ship card for command token")
+	_drag_help_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_drag_help_label.add_theme_color_override(
+			"font_color", Color(1.0, 1.0, 1.0, 0.9))
+	_drag_help_label.add_theme_color_override(
+			"font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	_drag_help_label.add_theme_constant_override("shadow_offset_x", 1)
+	_drag_help_label.add_theme_constant_override("shadow_offset_y", 1)
+	_drag_help_label.add_theme_font_size_override("font_size", 18)
+	_drag_help_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
+	if tm_layer:
+		tm_layer.add_child(_drag_help_label)
+		# Centre horizontally at the bottom third of the viewport.
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_drag_help_label.position = Vector2(
+				(vp_size.x - _drag_help_label.size.x) * 0.5,
+				vp_size.y * 0.75)
+		# Defer final centering until the label knows its width.
+		_drag_help_label.resized.connect(
+				_center_drag_help_label, CONNECT_ONE_SHOT)
+
+
+## Re-centres the drag help label after its size is computed.
+func _center_drag_help_label() -> void:
+	if _drag_help_label == null:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_drag_help_label.position.x = (
+			(vp_size.x - _drag_help_label.size.x) * 0.5)
+
+
 ## Handles mouse button release during dial drag.
-## Converts screen position to world position, checks for a valid ship
-## token under the mouse, and either completes the activation or cancels.
-## Requirements: UI-024.
+## First checks if the mouse is over the dragged ship's card panel entry
+## (convert to token). Falls back to checking ship tokens on the board
+## (keep for full effect). Otherwise cancels the drag.
+## Requirements: UI-024, UI-028.
 func _handle_drag_release() -> void:
+	var screen_pos: Vector2 = get_viewport().get_mouse_position()
+
+	# Check card panel drop first (convert to command token).
+	var card_hit: ShipInstance = _find_card_panel_hit(screen_pos)
+	if card_hit and card_hit == _drag_ship_instance:
+		_complete_token_conversion()
+		return
+
+	# Check board ship token drop (keep dial for full command effect).
 	var world_pos: Vector2 = get_global_mouse_position()
 	var target_token: ShipToken = _find_ship_token_at(world_pos)
 
@@ -985,6 +1038,42 @@ func _complete_ship_activation(token: ShipToken) -> void:
 			_drag_ship_instance.data_key if _drag_ship_instance else "?")
 
 
+## Completes a "convert to token" activation: reveals and immediately spends
+## the dial, attempts to add a matching command token, and shows the End
+## Activation button. No revealed dial sprite is shown on the board.
+## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
+## a command token of the same type."
+## Requirements: UI-028, SP-011, CM-004–006.
+func _complete_token_conversion() -> void:
+	var ship: ShipInstance = _drag_ship_instance
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	# No revealed dial on the board — _activating_ship_token stays null.
+	_clean_up_drag()
+	_show_end_activation_button()
+	var cmd_name: String = ""
+	if not result.is_empty():
+		cmd_name = Constants.CommandType.keys()[result["command"]]
+	_log.info("Ship activated via card drop (token convert): '%s' (%s, added=%s)." % [
+			ship.data_key if ship else "?", cmd_name,
+			str(result.get("token_added", false))])
+
+
+## Checks both card panels for a ship entry at [param screen_pos].
+## Returns the [ShipInstance] if found, or null.
+func _find_card_panel_hit(screen_pos: Vector2) -> ShipInstance:
+	if _rebel_card_panel:
+		var hit: ShipInstance = _rebel_card_panel \
+				.get_ship_instance_at_screen_pos(screen_pos)
+		if hit:
+			return hit
+	if _imperial_card_panel:
+		var hit: ShipInstance = _imperial_card_panel \
+				.get_ship_instance_at_screen_pos(screen_pos)
+		if hit:
+			return hit
+	return null
+
+
 ## Cancels the current dial drag (invalid drop target or no target).
 func _cancel_drag() -> void:
 	_log.info("Dial drag cancelled.")
@@ -992,13 +1081,16 @@ func _cancel_drag() -> void:
 	EventBus.dial_drag_cancelled.emit()
 
 
-## Cleans up drag state and removes the floating preview.
+## Cleans up drag state and removes the floating preview and help text.
 func _clean_up_drag() -> void:
 	_drag_active = false
 	_drag_ship_instance = null
 	if _drag_preview:
 		_drag_preview.queue_free()
 		_drag_preview = null
+	if _drag_help_label:
+		_drag_help_label.queue_free()
+		_drag_help_label = null
 
 
 ## Called when End Activation is pressed — cleans up the dial sprite on the

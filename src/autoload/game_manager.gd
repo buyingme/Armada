@@ -56,6 +56,7 @@ func start_new_game(_config: Dictionary = {}) -> void:
 	current_game_state.initialize()
 	is_game_active = true
 	active_player = current_game_state.initiative_player
+	_activating_ship = null
 	EventBus.game_started.emit()
 	_start_round()
 
@@ -304,6 +305,53 @@ func activate_ship(ship: ShipInstance) -> void:
 			ship.data_key, int(dial.get("command", -1))])
 
 
+## Starts a ship's activation by revealing and immediately spending its top
+## command dial, then attempting to convert it to a matching command token.
+## The dial goes directly to the spent area (activation marker) instead of
+## remaining revealed on the board.
+## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
+## a command token of the same type." SP-011b.
+## Requirements: UI-028, SP-011, CM-004–006.
+## [param ship] — the ship to activate.
+## Returns a dictionary with "command" (CommandType) and "token_added" (bool),
+## or an empty dictionary on failure.
+func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
+	if _activating_ship != null:
+		_log.warn("Cannot activate — already activating a ship.")
+		return {}
+	if ship.activated_this_round:
+		_log.warn("Cannot activate — ship already activated this round.")
+		return {}
+	if ship.command_dial_stack == null:
+		_log.warn("Cannot activate — ship has no command dial stack.")
+		return {}
+
+	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	if dial.is_empty():
+		_log.warn("Cannot activate — no dials to reveal.")
+		return {}
+
+	var cmd: int = int(dial.get("command", 0))
+
+	# Immediately spend the revealed dial (goes to spent area).
+	ship.command_dial_stack.spend_revealed()
+
+	# Try to add matching command token (CM-004 overflow / CM-005 duplicate
+	# rejection may cause this to fail — the dial is still spent).
+	var token_added: bool = false
+	if ship.command_tokens:
+		token_added = ship.command_tokens.add_token(cmd)
+
+	_activating_ship = ship
+	EventBus.command_dials_changed.emit(ship)
+	if token_added:
+		EventBus.command_tokens_changed.emit(ship)
+
+	_log.info("Ship activated (token convert): %s (command: %d, token_added: %s)" % [
+			ship.data_key, cmd, str(token_added)])
+	return {"command": cmd, "token_added": token_added}
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------
@@ -317,9 +365,14 @@ func _on_activation_ended() -> void:
 		return
 
 	# Ship Phase: spend revealed dial and mark ship as activated.
+	# The dial may already have been spent by activate_ship_as_token()
+	# (card-drop token conversion), so only spend if still revealed.
 	if current_game_state.current_phase == Constants.GamePhase.SHIP:
 		if _activating_ship != null:
-			_activating_ship.command_dial_stack.spend_revealed()
+			var revealed: Dictionary = \
+					_activating_ship.command_dial_stack.get_revealed_dial()
+			if not revealed.is_empty():
+				_activating_ship.command_dial_stack.spend_revealed()
 			_activating_ship.activated_this_round = true
 			EventBus.command_dials_changed.emit(_activating_ship)
 			_log.info("Ship activation ended: %s" % _activating_ship.data_key)

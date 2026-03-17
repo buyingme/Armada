@@ -303,6 +303,8 @@ func _handle_dial_stack_click(entry: Dictionary) -> void:
 			EventBus.dial_drag_started.emit(instance)
 			return
 		if instance.command_dial_stack.get_hidden_count() > 0:
+			# Unreveal any other ship's dial first (player changed their mind).
+			_unreveal_other_ships(instance)
 			# Step 1: reveal the top dial (stays on stack).
 			_log.info("Dial step 1 — revealing top for '%s'." \
 					% instance.data_key)
@@ -340,6 +342,22 @@ func _is_ship_phase_eligible(instance: ShipInstance) -> bool:
 	if GameManager.get_activating_ship() != null:
 		return false
 	return true
+
+
+## Unreveals any other ship's revealed dial before starting step 1 on a
+## different ship (player changed their mind).
+func _unreveal_other_ships(current: ShipInstance) -> void:
+	for entry: Dictionary in _entries:
+		var inst: ShipInstance = entry["instance"]
+		if inst == current:
+			continue
+		if inst.command_dial_stack == null:
+			continue
+		var rev: Dictionary = inst.command_dial_stack.get_revealed_dial()
+		if not rev.is_empty():
+			inst.command_dial_stack.unreveal_top()
+			_log.info("Unrevealed stale dial on '%s'." % inst.data_key)
+			EventBus.command_dials_changed.emit(inst)
 
 
 ## Returns true if a dial drag can be started for this ship.
@@ -625,6 +643,7 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 	# Composite: dial background + command icon on top.
 	var panel: Control = Control.new()
 	panel.custom_minimum_size = Vector2(w, h)
+	panel.size = Vector2(w, h)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	var bg_tex: Texture2D = _get_dial_hidden_texture()

@@ -140,6 +140,53 @@ func test_activate_as_token_works_with_already_revealed() -> void:
 			"Token should be added")
 
 
+## Regression: CR90 (command value 1) — after step 1, the revealed dial's
+## composite Control must have nonzero size so the second click can hit it.
+## This is a domain-level test: after reveal on a 1-dial ship, the revealed
+## dial should be retrievable for step 2 (the visual hit-test fix is in
+## _create_dial_rect setting size alongside custom_minimum_size).
+func test_one_dial_ship_step2_after_reveal() -> void:
+	var ship: ShipInstance = _create_ship_with_dials(0, 1)
+	_setup_game_in_ship_phase([ship], [])
+	# Step 1: reveal the only dial.
+	ship.command_dial_stack.reveal_top()
+	assert_eq(ship.command_dial_stack.get_hidden_count(), 0,
+			"Hidden count should be 0 after revealing the only dial")
+	# Step 2: the revealed dial should still be available.
+	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	assert_false(revealed.is_empty(),
+			"Revealed dial must be available for step 2 on a 1-dial ship")
+	# Can activate with it.
+	GameManager.activate_ship(ship)
+	assert_eq(GameManager.get_activating_ship(), ship,
+			"1-dial ship should activate successfully after reveal")
+
+
+## Regression: clicking step 1 on ship B should unreveal ship A's dial
+## (player changed their mind).
+func test_unreveal_other_ships_on_step1() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var ship_a: ShipInstance = _create_ship_with_dials(0, 1)
+	ship_a.data_key = "ship_a"
+	var ship_b: ShipInstance = _create_ship_with_dials(0, 2)
+	ship_b.data_key = "ship_b"
+	panel.add_ship_entry(ship_a)
+	panel.add_ship_entry(ship_b)
+	_setup_game_in_ship_phase([ship_a, ship_b], [])
+	# Step 1 on ship A.
+	ship_a.command_dial_stack.reveal_top()
+	assert_false(ship_a.command_dial_stack.get_revealed_dial().is_empty(),
+			"Ship A dial should be revealed")
+	# Now step 1 on ship B through the panel helper.
+	panel._unreveal_other_ships(ship_b)
+	assert_true(ship_a.command_dial_stack.get_revealed_dial().is_empty(),
+			"Ship A's dial should be unrevealed when step 1 starts on ship B")
+	assert_eq(ship_a.command_dial_stack.get_hidden_count(), 1,
+			"Ship A should have 1 hidden dial again")
+
+
 # ---------------------------------------------------------------------------
 # activate_ship_as_token — core domain tests
 # ---------------------------------------------------------------------------

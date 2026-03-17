@@ -562,6 +562,13 @@ func _populate_dial_stack(container: VBoxContainer,
 				0, false, dial_w, dial_h)
 		active_stack.add_child(rect)
 
+	# In a VBoxContainer with negative separation, later children draw on
+	# top of earlier ones.  We want the first child (top of the physical
+	# stack) to appear in front, so give it the highest z_index.
+	var child_count: int = active_stack.get_child_count()
+	for i: int in range(child_count):
+		active_stack.get_child(i).z_index = child_count - i
+
 	container.add_child(active_stack)
 
 	# --- Spent dial (activation marker) — below stack with ~0.5 cm gap ---
@@ -598,6 +605,7 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 	# Composite: dial background + command icon on top.
 	var panel: Control = Control.new()
 	panel.custom_minimum_size = Vector2(w, h)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	var bg_tex: Texture2D = _get_dial_hidden_texture()
 	if bg_tex:

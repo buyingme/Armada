@@ -904,9 +904,9 @@ func _show_end_activation_button() -> void:
 # Dial drag-and-drop — Ship Activation (Phase 4c)
 # ---------------------------------------------------------------------------
 
-## Called when the player clicks on a topmost command dial in the card panel.
-## Reveals the top dial immediately, creates a floating preview showing the
-## command icon, and enters drag mode.
+## Called when the player clicks on an already-revealed command dial in the
+## card panel (second click of the two-step flow). The dial was revealed by
+## the first click in ShipCardPanel._handle_dial_stack_click().
 ## Requirements: UI-024, UI-027.
 func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	if not ship_ref is ShipInstance:
@@ -915,10 +915,11 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 		return
 	_drag_active = true
 	_drag_ship_instance = ship_ref as ShipInstance
-	# Reveal the dial immediately so the player sees the command type.
-	var dial: Dictionary = _drag_ship_instance.command_dial_stack.reveal_top()
-	var cmd: int = int(dial.get("command", 0)) if not dial.is_empty() else -1
-	EventBus.command_dials_changed.emit(_drag_ship_instance)
+	# Dial is already revealed — read the command type for the preview icon.
+	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
+			.get_revealed_dial()
+	var cmd: int = int(revealed.get("command", 0)) if not revealed.is_empty() \
+			else -1
 	_create_drag_preview(cmd)
 	_create_drag_help_label()
 	_log.info("Dial drag started for '%s' (command: %d)." % [

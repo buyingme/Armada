@@ -273,8 +273,11 @@ func _is_click_in_dial_area(mb: InputEventMouseButton,
 	return dial_rect.has_point(mb.global_position)
 
 
-## Handles click on a ship's dial stack. Opens dial order modal for own ships,
-## or starts a dial drag during Ship Phase for eligible ships.
+## Handles click on a ship's dial stack. During Ship Phase this implements
+## a two-step activation flow:
+##   1. First click: reveal the top dial (face-up on the stack).
+##   2. Second click: start the drag with the already-revealed dial.
+## Outside Ship Phase, opens the dial order modal.
 ## Rules Reference: UI-022 — click own stack to open dial order.
 ## Rules Reference: UI-023 — cannot view opponent's unrevealed dials.
 ## Rules Reference: UI-024 — drag topmost dial to activate during Ship Phase.
@@ -284,19 +287,28 @@ func _handle_dial_stack_click(entry: Dictionary) -> void:
 	if _viewer_player >= 0 and instance.owner_player != _viewer_player:
 		return
 
-	# During Ship Phase: if this ship can be activated, start dial drag.
-	if _can_start_dial_drag(instance):
-		EventBus.dial_drag_started.emit(instance)
-		return
+	# Ship Phase two-step: (1) click reveals dial, (2) click starts drag.
+	if _is_ship_phase_eligible(instance):
+		var revealed: Dictionary = instance.command_dial_stack \
+				.get_revealed_dial()
+		if not revealed.is_empty():
+			# Step 2: dial already revealed → start drag.
+			EventBus.dial_drag_started.emit(instance)
+			return
+		if instance.command_dial_stack.get_hidden_count() > 0:
+			# Step 1: reveal the top dial (stays on stack).
+			instance.command_dial_stack.reveal_top()
+			EventBus.command_dials_changed.emit(instance)
+			return
 
 	EventBus.command_dial_order_requested.emit(instance)
 
 
-## Returns true if a dial drag can be started for this ship.
-## Conditions: Ship Phase, ship owned by active player, not activated,
-## has hidden dials, and no other ship is currently being activated.
+## Returns true if the ship is eligible for Ship Phase activation.
+## Used by the two-step reveal-then-drag flow. Does NOT check whether
+## hidden dials remain (the revealed dial counts as available).
 ## Requirements: UI-024.
-func _can_start_dial_drag(instance: ShipInstance) -> bool:
+func _is_ship_phase_eligible(instance: ShipInstance) -> bool:
 	if GameManager.get_current_phase() != Constants.GamePhase.SHIP:
 		return false
 	if instance.owner_player != GameManager.get_active_player():
@@ -305,9 +317,19 @@ func _can_start_dial_drag(instance: ShipInstance) -> bool:
 		return false
 	if instance.command_dial_stack == null:
 		return false
-	if instance.command_dial_stack.get_hidden_count() == 0:
-		return false
 	if GameManager.get_activating_ship() != null:
+		return false
+	return true
+
+
+## Returns true if a dial drag can be started for this ship.
+## Conditions: Ship Phase, ship owned by active player, not activated,
+## has hidden dials, and no other ship is currently being activated.
+## Requirements: UI-024.
+func _can_start_dial_drag(instance: ShipInstance) -> bool:
+	if not _is_ship_phase_eligible(instance):
+		return false
+	if instance.command_dial_stack.get_hidden_count() == 0:
 		return false
 	return true
 
@@ -522,11 +544,16 @@ func _populate_dial_stack(container: VBoxContainer,
 	# the active stack and the spent dial precisely.
 	container.add_theme_constant_override("separation", 0)
 
-	# --- Active dial stack (hidden only) with negative overlap ---
-	# The revealed dial is not rendered in the stack — it is already visible
-	# on the board token after the player drags it for activation.
+	# --- Active dial stack with negative overlap ---
+	# Revealed dial (if any) is shown face-up on top; hidden dials below.
 	var active_stack: VBoxContainer = VBoxContainer.new()
 	active_stack.add_theme_constant_override("separation", -offset)
+
+	# Show the revealed dial face-up on top of the stack (two-step flow).
+	if not revealed.is_empty():
+		var cmd: int = int(revealed.get("command", 0))
+		var rect: Control = _create_dial_rect(cmd, true, dial_w, dial_h)
+		active_stack.add_child(rect)
 
 	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
 	# Rules Reference: CP-006 — dials are facedown.

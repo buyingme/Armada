@@ -271,9 +271,18 @@ func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 func _is_click_in_dial_area(mb: InputEventMouseButton,
 		dial_cont: VBoxContainer) -> bool:
 	if dial_cont.get_child_count() == 0:
+		_log.info("_is_click_in_dial_area: no children in dial_cont.")
 		return false
 	var dial_rect: Rect2 = dial_cont.get_global_rect()
-	return dial_rect.has_point(mb.global_position)
+	var hit: bool = dial_rect.has_point(mb.global_position)
+	if not hit:
+		_log.info(
+				"_is_click_in_dial_area: MISS — click=(%d,%d), rect=(%d,%d,%d,%d), children=%d."
+				% [int(mb.global_position.x), int(mb.global_position.y),
+					int(dial_rect.position.x), int(dial_rect.position.y),
+					int(dial_rect.size.x), int(dial_rect.size.y),
+					dial_cont.get_child_count()])
+	return hit
 
 
 ## Handles click on a ship's dial stack. During Ship Phase this implements
@@ -526,6 +535,7 @@ func _compute_dial_stack_height(
 func _populate_token_column(col: VBoxContainer,
 		tokens: Array[Dictionary], token_h: float) -> void:
 	for child: Node in col.get_children():
+		col.remove_child(child)
 		child.queue_free()
 	for t: Dictionary in tokens:
 		var state: int = int(t.get("state", 0))
@@ -562,6 +572,7 @@ func _populate_token_column(col: VBoxContainer,
 func _populate_dial_stack(container: VBoxContainer,
 		instance: ShipInstance, scale_factor: float) -> void:
 	for child: Node in container.get_children():
+		container.remove_child(child)
 		child.queue_free()
 
 	if instance.command_dial_stack == null:
@@ -607,9 +618,20 @@ func _populate_dial_stack(container: VBoxContainer,
 	for i: int in range(child_count):
 		active_stack.get_child(i).z_index = child_count - i
 
+	# Compute and set the active stack's minimum size eagerly so the
+	# outer container reports correct dimensions for hit testing before
+	# Godot's deferred layout pass runs.
+	var total_dials: int = (0 if revealed.is_empty() else 1) + hidden_dials.size()
+	var stack_h: float = 0.0
+	if total_dials > 0:
+		stack_h = dial_h + maxf(0, total_dials - 1) * (dial_h - float(offset))
+	active_stack.custom_minimum_size = Vector2(dial_w, stack_h)
+	active_stack.size = Vector2(dial_w, stack_h)
+
 	container.add_child(active_stack)
 
 	# --- Spent dial (activation marker) — below stack with ~0.5 cm gap ---
+	var total_container_h: float = stack_h
 	if not spent_marker.is_empty():
 		var spent_gap_px: float = 12.0 * scale_factor
 		var spacer: Control = Control.new()
@@ -619,6 +641,11 @@ func _populate_dial_stack(container: VBoxContainer,
 				int(spent_marker.get("command", 0)), true, dial_w, dial_h)
 		spent_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		container.add_child(spent_rect)
+		total_container_h += spent_gap_px + dial_h
+
+	# Eagerly set the outer container's size for immediate hit testing.
+	container.custom_minimum_size = Vector2(dial_w, total_container_h)
+	container.size = Vector2(dial_w, total_container_h)
 
 
 ## Creates a Control for a single command dial.
@@ -678,6 +705,7 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 func _populate_cmd_token_column(col: VBoxContainer,
 		instance: ShipInstance, scale_factor: float) -> void:
 	for child: Node in col.get_children():
+		col.remove_child(child)
 		child.queue_free()
 
 	if instance.command_tokens == null:

@@ -22,8 +22,7 @@
 [ShipCardPanel]                  [game_board.gd]               [GameManager]
        │                               │                            │
        │  (1) LEFT-CLICK on dial area  │                            │
-       │   _on_entry_gui_input()       │                            │
-       │   _is_click_in_dial_area()    │                            │
+       │   _on_dial_container_gui_input()                            │
        │   _handle_dial_stack_click()  │                            │
        │                               │                            │
        ├──► Step 1 (first click):      │                            │
@@ -125,7 +124,8 @@ After step 1 (reveal), the stack state is:
 |--------|---------|------------|
 | `fc0991b` | Second click never reached `_handle_dial_stack_click` | `_create_dial_rect()` for revealed dials returned a `Control` with `custom_minimum_size` but zero `size`. Godot layout hadn't run yet, so `get_global_rect()` reported zero area. |
 | `7865d88` | Same symptom persisted | `queue_free()` on old children was deferred — old dying Control nodes were still in the tree during the same frame. VBoxContainer layout wasn't recalculated. |
-| **Current fix** | Working | (1) `remove_child()` before `queue_free()` for immediate tree removal. (2) Eager `size` + `custom_minimum_size` on composite Control, active_stack, and outer container. (3) Diagnostic logging in `_is_click_in_dial_area` for future debugging. |
+| `8787f11` | MISS log showed clicks at x=153 vs rect at x=8 | `_is_click_in_dial_area()` compared `mb.global_position` with `get_global_rect()`, but these use different coordinate spaces for Controls on a CanvasLayer with `canvas_items` stretch mode. |
+| **Current fix** | Working | Replaced coordinate comparison with Godot's native input routing: `dial_container` has its own `gui_input` handler (MOUSE_FILTER_STOP). All intermediate containers use MOUSE_FILTER_PASS. Dynamically created children get MOUSE_FILTER_PASS via `_set_children_mouse_pass()`. |
 
 ### Visual Representation (CR90, 1 dial)
 
@@ -172,7 +172,9 @@ After step 1 (reveal), the stack state is:
 |---------------|------|-------------|
 | Dial data model | `src/core/command_dial_stack.gd` | `reveal_top()`, `unreveal_top()`, `spend_revealed()`, `get_revealed_dial()`, `get_display_state()` |
 | Panel rendering | `src/ui/ship_card_panel.gd` | `_populate_dial_stack()`, `_create_dial_rect()` |
-| Click handling (two-step) | `src/ui/ship_card_panel.gd` | `_on_entry_gui_input()`, `_is_click_in_dial_area()`, `_handle_dial_stack_click()` |
+| Click handling (two-step) | `src/ui/ship_card_panel.gd` | `_on_dial_container_gui_input()`, `_handle_dial_stack_click()` |
+| Magnify toggle | `src/ui/ship_card_panel.gd` | `_on_entry_gui_input()`, `_toggle_magnify()` |
+| Mouse filter setup | `src/ui/ship_card_panel.gd` | `_set_children_mouse_pass()` |
 | Drag lifecycle | `src/scenes/game_board/game_board.gd` | `_on_dial_drag_started()`, `_handle_drag_release()`, `_cancel_drag()`, `_clean_up_drag()` |
 | Activation paths | `src/scenes/game_board/game_board.gd` | `_complete_ship_activation()` (board), `_complete_token_conversion()` (card) |
 | Domain activation | `src/autoload/game_manager.gd` | `activate_ship()`, `activate_ship_as_token()`, `_on_activation_ended()` |

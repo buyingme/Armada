@@ -215,6 +215,46 @@ func test_entry_stores_dial_container() -> void:
 			"dial_container should be a Control node")
 
 
+## Regression: dial_container must have MOUSE_FILTER_STOP and its own
+## gui_input connection so clicks on the dial area are handled directly
+## instead of being silently consumed by default Godot 4 control behaviour.
+func test_dial_container_mouse_filter_and_gui_input() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["EVADE"])
+	var inst: ShipInstance = _make_instance("test_ship", data, 0)
+	panel.add_ship_entry(inst)
+	var dial_cont: VBoxContainer = panel._entries[0]["dial_container"]
+	assert_eq(int(dial_cont.mouse_filter), int(Control.MOUSE_FILTER_STOP),
+			"dial_container must have MOUSE_FILTER_STOP to capture clicks")
+	assert_true(dial_cont.gui_input.get_connections().size() > 0,
+			"dial_container must have gui_input connected")
+
+
+## Regression: intermediate containers (left_col, token_col, cmd_token_col)
+## must use MOUSE_FILTER_PASS so clicks outside the dial area propagate
+## to the entry_container for magnify toggle.
+func test_intermediate_containers_use_mouse_filter_pass() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["EVADE"])
+	var inst: ShipInstance = _make_instance("test_ship", data, 0)
+	panel.add_ship_entry(inst)
+	var left_col: VBoxContainer = panel._entries[0]["left_col"]
+	var token_col: VBoxContainer = panel._entries[0]["token_col"]
+	var cmd_col: VBoxContainer = panel._entries[0]["cmd_token_col"]
+	assert_eq(int(left_col.mouse_filter), int(Control.MOUSE_FILTER_PASS),
+			"left_col must use MOUSE_FILTER_PASS")
+	assert_eq(int(token_col.mouse_filter), int(Control.MOUSE_FILTER_PASS),
+			"token_col must use MOUSE_FILTER_PASS")
+	assert_eq(int(cmd_col.mouse_filter), int(Control.MOUSE_FILTER_PASS),
+			"cmd_token_col must use MOUSE_FILTER_PASS")
+
+
 func test_entry_stores_cmd_token_col() -> void:
 	var panel: ShipCardPanel = ShipCardPanel.new()
 	add_child_autofree(panel)

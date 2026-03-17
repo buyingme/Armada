@@ -142,6 +142,20 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	_populate_dial_stack(dial_container, instance, 1.0)
 	left_col.add_child(dial_container)
 
+	# --- Mouse filter setup ---
+	# Child containers default to MOUSE_FILTER_STOP in Godot 4, which
+	# silently consumes clicks before they reach entry_container.  Set all
+	# non-dial containers to PASS so clicks propagate up for magnify.
+	# The dial_container keeps STOP and has its own gui_input handler.
+	left_col.mouse_filter = Control.MOUSE_FILTER_PASS
+	token_col.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	# Dial container captures clicks directly for the two-step activation
+	# flow and the dial-order modal — bypasses coordinate comparison.
+	dial_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	dial_container.gui_input.connect(
+			_on_dial_container_gui_input.bind(_entries.size()))
+
 	entry_container.add_child(left_col)
 
 	# --- Centre: ship card image ---
@@ -152,6 +166,7 @@ func add_ship_entry(instance: ShipInstance) -> void:
 		card_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		card_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card_rect.custom_minimum_size = Vector2(card_w, card_h)
+		card_rect.mouse_filter = Control.MOUSE_FILTER_PASS
 		entry_container.add_child(card_rect)
 	else:
 		var log: GameLogger = GameLogger.new("ShipCardPanel")
@@ -161,6 +176,7 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	var cmd_token_col: VBoxContainer = VBoxContainer.new()
 	cmd_token_col.add_theme_constant_override("separation", int(token_gap))
 	cmd_token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
+	cmd_token_col.mouse_filter = Control.MOUSE_FILTER_PASS
 	_populate_cmd_token_column(cmd_token_col, instance, 1.0)
 	entry_container.add_child(cmd_token_col)
 
@@ -245,8 +261,8 @@ func _compute_panel_size() -> Vector2:
 
 
 ## Handles left-click on a ship card entry to toggle magnify.
-## Also handles click on dial stack area for dial order modal.
-## Requirements: UI-018, UI-022, UI-023.
+## Dial clicks are routed to [method _on_dial_container_gui_input] instead.
+## Requirements: UI-018.
 func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 	if not event is InputEventMouseButton:
 		return
@@ -255,34 +271,25 @@ func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 		return
 	if index < 0 or index >= _entries.size():
 		return
-
-	var entry: Dictionary = _entries[index]
-	var dial_cont: VBoxContainer = entry["dial_container"] as VBoxContainer
-
-	# Check if click is within the dial container area (dial order modal).
-	if _is_click_in_dial_area(mb, dial_cont):
-		_handle_dial_stack_click(entry)
-		return
-
 	_toggle_magnify(index)
 
 
-## Returns true if the mouse event lands inside the dial container's rect.
-func _is_click_in_dial_area(mb: InputEventMouseButton,
-		dial_cont: VBoxContainer) -> bool:
-	if dial_cont.get_child_count() == 0:
-		_log.info("_is_click_in_dial_area: no children in dial_cont.")
-		return false
-	var dial_rect: Rect2 = dial_cont.get_global_rect()
-	var hit: bool = dial_rect.has_point(mb.global_position)
-	if not hit:
-		_log.info(
-				"_is_click_in_dial_area: MISS — click=(%d,%d), rect=(%d,%d,%d,%d), children=%d."
-				% [int(mb.global_position.x), int(mb.global_position.y),
-					int(dial_rect.position.x), int(dial_rect.position.y),
-					int(dial_rect.size.x), int(dial_rect.size.y),
-					dial_cont.get_child_count()])
-	return hit
+## Handles left-click on a ship's dial container.
+## Godot routes clicks to this handler via the dial_container's own
+## [code]gui_input[/code] connection (MOUSE_FILTER_STOP).  This avoids
+## manual coordinate comparisons that fail when global_position and
+## get_global_rect() use different coordinate spaces (CanvasLayer +
+## canvas_items stretch mode).
+## Requirements: UI-022, UI-023.
+func _on_dial_container_gui_input(event: InputEvent, index: int) -> void:
+	if not event is InputEventMouseButton:
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	if index < 0 or index >= _entries.size():
+		return
+	_handle_dial_stack_click(_entries[index])
 
 
 ## Handles click on a ship's dial stack. During Ship Phase this implements
@@ -529,6 +536,18 @@ func _compute_dial_stack_height(
 # Populate helpers
 # ---------------------------------------------------------------------------
 
+
+## Recursively sets [code]mouse_filter = MOUSE_FILTER_PASS[/code] on every
+## [Control] descendant of [param parent].  This ensures dynamically created
+## children (TextureRect, VBoxContainer, plain Control) do not silently
+## consume clicks (Godot 4 defaults to MOUSE_FILTER_STOP).
+func _set_children_mouse_pass(parent: Control) -> void:
+	for child: Node in parent.get_children():
+		if child is Control:
+			(child as Control).mouse_filter = Control.MOUSE_FILTER_PASS
+			_set_children_mouse_pass(child as Control)
+
+
 ## Fills a token column container with defense token TextureRect sprites.
 ## Clears existing children first.
 ## [param token_h] — the display height for each token sprite.
@@ -558,6 +577,7 @@ func _populate_token_column(col: VBoxContainer,
 		var token_w: float = token_h * t_aspect
 		rect.custom_minimum_size = Vector2(token_w, token_h)
 		col.add_child(rect)
+	_set_children_mouse_pass(col)
 
 
 ## Populates the command dial stack display as a vertical column.
@@ -647,6 +667,9 @@ func _populate_dial_stack(container: VBoxContainer,
 	container.custom_minimum_size = Vector2(dial_w, total_container_h)
 	container.size = Vector2(dial_w, total_container_h)
 
+	# Let clicks on children propagate up to dial_container's gui_input.
+	_set_children_mouse_pass(container)
+
 
 ## Creates a Control for a single command dial.
 ## When [param show_icon] is false, returns a [TextureRect] with the hidden
@@ -728,6 +751,7 @@ func _populate_cmd_token_column(col: VBoxContainer,
 		var tw: float = cmd_h * t_aspect
 		rect.custom_minimum_size = Vector2(tw, cmd_h)
 		col.add_child(rect)
+	_set_children_mouse_pass(col)
 
 
 # ---------------------------------------------------------------------------

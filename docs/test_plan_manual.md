@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4c, L, plus post-Phase-L bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–4c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -865,3 +865,74 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 3 | During Ship Phase, try clicking the opponent's dial stack | Nothing happens (viewer restriction) |
 
 **Pass criteria:** Dial drag only starts for unactivated ships owned by the active player during Ship Phase.
+
+---
+
+### MT-4c.6 — Composite dial graphic on board
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a Rebel ship by dragging its dial onto the ship token | Dial reveals behind the ship base on the board |
+| 2 | Zoom in on the revealed dial graphic | Shows a **composite**: the `cmd_dial_hidden.png` circle as background with the command icon (`cmd_<type>.png`) overlaid at ~75% scale in the centre |
+| 3 | Verify the icon matches the assigned command | E.g. Navigate shows the arrow icon |
+
+**Pass criteria:** Revealed dial on board is a two-layer composite (background + icon), not a single flat image.
+
+### MT-4c.7 — Spent dial positioned below active stack with gap
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship and click "End Activation" | The board dial disappears |
+| 2 | Check the ship's card panel entry | A spent (faceup) dial appears **below** the remaining hidden dial stack |
+| 3 | Verify a visible gap (~12 px) separates the spent dial from the hidden stack above it | Clear visual separation between active and spent dials |
+| 4 | Verify the spent dial is horizontally centred | Not stretched or left-aligned |
+
+**Pass criteria:** Spent dial renders below the active stack with visible separation and is centred.
+
+### MT-4c.8 — Revealed dial hidden from card panel stack
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship (drag dial to ship token) | Revealed dial appears on the board behind the ship |
+| 2 | Check the ship's card panel dial stack | The revealed dial is **not** shown in the card panel stack — only hidden dials and spent dials remain |
+| 3 | The board is the only place showing the revealed dial | Confirmed |
+
+**Pass criteria:** During activation, the revealed dial is only visible on the board token, not duplicated in the card panel stack.
+
+### MT-4c.9 — Initiative stays with Rebel player across rounds
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete round 1 (Command → Ship → Squadron → Status) | Round 2 begins |
+| 2 | Check who assigns dials first in round 2 | **Rebel player** (initiative player) assigns first |
+| 3 | Complete round 2 and check round 3 | Rebel still assigns first |
+| 4 | Check the "Your Turn" banner in Ship Phase of any round | Rebel always activates first |
+
+**Pass criteria:** Initiative never changes — Rebel player always goes first in every phase, every round. Per RRG "Initiative" p.8: "The first player retains initiative for the entire game."
+
+### MT-4c.10 — Round 2+ dial assignment for all ships
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete round 1 (all ships activated) | Round 2 begins, Command Phase |
+| 2 | Rebel assigns dials — check that **both** CR90 and Nebulon-B get a dial picker | Picker opens for each Rebel ship that needs a new dial |
+| 3 | Imperial assigns dials — Victory II gets a dial picker | Picker opens for the Victory II |
+| 4 | Verify Nebulon-B now has 2 hidden dials in its stack | 1 from round 1 (leftover) + 1 new = 2 |
+| 5 | Complete Ship Phase — verify Nebulon-B can be activated | Drag works normally for Nebulon-B |
+
+**Pass criteria:** In round 2+, every ship that needs a dial gets the picker; no ships are silently skipped. The state-aware `get_dials_needed()` correctly determines how many dials each ship requires.
+
+### MT-4c.11 — Command dial picker shows existing stack context
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In round 2, open the dial picker for a ship with existing dials (e.g. Nebulon-B) | Picker modal opens |
+| 2 | Check the stack area | Shows the **existing** hidden dials already in the stack |
+| 3 | Add 1 new dial | New dial added below existing dials |
+| 4 | Confirm | Stack now has the existing dials + new one |
+
+**Pass criteria:** Round 2+ picker shows existing queued dials for context, not an empty stack.
+
+---
+
+*Last updated: Phase 4c complete — drag-and-drop ship activation, composite dial rendering, spent dial positioning, initiative fix (Rebel retains for entire game), state-aware dial assignment. Post-4c bug fixes in commits `35f0f39`, `c666d52`, `36460b5`. 701 tests passing (44 scripts, 1358 asserts).*

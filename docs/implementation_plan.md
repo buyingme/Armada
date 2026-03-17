@@ -449,20 +449,22 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 ---
 
 ### Phase 4c: Ship Activation Trigger ✅
+**Status:** Complete — committed `35f7e12`, bug fixes in `35f0f39`, `c666d52`, `36460b5`
 **Goal:** Enable players to activate ships during the Ship Phase by dragging the topmost command dial to the ship token on the board. This is the minimal activation flow that enables the turn loop to reach round 2+ interactively, without implementing movement or attacks.
 **Prerequisites:** Phase 4b (turn management, End Activation button), Phase 3 (ShipInstance, CommandDialStack)
 **Duration estimate:** 1–2 sessions
+**Completed:** 701 tests passing (44 scripts, 1358 asserts)
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|-------------|
-| Drag source on topmost dial in ShipCardPanel | Presentation | UI-024 | Extend `ship_card_panel.gd` — topmost hidden dial becomes draggable during Ship Phase |
-| Drag preview (floating dial graphic) | Presentation | UI-024 | Semi-transparent dial follows mouse during drag |
-| Drop target on ShipToken | Presentation | UI-024 | `ship_token.gd` accepts dial drop, validates ownership + not-yet-activated |
-| Reveal dial on successful drop | Core | SP-010, SP-011 | Call `CommandDialStack.reveal_top()`, emit `command_revealed` signal |
-| Show revealed dial behind ship base on board | Presentation | UI-025 | Sprite2D child of ShipToken positioned 1 cm aft of ship base (GameScale: ruler_length_px / 30.48) |
-| "End Activation" marks ship activated + spends dial | Core/App | UI-026, SP-002, TF-005 | Call `CommandDialStack.spend_revealed()`, set `activated_this_round = true`, remove board dial sprite |
-| Refresh card panel dial stack display | Presentation | UI-019, UI-020 | Emit `command_dials_changed` so ShipCardPanel updates (revealed → spent) |
-| Full-scope skip: Attack + Maneuver steps | — | SP-013–015 | **Deferred to Phase 5/6.** Activation currently goes directly from Reveal Dial → End Activation. |
+| Task | Layer | Requirements | Deliverables | Status |
+|------|-------|-------------|-------------|--------|
+| Drag source on topmost dial in ShipCardPanel | Presentation | UI-024 | Extend `ship_card_panel.gd` — topmost hidden dial becomes draggable during Ship Phase | ✅ |
+| Drag preview (floating dial graphic) | Presentation | UI-024 | Semi-transparent dial follows mouse during drag | ✅ |
+| Drop target on ShipToken | Presentation | UI-024 | `ship_token.gd` accepts dial drop, validates ownership + not-yet-activated | ✅ |
+| Reveal dial on successful drop | Core | SP-010, SP-011 | Call `CommandDialStack.reveal_top()`, emit `command_revealed` signal | ✅ |
+| Show revealed dial behind ship base on board | Presentation | UI-025 | Composite Node2D (`cmd_dial_hidden.png` background + `cmd_<type>.png` icon at 75%) positioned 1 cm aft of ship base | ✅ |
+| "End Activation" marks ship activated + spends dial | Core/App | UI-026, SP-002, TF-005 | Call `CommandDialStack.spend_revealed()`, set `activated_this_round = true`, remove board dial sprite | ✅ |
+| Refresh card panel dial stack display | Presentation | UI-019, UI-020 | Emit `command_dials_changed` so ShipCardPanel updates (revealed → spent) | ✅ |
+| Full-scope skip: Attack + Maneuver steps | — | SP-013–015 | **Deferred to Phase 5/6.** Activation currently goes directly from Reveal Dial → End Activation. | ✅ |
 
 > **Full-scope gaps (for seamless Phase 5/6 integration):**
 >
@@ -478,8 +480,18 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 > 8. **CM-007 (unused dial discard):** If the dial is not spent during activation, it should be discarded. Phase 4c always spends/discards on End Activation. Full logic in Phase 5.
 > 9. **Activation step gating:** "End Activation" should only be available after Attack + Maneuver are complete. Phase 4c allows immediate end. Phase 5 must add step-by-step gating.
 
-**Requirements covered:** UI-024 (drag-and-drop), UI-025 (dial behind base), UI-026 (spent transition), SP-010 (activate), SP-011 (reveal top — partial)
-**Tests:** ~12 (drag initiation, drop validation, reveal on drop, dial behind base position, spent on end activation, card panel refresh, invalid drop rejection, already-activated rejection, wrong-player rejection)
+**Requirements covered:** UI-024 (drag-and-drop), UI-025 (dial behind base), UI-026 (spent transition), SP-010 (activate), SP-011 (reveal top — partial), IN-001 (initiative stays with Rebel)
+**Tests delivered:** 21 new (701 total, 44 scripts, all passing)
+
+#### Post-Phase-4c Bug Fixes
+
+Three fix commits addressed issues discovered during multi-round playtesting:
+
+| Commit | Fix | Layer | Details |
+|--------|-----|-------|---------|
+| `35f0f39` | Composite dial graphic, spent dial gap, round-2 cleanup + picker context | Presentation | Revealed dial on board now uses a composite Node2D (background + icon overlay at 75%) instead of a single sprite. Spent dial in card panel displays below active stack with 12 px gap using `SIZE_SHRINK_CENTER`. Status Phase clears spent history (`clear_spent_history()`) so round-2 card panel starts fresh. Command dial picker shows existing stack commands for player context. |
+| `c666d52` | Hide revealed dial from stack, center spent dial alignment | Presentation | Revealed dial no longer appears in the card panel dial stack (only visible on board token). Spent dial Control uses `SIZE_SHRINK_CENTER` to prevent VBoxContainer stretching. |
+| `36460b5` | Initiative stays with first player, fix round-2 dial assignment | Core | Initiative no longer flips during Status Phase — per RRG "Initiative" p.8: "The first player retains initiative for the entire game." Rebel player (player 0) always has initiative (IN-001). `get_dials_needed()` changed from `get_dials_needed(current_round: int)` to parameterless — now returns `max(0, command_value - get_dial_count())`, making it state-aware instead of hardcoding round logic. Fixes Nebulon-B being skipped in round 2. |
 
 ---
 
@@ -565,17 +577,20 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 **Prerequisites:** Phases 4–7 (all phase logic)
 **Duration estimate:** 1–2 sessions
 
-> **Placeholder implemented (Phase 4b extension):** `_begin_status_phase()` currently
-> performs the core cleanup automatically: readies exhausted defense tokens (ST-001),
-> flips initiative (ST-002), resets ship/squadron activation flags (ST-004), then
-> auto-advances to the next round. Game ends after round 6 (GF-001–003).
+> **Placeholder implemented (Phase 4b extension, updated in Phase 4c):**
+> `_begin_status_phase()` currently performs the core cleanup automatically:
+> readies exhausted defense tokens (ST-001), flips the initiative token side
+> (ST-002 — changes squadron activation slider colour but does NOT change which
+> player has initiative; see IN-001/IN-003), clears spent dial history,
+> resets ship/squadron activation flags (ST-004), then auto-advances to the
+> next round. Game ends after round 6 (GF-001–003).
 > Phase 8 will add the remaining items: elimination checks, scoring, victory screen,
 > and the persistent HUD.
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
 | Defense token readying | Core | ST-001 | Flip all exhausted tokens to ready |
-| Initiative flip | Core | ST-002 | Toggle initiative token side |
+| Initiative token flip | Core | ST-002, IN-003 | Toggle initiative token side (slider colour only — initiative does NOT change hands) |
 | Round advancement | Core | ST-003, GF-001–003 | Increment round, check round 6 end |
 | Clear activation state | Core | ST-004 | Remove faceup dials, reset activation |
 | Elimination check (continuous) | Core | GF-004, WN-001 | End game immediately when all ships destroyed |
@@ -672,13 +687,13 @@ Phase 0 (Scale & Assets)
 | Bug fixes | — | **1** | **672** |
 | Phase 4b+ | — | **8** | **680** |
 | Phase 4c | ~12 | **21** | **701** |
-| Phase 5 | ~35 | — | ~727 |
-| Phase 6 | ~45 | — | ~360 |
-| Phase 7 | ~30 | — | ~390 |
-| Phase 8 | ~20 | — | ~410 |
-| Phase 9 | ~15 | — | ~425 |
-| Phase 10 | ~20 | — | ~445 |
-| **Total** | **~295 new** | | **~465** |
+| Phase 5 | ~35 | — | ~736 |
+| Phase 6 | ~45 | — | ~781 |
+| Phase 7 | ~30 | — | ~811 |
+| Phase 8 | ~20 | — | ~831 |
+| Phase 9 | ~15 | — | ~846 |
+| Phase 10 | ~20 | — | ~866 |
+| **Total** | **~295 new** | | **~866** |
 
 ---
 
@@ -709,9 +724,9 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
-| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 5, 6 | ⏳ |
+| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 5, 6 | ⏳ SP-010/011 partial in 4c |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
-| Status Phase (ST-001–004) | 4 | Phase 8 | ⏳ |
+| Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
 | Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ✅ (core flow; activation steps in 5/7) |
 | Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |

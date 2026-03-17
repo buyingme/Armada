@@ -549,7 +549,7 @@ These are the digital representations required for the MVP.
 | GC-005 | Ship cards | 3 | PNG or data-driven UI | All ship stats displayed |
 | GC-006 | Squadron cards | 2 | PNG or data-driven UI | All squadron stats displayed |
 | GC-007 | Attack dice | 3 colors × 3 | PNG with face textures | Red (8 faces), Blue (8 faces), Black (8 faces) |
-| GC-008 | Command dials | 3 states | PNG composite | **Hidden:** `cmd_dial_hidden.png` (60×58). **Revealed:** `cmd_dial_hidden.png` + centred `cmd_<type>.png` (45×45) icon overlay, composited at runtime. **Spent:** Same as revealed (faceup activation marker). |
+| GC-008 | Command dials | 3 states | PNG composite | **Hidden:** `cmd_dial_hidden.png` (60\u00d758). **Revealed:** `cmd_dial_hidden.png` + centred `cmd_<type>.png` (45\u00d745) icon overlay at 75% scale, composited at runtime as a Node2D with two Sprite2D children. **Spent:** Same as revealed (faceup activation marker), shown below the active stack with a gap. |
 | GC-009 | Speed dials | 3 | UI widget | Speed 0–4 per ship |
 | GC-010 | Shield dials | 12 | UI widget | 4 per ship, showing current/max shields |
 | GC-011 | Defense tokens | ~9 | PNG | Evade, Redirect, Brace (ready/exhausted sides) |

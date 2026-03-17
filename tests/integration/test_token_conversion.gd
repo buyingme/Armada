@@ -50,6 +50,63 @@ func _track_active_player(player: int) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Early dial reveal on drag start
+# ---------------------------------------------------------------------------
+
+func test_early_reveal_dial_is_revealed_before_drop() -> void:
+	var ship: ShipInstance = _create_ship_with_dials(0, 1)
+	_setup_game_in_ship_phase([ship], [])
+	# Simulate what game_board._on_dial_drag_started does.
+	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	assert_false(dial.is_empty(),
+			"reveal_top should return the dial")
+	assert_eq(dial["state"], CommandDialStack.STATE_REVEALED,
+			"Dial should be revealed immediately on drag start")
+	assert_eq(int(dial["command"]), Constants.CommandType.NAVIGATE,
+			"Revealed command should be NAVIGATE")
+
+
+func test_early_reveal_unreveal_on_cancel_restores_hidden() -> void:
+	var ship: ShipInstance = _create_ship_with_dials(0, 1)
+	_setup_game_in_ship_phase([ship], [])
+	ship.command_dial_stack.reveal_top()
+	ship.command_dial_stack.unreveal_top()
+	assert_eq(ship.command_dial_stack.get_hidden_count(), 1,
+			"Hidden count should be 1 after unreveal")
+	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty(),
+			"No revealed dial after unreveal")
+
+
+func test_early_reveal_activate_ship_works_with_already_revealed() -> void:
+	var ship: ShipInstance = _create_ship_with_dials(0, 1)
+	_setup_game_in_ship_phase([ship], [])
+	# Reveal early (simulating drag start).
+	ship.command_dial_stack.reveal_top()
+	# activate_ship should handle already-revealed dial.
+	GameManager.activate_ship(ship)
+	assert_eq(GameManager.get_activating_ship(), ship,
+			"Ship should be activated even with pre-revealed dial")
+	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	assert_false(revealed.is_empty(),
+			"Dial should still be revealed after activate_ship")
+
+
+func test_early_reveal_activate_as_token_works_with_already_revealed() -> void:
+	var ship: ShipInstance = _create_ship_with_dials(0, 1)
+	_setup_game_in_ship_phase([ship], [])
+	# Reveal early (simulating drag start).
+	ship.command_dial_stack.reveal_top()
+	# activate_ship_as_token should handle already-revealed dial.
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	assert_false(result.is_empty(),
+			"activate_ship_as_token should succeed with pre-revealed dial")
+	assert_eq(int(result["command"]), Constants.CommandType.NAVIGATE,
+			"Should return NAVIGATE command type")
+	assert_true(result["token_added"],
+			"Token should be added")
+
+
+# ---------------------------------------------------------------------------
 # activate_ship_as_token — core domain tests
 # ---------------------------------------------------------------------------
 

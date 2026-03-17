@@ -406,3 +406,37 @@ func test_full_three_round_workflow() -> void:
 	# Verify spent history tracks all spent dials.
 	assert_eq(_stack.get_spent_history().size(), 2,
 			"Spent history should have 2 entries after 2 rounds of spending")
+
+
+# ---------------------------------------------------------------------------
+# unreveal_top
+# ---------------------------------------------------------------------------
+
+func test_unreveal_top_returns_empty_on_empty_stack() -> void:
+	var stack: CommandDialStack = CommandDialStack.create(1)
+	var result: Dictionary = stack.unreveal_top()
+	assert_true(result.is_empty(),
+			"unreveal_top on empty stack should return empty dict")
+
+
+func test_unreveal_top_returns_empty_when_hidden() -> void:
+	var stack: CommandDialStack = CommandDialStack.create(1)
+	stack.assign_dials([Constants.CommandType.NAVIGATE], 1)
+	var result: Dictionary = stack.unreveal_top()
+	assert_true(result.is_empty(),
+			"unreveal_top on hidden dial should return empty dict")
+
+
+func test_unreveal_top_sets_state_back_to_hidden() -> void:
+	var stack: CommandDialStack = CommandDialStack.create(1)
+	stack.assign_dials([Constants.CommandType.NAVIGATE], 1)
+	stack.reveal_top()
+	var result: Dictionary = stack.unreveal_top()
+	assert_false(result.is_empty(),
+			"unreveal_top should return the dial")
+	assert_eq(result["state"], CommandDialStack.STATE_HIDDEN,
+			"Dial state should be back to hidden")
+	assert_eq(stack.get_hidden_count(), 1,
+			"Hidden count should be 1 after unreveal")
+	assert_true(stack.get_revealed_dial().is_empty(),
+			"get_revealed_dial should return empty after unreveal")

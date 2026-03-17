@@ -295,7 +295,10 @@ func activate_ship(ship: ShipInstance) -> void:
 	if ship.command_dial_stack == null:
 		_log.warn("Cannot activate — ship has no command dial stack.")
 		return
-	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	# The dial may already be revealed (early reveal on drag start).
+	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	if dial.is_empty():
+		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		_log.warn("Cannot activate — no dials to reveal.")
 		return
@@ -326,7 +329,10 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 		_log.warn("Cannot activate — ship has no command dial stack.")
 		return {}
 
-	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	# The dial may already be revealed (early reveal on drag start).
+	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	if dial.is_empty():
+		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		_log.warn("Cannot activate — no dials to reveal.")
 		return {}

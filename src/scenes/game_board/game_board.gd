@@ -905,7 +905,8 @@ func _show_end_activation_button() -> void:
 # ---------------------------------------------------------------------------
 
 ## Called when the player clicks on a topmost command dial in the card panel.
-## Creates a floating preview and help text, then enters drag mode.
+## Reveals the top dial immediately, creates a floating preview showing the
+## command icon, and enters drag mode.
 ## Requirements: UI-024, UI-027.
 func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	if not ship_ref is ShipInstance:
@@ -914,16 +915,37 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 		return
 	_drag_active = true
 	_drag_ship_instance = ship_ref as ShipInstance
-	_create_drag_preview()
+	# Reveal the dial immediately so the player sees the command type.
+	var dial: Dictionary = _drag_ship_instance.command_dial_stack.reveal_top()
+	var cmd: int = int(dial.get("command", 0)) if not dial.is_empty() else -1
+	EventBus.command_dials_changed.emit(_drag_ship_instance)
+	_create_drag_preview(cmd)
 	_create_drag_help_label()
-	_log.info("Dial drag started for '%s'." % _drag_ship_instance.data_key)
+	_log.info("Dial drag started for '%s' (command: %d)." % [
+			_drag_ship_instance.data_key, cmd])
+
+
+## Map from CommandType to icon filename for the drag preview.
+const CMD_DRAG_ICON_FILES: Dictionary = {
+	Constants.CommandType.NAVIGATE: "cmd_navigate.png",
+	Constants.CommandType.SQUADRON: "cmd_squadron.png",
+	Constants.CommandType.CONCENTRATE_FIRE: "cmd_concentrate_fire.png",
+	Constants.CommandType.REPAIR: "cmd_repair.png",
+}
 
 
 ## Creates a semi-transparent floating dial preview on the TurnManagement layer.
-func _create_drag_preview() -> void:
+## Shows the revealed command icon when [param cmd] is valid, otherwise the
+## hidden dial back.
+func _create_drag_preview(cmd: int = -1) -> void:
 	_drag_preview = TextureRect.new()
-	var tex: Texture2D = AssetLoader.load_texture(
-			"command_tokens/", "cmd_dial_hidden.png")
+	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
+	var tex: Texture2D = null
+	if not icon_file.is_empty():
+		tex = AssetLoader.load_texture("command_tokens/", icon_file)
+	if tex == null:
+		tex = AssetLoader.load_texture(
+				"command_tokens/", "cmd_dial_hidden.png")
 	if tex:
 		_drag_preview.texture = tex
 	_drag_preview.custom_minimum_size = Vector2(50, 50)
@@ -1075,8 +1097,13 @@ func _find_card_panel_hit(screen_pos: Vector2) -> ShipInstance:
 
 
 ## Cancels the current dial drag (invalid drop target or no target).
+## Unreveals the dial so it returns to the hidden state.
 func _cancel_drag() -> void:
 	_log.info("Dial drag cancelled.")
+	# Unreveal the dial before cleaning up (which clears _drag_ship_instance).
+	if _drag_ship_instance:
+		_drag_ship_instance.command_dial_stack.unreveal_top()
+		EventBus.command_dials_changed.emit(_drag_ship_instance)
 	_clean_up_drag()
 	EventBus.dial_drag_cancelled.emit()
 

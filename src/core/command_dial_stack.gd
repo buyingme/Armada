@@ -153,6 +153,18 @@ func get_revealed_dial() -> Dictionary:
 	return {}
 
 
+## Reverts the top dial from "revealed" back to "hidden".
+## Used when a dial drag is cancelled before activation completes.
+## Returns the dial dictionary, or empty dict if nothing to unreveal.
+func unreveal_top() -> Dictionary:
+	if _dials.is_empty():
+		return {}
+	if _dials[0]["state"] != STATE_REVEALED:
+		return {}
+	_dials[0]["state"] = STATE_HIDDEN
+	return _dials[0]
+
+
 ## Returns the full spent history for the Command Dial Order modal.
 ## Each entry: {"command": Constants.CommandType, "round": int}.
 func get_spent_history() -> Array[Dictionary]:

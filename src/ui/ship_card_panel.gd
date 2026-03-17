@@ -61,6 +61,10 @@ var _entries: Array[Dictionary] = []
 ## Cached textures: {cache_key: Texture2D}.
 var _tex_cache: Dictionary = {}
 
+## The ShipInstance currently being dragged (null when idle).
+## When set, _populate_dial_stack hides the revealed dial for this ship.
+var _dragging_ship: ShipInstance = null
+
 ## The player index viewing this panel (for dial order modal access control).
 var _viewer_player: int = -1
 
@@ -416,6 +420,14 @@ func _connect_eventbus_signals() -> void:
 			_on_command_tokens_changed):
 		EventBus.command_tokens_changed.connect(
 				_on_command_tokens_changed)
+	if not EventBus.dial_drag_started.is_connected(
+			_on_dial_drag_started_panel):
+		EventBus.dial_drag_started.connect(
+				_on_dial_drag_started_panel)
+	if not EventBus.dial_drag_cancelled.is_connected(
+			_on_dial_drag_ended_panel):
+		EventBus.dial_drag_cancelled.connect(
+				_on_dial_drag_ended_panel)
 
 
 ## EventBus callback: a ship's defense token state changed.
@@ -431,8 +443,33 @@ func _on_defense_tokens_changed(inst: RefCounted) -> void:
 			break
 
 
+## EventBus callback: dial drag started — hide the revealed dial.
+func _on_dial_drag_started_panel(inst: RefCounted) -> void:
+	if inst is ShipInstance:
+		_dragging_ship = inst as ShipInstance
+		_on_command_dials_changed(inst)
+
+
+## EventBus callback: drag ended (cancelled or ship activated).
+func _on_dial_drag_ended_panel(_inst: RefCounted = null) -> void:
+	var prev: ShipInstance = _dragging_ship
+	_dragging_ship = null
+	if prev:
+		_on_command_dials_changed(prev)
+
+
 ## EventBus callback: a ship's command dials changed.
+## Also clears the dragging flag when the dial is no longer revealed
+## (meaning the drag completed via activation).
 func _on_command_dials_changed(inst: RefCounted) -> void:
+	# Auto-clear dragging flag on activation (dial was spent).
+	if _dragging_ship and inst == _dragging_ship:
+		if _dragging_ship.command_dial_stack:
+			var ds: Dictionary = _dragging_ship.command_dial_stack \
+					.get_display_state()
+			var rev: Dictionary = ds.get("revealed", {})
+			if rev.is_empty():
+				_dragging_ship = null
 	for entry: Dictionary in _entries:
 		if entry["instance"] == inst:
 			var factor: float = (
@@ -545,29 +582,32 @@ func _populate_dial_stack(container: VBoxContainer,
 	container.add_theme_constant_override("separation", 0)
 
 	# --- Active dial stack with negative overlap ---
-	# Revealed dial (if any) is shown face-up on top; hidden dials below.
+	# Hidden dials are rendered first (top of screen). The next dial
+	# (revealed or the topmost hidden) renders last at the bottom of
+	# the visual stack (highest y), so it appears "on top" physically.
 	var active_stack: VBoxContainer = VBoxContainer.new()
 	active_stack.add_theme_constant_override("separation", -offset)
 
-	# Show the revealed dial face-up on top of the stack (two-step flow).
-	if not revealed.is_empty():
-		var cmd: int = int(revealed.get("command", 0))
-		var rect: Control = _create_dial_rect(cmd, true, dial_w, dial_h)
-		active_stack.add_child(rect)
-
-	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
+	# Render hidden dials first — ALL use cmd_dial_hidden.png (facedown).
 	# Rules Reference: CP-006 — dials are facedown.
 	for i: int in range(hidden_dials.size()):
 		var rect: Control = _create_dial_rect(
 				0, false, dial_w, dial_h)
 		active_stack.add_child(rect)
 
+	# Show the revealed dial face-up at the bottom (two-step flow).
+	# Suppress it while the dial is being dragged so it vanishes from the
+	# panel during the drag animation.
+	var show_revealed: bool = (
+			not revealed.is_empty() and instance != _dragging_ship)
+	if show_revealed:
+		var cmd: int = int(revealed.get("command", 0))
+		var rect: Control = _create_dial_rect(cmd, true, dial_w, dial_h)
+		active_stack.add_child(rect)
+
 	# In a VBoxContainer with negative separation, later children draw on
-	# top of earlier ones.  We want the first child (top of the physical
-	# stack) to appear in front, so give it the highest z_index.
-	var child_count: int = active_stack.get_child_count()
-	for i: int in range(child_count):
-		active_stack.get_child(i).z_index = child_count - i
+	# top of earlier ones — which is exactly what we want: the bottom dial
+	# (last child) is the "next" dial and draws in front.
 
 	container.add_child(active_stack)
 

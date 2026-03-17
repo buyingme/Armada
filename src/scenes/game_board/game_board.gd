@@ -910,8 +910,10 @@ func _show_end_activation_button() -> void:
 ## Requirements: UI-024, UI-027.
 func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	if not ship_ref is ShipInstance:
+		_log.info("dial_drag_started ignored — ship_ref is not ShipInstance.")
 		return
 	if _drag_active:
+		_log.info("dial_drag_started ignored — drag already active.")
 		return
 	_drag_active = true
 	_drag_ship_instance = ship_ref as ShipInstance
@@ -936,47 +938,23 @@ const CMD_DRAG_ICON_FILES: Dictionary = {
 
 
 ## Creates a semi-transparent floating dial preview on the TurnManagement layer.
-## Composites the dial background with the command icon on top when [param cmd]
-## is a valid CommandType, otherwise shows just the hidden dial back.
+## Shows the revealed command icon when [param cmd] is valid, otherwise the
+## hidden dial back.
 func _create_drag_preview(cmd: int = -1) -> void:
-	var dial_size: Vector2 = Vector2(50, 50)
-
-	# Outer container holds both layers; ignore mouse so it never steals clicks.
-	_drag_preview = Control.new()
-	_drag_preview.custom_minimum_size = dial_size
-	_drag_preview.size = dial_size
+	_drag_preview = TextureRect.new()
+	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
+	var tex: Texture2D = null
+	if not icon_file.is_empty():
+		tex = AssetLoader.load_texture("command_tokens/", icon_file)
+	if tex == null:
+		tex = AssetLoader.load_texture(
+				"command_tokens/", "cmd_dial_hidden.png")
+	if tex:
+		_drag_preview.texture = tex
+	_drag_preview.custom_minimum_size = Vector2(50, 50)
+	_drag_preview.size = Vector2(50, 50)
 	_drag_preview.modulate.a = 0.75
 	_drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# Layer 1 — dial background (always present).
-	var bg_tex: Texture2D = AssetLoader.load_texture(
-			"command_tokens/", "cmd_dial_hidden.png")
-	if bg_tex:
-		var bg_rect: TextureRect = TextureRect.new()
-		bg_rect.texture = bg_tex
-		bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		bg_rect.custom_minimum_size = dial_size
-		bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_drag_preview.add_child(bg_rect)
-
-	# Layer 2 — command icon centred on top of the dial.
-	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
-	if not icon_file.is_empty():
-		var icon_tex: Texture2D = AssetLoader.load_texture(
-				"command_tokens/", icon_file)
-		if icon_tex:
-			var icon_rect: TextureRect = TextureRect.new()
-			icon_rect.texture = icon_tex
-			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			var icon_sz: float = dial_size.x * 0.7
-			var icon_off: float = (dial_size.x - icon_sz) * 0.5
-			icon_rect.custom_minimum_size = Vector2(icon_sz, icon_sz)
-			icon_rect.position = Vector2(icon_off, icon_off)
-			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_drag_preview.add_child(icon_rect)
-
 	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
 	if tm_layer:
 		tm_layer.add_child(_drag_preview)
@@ -1072,6 +1050,8 @@ func _is_valid_drop_target(token: ShipToken) -> bool:
 ## and enables the End Activation button.
 ## Requirements: UI-024, UI-025, SP-010.
 func _complete_ship_activation(token: ShipToken) -> void:
+	var ship_key: String = _drag_ship_instance.data_key if _drag_ship_instance \
+			else "?"
 	GameManager.activate_ship(_drag_ship_instance)
 	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
 			.get_revealed_dial()
@@ -1081,8 +1061,7 @@ func _complete_ship_activation(token: ShipToken) -> void:
 	_activating_ship_token = token
 	_clean_up_drag()
 	_show_end_activation_button()
-	_log.info("Ship activated via dial drop: '%s'." %
-			_drag_ship_instance.data_key if _drag_ship_instance else "?")
+	_log.info("Ship activated via dial drop: '%s'." % ship_key)
 
 
 ## Completes a "convert to token" activation: reveals and immediately spends
@@ -1152,3 +1131,4 @@ func _on_board_activation_ended() -> void:
 	if _activating_ship_token:
 		_activating_ship_token.hide_revealed_dial()
 		_activating_ship_token = null
+	_end_activation_button.hide_button()

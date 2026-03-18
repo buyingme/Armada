@@ -101,8 +101,8 @@ var _ships_needing_dials: Array[ShipInstance] = []
 var _drag_active: bool = false
 ## The ShipInstance whose dial is being dragged.
 var _drag_ship_instance: ShipInstance = null
-## Floating preview TextureRect shown during drag (on TurnManagement layer).
-var _drag_preview: TextureRect = null
+## Floating preview Control shown during drag (on TurnManagement layer).
+var _drag_preview: Control = null
 ## Help text label displayed during dial drag (on TurnManagement layer).
 ## Requirements: UI-027 — guide player on drag-to-ship vs drag-to-card.
 var _drag_help_label: Label = null
@@ -938,23 +938,50 @@ const CMD_DRAG_ICON_FILES: Dictionary = {
 
 
 ## Creates a semi-transparent floating dial preview on the TurnManagement layer.
-## Shows the revealed command icon when [param cmd] is valid, otherwise the
-## hidden dial back.
+## Shows the dial background with the revealed command icon composited on top
+## when [param cmd] is valid, otherwise the hidden dial back.  The preview
+## matches the dial size used on the card panel (no enlargement).
 func _create_drag_preview(cmd: int = -1) -> void:
-	_drag_preview = TextureRect.new()
-	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
-	var tex: Texture2D = null
-	if not icon_file.is_empty():
-		tex = AssetLoader.load_texture("command_tokens/", icon_file)
-	if tex == null:
-		tex = AssetLoader.load_texture(
-				"command_tokens/", "cmd_dial_hidden.png")
-	if tex:
-		_drag_preview.texture = tex
-	_drag_preview.custom_minimum_size = Vector2(50, 50)
-	_drag_preview.size = Vector2(50, 50)
+	var dial_w: float = GameScale.card_panel_dial_width_px
+	var dial_h: float = GameScale.card_panel_dial_height_px
+
+	# Outer container holds the composited dial (background + icon).
+	_drag_preview = Control.new()
+	_drag_preview.custom_minimum_size = Vector2(dial_w, dial_h)
+	_drag_preview.size = Vector2(dial_w, dial_h)
 	_drag_preview.modulate.a = 0.75
 	_drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Dial background (hidden-dial circle).
+	var bg_tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", "cmd_dial_hidden.png")
+	if bg_tex:
+		var bg_rect: TextureRect = TextureRect.new()
+		bg_rect.texture = bg_tex
+		bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bg_rect.custom_minimum_size = Vector2(dial_w, dial_h)
+		bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_drag_preview.add_child(bg_rect)
+
+	# Command icon on top of the dial background.
+	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
+	if not icon_file.is_empty():
+		var icon_tex: Texture2D = AssetLoader.load_texture(
+				"command_tokens/", icon_file)
+		if icon_tex:
+			var icon_rect: TextureRect = TextureRect.new()
+			icon_rect.texture = icon_tex
+			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			var icon_size: float = dial_h * 0.7
+			var icon_offset: float = (dial_h - icon_size) * 0.5
+			icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
+			icon_rect.position = Vector2(
+					(dial_w - icon_size) * 0.5, icon_offset)
+			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_drag_preview.add_child(icon_rect)
+
 	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
 	if tm_layer:
 		tm_layer.add_child(_drag_preview)

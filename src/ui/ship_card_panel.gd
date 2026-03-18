@@ -592,8 +592,12 @@ func _show_duplicate_toast(entry: Dictionary, token_type: int) -> void:
 	toast.name = "DuplicateToast"
 	toast.text = "Duplicate\n%s\ndiscarded" % cmd_name.to_lower().capitalize()
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast.add_theme_font_size_override("font_size", 9)
+	toast.add_theme_font_size_override("font_size", 18)
 	toast.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	toast.add_theme_color_override(
+			"font_shadow_color", Color(0, 0, 0, 0.8))
+	toast.add_theme_constant_override("shadow_offset_x", 1)
+	toast.add_theme_constant_override("shadow_offset_y", 1)
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(toast)
 	col.move_child(toast, 0)
@@ -626,8 +630,12 @@ func _enter_discard_mode(entry: Dictionary) -> void:
 	prompt.name = "DiscardPrompt"
 	prompt.text = "Discard\na token"
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt.add_theme_font_size_override("font_size", 10)
+	prompt.add_theme_font_size_override("font_size", 18)
 	prompt.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	prompt.add_theme_color_override(
+			"font_shadow_color", Color(0, 0, 0, 0.8))
+	prompt.add_theme_constant_override("shadow_offset_x", 1)
+	prompt.add_theme_constant_override("shadow_offset_y", 1)
 	prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(prompt)
 	col.move_child(prompt, 0)

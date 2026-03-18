@@ -51,7 +51,7 @@ func _enable_file_logging() -> void:
 	enabled = true
 	var timestamp: String = Time.get_datetime_string_from_system().replace(
 			":", "").replace("-", "").replace("T", "_")
-	var dir_path: String = "user://logs"
+	var dir_path: String = "res://logs"
 	DirAccess.make_dir_recursive_absolute(dir_path)
 	log_file_path = "%s/game_%s.log" % [dir_path, timestamp]
 

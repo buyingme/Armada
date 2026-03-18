@@ -15,6 +15,8 @@
 | **Revealed Dial on Board** | `TextureRect` child of `ShipToken` | `ship_token.gd` | Shown behind the ship base after a board-drop activation. Hidden on End Activation. |
 | **Spent Dial (Activation Marker)** | Moved from `_dials[]` to `_spent_history[]` | `CommandDialStack` | Rendered below the active stack with a gap. Shows the command that was used this round. |
 | **Command Token** | `int` in `CommandTokenManager._tokens[]` | `ShipInstance.command_tokens` | Added when the player drops the dial on the ship card (token convert path). |
+| **Discard Prompt** | `Label` named `DiscardPrompt` | `ShipCardPanel` cmd_token_col | Shown when overflow requires player to choose a token to discard. |
+| **Duplicate Toast** | `Label` named `DuplicateToast` | `ShipCardPanel` cmd_token_col | Brief notification when a duplicate token is auto-discarded. Auto-hides after 2s. |
 
 ## Event / Signal Flow
 
@@ -58,8 +60,32 @@
        │                  │            │  activate_ship_as_token()   │
        │                  │            │  reveal (or read revealed)  │
        │                  │            │  spend_revealed() ─► spent  │
-       │                  │            │  add_token(cmd) ─► token    │
+       │                  │            │  force_add_token(cmd) ─► tk │
        │                  │  _clean_up_drag()                       │
+       │                  │            │                            │
+       │                  │  ── Path B1: Normal (no overflow) ─────►│
+       │                  │  _show_end_activation_button()           │
+       │                  │            │                            │
+       │                  │  ── Path B2: Overflow (CM-004) ────────►│
+       │                  │  emit token_discard_required             │
+       │                  │  (End Activation delayed)               │
+       │             [ShipCardPanel] ◄─ _on_token_discard_required  │
+       │             _enter_discard_mode()                          │
+       │             (tokens: clickable, red tint, prompt label)     │
+       │                               │                            │
+       │             Player clicks a token:                         │
+       │             _on_discard_token_click()                      │
+       │             remove_token()                                 │
+       │             _exit_discard_mode()                           │
+       │             emit token_discarded ──────────────────────────►│
+       │                               │◄─ _on_token_discard_resolved│
+       │                               │  _show_end_activation_button│
+       │                  │            │                            │
+       │                  │  ── Path B3: Duplicate (CM-005) ───────►│
+       │                  │  auto remove_token(dup)                 │
+       │                  │  emit duplicate_token_discarded          │
+       │             [ShipCardPanel] ◄─ _on_duplicate_token_discarded│
+       │             _show_duplicate_toast() (2s auto-hide)         │
        │                  │  _show_end_activation_button()           │
        │                  │            │                            │
        │                  ├────────────┼─── Path C: Cancel ─────────┤
@@ -173,7 +199,9 @@ After step 1 (reveal), the stack state is:
 | Dial data model | `src/core/command_dial_stack.gd` | `reveal_top()`, `unreveal_top()`, `spend_revealed()`, `get_revealed_dial()`, `get_display_state()` |
 | Panel rendering | `src/ui/ship_card_panel.gd` | `_populate_dial_stack()`, `_create_dial_rect()` |
 | Click handling (two-step) | `src/ui/ship_card_panel.gd` | `_on_dial_container_gui_input()`, `_handle_dial_stack_click()` |
-| Magnify toggle | `src/ui/ship_card_panel.gd` | `_on_entry_gui_input()`, `_toggle_magnify()` |
+| Magnify toggle | `src/ui/ship_card_panel.gd` | `_on_entry_gui_input()`, `_toggle_magnify()` (blocked during discard mode) |
+| Token discard mode | `src/ui/ship_card_panel.gd` | `_enter_discard_mode()`, `_exit_discard_mode()`, `_on_discard_token_click()` |
+| Duplicate toast | `src/ui/ship_card_panel.gd` | `_show_duplicate_toast()`, `_on_duplicate_token_discarded()` |
 | Mouse filter setup | `src/ui/ship_card_panel.gd` | `_set_children_mouse_pass()` |
 | Drag lifecycle | `src/scenes/game_board/game_board.gd` | `_on_dial_drag_started()`, `_handle_drag_release()`, `_cancel_drag()`, `_clean_up_drag()` |
 | Activation paths | `src/scenes/game_board/game_board.gd` | `_complete_ship_activation()` (board), `_complete_token_conversion()` (card) |

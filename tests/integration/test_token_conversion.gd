@@ -512,6 +512,34 @@ func test_no_overflow_no_discard_signals() -> void:
 	_disconnect_phase4e_signals()
 
 
+func test_magnify_blocked_during_discard_mode() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var ship: ShipInstance = _create_ship_with_dials_and_command_value(0, 1, 1)
+	_setup_game_in_ship_phase([ship], [])
+	panel.add_ship_entry(ship)
+	# Pre-fill the single token slot.
+	ship.command_tokens.add_token(Constants.CommandType.REPAIR)
+	# Trigger overflow — enters discard mode in the panel.
+	GameManager.activate_ship_as_token(ship)
+	assert_true(panel.is_in_discard_mode(),
+			"Panel should be in discard mode after overflow")
+	# Try to magnify — should be blocked.
+	var entry: Dictionary = panel._entries[0]
+	assert_false(entry["magnified"],
+			"Entry should start unmagnified")
+	# Simulate a left-click on the entry (what _on_entry_gui_input does).
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._on_entry_gui_input(click, 0)
+	assert_false(entry["magnified"],
+			"Entry should remain unmagnified — magnify blocked during discard")
+	assert_true(panel.is_in_discard_mode(),
+			"Panel should still be in discard mode after blocked magnify")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

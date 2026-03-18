@@ -6,7 +6,7 @@ extends GutTest
 
 
 ## Temporary log file path used by tests.
-var _test_log_path: String = "user://logs/_test_logging_mode.log"
+var _test_log_path: String = "res://logs/_test_logging_mode.log"
 
 ## Tracks the actual log path created by _enable_file_logging.
 var _created_log_path: String = ""
@@ -75,11 +75,11 @@ func test_enable_file_logging_sets_enabled() -> void:
 			"log_file_path should not be empty")
 
 
-func test_log_file_path_starts_with_user_logs() -> void:
+func test_log_file_path_starts_with_res_logs() -> void:
 	LoggingMode._enable_file_logging()
 	_created_log_path = LoggingMode.log_file_path
-	assert_string_starts_with(LoggingMode.log_file_path, "user://logs/game_",
-			"Log file path should start with user://logs/game_")
+	assert_string_starts_with(LoggingMode.log_file_path, "res://logs/game_",
+			"Log file path should start with res://logs/game_")
 
 
 func test_log_file_path_ends_with_log_extension() -> void:

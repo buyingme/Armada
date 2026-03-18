@@ -266,6 +266,8 @@ func _compute_panel_size() -> Vector2:
 
 ## Handles left-click on a ship card entry to toggle magnify.
 ## Dial clicks are routed to [method _on_dial_container_gui_input] instead.
+## Blocked during discard mode to prevent the token column from being
+## repopulated (which would wipe out the clickable discard UI).
 ## Requirements: UI-018.
 func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 	if not event is InputEventMouseButton:
@@ -274,6 +276,10 @@ func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
 	if index < 0 or index >= _entries.size():
+		return
+	# Block magnify while a discard choice is pending.
+	if _discard_mode_ship != null:
+		_log.info("Magnify blocked — token discard pending.")
 		return
 	_toggle_magnify(index)
 
@@ -284,6 +290,7 @@ func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 ## manual coordinate comparisons that fail when global_position and
 ## get_global_rect() use different coordinate spaces (CanvasLayer +
 ## canvas_items stretch mode).
+## Blocked during discard mode to prevent new activations.
 ## Requirements: UI-022, UI-023.
 func _on_dial_container_gui_input(event: InputEvent, index: int) -> void:
 	if not event is InputEventMouseButton:
@@ -292,6 +299,11 @@ func _on_dial_container_gui_input(event: InputEvent, index: int) -> void:
 	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
 		return
 	if index < 0 or index >= _entries.size():
+		return
+	# Block dial interaction while a discard choice is pending.
+	if _discard_mode_ship != null:
+		_log.info("Dial click blocked — token discard pending.")
+		return
 		return
 	_handle_dial_stack_click(_entries[index])
 

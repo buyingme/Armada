@@ -32,6 +32,9 @@ venv/
 tests/results/
 *.log
 
+# Game session logs
+logs/
+
 # Temporary files
 tmp/
 temp/

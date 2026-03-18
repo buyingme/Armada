@@ -196,3 +196,74 @@ func test_cmd_value_one_max_one_token() -> void:
 	var result: bool = mgr1.add_token(Constants.CommandType.REPAIR)
 	assert_false(result,
 			"Command value 1 ship can only hold 1 token (CM-004)")
+
+
+# --- force_add_token() ---
+
+func test_force_add_token_normal_no_overflow() -> void:
+	var result: Dictionary = _mgr.force_add_token(
+			Constants.CommandType.NAVIGATE)
+	assert_false(result["overflow"],
+			"Should not be overflow when under max")
+	assert_false(result["duplicate"],
+			"Should not be duplicate when token is new")
+	assert_eq(_mgr.get_token_count(), 1,
+			"Token should be added")
+
+
+func test_force_add_token_overflow_flagged() -> void:
+	_mgr.force_add_token(Constants.CommandType.NAVIGATE)
+	_mgr.force_add_token(Constants.CommandType.REPAIR)
+	# max_tokens is 2, adding a third should flag overflow
+	var result: Dictionary = _mgr.force_add_token(
+			Constants.CommandType.SQUADRON)
+	assert_true(result["overflow"],
+			"Should flag overflow when tokens exceed max")
+	assert_false(result["duplicate"],
+			"Should not flag duplicate for new type")
+	assert_eq(_mgr.get_token_count(), 3,
+			"Token should still be added despite overflow")
+
+
+func test_force_add_token_duplicate_flagged() -> void:
+	_mgr.force_add_token(Constants.CommandType.NAVIGATE)
+	var result: Dictionary = _mgr.force_add_token(
+			Constants.CommandType.NAVIGATE)
+	assert_true(result["duplicate"],
+			"Should flag duplicate when same type exists")
+	assert_eq(_mgr.get_token_count(), 2,
+			"Duplicate token should still be physically added")
+
+
+func test_force_add_token_cmd_value_one_overflow() -> void:
+	var mgr1: CommandTokenManager = CommandTokenManager.create(1)
+	mgr1.force_add_token(Constants.CommandType.NAVIGATE)
+	var result: Dictionary = mgr1.force_add_token(
+			Constants.CommandType.REPAIR)
+	assert_true(result["overflow"],
+			"CMD value 1: second token should flag overflow")
+	assert_false(result["duplicate"],
+			"Should not flag duplicate for different type")
+	assert_eq(mgr1.get_token_count(), 2,
+			"Both tokens should be present until caller resolves")
+
+
+func test_force_add_then_remove_resolves_overflow() -> void:
+	_mgr.force_add_token(Constants.CommandType.NAVIGATE)
+	_mgr.force_add_token(Constants.CommandType.REPAIR)
+	_mgr.force_add_token(Constants.CommandType.SQUADRON)
+	assert_eq(_mgr.get_token_count(), 3,
+			"Should have 3 tokens before discard")
+	_mgr.remove_token(Constants.CommandType.NAVIGATE)
+	assert_eq(_mgr.get_token_count(), 2,
+			"Should have 2 tokens after discard (at max)")
+
+
+func test_force_add_duplicate_then_remove_resolves() -> void:
+	_mgr.force_add_token(Constants.CommandType.NAVIGATE)
+	_mgr.force_add_token(Constants.CommandType.NAVIGATE)
+	assert_eq(_mgr.get_token_count(), 2,
+			"Should have 2 nav tokens before removing duplicate")
+	_mgr.remove_token(Constants.CommandType.NAVIGATE)
+	assert_eq(_mgr.get_token_count(), 1,
+			"Should have 1 nav token after removing duplicate")

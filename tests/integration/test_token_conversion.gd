@@ -244,7 +244,7 @@ func test_activate_ship_as_token_emits_tokens_changed() -> void:
 			"command_tokens_changed should fire when token is added")
 
 
-func test_activate_ship_as_token_duplicate_token_rejected() -> void:
+func test_activate_ship_as_token_duplicate_token_auto_discarded() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 2)
 	_setup_game_in_ship_phase([ship], [])
 	# Pre-load a NAVIGATE token so the second one is a duplicate.
@@ -252,27 +252,29 @@ func test_activate_ship_as_token_duplicate_token_rejected() -> void:
 	_tokens_changed_ships.clear()
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
 	assert_false(result.is_empty(),
-			"Activation should still succeed even if token rejected")
-	assert_false(result["token_added"],
-			"Token should be rejected — duplicate (CM-005)")
+			"Activation should succeed even with duplicate token")
+	# force_add_token adds the duplicate, then auto-discards it (CM-005).
+	assert_true(result["token_added"],
+			"Token should be force-added before auto-discard")
 	assert_eq(ship.command_tokens.get_token_count(), 1,
-			"Token count should remain 1 (duplicate rejected)")
+			"Token count should be 1 after duplicate auto-discard")
+	assert_false(result.get("needs_discard", false),
+			"Duplicate does not require player discard choice")
 
 
-func test_activate_ship_as_token_overflow_rejected() -> void:
+func test_activate_ship_as_token_overflow_needs_discard() -> void:
 	var ship: ShipInstance = _create_ship_with_dials_and_command_value(0, 1, 1)
 	_setup_game_in_ship_phase([ship], [])
 	# Fill the token slot with a different type so it's at capacity.
 	ship.command_tokens.add_token(Constants.CommandType.REPAIR)
 	_tokens_changed_ships.clear()
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
-	assert_false(result["token_added"],
-			"Token should be rejected — overflow (CM-004)")
-	assert_eq(ship.command_tokens.get_token_count(), 1,
-			"Token count should remain 1 (overflow rejected)")
-	# tokens_changed should NOT be emitted when token wasn't added.
-	assert_false(_tokens_changed_ships.has(ship),
-			"command_tokens_changed should NOT fire when token rejected")
+	assert_true(result["token_added"],
+			"Token should be force-added despite overflow")
+	assert_true(result.get("needs_discard", false),
+			"Overflow should require player to discard a token (CM-004)")
+	assert_eq(ship.command_tokens.get_token_count(), 2,
+			"Both tokens should be present until player resolves discard")
 
 
 func test_activate_ship_as_token_rejects_already_activated() -> void:
@@ -392,6 +394,122 @@ func test_full_cycle_token_convert_then_board_drop() -> void:
 			"Should cascade to Command Phase of next round")
 	assert_eq(GameManager.get_current_round(), 2,
 			"Should be round 2 after both ships activated")
+
+
+# ---------------------------------------------------------------------------
+# Phase 4e: Token Overflow Discard Flow
+# ---------------------------------------------------------------------------
+
+## Signal trackers for Phase 4e.
+var _discard_required_ships: Array = []
+var _discarded_events: Array = []
+var _duplicate_discarded_events: Array = []
+
+
+func _track_discard_required(ship: RefCounted) -> void:
+	_discard_required_ships.append(ship)
+
+
+func _track_token_discarded(ship: RefCounted, cmd: int) -> void:
+	_discarded_events.append({"ship": ship, "command": cmd})
+
+
+func _track_duplicate_discarded(ship: RefCounted, cmd: int) -> void:
+	_duplicate_discarded_events.append({"ship": ship, "command": cmd})
+
+
+func _connect_phase4e_signals() -> void:
+	_discard_required_ships.clear()
+	_discarded_events.clear()
+	_duplicate_discarded_events.clear()
+	if not EventBus.token_discard_required.is_connected(
+			_track_discard_required):
+		EventBus.token_discard_required.connect(_track_discard_required)
+	if not EventBus.token_discarded.is_connected(_track_token_discarded):
+		EventBus.token_discarded.connect(_track_token_discarded)
+	if not EventBus.duplicate_token_discarded.is_connected(
+			_track_duplicate_discarded):
+		EventBus.duplicate_token_discarded.connect(
+				_track_duplicate_discarded)
+
+
+func _disconnect_phase4e_signals() -> void:
+	if EventBus.token_discard_required.is_connected(
+			_track_discard_required):
+		EventBus.token_discard_required.disconnect(_track_discard_required)
+	if EventBus.token_discarded.is_connected(_track_token_discarded):
+		EventBus.token_discarded.disconnect(_track_token_discarded)
+	if EventBus.duplicate_token_discarded.is_connected(
+			_track_duplicate_discarded):
+		EventBus.duplicate_token_discarded.disconnect(
+				_track_duplicate_discarded)
+
+
+func test_overflow_emits_token_discard_required() -> void:
+	_connect_phase4e_signals()
+	var ship: ShipInstance = _create_ship_with_dials_and_command_value(0, 1, 1)
+	_setup_game_in_ship_phase([ship], [])
+	ship.command_tokens.add_token(Constants.CommandType.REPAIR)
+	GameManager.activate_ship_as_token(ship)
+	assert_eq(_discard_required_ships.size(), 1,
+			"token_discard_required should fire once for overflow")
+	assert_eq(_discard_required_ships[0], ship,
+			"Signal should reference the overflowing ship")
+	_disconnect_phase4e_signals()
+
+
+func test_duplicate_emits_duplicate_token_discarded() -> void:
+	_connect_phase4e_signals()
+	var ship: ShipInstance = _create_ship_with_dials(0, 2)
+	_setup_game_in_ship_phase([ship], [])
+	ship.command_tokens.add_token(Constants.CommandType.NAVIGATE)
+	GameManager.activate_ship_as_token(ship)
+	assert_eq(_duplicate_discarded_events.size(), 1,
+			"duplicate_token_discarded should fire once")
+	assert_eq(_duplicate_discarded_events[0]["command"],
+			Constants.CommandType.NAVIGATE,
+			"Should report NAVIGATE as the discarded duplicate")
+	assert_eq(_discard_required_ships.size(), 0,
+			"Overflow signal should NOT fire for duplicate scenario")
+	_disconnect_phase4e_signals()
+
+
+func test_overflow_resolved_by_manual_discard() -> void:
+	_connect_phase4e_signals()
+	var ship: ShipInstance = _create_ship_with_dials_and_command_value(0, 1, 1)
+	_setup_game_in_ship_phase([ship], [])
+	ship.command_tokens.add_token(Constants.CommandType.REPAIR)
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	assert_true(result.get("needs_discard", false),
+			"Should need discard")
+	# Player picks REPAIR to discard (simulates ShipCardPanel click).
+	ship.command_tokens.remove_token(Constants.CommandType.REPAIR)
+	EventBus.command_tokens_changed.emit(ship)
+	EventBus.token_discarded.emit(ship, Constants.CommandType.REPAIR)
+	assert_eq(ship.command_tokens.get_token_count(), 1,
+			"Should have 1 token after discard")
+	assert_true(ship.command_tokens.has_token(Constants.CommandType.NAVIGATE),
+			"Remaining token should be NAVIGATE")
+	assert_eq(_discarded_events.size(), 1,
+			"token_discarded should fire once")
+	_disconnect_phase4e_signals()
+
+
+func test_no_overflow_no_discard_signals() -> void:
+	_connect_phase4e_signals()
+	var ship: ShipInstance = _create_ship_with_dials(0, 2)
+	_setup_game_in_ship_phase([ship], [])
+	# No pre-existing tokens — adding one should be fine.
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	assert_true(result["token_added"],
+			"Token should be added normally")
+	assert_false(result.get("needs_discard", false),
+			"Should not need discard")
+	assert_eq(_discard_required_ships.size(), 0,
+			"No overflow signal should fire")
+	assert_eq(_duplicate_discarded_events.size(), 0,
+			"No duplicate signal should fire")
+	_disconnect_phase4e_signals()
 
 
 # ---------------------------------------------------------------------------

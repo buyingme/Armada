@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4d, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–4e, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -980,11 +980,63 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 |------|--------|----------|
 | 1 | (Requires a ship that already has a NAVIGATE token — may need to do a card drop conversion in a previous round) | Ship has an existing token |
 | 2 | Start a dial drag for the same command type as the existing token | Drag begins |
-| 3 | Drop onto the ship card entry | Ship still activates, but duplicate token is NOT added (CM-005) |
+| 3 | Drop onto the ship card entry | Ship activates; duplicate token is added then **auto-discarded** (CM-005) |
 | 4 | Verify token count in the right column | Same as before — no duplicate |
+| 5 | Check for notification | Brief "Duplicate Navigate discarded" toast appears near the command token column and fades after ~2 seconds |
 
-**Pass criteria:** Duplicate token rejection per CM-005 does not prevent activation — the dial is still spent, but no new token appears.
+**Pass criteria:** Duplicate auto-discard per CM-005 fires a brief notification; dial is still spent; token count unchanged.
 
 ---
 
-*Last updated: Phase 4d complete — keep-or-convert dial choice via drag targets, help text overlay, token conversion path, defensive activation_ended handling. 716 tests passing (45 scripts, 1387 asserts).*
+## Phase 4e — Command Token Overflow Discard
+
+**What this phase adds:** When a dial-to-token conversion would cause a ship's tokens to exceed its command value, the new token is temporarily added and the player must click one of the ship's command tokens to discard. For duplicates, the token is auto-discarded with a brief notification. The "End Activation" button is delayed until any overflow is resolved.
+
+### MT-4e.1 — Overflow discard prompt appears (CR90, command value 1)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, reach Ship Phase for a CR90 (command value 1) | CR90 has one hidden dial |
+| 2 | In a previous activation, convert a dial to a command token | CR90 now holds 1 token (at capacity) |
+| 3 | In a subsequent round, drag a NEW dial onto the card panel (token path) | Both old and new tokens appear in the column; a red "Discard a token" prompt label appears at the top of the token column |
+| 4 | Verify "End Activation" button is NOT visible | Button should be hidden until discard is resolved |
+| 5 | Click one of the two tokens | The clicked token is removed; prompt disappears; "End Activation" button appears |
+
+**Pass criteria:** Overflow triggers discard mode; tokens are clickable; End Activation blocked until resolved.
+
+### MT-4e.2 — Token highlight and cursor in discard mode
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger overflow discard (as in MT-4e.1 steps 1–3) | Discard prompt visible |
+| 2 | Hover the mouse over each token | Cursor changes to pointing hand |
+| 3 | Observe token appearance | Tokens have a slight reddish tint (modulate) |
+
+**Pass criteria:** Visual feedback (cursor + tint) makes tokens clickable during discard mode.
+
+### MT-4e.3 — Duplicate token auto-discard with notification
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Have a ship with an existing NAVIGATE token | Token present in the right column |
+| 2 | Convert a NAVIGATE dial to token | Duplicate is auto-discarded immediately |
+| 3 | Observe the token column | A yellow "Duplicate Navigate discarded" toast appears, then auto-hides after ~2 seconds |
+| 4 | Verify token count | Still 1 NAVIGATE token (count unchanged) |
+| 5 | Verify "End Activation" button | Appears immediately (no discard prompt needed) |
+
+**Pass criteria:** Duplicate auto-discard is seamless with notification; no discard mode entered.
+
+### MT-4e.4 — No discard prompt when under capacity
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start with a ship that has 0 tokens and command value ≥ 2 | Token column is empty |
+| 2 | Convert a dial to a token | Token appears in the column normally |
+| 3 | Verify no prompt or special UI | No discard prompt, no tint, no toast |
+| 4 | "End Activation" button appears immediately | Button visible |
+
+**Pass criteria:** Normal flow is unchanged — no discard UI when under capacity.
+
+---
+
+*Last updated: Phase 4e complete — command token overflow discard with player choice, duplicate auto-discard with notification, delayed End Activation button.*

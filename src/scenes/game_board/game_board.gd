@@ -1094,6 +1094,8 @@ func _complete_ship_activation(token: ShipToken) -> void:
 ## Completes a "convert to token" activation: reveals and immediately spends
 ## the dial, attempts to add a matching command token, and shows the End
 ## Activation button. No revealed dial sprite is shown on the board.
+## If overflow triggers a discard prompt, the End Activation button is delayed
+## until the player resolves the discard.
 ## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
 ## a command token of the same type."
 ## Requirements: UI-028, SP-011, CM-004–006.
@@ -1102,13 +1104,31 @@ func _complete_token_conversion() -> void:
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
 	# No revealed dial on the board — _activating_ship_token stays null.
 	_clean_up_drag()
-	_show_end_activation_button()
+
+	var needs_discard: bool = result.get("needs_discard", false)
+	if needs_discard:
+		# Delay End Activation until the discard is resolved.
+		if not EventBus.token_discarded.is_connected(
+				_on_token_discard_resolved):
+			EventBus.token_discarded.connect(
+					_on_token_discard_resolved, CONNECT_ONE_SHOT)
+	else:
+		_show_end_activation_button()
+
 	var cmd_name: String = ""
 	if not result.is_empty():
 		cmd_name = Constants.CommandType.keys()[result["command"]]
-	_log.info("Ship activated via card drop (token convert): '%s' (%s, added=%s)." % [
+	_log.info("Ship activated via card drop (token convert): '%s' (%s, added=%s, discard=%s)." % [
 			ship.data_key if ship else "?", cmd_name,
-			str(result.get("token_added", false))])
+			str(result.get("token_added", false)),
+			str(needs_discard)])
+
+
+## Called (one-shot) when the player resolves a token overflow discard.
+## Shows the End Activation button now that the token count is legal.
+func _on_token_discard_resolved(_ship: RefCounted, _discarded: int) -> void:
+	_show_end_activation_button()
+	_log.info("Token discard resolved — showing End Activation button.")
 
 
 ## Checks both card panels for a ship entry at [param screen_pos].

@@ -166,6 +166,25 @@ signal perspective_change_complete()
 
 # --- Ship Activation Events (Phase 4c) ---
 
+## Emitted when a force-added command token causes overflow (tokens > command
+## value) and the player must choose one token to discard.
+## [param ship_instance] — the ship that must discard a token.
+## Rules Reference: "Command Tokens", p.4 — "if it has more command tokens
+## than its command value, it must immediately discard one of its command tokens."
+signal token_discard_required(ship_instance: RefCounted)
+
+## Emitted after the player (or auto-logic) discards a token to resolve
+## an overflow or duplicate situation.
+## [param ship_instance] — the ship whose token was discarded.
+## [param discarded_type] — Constants.CommandType value of the discarded token.
+signal token_discarded(ship_instance: RefCounted, discarded_type: int)
+
+## Emitted when a duplicate token is automatically discarded, so the UI can
+## show a brief notification to the player.
+## [param ship_instance] — the ship that had the duplicate.
+## [param token_type] — Constants.CommandType value of the discarded duplicate.
+signal duplicate_token_discarded(ship_instance: RefCounted, token_type: int)
+
 ## Emitted when the player starts dragging a command dial from the card panel.
 ## [param ship_instance] — the ship whose topmost dial is being dragged.
 ## Requirements: UI-024.

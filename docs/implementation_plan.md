@@ -18,6 +18,7 @@
 - [Phase L: Game Logging Tooling](#phase-l-game-logging-tooling)
 - [Phase 4c: Ship Activation Trigger](#phase-4c-ship-activation-trigger)
 - [Phase 4d: Keep-or-Convert Dial Choice](#phase-4d-keep-or-convert-dial-choice)
+- [Phase 4e: Command Token Overflow Discard](#phase-4e-command-token-overflow-discard)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -521,6 +522,33 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 4e: Command Token Overflow Discard ✅
+**Goal:** When a dial-to-token conversion would exceed the ship's command value, temporarily add the token and prompt the player to click one of the surplus tokens to discard. For duplicates, auto-discard immediately and show a brief notification.
+**Prerequisites:** Phase 4d (keep-or-convert), Phase 4 (CommandTokenManager)
+**Duration estimate:** 1 session
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|-------------|
+| `force_add_token()` in CommandTokenManager | Core | CM-004, CM-005 | Bypasses capacity/dup checks; returns `{overflow, duplicate}` dict |
+| EventBus discard signals | Autoload | — | `token_discard_required`, `token_discarded`, `duplicate_token_discarded` |
+| Refactor `activate_ship_as_token()` | Core/App | CM-004, CM-005 | Use `force_add_token()`, emit overflow/duplicate signals |
+| Token discard mode in ShipCardPanel | Presentation | CM-004, UI | Clickable tokens, prompt label, colour tint; player clicks to discard |
+| GameBoard discard flow wiring | Presentation | CM-004 | Delay End Activation button until discard resolved |
+| Duplicate token notification | Presentation | CM-005 | Brief toast label ("Duplicate discarded") that auto-hides after 2s |
+| Unit tests for `force_add_token` | Test | — | 6 tests: normal, overflow, duplicate, cmd-value-1, resolve scenarios |
+| Integration tests for discard flow | Test | — | 4 tests: overflow signal, duplicate signal, manual discard resolve, no-overflow baseline |
+
+> **Rules Reference:** "Command Tokens", p.4: "When a ship is assigned a command
+> token, if it has more command tokens than its command value, it must immediately
+> discard one of its command tokens." Also: "When a ship is assigned a command
+> token, if it already has a copy of that command token, it must immediately
+> discard that command token."
+
+**Requirements covered:** CM-004 (overflow discard), CM-005 (duplicate auto-discard)
+**Tests:** ~10 (6 unit + 4 integration)
+
+---
+
 ### Phase 5: Ship Movement ⏳
 **Goal:** Full ship movement system including the maneuver tool, speed chart, and Navigate command.
 **Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials), Phase 4c/4d (activation trigger + keep-or-convert)
@@ -715,7 +743,8 @@ Phase 0 (Scale & Assets)
 | Phase 4b+ | — | **8** | **680** |
 | Phase 4c | ~12 | **21** | **701** |
 | Phase 4d | ~10 | **15** | **716** |
-| Phase 5 | ~30 | — | ~746 |
+| Phase 4e | ~10 | **10** | **726** |
+| Phase 5 | ~30 | — | ~756 |
 | Phase 6 | ~45 | — | ~791 |
 | Phase 7 | ~30 | — | ~821 |
 | Phase 8 | ~20 | — | ~841 |

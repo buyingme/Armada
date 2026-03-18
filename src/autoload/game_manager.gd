@@ -312,12 +312,18 @@ func activate_ship(ship: ShipInstance) -> void:
 ## command dial, then attempting to convert it to a matching command token.
 ## The dial goes directly to the spent area (activation marker) instead of
 ## remaining revealed on the board.
+## If adding the token causes overflow (tokens > command value), the token is
+## still added but ``token_discard_required`` is emitted so the UI can prompt
+## the player to choose one to discard.
+## If the token is a duplicate of one already held, the duplicate is
+## immediately removed and ``duplicate_token_discarded`` is emitted.
 ## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
 ## a command token of the same type." SP-011b.
+## Rules Reference: "Command Tokens", p.4 — overflow / duplicate discard.
 ## Requirements: UI-028, SP-011, CM-004–006.
 ## [param ship] — the ship to activate.
-## Returns a dictionary with "command" (CommandType) and "token_added" (bool),
-## or an empty dictionary on failure.
+## Returns a dictionary with "command" (CommandType), "token_added" (bool),
+## and "needs_discard" (bool), or an empty dictionary on failure.
 func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 	if _activating_ship != null:
 		_log.warn("Cannot activate — already activating a ship.")
@@ -342,20 +348,34 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 	# Immediately spend the revealed dial (goes to spent area).
 	ship.command_dial_stack.spend_revealed()
 
-	# Try to add matching command token (CM-004 overflow / CM-005 duplicate
-	# rejection may cause this to fail — the dial is still spent).
+	# Force-add the token — overflow and duplicate are handled after.
 	var token_added: bool = false
+	var needs_discard: bool = false
 	if ship.command_tokens:
-		token_added = ship.command_tokens.add_token(cmd)
+		var result: Dictionary = ship.command_tokens.force_add_token(cmd)
+		token_added = true
+
+		if result.get("duplicate", false):
+			# Auto-discard the duplicate immediately (CM-005).
+			ship.command_tokens.remove_token(cmd)
+			EventBus.command_tokens_changed.emit(ship)
+			EventBus.duplicate_token_discarded.emit(ship, cmd)
+			_log.info("Duplicate token %d auto-discarded for %s" % [cmd, ship.data_key])
+		elif result.get("overflow", false):
+			# Player must choose which token to discard (CM-004).
+			needs_discard = true
+			EventBus.command_tokens_changed.emit(ship)
+			EventBus.token_discard_required.emit(ship)
+			_log.info("Token overflow for %s — player must discard one." % ship.data_key)
+		else:
+			EventBus.command_tokens_changed.emit(ship)
 
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
-	if token_added:
-		EventBus.command_tokens_changed.emit(ship)
 
-	_log.info("Ship activated (token convert): %s (command: %d, token_added: %s)" % [
-			ship.data_key, cmd, str(token_added)])
-	return {"command": cmd, "token_added": token_added}
+	_log.info("Ship activated (token convert): %s (command: %d, token_added: %s, needs_discard: %s)" % [
+			ship.data_key, cmd, str(token_added), str(needs_discard)])
+	return {"command": cmd, "token_added": token_added, "needs_discard": needs_discard}
 
 
 # ---------------------------------------------------------------------------

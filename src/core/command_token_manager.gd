@@ -56,6 +56,25 @@ func add_token(command: Constants.CommandType) -> bool:
 	return true
 
 
+## Unconditionally adds a command token, bypassing capacity and duplicate checks.
+## The caller is responsible for handling any overflow or duplicate situation
+## (e.g. prompting the player to discard).
+## Returns a dictionary: {"overflow": bool, "duplicate": bool}.
+## Rules Reference: "Command Tokens", p.4 — "when a ship is assigned a
+## command token, if it has more command tokens than its command value, it
+## must immediately discard one of its command tokens."
+func force_add_token(command: Constants.CommandType) -> Dictionary:
+	var is_duplicate: bool = has_token(command)
+	_tokens.append(int(command))
+	var is_overflow: bool = _tokens.size() > max_tokens
+	if is_duplicate:
+		_log.info("Force-added duplicate %s — must auto-discard." % command)
+	elif is_overflow:
+		_log.info("Force-added %s — overflow (%d/%d), discard required." % [
+				command, _tokens.size(), max_tokens])
+	return {"overflow": is_overflow, "duplicate": is_duplicate}
+
+
 ## Attempts to add a token, forcing discard of an existing one if at capacity.
 ## [param command] — the new token type.
 ## [param discard_type] — the token type to discard if at capacity.

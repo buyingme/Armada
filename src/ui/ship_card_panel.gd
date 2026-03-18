@@ -58,6 +58,10 @@ var _is_left_side: bool = true
 ##  dial_container: Control, cmd_token_col: VBoxContainer, magnified: bool}
 var _entries: Array[Dictionary] = []
 
+## The [ShipInstance] currently in token-discard mode, or null.
+## When set, the player must click one of the ship's command tokens to discard.
+var _discard_mode_ship: ShipInstance = null
+
 ## Cached textures: {cache_key: Texture2D}.
 var _tex_cache: Dictionary = {}
 
@@ -470,6 +474,14 @@ func _connect_eventbus_signals() -> void:
 			_on_command_tokens_changed):
 		EventBus.command_tokens_changed.connect(
 				_on_command_tokens_changed)
+	if not EventBus.token_discard_required.is_connected(
+			_on_token_discard_required):
+		EventBus.token_discard_required.connect(
+				_on_token_discard_required)
+	if not EventBus.duplicate_token_discarded.is_connected(
+			_on_duplicate_token_discarded):
+		EventBus.duplicate_token_discarded.connect(
+				_on_duplicate_token_discarded)
 
 
 ## EventBus callback: a ship's defense token state changed.
@@ -530,6 +542,170 @@ func _compute_dial_stack_height(
 	var off: float = GameScale.card_panel_dial_stack_offset_px * scale_factor
 	# Each extra dial overlaps: visible = dial_h - offset, first = full height.
 	return dial_h + maxf(0.0, float(n - 1) * (dial_h - off))
+
+
+# ---------------------------------------------------------------------------
+# Token Discard Mode
+# ---------------------------------------------------------------------------
+
+
+## Returns whether this panel is currently waiting for a discard click.
+func is_in_discard_mode() -> bool:
+	return _discard_mode_ship != null
+
+
+## EventBus callback: a ship needs to discard a command token (overflow).
+func _on_token_discard_required(inst: RefCounted) -> void:
+	# Only enter discard mode if this panel owns the ship.
+	for entry: Dictionary in _entries:
+		if entry["instance"] == inst:
+			_enter_discard_mode(entry)
+			break
+
+
+## EventBus callback: a duplicate token was auto-discarded.
+## Shows a brief notification near the ship's command-token column.
+func _on_duplicate_token_discarded(inst: RefCounted, token_type: int) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] == inst:
+			_show_duplicate_toast(entry, token_type)
+			break
+
+
+## Shows a small "Duplicate discarded" label that fades out after ~2 seconds.
+func _show_duplicate_toast(entry: Dictionary, token_type: int) -> void:
+	var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
+	var cmd_name: String = Constants.CommandType.keys()[token_type]
+	var toast: Label = Label.new()
+	toast.name = "DuplicateToast"
+	toast.text = "Duplicate\n%s\ndiscarded" % cmd_name.to_lower().capitalize()
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.add_theme_font_size_override("font_size", 9)
+	toast.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(toast)
+	col.move_child(toast, 0)
+
+	# Auto-remove after 2 seconds via a one-shot timer.
+	var timer: Timer = Timer.new()
+	timer.wait_time = 2.0
+	timer.one_shot = true
+	timer.autostart = true
+	toast.add_child(timer)
+	timer.timeout.connect(func() -> void:
+		if is_instance_valid(toast):
+			toast.queue_free()
+	)
+	_log.info("Showing duplicate discard toast for %s (%s)" % [
+			(entry["instance"] as ShipInstance).data_key, cmd_name])
+
+
+## Puts the command-token column of [param entry] into discard mode.
+## Each token becomes clickable (MOUSE_FILTER_STOP) and a prompt label
+## is prepended to the column.
+func _enter_discard_mode(entry: Dictionary) -> void:
+	var ship: ShipInstance = entry["instance"] as ShipInstance
+	_discard_mode_ship = ship
+
+	var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
+
+	# Add a prompt label at the top of the column.
+	var prompt: Label = Label.new()
+	prompt.name = "DiscardPrompt"
+	prompt.text = "Discard\na token"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.add_theme_font_size_override("font_size", 10)
+	prompt.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(prompt)
+	col.move_child(prompt, 0)
+
+	# Make each token TextureRect clickable.
+	for child: Node in col.get_children():
+		if child is TextureRect:
+			var tex_rect: TextureRect = child as TextureRect
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+			tex_rect.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			tex_rect.modulate = Color(1.0, 0.8, 0.8)
+			if not tex_rect.gui_input.is_connected(_on_discard_token_click):
+				tex_rect.gui_input.connect(
+						_on_discard_token_click.bind(tex_rect))
+
+	_log.info("Entered discard mode for %s" % ship.data_key)
+
+
+## Exits discard mode and restores normal token display.
+func _exit_discard_mode() -> void:
+	if _discard_mode_ship == null:
+		return
+
+	for entry: Dictionary in _entries:
+		if entry["instance"] == _discard_mode_ship:
+			var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
+			# Remove the prompt label.
+			var prompt: Node = col.find_child("DiscardPrompt", false)
+			if prompt:
+				col.remove_child(prompt)
+				prompt.queue_free()
+			# Restore normal mouse behaviour on tokens.
+			for child: Node in col.get_children():
+				if child is TextureRect:
+					var tex_rect: TextureRect = child as TextureRect
+					tex_rect.mouse_filter = Control.MOUSE_FILTER_PASS
+					tex_rect.mouse_default_cursor_shape = Control.CURSOR_ARROW
+					tex_rect.modulate = Color.WHITE
+					if tex_rect.gui_input.is_connected(
+							_on_discard_token_click):
+						tex_rect.gui_input.disconnect(
+								_on_discard_token_click)
+			break
+
+	_log.info("Exited discard mode for %s" % _discard_mode_ship.data_key)
+	_discard_mode_ship = null
+
+
+## Handles a click on a token TextureRect while in discard mode.
+## Determines which command type the clicked token represents, removes it,
+## and emits the appropriate EventBus signals.
+func _on_discard_token_click(event: InputEvent,
+		tex_rect: TextureRect) -> void:
+	if not event is InputEventMouseButton:
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+		return
+	if _discard_mode_ship == null:
+		return
+
+	# Determine the command type from the token's index in the column.
+	var col: VBoxContainer = tex_rect.get_parent() as VBoxContainer
+	if col == null:
+		return
+	# The first child may be the DiscardPrompt label — skip it.
+	var token_index: int = -1
+	var idx: int = 0
+	for child: Node in col.get_children():
+		if child is TextureRect:
+			if child == tex_rect:
+				token_index = idx
+				break
+			idx += 1
+
+	var tokens: Array[int] = _discard_mode_ship.command_tokens.get_tokens()
+	if token_index < 0 or token_index >= tokens.size():
+		_log.warn("Discard click — invalid token index %d" % token_index)
+		return
+
+	var cmd_type: int = tokens[token_index]
+	_discard_mode_ship.command_tokens.remove_token(cmd_type)
+	_log.info("Player discarded token %d from %s" % [
+			cmd_type, _discard_mode_ship.data_key])
+
+	var ship_ref: ShipInstance = _discard_mode_ship
+	_exit_discard_mode()
+
+	EventBus.command_tokens_changed.emit(ship_ref)
+	EventBus.token_discarded.emit(ship_ref, cmd_type)
 
 
 # ---------------------------------------------------------------------------

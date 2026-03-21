@@ -214,13 +214,19 @@ static func validate_category(category_name: String) -> ValidationResult:
 
 
 ## Loads a texture asset and returns it (or null on failure).
+## Falls back to [method Image.load_from_file] for PNGs that have not
+## been imported by the Godot editor yet (e.g. newly-added overlay images).
 static func load_texture(subfolder: String, filename: String) -> Texture2D:
 	var path: String = BASE_PATH + subfolder + filename
-	if not ResourceLoader.exists(path):
-		return null
-	var resource: Resource = ResourceLoader.load(path)
-	if resource is Texture2D:
-		return resource as Texture2D
+	if ResourceLoader.exists(path):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is Texture2D:
+			return resource as Texture2D
+	# Fallback: load PNG directly from the filesystem (bypasses import pipeline).
+	if filename.ends_with(".png") and FileAccess.file_exists(path):
+		var image: Image = Image.load_from_file(path)
+		if image != null:
+			return ImageTexture.create_from_image(image)
 	return null
 
 

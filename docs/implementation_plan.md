@@ -637,27 +637,48 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5b: Ship Movement Execution ⏳
-**Goal:** Wire the maneuver tool into the activation flow — execute maneuver, Navigate command, overlap handling.
+### Phase 5b: Ship Movement Execution 🔄
+**Goal:** Add activation modal that guides the player through the ship activation sub-steps (Reveal → Squadron → Repair → Attack → Execute Maneuver). Implement the Navigate command and actual ship placement via the maneuver tool. Overlap handling deferred to Phase 5b-2.
 **Prerequisites:** Phase 5a/5a+ (maneuver tool), Phase 4c/4d (activation trigger + keep-or-convert)
-**Duration estimate:** 2 sessions
+**Duration estimate:** 3 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| `SpeedChart` data per ship | Core | MV-003–004 | Speed/yaw data from card data JSONs |
-| Navigate command resolution | Core | CM-010–013 | Speed ±1, yaw +1 on one joint |
-| Ship placement at final position | Core + Pres | MV-010–014 | Slide-along-tool logic, side selection |
-| Speed 0 maneuver | Core | MV-015 | No movement, still counts as maneuver |
-| Ship–ship overlap handling | Core | OV-010–013 | Temp speed reduction loop, facedown damage to both |
-| Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons |
-| Activation step gating (Reveal → Attack → Move → End) | Core | SP-010, TF-004 | Enforce sequential activation sub-steps; "End Activation" only available after Move |
-| Movement preview (ghost position) wired to game flow | Presentation | UI-010, MV-005 | Ghost ship visible during Execute Maneuver step |
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | `ShipActivationState` — step tracker | Core | ACT-002, FLOW-004, AC-5b-01 | `src/core/ship_activation_state.gd` (RefCounted) — tracks current step, spent commands, Navigate resources. Steps: REVEAL, SQUADRON, REPAIR, ATTACK, MANEUVER, DONE | ✅ |
+| 2 | "Show Activation Sequence" button + Activation Modal UI | Presentation | ACT-001–004, ACT-007, AC-5b-01–02, AC-5b-14 | `src/ui/show_activation_button.gd` — bottom-centre button appears after dial reveal; pressing it opens `src/ui/activation_modal.gd` (Control) — persistent panel showing 5 step sections; steps 2–4 show "Not yet implemented" + auto-skip; revealed dial + tokens displayed per step | ✅ |
+| 3 | Navigate command resolution | Core | NAV-001–008, CM-010–013, AC-5b-04–06 | `ShipActivationState.can_change_speed()`, `apply_speed_change()`, `has_yaw_bonus()`, `apply_yaw_bonus()` — dial: speed ±1 AND/OR +1 yaw; token: speed ±1; combined: speed ±2 AND/OR +1 yaw | ✅ |
+| 4 | Wire +/− buttons to Navigate in activation mode | Presentation | NAV-008, AC-5b-04–07 | `ManeuverToolScene` detects activation vs simulation mode; +/− writes `ShipInstance.current_speed` gated by Navigate availability; reddish overlay on token when token-only spend | ✅ |
+| 5 | Yaw bonus joint | Core + Pres | NAV-002, NAV-006, EXE-005, AC-5b-04 | `ManeuverToolState.set_yaw_bonus_joint()` — one joint gets +1 max yaw for this maneuver; visual "N" badge on the joint indicator | ✅ |
+| 6 | "Execute Maneuver" button | Presentation | EXE-001, AC-5b-08 | New button at bottom-centre (same position as End Activation); commits maneuver: update speed, place ship, dismiss tool, emit `ship_moved` | ✅ |
+| 7 | Ship snap placement | Presentation | EXE-002, EXE-003, MV-010–014, AC-5b-09 | Ship token transform set to `compute_final_transform()` result; side from `compute_ghost_side()`; instant snap | ✅ |
+| 8 | Speed 0 maneuver | Core | EXE-004, MV-015, AC-5b-10 | No tool displayed; ship stays in place; maneuver counts as executed | ✅ |
+| 9 | Activation flow rewiring | Presentation | FLOW-001–003, AC-5b-11 | "Show Activation Sequence" button replaces immediate End Activation after dial reveal; pressing it opens modal; End Activation appears only after maneuver; maneuver tool auto-displayed in step 5 | ✅ |
+| 10 | Token spend highlight | Presentation | NAV-007, AC-5b-07 | Reddish semi-transparent overlay on Navigate token in ship card panel when it would be auto-spent | ⏳ |
+| 11 | Tests | Test | AC-5b-01–15 | Unit: ShipActivationState step tracking, Navigate speed/yaw logic, combined dial+token, bounds; Integration: activation flow end-to-end | ✅ |
 
 > **Note:** Activation trigger (drag-and-drop dial to ship) and basic reveal/spend flow
 > are handled by Phase 4c. Phase 4d adds the keep-or-convert choice (drag to card = token).
-> Phase 5b extends with the maneuver step and activation gating.
+> Phase 5b extends with the activation modal, Navigate command, and maneuver execution.
+> Overlap handling (ship–ship, ship–squadron) is deferred to Phase 5b-2.
 
-**Tests:** ~20 (speed chart, overlap cases, movement edge cases, navigate command, activation gating)
+**Requirements covered:** ACT-001–007, NAV-001–008, EXE-001–005, FLOW-001–004, AC-5b-01–15, CM-010–013, MV-010–015
+**Tests:** 33 (ShipActivationState: step tracking ×8, command resolution ×3, Navigate availability ×4, speed changes ×10, yaw bonus ×5, maneuver execution ×3) — 845 cumulative (50 scripts, 1623 asserts)
+
+---
+
+### Phase 5b-2: Overlap Handling ⏳
+**Goal:** Handle ship–ship and ship–squadron overlaps during movement.
+**Prerequisites:** Phase 5b (maneuver execution)
+**Duration estimate:** 1 session
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Ship–ship overlap detection | Core | OV-010–013 | Detect overlap at final position; temp speed reduction loop; facedown damage to both ships | ⏳ |
+| 2 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons | ⏳ |
+| 3 | Maneuver tool side fallback | Core | MV-013 | If ship overlaps tool on computed side, use opposite side | ⏳ |
+| 4 | Tests | Test | OV-001–013 | Overlap scenarios, displacement, damage | ⏳ |
+
+**Tests:** ~10 (overlap detection, displacement, damage)
 
 ---
 
@@ -837,13 +858,14 @@ Phase 0 (Scale & Assets)
 | Phase 4f | ~16 | **17** | **759** |
 | Phase 5a | ~25 | **36** | **796** |
 | Phase 5a+ | 16 | 812 | 812 |
-| Phase 5b | ~20 | — | ~831 |
-| Phase 6 | ~45 | — | ~876 |
-| Phase 7 | ~30 | — | ~906 |
-| Phase 8 | ~20 | — | ~926 |
-| Phase 9 | ~15 | — | ~941 |
-| Phase 10 | ~20 | — | ~961 |
-| **Total** | **~355 new** | | **~961** |
+| Phase 5b | ~25 | **33** | **845** |
+| Phase 5b-2 | ~10 | — | ~855 |
+| Phase 6 | ~45 | — | ~892 |
+| Phase 7 | ~30 | — | ~922 |
+| Phase 8 | ~20 | — | ~942 |
+| Phase 9 | ~15 | — | ~957 |
+| Phase 10 | ~20 | — | ~977 |
+| **Total** | **~370 new** | | **~977** |
 
 ---
 

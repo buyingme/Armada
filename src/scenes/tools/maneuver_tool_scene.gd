@@ -58,6 +58,18 @@ var _label_font: Font = null
 ## Cached textures per segment type.
 var _textures: Dictionary = {}
 
+## Whether the tool is in activation mode (real speed changes) vs simulation.
+## Requirements: NAV-008, FLOW-003, AC-5b-04.
+var _activation_mode: bool = false
+
+## The ShipActivationState driving Navigate budgets in activation mode.
+## Only set when _activation_mode is true.
+var _activation_state: ShipActivationState = null
+
+## Node2D overlay that draws yaw bonus "N" badges on joints.
+## Requirements: NAV-006, EXE-005.
+var _yaw_badge_layer: Node2D = null
+
 
 ## Initialises the tool for a specific ship token.
 ## [param ship_token] — the ship to attach the tool to.
@@ -81,6 +93,26 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 	_load_textures()
 	_create_sprites()
 	_update_visual()
+
+
+## Enables activation mode — speed +/- buttons write to ShipInstance,
+## gated by Navigate command availability via the activation state.
+## [param activation_state] — the ShipActivationState for this activation.
+## Requirements: NAV-008, FLOW-003, AC-5b-04.
+func set_activation_mode(activation_state: ShipActivationState) -> void:
+	_activation_mode = true
+	_activation_state = activation_state
+	# Apply yaw bonus from activation state, if any.
+	var yaw_joint: int = activation_state.get_yaw_bonus_joint()
+	if yaw_joint >= 0:
+		_state.set_yaw_bonus_joint(yaw_joint)
+	_update_visual()
+	_log.info("Activation mode enabled.")
+
+
+## Returns true if the tool is in activation mode.
+func is_activation_mode() -> bool:
+	return _activation_mode
 
 
 ## Returns the ManeuverToolState for external queries.
@@ -133,6 +165,12 @@ func _create_sprites() -> void:
 	_ghost_label_layer.draw.connect(_on_ghost_label_draw)
 	_ghost_label_layer.visible = false
 	add_child(_ghost_label_layer)
+	## Yaw bonus badge overlay drawn at joint positions.
+	_yaw_badge_layer = Node2D.new()
+	_yaw_badge_layer.name = "YawBadges"
+	_yaw_badge_layer.draw.connect(_on_yaw_badge_draw)
+	_yaw_badge_layer.visible = false
+	add_child(_yaw_badge_layer)
 	## Bold font for labels.
 	var sf: SystemFont = SystemFont.new()
 	sf.font_weight = 700
@@ -192,6 +230,7 @@ func _update_visual() -> void:
 	_update_segments(segs)
 	_update_speed_buttons(segs)
 	_update_ghost(start_pos, start_rot)
+	_update_yaw_badges(joints)
 
 
 ## Logs the full transform chain for debugging segment alignment.
@@ -447,28 +486,46 @@ func _get_speed_button_world_positions() -> Dictionary:
 
 
 ## Checks if the mouse click hits a speed button and applies it.
+## In activation mode, speed changes write to ShipInstance via Navigate budget.
+## In simulation mode, speed changes are preview-only (simulated_speed).
 ## Returns true if a speed button was clicked.
-## Requirements: MT-S-001, AC-20, AC-21.
+## Requirements: MT-S-001, NAV-008, AC-20, AC-21, AC-5b-04–07.
 func _try_speed_button_click() -> bool:
 	var positions: Dictionary = _get_speed_button_world_positions()
 	if positions.is_empty():
 		return false
 	var click_pos: Vector2 = get_global_mouse_position()
 	if click_pos.distance_to(positions["minus"]) <= SPEED_BUTTON_RADIUS:
-		var old_speed: int = _state.get_simulated_speed()
-		_state.set_simulated_speed(old_speed - 1)
-		if _state.get_simulated_speed() != old_speed:
-			_update_visual()
-			_log.info("Speed − → %d" % _state.get_simulated_speed())
+		_handle_speed_change(-1)
 		return true
 	if click_pos.distance_to(positions["plus"]) <= SPEED_BUTTON_RADIUS:
-		var old_speed: int = _state.get_simulated_speed()
-		_state.set_simulated_speed(old_speed + 1)
-		if _state.get_simulated_speed() != old_speed:
-			_update_visual()
-			_log.info("Speed + → %d" % _state.get_simulated_speed())
+		_handle_speed_change(1)
 		return true
 	return false
+
+
+## Applies a speed change, using either activation or simulation mode.
+## [param delta] — +1 or -1.
+func _handle_speed_change(delta: int) -> void:
+	if _activation_mode and _activation_state:
+		var applied: bool = _activation_state.apply_speed_change(delta)
+		if applied:
+			# Sync the tool state to the new actual speed.
+			_state.set_simulated_speed(_activation_state.get_ship().current_speed)
+			_update_visual()
+			_log.info("Activation speed %+d → %d" % [
+					delta, _activation_state.get_ship().current_speed])
+			EventBus.ship_speed_changed.emit(
+					_activation_state.get_ship(),
+					_activation_state.get_ship().current_speed)
+	else:
+		var old_speed: int = _state.get_simulated_speed()
+		_state.set_simulated_speed(old_speed + delta)
+		if _state.get_simulated_speed() != old_speed:
+			_update_visual()
+			_log.info("Speed %s → %d" % [
+					"+" if delta > 0 else "−",
+					_state.get_simulated_speed()])
 
 
 # ------------------------------------------------------------------
@@ -523,4 +580,50 @@ func _on_ghost_label_draw() -> void:
 			local_pos.x - text_size.x * 0.5,
 			local_pos.y + text_size.y * 0.25)
 	_ghost_label_layer.draw_string(_label_font, draw_pos, text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+
+
+# ------------------------------------------------------------------
+# Yaw bonus badges  (Phase 5b)
+# ------------------------------------------------------------------
+
+## Cached joint positions for yaw badge drawing.
+var _cached_joints: Array = []
+
+
+## Positions the yaw badge layer and triggers a redraw.
+## Requirements: NAV-006, EXE-005.
+func _update_yaw_badges(joints: Array) -> void:
+	_cached_joints = joints
+	if _yaw_badge_layer == null:
+		return
+	if _state == null or _state.get_yaw_bonus_joint() < 0:
+		_yaw_badge_layer.visible = false
+		return
+	_yaw_badge_layer.global_position = Vector2.ZERO
+	_yaw_badge_layer.global_rotation = 0.0
+	_yaw_badge_layer.visible = true
+	_yaw_badge_layer.queue_redraw()
+
+
+## Draws an "N" badge at the joint with the yaw bonus.
+## Requirements: NAV-006, EXE-005.
+func _on_yaw_badge_draw() -> void:
+	if _state == null or _label_font == null:
+		return
+	var bonus_joint: int = _state.get_yaw_bonus_joint()
+	if bonus_joint < 0 or bonus_joint >= _cached_joints.size():
+		return
+	var joint_pos: Vector2 = _cached_joints[bonus_joint] as Vector2
+	var badge_radius: float = 8.0
+	var bg_color: Color = Color(0.2, 0.6, 0.9, 0.85)
+	_yaw_badge_layer.draw_circle(joint_pos, badge_radius, bg_color)
+	var font_size: int = 10
+	var text: String = "N"
+	var text_size: Vector2 = _label_font.get_string_size(
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var draw_pos: Vector2 = Vector2(
+			joint_pos.x - text_size.x * 0.5,
+			joint_pos.y + text_size.y * 0.25)
+	_yaw_badge_layer.draw_string(_label_font, draw_pos, text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)

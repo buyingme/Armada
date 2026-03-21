@@ -117,6 +117,24 @@ var _maneuver_tool_scene: ManeuverToolScene = null
 ## ActionToolbar in the lower-right corner.
 var _action_toolbar: ActionToolbar = null
 
+## --- Phase 5b: Activation flow state ---
+
+## "Show Activation Sequence" button (replaces End Activation after dial reveal).
+## Requirements: ACT-007, FLOW-002.
+var _show_activation_button: ShowActivationButton = null
+
+## Activation modal panel (right side of screen).
+## Requirements: ACT-001–004.
+var _activation_modal: ActivationModal = null
+
+## "Execute Maneuver" button (bottom-centre during maneuver step).
+## Requirements: EXE-001, AC-5b-08.
+var _execute_maneuver_button: ExecuteManeuverButton = null
+
+## Current ship activation state tracker (nil when not in activation).
+## Requirements: FLOW-004.
+var _ship_activation_state: ShipActivationState = null
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -350,6 +368,8 @@ func _connect_signals() -> void:
 	# Maneuver tool (Phase 5a).
 	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
 	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
+	# Maneuver execution (Phase 5b).
+	EventBus.execute_maneuver_requested.connect(_on_execute_maneuver)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -460,6 +480,12 @@ func _on_viewport_resized() -> void:
 		_end_activation_button.update_position(vp_size)
 	if _action_toolbar != null:
 		_action_toolbar.update_position(vp_size)
+	if _show_activation_button != null:
+		_show_activation_button.update_position(vp_size)
+	if _execute_maneuver_button != null:
+		_execute_maneuver_button.update_position(vp_size)
+	if _activation_modal != null:
+		_activation_modal.update_position(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -679,6 +705,25 @@ func _create_turn_management_ui() -> void:
 	_end_activation_button.name = "EndActivationButton"
 	layer.add_child(_end_activation_button)
 
+	# Phase 5b: Show Activation Sequence button.
+	_show_activation_button = ShowActivationButton.new()
+	_show_activation_button.name = "ShowActivationButton"
+	_show_activation_button.activation_sequence_requested.connect(
+			_on_activation_sequence_requested)
+	layer.add_child(_show_activation_button)
+
+	# Phase 5b: Execute Maneuver button.
+	_execute_maneuver_button = ExecuteManeuverButton.new()
+	_execute_maneuver_button.name = "ExecuteManeuverButton"
+	layer.add_child(_execute_maneuver_button)
+
+	# Phase 5b: Activation modal (right side panel).
+	_activation_modal = ActivationModal.new()
+	_activation_modal.name = "ActivationModal"
+	_activation_modal.maneuver_step_entered.connect(
+			_on_maneuver_step_entered)
+	layer.add_child(_activation_modal)
+
 
 ## Creates a phase / round HUD label at the top-centre of the screen.
 func _create_phase_hud() -> void:
@@ -738,14 +783,18 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 	match new_phase:
 		Constants.GamePhase.COMMAND:
 			_end_activation_button.hide_button()
+			_hide_phase5b_ui()
 		Constants.GamePhase.SHIP:
 			# Button hidden until a ship is activated via dial drag (Phase 4c).
 			_end_activation_button.hide_button()
+			_hide_phase5b_ui()
 		Constants.GamePhase.SQUADRON:
 			# Placeholder — auto-passes immediately.
 			_end_activation_button.hide_button()
+			_hide_phase5b_ui()
 		_:
 			_end_activation_button.hide_button()
+			_hide_phase5b_ui()
 
 
 ## Called when a new round begins.
@@ -1058,8 +1107,8 @@ func _is_valid_drop_target(token: ShipToken) -> bool:
 
 
 ## Completes a ship activation: reveals the dial, shows it behind the base,
-## and enables the End Activation button.
-## Requirements: UI-024, UI-025, SP-010.
+## and shows the "Show Activation Sequence" button.
+## Requirements: UI-024, UI-025, SP-010, ACT-007, FLOW-002.
 func _complete_ship_activation(token: ShipToken) -> void:
 	var ship_key: String = _drag_ship_instance.data_key if _drag_ship_instance \
 			else "?"
@@ -1070,8 +1119,9 @@ func _complete_ship_activation(token: ShipToken) -> void:
 		var cmd: int = int(revealed.get("command", 0))
 		token.show_revealed_dial(cmd)
 	_activating_ship_token = token
+	_ship_activation_state = ShipActivationState.create(_drag_ship_instance)
 	_clean_up_drag()
-	_show_end_activation_button()
+	_show_activation_sequence_button()
 	_log.info("Ship activated via dial drop: '%s'." % ship_key)
 
 
@@ -1090,16 +1140,17 @@ func _complete_token_conversion() -> void:
 	# call show_text() again (preventing the toast from being killed).
 	_clean_up_drag()
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	_ship_activation_state = ShipActivationState.create(ship)
 
 	var needs_discard: bool = result.get("needs_discard", false)
 	if needs_discard:
-		# Delay End Activation until the discard is resolved.
+		# Delay activation sequence button until the discard is resolved.
 		if not EventBus.token_discarded.is_connected(
 				_on_token_discard_resolved):
 			EventBus.token_discarded.connect(
 					_on_token_discard_resolved, CONNECT_ONE_SHOT)
 	else:
-		_show_end_activation_button()
+		_show_activation_sequence_button()
 
 	var cmd_name: String = ""
 	if not result.is_empty():
@@ -1111,10 +1162,10 @@ func _complete_token_conversion() -> void:
 
 
 ## Called (one-shot) when the player resolves a token overflow discard.
-## Shows the End Activation button now that the token count is legal.
+## Shows the activation sequence button now that the token count is legal.
 func _on_token_discard_resolved(_ship: RefCounted, _discarded: int) -> void:
-	_show_end_activation_button()
-	_log.info("Token discard resolved — showing End Activation button.")
+	_show_activation_sequence_button()
+	_log.info("Token discard resolved — showing activation sequence button.")
 
 
 ## Checks both card panels for a ship entry at [param screen_pos].
@@ -1156,13 +1207,136 @@ func _clean_up_drag() -> void:
 
 
 ## Called when End Activation is pressed — cleans up the dial sprite on the
-## board and resets activation visual state.
-## Requirements: UI-026.
+## board, activation modal, and resets activation visual state.
+## Requirements: UI-026, FLOW-002.
 func _on_board_activation_ended() -> void:
 	if _activating_ship_token:
 		_activating_ship_token.hide_revealed_dial()
 		_activating_ship_token = null
 	_end_activation_button.hide_button()
+	if _activation_modal:
+		_activation_modal.close()
+	_ship_activation_state = null
+	_dismiss_maneuver_tool()
+
+
+# ---------------------------------------------------------------------------
+# Ship Activation Sequence (Phase 5b)
+# ---------------------------------------------------------------------------
+
+
+## Shows the "Show Activation Sequence" button at bottom-centre.
+## Replaces the old direct "End Activation" after dial reveal.
+## Requirements: ACT-007, FLOW-002.
+func _show_activation_sequence_button() -> void:
+	if _show_activation_button == null:
+		return
+	_show_activation_button.show_button()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_show_activation_button.update_position(vp_size)
+
+
+## Hides all Phase 5b UI elements (activation button, modal, execute button).
+func _hide_phase5b_ui() -> void:
+	if _show_activation_button:
+		_show_activation_button.hide_button()
+	if _activation_modal:
+		_activation_modal.close()
+	if _execute_maneuver_button:
+		_execute_maneuver_button.hide_button()
+	_ship_activation_state = null
+
+
+## Called when the player presses "Show Activation Sequence".
+## Opens the activation modal and starts the step sequence.
+## Requirements: ACT-001, ACT-007.
+func _on_activation_sequence_requested() -> void:
+	_log.info("Activation sequence requested.")
+	if _ship_activation_state == null:
+		_log.warn("No activation state — cannot open modal.")
+		return
+	if _activation_modal:
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.update_position(vp_size)
+
+
+## Called when the activation modal reaches the Execute Maneuver step.
+## Shows the maneuver tool on the activating ship and the Execute Maneuver
+## button. For speed 0, skips the tool and executes immediately.
+## Requirements: FLOW-003, AC-5b-03, EXE-004.
+func _on_maneuver_step_entered() -> void:
+	_log.info("Maneuver step entered.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		return
+	var ship: ShipInstance = _ship_activation_state.get_ship()
+	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
+	if ship.current_speed == 0:
+		_log.info("Speed 0 — executing maneuver without tool.")
+		_ship_activation_state.mark_maneuver_executed()
+		EventBus.ship_moved.emit(_activating_ship_token)
+		_show_end_activation_after_maneuver()
+		return
+	# Show the maneuver tool in activation mode.
+	_dismiss_maneuver_tool()
+	_maneuver_tool_scene = ManeuverToolScene.new()
+	_maneuver_tool_scene.name = "ManeuverToolScene"
+	_token_container.add_child(_maneuver_tool_scene)
+	_maneuver_tool_scene.setup(_activating_ship_token)
+	_maneuver_tool_scene.set_activation_mode(_ship_activation_state)
+	# Apply yaw bonus to the tool if Navigate dial provides it.
+	if _ship_activation_state.has_yaw_bonus():
+		_ship_activation_state.apply_yaw_bonus(0)
+		_maneuver_tool_scene.get_state().set_yaw_bonus_joint(0)
+		_maneuver_tool_scene.refresh()
+	# Show Execute Maneuver button.
+	if _execute_maneuver_button:
+		_execute_maneuver_button.show_button()
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_execute_maneuver_button.update_position(vp_size)
+
+
+## Called when the player commits the maneuver (Execute Maneuver button).
+## Snaps the ship to the final transform and shows End Activation.
+## Requirements: EXE-001, EXE-002, AC-5b-08, AC-5b-09, AC-5b-12, AC-5b-13.
+func _on_execute_maneuver() -> void:
+	_log.info("Execute maneuver requested.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		return
+	if _maneuver_tool_scene == null:
+		return
+	var tool_state: ManeuverToolState = _maneuver_tool_scene.get_state()
+	# Compute final transform.
+	var attach: Dictionary = _maneuver_tool_scene._compute_attachment()
+	var start_pos: Vector2 = attach["position"]
+	var start_rot: float = attach["rotation"]
+	var ghost_side: String = tool_state.compute_ghost_side()
+	var final_xform: Transform2D = tool_state.compute_final_transform(
+			start_pos, start_rot, ghost_side)
+	# Snap ship to final position.
+	_activating_ship_token.global_position = final_xform.origin
+	_activating_ship_token.global_rotation = final_xform.get_rotation()
+	# Mark maneuver executed.
+	_ship_activation_state.mark_maneuver_executed()
+	# Emit ship_moved.
+	EventBus.ship_moved.emit(_activating_ship_token)
+	# Dismiss maneuver tool.
+	_dismiss_maneuver_tool()
+	# Show End Activation.
+	_show_end_activation_after_maneuver()
+	_log.info("Ship snapped to final position.")
+
+
+## Shows the End Activation button after maneuver execution.
+## Requirements: AC-5b-11, FLOW-002.
+func _show_end_activation_after_maneuver() -> void:
+	if _execute_maneuver_button:
+		_execute_maneuver_button.hide_button()
+	_show_end_activation_button()
+	# Update modal to reflect completion.
+	if _activation_modal and _ship_activation_state:
+		_ship_activation_state.advance_step()  ## MANEUVER → DONE
+		_activation_modal.refresh()
 
 
 # ---------------------------------------------------------------------------

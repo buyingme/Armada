@@ -40,6 +40,10 @@ var _ship_size: Constants.ShipSize = Constants.ShipSize.SMALL
 ## Current click value per joint (negative = port, positive = starboard).
 var _joint_clicks: Array[int] = [0, 0, 0, 0]
 
+## Joint index that has a Navigate yaw bonus (+1 max yaw), or -1 if none.
+## Requirements: NAV-002, NAV-006, EXE-005, AC-5b-04.
+var _yaw_bonus_joint: int = -1
+
 
 ## Initialises the tool state for a specific ship.
 ## [param speed] — the ship's current speed (0–4).
@@ -83,10 +87,14 @@ func is_joint_active(joint_index: int) -> bool:
 
 
 ## Returns the maximum absolute yaw clicks for a joint at simulated speed.
-## Rules Reference: MT-M-005.
+## If a yaw bonus is applied to this joint, the limit is increased by 1.
+## Rules Reference: MT-M-005, NAV-002, NAV-006.
 func get_max_yaw(joint_index: int) -> int:
-	return ManeuverCalculator.get_max_yaw(
+	var base: int = ManeuverCalculator.get_max_yaw(
 			_nav_chart, _simulated_speed, joint_index)
+	if _yaw_bonus_joint == joint_index:
+		base += 1
+	return base
 
 
 ## Clicks a joint one step to the left (port, negative direction).
@@ -299,3 +307,36 @@ func _clamp_joints_to_nav_chart() -> void:
 		var max_yaw: int = get_max_yaw(i)
 		if absi(_joint_clicks[i]) > max_yaw:
 			_joint_clicks[i] = max_yaw * signi(_joint_clicks[i])
+
+
+# ------------------------------------------------------------------
+# Yaw bonus  (Phase 5b — Navigate command)
+# ------------------------------------------------------------------
+
+
+## Sets the yaw bonus on a specific joint (+1 max yaw for this maneuver).
+## Only one joint can hold the bonus at a time. Returns true if applied.
+## [param joint_index] — the joint to receive the bonus (0-based).
+## Requirements: NAV-002, NAV-006, EXE-005, AC-5b-04.
+func set_yaw_bonus_joint(joint_index: int) -> bool:
+	if joint_index < 0 or joint_index >= MAX_JOINTS:
+		return false
+	if not is_joint_active(joint_index):
+		return false
+	_yaw_bonus_joint = joint_index
+	return true
+
+
+## Removes the yaw bonus from all joints.
+func clear_yaw_bonus() -> void:
+	_yaw_bonus_joint = -1
+
+
+## Returns the joint index with the yaw bonus, or -1 if none.
+func get_yaw_bonus_joint() -> int:
+	return _yaw_bonus_joint
+
+
+## Returns true if the given joint has a yaw bonus.
+func has_yaw_bonus_on(joint_index: int) -> bool:
+	return _yaw_bonus_joint == joint_index

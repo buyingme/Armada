@@ -203,3 +203,23 @@ signal maneuver_tool_requested()
 ## Emitted when the maneuver tool should be dismissed.
 ## Requirements: MT-U-006.
 signal maneuver_tool_dismissed()
+
+
+# --- Activation / Maneuver Execution Events (Phase 5b) ---
+
+## Emitted when the player presses "Show Activation Sequence".
+## Requirements: ACT-007.
+signal activation_sequence_requested()
+
+## Emitted when the Execute Maneuver step becomes active in the modal.
+## Requirements: FLOW-003, AC-5b-03.
+signal maneuver_step_entered()
+
+## Emitted when the player presses "Execute Maneuver" to commit the move.
+## Requirements: EXE-001, AC-5b-08.
+signal execute_maneuver_requested()
+
+## Emitted after the ship has been placed at its final position.
+## [param ship_node] — the ShipToken that was moved.
+## Requirements: EXE-002, AC-5b-09, AC-5b-13.
+signal maneuver_executed(ship_node: Node)

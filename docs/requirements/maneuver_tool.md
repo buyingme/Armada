@@ -388,5 +388,240 @@ The `segment_end` section gains two new fields:
 
 1. **Phase 5a (this ticket):** Mathematical model, graphical representation,
    action toolbar, ship selection flow, tool display with interactive joints.
-2. **Phase 5b:** Wire into activation flow — attach to ship during Execute
-   Maneuver step, compute final position, handle overlaps, Navigate command.
+2. **Phase 5b:** Wire into activation flow — activation modal, Navigate
+   command, maneuver execution, ship placement.
+
+---
+
+## Phase 5b — Ship Movement Execution
+
+### 13. Activation Modal
+
+When a ship is activated during the Ship Phase (dial revealed and
+assigned), a **"Show Activation Sequence"** button appears at
+bottom-centre of the screen. Pressing it opens the **Activation
+Modal**, which guides the player through the sub-steps of activation
+in sequence. The modal is a persistent panel displayed alongside the
+game board.
+
+#### ACT-001 — Modal lifecycle
+The Activation Modal does **not** auto-open.  After the command dial
+is revealed and assigned (Phase 4c triggers), a "Show Activation
+Sequence" button appears at bottom-centre.  Pressing the button
+opens the modal.  It closes when the player presses "End
+Activation".
+
+#### ACT-002 — Step sequence
+The modal presents the activation sub-steps in the following order.
+Each step is a distinct section of the modal that becomes active
+only when the previous step is complete (or skipped).
+
+| # | Step name | Timing | Command resolved |
+|---|-----------|--------|------------------|
+| 1 | Reveal Command Dial | Automatic (already done by Phase 4c) | — |
+| 2 | Squadron Command (O) | After dial reveal | O dial and/or O token |
+| 3 | Repair Command (Q) | After dial reveal | Q dial and/or Q token |
+| 4 | Attack | After step 1 commands | P dial and/or P token (during attack sub-steps) |
+| 5 | Execute Maneuver | After attack | M dial and/or M token (during Determine Course) |
+
+Rules Reference: RRG "Ship Activation" p.16, "Commands" p.3.
+
+**Order within step 1 commands:** Squadron (O) and Repair (Q) both
+resolve "after revealing the ship's command dial". The modal presents
+Squadron first, then Repair. Both are optional; each may be skipped
+by pressing "Skip".
+
+#### ACT-003 — Displayed command info
+The modal shows the **revealed command** (from the dial) and each
+**command token** held by the ship. For each step the relevant
+command source(s) are highlighted:
+- If the ship's revealed dial matches the step's command → show dial icon.
+- If the ship holds a matching command token → show token icon.
+- If both → show both; player can choose dial, token, or combined.
+
+Rules Reference: CM-001 – CM-003.
+
+#### ACT-004 — Not-yet-implemented steps (placeholder)
+Steps 2 (Squadron), 3 (Repair), and 4 (Attack) display a "Not yet
+implemented" badge and an auto-skip button. They cannot be interacted
+with in Phase 5b.  The step label, command icon, and availability
+status are still rendered so the player sees the full flow.
+
+#### ACT-005 — Command spending rules
+A ship **can** spend both a command dial and a command token of the
+same type to combine their effects (counts as one resolution).
+A ship **cannot** resolve the same command more than once per round.
+The player must choose dial, token, or both **before** resolving.
+
+Rules Reference: CM-002, CM-003.
+
+#### ACT-006 — Prefer dial over token (UI default)
+When the revealed dial's command matches the current step, the UI
+**defaults to spending the dial** (higher effect). The player may
+explicitly opt to spend only the token instead, but the dial is
+pre-selected.  This incentivises saving tokens for later rounds.
+
+#### ACT-007 — "Show Activation Sequence" button
+After the command dial is revealed and assigned, a button labelled
+**"Show Activation Sequence"** appears at **bottom-centre** of the
+screen (same position used by `EndActivationButton`).  Pressing it:
+1. Hides the "Show Activation Sequence" button.
+2. Opens the Activation Modal (see ACT-001).
+
+The button remains visible until pressed; it does **not** auto-dismiss.
+
+### 14. Navigate Command — Execute Maneuver Step
+
+#### NAV-001 — Timing
+The Navigate command resolves during the "Determine Course" sub-step
+of the Execute Maneuver step.
+
+Rules Reference: CM-010.
+
+#### NAV-002 — Dial effect
+Spending the Navigate **dial** allows:
+- Increase **or** decrease the ship's speed by 1, **and/or**
+- Increase the yaw value of **one** joint by 1 for this maneuver.
+
+Rules Reference: CM-011.
+
+#### NAV-003 — Token effect
+Spending the Navigate **token** allows:
+- Increase **or** decrease the ship's speed by 1.
+
+(No yaw bonus.)
+
+Rules Reference: CM-012.
+
+#### NAV-004 — Combined dial + token
+If the player spends **both** a Navigate dial and a Navigate token,
+their effects combine (single resolution):
+- Speed may change by up to ±2, **and/or**
+- Yaw of one joint increased by 1.
+
+Rules Reference: CM-003, CM-011, CM-012.
+
+#### NAV-005 — Speed bounds
+Speed after Navigate is clamped to [0, ship_data.max_speed].
+A ship at speed 0 does not display the maneuver tool; it executes
+a 0-speed maneuver (stays in place).
+
+Rules Reference: CM-013, MV-015.
+
+#### NAV-006 — Yaw bonus joint
+When the Navigate dial grants +1 yaw on one joint, the player
+chooses which active joint receives the bonus.  The bonus applies
+for this maneuver only; it does not persist.
+
+#### NAV-007 — Token-only highlight
+If the player changes speed but does **not** have a matching Navigate
+dial (the dial was converted to token or set to a different command),
+the Navigate token to be spent is highlighted with a **reddish
+overlay** in the ship card panel.  The token is spent automatically
+when the maneuver is confirmed.
+
+#### NAV-008 — Speed change via +/− buttons
+The same +/− buttons on the end segment used for Phase 5a+ simulation
+are reused during Execute Maneuver.  In **activation mode** (as
+opposed to simulation mode) clicking +/− actually changes the ship's
+speed (writes `ShipInstance.current_speed`), subject to command
+availability and bounds.
+
+- If the ship has a Navigate **dial**: up to ±1 from the dial, plus
+  up to ±1 from a token if also available (max ±2 total).
+- If the ship has only a Navigate **token**: up to ±1.
+- If the ship has **neither**: no speed change allowed; buttons
+  disabled.
+
+### 15. Maneuver Execution
+
+#### EXE-001 — "Execute Maneuver" button
+A button labelled **"Execute Maneuver"** appears at the bottom-centre
+of the viewport (same position as the "End Activation" button) when
+the Navigate / Execute Maneuver step becomes active.
+
+Pressing it commits the maneuver:
+1. Ship speed is updated to the maneuver speed (if changed via Navigate).
+2. Ship position and rotation are set to the computed final transform
+   (`ManeuverToolState.compute_final_transform()`).
+3. The maneuver tool is dismissed.
+4. `EventBus.ship_moved` is emitted.
+5. The modal advances to the end state and the "End Activation" button
+   replaces the "Execute Maneuver" button.
+
+#### EXE-002 — Ship snap placement
+The ship token is placed **instantly** (no animation) at the final
+transform computed by the maneuver tool state.
+
+Rules Reference: MV-010 – MV-014.
+
+#### EXE-003 — Side selection
+The tool and ship use `compute_ghost_side()` (from Phase 5a+) to
+determine which side of the maneuver tool the ship's front notch
+attaches to.  If the ship would overlap the tool on the computed
+side, the opposite side is used.
+
+Rules Reference: MV-012, MV-013.
+
+#### EXE-004 — Speed 0 maneuver
+If the ship's speed is 0 (either originally or after Navigate),
+no maneuver tool is displayed.  The ship stays in place.
+The maneuver still counts as executed.
+
+Rules Reference: MV-015.
+
+#### EXE-005 — Yaw bonus indicator
+When a Navigate dial grants a +1 yaw bonus joint, the affected
+joint's click indicator on the maneuver tool scene displays a
+visual marker (e.g. a small "N" badge or different colour tint)
+to distinguish the bonus click from the ship's base yaw allowance.
+
+### 16. Activation flow integration
+
+#### FLOW-001 — Activation trigger unchanged
+Ship activation is still triggered via the existing Phase 4c
+mechanism (drag-and-drop dial to ship token, or drag to card panel
+to convert to token).
+
+#### FLOW-002 — Button replaces direct End Activation
+The current "End Activation" button is no longer shown immediately
+after dial reveal.  Instead, a **"Show Activation Sequence"** button
+appears at bottom-centre (ACT-007).  Pressing it opens the
+Activation Modal, which guides the player through steps.
+"End Activation" appears only after the Execute Maneuver step is
+complete.
+
+#### FLOW-003 — Maneuver tool in activation mode
+During the Execute Maneuver step, the maneuver tool is displayed
+automatically (no need to press "Display Maneuver Tool").  Joint
+interaction, speed buttons, and ghost preview work identically to
+Phase 5a/5a+ simulation mode, except:
+- Speed changes via +/− are **real** (write to `ShipInstance`).
+- Speed changes are gated by Navigate command availability.
+- An optional bonus yaw joint is available if Navigate dial is spent.
+
+#### FLOW-004 — Activation step tracking
+A new core class `ShipActivationState` (RefCounted) tracks which
+sub-step the activation is in and which commands have been spent
+this activation.  This prevents double-spending and enforces the
+sequential step order.
+
+### 17. Updated Acceptance Criteria (Phase 5b)
+
+| ID | Criterion |
+|----|-----------|
+| AC-5b-01 | "Show Activation Sequence" button appears at bottom-centre after dial reveal; pressing it opens the activation modal showing all 5 steps. |
+| AC-5b-02 | Steps 2–4 (Squadron, Repair, Attack) display "Not yet implemented" and auto-skip. |
+| AC-5b-03 | Step 5 (Execute Maneuver) activates the maneuver tool automatically. |
+| AC-5b-04 | Navigate dial: allows speed ±1 AND/OR +1 yaw on one joint. |
+| AC-5b-05 | Navigate token: allows speed ±1 only, no yaw bonus. |
+| AC-5b-06 | Navigate dial + token combined: speed ±2 AND/OR +1 yaw. |
+| AC-5b-07 | Token-only speed change highlights the token with reddish overlay. |
+| AC-5b-08 | "Execute Maneuver" button at bottom-centre commits the move. |
+| AC-5b-09 | Ship snaps instantly to final transform after Execute Maneuver. |
+| AC-5b-10 | Speed 0 maneuver: no tool shown, ship stays in place, still counts as maneuver. |
+| AC-5b-11 | "End Activation" only appears after maneuver is executed (not before modal is opened). |
+| AC-5b-12 | Ship's actual speed is updated after maneuver (if Navigate changed it). |
+| AC-5b-13 | `EventBus.ship_moved` emitted after placement. |
+| AC-5b-14 | Activation modal shows revealed dial command and available tokens per step. |
+| AC-5b-15 | A command cannot be resolved more than once per activation (CM-002). |

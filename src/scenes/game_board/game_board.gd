@@ -1097,6 +1097,17 @@ func _is_valid_drop_target(token: ShipToken) -> bool:
 	return true
 
 
+## Finds the ShipToken on the board bound to the given ShipInstance.
+## Returns null if not found.
+func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var st: ShipToken = child as ShipToken
+			if st.get_ship_instance() == ship:
+				return st
+	return null
+
+
 ## Completes a ship activation: reveals the dial, shows it behind the base,
 ## and shows the "Show Activation Sequence" button.
 ## Requirements: UI-024, UI-025, SP-010, ACT-007, FLOW-002.
@@ -1132,6 +1143,7 @@ func _complete_token_conversion() -> void:
 	_clean_up_drag()
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
 	_ship_activation_state = ShipActivationState.create(ship)
+	_activating_ship_token = _find_ship_token_for_instance(ship)
 
 	var needs_discard: bool = result.get("needs_discard", false)
 	if needs_discard:
@@ -1267,6 +1279,9 @@ func _on_activation_sequence_requested() -> void:
 func _on_maneuver_step_entered() -> void:
 	_log.info("Maneuver step entered.")
 	if _ship_activation_state == null or _activating_ship_token == null:
+		_log.info("Cannot show maneuver tool — state=%s, token=%s." % [
+				str(_ship_activation_state != null),
+				str(_activating_ship_token != null)])
 		return
 	var ship: ShipInstance = _ship_activation_state.get_ship()
 	# Speed 0: no tool, ship stays in place, maneuver counts as executed.

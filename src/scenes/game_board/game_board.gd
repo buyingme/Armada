@@ -1217,10 +1217,15 @@ func _on_board_activation_ended() -> void:
 		_activating_ship_token.hide_revealed_dial()
 		_activating_ship_token = null
 	_end_activation_button.hide_button()
+	if _show_activation_button:
+		_show_activation_button.hide_button()
 	if _activation_modal:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
 	_dismiss_maneuver_tool()
+	# Re-enable simulation maneuver button.
+	if _action_toolbar:
+		_action_toolbar.set_maneuver_button_disabled(false)
 
 
 # ---------------------------------------------------------------------------
@@ -1293,6 +1298,9 @@ func _on_maneuver_step_entered() -> void:
 		return
 	# Show the maneuver tool in activation mode.
 	_dismiss_maneuver_tool()
+	# Disable the simulation maneuver button while activation tool is active.
+	if _action_toolbar:
+		_action_toolbar.set_maneuver_button_disabled(true)
 	_maneuver_tool_scene = ManeuverToolScene.new()
 	_maneuver_tool_scene.name = "ManeuverToolScene"
 	_token_container.add_child(_maneuver_tool_scene)
@@ -1337,14 +1345,17 @@ func _on_execute_maneuver() -> void:
 	_log.info("Ship snapped to final position.")
 
 
-## Shows the End Activation button after maneuver execution.
+## Auto-ends the activation after maneuver execution.
+## Advances the step to DONE and emits activation_ended so the
+## GameManager spends the dial, marks the ship activated, and advances
+## the turn — no extra button press required.
 ## Requirements: AC-5b-11, FLOW-002.
 func _show_end_activation_after_maneuver() -> void:
-	_show_end_activation_button()
-	# Update modal to reflect completion.
-	if _activation_modal and _ship_activation_state:
+	# Update state to reflect completion before signalling.
+	if _ship_activation_state:
 		_ship_activation_state.advance_step()  ## MANEUVER → DONE
-		_activation_modal.refresh()
+	# Auto-end the activation (next player's turn).
+	EventBus.activation_ended.emit()
 
 
 # ---------------------------------------------------------------------------
@@ -1367,6 +1378,11 @@ func _create_action_toolbar() -> void:
 ## Handles the "Display Maneuver Tool" button press.
 ## Requirements: MT-U-002, MT-U-003.
 func _on_maneuver_tool_requested() -> void:
+	# Block simulation requests while the activation-mode maneuver tool
+	# is active — the player must use the modal's Commit button instead.
+	if _ship_activation_state != null and _maneuver_tool_scene != null:
+		_log.info("Simulation maneuver blocked — activation maneuver in progress.")
+		return
 	if _maneuver_tool_scene:
 		_dismiss_maneuver_tool()
 		return

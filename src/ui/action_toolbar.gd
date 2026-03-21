@@ -90,6 +90,14 @@ func _on_maneuver_tool_pressed() -> void:
 	EventBus.maneuver_tool_requested.emit()
 
 
+## Enables or disables the simulation maneuver button.
+## [param disabled] — when [code]true[/code], the button is greyed-out
+## and ignores clicks (used while the activation-mode maneuver tool is active).
+func set_maneuver_button_disabled(disabled: bool) -> void:
+	if _maneuver_tool_btn:
+		_maneuver_tool_btn.disabled = disabled
+
+
 ## Deferred position update after layout calculates sizes.
 func _deferred_position() -> void:
 	if not is_inside_tree():

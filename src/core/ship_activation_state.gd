@@ -45,6 +45,12 @@ var _dial_speed_budget: int = 0
 ## Speed change budget remaining from Navigate token (0 or 1).
 var _token_speed_budget: int = 0
 
+## Initial dial speed budget (set once, never decremented).
+var _initial_dial_budget: int = 0
+
+## Initial token speed budget (set once, never decremented).
+var _initial_token_budget: int = 0
+
 ## Whether the yaw bonus from the Navigate dial is still available.
 var _yaw_bonus_available: bool = false
 
@@ -140,20 +146,31 @@ func is_command_resolved(command: Constants.CommandType) -> bool:
 
 
 ## Returns true if the ship has any Navigate resource (dial or token)
-## that has not yet been spent during this maneuver.
+## that has not yet been fully committed during this maneuver.
+## Speed changes are reversible before commit, so budget is computed
+## from the absolute total change vs the maximum available.
 ## Rules Reference: NAV-001, NAV-008.
 func can_change_speed() -> bool:
-	return _dial_speed_budget > 0 or _token_speed_budget > 0
+	var max_budget: int = _initial_dial_budget + _initial_token_budget
+	return absi(_total_speed_change) < max_budget or _total_speed_change != 0
 
 
 ## Returns the maximum speed increase still available.
 func get_max_speed_increase() -> int:
-	return _dial_speed_budget + _token_speed_budget
+	var max_budget: int = _initial_dial_budget + _initial_token_budget
+	if _total_speed_change >= 0:
+		return max_budget - _total_speed_change
+	# Currently decreased — can swing all the way back plus budget.
+	return max_budget + absi(_total_speed_change)
 
 
 ## Returns the maximum speed decrease still available.
 func get_max_speed_decrease() -> int:
-	return _dial_speed_budget + _token_speed_budget
+	var max_budget: int = _initial_dial_budget + _initial_token_budget
+	if _total_speed_change <= 0:
+		return max_budget + _total_speed_change  # _total is negative
+	# Currently increased — can swing all the way back plus budget.
+	return max_budget + _total_speed_change
 
 
 ## Returns true if a Navigate dial is available (not yet spent).
@@ -186,53 +203,50 @@ func get_original_speed() -> int:
 	return _original_speed
 
 
-## Returns true if the speed change required only a token (no dial budget used).
+## Returns true if the speed change required only a token (no dial available).
 ## Used for the reddish highlight on the token (NAV-007).
 func is_token_only_spend() -> bool:
 	if _total_speed_change == 0:
 		return false
-	return not _has_navigate_dial or _dial_speed_budget == 0 and \
-			_token_speed_budget < (_dial_speed_budget + _token_speed_budget)
+	# Token-only when there's no dial, or the change exceeds dial capacity.
+	return _initial_dial_budget == 0
 
 
 ## Attempts to apply a speed change of +1 or -1 to the ship.
-## Consumes Navigate dial budget first, then token budget.
-## Enforces speed bounds [0, max_speed].
+## Speed changes are reversible before commit: clicking +1 then -1
+## returns to the original speed with full budget restored.
+## Enforces speed bounds [0, max_speed] and total budget.
 ## Returns true if the change was applied.
 ## Rules Reference: NAV-002, NAV-003, NAV-004, NAV-005, NAV-008.
 func apply_speed_change(delta: int) -> bool:
 	if delta == 0:
 		return false
-	if not can_change_speed():
-		_log.info("No Navigate budget remaining for speed change.")
+	var new_total: int = _total_speed_change + delta
+	var max_budget: int = _initial_dial_budget + _initial_token_budget
+	if absi(new_total) > max_budget:
+		_log.info("Speed change %+d would exceed budget (|%d| > %d)." %
+				[delta, new_total, max_budget])
 		return false
-	var new_speed: int = _ship.current_speed + delta
+	var new_speed: int = _original_speed + new_total
 	if new_speed < 0 or new_speed > _ship.ship_data.max_speed:
 		_log.info("Speed change %+d would exceed bounds [0, %d]." %
 				[delta, _ship.ship_data.max_speed])
 		return false
-	# Consume budget: dial first (higher value), then token.
-	if delta > 0:
-		_consume_budget_for_increase()
-	else:
-		_consume_budget_for_decrease()
 	_ship.set_speed(new_speed)
-	_total_speed_change += delta
-	_log.info("Speed changed by %+d → %d (dial_budget=%d, token_budget=%d)" %
-			[delta, _ship.current_speed, _dial_speed_budget, _token_speed_budget])
+	_total_speed_change = new_total
+	_recompute_budgets()
+	_log.info("Speed changed by %+d → %d (total_change=%+d, dial_budget=%d, token_budget=%d)" %
+			[delta, _ship.current_speed, _total_speed_change,
+			_dial_speed_budget, _token_speed_budget])
 	return true
 
 
-## Returns true if we are currently using token-only for speed changes.
-## This is the case when the dial budget is 0 but token budget was used.
+## Returns true if we are currently using the token for speed changes.
+## This is the case when |total_change| exceeds the initial dial budget.
 func is_using_token_for_speed() -> bool:
 	if _total_speed_change == 0:
 		return false
-	# If we had a dial and still have dial budget, we haven't used token-only.
-	# If dial budget is consumed and total change > dial contribution, token was used.
-	var original_dial: int = 1 if _has_navigate_dial else 0
-	var dial_used: int = original_dial - _dial_speed_budget
-	return absi(_total_speed_change) > dial_used
+	return absi(_total_speed_change) > _initial_dial_budget
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +315,8 @@ func _resolve_navigate_availability(ship: ShipInstance) -> void:
 	_has_navigate_token = false
 	_dial_speed_budget = 0
 	_token_speed_budget = 0
+	_initial_dial_budget = 0
+	_initial_token_budget = 0
 	_yaw_bonus_available = false
 	# Check revealed dial.
 	if ship.command_dial_stack:
@@ -309,30 +325,27 @@ func _resolve_navigate_availability(ship: ShipInstance) -> void:
 				int(revealed.get("command", -1)) == Constants.CommandType.NAVIGATE:
 			_has_navigate_dial = true
 			_dial_speed_budget = 1
+			_initial_dial_budget = 1
 			_yaw_bonus_available = true
 	# Check command tokens.
 	if ship.command_tokens and \
 			ship.command_tokens.has_token(Constants.CommandType.NAVIGATE):
 		_has_navigate_token = true
 		_token_speed_budget = 1
+		_initial_token_budget = 1
 	_log.info("Navigate availability: dial=%s, token=%s, yaw=%s" %
 			[str(_has_navigate_dial), str(_has_navigate_token),
 			str(_yaw_bonus_available)])
 
 
-## Consumes one unit of speed budget for an increase (+1).
-## Prefers dial budget first.
-func _consume_budget_for_increase() -> void:
-	if _dial_speed_budget > 0:
-		_dial_speed_budget -= 1
-	elif _token_speed_budget > 0:
-		_token_speed_budget -= 1
-
-
-## Consumes one unit of speed budget for a decrease (-1).
-## Prefers dial budget first.
-func _consume_budget_for_decrease() -> void:
-	if _dial_speed_budget > 0:
-		_dial_speed_budget -= 1
-	elif _token_speed_budget > 0:
-		_token_speed_budget -= 1
+## Recomputes dial/token budgets based on the current total speed change.
+## Dial budget is consumed first; token is consumed only when
+## |total_change| exceeds the initial dial budget.
+func _recompute_budgets() -> void:
+	var abs_change: int = absi(_total_speed_change)
+	# Dial consumed first.
+	var dial_used: int = mini(abs_change, _initial_dial_budget)
+	_dial_speed_budget = _initial_dial_budget - dial_used
+	# Token consumed for the remainder.
+	var token_used: int = mini(abs_change - dial_used, _initial_token_budget)
+	_token_speed_budget = _initial_token_budget - token_used

@@ -50,6 +50,12 @@ signal ship_hull_changed(ship_instance: RefCounted, new_hull: int)
 ## Emitted when a ship changes speed.
 signal ship_speed_changed(ship_instance: RefCounted, new_speed: int)
 
+## Emitted when the Navigate token spend preview changes during maneuver.
+## [param ship_instance] — the ship being activated.
+## [param would_spend] — true if the current speed change requires the token.
+## Requirements: NAV-007, AC-5b-07.
+signal navigate_token_spend_preview(ship_instance: RefCounted, would_spend: bool)
+
 ## Emitted when a ship's defense token state changes.
 signal ship_defense_token_changed(ship_instance: RefCounted)
 

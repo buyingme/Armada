@@ -228,6 +228,30 @@ func test_no_budget_rejects_speed_change() -> void:
 			"No more budget — should reject")
 
 
+func test_speed_change_reversible_before_commit() -> void:
+	var ship: ShipInstance = _make_ship(2, true, false)
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	assert_true(state.apply_speed_change(1), "+1 should succeed")
+	assert_eq(ship.current_speed, 3, "Speed should be 3")
+	assert_true(state.apply_speed_change(-1), "-1 reversal should succeed")
+	assert_eq(ship.current_speed, 2, "Speed restored to 2")
+	assert_eq(state.get_total_speed_change(), 0,
+			"Net change should be 0")
+	# Budget fully restored — can change again.
+	assert_true(state.apply_speed_change(-1), "-1 should still work")
+	assert_eq(ship.current_speed, 1, "Speed should be 1")
+
+
+func test_speed_change_swing_direction() -> void:
+	var ship: ShipInstance = _make_ship(2, true, false, 4)
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	assert_true(state.apply_speed_change(1), "+1 should succeed")
+	assert_true(state.apply_speed_change(-1), "-1 reversal should succeed")
+	assert_true(state.apply_speed_change(-1), "-1 should succeed")
+	assert_eq(ship.current_speed, 1, "Speed should be 1")
+	assert_eq(state.get_total_speed_change(), -1, "Total change should be -1")
+
+
 func test_combined_dial_token_allows_two_changes() -> void:
 	var ship: ShipInstance = _make_ship(2, true, true, 4)
 	var state: ShipActivationState = ShipActivationState.create(ship)

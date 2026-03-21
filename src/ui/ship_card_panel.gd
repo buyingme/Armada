@@ -559,6 +559,10 @@ func _connect_eventbus_signals() -> void:
 			_on_duplicate_token_discarded):
 		EventBus.duplicate_token_discarded.connect(
 				_on_duplicate_token_discarded)
+	if not EventBus.navigate_token_spend_preview.is_connected(
+			_on_navigate_token_spend_preview):
+		EventBus.navigate_token_spend_preview.connect(
+				_on_navigate_token_spend_preview)
 
 
 ## EventBus callback: a ship's defense token state changed.
@@ -598,6 +602,34 @@ func _on_command_tokens_changed(inst: RefCounted) -> void:
 					entry["cmd_token_col"], inst as ShipInstance, factor)
 			_refresh_panel_position()
 			break
+
+
+## EventBus callback: Navigate token spend preview changed.
+## Applies or removes a reddish overlay on the Navigate command token.
+## Requirements: NAV-007, AC-5b-07.
+func _on_navigate_token_spend_preview(inst: RefCounted, would_spend: bool) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] != inst:
+			continue
+		var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
+		var ship: ShipInstance = entry["instance"] as ShipInstance
+		if ship == null or ship.command_tokens == null:
+			break
+		var tokens: Array[int] = ship.command_tokens.get_tokens()
+		# Find the Navigate token's TextureRect in the column.
+		var nav_index: int = -1
+		for i: int in range(tokens.size()):
+			if tokens[i] == Constants.CommandType.NAVIGATE:
+				nav_index = i
+				break
+		if nav_index < 0 or nav_index >= col.get_child_count():
+			break
+		var rect: Control = col.get_child(nav_index)
+		if would_spend:
+			rect.modulate = Color(1.0, 0.4, 0.4, 0.85)
+		else:
+			rect.modulate = Color.WHITE
+		break
 
 
 ## Re-computes panel position after a content change.

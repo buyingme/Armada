@@ -518,6 +518,9 @@ func _handle_speed_change(delta: int) -> void:
 			EventBus.ship_speed_changed.emit(
 					_activation_state.get_ship(),
 					_activation_state.get_ship().current_speed)
+			EventBus.navigate_token_spend_preview.emit(
+					_activation_state.get_ship(),
+					_activation_state.is_using_token_for_speed())
 	else:
 		var old_speed: int = _state.get_simulated_speed()
 		_state.set_simulated_speed(old_speed + delta)

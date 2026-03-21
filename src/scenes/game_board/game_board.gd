@@ -1397,6 +1397,10 @@ func _show_maneuver_tool(token: ShipToken) -> void:
 func _dismiss_maneuver_tool() -> void:
 	_maneuver_tool_selecting = false
 	TooltipManager.hide_tooltip()
+	# Clear Navigate token spend preview overlay.
+	if _ship_activation_state and _ship_activation_state.get_ship():
+		EventBus.navigate_token_spend_preview.emit(
+				_ship_activation_state.get_ship(), false)
 	if _maneuver_tool_scene:
 		_maneuver_tool_scene.queue_free()
 		_maneuver_tool_scene = null

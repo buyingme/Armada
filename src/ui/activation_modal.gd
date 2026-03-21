@@ -399,18 +399,23 @@ func _update_command_info() -> void:
 ## Second click: emits [signal maneuver_commit_requested] to snap the ship.
 func _on_execute_pressed() -> void:
 	if not _maneuver_tool_shown:
-		# Phase 1 — show the maneuver tool.
+		# Phase 1 — show the maneuver tool and close the modal.
 		_log.info("Execute maneuver pressed — showing tool.")
 		_maneuver_tool_shown = true
 		if _execute_button:
 			_execute_button.text = "Commit ►"
 		maneuver_step_entered.emit()
+		# Close so the player can see the maneuver tool underneath.
+		close()
+		modal_closed.emit()
 	else:
 		# Phase 2 — commit the maneuver (snap ship).
 		_log.info("Commit maneuver pressed — snapping ship.")
 		if _execute_button:
 			_execute_button.disabled = true
 		maneuver_commit_requested.emit()
+		close()
+		modal_closed.emit()
 
 
 ## Called when the "✕ Close" button is pressed.

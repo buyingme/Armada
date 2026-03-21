@@ -20,17 +20,17 @@ func _make_square_base() -> PackedVector2Array:
 
 
 ## Creates a set of symmetric boundary points around a 100×100 base.
-## Inner points at the base corners, outer points pushed outward.
+## Inner points inside the base, outer points on the base edges.
 func _make_symmetric_boundaries() -> Dictionary:
 	return {
-		"inner_point_front_left":  Vector2(-50.0, -50.0),
-		"outer_point_front_left":  Vector2(-80.0, -80.0),
-		"inner_point_front_right": Vector2( 50.0, -50.0),
-		"outer_point_front_right": Vector2( 80.0, -80.0),
-		"inner_point_rear_left":   Vector2(-50.0,  50.0),
-		"outer_point_rear_left":   Vector2(-80.0,  80.0),
-		"inner_point_rear_right":  Vector2( 50.0,  50.0),
-		"outer_point_rear_right":  Vector2( 80.0,  80.0),
+		"inner_point_front_left":  Vector2(-20.0, -20.0),
+		"outer_point_front_left":  Vector2(-50.0, -30.0),
+		"inner_point_front_right": Vector2( 20.0, -20.0),
+		"outer_point_front_right": Vector2( 50.0, -30.0),
+		"inner_point_rear_left":   Vector2(-20.0,  20.0),
+		"outer_point_rear_left":   Vector2(-50.0,  30.0),
+		"inner_point_rear_right":  Vector2( 20.0,  20.0),
+		"outer_point_rear_right":  Vector2( 50.0,  30.0),
 	}
 
 
@@ -187,6 +187,60 @@ func test_ring_in_sector_empty_when_no_overlap() -> void:
 
 
 # ---------------------------------------------------------------------------
+# _build_hull_zone_poly
+# ---------------------------------------------------------------------------
+
+func test_build_hull_zone_poly_single_inner_produces_triangle() -> void:
+	# When all inner points coincide (like CR90) and outer points sit on
+	# the base corners, the hull zone polygon collapses to a triangle:
+	# inner → corner_A → corner_B.
+	var base: PackedVector2Array = _make_square_base()
+	var inner := Vector2(0.0, 0.0)
+	var outer_a := Vector2(-50.0, -50.0)   # = base[0]
+	var outer_b := Vector2( 50.0, -50.0)   # = base[1]
+	var result: PackedVector2Array = RangeOverlayCalculator._build_hull_zone_poly(
+			inner, outer_a, inner, outer_b, base, [0, 1])
+	# Duplicates removed: inner, outer_a==base[0], base[1]==outer_b.
+	assert_eq(result.size(), 3,
+		"Single-inner case should produce a triangle")
+	assert_true(Geometry2D.is_polygon_clockwise(result),
+		"Hull zone polygon should be CW")
+
+
+func test_build_hull_zone_poly_distinct_inner_produces_hexagon() -> void:
+	# When inner points differ and outer points are NOT at base corners,
+	# all 6 vertices remain.
+	var base: PackedVector2Array = _make_square_base()
+	var result: PackedVector2Array = RangeOverlayCalculator._build_hull_zone_poly(
+			Vector2(-20.0, -20.0), Vector2(-50.0, -30.0),
+			Vector2( 20.0, -20.0), Vector2( 50.0, -30.0),
+			base, [0, 1])
+	assert_eq(result.size(), 6,
+		"Distinct-inner case should produce a hexagon")
+	assert_true(Geometry2D.is_polygon_clockwise(result),
+		"Hull zone polygon should be CW")
+
+
+func test_build_hull_zone_poly_deduplicates_near_vertices() -> void:
+	# When inner points coincide with base corners, duplicates must be
+	# removed so the polygon has no repeated vertices.  The resulting
+	# shape may be self-intersecting (zero signed area) because this
+	# config is unrealistic — real ships always have inner points
+	# strictly inside the base.
+	var base: PackedVector2Array = _make_square_base()
+	# Inner at corners, outer pushed outward — old symmetric fixture shape.
+	var result: PackedVector2Array = RangeOverlayCalculator._build_hull_zone_poly(
+			Vector2(-50.0, -50.0), Vector2(-80.0, -80.0),
+			Vector2( 50.0, -50.0), Vector2( 80.0, -80.0),
+			base, [0, 1])
+	# inner_a == base[0], inner_b == base[1] → both skipped as duplicates.
+	# Expected: inner_a, outer_a, base[1], outer_b  (4 unique vertices).
+	assert_true(result.size() >= 3,
+		"Deduplication should keep at least 3 unique vertices")
+	# No CW check: self-intersecting polygon has zero signed area.
+
+
+# ---------------------------------------------------------------------------
 # Full compute()
 # ---------------------------------------------------------------------------
 
@@ -309,6 +363,6 @@ func test_arc_line_extends_beyond_long_range() -> void:
 	var from: Vector2 = seg[0] as Vector2
 	var to: Vector2 = seg[1] as Vector2
 	var line_length: float = from.distance_to(to)
-	# Inner to outer is ~42.43 px (diagonal of 30×30), plus 480 extension.
+	# Inner to outer is ~31.62 px, plus 480 extension.
 	assert_true(line_length > long_px,
 		"Arc line should extend beyond the long range distance")

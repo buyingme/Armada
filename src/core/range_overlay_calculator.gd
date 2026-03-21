@@ -7,11 +7,17 @@
 ## All coordinates are in world space (pixels). The caller converts
 ## PNG-space boundary points to world space before passing them here.
 ##
-## Range bands use Minkowski sums (Geometry2D.offset_polygon with
-## JOIN_ROUND) so that the band edges are proper curved arcs at a
-## constant distance from the ship base edge.
+## For each hull zone the calculator builds a hull zone polygon (the area
+## of the ship token within the two bounding arc lines), then creates
+## Minkowski sums (Geometry2D.offset_polygon with JOIN_ROUND) of that
+## hull zone polygon at each range distance. This ensures the distance
+## is measured from the closest point of the attacking hull zone, not
+## from the full ship base.
 ##
-## Rules Reference: "Firing Arcs", p.3; "Range and Distance", p.10;
+## Rules Reference: "Measuring Firing Arc and Range" — "To measure attack
+##   range from a ship, measure from the closest point of the attacking
+##   hull zone." / "Hull Zones" — "A hull zone is a section of a ship
+##   token delineated by the two firing arc lines that border it."
 ##   RO-003, RO-004, RO-005.
 class_name RangeOverlayCalculator
 extends RefCounted
@@ -32,7 +38,7 @@ const MIN_POLY_VERTS: int = 3
 # --- Results (populated by compute()) ---
 
 ## Boundary line segments: Array of [from: Vector2, to: Vector2].
-## 8 entries total (2 per arc × 4 arcs).
+## 4 entries (one per boundary line).
 var arc_lines: Array = []
 
 ## Band fill polygons keyed by hull zone then band name.
@@ -42,6 +48,7 @@ var band_polygons: Dictionary = {}
 
 ## Computes the overlay geometry.
 ## [param base_poly] — ship base polygon in world space (4 verts, CW in screen).
+##   Vertices ordered: 0=front-left, 1=front-right, 2=rear-right, 3=rear-left.
 ## [param boundaries] — world-space arc boundary points (8 keys, same names as
 ##   ShipData.firing_arc_boundaries).
 ## [param close_px] — close-range distance in pixels.
@@ -61,20 +68,6 @@ func compute(
 	# Ensure clockwise winding (Godot 2D screen-space convention).
 	var base: PackedVector2Array = _ensure_cw(base_poly)
 
-	# Compute offset polygons once (shared by all four arcs).
-	var off_close: Array = Geometry2D.offset_polygon(
-			base, close_px, Geometry2D.JOIN_ROUND)
-	var off_medium: Array = Geometry2D.offset_polygon(
-			base, medium_px, Geometry2D.JOIN_ROUND)
-	var off_long: Array = Geometry2D.offset_polygon(
-			base, long_px, Geometry2D.JOIN_ROUND)
-	if off_close.is_empty() or off_medium.is_empty() or off_long.is_empty():
-		return
-
-	var poly_close: PackedVector2Array = off_close[0]
-	var poly_medium: PackedVector2Array = off_medium[0]
-	var poly_long: PackedVector2Array = off_long[0]
-
 	# Unpack boundary points.
 	var ifl: Vector2 = boundaries.get("inner_point_front_left", Vector2.ZERO)
 	var ofl: Vector2 = boundaries.get("outer_point_front_left", Vector2.ZERO)
@@ -90,24 +83,80 @@ func compute(
 	arc_lines = _build_arc_lines(
 			ifl, ofl, ifr, ofr, irl, orl, irr, orr, line_ext)
 
-	# Per-arc definitions: zone → [inner_a, outer_a, inner_b, outer_b].
-	# Each arc is bounded by two of the four boundary lines.
-	var arc_defs: Dictionary = {
-		Constants.HullZone.FRONT: [ifl, ofl, ifr, ofr],
-		Constants.HullZone.LEFT:  [irl, orl, ifl, ofl],
-		Constants.HullZone.RIGHT: [ifr, ofr, irr, orr],
-		Constants.HullZone.REAR:  [irr, orr, irl, orl],
-	}
+	# Per-arc definitions: boundary points + base corner indices for the
+	# hull zone polygon.  Each hull zone's edge is the ship base edge
+	# between the two outer boundary points on that zone's side.
+	# Base polygon vertices: 0=front-left, 1=front-right,
+	#   2=rear-right, 3=rear-left.
+	var arc_defs: Array = [
+		{
+			"zone": Constants.HullZone.FRONT,
+			"ia": ifl, "oa": ofl, "ib": ifr, "ob": ofr,
+			"corners": [0, 1],
+		},
+		{
+			"zone": Constants.HullZone.LEFT,
+			"ia": irl, "oa": orl, "ib": ifl, "ob": ofl,
+			"corners": [3, 0],
+		},
+		{
+			"zone": Constants.HullZone.RIGHT,
+			"ia": ifr, "oa": ofr, "ib": irr, "ob": orr,
+			"corners": [1, 2],
+		},
+		{
+			"zone": Constants.HullZone.REAR,
+			"ia": irr, "oa": orr, "ib": irl, "ob": orl,
+			"corners": [2, 3],
+		},
+	]
 
-	for zone: int in arc_defs:
-		var d: Array = arc_defs[zone]
-		var sector: PackedVector2Array = _build_sector(d[0], d[1], d[2], d[3])
+	for def_dict: Dictionary in arc_defs:
+		var ia: Vector2 = def_dict["ia"]
+		var oa: Vector2 = def_dict["oa"]
+		var ib: Vector2 = def_dict["ib"]
+		var ob: Vector2 = def_dict["ob"]
+		var corners: Array = def_dict["corners"]
+		var zone: int = def_dict["zone"]
+
+		var sector: PackedVector2Array = _build_sector(ia, oa, ib, ob)
 		if sector.size() < MIN_POLY_VERTS:
 			continue
 
-		var close_bands: Array = _ring_in_sector(base, poly_close, sector)
-		var medium_bands: Array = _ring_in_sector(poly_close, poly_medium, sector)
-		var long_bands: Array = _ring_in_sector(poly_medium, poly_long, sector)
+		# Build the hull zone polygon — the area of the ship token
+		# within this arc.  Range is measured from the closest point
+		# of this polygon, NOT from the full base.
+		# Rules Reference: "Measuring Firing Arc and Range", p.8.
+		var hz_poly: PackedVector2Array = _build_hull_zone_poly(
+				ia, oa, ib, ob, base, corners)
+		if hz_poly.size() < MIN_POLY_VERTS:
+			continue
+
+		# Offset the hull zone polygon (Minkowski sum with circle)
+		# at each range distance.
+		var off_close_arr: Array = Geometry2D.offset_polygon(
+				hz_poly, close_px, Geometry2D.JOIN_ROUND)
+		var off_medium_arr: Array = Geometry2D.offset_polygon(
+				hz_poly, medium_px, Geometry2D.JOIN_ROUND)
+		var off_long_arr: Array = Geometry2D.offset_polygon(
+				hz_poly, long_px, Geometry2D.JOIN_ROUND)
+		if off_close_arr.is_empty() or off_medium_arr.is_empty() \
+				or off_long_arr.is_empty():
+			continue
+
+		var hz_off_close: PackedVector2Array = off_close_arr[0]
+		var hz_off_medium: PackedVector2Array = off_medium_arr[0]
+		var hz_off_long: PackedVector2Array = off_long_arr[0]
+
+		# Close band: outside the full ship base, within close range
+		# of the hull zone, clipped to the firing arc sector.
+		var close_bands: Array = _ring_in_sector(
+				base, hz_off_close, sector)
+		# Medium/long: annular rings between successive offsets.
+		var medium_bands: Array = _ring_in_sector(
+				hz_off_close, hz_off_medium, sector)
+		var long_bands: Array = _ring_in_sector(
+				hz_off_medium, hz_off_long, sector)
 
 		band_polygons[zone] = {
 			"close": close_bands,
@@ -120,7 +169,45 @@ func compute(
 # Private helpers
 # ---------------------------------------------------------------------------
 
-## Builds the 8 boundary line segments (2 per boundary × 4 boundaries).
+## Builds the hull zone polygon — the area of the ship token within one
+## firing arc, bounded by the two arc boundary lines and the base edge
+## between them.
+## [param inner_a] — inner point of boundary line A.
+## [param outer_a] — outer point of boundary line A (on base edge).
+## [param inner_b] — inner point of boundary line B.
+## [param outer_b] — outer point of boundary line B (on base edge).
+## [param base] — full ship base polygon (4 verts, CW).
+## [param corner_indices] — indices into [base] for corners between the
+##   two outer points (walking CW along the base perimeter).
+## Rules Reference: "Hull Zones", p.7 — "A hull zone is a section of a
+##   ship token delineated by the two firing arc lines that border it."
+static func _build_hull_zone_poly(
+		inner_a: Vector2, outer_a: Vector2,
+		inner_b: Vector2, outer_b: Vector2,
+		base: PackedVector2Array,
+		corner_indices: Array) -> PackedVector2Array:
+	var pts: PackedVector2Array = PackedVector2Array()
+	pts.append(inner_a)
+	_append_if_unique(pts, outer_a)
+	for idx: int in corner_indices:
+		_append_if_unique(pts, base[idx])
+	_append_if_unique(pts, outer_b)
+	_append_if_unique(pts, inner_b)
+	return _ensure_cw(pts)
+
+
+## Appends [pt] to [pts] only if it is farther than 1 px from every
+## existing vertex.  Prevents degenerate spikes when boundary points
+## coincide with base corners.
+static func _append_if_unique(
+		pts: PackedVector2Array, pt: Vector2) -> void:
+	for existing: Vector2 in pts:
+		if pt.distance_to(existing) <= 1.0:
+			return
+	pts.append(pt)
+
+
+## Builds the 4 boundary line segments (one per boundary line).
 static func _build_arc_lines(
 		ifl: Vector2, ofl: Vector2,
 		ifr: Vector2, ofr: Vector2,

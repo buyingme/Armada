@@ -229,3 +229,122 @@ func test_from_dict_offset_with_short_array_is_skipped() -> void:
 	var ship: ShipData = ShipData.from_dict(data)
 	assert_eq(ship.token_label_offsets.size(), 0,
 		"Array with fewer than 2 elements should be skipped")
+
+
+# --- firing_arc_boundaries ---
+
+func test_default_firing_arc_boundaries_is_empty() -> void:
+	var ship := ShipData.new()
+	assert_eq(ship.firing_arc_boundaries.size(), 0,
+		"Default firing_arc_boundaries should be empty")
+
+
+func test_from_dict_parses_firing_arc_boundaries() -> void:
+	var data: Dictionary = {
+		"firing_arc_boundaries": {
+			"_comment": "ignored",
+			"inner_point_front_left": [71, 124],
+			"outer_point_front_left": [25, 73],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.firing_arc_boundaries.size(), 2,
+		"Should parse 2 boundary entries (skipping _comment)")
+
+
+func test_from_dict_firing_arc_boundaries_are_vector2() -> void:
+	var data: Dictionary = {
+		"firing_arc_boundaries": {
+			"inner_point_front_left": [71, 124],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	var pt: Vector2 = ship.firing_arc_boundaries["inner_point_front_left"]
+	assert_eq(pt, Vector2(71, 124),
+		"Boundary point should be Vector2(71, 124)")
+
+
+func test_from_dict_firing_arc_boundaries_skip_comment() -> void:
+	var data: Dictionary = {
+		"firing_arc_boundaries": {
+			"_comment": "skip me",
+			"inner_point_front_left": [71, 124],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_false(ship.firing_arc_boundaries.has("_comment"),
+		"Keys starting with _ should be skipped")
+
+
+func test_from_dict_missing_firing_arc_boundaries_gives_empty() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_name": "No Arcs"})
+	assert_eq(ship.firing_arc_boundaries.size(), 0,
+		"Missing firing_arc_boundaries should result in empty dict")
+
+
+func test_from_dict_firing_arc_boundaries_all_eight_keys() -> void:
+	var data: Dictionary = {
+		"firing_arc_boundaries": {
+			"inner_point_front_left":  [71, 124],
+			"outer_point_front_left":  [25, 73],
+			"inner_point_front_right": [71, 124],
+			"outer_point_front_right": [117, 73],
+			"inner_point_rear_left":   [71, 124],
+			"outer_point_rear_left":   [25, 175],
+			"inner_point_rear_right":  [71, 124],
+			"outer_point_rear_right":  [117, 175],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.firing_arc_boundaries.size(), 8,
+		"Should parse all 8 boundary keys")
+
+
+# --- line_of_sight_origins ---
+
+func test_default_line_of_sight_origins_is_empty() -> void:
+	var ship := ShipData.new()
+	assert_eq(ship.line_of_sight_origins.size(), 0,
+		"Default line_of_sight_origins should be empty")
+
+
+func test_from_dict_parses_line_of_sight_origins() -> void:
+	var data: Dictionary = {
+		"line_of_sight_origins": {
+			"FRONT": [71, 62],
+			"REAR":  [71, 186],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.line_of_sight_origins.size(), 2,
+		"Should parse 2 LOS origin entries")
+
+
+func test_from_dict_line_of_sight_origins_are_vector2() -> void:
+	var data: Dictionary = {
+		"line_of_sight_origins": {
+			"FRONT": [71, 62],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	var pt: Vector2 = ship.line_of_sight_origins["FRONT"]
+	assert_eq(pt, Vector2(71, 62),
+		"LOS origin should be Vector2(71, 62)")
+
+
+func test_from_dict_line_of_sight_origins_skip_comment() -> void:
+	var data: Dictionary = {
+		"line_of_sight_origins": {
+			"_comment": "skip me",
+			"FRONT": [71, 62],
+		}
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_false(ship.line_of_sight_origins.has("_comment"),
+		"Keys starting with _ should be skipped")
+
+
+func test_from_dict_missing_line_of_sight_origins_gives_empty() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_name": "No LOS"})
+	assert_eq(ship.line_of_sight_origins.size(), 0,
+		"Missing line_of_sight_origins should result in empty dict")

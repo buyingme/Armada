@@ -94,5 +94,23 @@
       83,
       34
     ]
+  },
+  "firing_arc_boundaries": {
+    "_comment": "Each boundary is defined by an inner point and an outer point (on the token edge). All coordinates are pixel [x, y] measured from the PNG origin (top-left corner). The boundary line between two adjacent arcs runs from the inner point to the outer point.",
+    "inner_point_front_left":  [71, 124],
+    "outer_point_front_left":  [25, 73],
+    "inner_point_front_right": [71, 124],
+    "outer_point_front_right": [117, 73],
+    "inner_point_rear_left":   [71, 124],
+    "outer_point_rear_left":   [25, 175],
+    "inner_point_rear_right":  [71, 124],
+    "outer_point_rear_right":  [117, 175]
+  },
+  "line_of_sight_origins": {
+    "_comment": "Each hull zone has one line-of-sight dot. Pixel [x, y] from PNG origin.",
+    "FRONT": [71, 40],
+    "LEFT":  [44, 124],
+    "RIGHT": [98, 124],
+    "REAR":  [71, 171]
   }
 }

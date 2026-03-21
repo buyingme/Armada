@@ -145,6 +145,40 @@ func get_ship_data() -> ShipData:
 	return _ship_data
 
 
+## Converts a pixel coordinate in full-PNG space (from top-left) to world space.
+## Used for firing_arc_boundaries and line_of_sight_origins.
+func png_to_world(png_coord: Vector2) -> Vector2:
+	if _sprite == null or _sprite.texture == null:
+		return to_global(Vector2.ZERO)
+	var tex_w: float = float(_sprite.texture.get_width())
+	var tex_h: float = float(_sprite.texture.get_height())
+	var local: Vector2 = (png_coord - Vector2(tex_w, tex_h) * 0.5) * _sprite_scale
+	return to_global(local)
+
+
+## Returns firing arc boundary points converted to world space.
+## Result keys match ShipData.firing_arc_boundaries (e.g. "inner_point_front_left").
+## Returns an empty dictionary if the ship data has no boundary data.
+func get_firing_arc_world_points() -> Dictionary:
+	if not _ship_data or _ship_data.firing_arc_boundaries.is_empty():
+		return {}
+	var result: Dictionary = {}
+	for key: String in _ship_data.firing_arc_boundaries:
+		result[key] = png_to_world(_ship_data.firing_arc_boundaries[key])
+	return result
+
+
+## Returns line-of-sight origins converted to world space.
+## Result keys: "FRONT", "LEFT", "RIGHT", "REAR".
+func get_los_origins_world() -> Dictionary:
+	if not _ship_data or _ship_data.line_of_sight_origins.is_empty():
+		return {}
+	var result: Dictionary = {}
+	for key: String in _ship_data.line_of_sight_origins:
+		result[key] = png_to_world(_ship_data.line_of_sight_origins[key])
+	return result
+
+
 ## Returns true if [param world_pos] falls inside the base rectangle.
 func is_point_in_base(world_pos: Vector2) -> bool:
 	return _is_point_in_base(world_pos)

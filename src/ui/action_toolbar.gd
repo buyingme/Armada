@@ -1,10 +1,10 @@
 ## ActionToolbar
 ##
 ## Lower-right toolbar that hosts action buttons for the game board.
-## Contains the tooltip toggle (relocated from TooltipManager) and
-## the "Display Maneuver Tool" button.
+## Contains the tooltip toggle (relocated from TooltipManager),
+## the "Display Maneuver Tool" button (M), and the "Range Overlay" button (R).
 ##
-## Requirements: MT-U-001, MT-U-002, AC-13.
+## Requirements: MT-U-001, MT-U-002, RO-001, AC-13.
 class_name ActionToolbar
 extends HBoxContainer
 
@@ -18,6 +18,9 @@ var _tooltip_toggle: Button = null
 ## "Display Maneuver Tool" button.
 var _maneuver_tool_btn: Button = null
 
+## "Range Overlay" button.
+var _range_overlay_btn: Button = null
+
 
 func _init() -> void:
 	name = "ActionToolbar"
@@ -25,10 +28,11 @@ func _init() -> void:
 
 
 ## Sets up the toolbar after being added to the scene tree.
-## Reparents the tooltip toggle and creates the maneuver tool button.
+## Reparents the tooltip toggle and creates the action buttons.
 func setup_buttons() -> void:
 	_reparent_tooltip_toggle()
 	_create_maneuver_tool_button()
+	_create_range_overlay_button()
 	call_deferred("_deferred_position")
 
 
@@ -90,12 +94,40 @@ func _on_maneuver_tool_pressed() -> void:
 	EventBus.maneuver_tool_requested.emit()
 
 
-## Enables or disables the simulation maneuver button.
-## [param disabled] — when [code]true[/code], the button is greyed-out
-## and ignores clicks (used while the activation-mode maneuver tool is active).
-func set_maneuver_button_disabled(disabled: bool) -> void:
+## Creates the range overlay button.
+## Requirements: RO-001.
+func _create_range_overlay_button() -> void:
+	_range_overlay_btn = Button.new()
+	_range_overlay_btn.name = "RangeOverlayButton"
+	_range_overlay_btn.text = "R"
+	_range_overlay_btn.flat = true
+	var btn_size: float = GameScale.tooltip_toggle_button_size
+	_range_overlay_btn.custom_minimum_size = Vector2(btn_size, btn_size)
+	_range_overlay_btn.add_theme_font_size_override("font_size", 16)
+	_range_overlay_btn.add_theme_color_override(
+			"font_color", Color(1.0, 1.0, 1.0, 0.7))
+	_range_overlay_btn.add_theme_color_override(
+			"font_hover_color", Color.WHITE)
+	_range_overlay_btn.tooltip_text = "Range Overlay"
+	_range_overlay_btn.pressed.connect(_on_range_overlay_pressed)
+	add_child(_range_overlay_btn)
+
+
+## Emits the range overlay request signal.
+## Requirements: RO-002.
+func _on_range_overlay_pressed() -> void:
+	_log.info("Range Overlay button pressed.")
+	EventBus.range_overlay_requested.emit()
+
+
+## Enables or disables the simulation tool buttons (M and R).
+## [param disabled] — when [code]true[/code], the buttons are greyed-out
+## and ignore clicks (used while the activation-mode maneuver tool is active).
+func set_tool_buttons_disabled(disabled: bool) -> void:
 	if _maneuver_tool_btn:
 		_maneuver_tool_btn.disabled = disabled
+	if _range_overlay_btn:
+		_range_overlay_btn.disabled = disabled
 
 
 ## Deferred position update after layout calculates sizes.

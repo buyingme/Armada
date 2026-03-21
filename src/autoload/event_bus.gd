@@ -210,6 +210,14 @@ signal maneuver_tool_requested()
 ## Requirements: MT-U-006.
 signal maneuver_tool_dismissed()
 
+## Emitted when the player presses the "Range Overlay" button.
+## Requirements: RO-002.
+signal range_overlay_requested()
+
+## Emitted when the range overlay should be dismissed.
+## Requirements: RO-006.
+signal range_overlay_dismissed()
+
 
 # --- Activation / Maneuver Execution Events (Phase 5b) ---
 

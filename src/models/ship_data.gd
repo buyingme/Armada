@@ -53,11 +53,23 @@ extends Resource
 @export var navigation_chart: Array = []
 
 ## Pixel offsets for label positions on the token PNG,
-## measured from the upper-left corner of the source image.
+## measured from the upper-left corner of the base region in source-PNG pixel space.
 ## Keys: "shield_front", "shield_left", "shield_right", "shield_rear",
 ##       "hull", "speed"
 ## Values: Vector2 pixel coordinates in source-PNG space.
 @export var token_label_offsets: Dictionary = {}
+
+## Firing arc boundary points in full-PNG pixel space (top-left origin).
+## Keys: "inner_point_front_left", "outer_point_front_left", etc.
+## Values: Vector2 pixel coordinates.
+## Rules Reference: "Firing Arcs", p.3.
+@export var firing_arc_boundaries: Dictionary = {}
+
+## Line-of-sight origin dots in full-PNG pixel space (top-left origin).
+## Keys: "FRONT", "LEFT", "RIGHT", "REAR"
+## Values: Vector2 pixel coordinates.
+## Rules Reference: "Line of Sight", p.6.
+@export var line_of_sight_origins: Dictionary = {}
 
 
 ## Creates a ShipData from a raw JSON dictionary keyed by the field names in
@@ -82,6 +94,8 @@ static func from_dict(data: Dictionary) -> ShipData:
 	s.upgrade_slots = data.get("upgrade_slots", [])
 	s.navigation_chart = data.get("navigation_chart", [])
 	s.token_label_offsets = _parse_label_offsets(data.get("token_label_offsets", {}))
+	s.firing_arc_boundaries = _parse_point_dict(data.get("firing_arc_boundaries", {}))
+	s.line_of_sight_origins = _parse_point_dict(data.get("line_of_sight_origins", {}))
 	return s
 
 
@@ -93,6 +107,19 @@ static func _parse_label_offsets(raw: Dictionary) -> Dictionary:
 		var arr: Array = raw[key]
 		if arr.size() >= 2:
 			result[key] = Vector2(float(arr[0]), float(arr[1]))
+	return result
+
+
+## Parses a dictionary of [x, y] point arrays into Vector2 values.
+## Skips metadata keys that start with "_" (e.g. "_comment").
+static func _parse_point_dict(raw: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for key: String in raw:
+		if key.begins_with("_"):
+			continue
+		var val: Variant = raw[key]
+		if val is Array and (val as Array).size() >= 2:
+			result[key] = Vector2(float(val[0]), float(val[1]))
 	return result
 
 

@@ -114,6 +114,14 @@ var _maneuver_tool_selecting: bool = false
 ## Active ManeuverToolScene instance (null when not displayed).
 var _maneuver_tool_scene: ManeuverToolScene = null
 
+## --- Range Overlay state ---
+
+## Whether we are in "select ship for range overlay" mode.
+var _range_overlay_selecting: bool = false
+
+## Active RangeOverlayScene instance (null when not displayed).
+var _range_overlay_scene: RangeOverlayScene = null
+
 ## ActionToolbar in the lower-right corner.
 var _action_toolbar: ActionToolbar = null
 
@@ -242,6 +250,9 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Range overlay: Escape dismisses or cancels selection.
+	if _handle_range_overlay_escape(event):
+		return
 	# Maneuver tool: Escape dismisses or cancels selection.
 	if _handle_maneuver_tool_escape(event):
 		return
@@ -364,6 +375,9 @@ func _connect_signals() -> void:
 	# Maneuver tool (Phase 5a).
 	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
 	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
+	# Range overlay.
+	EventBus.range_overlay_requested.connect(_on_range_overlay_requested)
+	EventBus.range_overlay_dismissed.connect(_dismiss_range_overlay)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -437,6 +451,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if _range_overlay_selecting:
+		_show_range_overlay(token)
+		return
 	if _maneuver_tool_selecting:
 		_show_maneuver_tool(token)
 		return
@@ -1223,9 +1240,10 @@ func _on_board_activation_ended() -> void:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
 	_dismiss_maneuver_tool()
-	# Re-enable simulation maneuver button.
+	_dismiss_range_overlay()
+	# Re-enable simulation tool buttons.
 	if _action_toolbar:
-		_action_toolbar.set_maneuver_button_disabled(false)
+		_action_toolbar.set_tool_buttons_disabled(false)
 
 
 # ---------------------------------------------------------------------------
@@ -1300,7 +1318,7 @@ func _on_maneuver_step_entered() -> void:
 	_dismiss_maneuver_tool()
 	# Disable the simulation maneuver button while activation tool is active.
 	if _action_toolbar:
-		_action_toolbar.set_maneuver_button_disabled(true)
+		_action_toolbar.set_tool_buttons_disabled(true)
 	_maneuver_tool_scene = ManeuverToolScene.new()
 	_maneuver_tool_scene.name = "ManeuverToolScene"
 	_token_container.add_child(_maneuver_tool_scene)
@@ -1441,6 +1459,77 @@ func _handle_maneuver_tool_escape(event: InputEvent) -> bool:
 		return true
 	if _maneuver_tool_selecting:
 		_cancel_maneuver_tool_selection()
+		get_viewport().set_input_as_handled()
+		return true
+	return false
+
+
+# ---------------------------------------------------------------------------
+# Range Overlay
+# ---------------------------------------------------------------------------
+
+## Handles the "Range Overlay" button press.
+## Toggle behaviour: if an overlay is already visible, dismiss it.
+## If selecting, cancel selection. Otherwise enter selection mode.
+## Requirements: RO-001, RO-002.
+func _on_range_overlay_requested() -> void:
+	if _range_overlay_scene:
+		_dismiss_range_overlay()
+		return
+	if _range_overlay_selecting:
+		_cancel_range_overlay_selection()
+		return
+	_range_overlay_selecting = true
+	TooltipManager.show_text("Select a ship", Vector2.INF, 0.0, true)
+	_log.info("Range overlay: ship selection mode active.")
+
+
+## Shows the range overlay attached to the given ship token.
+## Requirements: RO-003, RO-004, RO-005, RO-006.
+func _show_range_overlay(token: ShipToken) -> void:
+	_range_overlay_selecting = false
+	TooltipManager.hide_tooltip()
+	if _range_overlay_scene:
+		_range_overlay_scene.queue_free()
+	_range_overlay_scene = RangeOverlayScene.new()
+	_range_overlay_scene.name = "RangeOverlayScene"
+	_token_container.add_child(_range_overlay_scene)
+	_range_overlay_scene.setup(token)
+	_log.info("Range overlay displayed on ship.")
+
+
+## Dismisses the range overlay and exits selection mode.
+## Requirements: RO-007.
+func _dismiss_range_overlay() -> void:
+	_range_overlay_selecting = false
+	TooltipManager.hide_tooltip()
+	if _range_overlay_scene:
+		_range_overlay_scene.queue_free()
+		_range_overlay_scene = null
+	_log.info("Range overlay dismissed.")
+
+
+## Cancels ship selection mode without showing the overlay.
+func _cancel_range_overlay_selection() -> void:
+	_range_overlay_selecting = false
+	TooltipManager.hide_tooltip()
+	_log.info("Range overlay selection cancelled.")
+
+
+## Checks if an Escape key press should dismiss the range overlay.
+## Returns true if the event was consumed.
+func _handle_range_overlay_escape(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	if _range_overlay_scene:
+		_dismiss_range_overlay()
+		get_viewport().set_input_as_handled()
+		return true
+	if _range_overlay_selecting:
+		_cancel_range_overlay_selection()
 		get_viewport().set_input_as_handled()
 		return true
 	return false

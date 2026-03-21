@@ -26,6 +26,13 @@ func setup(token: ShipToken) -> void:
 	var ship_data: ShipData = token.get_ship_data()
 	if ship_data == null:
 		return
+	setup_at_transform(ship_data, token.global_position, token.global_rotation)
+
+
+## Initialises the overlay from explicit ship data, position, and rotation.
+## Use this when there is no ShipToken (e.g. the maneuver tool ghost).
+func setup_at_transform(ship_data: ShipData, pos: Vector2,
+		rot: float) -> void:
 	if ship_data.range_overlay_image.is_empty():
 		return
 
@@ -34,9 +41,9 @@ func setup(token: ShipToken) -> void:
 	if tex == null:
 		return
 
-	# Position the overlay at the ship's world position and rotation.
-	position = token.global_position
-	rotation = token.global_rotation
+	# Position the overlay at the given world position and rotation.
+	position = pos
+	rotation = rot
 
 	# Create the sprite centred on the origin.
 	# The overlay PNG has the ship centre at image centre (origin_px),
@@ -55,3 +62,9 @@ func setup(token: ShipToken) -> void:
 		_sprite.offset = delta
 
 	add_child(_sprite)
+
+
+## Updates the overlay position and rotation (e.g. when the ghost moves).
+func update_transform(pos: Vector2, rot: float) -> void:
+	position = pos
+	rotation = rot

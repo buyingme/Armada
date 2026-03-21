@@ -1471,8 +1471,14 @@ func _handle_maneuver_tool_escape(event: InputEvent) -> bool:
 ## Handles the "Range Overlay" button press.
 ## Toggle behaviour: if an overlay is already visible, dismiss it.
 ## If selecting, cancel selection. Otherwise enter selection mode.
+## When a maneuver tool is active, toggles the overlay on the ghost
+## preview instead of requiring ship selection.
 ## Requirements: RO-001, RO-002.
 func _on_range_overlay_requested() -> void:
+	# If a maneuver tool is active, toggle the overlay on the ghost.
+	if _maneuver_tool_scene:
+		_maneuver_tool_scene.toggle_ghost_range_overlay()
+		return
 	if _range_overlay_scene:
 		_dismiss_range_overlay()
 		return

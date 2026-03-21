@@ -70,6 +70,12 @@ var _activation_state: ShipActivationState = null
 ## Requirements: NAV-006, EXE-005.
 var _yaw_badge_layer: Node2D = null
 
+## Range overlay shown on the ghost preview (null when hidden).
+var _ghost_range_overlay: RangeOverlayScene = null
+
+## Whether the ghost range overlay is currently requested.
+var _ghost_overlay_active: bool = false
+
 
 ## Initialises the tool for a specific ship token.
 ## [param ship_token] — the ship to attach the tool to.
@@ -328,6 +334,9 @@ func _update_ghost(start_pos: Vector2, start_rot: float) -> void:
 	_ghost_sprite.visible = true
 	_setup_ghost_texture()
 	_update_ghost_speed_label(final_xform)
+	# Keep the ghost range overlay in sync when joints change.
+	if _ghost_overlay_active:
+		_create_or_update_ghost_overlay()
 
 
 ## Loads and scales the ghost ship texture to match the ship token.
@@ -345,6 +354,58 @@ func _setup_ghost_texture() -> void:
 	var tex_size: Vector2 = Vector2(tex.get_width(), tex.get_height())
 	_ghost_sprite.scale = GameScale.get_base_sprite_scale(
 			_ship_token.get_ship_size(), tex_size)
+
+
+## Toggles the range overlay on the ghost preview.
+## Returns true if the overlay is now visible, false if dismissed.
+func toggle_ghost_range_overlay() -> bool:
+	_ghost_overlay_active = not _ghost_overlay_active
+	if _ghost_overlay_active:
+		_create_or_update_ghost_overlay()
+	else:
+		_remove_ghost_overlay()
+	return _ghost_overlay_active
+
+
+## Dismisses the ghost range overlay if active.
+func dismiss_ghost_range_overlay() -> void:
+	_ghost_overlay_active = false
+	_remove_ghost_overlay()
+
+
+## Returns true if the ghost range overlay is currently visible.
+func has_ghost_range_overlay() -> bool:
+	return _ghost_range_overlay != null
+
+
+## Creates or repositions the range overlay on the ghost preview.
+func _create_or_update_ghost_overlay() -> void:
+	if _ghost_sprite == null or not _ghost_sprite.visible:
+		_remove_ghost_overlay()
+		return
+	var ship_data: ShipData = _ship_token.get_ship_data()
+	if ship_data == null:
+		return
+	if _ghost_range_overlay == null:
+		_ghost_range_overlay = RangeOverlayScene.new()
+		_ghost_range_overlay.name = "GhostRangeOverlay"
+		add_child(_ghost_range_overlay)
+		# Move to index 0 so it renders below the ghost sprite and tool.
+		move_child(_ghost_range_overlay, 0)
+		_ghost_range_overlay.setup_at_transform(
+				ship_data, _ghost_sprite.global_position,
+				_ghost_sprite.global_rotation)
+	else:
+		_ghost_range_overlay.update_transform(
+				_ghost_sprite.global_position,
+				_ghost_sprite.global_rotation)
+
+
+## Removes the ghost range overlay node.
+func _remove_ghost_overlay() -> void:
+	if _ghost_range_overlay != null:
+		_ghost_range_overlay.queue_free()
+		_ghost_range_overlay = null
 
 
 # ------------------------------------------------------------------

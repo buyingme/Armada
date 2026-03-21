@@ -32,27 +32,46 @@
 
 ## 5.2 Level 2 — Game Core Detail
 
-> **TODO:** To be detailed during architecture phase.
+### Implemented Core Components
 
-### Planned Core Components
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `GameState` | RefCounted | `src/core/game_state.gd` | Round, phase, fleet and ship tracking |
+| `PhaseState` | RefCounted | `src/core/phase_state.gd` | Phase/sub-phase transitions, initiative |
+| `DicePool` | RefCounted | `src/core/dice.gd` | Dice rolling and modification |
+| `FleetBuilder` | RefCounted | `src/core/fleet_builder.gd` | Fleet construction and validation |
+| `ManeuverCalculator` | RefCounted | `src/core/maneuver_calculator.gd` | Chain-computation of tool joints and final transform |
+| `ManeuverTool` | RefCounted | `src/core/maneuver_tool.gd` | Maneuver state: joint angles, speed, yaw validation |
+| `ManeuverToolState` | RefCounted | `src/core/maneuver_tool_state.gd` | Activation-mode state: Navigate budget, yaw bonus, commit |
+| `ShipActivationState` | RefCounted | `src/core/ship_activation_state.gd` | Activation step tracking, command spending |
+| `CommandTokenManager` | RefCounted | `src/core/command_token_manager.gd` | Token pool management, add/remove/spend |
+| `TooltipLayout` | RefCounted | `src/core/tooltip_layout.gd` | Pure tooltip position computation |
 
-- **GameState** — Immutable snapshot of the full game state
+### Planned (Not Yet Implemented)
+
 - **RulesEngine** — Validates actions against game rules
-- **PhaseController** — Manages phase transitions
 - **CombatResolver** — Handles attack resolution, dice rolling, defense tokens
-- **MovementResolver** — Ship movement with maneuver tool simulation
-- **CommandProcessor** — Command dial/token processing
-- **TooltipLayout** — Pure tooltip position computation (viewport clamping, cursor offset)
+- **CommandProcessor** — Command dial/token processing (beyond Navigate)
 
 ## 5.3 Level 2 — UI Detail
 
-> **TODO:** To be detailed during architecture phase.
+### Implemented UI/Scene Components
 
-### Planned UI Components
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `GameBoard` | Node2D | `src/scenes/game_board.gd` | Main play area, ship/token rendering, camera |
+| `ShipToken` | Node2D | `src/scenes/ship_token.gd` | Ship base rendering, command dial icon, labels |
+| `ShipCardPanel` | Control | `src/scenes/ship_card_panel.gd` | Ship card display, defense tokens, command tokens |
+| `CommandDialPicker` | Control | `src/ui/command_dial_picker.gd` | Centred modal for choosing command dials |
+| `ActivationModal` | Control | `src/scenes/activation_modal.gd` | Centred panel for activation steps (5 sub-steps, two-phase button) |
+| `ManeuverToolScene` | Node2D | `src/scenes/tools/maneuver_tool_scene.gd` | Visual maneuver tool: segments, joints, speed buttons, ghost |
+| `ActionToolbar` | HBoxContainer | `src/ui/action_toolbar.gd` | Lower-right toolbar: tooltip toggle, maneuver display button |
+| `PhaseIndicator` | Control | `src/ui/phase_indicator.gd` | Current phase and round display |
+| `TooltipPanel` | PanelContainer | `src/ui/tooltip_panel.gd` | Hover/programmatic tooltip popup |
+| `HUDLayer` | CanvasLayer | `src/scenes/hud_layer.gd` | HUD container for panels, indicators |
 
-- **GameBoard** — Main play area with ship/squadron rendering
-- **ShipHUD** — Ship status, shields, hull, tokens display
+### Planned (Not Yet Implemented)
+
 - **DicePanel** — Dice rolling visualization
-- **PhaseIndicator** — Current phase and round display
 - **FleetBuilder** — Pre-game fleet construction interface
-- **TooltipPanel** — Reusable hover/programmatic tooltip popup (BBCode, styled)
+- **SquadronToken** — Squadron rendering

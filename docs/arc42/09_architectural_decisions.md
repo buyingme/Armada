@@ -145,3 +145,19 @@ Each decision follows this structure:
   - (-) New autoload singleton adds to the global namespace
   - (-) Migration of existing help text requires careful regression testing
   - (-) Toggle state persistence adds a dependency on `user://settings.cfg`
+
+---
+
+## ADR-010: Two-Phase Modal Button for Ship Activation
+
+- **Status:** Accepted
+- **Date:** 2026-07-12
+- **Context:** Phase 5b needed a way to let the player (a) open the maneuver tool from the activation modal and (b) commit the result back. A single-press "Execute Maneuver" button at the bottom of the viewport felt disconnected from the modal. The player also had to manually press "End Activation" after each ship.
+- **Decision:** Embed a two-phase button inside the Activation Modal panel. Phase 1 ("Execute Maneuver ►") closes the modal and attaches the maneuver tool to the ship. Phase 2 ("Commit Maneuver ►") commits the final position and auto-ends the activation. No separate "End Activation" button is needed.
+- **Consequences:**
+  - (+) Single UI location for the entire activation flow — no wandering buttons
+  - (+) Auto-end reduces clicks per activation by 1
+  - (+) Modal can be dismissed and reopened freely (state preserved)
+  - (+) Consistent centred-panel style with CommandDialPicker
+  - (-) Two label states on one button require clear visual feedback
+  - (-) Dismissibility means the player must know to reopen the modal to commit

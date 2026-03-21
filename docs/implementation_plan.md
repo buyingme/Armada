@@ -637,23 +637,24 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5b: Ship Movement Execution 🔄
+### Phase 5b: Ship Movement Execution ✅
 **Goal:** Add activation modal that guides the player through the ship activation sub-steps (Reveal → Squadron → Repair → Attack → Execute Maneuver). Implement the Navigate command and actual ship placement via the maneuver tool. Overlap handling deferred to Phase 5b-2.
 **Prerequisites:** Phase 5a/5a+ (maneuver tool), Phase 4c/4d (activation trigger + keep-or-convert)
 **Duration estimate:** 3 sessions
+**Commits:** `aba05de` (initial), `fe2d382`–`9939cb7` (8 bug-fix follow-ups)
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
 | 1 | `ShipActivationState` — step tracker | Core | ACT-002, FLOW-004, AC-5b-01 | `src/core/ship_activation_state.gd` (RefCounted) — tracks current step, spent commands, Navigate resources. Steps: REVEAL, SQUADRON, REPAIR, ATTACK, MANEUVER, DONE | ✅ |
-| 2 | "Show Activation Sequence" button + Activation Modal UI | Presentation | ACT-001–004, ACT-007, AC-5b-01–02, AC-5b-14 | `src/ui/show_activation_button.gd` — bottom-centre button appears after dial reveal; pressing it opens `src/ui/activation_modal.gd` (Control) — persistent panel showing 5 step sections; steps 2–4 show "Not yet implemented" + auto-skip; revealed dial + tokens displayed per step | ✅ |
-| 3 | Navigate command resolution | Core | NAV-001–008, CM-010–013, AC-5b-04–06 | `ShipActivationState.can_change_speed()`, `apply_speed_change()`, `has_yaw_bonus()`, `apply_yaw_bonus()` — dial: speed ±1 AND/OR +1 yaw; token: speed ±1; combined: speed ±2 AND/OR +1 yaw | ✅ |
-| 4 | Wire +/− buttons to Navigate in activation mode | Presentation | NAV-008, AC-5b-04–07 | `ManeuverToolScene` detects activation vs simulation mode; +/− writes `ShipInstance.current_speed` gated by Navigate availability; reddish overlay on token when token-only spend | ✅ |
-| 5 | Yaw bonus joint | Core + Pres | NAV-002, NAV-006, EXE-005, AC-5b-04 | `ManeuverToolState.set_yaw_bonus_joint()` — one joint gets +1 max yaw for this maneuver; visual "N" badge on the joint indicator | ✅ |
-| 6 | "Execute Maneuver" button | Presentation | EXE-001, AC-5b-08 | New button at bottom-centre (same position as End Activation); commits maneuver: update speed, place ship, dismiss tool, emit `ship_moved` | ✅ |
+| 2 | "Show Activation Sequence" button + Activation Modal UI | Presentation | ACT-001–004, ACT-007, AC-5b-01–02, AC-5b-14 | `src/ui/show_activation_button.gd` — bottom-centre button appears after dial reveal; pressing it opens `src/ui/activation_modal.gd` — centred panel matching CommandDialPicker style (StyleBoxFlat, `#0D1B2A` bg); 5 step rows with colour-coded states; two-phase button ("Execute Maneuver ►" → "Commit Maneuver ►"); dismissible via Escape/✕; steps 2–4 auto-skip with amber badges | ✅ |
+| 3 | Navigate command resolution | Core | NAV-001–008, CM-010–013, AC-5b-04–06 | `ShipActivationState.can_change_speed()`, `apply_speed_change()`, `has_yaw_bonus()`, `apply_yaw_bonus()` — dial: speed ±1 AND/OR +1 yaw; token: speed ±1; combined: speed ±2 AND/OR +1 yaw. Speed changes are **reversible** (total-change vs budget model). Token actually removed from `CommandTokenManager` on commit. | ✅ |
+| 4 | Wire +/− buttons to Navigate in activation mode | Presentation | NAV-008, AC-5b-04–07 | `ManeuverToolScene` detects activation vs simulation mode; +/− writes `ShipInstance.current_speed` gated by Navigate availability; reddish overlay on token when token-only spend; simulation button disabled during activation | ✅ |
+| 5 | Yaw bonus joint (any joint) | Core + Pres | NAV-002, NAV-006, EXE-005, AC-5b-04 | Yaw bonus applied on-demand when player clicks a joint beyond its base limit — `_try_apply_yaw_bonus_for()` in `ManeuverToolScene`; bonus can be moved between joints; visual "N" badge follows the bonus joint | ✅ |
+| 6 | Two-phase Execute/Commit button | Presentation | EXE-001, AC-5b-08 | Embedded in activation modal step 5 row: Phase 1 "Execute Maneuver ►" opens maneuver tool; Phase 2 "Commit Maneuver ►" commits position. Modal closes during both phases. | ✅ |
 | 7 | Ship snap placement | Presentation | EXE-002, EXE-003, MV-010–014, AC-5b-09 | Ship token transform set to `compute_final_transform()` result; side from `compute_ghost_side()`; instant snap | ✅ |
 | 8 | Speed 0 maneuver | Core | EXE-004, MV-015, AC-5b-10 | No tool displayed; ship stays in place; maneuver counts as executed | ✅ |
-| 9 | Activation flow rewiring | Presentation | FLOW-001–003, AC-5b-11 | "Show Activation Sequence" button replaces immediate End Activation after dial reveal; pressing it opens modal; End Activation appears only after maneuver; maneuver tool auto-displayed in step 5 | ✅ |
-| 10 | Token spend highlight | Presentation | NAV-007, AC-5b-07 | Reddish semi-transparent overlay on Navigate token in ship card panel when it would be auto-spent | ⏳ |
+| 9 | Activation flow rewiring + auto-end | Presentation | FLOW-001–003, AC-5b-11 | "Show Activation Sequence" button replaces immediate End Activation after dial reveal. After Commit, `activation_ended` emits automatically — no manual End Activation button press required. Next player's turn starts immediately. | ✅ |
+| 10 | Token spend highlight | Presentation | NAV-007, AC-5b-07 | Reddish semi-transparent overlay on Navigate token in ship card panel when speed change would require the token; Navigate token removed from ship on commit | ✅ |
 | 11 | Tests | Test | AC-5b-01–15 | Unit: ShipActivationState step tracking, Navigate speed/yaw logic, combined dial+token, bounds; Integration: activation flow end-to-end | ✅ |
 
 > **Note:** Activation trigger (drag-and-drop dial to ship) and basic reveal/spend flow
@@ -662,7 +663,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 > Overlap handling (ship–ship, ship–squadron) is deferred to Phase 5b-2.
 
 **Requirements covered:** ACT-001–007, NAV-001–008, EXE-001–005, FLOW-001–004, AC-5b-01–15, CM-010–013, MV-010–015
-**Tests:** 33 (ShipActivationState: step tracking ×8, command resolution ×3, Navigate availability ×4, speed changes ×10, yaw bonus ×5, maneuver execution ×3) — 845 cumulative (50 scripts, 1623 asserts)
+**Tests:** 33 (ShipActivationState: step tracking ×8, command resolution ×3, Navigate availability ×4, speed changes ×10, yaw bonus ×5, maneuver execution ×3) — 847 cumulative (50 scripts, 1635 asserts)
 
 ---
 
@@ -858,7 +859,7 @@ Phase 0 (Scale & Assets)
 | Phase 4f | ~16 | **17** | **759** |
 | Phase 5a | ~25 | **36** | **796** |
 | Phase 5a+ | 16 | 812 | 812 |
-| Phase 5b | ~25 | **33** | **845** |
+| Phase 5b | ~25 | **35** | **847** |
 | Phase 5b-2 | ~10 | — | ~855 |
 | Phase 6 | ~45 | — | ~892 |
 | Phase 7 | ~30 | — | ~922 |
@@ -896,7 +897,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
-| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 partial in 4c; SP-011 complete in 4d |
+| Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 in 4c/4d; SP-015 (maneuver) in 5b; Attack in Phase 6 |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
 | Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
@@ -904,11 +905,11 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |
 | Player Handoff (HO-001–005) | 5 | Phase 4b | ✅ |
 | Initiative (IN-001–003) | 3 | Phase 4b | ✅ |
-| Commands (CM-001–042) | 22 | Phase 4, 4d, 5, 6, 7, 9 | ⏳ CM-004–006 in 4d |
+| Commands (CM-001–042) | 22 | Phase 4, 4d, 5, 6, 7, 9 | ⏳ CM-004–006 in 4d; CM-010–013 (Navigate) in 5b |
 | Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
 | Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
-| Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ⏳ |
+| Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ✅ MV-001–015 done (overlap MV-016+ in 5b-2) |
 | Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ⏳ |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |

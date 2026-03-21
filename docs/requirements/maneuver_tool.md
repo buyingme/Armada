@@ -408,8 +408,14 @@ game board.
 The Activation Modal does **not** auto-open.  After the command dial
 is revealed and assigned (Phase 4c triggers), a "Show Activation
 Sequence" button appears at bottom-centre.  Pressing the button
-opens the modal.  It closes when the player presses "End
-Activation".
+opens the modal.  The modal is a **centred panel** (dark-blue
+`#0D1B2A` background, rounded corners) matching the
+`CommandDialPicker` styling.
+
+The modal can be dismissed with Escape or the ✕ button and
+reopened at any time.  The activation ends **automatically** after
+the maneuver is committed — there is no separate "End Activation"
+button.
 
 #### ACT-002 — Step sequence
 The modal presents the activation sub-steps in the following order.
@@ -510,15 +516,21 @@ Rules Reference: CM-013, MV-015.
 
 #### NAV-006 — Yaw bonus joint
 When the Navigate dial grants +1 yaw on one joint, the player
-chooses which active joint receives the bonus.  The bonus applies
-for this maneuver only; it does not persist.
+chooses which active joint receives the bonus by **clicking that
+joint beyond its base yaw limit**.  The bonus is auto-applied to
+whichever joint the player clicks; an "N" badge appears on that
+joint.  If the player later clicks a different joint beyond *its*
+base limit, the bonus **moves** to the new joint (old joint clicks
+clamped to its reduced limit).  The bonus applies for this maneuver
+only; it does not persist.
 
-#### NAV-007 — Token-only highlight
+#### NAV-007 — Token-only highlight and spending
 If the player changes speed but does **not** have a matching Navigate
 dial (the dial was converted to token or set to a different command),
 the Navigate token to be spent is highlighted with a **reddish
-overlay** in the ship card panel.  The token is spent automatically
-when the maneuver is confirmed.
+overlay** in the ship card panel.  When the maneuver is committed,
+the Navigate token is **removed** from the ship's token pool via
+`CommandTokenManager` and the overlay disappears.
 
 #### NAV-008 — Speed change via +/− buttons
 The same +/− buttons on the end segment used for Phase 5a+ simulation
@@ -535,19 +547,24 @@ availability and bounds.
 
 ### 15. Maneuver Execution
 
-#### EXE-001 — "Execute Maneuver" button
-A button labelled **"Execute Maneuver"** appears at the bottom-centre
-of the viewport (same position as the "End Activation" button) when
-the Navigate / Execute Maneuver step becomes active.
+#### EXE-001 — Two-phase Execute / Commit button
+Step 5 of the Activation Modal contains a **two-phase button**
+embedded in the modal panel (not a separate bottom-centre button):
 
-Pressing it commits the maneuver:
-1. Ship speed is updated to the maneuver speed (if changed via Navigate).
-2. Ship position and rotation are set to the computed final transform
-   (`ManeuverToolState.compute_final_transform()`).
-3. The maneuver tool is dismissed.
-4. `EventBus.ship_moved` is emitted.
-5. The modal advances to the end state and the "End Activation" button
-   replaces the "Execute Maneuver" button.
+1. **Phase 1 — "Execute Maneuver ►"**: Displayed when step 5
+   first becomes active.  Pressing it closes the modal and shows
+   the maneuver tool on the ship in activation mode.
+2. **Phase 2 — "Commit Maneuver ►"**: Displayed when the modal
+   is reopened after the tool is active.  Pressing it commits
+   the maneuver:
+   a. Ship speed is updated to the maneuver speed (if changed via Navigate).
+   b. Ship position and rotation are set to the computed final
+      transform (`ManeuverToolState.compute_final_transform()`).
+   c. The maneuver tool is dismissed.
+   d. `EventBus.ship_moved` is emitted.
+   e. Navigate token is removed from `CommandTokenManager` if spent.
+   f. The activation **auto-ends** — no "End Activation" button
+      is shown.  The next player's turn begins immediately.
 
 #### EXE-002 — Ship snap placement
 The ship token is placed **instantly** (no animation) at the final
@@ -588,8 +605,11 @@ The current "End Activation" button is no longer shown immediately
 after dial reveal.  Instead, a **"Show Activation Sequence"** button
 appears at bottom-centre (ACT-007).  Pressing it opens the
 Activation Modal, which guides the player through steps.
-"End Activation" appears only after the Execute Maneuver step is
-complete.
+
+After the maneuver is committed, the activation **ends
+automatically** — there is no manual "End Activation" button.
+The simulation maneuver button ("M" in the action toolbar) is
+**disabled** while any ship is in activation mode.
 
 #### FLOW-003 — Maneuver tool in activation mode
 During the Execute Maneuver step, the maneuver tool is displayed
@@ -612,16 +632,19 @@ sequential step order.
 |----|-----------|
 | AC-5b-01 | "Show Activation Sequence" button appears at bottom-centre after dial reveal; pressing it opens the activation modal showing all 5 steps. |
 | AC-5b-02 | Steps 2–4 (Squadron, Repair, Attack) display "Not yet implemented" and auto-skip. |
-| AC-5b-03 | Step 5 (Execute Maneuver) activates the maneuver tool automatically. |
+| AC-5b-03 | Step 5 (Execute Maneuver) shows "Execute Maneuver ►" button; pressing it opens the maneuver tool in activation mode. |
 | AC-5b-04 | Navigate dial: allows speed ±1 AND/OR +1 yaw on one joint. |
 | AC-5b-05 | Navigate token: allows speed ±1 only, no yaw bonus. |
 | AC-5b-06 | Navigate dial + token combined: speed ±2 AND/OR +1 yaw. |
 | AC-5b-07 | Token-only speed change highlights the token with reddish overlay. |
-| AC-5b-08 | "Execute Maneuver" button at bottom-centre commits the move. |
+| AC-5b-08 | Two-phase button: "Execute Maneuver ►" opens tool → "Commit Maneuver ►" commits the move. |
 | AC-5b-09 | Ship snaps instantly to final transform after Execute Maneuver. |
 | AC-5b-10 | Speed 0 maneuver: no tool shown, ship stays in place, still counts as maneuver. |
-| AC-5b-11 | "End Activation" only appears after maneuver is executed (not before modal is opened). |
+| AC-5b-11 | Activation auto-ends after maneuver commit — no manual "End Activation" button. |
 | AC-5b-12 | Ship's actual speed is updated after maneuver (if Navigate changed it). |
 | AC-5b-13 | `EventBus.ship_moved` emitted after placement. |
 | AC-5b-14 | Activation modal shows revealed dial command and available tokens per step. |
 | AC-5b-15 | A command cannot be resolved more than once per activation (CM-002). |
+| AC-5b-16 | Simulation maneuver button disabled during activation mode. |
+| AC-5b-17 | Navigate token removed from ship's CommandTokenManager on commit. |
+| AC-5b-18 | Activation Modal is centred (matching CommandDialPicker style), dismissible with Escape/✕. |

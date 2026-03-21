@@ -3,6 +3,7 @@
 > **Scope:** Phases 0–5b, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
+> **Current baseline:** 50 scripts, 847 tests, 1635 asserts — all passing.
 
 ---
 
@@ -1242,7 +1243,7 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ## Phase 5b — Ship Movement Execution
 
-**What this phase adds:** After a command dial is revealed (Phase 4c/4d), a "Show Activation Sequence" button replaces the immediate End Activation. Pressing it opens an Activation Modal on the right side that shows the five sub-steps (Reveal, Squadron, Repair, Attack, Execute Maneuver). Steps 2–4 auto-skip with "Not yet implemented" badges. In the Execute Maneuver step, the maneuver tool appears on the ship in activation mode: +/− buttons change the ship's actual speed (gated by Navigate command budget), and a yaw bonus "N" badge appears on joint 0 when a Navigate dial is available. "Execute Maneuver" commits the ship's final position, then "End Activation" becomes available.
+**What this phase adds:** After a command dial is revealed (Phase 4c/4d), a "Show Activation Sequence" button replaces the immediate End Activation. Pressing it opens a centred Activation Modal (matching CommandDialPicker style) that shows the five sub-steps (Reveal, Squadron, Repair, Attack, Execute Maneuver). Steps 2–4 auto-skip with "Not yet implemented" badges. In the Execute Maneuver step, a two-phase button ("Execute Maneuver ►" / "Commit Maneuver ►") controls the maneuver tool. Navigate command allows speed ±1/±2 and +1 yaw on any joint. After committing, the activation auto-ends and the next player's turn starts. The simulation maneuver button is disabled during activation.
 
 ### MT-5b.1 — Activation sequence button appears after dial reveal
 
@@ -1257,73 +1258,98 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Press "Show Activation Sequence" | The button hides; a panel appears on the right side of the screen |
+| 1 | Press "Show Activation Sequence" | The button hides; a centred panel appears (dark blue `#0D1B2A` background, rounded corners, matching CommandDialPicker style) |
 | 2 | Panel title | "Ship Activation" at the top |
 | 3 | Dial/token info | Shows the revealed dial command and any command tokens the ship has |
 | 4 | Step 1 (Reveal) | Shows checkmark ✓ (already completed) |
 | 5 | Steps 2–4 auto-skip | Each placeholder step briefly shows "Not yet implemented" in amber, then gets a ✓ after ~0.3s |
-| 6 | Step 5 (Execute Maneuver) | Shows ► as the active step after auto-skip finishes |
+| 6 | Step 5 (Execute Maneuver) | Shows "Execute Maneuver ►" button as the active step after auto-skip finishes |
 
-### MT-5b.3 — Maneuver tool displayed in activation mode
-
-| Step | Action | Expected |
-|------|--------|----------|
-| 1 | After auto-skip completes (step 5 active) | Maneuver tool appears attached to the activating ship |
-| 2 | Joint clicks work | Clicking joints rotates them as in simulation mode |
-| 3 | Ghost preview shows | Ghost ship at the computed final position |
-| 4 | "Execute Maneuver" button | Appears at bottom-centre |
-
-### MT-5b.4 — Navigate command: speed change via +/− buttons
+### MT-5b.3 — Modal dismiss and reopen
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Activate a ship with a Navigate dial revealed | Maneuver tool appears in activation mode |
+| 1 | Press Escape or the ✕ Close button on the modal | Modal closes; "Show Activation Sequence" button reappears |
+| 2 | Press "Show Activation Sequence" again | Modal reopens at the same step (Execute Maneuver still active) |
+
+### MT-5b.4 — Two-phase Execute/Commit button
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With step 5 active, press "Execute Maneuver ►" | Modal closes; maneuver tool appears attached to the ship in activation mode |
+| 2 | Reopen the modal ("Show Activation Sequence") | Button now reads "Commit Maneuver ►" |
+| 3 | Set joints and optionally change speed | Ghost shows the expected final position |
+| 4 | Press "Commit Maneuver ►" | Ship snaps to ghost position; maneuver tool disappears; modal closes; activation auto-ends; next player's turn starts |
+
+### MT-5b.5 — Navigate command: speed change via +/− buttons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with a Navigate dial revealed | After pressing Execute, maneuver tool appears in activation mode |
 | 2 | Click "+" on the end segment | Ship's actual speed increases by 1; maneuver tool gains a segment |
 | 3 | Click "+" again (dial budget spent) | No effect — budget exhausted (unless token available) |
-| 4 | Activate a ship with Navigate dial + Navigate token | Two speed changes allowed |
-| 5 | Click "−" on a speed-2 ship | Speed decreases to 1; segment removed |
+| 4 | Click "−" to reverse the change | Speed returns to original; budget fully restored (reversible) |
+| 5 | Activate a ship with Navigate dial + Navigate token | Two speed changes allowed (±2 total) |
 | 6 | Check bounds | Cannot go below 0 or above max_speed |
 
-### MT-5b.5 — Navigate command: yaw bonus
+### MT-5b.6 — Navigate command: yaw bonus on any joint
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Activate a ship with Navigate dial | Joint 0 shows an "N" badge (yaw bonus) |
-| 2 | Check joint max yaw | The joint with the bonus allows 1 extra click compared to the nav chart |
+| 1 | Activate a ship with Navigate dial at speed ≥ 2 | Maneuver tool appears; no "N" badge yet (bonus not pre-assigned) |
+| 2 | Click a joint beyond its base yaw limit | Click succeeds; an "N" badge appears on that joint (bonus auto-applied) |
+| 3 | Click a **different** joint beyond its base limit | Bonus moves to the new joint; "N" badge moves; old joint's clicks clamped to its reduced limit |
+| 4 | Verify the bonus joint allows 1 extra click vs nav chart | Compare with the ship's navigation chart — bonus joint has +1 max yaw |
 
-### MT-5b.6 — Execute Maneuver commits position
+### MT-5b.7 — Navigate token spend on commit
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Set joints and optionally change speed | Ghost shows the expected final position |
-| 2 | Press "Execute Maneuver" | Ship token snaps to the ghost position; maneuver tool disappears |
-| 3 | After execution | "End Activation" button appears; "Execute Maneuver" disappears |
-| 4 | Press "End Activation" | Activation modal closes; revealed dial hides; ready for next ship |
+| 1 | Activate a ship with only a Navigate token (dial = different command) | Speed ±1 available |
+| 2 | Change speed via +/− | Navigate token in card panel shows reddish overlay (spend preview) |
+| 3 | Press "Commit Maneuver ►" | Ship moves; Navigate token **removed** from card panel; overlay gone |
 
-### MT-5b.7 — Speed 0 skips maneuver tool
+### MT-5b.8 — Simulation maneuver blocked during activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship and press "Execute Maneuver ►" | Maneuver tool appears in activation mode |
+| 2 | Check lower-right toolbar "M" button | Button is greyed out / disabled |
+| 3 | Try clicking the "M" button | Nothing happens — simulation tool does not appear |
+| 4 | After committing the maneuver | "M" button re-enabled |
+
+### MT-5b.9 — Speed 0 skips maneuver tool
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Set a ship to speed 0 (via Navigate or initial state) and activate | No maneuver tool displayed |
 | 2 | Ship stays in place | Position unchanged; maneuver counts as executed |
-| 3 | "End Activation" button | Appears immediately (no Execute Maneuver step) |
+| 3 | Activation auto-ends | Next player's turn starts immediately (no End Activation button) |
 
-### MT-5b.8 — Token conversion flow still works
+### MT-5b.10 — Token conversion flow still works
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Drag a dial onto the ship card panel to convert to token | Token conversion happens, then "Show Activation Sequence" appears |
 | 2 | Token overflow triggers discard prompt | Discard prompt appears before activation sequence button |
 
-### MT-5b.9 — No regressions
+### MT-5b.11 — Auto-end activation after commit
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Run automated GUT suite | 845 tests, 50 scripts, 0 failures |
-| 2 | All Phase 5a/5a+ manual tests still pass | Toolbar, joints, ghost, simulation — no regression |
-| 3 | Complete a full game round | Command Phase → Ship Phase (activate all ships with maneuver) → Squadron Phase → Status Phase → Round 2 |
+| 1 | Commit a maneuver (press "Commit Maneuver ►") | Ship snaps to position; modal closes |
+| 2 | Verify no "End Activation" button appears | Activation ends automatically |
+| 3 | Verify next player's turn starts | Command dial prompt or next ship's activation begins |
+| 4 | Complete a full game round | Command Phase → Ship Phase (activate all ships) → Squadron Phase → Status Phase → Round 2 |
 
-**Pass criteria:** Activation sequence button appears after dial reveal; modal opens with auto-skip; maneuver tool in activation mode (speed changes gated by Navigate); Execute Maneuver commits position; End Activation follows; speed 0 works; 845 tests pass.
+### MT-5b.12 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 847 tests, 50 scripts, 0 failures |
+| 2 | All Phase 5a/5a+ manual tests still pass | Toolbar, joints, ghost, simulation — no regression |
+
+**Pass criteria:** Activation sequence button appears after dial reveal; modal opens centred with auto-skip; two-phase Execute/Commit button; maneuver tool in activation mode (speed changes gated by Navigate, reversible, yaw bonus on any joint); Commit snaps ship and auto-ends activation; Navigate token removed from ship on commit; simulation maneuver blocked during activation; speed 0 works; 847 tests pass.
 
 ---
 

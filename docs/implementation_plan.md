@@ -21,6 +21,7 @@
 - [Phase 4e: Command Token Overflow Discard](#phase-4e-command-token-overflow-discard)
 - [Phase 4f: Hover Tooltip Infrastructure](#phase-4f-hover-tooltip-infrastructure)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
+- [Phase 5c: Range Overlay Tool](#phase-5c-range-overlay-tool)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -667,6 +668,28 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 5c: Range Overlay Tool ✅
+**Goal:** Add an "R" button to the toolbar that shows per-firing-arc range bands (close/medium/long) with curved edges around a selected ship. Firing arc boundary points are measured from ship token PNGs and stored in ship JSON files. The range overlay is a pure visual aid — no gameplay effect.
+**Prerequisites:** Phase 0 (GameScale range values), Phase 2 (ShipToken, game board), Phase 5a (ActionToolbar)
+**Duration estimate:** 1 session
+**Commits:** `9319404`
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Ship JSON data: firing arc boundaries + LOS origins | Data | RO-DATA-01 | 8 boundary points (`inner_point_front_left`, `outer_point_front_left`, etc.) and 4 LOS origins (`FRONT`, `LEFT`, `RIGHT`, `REAR`) in each ship JSON; `card_data_schema.json` updated | ✅ |
+| 2 | `ShipData` parsing | Model | RO-DATA-02 | `firing_arc_boundaries` and `line_of_sight_origins` dict fields; `_parse_point_dict()` helper (skips `_comment` keys) | ✅ |
+| 3 | `ShipToken` coordinate conversion | Presentation | RO-003 | `png_to_world()` — converts PNG pixel coords to world space; `get_firing_arc_world_points()`, `get_los_origins_world()` | ✅ |
+| 4 | `RangeOverlayCalculator` | Core | RO-004, RO-005 | Computes curved range bands via `Geometry2D.offset_polygon(JOIN_ROUND)`, clips to arc sectors via `intersect_polygons`/`clip_polygons`; 4 arc boundary line segments extended 1.2× ruler length | ✅ |
+| 5 | `RangeOverlayScene` | Presentation | RO-003, RO-006 | Node2D draws band polygons (grey=close, blue=medium, red=long, α=0.12) and white arc lines (α=0.70, width 1.5) via `_draw()` | ✅ |
+| 6 | "R" button in ActionToolbar | Presentation | RO-001 | Button next to "M"; emits `range_overlay_requested`; disabled during activation alongside M | ✅ |
+| 7 | GameBoard wiring | Presentation | RO-002, RO-007 | Ship selection mode → show overlay; toggle/dismiss via R press or Escape; `set_tool_buttons_disabled()` renamed from `set_maneuver_button_disabled()` | ✅ |
+| 8 | Tests | Test | RO-T-01 | `test_range_overlay_calculator.gd` (19 tests: _extend_ray, _ensure_cw, _build_sector, _ring_in_sector, full compute); `test_ship_data.gd` (+11 tests: parsing boundaries + LOS origins) | ✅ |
+
+**Requirements covered:** RO-001–RO-007, RO-DATA-01/02, RO-T-01
+**Tests:** 30 new — 877 cumulative (51 scripts, 1710 asserts)
+
+---
+
 ### Phase 5b-2: Overlap Handling ⏳
 **Goal:** Handle ship–ship and ship–squadron overlaps during movement.
 **Prerequisites:** Phase 5b (maneuver execution)
@@ -860,7 +883,8 @@ Phase 0 (Scale & Assets)
 | Phase 5a | ~25 | **36** | **796** |
 | Phase 5a+ | 16 | 812 | 812 |
 | Phase 5b | ~25 | **35** | **847** |
-| Phase 5b-2 | ~10 | — | ~855 |
+| Phase 5c | ~30 | **30** | **877** |
+| Phase 5b-2 | ~10 | — | ~887 |
 | Phase 6 | ~45 | — | ~892 |
 | Phase 7 | ~30 | — | ~922 |
 | Phase 8 | ~20 | — | ~942 |

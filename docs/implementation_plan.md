@@ -669,24 +669,24 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 ---
 
 ### Phase 5c: Range Overlay Tool ✅
-**Goal:** Add an "R" button to the toolbar that shows per-firing-arc range bands (close/medium/long) with curved edges around a selected ship. Firing arc boundary points are measured from ship token PNGs and stored in ship JSON files. The range overlay is a pure visual aid — no gameplay effect.
+**Goal:** Add an "R" button to the toolbar that shows per-firing-arc range bands (close/medium/long) around a selected ship. Pre-rendered overlay PNGs (one per ship type) are displayed as a Sprite2D beneath the ship token. The range overlay is a pure visual aid — no gameplay effect.
 **Prerequisites:** Phase 0 (GameScale range values), Phase 2 (ShipToken, game board), Phase 5a (ActionToolbar)
 **Duration estimate:** 1 session
-**Commits:** `9319404`
+**Commits:** `9319404` (initial algorithmic impl), `3a79c6e` (hull-zone fix)
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
-| 1 | Ship JSON data: firing arc boundaries + LOS origins | Data | RO-DATA-01 | 8 boundary points (`inner_point_front_left`, `outer_point_front_left`, etc.) and 4 LOS origins (`FRONT`, `LEFT`, `RIGHT`, `REAR`) in each ship JSON; `card_data_schema.json` updated | ✅ |
-| 2 | `ShipData` parsing | Model | RO-DATA-02 | `firing_arc_boundaries` and `line_of_sight_origins` dict fields; `_parse_point_dict()` helper (skips `_comment` keys) | ✅ |
-| 3 | `ShipToken` coordinate conversion | Presentation | RO-003 | `png_to_world()` — converts PNG pixel coords to world space; `get_firing_arc_world_points()`, `get_los_origins_world()` | ✅ |
-| 4 | `RangeOverlayCalculator` | Core | RO-004, RO-005 | Computes curved range bands via `Geometry2D.offset_polygon(JOIN_ROUND)`, clips to arc sectors via `intersect_polygons`/`clip_polygons`; 4 arc boundary line segments extended 1.2× ruler length | ✅ |
-| 5 | `RangeOverlayScene` | Presentation | RO-003, RO-006 | Node2D draws band polygons (grey=close, blue=medium, red=long, α=0.12) and white arc lines (α=0.70, width 1.5) via `_draw()` | ✅ |
+| 1 | Ship JSON data: firing arc boundaries + LOS origins | Data | RO-DATA-01 | 8 boundary points and 4 LOS origins in each ship JSON; `card_data_schema.json` updated | ✅ |
+| 2 | Ship JSON data: range overlay image + origin | Data | RO-DATA-03 | `range_overlay.image` (filename) and `range_overlay.origin_px` ([x,y] of ship center) per ship JSON; 3 overlay PNGs at ruler pixel scale | ✅ |
+| 3 | `ShipData` parsing | Model | RO-DATA-02, RO-DATA-03 | `firing_arc_boundaries`, `line_of_sight_origins`, `range_overlay_image`, `range_overlay_origin_px` fields | ✅ |
+| 4 | `RangeOverlayScene` (sprite-based) | Presentation | RO-003, RO-006 | Sprite2D loads overlay texture, scales to game-scale, centres on ship token; z-order below all tokens | ✅ |
+| 5 | Delete `RangeOverlayCalculator` | Cleanup | — | Remove `src/core/range_overlay_calculator.gd` and `tests/unit/test_range_overlay_calculator.gd` | ✅ |
 | 6 | "R" button in ActionToolbar | Presentation | RO-001 | Button next to "M"; emits `range_overlay_requested`; disabled during activation alongside M | ✅ |
-| 7 | GameBoard wiring | Presentation | RO-002, RO-007 | Ship selection mode → show overlay; toggle/dismiss via R press or Escape; `set_tool_buttons_disabled()` renamed from `set_maneuver_button_disabled()` | ✅ |
-| 8 | Tests | Test | RO-T-01 | `test_range_overlay_calculator.gd` (19 tests: _extend_ray, _ensure_cw, _build_sector, _ring_in_sector, full compute); `test_ship_data.gd` (+11 tests: parsing boundaries + LOS origins) | ✅ |
+| 7 | GameBoard wiring | Presentation | RO-002, RO-007 | Ship selection mode → show overlay; toggle/dismiss via R press or Escape | ✅ |
+| 8 | Tests | Test | RO-T-01 | `test_ship_data.gd` (+4 overlay field parsing tests) | ✅ |
 
-**Requirements covered:** RO-001–RO-007, RO-DATA-01/02, RO-T-01
-**Tests:** 30 new — 877 cumulative (51 scripts, 1710 asserts)
+**Requirements covered:** RO-001–RO-007, RO-DATA-01/02/03, RO-T-01
+**Tests:** 862 cumulative (50 scripts, 1653 asserts)
 
 ---
 
@@ -883,7 +883,7 @@ Phase 0 (Scale & Assets)
 | Phase 5a | ~25 | **36** | **796** |
 | Phase 5a+ | 16 | 812 | 812 |
 | Phase 5b | ~25 | **35** | **847** |
-| Phase 5c | ~30 | **30** | **877** |
+| Phase 5c | ~12 | **12** | **862** |
 | Phase 5b-2 | ~10 | — | ~887 |
 | Phase 6 | ~45 | — | ~892 |
 | Phase 7 | ~30 | — | ~922 |

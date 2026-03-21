@@ -348,3 +348,44 @@ func test_from_dict_missing_line_of_sight_origins_gives_empty() -> void:
 	var ship: ShipData = ShipData.from_dict({"ship_name": "No LOS"})
 	assert_eq(ship.line_of_sight_origins.size(), 0,
 		"Missing line_of_sight_origins should result in empty dict")
+
+
+# ---------------------------------------------------------------------------
+# Range overlay fields  (RO-DATA-03)
+# ---------------------------------------------------------------------------
+
+func test_default_range_overlay_image_is_empty() -> void:
+	var ship: ShipData = ShipData.new()
+	assert_eq(ship.range_overlay_image, "",
+		"Default range_overlay_image should be empty string")
+
+
+func test_default_range_overlay_origin_is_zero() -> void:
+	var ship: ShipData = ShipData.new()
+	assert_eq(ship.range_overlay_origin_px, Vector2.ZERO,
+		"Default range_overlay_origin_px should be Vector2.ZERO")
+
+
+func test_from_dict_parses_range_overlay() -> void:
+	var data: Dictionary = {
+		"ship_name": "Test Ship",
+		"range_overlay": {
+			"image": "arcs_test_overlay.png",
+			"origin_px": [400.5, 500.5],
+		},
+	}
+	var ship: ShipData = ShipData.from_dict(data)
+	assert_eq(ship.range_overlay_image, "arcs_test_overlay.png",
+		"Should parse range_overlay image filename")
+	assert_almost_eq(ship.range_overlay_origin_px.x, 400.5, 0.01,
+		"Should parse overlay origin x")
+	assert_almost_eq(ship.range_overlay_origin_px.y, 500.5, 0.01,
+		"Should parse overlay origin y")
+
+
+func test_from_dict_missing_range_overlay_gives_defaults() -> void:
+	var ship: ShipData = ShipData.from_dict({"ship_name": "No Overlay"})
+	assert_eq(ship.range_overlay_image, "",
+		"Missing range_overlay should give empty image string")
+	assert_eq(ship.range_overlay_origin_px, Vector2.ZERO,
+		"Missing range_overlay should give zero origin")

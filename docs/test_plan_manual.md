@@ -1373,25 +1373,23 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | Click the R button again (toggle) | Selection mode cancelled; tooltip disappears |
 | 3 | Press Escape during selection mode | Selection mode cancelled; tooltip disappears |
 
-### MT-5c.3 — Range bands displayed
+### MT-5c.3 — Range overlay image displayed
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Click R, then click any ship token | Three semi-transparent colour bands appear around the ship base |
-| 2 | Innermost band (closest to ship base) | **Grey** — close range |
-| 3 | Middle band | **Blue** — medium range |
-| 4 | Outermost band | **Red** — long range |
-| 5 | Band edges (outer curves) | Smoothly curved — constant distance from the ship base edge |
-| 6 | Bands per arc | Each of the 4 hull zones (front, left, right, rear) has its own set of bands |
+| 1 | Click R, then click any ship token | Pre-rendered overlay image appears around the ship |
+| 2 | Overlay content | Arc boundary lines + coloured range bands (close/medium/long) baked into the image |
+| 3 | Overlay position | Centred on the ship token; aligned with ship's rotation |
+| 4 | Z-order | Overlay renders **below** all ship and squadron tokens |
+| 5 | Per-ship type | CR90, Neb-B, and VSD each have their own overlay graphic |
 
-### MT-5c.4 — Arc boundary lines
+### MT-5c.4 — Arc boundary lines and range bands visible
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | With range overlay visible | 4 white lines radiate from the ship base corners |
-| 2 | Line direction | Each line follows the inner→outer boundary direction from the ship token |
-| 3 | Line length | Lines extend noticeably beyond the long (red) range band (1.2× ruler length beyond outer point) |
-| 4 | Line style | White, thin, semi-transparent (α≈0.7) |
+| 1 | With range overlay visible | 4 boundary lines radiate from the ship base |
+| 2 | Range bands | Three coloured bands around each hull zone |
+| 3 | Band order | Inner = close, middle = medium, outer = long |
 
 ### MT-5c.5 — Dismiss and toggle
 
@@ -1401,19 +1399,19 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | Click R again, select a ship, then click R once more | Overlay toggles off |
 | 3 | Click R, select a ship; then click R, select a **different** ship | Previous overlay replaced by new one |
 
-### MT-5c.6 — Small ship (CR90) boundaries
+### MT-5c.6 — Small ship (CR90) overlay
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Show range overlay on CR90 Corvette A | All 4 boundary lines emanate from the **same inner point** (centre of base) |
-| 2 | Front arc is roughly a forward triangle | Front band sectors narrower than side arcs |
+| 1 | Show range overlay on CR90 Corvette A | Overlay centred on ship, arcs and bands look correct |
+| 2 | Front arc | Narrower forward sector |
 | 3 | Left and right arcs symmetric | Mirrored band shapes |
 
-### MT-5c.7 — Large ship (Victory-class) boundaries
+### MT-5c.7 — Medium ship (Victory-class) overlay
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Show range overlay on Victory I or II | Boundary lines may emanate from slightly different inner points (front vs rear) |
+| 1 | Show range overlay on Victory I or II | Overlay is larger (medium base), centred correctly |
 | 2 | Front arc is wider than CR90's | Larger base = wider front sector |
 | 3 | Rear arc is visible | Rear bands render correctly behind the ship |
 
@@ -1430,12 +1428,12 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Run automated GUT suite | 877 tests, 51 scripts, 0 failures |
+| 1 | Run automated GUT suite | 862 tests, 50 scripts, 0 failures |
 | 2 | All Phase 5a/5b manual tests still pass | Maneuver tool, activation, Navigate — no regression |
 | 3 | M button still works | Simulation maneuver tool unaffected |
 
-**Pass criteria:** R button visible and styled correctly; click R → select ship → range bands appear (grey/blue/red, curved edges); 4 white arc boundary lines extend beyond long range; toggle/escape dismisses; disabled during activation; small ship and large ship boundaries look correct; 877 tests pass.
+**Pass criteria:** R button visible and styled correctly; click R → select ship → pre-rendered overlay image appears centred on ship, below all tokens; toggle/escape dismisses; disabled during activation; small ship and medium ship overlays look correct; 862 tests pass.
 
 ---
 
-*Last updated: Phase 5c — Range overlay tool with per-arc curved range bands and arc boundary lines.*
+*Last updated: Phase 5c — Range overlay tool with pre-rendered overlay PNGs per ship type.*

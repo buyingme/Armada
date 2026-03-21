@@ -109,4 +109,10 @@
     "LEFT":  [44, 124],
     "RIGHT": [98, 124],
     "REAR":  [71, 171]
-  }}
+  },
+  "range_overlay": {
+    "_comment": "Pre-rendered overlay PNG at ruler pixel scale. origin_px is the ship centre in the overlay image.",
+    "image": "arcs_CR90_overlay.png",
+    "origin_px": [773.5, 807.5]
+  }
+}

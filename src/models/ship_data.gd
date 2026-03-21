@@ -71,6 +71,16 @@ extends Resource
 ## Rules Reference: "Line of Sight", p.6.
 @export var line_of_sight_origins: Dictionary = {}
 
+## Filename of the pre-rendered range overlay PNG (in ships/ folder).
+## Empty string if no overlay is available.
+## Requirements: RO-DATA-03.
+@export var range_overlay_image: String = ""
+
+## Ship centre in the overlay image, in overlay-pixel coordinates.
+## Used to align the overlay Sprite2D with the ship token position.
+## Requirements: RO-DATA-03.
+@export var range_overlay_origin_px: Vector2 = Vector2.ZERO
+
 
 ## Creates a ShipData from a raw JSON dictionary keyed by the field names in
 ## card_data_schema.json. Enum string values ("SMALL", "MEDIUM", "LARGE",
@@ -96,6 +106,11 @@ static func from_dict(data: Dictionary) -> ShipData:
 	s.token_label_offsets = _parse_label_offsets(data.get("token_label_offsets", {}))
 	s.firing_arc_boundaries = _parse_point_dict(data.get("firing_arc_boundaries", {}))
 	s.line_of_sight_origins = _parse_point_dict(data.get("line_of_sight_origins", {}))
+	var overlay: Dictionary = data.get("range_overlay", {})
+	s.range_overlay_image = overlay.get("image", "")
+	var origin_arr: Array = overlay.get("origin_px", [])
+	if origin_arr.size() >= 2:
+		s.range_overlay_origin_px = Vector2(float(origin_arr[0]), float(origin_arr[1]))
 	return s
 
 

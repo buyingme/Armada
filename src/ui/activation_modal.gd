@@ -333,10 +333,12 @@ func _update_step_display() -> void:
 				status_label.text = ""
 				if _execute_button:
 					_execute_button.visible = true
-					_execute_button.disabled = false				if _maneuver_tool_shown:
-					_execute_button.text = "Commit Maneuver ►"
-				else:
-					_execute_button.text = "Execute Maneuver ►"			else:
+					_execute_button.disabled = false
+					if _maneuver_tool_shown:
+						_execute_button.text = "Commit Maneuver ►"
+					else:
+						_execute_button.text = "Execute Maneuver ►"
+			else:
 				status_label.text = "►"
 				status_label.modulate = Color.WHITE
 		else:

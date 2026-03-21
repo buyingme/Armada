@@ -3,7 +3,7 @@
 ## Displays a pre-rendered range-band overlay image for one ship.
 ## Added as a child of the token container on the game board, positioned
 ## at the ship's world coordinates with the ship's rotation.  Renders
-## below all tokens (z_index = -1).
+## above the map but below all tokens (first child in container).
 ##
 ## The overlay PNG contains baked arc boundary lines and range bands
 ## (close / medium / long).  It is stored at the same pixel density as the
@@ -55,6 +55,3 @@ func setup(token: ShipToken) -> void:
 		_sprite.offset = delta
 
 	add_child(_sprite)
-
-	# Render below all tokens.
-	z_index = -1

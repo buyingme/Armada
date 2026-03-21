@@ -1494,6 +1494,8 @@ func _show_range_overlay(token: ShipToken) -> void:
 	_range_overlay_scene = RangeOverlayScene.new()
 	_range_overlay_scene.name = "RangeOverlayScene"
 	_token_container.add_child(_range_overlay_scene)
+	# Move to index 0 so it draws above the map but behind all tokens.
+	_token_container.move_child(_range_overlay_scene, 0)
 	_range_overlay_scene.setup(token)
 	_log.info("Range overlay displayed on ship.")
 

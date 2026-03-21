@@ -261,8 +261,8 @@ func _create_step_row(step_index: int) -> PanelContainer:
 	# For step 5 (Execute Maneuver): add an actionable button.
 	if step_index == 4:
 		_execute_button = Button.new()
-		_execute_button.text = "Execute ►"
-		_execute_button.custom_minimum_size = Vector2(90, 28)
+		_execute_button.text = "Execute Maneuver ►"
+		_execute_button.custom_minimum_size = Vector2(130, 28)
 		_execute_button.visible = false
 		_execute_button.pressed.connect(_on_execute_pressed)
 		hbox.add_child(_execute_button)
@@ -333,8 +333,10 @@ func _update_step_display() -> void:
 				status_label.text = ""
 				if _execute_button:
 					_execute_button.visible = true
-					_execute_button.disabled = false
-			else:
+					_execute_button.disabled = false				if _maneuver_tool_shown:
+					_execute_button.text = "Commit Maneuver ►"
+				else:
+					_execute_button.text = "Execute Maneuver ►"			else:
 				status_label.text = "►"
 				status_label.modulate = Color.WHITE
 		else:
@@ -403,7 +405,7 @@ func _on_execute_pressed() -> void:
 		_log.info("Execute maneuver pressed — showing tool.")
 		_maneuver_tool_shown = true
 		if _execute_button:
-			_execute_button.text = "Commit ►"
+			_execute_button.text = "Commit Maneuver ►"
 		maneuver_step_entered.emit()
 		# Close so the player can see the maneuver tool underneath.
 		close()

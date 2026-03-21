@@ -1306,11 +1306,8 @@ func _on_maneuver_step_entered() -> void:
 	_token_container.add_child(_maneuver_tool_scene)
 	_maneuver_tool_scene.setup(_activating_ship_token)
 	_maneuver_tool_scene.set_activation_mode(_ship_activation_state)
-	# Apply yaw bonus to the tool if Navigate dial provides it.
-	if _ship_activation_state.has_yaw_bonus():
-		_ship_activation_state.apply_yaw_bonus(0)
-		_maneuver_tool_scene.get_state().set_yaw_bonus_joint(0)
-		_maneuver_tool_scene.refresh()
+	# Yaw bonus (Navigate dial) is applied interactively when the player
+	# clicks a joint beyond its base limit — not auto-assigned to joint 0.
 	# Modal's embedded Execute button is already visible — no extra button needed.
 
 

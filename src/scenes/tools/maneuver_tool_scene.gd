@@ -389,6 +389,9 @@ func _try_joint_click(mb: InputEventMouseButton) -> void:
 			applied = _state.click_joint_left(j)
 		else:
 			applied = _state.click_joint_right(j)
+		# If the click was rejected, try applying/moving the yaw bonus.
+		if not applied:
+			applied = _try_apply_yaw_bonus_for(j, mb.button_index)
 		if applied:
 			_update_visual()
 			_log.info("Joint %d clicked %s → %d" % [
@@ -396,6 +399,35 @@ func _try_joint_click(mb: InputEventMouseButton) -> void:
 					else "right", _state.get_joint_clicks()[j]])
 		get_viewport().set_input_as_handled()
 		return
+
+
+## Attempts to apply or move the Navigate yaw bonus to [param joint_index]
+## so that a previously rejected click can succeed.
+## Returns true if the bonus was applied and the click went through.
+## Rules Reference: "Navigate" — increase 1 yaw value by 1 at any joint.
+## Requirements: NAV-002, NAV-006, EXE-005.
+func _try_apply_yaw_bonus_for(joint_index: int,
+		button: MouseButton) -> bool:
+	if not _activation_mode or _activation_state == null:
+		return false
+	var current_bonus: int = _activation_state.get_yaw_bonus_joint()
+	# Bonus is already on this joint — the click genuinely exceeds limits.
+	if current_bonus == joint_index:
+		return false
+	# If the bonus is on a different joint, remove it first.
+	if current_bonus >= 0:
+		_activation_state.remove_yaw_bonus()
+		_state.clear_yaw_bonus()
+		_state.clamp_joints()
+	# Apply the bonus to the requested joint.
+	if not _activation_state.has_yaw_bonus():
+		return false
+	_activation_state.apply_yaw_bonus(joint_index)
+	_state.set_yaw_bonus_joint(joint_index)
+	# Retry the click with the increased limit.
+	if button == MOUSE_BUTTON_LEFT:
+		return _state.click_joint_left(joint_index)
+	return _state.click_joint_right(joint_index)
 
 
 # ------------------------------------------------------------------

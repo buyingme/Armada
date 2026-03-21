@@ -298,7 +298,15 @@ func set_simulated_speed(new_speed: int) -> void:
 ## Clamps each joint's click value to the max yaw allowed at the
 ## current simulated speed. Retains the sign (port/starboard).
 ## Deactivated joints (index >= simulated_speed) are zeroed.
+## Call after changing the yaw bonus assignment so that the old joint's
+## clicks do not exceed the (now reduced) limit.
 ## Requirements: MT-S-003, AC-22.
+func clamp_joints() -> void:
+	_clamp_joints_to_nav_chart()
+
+
+## Internal: clamps each joint's click value to the max yaw allowed at the
+## current simulated speed.
 func _clamp_joints_to_nav_chart() -> void:
 	for i: int in range(MAX_JOINTS):
 		if i >= _simulated_speed:

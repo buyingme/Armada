@@ -293,10 +293,18 @@ func get_yaw_bonus_joint() -> int:
 
 
 ## Marks the maneuver as executed (committed).
+## If speed changes consumed the Navigate token, the token is removed
+## from the ship's CommandTokenManager and the UI is notified.
 ## After this, the activation can proceed to "End Activation".
-## Rules Reference: EXE-001.
+## Rules Reference: EXE-001, NAV-003, NAV-005, CM-001.
 func mark_maneuver_executed() -> void:
 	_maneuver_executed = true
+	# Spend the Navigate command token if it was consumed for speed changes.
+	if is_using_token_for_speed() and _ship and _ship.command_tokens:
+		_ship.command_tokens.spend_token(Constants.CommandType.NAVIGATE)
+		_has_navigate_token = false
+		EventBus.command_tokens_changed.emit(_ship)
+		_log.info("Navigate token spent on speed change.")
 	if not is_command_resolved(Constants.CommandType.NAVIGATE):
 		if _has_navigate_dial or _total_speed_change != 0:
 			mark_command_resolved(Constants.CommandType.NAVIGATE)

@@ -1,0 +1,526 @@
+## ManeuverToolScene
+##
+## Visual representation of the maneuver tool on the game board.
+## Renders segment sprites at positions computed by ManeuverToolState,
+## handles joint click interaction, and displays a ghost ship preview.
+##
+## Rules Reference: RRG "Maneuver Tool" p.10, "Ship Movement" p.16–17.
+## Requirements: MT-G-001–008, MT-U-005, AC-04–09.
+class_name ManeuverToolScene
+extends Node2D
+
+
+## Click detection radius around joint positions (in game pixels).
+const JOINT_CLICK_RADIUS: float = 24.0
+
+## Click detection radius for speed +/- buttons (in game pixels).
+const SPEED_BUTTON_RADIUS: float = 12.0
+
+## Speed button circle display radius (in game pixels).
+const SPEED_BUTTON_DRAW_RADIUS: float = 10.0
+
+## Ghost ship preview transparency.
+const GHOST_ALPHA: float = 0.35
+
+## Font size for the speed label on the ghost, in source-PNG pixels.
+## Matches ShipToken.LABEL_FONT_SIZE_PNG_PX.
+const LABEL_FONT_SIZE_PNG_PX: int = 13
+
+## Logger.
+var _log: GameLogger = GameLogger.new("ManeuverTool")
+
+## Core model tracking joint angles and speed.
+var _state: ManeuverToolState = null
+
+## Reference to the attached ship token.
+var _ship_token: ShipToken = null
+
+## Which side the tool is attached to ("left" or "right").
+var _side: String = "left"
+
+## Sprites for each of the 5 segments.
+var _segment_sprites: Array[Sprite2D] = []
+
+## Ghost ship preview sprite.
+var _ghost_sprite: Sprite2D = null
+
+## Node2D overlay that draws speed +/- buttons on the end segment.
+## Requirements: MT-S-001, AC-19, AC-25.
+var _speed_button_layer: Node2D = null
+
+## Node2D overlay that draws the speed label on the ghost.
+## Requirements: MT-S-005, AC-23.
+var _ghost_label_layer: Node2D = null
+
+## Bold font for the speed label on the ghost and button labels.
+var _label_font: Font = null
+
+## Cached textures per segment type.
+var _textures: Dictionary = {}
+
+
+## Initialises the tool for a specific ship token.
+## [param ship_token] — the ship to attach the tool to.
+## [param side] — "left" or "right" side of the ship base.
+func setup(ship_token: ShipToken, side: String = "left") -> void:
+	_ship_token = ship_token
+	_side = side
+	_state = ManeuverToolState.new()
+	var instance: ShipInstance = ship_token.get_ship_instance()
+	var speed: int = 2
+	var nav_chart: Array = [[2], [1, 2]]
+	var max_speed: int = 2
+	var ship_size: Constants.ShipSize = ship_token.get_ship_size()
+	if instance:
+		speed = instance.current_speed
+		var ship_data: ShipData = ship_token.get_ship_data()
+		if ship_data:
+			nav_chart = ship_data.navigation_chart
+			max_speed = ship_data.max_speed
+	_state.setup(speed, nav_chart, ship_size, max_speed)
+	_load_textures()
+	_create_sprites()
+	_update_visual()
+
+
+## Returns the ManeuverToolState for external queries.
+func get_state() -> ManeuverToolState:
+	return _state
+
+
+## Refreshes the visual representation after state changes.
+func refresh() -> void:
+	_update_visual()
+
+
+# ------------------------------------------------------------------
+# Texture and sprite creation
+# ------------------------------------------------------------------
+
+## Loads segment textures from the tools/ asset folder.
+func _load_textures() -> void:
+	var cfg: Dictionary = GameScale.maneuver_tool_config
+	for key: String in ["root", "segment", "segment_end"]:
+		var section: Dictionary = cfg.get(key, {})
+		var img: String = String(section.get("image", ""))
+		if not img.is_empty():
+			_textures[key] = AssetLoader.load_texture("tools/", img)
+
+
+## Creates the 5 segment sprites and the ghost preview sprite.
+func _create_sprites() -> void:
+	for i: int in range(ManeuverToolState.TOTAL_SEGMENTS):
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.centered = false
+		sprite.name = "Segment_%d" % i
+		sprite.visible = false
+		add_child(sprite)
+		_segment_sprites.append(sprite)
+	_ghost_sprite = Sprite2D.new()
+	_ghost_sprite.name = "GhostPreview"
+	_ghost_sprite.modulate = Color(1, 1, 1, GHOST_ALPHA)
+	_ghost_sprite.visible = false
+	add_child(_ghost_sprite)
+	## Speed button overlay drawn on top of the end segment.
+	_speed_button_layer = Node2D.new()
+	_speed_button_layer.name = "SpeedButtons"
+	_speed_button_layer.draw.connect(_on_speed_button_draw)
+	_speed_button_layer.visible = false
+	add_child(_speed_button_layer)
+	## Speed label overlay drawn on the ghost ship.
+	_ghost_label_layer = Node2D.new()
+	_ghost_label_layer.name = "GhostSpeedLabel"
+	_ghost_label_layer.draw.connect(_on_ghost_label_draw)
+	_ghost_label_layer.visible = false
+	add_child(_ghost_label_layer)
+	## Bold font for labels.
+	var sf: SystemFont = SystemFont.new()
+	sf.font_weight = 700
+	_label_font = sf
+
+
+# ------------------------------------------------------------------
+# Visual update
+# ------------------------------------------------------------------
+
+## Returns the universal sprite scale for all maneuver tool segment PNGs.
+## All types share a single factor so contact widths and proportions match.
+## Requirements: MT-D-003, AC-09.
+func _get_sprite_scale(_seg_type: String) -> float:
+	return ManeuverToolState.get_tool_scale()
+
+
+## Computes the tool's attachment point on the ship in world space.
+## Uses the computed alignment side so root and ghost switch together.
+## Returns {"position": Vector2, "rotation": float}.
+## Rules Reference: MT-G-005, MT-A-004.
+func _compute_attachment() -> Dictionary:
+	var side: String = "left"
+	if _state:
+		side = _state.compute_ghost_side()
+	var half_w: float = _ship_token.get_half_width()
+	var half_l: float = _ship_token.get_half_length()
+	var ship_pos: Vector2 = _ship_token.global_position
+	var ship_rot: float = _ship_token.global_rotation
+	var root_cfg: Dictionary = GameScale.maneuver_tool_config.get(
+			"root", {})
+	var entry: Vector2 = root_cfg.get("entry_intersection", Vector2.ZERO)
+	var seg_scale: float = _get_sprite_scale("root")
+	var contact: Vector2 = root_cfg.get("contact_right", Vector2.ZERO)
+	var corner_local: Vector2 = Vector2(-half_w, -half_l)
+	if side == "right":
+		contact = root_cfg.get("contact_left", Vector2.ZERO)
+		corner_local = Vector2(half_w, -half_l)
+	var offset: Vector2 = (entry - contact) * seg_scale
+	var entry_local: Vector2 = corner_local + offset
+	var entry_world: Vector2 = ship_pos + entry_local.rotated(ship_rot)
+	return {"position": entry_world, "rotation": ship_rot}
+
+
+## Updates all segment sprites and the ghost preview.
+func _update_visual() -> void:
+	if _state == null or _ship_token == null:
+		return
+	var attach: Dictionary = _compute_attachment()
+	var start_pos: Vector2 = attach["position"]
+	var start_rot: float = attach["rotation"]
+	var chain: Dictionary = _state.compute_segment_transforms(
+			start_pos, start_rot)
+	var segs: Array = chain["segments"]
+	var joints: Array = chain["joints"]
+	_log_chain(segs, joints)
+	_update_segments(segs)
+	_update_speed_buttons(segs)
+	_update_ghost(start_pos, start_rot)
+
+
+## Logs the full transform chain for debugging segment alignment.
+func _log_chain(segs: Array, joints: Array) -> void:
+	var s: float = ManeuverToolState.get_tool_scale()
+	_log.info("=== Maneuver Tool Chain (speed %d, scale %.4f) ===" % [
+			_state.get_speed(), s])
+	var active: int = _state.get_active_segment_count()
+	for i: int in range(active):
+		var seg_type: String = _state.get_segment_type(i)
+		var xform: Transform2D = segs[i] as Transform2D
+		var cfg: Dictionary = GameScale.maneuver_tool_config.get(
+				seg_type, {})
+		var entry_px: Vector2 = cfg.get("entry_intersection",
+				Vector2.ZERO) as Vector2
+		var exit_px: Vector2 = cfg.get("exit_intersection",
+				Vector2.ZERO) as Vector2
+		var rot: float = xform.get_rotation()
+		## World position of entry (= xform.origin by definition).
+		var entry_world: Vector2 = xform.origin
+		## World position of exit pixel (offset from entry in local space,
+		## scaled uniformly, then rotated).
+		var exit_world: Vector2 = Vector2.INF
+		if cfg.has("exit_intersection"):
+			var local_exit: Vector2 = (exit_px - entry_px) * s
+			exit_world = entry_world + local_exit.rotated(rot)
+		_log.info(
+				"  [%d] %s  entry_px=%s  exit_px=%s" % [
+				i, seg_type, entry_px, exit_px])
+		_log.info(
+				"       entry_world=(%.1f, %.1f)  rot=%.2f°" % [
+				entry_world.x, entry_world.y, rad_to_deg(rot)])
+		if exit_world != Vector2.INF:
+			_log.info(
+					"       exit_world=(%.1f, %.1f)" % [
+					exit_world.x, exit_world.y])
+		else:
+			_log.info("       (no exit — end segment)")
+		var cl: Vector2 = cfg.get("contact_left",
+				Vector2.ZERO) as Vector2
+		var cr: Vector2 = cfg.get("contact_right",
+				Vector2.ZERO) as Vector2
+		var cl_world: Vector2 = entry_world + (
+				(cl - entry_px) * s).rotated(rot)
+		var cr_world: Vector2 = entry_world + (
+				(cr - entry_px) * s).rotated(rot)
+		_log.info(
+				"       contact_L_world=(%.1f, %.1f)  contact_R_world=(%.1f, %.1f)" % [
+				cl_world.x, cl_world.y, cr_world.x, cr_world.y])
+	for j: int in range(joints.size()):
+		var jpos: Vector2 = joints[j] as Vector2
+		_log.info("  Joint %d  world=(%.1f, %.1f)" % [
+				j, jpos.x, jpos.y])
+	_log.info("=== End Chain ===")
+
+
+## Positions and configures each active segment sprite.
+func _update_segments(segs: Array) -> void:
+	var active: int = _state.get_active_segment_count()
+	for i: int in range(ManeuverToolState.TOTAL_SEGMENTS):
+		var sprite: Sprite2D = _segment_sprites[i]
+		if i >= active or i >= segs.size():
+			sprite.visible = false
+			continue
+		sprite.visible = true
+		var seg_type: String = _state.get_segment_type(i)
+		var tex: Texture2D = _textures.get(seg_type) as Texture2D
+		if tex:
+			sprite.texture = tex
+		var cfg: Dictionary = GameScale.maneuver_tool_config.get(
+				seg_type, {})
+		var entry_px: Vector2 = cfg.get("entry_intersection",
+				Vector2.ZERO) as Vector2
+		sprite.offset = -entry_px
+		var s: float = _get_sprite_scale(seg_type)
+		sprite.scale = Vector2(s, s)
+		var xform: Transform2D = segs[i] as Transform2D
+		sprite.global_position = xform.origin
+		sprite.global_rotation = xform.get_rotation()
+
+
+## Updates the ghost ship preview at the projected final position.
+## Uses compute_ghost_side() for dynamic alignment (MT-A-002).
+## Requirements: MT-G-007, MT-A-001–004, AC-07, AC-17, AC-18.
+func _update_ghost(start_pos: Vector2, start_rot: float) -> void:
+	if _ghost_sprite == null or _state.get_simulated_speed() <= 0:
+		if _ghost_sprite:
+			_ghost_sprite.visible = false
+		return
+	var ghost_side: String = _state.compute_ghost_side()
+	var final_xform: Transform2D = _state.compute_final_transform(
+			start_pos, start_rot, ghost_side)
+	_ghost_sprite.global_position = final_xform.origin
+	_ghost_sprite.global_rotation = final_xform.get_rotation()
+	_ghost_sprite.visible = true
+	_setup_ghost_texture()
+	_update_ghost_speed_label(final_xform)
+
+
+## Loads and scales the ghost ship texture to match the ship token.
+func _setup_ghost_texture() -> void:
+	if _ghost_sprite.texture != null:
+		return
+	var data_key: String = _ship_token.get_meta("data_key", "")
+	if data_key.is_empty():
+		return
+	var tex: Texture2D = AssetLoader.load_texture(
+			"ships/", data_key + "_token.png")
+	if tex == null:
+		return
+	_ghost_sprite.texture = tex
+	var tex_size: Vector2 = Vector2(tex.get_width(), tex.get_height())
+	_ghost_sprite.scale = GameScale.get_base_sprite_scale(
+			_ship_token.get_ship_size(), tex_size)
+
+
+# ------------------------------------------------------------------
+# Input handling — joint clicks
+# ------------------------------------------------------------------
+
+## Handles mouse clicks near joint positions and speed buttons.
+## Left click = port (left) on joints, or speed +/- on buttons.
+## Right click = starboard (right) on joints.
+## Rules Reference: MT-G-003, MT-S-001, AC-05, AC-20.
+func _input(event: InputEvent) -> void:
+	if not visible or _state == null:
+		return
+	if not event is InputEventMouseButton:
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if not mb.pressed:
+		return
+	if mb.button_index == MOUSE_BUTTON_LEFT:
+		if _try_speed_button_click():
+			get_viewport().set_input_as_handled()
+			return
+	if mb.button_index != MOUSE_BUTTON_LEFT \
+			and mb.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	_try_joint_click(mb)
+
+
+## Checks if a click is near an active joint and applies it.
+func _try_joint_click(mb: InputEventMouseButton) -> void:
+	var click_pos: Vector2 = get_global_mouse_position()
+	var attach: Dictionary = _compute_attachment()
+	var chain: Dictionary = _state.compute_segment_transforms(
+			attach["position"], attach["rotation"])
+	var joints: Array = chain["joints"]
+	for j: int in range(joints.size()):
+		var joint_pos: Vector2 = joints[j] as Vector2
+		if click_pos.distance_to(joint_pos) > JOINT_CLICK_RADIUS:
+			continue
+		var applied: bool = false
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			applied = _state.click_joint_left(j)
+		else:
+			applied = _state.click_joint_right(j)
+		if applied:
+			_update_visual()
+			_log.info("Joint %d clicked %s → %d" % [
+					j, "left" if mb.button_index == MOUSE_BUTTON_LEFT \
+					else "right", _state.get_joint_clicks()[j]])
+		get_viewport().set_input_as_handled()
+		return
+
+
+# ------------------------------------------------------------------
+# Speed buttons on end segment  (Phase 5a+)
+# ------------------------------------------------------------------
+
+
+## Positions the speed button overlay at the end segment's transform.
+## Requirements: MT-S-001, AC-19.
+func _update_speed_buttons(segs: Array) -> void:
+	if _speed_button_layer == null:
+		return
+	var active: int = _state.get_active_segment_count()
+	if active < 2 or segs.size() < active:
+		_speed_button_layer.visible = false
+		return
+	var last_idx: int = active - 1
+	var last_seg: Transform2D = segs[last_idx] as Transform2D
+	_speed_button_layer.global_position = last_seg.origin
+	_speed_button_layer.global_rotation = last_seg.get_rotation()
+	_speed_button_layer.visible = true
+	_speed_button_layer.queue_redraw()
+
+
+## Draws the speed +/- circle buttons on the end segment overlay.
+## Requirements: MT-S-001, AC-19, AC-25.
+func _on_speed_button_draw() -> void:
+	if _state == null or _label_font == null:
+		return
+	var seg_cfg: Dictionary = GameScale.maneuver_tool_config.get(
+			"segment_end", {})
+	var entry_px: Vector2 = seg_cfg.get("entry_intersection",
+			Vector2.ZERO) as Vector2
+	var s: float = _get_sprite_scale("segment_end")
+	var btn_minus_px: Vector2 = seg_cfg.get(
+			"speed_reduction_button", Vector2.ZERO) as Vector2
+	var btn_plus_px: Vector2 = seg_cfg.get(
+			"speed_increase_button", Vector2.ZERO) as Vector2
+	var minus_local: Vector2 = (btn_minus_px - entry_px) * s
+	var plus_local: Vector2 = (btn_plus_px - entry_px) * s
+	var bg_color: Color = Color(0.15, 0.15, 0.18, 0.85)
+	var text_color: Color = Color.WHITE
+	var font_size: int = maxi(1, roundi(16.0 * s))
+	var ascent: float = _label_font.get_ascent(font_size)
+	var descent: float = _label_font.get_descent(font_size)
+	var text_h: float = ascent + descent
+	## Draw minus button.
+	_speed_button_layer.draw_circle(minus_local,
+			SPEED_BUTTON_DRAW_RADIUS, bg_color)
+	var minus_text_size: Vector2 = _label_font.get_string_size(
+			"-", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	_speed_button_layer.draw_string(_label_font, Vector2(
+			minus_local.x - minus_text_size.x * 0.5,
+			minus_local.y + text_h * 0.5 - descent),
+			"-", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+	## Draw plus button.
+	_speed_button_layer.draw_circle(plus_local,
+			SPEED_BUTTON_DRAW_RADIUS, bg_color)
+	var plus_text_size: Vector2 = _label_font.get_string_size(
+			"+", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	_speed_button_layer.draw_string(_label_font, Vector2(
+			plus_local.x - plus_text_size.x * 0.5,
+			plus_local.y + text_h * 0.5 - descent),
+			"+", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+
+
+## Returns the world positions of the speed − and + buttons.
+## Returns {"minus": Vector2, "plus": Vector2}.
+func _get_speed_button_world_positions() -> Dictionary:
+	if _speed_button_layer == null or not _speed_button_layer.visible:
+		return {}
+	var seg_cfg: Dictionary = GameScale.maneuver_tool_config.get(
+			"segment_end", {})
+	var entry_px: Vector2 = seg_cfg.get("entry_intersection",
+			Vector2.ZERO) as Vector2
+	var s: float = _get_sprite_scale("segment_end")
+	var rot: float = _speed_button_layer.global_rotation
+	var origin: Vector2 = _speed_button_layer.global_position
+	var btn_minus_px: Vector2 = seg_cfg.get(
+			"speed_reduction_button", Vector2.ZERO) as Vector2
+	var btn_plus_px: Vector2 = seg_cfg.get(
+			"speed_increase_button", Vector2.ZERO) as Vector2
+	var minus_world: Vector2 = origin + (
+			(btn_minus_px - entry_px) * s).rotated(rot)
+	var plus_world: Vector2 = origin + (
+			(btn_plus_px - entry_px) * s).rotated(rot)
+	return {"minus": minus_world, "plus": plus_world}
+
+
+## Checks if the mouse click hits a speed button and applies it.
+## Returns true if a speed button was clicked.
+## Requirements: MT-S-001, AC-20, AC-21.
+func _try_speed_button_click() -> bool:
+	var positions: Dictionary = _get_speed_button_world_positions()
+	if positions.is_empty():
+		return false
+	var click_pos: Vector2 = get_global_mouse_position()
+	if click_pos.distance_to(positions["minus"]) <= SPEED_BUTTON_RADIUS:
+		var old_speed: int = _state.get_simulated_speed()
+		_state.set_simulated_speed(old_speed - 1)
+		if _state.get_simulated_speed() != old_speed:
+			_update_visual()
+			_log.info("Speed − → %d" % _state.get_simulated_speed())
+		return true
+	if click_pos.distance_to(positions["plus"]) <= SPEED_BUTTON_RADIUS:
+		var old_speed: int = _state.get_simulated_speed()
+		_state.set_simulated_speed(old_speed + 1)
+		if _state.get_simulated_speed() != old_speed:
+			_update_visual()
+			_log.info("Speed + → %d" % _state.get_simulated_speed())
+		return true
+	return false
+
+
+# ------------------------------------------------------------------
+# Ghost speed label  (Phase 5a+)
+# ------------------------------------------------------------------
+
+
+## Positions the ghost speed label overlay at the ghost's transform
+## and triggers a redraw.
+## Requirements: MT-S-005, AC-23.
+func _update_ghost_speed_label(ghost_xform: Transform2D) -> void:
+	if _ghost_label_layer == null:
+		return
+	_ghost_label_layer.global_position = ghost_xform.origin
+	_ghost_label_layer.global_rotation = ghost_xform.get_rotation()
+	_ghost_label_layer.visible = true
+	_ghost_label_layer.queue_redraw()
+
+
+## Draws the simulated speed value on the ghost at the ship's speed
+## label position. Mirrors ShipToken._draw_label_on() for consistency.
+## Requirements: MT-S-005, AC-23.
+func _on_ghost_label_draw() -> void:
+	if _state == null or _label_font == null or _ship_token == null:
+		return
+	var ship_data: ShipData = _ship_token.get_ship_data()
+	if ship_data == null:
+		return
+	var offsets: Dictionary = ship_data.token_label_offsets
+	if not offsets.has("speed"):
+		return
+	var base_offset: Vector2 = offsets["speed"] as Vector2
+	var base_region: Vector2 = GameScale.get_base_region(
+			_state.get_ship_size())
+	if base_region.x <= 0.0 or base_region.y <= 0.0:
+		return
+	var tex_size: Vector2 = Vector2.ZERO
+	if _ghost_sprite and _ghost_sprite.texture:
+		tex_size = Vector2(_ghost_sprite.texture.get_width(),
+				_ghost_sprite.texture.get_height())
+	var sprite_scale: Vector2 = GameScale.get_base_sprite_scale(
+			_state.get_ship_size(), tex_size)
+	var from_center: Vector2 = base_offset - base_region * 0.5
+	var local_pos: Vector2 = from_center * sprite_scale
+	var avg_scale: float = (sprite_scale.x + sprite_scale.y) * 0.5
+	var font_size: int = maxi(1, roundi(
+			float(LABEL_FONT_SIZE_PNG_PX) * avg_scale))
+	var text: String = str(_state.get_simulated_speed())
+	var text_size: Vector2 = _label_font.get_string_size(
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var draw_pos: Vector2 = Vector2(
+			local_pos.x - text_size.x * 0.5,
+			local_pos.y + text_size.y * 0.25)
+	_ghost_label_layer.draw_string(_label_font, draw_pos, text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)

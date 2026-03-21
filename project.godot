@@ -26,6 +26,7 @@ GameScale="*res://src/autoload/game_scale.gd"
 DebugMode="*res://src/autoload/debug_mode.gd"
 PlayMode="*res://src/autoload/play_mode.gd"
 LoggingMode="*res://src/autoload/logging_mode.gd"
+TooltipManager="*res://src/autoload/tooltip_manager.gd"
 
 [display]
 

@@ -17,5 +17,8 @@
 | TD-1 | Initial project setup — placeholder scenes and minimal UI | Low | Will be replaced during UI implementation phase |
 | TD-2 | No CI/CD pipeline yet | Medium | Set up GitHub Actions after initial development |
 | TD-3 | No data import pipeline from source rules | Medium | Build JSON → Resource converter during data phase |
+| TD-4 | 48 functions exceed the 30-line guideline (across 18 files) | Medium | Most are UI construction methods (e.g. `add_ship_entry` 96 lines, `_build_ui` 85 lines, `resolve_ship_position` 62 lines). Refactor incrementally when touched; extract helper methods where clarity improves. Not blocking — UI builders lose locality if over-decomposed. |
+| TD-5 | `UpgradeData` resource class unused in production code | Low | Placeholder for Phase 7 (Upgrade Cards). Keep as-is until needed. |
 
 > **Note:** This section will be updated as the project evolves.
+> **Last audit:** Phase 4f complete — 48 src files (10,169 lines), 48 test files (9,108 lines), 759 tests passing. Architecture compliance, static typing, and doc comment coverage all PASS.

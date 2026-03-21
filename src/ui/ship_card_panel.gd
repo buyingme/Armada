@@ -132,7 +132,7 @@ func add_ship_entry(instance: ShipInstance) -> void:
 
 	# --- Left column: defense tokens + command dial stack ---
 	var left_col: VBoxContainer = VBoxContainer.new()
-	left_col.add_theme_constant_override("separation", int(token_gap))
+	left_col.add_theme_constant_override("separation", 0)
 	left_col.alignment = BoxContainer.ALIGNMENT_BEGIN
 
 	var token_col: VBoxContainer = VBoxContainer.new()
@@ -140,6 +140,13 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_populate_token_column(token_col, instance.defense_tokens, token_h)
 	left_col.add_child(token_col)
+
+	# Configurable gap between defense tokens and command dial stack.
+	var dial_gap: Control = Control.new()
+	dial_gap.custom_minimum_size = Vector2(
+			0, GameScale.card_panel_dial_top_gap_px)
+	dial_gap.mouse_filter = Control.MOUSE_FILTER_PASS
+	left_col.add_child(dial_gap)
 
 	var dial_container: VBoxContainer = VBoxContainer.new()
 	dial_container.add_theme_constant_override("separation", 0)
@@ -195,12 +202,14 @@ func add_ship_entry(instance: ShipInstance) -> void:
 		"container": entry_container,
 		"left_col": left_col,
 		"token_col": token_col,
+		"dial_gap": dial_gap,
 		"dial_container": dial_container,
 		"cmd_token_col": cmd_token_col,
 		"magnified": false,
 	})
 
 	_connect_eventbus_signals()
+	_register_hover_tooltips(_entries.back())
 
 
 ## Positions this panel on the correct side of the screen.
@@ -304,7 +313,6 @@ func _on_dial_container_gui_input(event: InputEvent, index: int) -> void:
 	if _discard_mode_ship != null:
 		_log.info("Dial click blocked — token discard pending.")
 		return
-		return
 	_handle_dial_stack_click(_entries[index])
 
 
@@ -350,7 +358,7 @@ func _handle_dial_stack_click(entry: Dictionary) -> void:
 				% [instance.data_key,
 					int(GameManager.get_current_phase()),
 					GameManager.get_active_player()]
-				+ "activated=%s, stack=%s, activating=%s)." \
+				+"activated=%s, stack=%s, activating=%s)." \
 				% [str(instance.activated_this_round),
 					str(instance.command_dial_stack != null),
 					str(GameManager.get_activating_ship() != null)])
@@ -404,6 +412,58 @@ func _can_start_dial_drag(instance: ShipInstance) -> bool:
 	return true
 
 
+# ------------------------------------------------------------------
+# Hover tooltip callbacks (TT-080–086)
+# ------------------------------------------------------------------
+
+## Registers the dial_container and entry_container of [param entry]
+## with [TooltipManager] for context-sensitive hover hints.
+## Requirements: TT-012, TT-080–086.
+func _register_hover_tooltips(entry: Dictionary) -> void:
+	var tm: Node = get_node_or_null("/root/TooltipManager")
+	if tm == null:
+		return
+	var dial_cont: Control = entry["dial_container"] as Control
+	var entry_cont: Control = entry["container"] as Control
+	tm.register(dial_cont, _dial_tooltip_text.bind(entry))
+	tm.register(entry_cont, _card_tooltip_text.bind(entry))
+
+
+## Returns tooltip text for the command dial stack area.
+## Evaluates current game state to decide which hint to show.
+## Requirements: TT-080–084.
+func _dial_tooltip_text(entry: Dictionary) -> String:
+	# TT-084 — suppress during discard mode.
+	if _discard_mode_ship != null:
+		return ""
+	var instance: ShipInstance = entry["instance"]
+	# TT-083 — suppress for opponent’s ships.
+	if _viewer_player >= 0 and instance.owner_player != _viewer_player:
+		return ""
+	# TT-080 / TT-081 — Ship Phase activation context.
+	if _is_ship_phase_eligible(instance):
+		var revealed: Dictionary = instance.command_dial_stack \
+				.get_revealed_dial()
+		if not revealed.is_empty():
+			# TT-081: dial already revealed → drag instructions.
+			return "Drag to ship for full command\nDrag to card for command token"
+		if instance.command_dial_stack.get_hidden_count() > 0:
+			# TT-080: unrevealed dials → click to reveal.
+			return "Click to reveal dial\nand activate ship"
+	# TT-082 — fallthrough: not eligible or not Ship Phase.
+	return "Click to show\ncommand stack order"
+
+
+## Returns tooltip text for the ship card entry area (magnify toggle).
+## Requirements: TT-085–086.
+func _card_tooltip_text(entry: Dictionary) -> String:
+	# TT-086 — suppress during discard mode.
+	if _discard_mode_ship != null:
+		return ""
+	# TT-085 — magnify affordance.
+	return "Click to magnify"
+
+
 ## Toggles between normal and magnified size for the entry at [param index].
 ## Rules Reference: UI-018 — left-click toggles magnification.
 func _toggle_magnify(index: int) -> void:
@@ -446,6 +506,11 @@ func _apply_entry_size(entry: Dictionary,
 	var dial_cont: VBoxContainer = entry["dial_container"]
 	var instance: ShipInstance = entry["instance"]
 	_populate_dial_stack(dial_cont, instance, scale_factor)
+
+	# Scale the token-to-dial spacer.
+	var gap_ctrl: Control = entry["dial_gap"] as Control
+	gap_ctrl.custom_minimum_size = Vector2(
+			0, GameScale.card_panel_dial_top_gap_px * scale_factor)
 
 	# Re-populate command token column at new scale.
 	var cmd_col: VBoxContainer = entry["cmd_token_col"]
@@ -584,61 +649,32 @@ func _on_duplicate_token_discarded(inst: RefCounted, token_type: int) -> void:
 			break
 
 
-## Shows a small "Duplicate discarded" label that fades out after ~2 seconds.
+## Shows a brief "Duplicate discarded" tooltip that auto-hides after 2 seconds.
+## Migrated from ad-hoc Label to TooltipManager (TT-053).
 func _show_duplicate_toast(entry: Dictionary, token_type: int) -> void:
-	var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
 	var cmd_name: String = Constants.CommandType.keys()[token_type]
-	var toast: Label = Label.new()
-	toast.name = "DuplicateToast"
-	toast.text = "Duplicate\n%s\ndiscarded" % cmd_name.to_lower().capitalize()
-	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast.add_theme_font_size_override("font_size", 18)
-	toast.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-	toast.add_theme_color_override(
-			"font_shadow_color", Color(0, 0, 0, 0.8))
-	toast.add_theme_constant_override("shadow_offset_x", 1)
-	toast.add_theme_constant_override("shadow_offset_y", 1)
-	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(toast)
-	col.move_child(toast, 0)
-
-	# Auto-remove after 2 seconds via a one-shot timer.
-	var timer: Timer = Timer.new()
-	timer.wait_time = 2.0
-	timer.one_shot = true
-	timer.autostart = true
-	toast.add_child(timer)
-	timer.timeout.connect(func() -> void:
-		if is_instance_valid(toast):
-			toast.queue_free()
-	)
+	var text: String = "Duplicate\n%s\ndiscarded" % cmd_name.to_lower().capitalize()
+	var tm: Node = Engine.get_singleton("TooltipManager") if Engine.has_singleton("TooltipManager") else get_node_or_null("/root/TooltipManager")
+	if tm:
+		tm.show_text(text, Vector2.INF, 2.0)
 	_log.info("Showing duplicate discard toast for %s (%s)" % [
 			(entry["instance"] as ShipInstance).data_key, cmd_name])
 
 
 ## Puts the command-token column of [param entry] into discard mode.
-## Each token becomes clickable (MOUSE_FILTER_STOP) and a prompt label
-## is prepended to the column.
+## Each token becomes clickable (MOUSE_FILTER_STOP) and a prompt is shown
+## via the TooltipManager.
 func _enter_discard_mode(entry: Dictionary) -> void:
 	var ship: ShipInstance = entry["instance"] as ShipInstance
 	_discard_mode_ship = ship
 
 	var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
 
-	# Add a prompt label at the top of the column.
-	var prompt: Label = Label.new()
-	prompt.name = "DiscardPrompt"
-	prompt.text = "Discard\na token"
-	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt.add_theme_font_size_override("font_size", 18)
-	prompt.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
-	prompt.add_theme_color_override(
-			"font_shadow_color", Color(0, 0, 0, 0.8))
-	prompt.add_theme_constant_override("shadow_offset_x", 1)
-	prompt.add_theme_constant_override("shadow_offset_y", 1)
-	prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(prompt)
-	col.move_child(prompt, 0)
+	# Show discard prompt via TooltipManager (TT-053).
+	# force=true because the discard prompt is essential gameplay instruction.
+	var tm: Node = Engine.get_singleton("TooltipManager") if Engine.has_singleton("TooltipManager") else get_node_or_null("/root/TooltipManager")
+	if tm:
+		tm.show_text("Discard\na token", Vector2.INF, 0.0, true)
 
 	# Make each token TextureRect clickable.
 	for child: Node in col.get_children():
@@ -662,11 +698,10 @@ func _exit_discard_mode() -> void:
 	for entry: Dictionary in _entries:
 		if entry["instance"] == _discard_mode_ship:
 			var col: VBoxContainer = entry["cmd_token_col"] as VBoxContainer
-			# Remove the prompt label.
-			var prompt: Node = col.find_child("DiscardPrompt", false)
-			if prompt:
-				col.remove_child(prompt)
-				prompt.queue_free()
+			# Hide the tooltip prompt (TT-053).
+			var tm: Node = Engine.get_singleton("TooltipManager") if Engine.has_singleton("TooltipManager") else get_node_or_null("/root/TooltipManager")
+			if tm:
+				tm.hide_tooltip()
 			# Restore normal mouse behaviour on tokens.
 			for child: Node in col.get_children():
 				if child is TextureRect:
@@ -813,6 +848,10 @@ func _populate_dial_stack(container: VBoxContainer,
 	# Revealed dial (if any) is shown face-up on top; hidden dials below.
 	var active_stack: VBoxContainer = VBoxContainer.new()
 	active_stack.add_theme_constant_override("separation", -offset)
+	# Centre the stack within the parent (which may be wider than dial_w
+	# when defence tokens are wider).  SIZE_SHRINK_CENTER keeps it at
+	# custom_minimum_size width and centres horizontally.
+	active_stack.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	# Show the revealed dial face-up on top of the stack (two-step flow).
 	if not revealed.is_empty():
@@ -834,15 +873,15 @@ func _populate_dial_stack(container: VBoxContainer,
 	for i: int in range(child_count):
 		active_stack.get_child(i).z_index = child_count - i
 
-	# Compute and set the active stack's minimum size eagerly so the
-	# outer container reports correct dimensions for hit testing before
-	# Godot's deferred layout pass runs.
+	# Set the active stack's minimum size so Containers allocate correct
+	# space.  Do NOT set .size — that overrides the parent Container's
+	# layout-managed width (which may be wider than dial_w when defense
+	# tokens are wider) and causes the stack to jump left on reveal.
 	var total_dials: int = (0 if revealed.is_empty() else 1) + hidden_dials.size()
 	var stack_h: float = 0.0
 	if total_dials > 0:
 		stack_h = dial_h + maxf(0, total_dials - 1) * (dial_h - float(offset))
 	active_stack.custom_minimum_size = Vector2(dial_w, stack_h)
-	active_stack.size = Vector2(dial_w, stack_h)
 
 	container.add_child(active_stack)
 
@@ -859,9 +898,9 @@ func _populate_dial_stack(container: VBoxContainer,
 		container.add_child(spent_rect)
 		total_container_h += spent_gap_px + dial_h
 
-	# Eagerly set the outer container's size for immediate hit testing.
+	# Set minimum size so parent Containers allocate correct space.
+	# Do NOT set .size — see active_stack comment above.
 	container.custom_minimum_size = Vector2(dial_w, total_container_h)
-	container.size = Vector2(dial_w, total_container_h)
 
 	# Let clicks on children propagate up to dial_container's gui_input.
 	_set_children_mouse_pass(container)
@@ -889,8 +928,6 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 	# Composite: dial background + command icon on top.
 	var panel: Control = Control.new()
 	panel.custom_minimum_size = Vector2(w, h)
-	panel.size = Vector2(w, h)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	var bg_tex: Texture2D = _get_dial_hidden_texture()
 	if bg_tex:

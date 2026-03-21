@@ -63,6 +63,65 @@
         "dial_height_px": 30,
         "dial_width_px": 30,
         "dial_stack_offset_px": 20,
+        "dial_top_gap_px": 10,
         "cmd_token_height_px": 24
+    },
+    "tooltip": {
+        "_comment": "Hover tooltip system settings. TT-040, TT-042, TT-075.",
+        "hover_delay_sec": 0.45,
+        "offset_x": 12,
+        "offset_y": 16,
+        "max_width_px": 320,
+        "font_size": 18,
+        "corner_radius": 4,
+        "padding_h": 10,
+        "padding_v": 6,
+        "bg_color": [
+            0.12,
+            0.12,
+            0.14,
+            0.92
+        ],
+        "text_color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+        ],
+        "shadow_color": [
+            0.0,
+            0.0,
+            0.0,
+            0.8
+        ],
+        "shadow_offset": 1,
+        "toggle_button_size": 28,
+        "toggle_button_edge_padding": 6
+    },
+    "maneuver_tool": {
+        "_comment": "Pixel coordinates measured from maneuver tool segment PNGs (origin = top-left of each image). intersection = joint pivot centre where adjacent segments connect. contact = guide/notch attachment points to ship base. All values are placeholder zeroes until measured by the user. Requirements: docs/requirements/maneuver_tool.md MT-D-001.",
+        "yaw_degrees_per_click": 22.5,
+        "root": {
+            "image": "root_filled.png",
+            "entry_intersection": { "x": 18, "y": 118 },
+            "exit_intersection": { "x": 18, "y": 18 },
+            "contact_left":  { "x": 0, "y": 99 },
+            "contact_right": { "x": 35, "y": 99 }
+        },
+        "segment": {
+            "image": "segment_filled.png",
+            "entry_intersection": { "x": 21, "y": 149 },
+            "exit_intersection": { "x": 21, "y": 18 },
+            "contact_left":  { "x": 3, "y": 100 },
+            "contact_right": { "x": 38, "y": 100 }
+        },
+        "segment_end": {
+            "image": "segment_end.png",
+            "entry_intersection": { "x": 21, "y": 149 },
+            "contact_left":  { "x": 3, "y": 100 },
+            "contact_right": { "x": 38, "y": 100 },
+            "speed_reduction_button": { "x": 11, "y": 77 },
+            "speed_increase_button": { "x": 30, "y": 77 }
+        }
     }
 }

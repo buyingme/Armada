@@ -94,8 +94,48 @@ var card_panel_dial_height_px: float = 30.0
 var card_panel_dial_width_px: float = 30.0
 ## Vertical offset between stacked command dials in screen pixels.
 var card_panel_dial_stack_offset_px: float = 20.0
+## Extra gap between the defense token column and the dial stack.
+var card_panel_dial_top_gap_px: float = 10.0
 ## Command token display height in screen pixels.
 var card_panel_cmd_token_height_px: float = 24.0
+
+# --- Tooltip display values (loaded from tooltip config section) ---
+
+## Hover delay in seconds before the tooltip appears. TT-040.
+var tooltip_hover_delay_sec: float = 0.45
+## Horizontal cursor offset in screen pixels.
+var tooltip_offset_x: float = 12.0
+## Vertical cursor offset in screen pixels.
+var tooltip_offset_y: float = 16.0
+## Maximum tooltip width in screen pixels before wrapping. TT-022.
+var tooltip_max_width_px: float = 320.0
+## Font size inside the tooltip. TT-033.
+var tooltip_font_size: int = 18
+## Corner radius for the tooltip panel background.
+var tooltip_corner_radius: int = 4
+## Horizontal padding inside the tooltip panel.
+var tooltip_padding_h: int = 10
+## Vertical padding inside the tooltip panel.
+var tooltip_padding_v: int = 6
+## Background colour of the tooltip panel. TT-031.
+var tooltip_bg_color: Color = Color(0.12, 0.12, 0.14, 0.92)
+## Text colour inside the tooltip. TT-032.
+var tooltip_text_color: Color = Color(1.0, 1.0, 1.0, 0.9)
+## Shadow colour for tooltip text. TT-034.
+var tooltip_shadow_color: Color = Color(0.0, 0.0, 0.0, 0.8)
+## Shadow offset in pixels for tooltip text. TT-035.
+var tooltip_shadow_offset: int = 1
+## Toggle button size in screen pixels. TT-075.
+var tooltip_toggle_button_size: float = 28.0
+## Toggle button padding from screen edge. TT-075.
+var tooltip_toggle_button_edge_padding: float = 6.0
+
+# --- Maneuver tool pixel data (loaded from maneuver_tool config section) ---
+
+## Maneuver tool configuration loaded from scale_config.json.
+## Contains segment pixel data for root, segment, and segment_end pieces.
+## Requirements: MT-D-001, AC-09.
+var maneuver_tool_config: Dictionary = {}
 
 
 func _ready() -> void:
@@ -140,6 +180,12 @@ func _load_scale_config() -> void:
 
 	# Card panel display sizes.
 	_load_card_panel(config)
+
+	# Tooltip display sizes.
+	_load_tooltip(config)
+
+	# Maneuver tool pixel data.
+	_load_maneuver_tool(config)
 
 	is_initialised = true
 	_log.info("Scale initialised — ruler %s px, play area %s px" % [
@@ -211,6 +257,8 @@ func initialise_from_dict(config: Dictionary) -> void:
 	_compute_derived_values()
 	_load_base_graphics(config)
 	_load_card_panel(config)
+	_load_tooltip(config)
+	_load_maneuver_tool(config)
 
 	is_initialised = true
 
@@ -290,8 +338,85 @@ func _load_card_panel(config: Dictionary) -> void:
 			card_panel_dial_width_px))
 	card_panel_dial_stack_offset_px = float(cp.get("dial_stack_offset_px",
 			card_panel_dial_stack_offset_px))
+	card_panel_dial_top_gap_px = float(cp.get("dial_top_gap_px",
+			card_panel_dial_top_gap_px))
 	card_panel_cmd_token_height_px = float(cp.get("cmd_token_height_px",
 			card_panel_cmd_token_height_px))
+
+
+## Loads tooltip section from the config dictionary.
+## All values are direct pixel measurements / colour arrays read from JSON.
+func _load_tooltip(config: Dictionary) -> void:
+	var tt: Dictionary = config.get("tooltip", {})
+	tooltip_hover_delay_sec = float(tt.get("hover_delay_sec",
+			tooltip_hover_delay_sec))
+	tooltip_offset_x = float(tt.get("offset_x", tooltip_offset_x))
+	tooltip_offset_y = float(tt.get("offset_y", tooltip_offset_y))
+	tooltip_max_width_px = float(tt.get("max_width_px",
+			tooltip_max_width_px))
+	tooltip_font_size = int(tt.get("font_size", tooltip_font_size))
+	tooltip_corner_radius = int(tt.get("corner_radius",
+			tooltip_corner_radius))
+	tooltip_padding_h = int(tt.get("padding_h", tooltip_padding_h))
+	tooltip_padding_v = int(tt.get("padding_v", tooltip_padding_v))
+	var bg: Array = tt.get("bg_color", []) as Array
+	if bg.size() == 4:
+		tooltip_bg_color = Color(float(bg[0]), float(bg[1]),
+				float(bg[2]), float(bg[3]))
+	var tc: Array = tt.get("text_color", []) as Array
+	if tc.size() == 4:
+		tooltip_text_color = Color(float(tc[0]), float(tc[1]),
+				float(tc[2]), float(tc[3]))
+	var sc: Array = tt.get("shadow_color", []) as Array
+	if sc.size() == 4:
+		tooltip_shadow_color = Color(float(sc[0]), float(sc[1]),
+				float(sc[2]), float(sc[3]))
+	tooltip_shadow_offset = int(tt.get("shadow_offset",
+			tooltip_shadow_offset))
+	tooltip_toggle_button_size = float(tt.get("toggle_button_size",
+			tooltip_toggle_button_size))
+	tooltip_toggle_button_edge_padding = float(
+			tt.get("toggle_button_edge_padding",
+			tooltip_toggle_button_edge_padding))
+
+
+## Loads maneuver_tool section from the config dictionary.
+## Parses pixel coordinates for each segment type (root, segment, segment_end).
+## Requirements: MT-D-001.
+func _load_maneuver_tool(config: Dictionary) -> void:
+	var mt: Dictionary = config.get("maneuver_tool", {})
+	if mt.is_empty():
+		return
+	maneuver_tool_config = {}
+	maneuver_tool_config["yaw_degrees_per_click"] = float(
+			mt.get("yaw_degrees_per_click", 22.5))
+	for key: String in ["root", "segment", "segment_end"]:
+		var section: Dictionary = mt.get(key, {})
+		if section.is_empty():
+			continue
+		var parsed: Dictionary = {}
+		parsed["image"] = String(section.get("image", ""))
+		parsed["entry_intersection"] = _parse_vec2(
+				section.get("entry_intersection", {}))
+		if section.has("exit_intersection"):
+			parsed["exit_intersection"] = _parse_vec2(
+					section.get("exit_intersection", {}))
+		parsed["contact_left"] = _parse_vec2(
+				section.get("contact_left", {}))
+		parsed["contact_right"] = _parse_vec2(
+				section.get("contact_right", {}))
+		if section.has("speed_reduction_button"):
+			parsed["speed_reduction_button"] = _parse_vec2(
+					section.get("speed_reduction_button", {}))
+		if section.has("speed_increase_button"):
+			parsed["speed_increase_button"] = _parse_vec2(
+					section.get("speed_increase_button", {}))
+		maneuver_tool_config[key] = parsed
+
+
+## Parses a JSON {x, y} dictionary into a Vector2.
+func _parse_vec2(d: Dictionary) -> Vector2:
+	return Vector2(float(d.get("x", 0)), float(d.get("y", 0)))
 
 
 ## Reads and parses the JSON config file.

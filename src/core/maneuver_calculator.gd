@@ -22,8 +22,10 @@ extends RefCounted
 
 
 ## Degrees rotated per yaw click on the maneuver tool.
-## Rules Reference: "Maneuver", p.7 (each click ≈ 11.25°)
-const YAW_DEGREES_PER_CLICK: float = 11.25
+## Digital adaptation uses 22.5° per click for more visible turning.
+## Tabletop original: 11.25° per click.
+## Requirements: docs/requirements/maneuver_tool.md MT-M-002
+const YAW_DEGREES_PER_CLICK: float = 22.5
 
 ## Radian equivalent.
 const YAW_RADIANS_PER_CLICK: float = YAW_DEGREES_PER_CLICK * PI / 180.0

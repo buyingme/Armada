@@ -127,3 +127,21 @@ Each decision follows this structure:
   - (+) Smaller scope, faster iteration
   - (+) Core box has the most established rules and reference material
   - (-) Must ensure architecture supports easy faction addition later
+
+---
+
+## ADR-009: Centralised Hover Tooltip System
+
+- **Status:** Proposed
+- **Date:** 2026-03-18
+- **Context:** Multiple UI locations need contextual help text (hover hints on ship cards, dial stacks, defense tokens; drag help label; discard-mode prompt; duplicate toast). These were implemented as separate, ad-hoc Labels with duplicated styling code.
+- **Decision:** Introduce a single `TooltipManager` autoload singleton that owns a shared `TooltipPanel` on a dedicated `CanvasLayer` (layer 100). Interactive regions register via `register(control, callback)` for hover tooltips; non-hover help text uses `show_text()` / `hide()`. A global toggle button in the lower-right corner lets players disable optional hover hints while preserving essential gameplay instructions. All styling and behavioural parameters are loaded from `scale_config.json`.
+- **Consequences:**
+  - (+) One consistent tooltip style across the entire application
+  - (+) Context-sensitive text via callbacks; no stale strings
+  - (+) Configurable and data-driven (delay, offset, colours, toggle)
+  - (+) Core layout logic (`TooltipLayout` RefCounted) is unit-testable without scene tree
+  - (+) Existing drag help, discard prompt, and duplicate toast are migrated, removing duplicated code
+  - (-) New autoload singleton adds to the global namespace
+  - (-) Migration of existing help text requires careful regression testing
+  - (-) Toggle state persistence adds a dependency on `user://settings.cfg`

@@ -103,11 +103,19 @@ var _drag_active: bool = false
 var _drag_ship_instance: ShipInstance = null
 ## Floating preview Control shown during drag (on TurnManagement layer).
 var _drag_preview: Control = null
-## Help text label displayed during dial drag (on TurnManagement layer).
-## Requirements: UI-027 — guide player on drag-to-ship vs drag-to-card.
-var _drag_help_label: Label = null
 ## The ShipToken currently being activated (dial shown behind base).
 var _activating_ship_token: ShipToken = null
+
+## --- Maneuver Tool state (Phase 5a) ---
+
+## Whether we are in "select ship for maneuver tool" mode.
+var _maneuver_tool_selecting: bool = false
+
+## Active ManeuverToolScene instance (null when not displayed).
+var _maneuver_tool_scene: ManeuverToolScene = null
+
+## ActionToolbar in the lower-right corner.
+var _action_toolbar: ActionToolbar = null
 
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
@@ -128,6 +136,7 @@ func _ready() -> void:
 	_create_command_phase_ui()
 	_create_turn_management_ui()
 	_create_phase_hud()
+	_create_action_toolbar()
 	# Start game so GameState exists BEFORE tokens are spawned.
 	GameManager.start_new_game()
 	_spawn_learning_scenario_tokens()
@@ -219,6 +228,10 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Maneuver tool: Escape dismisses or cancels selection.
+	if _handle_maneuver_tool_escape(event):
+		return
+
 	if not DebugMode.enabled:
 		return
 
@@ -334,6 +347,9 @@ func _connect_signals() -> void:
 	# Ship activation drag-and-drop (Phase 4c).
 	EventBus.dial_drag_started.connect(_on_dial_drag_started)
 	EventBus.activation_ended.connect(_on_board_activation_ended)
+	# Maneuver tool (Phase 5a).
+	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
+	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -407,6 +423,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if _maneuver_tool_selecting:
+		_show_maneuver_tool(token)
+		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
 	else:
@@ -439,6 +458,8 @@ func _on_viewport_resized() -> void:
 		_your_turn_banner.update_size(vp_size)
 	if _end_activation_button != null:
 		_end_activation_button.update_position(vp_size)
+	if _action_toolbar != null:
+		_action_toolbar.update_position(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -923,7 +944,9 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	var cmd: int = int(revealed.get("command", 0)) if not revealed.is_empty() \
 			else -1
 	_create_drag_preview(cmd)
-	_create_drag_help_label()
+	TooltipManager.show_text(
+			"Drag to ship for full command effect\n"
+			+"Drag to ship card for command token")
 	_log.info("Dial drag started for '%s' (command: %d)." % [
 			_drag_ship_instance.data_key, cmd])
 
@@ -985,45 +1008,6 @@ func _create_drag_preview(cmd: int = -1) -> void:
 	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
 	if tm_layer:
 		tm_layer.add_child(_drag_preview)
-
-
-## Creates the help text label shown during dial drag.
-## Guides the player on the two drop targets (ship token vs card entry).
-## Requirements: UI-027.
-func _create_drag_help_label() -> void:
-	_drag_help_label = Label.new()
-	_drag_help_label.text = (
-			"Drag to ship for full command effect\n"
-			+ "Drag to ship card for command token")
-	_drag_help_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_drag_help_label.add_theme_color_override(
-			"font_color", Color(1.0, 1.0, 1.0, 0.9))
-	_drag_help_label.add_theme_color_override(
-			"font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
-	_drag_help_label.add_theme_constant_override("shadow_offset_x", 1)
-	_drag_help_label.add_theme_constant_override("shadow_offset_y", 1)
-	_drag_help_label.add_theme_font_size_override("font_size", 18)
-	_drag_help_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
-	if tm_layer:
-		tm_layer.add_child(_drag_help_label)
-		# Centre horizontally at the bottom third of the viewport.
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_drag_help_label.position = Vector2(
-				(vp_size.x - _drag_help_label.size.x) * 0.5,
-				vp_size.y * 0.75)
-		# Defer final centering until the label knows its width.
-		_drag_help_label.resized.connect(
-				_center_drag_help_label, CONNECT_ONE_SHOT)
-
-
-## Re-centres the drag help label after its size is computed.
-func _center_drag_help_label() -> void:
-	if _drag_help_label == null:
-		return
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_drag_help_label.position.x = (
-			(vp_size.x - _drag_help_label.size.x) * 0.5)
 
 
 ## Handles mouse button release during dial drag.
@@ -1101,9 +1085,11 @@ func _complete_ship_activation(token: ShipToken) -> void:
 ## Requirements: UI-028, SP-011, CM-004–006.
 func _complete_token_conversion() -> void:
 	var ship: ShipInstance = _drag_ship_instance
-	var result: Dictionary = GameManager.activate_ship_as_token(ship)
-	# No revealed dial on the board — _activating_ship_token stays null.
+	# Clean up drag state FIRST so that hide_tooltip() fires before
+	# activate_ship_as_token() emits duplicate/overflow signals that may
+	# call show_text() again (preventing the toast from being killed).
 	_clean_up_drag()
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
 
 	var needs_discard: bool = result.get("needs_discard", false)
 	if needs_discard:
@@ -1166,9 +1152,7 @@ func _clean_up_drag() -> void:
 	if _drag_preview:
 		_drag_preview.queue_free()
 		_drag_preview = null
-	if _drag_help_label:
-		_drag_help_label.queue_free()
-		_drag_help_label = null
+	TooltipManager.hide_tooltip()
 
 
 ## Called when End Activation is pressed — cleans up the dial sprite on the
@@ -1179,3 +1163,85 @@ func _on_board_activation_ended() -> void:
 		_activating_ship_token.hide_revealed_dial()
 		_activating_ship_token = null
 	_end_activation_button.hide_button()
+
+
+# ---------------------------------------------------------------------------
+# Maneuver Tool (Phase 5a)
+# ---------------------------------------------------------------------------
+
+## Creates the ActionToolbar on a CanvasLayer in the lower-right corner.
+## Requirements: MT-U-001, AC-13.
+func _create_action_toolbar() -> void:
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "ActionToolbarLayer"
+	layer.layer = 95
+	add_child(layer)
+	_action_toolbar = ActionToolbar.new()
+	_action_toolbar.name = "ActionToolbar"
+	layer.add_child(_action_toolbar)
+	_action_toolbar.setup_buttons()
+
+
+## Handles the "Display Maneuver Tool" button press.
+## Requirements: MT-U-002, MT-U-003.
+func _on_maneuver_tool_requested() -> void:
+	if _maneuver_tool_scene:
+		_dismiss_maneuver_tool()
+		return
+	if _maneuver_tool_selecting:
+		_cancel_maneuver_tool_selection()
+		return
+	_maneuver_tool_selecting = true
+	TooltipManager.show_text("Select a ship", Vector2.INF, 0.0, true)
+	_log.info("Maneuver tool: ship selection mode active.")
+
+
+## Shows the maneuver tool attached to the given ship token.
+## Requirements: MT-U-004, MT-G-005, AC-08.
+func _show_maneuver_tool(token: ShipToken) -> void:
+	_maneuver_tool_selecting = false
+	TooltipManager.hide_tooltip()
+	if _maneuver_tool_scene:
+		_maneuver_tool_scene.queue_free()
+	_maneuver_tool_scene = ManeuverToolScene.new()
+	_maneuver_tool_scene.name = "ManeuverToolScene"
+	_token_container.add_child(_maneuver_tool_scene)
+	_maneuver_tool_scene.setup(token)
+	_log.info("Maneuver tool displayed on ship.")
+
+
+## Dismisses the maneuver tool and exits selection mode.
+## Requirements: MT-U-005, MT-U-006, AC-15.
+func _dismiss_maneuver_tool() -> void:
+	_maneuver_tool_selecting = false
+	TooltipManager.hide_tooltip()
+	if _maneuver_tool_scene:
+		_maneuver_tool_scene.queue_free()
+		_maneuver_tool_scene = null
+	_log.info("Maneuver tool dismissed.")
+
+
+## Cancels ship selection mode without showing the tool.
+func _cancel_maneuver_tool_selection() -> void:
+	_maneuver_tool_selecting = false
+	TooltipManager.hide_tooltip()
+	_log.info("Maneuver tool selection cancelled.")
+
+
+## Checks if an Escape key press should dismiss the maneuver tool.
+## Returns true if the event was consumed.
+func _handle_maneuver_tool_escape(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	if _maneuver_tool_scene:
+		_dismiss_maneuver_tool()
+		get_viewport().set_input_as_handled()
+		return true
+	if _maneuver_tool_selecting:
+		_cancel_maneuver_tool_selection()
+		get_viewport().set_input_as_handled()
+		return true
+	return false

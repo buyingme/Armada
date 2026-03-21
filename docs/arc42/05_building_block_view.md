@@ -26,7 +26,7 @@
 | **UI / Scenes** | Visual scenes, HUD elements, menus, game board rendering | `src/scenes/`, `src/ui/` |
 | **Game Core** | Rules engine, game state, phase management, combat resolution | `src/core/` |
 | **Data Layer** | Data models as Godot Resources (ships, squadrons, upgrades) | `src/models/` |
-| **Autoload Services** | Singletons (GameManager, EventBus, Constants) | `src/autoload/` |
+| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager) | `src/autoload/` |
 | **Assets** | Textures, audio, fonts, shaders | `assets/` |
 | **Tests** | Unit and integration tests | `tests/` |
 
@@ -42,6 +42,7 @@
 - **CombatResolver** — Handles attack resolution, dice rolling, defense tokens
 - **MovementResolver** — Ship movement with maneuver tool simulation
 - **CommandProcessor** — Command dial/token processing
+- **TooltipLayout** — Pure tooltip position computation (viewport clamping, cursor offset)
 
 ## 5.3 Level 2 — UI Detail
 
@@ -54,3 +55,4 @@
 - **DicePanel** — Dice rolling visualization
 - **PhaseIndicator** — Current phase and round display
 - **FleetBuilder** — Pre-game fleet construction interface
+- **TooltipPanel** — Reusable hover/programmatic tooltip popup (BBCode, styled)

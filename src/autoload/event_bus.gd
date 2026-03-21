@@ -192,3 +192,14 @@ signal dial_drag_started(ship_instance: RefCounted)
 
 ## Emitted when a dial drag is cancelled (released on invalid target).
 signal dial_drag_cancelled()
+
+
+# --- Maneuver Tool Events (Phase 5a) ---
+
+## Emitted when the player presses the "Display Maneuver Tool" button.
+## Requirements: MT-U-002.
+signal maneuver_tool_requested()
+
+## Emitted when the maneuver tool should be dismissed.
+## Requirements: MT-U-006.
+signal maneuver_tool_dismissed()

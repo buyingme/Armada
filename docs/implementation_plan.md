@@ -19,6 +19,7 @@
 - [Phase 4c: Ship Activation Trigger](#phase-4c-ship-activation-trigger)
 - [Phase 4d: Keep-or-Convert Dial Choice](#phase-4d-keep-or-convert-dial-choice)
 - [Phase 4e: Command Token Overflow Discard](#phase-4e-command-token-overflow-discard)
+- [Phase 4f: Hover Tooltip Infrastructure](#phase-4f-hover-tooltip-infrastructure)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
@@ -549,29 +550,114 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5: Ship Movement ⏳
-**Goal:** Full ship movement system including the maneuver tool, speed chart, and Navigate command.
-**Prerequisites:** Phase 1 (ManeuverCalculator), Phase 3 (ShipInstance), Phase 4 (command dials), Phase 4c/4d (activation trigger + keep-or-convert)
-**Duration estimate:** 3–4 sessions
+### Phase 4f: Hover Tooltip Infrastructure ✅
+**Goal:** Build a reusable, globally switchable tooltip system that displays contextual help text on hover (with configurable delay) and replaces all existing ad-hoc help labels (drag help, discard prompt, duplicate toast) with a single unified mechanism.
+**Prerequisites:** Phase 4d (drag help label to migrate), Phase 4e (discard prompt + duplicate toast to migrate)
+**Duration estimate:** 2 sessions
+**Architecture:** arc42 § 8.8 · ADR-009 · Requirements: `docs/requirements/hover_tooltip_system.md`
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|---------------|
+| Add `"tooltip"` section to `scale_config.json` | Data | TT-040, TT-042, TT-075 | New config block with delay, offset, max width, font, colours, toggle button size |
+| `GameScale` tooltip properties | Autoload | TT-041, TT-042 | `tooltip_hover_delay_sec`, `tooltip_offset`, `tooltip_max_width_px`, `tooltip_font_size`, etc. |
+| `TooltipLayout` — pure position / clamping logic | Core | TT-020, TT-021, TT-060 | `src/core/tooltip_layout.gd` (RefCounted, static `compute_position()`) |
+| `TooltipLayout` unit tests | Test | TT-062 | `tests/unit/test_tooltip_layout.gd` — 5 tests: normal offset, flip H, flip V, flip both, clamp-to-zero |
+| `TooltipPanel` — styled BBCode popup widget | Presentation | TT-010, TT-011, TT-030–035 | `src/ui/tooltip_panel.gd` (PanelContainer + RichTextLabel, MOUSE_FILTER_IGNORE) |
+| `TooltipManager` autoload (registration, state machine, timer) | Autoload | TT-001–007, TT-012–013, TT-050–052 | `src/autoload/tooltip_manager.gd` — register/deregister, 4-state hover FSM (IDLE → WAITING → SHOWING / FORCED) |
+| Global toggle button (lower-right corner) | Presentation | TT-070–075 | Icon button on TooltipLayer; toggles `tooltips_enabled`; persists to `user://settings.cfg` |
+| `TooltipManager` integration tests | Test | TT-061–063 | `tests/integration/test_tooltip_manager.gd` — 11 tests: hover delay, exit, empty-callback suppression, programmatic override, auto-hide, deregister, freed-control, region-change reset, toggle disabled hover, toggle allows programmatic |
+| Wire hover regions (ShipCardPanel: dial stack + card entry) | Presentation | TT-012, TT-080–086 | `register()` calls with context-sensitive callbacks: dial stack (reveal/drag/order), card entry (magnify). Two callbacks + two registrations per ship entry |
+| Migrate drag help label → `show_text()` | Presentation | UI-027, TT-005, TT-053 | Remove `_create_drag_help_label()` / `_center_drag_help_label()` / `_drag_help_label` from `game_board.gd`; use `TooltipManager.show_text()` on drag start, `.hide()` on drop |
+| Migrate discard prompt → `show_text()` | Presentation | TT-005, TT-053 | Remove discard prompt Label from `ship_card_panel.gd`; use `TooltipManager.show_text("Click a token to discard")` |
+| Migrate duplicate toast → `show_text()` + auto-hide | Presentation | TT-005, TT-053 | Remove toast Label from `ship_card_panel.gd`; use `TooltipManager.show_text(text, Vector2.INF, 2.0)` |
+| Remove dead code from `game_board.gd` + `ship_card_panel.gd` | Presentation | TT-053 | Delete superseded Label creation/cleanup methods |
+| Register `TooltipManager` in `project.godot` | Config | TT-051 | Autoload entry |
+| Run full test suite — verify 0 failures + expected script count | Test | — | Regression check |
+
+> **Key design decisions:**
+>
+> - **Callback-based text** (Callable, not static string) — each region's tooltip
+>   text is computed at show-time, reflecting current game state (TT-012).
+> - **FORCED state** in the state machine — programmatic `show_text()` overrides
+>   hover and ignores the toggle switch, because drag help and discard prompts
+>   are essential gameplay instructions, not optional hints (TT-007, TT-073).
+> - **Toggle button** in lower-right corner — players who know the game can
+>   disable hover hints without losing essential instructions (TT-070–075).
+> - **Layer 100 CanvasLayer** — tooltip always renders above all other UI (TT-050).
+> - **Auto-deregister** via `tree_exiting` signal — prevents use-after-free on
+>   scene transitions (TT-052).
+
+**Requirements covered:** TT-001–007 (hover trigger + programmatic API), TT-010–013 (content), TT-020–022 (positioning), TT-030–035 (visual style), TT-040–042 (configuration), TT-050–053 (lifecycle + migration), TT-060–063 (testability), TT-070–075 (global toggle), TT-080–086 (contextual hover hints), UI-027 (drag help migration)
+**Tests:** 17 (5 unit + 12 integration) — 759 total, 47 scripts, 1488 asserts
+
+---
+
+### Phase 5a: Maneuver Tool Visualization & Toolbar ✅
+**Goal:** Standalone maneuver tool that can be displayed on the board, attached to a ship, with interactive joints. Plus a lower-right action toolbar that houses both the tooltip toggle and the new "Display Maneuver Tool" button.
+**Prerequisites:** Phase 1 (ManeuverCalculator already has `compute_tool_joints()`, `YAW = 22.5°`), Phase 3 (ShipInstance/ShipToken), Phase 4f (tooltip toggle — relocated into toolbar)
+**Requirements:** `docs/requirements/maneuver_tool.md` (MT-G-001–008, MT-U-001–006, MT-D-001–002, AC-01–16)
+**Duration estimate:** 2 sessions → completed in 1
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | `GameScale` loads `maneuver_tool` config | Autoload | MT-D-001, AC-09 | `_load_maneuver_tool()` + `_parse_vec2()` in `game_scale.gd` | ✅ |
+| 2 | `ManeuverToolState` — joint angles, active speed, yaw validation | Core | MT-M-001–004, AC-01–03, AC-12 | `src/core/maneuver_tool_state.gd` (RefCounted) | ✅ |
+| 3 | `ManeuverToolScene` — renders segments as sprites, positions via chain math | Presentation | MT-G-001–002, MT-G-004–005, AC-04 | `src/scenes/tools/maneuver_tool_scene.gd` | ✅ |
+| 4 | Joint interaction — left-click = port, right-click = starboard | Presentation | MT-G-003, MT-G-006, AC-05–06 | Click areas at each joint in ManeuverToolScene._try_joint_click | ✅ |
+| 5 | Ghost ship preview | Presentation | MT-G-007, AC-07 | Transparent ship token at computed final transform | ✅ |
+| 6 | `ActionToolbar` — lower-right HBoxContainer | UI | MT-U-001, AC-13 | `src/ui/action_toolbar.gd`; tooltip toggle reparented from TooltipManager | ✅ |
+| 7 | "Display Maneuver Tool" button + ship selection mode | UI + Pres | MT-U-002–004, AC-14 | Button in toolbar → prompt → click ship → show tool on left side | ✅ |
+| 8 | Dismissal (Escape / re-press button) | Presentation | MT-U-005–006, AC-15 | _handle_maneuver_tool_escape in GameBoard | ✅ |
+| 9 | Contact points on all segments | Data + Core | MT-G-008, AC-16 | `contact_left`/`contact_right` in config for root, segment, segment_end | ✅ |
+| 10 | Tests | Test | AC-11 | Unit: ManeuverToolState (26) + GameScale config (7) | ✅ |
+
+**Requirements covered:** MT-G-001–008 (graphical), MT-U-001–006 (UI flow), MT-M-001–006 (math model state), MT-D-001–002 (data), AC-01–16
+**Tests:** 36 (ManeuverToolState 29 + GameScale maneuver 7) — 796 total, 49 scripts, 1541 asserts
+
+---
+
+### Phase 5a+: Dynamic Alignment & Speed Simulation ✅
+**Goal:** Auto-switch **both** root attachment and ghost alignment based on joint bending direction (tool follows the bend; ghost appears opposite). Add +/− speed simulation buttons on the end segment to preview different speeds without modifying ship state.
+**Prerequisites:** Phase 5a (maneuver tool scene, tool state, ghost preview)
+**Requirements:** `docs/requirements/maneuver_tool.md` §8–§11 (MT-A-001–004, MT-S-001–006, MT-D-003a, AC-17–25)
+**Duration estimate:** 1 session
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Dynamic side: compute alignment from joint angles | Core | MT-A-001–002, AC-17–18 | `ManeuverToolState.compute_ghost_side() → String` — scans joints end→start; left bend → "left", right bend → "right" | ✅ |
+| 2 | Wire dynamic side into root attachment **and** ghost | Presentation | MT-A-003–004, AC-17 | `ManeuverToolScene._compute_attachment()` and `_update_ghost()` both use computed side | ✅ |
+| 3 | Load speed button positions from config | Autoload | MT-D-003a, AC-25 | `GameScale._load_maneuver_tool()` parses `speed_reduction_button`/`speed_increase_button` | ✅ |
+| 4 | Speed simulation in ManeuverToolState | Core | MT-S-002–004, AC-20–22, AC-24 | `set_simulated_speed()`, `get_simulated_speed()`, joint clamping, segment count adapts; min=1, max=ship_data.max_speed | ✅ |
+| 5 | Speed +/− buttons on end segment | Presentation | MT-S-001, AC-19 | `ManeuverToolScene` renders two 20 px circle buttons with centred +/− labels at config positions, left-click handling | ✅ |
+| 6 | Speed label on ghost | Presentation | MT-S-005, AC-23 | Draw simulated speed number at `token_label_offsets.speed` position on ghost sprite, matching ShipToken font/scale | ✅ |
+| 7 | Tests | Test | AC-17–25 | Unit: `compute_ghost_side` cases, speed sim bounds/clamping, config loading | ✅ 16 tests |
+
+**Requirements covered:** MT-A-001–004 (dynamic alignment), MT-S-001–006 (speed simulation), MT-D-003a (config), AC-17–25
+**Tests:** 16 actual (ghost side logic ×5, speed sim ×9, setup ×2, config loading ×1) — 812 cumulative (49 scripts, 1566 asserts)
+
+---
+
+### Phase 5b: Ship Movement Execution ⏳
+**Goal:** Wire the maneuver tool into the activation flow — execute maneuver, Navigate command, overlap handling.
+**Prerequisites:** Phase 5a/5a+ (maneuver tool), Phase 4c/4d (activation trigger + keep-or-convert)
+**Duration estimate:** 2 sessions
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
 | `SpeedChart` data per ship | Core | MV-003–004 | Speed/yaw data from card data JSONs |
-| Maneuver tool visualization | Presentation | GC-015, MV-001–002 | `src/scenes/tools/maneuver_tool.tscn` with interactive joints |
-| Movement preview (ghost position) | Presentation | UI-010, MV-005 | Transparent ship preview at projected position |
 | Navigate command resolution | Core | CM-010–013 | Speed ±1, yaw +1 on one joint |
 | Ship placement at final position | Core + Pres | MV-010–014 | Slide-along-tool logic, side selection |
 | Speed 0 maneuver | Core | MV-015 | No movement, still counts as maneuver |
 | Ship–ship overlap handling | Core | OV-010–013 | Temp speed reduction loop, facedown damage to both |
 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons |
 | Activation step gating (Reveal → Attack → Move → End) | Core | SP-010, TF-004 | Enforce sequential activation sub-steps; "End Activation" only available after Move |
+| Movement preview (ghost position) wired to game flow | Presentation | UI-010, MV-005 | Ghost ship visible during Execute Maneuver step |
 
 > **Note:** Activation trigger (drag-and-drop dial to ship) and basic reveal/spend flow
 > are handled by Phase 4c. Phase 4d adds the keep-or-convert choice (drag to card = token).
-> Phase 5 extends with the maneuver step and activation gating. The "Activation tracking
-> and alternation" and "Command dial reveal step" tasks originally listed here moved to Phase 4c.
+> Phase 5b extends with the maneuver step and activation gating.
 
-**Tests:** ~30 (speed chart, yaw validation, overlap cases, movement edge cases, navigate command, activation gating)
+**Tests:** ~20 (speed chart, overlap cases, movement edge cases, navigate command, activation gating)
 
 ---
 
@@ -713,6 +799,10 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       │                                 Phase 4d (Keep-or-Convert Dial Choice)
     │       │                                        │
+    │       │                                 Phase 4e (Token Overflow Discard)
+    │       │                                        │
+    │       │                                 Phase 4f (Hover Tooltip Infrastructure)
+    │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
@@ -744,13 +834,16 @@ Phase 0 (Scale & Assets)
 | Phase 4c | ~12 | **21** | **701** |
 | Phase 4d | ~10 | **15** | **716** |
 | Phase 4e | ~10 | **10** | **726** |
-| Phase 5 | ~30 | — | ~756 |
-| Phase 6 | ~45 | — | ~791 |
-| Phase 7 | ~30 | — | ~821 |
-| Phase 8 | ~20 | — | ~841 |
-| Phase 9 | ~15 | — | ~856 |
-| Phase 10 | ~20 | — | ~876 |
-| **Total** | **~300 new** | | **~876** |
+| Phase 4f | ~16 | **17** | **759** |
+| Phase 5a | ~25 | **36** | **796** |
+| Phase 5a+ | 16 | 812 | 812 |
+| Phase 5b | ~20 | — | ~831 |
+| Phase 6 | ~45 | — | ~876 |
+| Phase 7 | ~30 | — | ~906 |
+| Phase 8 | ~20 | — | ~926 |
+| Phase 9 | ~15 | — | ~941 |
+| Phase 10 | ~20 | — | ~961 |
+| **Total** | **~355 new** | | **~961** |
 
 ---
 
@@ -762,7 +855,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 |------|---------------|------------------|
 | `AttackPipeline` as callable function | Phase 6 | Salvo, Counter (reentrant attacks) |
 | Effect timing points in attack steps | Phase 6 | Upgrade card effects |
-| Effect timing points in movement | Phase 5 | Upgrade card effects on movement |
+| Effect timing points in movement | Phase 5b | Upgrade card effects on movement |
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
@@ -798,7 +891,8 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
-| UI Requirements (UI-001–028) | 28 | Phase 2, 3, 4, 4b, 4c, 4d, 5, 6, 7, 8, 10 |
+| UI Requirements (UI-001–028) | 28 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |
+| Hover Tooltip (TT-001–086) | 31 | Phase 4f | ✅ |

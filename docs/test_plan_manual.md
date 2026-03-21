@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–4e, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5a+, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 
@@ -1039,4 +1039,205 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ---
 
-*Last updated: Phase 4e complete — command token overflow discard with player choice, duplicate auto-discard with notification, delayed End Activation button.*
+---
+
+## Phase 4f — Hover Tooltip Infrastructure
+
+**What this phase adds:** A reusable, globally switchable tooltip system (`TooltipManager` autoload) that displays contextual BBCode-rich help text on hover with configurable delay. A global toggle button (lower-right corner) lets players disable hover hints while keeping essential programmatic tooltips (drag help, discard prompt) active. All ad-hoc labels (drag help, discard prompt, duplicate toast) are migrated to `TooltipManager.show_text()`.
+
+### MT-4f.1 — Toggle button renders and persists
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the GameBoard scene | A small (28×28 px) "?" toggle button appears in the lower-right corner |
+| 2 | Click the toggle button | Button text changes from "?" to "⦸" (or vice-versa); tooltip hover hints are disabled/enabled accordingly |
+| 3 | Quit and restart the scene | Toggle state is preserved (persisted to `user://settings.cfg`) |
+
+**Pass criteria:** Toggle button visible, clickable, state persists across sessions.
+
+### MT-4f.2 — Drag help tooltip replaces old label
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, reach Ship Phase, begin dragging a command dial | A tooltip appears near the cursor with drag instructions (BBCode styled) |
+| 2 | Drop or cancel the drag | Tooltip hides immediately |
+| 3 | Verify no old-style centred label | No full-width centred help label appears on the board |
+
+**Pass criteria:** Drag help uses TooltipManager; old `_drag_help_label` is gone.
+
+### MT-4f.3 — Discard prompt tooltip replaces old label
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger a command token overflow (see MT-4e.1 steps 1–3) | A tooltip appears with "Click a command token to discard" |
+| 2 | Click a token to resolve | Tooltip hides |
+
+**Pass criteria:** Discard prompt uses TooltipManager, not an ad-hoc Label.
+
+### MT-4f.4 — Duplicate toast tooltip with auto-hide
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Have a ship with an existing NAVIGATE token | Token present |
+| 2 | Convert a NAVIGATE dial to token | A tooltip appears briefly: "Duplicate Navigate discarded" |
+| 3 | Wait ~2 seconds | Tooltip auto-hides |
+
+**Pass criteria:** Toast uses TooltipManager with auto-hide duration; no old Label.
+
+### MT-4f.5 — Tooltip renders above all other UI
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger any tooltip (drag help, discard prompt, or hover) | Tooltip panel renders on top of all other UI elements (HUD, card panels, etc.) |
+| 2 | Check for any clipping or z-order issues | Tooltip is always fully visible |
+
+**Pass criteria:** CanvasLayer 100 ensures tooltip is the topmost UI element.
+
+---
+
+## Post-Phase 4f — Dial Alignment & Layout Fixes
+
+**What this fixes:** Command dial stack visual alignment issues (dial shift on reveal/spend) and adds a 10 px gap between defense tokens and the dial stack.
+
+### MT-4f-fix.1 — Dial centering on reveal and spend
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the GameBoard scene, reach Ship Phase | Ship card panel visible with hidden dials (white circle icons) |
+| 2 | Click a dial stack to reveal the top dial | Revealed dial icon stays horizontally centred — no leftward or rightward shift |
+| 3 | Drag the revealed dial to the ship | Dial is spent; spent dial icon appears centred below the active stack |
+| 4 | Compare alignment of hidden, revealed, and spent dials | All three types are horizontally centred within the same column width |
+
+**Pass criteria:** No horizontal shift when dials transition between hidden → revealed → spent states.
+
+### MT-4f-fix.2 — Gap between defense tokens and dial stack
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run a game with ships that have defense tokens | Defense token row visible in left column of ship entry |
+| 2 | Observe spacing between last defense token and first dial | A visible ~10 px gap separates the token row from the dial container |
+| 3 | Compare with magnified view | Gap scales proportionally when the card panel is magnified |
+
+**Pass criteria:** Tokens and dials are visually separated; no cramped overlap.
+
+### MT-4f-fix.3 — Contextual hover hints on ship card panel
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Ensure tooltip toggle is enabled ("?" visible in lower-right corner) | Toggle shows "?" |
+| 2 | Hover over a dial stack area | After short delay, a tooltip appears describing the current dial action (e.g., "Click to reveal top dial" during Ship Phase, "Click to open dial order" otherwise) |
+| 3 | Hover over a ship card thumbnail | Tooltip appears with "Click to magnify / unmagnify" |
+| 4 | Move cursor away | Tooltip hides |
+| 5 | Disable toggle (click "?" → "⦸") | Hovering no longer shows dial or card hints |
+
+**Pass criteria:** Contextual hover hints appear for dial stack and card entry; respect toggle state.
+
+---
+
+## Phase 5a — Maneuver Tool Visualization & Toolbar
+
+**What this phase adds:** An action toolbar in the lower-right corner (housing the existing tooltip toggle + a new "Display Maneuver Tool" button), a ship-selection prompt, ManeuverToolScene that renders the segmented maneuver tool attached to a ship with interactive joints (left-click = port, right-click = starboard), and a ghost ship preview at the projected final position.
+
+### MT-5a.1 — Action toolbar appears in lower-right
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run game board scene (F6) | Lower-right corner shows a toolbar with two buttons: "?" (tooltip toggle) and "M" (maneuver tool) |
+| 2 | Click "?" button | Tooltip toggle state changes (same behaviour as before relocation) |
+| 3 | Resize the window | Toolbar stays anchored in the lower-right corner |
+
+### MT-5a.2 — Ship selection mode and tool display
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click the "M" button in the toolbar | A "Select a ship" prompt appears (via tooltip system) |
+| 2 | Click on a ship token on the board | The maneuver tool appears attached to the left side of that ship's front edge |
+| 3 | Verify segment sprites | Multiple translucent segment images are visible in a chain extending forward from the ship |
+| 4 | Verify ghost preview | A semi-transparent ship token image appears at the projected final position |
+
+### MT-5a.3 — Joint interaction (left/right click)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With tool displayed, left-click near a joint (between segment sprites) | The downstream segments rotate to the left (port); joints within ±2 click range |
+| 2 | Right-click near the same joint | The downstream segments rotate to the right (starboard) |
+| 3 | Click beyond max yaw | No further rotation occurs (click is rejected) |
+| 4 | Verify ghost preview updates | Ghost ship position/rotation changes to match the new joint angles |
+
+### MT-5a.4 — Dismissal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press Escape while tool is displayed | Tool disappears, game returns to normal state |
+| 2 | Click "M" again, select a ship, then click "M" again | Tool disappears (toggle behaviour) |
+| 3 | Click "M", then press Escape before selecting a ship | Selection mode cancelled, no tool shown |
+
+### MT-5a.5 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 792 tests, 49 scripts, 0 failures |
+| 2 | Complete a full Command Phase | Dials assign normally; no interaction with maneuver tool flow |
+
+**Pass criteria:** Toolbar visible; button triggers selection; tool renders with correct segment sprites; joints clickable; ghost preview updates; Escape dismisses; 792 tests pass.
+
+---
+
+## Phase 5a+ — Dynamic Alignment & Speed Simulation
+
+**What this phase adds:** Ghost ship preview auto-switches side based on joint bending direction (bending left → ghost on right, bending right → ghost on left). Speed +/− buttons on the end segment allow previewing different speeds without modifying ship state. The ghost displays the simulated speed number.
+
+### MT-5a+.1 — Dynamic root and ghost alignment
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Display maneuver tool on a ship | Tool attaches on the left side of the ship; ghost on the left (default) |
+| 2 | Left-click a joint (port / left bend) | Tool stays on left side of ship; ghost stays on left; tool bends left |
+| 3 | Right-click a joint (starboard / right bend) | Tool switches to right side of ship; ghost switches to right; tool bends right |
+| 4 | Set multiple joints: an early joint left, last joint right | Tool on right, ghost on right (last non-zero joint = starboard wins) |
+| 5 | Reset all joints to straight | Tool and ghost both return to left (default) |
+
+### MT-5a+.2 — Speed +/− buttons visible
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Display maneuver tool at speed ≥ 1 | Two 20 px circular buttons ("−" and "+") are visible on the end segment, symbols centred |
+| 2 | Buttons are at the correct position | They appear in the upper area of the end segment, side by side |
+
+### MT-5a+.3 — Speed simulation via buttons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click "+" button | Segment count increases by 1; new segment appears; ghost moves further forward |
+| 2 | Click "+" until max speed | Button click has no effect beyond max speed; segment count stays at max_speed + 1 |
+| 3 | Click "−" button from max | Segment count decreases by 1; last segment disappears |
+| 4 | Click "−" until speed 1 | Button click has no effect below speed 1; tool shows root + 1 segment |
+| 5 | Verify joint clicks adapt | If a previously bent joint is no longer active after speed decrease, it resets to 0 |
+
+### MT-5a+.4 — Speed label on ghost
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Display tool at default speed | Ghost shows the current speed number at the speed label position on the token |
+| 2 | Click "+" to increase speed | Speed number on ghost updates to the new simulated speed |
+| 3 | Click "−" to decrease speed | Speed number on ghost updates to the new simulated speed |
+
+### MT-5a+.5 — Simulation is preview-only
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Change simulated speed via +/− | The ship's actual speed in the card panel does not change |
+| 2 | Dismiss the tool and re-display it | Tool starts at the ship's actual speed, not the simulated one |
+
+### MT-5a+.6 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 812 tests, 49 scripts, 0 failures |
+| 2 | All Phase 5a manual tests still pass | Joint clicks, dismissal, toolbar — no regression |
+
+**Pass criteria:** Ghost auto-switches sides; speed buttons render and work; speed label appears; simulation doesn't modify ship state; 812 tests pass.
+
+---
+
+*Last updated: Phase 5a+ — Dynamic alignment, speed simulation, ghost speed label.*

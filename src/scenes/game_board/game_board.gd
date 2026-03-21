@@ -123,13 +123,9 @@ var _action_toolbar: ActionToolbar = null
 ## Requirements: ACT-007, FLOW-002.
 var _show_activation_button: ShowActivationButton = null
 
-## Activation modal panel (right side of screen).
+## Activation modal panel (centred on screen, same style as CommandDialPicker).
 ## Requirements: ACT-001–004.
 var _activation_modal: ActivationModal = null
-
-## "Execute Maneuver" button (bottom-centre during maneuver step).
-## Requirements: EXE-001, AC-5b-08.
-var _execute_maneuver_button: ExecuteManeuverButton = null
 
 ## Current ship activation state tracker (nil when not in activation).
 ## Requirements: FLOW-004.
@@ -368,8 +364,6 @@ func _connect_signals() -> void:
 	# Maneuver tool (Phase 5a).
 	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
 	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
-	# Maneuver execution (Phase 5b).
-	EventBus.execute_maneuver_requested.connect(_on_execute_maneuver)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -482,10 +476,8 @@ func _on_viewport_resized() -> void:
 		_action_toolbar.update_position(vp_size)
 	if _show_activation_button != null:
 		_show_activation_button.update_position(vp_size)
-	if _execute_maneuver_button != null:
-		_execute_maneuver_button.update_position(vp_size)
-	if _activation_modal != null:
-		_activation_modal.update_position(vp_size)
+	if _activation_modal != null and _activation_modal.visible:
+		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -712,16 +704,15 @@ func _create_turn_management_ui() -> void:
 			_on_activation_sequence_requested)
 	layer.add_child(_show_activation_button)
 
-	# Phase 5b: Execute Maneuver button.
-	_execute_maneuver_button = ExecuteManeuverButton.new()
-	_execute_maneuver_button.name = "ExecuteManeuverButton"
-	layer.add_child(_execute_maneuver_button)
-
-	# Phase 5b: Activation modal (right side panel).
+	# Phase 5b: Activation modal (centred, same style as CommandDialPicker).
 	_activation_modal = ActivationModal.new()
 	_activation_modal.name = "ActivationModal"
 	_activation_modal.maneuver_step_entered.connect(
 			_on_maneuver_step_entered)
+	_activation_modal.maneuver_commit_requested.connect(
+			_on_execute_maneuver)
+	_activation_modal.modal_closed.connect(
+			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
 
 
@@ -1215,7 +1206,7 @@ func _on_board_activation_ended() -> void:
 		_activating_ship_token = null
 	_end_activation_button.hide_button()
 	if _activation_modal:
-		_activation_modal.close()
+		_activation_modal.close_and_clear()
 	_ship_activation_state = null
 	_dismiss_maneuver_tool()
 
@@ -1236,15 +1227,23 @@ func _show_activation_sequence_button() -> void:
 	_show_activation_button.update_position(vp_size)
 
 
-## Hides all Phase 5b UI elements (activation button, modal, execute button).
+## Hides all Phase 5b UI elements (activation button, modal).
 func _hide_phase5b_ui() -> void:
 	if _show_activation_button:
 		_show_activation_button.hide_button()
 	if _activation_modal:
-		_activation_modal.close()
-	if _execute_maneuver_button:
-		_execute_maneuver_button.hide_button()
+		_activation_modal.close_and_clear()
 	_ship_activation_state = null
+
+
+## Called when the activation modal is dismissed (Escape or ✕ Close).
+## Re-shows the "Show Activation Sequence" button so the player can reopen.
+func _on_activation_modal_closed() -> void:
+	_log.info("Activation modal dismissed by player.")
+	if _ship_activation_state != null and _show_activation_button:
+		_show_activation_button.show_button()
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_show_activation_button.update_position(vp_size)
 
 
 ## Called when the player presses "Show Activation Sequence".
@@ -1253,12 +1252,12 @@ func _hide_phase5b_ui() -> void:
 func _on_activation_sequence_requested() -> void:
 	_log.info("Activation sequence requested.")
 	if _ship_activation_state == null:
-		_log.warn("No activation state — cannot open modal.")
+		_log.info("No activation state — cannot open modal.")
 		return
 	if _activation_modal:
 		_activation_modal.open(_ship_activation_state)
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.update_position(vp_size)
+		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the activation modal reaches the Execute Maneuver step.
@@ -1289,14 +1288,10 @@ func _on_maneuver_step_entered() -> void:
 		_ship_activation_state.apply_yaw_bonus(0)
 		_maneuver_tool_scene.get_state().set_yaw_bonus_joint(0)
 		_maneuver_tool_scene.refresh()
-	# Show Execute Maneuver button.
-	if _execute_maneuver_button:
-		_execute_maneuver_button.show_button()
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_execute_maneuver_button.update_position(vp_size)
+	# Modal's embedded Execute button is already visible — no extra button needed.
 
 
-## Called when the player commits the maneuver (Execute Maneuver button).
+## Called when the player commits the maneuver (modal "Commit ►" button).
 ## Snaps the ship to the final transform and shows End Activation.
 ## Requirements: EXE-001, EXE-002, AC-5b-08, AC-5b-09, AC-5b-12, AC-5b-13.
 func _on_execute_maneuver() -> void:
@@ -1330,8 +1325,6 @@ func _on_execute_maneuver() -> void:
 ## Shows the End Activation button after maneuver execution.
 ## Requirements: AC-5b-11, FLOW-002.
 func _show_end_activation_after_maneuver() -> void:
-	if _execute_maneuver_button:
-		_execute_maneuver_button.hide_button()
 	_show_end_activation_button()
 	# Update modal to reflect completion.
 	if _activation_modal and _ship_activation_state:

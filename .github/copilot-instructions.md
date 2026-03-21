@@ -20,6 +20,7 @@ You **must** read and follow these documents (in `.skills/`):
 3. **`.skills/testing_standards.md`** — Test naming, AAA pattern, coverage targets
 4. **`.skills/file_organization.md`** — Where files go, new file checklist
 5. **`.skills/copilot_instructions.md`** — Detailed templates and rules
+6. **`.skills/ui_styling.md`** — Modal panel styles, colours, positioning, dismissibility
 
 ## Non-Negotiable Rules
 

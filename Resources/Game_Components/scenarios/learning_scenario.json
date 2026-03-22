@@ -4,6 +4,12 @@
     "_status": "VERIFIED",
     "scenario_name": "Learning Scenario",
     "map_image": "map_3x3_distant_planet_v3.jpg",
+    "use_fixed_round1_commands": true,
+    "fixed_round1_commands": {
+        "cr90_corvette_a": ["repair"],
+        "nebulon_b_escort_frigate": ["navigate", "squadron"],
+        "victory_ii_class_star_destroyer": ["repair", "navigate", "concentrate_fire"]
+    },
     "tokens": [
         {
             "key": "victory_ii_class_star_destroyer",

@@ -175,6 +175,11 @@ func _ready() -> void:
 	# Show the initial handoff overlay so the first player must click
 	# "Ready" before dials appear — same UX as every subsequent handoff.
 	_on_active_player_changed(GameManager.get_active_player())
+	# Show a brief toast if fixed round-1 commands were auto-assigned.
+	# Requirements: CP-009, CP-010.
+	if GameManager.fixed_commands_applied:
+		TooltipManager.show_text(
+				"Round 1 commands pre-assigned", Vector2.INF, 3.0)
 
 
 ## Returns all current ship tokens on the board.
@@ -405,6 +410,12 @@ func _spawn_learning_scenario_tokens() -> void:
 	# assigns dials to. Do NOT call populate_game_state() — that creates
 	# separate duplicate instances.
 	_register_instances_in_game_state(ship_instances, squad_instances)
+	# Apply fixed round-1 commands if configured (CP-009, CP-010).
+	# Must happen after instances are registered so GameManager can
+	# find them in the GameState.
+	if setup.has_fixed_round1_commands():
+		var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
+		GameManager.apply_fixed_round1_commands(fixed_cmds)
 	# Spawn ship tokens and bind instances (same order as placements).
 	for i: int in range(ship_placements.size()):
 		var token: ShipToken = _spawn_ship_token(ship_placements[i])

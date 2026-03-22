@@ -106,6 +106,45 @@ func get_damage_deck() -> DamageDeck:
 	return _damage_deck
 
 
+## Returns true if the scenario has fixed round-1 commands configured
+## and the toggle is enabled.
+## Rules Reference: LTP p.10 — "suggested commands"; CP-009.
+func has_fixed_round1_commands() -> bool:
+	_ensure_loaded()
+	return _data.get("use_fixed_round1_commands", false) as bool
+
+
+## Returns the fixed round-1 command assignments as a Dictionary mapping
+## ship data_key → Array[int] of Constants.CommandType values.
+## The first element is the top of the stack (revealed first).
+## Returns an empty Dictionary if the feature is disabled or data is missing.
+## Rules Reference: LTP p.10 — "last command listed is on the bottom";
+## CP-009.
+func get_fixed_round1_commands() -> Dictionary:
+	_ensure_loaded()
+	if not has_fixed_round1_commands():
+		return {}
+	var raw: Variant = _data.get("fixed_round1_commands", {})
+	if not raw is Dictionary:
+		return {}
+	var result: Dictionary = {}
+	for key: Variant in (raw as Dictionary):
+		var cmd_names: Variant = (raw as Dictionary)[key]
+		if not cmd_names is Array:
+			push_error("LearningScenarioSetup: fixed_round1_commands[%s] is not an Array" % str(key))
+			continue
+		var typed_cmds: Array[int] = []
+		for name: Variant in (cmd_names as Array):
+			var cmd: int = _parse_command_name(str(name))
+			if cmd < 0:
+				push_error("LearningScenarioSetup: unknown command '%s' for ship '%s'" % [str(name), str(key)])
+				continue
+			typed_cmds.append(cmd)
+		if typed_cmds.size() > 0:
+			result[str(key)] = typed_cmds
+	return result
+
+
 ## Populates a [GameState] with the Learning Scenario starting state.
 ## Creates [ShipInstance] / [SquadronInstance] objects, assigns them to
 ## the correct [PlayerState], sets factions, and initialises the damage deck.
@@ -221,6 +260,23 @@ func _player_for_faction(faction: Constants.Faction) -> int:
 	if faction == Constants.Faction.GALACTIC_EMPIRE:
 		return IMPERIAL_PLAYER
 	return REBEL_PLAYER
+
+
+## Converts a lowercase command name string to its Constants.CommandType value.
+## Returns -1 for unknown names.
+## Valid names: "navigate", "squadron", "concentrate_fire", "repair".
+static func _parse_command_name(command_name: String) -> int:
+	match command_name.to_lower().strip_edges():
+		"navigate":
+			return Constants.CommandType.NAVIGATE
+		"squadron":
+			return Constants.CommandType.SQUADRON
+		"concentrate_fire":
+			return Constants.CommandType.CONCENTRATE_FIRE
+		"repair":
+			return Constants.CommandType.REPAIR
+		_:
+			return -1
 
 
 ## Creates a ShipInstance and adds it to the correct PlayerState.

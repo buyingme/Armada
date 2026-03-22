@@ -42,6 +42,12 @@ var _command_assigning_player: int = -1
 ## Requirements: UI-024, UI-026.
 var _activating_ship: ShipInstance = null
 
+## Whether fixed round-1 commands were applied this game.
+## Set by [method apply_fixed_round1_commands]; reset on [method start_new_game].
+## Used by the game board to show a brief toast notification.
+## Requirements: CP-009, CP-010.
+var fixed_commands_applied: bool = false
+
 
 func _ready() -> void:
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
@@ -57,6 +63,7 @@ func start_new_game(_config: Dictionary = {}) -> void:
 	is_game_active = true
 	active_player = current_game_state.initiative_player
 	_activating_ship = null
+	fixed_commands_applied = false
 	EventBus.game_started.emit()
 	_start_round()
 
@@ -65,6 +72,61 @@ func start_new_game(_config: Dictionary = {}) -> void:
 func end_game(winner_index: int = -1) -> void:
 	is_game_active = false
 	EventBus.game_ended.emit(winner_index)
+
+
+## Applies pre-assigned (fixed) command dials to all ships for round 1,
+## then immediately skips the command phase.
+## [param commands] — Dictionary mapping ship data_key → Array[int] of
+##     Constants.CommandType values (first element = top of stack).
+## Must be called while the game is in round 1 / COMMAND phase and after
+## ship instances have been registered in the game state.
+## Rules Reference: LTP p.10 — "suggested commands"; CP-009, CP-010.
+func apply_fixed_round1_commands(commands: Dictionary) -> void:
+	if not is_game_active or not current_game_state:
+		_log.warn("apply_fixed_round1_commands: no active game.")
+		return
+	if current_game_state.current_round != 1:
+		_log.warn("apply_fixed_round1_commands: only valid in round 1.")
+		return
+	if current_game_state.current_phase != Constants.GamePhase.COMMAND:
+		_log.warn("apply_fixed_round1_commands: not in COMMAND phase.")
+		return
+
+	var assigned_count: int = 0
+	for player_idx: int in range(Constants.PLAYER_COUNT):
+		var ps: PlayerState = current_game_state.get_player_state(player_idx)
+		if ps == null:
+			continue
+		for s: Variant in ps.ships:
+			if not s is ShipInstance:
+				continue
+			var ship: ShipInstance = s as ShipInstance
+			if not commands.has(ship.data_key):
+				_log.warn("No fixed commands for ship '%s' — skipping." % ship.data_key)
+				continue
+			var cmds: Variant = commands[ship.data_key]
+			if not cmds is Array:
+				continue
+			var typed_cmds: Array[int] = []
+			for cmd: Variant in (cmds as Array):
+				typed_cmds.append(cmd as int)
+			var ok: bool = ship.command_dial_stack.assign_dials(
+					typed_cmds, 1)
+			if ok:
+				assigned_count += 1
+				_log.info("Auto-assigned round 1 commands: %s = %s" % [
+						ship.data_key, str(typed_cmds)])
+				EventBus.command_dials_changed.emit(ship)
+			else:
+				_log.warn("assign_dials failed for '%s' (fixed commands)." % ship.data_key)
+
+	# Mark both players as submitted and skip the command phase.
+	_command_submitted = [true, true]
+	_command_assigning_player = -1
+	fixed_commands_applied = true
+	_log.info("Fixed round-1 commands applied to %d ships. Skipping command phase." % assigned_count)
+	EventBus.command_phase_complete.emit()
+	advance_phase()
 
 
 ## Returns the current round number.

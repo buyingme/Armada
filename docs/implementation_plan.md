@@ -20,6 +20,7 @@
 - [Phase 4d: Keep-or-Convert Dial Choice](#phase-4d-keep-or-convert-dial-choice)
 - [Phase 4e: Command Token Overflow Discard](#phase-4e-command-token-overflow-discard)
 - [Phase 4f: Hover Tooltip Infrastructure](#phase-4f-hover-tooltip-infrastructure)
+- [Phase 4g: Fixed Round-1 Commands](#phase-4g-fixed-round-1-commands)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 5c: Range Overlay Tool](#phase-5c-range-overlay-tool)
 - [Phase 5d: Targeting List Tool](#phase-5d-targeting-list-tool)
@@ -591,6 +592,27 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** TT-001–007 (hover trigger + programmatic API), TT-010–013 (content), TT-020–022 (positioning), TT-030–035 (visual style), TT-040–042 (configuration), TT-050–053 (lifecycle + migration), TT-060–063 (testability), TT-070–075 (global toggle), TT-080–086 (contextual hover hints), UI-027 (drag help migration)
 **Tests:** 17 (5 unit + 12 integration) — 759 total, 47 scripts, 1488 asserts
+
+---
+
+### Phase 4g: Fixed Round-1 Commands ✅
+**Goal:** Allow the learning scenario to use pre-assigned command dials in round 1, skipping the command phase entirely. Configurable via `use_fixed_round1_commands` and `fixed_round1_commands` fields in the scenario JSON. When active, `LearningScenarioSetup` auto-assigns each ship's dial stack from the JSON data, and `GameManager` skips the command phase UI in round 1.
+**Prerequisites:** Phase 4 (CommandDialStack, command phase flow), Phase 3 (LearningScenarioSetup, ShipInstance)
+**Duration estimate:** 1 session
+**Requirements:** CP-009, CP-010
+**Completed:** 933 tests passing (54 scripts, 1776 asserts)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Add `use_fixed_round1_commands` + `fixed_round1_commands` to `learning_scenario.json` | Data | CP-009 | New JSON fields: boolean toggle + per-ship-key command arrays | ✅ |
+| 2 | Parse fixed commands in `LearningScenarioSetup` | Core | CP-009 | `has_fixed_round1_commands() -> bool`, `get_fixed_round1_commands() -> Dictionary`, `_parse_command_name()` helper | ✅ |
+| 3 | Auto-assign dials in `GameManager.apply_fixed_round1_commands()` | Application | CP-009, CP-010 | Assigns dials to each ship, marks both players submitted, emits `command_phase_complete`, advances to Ship Phase | ✅ |
+| 4 | Log auto-assigned commands via GameLogger | Utils | CP-010 | Log entry per ship: "Auto-assigned round 1 commands: <ship> = [<commands>]" | ✅ |
+| 5 | Toast notification in `game_board.gd` | Presentation | CP-010 | "Round 1 commands pre-assigned" toast via `TooltipManager.show_text()` (3s auto-hide) | ✅ |
+| 6 | Unit tests — parsing + auto-assign + dial order | Test | CP-009, CP-010 | `tests/unit/test_fixed_round1_commands.gd` — 17 tests covering parsing, apply, stack order, flag, preconditions | ✅ |
+
+**Requirements covered:** CP-009 (fixed commands config + assignment), CP-010 (skip command phase in round 1)
+**Tests:** 17 new (933 total, 54 scripts, 1776 asserts)
 
 ---
 

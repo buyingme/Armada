@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 53 scripts, 916 tests, 1741 asserts — all passing.
+> **Current baseline:** 54 scripts, 933 tests, 1776 asserts — all passing.
 
 ---
 
@@ -1524,4 +1524,54 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ---
 
-*Last updated: Phase 5d — Targeting list tool with RangeFinder, LineOfSightChecker, TargetingListBuilder.*
+## Phase 4g — Fixed Round-1 Commands
+
+**What this phase adds:** The learning scenario can optionally pre-assign command dials for round 1 instead of requiring players to pick them manually. When `use_fixed_round1_commands` is `true` in the scenario JSON, the command phase is completely skipped in round 1. Ships begin with their dial stacks pre-filled: CR90 → Repair; Nebulon-B → Navigate (top), Squadron (bottom); VSD → Repair (top), Navigate (middle), Concentrate Fire (bottom). A brief "Round 1 commands pre-assigned" toast appears.
+
+### MT-4g.1 — Game starts in Ship Phase (round 1 skips command phase)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game board scene (F6) | No command dial picker appears |
+| 2 | Observe the HUD phase indicator | Shows "Ship Phase" (not "Command Phase") |
+| 3 | Observe the round indicator | Shows round 1 |
+| 4 | Check for toast notification | Brief "Round 1 commands pre-assigned" toast appears and auto-hides after ~3 seconds |
+
+### MT-4g.2 — Dial stacks are pre-filled correctly
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click on the CR90 dial stack (own perspective) | Shows 1 hidden dial |
+| 2 | Activate CR90 (drag dial to ship) | Revealed dial shows Repair |
+| 3 | Check Nebulon-B stack | Shows 2 hidden dials |
+| 4 | Activate Nebulon-B (drag top dial to ship) | Revealed dial shows Navigate |
+| 5 | Switch to Imperial player, activate VSD | Revealed dial shows Repair |
+
+### MT-4g.3 — Round 2+ command phase works normally
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete round 1 (activate all ships, end activations) | Round advances to 2 |
+| 2 | Observe the round-2 flow | Command dial picker UI appears for each ship |
+| 3 | Assign dials normally | Dials assigned; game continues normally |
+
+### MT-4g.4 — Disabling fixed commands restores normal flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Edit `learning_scenario.json`: set `use_fixed_round1_commands` to `false` | File saved |
+| 2 | Launch the game board scene (F6) | Command dial picker appears in round 1 as before |
+| 3 | No toast appears | No "pre-assigned" notification |
+
+### MT-4g.5 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 933 tests, 54 scripts, 0 failures |
+| 2 | All previous manual tests still pass | No regression in turn management, dial assignment, ship activation |
+
+**Pass criteria:** Round 1 skips command phase; all ships have correct pre-assigned dials in correct stack order; toast appears; round 2+ is normal; toggling `use_fixed_round1_commands: false` restores normal flow; 933 tests pass.
+
+---
+
+*Last updated: Phase 4g — Fixed round-1 commands for the learning scenario.*

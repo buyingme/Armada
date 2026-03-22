@@ -789,6 +789,31 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 5d-2: Targeting List — Squadron Sections & Hull Zone Detail ⏳
+**Goal:** Extend the targeting list with three enhancements: (1) Add friendly squadron sections showing outgoing targets (ships + squadrons at distance 1) and incoming threats (enemy ships' anti-squadron arcs + enemy squadrons at distance 1). (2) Show per-defending-hull-zone breakdown for ship → ship targets instead of collapsing to the single closest zone. (3) Update the UI modal to display squadron sections and hull zone detail lines.
+**Prerequisites:** Phase 5d (Targeting List Tool), Phase 5d-fix (squadron armament)
+**Duration estimate:** 1–2 sessions
+**Requirements:** TL-LIST-011–014, TL-RNG-003, TL-RNG-005, AC-TL-30–37
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Add `target_zone` field to `TargetEntry` | Core | TL-LIST-013, AC-TL-35 | Optional `Constants.HullZone` on `TargetEntry`; populated for ship → ship, empty for squadron targets | ⏳ |
+| 2 | Ship → ship: emit one `TargetEntry` per reachable defending hull zone | Core | TL-LIST-013, AC-TL-34 | `_check_ship_target` returns `Array[TargetEntry]` instead of collapsing to best; each entry carries `target_zone`, its own range/dice/obstruction | ⏳ |
+| 3 | `SquadTargetingResult` + `_build_squad_entry` | Core | TL-LIST-011, TL-LIST-014, AC-TL-30–32 | New inner class; `_build_squad_entry` checks distance 1 to enemy ships (battery dice) and enemy squads (anti-sq dice); 360° arc, no LOS | ⏳ |
+| 4 | `_build_incoming_squad_threats` | Core | TL-LIST-012, AC-TL-33 | Enemy ships with anti-sq armament in arc at range → threat; enemy squads at distance 1 → threat | ⏳ |
+| 5 | `build()` returns combined results | Core | TL-LIST-014 | Return structure includes both `Array[ShipTargetingResult]` and `Array[SquadTargetingResult]`; backward-compatible wrapper or new return type | ⏳ |
+| 6 | `TargetingListModal` — squadron sections | Presentation | AC-TL-36 | New `_build_squad_section()` renders squadron outgoing + incoming after ship sections | ⏳ |
+| 7 | `TargetingListModal` — hull zone detail display | Presentation | AC-TL-37 | Ship → ship lines show "FRONT → LEFT at medium range (2 red, 1 blue)" format | ⏳ |
+| 8 | `game_board.gd` — collect friendly squad infos for builder | Presentation | TL-LIST-011 | Pass friendly squadrons to builder alongside enemy squads | ⏳ |
+| 9 | Unit tests — squadron targeting | Test | AC-TL-18, AC-TL-30–33 | Squad → ship, squad → squad, incoming to squads, empty states | ⏳ |
+| 10 | Unit tests — per-hull-zone detail | Test | AC-TL-18, AC-TL-34–35 | Ship → ship returns multiple entries with different target_zones | ⏳ |
+| 11 | Update requirements & docs | Docs | — | targeting_list.md, manual test plan | ⏳ |
+
+**Requirements covered:** TL-LIST-011–014, TL-RNG-003, TL-RNG-005, AC-TL-30–37
+**Tests:** ~15–20 new tests
+
+---
+
 ### Phase 5b-2: Overlap Handling ⏳
 **Goal:** Handle ship–ship and ship–squadron overlaps during movement.
 **Prerequisites:** Phase 5b (maneuver execution)

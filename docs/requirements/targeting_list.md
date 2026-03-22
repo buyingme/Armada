@@ -437,6 +437,63 @@ The `SquadInfo` data structure must include `battery_armament` and
 and range. The `_collect_squad_infos()` function in the game board must
 populate these from the squadron's JSON data.
 
+### TL-LIST-011 — Per friendly squadron: outgoing targets
+
+For each friendly squadron (belonging to the active player), determine all
+valid attack targets at **distance 1** (close range):
+
+1. **Enemy squadrons:** Measure distance from the closest point on the
+   friendly squadron's base to the closest point on the enemy squadron's
+   base. If distance ≤ close range, the enemy squadron is a valid target.
+   Dice come from the friendly squadron's `anti_squadron_armament`.
+2. **Enemy ships:** Measure distance from the closest point on the friendly
+   squadron's base to the closest point on the enemy ship's base (any hull
+   zone). If distance ≤ close range, the ship is a valid target. Dice come
+   from the friendly squadron's `battery_armament`.
+
+Squadrons have a 360° firing arc — no arc containment test is needed.
+LOS is not checked for squadron attacks (no hull zone blocking).
+
+> RRG "Firing Arc": "Each squadron has a 360° firing arc."
+> RRG "Attack Range": "Each squadron's attack range is distance 1."
+
+### TL-LIST-012 — Per friendly squadron: incoming threats
+
+For each friendly squadron, determine all incoming threats:
+
+1. **Enemy ships:** For each enemy ship hull zone with non-empty
+   anti-squadron armament, check whether any portion of the friendly
+   squadron's base is inside the hull zone's firing arc and at attack
+   range. If so, list as a threat with the enemy's anti-squadron dice.
+2. **Enemy squadrons:** Measure distance from the closest point on the
+   enemy squadron's base to the closest point on the friendly squadron's
+   base. If distance ≤ close range, list as a threat with the enemy's
+   `anti_squadron_armament` dice.
+
+### TL-LIST-013 — Per-hull-zone breakdown for ship → ship targeting
+
+When a ship can target another ship, the outgoing target entry must list
+**each reachable defending hull zone separately** rather than collapsing to
+the single closest one. Each sub-entry shows:
+- Attacking hull zone → Defending hull zone
+- Range band at that hull zone pair
+- Dice available at that range
+- Obstruction status
+
+This gives the player full visibility into which hull zone pair to choose
+for the actual attack declaration.
+
+> RRG "Attack", Step 1: "The attacker must declare the defending hull zone."
+
+### TL-LIST-014 — Squadron targeting result structure
+
+A new `SquadTargetingResult` class parallel to `ShipTargetingResult`:
+- `squad_name: String` — display name of the friendly squadron.
+- `outgoing: Array[TargetEntry]` — valid targets (ships and squadrons).
+- `incoming: Array[ThreatEntry]` — threats from enemy ships and squadrons.
+
+The `build()` method returns both ship results and squadron results.
+
 ---
 
 ## 7. UI Modal
@@ -594,6 +651,14 @@ Available via `GameScale.range_close_px`, `GameScale.range_medium_px`,
 | AC-TL-21 | Ship → squadron max attack range is based on anti-squadron armament colours. |
 | AC-TL-22 | Enemy squadrons at distance 1 of a friendly ship appear as incoming threats with battery armament dice. |
 | AC-TL-23 | `SquadInfo` includes `battery_armament` and `anti_squadron_armament` fields populated from JSON data. |
+| AC-TL-30 | Friendly squadrons appear in the targeting list with outgoing targets and incoming threats. |
+| AC-TL-31 | Squadron → ship targets show `battery_armament` dice at distance 1 (close range). |
+| AC-TL-32 | Squadron → squadron targets show `anti_squadron_armament` dice at distance 1 (close range). |
+| AC-TL-33 | Incoming threats to friendly squadrons include enemy ships (anti-sq armament in arc) and enemy squadrons (at distance 1). |
+| AC-TL-34 | Ship → ship outgoing targets list each reachable defending hull zone separately with its own range/dice/obstruction. |
+| AC-TL-35 | `TargetEntry` includes a `target_zone` field identifying the defending hull zone (or empty for squadron targets). |
+| AC-TL-36 | UI modal displays squadron sections after ship sections. |
+| AC-TL-37 | UI modal shows attacking arc → defending hull zone detail for ship → ship entries. |
 
 ---
 

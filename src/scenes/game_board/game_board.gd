@@ -1672,7 +1672,7 @@ func _show_targeting_list() -> void:
 	var squads_info: Array = _collect_squad_infos()
 	var active_player: int = GameManager.get_active_player()
 	var ghost: TargetingListBuilder.ShipInfo = _collect_ghost_info()
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			ships_info, squads_info, active_player, ghost)
 	# Create the modal on a CanvasLayer so it's always on top.
 	if _targeting_list_modal == null:
@@ -1683,7 +1683,7 @@ func _show_targeting_list() -> void:
 		layer.layer = 90
 		add_child(layer)
 		layer.add_child(_targeting_list_modal)
-	_targeting_list_modal.show_results(results)
+	_targeting_list_modal.show_results(build_result)
 	_log.info("Targeting list opened.")
 
 

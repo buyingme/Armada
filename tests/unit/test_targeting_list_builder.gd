@@ -138,8 +138,9 @@ func test_build_finds_outgoing_target_when_ship_ahead() -> void:
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 400), 0.0)
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
+	var results: Array = build_result.ship_results
 	# Assert — Should find at least one outgoing target.
 	assert_eq(results.size(), 1, "Should have 1 ship result (friendly only)")
 	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
@@ -157,10 +158,10 @@ func test_build_finds_incoming_threat_from_enemy() -> void:
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"VSD", 1, Vector2(500, 400), PI)  # facing down → front towards us
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
 	# Assert
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	assert_gt(ship_result.incoming.size(), 0,
 			"Should have at least one incoming threat")
 	var threat: TargetingListBuilder.ThreatEntry = ship_result.incoming[0]
@@ -177,9 +178,9 @@ func test_build_no_targets_when_ships_far_apart() -> void:
 			"CR90", 0, Vector2(500, 2000), 0.0)
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 100), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	assert_eq(ship_result.outgoing.size(), 0,
 			"No outgoing targets when out of range")
 
@@ -197,9 +198,9 @@ func test_build_no_targets_when_enemy_behind_no_rear_dice() -> void:
 	# Enemy is behind the friendly.
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 600), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	# The FRONT arc should not see the enemy (it's behind).
 	# LEFT/RIGHT might see depending on geometry, but REAR has no dice.
 	# Filter to only entries from REAR arc.
@@ -223,9 +224,9 @@ func test_build_finds_squadron_target() -> void:
 			{"BLUE": 1})
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"TIE Fighter", 1, Vector2(500, 400))
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	# Check for a squadron entry in outgoing.
 	var found_squad: bool = false
 	for entry: Variant in ship_result.outgoing:
@@ -246,8 +247,9 @@ func test_build_includes_ghost_with_projected_label() -> void:
 			"CR90", 0, Vector2(500, 500), 0.0)
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 300), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0, ghost)
+	var results: Array = build_result.ship_results
 	# Should have 2 results: friendly + ghost.
 	assert_eq(results.size(), 2, "Should have friendly + ghost results")
 	var ghost_result: TargetingListBuilder.ShipTargetingResult = results[1]
@@ -271,9 +273,9 @@ func test_build_long_range_only_red_dice() -> void:
 	# ~600px apart (edges are at ~565 and ~335 → distance ~530 → medium).
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 200), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	if ship_result.outgoing.size() > 0:
 		var entry: TargetingListBuilder.TargetEntry = ship_result.outgoing[0]
 		# At medium range, black dice should be excluded.
@@ -293,11 +295,11 @@ func test_build_marks_obstructed_when_intervening_ship() -> void:
 			"Blocker", 0, Vector2(500, 500), 0.0)
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 350), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, blocker, enemy], [], 0)
 	# Find the CR90's outgoing targets.
 	var cr90_result: TargetingListBuilder.ShipTargetingResult = null
-	for r: Variant in results:
+	for r: Variant in build_result.ship_results:
 		var sr: TargetingListBuilder.ShipTargetingResult = r as TargetingListBuilder.ShipTargetingResult
 		if sr.ship_name == "CR90":
 			cr90_result = sr
@@ -341,11 +343,11 @@ func test_build_only_includes_active_player_ships() -> void:
 			"CR90", 0, Vector2(500, 500), 0.0)
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 350), 0.0)
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
 	# Only friendly ship should appear as a result.
-	assert_eq(results.size(), 1, "Only 1 result for active player")
-	var sr: TargetingListBuilder.ShipTargetingResult = results[0]
+	assert_eq(build_result.ship_results.size(), 1, "Only 1 result for active player")
+	var sr: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	assert_eq(sr.ship_name, "CR90", "Only the friendly ship is listed")
 
 
@@ -364,10 +366,10 @@ func test_squadron_target_uses_anti_squadron_dice() -> void:
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"X-wing", 1, Vector2(500, 420))
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — dice should be anti-squadron (1 blue) not battery (3 red, 1 blue).
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var squad_entry: TargetingListBuilder.TargetEntry = null
 	for entry: Variant in ship_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
@@ -393,10 +395,10 @@ func test_squadron_target_no_anti_squadron_armament_excluded() -> void:
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"X-wing", 1, Vector2(500, 420))
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — no squadron target since anti-squadron armament is empty.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found_squad: bool = false
 	for entry: Variant in ship_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
@@ -420,10 +422,10 @@ func test_squadron_target_max_range_uses_anti_squadron() -> void:
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"X-wing", 1, Vector2(500, 400))
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — should still find the squadron (within medium = anti-sq max).
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found: bool = false
 	for entry: Variant in ship_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
@@ -445,10 +447,10 @@ func test_incoming_threats_includes_enemy_squadron_at_close() -> void:
 			"TIE Fighter", 1, Vector2(500, 450))
 	squad.battery_armament = {"BLUE": 1}
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — squadron should appear as incoming threat.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found_threat: bool = false
 	for entry: Variant in ship_result.incoming:
 		var te: TargetingListBuilder.ThreatEntry = entry as TargetingListBuilder.ThreatEntry
@@ -469,10 +471,10 @@ func test_incoming_threats_excludes_squadron_beyond_distance_1() -> void:
 			"TIE Fighter", 1, Vector2(500, 50))
 	squad.battery_armament = {"BLUE": 1}
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — squadron too far, should not appear as threat.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found_threat: bool = false
 	for entry: Variant in ship_result.incoming:
 		var te: TargetingListBuilder.ThreatEntry = entry as TargetingListBuilder.ThreatEntry
@@ -490,10 +492,10 @@ func test_incoming_threats_excludes_squadron_without_battery() -> void:
 			"TIE Fighter", 1, Vector2(500, 450))
 	# battery_armament stays empty (default).
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — no threat since the squadron has no battery armament.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found_threat: bool = false
 	for entry: Variant in ship_result.incoming:
 		var te: TargetingListBuilder.ThreatEntry = entry as TargetingListBuilder.ThreatEntry
@@ -511,10 +513,10 @@ func test_incoming_threats_excludes_friendly_squadron() -> void:
 			"X-wing", 0, Vector2(500, 450))  # same player
 	squad.battery_armament = {"RED": 1}
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — friendly squadron should not be a threat.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found_threat: bool = false
 	for entry: Variant in ship_result.incoming:
 		var te: TargetingListBuilder.ThreatEntry = entry as TargetingListBuilder.ThreatEntry
@@ -539,10 +541,10 @@ func test_squadron_target_found_even_when_battery_empty() -> void:
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"X-wing", 1, Vector2(500, 420))
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — squadron should still appear (anti-sq is global, not per zone).
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found: bool = false
 	for entry: Variant in ship_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
@@ -572,11 +574,11 @@ func test_range_measurement_uses_circle_edge() -> void:
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
 			"X-wing", 1, Vector2(500, 270))
 	# Act
-	var results: Array = TargetingListBuilder.build(
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly], [squad], 0)
 	# Assert — with old sampling (centre=195px → medium → beyond black max),
 	# this would fail.  Analytical closest (edge=180px → close) should pass.
-	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
 	var found: bool = false
 	for entry: Variant in ship_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
@@ -584,3 +586,253 @@ func test_range_measurement_uses_circle_edge() -> void:
 			found = true
 	assert_true(found,
 			"Squadron should be found when edge is in range (analytical closest)")
+
+
+# =========================================================================
+# build() returns BuildResult (TL-LIST-014)
+# =========================================================================
+
+func test_build_returns_build_result() -> void:
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"CR90", 0, Vector2(500, 500), 0.0)
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[friendly], [], 0)
+	assert_not_null(build_result, "build() should return a BuildResult")
+	assert_eq(build_result.ship_results.size(), 1,
+			"ship_results should have 1 entry")
+	assert_eq(build_result.squad_results.size(), 0,
+			"squad_results should be empty when no friendly squads")
+
+
+# =========================================================================
+# Ship → ship: target_zone populated (TL-LIST-013, AC-TL-34, AC-TL-35)
+# =========================================================================
+
+func test_ship_target_has_target_zone() -> void:
+	# Arrange — friendly facing up, enemy directly ahead.
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"CR90", 0, Vector2(500, 600), 0.0)
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 400), 0.0)
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[friendly, enemy], [], 0)
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
+	# Assert — ship targets should have has_target_zone = true.
+	assert_gt(ship_result.outgoing.size(), 0,
+			"Should have at least one outgoing target")
+	for entry: Variant in ship_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		assert_true(te.has_target_zone,
+				"Ship target entry should have has_target_zone = true")
+
+
+func test_ship_target_multiple_defending_zones() -> void:
+	# Arrange — friendly facing up, enemy directly ahead at close range.
+	# At close range, multiple defending hull zones may be reachable.
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"CR90", 0, Vector2(500, 570), 0.0)
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 420), 0.0)
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[friendly, enemy], [], 0)
+	var ship_result: TargetingListBuilder.ShipTargetingResult = build_result.ship_results[0]
+	# Count ISD entries from the FRONT arc — may have multiple defending zones.
+	var isd_from_front: Array = []
+	for entry: Variant in ship_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "ISD" and te.arc == Constants.HullZone.FRONT:
+			isd_from_front.append(te)
+	# At close range, the FRONT arc should see at least the REAR hull zone.
+	assert_gt(isd_from_front.size(), 0,
+			"Should have at least one ISD entry from FRONT arc")
+	# Each entry should have a distinct target_zone.
+	var seen_zones: Dictionary = {}
+	for entry: Variant in isd_from_front:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		assert_true(te.has_target_zone,
+				"Ship target should have has_target_zone")
+		seen_zones[te.target_zone] = true
+	# There should be at least 1 defending zone visible.
+	assert_gte(seen_zones.size(), 1,
+			"Should see at least 1 defending hull zone from FRONT arc")
+
+
+# =========================================================================
+# Squadron outgoing targets (TL-LIST-011, AC-TL-30–32)
+# =========================================================================
+
+func test_squad_targets_enemy_ship_at_distance_1() -> void:
+	# Arrange — friendly squadron near enemy ship.
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 500), 0.0)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 450))
+	squad.battery_armament = {"BLUE": 1}
+	squad.anti_squadron_armament = {"BLUE": 3}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy], [squad], 0)
+	# Assert — the friendly squadron should appear in squad_results.
+	assert_eq(build_result.squad_results.size(), 1,
+			"Should have 1 squadron result")
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	assert_eq(sq_result.squad_name, "X-wing", "Squadron name")
+	# Should find the enemy ship as a target (at distance 1).
+	var found_ship: bool = false
+	for entry: Variant in sq_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "ISD":
+			found_ship = true
+			assert_eq(te.range_band, "in range",
+					"Squadron→ship range should be 'in range'")
+			assert_eq(te.dice.get("BLUE", 0), 1,
+					"Should use battery_armament dice (1 blue)")
+	assert_true(found_ship, "Should find enemy ship as target")
+
+
+func test_squad_targets_enemy_squadron_at_distance_1() -> void:
+	# Arrange — friendly squadron near enemy squadron.
+	var f_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 500))
+	f_squad.anti_squadron_armament = {"BLUE": 3}
+	f_squad.battery_armament = {"BLUE": 1}
+	var e_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"TIE", 1, Vector2(500, 480))
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[], [f_squad, e_squad], 0)
+	# Assert
+	assert_eq(build_result.squad_results.size(), 1,
+			"Should have 1 squadron result for friendly")
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	var found_squad: bool = false
+	for entry: Variant in sq_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "TIE":
+			found_squad = true
+			assert_eq(te.dice.get("BLUE", 0), 3,
+					"Should use anti_squadron_armament dice (3 blue)")
+	assert_true(found_squad, "Should find enemy squadron as target")
+
+
+func test_squad_no_target_when_beyond_distance_1() -> void:
+	# Arrange — friendly squadron far from enemy ship.
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 100), 0.0)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 500))
+	squad.battery_armament = {"BLUE": 1}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy], [squad], 0)
+	# Assert — no targets since ship is far away.
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	assert_eq(sq_result.outgoing.size(), 0,
+			"No outgoing targets when beyond distance 1")
+
+
+func test_squad_no_target_when_no_armament() -> void:
+	# Arrange — friendly squadron near enemy but no battery armament.
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 500), 0.0)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 450))
+	# No battery_armament or anti_squadron_armament set (default empty).
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy], [squad], 0)
+	# Assert
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	assert_eq(sq_result.outgoing.size(), 0,
+			"No targets when squadron has no armament")
+
+
+# =========================================================================
+# Squadron incoming threats (TL-LIST-012, AC-TL-33)
+# =========================================================================
+
+func test_squad_incoming_threat_from_enemy_ship() -> void:
+	# Arrange — friendly squadron in range of enemy ship's anti-sq armament.
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 500), 0.0,
+			{"FRONT": {"RED": 3}, "LEFT": {}, "RIGHT": {}, "REAR": {}},
+			{"BLUE": 2})
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 420))
+	squad.battery_armament = {"BLUE": 1}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy], [squad], 0)
+	# Assert — the enemy ship should appear as an incoming threat.
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	var found_threat: bool = false
+	for threat: Variant in sq_result.incoming:
+		var te: TargetingListBuilder.ThreatEntry = threat as TargetingListBuilder.ThreatEntry
+		if te.enemy_name == "ISD":
+			found_threat = true
+	assert_true(found_threat,
+			"Enemy ship with anti-sq armament in arc is a threat to squadron")
+
+
+func test_squad_incoming_threat_from_enemy_squadron() -> void:
+	# Arrange — enemy squadron near friendly squadron.
+	var f_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 500))
+	f_squad.battery_armament = {"BLUE": 1}
+	var e_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"TIE", 1, Vector2(500, 480))
+	e_squad.anti_squadron_armament = {"BLUE": 3}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[], [f_squad, e_squad], 0)
+	# Assert — enemy squadron should be an incoming threat.
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	var found_threat: bool = false
+	for threat: Variant in sq_result.incoming:
+		var te: TargetingListBuilder.ThreatEntry = threat as TargetingListBuilder.ThreatEntry
+		if te.enemy_name == "TIE":
+			found_threat = true
+			assert_eq(te.range_band, "in range",
+					"Squadron threat band should be 'in range'")
+	assert_true(found_threat,
+			"Enemy squadron at distance 1 is a threat")
+
+
+func test_squad_no_incoming_threat_when_enemy_squad_far() -> void:
+	# Arrange — enemy squadron too far away.
+	var f_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 500))
+	f_squad.battery_armament = {"BLUE": 1}
+	var e_squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"TIE", 1, Vector2(500, 100))
+	e_squad.anti_squadron_armament = {"BLUE": 3}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[], [f_squad, e_squad], 0)
+	# Assert
+	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
+	assert_eq(sq_result.incoming.size(), 0,
+			"No threats when enemy squadron is far away")
+
+
+# =========================================================================
+# _measure_squad_to_squad_distance
+# =========================================================================
+
+func test_measure_squad_to_squad_distance_overlapping() -> void:
+	var sq_a: TargetingListBuilder.SquadInfo = _make_squad("A", 0, Vector2(100, 100))
+	var sq_b: TargetingListBuilder.SquadInfo = _make_squad("B", 1, Vector2(110, 100))
+	# Centre distance = 10, radii = 15+15 = 30. Overlap → distance = 0.
+	var dist: float = TargetingListBuilder._measure_squad_to_squad_distance(sq_a, sq_b)
+	assert_eq(dist, 0.0, "Overlapping squadrons should have 0 distance")
+
+
+func test_measure_squad_to_squad_distance_separated() -> void:
+	var sq_a: TargetingListBuilder.SquadInfo = _make_squad("A", 0, Vector2(100, 100))
+	var sq_b: TargetingListBuilder.SquadInfo = _make_squad("B", 1, Vector2(200, 100))
+	# Centre distance = 100, radii = 15+15 = 30. Edge dist = 70.
+	var dist: float = TargetingListBuilder._measure_squad_to_squad_distance(sq_a, sq_b)
+	assert_almost_eq(dist, 70.0, 0.1,
+			"Separated squadrons edge distance should be ~70")

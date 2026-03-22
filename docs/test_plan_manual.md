@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 54 scripts, 933 tests, 1776 asserts — all passing.
+> **Current baseline:** 55 scripts, 949 tests, 1793 asserts — all passing.
 
 ---
 
@@ -1575,3 +1575,58 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 ---
 
 *Last updated: Phase 4g — Fixed round-1 commands for the learning scenario.*
+
+---
+
+## Phase 2c — Relaxed Deployment Zones (Debug Mode)
+
+**Requirements covered:** DBG-032 (revised), DBG-033, DBG-034
+**Automated tests:** 16 new tests in `test_relaxed_deploy_zones.gd` — TokenMover zone bypass, is_in_deploy_zone checks, play area + collision still enforced.
+
+### MT-2c.1 — Ship crosses deployment zone in debug mode
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch game board with `--debug-mode` (F12 or CLI) | DEBUG label and blue deployment lines visible |
+| 2 | Click an Imperial ship token to select it | Token follows mouse |
+| 3 | Drag the ship below the top blue deployment line | Ship moves freely past the line — no clamping |
+| 4 | Observe toast notification | "CR90 Corvette A is outside deployment zone" (or ship name) toast appears briefly |
+| 5 | Drag the ship back above the line | No toast — token re-entered zone |
+| 6 | Drag below again | Toast fires again (one-shot per crossing) |
+
+### MT-2c.2 — Squadron crosses deployment zone in debug mode
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a Rebel squadron in debug mode | Token follows mouse |
+| 2 | Drag it above the bottom blue deployment line | Squadron crosses freely |
+| 3 | Observe toast | Toast shows squadron name + "outside deployment zone" |
+
+### MT-2c.3 — Token-token collision still enforced
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Drag a ship into another ship (outside deployment zone) | Ship is pushed away from the blocker — collision resolution still works |
+| 2 | Drag a squadron into a ship | Same push-out behaviour |
+
+### MT-2c.4 — Play area boundary still enforced
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Drag a token toward the edge of the play area | Token stops at the play area boundary — cannot exit |
+
+### MT-2c.5 — Zone enforcement in non-debug mode (future)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Disable debug mode (F12) | Debug HUD disappears, deployment zone lines hidden |
+| 2 | Note: Token dragging is only available in debug mode | This test validates that the `enforce_deploy_zones` default is `true` — covered by GUT |
+
+### MT-2c.6 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 949 tests, 55 scripts, 0 failures |
+| 2 | All previous manual tests still pass | No regression in existing debug mode features |
+
+**Pass criteria:** Tokens cross deployment zone freely in debug mode; toast fires once per crossing; collision + play area boundaries still enforced; 949 tests pass.

@@ -142,6 +142,10 @@ var _activation_modal: ActivationModal = null
 ## Requirements: FLOW-004.
 var _ship_activation_state: ShipActivationState = null
 
+## Tracks whether the currently dragged token was inside its deployment zone
+## on the previous frame, so the toast fires only on crossing (DBG-033).
+var _was_in_deploy_zone: bool = true
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -478,6 +482,7 @@ func _on_token_clicked(token: ShipToken) -> void:
 		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
+		_was_in_deploy_zone = true
 	else:
 		EventBus.element_selected.emit(token)
 
@@ -486,6 +491,7 @@ func _on_token_clicked(token: ShipToken) -> void:
 func _on_squadron_clicked(token: SquadronToken) -> void:
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
+		_was_in_deploy_zone = true
 	else:
 		EventBus.element_selected.emit(token)
 
@@ -561,7 +567,9 @@ func _handle_debug_rotate(event: InputEventMagnifyGesture) -> void:
 
 
 ## Moves the currently selected token toward the mouse with collision resolution.
-## DBG-011, DBG-020, DBG-021, DBG-032
+## In debug mode, deployment zone constraints are advisory (DBG-032 revised).
+## A toast fires when the dragged token crosses outside its zone (DBG-033).
+## DBG-011, DBG-020, DBG-032, DBG-033
 func _move_selected_token_to_mouse() -> void:
 	var token: Node2D = DebugMode.selected_token
 	if token == null:
@@ -570,18 +578,27 @@ func _move_selected_token_to_mouse() -> void:
 	var side: float = GameScale.play_area_side_px
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
+	var enforce_zones: bool = not DebugMode.enabled
 
 	if token is ShipToken:
-		_move_ship_token(token as ShipToken, mouse_world, side, top_y, bottom_y)
+		_move_ship_token(
+				token as ShipToken, mouse_world, side,
+				top_y, bottom_y, enforce_zones)
 	elif token is SquadronToken:
 		_move_squadron_token(
-				token as SquadronToken, mouse_world, side, top_y, bottom_y)
+				token as SquadronToken, mouse_world, side,
+				top_y, bottom_y, enforce_zones)
+
+	# Check zone crossing for toast warning (debug mode only).
+	if DebugMode.enabled:
+		_check_zone_crossing_toast(token, top_y, bottom_y)
 
 
 ## Resolves and applies position for a ship token.
+## DBG-032, DBG-034 — enforce_zones=false in debug mode.
 func _move_ship_token(
 		token: ShipToken, desired: Vector2, side: float,
-		top_y: float, bottom_y: float
+		top_y: float, bottom_y: float, enforce_zones: bool
 ) -> void:
 	var other_ships: Array = _build_other_ship_rects(token)
 	var other_squads: Array = _build_other_squad_circles(token)
@@ -590,14 +607,15 @@ func _move_ship_token(
 			token.get_ship_size(), token.rotation,
 			token.get_faction(),
 			other_ships, other_squads,
-			top_y, bottom_y, side)
+			top_y, bottom_y, side, enforce_zones)
 	token.position = new_pos
 
 
 ## Resolves and applies position for a squadron token.
+## DBG-032, DBG-034 — enforce_zones=false in debug mode.
 func _move_squadron_token(
 		token: SquadronToken, desired: Vector2, side: float,
-		top_y: float, bottom_y: float
+		top_y: float, bottom_y: float, enforce_zones: bool
 ) -> void:
 	var other_ships: Array = _build_other_ship_rects(token)
 	var other_squads: Array = _build_other_squad_circles(token)
@@ -605,8 +623,33 @@ func _move_squadron_token(
 			desired, token.position,
 			token.get_radius_px(), token.get_faction(),
 			other_ships, other_squads,
-			top_y, bottom_y, side)
+			top_y, bottom_y, side, enforce_zones)
 	token.position = new_pos
+
+
+## Checks if a dragged token just crossed outside its deployment zone and
+## shows a one-shot toast warning. Resets when the token re-enters.
+## DBG-033 — advisory toast on zone crossing in debug mode.
+func _check_zone_crossing_toast(
+		token: Node2D, top_y: float, bottom_y: float
+) -> void:
+	var faction: Constants.Faction = Constants.Faction.GALACTIC_EMPIRE
+	var token_name: String = token.name
+	if token is ShipToken:
+		faction = (token as ShipToken).get_faction()
+		var data: ShipData = (token as ShipToken).get_ship_data()
+		if data != null:
+			token_name = data.ship_name
+	elif token is SquadronToken:
+		faction = (token as SquadronToken).get_faction()
+		token_name = token.name
+	var in_zone: bool = DeploymentZoneOverlay.is_in_deploy_zone(
+			token.position.y, faction)
+	if _was_in_deploy_zone and not in_zone:
+		TooltipManager.show_text(
+				"%s is outside deployment zone" % token_name,
+				Vector2.INF, 3.0)
+	_was_in_deploy_zone = in_zone
 
 
 ## Builds collision descriptors for all ship tokens except [exclude].

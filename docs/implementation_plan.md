@@ -331,6 +331,26 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 
 ---
 
+### Phase 2c: Debug Mode — Relaxed Deployment Zones ✅
+**Goal:** Allow tokens to be dragged outside their deployment zone in debug mode (advisory-only zone boundaries). Show a toast warning when a dragged token leaves its zone. Preserve all zone validation logic for full-game enforcement later.
+**Prerequisites:** Phase 2b (debug token placement, deployment zone overlay, TokenMover)
+**Duration estimate:** 1 session
+
+| Task | Layer | Requirements | Deliverables |
+|------|-------|-------------|--------------|
+| Add `enforce_deploy_zones` flag to `TokenMover` resolve methods | Core | DBG-032 (revised), DBG-034 | Modify `resolve_ship_position()` + `resolve_squadron_position()` ✅ |
+| Skip zone clamping in push-out collection when flag is false | Core | DBG-032, DBG-034 | Modify `_collect_ship_pushouts()` + `_collect_circle_pushouts()` ✅ |
+| Pass `enforce_deploy_zones = false` from `game_board.gd` in debug mode | Application | DBG-032 | Modify `_move_ship_token()` + `_move_squadron_token()` ✅ |
+| Add `is_in_deploy_zone()` static helper to `DeploymentZoneOverlay` | Presentation | DBG-033 | New method: checks Y position against faction zone boundary ✅ |
+| Toast warning on zone crossing during debug drag | Presentation | DBG-033 | In `_move_selected_token_to_mouse()`: detect crossing, fire `TooltipManager.show_text()` ✅ |
+| Track "was in zone" state to fire toast only on crossing | Presentation | DBG-033 | `_was_in_deploy_zone: bool` flag in `game_board.gd` ✅ |
+| Unit tests for relaxed zone movement + toast trigger | Test | DBG-032–034 | `tests/unit/test_relaxed_deploy_zones.gd` (16 tests) ✅ |
+
+**Requirements covered:** DBG-032 (revised), DBG-033, DBG-034
+**Tests delivered:** 16 new (949 total, 55 scripts, 1793 asserts — all passing)
+
+---
+
 ### Phase 3: Game State Wiring ✅
 **Status:** Complete — 486 tests passing (29 scripts, 1034 asserts)
 **Goal:** Wire `GameState`/`PlayerState` core to visual tokens. Initialize the Learning Scenario.

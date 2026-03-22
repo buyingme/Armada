@@ -34,6 +34,25 @@ static func get_bottom_line_y() -> float:
 	return GameScale.play_area_side_px - GameScale.distance_bands_px[2]
 
 
+## Returns true if [param pos_y] is within the deployment zone for [param faction].
+## Imperial zone: top edge (0) up to top_line_y.
+## Rebel zone: bottom_line_y down to bottom edge (play_area_side_px).
+## Returns true (in zone) if deployment zones are not loaded.
+## DBG-033 — used to detect zone crossings for toast warnings.
+static func is_in_deploy_zone(pos_y: float, faction: Constants.Faction) -> bool:
+	var top_y: float = get_top_line_y()
+	var bottom_y: float = get_bottom_line_y()
+	if top_y < 0.0 or bottom_y < 0.0:
+		return true
+	match faction:
+		Constants.Faction.GALACTIC_EMPIRE:
+			return pos_y <= top_y
+		Constants.Faction.REBEL_ALLIANCE:
+			return pos_y >= bottom_y
+		_:
+			return true
+
+
 func _draw() -> void:
 	var side: float = GameScale.play_area_side_px
 	if side <= 0.0:

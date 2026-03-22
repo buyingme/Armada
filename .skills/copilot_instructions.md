@@ -245,3 +245,32 @@ These are subtle bugs actually encountered in this project:
 | Forgetting `static` on utility class method | `Method not found in base 'RefCounted'` at runtime | All methods in a static utility class must carry the `static` keyword |
 | `match` arm body indented at wrong level | Parse error or wrong arm executes | Each arm body must be exactly one tab deeper than the arm label |
 | GUT `-gexit` required in 9.5.0 | Headless process never terminates without it — tests run but the shell hangs | Always use `-gexit 2>&1 \| tail -20`; output IS visible through the pipe |
+| Multi-line `git commit -m` in terminal tool | Zsh garbles multi-line quoted strings passed via the terminal tool — produces `cmdand dquote>` artifacts, duplicated fragments, or truncated messages | **Never** use `git commit -m` with multi-line messages. Always write the message to a temp file first, then commit with `-F`. See the Git Commit section below |
+
+---
+
+## Git Commits
+
+The terminal tool struggles with multi-line quoted strings. Commits **must** follow this pattern:
+
+### Procedure
+
+1. **Write message to a temp file** using `printf` (not heredoc — heredocs can also have issues with the terminal tool):
+   ```bash
+   printf 'feat(core): implement targeting list tool (Phase 5d)\n\nShort body line 1.\nShort body line 2.\nTests: 916 (53 scripts, 1741 asserts).' > /tmp/commit_msg.txt
+   ```
+2. **Stage and commit** in the same command:
+   ```bash
+   git add -A && git commit -F /tmp/commit_msg.txt
+   ```
+3. **Verify** with `git log --oneline -1`.
+
+### Rules
+
+- **Never** use `git commit -m "..."` with multi-line messages.
+- **Never** use heredoc (`<< 'EOF'`) — it can also get garbled.
+- Use `printf` with `\n` for newlines — it's the most reliable method.
+- Keep commit messages concise: one subject line + 2-4 body lines max.
+- Follow Conventional Commits: `feat|fix|test|docs|refactor(scope): subject`
+- Include test count in the body: `Tests: NNN (SS scripts, AAA asserts).`
+- For single-line messages, `git commit -m "feat(scope): subject"` is fine.

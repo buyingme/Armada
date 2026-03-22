@@ -167,3 +167,21 @@ test(dice): add unit tests for damage calculation
 fix(combat): correct critical hit detection on black dice
 docs(arc42): complete building block view level 2
 ```
+
+### How to Commit (Terminal Tool)
+
+The terminal tool garbles multi-line quoted strings. **Always** use a temp file:
+
+```bash
+# 1. Write message with printf (\n for newlines)
+printf 'feat(scope): subject line\n\nBody line 1.\nBody line 2.\nTests: NNN (SS scripts, AAA asserts).' > /tmp/commit_msg.txt
+
+# 2. Stage + commit
+git add -A && git commit -F /tmp/commit_msg.txt
+
+# 3. Verify
+git log --oneline -1
+```
+
+**Never** use `git commit -m` with multi-line messages. **Never** use heredocs.
+Single-line messages with `git commit -m "..."` are fine.

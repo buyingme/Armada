@@ -184,21 +184,22 @@ static func _build_ship_entry(
 	]
 	for zone: int in zones:
 		var hz: Constants.HullZone = zone as Constants.HullZone
-		var armament: Dictionary = friendly.battery_armament.get(
-				_hz_key(hz), {})
-		if armament.is_empty():
-			continue
 		var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
 				friendly.pos, friendly.rot,
 				friendly.half_w, friendly.half_l, hz)
-		# Ship targets.
-		for enemy: Variant in enemy_ships:
-			var es: ShipInfo = enemy as ShipInfo
-			var entry: TargetEntry = _check_ship_target(
-					friendly, hz, atk_edge, armament, es, all_ship_bodies)
-			if entry != null:
-				result.outgoing.append(entry)
+		# Ship targets (need battery armament for this hull zone).
+		var armament: Dictionary = friendly.battery_armament.get(
+				_hz_key(hz), {})
+		if not armament.is_empty():
+			for enemy: Variant in enemy_ships:
+				var es: ShipInfo = enemy as ShipInfo
+				var entry: TargetEntry = _check_ship_target(
+						friendly, hz, atk_edge, armament, es, all_ship_bodies)
+				if entry != null:
+					result.outgoing.append(entry)
 		# Squadron targets — use anti-squadron armament for dice/range.
+		# Anti-squadron armament is global (not per hull zone) so we check
+		# even if this hull zone has no battery armament.
 		# Requirements: TL-RNG-007, AC-TL-20, AC-TL-21.
 		var anti_sq: Dictionary = friendly.anti_squadron_armament
 		for squad: Variant in enemy_squads:
@@ -332,8 +333,10 @@ static func _check_squadron_target(
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = squad.squad_name
 	entry.arc = atk_zone
-	entry.range_band = band
+	# Compute dice using the measured band, then override range_band
+	# for display — squadrons have a single engagement range.
 	entry.dice = RangeFinder.dice_at_range(anti_sq_armament, band)
+	entry.range_band = "in range"
 	entry.obstructed = los_result.obstructed
 	entry.obstructed_by = los_result.obstructed_by
 	return entry
@@ -436,7 +439,7 @@ static func _build_incoming_threats(
 		threat.friendly_name = friendly.ship_name
 		threat.enemy_name = sq.squad_name
 		threat.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
-		threat.range_band = band
+		threat.range_band = "in range"
 		threat.obstructed = false
 		threats.append(threat)
 	return threats

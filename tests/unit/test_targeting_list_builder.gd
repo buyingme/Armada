@@ -379,6 +379,8 @@ func test_squadron_target_uses_anti_squadron_dice() -> void:
 				"Anti-squadron dice: 1 blue")
 		assert_false(squad_entry.dice.has("RED"),
 				"Anti-squadron armament has no red dice")
+		assert_eq(squad_entry.range_band, "in range",
+				"Squadron target text should say 'in range'")
 
 
 func test_squadron_target_no_anti_squadron_armament_excluded() -> void:
@@ -452,8 +454,8 @@ func test_incoming_threats_includes_enemy_squadron_at_close() -> void:
 		var te: TargetingListBuilder.ThreatEntry = entry as TargetingListBuilder.ThreatEntry
 		if te.enemy_name == "TIE Fighter":
 			found_threat = true
-			assert_eq(te.range_band, "close",
-					"Squadron threat should be at close range")
+			assert_eq(te.range_band, "in range",
+					"Squadron threat should say 'in range'")
 	assert_true(found_threat,
 			"Enemy squadron at close range is an incoming threat")
 
@@ -520,3 +522,65 @@ func test_incoming_threats_excludes_friendly_squadron() -> void:
 			found_threat = true
 	assert_false(found_threat,
 			"Friendly squadron should not appear as an incoming threat")
+
+
+# =========================================================================
+# Anti-squadron from empty-battery hull zone (arc still valid)
+# =========================================================================
+
+func test_squadron_target_found_even_when_battery_empty() -> void:
+	# Arrange — ship with empty FRONT battery but valid anti-sq armament.
+	var battery: Dictionary = {
+		"FRONT": {}, "LEFT": {}, "RIGHT": {}, "REAR": {},
+	}
+	var anti_sq: Dictionary = {"BLUE": 1}
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"VSD", 0, Vector2(500, 500), 0.0, battery, anti_sq)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 1, Vector2(500, 420))
+	# Act
+	var results: Array = TargetingListBuilder.build(
+			[friendly], [squad], 0)
+	# Assert — squadron should still appear (anti-sq is global, not per zone).
+	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var found: bool = false
+	for entry: Variant in ship_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "X-wing":
+			found = true
+	assert_true(found,
+			"Squadron target found even when hull zone battery is empty")
+
+
+# =========================================================================
+# Range measurement uses circle edge, not centre (analytical closest point)
+# =========================================================================
+
+func test_range_measurement_uses_circle_edge() -> void:
+	# Arrange — place squadron so its CENTRE is beyond close range (181px)
+	# but its EDGE is within close range.  With black-only anti-sq the max
+	# range is close, so the squadron must be found if measured correctly.
+	# Ship front edge is at y = 500 - 35 = 465.
+	# Squadron centre at y = 270 → centre distance = 465 - 270 = 195px (medium).
+	# Edge distance = 195 - 15 = 180px (close, ≤ 181px).
+	var battery: Dictionary = {
+		"FRONT": {"RED": 1}, "LEFT": {}, "RIGHT": {}, "REAR": {},
+	}
+	var anti_sq: Dictionary = {"BLACK": 1}
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"VSD", 0, Vector2(500, 500), 0.0, battery, anti_sq)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 1, Vector2(500, 270))
+	# Act
+	var results: Array = TargetingListBuilder.build(
+			[friendly], [squad], 0)
+	# Assert — with old sampling (centre=195px → medium → beyond black max),
+	# this would fail.  Analytical closest (edge=180px → close) should pass.
+	var ship_result: TargetingListBuilder.ShipTargetingResult = results[0]
+	var found: bool = false
+	for entry: Variant in ship_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "X-wing":
+			found = true
+	assert_true(found,
+			"Squadron should be found when edge is in range (analytical closest)")

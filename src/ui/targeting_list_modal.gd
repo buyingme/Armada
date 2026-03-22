@@ -158,14 +158,24 @@ func _build_ship_section(
 
 
 ## Adds a target line: "<Name> at <range> range of <ARC> arc (<dice>) [— obstructed]"
+## For squadron targets where range_band == "in range", uses "in range of <ARC>"
+## instead of "at <band> range of <ARC>".
 ## Requirements: TL-LIST-006, TL-UI-006.
 func _add_target_line(entry: TargetingListBuilder.TargetEntry) -> void:
-	var text: String = "    %s at %s range of %s arc (%s)" % [
-		entry.target_name,
-		entry.range_band,
-		_hz_display(entry.arc),
-		RangeFinder.format_dice(entry.dice),
-	]
+	var text: String
+	if entry.range_band == "in range":
+		text = "    %s in range of %s arc (%s)" % [
+			entry.target_name,
+			_hz_display(entry.arc),
+			RangeFinder.format_dice(entry.dice),
+		]
+	else:
+		text = "    %s at %s range of %s arc (%s)" % [
+			entry.target_name,
+			entry.range_band,
+			_hz_display(entry.arc),
+			RangeFinder.format_dice(entry.dice),
+		]
 	if entry.obstructed:
 		text += " — obstructed"
 	var label: Label = Label.new()
@@ -178,14 +188,20 @@ func _add_target_line(entry: TargetingListBuilder.TargetEntry) -> void:
 
 
 ## Adds a threat line: "<Friendly> is at <range> range of <Enemy>'s <ARC> arc"
+## For squadron threats where range_band == "in range", uses
+## "<Enemy> is in range" instead.
 ## Requirements: TL-LIST-007.
 func _add_threat_line(threat: TargetingListBuilder.ThreatEntry) -> void:
-	var text: String = "    %s is at %s range of %s's %s arc" % [
-		threat.friendly_name,
-		threat.range_band,
-		threat.enemy_name,
-		_hz_display(threat.arc),
-	]
+	var text: String
+	if threat.range_band == "in range":
+		text = "    %s is in range" % threat.enemy_name
+	else:
+		text = "    %s is at %s range of %s's %s arc" % [
+			threat.friendly_name,
+			threat.range_band,
+			threat.enemy_name,
+			_hz_display(threat.arc),
+		]
 	if threat.obstructed:
 		text += " — obstructed"
 	var label: Label = Label.new()
@@ -226,7 +242,7 @@ func _range_colour(band: String, is_obstructed: bool) -> Color:
 	if is_obstructed:
 		return Color(0.95, 0.7, 0.3)  # orange
 	match band:
-		Constants.RANGE_BAND_CLOSE:
+		Constants.RANGE_BAND_CLOSE, "in range":
 			return Color(0.8, 0.8, 0.8)  # grey/white
 		Constants.RANGE_BAND_MEDIUM:
 			return Color(0.5, 0.7, 1.0)  # blue

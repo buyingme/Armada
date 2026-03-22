@@ -265,6 +265,10 @@ static func measure_attack_range_ship(
 ## Measures the attack range from a hull zone to a squadron base,
 ## considering ONLY the squadron portion inside the firing arc.
 ## Returns the pixel distance, or INF if no portion is inside the arc.
+##
+## Uses analytical closest-point computation first, then falls back to
+## dense sampling for arc-boundary cases.  Also checks from attack-edge
+## endpoints toward the closest in-arc circle point (bidirectional).
 ## Requirements: TL-RNG-002.
 static func measure_attack_range_squadron(
 		atk_edge: Array[Vector2],
@@ -273,13 +277,23 @@ static func measure_attack_range_squadron(
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> float:
 	var best: float = INF
-	# Sample points on the circle edge; keep only those inside the arc.
-	var sample_count: int = 16
-	var pts: Array[Vector2] = [squad_centre]
+	# --- Analytical closest point (optimal for common case) ---
+	# 1. Closest point on attack edge to the squadron centre.
+	# 2. Closest point on circle edge to that edge point.
+	# If the circle point is inside the arc this is the exact minimum.
+	var cp_on_edge: Vector2 = closest_point_on_segment(
+			squad_centre, atk_edge[0], atk_edge[1])
+	var cp_on_circle: Vector2 = closest_point_on_circle(
+			cp_on_edge, squad_centre, squad_radius)
+	if is_point_in_arc(cp_on_circle, atk_zone, atk_arc_pts):
+		return cp_on_edge.distance_to(cp_on_circle)
+	# --- Sampling fallback for arc-boundary cases ---
+	# Only edge points (not centre — the centre is interior to the base
+	# and always yields a distance that is squad_radius too large).
+	var sample_count: int = 32
 	for i: int in range(sample_count):
 		var angle: float = float(i) * TAU / float(sample_count)
-		pts.append(squad_centre + Vector2(squad_radius, 0.0).rotated(angle))
-	for pt: Vector2 in pts:
+		var pt: Vector2 = squad_centre + Vector2(squad_radius, 0.0).rotated(angle)
 		if not is_point_in_arc(pt, atk_zone, atk_arc_pts):
 			continue
 		var cp: Vector2 = closest_point_on_segment(
@@ -287,6 +301,15 @@ static func measure_attack_range_squadron(
 		var d: float = cp.distance_to(pt)
 		if d < best:
 			best = d
+	# Reverse direction: attack-edge endpoints → closest in-arc circle point.
+	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
+		var cp_c: Vector2 = closest_point_on_circle(
+				atk_pt, squad_centre, squad_radius)
+		if not is_point_in_arc(cp_c, atk_zone, atk_arc_pts):
+			continue
+		var d2: float = atk_pt.distance_to(cp_c)
+		if d2 < best:
+			best = d2
 	return best
 
 

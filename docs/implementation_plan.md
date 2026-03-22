@@ -728,7 +728,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 7 | GameBoard wiring | Presentation | RO-002, RO-007 | Ship selection mode → show overlay; toggle/dismiss via R press or Escape | ✅ |
 | 8 | Tests | Test | RO-T-01 | `test_ship_data.gd` (+4 overlay field parsing tests) | ✅ |
 
-**Requirements covered:** RO-001–RO-007, RO-DATA-01/02/03, RO-T-01
+**Requirements covered:** RO-001–RO-007, RO-008 (keyboard shortcut), RO-DATA-01/02/03, RO-T-01
 **Tests:** 862 cumulative (50 scripts, 1653 asserts)
 
 ---
@@ -752,6 +752,22 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** TL-RNG-001–006, TL-ARC-001–006, TL-LOS-001–009, TL-LIST-001–007, TL-UI-001–006, TL-ALGO-001–003, AC-TL-01–18
 **Tests:** 916 cumulative (53 scripts, 1741 asserts)
+
+---
+
+### Phase 5e: Keyboard Shortcuts for Tools 🔄
+**Goal:** Allow players to press **M**, **R**, or **T** on the keyboard to activate the Maneuver Tool, Range Overlay, and Targeting List respectively — same behaviour as clicking the toolbar buttons.
+**Prerequisites:** Phase 5a (ActionToolbar, Maneuver Tool), Phase 5c (Range Overlay), Phase 5d (Targeting List)
+**Duration estimate:** < 1 session
+**Requirements:** MT-U-007, RO-008 (new), TL-UI-003a
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Handle M/R/T key events in `game_board.gd` `_unhandled_input` | Presentation | MT-U-007, RO-008, TL-UI-003a | Key press → emit `EventBus` signal (same as button); guard against disabled state | 🔄 |
+| 2 | Add "Tools" section to `DebugHelpPanel` | Presentation | DBG-002 | M / R / T shortcuts shown in debug-mode help panel | 🔄 |
+| 3 | Update requirements & docs | Docs | — | MT-U-007 in maneuver_tool.md, TL-UI-003a in targeting_list.md, RO-008 in impl plan, manual test plan | 🔄 |
+
+**Requirements covered:** MT-U-007, AC-17, RO-008, TL-UI-003a
 
 ---
 

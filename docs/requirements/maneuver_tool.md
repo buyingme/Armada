@@ -176,6 +176,13 @@ adjust angles (MT-G-003). The tool redraws in real time.
 Clicking the "Display Maneuver Tool" button again, pressing Escape, or
 clicking elsewhere on the board dismisses the tool.
 
+### MT-U-007 — Keyboard shortcut (M key)
+Pressing the **M** key on the keyboard triggers the same action as clicking
+the "Display Maneuver Tool" button. The shortcut is available whenever the
+toolbar buttons are not disabled (i.e. not during a ship activation maneuver).
+When the tool is already visible, pressing **M** again dismisses it (toggle).
+When in ship selection mode, pressing **M** cancels the selection.
+
 ## 6. Data — Pixel Coordinates in `scale_config.json`
 
 The `"maneuver_tool"` section in `scale_config.json` stores all pixel
@@ -252,6 +259,7 @@ Root: `|118 − 18| = 100 px`. Middle: `|149 − 18| = 131 px`.
 | AC-14 | Pressing the button prompts "Select a ship"; clicking a ship shows the tool aligned to its left side. |
 | AC-15 | Pressing Escape or the button again dismisses the tool / cancels selection. |
 | AC-16 | Contact points on each segment match the measured PNG coordinates. |
+| AC-17 | Pressing **M** on the keyboard toggles the maneuver tool (same as clicking the toolbar button). |
 
 ## 8. Dynamic Alignment
 

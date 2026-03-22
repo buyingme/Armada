@@ -418,6 +418,12 @@ The modal is dismissed by:
 - Pressing Escape.
 - Pressing the "T" button again (toggle).
 
+### TL-UI-003a — Keyboard shortcut (T key)
+Pressing the **T** key on the keyboard triggers the same action as clicking
+the "T" button. When the modal is visible, pressing **T** again closes it
+(toggle). The shortcut is available whenever the toolbar buttons are not
+disabled.
+
 ### TL-UI-004 — Snapshot semantics
 
 The list is computed once when the modal opens. It does **not** live-update.

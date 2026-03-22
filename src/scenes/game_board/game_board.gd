@@ -272,6 +272,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _handle_maneuver_tool_escape(event):
 		return
 
+	# Keyboard shortcuts for tool buttons (M / R / T).
+	# Available in all modes; guarded by the same disabled flag as toolbar buttons.
+	# Requirements: MT-U-007, RO-008, TL-UI-003a.
+	if _handle_tool_shortcut(event):
+		return
+
 	if not DebugMode.enabled:
 		return
 
@@ -1524,6 +1530,46 @@ func _handle_maneuver_tool_escape(event: InputEvent) -> bool:
 		get_viewport().set_input_as_handled()
 		return true
 	return false
+
+
+## Handles keyboard shortcuts for the tool buttons (M / R / T).
+## Returns true if the event was consumed.
+## Requirements: MT-U-007, RO-008, TL-UI-003a.
+func _handle_tool_shortcut(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return false
+	if not _are_tool_buttons_enabled():
+		return false
+	match key_event.keycode:
+		KEY_M:
+			_log.info("Keyboard shortcut: M (Maneuver Tool).")
+			EventBus.maneuver_tool_requested.emit()
+			get_viewport().set_input_as_handled()
+			return true
+		KEY_R:
+			_log.info("Keyboard shortcut: R (Range Overlay).")
+			EventBus.range_overlay_requested.emit()
+			get_viewport().set_input_as_handled()
+			return true
+		KEY_T:
+			_log.info("Keyboard shortcut: T (Targeting List).")
+			EventBus.targeting_list_requested.emit()
+			get_viewport().set_input_as_handled()
+			return true
+	return false
+
+
+## Returns true when the toolbar action buttons are interactable.
+## Mirrors the disabled state applied by [method ActionToolbar.set_tool_buttons_disabled].
+func _are_tool_buttons_enabled() -> bool:
+	if _action_toolbar == null:
+		return false
+	if _action_toolbar._maneuver_tool_btn and _action_toolbar._maneuver_tool_btn.disabled:
+		return false
+	return true
 
 
 # ---------------------------------------------------------------------------

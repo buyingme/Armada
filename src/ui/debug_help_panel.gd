@@ -76,6 +76,11 @@ func _build_ui() -> void:
 	_add_line(vbox, "Scroll wheel", "Zoom in / out")
 	_add_line(vbox, "Two-finger swipe", "Pan camera (trackpad)")
 	_add_line(vbox, "Pinch", "Zoom (trackpad)")
+	_add_separator(vbox)
+	_add_section_header(vbox, "Tools")
+	_add_line(vbox, "M", "Maneuver Tool (toggle)")
+	_add_line(vbox, "R", "Range Overlay (toggle)")
+	_add_line(vbox, "T", "Targeting List (toggle)")
 
 
 ## Adds the main header label to the container.

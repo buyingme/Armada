@@ -1524,6 +1524,62 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ---
 
+## Phase 5e — Keyboard Shortcuts for Tools
+
+**What this phase adds:** Pressing **M**, **R**, or **T** on the keyboard activates the Maneuver Tool, Range Overlay, and Targeting List respectively — identical to clicking the toolbar buttons. Shortcuts are disabled during ship activation (same guard as the buttons). The debug help panel shows a new "Tools" section listing these shortcuts.
+
+### MT-5e.1 — M key toggles Maneuver Tool
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start game board scene | No maneuver tool visible |
+| 2 | Press **M** on the keyboard | "Select a ship" prompt appears (same as clicking the M button) |
+| 3 | Click a ship | Maneuver tool appears on the ship |
+| 4 | Press **M** again | Maneuver tool is dismissed |
+
+### MT-5e.2 — R key toggles Range Overlay
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press **R** on the keyboard | "Select a ship" prompt appears |
+| 2 | Click a ship | Range overlay appears |
+| 3 | Press **R** again | Range overlay is dismissed |
+
+### MT-5e.3 — T key toggles Targeting List
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press **T** on the keyboard | Targeting list modal opens |
+| 2 | Press **T** again | Modal closes (toggle) |
+
+### MT-5e.4 — Shortcuts disabled during activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship (drag dial to ship) | Activation modal appears, toolbar buttons disabled |
+| 2 | Press **M**, **R**, or **T** | Nothing happens — shortcuts are blocked |
+| 3 | Complete/close the activation | Shortcuts work again |
+
+### MT-5e.5 — Shortcuts visible in debug help panel
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press F12 to enter debug mode | Debug help panel appears on left |
+| 2 | Look for "Tools" section | "Tools" section header visible below "Camera" |
+| 3 | Verify shortcut listing | M → Maneuver Tool, R → Range Overlay, T → Targeting List shown |
+
+### MT-5e.6 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | All existing tests pass, 0 failures |
+| 2 | All Phase 5a–5d manual tests still pass | M/R/T buttons still work via click |
+| 3 | Escape still dismisses tools | Escape key behaviour unchanged |
+
+**Pass criteria:** M/R/T keys toggle their respective tools; shortcuts blocked during activation; shortcuts shown in help panel; existing button clicks and Escape handling unaffected; all tests pass.
+
+---
+
 ## Phase 4g — Fixed Round-1 Commands
 
 **What this phase adds:** The learning scenario can optionally pre-assign command dials for round 1 instead of requiring players to pick them manually. When `use_fixed_round1_commands` is `true` in the scenario JSON, the command phase is completely skipped in round 1. Ships begin with their dial stacks pre-filled: CR90 → Repair; Nebulon-B → Navigate (top), Squadron (bottom); VSD → Repair (top), Navigate (middle), Concentrate Fire (bottom). A brief "Round 1 commands pre-assigned" toast appears.

@@ -758,6 +758,69 @@ func test_squad_no_target_when_no_armament() -> void:
 			"No targets when squadron has no armament")
 
 
+func test_squad_ship_target_los_blocked_by_other_hull_zone() -> void:
+	# Arrange — squadron is directly to the LEFT of an enemy ship facing up.
+	# At distance 1, the FRONT hull zone's LOS enters through the LEFT edge
+	# so FRONT should be blocked. The LEFT zone itself should remain valid.
+	# Rules Reference: "Line of Sight", bullet 4.
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 500), 0.0)
+	# Place squadron just inside distance 1 of the left edge.
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(430, 500))
+	squad.battery_armament = {"BLUE": 1}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy], [squad], 0)
+	# Assert — the squadron should NOT see FRONT as a valid defending zone
+	# because LOS to the FRONT targeting point enters through the LEFT edge.
+	var sq_result: TargetingListBuilder.SquadTargetingResult = \
+			build_result.squad_results[0]
+	var target_zones: Array = []
+	for entry: Variant in sq_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "ISD":
+			target_zones.append(te.target_zone)
+	# LEFT should be present (direct LOS through left edge).
+	assert_has(target_zones, Constants.HullZone.LEFT,
+			"LEFT zone should be reachable from squadron to the left")
+	# FRONT should be blocked (LOS enters through LEFT edge).
+	assert_does_not_have(target_zones, Constants.HullZone.FRONT,
+			"FRONT zone should be blocked — LOS enters through LEFT edge")
+
+
+func test_squad_ship_target_obstructed_by_intervening_ship() -> void:
+	# Arrange — squadron behind enemy ship (close range to REAR), with
+	# another ship between them that obstructs LOS.
+	# ISD at (500, 400), half_l=35 → REAR edge at y=435.
+	# Blocker at (500, 465) — between ISD rear and the squadron.
+	# Squadron at (500, 500) — edge at y=485; dist to rear edge ≈ 50 - 15 = 35 (close).
+	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
+			"ISD", 1, Vector2(500, 400), 0.0)
+	var blocker: TargetingListBuilder.ShipInfo = _make_ship(
+			"Blocker", 1, Vector2(500, 470), 0.0)
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 510))
+	squad.battery_armament = {"BLUE": 1}
+	# Act
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[enemy, blocker], [squad], 0)
+	# Assert — REAR zone should be obstructed (intervening ship), not blocked.
+	var sq_result: TargetingListBuilder.SquadTargetingResult = \
+			build_result.squad_results[0]
+	var rear_entries: Array = []
+	for entry: Variant in sq_result.outgoing:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		if te.target_name == "ISD" and te.target_zone == Constants.HullZone.REAR:
+			rear_entries.append(te)
+	assert_eq(rear_entries.size(), 1,
+			"Should find ISD REAR as reachable target")
+	if rear_entries.size() > 0:
+		var re: TargetingListBuilder.TargetEntry = rear_entries[0]
+		assert_true(re.obstructed,
+				"REAR zone should be obstructed by intervening ship")
+
+
 # =========================================================================
 # Squadron incoming threats (TL-LIST-012, AC-TL-33)
 # =========================================================================

@@ -205,7 +205,7 @@ static func build(
 		_log.debug("[%s] pos=%s r=%.0f" % [
 				fsq.squad_name, _v2str(fsq.pos), fsq.radius])
 		var sq_entry: SquadTargetingResult = _build_squad_entry(
-				_log, fsq, enemy_ships, enemy_squads)
+				_log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
 		sq_entry.incoming = _build_incoming_squad_threats(
 				_log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
 		build_result.squad_results.append(sq_entry)
@@ -553,7 +553,8 @@ static func _build_squad_entry(
 		log: GameLogger,
 		squad: SquadInfo,
 		enemy_ships: Array,
-		enemy_squads: Array) -> SquadTargetingResult:
+		enemy_squads: Array,
+		all_ship_bodies: Array) -> SquadTargetingResult:
 	var result: SquadTargetingResult = SquadTargetingResult.new()
 	result.squad_name = squad.squad_name
 	# --- vs enemy ships (use battery_armament) ---
@@ -585,6 +586,36 @@ static func _build_squad_entry(
 						_hz_key(def_hz), dist, band])
 				if band != Constants.RANGE_BAND_CLOSE:
 					continue
+				# LOS check — TL-LOS-003 + TL-LOS-004.
+				# Trace from closest point on squadron base to defender's
+				# targeting point; check hull-zone blocking on the defender.
+				var def_los: Vector2 = es.los_pts.get(
+						_hz_key(def_hz), es.pos)
+				var bodies: Array = _get_intervening_squad_bodies(
+						es, all_ship_bodies)
+				var los_result: LineOfSightChecker.LOSResult = \
+						LineOfSightChecker.trace_los_squad_to_ship(
+								squad.pos, squad.radius,
+								def_los, def_hz,
+								es.pos, es.rot,
+								es.half_w, es.half_l,
+								bodies, [])
+				if not los_result.has_los:
+					log.debug("    LOS blocked for zone %s — skipped" %
+							_hz_key(def_hz))
+					continue
+				# TL-LOS-004: range path blocking.
+				var range_blocked: bool = \
+						LineOfSightChecker.is_range_path_blocked(
+								RangeFinder.closest_point_on_circle(
+										cp, squad.pos, squad.radius),
+								cp, def_hz,
+								es.pos, es.rot,
+								es.half_w, es.half_l)
+				if range_blocked:
+					log.debug("    range path blocked for zone %s — skipped" %
+							_hz_key(def_hz))
+					continue
 				var entry: TargetEntry = TargetEntry.new()
 				entry.target_name = es.ship_name
 				entry.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
@@ -593,6 +624,8 @@ static func _build_squad_entry(
 				entry.range_band = "in range"
 				entry.dice = RangeFinder.dice_at_range(
 						squad.battery_armament, band)
+				entry.obstructed = los_result.obstructed
+				entry.obstructed_by = los_result.obstructed_by
 				result.outgoing.append(entry)
 				log.debug("    -> HIT ship '%s' zone=%s" % [
 						es.ship_name, _hz_key(def_hz)])
@@ -777,6 +810,22 @@ static func _get_intervening_bodies(
 		var info: ShipInfo = d["info"] as ShipInfo
 		if info.ship_name == atk.ship_name:
 			continue
+		if info.ship_name == defender.ship_name:
+			continue
+		bodies.append(d["body"])
+	return bodies
+
+
+## Returns an array of ObstructionBody excluding only the defender ship.
+## Used for squadron→ship LOS where the squadron is not in all_ship_bodies.
+## Requirements: TL-LOS-005.
+static func _get_intervening_squad_bodies(
+		defender: ShipInfo,
+		all_ship_bodies: Array) -> Array:
+	var bodies: Array = []
+	for entry: Variant in all_ship_bodies:
+		var d: Dictionary = entry as Dictionary
+		var info: ShipInfo = d["info"] as ShipInfo
 		if info.ship_name == defender.ship_name:
 			continue
 		bodies.append(d["body"])

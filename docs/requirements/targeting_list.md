@@ -421,8 +421,10 @@ closest point of the ship's base (any hull zone). Each threat entry shows:
 squadron name, range band (always "close" at distance 1), and dice from the
 squadron's `battery_armament` at that range.
 
-LOS is not checked for squadron → ship threats (squadrons cannot obstruct,
-and no intervening hull zone check applies to squadron attackers).
+For the **threat** list (incoming), LOS hull-zone blocking is not checked
+per hull zone — a squadron at distance 1 of the ship's base is listed as a
+threat without per-hull-zone LOS validation.  This may over-count threats but
+ensures the player sees worst-case exposure.
 
 > Rules Reference: "Attack", Step 1:
 > "If the attacker is a squadron, the defending squadron or hull zone must be
@@ -452,8 +454,23 @@ valid attack targets at **distance 1** (close range):
    from the friendly squadron's `battery_armament`.
 
 Squadrons have a 360° firing arc — no arc containment test is needed.
-LOS is not checked for squadron attacks (no hull zone blocking).
 
+For **squadron → squadron** attacks, LOS hull-zone blocking does not apply
+(neither side has hull zones).  Obstruction by intervening ships applies in
+principle but is deferred.
+
+For **squadron → ship** attacks, LOS must be traced per TL-LOS-003 and
+hull-zone blocking per TL-LOS-004 applies — the **defender's** non-defending
+hull zones can block LOS.  Obstruction by intervening ships also applies.
+The range measurement path is also checked for hull-zone blocking
+(TL-LOS-004, range path check).
+
+> RRG "Line of Sight": "When tracing line of sight to or from a squadron,
+> trace the line using the point of the squadron's base that is closest to
+> the opposing squadron or hull zone."
+> RRG "Line of Sight", bullet 4: "If line of sight or attack range is traced
+> through a hull zone on the defender that is not the defending hull zone,
+> the attacker does not have line of sight."
 > RRG "Firing Arc": "Each squadron has a 360° firing arc."
 > RRG "Attack Range": "Each squadron's attack range is distance 1."
 

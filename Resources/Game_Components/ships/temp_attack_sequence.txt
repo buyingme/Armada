@@ -1,0 +1,9 @@
+the requirements for the ui for executing the attack sequence of a ship is the following.
+
+from the activation modal press a button next to the attack step. it should read "execute attack"
+
+close 
+first highlight the range overlay of the attacking ship.
+
+then the player needs to select the attacking hull zone with the left mouse button, then the defending sqadron or enemy ship hull zone.
+if both are selected draw a yellow line that represents the line of sight check according to the rules.

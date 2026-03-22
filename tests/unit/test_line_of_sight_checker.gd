@@ -188,6 +188,85 @@ func test_los_ship_to_squadron_obstructed() -> void:
 
 
 # =========================================================================
+# trace_los_squad_to_ship — clear LOS
+# =========================================================================
+
+func test_los_squad_to_ship_clear_when_direct_path() -> void:
+	# Arrange — squadron directly behind (south of) defender facing up.
+	# LOS targets the REAR hull zone — enters through REAR edge.
+	var squad_centre: Vector2 = Vector2(500, 500)
+	var squad_r: float = 15.0
+	var def_los: Vector2 = Vector2(500, 335)  # rear targeting point
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 20.0
+	var def_hl: float = 35.0
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					squad_centre, squad_r,
+					def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, def_hw, def_hl, [], [])
+	# Assert
+	assert_true(result.has_los,
+			"Clear squad→ship LOS should have line of sight")
+	assert_false(result.obstructed,
+			"Clear squad→ship LOS should not be obstructed")
+
+
+# =========================================================================
+# trace_los_squad_to_ship — blocked by other hull zone
+# =========================================================================
+
+func test_los_squad_to_ship_blocked_by_other_hull_zone() -> void:
+	# Arrange — squadron is to the left of defender facing up.
+	# LOS targets the FRONT hull zone — but the line enters through LEFT.
+	var squad_centre: Vector2 = Vector2(200, 300)
+	var squad_r: float = 15.0
+	var def_los: Vector2 = Vector2(500, 265)  # front targeting point
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 20.0
+	var def_hl: float = 35.0
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					squad_centre, squad_r,
+					def_los, Constants.HullZone.FRONT,
+					def_pos, 0.0, def_hw, def_hl, [], [])
+	# Assert
+	assert_false(result.has_los,
+			"Squad LOS entering through LEFT should block FRONT zone")
+
+
+# =========================================================================
+# trace_los_squad_to_ship — obstructed by intervening ship
+# =========================================================================
+
+func test_los_squad_to_ship_obstructed_by_intervening_ship() -> void:
+	# Arrange — direct path, but a ship sits between squadron and defender.
+	var squad_centre: Vector2 = Vector2(500, 600)
+	var squad_r: float = 15.0
+	var def_los: Vector2 = Vector2(500, 335)  # rear targeting point
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 20.0
+	var def_hl: float = 35.0
+	var blocker: LineOfSightChecker.ObstructionBody = _make_body(
+			"Blocker", Vector2(500, 450), 0.0, 20.0, 35.0)
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					squad_centre, squad_r,
+					def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, def_hw, def_hl, [blocker], [])
+	# Assert
+	assert_true(result.has_los,
+			"LOS should still exist (obstructed != blocked)")
+	assert_true(result.obstructed,
+			"LOS should be obstructed by intervening ship")
+	assert_has(result.obstructed_by, "Blocker",
+			"Obstructed_by should contain the blocker name")
+
+
+# =========================================================================
 # is_range_path_blocked
 # =========================================================================
 

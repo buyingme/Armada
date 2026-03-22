@@ -116,6 +116,50 @@ static func trace_los_ship_to_squadron(
 	return result
 
 
+## Traces LOS from a squadron to a specific hull zone on a defending ship.
+##
+## The LOS origin is the closest point on the squadron circle to the
+## defender's targeting point (TL-LOS-003).  The LOS segment is then
+## checked for hull-zone blocking (TL-LOS-004) and obstruction (TL-LOS-005).
+##
+## [param squad_centre]  — world-space centre of the squadron base.
+## [param squad_radius]  — squadron base radius in pixels.
+## [param def_los_pt]    — world-space targeting point of the defending hull zone.
+## [param def_zone]      — the defending hull zone enum.
+## [param def_pos]       — defender ship world position.
+## [param def_rot]       — defender ship rotation.
+## [param def_half_w]    — defender half-width.
+## [param def_half_l]    — defender half-length.
+## [param bodies]        — array of ObstructionBody for intervening ships.
+## [param obstacles]     — array of ObstructionBody for obstacles (future).
+## Requirements: TL-LOS-003, TL-LOS-004, TL-LOS-005, TL-LOS-008.
+static func trace_los_squad_to_ship(
+		squad_centre: Vector2,
+		squad_radius: float,
+		def_los_pt: Vector2,
+		def_zone: Constants.HullZone,
+		def_pos: Vector2,
+		def_rot: float,
+		def_half_w: float,
+		def_half_l: float,
+		bodies: Array,
+		obstacles: Array) -> LOSResult:
+	# LOS origin = closest point on squadron base to defender's LOS point.
+	var los_origin: Vector2 = RangeFinder.closest_point_on_circle(
+			def_los_pt, squad_centre, squad_radius)
+	var result: LOSResult = LOSResult.new()
+	# TL-LOS-004: check if LOS line enters defender through a different HZ.
+	if _los_blocked_by_other_hull_zone(
+			los_origin, def_los_pt, def_zone,
+			def_pos, def_rot, def_half_w, def_half_l):
+		result.has_los = false
+		return result
+	# TL-LOS-005/008: check intervening ships and obstacles.
+	_check_obstruction(los_origin, def_los_pt, bodies, result)
+	_check_obstruction(los_origin, def_los_pt, obstacles, result)
+	return result
+
+
 ## Checks if the range path (attacker edge → defender edge within arc)
 ## is blocked by defender's other hull zone.
 ## Requirements: TL-LOS-004 (range path check).

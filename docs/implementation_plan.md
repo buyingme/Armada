@@ -755,19 +755,21 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5e: Keyboard Shortcuts for Tools 🔄
+### Phase 5e: Keyboard Shortcuts for Tools ✅
 **Goal:** Allow players to press **M**, **R**, or **T** on the keyboard to activate the Maneuver Tool, Range Overlay, and Targeting List respectively — same behaviour as clicking the toolbar buttons.
 **Prerequisites:** Phase 5a (ActionToolbar, Maneuver Tool), Phase 5c (Range Overlay), Phase 5d (Targeting List)
 **Duration estimate:** < 1 session
 **Requirements:** MT-U-007, RO-008 (new), TL-UI-003a
+**Commits:** `53d86d1`
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
-| 1 | Handle M/R/T key events in `game_board.gd` `_unhandled_input` | Presentation | MT-U-007, RO-008, TL-UI-003a | Key press → emit `EventBus` signal (same as button); guard against disabled state | 🔄 |
-| 2 | Add "Tools" section to `DebugHelpPanel` | Presentation | DBG-002 | M / R / T shortcuts shown in debug-mode help panel | 🔄 |
-| 3 | Update requirements & docs | Docs | — | MT-U-007 in maneuver_tool.md, TL-UI-003a in targeting_list.md, RO-008 in impl plan, manual test plan | 🔄 |
+| 1 | Handle M/R/T key events in `game_board.gd` `_unhandled_input` | Presentation | MT-U-007, RO-008, TL-UI-003a | Key press → emit `EventBus` signal (same as button); guard against disabled state | ✅ |
+| 2 | Add "Tools" section to `DebugHelpPanel` | Presentation | DBG-002 | M / R / T shortcuts shown in debug-mode help panel | ✅ |
+| 3 | Update requirements & docs | Docs | — | MT-U-007 in maneuver_tool.md, TL-UI-003a in targeting_list.md, RO-008 in impl plan, manual test plan | ✅ |
 
 **Requirements covered:** MT-U-007, AC-17, RO-008, TL-UI-003a
+**Tests:** 949 cumulative (55 scripts, 1793 asserts)
 
 ---
 

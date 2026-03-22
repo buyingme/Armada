@@ -557,24 +557,45 @@ static func _build_squad_entry(
 	var result: SquadTargetingResult = SquadTargetingResult.new()
 	result.squad_name = squad.squad_name
 	# --- vs enemy ships (use battery_armament) ---
+	# List each reachable defending hull zone separately — the player must
+	# declare which hull zone to attack (same as ship → ship detail).
+	# Rules Reference: "Attack", Step 1 — "The attacker must declare the
+	# defending hull zone."
 	if not squad.battery_armament.is_empty():
+		var def_zones: Array = [
+			Constants.HullZone.FRONT,
+			Constants.HullZone.LEFT,
+			Constants.HullZone.RIGHT,
+			Constants.HullZone.REAR,
+		]
 		for enemy: Variant in enemy_ships:
 			var es: ShipInfo = enemy as ShipInfo
-			var dist: float = _measure_squad_to_ship_distance(squad, es)
-			var band: String = GameScale.get_range_band(dist)
-			log.debug("  squad '%s' -> ship '%s' dist=%.1f band=%s" % [
-					squad.squad_name, es.ship_name, dist, band])
-			if band != Constants.RANGE_BAND_CLOSE:
-				continue
-			var entry: TargetEntry = TargetEntry.new()
-			entry.target_name = es.ship_name
-			entry.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
-			entry.has_target_zone = false
-			entry.range_band = "in range"
-			entry.dice = RangeFinder.dice_at_range(
-					squad.battery_armament, band)
-			result.outgoing.append(entry)
-			log.debug("    -> HIT ship '%s'" % es.ship_name)
+			for dz: int in def_zones:
+				var def_hz: Constants.HullZone = dz as Constants.HullZone
+				var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+						es.pos, es.rot, es.half_w, es.half_l, def_hz)
+				var cp: Vector2 = RangeFinder.closest_point_on_segment(
+						squad.pos, edge[0], edge[1])
+				var dist: float = squad.pos.distance_to(cp) - squad.radius
+				if dist < 0.0:
+					dist = 0.0
+				var band: String = GameScale.get_range_band(dist)
+				log.debug("  squad '%s' -> ship '%s' %s dist=%.1f band=%s" % [
+						squad.squad_name, es.ship_name,
+						_hz_key(def_hz), dist, band])
+				if band != Constants.RANGE_BAND_CLOSE:
+					continue
+				var entry: TargetEntry = TargetEntry.new()
+				entry.target_name = es.ship_name
+				entry.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+				entry.target_zone = def_hz
+				entry.has_target_zone = true
+				entry.range_band = "in range"
+				entry.dice = RangeFinder.dice_at_range(
+						squad.battery_armament, band)
+				result.outgoing.append(entry)
+				log.debug("    -> HIT ship '%s' zone=%s" % [
+						es.ship_name, _hz_key(def_hz)])
 	# --- vs enemy squadrons (use anti_squadron_armament) ---
 	if not squad.anti_squadron_armament.is_empty():
 		for enemy_sq: Variant in enemy_squads:

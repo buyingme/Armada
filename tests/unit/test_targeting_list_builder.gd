@@ -679,17 +679,26 @@ func test_squad_targets_enemy_ship_at_distance_1() -> void:
 			"Should have 1 squadron result")
 	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
 	assert_eq(sq_result.squad_name, "X-wing", "Squadron name")
-	# Should find the enemy ship as a target (at distance 1).
-	var found_ship: bool = false
+	# Should find the enemy ship as a target with per-hull-zone detail.
+	var isd_entries: Array = []
 	for entry: Variant in sq_result.outgoing:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
 		if te.target_name == "ISD":
-			found_ship = true
+			isd_entries.append(te)
 			assert_eq(te.range_band, "in range",
 					"Squadron→ship range should be 'in range'")
 			assert_eq(te.dice.get("BLUE", 0), 1,
 					"Should use battery_armament dice (1 blue)")
-	assert_true(found_ship, "Should find enemy ship as target")
+			assert_true(te.has_target_zone,
+					"Squadron→ship entry should have target_zone set")
+	assert_gt(isd_entries.size(), 0, "Should find enemy ship as target")
+	# Each entry should have a distinct defending hull zone.
+	var seen_zones: Dictionary = {}
+	for entry: Variant in isd_entries:
+		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
+		seen_zones[te.target_zone] = true
+	assert_eq(seen_zones.size(), isd_entries.size(),
+			"Each ISD entry should target a distinct hull zone")
 
 
 func test_squad_targets_enemy_squadron_at_distance_1() -> void:

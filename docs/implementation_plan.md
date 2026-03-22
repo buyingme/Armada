@@ -773,6 +773,22 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 5d-fix: Targeting List Squadron Corrections ✅
+**Goal:** Fix three squadron-related bugs in the targeting list: (1) ship → squadron uses battery armament instead of anti-squadron armament for dice/range, (2) incoming threats omit enemy squadrons entirely, (3) SquadInfo lacks armament fields.
+**Prerequisites:** Phase 5d (Targeting List Tool)
+**Duration estimate:** < 1 session
+**Requirements:** TL-RNG-007, TL-LIST-008, TL-LIST-010, AC-TL-20–23
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Add armament fields to `SquadInfo` | Core | TL-LIST-010, AC-TL-23 | `battery_armament` and `anti_squadron_armament` on `SquadInfo`; `_collect_squad_infos()` populates from JSON | ✅ |
+| 2 | Fix `_check_squadron_target` to use anti-squadron armament | Core | TL-RNG-007, AC-TL-20, AC-TL-21 | Pass `anti_squadron_armament` for dice + max-range check instead of hull zone battery | ✅ |
+| 3 | Add squadron incoming threats in `_build_incoming_threats` | Core | TL-LIST-008, AC-TL-22 | Enemy squads at distance 1 with battery armament appear as threats | ✅ |
+| 4 | Unit tests for all three fixes | Test | AC-TL-18, AC-TL-20–23 | New tests in `test_targeting_list_builder.gd` | ✅ |
+| 5 | Update requirements & docs | Docs | — | TL-RNG-007, TL-LIST-008, TL-LIST-010 in targeting_list.md; manual test plan | ✅ |
+
+---
+
 ### Phase 5b-2: Overlap Handling ⏳
 **Goal:** Handle ship–ship and ship–squadron overlaps during movement.
 **Prerequisites:** Phase 5b (maneuver execution)

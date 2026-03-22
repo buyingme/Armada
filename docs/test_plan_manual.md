@@ -1686,3 +1686,38 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | All previous manual tests still pass | No regression in existing debug mode features |
 
 **Pass criteria:** Tokens cross deployment zone freely in debug mode; toast fires once per crossing; collision + play area boundaries still enforced; 949 tests pass.
+
+---
+
+## Phase 5d-fix — Squadron Targeting Armament Fix
+
+**Scope:** Ship→squadron targeting uses anti-squadron armament; incoming threats include enemy squadrons at distance 1.
+
+### MT-5d-fix.1 — Ship→squadron shows anti-squadron dice
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place a Victory I (anti-sq: 1 blue) near an enemy X-wing squadron | Targeting list shows the X-wing as an outgoing target with **1 blue die** |
+| 2 | Compare with the ship's front battery (3 red) | Dice shown are the anti-squadron armament, **not** the hull zone battery |
+
+### MT-5d-fix.2 — Ship with no anti-squadron armament excludes squadrons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | If a ship has empty anti-squadron armament, place an enemy squadron in arc | Squadron does **not** appear as an outgoing target |
+
+### MT-5d-fix.3 — Enemy squadron appears as incoming threat
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place an enemy squadron at close range (distance 1) of a friendly ship | Targeting list shows the squadron in the **incoming threats** section |
+| 2 | Move the enemy squadron beyond distance 1 | Squadron disappears from incoming threats |
+
+### MT-5d-fix.4 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 956 tests, 55 scripts, 0 failures |
+| 2 | All previous manual tests still pass | No regression in ship→ship targeting or other features |
+
+**Pass criteria:** Anti-squadron armament used for ship→squadron dice; squadron incoming threats appear at distance 1 only; 956 tests pass.

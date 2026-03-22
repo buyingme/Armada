@@ -96,6 +96,12 @@ class SquadInfo:
 	var pos: Vector2 = Vector2.ZERO
 	## Base radius in pixels.
 	var radius: float = 0.0
+	## Battery armament (for attacking ships): {"RED": 1}.
+	## Requirements: TL-LIST-010.
+	var battery_armament: Dictionary = {}
+	## Anti-squadron armament: {"BLUE": 4}.
+	## Requirements: TL-LIST-010.
+	var anti_squadron_armament: Dictionary = {}
 
 
 # =========================================================================
@@ -143,16 +149,16 @@ static func build(
 		var fs: ShipInfo = friendly as ShipInfo
 		var entry: ShipTargetingResult = _build_ship_entry(
 				fs, enemy_ships, enemy_squads, all_ship_bodies)
-		# Incoming threats from enemy ships.
+		# Incoming threats from enemy ships and squadrons.
 		entry.incoming = _build_incoming_threats(
-				fs, enemy_ships, all_ship_bodies)
+				fs, enemy_ships, enemy_squads, all_ship_bodies)
 		results.append(entry)
 	# Ghost section.
 	if ghost != null:
 		var ghost_entry: ShipTargetingResult = _build_ship_entry(
 				ghost, enemy_ships, enemy_squads, all_ship_bodies)
 		ghost_entry.incoming = _build_incoming_threats(
-				ghost, enemy_ships, all_ship_bodies)
+				ghost, enemy_ships, enemy_squads, all_ship_bodies)
 		ghost_entry.ship_name = ghost.ship_name + " (projected)"
 		results.append(ghost_entry)
 	return results
@@ -192,11 +198,13 @@ static func _build_ship_entry(
 					friendly, hz, atk_edge, armament, es, all_ship_bodies)
 			if entry != null:
 				result.outgoing.append(entry)
-		# Squadron targets.
+		# Squadron targets — use anti-squadron armament for dice/range.
+		# Requirements: TL-RNG-007, AC-TL-20, AC-TL-21.
+		var anti_sq: Dictionary = friendly.anti_squadron_armament
 		for squad: Variant in enemy_squads:
 			var sq: SquadInfo = squad as SquadInfo
 			var entry2: TargetEntry = _check_squadron_target(
-					friendly, hz, atk_edge, armament, sq, all_ship_bodies)
+					friendly, hz, atk_edge, anti_sq, sq, all_ship_bodies)
 			if entry2 != null:
 				result.outgoing.append(entry2)
 	return result
@@ -281,13 +289,18 @@ static func _check_ship_target(
 
 
 ## Checks if one enemy squadron is a valid target from a given hull zone.
+## Uses the ship's anti-squadron armament for dice and max-range check.
+## Requirements: TL-RNG-007, AC-TL-20, AC-TL-21.
 static func _check_squadron_target(
 		atk: ShipInfo,
 		atk_zone: Constants.HullZone,
 		atk_edge: Array[Vector2],
-		armament: Dictionary,
+		anti_sq_armament: Dictionary,
 		squad: SquadInfo,
 		all_ship_bodies: Array) -> TargetEntry:
+	# Skip if no anti-squadron armament.
+	if anti_sq_armament.is_empty():
+		return null
 	# Arc test.
 	if not RangeFinder.is_squadron_in_arc(
 			squad.pos, squad.radius, atk_zone, atk.arc_pts):
@@ -300,7 +313,7 @@ static func _check_squadron_target(
 	var band: String = GameScale.get_range_band(dist)
 	if band == Constants.RANGE_BAND_BEYOND:
 		return null
-	if not RangeFinder.is_within_max_range(band, armament):
+	if not RangeFinder.is_within_max_range(band, anti_sq_armament):
 		return null
 	# LOS check (ship → squadron).
 	var atk_los: Vector2 = atk.los_pts.get(_hz_key(atk_zone), atk.pos)
@@ -320,7 +333,7 @@ static func _check_squadron_target(
 	entry.target_name = squad.squad_name
 	entry.arc = atk_zone
 	entry.range_band = band
-	entry.dice = RangeFinder.dice_at_range(armament, band)
+	entry.dice = RangeFinder.dice_at_range(anti_sq_armament, band)
 	entry.obstructed = los_result.obstructed
 	entry.obstructed_by = los_result.obstructed_by
 	return entry
@@ -330,10 +343,13 @@ static func _check_squadron_target(
 # Internal — Incoming Threats
 # =========================================================================
 
-## Builds incoming threats for one friendly ship from all enemy ships.
+## Builds incoming threats for one friendly ship from all enemy ships and
+## squadrons.
+## Requirements: TL-LIST-002, TL-LIST-008, AC-TL-22.
 static func _build_incoming_threats(
 		friendly: ShipInfo,
 		enemy_ships: Array,
+		enemy_squads: Array,
 		all_ship_bodies: Array) -> Array:
 	var threats: Array = []
 	var zones: Array = [
@@ -342,6 +358,7 @@ static func _build_incoming_threats(
 		Constants.HullZone.RIGHT,
 		Constants.HullZone.REAR,
 	]
+	# --- Ship threats ---
 	for enemy: Variant in enemy_ships:
 		var es: ShipInfo = enemy as ShipInfo
 		for zone: int in zones:
@@ -402,12 +419,60 @@ static func _build_incoming_threats(
 				threat.obstructed = los_result.obstructed
 				threats.append(threat)
 				found_threat = true
+	# --- Squadron threats (TL-LIST-008) ---
+	# Squadrons attack at distance 1 (close range) with 360° arc.
+	# No LOS check needed (squadrons don't have hull zones to block).
+	for squad: Variant in enemy_squads:
+		var sq: SquadInfo = squad as SquadInfo
+		if sq.battery_armament.is_empty():
+			continue
+		# Measure from squadron base edge to nearest point on ship base.
+		var dist: float = _measure_squad_to_ship_distance(sq, friendly)
+		var band: String = GameScale.get_range_band(dist)
+		# Squadron attack range is distance 1 = close range only.
+		if band != Constants.RANGE_BAND_CLOSE:
+			continue
+		var threat: ThreatEntry = ThreatEntry.new()
+		threat.friendly_name = friendly.ship_name
+		threat.enemy_name = sq.squad_name
+		threat.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+		threat.range_band = band
+		threat.obstructed = false
+		threats.append(threat)
 	return threats
 
 
 # =========================================================================
 # Helpers
 # =========================================================================
+
+## Measures distance from a squadron's base edge to the nearest point on a
+## ship's base (any hull zone). Used for squadron → ship threat range check.
+## Requirements: TL-LIST-008.
+static func _measure_squad_to_ship_distance(
+		squad: SquadInfo, ship: ShipInfo) -> float:
+	var best_dist: float = INF
+	var zones: Array = [
+		Constants.HullZone.FRONT,
+		Constants.HullZone.LEFT,
+		Constants.HullZone.RIGHT,
+		Constants.HullZone.REAR,
+	]
+	for zone: int in zones:
+		var hz: Constants.HullZone = zone as Constants.HullZone
+		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+				ship.pos, ship.rot, ship.half_w, ship.half_l, hz)
+		# Closest point on the hull zone edge from the squadron centre.
+		var cp: Vector2 = RangeFinder.closest_point_on_segment(
+				squad.pos, edge[0], edge[1])
+		# Subtract squadron radius (measure from base edge, not centre).
+		var dist: float = squad.pos.distance_to(cp) - squad.radius
+		if dist < 0.0:
+			dist = 0.0
+		if dist < best_dist:
+			best_dist = dist
+	return best_dist
+
 
 ## Returns the hull-zone key string for a hull zone enum.
 static func _hz_key(zone: Constants.HullZone) -> String:

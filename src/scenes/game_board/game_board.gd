@@ -1734,6 +1734,7 @@ func _collect_ship_infos() -> Array:
 
 
 ## Collects SquadInfo data from all squadron tokens on the board.
+## Requirements: TL-LIST-010.
 func _collect_squad_infos() -> Array:
 	var infos: Array = []
 	var tokens: Array[SquadronToken] = get_squadron_tokens()
@@ -1742,6 +1743,8 @@ func _collect_squad_infos() -> Array:
 		var inst: SquadronInstance = token.get_squadron_instance()
 		if inst and inst.squadron_data:
 			info.squad_name = inst.squadron_data.squadron_name
+			info.battery_armament = inst.squadron_data.battery_armament
+			info.anti_squadron_armament = inst.squadron_data.anti_squadron_armament
 		else:
 			info.squad_name = "Squadron"
 		info.owner_player = inst.owner_player if inst else 0

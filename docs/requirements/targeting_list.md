@@ -390,6 +390,53 @@ Each line reads:
 Example:
 > `CR90 Corvette A is at close range of Victory I's FRONT arc — obstructed`
 
+### TL-RNG-007 — Anti-squadron armament for ship → squadron targeting
+
+When listing outgoing ship → squadron targets, use the ship's
+**anti-squadron armament** (a single global value) instead of the hull zone's
+battery armament. The anti-squadron armament determines both:
+- The **dice** shown in the targeting entry.
+- The **maximum attack range** (close-only if all black; medium if ≥1 blue;
+  long if ≥1 red).
+
+The firing arc and range measurement rules are unchanged — the squadron must
+still be inside the attacking hull zone's arc and at attack range.
+
+> Rules Reference: "Armament", bullet 3:
+> "A ship has one anti-squadron armament that is used regardless of which
+> hull zone is attacking."
+> Rules Reference: "Attack", Step 2:
+> "If the defender is a squadron, gather the attack dice indicated in the
+> attacker's anti-squadron armament."
+
+### TL-LIST-008 — Incoming squadron threats
+
+For each friendly ship, also list **incoming threats from enemy squadrons**.
+An enemy squadron threatens a friendly ship if:
+1. The squadron is at **distance 1** (close range) of the friendly ship.
+2. The squadron has a non-empty `battery_armament`.
+
+Distance is measured from the closest point of the squadron's base to the
+closest point of the ship's base (any hull zone). Each threat entry shows:
+squadron name, range band (always "close" at distance 1), and dice from the
+squadron's `battery_armament` at that range.
+
+LOS is not checked for squadron → ship threats (squadrons cannot obstruct,
+and no intervening hull zone check applies to squadron attackers).
+
+> Rules Reference: "Attack", Step 1:
+> "If the attacker is a squadron, the defending squadron or hull zone must be
+> at distance 1."
+> Rules Reference: "Firing Arc":
+> "Each squadron has a 360° firing arc."
+
+### TL-LIST-010 — SquadInfo carries armament data
+
+The `SquadInfo` data structure must include `battery_armament` and
+`anti_squadron_armament` fields so the builder can determine squadron dice
+and range. The `_collect_squad_infos()` function in the game board must
+populate these from the squadron's JSON data.
+
 ---
 
 ## 7. UI Modal
@@ -543,6 +590,10 @@ Available via `GameScale.range_close_px`, `GameScale.range_medium_px`,
 | AC-TL-16 | `LineOfSightChecker` accepts an extensible array of obstruction bodies for future obstacle support. |
 | AC-TL-17 | Empty states shown when no targets/threats exist. |
 | AC-TL-18 | All core algorithm classes have unit tests (AAA pattern, descriptive names). |
+| AC-TL-20 | Ship → squadron outgoing targets show anti-squadron armament dice, not battery armament. |
+| AC-TL-21 | Ship → squadron max attack range is based on anti-squadron armament colours. |
+| AC-TL-22 | Enemy squadrons at distance 1 of a friendly ship appear as incoming threats with battery armament dice. |
+| AC-TL-23 | `SquadInfo` includes `battery_armament` and `anti_squadron_armament` fields populated from JSON data. |
 
 ---
 

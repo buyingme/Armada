@@ -120,6 +120,9 @@ static func build(
 		squadrons: Array,
 		active_player: int,
 		ghost: ShipInfo = null) -> Array:
+	var _log: GameLogger = GameLogger.new("Targeting")
+	_log.debug("=== build() start — active_player=%d, ships=%d, squads=%d ===" % [
+			active_player, ships.size(), squadrons.size()])
 	var results: Array = []
 	var friendly_ships: Array = []
 	var enemy_ships: Array = []
@@ -135,6 +138,8 @@ static func build(
 		var sq: SquadInfo = squad as SquadInfo
 		if sq.owner_player != active_player:
 			enemy_squads.append(sq)
+	_log.debug("friendly=%d, enemies=%d ships + %d squads" % [
+			friendly_ships.size(), enemy_ships.size(), enemy_squads.size()])
 	# Build obstruction bodies from ALL ships (used for LOS checks).
 	var all_ship_bodies: Array = []
 	for ship2: Variant in ships:
@@ -147,21 +152,39 @@ static func build(
 	# Process each friendly ship.
 	for friendly: Variant in friendly_ships:
 		var fs: ShipInfo = friendly as ShipInfo
+		_log_ship_geometry(_log, fs)
 		var entry: ShipTargetingResult = _build_ship_entry(
-				fs, enemy_ships, enemy_squads, all_ship_bodies)
+				_log, fs, enemy_ships, enemy_squads, all_ship_bodies)
 		# Incoming threats from enemy ships and squadrons.
 		entry.incoming = _build_incoming_threats(
 				fs, enemy_ships, enemy_squads, all_ship_bodies)
 		results.append(entry)
 	# Ghost section.
 	if ghost != null:
+		_log_ship_geometry(_log, ghost)
 		var ghost_entry: ShipTargetingResult = _build_ship_entry(
-				ghost, enemy_ships, enemy_squads, all_ship_bodies)
+				_log, ghost, enemy_ships, enemy_squads, all_ship_bodies)
 		ghost_entry.incoming = _build_incoming_threats(
 				ghost, enemy_ships, enemy_squads, all_ship_bodies)
 		ghost_entry.ship_name = ghost.ship_name + " (projected)"
 		results.append(ghost_entry)
+	_log.debug("=== build() complete — %d results ===" % results.size())
 	return results
+
+
+## Logs the geometry of a ship (position, rotation, arc boundary world points).
+static func _log_ship_geometry(log: GameLogger, ship: ShipInfo) -> void:
+	log.debug("[%s] pos=%s rot=%.2f° base=%.0fx%.0f" % [
+			ship.ship_name,
+			_v2str(ship.pos),
+			rad_to_deg(ship.rot),
+			ship.half_w * 2.0,
+			ship.half_l * 2.0])
+	if ship.arc_pts.is_empty():
+		log.debug("  arc_pts: (empty)")
+		return
+	for key: String in ship.arc_pts:
+		log.debug("  arc %s = %s" % [key, _v2str(ship.arc_pts[key])])
 
 
 # =========================================================================
@@ -170,6 +193,7 @@ static func build(
 
 ## Builds outgoing targets for one friendly ship.
 static func _build_ship_entry(
+		log: GameLogger,
 		friendly: ShipInfo,
 		enemy_ships: Array,
 		enemy_squads: Array,
@@ -187,6 +211,9 @@ static func _build_ship_entry(
 		var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
 				friendly.pos, friendly.rot,
 				friendly.half_w, friendly.half_l, hz)
+		log.debug("  [%s] zone %s edge=[%s, %s]" % [
+				friendly.ship_name, _hz_key(hz),
+				_v2str(atk_edge[0]), _v2str(atk_edge[1])])
 		# Ship targets (need battery armament for this hull zone).
 		var armament: Dictionary = friendly.battery_armament.get(
 				_hz_key(hz), {})
@@ -194,7 +221,8 @@ static func _build_ship_entry(
 			for enemy: Variant in enemy_ships:
 				var es: ShipInfo = enemy as ShipInfo
 				var entry: TargetEntry = _check_ship_target(
-						friendly, hz, atk_edge, armament, es, all_ship_bodies)
+						log, friendly, hz, atk_edge, armament,
+						es, all_ship_bodies)
 				if entry != null:
 					result.outgoing.append(entry)
 		# Squadron targets — use anti-squadron armament for dice/range.
@@ -205,7 +233,8 @@ static func _build_ship_entry(
 		for squad: Variant in enemy_squads:
 			var sq: SquadInfo = squad as SquadInfo
 			var entry2: TargetEntry = _check_squadron_target(
-					friendly, hz, atk_edge, anti_sq, sq, all_ship_bodies)
+					log, friendly, hz, atk_edge, anti_sq,
+					sq, all_ship_bodies)
 			if entry2 != null:
 				result.outgoing.append(entry2)
 	return result
@@ -214,12 +243,15 @@ static func _build_ship_entry(
 ## Checks if one enemy ship is a valid target from a given hull zone.
 ## Returns a TargetEntry or null.
 static func _check_ship_target(
+		log: GameLogger,
 		atk: ShipInfo,
 		atk_zone: Constants.HullZone,
 		atk_edge: Array[Vector2],
 		armament: Dictionary,
 		defender: ShipInfo,
 		all_ship_bodies: Array) -> TargetEntry:
+	log.debug("    check ship '%s' from %s arc" % [
+			defender.ship_name, _hz_key(atk_zone)])
 	var def_zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.LEFT,
@@ -235,15 +267,21 @@ static func _check_ship_target(
 				defender.pos, defender.rot,
 				defender.half_w, defender.half_l, def_hz)
 		# Step 1: arc containment test (TL-ARC-006 step 1).
-		if not RangeFinder.is_hull_zone_edge_in_arc(
-				def_edge[0], def_edge[1], atk_zone, atk.arc_pts):
+		var in_arc: bool = RangeFinder.is_hull_zone_edge_in_arc(
+				def_edge[0], def_edge[1], atk_zone, atk.arc_pts)
+		log.debug("      def_zone %s edge=[%s,%s] in_arc=%s" % [
+				_hz_key(def_hz), _v2str(def_edge[0]),
+				_v2str(def_edge[1]), str(in_arc)])
+		if not in_arc:
 			continue
 		# Step 2: range measurement within arc (TL-ARC-006 step 2).
 		var dist: float = RangeFinder.measure_attack_range_ship(
 				atk_edge, def_edge, atk_zone, atk.arc_pts)
 		if dist >= INF:
+			log.debug("      dist=INF — skipped")
 			continue
 		var band: String = GameScale.get_range_band(dist)
+		log.debug("      dist=%.1f band=%s" % [dist, band])
 		if band == Constants.RANGE_BAND_BEYOND:
 			continue
 		# Step 3: max attack range filter (TL-RNG-004).
@@ -286,6 +324,12 @@ static func _check_ship_target(
 			entry.obstructed = los_result.obstructed
 			entry.obstructed_by = los_result.obstructed_by
 			best_entry = entry
+	if best_entry:
+		log.debug("    -> HIT ship '%s' zone=%s band=%s dist=%.1f" % [
+				best_entry.target_name, _hz_key(best_entry.arc),
+				best_entry.range_band, best_dist])
+	else:
+		log.debug("    -> no valid target from '%s'" % defender.ship_name)
 	return best_entry
 
 
@@ -293,6 +337,7 @@ static func _check_ship_target(
 ## Uses the ship's anti-squadron armament for dice and max-range check.
 ## Requirements: TL-RNG-007, AC-TL-20, AC-TL-21.
 static func _check_squadron_target(
+		log: GameLogger,
 		atk: ShipInfo,
 		atk_zone: Constants.HullZone,
 		atk_edge: Array[Vector2],
@@ -303,18 +348,25 @@ static func _check_squadron_target(
 	if anti_sq_armament.is_empty():
 		return null
 	# Arc test.
-	if not RangeFinder.is_squadron_in_arc(
-			squad.pos, squad.radius, atk_zone, atk.arc_pts):
+	var in_arc: bool = RangeFinder.is_squadron_in_arc(
+			squad.pos, squad.radius, atk_zone, atk.arc_pts)
+	log.debug("    check squad '%s' pos=%s r=%.0f %s arc in_arc=%s" % [
+			squad.squad_name, _v2str(squad.pos), squad.radius,
+			_hz_key(atk_zone), str(in_arc)])
+	if not in_arc:
 		return null
 	# Range measurement.
 	var dist: float = RangeFinder.measure_attack_range_squadron(
 			atk_edge, squad.pos, squad.radius, atk_zone, atk.arc_pts)
 	if dist >= INF:
+		log.debug("      dist=INF — skipped")
 		return null
 	var band: String = GameScale.get_range_band(dist)
+	log.debug("      dist=%.1f band=%s" % [dist, band])
 	if band == Constants.RANGE_BAND_BEYOND:
 		return null
 	if not RangeFinder.is_within_max_range(band, anti_sq_armament):
+		log.debug("      beyond max range for armament — skipped")
 		return null
 	# LOS check (ship → squadron).
 	var atk_los: Vector2 = atk.los_pts.get(_hz_key(atk_zone), atk.pos)
@@ -329,7 +381,10 @@ static func _check_squadron_target(
 			LineOfSightChecker.trace_los_ship_to_squadron(
 					atk_los, squad.pos, squad.radius, bodies, [])
 	if not los_result.has_los:
+		log.debug("      no LOS — skipped")
 		return null
+	log.debug("    -> HIT squad '%s' zone=%s band=%s dist=%.1f" % [
+			squad.squad_name, _hz_key(atk_zone), band, dist])
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = squad.squad_name
 	entry.arc = atk_zone
@@ -508,3 +563,8 @@ static func _get_intervening_bodies(
 			continue
 		bodies.append(d["body"])
 	return bodies
+
+
+## Formats a Vector2 compactly for log output.
+static func _v2str(v: Vector2) -> String:
+	return "(%.1f,%.1f)" % [v.x, v.y]

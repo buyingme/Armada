@@ -148,12 +148,17 @@ func get_ship_data() -> ShipData:
 ## Converts a pixel coordinate in full-PNG space (from top-left) to world space.
 ## Used for firing_arc_boundaries and line_of_sight_origins.
 func png_to_world(png_coord: Vector2) -> Vector2:
+	return to_global(png_to_local(png_coord))
+
+
+## Converts a pixel coordinate in full-PNG space (from top-left) to local space.
+## The sprite is centred on the node origin, so local = (px - centre) * scale.
+func png_to_local(png_coord: Vector2) -> Vector2:
 	if _sprite == null or _sprite.texture == null:
-		return to_global(Vector2.ZERO)
+		return Vector2.ZERO
 	var tex_w: float = float(_sprite.texture.get_width())
 	var tex_h: float = float(_sprite.texture.get_height())
-	var local: Vector2 = (png_coord - Vector2(tex_w, tex_h) * 0.5) * _sprite_scale
-	return to_global(local)
+	return (png_coord - Vector2(tex_w, tex_h) * 0.5) * _sprite_scale
 
 
 ## Returns firing arc boundary points converted to world space.
@@ -340,10 +345,25 @@ func _scale_sprite_to_base(tex: Texture2D) -> void:
 
 
 ## Creates the FiringArcOverlay child (initially hidden).
+## Passes the real arc boundary data from ship JSON so the overlay
+## draws the actual zone geometry instead of hardcoded 45° wedges.
 func _create_arc_overlay() -> void:
 	_arc_overlay = FiringArcOverlay.new()
 	_arc_overlay.visible = false
 	add_child(_arc_overlay)
+	_update_arc_overlay_boundaries()
+
+
+## Feeds the local-space arc boundary points from the ship JSON to the overlay.
+func _update_arc_overlay_boundaries() -> void:
+	if not _arc_overlay or not _ship_data:
+		return
+	if _ship_data.firing_arc_boundaries.is_empty():
+		return
+	var local_pts: Dictionary = {}
+	for key: String in _ship_data.firing_arc_boundaries:
+		local_pts[key] = png_to_local(_ship_data.firing_arc_boundaries[key])
+	_arc_overlay.set_arc_boundaries(local_pts)
 
 
 ## Returns true if [world_pos] falls inside the base rectangle (local space check).

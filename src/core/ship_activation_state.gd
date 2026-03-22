@@ -66,6 +66,20 @@ var _total_speed_change: int = 0
 ## Whether the maneuver has been executed (committed).
 var _maneuver_executed: bool = false
 
+## Hull zones that have already been used for attacks this activation.
+## Rules Reference: "Attack" — cannot attack from the same hull zone twice.
+## Requirements: ATK-2A-001.
+var _used_attack_zones: Array[Constants.HullZone] = []
+
+## Number of attacks performed so far this activation (0, 1, or 2).
+var _attacks_performed: int = 0
+
+## Whether a Concentrate Fire dial is available for attack.
+var _has_concentrate_fire_dial: bool = false
+
+## Whether a Concentrate Fire token is available for attack.
+var _has_concentrate_fire_token: bool = false
+
 var _log: GameLogger = GameLogger.new("ShipActivationState")
 
 
@@ -79,6 +93,7 @@ static func create(ship: ShipInstance) -> ShipActivationState:
 	state._current_step = Step.REVEAL
 	state._original_speed = ship.current_speed
 	state._resolve_navigate_availability(ship)
+	state._resolve_concentrate_fire_availability(ship)
 	return state
 
 
@@ -288,6 +303,71 @@ func get_yaw_bonus_joint() -> int:
 
 
 # ---------------------------------------------------------------------------
+# Attack tracking (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+## Returns the hull zones that have already been used for attacks.
+## Requirements: ATK-2A-001.
+func get_used_attack_zones() -> Array[Constants.HullZone]:
+	return _used_attack_zones
+
+
+## Returns true if the given hull zone has already been used for an attack.
+## Requirements: ATK-2A-002.
+func is_attack_zone_used(zone: Constants.HullZone) -> bool:
+	return zone in _used_attack_zones
+
+
+## Records that the given hull zone was used for an attack.
+## Requirements: ATK-2A-001.
+func mark_attack_zone_used(zone: Constants.HullZone) -> void:
+	if zone not in _used_attack_zones:
+		_used_attack_zones.append(zone)
+	_attacks_performed += 1
+	_log.info("Attack zone marked used: %s (attacks=%d)." %
+			[Constants.HullZone.keys()[zone], _attacks_performed])
+
+
+## Returns the number of attacks performed so far (0, 1, or 2).
+func get_attacks_performed() -> int:
+	return _attacks_performed
+
+
+## Returns true if the ship can perform another attack (max 2).
+## Rules Reference: "Attack" — up to two attacks per activation.
+## Requirements: ATK-FLOW-002.
+func can_attack_again() -> bool:
+	return _attacks_performed < 2
+
+
+## Returns true if a Concentrate Fire dial is available this activation.
+func has_concentrate_fire_dial() -> bool:
+	return _has_concentrate_fire_dial and \
+			not is_command_resolved(Constants.CommandType.CONCENTRATE_FIRE)
+
+
+## Returns true if a Concentrate Fire token is available this activation.
+func has_concentrate_fire_token() -> bool:
+	return _has_concentrate_fire_token
+
+
+## Spends the Concentrate Fire token (removes it from the ship).
+## Returns true if successful.
+func spend_concentrate_fire_token() -> bool:
+	if not _has_concentrate_fire_token:
+		return false
+	if _ship and _ship.command_tokens:
+		_ship.command_tokens.spend_token(
+				Constants.CommandType.CONCENTRATE_FIRE)
+		_has_concentrate_fire_token = false
+		EventBus.command_tokens_changed.emit(_ship)
+		_log.info("Concentrate Fire token spent.")
+		return true
+	return false
+
+
+# ---------------------------------------------------------------------------
 # Maneuver execution
 # ---------------------------------------------------------------------------
 
@@ -357,3 +437,25 @@ func _recompute_budgets() -> void:
 	# Token consumed for the remainder.
 	var token_used: int = mini(abs_change - dial_used, _initial_token_budget)
 	_token_speed_budget = _initial_token_budget - token_used
+
+
+## Determines Concentrate Fire resource availability from the ship's state.
+## Called once at creation time.
+func _resolve_concentrate_fire_availability(ship: ShipInstance) -> void:
+	_has_concentrate_fire_dial = false
+	_has_concentrate_fire_token = false
+	# Check revealed dial.
+	if ship.command_dial_stack:
+		var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
+		if not revealed.is_empty() and \
+				int(revealed.get("command", -1)) == \
+				Constants.CommandType.CONCENTRATE_FIRE:
+			_has_concentrate_fire_dial = true
+	# Check command tokens.
+	if ship.command_tokens and \
+			ship.command_tokens.has_token(
+					Constants.CommandType.CONCENTRATE_FIRE):
+		_has_concentrate_fire_token = true
+	_log.info("Concentrate Fire availability: dial=%s, token=%s" %
+			[str(_has_concentrate_fire_dial),
+			str(_has_concentrate_fire_token)])

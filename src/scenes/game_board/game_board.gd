@@ -142,6 +142,12 @@ var _activation_modal: ActivationModal = null
 ## Requirements: FLOW-004.
 var _ship_activation_state: ShipActivationState = null
 
+## --- Phase 6: Attack mode state ---
+
+## Active AttackModeController (null when not in attack mode).
+## Requirements: ATK-FLOW-001.
+var _attack_mode_controller: AttackModeController = null
+
 ## Tracks whether the currently dragged token was inside its deployment zone
 ## on the previous frame, so the toast fires only on crossing (DBG-033).
 var _was_in_deploy_zone: bool = true
@@ -480,6 +486,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if _attack_mode_controller:
+		_attack_mode_controller.handle_ship_click(token)
+		return
 	if _range_overlay_selecting:
 		_show_range_overlay(token)
 		return
@@ -495,6 +504,9 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
+	if _attack_mode_controller:
+		_attack_mode_controller.handle_squadron_click(token)
+		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
 		_was_in_deploy_zone = true
@@ -796,6 +808,8 @@ func _create_turn_management_ui() -> void:
 			_on_maneuver_step_entered)
 	_activation_modal.maneuver_commit_requested.connect(
 			_on_execute_maneuver)
+	_activation_modal.attack_step_entered.connect(
+			_on_attack_step_entered)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
@@ -1307,6 +1321,10 @@ func _on_board_activation_ended() -> void:
 	if _activation_modal:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
+	# Clean up attack mode if active.
+	if _attack_mode_controller:
+		_attack_mode_controller.teardown()
+		_attack_mode_controller = null
 	_dismiss_maneuver_tool()
 	_dismiss_range_overlay()
 	# Re-enable simulation tool buttons.
@@ -1439,6 +1457,121 @@ func _show_end_activation_after_maneuver() -> void:
 		_ship_activation_state.advance_step()  ## MANEUVER → DONE
 	# Auto-end the activation (next player's turn).
 	EventBus.activation_ended.emit()
+
+
+# ---------------------------------------------------------------------------
+# Attack Mode (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+## Called when the activation modal reaches the Attack step ("Execute Attack").
+## Creates the AttackModeController and enters attack mode.
+## Requirements: ATK-FLOW-001.
+func _on_attack_step_entered() -> void:
+	_log.info("Attack step entered.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		_log.info("Cannot enter attack mode — missing state or token.")
+		return
+
+	# Gather enemy tokens.
+	var enemy_ships: Array[ShipToken] = _get_enemy_ship_tokens()
+	var enemy_squads: Array = _get_enemy_squadron_tokens()
+	var all_bodies: Array = _build_all_ship_bodies()
+
+	# Dismiss any active tools.
+	if _action_toolbar:
+		_action_toolbar.set_tool_buttons_disabled(true)
+
+	# Create the attack mode controller.
+	_attack_mode_controller = AttackModeController.new()
+	_attack_mode_controller.name = "AttackModeController"
+	_token_container.add_child(_attack_mode_controller)
+	_attack_mode_controller.attacks_finished.connect(
+			_on_attacks_finished)
+	_attack_mode_controller.setup(
+			_ship_activation_state,
+			_activating_ship_token,
+			enemy_ships,
+			enemy_squads,
+			all_bodies)
+	_log.info("Attack mode controller created.")
+
+
+## Called when all attacks are finished (or skipped).
+## Advances the activation past the ATTACK step and re-opens the modal.
+## Requirements: ATK-FLOW-003.
+func _on_attacks_finished() -> void:
+	_log.info("Attacks finished — advancing to maneuver.")
+	# Clean up attack controller.
+	if _attack_mode_controller:
+		_attack_mode_controller.teardown()
+		_attack_mode_controller = null
+
+	# Re-enable action toolbar.
+	if _action_toolbar:
+		_action_toolbar.set_tool_buttons_disabled(false)
+
+	# Advance past ATTACK step.
+	if _ship_activation_state:
+		_ship_activation_state.advance_step()  ## ATTACK → MANEUVER
+
+	# Mark attacks done in the modal.
+	if _activation_modal:
+		_activation_modal.mark_attacks_complete()
+
+	# Re-open the activation modal at the maneuver step.
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.centre_on_screen(vp_size)
+
+
+## Returns all enemy ship tokens (not belonging to the active player).
+func _get_enemy_ship_tokens() -> Array[ShipToken]:
+	var result: Array[ShipToken] = []
+	var active_player: int = GameManager.get_active_player_index()
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var token: ShipToken = child as ShipToken
+			if token == _activating_ship_token:
+				continue
+			var inst: ShipInstance = token.get_ship_instance()
+			if inst and inst.owner_player != active_player:
+				result.append(token)
+	return result
+
+
+## Returns all enemy squadron tokens.
+func _get_enemy_squadron_tokens() -> Array:
+	var result: Array = []
+	var active_player: int = GameManager.get_active_player_index()
+	for child: Node in _token_container.get_children():
+		if child is SquadronToken:
+			var token: SquadronToken = child as SquadronToken
+			if token.has_method("get_squadron_instance"):
+				var inst: RefCounted = token.get_squadron_instance()
+				if inst and inst.get("owner_player") != null and \
+						int(inst.owner_player) != active_player:
+					result.append(token)
+	return result
+
+
+## Builds obstruction body data for all ships on the board.
+func _build_all_ship_bodies() -> Array:
+	var bodies: Array = []
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var token: ShipToken = child as ShipToken
+			bodies.append({
+				"token": token,
+				"body": LineOfSightChecker.ObstructionBody.from_ship_base(
+						token.name,
+						token.global_position,
+						token.global_rotation,
+						token.get_half_width(),
+						token.get_half_length()),
+			})
+	return bodies
 
 
 # ---------------------------------------------------------------------------

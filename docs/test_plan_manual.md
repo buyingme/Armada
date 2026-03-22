@@ -1,4 +1,29 @@
+
 # Manual Test Plan — Star Wars: Armada Digital Edition
+
+---
+
+## Phase 6 — Attack Resolution (MT-6)
+
+**What this phase adds:**
+Full attack sequence UI and logic, including hull zone/target selection, dice pool, CF dial/token, defense tokens, damage, and Step 6 squadron targeting. All requirements from temp_attack_sequence.txt are implemented and covered by automated tests.
+
+### MT-6.1 — Attack UI and Flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship and press "execute attack" in the activation modal | Modal closes, range overlay highlights attacking ship |
+| 2 | Info modal appears below ship | Prompts for hull zone selection |
+| 3 | Select hull zone | Yellow highlight appears on LOS marker, prompt updates |
+| 4 | Select target (ship/squadron) | Yellow highlight on target, LOS line drawn |
+| 5 | Deselect/reselect as described | Highlights and prompts update as expected |
+| 6 | Confirm attack, roll dice | Dice pool and results shown in modal |
+| 7 | Spend CF dial/token if available | Extra dice options shown, can be spent |
+| 8 | Reroll if available | Reroll button appears if eligible |
+| 9 | Confirm to resolve attack | Attack proceeds, Step 6 squadron logic if applicable |
+| 10 | After both hull zones, activation modal reopens | Attack step is checked off |
+
+**Pass criteria:** UI matches requirements, all prompts and highlights work, dice and defense logic correct, no errors.
 
 > **Scope:** Phases 0–5d, 4g, 2c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).

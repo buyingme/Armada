@@ -830,7 +830,10 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
+### Phase 6: Attack Resolution ✅ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
+**Status:** Complete — committed <commit-hash>
+**Goal:** Implement full attack sequence, UI, and core logic per requirements. All tests passing except 1 unrelated scenario test.
+**Tests delivered:** 1042 total, 1068 passing, 1 unrelated failure (learning scenario setup)
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions
 

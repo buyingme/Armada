@@ -2,8 +2,26 @@ the requirements for the ui for executing the attack sequence of a ship is the f
 
 from the activation modal press a button next to the attack step. it should read "execute attack"
 
-close 
-first highlight the range overlay of the attacking ship.
+close the activation modal
+highlight the range overlay of the attacking ship.
+show a info modal below the attacking ship that prompts all relevant information for the attack sequence.
 
-then the player needs to select the attacking hull zone with the left mouse button, then the defending sqadron or enemy ship hull zone.
-if both are selected draw a yellow line that represents the line of sight check according to the rules.
+then the player needs to select the attacking hull zone with the left mouse button. prompt "select attacking hull zone". Place a yellow round highlight 6 px diameter and translucent on the line of sight marker of the selected hull zone.
+then the player needs to select the defending sqadron or enemy ship hull zone. promt "select target". lace a yellow round highlight 6 px diameter and translucent on the line of sight marker of the selected hull zone or squadron.
+when both are selected draw a yellow line that represents the line of sight check according to the rules.
+the target can be deselected by clicking again on the target. the attacking hull zone remains active.
+both can be deselected by clicking on the attacking hull zone.
+show the number of attack dice rolled for the attack.
+if the attacker has a command dial active he may spent the dial now to add a dice to the attack pool. prompt "spend dial for extra dice?" followed by  each available dice option. the player may push the option to add the dice.
+in the lower part of the modal show: "roll dice" button.
+If tthe button is pushed, roll the dice and show the graphics of the rolled dice in the modal.
+If the player has a reroll option (through extra rule or command tolken attached to the ship) show a button "reroll dice"
+In any case show a button at the lowest part of the modal that ready "confirm". pushing this button lets the player execute the next attack.
+In case sqadrons are attacked follow these steps for each squadron being attacked from the attacking hull zone (the attacking hull zone is pre selected in this case and cannot be deselected)
+
+when this sequence is fully over, the player may select a second hull zone to attack with. the hull zone that alredy fired should be blocked for selection and the LOS-marker of the hull zone should be highlighted by a translucent red dot with 6px diameter.
+follow the same sequence.
+
+If at any time there are no valid targets skip the attack step of the second or both hull zones.
+
+after both hull zones fired, open the activation menu again and promt the attack as done (checkmark symbol as already implemented.)

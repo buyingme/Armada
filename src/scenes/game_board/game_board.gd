@@ -122,6 +122,9 @@ var _range_overlay_selecting: bool = false
 ## Active RangeOverlayScene instance (null when not displayed).
 var _range_overlay_scene: RangeOverlayScene = null
 
+## Targeting list modal (null when not displayed).
+var _targeting_list_modal: TargetingListModal = null
+
 ## ActionToolbar in the lower-right corner.
 var _action_toolbar: ActionToolbar = null
 
@@ -250,6 +253,9 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Targeting list: Escape dismisses.
+	if _handle_targeting_list_escape(event):
+		return
 	# Range overlay: Escape dismisses or cancels selection.
 	if _handle_range_overlay_escape(event):
 		return
@@ -378,6 +384,8 @@ func _connect_signals() -> void:
 	# Range overlay.
 	EventBus.range_overlay_requested.connect(_on_range_overlay_requested)
 	EventBus.range_overlay_dismissed.connect(_dismiss_range_overlay)
+	# Targeting list (Phase 5d).
+	EventBus.targeting_list_requested.connect(_on_targeting_list_requested)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -1541,3 +1549,129 @@ func _handle_range_overlay_escape(event: InputEvent) -> bool:
 		get_viewport().set_input_as_handled()
 		return true
 	return false
+
+
+# ---------------------------------------------------------------------------
+# Targeting List (Phase 5d)
+# ---------------------------------------------------------------------------
+
+## Handles the "Targeting List" button press.
+## Toggle behaviour: if the modal is visible, close it. Otherwise open it.
+## Requirements: TL-UI-001, TL-UI-003, TL-UI-004.
+func _on_targeting_list_requested() -> void:
+	if _targeting_list_modal and _targeting_list_modal.visible:
+		_dismiss_targeting_list()
+		return
+	_show_targeting_list()
+
+
+## Builds the targeting data and opens the modal.
+func _show_targeting_list() -> void:
+	_dismiss_targeting_list()
+	var ships_info: Array = _collect_ship_infos()
+	var squads_info: Array = _collect_squad_infos()
+	var active_player: int = GameManager.get_active_player()
+	var ghost: TargetingListBuilder.ShipInfo = _collect_ghost_info()
+	var results: Array = TargetingListBuilder.build(
+			ships_info, squads_info, active_player, ghost)
+	# Create the modal on a CanvasLayer so it's always on top.
+	if _targeting_list_modal == null:
+		_targeting_list_modal = TargetingListModal.new()
+		# Add on a CanvasLayer for screen-space display.
+		var layer: CanvasLayer = CanvasLayer.new()
+		layer.name = "TargetingListLayer"
+		layer.layer = 90
+		add_child(layer)
+		layer.add_child(_targeting_list_modal)
+	_targeting_list_modal.show_results(results)
+	_log.info("Targeting list opened.")
+
+
+## Closes the targeting list modal.
+func _dismiss_targeting_list() -> void:
+	if _targeting_list_modal:
+		_targeting_list_modal.close()
+	_log.info("Targeting list dismissed.")
+
+
+## Checks if an Escape key press should dismiss the targeting list.
+## Returns true if the event was consumed.
+func _handle_targeting_list_escape(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	if _targeting_list_modal and _targeting_list_modal.visible:
+		_dismiss_targeting_list()
+		get_viewport().set_input_as_handled()
+		return true
+	return false
+
+
+## Collects ShipInfo data from all ship tokens on the board.
+func _collect_ship_infos() -> Array:
+	var infos: Array = []
+	var tokens: Array[ShipToken] = get_ship_tokens()
+	for token: ShipToken in tokens:
+		var info: TargetingListBuilder.ShipInfo = TargetingListBuilder.ShipInfo.new()
+		var inst: ShipInstance = token.get_ship_instance()
+		info.ship_name = token.get_ship_data().ship_name if token.get_ship_data() else "Unknown"
+		info.data_key = inst.data_key if inst else ""
+		info.owner_player = inst.owner_player if inst else 0
+		info.pos = token.global_position
+		info.rot = token.global_rotation
+		info.half_w = token.get_half_width()
+		info.half_l = token.get_half_length()
+		info.arc_pts = token.get_firing_arc_world_points()
+		info.los_pts = token.get_los_origins_world()
+		var sd: ShipData = token.get_ship_data()
+		if sd:
+			info.battery_armament = sd.battery_armament
+			info.anti_squadron_armament = sd.anti_squadron_armament
+		infos.append(info)
+	return infos
+
+
+## Collects SquadInfo data from all squadron tokens on the board.
+func _collect_squad_infos() -> Array:
+	var infos: Array = []
+	var tokens: Array[SquadronToken] = get_squadron_tokens()
+	for token: SquadronToken in tokens:
+		var info: TargetingListBuilder.SquadInfo = TargetingListBuilder.SquadInfo.new()
+		var inst: SquadronInstance = token.get_squadron_instance()
+		if inst and inst.squadron_data:
+			info.squad_name = inst.squadron_data.squadron_name
+		else:
+			info.squad_name = "Squadron"
+		info.owner_player = inst.owner_player if inst else 0
+		info.pos = token.global_position
+		info.radius = token.get_radius_px()
+		infos.append(info)
+	return infos
+
+
+## Collects ghost ship info from the maneuver tool if active.
+## Returns null if no ghost is present.
+## Requirements: TL-LIST-004.
+func _collect_ghost_info() -> TargetingListBuilder.ShipInfo:
+	if _maneuver_tool_scene == null:
+		return null
+	if not _maneuver_tool_scene.has_method("get_ghost_transform"):
+		return null
+	var ghost_data: Dictionary = _maneuver_tool_scene.get_ghost_transform()
+	if ghost_data.is_empty():
+		return null
+	var info: TargetingListBuilder.ShipInfo = TargetingListBuilder.ShipInfo.new()
+	info.ship_name = ghost_data.get("ship_name", "Ghost")
+	info.data_key = ghost_data.get("data_key", "")
+	info.owner_player = ghost_data.get("owner_player", 0)
+	info.pos = ghost_data.get("position", Vector2.ZERO)
+	info.rot = ghost_data.get("rotation", 0.0)
+	info.half_w = ghost_data.get("half_w", 0.0)
+	info.half_l = ghost_data.get("half_l", 0.0)
+	info.arc_pts = ghost_data.get("arc_pts", {})
+	info.los_pts = ghost_data.get("los_pts", {})
+	info.battery_armament = ghost_data.get("battery_armament", {})
+	info.anti_squadron_armament = ghost_data.get("anti_squadron_armament", {})
+	return info

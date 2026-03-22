@@ -218,6 +218,10 @@ signal range_overlay_requested()
 ## Requirements: RO-006.
 signal range_overlay_dismissed()
 
+## Emitted when the player presses the "Targeting List" button.
+## Requirements: TL-UI-001.
+signal targeting_list_requested()
+
 
 # --- Activation / Maneuver Execution Events (Phase 5b) ---
 

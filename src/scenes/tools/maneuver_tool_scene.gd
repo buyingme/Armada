@@ -378,6 +378,56 @@ func has_ghost_range_overlay() -> bool:
 	return _ghost_range_overlay != null
 
 
+## Returns a Dictionary describing the ghost's current transform and ship data.
+## Used by the targeting list to compute hypothetical targeting from the ghost
+## position.  Returns an empty dictionary if no ghost is visible.
+## Requirements: TL-LIST-004.
+func get_ghost_transform() -> Dictionary:
+	if _ghost_sprite == null or not _ghost_sprite.visible:
+		return {}
+	var ship_data: ShipData = _ship_token.get_ship_data()
+	if ship_data == null:
+		return {}
+	var inst: ShipInstance = _ship_token.get_ship_instance()
+	# Compute firing arc boundary points in ghost world space.
+	var ghost_pos: Vector2 = _ghost_sprite.global_position
+	var ghost_rot: float = _ghost_sprite.global_rotation
+	var arc_pts: Dictionary = {}
+	if not ship_data.firing_arc_boundaries.is_empty() and _ghost_sprite.texture:
+		var tex_w: float = float(_ghost_sprite.texture.get_width())
+		var tex_h: float = float(_ghost_sprite.texture.get_height())
+		var sp_scale: Vector2 = _ghost_sprite.scale
+		for key: String in ship_data.firing_arc_boundaries:
+			var png_coord: Vector2 = ship_data.firing_arc_boundaries[key]
+			var local: Vector2 = (png_coord - Vector2(tex_w, tex_h) * 0.5) * sp_scale
+			arc_pts[key] = ghost_pos + local.rotated(ghost_rot)
+	# LOS origins in ghost world space.
+	var los_pts: Dictionary = {}
+	if not ship_data.line_of_sight_origins.is_empty() and _ghost_sprite.texture:
+		var tex_w2: float = float(_ghost_sprite.texture.get_width())
+		var tex_h2: float = float(_ghost_sprite.texture.get_height())
+		var sp_scale2: Vector2 = _ghost_sprite.scale
+		for key2: String in ship_data.line_of_sight_origins:
+			if key2.begins_with("_"):
+				continue
+			var png_coord2: Vector2 = ship_data.line_of_sight_origins[key2]
+			var local2: Vector2 = (png_coord2 - Vector2(tex_w2, tex_h2) * 0.5) * sp_scale2
+			los_pts[key2] = ghost_pos + local2.rotated(ghost_rot)
+	return {
+		"ship_name": ship_data.ship_name,
+		"data_key": _ship_token.get_meta("data_key", ""),
+		"owner_player": inst.owner_player if inst else 0,
+		"position": ghost_pos,
+		"rotation": ghost_rot,
+		"half_w": _ship_token.get_half_width(),
+		"half_l": _ship_token.get_half_length(),
+		"arc_pts": arc_pts,
+		"los_pts": los_pts,
+		"battery_armament": ship_data.battery_armament,
+		"anti_squadron_armament": ship_data.anti_squadron_armament,
+	}
+
+
 ## Creates or repositions the range overlay on the ghost preview.
 func _create_or_update_ghost_overlay() -> void:
 	if _ghost_sprite == null or not _ghost_sprite.visible:

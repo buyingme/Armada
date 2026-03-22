@@ -22,6 +22,7 @@
 - [Phase 4f: Hover Tooltip Infrastructure](#phase-4f-hover-tooltip-infrastructure)
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 5c: Range Overlay Tool](#phase-5c-range-overlay-tool)
+- [Phase 5d: Targeting List Tool](#phase-5d-targeting-list-tool)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -690,6 +691,28 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 5d: Targeting List Tool ✅
+**Goal:** Add a "T" button to the toolbar that opens a modal panel showing all valid attack targets (outgoing) and threats (incoming) for the active player's ships. Includes range-finding, firing-arc containment, line-of-sight/obstruction algorithms. Ghost hypothetical section when the maneuver tool ghost is visible. Pure information tool — no gameplay effect.
+**Prerequisites:** Phase 0 (GameScale range values), Phase 1 (geometry primitives), Phase 2 (ShipToken, SquadronToken), Phase 3 (GameState, PlayerState), Phase 5c (firing-arc boundary data, LOS origins data)
+**Duration estimate:** 2 sessions
+**Requirements:** `docs/requirements/targeting_list.md` (TL-RNG-001–006, TL-ARC-001–006, TL-LOS-001–009, TL-LIST-001–007, TL-UI-001–006, TL-ALGO-001–003)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | `RangeFinder` — point-in-arc, closest-point, range measurement | Core | TL-RNG-001–006, TL-ARC-001–006 | `src/core/range_finder.gd` — arc containment, hull-zone edge closest point (within arc), squadron base closest point, range band classification, max attack range | ✅ |
+| 2 | `LineOfSightChecker` — LOS trace + obstruction | Core | TL-LOS-001–009 | `src/core/line_of_sight_checker.gd` — segment-vs-OBR intersection, LOS from targeting points, blocked-by-other-hull-zone check (LOS + range path), obstruction by intervening ships, extensible obstacle array | ✅ |
+| 3 | `TargetingListBuilder` — orchestrator | Core | TL-LIST-001–005, TL-ALGO-003 | `src/core/targeting_list_builder.gd` — iterates friendly ships × hull zones × enemies, calls RangeFinder + LOSChecker, returns structured result with outgoing + incoming entries + ghost section | ✅ |
+| 4 | `TargetingListModal` — UI panel | Presentation | TL-UI-001–006, TL-LIST-006–007 | `src/ui/targeting_list_modal.gd` — PanelContainer, scrollable, per-ship sections, dice summary, obstruction flags, empty states, colour coding | ✅ |
+| 5 | "T" button + GameBoard wiring | Presentation | TL-UI-001, TL-UI-003–004 | Button in ActionToolbar; emits `targeting_list_requested`; open/close toggle; Escape dismissal; snapshot semantics; ghost section from maneuver tool | ✅ |
+| 6 | Unit tests — RangeFinder | Test | AC-TL-15, AC-TL-18 | `tests/unit/test_range_finder.gd` — point-in-arc, closest-point-within-arc, range band, max attack range, squadron base | ✅ |
+| 7 | Unit tests — LineOfSightChecker | Test | AC-TL-15, AC-TL-18 | `tests/unit/test_line_of_sight_checker.gd` — LOS traces, blocked by other HZ, obstruction by intervening ship, obstacle array | ✅ |
+| 8 | Unit tests — TargetingListBuilder | Test | AC-TL-01–18 | `tests/unit/test_targeting_list_builder.gd` — integration scenarios, ghost section, empty states, dice filtering by range | ✅ |
+
+**Requirements covered:** TL-RNG-001–006, TL-ARC-001–006, TL-LOS-001–009, TL-LIST-001–007, TL-UI-001–006, TL-ALGO-001–003, AC-TL-01–18
+**Tests:** 916 cumulative (53 scripts, 1741 asserts)
+
+---
+
 ### Phase 5b-2: Overlap Handling ⏳
 **Goal:** Handle ship–ship and ship–squadron overlaps during movement.
 **Prerequisites:** Phase 5b (maneuver execution)
@@ -850,6 +873,10 @@ Phase 0 (Scale & Assets)
     │       │                                        │
     │       ├── Phase 5 (Ship Movement) ◄────────────┘
     │       │       │
+    │       │       ├── Phase 5c (Range Overlay) ────┐
+    │       │       │                                │
+    │       │       └── Phase 5d (Targeting List) ◄──┘
+    │       │
     │       └── Phase 6 (Attack Resolution) ◄────────┘
     │               │
     │               ├── Phase 7 (Squadron Phase)
@@ -884,13 +911,14 @@ Phase 0 (Scale & Assets)
 | Phase 5a+ | 16 | 812 | 812 |
 | Phase 5b | ~25 | **35** | **847** |
 | Phase 5c | ~12 | **12** | **862** |
-| Phase 5b-2 | ~10 | — | ~887 |
-| Phase 6 | ~45 | — | ~892 |
-| Phase 7 | ~30 | — | ~922 |
-| Phase 8 | ~20 | — | ~942 |
-| Phase 9 | ~15 | — | ~957 |
-| Phase 10 | ~20 | — | ~977 |
-| **Total** | **~370 new** | | **~977** |
+| Phase 5d | ~50 | **54** | **916** |
+| Phase 5b-2 | ~10 | — | ~922 |
+| Phase 6 | ~45 | — | ~967 |
+| Phase 7 | ~30 | — | ~997 |
+| Phase 8 | ~20 | — | ~1017 |
+| Phase 9 | ~15 | — | ~1032 |
+| Phase 10 | ~20 | — | ~1052 |
+| **Total** | **~420 new** | | **~1052** |
 
 ---
 

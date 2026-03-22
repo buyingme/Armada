@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 51 scripts, 877 tests, 1710 asserts — all passing.
+> **Current baseline:** 53 scripts, 916 tests, 1741 asserts — all passing.
 
 ---
 
@@ -1436,4 +1436,92 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 
 ---
 
-*Last updated: Phase 5c — Range overlay tool with pre-rendered overlay PNGs per ship type.*
+## Phase 5d — Targeting List Tool
+
+**What this phase adds:** A "T" button opens a modal showing all valid attack targets (outgoing) and incoming threats for the active player's ships. Includes firing-arc containment, range measurement, and line-of-sight/obstruction checks. Ghost hypothetical section when maneuver tool ghost is visible.
+
+### MT-5d.1 — T button visible and styled
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start game board scene | "T" button visible in the ActionToolbar alongside "M" and "R" |
+| 2 | Hover over T button | Same styling as M and R buttons |
+| 3 | Check alignment | T button positioned after R button |
+
+### MT-5d.2 — Targeting list modal opens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press T button | Modal panel appears showing targeting list |
+| 2 | Check content | Shows sections for each friendly ship |
+| 3 | Check outgoing targets | Each ship lists outgoing targets per hull zone with range band, dice, and arc |
+| 4 | Check incoming threats | Each ship lists incoming threats from enemy arcs |
+
+### MT-5d.3 — Range and arc correctness
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With Learning Scenario layout, open targeting list | Range bands shown match expected values (e.g. close/medium/long) |
+| 2 | Compare with visual range overlay | Targets shown at ranges that match what the range overlay would show |
+| 3 | Check all four hull zones per ship | Targets appear under the correct arc (FRONT, LEFT, RIGHT, REAR) |
+
+### MT-5d.4 — Dice summary
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Check a target at close range | Dice summary includes black, blue, and red dice as appropriate |
+| 2 | Check a target at medium range | No black dice in summary |
+| 3 | Check a target at long range | Only red dice in summary |
+
+### MT-5d.5 — Dismiss and toggle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With modal visible, press Escape | Modal disappears |
+| 2 | Press T again | Modal reappears (recomputed) |
+| 3 | Press T while modal is visible | Modal closes (toggle) |
+
+### MT-5d.6 — Ghost hypothetical section
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open maneuver tool on a ship and set speed | Ghost preview visible |
+| 2 | Press T to open targeting list | Additional "Projected position (after maneuver)" section appears |
+| 3 | Check ghost section content | Shows targets/threats from the ghost's projected position |
+| 4 | Dismiss maneuver tool, press T again | Ghost section no longer appears |
+
+### MT-5d.7 — Empty states
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | If a ship has no outgoing targets | Shows "— No targets in range —" |
+| 2 | If a ship has no incoming threats | Shows "— No incoming threats —" |
+
+### MT-5d.8 — T button disabled during activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship | T button greyed out / disabled |
+| 2 | Try pressing T | Nothing happens |
+| 3 | Commit the maneuver | T button re-enabled |
+
+### MT-5d.9 — Scrolling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open targeting list with many entries | Content is scrollable if longer than viewport |
+| 2 | Scroll down | All entries visible and rendered correctly |
+
+### MT-5d.10 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 916 tests, 53 scripts, 0 failures |
+| 2 | All Phase 5a/5b/5c manual tests still pass | Maneuver tool, range overlay — no regression |
+| 3 | M and R buttons still work | Unaffected by T button addition |
+
+**Pass criteria:** T button visible and styled; click T → modal with correct targets per arc, range bands, dice summaries; obstruction flagged; ghost section present when maneuver ghost active; toggle/escape dismiss; disabled during activation; scrollable; 916 tests pass.
+
+---
+
+*Last updated: Phase 5d — Targeting list tool with RangeFinder, LineOfSightChecker, TargetingListBuilder.*

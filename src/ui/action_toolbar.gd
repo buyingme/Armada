@@ -2,9 +2,10 @@
 ##
 ## Lower-right toolbar that hosts action buttons for the game board.
 ## Contains the tooltip toggle (relocated from TooltipManager),
-## the "Display Maneuver Tool" button (M), and the "Range Overlay" button (R).
+## the "Display Maneuver Tool" button (M), the "Range Overlay" button (R),
+## and the "Targeting List" button (T).
 ##
-## Requirements: MT-U-001, MT-U-002, RO-001, AC-13.
+## Requirements: MT-U-001, MT-U-002, RO-001, TL-UI-001, AC-13.
 class_name ActionToolbar
 extends HBoxContainer
 
@@ -21,6 +22,9 @@ var _maneuver_tool_btn: Button = null
 ## "Range Overlay" button.
 var _range_overlay_btn: Button = null
 
+## "Targeting List" button.
+var _targeting_list_btn: Button = null
+
 
 func _init() -> void:
 	name = "ActionToolbar"
@@ -33,6 +37,7 @@ func setup_buttons() -> void:
 	_reparent_tooltip_toggle()
 	_create_maneuver_tool_button()
 	_create_range_overlay_button()
+	_create_targeting_list_button()
 	call_deferred("_deferred_position")
 
 
@@ -120,6 +125,32 @@ func _on_range_overlay_pressed() -> void:
 	EventBus.range_overlay_requested.emit()
 
 
+## Creates the targeting list button.
+## Requirements: TL-UI-001.
+func _create_targeting_list_button() -> void:
+	_targeting_list_btn = Button.new()
+	_targeting_list_btn.name = "TargetingListButton"
+	_targeting_list_btn.text = "T"
+	_targeting_list_btn.flat = true
+	var btn_size: float = GameScale.tooltip_toggle_button_size
+	_targeting_list_btn.custom_minimum_size = Vector2(btn_size, btn_size)
+	_targeting_list_btn.add_theme_font_size_override("font_size", 16)
+	_targeting_list_btn.add_theme_color_override(
+			"font_color", Color(1.0, 1.0, 1.0, 0.7))
+	_targeting_list_btn.add_theme_color_override(
+			"font_hover_color", Color.WHITE)
+	_targeting_list_btn.tooltip_text = "Targeting List"
+	_targeting_list_btn.pressed.connect(_on_targeting_list_pressed)
+	add_child(_targeting_list_btn)
+
+
+## Emits the targeting list request signal.
+## Requirements: TL-UI-001.
+func _on_targeting_list_pressed() -> void:
+	_log.info("Targeting List button pressed.")
+	EventBus.targeting_list_requested.emit()
+
+
 ## Enables or disables the simulation tool buttons (M and R).
 ## [param disabled] — when [code]true[/code], the buttons are greyed-out
 ## and ignore clicks (used while the activation-mode maneuver tool is active).
@@ -128,6 +159,8 @@ func set_tool_buttons_disabled(disabled: bool) -> void:
 		_maneuver_tool_btn.disabled = disabled
 	if _range_overlay_btn:
 		_range_overlay_btn.disabled = disabled
+	if _targeting_list_btn:
+		_targeting_list_btn.disabled = disabled
 
 
 ## Deferred position update after layout calculates sizes.

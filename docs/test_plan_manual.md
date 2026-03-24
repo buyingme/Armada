@@ -1887,3 +1887,80 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 4 | M, R, T toolbar buttons still work | No interference |
 
 **Pass criteria:** Target selection works for all four attacker/target combinations (ship→ship, ship→squad, squad→ship, squad→squad); LOS line colour matches trace result; deselection (target re-click, attacker click, Escape) all behave correctly; panel text updates properly; no regressions; all GUT tests pass.
+
+---
+
+## Phase 6a-3 — Same-Ship Guard, Arc Validation & Range Line
+
+**What this phase adds:** Three validation/visualisation improvements to the Attack Simulator target selection: (1) Hull zones on the same ship as the attacker cannot be selected as the target — a tooltip reading "Cannot target the same ship." appears briefly. (2) If the target is not inside the attacker's firing arc, the click is rejected with a tooltip "Defender is not in arc." (3) A range measurement line is drawn alongside the LOS line, coloured by range band (grey = close, blue = medium, red = long, purple = beyond). The range line connects the closest points on the attacking and defending geometries. The panel body now also shows the range band.
+
+**Prerequisites:** Phase 6a-2 committed and working. Learning Scenario board visible.
+
+### MT-6a-3.1 — Same-ship guard
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate "A", click a hull zone on a ship to select attacker | Attacker visuals shown; panel says "Select a target." |
+| 2 | Click a **different** hull zone on the **same** ship | Click rejected; tooltip "Cannot target the same ship." appears for ~2 s |
+| 3 | Click a hull zone on a **different** ship | Target accepted normally; LOS + range line drawn |
+
+### MT-6a-3.2 — Arc check — ship target not in arc
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a hull zone attacker (e.g. FRONT) | Attacker visuals with arc lines |
+| 2 | Click a hull zone on a ship that is clearly **behind** the attacker (not in the front arc) | Click rejected; tooltip "Defender is not in arc." appears for ~2 s |
+| 3 | Click a hull zone on a ship that **is** inside the front arc | Target accepted; LOS + range line drawn |
+
+### MT-6a-3.3 — Arc check — squadron target not in arc
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a hull zone attacker (e.g. LEFT) | Attacker visuals shown |
+| 2 | Click a squadron that is outside the left arc | Click rejected; tooltip "Defender is not in arc." |
+| 3 | Click a squadron that is inside the left arc | Target accepted; LOS + range line drawn |
+
+### MT-6a-3.4 — Squadron attacker skips arc check
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a squadron as attacker | Close-range circle shown |
+| 2 | Click a hull zone on a ship in any direction | Target accepted (no arc restriction); LOS + range line drawn |
+| 3 | Click a different squadron in any direction | Target accepted; both lines drawn |
+
+### MT-6a-3.5 — Range line colour coding
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select attacker and target at close range | Grey range line (`Color(0.7, 0.7, 0.7, 0.8)`) |
+| 2 | Select attacker and target at medium range | Blue range line (`Color(0.2, 0.4, 1.0, 0.8)`) |
+| 3 | Select attacker and target at long range | Red range line (`Color(1.0, 0.15, 0.15, 0.8)`) |
+| 4 | Select attacker and target beyond ruler range | Purple range line (`Color(0.6, 0.1, 0.9, 0.8)`) |
+
+### MT-6a-3.6 — Both lines drawn simultaneously
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select attacker hull zone and target hull zone | Two lines visible: LOS line (yellow/orange/red by LOS result) and range line (grey/blue/red/purple by range band) |
+| 2 | Note that the lines have **different endpoints** | LOS line goes targeting-point → targeting-point; range line goes closest-edge-point → closest-edge-point |
+| 3 | Deselect target (click target again) | Both lines disappear; attacker visuals remain |
+
+### MT-6a-3.7 — Panel shows range band
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select attacker and target at medium range with clear LOS | Panel body: "LOS: Clear · Range: Medium" |
+| 2 | Select attacker and target at long range with obstructed LOS | Panel body: "LOS: Obstructed by [ship] · Range: Long" |
+| 3 | Select attacker and target beyond range | Panel body includes "Range: Beyond" |
+
+### MT-6a-3.8 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | All tests pass, 0 failures, expected script count |
+| 2 | Verify Phase 6a attacker selection still works | Attacker visuals appear correctly |
+| 3 | Verify Phase 6a-2 LOS line + deselection still works | Colour-coded LOS line, deselection behaviour unchanged |
+| 4 | Escape cancels at any point | Clean dismiss, no orphaned visuals |
+| 5 | M, R, T toolbar buttons still work | No interference |
+
+**Pass criteria:** Same-ship clicks rejected with tooltip; out-of-arc clicks rejected with tooltip; squadron attackers bypass arc check; range line drawn with correct colour for each band; both LOS and range lines visible simultaneously; panel shows range band text; no regressions; all GUT tests pass.

@@ -1,9 +1,10 @@
 ## Unit tests for RangeFinder.
 ##
 ## Tests firing-arc containment, closest-point calculations, range measurement,
-## maximum attack range, and dice-at-range logic.
+## maximum attack range, dice-at-range logic, and endpoint measurement functions.
 ##
-## Requirements: TL-RNG-001–006, TL-ARC-001–006, AC-TL-15, AC-TL-18.
+## Requirements: TL-RNG-001–006, TL-ARC-001–006, AC-TL-15, AC-TL-18,
+## AS-RNG-011.
 extends GutTest
 
 
@@ -357,3 +358,121 @@ func test_format_dice_mixed() -> void:
 func test_format_dice_empty() -> void:
 	assert_eq(RangeFinder.format_dice({}), "no dice",
 			"Empty dict → 'no dice'")
+
+
+# =========================================================================
+# measure_attack_range_ship_endpoints  (AS-RNG-011)
+# =========================================================================
+
+func test_ship_endpoints_returns_inf_when_no_portion_in_arc() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var atk_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	var def_edge: Array[Vector2] = [Vector2(480, 700), Vector2(520, 700)]
+	var result: Dictionary = RangeFinder.measure_attack_range_ship_endpoints(
+			atk_edge, def_edge, Constants.HullZone.FRONT, arc_pts)
+	assert_eq(result["distance"], INF,
+			"No in-arc portion → distance should be INF")
+	assert_eq(result["atk_pt"], Vector2.ZERO,
+			"No in-arc portion → atk_pt should be ZERO")
+	assert_eq(result["def_pt"], Vector2.ZERO,
+			"No in-arc portion → def_pt should be ZERO")
+
+
+func test_ship_endpoints_returns_distance_and_points_when_in_arc() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var atk_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	var def_edge: Array[Vector2] = [Vector2(480, 365), Vector2(520, 365)]
+	var result: Dictionary = RangeFinder.measure_attack_range_ship_endpoints(
+			atk_edge, def_edge, Constants.HullZone.FRONT, arc_pts)
+	assert_almost_eq(result["distance"], 100.0, 1.0,
+			"Distance should be ~100 px between parallel edges")
+	# Check that returned points are reasonable — both should lie between
+	# Y=365 and Y=465, X between 480 and 520.
+	var atk_pt: Vector2 = result["atk_pt"]
+	var def_pt: Vector2 = result["def_pt"]
+	assert_true(atk_pt.y >= 464.0 and atk_pt.y <= 466.0,
+			"Attacker point Y should be on the atk edge (~465)")
+	assert_true(def_pt.y >= 364.0 and def_pt.y <= 366.0,
+			"Defender point Y should be on the def edge (~365)")
+
+
+# =========================================================================
+# measure_attack_range_squadron_endpoints  (AS-RNG-011)
+# =========================================================================
+
+func test_squad_endpoints_returns_distance_and_points() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var atk_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	var squad_pos: Vector2 = Vector2(500, 350)
+	var radius: float = 15.0
+	var result: Dictionary = RangeFinder.measure_attack_range_squadron_endpoints(
+			atk_edge, squad_pos, radius, Constants.HullZone.FRONT, arc_pts)
+	assert_almost_eq(result["distance"], 100.0, 2.0,
+			"Distance should be ~100 px to squadron edge")
+	var atk_pt: Vector2 = result["atk_pt"]
+	var def_pt: Vector2 = result["def_pt"]
+	assert_true(atk_pt.y >= 464.0 and atk_pt.y <= 466.0,
+			"Attacker point Y should be on the edge (~465)")
+	assert_almost_eq(def_pt.y, 365.0, 2.0,
+			"Defender point Y should be at ~365 (centre + radius)")
+
+
+func test_squad_endpoints_returns_inf_when_outside_arc() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var atk_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	var squad_pos: Vector2 = Vector2(500, 700)
+	var result: Dictionary = RangeFinder.measure_attack_range_squadron_endpoints(
+			atk_edge, squad_pos, 15.0, Constants.HullZone.FRONT, arc_pts)
+	assert_eq(result["distance"], INF,
+			"Squadron behind ship → distance should be INF")
+
+
+# =========================================================================
+# measure_range_squad_to_ship  (AS-RNG-011)
+# =========================================================================
+
+func test_squad_to_ship_returns_distance_and_points() -> void:
+	var squad_pos: Vector2 = Vector2(500, 350)
+	var squad_r: float = 15.0
+	var def_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			squad_pos, squad_r, def_edge)
+	assert_almost_eq(result["distance"], 100.0, 2.0,
+			"Distance should be ~100 px from squadron edge to ship edge")
+	assert_almost_eq(result["atk_pt"].y, 365.0, 2.0,
+			"Attacker point should be on the bottom of the circle (~365)")
+	assert_almost_eq(result["def_pt"].y, 465.0, 1.0,
+			"Defender point should be on the ship edge (~465)")
+
+
+# =========================================================================
+# measure_range_squad_to_squad  (AS-RNG-011)
+# =========================================================================
+
+func test_squad_to_squad_returns_distance_and_points() -> void:
+	var atk_centre: Vector2 = Vector2(500, 300)
+	var atk_r: float = 15.0
+	var def_centre: Vector2 = Vector2(500, 500)
+	var def_r: float = 15.0
+	var result: Dictionary = RangeFinder.measure_range_squad_to_squad(
+			atk_centre, atk_r, def_centre, def_r)
+	# Centre-to-centre: 200, minus two radii: 200 - 15 - 15 = 170.
+	assert_almost_eq(result["distance"], 170.0, 1.0,
+			"Distance should be ~170 px between two squadron edges")
+	assert_almost_eq(result["atk_pt"].y, 315.0, 1.0,
+			"Attacker point should be on bottom of atk circle (~315)")
+	assert_almost_eq(result["def_pt"].y, 485.0, 1.0,
+			"Defender point should be on top of def circle (~485)")
+
+
+func test_squad_to_squad_overlapping_returns_zero() -> void:
+	# Two overlapping squadrons should return 0 distance.
+	var pos: Vector2 = Vector2(500, 500)
+	var result: Dictionary = RangeFinder.measure_range_squad_to_squad(
+			pos, 15.0, pos, 15.0)
+	assert_almost_eq(result["distance"], 0.0, 1.0,
+			"Overlapping squadrons → distance should be ~0")

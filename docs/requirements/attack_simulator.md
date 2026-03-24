@@ -1,9 +1,11 @@
 # Attack Simulator — Requirements
 
-> **Scope:** Phases 6a / 6a-2 — Attacker Declaration, Target Selection
-> & LOS Visualization.
+> **Scope:** Phases 6a / 6a-2 / 6a-3 — Attacker Declaration, Target
+> Selection & LOS Visualization, Same-Ship Guard, Arc Validation, and
+> Range Measurement Line.
 > Selection of the attacking hull zone / squadron, selection of the
-> defending hull zone / squadron, and the LOS line between them.
+> defending hull zone / squadron, LOS line, arc containment check, and
+> range measurement line.
 > Dice rolling, defense tokens, and damage resolution remain in Phase 6
 > proper.
 
@@ -483,3 +485,193 @@ When one or both endpoints are squadrons, drop the "— \<ZONE\>" part.
 | AC-AS-13 | The "A" button is disabled during ship activation (same as M/R/T). |
 | AC-AS-14 | All key events are logged with `"AttackSim"` context. |
 | AC-AS-15 | Starting the attack simulator dismisses any active range overlay or targeting list. |
+
+---
+
+# Phase 6a-3 — Same-Ship Guard, Arc Validation & Range Line
+
+---
+
+## 19. Same-Ship Guard
+
+### AS-TGT-030 — Cannot target hull zone on same ship
+
+When the attacker is a **ship hull zone**, clicking any hull zone on the
+**same ship** as the attacker is rejected:
+
+- The click is ignored (no target is selected).
+- A tooltip is shown via `TooltipManager.show_text()` with the message
+  **"Cannot target the same ship."** (force = true, duration ≈ 2 s).
+- The `GameLogger` logs the rejection at `info` level.
+
+> Rules Reference: "Attack", Step 1, p.2.
+> "The attacker … cannot declare its own ship as the defender."
+
+This guard does **not** apply when the attacker is a squadron (a squadron
+can never target a ship hull zone on itself).
+
+---
+
+## 20. Firing-Arc Validation
+
+### AS-ARC-001 — Defender must be in attacker's firing arc (ship attacker)
+
+When the attacker is a **ship hull zone** and the player clicks a target,
+the simulator checks whether **any portion** of the defender is inside the
+attacker's firing arc before accepting the target:
+
+- **Ship target:** `RangeFinder.is_hull_zone_edge_in_arc()` with the
+  defender's hull-zone edge and the attacker's arc boundary points.
+- **Squadron target:** `RangeFinder.is_squadron_in_arc()` with the
+  defender squadron's centre + radius and the attacker's arc boundary pts.
+
+If the defender is **not** in arc:
+
+- The click is rejected (no target is selected).
+- A tooltip is shown via `TooltipManager.show_text()` with the message
+  **"Defender is not in arc."** (force = true, duration ≈ 2 s).
+- The `GameLogger` logs the rejection at `info` level.
+
+> Rules Reference: "Firing Arc", p.8.
+> "Each hull zone has a firing arc indicated by the lines on the ship
+> token. … A ship can only perform an attack against a target that is
+> inside the attacking hull zone's firing arc."
+
+### AS-ARC-002 — Squadron attackers skip arc check
+
+Squadrons do not have firing arcs. When the attacker is a squadron,
+the arc validation step is skipped entirely.
+
+---
+
+## 21. Range Measurement Line
+
+### AS-RNG-010 — Range line drawn between closest points
+
+When **both** attacker and target are selected (and the target passes the
+same-ship guard and arc check), a **range measurement line** is drawn in
+addition to the existing LOS line.
+
+The range line connects the **closest points** on the attacker and
+defender geometries used for range measurement:
+
+| Attacker | Target | Endpoint logic |
+|----------|--------|----------------|
+| Ship HZ | Ship HZ | Closest point on attacker hull-zone edge to closest in-arc point on defender hull-zone edge |
+| Ship HZ | Squadron | Closest point on attacker hull-zone edge to closest in-arc point on squadron base circle |
+| Squadron | Ship HZ | Closest point on squadron base circle to closest point on defender hull-zone edge |
+| Squadron | Squadron | Closest point on attacker base circle to closest point on defender base circle |
+
+> Rules Reference: "Attack", Step 1, p.2.
+> "Determine the range by measuring from the closest point of the
+> attacking hull zone to the closest point of the defending hull zone
+> or squadron."
+
+For **ship attackers**, only the portion of the defender inside the
+attacker's firing arc is considered (consistent with Rule Reference
+"Measuring Firing Arc and Range", p.10).
+
+For **squadron attackers**, arc restrictions do not apply (see AS-ARC-002).
+
+### AS-RNG-011 — New `RangeFinder` endpoint functions
+
+Because the existing `measure_attack_range_ship()` and
+`measure_attack_range_squadron()` return only the pixel distance, new
+companion functions are added that return **both the distance and the
+two endpoint positions** used for the range measurement:
+
+- `measure_attack_range_ship_endpoints(atk_edge, def_edge, atk_zone,
+  atk_arc_pts) → Dictionary`
+  Returns `{"distance": float, "atk_pt": Vector2, "def_pt": Vector2}`
+  or `{"distance": INF}` if no defender portion is in arc.
+
+- `measure_attack_range_squadron_endpoints(atk_edge, squad_centre,
+  squad_radius, atk_zone, atk_arc_pts) → Dictionary`
+  Returns `{"distance": float, "atk_pt": Vector2, "def_pt": Vector2}`
+  or `{"distance": INF}` if no squadron portion is in arc.
+
+- `measure_range_squad_to_ship(squad_centre, squad_radius, def_edge)
+  → Dictionary`
+  Returns `{"distance": float, "atk_pt": Vector2, "def_pt": Vector2}`.
+  No arc restriction (squadron attacker).
+
+- `measure_range_squad_to_squad(atk_centre, atk_radius, def_centre,
+  def_radius) → Dictionary`
+  Returns `{"distance": float, "atk_pt": Vector2, "def_pt": Vector2}`.
+  No arc restriction (squadron attacker).
+
+### AS-RNG-012 — Range line colour by range band
+
+The range line colour indicates the measured range band:
+
+| Range band | Colour | Constant name |
+|------------|--------|---------------|
+| Close | Grey `Color(0.7, 0.7, 0.7, 0.8)` | `RANGE_LINE_CLOSE` |
+| Medium | Blue `Color(0.2, 0.4, 1.0, 0.8)` | `RANGE_LINE_MEDIUM` |
+| Long | Red `Color(1.0, 0.15, 0.15, 0.8)` | `RANGE_LINE_LONG` |
+| Beyond | Purple `Color(0.6, 0.1, 0.9, 0.8)` | `RANGE_LINE_BEYOND` |
+
+The range band is determined by `GameScale.get_range_band(distance_px)`.
+
+Line width: 2.0 px (same as LOS line).
+
+### AS-RNG-013 — Range line drawn simultaneously with LOS line
+
+Both the LOS line (colour-coded by LOS result) and the range line
+(colour-coded by range band) are drawn at the same time. They have
+different endpoints — the LOS line uses targeting points; the range
+line uses closest-edge points.
+
+### AS-RNG-014 — Range band shown in info panel
+
+The panel body text is extended to include the range band:
+
+> **\<AttackerName\> — ZONE → \<DefenderName\> — ZONE**
+> LOS: Clear · Range: Close
+
+or:
+
+> **\<AttackerName\> → \<DefenderName\>**
+> LOS: Obstructed by CR90 · Range: Medium
+
+---
+
+## 22. Logging — Phase 6a-3
+
+### AS-LOG-020 — Validation rejection events
+
+| Event | Level | Example |
+|-------|-------|---------|
+| Same-ship guard rejected | `info` | `"Target rejected: same ship as attacker."` |
+| Arc check rejected | `info` | `"Target rejected: not in arc."` |
+| Range measured | `info` | `"Range: close (42 px)."` |
+
+---
+
+## 23. Reuse of Existing Functions — Phase 6a-3
+
+| Existing Function | Used For |
+|-------------------|----------|
+| `RangeFinder.is_hull_zone_edge_in_arc()` | Arc check for ship target |
+| `RangeFinder.is_squadron_in_arc()` | Arc check for squadron target |
+| `RangeFinder.get_hull_zone_edge()` | Attacker/defender edge for range measurement |
+| `RangeFinder.closest_point_on_segment()` | Range measurement closest point |
+| `RangeFinder.closest_point_on_circle()` | Range endpoint for squadron |
+| `GameScale.get_range_band()` | Convert pixel distance to range band name |
+| `TooltipManager.show_text()` | Display rejection messages |
+
+---
+
+## 24. Acceptance Criteria — Phase 6a-3
+
+| ID | Criterion |
+|----|-----------|
+| AC-AS-40 | Clicking a hull zone on the same ship as the attacker is rejected with tooltip "Cannot target the same ship." |
+| AC-AS-41 | Clicking a target not in the attacker's firing arc is rejected with tooltip "Defender is not in arc." |
+| AC-AS-42 | Arc check is skipped when attacker is a squadron. |
+| AC-AS-43 | A range measurement line is drawn from closest attacker point to closest defender point. |
+| AC-AS-44 | Range line is grey for close, blue for medium, red for long, purple for beyond. |
+| AC-AS-45 | Both LOS line and range line are visible simultaneously with different endpoint pairs. |
+| AC-AS-46 | Panel body shows range band alongside LOS status (e.g. "LOS: Clear · Range: Close"). |
+| AC-AS-47 | New `RangeFinder` endpoint functions return distance + atk_pt + def_pt. |
+| AC-AS-48 | Rejection events are logged. |

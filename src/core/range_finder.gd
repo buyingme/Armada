@@ -6,7 +6,7 @@
 ## All methods are static or work on plain Vector2/Dictionary data — no
 ## scene-tree or Node dependency.
 ##
-## Requirements: TL-RNG-001–006, TL-ARC-001–006, TL-ALGO-001.
+## Requirements: TL-RNG-001–006, TL-ARC-001–006, TL-ALGO-001, AS-RNG-011.
 ## Rules Reference: "Measuring Firing Arc and Range", p.10; "Firing Arc", p.8;
 ## "Attack Range", p.3; "Range and Distance", p.14.
 class_name RangeFinder
@@ -311,6 +311,153 @@ static func measure_attack_range_squadron(
 		if d2 < best:
 			best = d2
 	return best
+
+
+# =========================================================================
+# Attack Range Measurement with Endpoints  (AS-RNG-011)
+# =========================================================================
+
+## Like [method measure_attack_range_ship] but also returns the two closest
+## world-space points used for the measurement.
+## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2},
+## or {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+## when no defender portion is inside the arc.
+## Requirements: AS-RNG-011.
+static func measure_attack_range_ship_endpoints(
+		atk_edge: Array[Vector2],
+		def_edge: Array[Vector2],
+		atk_zone: Constants.HullZone,
+		atk_arc_pts: Dictionary) -> Dictionary:
+	var best: float = INF
+	var best_atk: Vector2 = Vector2.ZERO
+	var best_def: Vector2 = Vector2.ZERO
+	var def_start: Vector2 = def_edge[0]
+	var def_end: Vector2 = def_edge[1]
+	var count: int = EDGE_SAMPLE_COUNT
+	for i: int in range(count + 1):
+		var t: float = float(i) / float(count)
+		var def_pt: Vector2 = def_start.lerp(def_end, t)
+		if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
+			continue
+		var cp: Vector2 = closest_point_on_segment(
+				def_pt, atk_edge[0], atk_edge[1])
+		var d: float = cp.distance_to(def_pt)
+		if d < best:
+			best = d
+			best_atk = cp
+			best_def = def_pt
+	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
+		for j: int in range(count + 1):
+			var t2: float = float(j) / float(count)
+			var def_pt2: Vector2 = def_start.lerp(def_end, t2)
+			if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+				continue
+			var d2: float = atk_pt.distance_to(def_pt2)
+			if d2 < best:
+				best = d2
+				best_atk = atk_pt
+				best_def = def_pt2
+	if best == INF:
+		return {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
+
+
+## Like [method measure_attack_range_squadron] but also returns the two closest
+## world-space points used for the measurement.
+## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2},
+## or {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+## when no squadron portion is inside the arc.
+## Requirements: AS-RNG-011.
+static func measure_attack_range_squadron_endpoints(
+		atk_edge: Array[Vector2],
+		squad_centre: Vector2,
+		squad_radius: float,
+		atk_zone: Constants.HullZone,
+		atk_arc_pts: Dictionary) -> Dictionary:
+	var best: float = INF
+	var best_atk: Vector2 = Vector2.ZERO
+	var best_def: Vector2 = Vector2.ZERO
+	# Analytical closest point (optimal for common case).
+	var cp_on_edge: Vector2 = closest_point_on_segment(
+			squad_centre, atk_edge[0], atk_edge[1])
+	var cp_on_circle: Vector2 = closest_point_on_circle(
+			cp_on_edge, squad_centre, squad_radius)
+	if is_point_in_arc(cp_on_circle, atk_zone, atk_arc_pts):
+		return {
+			"distance": cp_on_edge.distance_to(cp_on_circle),
+			"atk_pt": cp_on_edge,
+			"def_pt": cp_on_circle,
+		}
+	# Sampling fallback for arc-boundary cases.
+	var sample_count: int = 32
+	for i: int in range(sample_count):
+		var angle: float = float(i) * TAU / float(sample_count)
+		var pt: Vector2 = squad_centre + Vector2(squad_radius, 0.0).rotated(angle)
+		if not is_point_in_arc(pt, atk_zone, atk_arc_pts):
+			continue
+		var cp: Vector2 = closest_point_on_segment(
+				pt, atk_edge[0], atk_edge[1])
+		var d: float = cp.distance_to(pt)
+		if d < best:
+			best = d
+			best_atk = cp
+			best_def = pt
+	# Reverse direction: attack-edge endpoints → closest in-arc circle point.
+	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
+		var cp_c: Vector2 = closest_point_on_circle(
+				atk_pt, squad_centre, squad_radius)
+		if not is_point_in_arc(cp_c, atk_zone, atk_arc_pts):
+			continue
+		var d2: float = atk_pt.distance_to(cp_c)
+		if d2 < best:
+			best = d2
+			best_atk = atk_pt
+			best_def = cp_c
+	if best == INF:
+		return {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
+
+
+## Measures range from a squadron base to a ship hull-zone edge.
+## No arc restriction (squadrons have no firing arcs).
+## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2}.
+## Requirements: AS-RNG-011.
+## Rules Reference: "Attack", Step 1, p.2.
+static func measure_range_squad_to_ship(
+		squad_centre: Vector2,
+		squad_radius: float,
+		def_edge: Array[Vector2]) -> Dictionary:
+	# Closest point on the defender edge to the squadron centre.
+	var cp_edge: Vector2 = closest_point_on_segment(
+			squad_centre, def_edge[0], def_edge[1])
+	# Closest point on the squadron base circle to that edge point.
+	var cp_circle: Vector2 = closest_point_on_circle(
+			cp_edge, squad_centre, squad_radius)
+	return {
+		"distance": cp_circle.distance_to(cp_edge),
+		"atk_pt": cp_circle,
+		"def_pt": cp_edge,
+	}
+
+
+## Measures range from one squadron base to another.
+## No arc restriction (squadrons have no firing arcs).
+## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2}.
+## Requirements: AS-RNG-011.
+static func measure_range_squad_to_squad(
+		atk_centre: Vector2,
+		atk_radius: float,
+		def_centre: Vector2,
+		def_radius: float) -> Dictionary:
+	var atk_pt: Vector2 = closest_point_on_circle(
+			def_centre, atk_centre, atk_radius)
+	var def_pt: Vector2 = closest_point_on_circle(
+			atk_centre, def_centre, def_radius)
+	return {
+		"distance": atk_pt.distance_to(def_pt),
+		"atk_pt": atk_pt,
+		"def_pt": def_pt,
+	}
 
 
 # =========================================================================

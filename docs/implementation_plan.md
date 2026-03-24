@@ -25,6 +25,7 @@
 - [Phase 5c: Range Overlay Tool](#phase-5c-range-overlay-tool)
 - [Phase 5d: Targeting List Tool](#phase-5d-targeting-list-tool)
 - [Phase 6a: Attack Simulator — Attacker Declaration](#phase-6a-attack-simulator--attacker-declaration)
+- [Phase 6a-3: Attack Simulator — Same-Ship Guard, Arc Validation & Range Line](#phase-6a-3-attack-simulator--same-ship-guard-arc-validation--range-line)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -879,6 +880,33 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** AS-TGT-001–003/010–012/020–022, AS-VIS-020–022, AS-PNL-010–011, AS-LOG-010, AC-AS-20–30
 **Tests:** 20 new tests (59 scripts, 1024 total, 1906 asserts)
+
+---
+
+### Phase 6a-3: Attack Simulator — Same-Ship Guard, Arc Validation & Range Line ✅
+**Goal:** Prevent illegal target selections (same ship, not in arc) with tooltip feedback. Draw a range measurement line (closest-point-to-closest-point) colour-coded by range band alongside the existing LOS line. Add new `RangeFinder` endpoint functions that return both distance and the two world-space points used for measurement.
+**Prerequisites:** Phase 6a-2 (target selection, LOS line, overlay, panel)
+**Duration estimate:** 1 session
+**Requirements:** `docs/requirements/attack_simulator.md` (AS-TGT-030, AS-ARC-001–002, AS-RNG-010–014, AS-LOG-020, AC-AS-40–48)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Same-ship guard in `_attack_sim_handle_target_ship_click` | Presentation | AS-TGT-030, AC-AS-40 | If `token == _attack_sim_atk_ship` and zone differs, reject click + show tooltip "Cannot target the same ship." | ✅ |
+| 2 | Arc check — ship target | Presentation | AS-ARC-001, AC-AS-41 | Before accepting a ship hull zone target, call `RangeFinder.is_hull_zone_edge_in_arc(def_edge, atk_zone, atk_arc_pts)`; reject + tooltip "Defender is not in arc." if false | ✅ |
+| 3 | Arc check — squadron target | Presentation | AS-ARC-001, AC-AS-41/42 | Before accepting a squadron target (ship attacker only), call `RangeFinder.is_squadron_in_arc()`; reject + tooltip; skip entirely for squadron attackers | ✅ |
+| 4 | `RangeFinder.measure_attack_range_ship_endpoints()` | Core | AS-RNG-011, AC-AS-47 | Returns `{"distance", "atk_pt", "def_pt"}` — like `measure_attack_range_ship` but also returns the two closest points | ✅ |
+| 5 | `RangeFinder.measure_attack_range_squadron_endpoints()` | Core | AS-RNG-011, AC-AS-47 | Returns `{"distance", "atk_pt", "def_pt"}` — like `measure_attack_range_squadron` but also returns endpoints | ✅ |
+| 6 | `RangeFinder.measure_range_squad_to_ship()` | Core | AS-RNG-011, AC-AS-47 | Returns `{"distance", "atk_pt", "def_pt"}` — squadron base → ship hull-zone edge (no arc restriction) | ✅ |
+| 7 | `RangeFinder.measure_range_squad_to_squad()` | Core | AS-RNG-011, AC-AS-47 | Returns `{"distance", "atk_pt", "def_pt"}` — squadron base → squadron base | ✅ |
+| 8 | Range line drawing in `AttackSimOverlay` | Presentation | AS-RNG-010/012/013, AC-AS-43–45 | `setup_range_line(start, end, band)` — grey/blue/red/purple; 2.0 px; drawn alongside LOS line | ✅ |
+| 9 | Range computation + overlay wiring in `game_board.gd` | Presentation | AS-RNG-010, AC-AS-43 | After LOS computed, compute range endpoints via new RangeFinder functions, determine band via `GameScale.get_range_band()`, call `setup_range_line()` | ✅ |
+| 10 | Panel body extended with range band | Presentation | AS-RNG-014, AC-AS-46 | `show_target_selected()` updated: body shows "LOS: Clear · Range: Close" | ✅ |
+| 11 | Unit tests — guard, arc, range | Test | AC-AS-40–48 | Same-ship rejection, arc rejection, endpoint functions, range line colours, panel range text | ✅ |
+| 12 | Manual test plan update | Docs | — | `docs/test_plan_manual.md` Phase 6a-3 section (MT-6a-3.1–6a-3.8) | ✅ |
+
+**Commit:** `PENDING`
+**Requirements covered:** AS-TGT-030, AS-ARC-001–002, AS-RNG-010–014, AS-LOG-020, AC-AS-40–48
+**Tests:** 1045 (59 scripts, 1941 asserts) — 21 new tests
 
 ---
 

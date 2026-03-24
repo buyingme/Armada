@@ -6,12 +6,15 @@
 ##
 ## For hull zone selection: draws two firing arc boundary lines and a LOS marker.
 ## For squadron selection: draws a close-range circle.
-## When a target is selected: draws a target LOS marker and a colour-coded
-## LOS line between attacker and target.
+## When a target is selected: draws a target LOS marker, a colour-coded
+## LOS line, and a colour-coded range measurement line between attacker
+## and target.
 ## The range overlay (RangeOverlayScene) is managed separately by the game board.
 ##
-## Requirements: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022.
-## Rules Reference: "Firing Arcs", p.3; "Line of Sight", p.10.
+## Requirements: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022,
+## AS-RNG-010–013.
+## Rules Reference: "Firing Arcs", p.3; "Line of Sight", p.10;
+## "Attack Range", p.3.
 class_name AttackSimOverlay
 extends Node2D
 
@@ -59,6 +62,25 @@ const LOS_LINE_BLOCKED: Color = Color(1.0, 0.0, 0.0, 0.6)
 ## Requirements: AS-VIS-021.
 const LOS_LINE_WIDTH: float = 2.0
 
+## Range line colour for close range — grey, 80 % opacity.
+## Requirements: AS-RNG-012.
+const RANGE_LINE_CLOSE: Color = Color(0.7, 0.7, 0.7, 0.8)
+
+## Range line colour for medium range — blue, 80 % opacity.
+## Requirements: AS-RNG-012.
+const RANGE_LINE_MEDIUM: Color = Color(0.2, 0.4, 1.0, 0.8)
+
+## Range line colour for long range — red, 80 % opacity.
+## Requirements: AS-RNG-012.
+const RANGE_LINE_LONG: Color = Color(1.0, 0.15, 0.15, 0.8)
+
+## Range line colour for beyond range — purple, 80 % opacity.
+## Requirements: AS-RNG-012.
+const RANGE_LINE_BEYOND: Color = Color(0.6, 0.1, 0.9, 0.8)
+
+## Width of the range measurement line in pixels.
+const RANGE_LINE_WIDTH: float = 2.0
+
 ## LOS status enum for setup_los_line().
 enum LOSStatus { CLEAR, OBSTRUCTED, BLOCKED }
 
@@ -103,6 +125,17 @@ var _los_line_end: Vector2 = Vector2.ZERO
 var _los_line_colour: Color = LOS_LINE_CLEAR
 ## Whether the LOS line should be drawn.
 var _draw_los_line: bool = false
+
+# --- Range line visuals ---
+
+## Start point of the range line (attacker closest point).
+var _range_line_start: Vector2 = Vector2.ZERO
+## End point of the range line (defender closest point).
+var _range_line_end: Vector2 = Vector2.ZERO
+## Colour of the range line (derived from range band).
+var _range_line_colour: Color = RANGE_LINE_CLOSE
+## Whether the range line should be drawn.
+var _draw_range_line: bool = false
 
 
 ## Sets up the overlay for a hull zone attacker.
@@ -153,6 +186,7 @@ func clear() -> void:
 	_draw_squadron = false
 	_draw_target_marker = false
 	_draw_los_line = false
+	_draw_range_line = false
 	queue_redraw()
 
 
@@ -162,6 +196,7 @@ func clear() -> void:
 func clear_target() -> void:
 	_draw_target_marker = false
 	_draw_los_line = false
+	_draw_range_line = false
 	queue_redraw()
 
 
@@ -207,6 +242,30 @@ func setup_los_line(start_pos: Vector2, end_pos: Vector2,
 	queue_redraw()
 
 
+## Sets up the range measurement line between attacker and target.
+## [param start_pos] — world-space closest point on attacker geometry.
+## [param end_pos] — world-space closest point on defender geometry.
+## [param range_band] — range band string ("close", "medium", "long", "beyond").
+## Requirements: AS-RNG-010, AS-RNG-012.
+func setup_range_line(start_pos: Vector2, end_pos: Vector2,
+		range_band: String) -> void:
+	_range_line_start = start_pos
+	_range_line_end = end_pos
+	_draw_range_line = true
+	match range_band:
+		Constants.RANGE_BAND_CLOSE:
+			_range_line_colour = RANGE_LINE_CLOSE
+		Constants.RANGE_BAND_MEDIUM:
+			_range_line_colour = RANGE_LINE_MEDIUM
+		Constants.RANGE_BAND_LONG:
+			_range_line_colour = RANGE_LINE_LONG
+		_:
+			_range_line_colour = RANGE_LINE_BEYOND
+	_log.debug("Range line set up: %s → %s, band=%s." % [
+			start_pos, end_pos, range_band])
+	queue_redraw()
+
+
 func _draw() -> void:
 	if _draw_hull_zone:
 		_draw_arc_lines()
@@ -217,6 +276,8 @@ func _draw() -> void:
 		_draw_target_los_marker()
 	if _draw_los_line:
 		_draw_los_line_segment()
+	if _draw_range_line:
+		_draw_range_line_segment()
 
 
 # =========================================================================
@@ -253,6 +314,13 @@ func _draw_target_los_marker() -> void:
 func _draw_los_line_segment() -> void:
 	draw_line(_los_line_start, _los_line_end,
 			_los_line_colour, LOS_LINE_WIDTH, true)
+
+
+## Draws the colour-coded range measurement line.
+## Requirements: AS-RNG-010, AS-RNG-012.
+func _draw_range_line_segment() -> void:
+	draw_line(_range_line_start, _range_line_end,
+			_range_line_colour, RANGE_LINE_WIDTH, true)
 
 
 # =========================================================================

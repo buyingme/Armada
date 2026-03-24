@@ -3,12 +3,14 @@
 ## Screen-space info panel for the Attack Simulator.
 ## Shows step-by-step prompts guiding the player through the attack sequence.
 ## Phase 6a: attacker declaration.  Phase 6a-2: target selection + LOS result.
+## Phase 6a-3: range band display alongside LOS result.
 ##
 ## Built as a PanelContainer following the project's standard modal styling.
 ## Dismissed by Escape, re-pressing "A", or programmatically via [method close].
 ##
-## Requirements: AS-PNL-001–003, AS-PNL-010–011.
-## Rules Reference: "Attack", Step 1, p.2; "Line of Sight", p.10.
+## Requirements: AS-PNL-001–003, AS-PNL-010–011, AS-RNG-014.
+## Rules Reference: "Attack", Step 1, p.2; "Line of Sight", p.10;
+## "Attack Range", p.3.
 class_name AttackSimPanel
 extends PanelContainer
 
@@ -62,15 +64,19 @@ func show_squadron_selected(squad_name: String) -> void:
 	_set_prompt(title, body)
 
 
-## Updates the panel to show the attacker → target pair and LOS result.
+## Updates the panel to show the attacker → target pair, LOS result,
+## and range band.
 ## [param atk_name] — display name of the attacking ship/squadron.
 ## [param atk_zone] — hull zone string or empty for squadrons.
 ## [param def_name] — display name of the defending ship/squadron.
 ## [param def_zone] — hull zone string or empty for squadrons.
 ## [param los_text] — LOS result string (e.g. "Clear", "Obstructed by X", "Blocked").
-## Requirements: AS-PNL-011.
+## [param range_band] — range band string ("close", "medium", "long", "beyond")
+##     or empty to omit the range part.
+## Requirements: AS-PNL-011, AS-RNG-014.
 func show_target_selected(atk_name: String, atk_zone: String,
-		def_name: String, def_zone: String, los_text: String) -> void:
+		def_name: String, def_zone: String, los_text: String,
+		range_band: String = "") -> void:
 	var atk_part: String = atk_name
 	if atk_zone != "":
 		atk_part = "%s — %s" % [atk_name, atk_zone]
@@ -79,6 +85,9 @@ func show_target_selected(atk_name: String, atk_zone: String,
 		def_part = "%s — %s" % [def_name, def_zone]
 	var title: String = "%s → %s" % [atk_part, def_part]
 	var body: String = "LOS: %s" % los_text
+	if range_band != "":
+		var display_band: String = range_band.capitalize()
+		body = "LOS: %s · Range: %s" % [los_text, display_band]
 	_set_prompt(title, body)
 
 

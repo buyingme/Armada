@@ -1,7 +1,7 @@
 ## Unit tests for AttackSimPanel
 ##
 ## Covers: AS-PNL-001, AS-PNL-002, AS-PNL-003, AS-VIS-004, AS-VIS-011,
-## AS-PNL-010, AS-PNL-011.
+## AS-PNL-010, AS-PNL-011, AS-RNG-014.
 extends GutTest
 
 
@@ -128,3 +128,59 @@ func test_show_target_selected_both_squadrons() -> void:
 	assert_eq(_panel.get_title_text(),
 			"X-wing Alpha \u2192 TIE Fighter Alpha",
 			"Both squadrons should omit zones in title.")
+
+
+# =========================================================================
+# Range band display in body  (AS-RNG-014)
+# =========================================================================
+
+func test_show_target_selected_body_with_close_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Clear", "close")
+	assert_eq(_panel.get_body_text(),
+			"LOS: Clear \u00b7 Range: Close",
+			"Body should include range band when provided.")
+
+
+func test_show_target_selected_body_with_medium_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Obstructed", "medium")
+	assert_eq(_panel.get_body_text(),
+			"LOS: Obstructed \u00b7 Range: Medium",
+			"Body should show medium range.")
+
+
+func test_show_target_selected_body_with_long_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Clear", "long")
+	assert_eq(_panel.get_body_text(),
+			"LOS: Clear \u00b7 Range: Long",
+			"Body should show long range.")
+
+
+func test_show_target_selected_body_with_beyond_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Clear", "beyond")
+	assert_eq(_panel.get_body_text(),
+			"LOS: Clear \u00b7 Range: Beyond",
+			"Body should show beyond range.")
+
+
+func test_show_target_selected_body_no_range_band_omits_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Clear")
+	assert_eq(_panel.get_body_text(), "LOS: Clear",
+			"Body should omit range when range_band is empty.")
+
+
+func test_show_target_selected_body_empty_string_range_omits_range() -> void:
+	_panel.show_initial()
+	_panel.show_target_selected(
+			"CR90", "FRONT", "VSD", "LEFT", "Clear", "")
+	assert_eq(_panel.get_body_text(), "LOS: Clear",
+			"Explicit empty string should also omit range.")

@@ -1,6 +1,7 @@
 ## Unit tests for AttackSimOverlay
 ##
-## Covers: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022.
+## Covers: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022,
+## AS-RNG-010–013.
 extends GutTest
 
 
@@ -210,6 +211,8 @@ func test_clear_resets_all_flags() -> void:
 	_overlay.setup_los_line(
 			Vector2.ZERO, Vector2(100, 200),
 			AttackSimOverlay.LOSStatus.CLEAR)
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2(100, 200), Constants.RANGE_BAND_CLOSE)
 	_overlay.clear()
 	assert_false(_overlay._draw_hull_zone,
 			"Hull zone flag should be false after clear().")
@@ -217,3 +220,73 @@ func test_clear_resets_all_flags() -> void:
 			"Target marker flag should be false after clear().")
 	assert_false(_overlay._draw_los_line,
 			"LOS line flag should be false after clear().")
+	assert_false(_overlay._draw_range_line,
+			"Range line flag should be false after clear().")
+
+
+# =========================================================================
+# Range line tests  (AS-RNG-010–013)
+# =========================================================================
+
+func test_setup_range_line_sets_draw_flag() -> void:
+	_overlay.setup_range_line(
+			Vector2(100, 100), Vector2(200, 200), Constants.RANGE_BAND_CLOSE)
+	assert_true(_overlay._draw_range_line,
+			"Range line draw flag should be true after setup_range_line().")
+
+
+func test_setup_range_line_stores_endpoints() -> void:
+	var start: Vector2 = Vector2(50, 60)
+	var end_pt: Vector2 = Vector2(250, 300)
+	_overlay.setup_range_line(start, end_pt, Constants.RANGE_BAND_MEDIUM)
+	assert_eq(_overlay._range_line_start, start,
+			"Range line start should be stored.")
+	assert_eq(_overlay._range_line_end, end_pt,
+			"Range line end should be stored.")
+
+
+func test_setup_range_line_close_colour() -> void:
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2.ONE, Constants.RANGE_BAND_CLOSE)
+	assert_eq(_overlay._range_line_colour, AttackSimOverlay.RANGE_LINE_CLOSE,
+			"Range line colour should be grey for close range.")
+
+
+func test_setup_range_line_medium_colour() -> void:
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2.ONE, Constants.RANGE_BAND_MEDIUM)
+	assert_eq(_overlay._range_line_colour, AttackSimOverlay.RANGE_LINE_MEDIUM,
+			"Range line colour should be blue for medium range.")
+
+
+func test_setup_range_line_long_colour() -> void:
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2.ONE, Constants.RANGE_BAND_LONG)
+	assert_eq(_overlay._range_line_colour, AttackSimOverlay.RANGE_LINE_LONG,
+			"Range line colour should be red for long range.")
+
+
+func test_setup_range_line_beyond_colour() -> void:
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2.ONE, Constants.RANGE_BAND_BEYOND)
+	assert_eq(_overlay._range_line_colour, AttackSimOverlay.RANGE_LINE_BEYOND,
+			"Range line colour should be purple for beyond range.")
+
+
+func test_setup_range_line_unknown_band_uses_beyond_colour() -> void:
+	_overlay.setup_range_line(
+			Vector2.ZERO, Vector2.ONE, "unknown_band")
+	assert_eq(_overlay._range_line_colour, AttackSimOverlay.RANGE_LINE_BEYOND,
+			"Unknown range band should fall back to beyond colour.")
+
+
+func test_clear_target_also_clears_range_line() -> void:
+	_overlay.setup_hull_zone(Vector2.ZERO, Vector2.ZERO,
+			Vector2.ZERO, Vector2.ZERO, Vector2.ZERO)
+	_overlay.setup_range_line(
+			Vector2(10, 20), Vector2(30, 40), Constants.RANGE_BAND_LONG)
+	_overlay.clear_target()
+	assert_false(_overlay._draw_range_line,
+			"Range line flag should be false after clear_target().")
+	assert_true(_overlay._draw_hull_zone,
+			"Hull zone flag should remain true after clear_target().")

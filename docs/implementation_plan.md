@@ -904,7 +904,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 11 | Unit tests — guard, arc, range | Test | AC-AS-40–48 | Same-ship rejection, arc rejection, endpoint functions, range line colours, panel range text | ✅ |
 | 12 | Manual test plan update | Docs | — | `docs/test_plan_manual.md` Phase 6a-3 section (MT-6a-3.1–6a-3.8) | ✅ |
 
-**Commit:** `PENDING`
+**Commit:** `5c2d4e2`
 **Requirements covered:** AS-TGT-030, AS-ARC-001–002, AS-RNG-010–014, AS-LOG-020, AC-AS-40–48
 **Tests:** 1045 (59 scripts, 1941 asserts) — 21 new tests
 

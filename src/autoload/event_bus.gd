@@ -92,22 +92,6 @@ signal defense_token_spent(ship: Node, token_type: Constants.DefenseToken)
 ## Emitted when damage is resolved.
 signal damage_resolved(target: Node, total_damage: int)
 
-## Emitted when the player presses "Execute Attack" in the activation modal.
-## Requirements: ATK-FLOW-001, ATK-UI-003.
-signal attack_step_entered()
-
-## Emitted when a single attack (Steps 1–6) finishes.
-## Requirements: ATK-FLOW-002.
-signal attack_completed()
-
-## Emitted when both attacks are done or skipped.
-## Requirements: ATK-FLOW-002.
-signal all_attacks_completed()
-
-## Emitted when an attack is cancelled (e.g. 0 dice at range).
-## Requirements: ATK-FLOW-003.
-signal attack_cancelled()
-
 
 # --- UI Events ---
 
@@ -237,6 +221,10 @@ signal range_overlay_dismissed()
 ## Emitted when the player presses the "Targeting List" button.
 ## Requirements: TL-UI-001.
 signal targeting_list_requested()
+
+## Emitted when the player presses the "Attack Simulator" button.
+## Requirements: AS-ACT-001, AS-ACT-002.
+signal attack_simulator_requested()
 
 
 # --- Activation / Maneuver Execution Events (Phase 5b) ---

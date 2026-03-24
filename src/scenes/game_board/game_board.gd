@@ -128,6 +128,20 @@ var _targeting_list_modal: TargetingListModal = null
 ## ActionToolbar in the lower-right corner.
 var _action_toolbar: ActionToolbar = null
 
+## --- Attack Simulator state (Phase 6a) ---
+
+## Whether we are in "select attacker" mode.
+var _attack_sim_selecting: bool = false
+
+## Attack simulator info panel (null when not displayed).
+var _attack_sim_panel: AttackSimPanel = null
+
+## Attack simulator visual-aid overlay (null when not displayed).
+var _attack_sim_overlay: AttackSimOverlay = null
+
+## Range overlay shown as part of the attack simulator (separate from the R tool).
+var _attack_sim_range_overlay: RangeOverlayScene = null
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -141,12 +155,6 @@ var _activation_modal: ActivationModal = null
 ## Current ship activation state tracker (nil when not in activation).
 ## Requirements: FLOW-004.
 var _ship_activation_state: ShipActivationState = null
-
-## --- Phase 6: Attack mode state ---
-
-## Active AttackModeController (null when not in attack mode).
-## Requirements: ATK-FLOW-001.
-var _attack_mode_controller: AttackModeController = null
 
 ## Tracks whether the currently dragged token was inside its deployment zone
 ## on the previous frame, so the toast fires only on crossing (DBG-033).
@@ -268,6 +276,9 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Attack simulator: Escape dismisses.
+	if _handle_attack_sim_escape(event):
+		return
 	# Targeting list: Escape dismisses.
 	if _handle_targeting_list_escape(event):
 		return
@@ -407,6 +418,8 @@ func _connect_signals() -> void:
 	EventBus.range_overlay_dismissed.connect(_dismiss_range_overlay)
 	# Targeting list (Phase 5d).
 	EventBus.targeting_list_requested.connect(_on_targeting_list_requested)
+	# Attack simulator (Phase 6a).
+	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -486,8 +499,8 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
-	if _attack_mode_controller:
-		_attack_mode_controller.handle_ship_click(token)
+	if _attack_sim_selecting:
+		_attack_sim_handle_ship_click(token)
 		return
 	if _range_overlay_selecting:
 		_show_range_overlay(token)
@@ -504,8 +517,8 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
-	if _attack_mode_controller:
-		_attack_mode_controller.handle_squadron_click(token)
+	if _attack_sim_selecting:
+		_attack_sim_handle_squadron_click(token)
 		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
@@ -808,8 +821,6 @@ func _create_turn_management_ui() -> void:
 			_on_maneuver_step_entered)
 	_activation_modal.maneuver_commit_requested.connect(
 			_on_execute_maneuver)
-	_activation_modal.attack_step_entered.connect(
-			_on_attack_step_entered)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
@@ -1321,10 +1332,6 @@ func _on_board_activation_ended() -> void:
 	if _activation_modal:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
-	# Clean up attack mode if active.
-	if _attack_mode_controller:
-		_attack_mode_controller.teardown()
-		_attack_mode_controller = null
 	_dismiss_maneuver_tool()
 	_dismiss_range_overlay()
 	# Re-enable simulation tool buttons.
@@ -1460,121 +1467,6 @@ func _show_end_activation_after_maneuver() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Attack Mode (Phase 6)
-# ---------------------------------------------------------------------------
-
-
-## Called when the activation modal reaches the Attack step ("Execute Attack").
-## Creates the AttackModeController and enters attack mode.
-## Requirements: ATK-FLOW-001.
-func _on_attack_step_entered() -> void:
-	_log.info("Attack step entered.")
-	if _ship_activation_state == null or _activating_ship_token == null:
-		_log.info("Cannot enter attack mode — missing state or token.")
-		return
-
-	# Gather enemy tokens.
-	var enemy_ships: Array[ShipToken] = _get_enemy_ship_tokens()
-	var enemy_squads: Array = _get_enemy_squadron_tokens()
-	var all_bodies: Array = _build_all_ship_bodies()
-
-	# Dismiss any active tools.
-	if _action_toolbar:
-		_action_toolbar.set_tool_buttons_disabled(true)
-
-	# Create the attack mode controller.
-	_attack_mode_controller = AttackModeController.new()
-	_attack_mode_controller.name = "AttackModeController"
-	_token_container.add_child(_attack_mode_controller)
-	_attack_mode_controller.attacks_finished.connect(
-			_on_attacks_finished)
-	_attack_mode_controller.setup(
-			_ship_activation_state,
-			_activating_ship_token,
-			enemy_ships,
-			enemy_squads,
-			all_bodies)
-	_log.info("Attack mode controller created.")
-
-
-## Called when all attacks are finished (or skipped).
-## Advances the activation past the ATTACK step and re-opens the modal.
-## Requirements: ATK-FLOW-003.
-func _on_attacks_finished() -> void:
-	_log.info("Attacks finished — advancing to maneuver.")
-	# Clean up attack controller.
-	if _attack_mode_controller:
-		_attack_mode_controller.teardown()
-		_attack_mode_controller = null
-
-	# Re-enable action toolbar.
-	if _action_toolbar:
-		_action_toolbar.set_tool_buttons_disabled(false)
-
-	# Advance past ATTACK step.
-	if _ship_activation_state:
-		_ship_activation_state.advance_step()  ## ATTACK → MANEUVER
-
-	# Mark attacks done in the modal.
-	if _activation_modal:
-		_activation_modal.mark_attacks_complete()
-
-	# Re-open the activation modal at the maneuver step.
-	if _activation_modal and _ship_activation_state:
-		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
-
-
-## Returns all enemy ship tokens (not belonging to the active player).
-func _get_enemy_ship_tokens() -> Array[ShipToken]:
-	var result: Array[ShipToken] = []
-	var active_player: int = GameManager.get_active_player_index()
-	for child: Node in _token_container.get_children():
-		if child is ShipToken:
-			var token: ShipToken = child as ShipToken
-			if token == _activating_ship_token:
-				continue
-			var inst: ShipInstance = token.get_ship_instance()
-			if inst and inst.owner_player != active_player:
-				result.append(token)
-	return result
-
-
-## Returns all enemy squadron tokens.
-func _get_enemy_squadron_tokens() -> Array:
-	var result: Array = []
-	var active_player: int = GameManager.get_active_player_index()
-	for child: Node in _token_container.get_children():
-		if child is SquadronToken:
-			var token: SquadronToken = child as SquadronToken
-			if token.has_method("get_squadron_instance"):
-				var inst: RefCounted = token.get_squadron_instance()
-				if inst and inst.get("owner_player") != null and \
-						int(inst.owner_player) != active_player:
-					result.append(token)
-	return result
-
-
-## Builds obstruction body data for all ships on the board.
-func _build_all_ship_bodies() -> Array:
-	var bodies: Array = []
-	for child: Node in _token_container.get_children():
-		if child is ShipToken:
-			var token: ShipToken = child as ShipToken
-			bodies.append({
-				"token": token,
-				"body": LineOfSightChecker.ObstructionBody.from_ship_base(
-						token.name,
-						token.global_position,
-						token.global_rotation,
-						token.get_half_width(),
-						token.get_half_length()),
-			})
-	return bodies
-
-
-# ---------------------------------------------------------------------------
 # Maneuver Tool (Phase 5a)
 # ---------------------------------------------------------------------------
 
@@ -1690,6 +1582,11 @@ func _handle_tool_shortcut(event: InputEvent) -> bool:
 		KEY_T:
 			_log.info("Keyboard shortcut: T (Targeting List).")
 			EventBus.targeting_list_requested.emit()
+			get_viewport().set_input_as_handled()
+			return true
+		KEY_A:
+			_log.info("Keyboard shortcut: A (Attack Simulator).")
+			EventBus.attack_simulator_requested.emit()
 			get_viewport().set_input_as_handled()
 			return true
 	return false
@@ -1911,3 +1808,219 @@ func _collect_ghost_info() -> TargetingListBuilder.ShipInfo:
 	info.battery_armament = ghost_data.get("battery_armament", {})
 	info.anti_squadron_armament = ghost_data.get("anti_squadron_armament", {})
 	return info
+
+
+# ---------------------------------------------------------------------------
+# Attack Simulator (Phase 6a)
+# ---------------------------------------------------------------------------
+
+## Maps Constants.HullZone values to their firing-arc boundary key pairs.
+## Each entry has "inner_a"/"outer_a" (left boundary) and
+## "inner_b"/"outer_b" (right boundary).
+const _ATTACK_SIM_ARC_KEYS: Dictionary = {
+	Constants.HullZone.FRONT: {
+		"inner_a": "inner_point_front_left",
+		"outer_a": "outer_point_front_left",
+		"inner_b": "inner_point_front_right",
+		"outer_b": "outer_point_front_right",
+	},
+	Constants.HullZone.LEFT: {
+		"inner_a": "inner_point_front_left",
+		"outer_a": "outer_point_front_left",
+		"inner_b": "inner_point_rear_left",
+		"outer_b": "outer_point_rear_left",
+	},
+	Constants.HullZone.RIGHT: {
+		"inner_a": "inner_point_front_right",
+		"outer_a": "outer_point_front_right",
+		"inner_b": "inner_point_rear_right",
+		"outer_b": "outer_point_rear_right",
+	},
+	Constants.HullZone.REAR: {
+		"inner_a": "inner_point_rear_left",
+		"outer_a": "outer_point_rear_left",
+		"inner_b": "inner_point_rear_right",
+		"outer_b": "outer_point_rear_right",
+	},
+}
+
+## Human-readable zone names for logging and panel display.
+const _ZONE_NAMES: Dictionary = {
+	Constants.HullZone.FRONT: "FRONT",
+	Constants.HullZone.LEFT: "LEFT",
+	Constants.HullZone.RIGHT: "RIGHT",
+	Constants.HullZone.REAR: "REAR",
+}
+
+
+## Handles the "Attack Simulator" button/key press.
+## Toggle behaviour: if already active, dismiss. Otherwise activate
+## and dismiss any other active tool first.
+## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005.
+func _on_attack_simulator_requested() -> void:
+	if _attack_sim_selecting or (_attack_sim_panel and _attack_sim_panel.visible):
+		_dismiss_attack_sim()
+		return
+	# Dismiss other tools first (AS-ACT-005).
+	_dismiss_range_overlay()
+	_dismiss_targeting_list()
+	_dismiss_maneuver_tool()
+	_activate_attack_sim()
+
+
+## Enters attacker-selection mode and shows the info panel.
+## Requirements: AS-ACT-001, AS-PNL-001, AS-PNL-002.
+func _activate_attack_sim() -> void:
+	_attack_sim_selecting = true
+	# Create the info panel on a CanvasLayer for screen-space display.
+	if _attack_sim_panel == null:
+		_attack_sim_panel = AttackSimPanel.new()
+		var layer: CanvasLayer = CanvasLayer.new()
+		layer.name = "AttackSimPanelLayer"
+		layer.layer = 90
+		add_child(layer)
+		layer.add_child(_attack_sim_panel)
+	_attack_sim_panel.show_initial()
+	_log.info("Attack simulator activated.")
+
+
+## Dismisses the attack simulator, removing all visual aids and the panel.
+## Requirements: AS-ACT-003, AS-PNL-003.
+func _dismiss_attack_sim() -> void:
+	_attack_sim_selecting = false
+	# Remove info panel.
+	if _attack_sim_panel:
+		_attack_sim_panel.close()
+	# Remove visual overlay.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.queue_free()
+		_attack_sim_overlay = null
+	# Remove attack sim range overlay.
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	_log.info("Attack simulator cancelled.")
+
+
+## Handles a ship token click during attacker selection.
+## Determines the hull zone from the click position and sets up visual aids.
+## Requirements: AS-SEL-001, AS-SEL-002.
+func _attack_sim_handle_ship_click(token: ShipToken) -> void:
+	var active_player: int = GameManager.get_active_player()
+	var inst: ShipInstance = token.get_ship_instance()
+	# Only friendly ships respond (AS-SEL-002).
+	if inst and inst.owner_player != active_player:
+		_log.debug("Click on enemy ship token ignored.")
+		return
+	# Determine hull zone from click position.
+	var click_pos: Vector2 = token.get_global_mouse_position()
+	var zone: int = token.get_hull_zone_at(click_pos)
+	if zone < 0:
+		_log.debug("Click outside ship base — ignored.")
+		return
+	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
+	var ship_name: String = ""
+	if token.get_ship_data():
+		ship_name = token.get_ship_data().ship_name
+	_log.info("Attacker selected: %s — %s arc." % [ship_name, zone_name])
+	_log.debug("Click at %s → %s hull zone." % [click_pos, zone_name])
+	# End selection mode.
+	_attack_sim_selecting = false
+	# Update info panel.
+	if _attack_sim_panel:
+		_attack_sim_panel.show_hull_zone_selected(ship_name, zone_name)
+	# Show visual aids.
+	_attack_sim_show_hull_zone_visuals(token, zone)
+
+
+## Creates the visual aids for a hull zone attacker: range overlay, arc
+## boundary lines, and LOS marker.
+## Requirements: AS-VIS-001, AS-VIS-002, AS-VIS-003.
+func _attack_sim_show_hull_zone_visuals(token: ShipToken,
+		zone: int) -> void:
+	# Clear any previous visuals.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.queue_free()
+		_attack_sim_overlay = null
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	# Range overlay (reuse RangeOverlayScene).
+	_attack_sim_range_overlay = RangeOverlayScene.new()
+	_attack_sim_range_overlay.name = "AttackSimRangeOverlay"
+	_token_container.add_child(_attack_sim_range_overlay)
+	_token_container.move_child(_attack_sim_range_overlay, 0)
+	_attack_sim_range_overlay.setup(token)
+	# Firing arc boundary lines + LOS marker via AttackSimOverlay.
+	var arc_pts: Dictionary = token.get_firing_arc_world_points()
+	var los_pts: Dictionary = token.get_los_origins_world()
+	var keys: Dictionary = _ATTACK_SIM_ARC_KEYS.get(zone, {})
+	if keys.is_empty() or arc_pts.is_empty():
+		_log.warn("No arc boundary data for zone %s." % zone)
+		return
+	var inner_a: Vector2 = arc_pts.get(keys["inner_a"], Vector2.ZERO)
+	var outer_a: Vector2 = arc_pts.get(keys["outer_a"], Vector2.ZERO)
+	var inner_b: Vector2 = arc_pts.get(keys["inner_b"], Vector2.ZERO)
+	var outer_b: Vector2 = arc_pts.get(keys["outer_b"], Vector2.ZERO)
+	var zone_name: String = _ZONE_NAMES.get(zone, "FRONT")
+	var los_pos: Vector2 = los_pts.get(zone_name, Vector2.ZERO)
+	_attack_sim_overlay = AttackSimOverlay.new()
+	_attack_sim_overlay.name = "AttackSimOverlay"
+	_token_container.add_child(_attack_sim_overlay)
+	_attack_sim_overlay.setup_hull_zone(inner_a, outer_a, inner_b, outer_b,
+			los_pos)
+
+
+## Handles a squadron token click during attacker selection.
+## Requirements: AS-SEL-010, AS-SEL-011.
+func _attack_sim_handle_squadron_click(token: SquadronToken) -> void:
+	var active_player: int = GameManager.get_active_player()
+	var inst: SquadronInstance = token.get_squadron_instance()
+	# Only friendly squadrons respond (AS-SEL-011).
+	if inst and inst.owner_player != active_player:
+		_log.debug("Click on enemy squadron token ignored.")
+		return
+	var squad_name: String = "Squadron"
+	if inst and inst.squadron_data:
+		squad_name = inst.squadron_data.squadron_name
+	_log.info("Attacker selected: %s." % squad_name)
+	# End selection mode.
+	_attack_sim_selecting = false
+	# Update info panel.
+	if _attack_sim_panel:
+		_attack_sim_panel.show_squadron_selected(squad_name)
+	# Show visual aids.
+	_attack_sim_show_squadron_visuals(token)
+
+
+## Creates the visual aids for a squadron attacker: close-range circle.
+## Requirements: AS-VIS-010.
+func _attack_sim_show_squadron_visuals(token: SquadronToken) -> void:
+	# Clear any previous visuals.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.queue_free()
+		_attack_sim_overlay = null
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	_attack_sim_overlay = AttackSimOverlay.new()
+	_attack_sim_overlay.name = "AttackSimOverlay"
+	_token_container.add_child(_attack_sim_overlay)
+	_attack_sim_overlay.setup_squadron(
+			token.global_position, token.get_radius_px())
+
+
+## Checks if an Escape key press should dismiss the attack simulator.
+## Returns true if the event was consumed.
+## Requirements: AS-ACT-003.
+func _handle_attack_sim_escape(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	if _attack_sim_selecting or (_attack_sim_panel and _attack_sim_panel.visible):
+		_dismiss_attack_sim()
+		get_viewport().set_input_as_handled()
+		return true
+	return false

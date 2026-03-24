@@ -24,6 +24,7 @@
 - [Phase 5: Ship Movement](#phase-5-ship-movement)
 - [Phase 5c: Range Overlay Tool](#phase-5c-range-overlay-tool)
 - [Phase 5d: Targeting List Tool](#phase-5d-targeting-list-tool)
+- [Phase 6a: Attack Simulator — Attacker Declaration](#phase-6a-attack-simulator--attacker-declaration)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -830,10 +831,32 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 6: Attack Resolution ✅ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
-**Status:** Complete — committed <commit-hash>
-**Goal:** Implement full attack sequence, UI, and core logic per requirements. All tests passing except 1 unrelated scenario test.
-**Tests delivered:** 1042 total, 1068 passing, 1 unrelated failure (learning scenario setup)
+### Phase 6a: Attack Simulator — Attacker Declaration ✅
+**Goal:** Add an interactive "A" button / A-key tool that lets the player select an attacking hull zone (on a friendly ship) or a friendly squadron. On selection, draw visual aids: range overlay, firing arc boundary lines extended to the map edge, and LOS targeting point marker for ships; close-range circle for squadrons. An info panel guides the player step by step. This is the first sub-phase of Phase 6 (Attack Resolution) and sets up the interactive selection infrastructure that later phases will extend.
+**Prerequisites:** Phase 5a (ActionToolbar), Phase 5c (Range Overlay, firing arc data), Phase 5d (LOS origins data, Targeting List)
+**Duration estimate:** 1–2 sessions
+**Requirements:** `docs/requirements/attack_simulator.md` (AS-ACT-001–005, AS-PNL-001–003, AS-SEL-001–003/010–011, AS-VIS-001–004/010–011, AS-LOG-001–002, AC-AS-01–15)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | `EventBus.attack_simulator_requested` signal | Autoload | AS-ACT-001 | New signal in `event_bus.gd` | ✅ |
+| 2 | "A" button on `ActionToolbar` | Presentation | AS-ACT-001, AC-AS-01 | New button after T; styled same as M/R/T; emits signal; disabled during activation | ✅ |
+| 3 | **A** key shortcut in `game_board.gd` | Presentation | AS-ACT-002 | `KEY_A` in `_handle_tool_shortcut`; toggle behaviour | ✅ |
+| 4 | Attack simulator state management in `game_board.gd` | Presentation | AS-ACT-003–005, AC-AS-09/10/15 | `_attack_sim_active` flag; Escape handler; dismiss range overlay / targeting list on entry; cancel on A re-press | ✅ |
+| 5 | `AttackSimPanel` — info panel (PanelContainer) | Presentation | AS-PNL-001–003, AC-AS-02/08 | Screen-space modal with standard styling; shows prompts; dismissed on cancel | ✅ |
+| 6 | Hull zone click detection | Presentation | AS-SEL-001–002, AC-AS-03/04 | Convert click to ship local space → determine hull zone quadrant; ignore enemy tokens | ✅ |
+| 7 | Squadron click detection | Presentation | AS-SEL-010–011, AC-AS-11 | Friendly squadron click → select as attacker; ignore enemies | ✅ |
+| 8 | `AttackSimOverlay` — visual aids (Node2D) | Presentation | AS-VIS-001–004, AS-VIS-010–011, AC-AS-05–07/12 | Draws firing arc lines (white, extended to map edge), LOS marker (yellow, 6 px), close-range circle (squadron); uses `RangeOverlayScene` for ship range | ✅ |
+| 9 | Logging | Utility | AS-LOG-001–002, AC-AS-14 | `GameLogger.new("AttackSim")` — activation, cancellation, selection, ignored clicks | ✅ |
+| 10 | Unit tests — hull zone quadrant detection | Test | AC-AS-03 | Test that click positions map to correct hull zones | ✅ |
+| 11 | Manual test plan update | Docs | — | `docs/test_plan_manual.md` Phase 6a section | ✅ |
+
+**Requirements covered:** AS-ACT-001–005, AS-PNL-001–003, AS-SEL-001–003/010–011, AS-VIS-001–004/010–011, AS-LOG-001–002, AC-AS-01–15
+**Tests:** ~8–12 new tests (hull zone detection, state management, panel lifecycle)
+
+---
+
+### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions
 

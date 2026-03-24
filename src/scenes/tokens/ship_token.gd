@@ -189,6 +189,28 @@ func is_point_in_base(world_pos: Vector2) -> bool:
 	return _is_point_in_base(world_pos)
 
 
+## Determines which hull zone a world-space point falls into.
+## Returns Constants.HullZone.FRONT / LEFT / RIGHT / REAR based on the
+## ship's local-space third-division geometry.
+## Returns -1 if the point is outside the base.
+## Rules Reference: "Hull Zones", p.4.
+## Requirements: AS-SEL-001.
+func get_hull_zone_at(world_pos: Vector2) -> int:
+	if not _is_point_in_base(world_pos):
+		return -1
+	var local_pos: Vector2 = to_local(world_pos)
+	var third: float = _half_l * 2.0 / 3.0
+	var front_y: float = -_half_l + third
+	var rear_y: float = _half_l - third
+	if local_pos.y < front_y:
+		return Constants.HullZone.FRONT
+	if local_pos.y > rear_y:
+		return Constants.HullZone.REAR
+	if local_pos.x < 0.0:
+		return Constants.HullZone.LEFT
+	return Constants.HullZone.RIGHT
+
+
 ## Shows the revealed command dial behind the ship base on the board.
 ## The dial is a composite: hidden dial background + command icon on top.
 ## Positioned 1 cm (in game space) aft of the base edge.

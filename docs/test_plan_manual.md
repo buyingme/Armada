@@ -1,34 +1,9 @@
-
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
----
-
-## Phase 6 — Attack Resolution (MT-6)
-
-**What this phase adds:**
-Full attack sequence UI and logic, including hull zone/target selection, dice pool, CF dial/token, defense tokens, damage, and Step 6 squadron targeting. All requirements from temp_attack_sequence.txt are implemented and covered by automated tests.
-
-### MT-6.1 — Attack UI and Flow
-
-| Step | Action | Expected |
-|------|--------|----------|
-| 1 | Activate a ship and press "execute attack" in the activation modal | Modal closes, range overlay highlights attacking ship |
-| 2 | Info modal appears below ship | Prompts for hull zone selection |
-| 3 | Select hull zone | Yellow highlight appears on LOS marker, prompt updates |
-| 4 | Select target (ship/squadron) | Yellow highlight on target, LOS line drawn |
-| 5 | Deselect/reselect as described | Highlights and prompts update as expected |
-| 6 | Confirm attack, roll dice | Dice pool and results shown in modal |
-| 7 | Spend CF dial/token if available | Extra dice options shown, can be spent |
-| 8 | Reroll if available | Reroll button appears if eligible |
-| 9 | Confirm to resolve attack | Attack proceeds, Step 6 squadron logic if applicable |
-| 10 | After both hull zones, activation modal reopens | Attack step is checked off |
-
-**Pass criteria:** UI matches requirements, all prompts and highlights work, dice and defense logic correct, no errors.
-
-> **Scope:** Phases 0–5d, 4g, 2c, L, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 55 scripts, 949 tests, 1793 asserts — all passing.
+> **Current baseline:** 59 scripts, 1004 tests, 1879 asserts — all passing.
 
 ---
 
@@ -1746,3 +1721,94 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | All previous manual tests still pass | No regression in ship→ship targeting or other features |
 
 **Pass criteria:** Anti-squadron armament used for ship→squadron dice; squadron incoming threats appear at distance 1 only; 956 tests pass.
+
+---
+
+## Phase 6a — Attack Simulator: Attacker Declaration
+
+**What this phase adds:** An "A" toolbar button (and keyboard shortcut) that enters an attacker-selection mode. Clicking a hull zone on a ship or clicking a squadron declares it as the attacker, then shows visual aids: range overlay, firing-arc boundary lines extended to map edge (hull zone), LOS marker highlight (hull zone), or close-range circle (squadron). An info panel describes the current step.
+
+### MT-6a.1 — "A" button activates attack simulator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game board scene (F6) | Board renders with ships, squadrons, and toolbar |
+| 2 | Click the **A** button in the bottom-right toolbar | Info panel appears with prompt "Select a hull zone or squadron as the attacker" |
+| 3 | Verify button visual state | "A" button appears pressed/active |
+
+### MT-6a.2 — "A" keyboard shortcut activates attack simulator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With no other tool active, press the **A** key | Same info panel appears as MT-6a.1 step 2 |
+| 2 | Press **A** again | Info panel disappears; simulator deactivated |
+
+### MT-6a.3 — Hull zone selection shows visual aids
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate attack simulator (A button or key) | Info panel prompts for attacker selection |
+| 2 | Click on the **front** hull zone of a friendly ship | Range overlay appears centred on the ship |
+| 3 | Observe arc boundary lines | Two thin white lines (≈1.5 px, 60 % opacity) extend from the ship's front arc boundaries to the map edge |
+| 4 | Observe LOS marker | A yellow translucent circle (≈6 px, 60 % opacity) appears at the front hull zone's LOS origin |
+| 5 | Info panel updates | Panel shows "Attacker: [ship name] — Front" (or similar confirmation) |
+
+### MT-6a.4 — Different hull zones produce different arcs
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Cancel current selection (Escape) | Visual aids disappear; back to selection prompt |
+| 2 | Click the **left** hull zone of a ship | Arc boundary lines match the left firing arc; LOS marker at left hull zone origin |
+| 3 | Cancel and click **right** hull zone | Arc boundary lines match the right firing arc; LOS marker at right origin |
+| 4 | Cancel and click **rear** hull zone | Arc boundary lines match the rear firing arc; LOS marker at rear origin |
+
+### MT-6a.5 — Squadron selection shows close-range circle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate attack simulator | Info panel prompts for attacker selection |
+| 2 | Click on a friendly squadron | A white translucent circle (30 % opacity) with radius = close range appears around the squadron |
+| 3 | No arc boundary lines or LOS marker | Only the close-range circle is drawn (squadrons have no arcs) |
+| 4 | Info panel updates | Panel shows "Attacker: [squadron name]" |
+
+### MT-6a.6 — Escape cancels attack simulator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate attack simulator and select a hull zone | Visual aids visible |
+| 2 | Press **Escape** | All visual aids disappear; info panel dismissed; toolbar button deactivated |
+| 3 | Activate again, but press Escape **before** selecting | Info panel dismissed; simulator deactivated cleanly |
+
+### MT-6a.7 — Toggle "A" button cancels attack simulator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click "A" to activate; visual aids or info panel present | Simulator active |
+| 2 | Click "A" again | Everything dismissed — same as Escape |
+
+### MT-6a.8 — Enemy tokens are not selectable as attacker
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate attack simulator | Info panel visible |
+| 2 | Click on an enemy ship hull zone | No selection occurs; info panel still shows prompt |
+| 3 | Click on an enemy squadron | No selection occurs |
+
+### MT-6a.9 — Other tools deactivate when "A" is pressed
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate the range overlay (R) on a ship | Range overlay visible |
+| 2 | Press **A** | Range overlay from R tool dismissed; attack simulator activates |
+| 3 | Activate targeting list (T) | Targeting list visible |
+| 4 | Press **A** | Targeting list dismissed; attack simulator activates |
+
+### MT-6a.10 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | All tests pass, 0 failures, expected script count |
+| 2 | Verify M, R, T toolbar buttons still work | Each tool activates and deactivates normally |
+| 3 | Ship/squadron dragging in debug mode unaffected | Tokens drag and snap as before |
+
+**Pass criteria:** "A" button and key activate the simulator; hull zone click shows range overlay + arc lines + LOS marker; squadron click shows close-range circle; Escape and toggle dismiss cleanly; enemy tokens ignored; no regressions; all GUT tests pass.

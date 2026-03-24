@@ -25,6 +25,9 @@ var _range_overlay_btn: Button = null
 ## "Targeting List" button.
 var _targeting_list_btn: Button = null
 
+## "Attack Simulator" button.
+var _attack_sim_btn: Button = null
+
 
 func _init() -> void:
 	name = "ActionToolbar"
@@ -38,6 +41,7 @@ func setup_buttons() -> void:
 	_create_maneuver_tool_button()
 	_create_range_overlay_button()
 	_create_targeting_list_button()
+	_create_attack_sim_button()
 	call_deferred("_deferred_position")
 
 
@@ -151,6 +155,32 @@ func _on_targeting_list_pressed() -> void:
 	EventBus.targeting_list_requested.emit()
 
 
+## Creates the attack simulator button.
+## Requirements: AS-ACT-001.
+func _create_attack_sim_button() -> void:
+	_attack_sim_btn = Button.new()
+	_attack_sim_btn.name = "AttackSimButton"
+	_attack_sim_btn.text = "A"
+	_attack_sim_btn.flat = true
+	var btn_size: float = GameScale.tooltip_toggle_button_size
+	_attack_sim_btn.custom_minimum_size = Vector2(btn_size, btn_size)
+	_attack_sim_btn.add_theme_font_size_override("font_size", 16)
+	_attack_sim_btn.add_theme_color_override(
+			"font_color", Color(1.0, 1.0, 1.0, 0.7))
+	_attack_sim_btn.add_theme_color_override(
+			"font_hover_color", Color.WHITE)
+	_attack_sim_btn.tooltip_text = "Attack Simulator"
+	_attack_sim_btn.pressed.connect(_on_attack_sim_pressed)
+	add_child(_attack_sim_btn)
+
+
+## Emits the attack simulator request signal.
+## Requirements: AS-ACT-001.
+func _on_attack_sim_pressed() -> void:
+	_log.info("Attack Simulator button pressed.")
+	EventBus.attack_simulator_requested.emit()
+
+
 ## Enables or disables the simulation tool buttons (M and R).
 ## [param disabled] — when [code]true[/code], the buttons are greyed-out
 ## and ignore clicks (used while the activation-mode maneuver tool is active).
@@ -161,6 +191,8 @@ func set_tool_buttons_disabled(disabled: bool) -> void:
 		_range_overlay_btn.disabled = disabled
 	if _targeting_list_btn:
 		_targeting_list_btn.disabled = disabled
+	if _attack_sim_btn:
+		_attack_sim_btn.disabled = disabled
 
 
 ## Deferred position update after layout calculates sizes.

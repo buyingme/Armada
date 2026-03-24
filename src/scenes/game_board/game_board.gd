@@ -1906,12 +1906,6 @@ func _dismiss_attack_sim() -> void:
 ## Determines the hull zone from the click position and sets up visual aids.
 ## Requirements: AS-SEL-001, AS-SEL-002.
 func _attack_sim_handle_ship_click(token: ShipToken) -> void:
-	var active_player: int = GameManager.get_active_player()
-	var inst: ShipInstance = token.get_ship_instance()
-	# Only friendly ships respond (AS-SEL-002).
-	if inst and inst.owner_player != active_player:
-		_log.debug("Click on enemy ship token ignored.")
-		return
 	# Determine hull zone from click position.
 	var click_pos: Vector2 = token.get_global_mouse_position()
 	var zone: int = token.get_hull_zone_at(click_pos)
@@ -1974,12 +1968,7 @@ func _attack_sim_show_hull_zone_visuals(token: ShipToken,
 ## Handles a squadron token click during attacker selection.
 ## Requirements: AS-SEL-010, AS-SEL-011.
 func _attack_sim_handle_squadron_click(token: SquadronToken) -> void:
-	var active_player: int = GameManager.get_active_player()
 	var inst: SquadronInstance = token.get_squadron_instance()
-	# Only friendly squadrons respond (AS-SEL-011).
-	if inst and inst.owner_player != active_player:
-		_log.debug("Click on enemy squadron token ignored.")
-		return
 	var squad_name: String = "Squadron"
 	if inst and inst.squadron_data:
 		squad_name = inst.squadron_data.squadron_name

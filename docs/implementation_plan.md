@@ -844,8 +844,8 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 3 | **A** key shortcut in `game_board.gd` | Presentation | AS-ACT-002 | `KEY_A` in `_handle_tool_shortcut`; toggle behaviour | ✅ |
 | 4 | Attack simulator state management in `game_board.gd` | Presentation | AS-ACT-003–005, AC-AS-09/10/15 | `_attack_sim_active` flag; Escape handler; dismiss range overlay / targeting list on entry; cancel on A re-press | ✅ |
 | 5 | `AttackSimPanel` — info panel (PanelContainer) | Presentation | AS-PNL-001–003, AC-AS-02/08 | Screen-space modal with standard styling; shows prompts; dismissed on cancel | ✅ |
-| 6 | Hull zone click detection | Presentation | AS-SEL-001–002, AC-AS-03/04 | Convert click to ship local space → determine hull zone quadrant; ignore enemy tokens | ✅ |
-| 7 | Squadron click detection | Presentation | AS-SEL-010–011, AC-AS-11 | Friendly squadron click → select as attacker; ignore enemies | ✅ |
+| 6 | Hull zone click detection | Presentation | AS-SEL-001–002, AC-AS-03 | Convert click to ship local space → determine hull zone quadrant; accept any ship (friendly or enemy) | ✅ |
+| 7 | Squadron click detection | Presentation | AS-SEL-010–011, AC-AS-11 | Any squadron click → select as attacker; no faction filter | ✅ |
 | 8 | `AttackSimOverlay` — visual aids (Node2D) | Presentation | AS-VIS-001–004, AS-VIS-010–011, AC-AS-05–07/12 | Draws firing arc lines (white, extended to map edge), LOS marker (yellow, 6 px), close-range circle (squadron); uses `RangeOverlayScene` for ship range | ✅ |
 | 9 | Logging | Utility | AS-LOG-001–002, AC-AS-14 | `GameLogger.new("AttackSim")` — activation, cancellation, selection, ignored clicks | ✅ |
 | 10 | Unit tests — hull zone quadrant detection | Test | AC-AS-03 | Test that click positions map to correct hull zones | ✅ |

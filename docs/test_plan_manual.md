@@ -1786,13 +1786,13 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 1 | Click "A" to activate; visual aids or info panel present | Simulator active |
 | 2 | Click "A" again | Everything dismissed — same as Escape |
 
-### MT-6a.8 — Enemy tokens are not selectable as attacker
+### MT-6a.8 — Enemy tokens are selectable as attacker
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Activate attack simulator | Info panel visible |
-| 2 | Click on an enemy ship hull zone | No selection occurs; info panel still shows prompt |
-| 3 | Click on an enemy squadron | No selection occurs |
+| 2 | Click on an enemy ship hull zone | Selection occurs; visual aids appear for that hull zone |
+| 3 | Cancel, then click on an enemy squadron | Selection occurs; close-range circle appears |
 
 ### MT-6a.9 — Other tools deactivate when "A" is pressed
 
@@ -1811,4 +1811,4 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | Verify M, R, T toolbar buttons still work | Each tool activates and deactivates normally |
 | 3 | Ship/squadron dragging in debug mode unaffected | Tokens drag and snap as before |
 
-**Pass criteria:** "A" button and key activate the simulator; hull zone click shows range overlay + arc lines + LOS marker; squadron click shows close-range circle; Escape and toggle dismiss cleanly; enemy tokens ignored; no regressions; all GUT tests pass.
+**Pass criteria:** "A" button and key activate the simulator; hull zone click shows range overlay + arc lines + LOS marker; squadron click shows close-range circle; Escape and toggle dismiss cleanly; both friendly and enemy tokens selectable; no regressions; all GUT tests pass.

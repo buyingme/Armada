@@ -94,19 +94,22 @@ is removed from the scene tree.
 
 ### AS-SEL-001 — Click hull zone directly
 
-The player directly clicks a hull zone on any **friendly ship** (belonging to
-the active player) to select it as the attacking hull zone.  The click is
-resolved by determining which quadrant of the ship base the click position
-falls into (FRONT / LEFT / RIGHT / REAR).
+The player directly clicks a hull zone on **any ship** (friendly or enemy) to
+select it as the attacking hull zone.  The click is resolved by determining
+which quadrant of the ship base the click position falls into
+(FRONT / LEFT / RIGHT / REAR).
+
+> Rationale: The Attack Simulator is an analysis tool.  Players need to
+> evaluate potential attacks from the opponent's ships as well as their own.
 
 > Implementation: Convert the click to the ship's local space and determine
 > the hull zone from the ship's geometry (half-width, half-length, the four
 > base quadrant regions).
 
-### AS-SEL-002 — Only friendly ships respond
+### AS-SEL-002 — Both friendly and enemy ships respond
 
-Clicks on enemy ships or enemy squadrons during attacker selection are
-ignored.  Only tokens belonging to the active player are valid.
+Clicks on **any** ship token (regardless of owner) during attacker selection
+are accepted.  There is no faction filter.
 
 ### AS-SEL-003 — Hull zone feedback on hover (nice-to-have)
 
@@ -120,15 +123,16 @@ first implementation pass.
 
 ### AS-SEL-010 — Click squadron token
 
-Clicking a friendly squadron token selects it as the attacker.  Squadrons
-have a 360° arc and attack at distance 1.
+Clicking **any** squadron token (friendly or enemy) selects it as the
+attacker.  Squadrons have a 360° arc and attack at distance 1.
 
 > Rules Reference: "Firing Arc" — "Each squadron has a 360° firing arc."
 > Rules Reference: "Attack Range" — "Each squadron's attack range is distance 1."
 
-### AS-SEL-011 — Only friendly squadrons respond
+### AS-SEL-011 — Both friendly and enemy squadrons respond
 
-Clicks on enemy squadrons during attacker selection are ignored.
+Clicks on **any** squadron token during attacker selection are accepted.
+There is no faction filter.
 
 ---
 
@@ -247,15 +251,15 @@ var _log: GameLogger = GameLogger.new("AttackSim")
 |----|-----------|
 | AC-AS-01 | Pressing "A" (button or key) opens the attack simulator info panel. |
 | AC-AS-02 | Info panel shows "Select a hull zone or squadron as the attacker." |
-| AC-AS-03 | Clicking a friendly ship hull zone selects it as the attacker. |
-| AC-AS-04 | Clicking an enemy token is ignored during selection. |
+| AC-AS-03 | Clicking any ship hull zone (friendly or enemy) selects it as the attacker. |
+| AC-AS-04 | ~~removed~~ — no faction filter; both friendly and enemy tokens are selectable. |
 | AC-AS-05 | Once a hull zone is selected, the ship's range overlay appears. |
 | AC-AS-06 | Two white lines extend the firing arc boundaries to the map edge. |
 | AC-AS-07 | A 6 px yellow circle marks the LOS targeting point. |
 | AC-AS-08 | Info panel updates to show the selected attacker identity. |
 | AC-AS-09 | Pressing Escape cancels the simulator and removes all visuals. |
 | AC-AS-10 | Pressing "A" again cancels the simulator (toggle). |
-| AC-AS-11 | Clicking a friendly squadron selects it as the attacker. |
+| AC-AS-11 | Clicking any squadron (friendly or enemy) selects it as the attacker. |
 | AC-AS-12 | Once a squadron is selected, a close-range circle is drawn. |
 | AC-AS-13 | The "A" button is disabled during ship activation (same as M/R/T). |
 | AC-AS-14 | All key events are logged with `"AttackSim"` context. |

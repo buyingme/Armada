@@ -231,6 +231,22 @@ static func _log_ship_geometry(log: GameLogger, ship: ShipInfo) -> void:
 
 
 # =========================================================================
+# Internal — Hull-Zone Edge Helper
+# =========================================================================
+
+## Returns the hull-zone edge polyline for [param ship], preferring arc-based
+## multi-segment edges when corner_* keys are present in arc_pts.
+## Falls back to a rectangle-corner two-point edge otherwise.
+## Requirements: HZ-EDGE-001.
+static func _get_ship_edge(
+		ship: ShipInfo, zone: Constants.HullZone) -> Array[Vector2]:
+	if not ship.arc_pts.is_empty() and ship.arc_pts.has("corner_front_left"):
+		return RangeFinder.get_hull_zone_edge_from_arcs(ship.arc_pts, zone)
+	return RangeFinder.get_hull_zone_edge(
+			ship.pos, ship.rot, ship.half_w, ship.half_l, zone)
+
+
+# =========================================================================
 # Internal — Outgoing Targets
 # =========================================================================
 
@@ -251,12 +267,10 @@ static func _build_ship_entry(
 	]
 	for zone: int in zones:
 		var hz: Constants.HullZone = zone as Constants.HullZone
-		var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				friendly.pos, friendly.rot,
-				friendly.half_w, friendly.half_l, hz)
-		log.debug("  [%s] zone %s edge=[%s, %s]" % [
+		var atk_edge: Array[Vector2] = _get_ship_edge(friendly, hz)
+		log.debug("  [%s] zone %s edge=[%s..%s]" % [
 				friendly.ship_name, _hz_key(hz),
-				_v2str(atk_edge[0]), _v2str(atk_edge[1])])
+				_v2str(atk_edge[0]), _v2str(atk_edge[-1])])
 		# Ship targets (need battery armament for this hull zone).
 		var armament: Dictionary = friendly.battery_armament.get(
 				_hz_key(hz), {})
@@ -304,15 +318,13 @@ static func _check_ship_target(
 	var results: Array = []
 	for dz: int in def_zones:
 		var def_hz: Constants.HullZone = dz as Constants.HullZone
-		var def_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				defender.pos, defender.rot,
-				defender.half_w, defender.half_l, def_hz)
+		var def_edge: Array[Vector2] = _get_ship_edge(defender, def_hz)
 		# Step 1: arc containment test (TL-ARC-006 step 1).
 		var in_arc: bool = RangeFinder.is_hull_zone_edge_in_arc(
-				def_edge[0], def_edge[1], atk_zone, atk.arc_pts)
-		log.debug("      def_zone %s edge=[%s,%s] in_arc=%s" % [
+				def_edge, atk_zone, atk.arc_pts)
+		log.debug("      def_zone %s edge=[%s..%s] in_arc=%s" % [
 				_hz_key(def_hz), _v2str(def_edge[0]),
-				_v2str(def_edge[1]), str(in_arc)])
+				_v2str(def_edge[-1]), str(in_arc)])
 		if not in_arc:
 			continue
 		# Step 2: range measurement within arc (TL-ARC-006 step 2).
@@ -465,8 +477,7 @@ static func _build_incoming_threats(
 					_hz_key(hz), {})
 			if armament.is_empty():
 				continue
-			var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-					es.pos, es.rot, es.half_w, es.half_l, hz)
+			var atk_edge: Array[Vector2] = _get_ship_edge(es, hz)
 			# Check each friendly hull zone.
 			var friendly_zones: Array = [
 				Constants.HullZone.FRONT,
@@ -479,11 +490,9 @@ static func _build_incoming_threats(
 				if found_threat:
 					break
 				var fhz: Constants.HullZone = fz as Constants.HullZone
-				var def_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-						friendly.pos, friendly.rot,
-						friendly.half_w, friendly.half_l, fhz)
+				var def_edge: Array[Vector2] = _get_ship_edge(friendly, fhz)
 				if not RangeFinder.is_hull_zone_edge_in_arc(
-						def_edge[0], def_edge[1], hz, es.arc_pts):
+						def_edge, hz, es.arc_pts):
 					continue
 				var dist: float = RangeFinder.measure_attack_range_ship(
 						atk_edge, def_edge, hz, es.arc_pts)
@@ -573,10 +582,9 @@ static func _build_squad_entry(
 			var es: ShipInfo = enemy as ShipInfo
 			for dz: int in def_zones:
 				var def_hz: Constants.HullZone = dz as Constants.HullZone
-				var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-						es.pos, es.rot, es.half_w, es.half_l, def_hz)
-				var cp: Vector2 = RangeFinder.closest_point_on_segment(
-						squad.pos, edge[0], edge[1])
+				var edge: Array[Vector2] = _get_ship_edge(es, def_hz)
+				var cp: Vector2 = RangeFinder.closest_point_on_polyline(
+						squad.pos, edge)
 				var dist: float = squad.pos.distance_to(cp) - squad.radius
 				if dist < 0.0:
 					dist = 0.0
@@ -677,8 +685,7 @@ static func _build_incoming_squad_threats(
 			if found_threat:
 				break
 			var hz: Constants.HullZone = zone as Constants.HullZone
-			var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-					es.pos, es.rot, es.half_w, es.half_l, hz)
+			var atk_edge: Array[Vector2] = _get_ship_edge(es, hz)
 			# Arc containment test.
 			if not RangeFinder.is_squadron_in_arc(
 					squad.pos, squad.radius, hz, es.arc_pts):
@@ -758,11 +765,10 @@ static func _measure_squad_to_ship_distance(
 	]
 	for zone: int in zones:
 		var hz: Constants.HullZone = zone as Constants.HullZone
-		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				ship.pos, ship.rot, ship.half_w, ship.half_l, hz)
+		var edge: Array[Vector2] = _get_ship_edge(ship, hz)
 		# Closest point on the hull zone edge from the squadron centre.
-		var cp: Vector2 = RangeFinder.closest_point_on_segment(
-				squad.pos, edge[0], edge[1])
+		var cp: Vector2 = RangeFinder.closest_point_on_polyline(
+				squad.pos, edge)
 		# Subtract squadron radius (measure from base edge, not centre).
 		var dist: float = squad.pos.distance_to(cp) - squad.radius
 		if dist < 0.0:

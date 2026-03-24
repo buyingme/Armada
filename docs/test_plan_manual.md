@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 59 scripts, 1004 tests, 1879 asserts — all passing.
+> **Current baseline:** 59 scripts, 1055 tests, 1963 asserts — all passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -1964,3 +1964,39 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 5 | M, R, T toolbar buttons still work | No interference |
 
 **Pass criteria:** Same-ship clicks rejected with tooltip; out-of-arc clicks rejected with tooltip; squadron attackers bypass arc check; range line drawn with correct colour for each band; both LOS and range lines visible simultaneously; panel shows range band text; no regressions; all GUT tests pass.
+
+---
+
+## Phase 6a-4 — Hull-Zone Edge Polyline Fix (HZ-EDGE-001)
+
+**What this phase fixes:** Hull-zone edges were previously approximated using rectangle corners. FRONT and REAR edges now use polylines derived from arc boundary outer points + template corners. This affects arc validation, range measurement, and targeting lists — especially for the VSD where the FRONT arc wraps around corners.
+
+> **Automated coverage note:** The fix is primarily in `RangeFinder` (pure logic) and is covered by 10 new GUT tests. The manual tests below verify visual correctness that cannot be checked automatically.
+
+### MT-6a-4.1 — VSD front-arc targeting uses correct edge geometry
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the board scene with two ships: a VSD (Imperial) facing a CR90 (Rebel), positioned so the CR90 is directly ahead of the VSD | Both ships visible on board |
+| 2 | Press **A** to open attack simulator. Click VSD FRONT hull zone as attacker | FRONT arc lines drawn correctly |
+| 3 | Click CR90 hull zone as target | Target accepted; LOS line + range line drawn to the correct hull zone edge, not the full template width |
+| 4 | Position CR90 near the edge of the VSD's FRONT arc (close to the boundary line) | Range line endpoint tracks the nearest in-arc point of the CR90's edge, not the rectangle corner |
+
+### MT-6a-4.2 — Targeting list shows correct ranges after fix
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press **T** to open targeting list | Modal opens |
+| 2 | Check range band for VSD FRONT → CR90 target | Range band matches the visual range line colour from MT-6a-4.1 |
+| 3 | Check that LEFT/RIGHT hull zones from targeting list match visual arcs | Edge geometry does not extend beyond the actual arc boundaries |
+
+### MT-6a-4.3 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 59 scripts, 1055 tests, 1963 asserts, 0 new failures |
+| 2 | Verify Phase 6a attacker selection still works | Attacker visuals appear correctly |
+| 3 | Verify Phase 6a-3 range line + LOS line still works | Both lines visible, colour-coded correctly |
+| 4 | Press T — targeting list still functional | All entries present, no crashes |
+
+**Pass criteria:** VSD front edge wraps corners correctly; range measurements use arc-derived polylines; targeting list results consistent with visual range lines; no regressions; all GUT tests pass.

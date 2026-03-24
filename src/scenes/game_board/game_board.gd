@@ -2360,9 +2360,23 @@ func _attack_sim_trace_los(atk_pt: Vector2,
 # Attack Simulator — Arc Validation (Phase 6a-3)
 # =========================================================================
 
+## Returns the hull-zone edge polyline for [param token], preferring
+## arc-based multi-segment edges when boundary data with corner_* keys
+## is available, otherwise falling back to rectangle corners.
+## Requirements: HZ-EDGE-001.
+func _get_ship_edge(
+		token: ShipToken, zone: Constants.HullZone) -> Array[Vector2]:
+	var arc_pts: Dictionary = token.get_firing_arc_world_points()
+	if not arc_pts.is_empty() and arc_pts.has("corner_front_left"):
+		return RangeFinder.get_hull_zone_edge_from_arcs(arc_pts, zone)
+	return RangeFinder.get_hull_zone_edge(
+			token.global_position, token.rotation,
+			token.get_half_width(), token.get_half_length(), zone)
+
+
 ## Returns true if the defending ship hull zone is inside the attacker's
 ## firing arc.  Only valid when the attacker is a ship hull zone.
-## Requirements: AS-ARC-001.
+## Requirements: AS-ARC-001, HZ-EDGE-001.
 func _attack_sim_is_ship_target_in_arc(
 		def_token: ShipToken, def_zone: int) -> bool:
 	if not _attack_sim_atk_ship:
@@ -2371,12 +2385,10 @@ func _attack_sim_is_ship_target_in_arc(
 			.get_firing_arc_world_points()
 	if atk_arc_pts.is_empty():
 		return true  # No arc data → allow.
-	var def_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-			def_token.global_position, def_token.rotation,
-			def_token.get_half_width(), def_token.get_half_length(),
-			def_zone as Constants.HullZone)
+	var def_edge: Array[Vector2] = _get_ship_edge(
+			def_token, def_zone as Constants.HullZone)
 	return RangeFinder.is_hull_zone_edge_in_arc(
-			def_edge[0], def_edge[1],
+			def_edge,
 			_attack_sim_atk_zone as Constants.HullZone,
 			atk_arc_pts)
 
@@ -2406,21 +2418,15 @@ func _attack_sim_is_squadron_target_in_arc(
 ## Computes the range measurement endpoints and distance for the current
 ## attacker/target pair.  Returns a Dictionary with "distance" (float),
 ## "atk_pt" (Vector2), "def_pt" (Vector2).
-## Requirements: AS-RNG-010, AS-RNG-011.
+## Requirements: AS-RNG-010, AS-RNG-011, HZ-EDGE-001.
 func _attack_sim_compute_range_endpoints() -> Dictionary:
 	# Ship → Ship
 	if _attack_sim_atk_ship and _attack_sim_def_ship:
-		var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				_attack_sim_atk_ship.global_position,
-				_attack_sim_atk_ship.rotation,
-				_attack_sim_atk_ship.get_half_width(),
-				_attack_sim_atk_ship.get_half_length(),
+		var atk_edge: Array[Vector2] = _get_ship_edge(
+				_attack_sim_atk_ship,
 				_attack_sim_atk_zone as Constants.HullZone)
-		var def_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				_attack_sim_def_ship.global_position,
-				_attack_sim_def_ship.rotation,
-				_attack_sim_def_ship.get_half_width(),
-				_attack_sim_def_ship.get_half_length(),
+		var def_edge: Array[Vector2] = _get_ship_edge(
+				_attack_sim_def_ship,
 				_attack_sim_def_zone as Constants.HullZone)
 		var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
 				.get_firing_arc_world_points()
@@ -2430,11 +2436,8 @@ func _attack_sim_compute_range_endpoints() -> Dictionary:
 				atk_arc_pts)
 	# Ship → Squadron
 	if _attack_sim_atk_ship and _attack_sim_def_squad:
-		var atk_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				_attack_sim_atk_ship.global_position,
-				_attack_sim_atk_ship.rotation,
-				_attack_sim_atk_ship.get_half_width(),
-				_attack_sim_atk_ship.get_half_length(),
+		var atk_edge: Array[Vector2] = _get_ship_edge(
+				_attack_sim_atk_ship,
 				_attack_sim_atk_zone as Constants.HullZone)
 		var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
 				.get_firing_arc_world_points()
@@ -2446,11 +2449,8 @@ func _attack_sim_compute_range_endpoints() -> Dictionary:
 				atk_arc_pts)
 	# Squadron → Ship
 	if _attack_sim_atk_squad and _attack_sim_def_ship:
-		var def_edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
-				_attack_sim_def_ship.global_position,
-				_attack_sim_def_ship.rotation,
-				_attack_sim_def_ship.get_half_width(),
-				_attack_sim_def_ship.get_half_length(),
+		var def_edge: Array[Vector2] = _get_ship_edge(
+				_attack_sim_def_ship,
 				_attack_sim_def_zone as Constants.HullZone)
 		return RangeFinder.measure_range_squad_to_ship(
 				_attack_sim_atk_squad.global_position,

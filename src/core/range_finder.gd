@@ -6,9 +6,10 @@
 ## All methods are static or work on plain Vector2/Dictionary data — no
 ## scene-tree or Node dependency.
 ##
-## Requirements: TL-RNG-001–006, TL-ARC-001–006, TL-ALGO-001, AS-RNG-011.
+## Requirements: TL-RNG-001–006, TL-ARC-001–006, TL-ALGO-001, AS-RNG-011,
+## HZ-EDGE-001.
 ## Rules Reference: "Measuring Firing Arc and Range", p.10; "Firing Arc", p.8;
-## "Attack Range", p.3; "Range and Distance", p.14.
+## "Attack Range", p.3; "Range and Distance", p.14; "Hull Zones", p.9.
 class_name RangeFinder
 extends RefCounted
 
@@ -97,23 +98,25 @@ static func is_point_in_arc(
 	return side_a and side_b
 
 
-## Returns true if **any** portion of the defending hull-zone edge is inside
-## the attacker's firing arc.  Samples representative points along the edge.
-## Requirements: TL-ARC-003.
-## [param def_edge_start] — world-space start of the defending hull-zone edge.
-## [param def_edge_end]   — world-space end of the defending hull-zone edge.
-## [param atk_zone]       — the attacking hull zone enum.
-## [param atk_arc_pts]    — world-space boundary points of the attacker.
+## Returns true if **any** portion of the defending hull-zone edge (polyline)
+## is inside the attacker's firing arc.  Samples representative points along
+## each segment of the polyline.
+## Requirements: TL-ARC-003, HZ-EDGE-001.
+## [param def_edge] — world-space polyline (2+ points, consecutive segments).
+## [param atk_zone] — the attacking hull zone enum.
+## [param atk_arc_pts] — world-space boundary points of the attacker.
 static func is_hull_zone_edge_in_arc(
-		def_edge_start: Vector2,
-		def_edge_end: Vector2,
+		def_edge: Array[Vector2],
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> bool:
-	for i: int in range(EDGE_SAMPLE_COUNT + 1):
-		var t: float = float(i) / float(EDGE_SAMPLE_COUNT)
-		var pt: Vector2 = def_edge_start.lerp(def_edge_end, t)
-		if is_point_in_arc(pt, atk_zone, atk_arc_pts):
-			return true
+	for seg_idx: int in range(def_edge.size() - 1):
+		var seg_start: Vector2 = def_edge[seg_idx]
+		var seg_end: Vector2 = def_edge[seg_idx + 1]
+		for i: int in range(EDGE_SAMPLE_COUNT + 1):
+			var t: float = float(i) / float(EDGE_SAMPLE_COUNT)
+			var pt: Vector2 = seg_start.lerp(seg_end, t)
+			if is_point_in_arc(pt, atk_zone, atk_arc_pts):
+				return true
 	return false
 
 
@@ -137,11 +140,13 @@ static func is_squadron_in_arc(
 
 
 # =========================================================================
-# Hull-Zone Edge Geometry  (TL-ARC-005)
+# Hull-Zone Edge Geometry  (TL-ARC-005, HZ-EDGE-001)
 # =========================================================================
 
 ## Returns the world-space start and end of a hull-zone edge as a
-## two-element array [start, end].
+## two-element array [start, end].  Uses rectangle-corner approximation.
+## Prefer [method get_hull_zone_edge_from_arcs] when arc boundary data
+## is available — it returns correct multi-segment edges for FRONT/REAR.
 ## [param pos]      — ship world position (centre of the base).
 ## [param rot]      — ship world rotation in radians.
 ## [param half_w]   — half-width of the base.
@@ -177,6 +182,52 @@ static func get_hull_zone_edge(
 	]
 
 
+## Returns the hull-zone edge as a world-space polyline derived from the
+## arc boundary outer points and template corner points.
+##
+## FRONT and REAR zones wrap around the template corners — returned as
+## 4-point polylines (3 segments).  LEFT and RIGHT are straight — returned
+## as 2-point polylines (1 segment).
+##
+## Requires [param arc_pts] to contain both the outer_point_* keys and
+## the corner_* keys (loaded from the ship JSON firing_arc_boundaries).
+## Falls back to an empty array if required keys are missing.
+## [param arc_pts] — world-space boundary points.
+## [param zone]    — the hull zone whose edge to return.
+## Requirements: HZ-EDGE-001.
+## Rules Reference: "Hull Zones", p.9.
+static func get_hull_zone_edge_from_arcs(
+		arc_pts: Dictionary,
+		zone: Constants.HullZone) -> Array[Vector2]:
+	match zone:
+		Constants.HullZone.FRONT:
+			return [
+				arc_pts["outer_point_front_left"],
+				arc_pts["corner_front_left"],
+				arc_pts["corner_front_right"],
+				arc_pts["outer_point_front_right"],
+			]
+		Constants.HullZone.REAR:
+			return [
+				arc_pts["outer_point_rear_left"],
+				arc_pts["corner_rear_left"],
+				arc_pts["corner_rear_right"],
+				arc_pts["outer_point_rear_right"],
+			]
+		Constants.HullZone.LEFT:
+			return [
+				arc_pts["outer_point_front_left"],
+				arc_pts["outer_point_rear_left"],
+			]
+		Constants.HullZone.RIGHT:
+			return [
+				arc_pts["outer_point_front_right"],
+				arc_pts["outer_point_rear_right"],
+			]
+		_:
+			return []
+
+
 # =========================================================================
 # Closest-Point Calculations  (TL-RNG-001, TL-RNG-002)
 # =========================================================================
@@ -190,6 +241,23 @@ static func closest_point_on_segment(
 		return a
 	var t: float = clampf((p - a).dot(ab) / len_sq, 0.0, 1.0)
 	return a + ab * t
+
+
+## Returns the closest point on a polyline (consecutive segments) to [param p].
+## The polyline must have at least 2 points.
+## Requirements: HZ-EDGE-001.
+static func closest_point_on_polyline(
+		p: Vector2, polyline: Array[Vector2]) -> Vector2:
+	var best_pt: Vector2 = polyline[0]
+	var best_dist_sq: float = INF
+	for i: int in range(polyline.size() - 1):
+		var cp: Vector2 = closest_point_on_segment(
+				p, polyline[i], polyline[i + 1])
+		var d_sq: float = p.distance_squared_to(cp)
+		if d_sq < best_dist_sq:
+			best_dist_sq = d_sq
+			best_pt = cp
+	return best_pt
 
 
 ## Returns the minimum distance between two line segments
@@ -223,42 +291,45 @@ static func closest_point_on_circle(
 ## considering ONLY the defender portion inside the attacker's firing arc.
 ## Returns the pixel distance, or INF if no portion is inside the arc.
 ##
-## [param atk_edge]     — [start, end] of the attacking hull-zone edge.
-## [param def_edge]     — [start, end] of the defending hull-zone edge.
+## Both [param atk_edge] and [param def_edge] are polylines (2+ points).
+## For simple edges pass a 2-element array; for multi-segment edges
+## (FRONT/REAR from [method get_hull_zone_edge_from_arcs]) pass 4 points.
 ## [param atk_zone]     — the attacking hull zone enum.
 ## [param atk_arc_pts]  — world-space boundary points of the attacker.
-## Requirements: TL-RNG-001, TL-ARC-006.
+## Requirements: TL-RNG-001, TL-ARC-006, HZ-EDGE-001.
 static func measure_attack_range_ship(
 		atk_edge: Array[Vector2],
 		def_edge: Array[Vector2],
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> float:
 	var best: float = INF
-	# Sample many points on the defender edge; keep only those inside arc.
-	var def_start: Vector2 = def_edge[0]
-	var def_end: Vector2 = def_edge[1]
 	var count: int = EDGE_SAMPLE_COUNT
-	for i: int in range(count + 1):
-		var t: float = float(i) / float(count)
-		var def_pt: Vector2 = def_start.lerp(def_end, t)
-		if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
-			continue
-		# Distance from this within-arc defender point to closest on atk edge.
-		var cp: Vector2 = closest_point_on_segment(
-				def_pt, atk_edge[0], atk_edge[1])
-		var d: float = cp.distance_to(def_pt)
-		if d < best:
-			best = d
-	# Also check attacker edge points → closest in-arc defender point.
-	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
-		for j: int in range(count + 1):
-			var t2: float = float(j) / float(count)
-			var def_pt2: Vector2 = def_start.lerp(def_end, t2)
-			if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+	# Sample points on each defender segment; keep only in-arc points.
+	for seg_idx: int in range(def_edge.size() - 1):
+		var d_a: Vector2 = def_edge[seg_idx]
+		var d_b: Vector2 = def_edge[seg_idx + 1]
+		for i: int in range(count + 1):
+			var t: float = float(i) / float(count)
+			var def_pt: Vector2 = d_a.lerp(d_b, t)
+			if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
 				continue
-			var d2: float = atk_pt.distance_to(def_pt2)
-			if d2 < best:
-				best = d2
+			var cp: Vector2 = closest_point_on_polyline(def_pt, atk_edge)
+			var d: float = cp.distance_to(def_pt)
+			if d < best:
+				best = d
+	# Also check attacker edge vertices → closest in-arc defender point.
+	for atk_pt: Vector2 in atk_edge:
+		for seg_idx2: int in range(def_edge.size() - 1):
+			var d_a2: Vector2 = def_edge[seg_idx2]
+			var d_b2: Vector2 = def_edge[seg_idx2 + 1]
+			for j: int in range(count + 1):
+				var t2: float = float(j) / float(count)
+				var def_pt2: Vector2 = d_a2.lerp(d_b2, t2)
+				if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+					continue
+				var d2: float = atk_pt.distance_to(def_pt2)
+				if d2 < best:
+					best = d2
 	return best
 
 
@@ -266,10 +337,10 @@ static func measure_attack_range_ship(
 ## considering ONLY the squadron portion inside the firing arc.
 ## Returns the pixel distance, or INF if no portion is inside the arc.
 ##
-## Uses analytical closest-point computation first, then falls back to
-## dense sampling for arc-boundary cases.  Also checks from attack-edge
-## endpoints toward the closest in-arc circle point (bidirectional).
-## Requirements: TL-RNG-002.
+## [param atk_edge] is a polyline (2+ points).  Uses analytical
+## closest-point computation first, then falls back to dense sampling
+## for arc-boundary cases.
+## Requirements: TL-RNG-002, HZ-EDGE-001.
 static func measure_attack_range_squadron(
 		atk_edge: Array[Vector2],
 		squad_centre: Vector2,
@@ -278,31 +349,25 @@ static func measure_attack_range_squadron(
 		atk_arc_pts: Dictionary) -> float:
 	var best: float = INF
 	# --- Analytical closest point (optimal for common case) ---
-	# 1. Closest point on attack edge to the squadron centre.
-	# 2. Closest point on circle edge to that edge point.
-	# If the circle point is inside the arc this is the exact minimum.
-	var cp_on_edge: Vector2 = closest_point_on_segment(
-			squad_centre, atk_edge[0], atk_edge[1])
+	var cp_on_edge: Vector2 = closest_point_on_polyline(
+			squad_centre, atk_edge)
 	var cp_on_circle: Vector2 = closest_point_on_circle(
 			cp_on_edge, squad_centre, squad_radius)
 	if is_point_in_arc(cp_on_circle, atk_zone, atk_arc_pts):
 		return cp_on_edge.distance_to(cp_on_circle)
 	# --- Sampling fallback for arc-boundary cases ---
-	# Only edge points (not centre — the centre is interior to the base
-	# and always yields a distance that is squad_radius too large).
 	var sample_count: int = 32
 	for i: int in range(sample_count):
 		var angle: float = float(i) * TAU / float(sample_count)
 		var pt: Vector2 = squad_centre + Vector2(squad_radius, 0.0).rotated(angle)
 		if not is_point_in_arc(pt, atk_zone, atk_arc_pts):
 			continue
-		var cp: Vector2 = closest_point_on_segment(
-				pt, atk_edge[0], atk_edge[1])
+		var cp: Vector2 = closest_point_on_polyline(pt, atk_edge)
 		var d: float = cp.distance_to(pt)
 		if d < best:
 			best = d
-	# Reverse direction: attack-edge endpoints → closest in-arc circle point.
-	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
+	# Reverse direction: attacker polyline vertices → closest in-arc circle point.
+	for atk_pt: Vector2 in atk_edge:
 		var cp_c: Vector2 = closest_point_on_circle(
 				atk_pt, squad_centre, squad_radius)
 		if not is_point_in_arc(cp_c, atk_zone, atk_arc_pts):
@@ -319,10 +384,11 @@ static func measure_attack_range_squadron(
 
 ## Like [method measure_attack_range_ship] but also returns the two closest
 ## world-space points used for the measurement.
+## Both edges are polylines (2+ points).
 ## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2},
 ## or {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
 ## when no defender portion is inside the arc.
-## Requirements: AS-RNG-011.
+## Requirements: AS-RNG-011, HZ-EDGE-001.
 static func measure_attack_range_ship_endpoints(
 		atk_edge: Array[Vector2],
 		def_edge: Array[Vector2],
@@ -331,32 +397,35 @@ static func measure_attack_range_ship_endpoints(
 	var best: float = INF
 	var best_atk: Vector2 = Vector2.ZERO
 	var best_def: Vector2 = Vector2.ZERO
-	var def_start: Vector2 = def_edge[0]
-	var def_end: Vector2 = def_edge[1]
 	var count: int = EDGE_SAMPLE_COUNT
-	for i: int in range(count + 1):
-		var t: float = float(i) / float(count)
-		var def_pt: Vector2 = def_start.lerp(def_end, t)
-		if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
-			continue
-		var cp: Vector2 = closest_point_on_segment(
-				def_pt, atk_edge[0], atk_edge[1])
-		var d: float = cp.distance_to(def_pt)
-		if d < best:
-			best = d
-			best_atk = cp
-			best_def = def_pt
-	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
-		for j: int in range(count + 1):
-			var t2: float = float(j) / float(count)
-			var def_pt2: Vector2 = def_start.lerp(def_end, t2)
-			if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+	for seg_idx: int in range(def_edge.size() - 1):
+		var d_a: Vector2 = def_edge[seg_idx]
+		var d_b: Vector2 = def_edge[seg_idx + 1]
+		for i: int in range(count + 1):
+			var t: float = float(i) / float(count)
+			var def_pt: Vector2 = d_a.lerp(d_b, t)
+			if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
 				continue
-			var d2: float = atk_pt.distance_to(def_pt2)
-			if d2 < best:
-				best = d2
-				best_atk = atk_pt
-				best_def = def_pt2
+			var cp: Vector2 = closest_point_on_polyline(def_pt, atk_edge)
+			var d: float = cp.distance_to(def_pt)
+			if d < best:
+				best = d
+				best_atk = cp
+				best_def = def_pt
+	for atk_pt: Vector2 in atk_edge:
+		for seg_idx2: int in range(def_edge.size() - 1):
+			var d_a2: Vector2 = def_edge[seg_idx2]
+			var d_b2: Vector2 = def_edge[seg_idx2 + 1]
+			for j: int in range(count + 1):
+				var t2: float = float(j) / float(count)
+				var def_pt2: Vector2 = d_a2.lerp(d_b2, t2)
+				if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+					continue
+				var d2: float = atk_pt.distance_to(def_pt2)
+				if d2 < best:
+					best = d2
+					best_atk = atk_pt
+					best_def = def_pt2
 	if best == INF:
 		return {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
 	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
@@ -364,10 +433,11 @@ static func measure_attack_range_ship_endpoints(
 
 ## Like [method measure_attack_range_squadron] but also returns the two closest
 ## world-space points used for the measurement.
+## [param atk_edge] is a polyline (2+ points).
 ## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2},
 ## or {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
 ## when no squadron portion is inside the arc.
-## Requirements: AS-RNG-011.
+## Requirements: AS-RNG-011, HZ-EDGE-001.
 static func measure_attack_range_squadron_endpoints(
 		atk_edge: Array[Vector2],
 		squad_centre: Vector2,
@@ -378,8 +448,8 @@ static func measure_attack_range_squadron_endpoints(
 	var best_atk: Vector2 = Vector2.ZERO
 	var best_def: Vector2 = Vector2.ZERO
 	# Analytical closest point (optimal for common case).
-	var cp_on_edge: Vector2 = closest_point_on_segment(
-			squad_centre, atk_edge[0], atk_edge[1])
+	var cp_on_edge: Vector2 = closest_point_on_polyline(
+			squad_centre, atk_edge)
 	var cp_on_circle: Vector2 = closest_point_on_circle(
 			cp_on_edge, squad_centre, squad_radius)
 	if is_point_in_arc(cp_on_circle, atk_zone, atk_arc_pts):
@@ -395,15 +465,14 @@ static func measure_attack_range_squadron_endpoints(
 		var pt: Vector2 = squad_centre + Vector2(squad_radius, 0.0).rotated(angle)
 		if not is_point_in_arc(pt, atk_zone, atk_arc_pts):
 			continue
-		var cp: Vector2 = closest_point_on_segment(
-				pt, atk_edge[0], atk_edge[1])
+		var cp: Vector2 = closest_point_on_polyline(pt, atk_edge)
 		var d: float = cp.distance_to(pt)
 		if d < best:
 			best = d
 			best_atk = cp
 			best_def = pt
-	# Reverse direction: attack-edge endpoints → closest in-arc circle point.
-	for atk_pt: Vector2 in [atk_edge[0], atk_edge[1]]:
+	# Reverse direction: attacker polyline vertices → closest in-arc circle point.
+	for atk_pt: Vector2 in atk_edge:
 		var cp_c: Vector2 = closest_point_on_circle(
 				atk_pt, squad_centre, squad_radius)
 		if not is_point_in_arc(cp_c, atk_zone, atk_arc_pts):
@@ -418,18 +487,19 @@ static func measure_attack_range_squadron_endpoints(
 	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
 
 
-## Measures range from a squadron base to a ship hull-zone edge.
+## Measures range from a squadron base to a ship hull-zone edge (polyline).
 ## No arc restriction (squadrons have no firing arcs).
+## [param def_edge] is a polyline (2+ points).
 ## Returns {"distance": float, "atk_pt": Vector2, "def_pt": Vector2}.
-## Requirements: AS-RNG-011.
+## Requirements: AS-RNG-011, HZ-EDGE-001.
 ## Rules Reference: "Attack", Step 1, p.2.
 static func measure_range_squad_to_ship(
 		squad_centre: Vector2,
 		squad_radius: float,
 		def_edge: Array[Vector2]) -> Dictionary:
-	# Closest point on the defender edge to the squadron centre.
-	var cp_edge: Vector2 = closest_point_on_segment(
-			squad_centre, def_edge[0], def_edge[1])
+	# Closest point on the defender edge polyline to the squadron centre.
+	var cp_edge: Vector2 = closest_point_on_polyline(
+			squad_centre, def_edge)
 	# Closest point on the squadron base circle to that edge point.
 	var cp_circle: Vector2 = closest_point_on_circle(
 			cp_edge, squad_centre, squad_radius)

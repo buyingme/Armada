@@ -4,7 +4,7 @@
 ## maximum attack range, dice-at-range logic, and endpoint measurement functions.
 ##
 ## Requirements: TL-RNG-001–006, TL-ARC-001–006, AC-TL-15, AC-TL-18,
-## AS-RNG-011.
+## AS-RNG-011, HZ-EDGE-001.
 extends GutTest
 
 
@@ -41,6 +41,10 @@ func _make_arc_pts(pos: Vector2, rot: float) -> Dictionary:
 		"outer_point_rear_left": rl_ext,
 		"inner_point_rear_right": centre,
 		"outer_point_rear_right": rr_ext,
+		"corner_front_left": fl,
+		"corner_front_right": fr,
+		"corner_rear_left": rl,
+		"corner_rear_right": rr,
 	}
 
 
@@ -131,21 +135,36 @@ func test_hull_zone_edge_in_arc_returns_true_when_edge_ahead() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
 	# Defender's front edge is 200px ahead.
-	var def_start: Vector2 = Vector2(480, 300)
-	var def_end: Vector2 = Vector2(520, 300)
+	var def_edge: Array[Vector2] = [Vector2(480, 300), Vector2(520, 300)]
 	var result: bool = RangeFinder.is_hull_zone_edge_in_arc(
-			def_start, def_end, Constants.HullZone.FRONT, arc_pts)
+			def_edge, Constants.HullZone.FRONT, arc_pts)
 	assert_true(result, "Edge ahead should be in FRONT arc")
 
 
 func test_hull_zone_edge_in_arc_returns_false_when_edge_behind() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
-	var def_start: Vector2 = Vector2(480, 700)
-	var def_end: Vector2 = Vector2(520, 700)
+	var def_edge: Array[Vector2] = [Vector2(480, 700), Vector2(520, 700)]
 	var result: bool = RangeFinder.is_hull_zone_edge_in_arc(
-			def_start, def_end, Constants.HullZone.FRONT, arc_pts)
+			def_edge, Constants.HullZone.FRONT, arc_pts)
 	assert_false(result, "Edge behind should NOT be in FRONT arc")
+
+
+func test_hull_zone_edge_in_arc_polyline_returns_true_when_lip_in_arc() -> void:
+	# Test with a multi-segment (polyline) edge where only the corner-lip
+	# portion falls inside the arc.
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	# Defender FRONT polyline: wide wrap with points well inside FRONT arc.
+	var def_edge: Array[Vector2] = [
+		Vector2(400, 350),  # outer left lip
+		Vector2(450, 300),  # corner FL
+		Vector2(550, 300),  # corner FR
+		Vector2(600, 350),  # outer right lip
+	]
+	var result: bool = RangeFinder.is_hull_zone_edge_in_arc(
+			def_edge, Constants.HullZone.FRONT, arc_pts)
+	assert_true(result, "Polyline with corners in FRONT arc should return true")
 
 
 # =========================================================================
@@ -176,7 +195,133 @@ func test_squadron_in_arc_returns_true_when_edge_in_arc() -> void:
 
 
 # =========================================================================
-# get_hull_zone_edge
+# get_hull_zone_edge_from_arcs  (HZ-EDGE-001)
+# =========================================================================
+
+func test_hull_zone_edge_from_arcs_front_returns_4_point_polyline() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge_from_arcs(
+			arc_pts, Constants.HullZone.FRONT)
+	assert_eq(edge.size(), 4, "FRONT edge should be a 4-point polyline")
+	assert_eq(edge[0], arc_pts["outer_point_front_left"],
+			"First point should be outer_point_front_left")
+	assert_eq(edge[1], arc_pts["corner_front_left"],
+			"Second point should be corner_front_left")
+	assert_eq(edge[2], arc_pts["corner_front_right"],
+			"Third point should be corner_front_right")
+	assert_eq(edge[3], arc_pts["outer_point_front_right"],
+			"Fourth point should be outer_point_front_right")
+
+
+func test_hull_zone_edge_from_arcs_rear_returns_4_point_polyline() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge_from_arcs(
+			arc_pts, Constants.HullZone.REAR)
+	assert_eq(edge.size(), 4, "REAR edge should be a 4-point polyline")
+	assert_eq(edge[0], arc_pts["outer_point_rear_left"],
+			"First point should be outer_point_rear_left")
+	assert_eq(edge[3], arc_pts["outer_point_rear_right"],
+			"Last point should be outer_point_rear_right")
+
+
+func test_hull_zone_edge_from_arcs_left_returns_2_point_polyline() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge_from_arcs(
+			arc_pts, Constants.HullZone.LEFT)
+	assert_eq(edge.size(), 2, "LEFT edge should be a 2-point polyline")
+	assert_eq(edge[0], arc_pts["outer_point_front_left"],
+			"Start should be outer_point_front_left")
+	assert_eq(edge[1], arc_pts["outer_point_rear_left"],
+			"End should be outer_point_rear_left")
+
+
+func test_hull_zone_edge_from_arcs_right_returns_2_point_polyline() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge_from_arcs(
+			arc_pts, Constants.HullZone.RIGHT)
+	assert_eq(edge.size(), 2, "RIGHT edge should be a 2-point polyline")
+	assert_eq(edge[0], arc_pts["outer_point_front_right"],
+			"Start should be outer_point_front_right")
+	assert_eq(edge[1], arc_pts["outer_point_rear_right"],
+			"End should be outer_point_rear_right")
+
+
+# =========================================================================
+# closest_point_on_polyline  (HZ-EDGE-001)
+# =========================================================================
+
+func test_closest_point_on_polyline_single_segment() -> void:
+	var polyline: Array[Vector2] = [Vector2(0, 0), Vector2(100, 0)]
+	var p: Vector2 = Vector2(50, 30)
+	var cp: Vector2 = RangeFinder.closest_point_on_polyline(p, polyline)
+	assert_almost_eq(cp.x, 50.0, 0.01, "Single segment: X should be 50")
+	assert_almost_eq(cp.y, 0.0, 0.01, "Single segment: Y should be 0")
+
+
+func test_closest_point_on_polyline_multi_segment_chooses_nearest() -> void:
+	# L-shaped polyline: horizontal then vertical.
+	var polyline: Array[Vector2] = [
+		Vector2(0, 0), Vector2(100, 0), Vector2(100, 100)]
+	var p: Vector2 = Vector2(110, 50)  # Closest to the vertical segment.
+	var cp: Vector2 = RangeFinder.closest_point_on_polyline(p, polyline)
+	assert_almost_eq(cp.x, 100.0, 0.01,
+			"Should snap to vertical segment X=100")
+	assert_almost_eq(cp.y, 50.0, 0.01,
+			"Should snap to vertical segment Y=50")
+
+
+func test_closest_point_on_polyline_four_points() -> void:
+	# Front edge polyline: left lip, two corners, right lip.
+	var polyline: Array[Vector2] = [
+		Vector2(0, 50), Vector2(0, 0), Vector2(100, 0), Vector2(100, 50)]
+	var p: Vector2 = Vector2(50, -10)  # Above the top segment.
+	var cp: Vector2 = RangeFinder.closest_point_on_polyline(p, polyline)
+	assert_almost_eq(cp.x, 50.0, 0.01, "Should project onto middle segment")
+	assert_almost_eq(cp.y, 0.0, 0.01, "Should be on the Y=0 segment")
+
+
+# =========================================================================
+# Polyline-based measurement  (HZ-EDGE-001)
+# =========================================================================
+
+func test_measure_ship_polyline_edge_returns_correct_distance() -> void:
+	# Attacker: single segment. Defender: 4-point FRONT polyline.
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	var atk_edge: Array[Vector2] = [Vector2(480, 465), Vector2(520, 465)]
+	# Defender FRONT polyline: lip-corner-corner-lip, 100px ahead.
+	var def_edge: Array[Vector2] = [
+		Vector2(460, 375), Vector2(480, 365),
+		Vector2(520, 365), Vector2(540, 375)]
+	var dist: float = RangeFinder.measure_attack_range_ship(
+			atk_edge, def_edge, Constants.HullZone.FRONT, arc_pts)
+	# Lip segments (e.g. (460,375)→(480,365)) introduce in-arc points
+	# closer than the middle segment (Y=365), so the actual minimum
+	# distance is slightly less than 100 px.
+	assert_almost_eq(dist, 95.0, 10.0,
+			"Distance should be ~95 px to nearest in-arc polyline segment")
+
+
+func test_squad_to_ship_polyline_returns_distance() -> void:
+	var squad_pos: Vector2 = Vector2(500, 350)
+	var squad_r: float = 15.0
+	var def_edge: Array[Vector2] = [
+		Vector2(460, 475), Vector2(480, 465),
+		Vector2(520, 465), Vector2(540, 475)]
+	var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			squad_pos, squad_r, def_edge)
+	# Closest point on polyline to squad centre is on the middle segment
+	# (Y=465, X=500).  Distance = 465 - 350 - 15 = 100.
+	assert_almost_eq(result["distance"], 100.0, 2.0,
+			"Distance should be ~100 px from squad edge to nearest polyline seg")
+
+
+# =========================================================================
+# get_hull_zone_edge  (rectangle fallback)
 # =========================================================================
 
 func test_hull_zone_edge_front_returns_correct_world_coords() -> void:

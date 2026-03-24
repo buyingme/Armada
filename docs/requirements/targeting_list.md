@@ -205,7 +205,7 @@ Each hull zone's edge is the segment of the ship base perimeter that lies
 between the two boundary lines bordering that hull zone.
 
 The hull zone edge approximation for closest-point calculations:
-- For **rectanglular bases**: the hull zone edge is one side of the base
+- For **rectangular bases**: the hull zone edge is one side of the base
   rectangle (front edge, left edge, right edge, rear edge).
 - The edges do **not** include the plastic frame or shield dials.
 
@@ -214,6 +214,35 @@ The hull zone edge approximation for closest-point calculations:
 > the plastic base."
 > RRG "Measuring Firing Arc and Range", bullet 4: "ignore … ships' shield
 > dials and the plastic portions of the base."
+
+### TL-ARC-005b — Arc-based hull-zone edge polylines (HZ-EDGE-001)
+
+Because firing arc boundary lines do **not** always intersect the template
+edge at the rectangle corners, the hull-zone edge for FRONT and REAR zones
+may wrap around one or two template corners.  This happens when the arc
+boundary's outer point lies on a side edge rather than the front/rear edge
+(e.g., VSD).
+
+Hull-zone edge geometry using arc boundary data:
+- **FRONT**: polyline `[outer_FL, corner_FL, corner_FR, outer_FR]` (3 segments).
+- **REAR**: polyline `[outer_RL, corner_RL, corner_RR, outer_RR]` (3 segments).
+- **LEFT**: polyline `[outer_FL, outer_RL]` (1 segment).
+- **RIGHT**: polyline `[outer_FR, outer_RR]` (1 segment).
+
+When `outer_FL == corner_FL` (e.g. Nebulon-B front), the first segment
+degenerates to zero length — functionally a 2-point edge, handled naturally.
+
+Template corner coordinates are stored in the ship JSON
+`firing_arc_boundaries` section as `corner_front_left`, `corner_front_right`,
+`corner_rear_left`, `corner_rear_right`.
+
+`RangeFinder.get_hull_zone_edge_from_arcs()` returns these polylines in
+world space.  `RangeFinder.closest_point_on_polyline()` computes the nearest
+point on any segment of the polyline.  All measurement and arc-check
+functions accept polyline edges.
+
+The rectangle-corner fallback (`get_hull_zone_edge()`) is retained for the
+LOS hull-zone-entry checker, which does not yet receive arc boundary data.
 
 ---
 

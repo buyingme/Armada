@@ -86,7 +86,7 @@
         ]
     },
     "firing_arc_boundaries": {
-        "_comment": "Each boundary is defined by an inner point and an outer point (on the token edge). All coordinates are pixel [x, y] measured from the PNG origin (top-left corner). The boundary line between two adjacent arcs runs from the inner point to the outer point.",
+        "_comment": "Each boundary is defined by an inner point and an outer point (on the token edge). All coordinates are pixel [x, y] measured from the PNG origin (top-left corner). The boundary line between two adjacent arcs runs from the inner point to the outer point. The four corner_* points mark the corners of the rectangular base template.",
         "inner_point_front_left":  [94, 132],
         "outer_point_front_left":  [25, 78],
         "inner_point_front_right": [94, 132],
@@ -94,7 +94,11 @@
         "inner_point_rear_left":   [94, 134],
         "outer_point_rear_left":   [25, 206],
         "inner_point_rear_right":  [94, 134],
-        "outer_point_rear_right":  [163, 206]
+        "outer_point_rear_right":  [163, 206],
+        "corner_front_left":       [25, 21],
+        "corner_front_right":      [163, 21],
+        "corner_rear_left":        [25, 261],
+        "corner_rear_right":       [163, 261]
     },
     "line_of_sight_origins": {
         "_comment": "Each hull zone has one line-of-sight dot. Pixel [x, y] from PNG origin.",

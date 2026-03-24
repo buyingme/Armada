@@ -26,6 +26,7 @@
 - [Phase 5d: Targeting List Tool](#phase-5d-targeting-list-tool)
 - [Phase 6a: Attack Simulator — Attacker Declaration](#phase-6a-attack-simulator--attacker-declaration)
 - [Phase 6a-3: Attack Simulator — Same-Ship Guard, Arc Validation & Range Line](#phase-6a-3-attack-simulator--same-ship-guard-arc-validation--range-line)
+- [Phase 6a-4: Hull-Zone Edge Polyline Fix (HZ-EDGE-001)](#phase-6a-4-hull-zone-edge-polyline-fix-hz-edge-001)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -907,6 +908,29 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 **Commit:** `5c2d4e2`
 **Requirements covered:** AS-TGT-030, AS-ARC-001–002, AS-RNG-010–014, AS-LOG-020, AC-AS-40–48
 **Tests:** 1045 (59 scripts, 1941 asserts) — 21 new tests
+
+---
+
+### Phase 6a-4: Hull-Zone Edge Polyline Fix (HZ-EDGE-001) ✅
+**Goal:** Fix incorrect hull-zone edge geometry. The previous implementation used rectangle corners for hull-zone edges, but firing arc boundary lines do not always intersect at the template corners. FRONT and REAR edges now use 3-segment polylines wrapping around the template corners, derived from arc boundary outer points and new `corner_*` JSON fields.
+**Prerequisites:** Phase 6a-3 (RangeFinder, arc validation, range measurement)
+**Duration estimate:** 1 session
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Add `corner_*` fields to ship JSON | Data | HZ-EDGE-001 | `corner_front_left/right`, `corner_rear_left/right` in all 6 ship JSON files | ✅ |
+| 2 | `RangeFinder.get_hull_zone_edge_from_arcs()` | Core | HZ-EDGE-001, TL-ARC-005b | Returns polyline `Array[Vector2]` from arc boundary + corner world points | ✅ |
+| 3 | `RangeFinder.closest_point_on_polyline()` | Core | HZ-EDGE-001 | Finds nearest point across all segments of a polyline | ✅ |
+| 4 | `RangeFinder.is_hull_zone_edge_in_arc()` — polyline | Core | HZ-EDGE-001, TL-ARC-003 | Signature changed from `(start, end, …)` to `(polyline, …)` — iterates all segments | ✅ |
+| 5 | Update `measure_attack_range_ship/squadron/_endpoints` | Core | HZ-EDGE-001, TL-RNG-001 | All measurement functions iterate polyline segments | ✅ |
+| 6 | Update callers in `game_board.gd` | Presentation | HZ-EDGE-001 | `_get_ship_edge()` helper prefers arc-based edges; updated 5 call sites | ✅ |
+| 7 | Update callers in `targeting_list_builder.gd` | Core | HZ-EDGE-001 | `_get_ship_edge()` helper; updated 7 `get_hull_zone_edge` + 2 `is_hull_zone_edge_in_arc` + 2 `closest_point_on_segment` calls | ✅ |
+| 8 | LOS checker — deferred TODO | Core | HZ-EDGE-001 | Added TODO comment to `_los_blocked_by_other_hull_zone()` for future arc-based edge update | ✅ |
+| 9 | Unit tests | Test | HZ-EDGE-001 | New tests for `get_hull_zone_edge_from_arcs`, `closest_point_on_polyline`, polyline measurement, polyline arc-check | ✅ |
+| 10 | Requirements & docs update | Docs | — | TL-ARC-005b in `targeting_list.md`, this phase, manual test plan | ✅ |
+
+**Requirements covered:** HZ-EDGE-001, TL-ARC-005b
+**Tests:** 1055 (59 scripts, 1963 asserts) — 10 new tests
 
 ---
 

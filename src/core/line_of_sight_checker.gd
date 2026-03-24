@@ -246,6 +246,10 @@ static func segment_intersects_polygon(
 ## that is NOT the defending hull zone.
 ## Returns true if blocked (no LOS).
 ## Requirements: TL-LOS-004.
+## TODO(HZ-EDGE-001): Switch to arc-based hull-zone edges
+##   (RangeFinder.get_hull_zone_edge_from_arcs) when arc_pts are available.
+##   Currently uses rectangle-corner edges, which is slightly inaccurate
+##   in the small "lip" areas around template corners on FRONT/REAR.
 static func _los_blocked_by_other_hull_zone(
 		seg_start: Vector2,
 		seg_end: Vector2,

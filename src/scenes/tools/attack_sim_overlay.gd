@@ -6,10 +6,12 @@
 ##
 ## For hull zone selection: draws two firing arc boundary lines and a LOS marker.
 ## For squadron selection: draws a close-range circle.
+## When a target is selected: draws a target LOS marker and a colour-coded
+## LOS line between attacker and target.
 ## The range overlay (RangeOverlayScene) is managed separately by the game board.
 ##
-## Requirements: AS-VIS-002, AS-VIS-003, AS-VIS-010.
-## Rules Reference: "Firing Arcs", p.3; "Line of Sight", p.6.
+## Requirements: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022.
+## Rules Reference: "Firing Arcs", p.3; "Line of Sight", p.10.
 class_name AttackSimOverlay
 extends Node2D
 
@@ -25,7 +27,7 @@ const ARC_LINE_COLOUR: Color = Color(1.0, 1.0, 1.0, 0.6)
 const ARC_LINE_WIDTH: float = 1.5
 
 ## Colour for LOS targeting point marker — yellow, 60 % opacity.
-## Requirements: AS-VIS-003.
+## Requirements: AS-VIS-003, AS-VIS-020.
 const LOS_MARKER_COLOUR: Color = Color(1.0, 1.0, 0.0, 0.6)
 
 ## Radius of the LOS marker circle in pixels (6 px diameter → 3 px radius).
@@ -40,6 +42,25 @@ const SQUAD_CIRCLE_WIDTH: float = 1.5
 
 ## Number of segments for drawn circles.
 const CIRCLE_SEGMENTS: int = 64
+
+## LOS line colour when clear — yellow, 80 % opacity.
+## Requirements: AS-VIS-022.
+const LOS_LINE_CLEAR: Color = Color(1.0, 1.0, 0.0, 0.8)
+
+## LOS line colour when obstructed — orange, 80 % opacity.
+## Requirements: AS-VIS-022.
+const LOS_LINE_OBSTRUCTED: Color = Color(1.0, 0.6, 0.0, 0.8)
+
+## LOS line colour when blocked — red, 60 % opacity.
+## Requirements: AS-VIS-022.
+const LOS_LINE_BLOCKED: Color = Color(1.0, 0.0, 0.0, 0.6)
+
+## Width of the LOS line in pixels.
+## Requirements: AS-VIS-021.
+const LOS_LINE_WIDTH: float = 2.0
+
+## LOS status enum for setup_los_line().
+enum LOSStatus { CLEAR, OBSTRUCTED, BLOCKED }
 
 ## Play area side length — lines are clipped to this boundary.
 var _play_area_side: float = 0.0
@@ -67,6 +88,21 @@ var _squad_centre: Vector2 = Vector2.ZERO
 var _squad_circle_radius: float = 0.0
 ## Whether squadron visuals should be drawn.
 var _draw_squadron: bool = false
+
+# --- Target visuals ---
+
+## World-space position of the target's LOS point.
+var _target_los_position: Vector2 = Vector2.ZERO
+## Whether a target LOS marker should be drawn.
+var _draw_target_marker: bool = false
+## Start point of the LOS line (attacker side).
+var _los_line_start: Vector2 = Vector2.ZERO
+## End point of the LOS line (target side).
+var _los_line_end: Vector2 = Vector2.ZERO
+## Colour of the LOS line (derived from status).
+var _los_line_colour: Color = LOS_LINE_CLEAR
+## Whether the LOS line should be drawn.
+var _draw_los_line: bool = false
 
 
 ## Sets up the overlay for a hull zone attacker.
@@ -115,6 +151,59 @@ func setup_squadron(centre: Vector2, base_radius: float) -> void:
 func clear() -> void:
 	_draw_hull_zone = false
 	_draw_squadron = false
+	_draw_target_marker = false
+	_draw_los_line = false
+	queue_redraw()
+
+
+## Clears only the target-related visuals (marker + LOS line).
+## Attacker visuals (arc lines, LOS marker, close-range circle) are kept.
+## Requirements: AS-TGT-020.
+func clear_target() -> void:
+	_draw_target_marker = false
+	_draw_los_line = false
+	queue_redraw()
+
+
+## Sets up the target LOS marker for a defending hull zone.
+## [param los_pos] — world-space LOS targeting point of the defending zone.
+## Requirements: AS-VIS-020.
+func setup_target_hull_zone(los_pos: Vector2) -> void:
+	_target_los_position = los_pos
+	_draw_target_marker = true
+	_log.debug("Target hull zone marker at %s." % los_pos)
+	queue_redraw()
+
+
+## Sets up the target LOS marker for a defending squadron.
+## [param centre] — world-space centre of the defending squadron.
+## Requirements: AS-VIS-020.
+func setup_target_squadron(centre: Vector2) -> void:
+	_target_los_position = centre
+	_draw_target_marker = true
+	_log.debug("Target squadron marker at %s." % centre)
+	queue_redraw()
+
+
+## Sets up the LOS line between attacker and target.
+## [param start_pos] — world-space start point (attacker side).
+## [param end_pos] — world-space end point (target side).
+## [param los_status] — LOSStatus enum value (CLEAR, OBSTRUCTED, BLOCKED).
+## Requirements: AS-VIS-021, AS-VIS-022.
+func setup_los_line(start_pos: Vector2, end_pos: Vector2,
+		los_status: int) -> void:
+	_los_line_start = start_pos
+	_los_line_end = end_pos
+	_draw_los_line = true
+	match los_status:
+		LOSStatus.OBSTRUCTED:
+			_los_line_colour = LOS_LINE_OBSTRUCTED
+		LOSStatus.BLOCKED:
+			_los_line_colour = LOS_LINE_BLOCKED
+		_:
+			_los_line_colour = LOS_LINE_CLEAR
+	_log.debug("LOS line set up: %s → %s, status=%d." % [
+			start_pos, end_pos, los_status])
 	queue_redraw()
 
 
@@ -124,6 +213,10 @@ func _draw() -> void:
 		_draw_los_marker()
 	if _draw_squadron:
 		_draw_close_range_circle()
+	if _draw_target_marker:
+		_draw_target_los_marker()
+	if _draw_los_line:
+		_draw_los_line_segment()
 
 
 # =========================================================================
@@ -147,6 +240,19 @@ func _draw_los_marker() -> void:
 func _draw_close_range_circle() -> void:
 	draw_arc(_squad_centre, _squad_circle_radius, 0.0, TAU,
 			CIRCLE_SEGMENTS, SQUAD_CIRCLE_COLOUR, SQUAD_CIRCLE_WIDTH, true)
+
+
+## Draws the target's LOS targeting point marker.
+## Requirements: AS-VIS-020.
+func _draw_target_los_marker() -> void:
+	draw_circle(_target_los_position, LOS_MARKER_RADIUS, LOS_MARKER_COLOUR)
+
+
+## Draws the colour-coded LOS line between attacker and target.
+## Requirements: AS-VIS-021, AS-VIS-022.
+func _draw_los_line_segment() -> void:
+	draw_line(_los_line_start, _los_line_end,
+			_los_line_colour, LOS_LINE_WIDTH, true)
 
 
 # =========================================================================

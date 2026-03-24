@@ -128,10 +128,14 @@ var _targeting_list_modal: TargetingListModal = null
 ## ActionToolbar in the lower-right corner.
 var _action_toolbar: ActionToolbar = null
 
-## --- Attack Simulator state (Phase 6a) ---
+## --- Attack Simulator state (Phase 6a / 6a-2) ---
 
 ## Whether we are in "select attacker" mode.
 var _attack_sim_selecting: bool = false
+
+## Whether we are in "select target" mode (attacker already chosen).
+## Requirements: AS-TGT-001, AS-TGT-010.
+var _attack_sim_target_selecting: bool = false
 
 ## Attack simulator info panel (null when not displayed).
 var _attack_sim_panel: AttackSimPanel = null
@@ -141,6 +145,32 @@ var _attack_sim_overlay: AttackSimOverlay = null
 
 ## Range overlay shown as part of the attack simulator (separate from the R tool).
 var _attack_sim_range_overlay: RangeOverlayScene = null
+
+## --- Attacker state (stored after attacker selection) ---
+
+## The attacking ship token (null if attacker is a squadron).
+var _attack_sim_atk_ship: ShipToken = null
+## The attacking hull zone (only valid when _attack_sim_atk_ship != null).
+var _attack_sim_atk_zone: int = -1
+## The attacking squadron token (null if attacker is a ship).
+var _attack_sim_atk_squad: SquadronToken = null
+## Attacker display name (cached for panel text).
+var _attack_sim_atk_name: String = ""
+## Attacker zone display name (empty for squadrons).
+var _attack_sim_atk_zone_name: String = ""
+
+## --- Target state (stored after target selection) ---
+
+## The defending ship token (null if target is a squadron).
+var _attack_sim_def_ship: ShipToken = null
+## The defending hull zone (only valid when _attack_sim_def_ship != null).
+var _attack_sim_def_zone: int = -1
+## The defending squadron token (null if target is a ship).
+var _attack_sim_def_squad: SquadronToken = null
+## Target display name (cached for panel text).
+var _attack_sim_def_name: String = ""
+## Target zone display name (empty for squadrons).
+var _attack_sim_def_zone_name: String = ""
 
 ## --- Phase 5b: Activation flow state ---
 
@@ -499,6 +529,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if _attack_sim_target_selecting:
+		_attack_sim_handle_target_ship_click(token)
+		return
 	if _attack_sim_selecting:
 		_attack_sim_handle_ship_click(token)
 		return
@@ -517,6 +550,9 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
+	if _attack_sim_target_selecting:
+		_attack_sim_handle_target_squadron_click(token)
+		return
 	if _attack_sim_selecting:
 		_attack_sim_handle_squadron_click(token)
 		return
@@ -1858,7 +1894,8 @@ const _ZONE_NAMES: Dictionary = {
 ## and dismiss any other active tool first.
 ## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005.
 func _on_attack_simulator_requested() -> void:
-	if _attack_sim_selecting or (_attack_sim_panel and _attack_sim_panel.visible):
+	if _attack_sim_selecting or _attack_sim_target_selecting \
+			or (_attack_sim_panel and _attack_sim_panel.visible):
 		_dismiss_attack_sim()
 		return
 	# Dismiss other tools first (AS-ACT-005).
@@ -1885,9 +1922,12 @@ func _activate_attack_sim() -> void:
 
 
 ## Dismisses the attack simulator, removing all visual aids and the panel.
-## Requirements: AS-ACT-003, AS-PNL-003.
+## Requirements: AS-ACT-003, AS-PNL-003, AS-TGT-022.
 func _dismiss_attack_sim() -> void:
 	_attack_sim_selecting = false
+	_attack_sim_target_selecting = false
+	_attack_sim_clear_attacker_state()
+	_attack_sim_clear_target_state()
 	# Remove info panel.
 	if _attack_sim_panel:
 		_attack_sim_panel.close()
@@ -1918,8 +1958,15 @@ func _attack_sim_handle_ship_click(token: ShipToken) -> void:
 		ship_name = token.get_ship_data().ship_name
 	_log.info("Attacker selected: %s — %s arc." % [ship_name, zone_name])
 	_log.debug("Click at %s → %s hull zone." % [click_pos, zone_name])
-	# End selection mode.
+	# Store attacker state.
+	_attack_sim_atk_ship = token
+	_attack_sim_atk_zone = zone
+	_attack_sim_atk_squad = null
+	_attack_sim_atk_name = ship_name
+	_attack_sim_atk_zone_name = zone_name
+	# End attacker selection, enter target selection.
 	_attack_sim_selecting = false
+	_attack_sim_target_selecting = true
 	# Update info panel.
 	if _attack_sim_panel:
 		_attack_sim_panel.show_hull_zone_selected(ship_name, zone_name)
@@ -1973,8 +2020,15 @@ func _attack_sim_handle_squadron_click(token: SquadronToken) -> void:
 	if inst and inst.squadron_data:
 		squad_name = inst.squadron_data.squadron_name
 	_log.info("Attacker selected: %s." % squad_name)
-	# End selection mode.
+	# Store attacker state.
+	_attack_sim_atk_ship = null
+	_attack_sim_atk_zone = -1
+	_attack_sim_atk_squad = token
+	_attack_sim_atk_name = squad_name
+	_attack_sim_atk_zone_name = ""
+	# End attacker selection, enter target selection.
 	_attack_sim_selecting = false
+	_attack_sim_target_selecting = true
 	# Update info panel.
 	if _attack_sim_panel:
 		_attack_sim_panel.show_squadron_selected(squad_name)
@@ -1999,16 +2053,287 @@ func _attack_sim_show_squadron_visuals(token: SquadronToken) -> void:
 			token.global_position, token.get_radius_px())
 
 
+# =========================================================================
+# Attack Simulator — Target Selection (Phase 6a-2)
+# =========================================================================
+
+## Handles a ship token click during target selection.
+## Checks for deselection (same attacker hull zone) or sets the target.
+## Requirements: AS-TGT-001–003, AS-TGT-020–021.
+func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
+	var click_pos: Vector2 = token.get_global_mouse_position()
+	var zone: int = token.get_hull_zone_at(click_pos)
+	if zone < 0:
+		_log.debug("Target click outside ship base — ignored.")
+		return
+	# Check: clicking the attacker hull zone → deselect both (AS-TGT-021).
+	if _attack_sim_atk_ship == token and _attack_sim_atk_zone == zone:
+		_log.info("Attacker re-clicked — both deselected.")
+		_attack_sim_deselect_both()
+		return
+	# Check: clicking the current target hull zone → deselect target (AS-TGT-020).
+	if _attack_sim_def_ship == token and _attack_sim_def_zone == zone:
+		_log.info("Target deselected.")
+		_attack_sim_deselect_target()
+		return
+	# New target selected.
+	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
+	var ship_name: String = ""
+	if token.get_ship_data():
+		ship_name = token.get_ship_data().ship_name
+	_log.info("Target selected: %s — %s arc." % [ship_name, zone_name])
+	# Store target state.
+	_attack_sim_def_ship = token
+	_attack_sim_def_zone = zone
+	_attack_sim_def_squad = null
+	_attack_sim_def_name = ship_name
+	_attack_sim_def_zone_name = zone_name
+	# Compute and display LOS.
+	_attack_sim_compute_and_show_los()
+
+
+## Handles a squadron token click during target selection.
+## Checks for deselection (same attacker squadron) or sets the target.
+## Requirements: AS-TGT-010–012, AS-TGT-020–021.
+func _attack_sim_handle_target_squadron_click(token: SquadronToken) -> void:
+	# Check: clicking the attacker squadron → deselect both (AS-TGT-021).
+	if _attack_sim_atk_squad == token:
+		_log.info("Attacker re-clicked — both deselected.")
+		_attack_sim_deselect_both()
+		return
+	# Check: clicking the current target squadron → deselect target (AS-TGT-020).
+	if _attack_sim_def_squad == token:
+		_log.info("Target deselected.")
+		_attack_sim_deselect_target()
+		return
+	# New target selected.
+	var inst: SquadronInstance = token.get_squadron_instance()
+	var squad_name: String = "Squadron"
+	if inst and inst.squadron_data:
+		squad_name = inst.squadron_data.squadron_name
+	_log.info("Target selected: %s." % squad_name)
+	# Store target state.
+	_attack_sim_def_ship = null
+	_attack_sim_def_zone = -1
+	_attack_sim_def_squad = token
+	_attack_sim_def_name = squad_name
+	_attack_sim_def_zone_name = ""
+	# Compute and display LOS.
+	_attack_sim_compute_and_show_los()
+
+
+## Deselects the target only; returns to "Select a target" prompt.
+## Attacker visuals remain active.
+## Requirements: AS-TGT-020.
+func _attack_sim_deselect_target() -> void:
+	_attack_sim_clear_target_state()
+	# Remove target visuals from overlay (keep attacker visuals).
+	if _attack_sim_overlay:
+		_attack_sim_overlay.clear_target()
+	# Restore "Select a target" prompt.
+	if _attack_sim_panel:
+		if _attack_sim_atk_zone_name != "":
+			_attack_sim_panel.show_hull_zone_selected(
+					_attack_sim_atk_name, _attack_sim_atk_zone_name)
+		else:
+			_attack_sim_panel.show_squadron_selected(_attack_sim_atk_name)
+
+
+## Deselects both attacker and target; returns to initial prompt.
+## Requirements: AS-TGT-021.
+func _attack_sim_deselect_both() -> void:
+	_attack_sim_clear_attacker_state()
+	_attack_sim_clear_target_state()
+	_attack_sim_target_selecting = false
+	_attack_sim_selecting = true
+	# Remove all visuals.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.queue_free()
+		_attack_sim_overlay = null
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	# Show initial prompt.
+	if _attack_sim_panel:
+		_attack_sim_panel.show_initial()
+
+
+## Clears stored attacker state.
+func _attack_sim_clear_attacker_state() -> void:
+	_attack_sim_atk_ship = null
+	_attack_sim_atk_zone = -1
+	_attack_sim_atk_squad = null
+	_attack_sim_atk_name = ""
+	_attack_sim_atk_zone_name = ""
+
+
+## Clears stored target state.
+func _attack_sim_clear_target_state() -> void:
+	_attack_sim_def_ship = null
+	_attack_sim_def_zone = -1
+	_attack_sim_def_squad = null
+	_attack_sim_def_name = ""
+	_attack_sim_def_zone_name = ""
+
+
+## Computes LOS between attacker and target, then updates the overlay
+## and info panel with the result.
+## Requirements: AS-VIS-020–022, AS-PNL-011, AS-LOG-010.
+func _attack_sim_compute_and_show_los() -> void:
+	# Determine LOS endpoints and trace result.
+	var endpoints: Dictionary = _attack_sim_compute_los_endpoints()
+	var atk_pt: Vector2 = endpoints["atk"]
+	var def_pt: Vector2 = endpoints["def"]
+	var los_result: LineOfSightChecker.LOSResult = _attack_sim_trace_los(
+			atk_pt, def_pt)
+	# Determine overlay status.
+	var status: int = AttackSimOverlay.LOSStatus.CLEAR
+	var los_text: String = "Clear"
+	if not los_result.has_los:
+		status = AttackSimOverlay.LOSStatus.BLOCKED
+		los_text = "Blocked"
+	elif los_result.obstructed:
+		status = AttackSimOverlay.LOSStatus.OBSTRUCTED
+		if los_result.obstructed_by.size() > 0:
+			los_text = "Obstructed by %s" % ", ".join(
+					los_result.obstructed_by)
+		else:
+			los_text = "Obstructed"
+	_log.info("LOS: %s." % los_text)
+	# Update overlay: target marker + LOS line.
+	if _attack_sim_overlay:
+		if _attack_sim_def_ship:
+			_attack_sim_overlay.setup_target_hull_zone(def_pt)
+		else:
+			_attack_sim_overlay.setup_target_squadron(def_pt)
+		_attack_sim_overlay.setup_los_line(atk_pt, def_pt, status)
+	# Update panel.
+	if _attack_sim_panel:
+		_attack_sim_panel.show_target_selected(
+				_attack_sim_atk_name, _attack_sim_atk_zone_name,
+				_attack_sim_def_name, _attack_sim_def_zone_name,
+				los_text)
+
+
+## Computes the LOS line endpoints for the current attacker/target pair.
+## Returns a Dictionary with "atk" and "def" Vector2 keys.
+## Rules Reference: "Line of Sight", p.10.
+func _attack_sim_compute_los_endpoints() -> Dictionary:
+	var atk_pt: Vector2 = Vector2.ZERO
+	var def_pt: Vector2 = Vector2.ZERO
+	# Attacker endpoint.
+	if _attack_sim_atk_ship:
+		# Ship hull zone → targeting point.
+		var los_pts: Dictionary = _attack_sim_atk_ship.get_los_origins_world()
+		var zone_key: String = _ZONE_NAMES.get(_attack_sim_atk_zone, "FRONT")
+		atk_pt = los_pts.get(zone_key, Vector2.ZERO)
+	# Defender endpoint (depends on type).
+	if _attack_sim_def_ship:
+		# Ship hull zone → targeting point.
+		var los_pts: Dictionary = _attack_sim_def_ship.get_los_origins_world()
+		var zone_key: String = _ZONE_NAMES.get(_attack_sim_def_zone, "FRONT")
+		def_pt = los_pts.get(zone_key, Vector2.ZERO)
+	if _attack_sim_atk_ship and _attack_sim_def_squad:
+		# Ship → Squadron: defender = closest point on squadron base.
+		def_pt = RangeFinder.closest_point_on_circle(
+				atk_pt,
+				_attack_sim_def_squad.global_position,
+				_attack_sim_def_squad.get_radius_px())
+	if _attack_sim_atk_squad and _attack_sim_def_ship:
+		# Squadron → Ship: attacker = closest point on squadron base to
+		# defender's targeting point.
+		var d_los_pts: Dictionary = _attack_sim_def_ship.get_los_origins_world()
+		var d_zone_key: String = _ZONE_NAMES.get(_attack_sim_def_zone, "FRONT")
+		def_pt = d_los_pts.get(d_zone_key, Vector2.ZERO)
+		atk_pt = RangeFinder.closest_point_on_circle(
+				def_pt,
+				_attack_sim_atk_squad.global_position,
+				_attack_sim_atk_squad.get_radius_px())
+	if _attack_sim_atk_squad and _attack_sim_def_squad:
+		# Squadron → Squadron: both = closest points on each base to the
+		# other's centre.
+		atk_pt = RangeFinder.closest_point_on_circle(
+				_attack_sim_def_squad.global_position,
+				_attack_sim_atk_squad.global_position,
+				_attack_sim_atk_squad.get_radius_px())
+		def_pt = RangeFinder.closest_point_on_circle(
+				_attack_sim_atk_squad.global_position,
+				_attack_sim_def_squad.global_position,
+				_attack_sim_def_squad.get_radius_px())
+	return {"atk": atk_pt, "def": def_pt}
+
+
+## Traces LOS between the attacker and target using LineOfSightChecker.
+## Builds obstruction bodies from all ships except the attacker/defender.
+## Requirements: AS-VIS-022, TL-LOS-001–005.
+func _attack_sim_trace_los(atk_pt: Vector2,
+		def_pt: Vector2) -> LineOfSightChecker.LOSResult:
+	# Build obstruction bodies from all ships excluding attacker and defender.
+	var bodies: Array = []
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var st: ShipToken = child as ShipToken
+			if st == _attack_sim_atk_ship or st == _attack_sim_def_ship:
+				continue
+			var sd: ShipData = st.get_ship_data()
+			if sd:
+				bodies.append(
+						LineOfSightChecker.ObstructionBody.from_ship_base(
+								sd.ship_name, st.global_position,
+								st.rotation, st.get_half_width(),
+								st.get_half_length()))
+	var obstacles: Array = []  # Future: obstacle tokens.
+	# Determine which trace method to use.
+	# Ship → Ship
+	if _attack_sim_atk_ship and _attack_sim_def_ship:
+		var ds: ShipToken = _attack_sim_def_ship
+		return LineOfSightChecker.trace_los_ship_to_ship(
+				atk_pt, def_pt,
+				_attack_sim_def_zone as Constants.HullZone,
+				ds.global_position, ds.rotation,
+				ds.get_half_width(), ds.get_half_length(),
+				bodies, obstacles)
+	# Ship → Squadron
+	if _attack_sim_atk_ship and _attack_sim_def_squad:
+		return LineOfSightChecker.trace_los_ship_to_squadron(
+				atk_pt,
+				_attack_sim_def_squad.global_position,
+				_attack_sim_def_squad.get_radius_px(),
+				bodies, obstacles)
+	# Squadron → Ship
+	if _attack_sim_atk_squad and _attack_sim_def_ship:
+		var ds: ShipToken = _attack_sim_def_ship
+		return LineOfSightChecker.trace_los_squad_to_ship(
+				_attack_sim_atk_squad.global_position,
+				_attack_sim_atk_squad.get_radius_px(),
+				def_pt,
+				_attack_sim_def_zone as Constants.HullZone,
+				ds.global_position, ds.rotation,
+				ds.get_half_width(), ds.get_half_length(),
+				bodies, obstacles)
+	# Squadron → Squadron — no hull zone blocking, just obstruction.
+	if _attack_sim_atk_squad and _attack_sim_def_squad:
+		return LineOfSightChecker.trace_los_squad_to_squad(
+				_attack_sim_atk_squad.global_position,
+				_attack_sim_atk_squad.get_radius_px(),
+				_attack_sim_def_squad.global_position,
+				_attack_sim_def_squad.get_radius_px(),
+				bodies, obstacles)
+	# Fallback (should not happen).
+	return LineOfSightChecker.LOSResult.new()
+
+
 ## Checks if an Escape key press should dismiss the attack simulator.
 ## Returns true if the event was consumed.
-## Requirements: AS-ACT-003.
+## Requirements: AS-ACT-003, AS-TGT-022.
 func _handle_attack_sim_escape(event: InputEvent) -> bool:
 	if not event is InputEventKey:
 		return false
 	var key_event: InputEventKey = event as InputEventKey
 	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
 		return false
-	if _attack_sim_selecting or (_attack_sim_panel and _attack_sim_panel.visible):
+	if _attack_sim_selecting or _attack_sim_target_selecting \
+			or (_attack_sim_panel and _attack_sim_panel.visible):
 		_dismiss_attack_sim()
 		get_viewport().set_input_as_handled()
 		return true

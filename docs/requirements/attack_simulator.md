@@ -1,9 +1,11 @@
 # Attack Simulator — Requirements
 
-> **Scope:** Phase 6a — Attacker Declaration & Visual Aids.
-> Only the *selection* of the attacking hull zone / squadron and the
-> corresponding visual cues on the board.  Dice rolling, defense tokens,
-> and damage resolution remain in Phase 6 proper.
+> **Scope:** Phases 6a / 6a-2 — Attacker Declaration, Target Selection
+> & LOS Visualization.
+> Selection of the attacking hull zone / squadron, selection of the
+> defending hull zone / squadron, and the LOS line between them.
+> Dice rolling, defense tokens, and damage resolution remain in Phase 6
+> proper.
 
 ---
 
@@ -181,9 +183,7 @@ of the selected hull zone's line-of-sight targeting point.
 After the hull zone is selected, the info panel text updates to:
 
 > **Attacking: \<ShipName\> — \<ZONE\> arc**
-> Select a target (next step — not yet implemented).
-
-This is a placeholder for Phase 6 proper.
+> Select a target.
 
 ---
 
@@ -205,7 +205,7 @@ Draw a circle centred on the squadron token showing the **close range**
 After the squadron is selected, the info panel text updates to:
 
 > **Attacking: \<SquadronName\>**
-> Select a target (next step — not yet implemented).
+> Select a target.
 
 ---
 
@@ -261,6 +261,225 @@ var _log: GameLogger = GameLogger.new("AttackSim")
 | AC-AS-10 | Pressing "A" again cancels the simulator (toggle). |
 | AC-AS-11 | Clicking any squadron (friendly or enemy) selects it as the attacker. |
 | AC-AS-12 | Once a squadron is selected, a close-range circle is drawn. |
+
+---
+
+# Phase 6a-2 — Target Selection & LOS Visualization
+
+---
+
+## 11. Target Selection — Hull Zone
+
+After the attacker is selected, the player selects a defending hull zone
+or squadron.  The info panel prompts **"Select a target."**
+
+### AS-TGT-001 — Click hull zone as target
+
+The player clicks a hull zone on **any ship** (friendly or enemy) to
+select it as the defending hull zone.  The hull zone is identified the
+same way as for attacker selection (click position → quadrant detection).
+
+> Rationale: Same analysis-tool argument as AS-SEL-001 — players need to
+> evaluate LOS from either side.
+
+### AS-TGT-002 — Both factions selectable as target
+
+Clicks on **any** ship token (regardless of owner) during target
+selection are accepted.  There is no faction filter.
+
+### AS-TGT-003 — Attacker cannot be its own target
+
+If the player clicks the **same hull zone** that is currently the
+attacker, both attacker and target are deselected (see AS-TGT-021).
+A ship's other hull zones **can** be selected as the target (to
+check LOS from one zone to another on the same ship).
+
+---
+
+## 12. Target Selection — Squadron
+
+### AS-TGT-010 — Click squadron as target
+
+Clicking **any** squadron token selects it as the defending squadron.
+
+### AS-TGT-011 — Both factions selectable for squadron target
+
+Clicks on **any** squadron token during target selection are accepted.
+There is no faction filter.
+
+### AS-TGT-012 — Attacker squadron cannot target itself
+
+If the attacker is a squadron and the player clicks the **same**
+squadron, both attacker and target are deselected (see AS-TGT-021).
+
+---
+
+## 13. Target Deselection
+
+### AS-TGT-020 — Click target again to deselect target only
+
+Re-clicking the currently selected **target** (same hull zone or same
+squadron) deselects the target.  The attacker selection and its visual
+aids remain active.  The simulator returns to the "Select a target"
+prompt.
+
+### AS-TGT-021 — Click attacker to deselect both
+
+Clicking the currently selected **attacker** token (the same hull zone if
+ship, or the same squadron) deselects **both** attacker and target.  All
+visual aids are removed.  The simulator returns to the initial
+"Select a hull zone or squadron as the attacker" prompt.
+
+> This applies equally to ship hull zone attackers and squadron attackers.
+
+### AS-TGT-022 — Escape still cancels everything
+
+Pressing **Escape** at any point (attacker selected, target selected, or
+both) fully cancels the attack simulator — same as AS-ACT-003.
+
+---
+
+## 14. Visual Aids — Target Selected
+
+### AS-VIS-020 — LOS marker on target
+
+Place a translucent yellow circle (6 px diameter) at the target's
+line-of-sight point:
+
+- **Ship hull zone target:** at `ShipToken.get_los_origins_world()[zone_key]`.
+- **Squadron target:** at the squadron token's centre (`global_position`).
+
+Colour, diameter, and opacity are identical to the attacker's LOS marker
+(AS-VIS-003): `Color(1.0, 1.0, 0.0, 0.6)`, 6 px diameter.
+
+### AS-VIS-021 — LOS line between attacker and target
+
+When **both** attacker and target are selected, draw a line representing
+the line-of-sight trace between them.
+
+> Rules Reference: "Line of Sight", p.10.
+> "To determine line of sight, a player uses the range ruler to trace a
+> line between the attacking squadron or hull zone and the defending
+> squadron or hull zone."
+
+Line endpoints follow the Rules Reference:
+
+| Attacker | Target | Attacker endpoint | Target endpoint |
+|----------|--------|-------------------|-----------------|
+| Ship HZ | Ship HZ | Attacking hull zone targeting point | Defending hull zone targeting point |
+| Ship HZ | Squadron | Attacking hull zone targeting point | Closest point on squadron base circle to attacker's targeting point |
+| Squadron | Ship HZ | Closest point on squadron base circle to defender's targeting point | Defending hull zone targeting point |
+| Squadron | Squadron | Closest point on attacker base circle to defender's centre | Closest point on defender base circle to attacker's centre |
+
+> Rules Reference: "When tracing line of sight to or from a squadron,
+> trace the line using the point of the squadron's base that is closest
+> to the opposing squadron or hull zone."
+>
+> Rules Reference: "When tracing line of sight to or from a hull zone,
+> trace the line using the yellow targeting point printed in that hull zone."
+
+- Line width: 2.0 px (anti-aliased) — slightly thicker than arc boundary
+  lines (1.5 px) for visual distinction.
+
+### AS-VIS-022 — LOS line colour-coded by result
+
+The LOS line colour indicates the trace result from `LineOfSightChecker`:
+
+| Status | Colour | Constant name |
+|--------|--------|---------------|
+| Clear | Yellow `Color(1.0, 1.0, 0.0, 0.8)` | `LOS_LINE_CLEAR` |
+| Obstructed | Orange `Color(1.0, 0.6, 0.0, 0.8)` | `LOS_LINE_OBSTRUCTED` |
+| Blocked | Red `Color(1.0, 0.0, 0.0, 0.6)` | `LOS_LINE_BLOCKED` |
+
+> Rules Reference: "If line of sight or attack range is traced through a
+> hull zone on the defender that is not the defending hull zone, the
+> attacker does not have line of sight and must choose another target."
+>
+> Rules Reference: "If line of sight is traced through an obstacle token
+> or through a ship that is not the attacker or defender, the attack is
+> obstructed."
+
+---
+
+## 15. Info Panel — Target Phase
+
+### AS-PNL-010 — "Select a target" prompt
+
+After the attacker is selected (hull zone or squadron), the panel shows:
+
+> **Attacking: \<ShipName\> — \<ZONE\> arc**
+> Select a target.
+
+or for a squadron attacker:
+
+> **Attacking: \<SquadronName\>**
+> Select a target.
+
+(These replace the Phase 6a placeholder texts in AS-VIS-004 / AS-VIS-011.)
+
+### AS-PNL-011 — Attacker → target + LOS result
+
+Once **both** attacker and target are selected, the panel updates to:
+
+> **\<AttackerName\> — \<ZONE\> → \<DefenderName\> — \<ZONE\>**
+> LOS: Clear
+
+or, for an obstructed/blocked result:
+
+> **\<AttackerName\> — \<ZONE\> → \<DefenderName\> — \<ZONE\>**
+> LOS: Obstructed by \<EntityName\>
+
+> **\<AttackerName\> — \<ZONE\> → \<DefenderName\> — \<ZONE\>**
+> LOS: Blocked
+
+When one or both endpoints are squadrons, drop the "— \<ZONE\>" part.
+
+---
+
+## 16. Logging — Target Phase
+
+### AS-LOG-010 — Target selection events
+
+| Event | Level | Example |
+|-------|-------|---------|
+| Target hull zone selected | `info` | `"Target selected: VSD — LEFT arc."` |
+| Target squadron selected | `info` | `"Target selected: TIE Fighter Alpha."` |
+| Target deselected | `info` | `"Target deselected."` |
+| Both deselected (attacker click) | `info` | `"Attacker re-clicked — both deselected."` |
+| LOS result | `info` | `"LOS: Clear."` / `"LOS: Obstructed by CR90."` / `"LOS: Blocked."` |
+
+---
+
+## 17. Reuse of Existing Functions — Target Phase
+
+| Existing Function | Used For |
+|-------------------|----------|
+| `ShipToken.get_hull_zone_at(world_pos)` | Determine defending hull zone from click |
+| `ShipToken.get_los_origins_world()` | Target LOS marker position |
+| `SquadronToken.get_radius_px()` | Closest-point calculation for squadron LOS |
+| `RangeFinder.closest_point_on_circle()` | LOS line endpoint for squadron |
+| `RangeFinder.get_hull_zone_edge()` | Hull zone geometry for LOS blocking check |
+| `LineOfSightChecker.trace_los_ship_to_ship()` | Ship → Ship LOS trace |
+| `LineOfSightChecker.trace_los_ship_to_squadron()` | Ship → Squadron LOS trace |
+| `LineOfSightChecker.trace_los_squad_to_ship()` | Squadron → Ship LOS trace |
+
+---
+
+## 18. Acceptance Criteria — Target Phase
+
+| ID | Criterion |
+|----|-----------|
+| AC-AS-20 | After attacker selected, panel shows "Select a target." |
+| AC-AS-21 | Clicking any ship hull zone selects it as the target. |
+| AC-AS-22 | Clicking any squadron selects it as the target. |
+| AC-AS-23 | A 6 px yellow circle marks the target's LOS point. |
+| AC-AS-24 | A yellow/orange/red LOS line connects attacker and target. |
+| AC-AS-25 | LOS line is yellow when clear, orange when obstructed, red when blocked. |
+| AC-AS-26 | Panel shows attacker → target identity + LOS result text. |
+| AC-AS-27 | Re-clicking the target deselects it; attacker visuals remain. |
+| AC-AS-28 | Clicking the attacker deselects both; returns to initial prompt. |
+| AC-AS-29 | Escape cancels everything at any point. |
+| AC-AS-30 | LOS line endpoints follow the Rules Reference (targeting points / closest base point). |
 | AC-AS-13 | The "A" button is disabled during ship activation (same as M/R/T). |
 | AC-AS-14 | All key events are logged with `"AttackSim"` context. |
 | AC-AS-15 | Starting the attack simulator dismisses any active range overlay or targeting list. |

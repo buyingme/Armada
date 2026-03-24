@@ -160,6 +160,38 @@ static func trace_los_squad_to_ship(
 	return result
 
 
+## Traces LOS from a squadron to another squadron.
+## Squadrons never block LOS (TL-LOS-006), and there are no hull zones
+## to check.  Only intervening ships/obstacles can obstruct.
+##
+## [param atk_centre]  — world-space centre of the attacking squadron.
+## [param atk_radius]  — attacking squadron base radius in pixels.
+## [param def_centre]  — world-space centre of the defending squadron.
+## [param def_radius]  — defending squadron base radius in pixels.
+## [param bodies]      — array of ObstructionBody for intervening ships.
+## [param obstacles]   — array of ObstructionBody for obstacles (future).
+## Requirements: TL-LOS-006.
+## Rules Reference: "Line of Sight", p.10 — "Squadrons do not block or
+## obstruct line of sight."
+static func trace_los_squad_to_squad(
+		atk_centre: Vector2,
+		atk_radius: float,
+		def_centre: Vector2,
+		def_radius: float,
+		bodies: Array,
+		obstacles: Array) -> LOSResult:
+	# LOS origin = closest point on attacker base to defender's centre.
+	var los_origin: Vector2 = RangeFinder.closest_point_on_circle(
+			def_centre, atk_centre, atk_radius)
+	# LOS target = closest point on defender base to attacker's centre.
+	var los_target: Vector2 = RangeFinder.closest_point_on_circle(
+			atk_centre, def_centre, def_radius)
+	var result: LOSResult = LOSResult.new()
+	_check_obstruction(los_origin, los_target, bodies, result)
+	_check_obstruction(los_origin, los_target, obstacles, result)
+	return result
+
+
 ## Checks if the range path (attacker edge → defender edge within arc)
 ## is blocked by defender's other hull zone.
 ## Requirements: TL-LOS-004 (range path check).

@@ -2,13 +2,13 @@
 ##
 ## Screen-space info panel for the Attack Simulator.
 ## Shows step-by-step prompts guiding the player through the attack sequence.
-## Phase 6a implements only the attacker declaration step.
+## Phase 6a: attacker declaration.  Phase 6a-2: target selection + LOS result.
 ##
 ## Built as a PanelContainer following the project's standard modal styling.
 ## Dismissed by Escape, re-pressing "A", or programmatically via [method close].
 ##
-## Requirements: AS-PNL-001, AS-PNL-002, AS-PNL-003.
-## Rules Reference: "Attack", Step 1, p.2.
+## Requirements: AS-PNL-001–003, AS-PNL-010–011.
+## Rules Reference: "Attack", Step 1, p.2; "Line of Sight", p.10.
 class_name AttackSimPanel
 extends PanelContainer
 
@@ -46,19 +46,39 @@ func show_initial() -> void:
 ## Updates the panel to show attacker confirmation for a hull zone.
 ## [param ship_name] — display name of the selected ship.
 ## [param zone_name] — hull zone string (e.g. "FRONT").
-## Requirements: AS-VIS-004.
+## Requirements: AS-VIS-004, AS-PNL-010.
 func show_hull_zone_selected(ship_name: String, zone_name: String) -> void:
 	var title: String = "Attacking: %s — %s arc" % [ship_name, zone_name]
-	var body: String = "Select a target (next step — not yet implemented)."
+	var body: String = "Select a target."
 	_set_prompt(title, body)
 
 
 ## Updates the panel to show attacker confirmation for a squadron.
 ## [param squad_name] — display name of the selected squadron.
-## Requirements: AS-VIS-011.
+## Requirements: AS-VIS-011, AS-PNL-010.
 func show_squadron_selected(squad_name: String) -> void:
 	var title: String = "Attacking: %s" % squad_name
-	var body: String = "Select a target (next step — not yet implemented)."
+	var body: String = "Select a target."
+	_set_prompt(title, body)
+
+
+## Updates the panel to show the attacker → target pair and LOS result.
+## [param atk_name] — display name of the attacking ship/squadron.
+## [param atk_zone] — hull zone string or empty for squadrons.
+## [param def_name] — display name of the defending ship/squadron.
+## [param def_zone] — hull zone string or empty for squadrons.
+## [param los_text] — LOS result string (e.g. "Clear", "Obstructed by X", "Blocked").
+## Requirements: AS-PNL-011.
+func show_target_selected(atk_name: String, atk_zone: String,
+		def_name: String, def_zone: String, los_text: String) -> void:
+	var atk_part: String = atk_name
+	if atk_zone != "":
+		atk_part = "%s — %s" % [atk_name, atk_zone]
+	var def_part: String = def_name
+	if def_zone != "":
+		def_part = "%s — %s" % [def_name, def_zone]
+	var title: String = "%s → %s" % [atk_part, def_part]
+	var body: String = "LOS: %s" % los_text
 	_set_prompt(title, body)
 
 

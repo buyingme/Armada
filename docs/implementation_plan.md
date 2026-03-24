@@ -856,6 +856,32 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Phase 6a-2: Attack Simulator — Target Selection & LOS Visualization ✅
+**Goal:** After the attacker is selected (Phase 6a), let the player select a defending hull zone or squadron. Draw a colour-coded LOS line between attacker and target following the Rules Reference. Show the LOS trace result (clear / obstructed / blocked) in the info panel. Support deselection: re-click target to deselect it, click attacker to deselect both.
+**Prerequisites:** Phase 6a (attack simulator infrastructure, overlay, panel)
+**Duration estimate:** 1–2 sessions
+**Requirements:** `docs/requirements/attack_simulator.md` (AS-TGT-001–003/010–012/020–022, AS-VIS-020–022, AS-PNL-010–011, AS-LOG-010, AC-AS-20–30)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Target selection state in `game_board.gd` | Presentation | AS-TGT-001, AS-TGT-010, AS-PNL-010 | New `_attack_sim_target_selecting` flag; store attacker token/zone/type; after attacker selected, enter target-selection mode; panel shows "Select a target." | ✅ |
+| 2 | Target hull zone click handler | Presentation | AS-TGT-001–003, AC-AS-21 | `_attack_sim_handle_target_ship_click()`: determine hull zone, store target, trigger LOS computation + visuals | ✅ |
+| 3 | Target squadron click handler | Presentation | AS-TGT-010–012, AC-AS-22 | `_attack_sim_handle_target_squadron_click()`: store target squadron, trigger LOS computation + visuals | ✅ |
+| 4 | Target deselection (click target again) | Presentation | AS-TGT-020, AC-AS-27 | Re-click target → remove target visuals + LOS line → return to "Select a target" prompt; attacker visuals remain | ✅ |
+| 5 | Both deselection (click attacker) | Presentation | AS-TGT-021, AC-AS-28 | Click attacker hull zone / squadron → remove all visuals → return to initial "Select attacker" prompt | ✅ |
+| 6 | Target LOS marker in `AttackSimOverlay` | Presentation | AS-VIS-020, AC-AS-23 | `setup_target_hull_zone(los_pos)` / `setup_target_squadron(centre)` — draw yellow 6 px marker at target's LOS point | ✅ |
+| 7 | LOS line + colour coding in `AttackSimOverlay` | Presentation | AS-VIS-021–022, AC-AS-24–25 | `setup_los_line(start, end, status)` — yellow (clear), orange (obstructed), red (blocked); 2.0 px width | ✅ |
+| 8 | LOS computation helper | Presentation | AS-VIS-021–022, AC-AS-30 | Gather `ObstructionBody` list, compute LOS endpoints per attacker/target type, call `LineOfSightChecker`, return LOSResult | ✅ |
+| 9 | `AttackSimPanel` target prompts | Presentation | AS-PNL-010–011, AC-AS-20/26 | `show_target_selected(atk_name, atk_zone, def_name, def_zone, los_text)` — display attacker→target + LOS result | ✅ |
+| 10 | Logging — target events | Utility | AS-LOG-010 | Target selected, deselected, LOS result → `GameLogger("AttackSim")` | ✅ |
+| 11 | Unit tests — target selection & LOS | Test | AC-AS-20–30 | Target click detection, deselection state transitions, LOS line endpoints, panel text updates | ✅ |
+| 12 | Manual test plan update | Docs | — | `docs/test_plan_manual.md` Phase 6a-2 section (MT-6a-2.1–6a-2.8) | ✅ |
+
+**Requirements covered:** AS-TGT-001–003/010–012/020–022, AS-VIS-020–022, AS-PNL-010–011, AS-LOG-010, AC-AS-20–30
+**Tests:** 20 new tests (59 scripts, 1024 total, 1906 asserts)
+
+---
+
 ### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions

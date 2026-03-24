@@ -320,3 +320,38 @@ func test_obstruction_body_corners_match_expected_positions() -> void:
 	assert_almost_eq(body.polygon[2].x, 10.0, 0.01, "BR corner X")
 	assert_almost_eq(body.polygon[2].y, 20.0, 0.01, "BR corner Y")
 	assert_almost_eq(body.polygon[3].x, -10.0, 0.01, "BL corner X")
+
+
+# =========================================================================
+# trace_los_squad_to_squad (TL-LOS-006)
+# =========================================================================
+
+func test_trace_los_squad_to_squad_clear() -> void:
+	# Two squadrons with no ships between them.
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_squad(
+					Vector2(100, 100), 15.0,
+					Vector2(400, 100), 15.0,
+					[], [])
+	assert_true(result.has_los,
+			"Squad-to-squad LOS should be clear with no intervening ships.")
+	assert_false(result.obstructed,
+			"Squad-to-squad LOS should not be obstructed.")
+
+
+func test_trace_los_squad_to_squad_obstructed() -> void:
+	# Intervening ship between two squadrons.
+	var body: LineOfSightChecker.ObstructionBody = \
+			LineOfSightChecker.ObstructionBody.from_ship_base(
+					"Blocker", Vector2(250, 100), 0.0, 30.0, 40.0)
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_squad(
+					Vector2(100, 100), 15.0,
+					Vector2(400, 100), 15.0,
+					[body], [])
+	assert_true(result.has_los,
+			"Squad-to-squad LOS should still exist when obstructed.")
+	assert_true(result.obstructed,
+			"Squad-to-squad LOS should be obstructed by intervening ship.")
+	assert_has(result.obstructed_by, "Blocker",
+			"Obstructed-by list should include the blocker.")

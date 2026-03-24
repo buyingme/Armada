@@ -1812,3 +1812,78 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 3 | Ship/squadron dragging in debug mode unaffected | Tokens drag and snap as before |
 
 **Pass criteria:** "A" button and key activate the simulator; hull zone click shows range overlay + arc lines + LOS marker; squadron click shows close-range circle; Escape and toggle dismiss cleanly; both friendly and enemy tokens selectable; no regressions; all GUT tests pass.
+
+---
+
+## Phase 6a-2 — Target Selection & LOS Visualization
+
+**Baseline:** 59 scripts, 1004 tests, 1879 asserts (Phase 6a).
+
+### MT-6a-2.1 — Target hull zone selection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate attack simulator, select a ship hull zone as attacker | Attacker visuals shown; panel says "Select a target." |
+| 2 | Click a hull zone on a **different** ship | Yellow 6 px marker appears on target's LOS targeting point |
+| 3 | A yellow/orange/red LOS line connects attacker's LOS point to target's LOS point | Line colour matches LOS result (clear/obstructed/blocked) |
+| 4 | Panel updates to show attacker → target identity + LOS result | e.g. "CR90 — FRONT → VSD — LEFT \| LOS: Clear" |
+
+### MT-6a-2.2 — Target squadron selection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a ship hull zone as attacker | Attacker visuals shown |
+| 2 | Click an enemy squadron | Yellow marker at squadron centre; LOS line from attacker's targeting point to closest point on squadron base |
+| 3 | Panel shows attacker → squadron + LOS result | LOS status text is correct |
+
+### MT-6a-2.3 — Squadron attacker → ship target
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a squadron as attacker | Close-range circle shown |
+| 2 | Click a ship hull zone | Yellow marker at target's LOS point; LOS line from closest point on squadron base to target's targeting point |
+| 3 | Panel shows squadron → ship hull zone + LOS result | LOS status text matches line colour |
+
+### MT-6a-2.4 — Squadron attacker → squadron target
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a squadron as attacker | Close-range circle shown |
+| 2 | Click a different squadron | Yellow marker at target centre; LOS line from closest point on attacker base to closest point on target base |
+| 3 | Panel shows squadron → squadron + LOS result | Expected: "Clear" if no ship blocks the line |
+
+### MT-6a-2.5 — Target deselection (click target again)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With both attacker and target selected | LOS line + target marker visible |
+| 2 | Click the **target** hull zone / squadron again | Target marker and LOS line disappear; attacker visuals remain |
+| 3 | Panel returns to "Select a target." | Attacker identity still shown |
+| 4 | Click a new target | New LOS line + marker appear |
+
+### MT-6a-2.6 — Both deselection (click attacker)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With both attacker and target selected | LOS line + both markers visible |
+| 2 | Click the **attacker** hull zone / squadron | All visuals removed (including arc lines and range overlay) |
+| 3 | Panel returns to "Select a hull zone or squadron as the attacker." | Full reset to initial state |
+
+### MT-6a-2.7 — LOS colour coding
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select attacker and target with clear LOS path | Yellow line (`Color(1.0, 1.0, 0.0, 0.8)`) |
+| 2 | Select attacker and target with an intervening ship between them | Orange line (`Color(1.0, 0.6, 0.0, 0.8)`); panel says "Obstructed by [ship]" |
+| 3 | Select attacker and target where LOS enters defender through wrong hull zone | Red line (`Color(1.0, 0.0, 0.0, 0.6)`); panel says "Blocked" |
+
+### MT-6a-2.8 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | All tests pass, 0 failures, expected script count |
+| 2 | Verify Phase 6a attacker selection still works | Attacker visuals appear correctly |
+| 3 | Escape cancels at any point (attacker only, attacker+target) | Clean dismiss, no orphaned visuals |
+| 4 | M, R, T toolbar buttons still work | No interference |
+
+**Pass criteria:** Target selection works for all four attacker/target combinations (ship→ship, ship→squad, squad→ship, squad→squad); LOS line colour matches trace result; deselection (target re-click, attacker click, Escape) all behave correctly; panel text updates properly; no regressions; all GUT tests pass.

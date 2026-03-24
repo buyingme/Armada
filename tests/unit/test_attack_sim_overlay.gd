@@ -1,6 +1,6 @@
 ## Unit tests for AttackSimOverlay
 ##
-## Covers: AS-VIS-002, AS-VIS-003, AS-VIS-010.
+## Covers: AS-VIS-002, AS-VIS-003, AS-VIS-010, AS-VIS-020–022.
 extends GutTest
 
 
@@ -105,3 +105,115 @@ func test_extend_to_boundary_diagonal() -> void:
 			"Diagonal ray should reach x = 2160.")
 	assert_almost_eq(result.y, 0.0, 1.0,
 			"Diagonal ray should reach y = 0.")
+
+
+# =========================================================================
+# Target marker tests (AS-VIS-020)
+# =========================================================================
+
+func test_setup_target_hull_zone_sets_draw_flag() -> void:
+	_overlay.setup_target_hull_zone(Vector2(300, 400))
+	assert_true(_overlay._draw_target_marker,
+			"Target marker draw flag should be true after setup_target_hull_zone().")
+
+
+func test_setup_target_hull_zone_stores_position() -> void:
+	var pos: Vector2 = Vector2(123, 456)
+	_overlay.setup_target_hull_zone(pos)
+	assert_eq(_overlay._target_los_position, pos,
+			"Target LOS position should be stored.")
+
+
+func test_setup_target_squadron_sets_draw_flag() -> void:
+	_overlay.setup_target_squadron(Vector2(500, 600))
+	assert_true(_overlay._draw_target_marker,
+			"Target marker draw flag should be true after setup_target_squadron().")
+
+
+func test_setup_target_squadron_stores_position() -> void:
+	var pos: Vector2 = Vector2(500, 600)
+	_overlay.setup_target_squadron(pos)
+	assert_eq(_overlay._target_los_position, pos,
+			"Target LOS position should be stored.")
+
+
+# =========================================================================
+# LOS line tests (AS-VIS-021, AS-VIS-022)
+# =========================================================================
+
+func test_setup_los_line_sets_draw_flag() -> void:
+	_overlay.setup_los_line(
+			Vector2(100, 100), Vector2(200, 200),
+			AttackSimOverlay.LOSStatus.CLEAR)
+	assert_true(_overlay._draw_los_line,
+			"LOS line draw flag should be true after setup_los_line().")
+
+
+func test_setup_los_line_stores_endpoints() -> void:
+	var start: Vector2 = Vector2(100, 100)
+	var end_pt: Vector2 = Vector2(200, 200)
+	_overlay.setup_los_line(start, end_pt, AttackSimOverlay.LOSStatus.CLEAR)
+	assert_eq(_overlay._los_line_start, start,
+			"LOS line start should be stored.")
+	assert_eq(_overlay._los_line_end, end_pt,
+			"LOS line end should be stored.")
+
+
+func test_setup_los_line_clear_colour() -> void:
+	_overlay.setup_los_line(
+			Vector2.ZERO, Vector2.ONE,
+			AttackSimOverlay.LOSStatus.CLEAR)
+	assert_eq(_overlay._los_line_colour, AttackSimOverlay.LOS_LINE_CLEAR,
+			"LOS line colour should be yellow for CLEAR status.")
+
+
+func test_setup_los_line_obstructed_colour() -> void:
+	_overlay.setup_los_line(
+			Vector2.ZERO, Vector2.ONE,
+			AttackSimOverlay.LOSStatus.OBSTRUCTED)
+	assert_eq(_overlay._los_line_colour, AttackSimOverlay.LOS_LINE_OBSTRUCTED,
+			"LOS line colour should be orange for OBSTRUCTED status.")
+
+
+func test_setup_los_line_blocked_colour() -> void:
+	_overlay.setup_los_line(
+			Vector2.ZERO, Vector2.ONE,
+			AttackSimOverlay.LOSStatus.BLOCKED)
+	assert_eq(_overlay._los_line_colour, AttackSimOverlay.LOS_LINE_BLOCKED,
+			"LOS line colour should be red for BLOCKED status.")
+
+
+# =========================================================================
+# clear_target tests (AS-TGT-020)
+# =========================================================================
+
+func test_clear_target_resets_target_flags_only() -> void:
+	_overlay.setup_hull_zone(Vector2.ZERO, Vector2.ZERO,
+			Vector2.ZERO, Vector2.ZERO, Vector2.ZERO)
+	_overlay.setup_target_hull_zone(Vector2(100, 200))
+	_overlay.setup_los_line(
+			Vector2.ZERO, Vector2(100, 200),
+			AttackSimOverlay.LOSStatus.CLEAR)
+	_overlay.clear_target()
+	assert_false(_overlay._draw_target_marker,
+			"Target marker flag should be false after clear_target().")
+	assert_false(_overlay._draw_los_line,
+			"LOS line flag should be false after clear_target().")
+	assert_true(_overlay._draw_hull_zone,
+			"Hull zone flag should remain true after clear_target().")
+
+
+func test_clear_resets_all_flags() -> void:
+	_overlay.setup_hull_zone(Vector2.ZERO, Vector2.ZERO,
+			Vector2.ZERO, Vector2.ZERO, Vector2.ZERO)
+	_overlay.setup_target_hull_zone(Vector2(100, 200))
+	_overlay.setup_los_line(
+			Vector2.ZERO, Vector2(100, 200),
+			AttackSimOverlay.LOSStatus.CLEAR)
+	_overlay.clear()
+	assert_false(_overlay._draw_hull_zone,
+			"Hull zone flag should be false after clear().")
+	assert_false(_overlay._draw_target_marker,
+			"Target marker flag should be false after clear().")
+	assert_false(_overlay._draw_los_line,
+			"LOS line flag should be false after clear().")

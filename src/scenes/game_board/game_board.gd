@@ -2892,6 +2892,7 @@ func _on_attack_cf_dial_colour(colour_key: String) -> void:
 	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
 	if inst and inst.command_dial_stack:
 		inst.command_dial_stack.spend_revealed()
+		EventBus.command_dials_changed.emit(inst)
 	_attack_exec_cf_dial_used = true
 	# Update dice count display.
 	if _attack_sim_panel:
@@ -2964,6 +2965,7 @@ func _on_attack_cf_token_reroll(die_index: int) -> void:
 	if inst and inst.command_tokens:
 		inst.command_tokens.spend_token(
 				Constants.CommandType.CONCENTRATE_FIRE)
+		EventBus.command_tokens_changed.emit(inst)
 	# Update display.
 	if _attack_sim_panel:
 		_attack_sim_panel.update_die_result(die_index, new_result)

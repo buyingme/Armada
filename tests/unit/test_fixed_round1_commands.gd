@@ -54,9 +54,9 @@ func test_cr90_gets_repair() -> void:
 			"CR90 command should be REPAIR")
 
 
-## Nebulon-B gets Navigate (top), Squadron (bottom).
-## Rules Reference: LTP p.10 — "Nebulon-B: Navigate, Squadron"
-func test_nebulon_b_gets_navigate_squadron() -> void:
+## Nebulon-B gets Concentrate Fire (top), Squadron (bottom).
+## Learning Scenario JSON: "nebulon_b_escort_frigate": ["concentrate_fire", "squadron"]
+func test_nebulon_b_gets_concentrate_fire_squadron() -> void:
 	# Arrange
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	var cmds: Dictionary = setup.get_fixed_round1_commands()
@@ -67,8 +67,8 @@ func test_nebulon_b_gets_navigate_squadron() -> void:
 	# Assert
 	assert_eq(neb_cmds.size(), 2,
 			"Nebulon-B should have 2 commands (command value = 2)")
-	assert_eq(neb_cmds[0], Constants.CommandType.NAVIGATE,
-			"Nebulon-B top dial should be NAVIGATE")
+	assert_eq(neb_cmds[0], Constants.CommandType.CONCENTRATE_FIRE,
+			"Nebulon-B top dial should be CONCENTRATE_FIRE")
 	assert_eq(neb_cmds[1], Constants.CommandType.SQUADRON,
 			"Nebulon-B bottom dial should be SQUADRON")
 
@@ -226,7 +226,7 @@ func test_cr90_has_correct_dials_after_apply() -> void:
 			"CR90 top dial should be REPAIR")
 
 
-## Nebulon-B stack: Navigate on top, Squadron on bottom.
+## Nebulon-B stack: Concentrate Fire on top, Squadron on bottom.
 func test_neb_has_correct_dial_order_after_apply() -> void:
 	# Arrange
 	var ships: Dictionary = _setup_game_with_ships()
@@ -241,8 +241,8 @@ func test_neb_has_correct_dial_order_after_apply() -> void:
 	assert_eq(neb.command_dial_stack.get_dial_count(), 2,
 			"Nebulon-B should have 2 dials assigned")
 	var dials: Array[Dictionary] = neb.command_dial_stack.get_all_dials()
-	assert_eq(int(dials[0]["command"]), Constants.CommandType.NAVIGATE,
-			"Nebulon-B top dial should be NAVIGATE")
+	assert_eq(int(dials[0]["command"]), Constants.CommandType.CONCENTRATE_FIRE,
+			"Nebulon-B top dial should be CONCENTRATE_FIRE")
 	assert_eq(int(dials[1]["command"]), Constants.CommandType.SQUADRON,
 			"Nebulon-B bottom dial should be SQUADRON")
 

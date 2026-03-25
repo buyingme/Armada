@@ -2458,6 +2458,9 @@ func _attack_sim_compute_and_show_los() -> void:
 	# In attack execution mode, compute and display the dice pool, then
 	# begin the attack sequence (CF dial → Roll → Reroll → Confirm).
 	if _attack_exec_mode and _attack_sim_panel:
+		# Lock target selection — clicks during the dice sequence must not
+		# be routed through target-selection handlers.
+		_attack_sim_target_selecting = false
 		_attack_exec_range_band = range_band
 		var dice_text: String = _compute_attack_dice_text(range_band)
 		_attack_sim_panel.show_dice_count(dice_text)

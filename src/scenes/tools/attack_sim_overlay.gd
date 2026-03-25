@@ -90,6 +90,16 @@ enum LOSStatus { CLEAR, OBSTRUCTED, BLOCKED }
 ## Requirements: AE-VIS-001.
 var attack_execution_mode: bool = false
 
+## Colour for spent hull zone marker — red, 60 % opacity.
+## Requirements: AE-2HZ-003.
+const SPENT_ZONE_COLOUR: Color = Color(1.0, 0.0, 0.0, 0.6)
+
+## Radius of the spent zone marker in pixels (6 px diameter → 3 px radius).
+const SPENT_ZONE_RADIUS: float = 3.0
+
+## Positions of spent hull zone markers (world space).
+var _spent_zone_positions: Array[Vector2] = []
+
 ## Play area side length — lines are clipped to this boundary.
 var _play_area_side: float = 0.0
 
@@ -197,6 +207,7 @@ func clear() -> void:
 	_draw_target_marker = false
 	_draw_los_line = false
 	_draw_range_line = false
+	_spent_zone_positions.clear()
 	queue_redraw()
 
 
@@ -279,6 +290,14 @@ func setup_range_line(start_pos: Vector2, end_pos: Vector2,
 	queue_redraw()
 
 
+## Adds a translucent red dot at [param pos] marking a spent hull zone.
+## Requirements: AE-2HZ-003.
+func add_spent_zone_marker(pos: Vector2) -> void:
+	_spent_zone_positions.append(pos)
+	_log.debug("Spent zone marker added at %s." % pos)
+	queue_redraw()
+
+
 func _draw() -> void:
 	if _draw_hull_zone:
 		if not attack_execution_mode:
@@ -292,6 +311,8 @@ func _draw() -> void:
 		_draw_los_line_segment()
 	if _draw_range_line:
 		_draw_range_line_segment()
+	for pos: Vector2 in _spent_zone_positions:
+		draw_circle(pos, SPENT_ZONE_RADIUS, SPENT_ZONE_COLOUR)
 
 
 # =========================================================================

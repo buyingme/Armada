@@ -181,3 +181,50 @@ func test_format_attack_pool_beyond_shows_zero() -> void:
 			armament, Constants.RANGE_BAND_BEYOND),
 			"0 dice",
 			"Beyond range shows 0 dice")
+
+
+# ── to_engine_pool — string-key → DiceColor conversion ──────────────
+
+func test_to_engine_pool_converts_all_colours() -> void:
+	# Arrange
+	var pool: Dictionary = {"RED": 2, "BLUE": 1, "BLACK": 3}
+	# Act
+	var result: Dictionary = DicePool.to_engine_pool(pool)
+	# Assert
+	assert_eq(result.get(Constants.DiceColor.RED, 0), 2,
+			"RED → DiceColor.RED with count 2")
+	assert_eq(result.get(Constants.DiceColor.BLUE, 0), 1,
+			"BLUE → DiceColor.BLUE with count 1")
+	assert_eq(result.get(Constants.DiceColor.BLACK, 0), 3,
+			"BLACK → DiceColor.BLACK with count 3")
+
+
+func test_to_engine_pool_omits_zero_count() -> void:
+	# Arrange
+	var pool: Dictionary = {"RED": 0, "BLUE": 2}
+	# Act
+	var result: Dictionary = DicePool.to_engine_pool(pool)
+	# Assert
+	assert_false(result.has(Constants.DiceColor.RED),
+			"Zero-count colour should be omitted")
+	assert_eq(result.get(Constants.DiceColor.BLUE, 0), 2,
+			"Non-zero colour should be present")
+
+
+func test_to_engine_pool_empty_returns_empty() -> void:
+	# Arrange / Act
+	var result: Dictionary = DicePool.to_engine_pool({})
+	# Assert
+	assert_true(result.is_empty(),
+			"Empty pool should return empty dict")
+
+
+func test_to_engine_pool_single_colour() -> void:
+	# Arrange
+	var pool: Dictionary = {"BLACK": 4}
+	# Act
+	var result: Dictionary = DicePool.to_engine_pool(pool)
+	# Assert
+	assert_eq(result.size(), 1, "Only one colour in result")
+	assert_eq(result.get(Constants.DiceColor.BLACK, 0), 4,
+			"BLACK count should be 4")

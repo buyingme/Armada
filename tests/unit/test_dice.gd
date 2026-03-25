@@ -150,3 +150,81 @@ func test_calculate_damage_mixed() -> void:
 func test_calculate_damage_empty() -> void:
 	var results: Array[Dictionary] = []
 	assert_eq(Dice.calculate_damage(results), 0, "Empty results should deal 0 damage")
+
+
+# --- get_face_image_path ---
+
+func test_get_face_image_path_red_hit_returns_correct_path() -> void:
+	# Arrange / Act
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.RED, Constants.DiceFace.HIT)
+	# Assert
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_red_hit.png",
+			"Red HIT should map to die_red_hit.png")
+
+
+func test_get_face_image_path_blue_accuracy_returns_correct_path() -> void:
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.BLUE, Constants.DiceFace.ACCURACY)
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_blue_accuracy.png",
+			"Blue ACCURACY path")
+
+
+func test_get_face_image_path_black_hit_crit_returns_correct_path() -> void:
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.BLACK, Constants.DiceFace.HIT_CRITICAL)
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_black_hit_crit.png",
+			"Black HIT_CRITICAL path")
+
+
+func test_get_face_image_path_red_blank_returns_correct_path() -> void:
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.RED, Constants.DiceFace.BLANK)
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_red_blank.png",
+			"Red BLANK path")
+
+
+func test_get_face_image_path_red_hit_hit_returns_correct_path() -> void:
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.RED, Constants.DiceFace.HIT_HIT)
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_red_hit_hit.png",
+			"Red HIT_HIT path")
+
+
+func test_get_face_image_path_black_crit_returns_correct_path() -> void:
+	var path: String = Dice.get_face_image_path(
+			Constants.DiceColor.BLACK, Constants.DiceFace.CRITICAL)
+	assert_eq(path,
+			"res://Resources/Game_Components/dice/die_black_crit.png",
+			"Black CRITICAL path")
+
+
+func test_get_face_image_path_all_colours_all_faces_have_valid_paths() -> void:
+	# Every colour × face combo should produce a non-empty path.
+	var colours: Array = [
+		Constants.DiceColor.RED,
+		Constants.DiceColor.BLUE,
+		Constants.DiceColor.BLACK,
+	]
+	var faces: Array = [
+		Constants.DiceFace.BLANK,
+		Constants.DiceFace.HIT,
+		Constants.DiceFace.CRITICAL,
+		Constants.DiceFace.HIT_CRITICAL,
+		Constants.DiceFace.ACCURACY,
+		Constants.DiceFace.HIT_HIT,
+	]
+	for color in colours:
+		for face in faces:
+			var path: String = Dice.get_face_image_path(color, face)
+			assert_true(path.begins_with("res://"),
+					"Path for %d/%d should start with res://" % [
+					color, face])
+			assert_true(path.ends_with(".png"),
+					"Path for %d/%d should end with .png" % [
+					color, face])

@@ -28,6 +28,7 @@
 - [Phase 6a-3: Attack Simulator — Same-Ship Guard, Arc Validation & Range Line](#phase-6a-3-attack-simulator--same-ship-guard-arc-validation--range-line)
 - [Phase 6a-4: Hull-Zone Edge Polyline Fix (HZ-EDGE-001)](#phase-6a-4-hull-zone-edge-polyline-fix-hz-edge-001)
 - [Phase 6b-1: Attack Execution — Target Selection & Visuals](#phase-6b-1-attack-execution--target-selection--visuals)
+- [Phase 6b-2: Attack Execution — Dice Rolling, Concentrate Fire & Two-Hull-Zone Sequencing](#phase-6b-2-attack-execution--dice-rolling-concentrate-fire--two-hull-zone-sequencing)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -951,6 +952,90 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** AE-ACT-001, AE-VIS-001, AE-PNL-001–003, AE-FLOW-001–005, AE-TGT-001
 **Tests:** 1074 (60 scripts, 1989 asserts) — 19 new tests
+
+---
+
+### Phase 6b-2: Attack Execution — Dice Rolling, Concentrate Fire & Two-Hull-Zone Sequencing ✅
+**Goal:** After target selection (Phase 6b-1), the player can optionally spend a Concentrate Fire dial to add a die, roll the dice pool, optionally spend a CF token to reroll one die, then confirm. The attack sequence supports two sequential hull zone attacks with the first zone marked as spent. Damage resolution is deferred (dice are rolled but damage is not applied).
+**Prerequisites:** Phase 6b-1 (target selection, LOS, dice count display, DicePool, Dice class)
+**Duration estimate:** 1–2 sessions
+
+#### Requirements
+
+**Concentrate Fire Dial** (Rules Reference: "Concentrate Fire", p.3)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-CF-001 | After target selected with dice count visible, if the ship's revealed command dial is Concentrate Fire (kept as dial, not converted to token), show prompt: "Spend CF dial for +1 die?" | Check `command_dial_stack.get_revealed_dial()` command type |
+| AE-CF-002 | Show clickable colour buttons only for colours present in the attacking hull zone's battery armament (or anti-squadron armament when targeting a squadron) | e.g. CR90 FRONT: [+ Red] [+ Blue] — no Black button |
+| AE-CF-003 | Pressing a colour button: adds 1 die of that colour to the pool, updates the dice count display, spends the dial via `CommandDialStack.spend_revealed()`, hides the dial sprite on the ship token | Irreversible action |
+| AE-CF-004 | "Skip" button to decline the extra die — CF dial remains unspent for potential later use (e.g. second hull zone attack) | |
+| AE-CF-005 | CF dial prompt appears BEFORE the "Roll Dice" button; rolling is blocked until the dial decision is resolved | |
+
+**Dice Rolling** (Rules Reference: "Attack", Step 2, p.2)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-DICE-001 | "Roll Dice" button appears after the CF dial decision (or immediately if no CF dial available) | |
+| AE-DICE-002 | Rolling uses `Dice.roll_pool()` with the final pool (base armament ± CF extra die), converting DicePool string keys to DiceColor enums | |
+| AE-DICE-003 | Rolled dice shown as die-face PNG images (~32×32 px) in a horizontal row inside the panel; PNGs from `Resources/Game_Components/dice/` | e.g. `die_red_hit.png`, `die_blue_accuracy.png` |
+| AE-DICE-004 | "Roll Dice" button hidden after rolling; dice count label replaced by actual image results | |
+
+**Concentrate Fire Token Reroll** (Rules Reference: "Concentrate Fire", p.3)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-CF-010 | After rolling, if the ship holds a Concentrate Fire command token, show: "Spend CF token to reroll 1 die?" | Check `command_tokens.has_token(CONCENTRATE_FIRE)` |
+| AE-CF-011 | Player clicks a die image to select it (yellow border highlight); then presses "Reroll" button | Only one die may be selected at a time |
+| AE-CF-012 | Rerolled die replaces the selected die in the results display using its new face PNG | |
+| AE-CF-013 | CF token spent via `CommandTokenManager.spend_token(CONCENTRATE_FIRE)` after reroll; reroll UI removed | Irreversible |
+| AE-CF-014 | "Skip" button to decline the reroll — CF token remains unspent | |
+
+**Confirm & Damage Skip**
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-CONF-001 | "Confirm" button appears below dice results (after optional reroll decision) | |
+| AE-CONF-002 | Pressing Confirm ends the current hull zone's attack; damage resolution is skipped for now (deferred to Phase 6) | Placeholder: log dice results, no shield/hull changes |
+
+**Two-Hull-Zone Sequencing** (Rules Reference: "Ship Activation", p.16 — "each of its hull zones can be used to perform one attack")
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-2HZ-001 | After first hull zone Confirm, return to hull zone selection for a second attack from a different hull zone | Reset target state, keep range overlay |
+| AE-2HZ-002 | The first hull zone's LOS marker is overlaid with a translucent red dot (6 px diameter) indicating it has already fired | Drawn by AttackSimOverlay |
+| AE-2HZ-003 | The first hull zone is blocked from re-selection; clicking it shows tooltip: "This hull zone has already attacked." | |
+| AE-2HZ-004 | "Skip" button available during second hull zone selection to decline the second attack | |
+| AE-2HZ-005 | After second Confirm (or Skip), complete the attack step → dismiss visuals → re-open activation modal with Attack step checkmarked | |
+
+**Skip Logic**
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-SKIP-001 | "Skip Attack" button visible during hull zone selection to skip the current attack opportunity | |
+| AE-SKIP-002 | Skipping first hull zone → transitions to second hull zone opportunity (no red dot, no zone blocked) | |
+| AE-SKIP-003 | Skipping second hull zone → completes the attack step | |
+
+#### Implementation Tasks
+
+| # | Task | Layer | Requirements | Deliverables | Status |
+|---|------|-------|-------------|--------------|--------|
+| 1 | `Dice.get_face_image_path()` — colour+face → PNG path | Core | AE-DICE-003 | Static method on existing `Dice` class | ✅ |
+| 2 | `DicePool.to_engine_pool()` — string keys → DiceColor enum keys | Core | AE-DICE-002 | Static method; allows `Dice.roll_pool(DicePool.to_engine_pool(pool))` | ✅ |
+| 3 | `AttackSimPanel` — CF dial UI (colour buttons + skip) | Presentation | AE-CF-001–005 | New section in panel with colour buttons, skip button, signals | ✅ |
+| 4 | `AttackSimPanel` — Roll Dice button + dice image display | Presentation | AE-DICE-001–004 | HBoxContainer of TextureRect die faces, Roll button | ✅ |
+| 5 | `AttackSimPanel` — CF token reroll UI (die selection + reroll) | Presentation | AE-CF-010–014 | Clickable die images with highlight, Reroll/Skip buttons | ✅ |
+| 6 | `AttackSimPanel` — Confirm button + Skip Attack button | Presentation | AE-CONF-001–002, AE-SKIP-001–003 | Confirm replaces Done; Skip available during selection | ✅ |
+| 7 | `AttackSimOverlay` — red dot on spent hull zone LOS marker | Presentation | AE-2HZ-002 | New `add_spent_zone_marker(position)` method | ✅ |
+| 8 | `game_board.gd` — CF dial integration | Orchestration | AE-CF-001–005 | Check revealed dial, handle spending, hide dial sprite | ✅ |
+| 9 | `game_board.gd` — dice rolling orchestration | Orchestration | AE-DICE-001–004 | Roll via `Dice.roll_pool()`, feed results to panel | ✅ |
+| 10 | `game_board.gd` — CF token reroll | Orchestration | AE-CF-010–014 | Handle reroll request, spend token, update results | ✅ |
+| 11 | `game_board.gd` — two-hull-zone sequencing | Orchestration | AE-2HZ-001–005, AE-SKIP-001–003 | Track fired zones, red dot, zone blocking, skip, complete | ✅ |
+| 12 | Unit tests — `Dice.get_face_image_path()`, `DicePool.to_engine_pool()` | Tests | — | New tests in `test_dice_pool.gd` and `test_dice.gd` | ✅ |
+| 13 | Docs & plan update | Docs | — | This section + `docs/test_plan_manual.md` Phase 6b-2 | ✅ |
+
+**Requirements covered:** AE-CF-001–005, AE-CF-010–014, AE-DICE-001–004, AE-CONF-001–002, AE-2HZ-001–005, AE-SKIP-001–003
+**Tests:** 60 scripts, 1105 tests, 2061 asserts (31 new tests)
 
 ---
 

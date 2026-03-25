@@ -91,3 +91,26 @@ static func format_attack_pool(
 		armament: Dictionary, range_band: String) -> String:
 	var pool: Dictionary = get_attack_pool(armament, range_band)
 	return format_pool(pool)
+
+
+## String-key to DiceColor enum mapping.
+const _STRING_TO_DICE_COLOUR: Dictionary = {
+	"RED": Constants.DiceColor.RED,
+	"BLUE": Constants.DiceColor.BLUE,
+	"BLACK": Constants.DiceColor.BLACK,
+}
+
+
+## Converts a string-keyed pool (as returned by [method get_attack_pool])
+## into a [code]DiceColor[/code]-keyed pool suitable for [method Dice.roll_pool].
+## Colours with zero count are omitted.
+## Requirements: AE-DICE-001.
+static func to_engine_pool(pool: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for key: String in pool:
+		var colour: Constants.DiceColor = _STRING_TO_DICE_COLOUR.get(
+				key, Constants.DiceColor.RED)
+		var count: int = int(pool[key])
+		if count > 0:
+			result[colour] = count
+	return result

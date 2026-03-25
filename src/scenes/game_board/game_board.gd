@@ -186,6 +186,28 @@ var _attack_exec_mode: bool = false
 ## Requirements: AE-FLOW-002.
 var _attack_exec_ship_token: ShipToken = null
 
+## Hull zones already attacked from during this activation.
+## Requirements: AE-2HZ-001.
+var _attack_exec_fired_zones: Array[int] = []
+
+## Which attack number we are on (0 = first, 1 = second).
+## Requirements: AE-2HZ-004.
+var _attack_exec_current_attack: int = 0
+
+## Dice roll results for the current attack.
+## Requirements: AE-DICE-003.
+var _attack_exec_dice_results: Array[Dictionary] = []
+
+## String-keyed dice pool for the current attack.
+## Requirements: AE-DICE-001.
+var _attack_exec_pool: Dictionary = {}
+
+## Range band of the current attack target.
+var _attack_exec_range_band: String = ""
+
+## Whether the CF dial has already been used during this activation's attacks.
+var _attack_exec_cf_dial_used: bool = false
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -1443,6 +1465,12 @@ func _on_attack_step_entered() -> void:
 	# Set attack execution mode.
 	_attack_exec_mode = true
 	_attack_exec_ship_token = _activating_ship_token
+	_attack_exec_fired_zones.clear()
+	_attack_exec_current_attack = 0
+	_attack_exec_dice_results.clear()
+	_attack_exec_pool.clear()
+	_attack_exec_range_band = ""
+	_attack_exec_cf_dial_used = false
 	_attack_sim_selecting = true
 	# Create the info panel on a CanvasLayer.
 	if _attack_sim_panel == null:
@@ -1452,11 +1480,13 @@ func _on_attack_step_entered() -> void:
 		layer.layer = 90
 		add_child(layer)
 		layer.add_child(_attack_sim_panel)
-	# Connect Done button if not already connected.
+	# Connect Done button if not already connected (sim mode compat).
 	if not _attack_sim_panel.attack_done_pressed.is_connected(
 			_on_attack_exec_done):
 		_attack_sim_panel.attack_done_pressed.connect(
 				_on_attack_exec_done)
+	# Connect Phase 6b-2 signals.
+	_connect_attack_panel_signals()
 	var ship_name: String = ""
 	if _attack_exec_ship_token.get_ship_data():
 		ship_name = _attack_exec_ship_token.get_ship_data().ship_name
@@ -1473,15 +1503,21 @@ func _on_attack_step_entered() -> void:
 	_log.info("Attack execution: range overlay shown, awaiting hull zone.")
 
 
-## Called when the player presses "Done" on the attack execution panel.
-## Completes the Attack step and re-opens the activation modal.
-## Requirements: AE-FLOW-003.
+## Called when the attack execution step is fully complete.
+## Cleans up and re-opens the activation modal.
+## Requirements: AE-FLOW-003, AE-CONF-002.
 func _on_attack_exec_done() -> void:
 	_log.info("Attack execution done — completing attack step.")
 	# Dismiss all attack visuals.
 	_dismiss_attack_sim()
 	_attack_exec_mode = false
 	_attack_exec_ship_token = null
+	_attack_exec_fired_zones.clear()
+	_attack_exec_current_attack = 0
+	_attack_exec_dice_results.clear()
+	_attack_exec_pool.clear()
+	_attack_exec_range_band = ""
+	_attack_exec_cf_dial_used = false
 	# Advance the activation state past ATTACK → MANEUVER.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
@@ -2044,6 +2080,15 @@ func _attack_sim_handle_ship_click(token: ShipToken) -> void:
 	if zone < 0:
 		_log.debug("Click outside ship base — ignored.")
 		return
+	# Block hull zones already attacked from (two-HZ rule).
+	# Requirements: AE-2HZ-002.
+	if _attack_exec_mode and zone in _attack_exec_fired_zones:
+		var fired_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
+		_log.info("Attack exec: zone %s already used." % fired_name)
+		TooltipManager.show_text(
+				"%s arc already used this activation." % fired_name,
+				Vector2.INF, 2.0, true)
+		return
 	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
 	var ship_name: String = ""
 	if token.get_ship_data():
@@ -2376,11 +2421,14 @@ func _attack_sim_compute_and_show_los() -> void:
 				_attack_sim_atk_name, _attack_sim_atk_zone_name,
 				_attack_sim_def_name, _attack_sim_def_zone_name,
 				los_text, range_band)
-	# In attack execution mode, compute and display the dice pool.
+	# In attack execution mode, compute and display the dice pool, then
+	# begin the attack sequence (CF dial → Roll → Reroll → Confirm).
 	if _attack_exec_mode and _attack_sim_panel:
+		_attack_exec_range_band = range_band
 		var dice_text: String = _compute_attack_dice_text(range_band)
 		_attack_sim_panel.show_dice_count(dice_text)
 		_log.info("Dice pool: %s." % dice_text)
+		_attack_exec_begin_sequence(range_band)
 
 
 ## Computes the dice pool text for the current attacker/target pair at the
@@ -2643,6 +2691,12 @@ func _handle_attack_sim_escape(event: InputEvent) -> bool:
 			# Return to activation modal without completing the attack step.
 			_attack_exec_mode = false
 			_attack_exec_ship_token = null
+			_attack_exec_fired_zones.clear()
+			_attack_exec_current_attack = 0
+			_attack_exec_dice_results.clear()
+			_attack_exec_pool.clear()
+			_attack_exec_range_band = ""
+			_attack_exec_cf_dial_used = false
 			if _activation_modal and _ship_activation_state:
 				_activation_modal.open(_ship_activation_state)
 				var vp_size: Vector2 = get_viewport().get_visible_rect().size
@@ -2650,3 +2704,290 @@ func _handle_attack_sim_escape(event: InputEvent) -> bool:
 		get_viewport().set_input_as_handled()
 		return true
 	return false
+
+
+# =========================================================================
+# Phase 6b-2 — Attack Sequence Orchestration
+# =========================================================================
+
+## Connects the Phase 6b-2 panel signals to game_board handlers.
+func _connect_attack_panel_signals() -> void:
+	if _attack_sim_panel == null:
+		return
+	var p: AttackSimPanel = _attack_sim_panel
+	if not p.cf_dial_colour_selected.is_connected(
+			_on_attack_cf_dial_colour):
+		p.cf_dial_colour_selected.connect(_on_attack_cf_dial_colour)
+	if not p.cf_dial_skipped.is_connected(_on_attack_cf_dial_skipped):
+		p.cf_dial_skipped.connect(_on_attack_cf_dial_skipped)
+	if not p.roll_dice_pressed.is_connected(_on_attack_roll_dice):
+		p.roll_dice_pressed.connect(_on_attack_roll_dice)
+	if not p.cf_token_reroll_requested.is_connected(
+			_on_attack_cf_token_reroll):
+		p.cf_token_reroll_requested.connect(_on_attack_cf_token_reroll)
+	if not p.cf_token_reroll_skipped.is_connected(
+			_on_attack_cf_token_skipped):
+		p.cf_token_reroll_skipped.connect(_on_attack_cf_token_skipped)
+	if not p.confirm_pressed.is_connected(_on_attack_confirm):
+		p.confirm_pressed.connect(_on_attack_confirm)
+	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
+		p.skip_attack_pressed.connect(_on_attack_skip)
+
+
+## Begins the Phase 6b-2 attack sequence after target and range are known.
+## Checks for a CF dial and starts the appropriate step.
+## Requirements: AE-CF-001, AE-CF-002.
+## Rules Reference: "Concentrate Fire", p.3 — "While attacking, the ship
+## may add 1 die to its attack pool of a color that is already in its
+## attack pool."
+func _attack_exec_begin_sequence(range_band: String) -> void:
+	if _attack_sim_panel == null or _attack_exec_ship_token == null:
+		return
+	# Compute the string-keyed pool.
+	_attack_exec_pool = _compute_attack_pool_dict(range_band)
+	# Show Skip Attack button.
+	_attack_sim_panel.show_skip_attack_button()
+	# Check CF dial availability.
+	if not _attack_exec_cf_dial_used and _attack_exec_has_cf_dial():
+		# Offer CF dial: colours must be present in pool.
+		var available: Array[String] = _get_cf_dial_colours(
+				_attack_exec_pool)
+		if available.size() > 0:
+			_attack_sim_panel.show_cf_dial_section(available)
+			_log.info("CF dial available — offering colours: %s." % [
+					str(available)])
+			return
+	# No CF dial — proceed to roll.
+	_attack_exec_show_roll_button()
+
+
+## Checks whether the activated ship has a revealed CF dial.
+## Requirements: AE-CF-001.
+func _attack_exec_has_cf_dial() -> bool:
+	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	if inst == null or inst.command_dial_stack == null:
+		return false
+	var dial: Dictionary = inst.command_dial_stack.get_revealed_dial()
+	if dial.is_empty():
+		return false
+	return (dial.get("command", -1) as int) == (
+			Constants.CommandType.CONCENTRATE_FIRE as int)
+
+
+## Returns which colour keys are available for CF dial extra die.
+## Only colours already in the pool may be chosen.
+## Requirements: AE-CF-003.
+## Rules Reference: "Concentrate Fire", p.3.
+func _get_cf_dial_colours(pool: Dictionary) -> Array[String]:
+	var colours: Array[String] = []
+	for key: String in pool:
+		if int(pool[key]) > 0:
+			colours.append(key)
+	return colours
+
+
+## Computes the string-keyed dice pool for the current attacker/target.
+## Same logic as _compute_attack_dice_text but returns the Dictionary.
+func _compute_attack_pool_dict(range_band: String) -> Dictionary:
+	if _attack_sim_atk_ship == null:
+		return {}
+	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
+	if ship_data == null:
+		return {}
+	var armament: Dictionary = {}
+	if _attack_sim_def_squad:
+		armament = ship_data.anti_squadron_armament
+	else:
+		var zone_key: String = _ZONE_NAMES.get(
+				_attack_sim_atk_zone, "FRONT")
+		armament = ship_data.battery_armament.get(zone_key, {})
+	return DicePool.get_attack_pool(armament, range_band)
+
+
+## Shows the Roll Dice button.
+func _attack_exec_show_roll_button() -> void:
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_cf_dial_section()
+		_attack_sim_panel.show_roll_button()
+	_log.info("Awaiting dice roll.")
+
+
+## Called when the player selects a colour for the CF dial extra die.
+## Requirements: AE-CF-003, AE-CF-004.
+func _on_attack_cf_dial_colour(colour_key: String) -> void:
+	_log.info("CF dial: adding 1 %s die." % colour_key)
+	# Add die to the pool.
+	var current: int = int(_attack_exec_pool.get(colour_key, 0))
+	_attack_exec_pool[colour_key] = current + 1
+	# Spend the dial.
+	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	if inst and inst.command_dial_stack:
+		inst.command_dial_stack.spend_revealed()
+	_attack_exec_cf_dial_used = true
+	# Update dice count display.
+	if _attack_sim_panel:
+		var dice_text: String = DicePool.format_pool(_attack_exec_pool)
+		_attack_sim_panel.show_dice_count(dice_text)
+	# Proceed to roll.
+	_attack_exec_show_roll_button()
+
+
+## Called when the player skips the CF dial.
+## Requirements: AE-CF-005.
+func _on_attack_cf_dial_skipped() -> void:
+	_log.info("CF dial skipped.")
+	_attack_exec_show_roll_button()
+
+
+## Called when the player presses "Roll Dice".
+## Requirements: AE-DICE-001, AE-DICE-003.
+func _on_attack_roll_dice() -> void:
+	_log.info("Rolling dice: %s." % DicePool.format_pool(
+			_attack_exec_pool))
+	# Convert to engine pool and roll.
+	var engine_pool: Dictionary = DicePool.to_engine_pool(
+			_attack_exec_pool)
+	_attack_exec_dice_results = Dice.roll_pool(engine_pool)
+	# Show results.
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_roll_button()
+		_attack_sim_panel.show_dice_results(_attack_exec_dice_results)
+	# Log results.
+	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	_log.info("Dice rolled: %d dice, %d damage." % [
+			_attack_exec_dice_results.size(), damage])
+	# Check CF token for reroll.
+	if _attack_exec_has_cf_token():
+		if _attack_sim_panel:
+			_attack_sim_panel.show_cf_token_section()
+		_log.info("CF token available — offering reroll.")
+		return
+	# No token — show confirm.
+	_attack_exec_show_confirm()
+
+
+## Checks whether the activated ship has a CF command token.
+## Requirements: AE-CF-010.
+func _attack_exec_has_cf_token() -> bool:
+	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	if inst == null or inst.command_tokens == null:
+		return false
+	return inst.command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE)
+
+
+## Called when the player selects a die and confirms reroll (CF token).
+## Requirements: AE-CF-011, AE-CF-012, AE-CF-014.
+func _on_attack_cf_token_reroll(die_index: int) -> void:
+	if die_index < 0 or die_index >= _attack_exec_dice_results.size():
+		return
+	var old_result: Dictionary = _attack_exec_dice_results[die_index]
+	var color: Constants.DiceColor = (
+			old_result["color"] as Constants.DiceColor)
+	# Reroll the die.
+	var new_face: Constants.DiceFace = Dice.roll_die(color)
+	var new_result: Dictionary = {"color": color, "face": new_face}
+	_attack_exec_dice_results[die_index] = new_result
+	_log.info("CF token: rerolled die %d (%s) → %s." % [
+			die_index, str(old_result["face"]), str(new_face)])
+	# Spend the token.
+	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	if inst and inst.command_tokens:
+		inst.command_tokens.spend_token(
+				Constants.CommandType.CONCENTRATE_FIRE)
+	# Update display.
+	if _attack_sim_panel:
+		_attack_sim_panel.update_die_result(die_index, new_result)
+		_attack_sim_panel.hide_cf_token_section()
+	# Show confirm.
+	_attack_exec_show_confirm()
+
+
+## Called when the player skips the CF token reroll.
+## Requirements: AE-CF-013.
+func _on_attack_cf_token_skipped() -> void:
+	_log.info("CF token reroll skipped.")
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_cf_token_section()
+	_attack_exec_show_confirm()
+
+
+## Shows the Confirm button after dice are finalised.
+## Requirements: AE-CONF-001.
+func _attack_exec_show_confirm() -> void:
+	if _attack_sim_panel:
+		_attack_sim_panel.show_confirm_button()
+	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	_log.info("Final dice: %d damage. Awaiting confirm." % damage)
+
+
+## Called when the player presses "Confirm" to accept the dice results.
+## Marks the zone as fired and checks for follow-up attacks.
+## Requirements: AE-CONF-002, AE-2HZ-001, AE-2HZ-003, AE-2HZ-004.
+func _on_attack_confirm() -> void:
+	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	_log.info("Attack confirmed: %d damage (damage step deferred)." % damage)
+	# Record this zone as fired.
+	if _attack_sim_atk_zone >= 0:
+		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
+	# Draw red dot on spent zone's LOS position.
+	if _attack_sim_overlay and _attack_sim_atk_ship:
+		var los_pts: Dictionary = (
+				_attack_sim_atk_ship.get_los_origins_world())
+		var zone_key: String = _ZONE_NAMES.get(
+				_attack_sim_atk_zone, "FRONT")
+		var los_pos: Vector2 = los_pts.get(zone_key, Vector2.ZERO)
+		_attack_sim_overlay.add_spent_zone_marker(los_pos)
+	_attack_exec_current_attack += 1
+	# Check if second attack is possible (max 2 hull zones per activation).
+	# Rules Reference: "Attack", p.2 — each ship may perform up to two
+	# attacks during its activation from different hull zones.
+	if _attack_exec_current_attack < 2:
+		_attack_exec_prepare_next_attack()
+		return
+	# All attacks done — finish.
+	_on_attack_exec_done()
+
+
+## Prepares the board for a second hull zone attack.
+## Resets target state and returns to hull zone selection.
+## Requirements: AE-2HZ-004, AE-2HZ-005.
+func _attack_exec_prepare_next_attack() -> void:
+	_log.info("Preparing second attack (attack %d/2)." % [
+			_attack_exec_current_attack + 1])
+	# Reset target and dice state.
+	_attack_sim_clear_target_state()
+	_attack_exec_dice_results.clear()
+	_attack_exec_pool.clear()
+	_attack_exec_range_band = ""
+	# Clean up target visuals, keep spent zone markers.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.clear_target()
+	# Return to hull zone selection.
+	_attack_sim_selecting = true
+	_attack_sim_target_selecting = false
+	# Update panel.
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_dice_count()
+		var ship_name: String = ""
+		if _attack_exec_ship_token.get_ship_data():
+			ship_name = _attack_exec_ship_token.get_ship_data().ship_name
+		_attack_sim_panel.show_initial_attack_exec(ship_name)
+		_attack_sim_panel.show_skip_attack_button()
+	# Restore range overlay.
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	_attack_sim_range_overlay = RangeOverlayScene.new()
+	_attack_sim_range_overlay.name = "AttackExecRangeOverlay"
+	_token_container.add_child(_attack_sim_range_overlay)
+	_token_container.move_child(_attack_sim_range_overlay, 0)
+	_attack_sim_range_overlay.setup(_attack_exec_ship_token)
+
+
+## Called when the player presses "Skip Attack".
+## Ends the attack step immediately.
+## Requirements: AE-SKIP-001, AE-SKIP-002.
+func _on_attack_skip() -> void:
+	_log.info("Attack skipped by player.")
+	_on_attack_exec_done()

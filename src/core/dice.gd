@@ -99,3 +99,35 @@ static func has_critical(face: Constants.DiceFace) -> bool:
 ## Returns whether a dice face is an accuracy result.
 static func is_accuracy(face: Constants.DiceFace) -> bool:
 	return face == Constants.DiceFace.ACCURACY
+
+
+## Base path for dice face PNG images.
+const _DICE_IMAGE_BASE: String = "res://Resources/Game_Components/dice/"
+
+## Mapping from DiceColor enum to the colour portion of the filename.
+const _COLOUR_FILE_NAMES: Dictionary = {
+	Constants.DiceColor.RED: "red",
+	Constants.DiceColor.BLUE: "blue",
+	Constants.DiceColor.BLACK: "black",
+}
+
+## Mapping from DiceFace enum to the face portion of the filename.
+const _FACE_FILE_NAMES: Dictionary = {
+	Constants.DiceFace.BLANK: "blank",
+	Constants.DiceFace.HIT: "hit",
+	Constants.DiceFace.CRITICAL: "crit",
+	Constants.DiceFace.HIT_CRITICAL: "hit_crit",
+	Constants.DiceFace.ACCURACY: "accuracy",
+	Constants.DiceFace.HIT_HIT: "hit_hit",
+}
+
+
+## Returns the resource path for the PNG image representing a die face.
+## E.g. [code]get_face_image_path(DiceColor.RED, DiceFace.HIT)[/code]
+## returns [code]"res://Resources/Game_Components/dice/die_red_hit.png"[/code].
+## Requirements: AE-DICE-002.
+static func get_face_image_path(
+		color: Constants.DiceColor, face: Constants.DiceFace) -> String:
+	var colour_str: String = _COLOUR_FILE_NAMES.get(color, "red")
+	var face_str: String = _FACE_FILE_NAMES.get(face, "blank")
+	return "%sdie_%s_%s.png" % [_DICE_IMAGE_BASE, colour_str, face_str]

@@ -6,20 +6,51 @@
 ## Phase 6a: attacker declaration.  Phase 6a-2: target selection + LOS result.
 ## Phase 6a-3: range band display alongside LOS result.
 ## Phase 6b-1: dice count display and "Done" button for attack execution.
+## Phase 6b-2: CF dial, dice rolling, CF token reroll, Confirm, Skip Attack.
 ##
 ## Built as a PanelContainer following the project's standard modal styling.
 ## Dismissed by Escape, re-pressing "A", or programmatically via [method close].
 ##
-## Requirements: AS-PNL-001–003, AS-PNL-010–011, AS-RNG-014, AE-PNL-001–003.
+## Requirements: AS-PNL-001–003, AS-PNL-010–011, AS-RNG-014, AE-PNL-001–003,
+## AE-CF-001–005, AE-CF-010–014, AE-DICE-001–004, AE-CONF-001–002,
+## AE-2HZ-001–005, AE-SKIP-001–003.
 ## Rules Reference: "Attack", Step 1, p.2; "Line of Sight", p.10;
-## "Attack Range", p.3.
+## "Attack Range", p.3; "Concentrate Fire", p.3.
 class_name AttackSimPanel
 extends PanelContainer
 
 
-## Emitted when the player presses the "Done" button to finish the attack step.
+## Emitted when the player presses the "Done" button (sim mode only).
 ## Requirements: AE-PNL-003.
 signal attack_done_pressed()
+
+## Emitted when the player selects a colour for the CF dial extra die.
+## Requirements: AE-CF-003.
+signal cf_dial_colour_selected(colour_key: String)
+
+## Emitted when the player skips the CF dial.
+## Requirements: AE-CF-005.
+signal cf_dial_skipped()
+
+## Emitted when the player presses "Roll Dice".
+## Requirements: AE-DICE-001.
+signal roll_dice_pressed()
+
+## Emitted when the player confirms a die reroll (CF token).
+## Requirements: AE-CF-011.
+signal cf_token_reroll_requested(die_index: int)
+
+## Emitted when the player skips the CF token reroll.
+## Requirements: AE-CF-013.
+signal cf_token_reroll_skipped()
+
+## Emitted when the player presses "Confirm" to finalise the attack.
+## Requirements: AE-CONF-001.
+signal confirm_pressed()
+
+## Emitted when the player presses "Skip Attack".
+## Requirements: AE-SKIP-001.
+signal skip_attack_pressed()
 
 
 ## Logger.
@@ -38,9 +69,41 @@ var _content: VBoxContainer = null
 ## Requirements: AE-PNL-001.
 var _dice_count_label: Label = null
 
-## "Done" button — visible only in attack execution mode.
+## "Done" button — visible only in sim mode.
 ## Requirements: AE-PNL-003.
 var _done_button: Button = null
+
+## --- Phase 6b-2 UI elements ---
+
+## CF dial section container (label + colour buttons + skip).
+var _cf_dial_container: VBoxContainer = null
+## HBox holding the colour buttons for CF dial.
+var _cf_dial_buttons: HBoxContainer = null
+## Skip button for the CF dial section.
+var _cf_dial_skip_button: Button = null
+## "Roll Dice" button.
+var _roll_button: Button = null
+## HBox holding die face TextureRects.
+var _dice_container: HBoxContainer = null
+## CF token reroll section container.
+var _cf_token_container: VBoxContainer = null
+## HBox holding the Reroll + Skip buttons for CF token.
+var _cf_token_buttons: HBoxContainer = null
+## "Reroll" button inside CF token section.
+var _cf_token_reroll_button: Button = null
+## "Skip" button inside CF token section.
+var _cf_token_skip_button: Button = null
+## "Confirm" button — finalises the attack.
+var _confirm_button: Button = null
+## "Skip Attack" button — skips the entire attack.
+var _skip_attack_button: Button = null
+
+## Array of TextureRects showing die face images.
+var _dice_textures: Array[TextureRect] = []
+## Index of the die selected for reroll (-1 = none).
+var _selected_reroll_index: int = -1
+## Size of each die image in the row (pixels).
+const _DIE_IMAGE_SIZE: float = 32.0
 
 ## Whether this panel is in attack execution mode (shows dice count + Done).
 var _attack_execution_mode: bool = false
@@ -126,16 +189,24 @@ func show_dice_count(dice_text: String) -> void:
 	if _dice_count_label:
 		_dice_count_label.text = "Dice: %s" % dice_text
 		_dice_count_label.visible = true
-	if _done_button:
+	# Done button only in sim mode; attack execution uses Confirm flow.
+	if _done_button and not _attack_execution_mode:
 		_done_button.visible = true
 
 
 ## Hides the dice count label and Done button (e.g. when target is deselected).
+## Also hides all Phase 6b-2 UI sections.
 func hide_dice_count() -> void:
 	if _dice_count_label:
 		_dice_count_label.visible = false
 	if _done_button:
 		_done_button.visible = false
+	hide_cf_dial_section()
+	hide_roll_button()
+	hide_dice_results()
+	hide_cf_token_section()
+	hide_confirm_button()
+	hide_skip_attack_button()
 
 
 ## Returns the current dice count text (for testing).
@@ -225,7 +296,7 @@ func _build_ui() -> void:
 	_dice_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dice_count_label.visible = false
 	_content.add_child(_dice_count_label)
-	# Done button (attack execution mode only, hidden initially).
+	# Done button (sim mode only, hidden initially).
 	_done_button = Button.new()
 	_done_button.text = "Done"
 	_done_button.custom_minimum_size = Vector2(80.0, 32.0)
@@ -233,6 +304,86 @@ func _build_ui() -> void:
 	_done_button.visible = false
 	_done_button.pressed.connect(_on_done_pressed)
 	_content.add_child(_done_button)
+	# --- Phase 6b-2 UI elements (hidden by default) ---
+	# CF dial section: label + colour buttons + skip.
+	_cf_dial_container = VBoxContainer.new()
+	_cf_dial_container.add_theme_constant_override("separation", 4)
+	_cf_dial_container.visible = false
+	_content.add_child(_cf_dial_container)
+	var cf_dial_label: Label = Label.new()
+	cf_dial_label.text = "CF Dial — add 1 die:"
+	cf_dial_label.add_theme_font_size_override("font_size", 13)
+	cf_dial_label.add_theme_color_override("font_color",
+			Color(1.0, 0.8, 0.3))
+	cf_dial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cf_dial_container.add_child(cf_dial_label)
+	_cf_dial_buttons = HBoxContainer.new()
+	_cf_dial_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_cf_dial_buttons.add_theme_constant_override("separation", 6)
+	_cf_dial_container.add_child(_cf_dial_buttons)
+	_cf_dial_skip_button = Button.new()
+	_cf_dial_skip_button.text = "Skip"
+	_cf_dial_skip_button.custom_minimum_size = Vector2(60.0, 28.0)
+	_cf_dial_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_cf_dial_skip_button.pressed.connect(_on_cf_dial_skip)
+	_cf_dial_container.add_child(_cf_dial_skip_button)
+	# Roll Dice button.
+	_roll_button = Button.new()
+	_roll_button.text = "Roll Dice"
+	_roll_button.custom_minimum_size = Vector2(100.0, 32.0)
+	_roll_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_roll_button.visible = false
+	_roll_button.pressed.connect(_on_roll_pressed)
+	_content.add_child(_roll_button)
+	# Dice results container (TextureRect images).
+	_dice_container = HBoxContainer.new()
+	_dice_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_dice_container.add_theme_constant_override("separation", 4)
+	_dice_container.visible = false
+	_content.add_child(_dice_container)
+	# CF token reroll section: label + reroll/skip buttons.
+	_cf_token_container = VBoxContainer.new()
+	_cf_token_container.add_theme_constant_override("separation", 4)
+	_cf_token_container.visible = false
+	_content.add_child(_cf_token_container)
+	var cf_token_label: Label = Label.new()
+	cf_token_label.text = "CF Token — select a die to reroll:"
+	cf_token_label.add_theme_font_size_override("font_size", 13)
+	cf_token_label.add_theme_color_override("font_color",
+			Color(1.0, 0.8, 0.3))
+	cf_token_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cf_token_container.add_child(cf_token_label)
+	_cf_token_buttons = HBoxContainer.new()
+	_cf_token_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_cf_token_buttons.add_theme_constant_override("separation", 6)
+	_cf_token_container.add_child(_cf_token_buttons)
+	_cf_token_reroll_button = Button.new()
+	_cf_token_reroll_button.text = "Reroll"
+	_cf_token_reroll_button.custom_minimum_size = Vector2(80.0, 28.0)
+	_cf_token_reroll_button.disabled = true
+	_cf_token_reroll_button.pressed.connect(_on_cf_token_reroll)
+	_cf_token_buttons.add_child(_cf_token_reroll_button)
+	_cf_token_skip_button = Button.new()
+	_cf_token_skip_button.text = "Skip"
+	_cf_token_skip_button.custom_minimum_size = Vector2(60.0, 28.0)
+	_cf_token_skip_button.pressed.connect(_on_cf_token_skip)
+	_cf_token_buttons.add_child(_cf_token_skip_button)
+	# Confirm button.
+	_confirm_button = Button.new()
+	_confirm_button.text = "Confirm"
+	_confirm_button.custom_minimum_size = Vector2(100.0, 32.0)
+	_confirm_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_confirm_button.visible = false
+	_confirm_button.pressed.connect(_on_confirm_pressed)
+	_content.add_child(_confirm_button)
+	# Skip Attack button.
+	_skip_attack_button = Button.new()
+	_skip_attack_button.text = "Skip Attack"
+	_skip_attack_button.custom_minimum_size = Vector2(100.0, 28.0)
+	_skip_attack_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_skip_attack_button.visible = false
+	_skip_attack_button.pressed.connect(_on_skip_attack_pressed)
+	_content.add_child(_skip_attack_button)
 
 
 ## Updates the title and body text.
@@ -252,8 +403,288 @@ func _clear_content() -> void:
 		_body_label = null
 		_dice_count_label = null
 		_done_button = null
+		_cf_dial_container = null
+		_cf_dial_buttons = null
+		_cf_dial_skip_button = null
+		_roll_button = null
+		_dice_container = null
+		_cf_token_container = null
+		_cf_token_buttons = null
+		_cf_token_reroll_button = null
+		_cf_token_skip_button = null
+		_confirm_button = null
+		_skip_attack_button = null
+		_dice_textures.clear()
+		_selected_reroll_index = -1
 
 
-## Called when the Done button is pressed.
+## Called when the Done button is pressed (sim mode).
 func _on_done_pressed() -> void:
 	attack_done_pressed.emit()
+
+
+# =========================================================================
+# Phase 6b-2 — Concentrate Fire Dial
+# =========================================================================
+
+## Display colour names for CF dial buttons.
+const _CF_COLOUR_DISPLAY: Dictionary = {
+	"RED": "Red", "BLUE": "Blue", "BLACK": "Black",
+}
+
+## Tint colours for CF dial buttons.
+const _CF_COLOUR_TINTS: Dictionary = {
+	"RED": Color(0.9, 0.2, 0.2),
+	"BLUE": Color(0.2, 0.4, 0.9),
+	"BLACK": Color(0.5, 0.5, 0.5),
+}
+
+
+## Shows the Concentrate Fire dial section with colour buttons.
+## [param available_colours] — colour keys ("RED", "BLUE", "BLACK") the
+##     player may choose from (range-filtered).
+## Requirements: AE-CF-001, AE-CF-003.
+func show_cf_dial_section(available_colours: Array[String]) -> void:
+	if _cf_dial_container == null or _cf_dial_buttons == null:
+		return
+	# Clear previous buttons.
+	for child: Node in _cf_dial_buttons.get_children():
+		child.queue_free()
+	# Build colour buttons.
+	for colour_key: String in available_colours:
+		var btn: Button = Button.new()
+		btn.text = _CF_COLOUR_DISPLAY.get(colour_key, colour_key)
+		btn.custom_minimum_size = Vector2(60.0, 28.0)
+		btn.add_theme_color_override("font_color",
+				_CF_COLOUR_TINTS.get(colour_key, Color.WHITE))
+		btn.pressed.connect(_on_cf_dial_colour.bind(colour_key))
+		_cf_dial_buttons.add_child(btn)
+	_cf_dial_container.visible = true
+
+
+## Hides the Concentrate Fire dial section.
+func hide_cf_dial_section() -> void:
+	if _cf_dial_container:
+		_cf_dial_container.visible = false
+
+
+func _on_cf_dial_colour(colour_key: String) -> void:
+	cf_dial_colour_selected.emit(colour_key)
+
+
+func _on_cf_dial_skip() -> void:
+	cf_dial_skipped.emit()
+
+
+# =========================================================================
+# Phase 6b-2 — Dice Rolling
+# =========================================================================
+
+## Shows the "Roll Dice" button.
+## Requirements: AE-DICE-001.
+func show_roll_button() -> void:
+	if _roll_button:
+		_roll_button.visible = true
+
+
+## Hides the "Roll Dice" button.
+func hide_roll_button() -> void:
+	if _roll_button:
+		_roll_button.visible = false
+
+
+## Shows the dice roll results as PNG images.
+## [param results] — Array of {color: DiceColor, face: DiceFace}.
+## Requirements: AE-DICE-002.
+func show_dice_results(results: Array[Dictionary]) -> void:
+	if _dice_container == null:
+		return
+	_clear_dice_images()
+	_dice_textures.clear()
+	_selected_reroll_index = -1
+	for i: int in range(results.size()):
+		var result: Dictionary = results[i]
+		var color: Constants.DiceColor = (
+				result["color"] as Constants.DiceColor)
+		var face: Constants.DiceFace = (
+				result["face"] as Constants.DiceFace)
+		var tex_rect: TextureRect = _create_die_image(color, face, i)
+		_dice_container.add_child(tex_rect)
+		_dice_textures.append(tex_rect)
+	_dice_container.visible = true
+
+
+## Updates a single die image after a reroll.
+## [param die_index] — index in the results array.
+## [param new_result] — {color: DiceColor, face: DiceFace}.
+## Requirements: AE-CF-014.
+func update_die_result(die_index: int, new_result: Dictionary) -> void:
+	if die_index < 0 or die_index >= _dice_textures.size():
+		return
+	var color: Constants.DiceColor = (
+			new_result["color"] as Constants.DiceColor)
+	var face: Constants.DiceFace = (
+			new_result["face"] as Constants.DiceFace)
+	var path: String = Dice.get_face_image_path(color, face)
+	var tex: Texture2D = load(path) as Texture2D
+	if tex and _dice_textures[die_index]:
+		_dice_textures[die_index].texture = tex
+	_selected_reroll_index = -1
+	_clear_die_selection_highlights()
+
+
+## Hides dice result images.
+func hide_dice_results() -> void:
+	if _dice_container:
+		_clear_dice_images()
+		_dice_container.visible = false
+	_dice_textures.clear()
+
+
+func _on_roll_pressed() -> void:
+	roll_dice_pressed.emit()
+
+
+# =========================================================================
+# Phase 6b-2 — CF Token Reroll
+# =========================================================================
+
+## Shows the CF token reroll section.  Die images become clickable.
+## Requirements: AE-CF-010.
+func show_cf_token_section() -> void:
+	if _cf_token_container == null:
+		return
+	_selected_reroll_index = -1
+	_cf_token_container.visible = true
+	if _cf_token_reroll_button:
+		_cf_token_reroll_button.disabled = true
+	_set_dice_clickable(true)
+
+
+## Hides the CF token reroll section.
+func hide_cf_token_section() -> void:
+	if _cf_token_container:
+		_cf_token_container.visible = false
+	_set_dice_clickable(false)
+	_selected_reroll_index = -1
+	_clear_die_selection_highlights()
+
+
+## Returns the currently selected reroll die index (for testing).
+func get_selected_reroll_index() -> int:
+	return _selected_reroll_index
+
+
+func _on_cf_token_reroll() -> void:
+	if _selected_reroll_index >= 0:
+		cf_token_reroll_requested.emit(_selected_reroll_index)
+
+
+func _on_cf_token_skip() -> void:
+	cf_token_reroll_skipped.emit()
+
+
+# =========================================================================
+# Phase 6b-2 — Confirm / Skip Attack
+# =========================================================================
+
+## Shows the "Confirm" button.
+## Requirements: AE-CONF-001.
+func show_confirm_button() -> void:
+	if _confirm_button:
+		_confirm_button.visible = true
+
+
+## Hides the "Confirm" button.
+func hide_confirm_button() -> void:
+	if _confirm_button:
+		_confirm_button.visible = false
+
+
+## Shows the "Skip Attack" button.
+## Requirements: AE-SKIP-001.
+func show_skip_attack_button() -> void:
+	if _skip_attack_button:
+		_skip_attack_button.visible = true
+
+
+## Hides the "Skip Attack" button.
+func hide_skip_attack_button() -> void:
+	if _skip_attack_button:
+		_skip_attack_button.visible = false
+
+
+func _on_confirm_pressed() -> void:
+	confirm_pressed.emit()
+
+
+func _on_skip_attack_pressed() -> void:
+	skip_attack_pressed.emit()
+
+
+# =========================================================================
+# Die Image Helpers
+# =========================================================================
+
+## Creates a TextureRect for a single die face image.
+func _create_die_image(color: Constants.DiceColor,
+		face: Constants.DiceFace, index: int) -> TextureRect:
+	var path: String = Dice.get_face_image_path(color, face)
+	var tex: Texture2D = load(path) as Texture2D
+	var rect: TextureRect = TextureRect.new()
+	rect.texture = tex
+	rect.custom_minimum_size = Vector2(_DIE_IMAGE_SIZE, _DIE_IMAGE_SIZE)
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.set_meta("die_index", index)
+	return rect
+
+
+## Clears all die image children from the container.
+func _clear_dice_images() -> void:
+	if _dice_container:
+		for child: Node in _dice_container.get_children():
+			child.queue_free()
+
+
+## Enables or disables click handling on die images.
+func _set_dice_clickable(clickable: bool) -> void:
+	for tex_rect: TextureRect in _dice_textures:
+		if tex_rect == null:
+			continue
+		if clickable:
+			if not tex_rect.gui_input.is_connected(_on_die_clicked):
+				tex_rect.gui_input.connect(
+						_on_die_clicked.bind(tex_rect))
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+		else:
+			if tex_rect.gui_input.is_connected(_on_die_clicked):
+				tex_rect.gui_input.disconnect(
+						_on_die_clicked.bind(tex_rect))
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Called when a die image is clicked during reroll selection.
+func _on_die_clicked(event: InputEvent,
+		tex_rect: TextureRect) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	var index: int = tex_rect.get_meta("die_index", -1)
+	if index < 0:
+		return
+	_selected_reroll_index = index
+	_clear_die_selection_highlights()
+	tex_rect.modulate = Color(1.0, 1.0, 0.5, 1.0)
+	if _cf_token_reroll_button:
+		_cf_token_reroll_button.disabled = false
+
+
+## Resets all die images to default modulate.
+func _clear_die_selection_highlights() -> void:
+	for tex_rect: TextureRect in _dice_textures:
+		if tex_rect:
+			tex_rect.modulate = Color.WHITE

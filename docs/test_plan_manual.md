@@ -2075,3 +2075,103 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 5 | Escape cancels at any point | Clean dismiss, no orphaned visuals |
 
 **Pass criteria:** Execute Attack button appears at Attack step; hull zone selection shows only LOS markers (no arc lines); target selection shows LOS line + dice count; faction guards reject friendly targets; "Done" completes attack step; Escape cancels; attack simulator unaffected; all GUT tests pass.
+
+---
+
+## Phase 6b-2 — Attack Execution: Dice Rolling, Concentrate Fire & Two-Hull-Zone Sequencing
+
+**What this phase adds:** After target selection, the player can optionally spend a Concentrate Fire dial to add a die, roll the dice pool (shown as die-face PNG images), optionally spend a CF token to reroll one die, then confirm the attack. The sequence supports two hull zone attacks per activation with the first zone marked as spent (red dot). Damage resolution is skipped for now.
+
+> **Automated coverage note:** `DicePool.to_engine_pool()` and `Dice.get_face_image_path()` are covered by GUT tests. Manual tests below verify the interactive CF dial/token flow, dice display, two-hull-zone sequencing, and skip behaviour.
+
+### MT-6b-2.1 — Concentrate Fire dial adds a die
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with a Concentrate Fire command dial (keep as dial, do not convert) | Ship activated with CF dial visible behind base |
+| 2 | Press "Execute Attack ►", select a hull zone, select an enemy target | Dice count shown (e.g. "Dice: 2 red, 1 blue") |
+| 3 | Panel shows "Spend CF dial for +1 die?" with colour buttons | Only colours in the hull zone's armament appear (e.g. [+ Red] [+ Blue] for CR90 FRONT) |
+| 4 | Press a colour button (e.g. [+ Red]) | Dice count updates (e.g. "Dice: 3 red, 1 blue"); CF dial sprite disappears from ship token; colour buttons removed |
+| 5 | "Roll Dice" button now visible | Button is clickable |
+
+### MT-6b-2.2 — Concentrate Fire dial can be skipped
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Same setup as MT-6b-2.1 (CF dial kept) | CF dial prompt appears |
+| 2 | Press "Skip" on the CF dial prompt | Dice count unchanged; "Roll Dice" button appears; CF dial sprite remains on ship |
+
+### MT-6b-2.3 — Dice rolling shows face images
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After CF dial decision (or immediately if no CF dial), press "Roll Dice" | Die face PNG images appear in a horizontal row (~32×32 px each) |
+| 2 | Each die image matches its colour (red/blue/black) and shows a valid face | Images loaded from `Resources/Game_Components/dice/` |
+| 3 | "Roll Dice" button disappears | Dice count label replaced by actual die images |
+
+### MT-6b-2.4 — Concentrate Fire token reroll
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship that holds a CF command token (from a previous round's conversion) | Token visible in ship card panel |
+| 2 | Execute attack, select hull zone + target, roll dice | Dice results shown; "Spend CF token to reroll 1 die?" prompt appears |
+| 3 | Click a die image | Selected die gets a yellow border highlight |
+| 4 | Press "Reroll" | Selected die re-rolled; new face image replaces old; reroll UI removed; CF token removed from ship |
+
+### MT-6b-2.5 — CF token reroll can be skipped
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Same setup as MT-6b-2.4 | CF token reroll prompt visible |
+| 2 | Press "Skip" | Reroll UI removed; CF token remains on ship; "Confirm" button appears |
+
+### MT-6b-2.6 — Confirm ends current attack (damage skipped)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After dice rolled (and optional reroll), press "Confirm" | Current hull zone attack ends; no damage applied to target; log shows dice results |
+| 2 | Panel transitions to second hull zone selection | Prompt: "Select second attacking hull zone." |
+
+### MT-6b-2.7 — Two hull zone sequencing with red dot
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After first hull zone Confirm | First hull zone's LOS marker has a translucent red dot (6 px) |
+| 2 | Try clicking the first (spent) hull zone | Tooltip: "This hull zone has already attacked." — click rejected |
+| 3 | Select a different hull zone | Hull zone accepted; target selection proceeds |
+| 4 | Select target, roll dice, Confirm | Second hull zone attack complete; attack step finishes |
+| 5 | Activation modal re-opens | Attack step shows checkmark; Maneuver step is active |
+
+### MT-6b-2.8 — Skip first hull zone, still get second opportunity
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During hull zone selection, press "Skip Attack" | First hull zone skipped; transitions to second hull zone opportunity (no red dot) |
+| 2 | Select a hull zone, target, roll, Confirm | Second attack completes; attack step done |
+
+### MT-6b-2.9 — Skip both hull zones
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press "Skip Attack" during first hull zone selection | Transitions to second hull zone opportunity |
+| 2 | Press "Skip Attack" again | Attack step complete; activation modal re-opens with Attack checkmarked |
+
+### MT-6b-2.10 — CF dial available for second hull zone if not spent on first
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | CF dial kept; skip the CF dial prompt during first hull zone attack (press "Skip") | CF dial not spent |
+| 2 | After first Confirm, select second hull zone + target | CF dial prompt appears again for the second attack |
+| 3 | Spend it this time | Die added; dial sprite hidden; dial spent |
+
+### MT-6b-2.11 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | Expected script count, expected test count, 0 new failures |
+| 2 | Verify attack simulator (A key) still works | All simulator visuals unchanged |
+| 3 | Verify Phase 6b-1 target selection still works | LOS markers, LOS line, faction guards |
+| 4 | Verify maneuver step still works | Execute Maneuver functions correctly |
+| 5 | Escape cancels at any point | Clean dismiss, no orphaned visuals |
+
+**Pass criteria:** CF dial adds a die and spends the dial; CF token rerolls one die and spends the token; dice face PNGs displayed correctly; two hull zone attacks work with red dot and zone blocking; skip buttons work at all stages; no damage applied (placeholder); no regressions; all GUT tests pass.

@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 60 scripts, 1074 tests, 1989 asserts — all passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 60 scripts, 1107 tests, 2063 asserts — all passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -2175,3 +2175,84 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 5 | Escape cancels at any point | Clean dismiss, no orphaned visuals |
 
 **Pass criteria:** CF dial adds a die and spends the dial; CF token rerolls one die and spends the token; dice face PNGs displayed correctly; two hull zone attacks work with red dot and zone blocking; skip buttons work at all stages; no damage applied (placeholder); no regressions; all GUT tests pass.
+
+---
+
+## Phase 6b-3 — Anti-Squadron Multi-Target Sequencing
+
+**What this phase adds:** After confirming an attack against an enemy squadron, the ship can declare another enemy squadron in the same arc as the next target (Rules Reference: "Attack", Step 6). Each attacked squadron gets a red dot marker. The loop continues until no eligible targets remain or the player presses Skip.
+
+### Setup
+
+Open `src/scenes/game_board/game_board.tscn` and press **F6**. Position the Rebel ships so that at least two Imperial/enemy squadrons are within the same firing arc at attack range (or use the Learning Scenario default placement where the X-wing and TIE Fighter may be in arc).
+
+---
+
+### MT-6b-3.1 — Squadron attack loop basic flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a Rebel ship, reach Attack step | Attack panel appears: "Select attacking hull zone." |
+| 2 | Click a hull zone that has enemy squadrons in arc | Panel: "Attacking: {ship} — {zone} arc / Select a target." |
+| 3 | Click an enemy squadron in that arc | LOS line + range shown; dice count + CF dial (if available) shown |
+| 4 | Complete the dice sequence: CF dial → Roll → optional Reroll → Confirm | Dice results confirmed; red dot appears on the squadron's centre |
+| 5 | If another enemy squadron remains in arc | Panel: "{ship} — {zone} arc / Select next squadron in arc, or Skip." |
+| 6 | Click the next enemy squadron | LOS + range + dice for the new squadron; new attack sequence starts |
+| 7 | Complete and Confirm | Second red dot on that squadron; loop continues or finishes |
+
+**Pass criteria:** Each confirmed squadron shows a red dot; the full dice sequence repeats per squadron; hull zone stays locked throughout.
+
+---
+
+### MT-6b-3.2 — Already-attacked squadron guard
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete an attack against a squadron (Step 4 above) | Red dot on that squadron |
+| 2 | During "Select next squadron" prompt, click the already-attacked squadron | Tooltip: "{name} has already been attacked." — target not set |
+
+**Pass criteria:** Already-attacked squadrons are blocked with a tooltip.
+
+---
+
+### MT-6b-3.3 — Hull zone locked during squadron loop
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During "Select next squadron" prompt, click the attacker ship's hull zone | Tooltip: "Hull zone is locked during anti-squadron attacks." — not deselected |
+
+**Pass criteria:** Hull zone cannot be deselected during the anti-squadron loop.
+
+---
+
+### MT-6b-3.4 — Skip during squadron loop
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After attacking one squadron, see "Select next squadron" prompt | Skip Attack button visible |
+| 2 | Press Skip Attack | Loop ends; hull zone marked as fired (red dot on zone LOS); proceeds to second hull zone selection (or finishes if second HZ already done) |
+
+**Pass criteria:** Skip ends the squadron loop and moves to second hull zone — does NOT end the entire attack step.
+
+---
+
+### MT-6b-3.5 — No more targets auto-finishes loop
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position so only one enemy squadron is in the arc | |
+| 2 | Attack and Confirm against that squadron | Red dot on squadron; no "select next" prompt; hull zone marked as fired; proceeds to next hull zone or finishes |
+
+**Pass criteria:** Loop auto-finishes when no eligible targets remain.
+
+---
+
+### MT-6b-3.6 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 60 scripts, 1107 tests, 0 new failures |
+| 2 | Verify ship-vs-ship attack (two hull zones) still works | Red dots on HZ LOS, zone blocking, same as Phase 6b-2 |
+| 3 | Escape cancels at any point | Clean dismiss |
+
+**Pass criteria:** All Phase 6b-2 behaviours unchanged; GUT passes; anti-squadron loop works per MT-6b-3.1–5.

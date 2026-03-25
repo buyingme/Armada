@@ -155,6 +155,20 @@ func show_squadron_selected(squad_name: String) -> void:
 	_set_prompt(title, body)
 
 
+## Updates the panel to prompt for the next squadron target in the same arc.
+## Shown after confirming an attack against a squadron when more enemy
+## squadrons remain in range and arc.
+## [param ship_name] — display name of the attacking ship.
+## [param zone_name] — hull zone string (e.g. "FRONT").
+## Requirements: AE-SQ-004, AE-SQ-005.
+## Rules Reference: "Attack", Step 6, p.2.
+func show_select_next_squadron(ship_name: String,
+		zone_name: String) -> void:
+	var title: String = "%s — %s arc" % [ship_name, zone_name]
+	var body: String = "Select next squadron in arc, or Skip."
+	_set_prompt(title, body)
+
+
 ## Updates the panel to show the attacker → target pair, LOS result,
 ## and range band.
 ## [param atk_name] — display name of the attacking ship/squadron.

@@ -365,3 +365,23 @@ func test_show_dice_count_sim_mode_shows_done_button() -> void:
 	_panel.show_dice_count("2 red")
 	assert_true(_panel._done_button.visible,
 			"Done button should show in sim mode.")
+
+
+# =========================================================================
+# Phase 6b-3 — show_select_next_squadron
+# =========================================================================
+
+func test_show_select_next_squadron_title() -> void:
+	_panel.show_initial()
+	_panel.show_select_next_squadron("CR90 Corvette A", "FRONT")
+	assert_eq(_panel.get_title_text(),
+			"CR90 Corvette A — FRONT arc",
+			"Title should show ship and zone for next squadron prompt.")
+
+
+func test_show_select_next_squadron_body() -> void:
+	_panel.show_initial()
+	_panel.show_select_next_squadron("CR90 Corvette A", "FRONT")
+	assert_eq(_panel.get_body_text(),
+			"Select next squadron in arc, or Skip.",
+			"Body should prompt for next squadron or skip.")

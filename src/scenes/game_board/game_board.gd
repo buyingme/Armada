@@ -208,6 +208,14 @@ var _attack_exec_range_band: String = ""
 ## Whether the CF dial has already been used during this activation's attacks.
 var _attack_exec_cf_dial_used: bool = false
 
+## Whether the CF token has already been used during this activation's attacks.
+var _attack_exec_cf_token_used: bool = false
+
+## Squadrons already targeted during the current hull zone's anti-squadron
+## attack loop (Rules Reference: "Attack", Step 6).
+## Requirements: AE-SQ-001.
+var _attack_exec_attacked_squads: Array[SquadronToken] = []
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -1471,6 +1479,8 @@ func _on_attack_step_entered() -> void:
 	_attack_exec_pool.clear()
 	_attack_exec_range_band = ""
 	_attack_exec_cf_dial_used = false
+	_attack_exec_cf_token_used = false
+	_attack_exec_attacked_squads.clear()
 	_attack_sim_selecting = true
 	# Create the info panel on a CanvasLayer.
 	if _attack_sim_panel == null:
@@ -1518,6 +1528,8 @@ func _on_attack_exec_done() -> void:
 	_attack_exec_pool.clear()
 	_attack_exec_range_band = ""
 	_attack_exec_cf_dial_used = false
+	_attack_exec_cf_token_used = false
+	_attack_exec_attacked_squads.clear()
 	# Advance the activation state past ATTACK → MANEUVER.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
@@ -2213,7 +2225,14 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 		_log.debug("Target click outside ship base — ignored.")
 		return
 	# Check: clicking the attacker hull zone → deselect both (AS-TGT-021).
+	# But NOT during the Step 6 squadron loop — hull zone is locked.
 	if _attack_sim_atk_ship == token and _attack_sim_atk_zone == zone:
+		if _attack_exec_mode and _attack_exec_attacked_squads.size() > 0:
+			_log.info("Hull zone locked during squadron loop.")
+			TooltipManager.show_text(
+					"Hull zone is locked during anti-squadron attacks.",
+					Vector2.INF, 2.0, true)
+			return
 		_log.info("Attacker re-clicked — both deselected.")
 		_attack_sim_deselect_both()
 		return
@@ -2288,6 +2307,21 @@ func _attack_sim_handle_target_squadron_click(token: SquadronToken) -> void:
 			TooltipManager.show_text("Cannot target a friendly squadron.",
 					Vector2.INF, 2.0, true)
 			return
+	# Already-attacked guard (Step 6): each squadron targeted only once.
+	# Requirements: AE-SQ-002.
+	# Rules Reference: "Attack", Step 6, p.2 — "Each enemy squadron can
+	# be targeted only once per attack."
+	if _attack_exec_mode and token in _attack_exec_attacked_squads:
+		var inst_name: String = "Squadron"
+		var sq_inst: SquadronInstance = token.get_squadron_instance()
+		if sq_inst and sq_inst.squadron_data:
+			inst_name = sq_inst.squadron_data.squadron_name
+		_log.info("Attack exec: %s already attacked this activation." \
+				% inst_name)
+		TooltipManager.show_text(
+				"%s has already been attacked." % inst_name,
+				Vector2.INF, 2.0, true)
+		return
 	# New target selected.
 	var inst: SquadronInstance = token.get_squadron_instance()
 	var squad_name: String = "Squadron"
@@ -2922,22 +2956,48 @@ func _attack_exec_show_confirm() -> void:
 
 
 ## Called when the player presses "Confirm" to accept the dice results.
-## Marks the zone as fired and checks for follow-up attacks.
-## Requirements: AE-CONF-002, AE-2HZ-001, AE-2HZ-003, AE-2HZ-004.
+## For ship targets: marks the zone as fired, checks for follow-up attacks.
+## For squadron targets: marks the squadron as attacked, checks for more
+## enemy squadrons in the same arc (Step 6 loop).
+## Requirements: AE-CONF-002, AE-2HZ-001, AE-2HZ-003, AE-2HZ-004,
+## AE-SQ-001, AE-SQ-003, AE-SQ-004.
+## Rules Reference: "Attack", Step 6, p.2 — "Declare Additional Squadron
+## Target": if the attacker is a ship and the defender was a squadron,
+## the attacker can declare another enemy squadron as a defender and
+## repeat steps 2 through 6.
 func _on_attack_confirm() -> void:
 	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
 	_log.info("Attack confirmed: %d damage (damage step deferred)." % damage)
+	# --- Squadron defender: Step 6 loop ---
+	if _attack_sim_def_squad:
+		# Record this squadron as attacked.
+		_attack_exec_attacked_squads.append(_attack_sim_def_squad)
+		# Draw red dot on the squadron's centre.
+		if _attack_sim_overlay:
+			_attack_sim_overlay.add_spent_zone_marker(
+					_attack_sim_def_squad.global_position)
+		# Check for remaining enemy squadrons in the same arc.
+		if _attack_exec_has_more_squad_targets():
+			_attack_exec_prepare_next_squadron()
+			return
+		# No more squadron targets — record zone as fired, move to next HZ.
+		if _attack_sim_atk_zone >= 0:
+			_attack_exec_fired_zones.append(_attack_sim_atk_zone)
+		# Draw red dot on spent zone's LOS position.
+		_attack_exec_mark_spent_zone()
+		_attack_exec_current_attack += 1
+		if _attack_exec_current_attack < 2:
+			_attack_exec_attacked_squads.clear()
+			_attack_exec_prepare_next_attack()
+			return
+		_on_attack_exec_done()
+		return
+	# --- Ship defender: existing two-hull-zone logic ---
 	# Record this zone as fired.
 	if _attack_sim_atk_zone >= 0:
 		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
 	# Draw red dot on spent zone's LOS position.
-	if _attack_sim_overlay and _attack_sim_atk_ship:
-		var los_pts: Dictionary = (
-				_attack_sim_atk_ship.get_los_origins_world())
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_atk_zone, "FRONT")
-		var los_pos: Vector2 = los_pts.get(zone_key, Vector2.ZERO)
-		_attack_sim_overlay.add_spent_zone_marker(los_pos)
+	_attack_exec_mark_spent_zone()
 	_attack_exec_current_attack += 1
 	# Check if second attack is possible (max 2 hull zones per activation).
 	# Rules Reference: "Attack", p.2 — each ship may perform up to two
@@ -2947,6 +3007,103 @@ func _on_attack_confirm() -> void:
 		return
 	# All attacks done — finish.
 	_on_attack_exec_done()
+
+
+## Draws a red dot on the spent hull zone's LOS marker position.
+## Requirements: AE-2HZ-002.
+func _attack_exec_mark_spent_zone() -> void:
+	if _attack_sim_overlay and _attack_sim_atk_ship:
+		var los_pts: Dictionary = (
+				_attack_sim_atk_ship.get_los_origins_world())
+		var zone_key: String = _ZONE_NAMES.get(
+				_attack_sim_atk_zone, "FRONT")
+		var los_pos: Vector2 = los_pts.get(zone_key, Vector2.ZERO)
+		_attack_sim_overlay.add_spent_zone_marker(los_pos)
+
+
+## Checks whether there are more enemy squadrons in the current arc
+## that have not yet been attacked during this hull zone's attack.
+## Requirements: AE-SQ-003.
+## Rules Reference: "Attack", Step 6, p.2 — new defender must be inside
+## the firing arc and at attack range of the same attacking hull zone.
+func _attack_exec_has_more_squad_targets() -> bool:
+	if not _attack_sim_atk_ship or not _attack_exec_ship_token:
+		return false
+	var attacker_faction: int = _attack_exec_ship_token.get_faction()
+	for sq_token: SquadronToken in get_squadron_tokens():
+		# Must be an enemy.
+		if sq_token.get_faction() == attacker_faction:
+			continue
+		# Must not be already attacked.
+		if sq_token in _attack_exec_attacked_squads:
+			continue
+		# Must be in arc.
+		if not _attack_sim_is_squadron_target_in_arc(sq_token):
+			continue
+		# Must be at attack range (not beyond).
+		if not _attack_exec_is_squadron_at_range(sq_token):
+			continue
+		return true
+	return false
+
+
+## Checks whether a squadron is at attack range (close/medium/long)
+## from the current attacker hull zone.
+## Requirements: AE-SQ-003.
+func _attack_exec_is_squadron_at_range(
+		sq_token: SquadronToken) -> bool:
+	var atk_edge: Array[Vector2] = _get_ship_edge(
+			_attack_sim_atk_ship,
+			_attack_sim_atk_zone as Constants.HullZone)
+	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
+			.get_firing_arc_world_points()
+	var range_data: Dictionary = (
+			RangeFinder.measure_attack_range_squadron_endpoints(
+			atk_edge, sq_token.global_position,
+			sq_token.get_radius_px(),
+			_attack_sim_atk_zone as Constants.HullZone,
+			atk_arc_pts))
+	var dist: float = range_data.get("distance", INF)
+	if dist >= INF:
+		return false
+	var band: String = GameScale.get_range_band(dist)
+	return band != Constants.RANGE_BAND_BEYOND
+
+
+## Prepares the board for attacking the next squadron in the same arc.
+## Resets target and dice state but keeps the hull zone locked.
+## Requirements: AE-SQ-004, AE-SQ-005.
+## Rules Reference: "Attack", Step 6, p.2 — "Treat each repetition of
+## steps 2 through 6 as a new attack for the purposes of resolving
+## card effects."
+func _attack_exec_prepare_next_squadron() -> void:
+	_log.info("Preparing next squadron target (Step 6 loop). " \
+			+ "Attacked so far: %d." % _attack_exec_attacked_squads.size())
+	# Reset target and dice state.
+	_attack_sim_clear_target_state()
+	_attack_exec_dice_results.clear()
+	_attack_exec_pool.clear()
+	_attack_exec_range_band = ""
+	# Clean up target visuals, keep spent zone markers.
+	if _attack_sim_overlay:
+		_attack_sim_overlay.clear_target()
+	# Stay in target-selection mode with the hull zone locked.
+	_attack_sim_selecting = false
+	_attack_sim_target_selecting = true
+	# Update panel with "Select next squadron" prompt.
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_dice_count()
+		_attack_sim_panel.hide_dice_results()
+		_attack_sim_panel.hide_confirm_button()
+		_attack_sim_panel.hide_cf_dial_section()
+		_attack_sim_panel.hide_cf_token_section()
+		_attack_sim_panel.hide_roll_button()
+		var ship_name: String = ""
+		if _attack_exec_ship_token.get_ship_data():
+			ship_name = _attack_exec_ship_token.get_ship_data().ship_name
+		_attack_sim_panel.show_select_next_squadron(
+				ship_name, _attack_sim_atk_zone_name)
+		_attack_sim_panel.show_skip_attack_button()
 
 
 ## Prepares the board for a second hull zone attack.
@@ -2960,6 +3117,7 @@ func _attack_exec_prepare_next_attack() -> void:
 	_attack_exec_dice_results.clear()
 	_attack_exec_pool.clear()
 	_attack_exec_range_band = ""
+	_attack_exec_attacked_squads.clear()
 	# Clean up target visuals, keep spent zone markers.
 	if _attack_sim_overlay:
 		_attack_sim_overlay.clear_target()
@@ -2986,8 +3144,27 @@ func _attack_exec_prepare_next_attack() -> void:
 
 
 ## Called when the player presses "Skip Attack".
-## Ends the attack step immediately.
-## Requirements: AE-SKIP-001, AE-SKIP-002.
+## During hull zone selection: ends the attack step immediately.
+## During the Step 6 squadron loop: ends the loop and proceeds to
+## the next hull zone (or finishes if both are done).
+## Requirements: AE-SKIP-001, AE-SKIP-002, AE-SQ-006.
 func _on_attack_skip() -> void:
+	# If we're in the Step 6 squadron loop (attacked ≥1 squadron and
+	# still target-selecting for the next one), treat as "done with
+	# this hull zone's anti-squadron attacks."
+	if _attack_exec_attacked_squads.size() > 0 and \
+			_attack_sim_target_selecting:
+		_log.info("Squadron loop skipped — moving to next hull zone.")
+		# Record this zone as fired.
+		if _attack_sim_atk_zone >= 0:
+			_attack_exec_fired_zones.append(_attack_sim_atk_zone)
+		_attack_exec_mark_spent_zone()
+		_attack_exec_current_attack += 1
+		_attack_exec_attacked_squads.clear()
+		if _attack_exec_current_attack < 2:
+			_attack_exec_prepare_next_attack()
+			return
+		_on_attack_exec_done()
+		return
 	_log.info("Attack skipped by player.")
 	_on_attack_exec_done()

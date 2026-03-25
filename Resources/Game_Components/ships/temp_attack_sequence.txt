@@ -14,7 +14,7 @@ both can be deselected by clicking on the attacking hull zone.
 show the number of attack dice rolled for the attack.
 if the attacker has a command dial active he may spent the dial now to add a dice to the attack pool. prompt "spend dial for extra dice?" followed by  each available dice option. the player may push the option to add the dice.
 in the lower part of the modal show: "roll dice" button.
-If tthe button is pushed, roll the dice and show the graphics of the rolled dice in the modal.
+If the button is pushed, roll the dice and show the graphics of the rolled dice in the modal.
 If the player has a reroll option (through extra rule or command tolken attached to the ship) show a button "reroll dice"
 In any case show a button at the lowest part of the modal that ready "confirm". pushing this button lets the player execute the next attack.
 In case sqadrons are attacked follow these steps for each squadron being attacked from the attacking hull zone (the attacking hull zone is pre selected in this case and cannot be deselected)

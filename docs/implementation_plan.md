@@ -29,6 +29,7 @@
 - [Phase 6a-4: Hull-Zone Edge Polyline Fix (HZ-EDGE-001)](#phase-6a-4-hull-zone-edge-polyline-fix-hz-edge-001)
 - [Phase 6b-1: Attack Execution — Target Selection & Visuals](#phase-6b-1-attack-execution--target-selection--visuals)
 - [Phase 6b-2: Attack Execution — Dice Rolling, Concentrate Fire & Two-Hull-Zone Sequencing](#phase-6b-2-attack-execution--dice-rolling-concentrate-fire--two-hull-zone-sequencing)
+- [Phase 6b-3: Attack Execution — Anti-Squadron Multi-Target Sequencing](#phase-6b-3-attack-execution--anti-squadron-multi-target-sequencing)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -1036,6 +1037,48 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** AE-CF-001–005, AE-CF-010–014, AE-DICE-001–004, AE-CONF-001–002, AE-2HZ-001–005, AE-SKIP-001–003
 **Tests:** 60 scripts, 1105 tests, 2061 asserts (31 new tests)
+
+---
+
+### Phase 6b-3: Attack Execution — Anti-Squadron Multi-Target Sequencing ✅
+**Goal:** After confirming an attack against a squadron, the ship can declare another enemy squadron as a defender from the same hull zone (Rules Reference: "Attack", Step 6). Each attacked squadron is marked with a translucent red dot. The loop repeats the full dice sequence (CF dial → Roll → Reroll → Confirm) per squadron until no more eligible targets remain or the player skips.
+**Prerequisites:** Phase 6b-2 (dice rolling, confirm, two-hull-zone sequencing)
+**Duration estimate:** 0.5 session
+
+#### Requirements
+
+**Anti-Squadron Loop** (Rules Reference: "Attack", Step 6, p.2)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-SQ-001 | Track squadrons already attacked during the current hull zone's anti-squadron loop in `_attack_exec_attacked_squads` | Reset on hull zone change or attack done |
+| AE-SQ-002 | Block re-targeting an already-attacked squadron with tooltip: "{name} has already been attacked." | Guard in `_attack_sim_handle_target_squadron_click()` |
+| AE-SQ-003 | After confirming attack vs squadron, check for remaining enemy squadrons in same arc AND at attack range (not beyond) that have not been attacked | `_attack_exec_has_more_squad_targets()` |
+| AE-SQ-004 | If more targets exist, reset target/dice state, show prompt "Select next squadron in arc, or Skip." — hull zone stays locked, cannot be deselected | `_attack_exec_prepare_next_squadron()` |
+| AE-SQ-005 | For each subsequent squadron target, repeat the full dice sequence: CF dial (if not yet spent) → Roll → CF token reroll (if token available) → Confirm | Each repetition is a new attack per rules ("Treat each repetition of steps 2 through 6 as a new attack for the purposes of resolving card effects.") |
+| AE-SQ-006 | "Skip Attack" during the squadron loop ends the loop and moves to the next hull zone (or finishes if both HZs done) — does NOT end the entire attack step | |
+| AE-SQ-007 | Each confirmed squadron attack draws a translucent red 6px dot on the squadron's base centre via `AttackSimOverlay.add_spent_zone_marker()` | Visual feedback for attacked squadrons |
+| AE-SQ-008 | Hull zone locked during squadron loop: clicking attacker ship shows tooltip "Hull zone is locked during anti-squadron attacks." | Prevents deselection |
+| AE-SQ-009 | When no more eligible squadron targets remain after confirm, record hull zone as fired and proceed to next hull zone selection (or finish) | Same as AE-2HZ-001 flow |
+
+#### Implementation Tasks
+
+| # | Task | Layer | Requirements | Deliverables | Status |
+|---|------|-------|-------------|--------------|--------|
+| 1 | `_attack_exec_attacked_squads` state variable | Orchestration | AE-SQ-001 | New `Array[SquadronToken]` in `game_board.gd` | ✅ |
+| 2 | Already-attacked guard in target click handler | Orchestration | AE-SQ-002 | Guard + tooltip in `_attack_sim_handle_target_squadron_click()` | ✅ |
+| 3 | `_attack_exec_has_more_squad_targets()` — checks arc + range + not-attacked | Orchestration | AE-SQ-003 | New method checks all enemy squadrons | ✅ |
+| 4 | `_attack_exec_is_squadron_at_range()` — range check helper | Orchestration | AE-SQ-003 | Uses `RangeFinder.measure_attack_range_squadron_endpoints()` | ✅ |
+| 5 | Branch `_on_attack_confirm()` for squadron defender | Orchestration | AE-SQ-004, AE-SQ-007, AE-SQ-009 | Red dot on squadron + loop or proceed to next HZ | ✅ |
+| 6 | `_attack_exec_prepare_next_squadron()` — reset for next target | Orchestration | AE-SQ-004, AE-SQ-005 | Resets target/dice, keeps HZ locked, shows prompt | ✅ |
+| 7 | `AttackSimPanel.show_select_next_squadron()` — prompt method | Presentation | AE-SQ-004 | New method showing "Select next squadron in arc, or Skip." | ✅ |
+| 8 | Hull zone lock guard during squadron loop | Orchestration | AE-SQ-008 | Guard in `_attack_sim_handle_target_ship_click()` | ✅ |
+| 9 | Skip Attack during loop ends loop (not full attack step) | Orchestration | AE-SQ-006 | Updated `_on_attack_skip()` to branch for squadron loop | ✅ |
+| 10 | Unit tests — `show_select_next_squadron()` | Tests | — | 2 new tests in `test_attack_sim_panel.gd` | ✅ |
+| 11 | Docs & plan update | Docs | — | This section + `docs/test_plan_manual.md` Phase 6b-3 | ✅ |
+
+**Requirements covered:** AE-SQ-001–009
+**Tests:** 60 scripts, 1107 tests, 2063 asserts (2 new tests)
 
 ---
 

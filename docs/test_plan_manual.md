@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 59 scripts, 1055 tests, 1963 asserts — all passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 60 scripts, 1074 tests, 1989 asserts — all passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -2000,3 +2000,78 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 4 | Press T — targeting list still functional | All entries present, no crashes |
 
 **Pass criteria:** VSD front edge wraps corners correctly; range measurements use arc-derived polylines; targeting list results consistent with visual range lines; no regressions; all GUT tests pass.
+
+---
+
+## Phase 6b-1 — Attack Execution: Target Selection & Visuals
+
+**What this phase adds:** During a ship's activation, the Attack step now has an "Execute Attack ►" button. Pressing it closes the activation modal, shows the range overlay, and enters a target-selection flow. The player selects an attacking hull zone, then a target. LOS markers and LOS line are drawn (no arc lines, no range line). The dice pool is computed by colour and displayed. A "Done" button completes the attack step and re-opens the activation modal.
+
+> **Automated coverage note:** `DicePool` (range filtering, formatting) is fully covered by 19 GUT tests. Manual tests below verify the interactive selection flow, visual correctness, and modal integration.
+
+### MT-6b-1.1 — Execute Attack button appears and works
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship: click it, assign a command, drop the dial | Ship activated, "Show Activation Sequence" button appears |
+| 2 | Click "Show Activation Sequence" | Activation modal opens; Squadron and Repair steps auto-skip |
+| 3 | Modal stops at step 4 (Attack) | "Execute Attack ►" button visible and enabled |
+| 4 | Click "Execute Attack ►" | Modal closes; range overlay appears around the activated ship; info panel appears below ship with prompt "Select attacking hull zone." |
+
+### MT-6b-1.2 — Hull zone selection and target selection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After step 4 above, click a hull zone on the activated ship | Yellow LOS marker appears on the hull zone; no arc boundary lines drawn; panel updates to "Select a target." |
+| 2 | Click a hull zone on an enemy ship | Yellow LOS marker on target; yellow LOS line drawn between attacker and target; panel shows LOS status and range band |
+| 3 | Dice count appears in the panel | Shows colour breakdown (e.g. "Dice: 2 red, 1 blue"); "Done" button visible |
+
+### MT-6b-1.3 — Deselection behaviour
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With both selected, click target again | Target deselected; LOS line disappears; dice count hidden; attacker hull zone and LOS marker remain |
+| 2 | Click a different enemy hull zone | New target selected; LOS line redrawn; dice count updated |
+| 3 | Click the attacker hull zone | Both attacker and target deselected; range overlay restored; panel shows initial prompt |
+
+### MT-6b-1.4 — Faction guard and activation guard
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Try clicking a non-activated friendly ship as attacker | Tooltip: "Only the activated ship can attack." — click rejected |
+| 2 | Try clicking a friendly ship as target | Tooltip: "Cannot target a friendly ship." — click rejected |
+| 3 | Try clicking a friendly squadron as target | Tooltip: "Cannot target a friendly squadron." — click rejected |
+| 4 | Try clicking a squadron as attacker | Tooltip: "Select a hull zone on the activated ship." — click rejected |
+
+### MT-6b-1.5 — Attack vs squadron shows anti-squadron armament
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a hull zone on the activated ship | Attacker selected |
+| 2 | Click an enemy squadron | Target marker appears; LOS line drawn; dice count shows anti-squadron armament (e.g. "1 blue") |
+
+### MT-6b-1.6 — Done button and Escape behaviour
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | With target selected, click "Done" | Attack visuals dismissed; activation modal re-opens at Maneuver step; Attack step shows checkmark |
+| 2 | Alternatively: press Escape during target selection | Attack cancelled; activation modal re-opens at Attack step (not advanced) |
+
+### MT-6b-1.7 — No visual differences: no arc lines, no range line
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select hull zone + target during attack execution | Only LOS markers and LOS line visible — NO arc boundary lines extending from the hull zone, NO range measurement line |
+| 2 | Dismiss and use attack simulator (A key) with same ship | Arc boundary lines AND range line now visible (simulator mode unchanged) |
+
+### MT-6b-1.8 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 60 scripts, 1074 tests, 1989 asserts, 0 new failures |
+| 2 | Verify attack simulator (A key) still works | All simulator visuals and behaviour unchanged |
+| 3 | Verify maneuver step still works | Execute Maneuver button appears and functions correctly |
+| 4 | Verify M, R, T toolbar buttons still work | No interference |
+| 5 | Escape cancels at any point | Clean dismiss, no orphaned visuals |
+
+**Pass criteria:** Execute Attack button appears at Attack step; hull zone selection shows only LOS markers (no arc lines); target selection shows LOS line + dice count; faction guards reject friendly targets; "Done" completes attack step; Escape cancels; attack simulator unaffected; all GUT tests pass.

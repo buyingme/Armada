@@ -27,6 +27,7 @@
 - [Phase 6a: Attack Simulator — Attacker Declaration](#phase-6a-attack-simulator--attacker-declaration)
 - [Phase 6a-3: Attack Simulator — Same-Ship Guard, Arc Validation & Range Line](#phase-6a-3-attack-simulator--same-ship-guard-arc-validation--range-line)
 - [Phase 6a-4: Hull-Zone Edge Polyline Fix (HZ-EDGE-001)](#phase-6a-4-hull-zone-edge-polyline-fix-hz-edge-001)
+- [Phase 6b-1: Attack Execution — Target Selection & Visuals](#phase-6b-1-attack-execution--target-selection--visuals)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -931,6 +932,25 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** HZ-EDGE-001, TL-ARC-005b
 **Tests:** 1055 (59 scripts, 1963 asserts) — 10 new tests
+
+---
+
+### Phase 6b-1: Attack Execution — Target Selection & Visuals ✅
+**Goal:** Add an "Execute Attack ►" button in the activation modal's Attack step. Pressing it closes the modal, shows the range overlay for the activated ship, and enters a target-selection flow that reuses the attack simulator infrastructure. Visual differences from the simulator: no arc lines, no range line — only LOS markers and LOS line. After target selection, the dice pool (by colour, filtered by range) is displayed. A "Done" button completes the attack step and re-opens the activation modal at the Maneuver step. Only the activated ship's hull zones can be the attacker; only enemy units can be targets.
+**Prerequisites:** Phase 6a-4 (attack sim overlay, panel, LOS, range, arc validation)
+
+| # | Task | Layer | Requirements | Deliverables | Status |
+|---|------|-------|-------------|--------------|--------|
+| 1 | `DicePool` — range-filtered dice pool computation | Core | AE-PNL-002 | `src/core/dice_pool.gd` — static methods: `get_attack_pool()`, `format_pool()` | ✅ |
+| 2 | `DicePool` unit tests | Tests | — | `tests/unit/test_dice_pool.gd` — 19 tests covering range filtering, formatting, edge cases | ✅ |
+| 3 | `AttackSimOverlay.attack_execution_mode` | Presentation | AE-VIS-001 | Suppress arc lines + range line when mode active; LOS markers/line still drawn | ✅ |
+| 4 | `AttackSimPanel` — dice count + Done button | Presentation | AE-PNL-001–003 | `show_dice_count()`, `hide_dice_count()`, `show_initial_attack_exec()`, `attack_done_pressed` signal | ✅ |
+| 5 | `ActivationModal` — Execute Attack button | Presentation | AE-ACT-001 | Remove ATTACK from placeholders, add button + `attack_step_entered` signal | ✅ |
+| 6 | `game_board.gd` — attack execution flow | Orchestration | AE-FLOW-001–005, AE-TGT-001 | `_on_attack_step_entered()`, `_on_attack_exec_done()`, mode flag, faction guards, Escape cancel | ✅ |
+| 7 | Docs & implementation plan update | Docs | — | This section + `docs/test_plan_manual.md` Phase 6b-1 | ✅ |
+
+**Requirements covered:** AE-ACT-001, AE-VIS-001, AE-PNL-001–003, AE-FLOW-001–005, AE-TGT-001
+**Tests:** 1074 (60 scripts, 1989 asserts) — 19 new tests
 
 ---
 

@@ -2,7 +2,8 @@
 ##
 ## Centred panel that guides the player through the five sub-steps
 ## of a ship's activation: Reveal → Squadron → Repair → Attack → Maneuver.
-## Steps 2–4 show "Not yet implemented" badges in Phase 5b.
+## Steps 2–3 show "Not yet implemented" badges (placeholder).
+## Step 4 (Attack) shows an actionable "Execute Attack" button.
 ## Step 5 (Execute Maneuver) shows an actionable "Execute" button.
 ##
 ## Styled identically to CommandDialPicker / CommandDialOrderModal
@@ -13,7 +14,7 @@
 ## can re-open it via "Show Activation Sequence".
 ##
 ## Rules Reference: RRG "Ship Activation" p.16, "Commands" p.3.
-## Requirements: ACT-001–004, ACT-007, AC-5b-01–02, AC-5b-14.
+## Requirements: ACT-001–004, ACT-007, AC-5b-01–02, AC-5b-14, AE-ACT-001.
 class_name ActivationModal
 extends PanelContainer
 
@@ -23,6 +24,10 @@ signal maneuver_step_entered()
 
 ## Emitted when the player clicks "Commit ►" — snaps ship to final position.
 signal maneuver_commit_requested()
+
+## Emitted when the player clicks "Execute Attack ►" — starts attack flow.
+## Requirements: AE-ACT-001.
+signal attack_step_entered()
 
 ## Emitted when the modal wants to auto-skip to maneuver (all placeholders done).
 signal ready_for_maneuver()
@@ -42,8 +47,8 @@ const STEP_NAMES: Array[String] = [
 	"5. Execute Maneuver",
 ]
 
-## Which steps are placeholders (not yet implemented) in Phase 5b.
-const PLACEHOLDER_STEPS: Array[int] = [1, 2, 3]  ## indices into STEP_NAMES
+## Which steps are placeholders (not yet implemented).
+const PLACEHOLDER_STEPS: Array[int] = [1, 2]  ## indices into STEP_NAMES
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ActivationModal")
@@ -68,6 +73,10 @@ var _token_label: Label = null
 
 ## "Execute" button inside the maneuver step row.
 var _execute_button: Button = null
+
+## "Execute Attack" button inside the attack step row.
+## Requirements: AE-ACT-001.
+var _attack_button: Button = null
 
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
@@ -267,6 +276,15 @@ func _create_step_row(step_index: int) -> PanelContainer:
 		_execute_button.pressed.connect(_on_execute_pressed)
 		hbox.add_child(_execute_button)
 
+	# For step 4 (Attack): add "Execute Attack" button.
+	if step_index == 3:
+		_attack_button = Button.new()
+		_attack_button.text = "Execute Attack ►"
+		_attack_button.custom_minimum_size = Vector2(130, 28)
+		_attack_button.visible = false
+		_attack_button.pressed.connect(_on_attack_pressed)
+		hbox.add_child(_attack_button)
+
 	# Status label (shows badge or checkmark).
 	var status: Label = Label.new()
 	status.name = "StatusLabel"
@@ -286,6 +304,7 @@ func _clear_ui() -> void:
 	_command_label = null
 	_token_label = null
 	_execute_button = null
+	_attack_button = null
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +347,12 @@ func _update_step_display() -> void:
 			if i in PLACEHOLDER_STEPS:
 				status_label.text = "Not yet implemented"
 				status_label.modulate = Color(0.9, 0.7, 0.3)
+			elif i == 3:
+				# Attack step — show the Execute Attack button.
+				status_label.text = ""
+				if _attack_button:
+					_attack_button.visible = true
+					_attack_button.disabled = false
 			elif i == 4:
 				# Execute Maneuver step — show the action button.
 				status_label.text = ""
@@ -350,6 +375,8 @@ func _update_step_display() -> void:
 			row.modulate = Color(0.5, 0.5, 0.5)
 			if i == 4 and _execute_button:
 				_execute_button.visible = false
+			if i == 3 and _attack_button:
+				_attack_button.visible = false
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -422,6 +449,17 @@ func _on_execute_pressed() -> void:
 		modal_closed.emit()
 
 
+## Called when the "Execute Attack ►" button is pressed.
+## Emits [signal attack_step_entered] and closes the modal so the player
+## can interact with the board.
+## Requirements: AE-ACT-001.
+func _on_attack_pressed() -> void:
+	_log.info("Execute Attack pressed — starting attack flow.")
+	attack_step_entered.emit()
+	close()
+	modal_closed.emit()
+
+
 ## Called when the "✕ Close" button is pressed.
 func _on_close_pressed() -> void:
 	close()
@@ -446,10 +484,9 @@ func _try_auto_skip_next() -> void:
 	if not _auto_skipping or _activation_state == null:
 		return
 	var current: int = int(_activation_state.get_current_step())
-	# Steps 1,2,3 (SQUADRON, REPAIR, ATTACK) are placeholders.
+	# Steps 1, 2 (SQUADRON, REPAIR) are placeholders — auto-skip them.
 	if current in [ShipActivationState.Step.SQUADRON,
-			ShipActivationState.Step.REPAIR,
-			ShipActivationState.Step.ATTACK]:
+			ShipActivationState.Step.REPAIR]:
 		_update_step_display()
 		# Use a short delay via a timer (0.3s) for visual feedback.
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
@@ -457,7 +494,10 @@ func _try_auto_skip_next() -> void:
 	else:
 		_auto_skipping = false
 		_update_step_display()
-		if current == ShipActivationState.Step.MANEUVER:
+		if current == ShipActivationState.Step.ATTACK:
+			_log.info("Auto-skip complete — attack step active. " +
+					"Player must press Execute Attack.")
+		elif current == ShipActivationState.Step.MANEUVER:
 			_log.info("Auto-skip complete — maneuver step active. " +
 					"Player must press Execute.")
 

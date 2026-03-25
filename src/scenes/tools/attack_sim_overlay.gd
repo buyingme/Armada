@@ -84,6 +84,12 @@ const RANGE_LINE_WIDTH: float = 2.0
 ## LOS status enum for setup_los_line().
 enum LOSStatus { CLEAR, OBSTRUCTED, BLOCKED }
 
+## When true, suppresses firing arc boundary lines and range measurement
+## line.  LOS markers and LOS line are still drawn.  Used during the real
+## attack execution step (as opposed to the free-form attack simulator).
+## Requirements: AE-VIS-001.
+var attack_execution_mode: bool = false
+
 ## Play area side length — lines are clipped to this boundary.
 var _play_area_side: float = 0.0
 
@@ -151,18 +157,22 @@ func setup_hull_zone(inner_left: Vector2, outer_left: Vector2,
 	_play_area_side = GameScale.play_area_side_px
 	_draw_hull_zone = true
 	_draw_squadron = false
-	# Arc boundary left line: inner → outer, extended to play area edge.
-	_arc_line_left_start = inner_left
-	_arc_line_left_end = _extend_to_boundary(inner_left, outer_left)
-	# Arc boundary right line: inner → outer, extended to play area edge.
-	_arc_line_right_start = inner_right
-	_arc_line_right_end = _extend_to_boundary(inner_right, outer_right)
+	# Arc boundary lines — suppressed in attack execution mode (AE-VIS-001).
+	if not attack_execution_mode:
+		_arc_line_left_start = inner_left
+		_arc_line_left_end = _extend_to_boundary(inner_left, outer_left)
+		_arc_line_right_start = inner_right
+		_arc_line_right_end = _extend_to_boundary(inner_right, outer_right)
 	# LOS marker.
 	_los_position = los_pos
-	_log.debug("Hull zone overlay set up. Arc lines: L(%s → %s), R(%s → %s), LOS: %s" % [
-			_arc_line_left_start, _arc_line_left_end,
-			_arc_line_right_start, _arc_line_right_end,
-			_los_position])
+	if attack_execution_mode:
+		_log.debug("Hull zone overlay set up (exec mode). LOS: %s" % [
+				_los_position])
+	else:
+		_log.debug("Hull zone overlay set up. Arc lines: L(%s → %s), R(%s → %s), LOS: %s" % [
+				_arc_line_left_start, _arc_line_left_end,
+				_arc_line_right_start, _arc_line_right_end,
+				_los_position])
 	queue_redraw()
 
 
@@ -249,6 +259,9 @@ func setup_los_line(start_pos: Vector2, end_pos: Vector2,
 ## Requirements: AS-RNG-010, AS-RNG-012.
 func setup_range_line(start_pos: Vector2, end_pos: Vector2,
 		range_band: String) -> void:
+	# Range line suppressed in attack execution mode (AE-VIS-001).
+	if attack_execution_mode:
+		return
 	_range_line_start = start_pos
 	_range_line_end = end_pos
 	_draw_range_line = true
@@ -268,7 +281,8 @@ func setup_range_line(start_pos: Vector2, end_pos: Vector2,
 
 func _draw() -> void:
 	if _draw_hull_zone:
-		_draw_arc_lines()
+		if not attack_execution_mode:
+			_draw_arc_lines()
 		_draw_los_marker()
 	if _draw_squadron:
 		_draw_close_range_circle()

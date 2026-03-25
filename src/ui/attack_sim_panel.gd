@@ -1,18 +1,25 @@
 ## AttackSimPanel
 ##
-## Screen-space info panel for the Attack Simulator.
-## Shows step-by-step prompts guiding the player through the attack sequence.
+## Screen-space info panel for the Attack Simulator and the real attack
+## execution step.  Shows step-by-step prompts guiding the player through
+## the attack sequence.
 ## Phase 6a: attacker declaration.  Phase 6a-2: target selection + LOS result.
 ## Phase 6a-3: range band display alongside LOS result.
+## Phase 6b-1: dice count display and "Done" button for attack execution.
 ##
 ## Built as a PanelContainer following the project's standard modal styling.
 ## Dismissed by Escape, re-pressing "A", or programmatically via [method close].
 ##
-## Requirements: AS-PNL-001–003, AS-PNL-010–011, AS-RNG-014.
+## Requirements: AS-PNL-001–003, AS-PNL-010–011, AS-RNG-014, AE-PNL-001–003.
 ## Rules Reference: "Attack", Step 1, p.2; "Line of Sight", p.10;
 ## "Attack Range", p.3.
 class_name AttackSimPanel
 extends PanelContainer
+
+
+## Emitted when the player presses the "Done" button to finish the attack step.
+## Requirements: AE-PNL-003.
+signal attack_done_pressed()
 
 
 ## Logger.
@@ -26,6 +33,17 @@ var _body_label: Label = null
 
 ## The VBox holding all content.
 var _content: VBoxContainer = null
+
+## Dice count label — visible only in attack execution mode.
+## Requirements: AE-PNL-001.
+var _dice_count_label: Label = null
+
+## "Done" button — visible only in attack execution mode.
+## Requirements: AE-PNL-003.
+var _done_button: Button = null
+
+## Whether this panel is in attack execution mode (shows dice count + Done).
+var _attack_execution_mode: bool = false
 
 ## Initial prompt shown when the panel first appears.
 ## Requirements: AS-PNL-002.
@@ -42,6 +60,16 @@ func _init() -> void:
 func show_initial() -> void:
 	_build_ui()
 	_set_prompt("Attack Simulator", INITIAL_PROMPT)
+	visible = true
+
+
+## Builds the panel UI in attack execution mode with initial hull zone prompt.
+## Requirements: AE-PNL-001.
+func show_initial_attack_exec(ship_name: String) -> void:
+	_attack_execution_mode = true
+	_build_ui()
+	_set_prompt("%s — Attack" % ship_name,
+			"Select attacking hull zone.")
 	visible = true
 
 
@@ -91,10 +119,37 @@ func show_target_selected(atk_name: String, atk_zone: String,
 	_set_prompt(title, body)
 
 
+## Shows the dice pool count label.  Only effective in attack execution mode.
+## [param dice_text] — formatted string like "2 red, 1 blue".
+## Requirements: AE-PNL-002.
+func show_dice_count(dice_text: String) -> void:
+	if _dice_count_label:
+		_dice_count_label.text = "Dice: %s" % dice_text
+		_dice_count_label.visible = true
+	if _done_button:
+		_done_button.visible = true
+
+
+## Hides the dice count label and Done button (e.g. when target is deselected).
+func hide_dice_count() -> void:
+	if _dice_count_label:
+		_dice_count_label.visible = false
+	if _done_button:
+		_done_button.visible = false
+
+
+## Returns the current dice count text (for testing).
+func get_dice_count_text() -> String:
+	if _dice_count_label:
+		return _dice_count_label.text
+	return ""
+
+
 ## Hides and clears the panel.
 ## Requirements: AS-PNL-003.
 func close() -> void:
 	visible = false
+	_attack_execution_mode = false
 	_clear_content()
 
 
@@ -162,6 +217,22 @@ func _build_ui() -> void:
 	_body_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_content.add_child(_body_label)
+	# Dice count label (attack execution mode only, hidden initially).
+	_dice_count_label = Label.new()
+	_dice_count_label.add_theme_font_size_override("font_size", 14)
+	_dice_count_label.add_theme_color_override("font_color",
+			Color(0.6, 0.85, 1.0))
+	_dice_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_dice_count_label.visible = false
+	_content.add_child(_dice_count_label)
+	# Done button (attack execution mode only, hidden initially).
+	_done_button = Button.new()
+	_done_button.text = "Done"
+	_done_button.custom_minimum_size = Vector2(80.0, 32.0)
+	_done_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_done_button.visible = false
+	_done_button.pressed.connect(_on_done_pressed)
+	_content.add_child(_done_button)
 
 
 ## Updates the title and body text.
@@ -179,3 +250,10 @@ func _clear_content() -> void:
 		_content = null
 		_title_label = null
 		_body_label = null
+		_dice_count_label = null
+		_done_button = null
+
+
+## Called when the Done button is pressed.
+func _on_done_pressed() -> void:
+	attack_done_pressed.emit()

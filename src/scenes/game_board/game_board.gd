@@ -172,6 +172,20 @@ var _attack_sim_def_name: String = ""
 ## Target zone display name (empty for squadrons).
 var _attack_sim_def_zone_name: String = ""
 
+## --- Attack execution state (Phase 6b-1) ---
+
+## Whether the current attack sim session is an actual attack execution
+## (from the activation modal) rather than the free-form simulator.
+## When true, only the activated ship can be the attacker and only enemy
+## units can be targets; arc lines and range line are suppressed.
+## Requirements: AE-FLOW-001.
+var _attack_exec_mode: bool = false
+
+## The ShipToken being activated, whose hull zones are the only valid
+## attacker choices during attack execution.
+## Requirements: AE-FLOW-002.
+var _attack_exec_ship_token: ShipToken = null
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -857,6 +871,8 @@ func _create_turn_management_ui() -> void:
 			_on_maneuver_step_entered)
 	_activation_modal.maneuver_commit_requested.connect(
 			_on_execute_maneuver)
+	_activation_modal.attack_step_entered.connect(
+			_on_attack_step_entered)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
@@ -1410,6 +1426,72 @@ func _on_activation_modal_closed() -> void:
 		_show_activation_button.update_position(vp_size)
 
 
+## Called when the player presses "Execute Attack ►" in the activation modal.
+## Sets up the attack execution flow: shows the range overlay for the
+## activated ship, opens the info panel, and enters hull-zone selection mode.
+## Requirements: AE-FLOW-001, AE-ACT-001.
+func _on_attack_step_entered() -> void:
+	_log.info("Attack step entered — starting attack execution flow.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		_log.info("Cannot start attack — no activation state or token.")
+		return
+	# Dismiss any other active tool first.
+	_dismiss_range_overlay()
+	_dismiss_targeting_list()
+	_dismiss_maneuver_tool()
+	_dismiss_attack_sim()
+	# Set attack execution mode.
+	_attack_exec_mode = true
+	_attack_exec_ship_token = _activating_ship_token
+	_attack_sim_selecting = true
+	# Create the info panel on a CanvasLayer.
+	if _attack_sim_panel == null:
+		_attack_sim_panel = AttackSimPanel.new()
+		var layer: CanvasLayer = CanvasLayer.new()
+		layer.name = "AttackSimPanelLayer"
+		layer.layer = 90
+		add_child(layer)
+		layer.add_child(_attack_sim_panel)
+	# Connect Done button if not already connected.
+	if not _attack_sim_panel.attack_done_pressed.is_connected(
+			_on_attack_exec_done):
+		_attack_sim_panel.attack_done_pressed.connect(
+				_on_attack_exec_done)
+	var ship_name: String = ""
+	if _attack_exec_ship_token.get_ship_data():
+		ship_name = _attack_exec_ship_token.get_ship_data().ship_name
+	_attack_sim_panel.show_initial_attack_exec(ship_name)
+	# Show range overlay for the activated ship.
+	if _attack_sim_range_overlay:
+		_attack_sim_range_overlay.queue_free()
+		_attack_sim_range_overlay = null
+	_attack_sim_range_overlay = RangeOverlayScene.new()
+	_attack_sim_range_overlay.name = "AttackExecRangeOverlay"
+	_token_container.add_child(_attack_sim_range_overlay)
+	_token_container.move_child(_attack_sim_range_overlay, 0)
+	_attack_sim_range_overlay.setup(_attack_exec_ship_token)
+	_log.info("Attack execution: range overlay shown, awaiting hull zone.")
+
+
+## Called when the player presses "Done" on the attack execution panel.
+## Completes the Attack step and re-opens the activation modal.
+## Requirements: AE-FLOW-003.
+func _on_attack_exec_done() -> void:
+	_log.info("Attack execution done — completing attack step.")
+	# Dismiss all attack visuals.
+	_dismiss_attack_sim()
+	_attack_exec_mode = false
+	_attack_exec_ship_token = null
+	# Advance the activation state past ATTACK → MANEUVER.
+	if _ship_activation_state:
+		_ship_activation_state.advance_step()
+	# Re-open the activation modal.
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.centre_on_screen(vp_size)
+
+
 ## Called when the player presses "Show Activation Sequence".
 ## Opens the activation modal and starts the step sequence.
 ## Requirements: ACT-001, ACT-007.
@@ -1892,8 +1974,12 @@ const _ZONE_NAMES: Dictionary = {
 ## Handles the "Attack Simulator" button/key press.
 ## Toggle behaviour: if already active, dismiss. Otherwise activate
 ## and dismiss any other active tool first.
-## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005.
+## Blocked during attack execution mode (use the activation modal instead).
+## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005, AE-FLOW-005.
 func _on_attack_simulator_requested() -> void:
+	# Block simulator toggle during attack execution.
+	if _attack_exec_mode:
+		return
 	if _attack_sim_selecting or _attack_sim_target_selecting \
 			or (_attack_sim_panel and _attack_sim_panel.visible):
 		_dismiss_attack_sim()
@@ -1944,8 +2030,14 @@ func _dismiss_attack_sim() -> void:
 
 ## Handles a ship token click during attacker selection.
 ## Determines the hull zone from the click position and sets up visual aids.
-## Requirements: AS-SEL-001, AS-SEL-002.
+## Requirements: AS-SEL-001, AS-SEL-002, AE-FLOW-002.
 func _attack_sim_handle_ship_click(token: ShipToken) -> void:
+	# Attack execution guard: only activated ship allowed as attacker.
+	if _attack_exec_mode and token != _attack_exec_ship_token:
+		_log.info("Attack exec: non-activated ship rejected as attacker.")
+		TooltipManager.show_text("Only the activated ship can attack.",
+				Vector2.INF, 2.0, true)
+		return
 	# Determine hull zone from click position.
 	var click_pos: Vector2 = token.get_global_mouse_position()
 	var zone: int = token.get_hull_zone_at(click_pos)
@@ -2007,14 +2099,21 @@ func _attack_sim_show_hull_zone_visuals(token: ShipToken,
 	var los_pos: Vector2 = los_pts.get(zone_name, Vector2.ZERO)
 	_attack_sim_overlay = AttackSimOverlay.new()
 	_attack_sim_overlay.name = "AttackSimOverlay"
+	_attack_sim_overlay.attack_execution_mode = _attack_exec_mode
 	_token_container.add_child(_attack_sim_overlay)
 	_attack_sim_overlay.setup_hull_zone(inner_a, outer_a, inner_b, outer_b,
 			los_pos)
 
 
 ## Handles a squadron token click during attacker selection.
-## Requirements: AS-SEL-010, AS-SEL-011.
+## Requirements: AS-SEL-010, AS-SEL-011, AE-FLOW-002.
 func _attack_sim_handle_squadron_click(token: SquadronToken) -> void:
+	# Attack execution guard: only the activated ship's hull zones may attack.
+	if _attack_exec_mode:
+		_log.info("Attack exec: squadron cannot be attacker.")
+		TooltipManager.show_text("Select a hull zone on the activated ship.",
+				Vector2.INF, 2.0, true)
+		return
 	var inst: SquadronInstance = token.get_squadron_instance()
 	var squad_name: String = "Squadron"
 	if inst and inst.squadron_data:
@@ -2060,7 +2159,8 @@ func _attack_sim_show_squadron_visuals(token: SquadronToken) -> void:
 ## Handles a ship token click during target selection.
 ## Checks for deselection (same attacker hull zone), same-ship guard,
 ## arc containment, or sets the target.
-## Requirements: AS-TGT-001–003, AS-TGT-020–021, AS-TGT-030, AS-ARC-001.
+## Requirements: AS-TGT-001–003, AS-TGT-020–021, AS-TGT-030, AS-ARC-001,
+## AE-TGT-001.
 func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 	var click_pos: Vector2 = token.get_global_mouse_position()
 	var zone: int = token.get_hull_zone_at(click_pos)
@@ -2083,6 +2183,13 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 		TooltipManager.show_text("Cannot target the same ship.",
 				Vector2.INF, 2.0, true)
 		return
+	# Faction guard: in attack execution mode, only enemy ships (AE-TGT-001).
+	if _attack_exec_mode and _attack_exec_ship_token:
+		if token.get_faction() == _attack_exec_ship_token.get_faction():
+			_log.info("Attack exec: same-faction target rejected.")
+			TooltipManager.show_text("Cannot target a friendly ship.",
+					Vector2.INF, 2.0, true)
+			return
 	# Arc check for ship attacker → ship target (AS-ARC-001).
 	if _attack_sim_atk_ship:
 		if not _attack_sim_is_ship_target_in_arc(token, zone):
@@ -2129,6 +2236,13 @@ func _attack_sim_handle_target_squadron_click(token: SquadronToken) -> void:
 			TooltipManager.show_text("Defender is not in arc.",
 					Vector2.INF, 2.0, true)
 			return
+	# Faction guard: in attack execution mode, only enemy squadrons.
+	if _attack_exec_mode and _attack_exec_ship_token:
+		if token.get_faction() == _attack_exec_ship_token.get_faction():
+			_log.info("Attack exec: same-faction squadron rejected.")
+			TooltipManager.show_text("Cannot target a friendly squadron.",
+					Vector2.INF, 2.0, true)
+			return
 	# New target selected.
 	var inst: SquadronInstance = token.get_squadron_instance()
 	var squad_name: String = "Squadron"
@@ -2153,6 +2267,9 @@ func _attack_sim_deselect_target() -> void:
 	# Remove target visuals from overlay (keep attacker visuals).
 	if _attack_sim_overlay:
 		_attack_sim_overlay.clear_target()
+	# Hide dice count when target is deselected.
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_dice_count()
 	# Restore "Select a target" prompt.
 	if _attack_sim_panel:
 		if _attack_sim_atk_zone_name != "":
@@ -2178,7 +2295,20 @@ func _attack_sim_deselect_both() -> void:
 		_attack_sim_range_overlay = null
 	# Show initial prompt.
 	if _attack_sim_panel:
-		_attack_sim_panel.show_initial()
+		_attack_sim_panel.hide_dice_count()
+		if _attack_exec_mode and _attack_exec_ship_token:
+			# Restore range overlay for activated ship.
+			_attack_sim_range_overlay = RangeOverlayScene.new()
+			_attack_sim_range_overlay.name = "AttackExecRangeOverlay"
+			_token_container.add_child(_attack_sim_range_overlay)
+			_token_container.move_child(_attack_sim_range_overlay, 0)
+			_attack_sim_range_overlay.setup(_attack_exec_ship_token)
+			var ship_name: String = ""
+			if _attack_exec_ship_token.get_ship_data():
+				ship_name = _attack_exec_ship_token.get_ship_data().ship_name
+			_attack_sim_panel.show_initial_attack_exec(ship_name)
+		else:
+			_attack_sim_panel.show_initial()
 
 
 ## Clears stored attacker state.
@@ -2246,6 +2376,34 @@ func _attack_sim_compute_and_show_los() -> void:
 				_attack_sim_atk_name, _attack_sim_atk_zone_name,
 				_attack_sim_def_name, _attack_sim_def_zone_name,
 				los_text, range_band)
+	# In attack execution mode, compute and display the dice pool.
+	if _attack_exec_mode and _attack_sim_panel:
+		var dice_text: String = _compute_attack_dice_text(range_band)
+		_attack_sim_panel.show_dice_count(dice_text)
+		_log.info("Dice pool: %s." % dice_text)
+
+
+## Computes the dice pool text for the current attacker/target pair at the
+## given [param range_band].  Uses the ship's battery armament for the
+## selected hull zone, or anti-squadron armament when targeting a squadron.
+## Requirements: AE-PNL-002.
+## Rules Reference: "Attack", Step 2, p.2.
+func _compute_attack_dice_text(range_band: String) -> String:
+	if _attack_sim_atk_ship == null:
+		return "0 dice"
+	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
+	if ship_data == null:
+		return "0 dice"
+	var armament: Dictionary = {}
+	if _attack_sim_def_squad:
+		# Ship attacking squadron: use anti-squadron armament.
+		armament = ship_data.anti_squadron_armament
+	else:
+		# Ship attacking ship: use battery armament for the selected zone.
+		var zone_key: String = _ZONE_NAMES.get(
+				_attack_sim_atk_zone, "FRONT")
+		armament = ship_data.battery_armament.get(zone_key, {})
+	return DicePool.format_attack_pool(armament, range_band)
 
 
 ## Computes the LOS line endpoints for the current attacker/target pair.
@@ -2469,7 +2627,8 @@ func _attack_sim_compute_range_endpoints() -> Dictionary:
 
 ## Checks if an Escape key press should dismiss the attack simulator.
 ## Returns true if the event was consumed.
-## Requirements: AS-ACT-003, AS-TGT-022.
+## In attack execution mode, cancels back to the activation modal.
+## Requirements: AS-ACT-003, AS-TGT-022, AE-FLOW-004.
 func _handle_attack_sim_escape(event: InputEvent) -> bool:
 	if not event is InputEventKey:
 		return false
@@ -2478,7 +2637,16 @@ func _handle_attack_sim_escape(event: InputEvent) -> bool:
 		return false
 	if _attack_sim_selecting or _attack_sim_target_selecting \
 			or (_attack_sim_panel and _attack_sim_panel.visible):
+		var was_exec: bool = _attack_exec_mode
 		_dismiss_attack_sim()
+		if was_exec:
+			# Return to activation modal without completing the attack step.
+			_attack_exec_mode = false
+			_attack_exec_ship_token = null
+			if _activation_modal and _ship_activation_state:
+				_activation_modal.open(_ship_activation_state)
+				var vp_size: Vector2 = get_viewport().get_visible_rect().size
+				_activation_modal.centre_on_screen(vp_size)
 		get_viewport().set_input_as_handled()
 		return true
 	return false

@@ -289,7 +289,7 @@ func get_label_local_position(key: String) -> Vector2:
 	return _base_offset_to_local(_ship_data.token_label_offsets[key])
 
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if _is_point_in_base(get_global_mouse_position()):

@@ -2224,6 +2224,15 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 	if zone < 0:
 		_log.debug("Target click outside ship base — ignored.")
 		return
+	# Dice-phase guard: once the dice sequence has started (pool computed),
+	# only allow deselecting the current target. Ignore all other clicks
+	# to prevent spurious "not in arc" errors.
+	if _attack_exec_mode and _attack_exec_pool.size() > 0:
+		if _attack_sim_def_ship == token and _attack_sim_def_zone == zone:
+			_log.info("Target deselected during dice phase — resetting.")
+			_attack_exec_reset_dice_ui()
+			_attack_sim_deselect_target()
+		return
 	# Check: clicking the attacker hull zone → deselect both (AS-TGT-021).
 	# But NOT during the Step 6 squadron loop — hull zone is locked.
 	if _attack_sim_atk_ship == token and _attack_sim_atk_zone == zone:
@@ -2282,6 +2291,15 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 ## or sets the target.
 ## Requirements: AS-TGT-010–012, AS-TGT-020–021, AS-ARC-001–002.
 func _attack_sim_handle_target_squadron_click(token: SquadronToken) -> void:
+	# Dice-phase guard: once the dice sequence has started (pool computed),
+	# only allow deselecting the current target. Ignore all other clicks
+	# to prevent spurious "not in arc" errors.
+	if _attack_exec_mode and _attack_exec_pool.size() > 0:
+		if _attack_sim_def_squad == token:
+			_log.info("Target deselected during dice phase — resetting.")
+			_attack_exec_reset_dice_ui()
+			_attack_sim_deselect_target()
+		return
 	# Check: clicking the attacker squadron → deselect both (AS-TGT-021).
 	if _attack_sim_atk_squad == token:
 		_log.info("Attacker re-clicked — both deselected.")
@@ -2336,6 +2354,23 @@ func _attack_sim_handle_target_squadron_click(token: SquadronToken) -> void:
 	_attack_sim_def_zone_name = ""
 	# Compute and display LOS + range.
 	_attack_sim_compute_and_show_los()
+
+
+## Resets all dice-sequence UI elements and internal dice state.
+## Called when deselecting a target during the dice phase so the
+## panel returns cleanly to target-selection mode.
+func _attack_exec_reset_dice_ui() -> void:
+	_attack_exec_pool.clear()
+	_attack_exec_dice_results.clear()
+	_attack_exec_range_band = ""
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_dice_count()
+		_attack_sim_panel.hide_dice_results()
+		_attack_sim_panel.hide_cf_dial_section()
+		_attack_sim_panel.hide_cf_token_section()
+		_attack_sim_panel.hide_roll_button()
+		_attack_sim_panel.hide_confirm_button()
+		_attack_sim_panel.hide_skip_attack_button()
 
 
 ## Deselects the target only; returns to "Select a target" prompt.
@@ -2458,9 +2493,6 @@ func _attack_sim_compute_and_show_los() -> void:
 	# In attack execution mode, compute and display the dice pool, then
 	# begin the attack sequence (CF dial → Roll → Reroll → Confirm).
 	if _attack_exec_mode and _attack_sim_panel:
-		# Lock target selection — clicks during the dice sequence must not
-		# be routed through target-selection handlers.
-		_attack_sim_target_selecting = false
 		_attack_exec_range_band = range_band
 		var dice_text: String = _compute_attack_dice_text(range_band)
 		_attack_sim_panel.show_dice_count(dice_text)

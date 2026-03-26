@@ -3083,9 +3083,6 @@ func _on_attack_confirm() -> void:
 	_attack_exec_start_accuracy()
 
 
-	_attack_exec_start_accuracy()
-
-
 # =========================================================================
 # Phase 6c-1 — Accuracy Spending (Step 3)
 # =========================================================================

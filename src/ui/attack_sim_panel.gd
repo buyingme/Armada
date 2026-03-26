@@ -52,6 +52,30 @@ signal confirm_pressed()
 ## Requirements: AE-SKIP-001.
 signal skip_attack_pressed()
 
+## Emitted when the player toggles a defense token lock (accuracy).
+## [param token_index] — index in the defender's defense_tokens array.
+## Requirements: AE-ACC-002, AE-ACC-003.
+signal accuracy_token_toggled(token_index: int)
+
+## Emitted when the player confirms accuracy spending.
+## Requirements: AE-ACC-006.
+signal accuracy_confirmed()
+
+## Emitted when the player spends a defense token during the defense step.
+## [param token_index] — index in the defender's defense_tokens array.
+## [param spend_method] — "exhaust" or "discard".
+## Requirements: AE-DEF-001, AE-DEF-002.
+signal defense_token_selected(token_index: int, spend_method: String)
+
+## Emitted when the player finishes spending defense tokens.
+## Requirements: AE-DEF-003.
+signal defense_tokens_done()
+
+## Emitted when the player selects a hull zone for redirect damage.
+## [param zone] — Constants.HullZone value.
+## Requirements: AE-DEF-012, AE-DEF-013.
+signal redirect_zone_selected(zone: int)
+
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackSimPanel")
@@ -97,6 +121,46 @@ var _cf_token_skip_button: Button = null
 var _confirm_button: Button = null
 ## "Skip Attack" button — skips the entire attack.
 var _skip_attack_button: Button = null
+
+## --- Phase 6c-1: Accuracy spending UI ---
+
+## Accuracy section container (label + token buttons + confirm).
+var _accuracy_container: VBoxContainer = null
+## HBox holding defender token buttons for accuracy lock.
+var _accuracy_token_buttons: HBoxContainer = null
+## "Confirm Accuracies" button.
+var _accuracy_confirm_button: Button = null
+## Tracks which token indices are currently locked by accuracy.
+var _accuracy_locked_indices: Array[int] = []
+## Number of accuracy icons available to spend.
+var _accuracy_budget: int = 0
+
+## --- Phase 6c-2: Defense token spending UI ---
+
+## Defense section container (label + token buttons + done).
+var _defense_container: VBoxContainer = null
+## HBox holding defender token buttons for spending.
+var _defense_token_buttons: HBoxContainer = null
+## "Done" button to finish defense token spending.
+var _defense_done_button: Button = null
+## Info label showing current damage after modifications.
+var _defense_info_label: Label = null
+
+## --- Phase 6c-2: Redirect zone selection UI ---
+
+## Redirect zone selection container.
+var _redirect_container: VBoxContainer = null
+## HBox holding zone buttons.
+var _redirect_zone_buttons: HBoxContainer = null
+## Redirect info label.
+var _redirect_info_label: Label = null
+
+## --- Phase 6c-3: Damage resolution info UI ---
+
+## Damage resolution info container.
+var _damage_info_container: VBoxContainer = null
+## Damage info label.
+var _damage_info_label: Label = null
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -398,6 +462,78 @@ func _build_ui() -> void:
 	_skip_attack_button.visible = false
 	_skip_attack_button.pressed.connect(_on_skip_attack_pressed)
 	_content.add_child(_skip_attack_button)
+	# --- Phase 6c-1: Accuracy section ---
+	_accuracy_container = VBoxContainer.new()
+	_accuracy_container.add_theme_constant_override("separation", 4)
+	_accuracy_container.visible = false
+	_content.add_child(_accuracy_container)
+	var acc_label: Label = Label.new()
+	acc_label.text = "Accuracy — lock defender tokens:"
+	acc_label.add_theme_font_size_override("font_size", 13)
+	acc_label.add_theme_color_override("font_color", Color(0.3, 0.9, 1.0))
+	acc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_accuracy_container.add_child(acc_label)
+	_accuracy_token_buttons = HBoxContainer.new()
+	_accuracy_token_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_accuracy_token_buttons.add_theme_constant_override("separation", 6)
+	_accuracy_container.add_child(_accuracy_token_buttons)
+	_accuracy_confirm_button = Button.new()
+	_accuracy_confirm_button.text = "Confirm Accuracies"
+	_accuracy_confirm_button.custom_minimum_size = Vector2(140.0, 28.0)
+	_accuracy_confirm_button.size_flags_horizontal = (
+			Control.SIZE_SHRINK_CENTER)
+	_accuracy_confirm_button.pressed.connect(_on_accuracy_confirm)
+	_accuracy_container.add_child(_accuracy_confirm_button)
+	# --- Phase 6c-2: Defense token section ---
+	_defense_container = VBoxContainer.new()
+	_defense_container.add_theme_constant_override("separation", 4)
+	_defense_container.visible = false
+	_content.add_child(_defense_container)
+	_defense_info_label = Label.new()
+	_defense_info_label.add_theme_font_size_override("font_size", 13)
+	_defense_info_label.add_theme_color_override("font_color",
+			Color(1.0, 0.6, 0.3))
+	_defense_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_defense_container.add_child(_defense_info_label)
+	_defense_token_buttons = HBoxContainer.new()
+	_defense_token_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_defense_token_buttons.add_theme_constant_override("separation", 6)
+	_defense_container.add_child(_defense_token_buttons)
+	_defense_done_button = Button.new()
+	_defense_done_button.text = "Done with Defense"
+	_defense_done_button.custom_minimum_size = Vector2(140.0, 28.0)
+	_defense_done_button.size_flags_horizontal = (
+			Control.SIZE_SHRINK_CENTER)
+	_defense_done_button.pressed.connect(_on_defense_done)
+	_defense_container.add_child(_defense_done_button)
+	# --- Phase 6c-2: Redirect zone selection ---
+	_redirect_container = VBoxContainer.new()
+	_redirect_container.add_theme_constant_override("separation", 4)
+	_redirect_container.visible = false
+	_content.add_child(_redirect_container)
+	_redirect_info_label = Label.new()
+	_redirect_info_label.text = "Redirect — select adjacent zone:"
+	_redirect_info_label.add_theme_font_size_override("font_size", 13)
+	_redirect_info_label.add_theme_color_override("font_color",
+			Color(0.3, 1.0, 0.6))
+	_redirect_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_redirect_container.add_child(_redirect_info_label)
+	_redirect_zone_buttons = HBoxContainer.new()
+	_redirect_zone_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_redirect_zone_buttons.add_theme_constant_override("separation", 6)
+	_redirect_container.add_child(_redirect_zone_buttons)
+	# --- Phase 6c-3: Damage resolution info ---
+	_damage_info_container = VBoxContainer.new()
+	_damage_info_container.add_theme_constant_override("separation", 4)
+	_damage_info_container.visible = false
+	_content.add_child(_damage_info_container)
+	_damage_info_label = Label.new()
+	_damage_info_label.add_theme_font_size_override("font_size", 13)
+	_damage_info_label.add_theme_color_override("font_color",
+			Color(1.0, 0.5, 0.5))
+	_damage_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_damage_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_damage_info_container.add_child(_damage_info_label)
 
 
 ## Updates the title and body text.
@@ -428,6 +564,20 @@ func _clear_content() -> void:
 		_cf_token_skip_button = null
 		_confirm_button = null
 		_skip_attack_button = null
+		_accuracy_container = null
+		_accuracy_token_buttons = null
+		_accuracy_confirm_button = null
+		_accuracy_locked_indices.clear()
+		_accuracy_budget = 0
+		_defense_container = null
+		_defense_token_buttons = null
+		_defense_done_button = null
+		_defense_info_label = null
+		_redirect_container = null
+		_redirect_zone_buttons = null
+		_redirect_info_label = null
+		_damage_info_container = null
+		_damage_info_label = null
 		_dice_textures.clear()
 		_selected_reroll_index = -1
 
@@ -637,6 +787,246 @@ func _on_skip_attack_pressed() -> void:
 
 
 # =========================================================================
+# Phase 6c-1 — Accuracy Spending
+# =========================================================================
+
+## Defence token image base path.
+const _TOKEN_IMAGE_BASE: String = (
+		"res://Resources/Game_Components/defense_tokens/")
+
+## Maps DefenseToken enum to filename fragment.
+const _TOKEN_FILE_NAMES: Dictionary = {
+	Constants.DefenseToken.EVADE: "evade",
+	Constants.DefenseToken.REDIRECT: "redirect",
+	Constants.DefenseToken.BRACE: "brace",
+	Constants.DefenseToken.SCATTER: "scatter",
+	Constants.DefenseToken.CONTAIN: "contain",
+	Constants.DefenseToken.SALVO: "salvo",
+}
+
+## Token image size in pixels.
+const _TOKEN_IMAGE_SIZE: float = 28.0
+
+
+## Shows the accuracy spending section with the defender's defense tokens.
+## [param tokens] — Array of {type: DefenseToken, state: DefenseTokenState}.
+## [param accuracy_count] — number of accuracy icons in the dice pool.
+## Requirements: AE-ACC-001–004.
+func show_accuracy_section(tokens: Array[Dictionary],
+		accuracy_count: int) -> void:
+	if _accuracy_container == null or _accuracy_token_buttons == null:
+		return
+	_accuracy_locked_indices.clear()
+	_accuracy_budget = accuracy_count
+	# Clear old buttons.
+	for child: Node in _accuracy_token_buttons.get_children():
+		child.queue_free()
+	# Build token buttons.
+	for i: int in range(tokens.size()):
+		var token: Dictionary = tokens[i]
+		var state: Constants.DefenseTokenState = (
+				token["state"] as Constants.DefenseTokenState)
+		if state == Constants.DefenseTokenState.DISCARDED:
+			continue
+		var btn: Button = _create_token_button(token, i)
+		btn.pressed.connect(_on_accuracy_token_pressed.bind(i))
+		_accuracy_token_buttons.add_child(btn)
+	_accuracy_container.visible = true
+
+
+## Hides the accuracy section.
+func hide_accuracy_section() -> void:
+	if _accuracy_container:
+		_accuracy_container.visible = false
+	_accuracy_locked_indices.clear()
+	_accuracy_budget = 0
+
+
+## Returns currently locked token indices (for testing).
+func get_accuracy_locked_indices() -> Array[int]:
+	return _accuracy_locked_indices.duplicate()
+
+
+func _on_accuracy_token_pressed(token_index: int) -> void:
+	# Toggle lock state.
+	if token_index in _accuracy_locked_indices:
+		_accuracy_locked_indices.erase(token_index)
+	else:
+		if _accuracy_locked_indices.size() >= _accuracy_budget:
+			return  # All accuracy icons used
+		_accuracy_locked_indices.append(token_index)
+	# Update button visuals.
+	_update_accuracy_button_visuals()
+	accuracy_token_toggled.emit(token_index)
+
+
+func _on_accuracy_confirm() -> void:
+	accuracy_confirmed.emit()
+
+
+## Refreshes the visual state of accuracy token buttons.
+func _update_accuracy_button_visuals() -> void:
+	if _accuracy_token_buttons == null:
+		return
+	for child: Node in _accuracy_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn == null:
+			continue
+		var idx: int = btn.get_meta("token_index", -1)
+		if idx in _accuracy_locked_indices:
+			btn.modulate = Color(0.5, 0.5, 0.5, 1.0)
+			btn.text = btn.get_meta("base_text", "") + " [LOCKED]"
+		else:
+			btn.modulate = Color.WHITE
+			btn.text = btn.get_meta("base_text", "")
+
+
+# =========================================================================
+# Phase 6c-2 — Defense Token Spending
+# =========================================================================
+
+## Shows the defense token spending section.
+## [param tokens] — defender's defense tokens with states.
+## [param locked_indices] — token indices locked by accuracy.
+## [param damage] — current unmodified damage from dice.
+## [param defender_speed] — defender's speed (0 blocks spending).
+## Requirements: AE-DEF-001–005.
+## Rules Reference: "Defense Tokens", bullet 4, p.5 — speed 0 blocks all.
+func show_defense_section(tokens: Array[Dictionary],
+		locked_indices: Array[int], damage: int,
+		defender_speed: int) -> void:
+	if _defense_container == null or _defense_token_buttons == null:
+		return
+	# Clear old buttons.
+	for child: Node in _defense_token_buttons.get_children():
+		child.queue_free()
+	# Update info label.
+	if _defense_info_label:
+		_defense_info_label.text = "Damage: %d — Spend tokens:" % damage
+	# Speed 0 check.
+	if defender_speed == 0:
+		if _defense_info_label:
+			_defense_info_label.text = (
+					"Damage: %d — Speed 0: cannot spend tokens." % damage)
+		_defense_container.visible = true
+		return
+	# Build token buttons.
+	for i: int in range(tokens.size()):
+		var token: Dictionary = tokens[i]
+		var state: Constants.DefenseTokenState = (
+				token["state"] as Constants.DefenseTokenState)
+		if state == Constants.DefenseTokenState.DISCARDED:
+			continue
+		if i in locked_indices:
+			# Show locked token (greyed out, not clickable).
+			var btn: Button = _create_token_button(token, i)
+			btn.disabled = true
+			btn.modulate = Color(0.4, 0.4, 0.4, 1.0)
+			btn.text = btn.get_meta("base_text", "") + " [LOCKED]"
+			_defense_token_buttons.add_child(btn)
+			continue
+		var btn: Button = _create_token_button(token, i)
+		btn.pressed.connect(_on_defense_token_pressed.bind(i))
+		_defense_token_buttons.add_child(btn)
+	_defense_container.visible = true
+
+
+## Hides the defense section.
+func hide_defense_section() -> void:
+	if _defense_container:
+		_defense_container.visible = false
+
+
+## Updates the damage display during defense modifications.
+func update_defense_damage(damage: int) -> void:
+	if _defense_info_label:
+		_defense_info_label.text = "Modified damage: %d" % damage
+
+
+## Disables a defense token button after it's been spent.
+func disable_defense_token_button(token_index: int) -> void:
+	if _defense_token_buttons == null:
+		return
+	for child: Node in _defense_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn and btn.get_meta("token_index", -1) == token_index:
+			btn.disabled = true
+			btn.modulate = Color(0.5, 0.5, 0.5, 0.7)
+			break
+
+
+func _on_defense_token_pressed(token_index: int) -> void:
+	defense_token_selected.emit(token_index, "exhaust")
+
+
+func _on_defense_done() -> void:
+	defense_tokens_done.emit()
+
+
+# =========================================================================
+# Phase 6c-2 — Redirect Zone Selection
+# =========================================================================
+
+## Shows the redirect zone selection with buttons for adjacent zones.
+## [param zones] — Array of Constants.HullZone values that are adjacent.
+## [param remaining] — damage points still to redirect.
+## Requirements: AE-DEF-011–013.
+func show_redirect_section(zones: Array, remaining: int) -> void:
+	if _redirect_container == null or _redirect_zone_buttons == null:
+		return
+	for child: Node in _redirect_zone_buttons.get_children():
+		child.queue_free()
+	if _redirect_info_label:
+		_redirect_info_label.text = (
+				"Redirect %d damage — select zone:" % remaining)
+	for zone: Variant in zones:
+		var zone_enum: Constants.HullZone = zone as Constants.HullZone
+		var zone_name: String = Constants.hull_zone_to_string(zone_enum)
+		var btn: Button = Button.new()
+		btn.text = zone_name
+		btn.custom_minimum_size = Vector2(70.0, 28.0)
+		btn.pressed.connect(_on_redirect_zone_pressed.bind(
+				zone_enum as int))
+		_redirect_zone_buttons.add_child(btn)
+	_redirect_container.visible = true
+
+
+## Updates the redirect info label with remaining budget.
+func update_redirect_remaining(remaining: int) -> void:
+	if _redirect_info_label:
+		_redirect_info_label.text = (
+				"Redirect %d remaining — select zone:" % remaining)
+
+
+## Hides the redirect section.
+func hide_redirect_section() -> void:
+	if _redirect_container:
+		_redirect_container.visible = false
+
+
+func _on_redirect_zone_pressed(zone: int) -> void:
+	redirect_zone_selected.emit(zone)
+
+
+# =========================================================================
+# Phase 6c-3 — Damage Resolution Info
+# =========================================================================
+
+## Shows the damage resolution info.
+## [param text] — damage summary text.
+func show_damage_info(text: String) -> void:
+	if _damage_info_container and _damage_info_label:
+		_damage_info_label.text = text
+		_damage_info_container.visible = true
+
+
+## Hides the damage info.
+func hide_damage_info() -> void:
+	if _damage_info_container:
+		_damage_info_container.visible = false
+
+
+# =========================================================================
 # Die Image Helpers
 # =========================================================================
 
@@ -702,3 +1092,35 @@ func _clear_die_selection_highlights() -> void:
 	for tex_rect: TextureRect in _dice_textures:
 		if tex_rect:
 			tex_rect.modulate = Color.WHITE
+
+
+# =========================================================================
+# Token Button Helpers
+# =========================================================================
+
+## Creates a Button representing a defense token with icon and text.
+## Stores metadata: "token_index", "token_type", "base_text".
+func _create_token_button(token: Dictionary, index: int) -> Button:
+	var token_type: Constants.DefenseToken = (
+			token["type"] as Constants.DefenseToken)
+	var state: Constants.DefenseTokenState = (
+			token["state"] as Constants.DefenseTokenState)
+	var type_name: String = Constants.DEFENSE_TOKEN_NAMES.get(
+			token_type, "?")
+	var state_suffix: String = ""
+	match state:
+		Constants.DefenseTokenState.EXHAUSTED:
+			state_suffix = " (E)"
+		Constants.DefenseTokenState.DISCARDED:
+			state_suffix = " (D)"
+	var label_text: String = type_name + state_suffix
+	var btn: Button = Button.new()
+	btn.text = label_text
+	btn.custom_minimum_size = Vector2(80.0, 28.0)
+	btn.set_meta("token_index", index)
+	btn.set_meta("token_type", token_type)
+	btn.set_meta("base_text", label_text)
+	# Tint exhausted tokens orange.
+	if state == Constants.DefenseTokenState.EXHAUSTED:
+		btn.modulate = Color(1.0, 0.7, 0.3, 1.0)
+	return btn

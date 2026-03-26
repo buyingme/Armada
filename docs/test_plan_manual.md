@@ -2256,3 +2256,191 @@ Open `src/scenes/game_board/game_board.tscn` and press **F6**. Position the Rebe
 | 3 | Escape cancels at any point | Clean dismiss |
 
 **Pass criteria:** All Phase 6b-2 behaviours unchanged; GUT passes; anti-squadron loop works per MT-6b-3.1–5.
+
+---
+
+## Phase 6c — Attack Steps 3–5: Accuracy, Defense Tokens & Damage Resolution
+
+**What this phase adds:** After dice confirmation, the attacker can spend accuracy
+icons to lock the defender's defense tokens. The defender then spends defense tokens
+(Scatter, Evade, Brace, Redirect, Contain) to modify damage. Finally, damage is
+resolved: shields absorb first, then hull damage cards are dealt (with standard
+critical effect), and ships/squadrons are destroyed if damage exceeds hull.
+
+### Setup
+
+Open `src/scenes/game_board/game_board.tscn` and press **F6**. Start a game with the
+Learning Scenario. Advance to a ship activation and initiate an attack against an enemy
+ship (select hull zone, target, roll dice, confirm with Confirm Attack).
+
+---
+
+### MT-6c.1 — Accuracy spending (skip when no accuracies)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack and confirm dice that contain NO accuracy icons | No accuracy section shown; proceeds directly to defense step |
+| 2 | Attack a target that has no defense tokens (e.g. a squadron) | No accuracy section even if dice have accuracy icons; skips to defense/damage |
+
+**Pass criteria:** Accuracy step is auto-skipped when irrelevant.
+
+---
+
+### MT-6c.2 — Accuracy spending (interactive)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack with dice that have ≥1 accuracy icon against a defender with defense tokens | Accuracy section appears: "Spend accuracies to lock tokens (0/N)" with defender's token buttons |
+| 2 | Click a token button to toggle it ON | Button turns green/highlighted; count updates: "(1/N)" |
+| 3 | Click the same button again | Button toggles OFF; count back to "(0/N)" |
+| 4 | Toggle tokens ON up to accuracy budget, then try one more | Extra toggle has no effect — budget enforced |
+| 5 | Click "Confirm Accuracy" | Accuracy section hides; proceeds to defense step with locked tokens excluded |
+
+**Pass criteria:** Toggling works within budget; locked tokens cannot be spent in defense.
+
+---
+
+### MT-6c.3 — Defense token spending (basic flow)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | After accuracy step, see defense section | Camera rotates to defender; defense section shows spendable tokens with current damage total |
+| 2 | Click a READY token (e.g. Brace) | Token is exhausted; damage updates (halved, rounded up); button disabled |
+| 3 | Click "Done" | Defense section hides; damage resolution begins |
+
+**Pass criteria:** Token spending modifies damage; camera rotates to defender.
+
+---
+
+### MT-6c.4 — Defense token: Scatter
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Defender spends Scatter token | Damage drops to 0; defense step ends immediately; no further tokens can be spent |
+
+**Pass criteria:** Scatter cancels all damage and immediately ends defense.
+
+---
+
+### MT-6c.5 — Defense token: Evade (long range)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack at long range; defender spends Evade | One die is removed from the pool (highest damage die); damage total decreases |
+
+**Pass criteria:** Die removed at long range.
+
+---
+
+### MT-6c.6 — Defense token: Evade (medium/close range)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack at medium or close range; defender spends Evade | One die is rerolled; damage total may change |
+
+**Pass criteria:** Die rerolled (not removed) at medium/close.
+
+---
+
+### MT-6c.7 — Defense token: Redirect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Defender spends Redirect | Redirect section appears showing adjacent hull zones with remaining redirect capacity |
+| 2 | Click an adjacent hull zone button | 1 damage redirected to that zone's shields; remaining count decreases |
+| 3 | Click again (if capacity remains) | Another damage redirected |
+| 4 | All redirect capacity spent or shields exhausted | Redirect section auto-closes; returns to defense token selection |
+
+**Pass criteria:** Per-click redirect allocation to adjacent zones; limited by shields.
+
+---
+
+### MT-6c.8 — Defense tokens: speed 0 block
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set defender speed to 0 (if possible) and attack | Defense step is auto-skipped; no tokens can be spent; log message indicates speed 0 |
+
+**Pass criteria:** Speed 0 defenders cannot spend defense tokens per rules.
+
+---
+
+### MT-6c.9 — Defense token: exhausted must discard
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Exhaust a defender token in one attack | Token shows exhausted state |
+| 2 | In a subsequent attack, spend the same token (now exhausted) | Token is discarded (removed permanently); effect still applies |
+
+**Pass criteria:** EXHAUSTED tokens are discarded on spend, not just re-exhausted.
+
+---
+
+### MT-6c.10 — Damage resolution: ship (shields absorb)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack a ship with shields remaining in the attacked zone | Damage info section shows: "Damage: N → Zone shields: M → Shields absorb K, hull takes J" |
+| 2 | After resolution | Ship's shield count on the attacked zone decreases; damage cards visible on ship if hull damage dealt |
+
+**Pass criteria:** Shields absorb damage first; remaining goes to hull as cards.
+
+---
+
+### MT-6c.11 — Damage resolution: standard critical
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack with a critical icon in the dice pool; no Contain token spent | First damage card dealt to hull is faceup (critical effect) |
+| 2 | Same attack but defender spends Contain | All hull damage cards are facedown (standard crit blocked) |
+
+**Pass criteria:** Standard critical makes first card faceup unless Contain used.
+
+---
+
+### MT-6c.12 — Ship destruction
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal enough damage to a ship so total damage ≥ hull value | Ship is removed from the board (hidden); `ship_destroyed` log entry appears |
+
+**Pass criteria:** Ship destroyed and removed when damage reaches hull.
+
+---
+
+### MT-6c.13 — Squadron damage resolution
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack an enemy squadron (from anti-squadron armament) | Damage dealt directly to squadron hull (no shields) |
+| 2 | Deal enough damage to destroy the squadron | Squadron hidden from board; `squadron_destroyed` log entry |
+
+**Pass criteria:** Squadron takes direct hull damage; destroyed when hull ≤ 0.
+
+---
+
+### MT-6c.14 — Full attack flow end-to-end
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a ship attack: select hull zone → target ship → roll dice → confirm | Accuracy step (if applicable) |
+| 2 | Complete accuracy spending | Defense step begins with camera rotation |
+| 3 | Spend defense tokens (mix of types) | Damage updated after each token |
+| 4 | Click Done | Damage resolved: shields absorb, cards dealt |
+| 5 | After 1.2s delay | Attack finalizes; proceeds to second hull zone or attack done |
+| 6 | Complete second hull zone attack | Ship's attack step fully complete |
+
+**Pass criteria:** Complete attack flow from declaration through damage, including two hull zones.
+
+---
+
+### MT-6c.15 — No regressions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run automated GUT suite | 64 scripts, 1173 tests, 0 new failures |
+| 2 | Verify dice rolling + CF dial/token still works | Same as Phase 6b-2 |
+| 3 | Verify anti-squadron loop still works | Same as Phase 6b-3 |
+| 4 | Escape cancels at any point | Clean dismiss |
+
+**Pass criteria:** All prior phase behaviours unchanged; GUT passes; full attack sequence works per MT-6c.1–14.

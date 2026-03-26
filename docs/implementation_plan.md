@@ -30,6 +30,7 @@
 - [Phase 6b-1: Attack Execution — Target Selection & Visuals](#phase-6b-1-attack-execution--target-selection--visuals)
 - [Phase 6b-2: Attack Execution — Dice Rolling, Concentrate Fire & Two-Hull-Zone Sequencing](#phase-6b-2-attack-execution--dice-rolling-concentrate-fire--two-hull-zone-sequencing)
 - [Phase 6b-3: Attack Execution — Anti-Squadron Multi-Target Sequencing](#phase-6b-3-attack-execution--anti-squadron-multi-target-sequencing)
+- [Phase 6c: Attack Steps 3–5 — Accuracy, Defense Tokens & Damage Resolution](#phase-6c-attack-steps-35--accuracy-defense-tokens--damage-resolution)
 - [Phase 6: Attack Resolution](#phase-6-attack-resolution)
 - [Phase 7: Squadron Phase](#phase-7-squadron-phase)
 - [Phase 8: Status Phase & Game Flow](#phase-8-status-phase--game-flow)
@@ -1079,6 +1080,96 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 **Requirements covered:** AE-SQ-001–009
 **Tests:** 60 scripts, 1107 tests, 2063 asserts (2 new tests)
+
+---
+
+### Phase 6c: Attack Steps 3–5 — Accuracy, Defense Tokens & Damage Resolution ✅
+**Goal:** Complete the attack sequence by implementing Step 3 (accuracy spending to lock defender tokens), Step 4 (defense token spending: Scatter, Evade, Brace, Redirect, Contain), and Step 5 (damage resolution: shields → hull → damage cards → ship destruction).
+**Prerequisites:** Phase 6b-3 (dice rolling, confirm, two-hull-zone sequencing, anti-squadron loop)
+**Duration:** 1 session
+
+#### Requirements
+
+**Phase 6c-1: Accuracy Spending** (Rules Reference: "Attack", Step 3, "Accuracy", p.1)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-ACC-001 | After dice confirmation, count accuracy icons in the pool via `Dice.count_accuracy()` | New static method on Dice |
+| AE-ACC-002 | If ≥1 accuracy and defender has defense tokens, show accuracy section in AttackSimPanel with defender's token buttons | Budget = accuracy count |
+| AE-ACC-003 | Player can toggle tokens on/off up to accuracy budget; toggled tokens are "locked" | Locked indices stored in panel |
+| AE-ACC-004 | "Confirm Accuracy" button proceeds to defense step; locked token indices passed to game_board | Signal: `accuracy_confirmed` |
+| AE-ACC-005 | If 0 accuracies or defender has no tokens, skip directly to defense step | Auto-skip with no UI |
+| AE-ACC-006 | `Dice.has_any_critical()` — new static helper to check for CRITICAL or HIT_CRITICAL faces | Used later by damage resolution |
+
+**Phase 6c-2: Defense Token Spending** (Rules Reference: "Defense Tokens", p.5; "Evade"/"Brace"/"Redirect"/"Scatter"/"Contain")
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-DEF-001 | Show defense section with defender's spendable tokens (READY or EXHAUSTED, not DISCARDED, not accuracy-locked) | Token buttons with exhaust/discard options |
+| AE-DEF-002 | Speed 0 defenders cannot spend any defense tokens (Rules Reference: "Defense Tokens", bullet 4) | Auto-skip with log |
+| AE-DEF-003 | Each token type can be spent at most once per attack | Disable button after spending |
+| AE-DEF-004 | READY tokens can be exhausted; EXHAUSTED tokens must be discarded | Spend method determined by state |
+| AE-DEF-005 | **Scatter** — cancels all dice, sets modified damage to 0, ends defense step immediately | Most impactful token |
+| AE-DEF-006 | **Evade** — at long range: remove 1 die (best for defender); at medium/close: reroll 1 die | `_apply_evade_effect()` with `_find_best_evade_die()` |
+| AE-DEF-007 | **Brace** — halve total damage (round up); update panel damage display | `ceili(damage / 2.0)` |
+| AE-DEF-008 | **Redirect** — enter redirect sub-step: player clicks adjacent hull zones to move damage 1-at-a-time up to shield capacity | `_attack_exec_start_redirect()`, per-click allocation |
+| AE-DEF-009 | **Contain** — prevent the first damage card from being dealt faceup (standard critical blocked) | Flag `_attack_exec_contain_used` |
+| AE-DEF-010 | "Done" button ends defense step and proceeds to damage resolution | Signal: `defense_tokens_done` |
+| AE-DEF-011 | Camera rotates to defender's player before defense step | `_camera.rotate_to_player()` |
+| AE-DEF-012 | Real-time damage display updated after each token spend | `update_defense_damage()` on panel |
+
+**Phase 6c-3: Damage Resolution** (Rules Reference: "Attack", Step 5; "Damage", p.5–6)
+
+| ID | Requirement | Notes |
+|----|------------|-------|
+| AE-DMG-001 | Calculate total damage from modified dice pool via `Dice.calculate_damage()` | After all defense modifications |
+| AE-DMG-002 | For ship targets: shields in attacked zone absorb damage first via `reduce_shields()` | Emit `ship_shields_changed` |
+| AE-DMG-003 | Remaining damage dealt as facedown damage cards from DamageDeck | One card per damage point |
+| AE-DMG-004 | Standard critical effect: if pool has critical icon AND Contain not used, first card is faceup | `has_any_critical()` check |
+| AE-DMG-005 | Ship destroyed when total damage ≥ hull value | `is_destroyed()` check |
+| AE-DMG-006 | Destroyed ship hidden from board, `ship_destroyed` signal emitted | Visual removal |
+| AE-DMG-007 | For squadron targets: damage dealt directly to hull via `suffer_damage()` | No shields on squadrons |
+| AE-DMG-008 | Squadron destroyed when hull ≤ 0; hidden + signal emitted | `squadron_destroyed` |
+| AE-DMG-009 | Damage info section shows final damage summary before proceeding | `show_damage_info()` on panel |
+| AE-DMG-010 | After 1.2s delay, finalize attack and proceed to next hull zone or squadron loop | `_attack_exec_finalize_after_delay()` |
+| AE-DMG-011 | Hull zone adjacency table in Constants for redirect targeting | `get_adjacent_hull_zones()` |
+| AE-DMG-012 | Hull zone string ↔ enum conversion utilities in Constants | `hull_zone_to_string()`, `string_to_hull_zone()` |
+| AE-DMG-013 | Defense token name dictionary in Constants | `DEFENSE_TOKEN_NAMES` |
+| AE-DMG-014 | DamageDeck stored in game_board for card drawing during damage resolution | `_damage_deck` reference |
+
+#### Implementation Tasks
+
+| # | Task | Layer | Requirements | Deliverables | Status |
+|---|------|-------|-------------|--------------|--------|
+| 1 | `Dice.count_accuracy()` + `Dice.has_any_critical()` | Core | AE-ACC-001, AE-ACC-006 | Static methods in `src/core/dice.gd` | ✅ |
+| 2 | Constants: adjacency table, zone string conversion, token names | Autoload | AE-DMG-011–013 | `get_adjacent_hull_zones()`, `hull_zone_to_string()`, `string_to_hull_zone()`, `DEFENSE_TOKEN_NAMES` | ✅ |
+| 3 | Phase 6c state variables in game_board.gd | Orchestration | All | ~15 new state vars for accuracy/defense/damage tracking | ✅ |
+| 4 | Store `_damage_deck` reference during scenario setup | Orchestration | AE-DMG-014 | `_damage_deck` from `setup.get_damage_deck()` | ✅ |
+| 5 | State var resets in `_on_attack_exec_done()` | Orchestration | All | Clean reset of all Phase 6c state | ✅ |
+| 6 | AttackSimPanel: 6 new signals + ~15 UI member vars | Presentation | AE-ACC-002–004, AE-DEF-001–012, AE-DMG-009 | Signals, containers, buttons, labels | ✅ |
+| 7 | AttackSimPanel: `_build_ui()` accuracy/defense/redirect/damage sections | Presentation | AE-ACC-002, AE-DEF-001, AE-DEF-008, AE-DMG-009 | Hidden containers built in `_build_ui()` | ✅ |
+| 8 | AttackSimPanel: public API methods (show/hide/update) | Presentation | All UI | `show_accuracy_section()`, `show_defense_section()`, `show_redirect_section()`, `show_damage_info()`, etc. | ✅ |
+| 9 | `_create_token_button()` helper | Presentation | AE-ACC-002, AE-DEF-001 | Creates styled token Button with metadata | ✅ |
+| 10 | Connect new panel signals in `_connect_attack_panel_signals()` | Orchestration | All | 4 new signal connections | ✅ |
+| 11 | Refactor `_on_attack_confirm()` → start accuracy step | Orchestration | AE-ACC-001 | Now resets Phase 6c state and calls `_attack_exec_start_accuracy()` | ✅ |
+| 12 | Phase 6c-1: `_attack_exec_start_accuracy()` + `_on_attack_accuracy_confirmed()` | Orchestration | AE-ACC-001–005 | Full accuracy toggling flow with budget | ✅ |
+| 13 | Phase 6c-2: `_attack_exec_start_defense()` + token spending flow | Orchestration | AE-DEF-001–004, AE-DEF-011 | Camera rotation, spendable token check, speed 0 guard | ✅ |
+| 14 | `_on_attack_defense_token_spent()` + `_apply_defense_token_effect()` | Orchestration | AE-DEF-003–009 | Exhaust/discard logic, dispatch to token-specific handlers | ✅ |
+| 15 | `_apply_evade_effect()` + `_find_best_evade_die()` | Orchestration | AE-DEF-006 | Long=remove, medium/close=reroll; find best die to evade | ✅ |
+| 16 | Redirect sub-step: `_attack_exec_start_redirect()` + `_on_attack_redirect_zone_selected()` | Orchestration | AE-DEF-008 | Adjacent zone buttons, per-click allocation | ✅ |
+| 17 | `_on_attack_defense_done()` | Orchestration | AE-DEF-010 | Ends defense, proceeds to damage | ✅ |
+| 18 | `_attack_exec_resolve_damage()` — routes to ship or squadron | Orchestration | AE-DMG-001 | Calculates final damage, dispatches | ✅ |
+| 19 | `_resolve_ship_damage()` — shields → cards → crit → destroy | Orchestration | AE-DMG-002–006 | Full ship damage pipeline | ✅ |
+| 20 | `_resolve_squadron_damage()` — direct hull damage | Orchestration | AE-DMG-007–008 | Squadron damage + destroy | ✅ |
+| 21 | `_attack_exec_finalize_after_delay()` + `_attack_exec_finalize_attack()` | Orchestration | AE-DMG-010 | 1.2s timer, then squadron loop / two-HZ sequencing | ✅ |
+| 22 | Unit tests: `test_dice_accuracy.gd` (9 tests) | Tests | AE-ACC-001, AE-ACC-006 | `Dice.count_accuracy()` + `has_any_critical()` | ✅ |
+| 23 | Unit tests: `test_constants_hull_zones.gd` (12 tests) | Tests | AE-DMG-011–012 | Adjacency, string↔enum conversion | ✅ |
+| 24 | Unit tests: `test_ship_damage_resolution.gd` (25 tests) | Tests | AE-DMG-001–006 | Shields, damage cards, defense tokens, brace math, destruction | ✅ |
+| 25 | Unit tests: `test_attack_sim_panel_defense.gd` (15 tests) | Tests | AE-ACC-002–004, AE-DEF-001, AE-DEF-008, AE-DMG-009 | Accuracy/defense/redirect/damage UI sections | ✅ |
+| 26 | Docs & plan update | Docs | — | This section + `docs/test_plan_manual.md` Phase 6c | ✅ |
+
+**Requirements covered:** AE-ACC-001–006, AE-DEF-001–012, AE-DMG-001–014
+**Tests:** 64 scripts, 1173 tests, 2147 asserts (66 new tests across 4 new test files)
 
 ---
 

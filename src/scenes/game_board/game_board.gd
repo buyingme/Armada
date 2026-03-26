@@ -216,6 +216,48 @@ var _attack_exec_cf_token_used: bool = false
 ## Requirements: AE-SQ-001.
 var _attack_exec_attacked_squads: Array[SquadronToken] = []
 
+## --- Phase 6c: Accuracy, Defense Tokens, Damage Resolution ---
+
+## Shared damage deck for the game. Initialised during scenario setup.
+var _damage_deck: DamageDeck = null
+
+## Indices of defender defense tokens locked by accuracy icons.
+## Each entry is a token index in the defender's defense_tokens array.
+## Requirements: AE-ACC-001–008.
+var _attack_exec_locked_tokens: Array[int] = []
+
+## Whether we are in the accuracy spending sub-step.
+var _attack_exec_accuracy_step: bool = false
+
+## Whether we are in the defense token spending sub-step.
+var _attack_exec_defense_step: bool = false
+
+## Defense tokens spent this attack, keyed by Constants.DefenseToken type.
+## Values are the chosen spend method: "exhaust" or "discard".
+## Only one token of each TYPE per attack (RRG "Defense Tokens", bullet 3).
+## Requirements: AE-DEF-001–016.
+var _attack_exec_spent_tokens: Dictionary = {}
+
+## Current damage total after defense modifications (brace etc.).
+var _attack_exec_modified_damage: int = 0
+
+## Whether Scatter was spent this attack (cancels all dice).
+var _attack_exec_scatter_used: bool = false
+
+## How many damage points must still be redirected (Redirect token).
+## Requirements: AE-DEF-011–013.
+var _attack_exec_redirect_remaining: int = 0
+
+## The hull zone selected for redirect (Constants.HullZone value or -1).
+var _attack_exec_redirect_zone: int = -1
+
+## Whether the Contain token was spent (prevents standard critical).
+## Requirements: AE-DEF-014.
+var _attack_exec_contain_used: bool = false
+
+## Whether we are in the redirect zone click sub-step.
+var _attack_exec_redirect_step: bool = false
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -504,6 +546,8 @@ func _connect_signals() -> void:
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	_load_map_texture(setup.get_map_image_filename())
+	# Initialise the shared damage deck for this game.
+	_damage_deck = setup.get_damage_deck()
 	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
 	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
 	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
@@ -1530,6 +1574,16 @@ func _on_attack_exec_done() -> void:
 	_attack_exec_cf_dial_used = false
 	_attack_exec_cf_token_used = false
 	_attack_exec_attacked_squads.clear()
+	_attack_exec_locked_tokens.clear()
+	_attack_exec_accuracy_step = false
+	_attack_exec_defense_step = false
+	_attack_exec_spent_tokens.clear()
+	_attack_exec_modified_damage = 0
+	_attack_exec_scatter_used = false
+	_attack_exec_redirect_remaining = 0
+	_attack_exec_redirect_zone = -1
+	_attack_exec_contain_used = false
+	_attack_exec_redirect_step = false
 	# Advance the activation state past ATTACK → MANEUVER.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
@@ -2801,6 +2855,20 @@ func _connect_attack_panel_signals() -> void:
 		p.confirm_pressed.connect(_on_attack_confirm)
 	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
 		p.skip_attack_pressed.connect(_on_attack_skip)
+	# Phase 6c signals.
+	if not p.accuracy_confirmed.is_connected(
+			_on_attack_accuracy_confirmed):
+		p.accuracy_confirmed.connect(_on_attack_accuracy_confirmed)
+	if not p.defense_token_selected.is_connected(
+			_on_attack_defense_token_spent):
+		p.defense_token_selected.connect(_on_attack_defense_token_spent)
+	if not p.defense_tokens_done.is_connected(
+			_on_attack_defense_done):
+		p.defense_tokens_done.connect(_on_attack_defense_done)
+	if not p.redirect_zone_selected.is_connected(
+			_on_attack_redirect_zone_selected):
+		p.redirect_zone_selected.connect(
+				_on_attack_redirect_zone_selected)
 
 
 ## Begins the Phase 6b-2 attack sequence after target and range are known.
@@ -2993,34 +3061,585 @@ func _attack_exec_show_confirm() -> void:
 
 
 ## Called when the player presses "Confirm" to accept the dice results.
-## For ship targets: marks the zone as fired, checks for follow-up attacks.
-## For squadron targets: marks the squadron as attacked, checks for more
-## enemy squadrons in the same arc (Step 6 loop).
-## Requirements: AE-CONF-002, AE-2HZ-001, AE-2HZ-003, AE-2HZ-004,
-## AE-SQ-001, AE-SQ-003, AE-SQ-004.
-## Rules Reference: "Attack", Step 6, p.2 — "Declare Additional Squadron
-## Target": if the attacker is a ship and the defender was a squadron,
-## the attacker can declare another enemy squadron as a defender and
-## repeat steps 2 through 6.
+## Starts the accuracy spending step (Step 3), then defense (Step 4),
+## then damage resolution (Step 5).
+## Requirements: AE-CONF-002, AE-ACC-001, AE-DEF-001, AE-DMG-001.
+## Rules Reference: "Attack", Steps 3–5.
 func _on_attack_confirm() -> void:
 	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
-	_log.info("Attack confirmed: %d damage (damage step deferred)." % damage)
+	_log.info("Attack confirmed: %d damage. Starting Step 3 (accuracy)." %
+			damage)
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_confirm_button()
+	# Reset Phase 6c state for this attack.
+	_attack_exec_locked_tokens.clear()
+	_attack_exec_spent_tokens.clear()
+	_attack_exec_modified_damage = damage
+	_attack_exec_scatter_used = false
+	_attack_exec_redirect_remaining = 0
+	_attack_exec_redirect_zone = -1
+	_attack_exec_contain_used = false
+	_attack_exec_redirect_step = false
+	_attack_exec_start_accuracy()
+
+
+	_attack_exec_start_accuracy()
+
+
+# =========================================================================
+# Phase 6c-1 — Accuracy Spending (Step 3)
+# =========================================================================
+
+## Starts the accuracy spending step.
+## If the defender is a ship and the attacker rolled accuracy icons,
+## show the accuracy UI. Otherwise, skip to defense tokens.
+## Requirements: AE-ACC-001–008.
+## Rules Reference: "Accuracy", p.2 — "The attacker can spend one or more
+## of his accuracy icons to choose the same number of the defender's
+## defense tokens. The chosen tokens cannot be spent during this attack."
+func _attack_exec_start_accuracy() -> void:
+	_attack_exec_accuracy_step = true
+	var acc_count: int = Dice.count_accuracy(_attack_exec_dice_results)
+	# Only ships have defense tokens; squadrons skip accuracy step.
+	if _attack_sim_def_ship == null or acc_count == 0:
+		_log.info("No accuracy icons or squadron defender — skipping "
+				+ "accuracy step.")
+		_attack_exec_accuracy_step = false
+		_attack_exec_start_defense()
+		return
+	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		_attack_exec_accuracy_step = false
+		_attack_exec_start_defense()
+		return
+	# Check if the defender has any non-discarded tokens to lock.
+	var lockable: int = 0
+	for token: Dictionary in def_inst.defense_tokens:
+		if token["state"] != Constants.DefenseTokenState.DISCARDED:
+			lockable += 1
+	if lockable == 0:
+		_log.info("Defender has no lockable tokens — skipping accuracy.")
+		_attack_exec_accuracy_step = false
+		_attack_exec_start_defense()
+		return
+	_log.info("Accuracy step: %d icons, %d lockable tokens." % [
+			acc_count, lockable])
+	# Grey out accuracy dice in the dice display.
+	if _attack_sim_panel:
+		_attack_sim_panel.show_accuracy_section(
+				def_inst.defense_tokens, acc_count)
+		_attack_sim_panel.hide_confirm_button()
+
+
+## Called when the player confirms accuracy spending.
+## Stores the locked token indices and proceeds to defense step.
+## Requirements: AE-ACC-006.
+func _on_attack_accuracy_confirmed() -> void:
+	if _attack_sim_panel:
+		_attack_exec_locked_tokens = (
+				_attack_sim_panel.get_accuracy_locked_indices())
+		_attack_sim_panel.hide_accuracy_section()
+	_attack_exec_accuracy_step = false
+	_log.info("Accuracy confirmed: locked tokens %s." % [
+			str(_attack_exec_locked_tokens)])
+	_attack_exec_start_defense()
+
+
+# =========================================================================
+# Phase 6c-2 — Defense Token Spending (Step 4)
+# =========================================================================
+
+## Starts the defense token spending step.
+## If the defender is a ship with spendable tokens, show the defense UI.
+## Otherwise, skip to damage resolution.
+## Requirements: AE-DEF-001–016.
+## Rules Reference: "Spend Defense Tokens", p.5 — "The defender can spend
+## one or more of his defense tokens."
+func _attack_exec_start_defense() -> void:
+	_attack_exec_defense_step = true
+	_attack_exec_spent_tokens.clear()
+	# Squadron defenders have no defense tokens (generic squads).
+	if _attack_sim_def_ship == null:
+		_attack_exec_defense_step = false
+		_attack_exec_resolve_damage()
+		return
+	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		_attack_exec_defense_step = false
+		_attack_exec_resolve_damage()
+		return
+	# Check if the defender can spend any tokens.
+	var spendable: int = _count_spendable_defense_tokens(def_inst)
+	if spendable == 0:
+		_log.info("No spendable defense tokens — skipping defense step.")
+		_attack_exec_defense_step = false
+		_attack_exec_resolve_damage()
+		return
+	# Speed 0 check: cannot spend defense tokens.
+	## Rules Reference: "Defense Tokens", bullet 4, p.5.
+	if def_inst.current_speed == 0:
+		_log.info("Defender speed 0 — cannot spend defense tokens.")
+	_log.info("Defense step: %d spendable tokens, %d damage." % [
+			spendable, _attack_exec_modified_damage])
+	if _attack_sim_panel:
+		_attack_sim_panel.show_defense_section(
+				def_inst.defense_tokens,
+				_attack_exec_locked_tokens,
+				_attack_exec_modified_damage,
+				def_inst.current_speed)
+
+
+## Returns the number of spendable (non-discarded, non-locked) tokens.
+func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
+	var count: int = 0
+	for i: int in range(inst.defense_tokens.size()):
+		if i in _attack_exec_locked_tokens:
+			continue
+		var state: Constants.DefenseTokenState = (
+				inst.defense_tokens[i]["state"]
+				as Constants.DefenseTokenState)
+		if state != Constants.DefenseTokenState.DISCARDED:
+			count += 1
+	return count
+
+
+## Called when the player spends a defense token.
+## [param token_index] — index in the defender's defense_tokens array.
+## [param spend_method] — "exhaust" or "discard".
+## Requirements: AE-DEF-001–016.
+## Rules Reference: "Defense Tokens", p.5 — each token type at most once.
+func _on_attack_defense_token_spent(token_index: int,
+		spend_method: String) -> void:
+	if _attack_sim_def_ship == null:
+		return
+	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	if token_index < 0 or token_index >= def_inst.defense_tokens.size():
+		return
+	var token: Dictionary = def_inst.defense_tokens[token_index]
+	var token_type: Constants.DefenseToken = (
+			token["type"] as Constants.DefenseToken)
+	var token_state: Constants.DefenseTokenState = (
+			token["state"] as Constants.DefenseTokenState)
+	# Cannot spend discarded tokens.
+	if token_state == Constants.DefenseTokenState.DISCARDED:
+		_log.info("Token %d already discarded — ignoring." % token_index)
+		return
+	# Cannot spend a token type already spent this attack.
+	if _attack_exec_spent_tokens.has(token_type):
+		_log.info("Token type already spent this attack — ignoring.")
+		return
+	# Cannot spend locked tokens.
+	if token_index in _attack_exec_locked_tokens:
+		_log.info("Token %d is locked by accuracy — ignoring." %
+				token_index)
+		return
+	# Determine spend method: exhausted tokens must be discarded.
+	var actual_method: String = spend_method
+	if token_state == Constants.DefenseTokenState.EXHAUSTED:
+		actual_method = "discard"
+	# Apply the spend.
+	match actual_method:
+		"discard":
+			def_inst.discard_defense_token(token_index)
+		_:
+			def_inst.exhaust_defense_token(token_index)
+	_attack_exec_spent_tokens[token_type] = actual_method
+	EventBus.ship_defense_token_changed.emit(def_inst)
+	EventBus.defense_token_spent.emit(
+			_attack_sim_def_ship, token_type)
+	_log.info("Defense token spent: %s (%s)." % [
+			Constants.DEFENSE_TOKEN_NAMES.get(token_type, "?"),
+			actual_method])
+	# Apply the token's effect immediately.
+	_apply_defense_token_effect(token_type, def_inst)
+
+
+## Applies the effect of a defense token to the current attack.
+## Requirements: AE-DEF-006–016.
+## Rules Reference: "Defense Tokens", p.5; individual token entries.
+func _apply_defense_token_effect(token_type: Constants.DefenseToken,
+		def_inst: ShipInstance) -> void:
+	match token_type:
+		Constants.DefenseToken.SCATTER:
+			# Cancel all dice.
+			## Rules Reference: "Scatter", p.11 — "the attacker must
+			## choose and remove all dice from the attack pool."
+			_attack_exec_scatter_used = true
+			_attack_exec_modified_damage = 0
+			_log.info("Scatter: all damage cancelled.")
+			if _attack_sim_panel:
+				_attack_sim_panel.update_defense_damage(0)
+				_attack_sim_panel.disable_defense_token_button(-1)
+		Constants.DefenseToken.EVADE:
+			# RRG v1.5.0 "Evade": at long range remove 1 die, at
+			# medium/close range reroll 1 die.
+			_apply_evade_effect()
+		Constants.DefenseToken.BRACE:
+			# Halve total damage, rounded up.
+			## Rules Reference: "Brace", p.3 — "the total damage is
+			## reduced to half, rounded up."
+			_attack_exec_modified_damage = ceili(
+					float(_attack_exec_modified_damage) / 2.0)
+			_log.info("Brace: damage halved to %d." % [
+					_attack_exec_modified_damage])
+			if _attack_sim_panel:
+				_attack_sim_panel.update_defense_damage(
+						_attack_exec_modified_damage)
+		Constants.DefenseToken.REDIRECT:
+			# Enter redirect mode — player must click hull zone to
+			# redirect up to the max shields of the chosen zone.
+			_attack_exec_start_redirect(def_inst)
+			return  # Don't disable button here; redirect step handles it
+		Constants.DefenseToken.CONTAIN:
+			# Prevents the standard critical effect.
+			## Rules Reference: "Contain", p.3 — "the standard critical
+			## effect is prevented."
+			_attack_exec_contain_used = true
+			_log.info("Contain: standard critical effect prevented.")
+		_:
+			_log.info("Unhandled defense token type: %s" % str(token_type))
+	# Disable the spent token button.
+	if _attack_sim_panel:
+		_attack_sim_panel.disable_defense_token_button(
+				_get_token_button_index_for_type(token_type))
+
+
+## Returns the button index for a given token type in the current attack.
+func _get_token_button_index_for_type(
+		token_type: Constants.DefenseToken) -> int:
+	if _attack_sim_def_ship == null:
+		return -1
+	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		return -1
+	for i: int in range(def_inst.defense_tokens.size()):
+		if def_inst.defense_tokens[i]["type"] == token_type:
+			if _attack_exec_spent_tokens.has(token_type):
+				return i
+	return -1
+
+
+## Applies the Evade defense token effect.
+## At long range: remove 1 die (choose die with most damage).
+## At medium/close range: force attacker to reroll 1 die.
+## Requirements: AE-DEF-007–009.
+## Rules Reference: "Evade", RRG v1.5.0, p.5 — "At long range, the
+## defender chooses one die to be removed. At medium or close range, the
+## defender chooses one die to be rerolled."
+func _apply_evade_effect() -> void:
+	if _attack_exec_dice_results.is_empty():
+		return
+	var range_band: String = _attack_exec_range_band
+	if range_band == Constants.RANGE_BAND_LONG:
+		# Remove the die with the highest damage.
+		var best_idx: int = _find_best_evade_die()
+		if best_idx >= 0:
+			var removed: Dictionary = _attack_exec_dice_results[best_idx]
+			_attack_exec_dice_results.remove_at(best_idx)
+			_attack_exec_modified_damage = Dice.calculate_damage(
+					_attack_exec_dice_results)
+			_log.info("Evade (long): removed die %d. Damage now %d." % [
+					best_idx, _attack_exec_modified_damage])
+			if _attack_sim_panel:
+				_attack_sim_panel.show_dice_results(
+						_attack_exec_dice_results)
+				_attack_sim_panel.update_defense_damage(
+						_attack_exec_modified_damage)
+	else:
+		# Medium or close: reroll 1 die (choose the highest damage die).
+		var best_idx: int = _find_best_evade_die()
+		if best_idx >= 0:
+			var die_result: Dictionary = (
+					_attack_exec_dice_results[best_idx])
+			var color: Constants.DiceColor = (
+					die_result["color"] as Constants.DiceColor)
+			var new_face: Constants.DiceFace = Dice.roll_die(color)
+			_attack_exec_dice_results[best_idx]["face"] = new_face
+			_attack_exec_modified_damage = Dice.calculate_damage(
+					_attack_exec_dice_results)
+			_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
+					% [range_band, best_idx, str(new_face),
+					_attack_exec_modified_damage])
+			if _attack_sim_panel:
+				_attack_sim_panel.update_die_result(best_idx, {
+					"color": color, "face": new_face})
+				_attack_sim_panel.update_defense_damage(
+						_attack_exec_modified_damage)
+
+
+## Finds the die index with the highest damage value (for Evade).
+func _find_best_evade_die() -> int:
+	var best_idx: int = -1
+	var best_dmg: int = -1
+	for i: int in range(_attack_exec_dice_results.size()):
+		var face: Constants.DiceFace = (
+				_attack_exec_dice_results[i]["face"]
+				as Constants.DiceFace)
+		var dmg: int = Dice.get_face_damage(face)
+		if dmg > best_dmg:
+			best_dmg = dmg
+			best_idx = i
+	return best_idx
+
+
+## Starts the redirect sub-step: shows adjacent zone buttons.
+## Requirements: AE-DEF-011–013.
+## Rules Reference: "Redirect", p.11 — "the defender chooses one hull zone
+## adjacent to the defending hull zone and may suffer up to that adjacent
+## zone's remaining shields in that zone instead."
+func _attack_exec_start_redirect(def_inst: ShipInstance) -> void:
+	_attack_exec_redirect_step = true
+	# The redirect budget is all the current damage.
+	_attack_exec_redirect_remaining = _attack_exec_modified_damage
+	# Get adjacent zones to the defending hull zone.
+	var def_zone: Constants.HullZone = (
+			_attack_sim_def_zone as Constants.HullZone)
+	var adjacent: Array = Constants.get_adjacent_hull_zones(def_zone)
+	_log.info("Redirect: %d damage to redirect from %s. Adjacent: %s" % [
+			_attack_exec_redirect_remaining,
+			Constants.hull_zone_to_string(def_zone),
+			str(adjacent)])
+	if _attack_sim_panel:
+		_attack_sim_panel.show_redirect_section(
+				adjacent, _attack_exec_redirect_remaining)
+
+
+## Called when the player selects a hull zone for redirect.
+## Each click redirects 1 damage to that zone (limited by zone shields).
+## Requirements: AE-DEF-012, AE-DEF-013.
+func _on_attack_redirect_zone_selected(zone: int) -> void:
+	if not _attack_exec_redirect_step:
+		return
+	if _attack_sim_def_ship == null:
+		return
+	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	var zone_enum: Constants.HullZone = zone as Constants.HullZone
+	var zone_str: String = Constants.hull_zone_to_string(zone_enum)
+	var zone_shields: int = int(def_inst.current_shields.get(zone_str, 0))
+	if zone_shields <= 0:
+		_log.info("Redirect: %s has 0 shields — cannot redirect there." %
+				zone_str)
+		return
+	if _attack_exec_redirect_remaining <= 0:
+		_log.info("Redirect: no more damage to redirect.")
+		return
+	# Redirect 1 damage to this zone (absorbed by shield).
+	def_inst.reduce_shields(zone_str, 1)
+	EventBus.ship_shields_changed.emit(
+			def_inst, zone_str,
+			int(def_inst.current_shields.get(zone_str, 0)))
+	_attack_exec_redirect_remaining -= 1
+	_attack_exec_modified_damage -= 1
+	_log.info("Redirect: 1 damage to %s shield. Remaining: %d/%d." % [
+			zone_str, _attack_exec_redirect_remaining,
+			_attack_exec_modified_damage])
+	if _attack_sim_panel:
+		_attack_sim_panel.update_defense_damage(
+				_attack_exec_modified_damage)
+		if _attack_exec_redirect_remaining > 0:
+			# Check if any adjacent zone still has shields.
+			var def_zone: Constants.HullZone = (
+					_attack_sim_def_zone as Constants.HullZone)
+			var adjacent: Array = Constants.get_adjacent_hull_zones(
+					def_zone)
+			var has_shields: bool = false
+			for adj_zone: Variant in adjacent:
+				var adj_str: String = Constants.hull_zone_to_string(
+						adj_zone as Constants.HullZone)
+				if int(def_inst.current_shields.get(adj_str, 0)) > 0:
+					has_shields = true
+					break
+			if has_shields:
+				_attack_sim_panel.update_redirect_remaining(
+						_attack_exec_redirect_remaining)
+				return  # Continue redirect
+		_attack_sim_panel.hide_redirect_section()
+	_attack_exec_redirect_step = false
+
+
+## Called when the player finishes spending defense tokens.
+## Proceeds to damage resolution.
+## Requirements: AE-DEF-003.
+func _on_attack_defense_done() -> void:
+	_log.info("Defense tokens done. Modified damage: %d." % [
+			_attack_exec_modified_damage])
+	_attack_exec_defense_step = false
+	# Hide redirect if still showing.
+	if _attack_exec_redirect_step:
+		_attack_exec_redirect_step = false
+		if _attack_sim_panel:
+			_attack_sim_panel.hide_redirect_section()
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_defense_section()
+	_attack_exec_resolve_damage()
+
+
+# =========================================================================
+# Phase 6c-3 — Damage Resolution (Step 5)
+# =========================================================================
+
+## Resolves damage against the defender.
+## For ships: shields absorb damage first, then damage cards are dealt.
+## Standard critical: if at least one critical icon and Contain was not
+## used, the first damage card is dealt faceup.
+## Requirements: AE-DMG-001–014.
+## Rules Reference: "Damage", p.4 — "Damage is applied one point at a time."
+func _attack_exec_resolve_damage() -> void:
+	var final_damage: int = _attack_exec_modified_damage
+	if _attack_exec_scatter_used:
+		final_damage = 0
+	_log.info("Resolving damage: %d total." % final_damage)
+	if final_damage <= 0:
+		_log.info("No damage to resolve.")
+		if _attack_sim_panel:
+			_attack_sim_panel.show_damage_info("No damage dealt.")
+		_attack_exec_finalize_after_delay()
+		return
+	# --- Squadron defender ---
+	if _attack_sim_def_squad:
+		_resolve_squadron_damage(final_damage)
+		_attack_exec_finalize_after_delay()
+		return
+	# --- Ship defender ---
+	if _attack_sim_def_ship:
+		_resolve_ship_damage(final_damage)
+		_attack_exec_finalize_after_delay()
+		return
+	_log.error("No defender found for damage resolution!")
+	_attack_exec_finalize_attack()
+
+
+## Resolves damage against a squadron.
+## Squadrons have no shields — damage goes directly to hull.
+## Requirements: AE-DMG-002.
+func _resolve_squadron_damage(damage: int) -> void:
+	var sq_inst: SquadronInstance = (
+			_attack_sim_def_squad.get_squadron_instance())
+	if sq_inst == null:
+		_log.error("Squadron instance is null — cannot resolve damage.")
+		return
+	var actual: int = sq_inst.suffer_damage(damage)
+	EventBus.squadron_hull_changed.emit(sq_inst, sq_inst.current_hull)
+	_log.info("Squadron took %d damage. Hull: %d/%d." % [
+			actual, sq_inst.current_hull,
+			sq_inst.squadron_data.hull])
+	if _attack_sim_panel:
+		_attack_sim_panel.show_damage_info(
+				"Squadron: %d damage → Hull %d/%d" % [
+				actual, sq_inst.current_hull,
+				sq_inst.squadron_data.hull])
+	if sq_inst.is_destroyed():
+		_log.info("Squadron destroyed!")
+		EventBus.squadron_destroyed.emit(_attack_sim_def_squad)
+		_attack_sim_def_squad.visible = false
+
+
+## Resolves damage against a ship.
+## Shields absorb damage first. Remaining damage becomes damage cards.
+## Standard critical: first card is faceup if any critical icon present
+## and Contain was not spent.
+## Requirements: AE-DMG-003–014.
+## Rules Reference: "Damage", p.4.
+func _resolve_ship_damage(damage: int) -> void:
+	var def_inst: ShipInstance = (
+			_attack_sim_def_ship.get_ship_instance())
+	if def_inst == null:
+		_log.error("Ship instance is null — cannot resolve damage.")
+		return
+	var def_zone_str: String = Constants.hull_zone_to_string(
+			_attack_sim_def_zone as Constants.HullZone)
+	var remaining: int = damage
+	# Step 1: Absorb damage with shields.
+	var shield_absorbed: int = def_inst.reduce_shields(
+			def_zone_str, remaining)
+	remaining -= shield_absorbed
+	if shield_absorbed > 0:
+		EventBus.ship_shields_changed.emit(
+				def_inst, def_zone_str,
+				int(def_inst.current_shields.get(def_zone_str, 0)))
+		_log.info("Shields absorbed %d damage in %s. Remaining: %d." % [
+				shield_absorbed, def_zone_str, remaining])
+	# Step 2: Deal damage cards for remaining damage.
+	var has_crit: bool = Dice.has_any_critical(
+			_attack_exec_dice_results)
+	var first_card_faceup: bool = (has_crit
+			and not _attack_exec_contain_used)
+	var cards_dealt: int = 0
+	for i: int in range(remaining):
+		if _damage_deck == null:
+			_log.error("No damage deck available!")
+			break
+		var card: DamageCard = _damage_deck.draw_card()
+		if card == null:
+			_log.error("Damage deck is empty!")
+			break
+		if i == 0 and first_card_faceup:
+			card.is_faceup = true
+			def_inst.add_faceup_damage(card)
+			_log.info("Dealt faceup damage card: %s (standard critical)."
+					% card.title)
+		else:
+			def_inst.add_facedown_damage(card)
+		cards_dealt += 1
+	if cards_dealt > 0:
+		var new_hull: int = def_inst.ship_data.hull - (
+				def_inst.get_total_damage())
+		EventBus.ship_hull_changed.emit(def_inst, new_hull)
+		EventBus.ship_damaged.emit(
+				_attack_sim_def_ship, cards_dealt,
+				_attack_sim_def_zone as Constants.HullZone)
+	# Build damage summary.
+	var summary: String = "%s: %d shield, %d cards" % [
+			def_zone_str, shield_absorbed, cards_dealt]
+	if first_card_faceup and cards_dealt > 0:
+		summary += " (1st faceup)"
+	if _attack_sim_panel:
+		_attack_sim_panel.show_damage_info(summary)
+	_log.info("Damage resolved: %s" % summary)
+	# Check for destruction.
+	EventBus.damage_resolved.emit(
+			_attack_sim_def_ship, damage)
+	if def_inst.is_destroyed():
+		_log.info("Ship destroyed! %s" % def_inst.data_key)
+		EventBus.ship_destroyed.emit(_attack_sim_def_ship)
+		_attack_sim_def_ship.visible = false
+
+
+## Waits briefly to show the damage info, then proceeds to finalize.
+func _attack_exec_finalize_after_delay() -> void:
+	# Small delay so the player can see the damage info.
+	var timer: SceneTreeTimer = get_tree().create_timer(1.2)
+	timer.timeout.connect(_attack_exec_finalize_attack)
+
+
+## Finalises the attack: records the zone as fired, checks for follow-up
+## attacks (two-hull-zone rule, squadron Step 6 loop).
+## This is the logic previously in _on_attack_confirm after damage was
+## "deferred."
+## Requirements: AE-2HZ-001, AE-2HZ-003, AE-2HZ-004, AE-SQ-001,
+## AE-SQ-003, AE-SQ-004.
+## Rules Reference: "Attack", Step 6, p.2.
+func _attack_exec_finalize_attack() -> void:
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_damage_info()
+		_attack_sim_panel.hide_defense_section()
+		_attack_sim_panel.hide_accuracy_section()
+		_attack_sim_panel.hide_redirect_section()
 	# --- Squadron defender: Step 6 loop ---
 	if _attack_sim_def_squad:
-		# Record this squadron as attacked.
 		_attack_exec_attacked_squads.append(_attack_sim_def_squad)
-		# Draw red dot on the squadron's centre.
 		if _attack_sim_overlay:
 			_attack_sim_overlay.add_spent_zone_marker(
 					_attack_sim_def_squad.global_position)
-		# Check for remaining enemy squadrons in the same arc.
 		if _attack_exec_has_more_squad_targets():
 			_attack_exec_prepare_next_squadron()
 			return
-		# No more squadron targets — record zone as fired, move to next HZ.
 		if _attack_sim_atk_zone >= 0:
 			_attack_exec_fired_zones.append(_attack_sim_atk_zone)
-		# Draw red dot on spent zone's LOS position.
 		_attack_exec_mark_spent_zone()
 		_attack_exec_current_attack += 1
 		if _attack_exec_current_attack < 2:
@@ -3029,20 +3648,14 @@ func _on_attack_confirm() -> void:
 			return
 		_on_attack_exec_done()
 		return
-	# --- Ship defender: existing two-hull-zone logic ---
-	# Record this zone as fired.
+	# --- Ship defender: two-hull-zone logic ---
 	if _attack_sim_atk_zone >= 0:
 		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
-	# Draw red dot on spent zone's LOS position.
 	_attack_exec_mark_spent_zone()
 	_attack_exec_current_attack += 1
-	# Check if second attack is possible (max 2 hull zones per activation).
-	# Rules Reference: "Attack", p.2 — each ship may perform up to two
-	# attacks during its activation from different hull zones.
 	if _attack_exec_current_attack < 2:
 		_attack_exec_prepare_next_attack()
 		return
-	# All attacks done — finish.
 	_on_attack_exec_done()
 
 

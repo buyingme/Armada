@@ -101,6 +101,27 @@ static func is_accuracy(face: Constants.DiceFace) -> bool:
 	return face == Constants.DiceFace.ACCURACY
 
 
+## Returns the number of accuracy results in a dice result array.
+## Requirements: AE-ACC-001.
+static func count_accuracy(results: Array[Dictionary]) -> int:
+	var count: int = 0
+	for result: Dictionary in results:
+		if is_accuracy(result["face"] as Constants.DiceFace):
+			count += 1
+	return count
+
+
+## Returns whether any die in the results has a critical face.
+## Requirements: AE-DMG-010.
+## Rules Reference: "Critical Effect", p.4 — standard critical: if at least
+## one critical icon, first damage card is faceup.
+static func has_any_critical(results: Array[Dictionary]) -> bool:
+	for result: Dictionary in results:
+		if has_critical(result["face"] as Constants.DiceFace):
+			return true
+	return false
+
+
 ## Base path for dice face PNG images.
 const _DICE_IMAGE_BASE: String = "res://Resources/Game_Components/dice/"
 

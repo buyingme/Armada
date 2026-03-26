@@ -153,3 +153,65 @@ static func get_max_speed(ship_size: ShipSize) -> int:
 		_:
 			push_error("Unknown ship size: %s" % ship_size)
 			return 0
+
+
+## Hull zone adjacency table.  Two hull zones are adjacent if they share a
+## hull-zone line (the boundary between zones on the base).
+## Rules Reference: "Hull Zones", p.8 — "adjacent hull zones share a hull
+## zone line."
+## FRONT↔LEFT, FRONT↔RIGHT, REAR↔LEFT, REAR↔RIGHT.
+## FRONT is NOT adjacent to REAR; LEFT is NOT adjacent to RIGHT.
+const ADJACENT_HULL_ZONES: Dictionary = {
+	HullZone.FRONT: [HullZone.LEFT, HullZone.RIGHT],
+	HullZone.LEFT: [HullZone.FRONT, HullZone.REAR],
+	HullZone.RIGHT: [HullZone.FRONT, HullZone.REAR],
+	HullZone.REAR: [HullZone.LEFT, HullZone.RIGHT],
+}
+
+
+## Returns the hull zones adjacent to [param zone].
+## Requirements: AE-DEF-012.
+## Rules Reference: "Hull Zones", p.8.
+static func get_adjacent_hull_zones(zone: HullZone) -> Array:
+	return ADJACENT_HULL_ZONES.get(zone, [])
+
+
+## Returns the string key ("FRONT", "LEFT", etc.) for a HullZone enum value.
+static func hull_zone_to_string(zone: HullZone) -> String:
+	match zone:
+		HullZone.FRONT:
+			return "FRONT"
+		HullZone.LEFT:
+			return "LEFT"
+		HullZone.RIGHT:
+			return "RIGHT"
+		HullZone.REAR:
+			return "REAR"
+		_:
+			return "FRONT"
+
+
+## Returns the HullZone enum for a string key ("FRONT", "LEFT", etc.).
+static func string_to_hull_zone(zone_str: String) -> HullZone:
+	match zone_str.to_upper():
+		"FRONT":
+			return HullZone.FRONT
+		"LEFT":
+			return HullZone.LEFT
+		"RIGHT":
+			return HullZone.RIGHT
+		"REAR":
+			return HullZone.REAR
+		_:
+			return HullZone.FRONT
+
+
+## Defense token type to display name.
+const DEFENSE_TOKEN_NAMES: Dictionary = {
+	DefenseToken.EVADE: "Evade",
+	DefenseToken.REDIRECT: "Redirect",
+	DefenseToken.BRACE: "Brace",
+	DefenseToken.SCATTER: "Scatter",
+	DefenseToken.CONTAIN: "Contain",
+	DefenseToken.SALVO: "Salvo",
+}

@@ -385,3 +385,28 @@ func test_show_select_next_squadron_body() -> void:
 	assert_eq(_panel.get_body_text(),
 			"Select next squadron in arc, or Skip.",
 			"Body should prompt for next squadron or skip.")
+
+
+# =========================================================================
+# Skip Attack Button — Visibility at Attack Start
+# =========================================================================
+
+func test_skip_attack_button_hidden_initially() -> void:
+	_panel.show_initial()
+	assert_false(_panel._skip_attack_button.visible,
+			"Skip Attack should be hidden initially.")
+
+
+func test_skip_attack_button_visible_after_show() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	assert_true(_panel._skip_attack_button.visible,
+			"Skip Attack should be visible after show_skip_attack_button.")
+
+
+func test_skip_attack_button_hidden_after_hide() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	_panel.hide_skip_attack_button()
+	assert_false(_panel._skip_attack_button.visible,
+			"Skip Attack should be hidden after hide_skip_attack_button.")

@@ -2458,3 +2458,37 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | 4 | Escape cancels at any point | Clean dismiss |
 
 **Pass criteria:** All prior phase behaviours unchanged; GUT passes; full attack sequence works per MT-6c.1–14.
+
+---
+
+### MT-6c.16 — Auto-skip attack when no valid targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position a ship far from all enemies (no targets in any arc/range) | Ship on board with no reachable enemies |
+| 2 | Activate the ship and enter the Attack step via the activation modal | Attack step auto-skips immediately; log shows "No valid targets from any hull zone — auto-skipping"; activation advances to Maneuver step |
+| 3 | Verify the activation modal re-opens | Activation modal shows with Maneuver step active |
+
+**Pass criteria:** Ship with no valid targets auto-skips the entire attack step without requiring player interaction.
+
+---
+
+### MT-6c.17 — Skip Attack button at hull zone selection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship and enter the Attack step | Attack panel appears with "Select attacking hull zone" prompt AND a visible "Skip Attack" button |
+| 2 | Click "Skip Attack" without selecting a hull zone | Attack step ends cleanly; activation advances to Maneuver step |
+
+**Pass criteria:** Player can skip attacks at any point, even before selecting a hull zone.
+
+---
+
+### MT-6c.18 — Auto-skip second attack when no remaining targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack from one hull zone and resolve damage normally | First attack completes; board transitions to second hull zone selection |
+| 2 | If no valid targets exist from any remaining unfired hull zone | Second attack auto-skips; attack step ends; activation advances to Maneuver |
+
+**Pass criteria:** Second attack auto-skips when no remaining hull zones have valid targets.

@@ -1554,6 +1554,16 @@ func _on_attack_step_entered() -> void:
 	if _attack_exec_ship_token.get_ship_data():
 		ship_name = _attack_exec_ship_token.get_ship_data().ship_name
 	_attack_sim_panel.show_initial_attack_exec(ship_name)
+	# Always show Skip Attack so the player can opt out.
+	_attack_sim_panel.show_skip_attack_button()
+	# Auto-skip if no valid targets exist from any hull zone.
+	## Rules Reference: "Attack", p.2 — a ship is not required to attack.
+	if not _attack_exec_has_any_valid_target():
+		_log.info("No valid targets from any hull zone — auto-skipping.")
+		if _attack_sim_panel:
+			_attack_sim_panel.hide_skip_attack_button()
+		_on_attack_exec_done()
+		return
 	# Show range overlay for the activated ship.
 	if _attack_sim_range_overlay:
 		_attack_sim_range_overlay.queue_free()
@@ -3762,6 +3772,79 @@ func _attack_exec_is_squadron_at_range(
 	return band != Constants.RANGE_BAND_BEYOND
 
 
+## Returns true if the given hull zone on the attacker has ANY valid
+## enemy target (ship or squadron) in arc and at attack range.
+## Used to auto-skip attack when no targets exist.
+## Requirements: AE-SKIP-003.
+func _attack_exec_zone_has_targets(ship_token: ShipToken,
+		zone: Constants.HullZone) -> bool:
+	var atk_arc_pts: Dictionary = ship_token.get_firing_arc_world_points()
+	var atk_edge: Array[Vector2] = _get_ship_edge(ship_token, zone)
+	var attacker_faction: int = ship_token.get_faction()
+	# Check enemy ships.
+	for def_token: ShipToken in get_ship_tokens():
+		if def_token.get_faction() == attacker_faction:
+			continue
+		if def_token == ship_token:
+			continue
+		# Check all 4 hull zones of the defender.
+		for def_zone: int in [Constants.HullZone.FRONT,
+				Constants.HullZone.LEFT, Constants.HullZone.RIGHT,
+				Constants.HullZone.REAR]:
+			var def_edge: Array[Vector2] = _get_ship_edge(
+					def_token, def_zone as Constants.HullZone)
+			if not RangeFinder.is_hull_zone_edge_in_arc(
+					def_edge, zone, atk_arc_pts):
+				continue
+			var range_data: Dictionary = (
+					RangeFinder.measure_attack_range_ship_endpoints(
+					atk_edge, def_edge, zone, atk_arc_pts))
+			var dist: float = range_data.get("distance", INF)
+			if dist >= INF:
+				continue
+			var rng_band: String = GameScale.get_range_band(dist)
+			if rng_band != Constants.RANGE_BAND_BEYOND:
+				return true
+	# Check enemy squadrons.
+	for sq_token: SquadronToken in get_squadron_tokens():
+		if sq_token.get_faction() == attacker_faction:
+			continue
+		if not RangeFinder.is_squadron_in_arc(
+				sq_token.global_position, sq_token.get_radius_px(),
+				zone, atk_arc_pts):
+			continue
+		var range_data: Dictionary = (
+				RangeFinder.measure_attack_range_squadron_endpoints(
+				atk_edge, sq_token.global_position,
+				sq_token.get_radius_px(), zone, atk_arc_pts))
+		var dist: float = range_data.get("distance", INF)
+		if dist >= INF:
+			continue
+		var rng_band: String = GameScale.get_range_band(dist)
+		if rng_band != Constants.RANGE_BAND_BEYOND:
+			return true
+	return false
+
+
+## Returns true if the attacker has valid targets from ANY unfired hull zone.
+## Requirements: AE-SKIP-003.
+func _attack_exec_has_any_valid_target() -> bool:
+	if _attack_exec_ship_token == null:
+		return false
+	var all_zones: Array[int] = [
+		Constants.HullZone.FRONT, Constants.HullZone.LEFT,
+		Constants.HullZone.RIGHT, Constants.HullZone.REAR,
+	]
+	for zone: int in all_zones:
+		if zone in _attack_exec_fired_zones:
+			continue
+		if _attack_exec_zone_has_targets(
+				_attack_exec_ship_token,
+				zone as Constants.HullZone):
+			return true
+	return false
+
+
 ## Prepares the board for attacking the next squadron in the same arc.
 ## Resets target and dice state but keeps the hull zone locked.
 ## Requirements: AE-SQ-004, AE-SQ-005.
@@ -3804,6 +3887,11 @@ func _attack_exec_prepare_next_squadron() -> void:
 func _attack_exec_prepare_next_attack() -> void:
 	_log.info("Preparing second attack (attack %d/2)." % [
 			_attack_exec_current_attack + 1])
+	# Auto-skip if no valid targets remain from unfired hull zones.
+	if not _attack_exec_has_any_valid_target():
+		_log.info("No valid targets for second attack — auto-skipping.")
+		_on_attack_exec_done()
+		return
 	# Reset target and dice state.
 	_attack_sim_clear_target_state()
 	_attack_exec_dice_results.clear()

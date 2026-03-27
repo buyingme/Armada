@@ -217,3 +217,114 @@ func test_hide_damage_info_hides() -> void:
 	_panel.hide_damage_info()
 	assert_false(_panel._damage_info_container.visible,
 			"Damage info should be hidden")
+
+
+# =========================================================================
+# Evade Die Selection
+# =========================================================================
+
+func test_show_evade_die_selection_enables_evade_mode() -> void:
+	# Build dice first so clickable dice exist.
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLUE,
+				"face": Constants.DiceFace.HIT},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	assert_true(_panel._evade_mode,
+			"Evade mode should be true after show_evade_die_selection")
+
+
+func test_show_evade_die_selection_long_range_prompt() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	assert_true("remove" in _panel._defense_info_label.text,
+			"Long range evade prompt should mention 'remove'")
+
+
+func test_show_evade_die_selection_medium_range_prompt() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_MEDIUM)
+	assert_true("reroll" in _panel._defense_info_label.text,
+			"Medium range evade prompt should mention 'reroll'")
+
+
+func test_hide_evade_die_selection_clears_mode() -> void:
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	_panel.hide_evade_die_selection()
+	assert_false(_panel._evade_mode,
+			"Evade mode should be false after hide")
+
+
+func test_evade_die_click_emits_signal() -> void:
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLUE,
+				"face": Constants.DiceFace.ACCURACY},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	# Watch for signal.
+	watch_signals(_panel)
+	# Simulate clicking die 0.
+	if _panel._dice_textures.size() > 0:
+		var event: InputEventMouseButton = InputEventMouseButton.new()
+		event.pressed = true
+		event.button_index = MOUSE_BUTTON_LEFT
+		_panel._on_die_clicked(event, _panel._dice_textures[0])
+	assert_signal_emitted(_panel, "evade_die_confirmed",
+			"evade_die_confirmed should be emitted on die click")
+
+
+# =========================================================================
+# Brace Pending Indicator
+# =========================================================================
+
+func test_update_defense_damage_brace_pending_shows_indicator() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 6, 2)
+	_panel.update_defense_damage(6, true)
+	assert_true("Brace pending" in _panel._defense_info_label.text,
+			"Brace pending indicator should appear")
+	assert_true("3" in _panel._defense_info_label.text,
+			"Braced damage preview (3) should appear")
+
+
+func test_update_defense_damage_no_brace_no_indicator() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 6, 2)
+	_panel.update_defense_damage(4)
+	assert_false("Brace" in _panel._defense_info_label.text,
+			"No brace indicator without brace_pending")

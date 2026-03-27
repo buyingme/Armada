@@ -1110,8 +1110,8 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | AE-DEF-003 | Each token type can be spent at most once per attack | Disable button after spending |
 | AE-DEF-004 | READY tokens can be exhausted; EXHAUSTED tokens must be discarded | Spend method determined by state |
 | AE-DEF-005 | **Scatter** — cancels all dice, sets modified damage to 0, ends defense step immediately | Most impactful token |
-| AE-DEF-006 | **Evade** — at long range: remove 1 die (best for defender); at medium/close: reroll 1 die | `_apply_evade_effect()` with `_find_best_evade_die()` |
-| AE-DEF-007 | **Brace** — halve total damage (round up); update panel damage display | `ceili(damage / 2.0)` |
+| AE-DEF-006 | **Evade** — defender manually selects a die: at long range remove it, at medium/close reroll it (immediate apply on click) | `_attack_exec_start_evade()` + `_on_evade_die_selected()` |
+| AE-DEF-007 | **Brace** — deferred to Step 5 (Resolve Damage): halve total damage (round up); show pending indicator during Step 4 | Flag `_attack_exec_brace_used`, applied in `_attack_exec_resolve_damage()` |
 | AE-DEF-008 | **Redirect** — enter redirect sub-step: player clicks adjacent hull zones to move damage 1-at-a-time up to shield capacity | `_attack_exec_start_redirect()`, per-click allocation |
 | AE-DEF-009 | **Contain** — prevent the first damage card from being dealt faceup (standard critical blocked) | Flag `_attack_exec_contain_used` |
 | AE-DEF-010 | "Done" button ends defense step and proceeds to damage resolution | Signal: `defense_tokens_done` |
@@ -1155,7 +1155,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 12 | Phase 6c-1: `_attack_exec_start_accuracy()` + `_on_attack_accuracy_confirmed()` | Orchestration | AE-ACC-001–005 | Full accuracy toggling flow with budget | ✅ |
 | 13 | Phase 6c-2: `_attack_exec_start_defense()` + token spending flow | Orchestration | AE-DEF-001–004, AE-DEF-011 | Camera rotation, spendable token check, speed 0 guard | ✅ |
 | 14 | `_on_attack_defense_token_spent()` + `_apply_defense_token_effect()` | Orchestration | AE-DEF-003–009 | Exhaust/discard logic, dispatch to token-specific handlers | ✅ |
-| 15 | `_apply_evade_effect()` + `_find_best_evade_die()` | Orchestration | AE-DEF-006 | Long=remove, medium/close=reroll; find best die to evade | ✅ |
+| 15 | Evade die-selection: `_attack_exec_start_evade()` + `_on_evade_die_selected()` + panel `show_evade_die_selection()` | Orchestration+UI | AE-DEF-006 | Manual die selection, long=remove, medium/close=reroll; `evade_die_confirmed` signal | ✅ |
 | 16 | Redirect sub-step: `_attack_exec_start_redirect()` + `_on_attack_redirect_zone_selected()` | Orchestration | AE-DEF-008 | Adjacent zone buttons, per-click allocation | ✅ |
 | 17 | `_on_attack_defense_done()` | Orchestration | AE-DEF-010 | Ends defense, proceeds to damage | ✅ |
 | 18 | `_attack_exec_resolve_damage()` — routes to ship or squadron | Orchestration | AE-DMG-001 | Calculates final damage, dispatches | ✅ |
@@ -1165,7 +1165,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 22 | Unit tests: `test_dice_accuracy.gd` (9 tests) | Tests | AE-ACC-001, AE-ACC-006 | `Dice.count_accuracy()` + `has_any_critical()` | ✅ |
 | 23 | Unit tests: `test_constants_hull_zones.gd` (12 tests) | Tests | AE-DMG-011–012 | Adjacency, string↔enum conversion | ✅ |
 | 24 | Unit tests: `test_ship_damage_resolution.gd` (25 tests) | Tests | AE-DMG-001–006 | Shields, damage cards, defense tokens, brace math, destruction | ✅ |
-| 25 | Unit tests: `test_attack_sim_panel_defense.gd` (15 tests) | Tests | AE-ACC-002–004, AE-DEF-001, AE-DEF-008, AE-DMG-009 | Accuracy/defense/redirect/damage UI sections | ✅ |
+| 25 | Unit tests: `test_attack_sim_panel_defense.gd` (24 tests) | Tests | AE-ACC-002–004, AE-DEF-001, AE-DEF-006–007, AE-DEF-008, AE-DMG-009 | Accuracy/defense/redirect/damage/evade/brace UI sections | ✅ |
 | 26 | Docs & plan update | Docs | — | This section + `docs/test_plan_manual.md` Phase 6c | ✅ |
 
 **Requirements covered:** AE-ACC-001–006, AE-DEF-001–012, AE-DMG-001–014

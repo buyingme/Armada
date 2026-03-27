@@ -255,8 +255,17 @@ var _attack_exec_redirect_zone: int = -1
 ## Requirements: AE-DEF-014.
 var _attack_exec_contain_used: bool = false
 
+## Whether the Brace token was spent (deferred to Step 5 — Resolve Damage).
+## Requirements: AE-DEF-010.
+## Rules Reference: "Brace", RRG v1.5.0, p.3 — "When damage is totaled
+## during the 'Resolve Damage' step, the total is reduced to half."
+var _attack_exec_brace_used: bool = false
+
 ## Whether we are in the redirect zone click sub-step.
 var _attack_exec_redirect_step: bool = false
+
+## Whether we are in the evade die-selection sub-step.
+var _attack_exec_evade_step: bool = false
 
 ## --- Phase 5b: Activation flow state ---
 
@@ -1583,7 +1592,9 @@ func _on_attack_exec_done() -> void:
 	_attack_exec_redirect_remaining = 0
 	_attack_exec_redirect_zone = -1
 	_attack_exec_contain_used = false
+	_attack_exec_brace_used = false
 	_attack_exec_redirect_step = false
+	_attack_exec_evade_step = false
 	# Advance the activation state past ATTACK → MANEUVER.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
@@ -2869,6 +2880,9 @@ func _connect_attack_panel_signals() -> void:
 			_on_attack_redirect_zone_selected):
 		p.redirect_zone_selected.connect(
 				_on_attack_redirect_zone_selected)
+	if not p.evade_die_confirmed.is_connected(
+			_on_evade_die_selected):
+		p.evade_die_confirmed.connect(_on_evade_die_selected)
 
 
 ## Begins the Phase 6b-2 attack sequence after target and range are known.
@@ -3079,7 +3093,9 @@ func _on_attack_confirm() -> void:
 	_attack_exec_redirect_remaining = 0
 	_attack_exec_redirect_zone = -1
 	_attack_exec_contain_used = false
+	_attack_exec_brace_used = false
 	_attack_exec_redirect_step = false
+	_attack_exec_evade_step = false
 	_attack_exec_start_accuracy()
 
 
@@ -3278,20 +3294,23 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 				_attack_sim_panel.update_defense_damage(0)
 				_attack_sim_panel.disable_defense_token_button(-1)
 		Constants.DefenseToken.EVADE:
-			# RRG v1.5.0 "Evade": at long range remove 1 die, at
-			# medium/close range reroll 1 die.
-			_apply_evade_effect()
+			# Enter die-selection mode — defender chooses which die.
+			## Rules Reference: "Evade", RRG v1.5.0, p.5 — "At long
+			## range, the defender cancels one attack die of its choice.
+			## At medium or close range, the defender chooses one attack
+			## die to be rerolled."
+			_attack_exec_start_evade()
+			return  # Don't disable button here; evade step handles it
 		Constants.DefenseToken.BRACE:
-			# Halve total damage, rounded up.
-			## Rules Reference: "Brace", p.3 — "the total damage is
+			# Deferred to Step 5 (Resolve Damage): halve total damage.
+			## Rules Reference: "Brace", RRG v1.5.0, p.3 — "When damage
+			## is totaled during the 'Resolve Damage' step, the total is
 			## reduced to half, rounded up."
-			_attack_exec_modified_damage = ceili(
-					float(_attack_exec_modified_damage) / 2.0)
-			_log.info("Brace: damage halved to %d." % [
-					_attack_exec_modified_damage])
+			_attack_exec_brace_used = true
+			_log.info("Brace: will halve damage in Step 5.")
 			if _attack_sim_panel:
 				_attack_sim_panel.update_defense_damage(
-						_attack_exec_modified_damage)
+						_attack_exec_modified_damage, true)
 		Constants.DefenseToken.REDIRECT:
 			# Enter redirect mode — player must click hull zone to
 			# redirect up to the max shields of the chosen zone.
@@ -3326,67 +3345,71 @@ func _get_token_button_index_for_type(
 	return -1
 
 
-## Applies the Evade defense token effect.
-## At long range: remove 1 die (choose die with most damage).
-## At medium/close range: force attacker to reroll 1 die.
+## Starts the Evade die-selection sub-step.
+## The defender must click a die to remove (long) or reroll (med/close).
 ## Requirements: AE-DEF-007–009.
 ## Rules Reference: "Evade", RRG v1.5.0, p.5 — "At long range, the
-## defender chooses one die to be removed. At medium or close range, the
-## defender chooses one die to be rerolled."
-func _apply_evade_effect() -> void:
+## defender cancels one attack die of its choice. At medium or close
+## range, the defender chooses one attack die to be rerolled."
+func _attack_exec_start_evade() -> void:
 	if _attack_exec_dice_results.is_empty():
+		_log.info("Evade: no dice to target — skipping.")
 		return
+	_attack_exec_evade_step = true
+	var range_band: String = _attack_exec_range_band
+	_log.info("Evade: awaiting die selection (%s range)." % range_band)
+	if _attack_sim_panel:
+		_attack_sim_panel.show_evade_die_selection(range_band)
+
+
+## Called when the defender selects a die during evade die-selection.
+## At long range: remove the die. At medium/close: reroll it.
+## Requirements: AE-DEF-007–009.
+func _on_evade_die_selected(die_index: int) -> void:
+	if not _attack_exec_evade_step:
+		return
+	if die_index < 0 or die_index >= _attack_exec_dice_results.size():
+		_log.info("Evade: invalid die index %d." % die_index)
+		return
+	_attack_exec_evade_step = false
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_evade_die_selection()
 	var range_band: String = _attack_exec_range_band
 	if range_band == Constants.RANGE_BAND_LONG:
-		# Remove the die with the highest damage.
-		var best_idx: int = _find_best_evade_die()
-		if best_idx >= 0:
-			var removed: Dictionary = _attack_exec_dice_results[best_idx]
-			_attack_exec_dice_results.remove_at(best_idx)
-			_attack_exec_modified_damage = Dice.calculate_damage(
+		# Remove the chosen die.
+		_attack_exec_dice_results.remove_at(die_index)
+		_attack_exec_modified_damage = Dice.calculate_damage(
+				_attack_exec_dice_results)
+		_log.info("Evade (long): removed die %d. Damage now %d." % [
+				die_index, _attack_exec_modified_damage])
+		if _attack_sim_panel:
+			_attack_sim_panel.show_dice_results(
 					_attack_exec_dice_results)
-			_log.info("Evade (long): removed die %d. Damage now %d." % [
-					best_idx, _attack_exec_modified_damage])
-			if _attack_sim_panel:
-				_attack_sim_panel.show_dice_results(
-						_attack_exec_dice_results)
-				_attack_sim_panel.update_defense_damage(
-						_attack_exec_modified_damage)
 	else:
-		# Medium or close: reroll 1 die (choose the highest damage die).
-		var best_idx: int = _find_best_evade_die()
-		if best_idx >= 0:
-			var die_result: Dictionary = (
-					_attack_exec_dice_results[best_idx])
-			var color: Constants.DiceColor = (
-					die_result["color"] as Constants.DiceColor)
-			var new_face: Constants.DiceFace = Dice.roll_die(color)
-			_attack_exec_dice_results[best_idx]["face"] = new_face
-			_attack_exec_modified_damage = Dice.calculate_damage(
-					_attack_exec_dice_results)
-			_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
-					% [range_band, best_idx, str(new_face),
-					_attack_exec_modified_damage])
-			if _attack_sim_panel:
-				_attack_sim_panel.update_die_result(best_idx, {
-					"color": color, "face": new_face})
-				_attack_sim_panel.update_defense_damage(
-						_attack_exec_modified_damage)
-
-
-## Finds the die index with the highest damage value (for Evade).
-func _find_best_evade_die() -> int:
-	var best_idx: int = -1
-	var best_dmg: int = -1
-	for i: int in range(_attack_exec_dice_results.size()):
-		var face: Constants.DiceFace = (
-				_attack_exec_dice_results[i]["face"]
-				as Constants.DiceFace)
-		var dmg: int = Dice.get_face_damage(face)
-		if dmg > best_dmg:
-			best_dmg = dmg
-			best_idx = i
-	return best_idx
+		# Medium or close: reroll the chosen die.
+		var die_result: Dictionary = (
+				_attack_exec_dice_results[die_index])
+		var color: Constants.DiceColor = (
+				die_result["color"] as Constants.DiceColor)
+		var new_face: Constants.DiceFace = Dice.roll_die(color)
+		_attack_exec_dice_results[die_index]["face"] = new_face
+		_attack_exec_modified_damage = Dice.calculate_damage(
+				_attack_exec_dice_results)
+		_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
+				% [range_band, die_index, str(new_face),
+				_attack_exec_modified_damage])
+		if _attack_sim_panel:
+			_attack_sim_panel.update_die_result(die_index, {
+				"color": color, "face": new_face})
+	# Update damage display (with brace pending if applicable).
+	if _attack_sim_panel:
+		_attack_sim_panel.update_defense_damage(
+				_attack_exec_modified_damage, _attack_exec_brace_used)
+	# Disable the Evade button.
+	if _attack_sim_panel:
+		_attack_sim_panel.disable_defense_token_button(
+				_get_token_button_index_for_type(
+				Constants.DefenseToken.EVADE))
 
 
 ## Starts the redirect sub-step: shows adjacent zone buttons.
@@ -3444,7 +3467,7 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 			_attack_exec_modified_damage])
 	if _attack_sim_panel:
 		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage)
+				_attack_exec_modified_damage, _attack_exec_brace_used)
 		if _attack_exec_redirect_remaining > 0:
 			# Check if any adjacent zone still has shields.
 			var def_zone: Constants.HullZone = (
@@ -3497,6 +3520,13 @@ func _attack_exec_resolve_damage() -> void:
 	var final_damage: int = _attack_exec_modified_damage
 	if _attack_exec_scatter_used:
 		final_damage = 0
+	# Apply Brace here (deferred from Step 4 to Step 5).
+	## Rules Reference: "Brace", RRG v1.5.0, p.3 — "When damage is totaled
+	## during the 'Resolve Damage' step, the total is reduced to half,
+	## rounded up."
+	if _attack_exec_brace_used and final_damage > 0:
+		final_damage = ceili(float(final_damage) / 2.0)
+		_log.info("Brace (Step 5): damage halved to %d." % final_damage)
 	_log.info("Resolving damage: %d total." % final_damage)
 	if final_damage <= 0:
 		_log.info("No damage to resolve.")

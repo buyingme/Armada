@@ -2326,9 +2326,10 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Attack at long range; defender spends Evade | One die is removed from the pool (highest damage die); damage total decreases |
+| 1 | Attack at long range; defender spends Evade | Dice become clickable with cyan tint; prompt says "click a die to remove" |
+| 2 | Click a die of your choice | The clicked die is removed from the pool; damage total decreases; dice return to normal |
 
-**Pass criteria:** Die removed at long range.
+**Pass criteria:** Defender manually selects which die to remove at long range.
 
 ---
 
@@ -2336,9 +2337,22 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Attack at medium or close range; defender spends Evade | One die is rerolled; damage total may change |
+| 1 | Attack at medium or close range; defender spends Evade | Dice become clickable with cyan tint; prompt says "click a die to reroll" |
+| 2 | Click a die of your choice | The clicked die is rerolled; damage total may change; dice return to normal |
 
-**Pass criteria:** Die rerolled (not removed) at medium/close.
+**Pass criteria:** Defender manually selects which die to reroll at medium/close.
+
+---
+
+### MT-6c.6a — Defense token: Brace (deferred to Step 5)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Defender spends Brace token | Damage label shows "Modified damage: N (Brace pending → M)" where M = ceil(N/2); damage is NOT halved yet |
+| 2 | Defender clicks "Done" to end defense step | Damage resolution applies brace: final damage is halved (rounded up) |
+| 3 | Defender spends Evade AFTER Brace | Evade modifies dice normally; brace pending preview updates to reflect new total |
+
+**Pass criteria:** Brace halving deferred to Step 5; pending indicator shown during Step 4; Evade+Brace interaction correct.
 
 ---
 

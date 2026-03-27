@@ -76,6 +76,13 @@ signal defense_tokens_done()
 ## Requirements: AE-DEF-012, AE-DEF-013.
 signal redirect_zone_selected(zone: int)
 
+## Emitted when the defender selects a die during evade die-selection.
+## [param die_index] — index in the dice results array.
+## Requirements: AE-DEF-007.
+## Rules Reference: "Evade", RRG v1.5.0, p.5 — "the defender cancels one
+## attack die of its choice."
+signal evade_die_confirmed(die_index: int)
+
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackSimPanel")
@@ -166,6 +173,8 @@ var _damage_info_label: Label = null
 var _dice_textures: Array[TextureRect] = []
 ## Index of the die selected for reroll (-1 = none).
 var _selected_reroll_index: int = -1
+## Whether dice are in evade-selection mode (click = immediate confirm).
+var _evade_mode: bool = false
 ## Size of each die image in the row (pixels).
 const _DIE_IMAGE_SIZE: float = 32.0
 
@@ -938,9 +947,16 @@ func hide_defense_section() -> void:
 
 
 ## Updates the damage display during defense modifications.
-func update_defense_damage(damage: int) -> void:
+## When [param brace_pending] is true, shows a "(Brace pending)" hint.
+func update_defense_damage(damage: int, brace_pending: bool = false) -> void:
 	if _defense_info_label:
-		_defense_info_label.text = "Modified damage: %d" % damage
+		if brace_pending:
+			var braced: int = ceili(float(damage) / 2.0)
+			_defense_info_label.text = (
+					"Modified damage: %d (Brace pending → %d)" % [
+					damage, braced])
+		else:
+			_defense_info_label.text = "Modified damage: %d" % damage
 
 
 ## Disables a defense token button after it's been spent.
@@ -957,6 +973,32 @@ func disable_defense_token_button(token_index: int) -> void:
 
 func _on_defense_token_pressed(token_index: int) -> void:
 	defense_token_selected.emit(token_index, "exhaust")
+
+
+## Enters evade die-selection mode — dice become clickable and the prompt
+## instructs the defender to pick a die to remove (long) or reroll (med/close).
+## Requirements: AE-DEF-007–009.
+## Rules Reference: "Evade", RRG v1.5.0, p.5.
+func show_evade_die_selection(range_band: String) -> void:
+	_evade_mode = true
+	_set_dice_clickable(true)
+	_clear_die_selection_highlights()
+	# Tint dice cyan to show they are selectable.
+	for tex_rect: TextureRect in _dice_textures:
+		if tex_rect:
+			tex_rect.modulate = Color(0.7, 1.0, 1.0, 1.0)
+	if _defense_info_label:
+		if range_band == Constants.RANGE_BAND_LONG:
+			_defense_info_label.text += "\nEvade: click a die to remove."
+		else:
+			_defense_info_label.text += "\nEvade: click a die to reroll."
+
+
+## Exits evade die-selection mode — dice return to non-clickable.
+func hide_evade_die_selection() -> void:
+	_evade_mode = false
+	_set_dice_clickable(false)
+	_clear_die_selection_highlights()
 
 
 func _on_defense_done() -> void:
@@ -1069,7 +1111,7 @@ func _set_dice_clickable(clickable: bool) -> void:
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
-## Called when a die image is clicked during reroll selection.
+## Called when a die image is clicked during reroll or evade selection.
 func _on_die_clicked(event: InputEvent,
 		tex_rect: TextureRect) -> void:
 	if not (event is InputEventMouseButton):
@@ -1079,6 +1121,12 @@ func _on_die_clicked(event: InputEvent,
 		return
 	var index: int = tex_rect.get_meta("die_index", -1)
 	if index < 0:
+		return
+	if _evade_mode:
+		# Evade: immediate confirm on click.
+		_clear_die_selection_highlights()
+		tex_rect.modulate = Color(1.0, 1.0, 0.5, 1.0)
+		evade_die_confirmed.emit(index)
 		return
 	_selected_reroll_index = index
 	_clear_die_selection_highlights()

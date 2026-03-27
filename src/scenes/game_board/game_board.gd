@@ -3174,8 +3174,16 @@ func _attack_exec_start_defense() -> void:
 		return
 	# Speed 0 check: cannot spend defense tokens.
 	## Rules Reference: "Defense Tokens", bullet 4, p.5.
+	## "If the defender's speed is 0, he cannot spend any defense tokens."
 	if def_inst.current_speed == 0:
 		_log.info("Defender speed 0 — cannot spend defense tokens.")
+		_attack_exec_defense_step = false
+		_attack_exec_resolve_damage()
+		return
+	# Rotate camera to the defender's perspective so they can see their
+	# tokens. Requirement: AE-DEF-011.
+	if _camera and PlayMode.is_hot_seat():
+		_camera.rotate_to_player(def_inst.owner_player)
 	_log.info("Defense step: %d spendable tokens, %d damage." % [
 			spendable, _attack_exec_modified_damage])
 	if _attack_sim_panel:
@@ -3626,6 +3634,13 @@ func _attack_exec_finalize_attack() -> void:
 		_attack_sim_panel.hide_defense_section()
 		_attack_sim_panel.hide_accuracy_section()
 		_attack_sim_panel.hide_redirect_section()
+	# Rotate camera back to the attacker's perspective for hull zone
+	# selection or the squadron loop. Requirement: AE-DEF-011.
+	if _camera and PlayMode.is_hot_seat() and _attack_exec_ship_token:
+		var atk_inst: ShipInstance = (
+				_attack_exec_ship_token.get_ship_instance())
+		if atk_inst:
+			_camera.rotate_to_player(atk_inst.owner_player)
 	# --- Squadron defender: Step 6 loop ---
 	if _attack_sim_def_squad:
 		_attack_exec_attacked_squads.append(_attack_sim_def_squad)

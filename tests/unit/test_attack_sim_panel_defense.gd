@@ -171,6 +171,192 @@ func test_update_defense_damage_updates_label() -> void:
 
 
 # =========================================================================
+# Defense Toggle / Deselect / Commit
+# =========================================================================
+
+func test_defense_token_toggle_selects() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	_panel._on_defense_token_pressed(0)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_true(0 in selected,
+			"Token 0 should be selected after first press")
+
+
+func test_defense_token_toggle_deselects() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	_panel._on_defense_token_pressed(0)
+	_panel._on_defense_token_pressed(0)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_false(0 in selected,
+			"Token 0 should be deselected after second press")
+
+
+func test_defense_token_highlight_on_select() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	_panel._on_defense_token_pressed(0)
+	var btn: Button = _panel._defense_token_buttons.get_child(0) as Button
+	assert_eq(btn.modulate, Color(0.3, 1.0, 0.3, 1.0),
+			"Selected button should have green modulate")
+	assert_true(btn.text.ends_with("✓"),
+			"Selected button text should end with checkmark")
+
+
+func test_defense_token_highlight_removed_on_deselect() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	_panel._on_defense_token_pressed(0)
+	_panel._on_defense_token_pressed(0)
+	var btn: Button = _panel._defense_token_buttons.get_child(0) as Button
+	assert_eq(btn.modulate, Color.WHITE,
+			"Deselected ready token should have white modulate")
+	assert_false(btn.text.ends_with("✓"),
+			"Deselected button text should not have checkmark")
+
+
+func test_defense_token_exhausted_restores_orange_on_deselect() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.EXHAUSTED},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	_panel._on_defense_token_pressed(0)
+	_panel._on_defense_token_pressed(0)
+	var btn: Button = _panel._defense_token_buttons.get_child(0) as Button
+	assert_eq(btn.modulate, Color(1.0, 0.7, 0.3, 1.0),
+			"Deselected exhausted token should restore orange modulate")
+
+
+func test_defense_one_per_type_deselects_previous() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.REDIRECT,
+				"state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.REDIRECT,
+				"state": Constants.DefenseTokenState.EXHAUSTED},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	_panel._on_defense_token_pressed(0)
+	_panel._on_defense_token_pressed(1)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_false(0 in selected,
+			"First Redirect should be deselected when second is selected")
+	assert_true(1 in selected,
+			"Second Redirect should be selected")
+
+
+func test_defense_different_types_both_selected() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 5, 2)
+	_panel._on_defense_token_pressed(0)
+	_panel._on_defense_token_pressed(1)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_eq(selected.size(), 2,
+			"Two tokens of different types should both be selected")
+
+
+func test_defense_get_selected_returns_empty_initially() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_eq(selected.size(), 0,
+			"No tokens should be selected initially")
+
+
+func test_defense_show_section_clears_prior_selection() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	_panel._on_defense_token_pressed(0)
+	# Re-show section — selection should reset.
+	_panel.show_defense_section(tokens, [], 4, 2)
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	assert_eq(selected.size(), 0,
+			"Prior selection should be cleared on re-show")
+
+
+func test_defense_disable_all_buttons_disables() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 4, 2)
+	_panel.disable_all_defense_buttons()
+	for child: Node in _panel._defense_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn:
+			assert_true(btn.disabled,
+					"All buttons should be disabled after disable_all")
+
+
+func test_defense_disable_all_hides_commit_button() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	_panel.disable_all_defense_buttons()
+	assert_false(_panel._defense_done_button.visible,
+			"Commit button should be hidden after disable_all")
+
+
+func test_defense_commit_button_text() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	assert_eq(_panel._defense_done_button.text, "Commit Defense",
+			"Done button should read 'Commit Defense'")
+
+
+func test_defense_done_emits_signal() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [], 3, 2)
+	watch_signals(_panel)
+	_panel._on_defense_done()
+	assert_signal_emitted(_panel, "defense_tokens_done",
+			"defense_tokens_done should be emitted on commit press")
+
+
+func test_redirect_done_emits_signal() -> void:
+	var zones: Array = [Constants.HullZone.LEFT]
+	_panel.show_redirect_section(zones, 1)
+	watch_signals(_panel)
+	_panel._on_redirect_done_pressed()
+	assert_signal_emitted(_panel, "redirect_done_pressed",
+			"redirect_done_pressed should be emitted")
+
+
+# =========================================================================
 # Redirect Section
 # =========================================================================
 

@@ -1112,6 +1112,10 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | AE-DEF-001 | Show defense section with defender's spendable tokens (READY or EXHAUSTED, not DISCARDED, not accuracy-locked) | Token buttons with exhaust/discard options |
 | AE-DEF-002 | Speed 0 defenders cannot spend any defense tokens (Rules Reference: "Defense Tokens", bullet 4) | Auto-skip with log |
 | AE-DEF-003 | Each token type can be spent at most once per attack | Disable button after spending |
+| AE-DEF-003a | Defense token buttons toggle selection (highlight) instead of immediately spending; player clicks "Commit Defense" to apply | Two-phase: select → commit. Visual green highlight + ✓ on selected tokens. One-per-type enforced during selection. |
+| AE-DEF-003b | Selected defense tokens can be deselected before committing | Click again to toggle off; restores original modulate |
+| AE-DEF-003c | Commit processes selected tokens sequentially via queue; evade/redirect pause for sub-steps | `_defense_commit_queue`, `_process_next_defense_commit()` |
+| AE-DEF-003d | "Done Redirecting" button allows early exit from redirect sub-step during commit queue | `redirect_done_pressed` signal, `_on_redirect_done_early()` |
 | AE-DEF-004 | READY tokens can be exhausted; EXHAUSTED tokens must be discarded | Spend method determined by state |
 | AE-DEF-005 | **Scatter** — cancels all dice, sets modified damage to 0, ends defense step immediately | Most impactful token |
 | AE-DEF-006 | **Evade** — defender manually selects a die: at long range remove it, at medium/close reroll it (immediate apply on click) | `_attack_exec_start_evade()` + `_on_evade_die_selected()` |

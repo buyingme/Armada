@@ -267,6 +267,9 @@ var _attack_exec_redirect_step: bool = false
 ## Whether we are in the evade die-selection sub-step.
 var _attack_exec_evade_step: bool = false
 
+## Queue of defense token indices being processed during commit.
+var _defense_commit_queue: Array[int] = []
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -1597,6 +1600,7 @@ func _on_attack_exec_done() -> void:
 	_attack_exec_accuracy_step = false
 	_attack_exec_defense_step = false
 	_attack_exec_spent_tokens.clear()
+	_defense_commit_queue.clear()
 	_attack_exec_modified_damage = 0
 	_attack_exec_scatter_used = false
 	_attack_exec_redirect_remaining = 0
@@ -2900,6 +2904,9 @@ func _connect_attack_panel_signals() -> void:
 	if not p.evade_die_confirmed.is_connected(
 			_on_evade_die_selected):
 		p.evade_die_confirmed.connect(_on_evade_die_selected)
+	if not p.redirect_done_pressed.is_connected(
+			_on_redirect_done_early):
+		p.redirect_done_pressed.connect(_on_redirect_done_early)
 
 
 ## Begins the Phase 6b-2 attack sequence after target and range are known.
@@ -3105,6 +3112,7 @@ func _on_attack_confirm() -> void:
 	# Reset Phase 6c state for this attack.
 	_attack_exec_locked_tokens.clear()
 	_attack_exec_spent_tokens.clear()
+	_defense_commit_queue.clear()
 	_attack_exec_modified_damage = damage
 	_attack_exec_scatter_used = false
 	_attack_exec_redirect_remaining = 0
@@ -3188,6 +3196,7 @@ func _on_attack_accuracy_confirmed() -> void:
 func _attack_exec_start_defense() -> void:
 	_attack_exec_defense_step = true
 	_attack_exec_spent_tokens.clear()
+	_defense_commit_queue.clear()
 	# Squadron defenders have no defense tokens (generic squads).
 	if _attack_sim_def_ship == null:
 		_attack_exec_defense_step = false
@@ -3427,6 +3436,8 @@ func _on_evade_die_selected(die_index: int) -> void:
 		_attack_sim_panel.disable_defense_token_button(
 				_get_token_button_index_for_type(
 				Constants.DefenseToken.EVADE))
+	# Continue processing the defense commit queue.
+	_process_next_defense_commit()
 
 
 ## Starts the redirect sub-step: shows adjacent zone buttons.
@@ -3504,23 +3515,67 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 				return  # Continue redirect
 		_attack_sim_panel.hide_redirect_section()
 	_attack_exec_redirect_step = false
+	# Continue processing the defense commit queue.
+	_process_next_defense_commit()
 
 
-## Called when the player finishes spending defense tokens.
-## Proceeds to damage resolution.
+## Called when the player presses "Commit Defense".
+## Reads selected token indices from the panel and processes them
+## sequentially via [method _process_next_defense_commit].
 ## Requirements: AE-DEF-003.
 func _on_attack_defense_done() -> void:
-	_log.info("Defense tokens done. Modified damage: %d." % [
-			_attack_exec_modified_damage])
-	_attack_exec_defense_step = false
-	# Hide redirect if still showing.
-	if _attack_exec_redirect_step:
-		_attack_exec_redirect_step = false
-		if _attack_sim_panel:
-			_attack_sim_panel.hide_redirect_section()
+	var selected: Array[int] = []
 	if _attack_sim_panel:
-		_attack_sim_panel.hide_defense_section()
-	_attack_exec_resolve_damage()
+		selected = _attack_sim_panel.get_defense_selected_indices()
+		_attack_sim_panel.disable_all_defense_buttons()
+	if selected.is_empty():
+		_log.info("No defense tokens selected — proceeding to damage.")
+		_attack_exec_defense_step = false
+		if _attack_sim_panel:
+			_attack_sim_panel.hide_defense_section()
+		_attack_exec_resolve_damage()
+		return
+	_defense_commit_queue = selected
+	_log.info("Defense commit: %d tokens queued." %
+			_defense_commit_queue.size())
+	_process_next_defense_commit()
+
+
+## Processes the next defense token in the commit queue.
+## When the queue is empty, hides the defense UI and resolves damage.
+func _process_next_defense_commit() -> void:
+	if _defense_commit_queue.is_empty():
+		_log.info("Defense commit complete. Modified damage: %d." % [
+				_attack_exec_modified_damage])
+		_attack_exec_defense_step = false
+		if _attack_sim_panel:
+			_attack_sim_panel.hide_defense_section()
+		_attack_exec_resolve_damage()
+		return
+	var token_index: int = _defense_commit_queue.pop_front()
+	_log.info("Processing committed token index %d." % token_index)
+	# Reuse the existing spending logic (validates, applies, starts
+	# sub-steps for Evade/Redirect).
+	_on_attack_defense_token_spent(token_index, "exhaust")
+	# For simple tokens (Scatter, Brace, Contain) the method returns
+	# synchronously. For Evade/Redirect, sub-steps will call
+	# _process_next_defense_commit() when they finish.
+	# _apply_defense_token_effect returns early for Evade/Redirect, so
+	# we check whether a sub-step was started.
+	if not _attack_exec_evade_step and not _attack_exec_redirect_step:
+		_process_next_defense_commit()
+
+
+## Called when the player presses "Done Redirecting" in the redirect
+## section, ending the redirect sub-step early.
+func _on_redirect_done_early() -> void:
+	if not _attack_exec_redirect_step:
+		return
+	_log.info("Redirect ended early by player.")
+	_attack_exec_redirect_step = false
+	if _attack_sim_panel:
+		_attack_sim_panel.hide_redirect_section()
+	_process_next_defense_commit()
 
 
 # =========================================================================

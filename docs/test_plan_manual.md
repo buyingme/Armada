@@ -2304,11 +2304,50 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | After accuracy step, see defense section | Camera rotates to defender; defense section shows spendable tokens with current damage total |
-| 2 | Click a READY token (e.g. Brace) | Token is exhausted; damage updates (halved, rounded up); button disabled |
-| 3 | Click "Done" | Defense section hides; damage resolution begins |
+| 1 | After accuracy step, see defense section | Camera rotates to defender; defense section shows spendable tokens with current damage total and "Commit Defense" button |
+| 2 | Click a READY token (e.g. Brace) | Button turns **green** with a **✓** suffix — token is *selected* but not yet spent |
+| 3 | Click "Commit Defense" | Token is exhausted; damage updates (halved, rounded up); defense section hides; damage resolution begins |
 
-**Pass criteria:** Token spending modifies damage; camera rotates to defender.
+**Pass criteria:** Token selection → commit two-phase flow works; visual highlight on selected token.
+
+---
+
+### MT-6c.3a — Defense token deselect before commit
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In defense section, click a READY token | Button turns green with ✓ (selected) |
+| 2 | Click the same token again | Green highlight and ✓ removed — token returns to original colour (white for ready, orange for exhausted) |
+| 3 | Verify `get_defense_selected_indices()` is empty | No tokens selected |
+| 4 | Click "Commit Defense" with no tokens selected | Defense step ends immediately; damage resolution proceeds with unmodified damage |
+
+**Pass criteria:** Deselection restores visual state; committing with no selection skips defense.
+
+---
+
+### MT-6c.3b — One-per-type enforcement during selection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Defender has two Redirect tokens (one READY, one EXHAUSTED) | Both shown as clickable buttons |
+| 2 | Click the READY Redirect | Green ✓ highlight |
+| 3 | Click the EXHAUSTED Redirect | First Redirect deselected (returns to white); second one highlighted green ✓ |
+| 4 | Select an Evade (different type) alongside Redirect | Both tokens highlighted — different types allowed simultaneously |
+
+**Pass criteria:** Only one token of each type can be selected; selecting a second same-type auto-deselects the first.
+
+---
+
+### MT-6c.3c — Commit queue with Evade + Redirect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select Evade **and** Redirect tokens, then click "Commit Defense" | All token buttons disabled; commit button hidden |
+| 2 | Evade sub-step: dice become clickable (cyan tint) | Pick a die — die removed/rerolled, queue continues |
+| 3 | Redirect sub-step: zone buttons appear with "Done Redirecting" button | Click zones to redirect damage, or click "Done Redirecting" to finish early |
+| 4 | After all tokens processed | Defense section hides; damage resolution begins |
+
+**Pass criteria:** Multiple selected tokens processed sequentially through queue; evade and redirect sub-steps pause and resume correctly.
 
 ---
 
@@ -2439,8 +2478,9 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 |------|--------|----------|
 | 1 | Start a ship attack: select hull zone → target ship → roll dice → confirm | Accuracy step (if applicable) |
 | 2 | Complete accuracy spending | Defense step begins with camera rotation |
-| 3 | Spend defense tokens (mix of types) | Damage updated after each token |
-| 4 | Click Done | Damage resolved: shields absorb, cards dealt |
+| 3 | Select defense tokens (click to highlight green ✓, mix of types) | Tokens highlighted but not yet spent |
+| 4 | Click "Commit Defense" | Tokens spent sequentially; damage updated; evade/redirect sub-steps pause queue |
+| 5 | After all tokens processed | Damage resolved: shields absorb, cards dealt |
 | 5 | After 1.2s delay | Attack finalizes; proceeds to second hull zone or attack done |
 | 6 | Complete second hull zone attack | Ship's attack step fully complete |
 

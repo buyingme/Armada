@@ -71,6 +71,10 @@ signal defense_token_selected(token_index: int, spend_method: String)
 ## Requirements: AE-DEF-003.
 signal defense_tokens_done()
 
+## Emitted when the player clicks "Done Redirecting" to finish the
+## redirect sub-step early.
+signal redirect_done_pressed()
+
 ## Emitted when the player selects a hull zone for redirect damage.
 ## [param zone] — Constants.HullZone value.
 ## Requirements: AE-DEF-012, AE-DEF-013.
@@ -158,6 +162,8 @@ var _defense_token_buttons: HBoxContainer = null
 var _defense_done_button: Button = null
 ## Info label showing current damage after modifications.
 var _defense_info_label: Label = null
+## Tracks defense token indices currently selected (not yet committed).
+var _defense_selected_indices: Array[int] = []
 
 ## --- Phase 6c-2: Redirect zone selection UI ---
 
@@ -167,6 +173,8 @@ var _redirect_container: VBoxContainer = null
 var _redirect_zone_buttons: HBoxContainer = null
 ## Redirect info label.
 var _redirect_info_label: Label = null
+## "Done Redirecting" button inside the redirect section.
+var _redirect_done_button: Button = null
 
 ## --- Phase 6c-3: Damage resolution info UI ---
 
@@ -534,7 +542,7 @@ func _build_ui() -> void:
 	_defense_token_buttons.add_theme_constant_override("separation", 6)
 	_defense_container.add_child(_defense_token_buttons)
 	_defense_done_button = Button.new()
-	_defense_done_button.text = "Done with Defense"
+	_defense_done_button.text = "Commit Defense"
 	_defense_done_button.custom_minimum_size = Vector2(140.0, 28.0)
 	_defense_done_button.size_flags_horizontal = (
 			Control.SIZE_SHRINK_CENTER)
@@ -556,6 +564,13 @@ func _build_ui() -> void:
 	_redirect_zone_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_redirect_zone_buttons.add_theme_constant_override("separation", 6)
 	_redirect_container.add_child(_redirect_zone_buttons)
+	_redirect_done_button = Button.new()
+	_redirect_done_button.text = "Done Redirecting"
+	_redirect_done_button.custom_minimum_size = Vector2(130.0, 28.0)
+	_redirect_done_button.size_flags_horizontal = (
+			Control.SIZE_SHRINK_CENTER)
+	_redirect_done_button.pressed.connect(_on_redirect_done_pressed)
+	_redirect_container.add_child(_redirect_done_button)
 	# --- Phase 6c-3: Damage resolution info ---
 	_damage_info_container = VBoxContainer.new()
 	_damage_info_container.add_theme_constant_override("separation", 4)
@@ -610,9 +625,11 @@ func _clear_content() -> void:
 		_defense_token_buttons = null
 		_defense_done_button = null
 		_defense_info_label = null
+		_defense_selected_indices.clear()
 		_redirect_container = null
 		_redirect_zone_buttons = null
 		_redirect_info_label = null
+		_redirect_done_button = null
 		_damage_info_container = null
 		_damage_info_label = null
 		_dice_textures.clear()
@@ -960,6 +977,8 @@ func show_defense_section(tokens: Array[Dictionary],
 		defender_speed: int) -> void:
 	if _defense_container == null or _defense_token_buttons == null:
 		return
+	# Reset selection state.
+	_defense_selected_indices.clear()
 	# Clear old buttons.
 	for child: Node in _defense_token_buttons.get_children():
 		child.queue_free()
@@ -991,6 +1010,10 @@ func show_defense_section(tokens: Array[Dictionary],
 		var btn: Button = _create_token_button(token, i)
 		btn.pressed.connect(_on_defense_token_pressed.bind(i))
 		_defense_token_buttons.add_child(btn)
+	# Re-show Commit button (may have been hidden during a previous commit).
+	if _defense_done_button:
+		_defense_done_button.visible = true
+		_defense_done_button.text = "Commit Defense"
 	_defense_container.visible = true
 
 
@@ -1025,8 +1048,72 @@ func disable_defense_token_button(token_index: int) -> void:
 			break
 
 
+## Toggles a defense token's selection state.
+## If another token of the same type is already selected, it is
+## deselected first (only one of each type per attack).
+## Rules Reference: "Defense Tokens", bullet 3, p.5.
 func _on_defense_token_pressed(token_index: int) -> void:
-	defense_token_selected.emit(token_index, "exhaust")
+	if token_index in _defense_selected_indices:
+		_defense_selected_indices.erase(token_index)
+		_set_defense_token_highlight(token_index, false)
+	else:
+		# Enforce one token per type: deselect any same-type token.
+		var new_type: int = _get_defense_token_type(token_index)
+		for sel_i: int in _defense_selected_indices.duplicate():
+			if _get_defense_token_type(sel_i) == new_type:
+				_defense_selected_indices.erase(sel_i)
+				_set_defense_token_highlight(sel_i, false)
+		_defense_selected_indices.append(token_index)
+		_set_defense_token_highlight(token_index, true)
+
+
+## Returns the token type for a defense button by its token index.
+func _get_defense_token_type(token_index: int) -> int:
+	if _defense_token_buttons == null:
+		return -1
+	for child: Node in _defense_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn and btn.get_meta("token_index", -1) == token_index:
+			return btn.get_meta("token_type", -1) as int
+	return -1
+
+
+## Applies or removes the visual highlight on a defense token button.
+func _set_defense_token_highlight(token_index: int,
+		selected: bool) -> void:
+	if _defense_token_buttons == null:
+		return
+	for child: Node in _defense_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn and btn.get_meta("token_index", -1) == token_index:
+			if selected:
+				btn.modulate = Color(0.3, 1.0, 0.3, 1.0)
+				btn.text = btn.get_meta("base_text", "") + " ✓"
+			else:
+				# Restore original modulate (exhausted = orange, else white).
+				var token_state: int = btn.get_meta("token_state", 0)
+				if token_state == Constants.DefenseTokenState.EXHAUSTED:
+					btn.modulate = Color(1.0, 0.7, 0.3, 1.0)
+				else:
+					btn.modulate = Color.WHITE
+				btn.text = btn.get_meta("base_text", "")
+			break
+
+
+## Returns the list of defense token indices currently selected.
+func get_defense_selected_indices() -> Array[int]:
+	return _defense_selected_indices.duplicate()
+
+
+## Disables all defense token buttons (used during commit processing).
+func disable_all_defense_buttons() -> void:
+	if _defense_token_buttons:
+		for child: Node in _defense_token_buttons.get_children():
+			var btn: Button = child as Button
+			if btn:
+				btn.disabled = true
+	if _defense_done_button:
+		_defense_done_button.visible = false
 
 
 ## Enters evade die-selection mode — dice become clickable and the prompt
@@ -1057,6 +1144,10 @@ func hide_evade_die_selection() -> void:
 
 func _on_defense_done() -> void:
 	defense_tokens_done.emit()
+
+
+func _on_redirect_done_pressed() -> void:
+	redirect_done_pressed.emit()
 
 
 # =========================================================================
@@ -1201,7 +1292,7 @@ func _clear_die_selection_highlights() -> void:
 # =========================================================================
 
 ## Creates a Button representing a defense token with icon and text.
-## Stores metadata: "token_index", "token_type", "base_text".
+## Stores metadata: "token_index", "token_type", "token_state", "base_text".
 func _create_token_button(token: Dictionary, index: int) -> Button:
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
@@ -1221,6 +1312,7 @@ func _create_token_button(token: Dictionary, index: int) -> Button:
 	btn.custom_minimum_size = Vector2(80.0, 28.0)
 	btn.set_meta("token_index", index)
 	btn.set_meta("token_type", token_type)
+	btn.set_meta("token_state", int(state))
 	btn.set_meta("base_text", label_text)
 	# Tint exhausted tokens orange.
 	if state == Constants.DefenseTokenState.EXHAUSTED:

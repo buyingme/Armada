@@ -363,7 +363,7 @@ static func _classify_local_point(
 		half_w: float,
 		half_l: float) -> Constants.HullZone:
 	var third: float = half_l * 2.0 / 3.0
-	var front_y: float = -half_l + third
+	var front_y: float = - half_l + third
 	var rear_y: float = half_l - third
 	if local.y < front_y:
 		return Constants.HullZone.FRONT

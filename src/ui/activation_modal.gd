@@ -48,7 +48,7 @@ const STEP_NAMES: Array[String] = [
 ]
 
 ## Which steps are placeholders (not yet implemented).
-const PLACEHOLDER_STEPS: Array[int] = [1, 2]  ## indices into STEP_NAMES
+const PLACEHOLDER_STEPS: Array[int] = [1, 2] ## indices into STEP_NAMES
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ActivationModal")
@@ -344,7 +344,7 @@ func _update_step_display() -> void:
 		row_style.set_border_width_all(1)
 		row_style.set_corner_radius_all(4)
 
-		var step_val: int = i  # 0=REVEAL, 1=SQUADRON, ...
+		var step_val: int = i # 0=REVEAL, 1=SQUADRON, ...
 		if step_val < current:
 			# Past step — completed.
 			row_style.bg_color = Color(0.1, 0.1, 0.14, 0.8)

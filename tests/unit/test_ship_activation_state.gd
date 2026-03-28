@@ -223,7 +223,7 @@ func test_speed_change_zero_rejected() -> void:
 func test_no_budget_rejects_speed_change() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var state: ShipActivationState = ShipActivationState.create(ship)
-	state.apply_speed_change(1)  # Spend the dial budget.
+	state.apply_speed_change(1) # Spend the dial budget.
 	assert_false(state.apply_speed_change(1),
 			"No more budget — should reject")
 
@@ -291,10 +291,10 @@ func test_token_only_speed_change() -> void:
 func test_dial_then_token_for_second_change() -> void:
 	var ship: ShipInstance = _make_ship(2, true, true, 4)
 	var state: ShipActivationState = ShipActivationState.create(ship)
-	state.apply_speed_change(1)  # Dial budget used.
+	state.apply_speed_change(1) # Dial budget used.
 	assert_false(state.is_using_token_for_speed(),
 			"First change uses dial — not token-only")
-	state.apply_speed_change(1)  # Token budget used.
+	state.apply_speed_change(1) # Token budget used.
 	assert_true(state.is_using_token_for_speed(),
 			"Second change uses token")
 

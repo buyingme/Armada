@@ -228,7 +228,9 @@
           "description": "Pixel [x, y] offsets from PNG origin for label positions on the ship token image.",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "number" },
+            "items": {
+              "type": "number"
+            },
             "minItems": 2,
             "maxItems": 2
           }
@@ -237,20 +239,88 @@
           "type": "object",
           "description": "Pixel coordinates defining the four arc boundary lines on the ship token. Each boundary separates two adjacent hull zones and is defined by an inner point and an outer point (on the token edge). All [x, y] pairs are measured from the PNG origin (top-left corner).",
           "properties": {
-            "inner_point_front_left":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Inner point of the FRONT/LEFT arc boundary" },
-            "outer_point_front_left":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Outer (edge) point of the FRONT/LEFT arc boundary" },
-            "inner_point_front_right": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Inner point of the FRONT/RIGHT arc boundary" },
-            "outer_point_front_right": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Outer (edge) point of the FRONT/RIGHT arc boundary" },
-            "inner_point_rear_left":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Inner point of the REAR/LEFT arc boundary" },
-            "outer_point_rear_left":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Outer (edge) point of the REAR/LEFT arc boundary" },
-            "inner_point_rear_right":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Inner point of the REAR/RIGHT arc boundary" },
-            "outer_point_rear_right":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Outer (edge) point of the REAR/RIGHT arc boundary" }
+            "inner_point_front_left": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Inner point of the FRONT/LEFT arc boundary"
+            },
+            "outer_point_front_left": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Outer (edge) point of the FRONT/LEFT arc boundary"
+            },
+            "inner_point_front_right": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Inner point of the FRONT/RIGHT arc boundary"
+            },
+            "outer_point_front_right": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Outer (edge) point of the FRONT/RIGHT arc boundary"
+            },
+            "inner_point_rear_left": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Inner point of the REAR/LEFT arc boundary"
+            },
+            "outer_point_rear_left": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Outer (edge) point of the REAR/LEFT arc boundary"
+            },
+            "inner_point_rear_right": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Inner point of the REAR/RIGHT arc boundary"
+            },
+            "outer_point_rear_right": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Outer (edge) point of the REAR/RIGHT arc boundary"
+            }
           },
           "required": [
-            "inner_point_front_left", "outer_point_front_left",
-            "inner_point_front_right", "outer_point_front_right",
-            "inner_point_rear_left", "outer_point_rear_left",
-            "inner_point_rear_right", "outer_point_rear_right"
+            "inner_point_front_left",
+            "outer_point_front_left",
+            "inner_point_front_right",
+            "outer_point_front_right",
+            "inner_point_rear_left",
+            "outer_point_rear_left",
+            "inner_point_rear_right",
+            "outer_point_rear_right"
           ],
           "additionalProperties": false
         },
@@ -258,12 +328,45 @@
           "type": "object",
           "description": "Each hull zone has one line-of-sight origin dot used to trace LOS to targets. Pixel [x, y] from PNG origin.",
           "properties": {
-            "FRONT": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-            "LEFT":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-            "RIGHT": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-            "REAR":  { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+            "FRONT": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "LEFT": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "RIGHT": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "REAR": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
           },
-          "required": ["FRONT", "LEFT", "RIGHT", "REAR"],
+          "required": [
+            "FRONT",
+            "LEFT",
+            "RIGHT",
+            "REAR"
+          ],
           "additionalProperties": false
         }
       },

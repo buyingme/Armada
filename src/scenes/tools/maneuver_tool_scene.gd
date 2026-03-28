@@ -310,7 +310,7 @@ func _update_segments(segs: Array) -> void:
 				seg_type, {})
 		var entry_px: Vector2 = cfg.get("entry_intersection",
 				Vector2.ZERO) as Vector2
-		sprite.offset = -entry_px
+		sprite.offset = - entry_px
 		var s: float = _get_sprite_scale(seg_type)
 		sprite.scale = Vector2(s, s)
 		var xform: Transform2D = segs[i] as Transform2D

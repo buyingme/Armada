@@ -63,7 +63,7 @@ func test_segment_intersects_polygon_true_for_endpoint_inside() -> void:
 		Vector2(0, 0), Vector2(100, 0),
 		Vector2(100, 100), Vector2(0, 100),
 	]
-	var p1: Vector2 = Vector2(50, 50)  # inside
+	var p1: Vector2 = Vector2(50, 50) # inside
 	var p2: Vector2 = Vector2(200, 200)
 	assert_true(LineOfSightChecker.segment_intersects_polygon(p1, p2, poly),
 			"Segment with endpoint inside should return true")
@@ -96,8 +96,8 @@ func test_los_ship_to_ship_clear_when_direct_path() -> void:
 	# Arrange — attacker at (500, 700), defender at (500, 300).
 	# Both facing up (rot = 0).
 	# LOS from attacker FRONT → defender REAR (closest).
-	var atk_los: Vector2 = Vector2(500, 665)  # front LOS point
-	var def_los: Vector2 = Vector2(500, 335)  # rear LOS point
+	var atk_los: Vector2 = Vector2(500, 665) # front LOS point
+	var def_los: Vector2 = Vector2(500, 335) # rear LOS point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -120,7 +120,7 @@ func test_los_blocked_when_enters_through_different_hull_zone() -> void:
 	# LOS line enters the defender's LEFT zone (middle band of LEFT edge)
 	# but the defending zone is RIGHT → blocked.
 	var atk_los: Vector2 = Vector2(200, 300)
-	var def_los: Vector2 = Vector2(520, 300)  # defender's right LOS point
+	var def_los: Vector2 = Vector2(520, 300) # defender's right LOS point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -196,7 +196,7 @@ func test_los_squad_to_ship_clear_when_direct_path() -> void:
 	# LOS targets the REAR hull zone — enters through REAR edge.
 	var squad_centre: Vector2 = Vector2(500, 500)
 	var squad_r: float = 15.0
-	var def_los: Vector2 = Vector2(500, 335)  # rear targeting point
+	var def_los: Vector2 = Vector2(500, 335) # rear targeting point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -223,7 +223,7 @@ func test_los_squad_to_ship_blocked_by_other_hull_zone() -> void:
 	# (middle band of the left edge).
 	var squad_centre: Vector2 = Vector2(200, 300)
 	var squad_r: float = 15.0
-	var def_los: Vector2 = Vector2(520, 300)  # right hull zone point
+	var def_los: Vector2 = Vector2(520, 300) # right hull zone point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -246,7 +246,7 @@ func test_los_squad_to_ship_obstructed_by_intervening_ship() -> void:
 	# Arrange — direct path, but a ship sits between squadron and defender.
 	var squad_centre: Vector2 = Vector2(500, 600)
 	var squad_r: float = 15.0
-	var def_los: Vector2 = Vector2(500, 335)  # rear targeting point
+	var def_los: Vector2 = Vector2(500, 335) # rear targeting point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -274,7 +274,7 @@ func test_los_squad_to_ship_obstructed_by_intervening_ship() -> void:
 func test_range_path_blocked_returns_false_for_correct_zone() -> void:
 	# Arrange — range path enters defender base through FRONT edge.
 	var atk_pt: Vector2 = Vector2(500, 100)
-	var def_pt: Vector2 = Vector2(500, 265)  # on front edge
+	var def_pt: Vector2 = Vector2(500, 265) # on front edge
 	var def_pos: Vector2 = Vector2(500, 300)
 	# Act
 	var blocked: bool = LineOfSightChecker.is_range_path_blocked(
@@ -288,7 +288,7 @@ func test_range_path_blocked_returns_false_for_correct_zone() -> void:
 func test_range_path_blocked_returns_true_for_wrong_zone() -> void:
 	# Arrange — range path comes from the left side into the base.
 	var atk_pt: Vector2 = Vector2(200, 300)
-	var def_pt: Vector2 = Vector2(480, 300)  # on left edge
+	var def_pt: Vector2 = Vector2(480, 300) # on left edge
 	var def_pos: Vector2 = Vector2(500, 300)
 	# Claim it's targeting the FRONT zone.
 	var blocked: bool = LineOfSightChecker.is_range_path_blocked(
@@ -410,7 +410,7 @@ func test_los_not_blocked_entering_right_edge_in_rear_third() -> void:
 	var def_hl: float = 120.0
 	# Attacker to the right, slightly behind: enters RIGHT edge in REAR third.
 	var atk_los: Vector2 = Vector2(800, 350)
-	var def_los: Vector2 = Vector2(500, 420)  # REAR LOS point
+	var def_los: Vector2 = Vector2(500, 420) # REAR LOS point
 	# Act
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
@@ -429,7 +429,7 @@ func test_los_blocked_entering_right_edge_in_middle_third() -> void:
 	var def_hl: float = 120.0
 	# Attacker far to the upper-right: enters RIGHT edge in middle third.
 	var atk_los: Vector2 = Vector2(800, 0)
-	var def_los: Vector2 = Vector2(500, 420)  # REAR LOS point
+	var def_los: Vector2 = Vector2(500, 420) # REAR LOS point
 	# Act
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
@@ -448,7 +448,7 @@ func test_los_not_blocked_entering_left_edge_in_front_third() -> void:
 	var def_hl: float = 120.0
 	# Attacker to the upper-left: enters LEFT edge in FRONT third.
 	var atk_los: Vector2 = Vector2(200, 250)
-	var def_los: Vector2 = Vector2(500, 180)  # FRONT LOS point
+	var def_los: Vector2 = Vector2(500, 180) # FRONT LOS point
 	# Act
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
@@ -468,8 +468,8 @@ func test_arc_boundary_los_clear_when_not_crossing_any_boundary() -> void:
 	## The line does not cross any arc boundary → not blocked.
 	var def_pos: Vector2 = Vector2(500, 300)
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
-	var atk_los: Vector2 = Vector2(500, 600)   # directly behind
-	var def_los: Vector2 = Vector2(500, 335)   # rear LOS point
+	var atk_los: Vector2 = Vector2(500, 600) # directly behind
+	var def_los: Vector2 = Vector2(500, 335) # rear LOS point
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.REAR,
@@ -483,8 +483,8 @@ func test_arc_boundary_los_blocked_crossing_front_left_boundary() -> void:
 	## The line crosses the front_left boundary → blocked.
 	var def_pos: Vector2 = Vector2(500, 300)
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
-	var atk_los: Vector2 = Vector2(200, 300)   # to the left
-	var def_los: Vector2 = Vector2(500, 265)   # front LOS point
+	var atk_los: Vector2 = Vector2(200, 300) # to the left
+	var def_los: Vector2 = Vector2(500, 265) # front LOS point
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.FRONT,
@@ -498,8 +498,8 @@ func test_arc_boundary_los_blocked_crossing_rear_right_boundary() -> void:
 	## The line crosses the rear_right boundary → blocked.
 	var def_pos: Vector2 = Vector2(500, 300)
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
-	var atk_los: Vector2 = Vector2(800, 300)   # to the right
-	var def_los: Vector2 = Vector2(500, 335)   # rear LOS point
+	var atk_los: Vector2 = Vector2(800, 300) # to the right
+	var def_los: Vector2 = Vector2(500, 335) # rear LOS point
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.REAR,
@@ -513,8 +513,8 @@ func test_arc_boundary_los_clear_to_left_from_left() -> void:
 	## The line does NOT cross any arc boundary → not blocked.
 	var def_pos: Vector2 = Vector2(500, 300)
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
-	var atk_los: Vector2 = Vector2(200, 300)   # to the left
-	var def_los: Vector2 = Vector2(480, 300)   # left LOS point
+	var atk_los: Vector2 = Vector2(200, 300) # to the left
+	var def_los: Vector2 = Vector2(480, 300) # left LOS point
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.LEFT,
@@ -527,8 +527,8 @@ func test_arc_boundary_los_clear_to_front_from_front() -> void:
 	## LOS from directly ahead to FRONT zone — no boundary crossed.
 	var def_pos: Vector2 = Vector2(500, 300)
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
-	var atk_los: Vector2 = Vector2(500, 100)   # directly ahead
-	var def_los: Vector2 = Vector2(500, 265)   # front LOS point
+	var atk_los: Vector2 = Vector2(500, 100) # directly ahead
+	var def_los: Vector2 = Vector2(500, 265) # front LOS point
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.FRONT,
@@ -597,8 +597,8 @@ func test_arc_boundary_rotated_defender_clear() -> void:
 	var def_pos: Vector2 = Vector2(500, 300)
 	var rot: float = PI / 2.0
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, rot)
-	var atk_los: Vector2 = Vector2(700, 300)   # to the right = ahead of rotated ship
-	var def_los: Vector2 = Vector2(535, 300)   # front LOS point (rotated)
+	var atk_los: Vector2 = Vector2(700, 300) # to the right = ahead of rotated ship
+	var def_los: Vector2 = Vector2(535, 300) # front LOS point (rotated)
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.FRONT,
@@ -613,8 +613,8 @@ func test_arc_boundary_rotated_defender_blocked() -> void:
 	var def_pos: Vector2 = Vector2(500, 300)
 	var rot: float = PI / 2.0
 	var arc_pts: Dictionary = _make_arc_pts(def_pos, rot)
-	var atk_los: Vector2 = Vector2(500, 600)   # below = to the rear side
-	var def_los: Vector2 = Vector2(535, 300)   # front LOS point (rotated)
+	var atk_los: Vector2 = Vector2(500, 600) # below = to the rear side
+	var def_los: Vector2 = Vector2(535, 300) # front LOS point (rotated)
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
 					atk_los, def_los, Constants.HullZone.FRONT,

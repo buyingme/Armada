@@ -200,7 +200,7 @@ func get_hull_zone_at(world_pos: Vector2) -> int:
 		return -1
 	var local_pos: Vector2 = to_local(world_pos)
 	var third: float = _half_l * 2.0 / 3.0
-	var front_y: float = -_half_l + third
+	var front_y: float = - _half_l + third
 	var rear_y: float = _half_l - third
 	if local_pos.y < front_y:
 		return Constants.HullZone.FRONT

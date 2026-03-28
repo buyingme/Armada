@@ -285,14 +285,14 @@ func test_from_dict_missing_firing_arc_boundaries_gives_empty() -> void:
 func test_from_dict_firing_arc_boundaries_all_eight_keys() -> void:
 	var data: Dictionary = {
 		"firing_arc_boundaries": {
-			"inner_point_front_left":  [71, 124],
-			"outer_point_front_left":  [25, 73],
+			"inner_point_front_left": [71, 124],
+			"outer_point_front_left": [25, 73],
 			"inner_point_front_right": [71, 124],
 			"outer_point_front_right": [117, 73],
-			"inner_point_rear_left":   [71, 124],
-			"outer_point_rear_left":   [25, 175],
-			"inner_point_rear_right":  [71, 124],
-			"outer_point_rear_right":  [117, 175],
+			"inner_point_rear_left": [71, 124],
+			"outer_point_rear_left": [25, 175],
+			"inner_point_rear_right": [71, 124],
+			"outer_point_rear_right": [117, 175],
 		}
 	}
 	var ship: ShipData = ShipData.from_dict(data)
@@ -312,7 +312,7 @@ func test_from_dict_parses_line_of_sight_origins() -> void:
 	var data: Dictionary = {
 		"line_of_sight_origins": {
 			"FRONT": [71, 62],
-			"REAR":  [71, 186],
+			"REAR": [71, 186],
 		}
 	}
 	var ship: ShipData = ShipData.from_dict(data)

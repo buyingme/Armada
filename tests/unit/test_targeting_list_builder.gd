@@ -156,7 +156,7 @@ func test_build_finds_incoming_threat_from_enemy() -> void:
 	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
 			"CR90", 0, Vector2(500, 600), 0.0)
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
-			"VSD", 1, Vector2(500, 400), PI)  # facing down → front towards us
+			"VSD", 1, Vector2(500, 400), PI) # facing down → front towards us
 	# Act
 	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[friendly, enemy], [], 0)
@@ -510,7 +510,7 @@ func test_incoming_threats_excludes_friendly_squadron() -> void:
 	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
 			"CR90", 0, Vector2(500, 500), 0.0)
 	var squad: TargetingListBuilder.SquadInfo = _make_squad(
-			"X-wing", 0, Vector2(500, 450))  # same player
+			"X-wing", 0, Vector2(500, 450)) # same player
 	squad.battery_armament = {"RED": 1}
 	# Act
 	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(

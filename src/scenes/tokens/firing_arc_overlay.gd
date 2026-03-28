@@ -168,10 +168,10 @@ func _compute_zone_angles() -> Array[float]:
 	#   RL boundary separates REAR / LEFT
 	#   RR boundary separates REAR / RIGHT
 	# Angles of the 4 boundary rays.
-	var a_fl: float = _boundary_angle(0)  # front-left
-	var a_fr: float = _boundary_angle(1)  # front-right
-	var a_rl: float = _boundary_angle(2)  # rear-left
-	var a_rr: float = _boundary_angle(3)  # rear-right
+	var a_fl: float = _boundary_angle(0) # front-left
+	var a_fr: float = _boundary_angle(1) # front-right
+	var a_rl: float = _boundary_angle(2) # rear-left
+	var a_rr: float = _boundary_angle(3) # rear-right
 	# FRONT: from FL to FR (going clockwise in screen space = increasing angle
 	# from negative to less negative).
 	# LEFT:  from RL to FL (wrapping around -π/π boundary).
@@ -216,10 +216,10 @@ static func _angle_span(a_from: float, a_to: float) -> float:
 ## Draws arcs with hardcoded 45° angles (fallback when no boundary data).
 func _draw_fallback() -> void:
 	var fallback_angles: Array[Array] = [
-		[-2.35619449, -0.78539816],  # FRONT
-		[2.35619449, 3.92699082],    # LEFT
-		[-0.78539816, 0.78539816],   # RIGHT
-		[0.78539816, 2.35619449],    # REAR
+		[-2.35619449, -0.78539816], # FRONT
+		[2.35619449, 3.92699082], # LEFT
+		[-0.78539816, 0.78539816], # RIGHT
+		[0.78539816, 2.35619449], # REAR
 	]
 	for zone_int: int in range(4):
 		var angles: Array = fallback_angles[zone_int]

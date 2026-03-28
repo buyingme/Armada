@@ -56,7 +56,7 @@ func test_point_in_front_arc_returns_true_for_point_ahead() -> void:
 	# Arrange
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
-	var point: Vector2 = Vector2(500, 300)  # directly ahead (Y negative = front)
+	var point: Vector2 = Vector2(500, 300) # directly ahead (Y negative = front)
 	# Act
 	var result: bool = RangeFinder.is_point_in_arc(
 			point, Constants.HullZone.FRONT, arc_pts)
@@ -67,7 +67,7 @@ func test_point_in_front_arc_returns_true_for_point_ahead() -> void:
 func test_point_in_front_arc_returns_false_for_point_behind() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
-	var point: Vector2 = Vector2(500, 700)  # directly behind
+	var point: Vector2 = Vector2(500, 700) # directly behind
 	var result: bool = RangeFinder.is_point_in_arc(
 			point, Constants.HullZone.FRONT, arc_pts)
 	assert_false(result, "Point behind should NOT be in FRONT arc")
@@ -85,7 +85,7 @@ func test_point_in_rear_arc_returns_true_for_point_behind() -> void:
 func test_point_in_left_arc_returns_true_for_point_left() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
-	var point: Vector2 = Vector2(300, 500)  # directly left
+	var point: Vector2 = Vector2(300, 500) # directly left
 	var result: bool = RangeFinder.is_point_in_arc(
 			point, Constants.HullZone.LEFT, arc_pts)
 	assert_true(result, "Point to the left should be in LEFT arc")
@@ -94,7 +94,7 @@ func test_point_in_left_arc_returns_true_for_point_left() -> void:
 func test_point_in_right_arc_returns_true_for_point_right() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
-	var point: Vector2 = Vector2(700, 500)  # directly right
+	var point: Vector2 = Vector2(700, 500) # directly right
 	var result: bool = RangeFinder.is_point_in_arc(
 			point, Constants.HullZone.RIGHT, arc_pts)
 	assert_true(result, "Point to the right should be in RIGHT arc")
@@ -105,7 +105,7 @@ func test_point_in_arc_with_rotation_returns_correct() -> void:
 	var pos: Vector2 = Vector2(500, 500)
 	var rot: float = PI / 2.0
 	var arc_pts: Dictionary = _make_arc_pts(pos, rot)
-	var point: Vector2 = Vector2(700, 500)  # to the right = front
+	var point: Vector2 = Vector2(700, 500) # to the right = front
 	var result: bool = RangeFinder.is_point_in_arc(
 			point, Constants.HullZone.FRONT, arc_pts)
 	assert_true(result, "Point ahead of rotated ship should be in FRONT arc")
@@ -157,10 +157,10 @@ func test_hull_zone_edge_in_arc_polyline_returns_true_when_lip_in_arc() -> void:
 	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
 	# Defender FRONT polyline: wide wrap with points well inside FRONT arc.
 	var def_edge: Array[Vector2] = [
-		Vector2(400, 350),  # outer left lip
-		Vector2(450, 300),  # corner FL
-		Vector2(550, 300),  # corner FR
-		Vector2(600, 350),  # outer right lip
+		Vector2(400, 350), # outer left lip
+		Vector2(450, 300), # corner FL
+		Vector2(550, 300), # corner FR
+		Vector2(600, 350), # outer right lip
 	]
 	var result: bool = RangeFinder.is_hull_zone_edge_in_arc(
 			def_edge, Constants.HullZone.FRONT, arc_pts)
@@ -266,7 +266,7 @@ func test_closest_point_on_polyline_multi_segment_chooses_nearest() -> void:
 	# L-shaped polyline: horizontal then vertical.
 	var polyline: Array[Vector2] = [
 		Vector2(0, 0), Vector2(100, 0), Vector2(100, 100)]
-	var p: Vector2 = Vector2(110, 50)  # Closest to the vertical segment.
+	var p: Vector2 = Vector2(110, 50) # Closest to the vertical segment.
 	var cp: Vector2 = RangeFinder.closest_point_on_polyline(p, polyline)
 	assert_almost_eq(cp.x, 100.0, 0.01,
 			"Should snap to vertical segment X=100")
@@ -278,7 +278,7 @@ func test_closest_point_on_polyline_four_points() -> void:
 	# Front edge polyline: left lip, two corners, right lip.
 	var polyline: Array[Vector2] = [
 		Vector2(0, 50), Vector2(0, 0), Vector2(100, 0), Vector2(100, 50)]
-	var p: Vector2 = Vector2(50, -10)  # Above the top segment.
+	var p: Vector2 = Vector2(50, -10) # Above the top segment.
 	var cp: Vector2 = RangeFinder.closest_point_on_polyline(p, polyline)
 	assert_almost_eq(cp.x, 50.0, 0.01, "Should project onto middle segment")
 	assert_almost_eq(cp.y, 0.0, 0.01, "Should be on the Y=0 segment")

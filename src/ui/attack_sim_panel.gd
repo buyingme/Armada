@@ -366,7 +366,7 @@ func _build_ui() -> void:
 	anchor_right = 0.5
 	anchor_top = 1.0
 	anchor_bottom = 1.0
-	offset_left = -panel_w * 0.5
+	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
 	offset_top = -120.0
 	offset_bottom = -40.0
@@ -933,7 +933,7 @@ func _on_accuracy_token_pressed(token_index: int) -> void:
 		_accuracy_locked_indices.erase(token_index)
 	else:
 		if _accuracy_locked_indices.size() >= _accuracy_budget:
-			return  # All accuracy icons used
+			return # All accuracy icons used
 		_accuracy_locked_indices.append(token_index)
 	# Update button visuals.
 	_update_accuracy_button_visuals()

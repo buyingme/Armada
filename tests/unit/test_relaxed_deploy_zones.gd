@@ -196,7 +196,7 @@ func test_token_collision_still_enforced_with_no_zones() -> void:
 	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
 	var hw: float = base_size.x * 0.5
 	var hl: float = base_size.y * 0.5
-	var blocker: Array = [{
+	var blocker: Array = [ {
 		"position": Vector2(500.0, 800.0),
 		"rotation": 0.0,
 		"half_w": hw,
@@ -228,7 +228,7 @@ func test_pushout_not_clamped_to_zone_with_enforce_false() -> void:
 	var hl: float = base_size.y * 0.5
 	# Blocker just inside the zone near the deploy line.
 	var blocker_y: float = _top_y - hl - 10.0
-	var blocker: Array = [{
+	var blocker: Array = [ {
 		"position": Vector2(500.0, blocker_y),
 		"rotation": 0.0,
 		"half_w": hw,

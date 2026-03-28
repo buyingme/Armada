@@ -306,13 +306,13 @@ func _hz_display(zone: Constants.HullZone) -> String:
 ## Requirements: TL-UI-006.
 func _range_colour(band: String, is_obstructed: bool) -> Color:
 	if is_obstructed:
-		return Color(0.95, 0.7, 0.3)  # orange
+		return Color(0.95, 0.7, 0.3) # orange
 	match band:
 		Constants.RANGE_BAND_CLOSE, "in range":
-			return Color(0.8, 0.8, 0.8)  # grey/white
+			return Color(0.8, 0.8, 0.8) # grey/white
 		Constants.RANGE_BAND_MEDIUM:
-			return Color(0.5, 0.7, 1.0)  # blue
+			return Color(0.5, 0.7, 1.0) # blue
 		Constants.RANGE_BAND_LONG:
-			return Color(1.0, 0.5, 0.5)  # red
+			return Color(1.0, 0.5, 0.5) # red
 		_:
 			return Color(0.6, 0.6, 0.6)

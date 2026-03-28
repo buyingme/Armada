@@ -1710,7 +1710,7 @@ func _on_execute_maneuver() -> void:
 func _show_end_activation_after_maneuver() -> void:
 	# Update state to reflect completion before signalling.
 	if _ship_activation_state:
-		_ship_activation_state.advance_step()  ## MANEUVER → DONE
+		_ship_activation_state.advance_step() ## MANEUVER → DONE
 	# Auto-end the activation (next player's turn).
 	EventBus.activation_ended.emit()
 
@@ -2552,7 +2552,7 @@ func _attack_sim_compute_and_show_los() -> void:
 			if not info.is_empty():
 				_log.debug(
 						"LOS blocked by boundary '%s': " % info["boundary"]
-						+ "inner=%s outer=%s ix=%s." % [
+						+"inner=%s outer=%s ix=%s." % [
 								info["inner"], info["outer"],
 								info["intersection"]])
 	elif los_result.obstructed:
@@ -2686,7 +2686,7 @@ func _attack_sim_trace_los(atk_pt: Vector2,
 								sd.ship_name, st.global_position,
 								st.rotation, st.get_half_width(),
 								st.get_half_length()))
-	var obstacles: Array = []  # Future: obstacle tokens.
+	var obstacles: Array = [] # Future: obstacle tokens.
 	# Determine which trace method to use.
 	# Ship → Ship
 	if _attack_sim_atk_ship and _attack_sim_def_ship:
@@ -2757,7 +2757,7 @@ func _attack_sim_is_ship_target_in_arc(
 	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
 			.get_firing_arc_world_points()
 	if atk_arc_pts.is_empty():
-		return true  # No arc data → allow.
+		return true # No arc data → allow.
 	var def_edge: Array[Vector2] = _get_ship_edge(
 			def_token, def_zone as Constants.HullZone)
 	return RangeFinder.is_hull_zone_edge_in_arc(
@@ -3156,7 +3156,7 @@ func _attack_exec_start_accuracy() -> void:
 	# Only ships have defense tokens; squadrons skip accuracy step.
 	if _attack_sim_def_ship == null or acc_count == 0:
 		_log.info("No accuracy icons or squadron defender — skipping "
-				+ "accuracy step.")
+				+"accuracy step.")
 		_attack_exec_accuracy_step = false
 		_attack_exec_start_defense()
 		return
@@ -3341,7 +3341,7 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 			## At medium or close range, the defender chooses one attack
 			## die to be rerolled."
 			_attack_exec_start_evade()
-			return  # Don't disable button here; evade step handles it
+			return # Don't disable button here; evade step handles it
 		Constants.DefenseToken.BRACE:
 			# Deferred to Step 5 (Resolve Damage): halve total damage.
 			## Rules Reference: "Brace", RRG v1.5.0, p.3 — "When damage
@@ -3356,7 +3356,7 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 			# Enter redirect mode — player must click hull zone to
 			# redirect up to the max shields of the chosen zone.
 			_attack_exec_start_redirect(def_inst)
-			return  # Don't disable button here; redirect step handles it
+			return # Don't disable button here; redirect step handles it
 		Constants.DefenseToken.CONTAIN:
 			# Prevents the standard critical effect.
 			## Rules Reference: "Contain", p.3 — "the standard critical
@@ -3527,7 +3527,7 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 			if has_shields:
 				_attack_sim_panel.update_redirect_remaining(
 						_attack_exec_redirect_remaining)
-				return  # Continue redirect
+				return # Continue redirect
 		_attack_sim_panel.hide_redirect_section()
 	_attack_exec_redirect_step = false
 	# Continue processing the defense commit queue.
@@ -3960,7 +3960,7 @@ func _ship_has_any_attack_target(ship_token: ShipToken) -> bool:
 ## card effects."
 func _attack_exec_prepare_next_squadron() -> void:
 	_log.info("Preparing next squadron target (Step 6 loop). " \
-			+ "Attacked so far: %d." % _attack_exec_attacked_squads.size())
+			+"Attacked so far: %d." % _attack_exec_attacked_squads.size())
 	# Reset target and dice state.
 	_attack_sim_clear_target_state()
 	_attack_exec_dice_results.clear()

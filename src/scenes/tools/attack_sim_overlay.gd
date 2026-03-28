@@ -82,7 +82,7 @@ const RANGE_LINE_BEYOND: Color = Color(0.6, 0.1, 0.9, 0.8)
 const RANGE_LINE_WIDTH: float = 2.0
 
 ## LOS status enum for setup_los_line().
-enum LOSStatus { CLEAR, OBSTRUCTED, BLOCKED }
+enum LOSStatus {CLEAR, OBSTRUCTED, BLOCKED}
 
 ## When true, suppresses firing arc boundary lines and range measurement
 ## line.  LOS markers and LOS line are still drawn.  Used during the real

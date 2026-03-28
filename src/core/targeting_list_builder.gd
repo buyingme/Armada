@@ -58,9 +58,9 @@ class ShipTargetingResult:
 	## The friendly ship's display name.
 	var ship_name: String = ""
 	## Outgoing targets grouped by hull zone.
-	var outgoing: Array = []  # Array[TargetEntry]
+	var outgoing: Array = [] # Array[TargetEntry]
 	## Incoming threats.
-	var incoming: Array = []  # Array[ThreatEntry]
+	var incoming: Array = [] # Array[ThreatEntry]
 
 
 ## Per-squadron targeting result.
@@ -70,9 +70,9 @@ class SquadTargetingResult:
 	## The friendly squadron's display name.
 	var squad_name: String = ""
 	## Outgoing targets (ships at distance 1 + enemy squadrons at distance 1).
-	var outgoing: Array = []  # Array[TargetEntry]
+	var outgoing: Array = [] # Array[TargetEntry]
 	## Incoming threats from enemy ships and squadrons.
-	var incoming: Array = []  # Array[ThreatEntry]
+	var incoming: Array = [] # Array[ThreatEntry]
 
 
 ## Combined build result containing both ship and squadron targeting data.
@@ -80,9 +80,9 @@ class SquadTargetingResult:
 class BuildResult:
 	extends RefCounted
 	## Per-ship targeting results for friendly ships (+ ghost).
-	var ship_results: Array = []  # Array[ShipTargetingResult]
+	var ship_results: Array = [] # Array[ShipTargetingResult]
 	## Per-squadron targeting results for friendly squadrons.
-	var squad_results: Array = []  # Array[SquadTargetingResult]
+	var squad_results: Array = [] # Array[SquadTargetingResult]
 
 
 ## Description of a ship on the board (passed in as input data).
@@ -545,7 +545,7 @@ static func _build_incoming_threats(
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = friendly.ship_name
 		threat.enemy_name = sq.squad_name
-		threat.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+		threat.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
 		threat.range_band = "in range"
 		threat.obstructed = false
 		threats.append(threat)
@@ -631,7 +631,7 @@ static func _build_squad_entry(
 					continue
 				var entry: TargetEntry = TargetEntry.new()
 				entry.target_name = es.ship_name
-				entry.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+				entry.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
 				entry.target_zone = def_hz
 				entry.has_target_zone = true
 				entry.range_band = "in range"
@@ -654,7 +654,7 @@ static func _build_squad_entry(
 				continue
 			var entry: TargetEntry = TargetEntry.new()
 			entry.target_name = esq.squad_name
-			entry.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+			entry.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
 			entry.has_target_zone = false
 			entry.range_band = "in range"
 			entry.dice = RangeFinder.dice_at_range(
@@ -743,7 +743,7 @@ static func _build_incoming_squad_threats(
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = squad.squad_name
 		threat.enemy_name = esq.squad_name
-		threat.arc = Constants.HullZone.FRONT  # Placeholder — 360° arc.
+		threat.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
 		threat.range_band = "in range"
 		threat.obstructed = false
 		threats.append(threat)

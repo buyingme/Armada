@@ -168,7 +168,7 @@ func get_max_speed_increase() -> int:
 func get_max_speed_decrease() -> int:
 	var max_budget: int = _initial_dial_budget + _initial_token_budget
 	if _total_speed_change <= 0:
-		return max_budget + _total_speed_change  # _total is negative
+		return max_budget + _total_speed_change # _total is negative
 	# Currently increased — can swing all the way back plus budget.
 	return max_budget + _total_speed_change
 

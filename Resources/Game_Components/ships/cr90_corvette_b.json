@@ -94,29 +94,80 @@
   },
   "firing_arc_boundaries": {
     "_comment": "Each boundary is defined by an inner point and an outer point (on the token edge). All coordinates are pixel [x, y] measured from the PNG origin (top-left corner). The boundary line between two adjacent arcs runs from the inner point to the outer point. The four corner_* points mark the corners of the rectangular base template.",
-    "inner_point_front_left":  [71, 124],
-    "outer_point_front_left":  [25, 73],
-    "inner_point_front_right": [71, 124],
-    "outer_point_front_right": [117, 73],
-    "inner_point_rear_left":   [71, 124],
-    "outer_point_rear_left":   [25, 175],
-    "inner_point_rear_right":  [71, 124],
-    "outer_point_rear_right":  [117, 175],
-    "corner_front_left":       [25, 21],
-    "corner_front_right":      [117, 21],
-    "corner_rear_left":        [25, 189],
-    "corner_rear_right":       [117, 189]
+    "inner_point_front_left": [
+      71,
+      124
+    ],
+    "outer_point_front_left": [
+      25,
+      73
+    ],
+    "inner_point_front_right": [
+      71,
+      124
+    ],
+    "outer_point_front_right": [
+      117,
+      73
+    ],
+    "inner_point_rear_left": [
+      71,
+      124
+    ],
+    "outer_point_rear_left": [
+      25,
+      175
+    ],
+    "inner_point_rear_right": [
+      71,
+      124
+    ],
+    "outer_point_rear_right": [
+      117,
+      175
+    ],
+    "corner_front_left": [
+      25,
+      21
+    ],
+    "corner_front_right": [
+      117,
+      21
+    ],
+    "corner_rear_left": [
+      25,
+      189
+    ],
+    "corner_rear_right": [
+      117,
+      189
+    ]
   },
   "line_of_sight_origins": {
     "_comment": "Each hull zone has one line-of-sight dot. Pixel [x, y] from PNG origin.",
-    "FRONT": [71, 40],
-    "LEFT":  [44, 124],
-    "RIGHT": [98, 124],
-    "REAR":  [71, 171]
+    "FRONT": [
+      71,
+      40
+    ],
+    "LEFT": [
+      44,
+      124
+    ],
+    "RIGHT": [
+      98,
+      124
+    ],
+    "REAR": [
+      71,
+      171
+    ]
   },
   "range_overlay": {
     "_comment": "Pre-rendered overlay PNG at ruler pixel scale. origin_px is the ship centre in the overlay image.",
     "image": "arcs_CR90_overlay.png",
-    "origin_px": [773.5, 807.5]
+    "origin_px": [
+      773.5,
+      807.5
+    ]
   }
 }

@@ -46,6 +46,15 @@
 | `ShipActivationState` | RefCounted | `src/core/ship_activation_state.gd` | Activation step tracking, command spending |
 | `CommandTokenManager` | RefCounted | `src/core/command_token_manager.gd` | Token pool management, add/remove/spend |
 | `TooltipLayout` | RefCounted | `src/core/tooltip_layout.gd` | Pure tooltip position computation |
+| `EffectContext` | RefCounted | `src/core/effects/effect_context.gd` | Mutable data bag passed through effect hook pipeline |
+| `GameEffect` | RefCounted | `src/core/effects/game_effect.gd` | Base class for all rule-modifying effects (keywords, upgrades, damage cards) |
+| `EffectRegistry` | RefCounted | `src/core/effects/effect_registry.gd` | Central registry: collects effects, resolves hook points in priority order |
+| `EffectFactory` | RefCounted | `src/core/effects/effect_factory.gd` | Creates and registers squadron keyword effects at game start |
+| `BomberEffect` | GameEffect | `src/core/effects/keywords/bomber_effect.gd` | Bomber keyword: crits count as damage vs ships |
+| `EscortEffect` | GameEffect | `src/core/effects/keywords/escort_effect.gd` | Escort keyword: engaged squadrons must target Escort first |
+| `SwarmEffect` | GameEffect | `src/core/effects/keywords/swarm_effect.gd` | Swarm keyword: reroll worst die when friendly also engaged |
+| `EngagementResolver` | RefCounted | `src/core/engagement_resolver.gd` | Edge-to-edge distance-1 engagement checks, valid target filtering |
+| `SquadronMover` | RefCounted | `src/core/squadron_mover.gd` | Distance band + overlap validation for squadron placement |
 
 ### Planned (Not Yet Implemented)
 

@@ -22,12 +22,18 @@ var initiative_player: int = 0
 ## The selected objective cards for this game.
 var objectives: Dictionary = {}
 
+## Central registry for all active gameplay effects (keywords, upgrades, etc.).
+## Created on [method initialize]; lives here so it travels with the game state.
+## Rules Reference: "Effect Use and Timing", RRG p.5; ET-001–004.
+var effect_registry: EffectRegistry = null
+
 
 ## Initializes a new game state with default values.
 func initialize() -> void:
 	current_round = 0
 	current_phase = Constants.GamePhase.SETUP
 	initiative_player = 0
+	effect_registry = EffectRegistry.new()
 	player_states.clear()
 	for i in range(Constants.PLAYER_COUNT):
 		var ps := PlayerState.new()

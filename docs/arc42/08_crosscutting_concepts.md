@@ -355,3 +355,62 @@ TooltipManager="*res://src/autoload/tooltip_manager.gd"
 | 9 | Migrate duplicate toast → `show_text()` + `auto_hide_sec` | Step 5 |
 | 10 | Remove dead code (old Label creation/cleanup methods) | Steps 7–9 |
 | 11 | Run full test suite, verify script count + 0 failures | Step 10 |
+
+## 8.9 Effect/Hook Pipeline
+
+### 8.9.1 Purpose
+
+A pluggable pipeline for rule-modifying effects (squadron keywords, upgrade cards,
+damage card effects, objective modifiers). Effects register for named "hook points"
+and are resolved in priority order at runtime. This replaces hard-coded keyword
+checks with an extensible architecture.
+
+### 8.9.2 Architecture Overview
+
+```
+┌────────────────┐     ┌───────────────┐     ┌───────────────┐
+│  EffectFactory │────▶│ EffectRegistry│────▶│  GameEffect   │
+│  (registers)   │     │  (resolves)   │     │  (base class) │
+└────────────────┘     └───────┬───────┘     └───────────────┘
+                               │                      ▲
+                               │ resolve_hook()       │ extends
+                               ▼                      │
+                       ┌───────────────┐     ┌────────┴────────┐
+                       │ EffectContext │     │ BomberEffect    │
+                       │ (mutable bag) │     │ EscortEffect    │
+                       └───────────────┘     │ SwarmEffect     │
+                                             └─────────────────┘
+```
+
+### 8.9.3 Hook Points
+
+| Hook Name | Where Resolved | Purpose |
+|-----------|---------------|---------|
+| `ATTACK_CALC_DAMAGE` | `AttackExecutor._calc_attack_damage()` | Modify final damage total (Bomber) |
+| `ATTACK_MODIFY_DICE_ATTACKER` | (future) attack step 3 | Modify dice pool (Swarm reroll) |
+| `SQUADRON_MUST_ATTACK_ENGAGED` | (future) target selection | Force targeting Escort squadrons |
+
+### 8.9.4 Resolution Order
+
+1. All effects registered for the current hook are collected
+2. Effects are sorted by `player_priority` (initiative player = 0, other = 1)
+3. Each effect's `should_trigger(context)` is checked
+4. If true, `resolve(context)` mutates the shared `EffectContext`
+5. After all effects resolve, the caller reads the mutated context
+
+### 8.9.5 Adding New Effects
+
+To add a new keyword or upgrade effect:
+
+1. Create a new class extending `GameEffect` in `src/core/effects/`
+2. Override `get_hooks()` → return the hook StringNames to listen on
+3. Override `should_trigger(context)` → return true when the effect applies
+4. Override `resolve(context)` → mutate the context data bag
+5. Register in `EffectFactory` (for keywords) or at game start (for upgrades)
+
+### 8.9.6 Design Decisions
+
+- **RefCounted, not Node:** Effects are pure logic, no scene tree dependency
+- **Mutable context:** Single object passed by reference avoids allocations
+- **Priority sort:** Ensures initiative player's effects resolve first (RRG "Effects and Timing")
+- **Optional flag:** `is_optional` on GameEffect supports future player-choice effects

@@ -1319,30 +1319,45 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 7: Squadron Phase ⏳, movement, engagement, attacks, and keywords.
+### Phase 7: Squadron Phase ✅ — Effect/Hook pipeline, engagement, movement validation, keyword effects, interactive squadron activation.
 **Prerequisites:** Phase 1 (geometry), Phase 3 (SquadronInstance), Phase 6 (attack pipeline for squadron attacks)
 **Duration estimate:** 2–3 sessions
 
-> **Placeholder implemented (Phase 4b extension):** `_begin_squadron_phase()` currently
-> auto-marks all squadrons as activated and immediately advances to the Status Phase.
-> Phase 7 will replace this placeholder with the interactive alternating activation,
-> movement, engagement, and attack systems listed below.
+> **Placeholder replaced:** `_begin_squadron_phase()` previously auto-marked all
+> squadrons as activated and immediately advanced to the Status Phase. Phase 7
+> replaces this with an interactive alternating activation system, an Effect/Hook
+> pipeline for rule-modifying effects, engagement calculations, and movement
+> validation.
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| Squadron activation alternation (2 at a time) | Core | SQ-001–005, TF-008–012 | Alternating activation with auto-pass logic; uses Phase 4b turn management |
-| Squadron movement (distance ruler) | Core | SM-001–005 | Place within distance band matching speed |
-| Range ruler visualization (distance side) | Presentation | GC-014, UI-012 | Draggable ruler for squadron movement |
-| Engagement system | Core | SM-010–015 | Distance 1 check, movement lock, attack constraint |
-| Engagement visualization | Presentation | UI-013 | Lines/glow between engaged squadrons |
-| Squadron attacks (vs squadron, vs ship) | Core | SM-020–024 | Use AttackPipeline with squadron-specific rules |
-| Keyword: Bomber | Core | SM-030 | Crits count as damage vs ships |
-| Keyword: Escort | Core | SM-031 | Engaged squadrons must target Escort first |
-| Keyword: Swarm | Core | SM-032 | Reroll 1 die if friendly also engaged |
-| Squadron command resolution | Core | CM-020–022 | Activate N squadrons at close–medium range, can move+attack |
-| Activation slider tracking | Core + Pres | SM-040–042, SQ-008 | Toggle visual after activation |
+**Architecture:** Effect/Hook Pipeline (see `docs/arc42/08_crosscutting_concepts.md`)
+- `GameEffect` base class → `EffectContext` mutable data bag → `EffectRegistry` central resolver
+- Hook points: `ATTACK_CALC_DAMAGE`, `ATTACK_MODIFY_DICE_ATTACKER`, `SQUADRON_MUST_ATTACK_ENGAGED`
+- Effects registered at game start via `EffectFactory.register_squadron_keywords()`
+- Resolved in player-priority order (initiative player first)
 
-**Tests:** ~30 (activation order, engagement rules, keywords, squadron command, move constraints)
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | `EffectContext` — mutable data bag for hook pipeline | Core | — | `src/core/effects/effect_context.gd` | ✅ |
+| 2 | `GameEffect` — base class for all effects | Core | — | `src/core/effects/game_effect.gd` | ✅ |
+| 3 | `EffectRegistry` — central resolve, priority sort | Core | — | `src/core/effects/effect_registry.gd` | ✅ |
+| 4 | `EffectFactory` — keyword→effect registration | Core | — | `src/core/effects/effect_factory.gd` | ✅ |
+| 5 | `BomberEffect` — crits count as damage vs ships | Core | SM-030 | `src/core/effects/keywords/bomber_effect.gd` | ✅ |
+| 6 | `EscortEffect` — engaged must target Escort first | Core | SM-031 | `src/core/effects/keywords/escort_effect.gd` | ✅ |
+| 7 | `SwarmEffect` — reroll worst die when friendly engaged | Core | SM-032 | `src/core/effects/keywords/swarm_effect.gd` | ✅ |
+| 8 | `EngagementResolver` — distance-1 edge-to-edge checks | Core | SM-010–015 | `src/core/engagement_resolver.gd` | ✅ |
+| 9 | `SquadronMover` — movement distance + overlap validation | Core | SM-001–005 | `src/core/squadron_mover.gd` | ✅ |
+| 10 | `EffectRegistry` wired into `GameState.initialize()` | Core | — | Modified `src/core/game_state.gd` | ✅ |
+| 11 | `ATTACK_CALC_DAMAGE` hook in `AttackExecutor._calc_attack_damage()` | Core+Pres | SM-030 | Modified `src/scenes/game_board/attack_executor.gd` | ✅ |
+| 12 | `set_effect_registry()` wired from `game_board.gd` | Presentation | — | Modified `src/scenes/game_board/game_board.gd` | ✅ |
+| 13 | Interactive squadron activation (2 per turn, alternating) | Core+Autoload | SQ-001–005, TF-008–012 | Modified `src/autoload/game_manager.gd` | ✅ |
+| 14 | `squadron_activation_ended` signal | Autoload | — | Modified `src/autoload/event_bus.gd` | ✅ |
+| 15 | `SQUADRONS_PER_ACTIVATION` constant | Autoload | SQ-003 | Modified `src/autoload/constants.gd` | ✅ |
+| 16 | Unit tests — effect system, keywords, engagement, movement | Test | — | 7 test files, 75 tests | ✅ |
+| 17 | Manual test plan update | Docs | — | `docs/test_plan_manual.md` Phase 7 section | ✅ |
+| 18 | Architecture docs update | Docs | — | `docs/arc42/05_building_block_view.md`, `06_runtime_view.md` | ✅ |
+
+**Requirements covered:** SQ-001–005, TF-008–012, SM-001–005, SM-010–015, SM-030–032
+**Tests:** 75 new tests (71 scripts total, 1325 tests, 1324 passing, 1 pre-existing Nebulon-B failure)
 
 ---
 
@@ -1480,11 +1495,11 @@ Phase 0 (Scale & Assets)
 | Phase 5d | ~50 | **54** | **916** |
 | Phase 5b-2 | ~10 | — | ~922 |
 | Phase 6 | ~45 | — | ~967 |
-| Phase 7 | ~30 | — | ~997 |
-| Phase 8 | ~20 | — | ~1017 |
-| Phase 9 | ~15 | — | ~1032 |
-| Phase 10 | ~20 | — | ~1052 |
-| **Total** | **~420 new** | | **~1052** |
+| Phase 7 | ~30 | **75** | **1325** |
+| Phase 8 | ~20 | — | ~1345 |
+| Phase 9 | ~15 | — | ~1360 |
+| Phase 10 | ~20 | — | ~1380 |
+| **Total** | **~420 new** | | **~1380** |
 
 ---
 
@@ -1500,7 +1515,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
-| Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords |
+| Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
 | Damage card effect pattern | Phase 9 | Upgrade card effects (same pattern) |
 
 ---
@@ -1516,7 +1531,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
 | Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 in 4c/4d; SP-015 (maneuver) in 5b; Attack in Phase 6 |
-| Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ⏳ |
+| Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ✅ SQ-001–005 done; SQ-006–009 defer to Phase 7b (visual + command) |
 | Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
 | Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ✅ (core flow; activation steps in 5/7) |
@@ -1528,7 +1543,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
 | Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
 | Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ✅ MV-001–015 done (overlap MV-016+ in 5b-2) |
-| Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ⏳ |
+| Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ✅ SM-001–005, SM-010–015, SM-030–032 done; SM-020–024 (attacks), SM-040–042 (activation UI) defer to Phase 7b |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |

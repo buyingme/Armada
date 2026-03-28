@@ -16,6 +16,10 @@ const MAX_FLEET_POINTS: int = 400
 ## Number of players
 const PLAYER_COUNT: int = 2
 
+## Number of squadrons a player activates per turn in the Squadron Phase.
+## Rules Reference: "Squadron Phase", RRG p.12; SQ-002.
+const SQUADRONS_PER_ACTIVATION: int = 2
+
 ## --- Distance Constants ---
 ## Pixel values are resolved at runtime by GameScale autoload.
 ## These string keys match the range band names used in scale_config.json.

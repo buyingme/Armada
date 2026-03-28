@@ -42,6 +42,18 @@ var _command_assigning_player: int = -1
 ## Requirements: UI-024, UI-026.
 var _activating_ship: ShipInstance = null
 
+## The squadron currently being activated during Squadron Phase, or null.
+## Set when a squadron token is clicked; cleared after move+attack resolves.
+## Requirements: SQ-006.
+var _activating_squadron: SquadronInstance = null
+
+## How many squadrons the active player has activated in the current turn
+## during the Squadron Phase.  Each turn activates exactly 2 squadrons
+## (or fewer if the player has fewer remaining).
+## Resets when the active player changes.
+## Requirements: SQ-002.
+var _squadrons_activated_this_turn: int = 0
+
 ## Whether fixed round-1 commands were applied this game.
 ## Set by [method apply_fixed_round1_commands]; reset on [method start_new_game].
 ## Used by the game board to show a brief toast notification.
@@ -54,6 +66,8 @@ func _ready() -> void:
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
 	EventBus.activation_ended.connect(_on_activation_ended)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
+	EventBus.squadron_activation_ended.connect(
+			_on_squadron_activation_ended)
 
 
 func _notification(what: int) -> void:
@@ -63,6 +77,7 @@ func _notification(what: int) -> void:
 		# at exit (avoids "resources still in use" warnings).
 		current_game_state = null
 		_activating_ship = null
+		_activating_squadron = null
 
 
 ## Starts a new game with the given configuration.
@@ -72,6 +87,8 @@ func start_new_game(_config: Dictionary = {}) -> void:
 	is_game_active = true
 	active_player = current_game_state.initiative_player
 	_activating_ship = null
+	_activating_squadron = null
+	_squadrons_activated_this_turn = 0
 	fixed_commands_applied = false
 	EventBus.game_started.emit()
 	_start_round()
@@ -510,6 +527,7 @@ func _advance_ship_phase_turn() -> void:
 
 ## Advances to the next player's turn in the Squadron Phase.
 ## Auto-passes for players with no unactivated squadrons.
+## Resets the per-turn squadron activation counter for the new player.
 ## Requirements: TF-008, TF-009, TF-012.
 func _advance_squadron_phase_turn() -> void:
 	var next: int = 1 - active_player
@@ -523,9 +541,11 @@ func _advance_squadron_phase_turn() -> void:
 	if next_has:
 		if not curr_has:
 			_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % active_player)
+		_squadrons_activated_this_turn = 0
 		_set_active_player(next)
 	elif curr_has:
 		_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % next)
+		_squadrons_activated_this_turn = 0
 		_set_active_player(active_player)
 	else:
 		advance_phase()
@@ -583,28 +603,80 @@ func _begin_ship_phase() -> void:
 
 
 ## Begins the Squadron Phase.
-## --- Placeholder: auto-passes all squadron activations immediately. ---
-## Full squadron activation (movement, attacks, engagement, keywords)
-## will be implemented in Phase 7.
+## Sets the initiative player as active and resets per-turn counters.
+## Players alternate activating up to 2 squadrons each turn.
+## If neither player has unactivated squadrons, the phase is auto-skipped.
 ## Requirements: TF-008, SQ-001–005.
 func _begin_squadron_phase() -> void:
 	if not current_game_state:
 		return
-	_auto_pass_all_squadrons()
-	advance_phase()
+	# Register keyword effects for all squadrons if not already done.
+	if current_game_state.effect_registry.get_effect_count() == 0:
+		EffectFactory.register_squadron_keywords(
+				current_game_state,
+				current_game_state.initiative_player)
+	# If neither player has unactivated squadrons, auto-skip.
+	var init: int = current_game_state.initiative_player
+	if not _has_unactivated_squadrons(init) \
+			and not _has_unactivated_squadrons(1 - init):
+		_log.info("Squadron Phase: no squadrons to activate — auto-skip.")
+		advance_phase()
+		return
+	_squadrons_activated_this_turn = 0
+	_activating_squadron = null
+	_set_active_player(init)
+	_log.info("Squadron Phase: initiative player %d activates first." % init)
 
 
-## Marks all squadrons as activated so the phase can advance.
-## Placeholder — Phase 7 will replace this with interactive activation.
-func _auto_pass_all_squadrons() -> void:
-	for i: int in range(Constants.PLAYER_COUNT):
-		var ps: PlayerState = current_game_state.get_player_state(i)
-		if ps == null:
-			continue
-		for sq: Variant in ps.squadrons:
-			if sq is SquadronInstance:
-				(sq as SquadronInstance).activated_this_round = true
-	_log.info("Squadron Phase: auto-passed all squadrons (placeholder).")
+## Activates a squadron during the Squadron Phase.
+## Called by the game board when the active player clicks a squadron token.
+## Requirements: SQ-003, SQ-006.
+## [param squadron] — the squadron instance to activate.
+func activate_squadron(squadron: SquadronInstance) -> void:
+	if not is_game_active or not current_game_state:
+		return
+	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
+		_log.warn("activate_squadron: not in SQUADRON phase.")
+		return
+	if squadron.owner_player != active_player:
+		_log.warn("activate_squadron: squadron not owned by active player.")
+		return
+	if squadron.activated_this_round:
+		_log.warn("activate_squadron: already activated this round.")
+		return
+	if _activating_squadron != null:
+		_log.warn("activate_squadron: already activating a squadron.")
+		return
+	_activating_squadron = squadron
+	_log.info("Squadron activated: %s (player %d, turn count %d)" % [
+			squadron.data_key, squadron.owner_player,
+			_squadrons_activated_this_turn + 1])
+
+
+## Returns the squadron currently being activated, or null.
+func get_activating_squadron() -> SquadronInstance:
+	return _activating_squadron
+
+
+## Called when a squadron finishes its activation (move and/or attack done).
+## Marks it as activated, increments the per-turn counter, and advances
+## the turn when the player has activated 2 squadrons (or has no more).
+## Requirements: SQ-002, SQ-005, TF-010, TF-011.
+func _on_squadron_activation_ended(squadron: RefCounted) -> void:
+	if not is_game_active or not current_game_state:
+		return
+	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
+		return
+	if squadron is SquadronInstance:
+		var sq: SquadronInstance = squadron as SquadronInstance
+		sq.activated_this_round = true
+		_log.info("Squadron activation ended: %s" % sq.data_key)
+	_activating_squadron = null
+	_squadrons_activated_this_turn += 1
+	# SQ-002: each player activates up to 2 squadrons per turn.
+	if _squadrons_activated_this_turn >= Constants.SQUADRONS_PER_ACTIVATION \
+			or not _has_unactivated_squadrons(active_player):
+		_advance_squadron_phase_turn()
 
 
 ## Begins the Status Phase.

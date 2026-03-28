@@ -240,6 +240,10 @@ var _attack_exec_evade_step: bool = false
 ## Queue of defense token indices being processed during commit.
 var _defense_commit_queue: Array[int] = []
 
+## Reference to the game's [EffectRegistry] for hook resolution.
+## Set via [method set_effect_registry] after game initialisation.
+var _effect_registry: EffectRegistry = null
+
 
 # ===========================================================================
 # Public Interface
@@ -252,6 +256,11 @@ func initialize(board: Node2D, token_container: Node2D,
 	_board = board
 	_token_container = token_container
 	_camera = camera
+
+
+## Sets the [EffectRegistry] for hook resolution during attacks.
+func set_effect_registry(registry: EffectRegistry) -> void:
+	_effect_registry = registry
 
 
 ## Sets the shared damage deck reference.
@@ -506,12 +515,33 @@ func _attack_sim_clear_target_state() -> void:
 ## Returns the damage total for the current dice pool, using the correct
 ## formula for the defender type. Critical icons only count as damage when
 ## both attacker and defender are ships.
+## After the base calculation, the ATTACK_CALC_DAMAGE hook is resolved
+## so keyword effects (e.g. Bomber) can adjust the total.
 ## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
 ## defender are ships, this icon adds one damage to the damage total."
 func _calc_attack_damage(results: Array[Dictionary]) -> int:
+	var base_damage: int
 	if _attack_sim_def_squad != null:
-		return Dice.calculate_damage_vs_squadron(results)
-	return Dice.calculate_damage(results)
+		base_damage = Dice.calculate_damage_vs_squadron(results)
+	else:
+		base_damage = Dice.calculate_damage(results)
+	# Resolve ATTACK_CALC_DAMAGE hook for keyword effects (e.g. Bomber).
+	if _effect_registry != null:
+		var ctx: EffectContext = EffectContext.new()
+		ctx.dice_results = results
+		ctx.damage_total = base_damage
+		# Determine attacker/defender RefCounted references.
+		if _attack_sim_atk_ship != null and _attack_sim_atk_ship is ShipToken:
+			ctx.attacker = (_attack_sim_atk_ship as ShipToken).get_ship_instance()
+		if _attack_sim_atk_squad != null:
+			ctx.attacker = _attack_sim_atk_squad.get_squadron_instance()
+		if _attack_sim_def_squad != null:
+			ctx.defender = _attack_sim_def_squad.get_squadron_instance()
+		elif _attack_sim_def_ship != null and _attack_sim_def_ship is ShipToken:
+			ctx.defender = (_attack_sim_def_ship as ShipToken).get_ship_instance()
+		ctx = _effect_registry.resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)
+		return ctx.damage_total
+	return base_damage
 
 
 # ===========================================================================

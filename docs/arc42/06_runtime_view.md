@@ -181,3 +181,98 @@ Maneuver tool dismissed
 5. After last active segment, contact points determine final ship placement
 
 All pixel dimensions read from `scale_config.json`.
+
+## 6.5 Squadron Phase Sequence
+
+```
+Ship Phase ends → GameManager._begin_squadron_phase()
+    │
+    ├─ EffectFactory.register_squadron_keywords(game_state, initiative_player)
+    │    └─ Scans all squadrons for keywords (Bomber, Escort, Swarm)
+    │       and registers GameEffect instances in EffectRegistry
+    │
+    ├─ If neither player has squadrons → skip to Status Phase
+    │
+    ▼
+Initiative player becomes active_player
+_squadrons_activated_this_turn = 0
+    │
+    ▼
+┌─────────────────────────────┐
+│ Active Player's Turn        │
+│                             │
+│  Player activates squadron  │──→ GameManager.activate_squadron(sq)
+│    - Must own squadron      │     ├─ Validates ownership
+│    - Must not be activated  │     ├─ Validates not already activated
+│    - No double activation   │     └─ Sets _activating_squadron
+│                             │
+│  Squadron moves + attacks   │    (future: movement UI + attack execution)
+│                             │
+│  EventBus.squadron_activation_ended.emit(squadron)
+│    └─ _on_squadron_activation_ended()
+│        ├─ squadron.activated_this_round = true
+│        ├─ _squadrons_activated_this_turn += 1
+│        └─ If count == 2 or no more unactivated → switch turns
+│                             │
+└─────────┬───────────────────┘
+          │
+          ▼
+_advance_squadron_phase_turn()
+    ├─ Switch active player
+    ├─ Reset _squadrons_activated_this_turn = 0
+    ├─ If new player has unactivated squadrons → their turn
+    ├─ If not but original player does → swap back
+    └─ If both done → all remaining activated → Status Phase
+```
+
+### Effect/Hook Pipeline
+
+```
+AttackExecutor._calc_attack_damage(results)
+    │
+    ├─ Base damage calculated (standard or vs-squadron)
+    │
+    ├─ If EffectRegistry exists:
+    │    ├─ Create EffectContext (hook, attacker, defender, damage_total, ...)
+    │    ├─ EffectRegistry.resolve_hook(&"ATTACK_CALC_DAMAGE", context)
+    │    │    └─ For each registered effect (sorted by player_priority):
+    │    │         ├─ effect.should_trigger(context)?
+    │    │         └─ effect.resolve(context)  → mutates context.damage_total
+    │    └─ Return context.damage_total
+    │
+    └─ Else: return base damage
+```
+
+### Engagement Resolution
+
+```
+EngagementResolver.get_engaged_enemies(squadron, all_squadrons)
+    │
+    ├─ For each enemy squadron:
+    │    ├─ _edge_distance(pos_a, radius_a, pos_b, radius_b)
+    │    │    = max(0, center_distance - radius_a - radius_b)
+    │    └─ If edge_distance <= _get_distance_1_px() → engaged
+    │
+    └─ Returns Array[Dictionary] of engaged enemies
+
+EngagementResolver.get_valid_engaged_targets(squadron, engaged_enemies)
+    │
+    ├─ Check if any engaged enemy has "escort" keyword
+    ├─ If yes → return only Escort squadrons
+    └─ If no  → return all engaged enemies
+```
+
+### Key Participants
+
+| Component | Role |
+|-----------|------|
+| `GameManager` (Autoload) | Orchestrates squadron phase turns, activation validation |
+| `EffectRegistry` (RefCounted) | Resolves hook points, dispatches to registered effects |
+| `EffectFactory` (RefCounted) | Scans squadrons, creates/registers keyword effects |
+| `EffectContext` (RefCounted) | Mutable data bag for hook pipeline |
+| `EngagementResolver` (RefCounted) | Distance-1 engagement checks, valid target filtering |
+| `SquadronMover` (RefCounted) | Movement distance + overlap validation |
+| `BomberEffect` (GameEffect) | Recalculates damage using `Dice.calculate_damage()` vs ships |
+| `EscortEffect` (GameEffect) | Cancels attacks targeting non-Escort when Escort engaged |
+| `SwarmEffect` (GameEffect) | Rerolls worst die when friendly squadron also engaged |
+| `EventBus` (Autoload) | `squadron_activation_ended` signal |

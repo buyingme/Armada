@@ -2761,3 +2761,142 @@ Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
 | 4 | Press A to activate Attack Simulator | Maneuver tool dismissed automatically |
 
 **Pass criteria:** Attack simulator dismisses other tools when activated, preventing visual conflicts.
+
+---
+
+## Phase 7: Squadron Phase — Effect Pipeline, Engagement & Activation
+
+**What this phase adds:** An Effect/Hook pipeline for rule-modifying effects (Bomber, Escort, Swarm keywords), engagement resolution (distance-1 edge-to-edge), squadron movement validation, and interactive alternating squadron activation (2 per turn). The phase replaces the placeholder that auto-passed all squadrons.
+
+### Setup
+
+Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
+
+---
+
+### MT-7.1 — Automated test baseline
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 71 scripts, 1325 tests |
+| 2 | Check failures | Exactly 1 failure (pre-existing Nebulon-B deployment) |
+
+**Pass criteria:** 1324 passing, 1 pre-existing failure. No new failures.
+
+---
+
+### MT-7.2 — Squadron phase starts after ship phase
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and complete all ship activations in a round | Phase changes to Squadron Phase |
+| 2 | Observe the phase indicator | Shows "Squadron Phase" |
+| 3 | Check game log | Log shows squadron phase has begun and which player is active |
+
+**Pass criteria:** Squadron phase starts automatically after the last ship activation ends.
+
+---
+
+### MT-7.3 — Squadron phase auto-skips when no squadrons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | (If possible) Start a scenario with no squadrons on either side | Phase should skip directly to Status Phase |
+| 2 | Check game log | Log shows squadron phase was skipped due to no squadrons |
+
+**Pass criteria:** If neither player has squadrons, the phase auto-skips to Status Phase. (Note: Learning scenario always has squadrons, so you may need to manually destroy all squadrons or modify setup to verify.)
+
+---
+
+### MT-7.4 — Initiative player activates first
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter the Squadron Phase | Initiative player (player with initiative token) is set as active player |
+| 2 | Check phase indicator / game log | Active player matches initiative holder |
+
+**Pass criteria:** The initiative player always gets the first turn in the squadron phase.
+
+---
+
+### MT-7.5 — Squadron activation: 2-per-turn limit
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During a player's squadron turn, activate 1 squadron | Squadron starts its activation |
+| 2 | Complete the first squadron's activation | Counter increments to 1 |
+| 3 | Activate a second squadron | Squadron activates successfully |
+| 4 | Complete the second squadron's activation | Turn automatically ends, switches to opponent |
+
+**Pass criteria:** After 2 squadron activations, the turn switches to the other player without player action.
+
+---
+
+### MT-7.6 — Alternating turns
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Player A completes their 2 squadron activations | Turn switches to Player B |
+| 2 | Player B completes their 2 squadron activations | Turn switches back to Player A |
+| 3 | Repeat until all squadrons exhausted | Phase ends |
+
+**Pass criteria:** Players alternate turns correctly. Each player gets 2 activations per turn.
+
+---
+
+### MT-7.7 — Auto-pass when player has no unactivated squadrons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | One player has fewer squadrons than the other | After the smaller-fleet player runs out of unactivated squadrons, their turns are automatically passed |
+| 2 | The larger-fleet player continues activating | Remaining squadrons activate normally |
+
+**Pass criteria:** When a player runs out of squadrons to activate, the other player gets all remaining turns.
+
+---
+
+### MT-7.8 — Phase ends when all squadrons activated
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Both players activate all their squadrons | Squadron phase ends |
+| 2 | Check the next phase | Status Phase begins |
+| 3 | Verify squadron activation flags are reset | In the next round's squadron phase, all squadrons are available again |
+
+**Pass criteria:** Phase transitions to Status Phase after all squadrons are activated.
+
+---
+
+### MT-7.9 — Activated squadron visual indicator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a squadron | Squadron's visual appearance changes to indicate activation (e.g., opacity change, border, or glow) |
+| 2 | Check unactivated squadrons | They retain their normal appearance |
+
+**Pass criteria:** Activated and unactivated squadrons are visually distinguishable. (Note: visual indicator may not yet be implemented in the presentation layer — verify what exists.)
+
+---
+
+### MT-7.10 — Bomber keyword affects damage vs ships
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During an attack, have a squadron with the Bomber keyword attack a ship | Damage calculation includes critical results as damage |
+| 2 | Compare with a non-Bomber squadron attacking a ship | Non-Bomber crits count as 0 damage; Bomber crits count as 1 |
+
+**Pass criteria:** Bomber keyword correctly modifies damage calculation against ships. (This is tested by GUT unit tests; visual verification requires inspecting damage results in the attack flow.)
+
+---
+
+### MT-7.11 — No regressions: full game flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play through a full round: Command → Ship → Squadron → Status | All phases complete without errors |
+| 2 | Play through multiple rounds | Game flow repeats correctly, no crashes |
+| 3 | Verify ship attacks still work normally | Attack simulator and execution unchanged |
+| 4 | Verify ship movement still works | Maneuver tool unchanged |
+| 5 | Verify defense tokens still work | Token spending unchanged |
+
+**Pass criteria:** All existing functionality (ship activation, movement, attacks, defense tokens) works identically to before Phase 7.

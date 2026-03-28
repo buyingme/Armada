@@ -71,6 +71,11 @@ signal squadron_hull_changed(squadron_instance: RefCounted, new_hull: int)
 ## Emitted when a squadron is activated.
 signal squadron_activated(squadron: Node)
 
+## Emitted when a squadron finishes its activation (moved and/or attacked).
+## GameManager listens to advance the squadron phase turn.
+## Requirements: SQ-006, TF-011.
+signal squadron_activation_ended(squadron_instance: RefCounted)
+
 ## Emitted when a squadron is destroyed.
 signal squadron_destroyed(squadron: Node)
 

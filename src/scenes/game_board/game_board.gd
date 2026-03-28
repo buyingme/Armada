@@ -429,6 +429,11 @@ func _spawn_learning_scenario_tokens() -> void:
 	# Pass deck to the attack executor.
 	if _attack_executor:
 		_attack_executor.set_damage_deck(_damage_deck)
+	# Wire the effect registry to the attack executor.
+	if _attack_executor and GameManager.current_game_state \
+			and GameManager.current_game_state.effect_registry:
+		_attack_executor.set_effect_registry(
+				GameManager.current_game_state.effect_registry)
 	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
 	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
 	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()

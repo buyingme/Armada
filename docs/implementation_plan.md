@@ -1361,6 +1361,32 @@ game logic was altered — pure structural refactoring.
 
 ---
 
+### Phase 7b: Squadron Activation UI ✅ — Modal, move overlay, attack integration, activated visual.
+**Prerequisites:** Phase 7 (engagement, movement validation, GameManager squadron logic), Phase 6a (AttackExecutor)
+**Duration estimate:** 1 session
+**Commit:** (pending)
+
+> **Interactive squadron activation UI:** Replaces the placeholder squadron phase
+> with a guided modal that walks the player through selecting, moving, and
+> attacking with each squadron. Includes movement + armament range overlays,
+> engagement-based button restrictions, and visual dimming of activated tokens.
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Requirements doc — resolved ambiguities | Docs | SQA-001–013 | `docs/requirements/squadron_activation_ui.md` | ✅ |
+| 2 | `set_activated_visual()` on SquadronToken | Presentation | SQA-013 | Modified `src/scenes/tokens/squadron_token.gd` | ✅ |
+| 3 | `SquadronMoveOverlay` — movement + armament circles | Presentation | SQM-001, SQM-002 | `src/ui/squadron_move_overlay.gd` | ✅ |
+| 4 | `SquadronActivationModal` — 6-state state machine | Presentation | SQA-001–012 | `src/ui/squadron_activation_modal.gd` | ✅ |
+| 5 | `ShowSquadronModalButton` — re-open button | Presentation | SQA-011, SQA-013 | `src/ui/show_squadron_modal_button.gd` | ✅ |
+| 6 | `start_squadron_attack()` in AttackExecutor | Presentation | SQA-ATK-001 | Modified `src/scenes/game_board/attack_executor.gd` | ✅ |
+| 7 | GameBoard wiring — signals, handlers, overlays | Presentation | SQA-TM-001–004 | Modified `src/scenes/game_board/game_board.gd` | ✅ |
+| 8 | Unit + integration tests | Test | — | 3 test files, 39 new tests | ✅ |
+
+**Requirements covered:** SQA-001–013, SQM-001–007, SQA-ATK-001–006, SQA-TM-001–004
+**Tests:** 39 new tests (75 scripts total, 1385 tests, 1384 passing, 1 pre-existing Nebulon-B failure)
+
+---
+
 ### Phase 8: Status Phase & Game Flow ⏳ and victory conditions.
 **Prerequisites:** Phases 4–7 (all phase logic)
 **Duration estimate:** 1–2 sessions
@@ -1496,10 +1522,11 @@ Phase 0 (Scale & Assets)
 | Phase 5b-2 | ~10 | — | ~922 |
 | Phase 6 | ~45 | — | ~967 |
 | Phase 7 | ~30 | **75** | **1325** |
-| Phase 8 | ~20 | — | ~1345 |
-| Phase 9 | ~15 | — | ~1360 |
-| Phase 10 | ~20 | — | ~1380 |
-| **Total** | **~420 new** | | **~1380** |
+| Phase 7b | ~30 | **39** | **1385** |
+| Phase 8 | ~20 | — | ~1405 |
+| Phase 9 | ~15 | — | ~1420 |
+| Phase 10 | ~20 | — | ~1440 |
+| **Total** | **~420 new** | | **~1440** |
 
 ---
 
@@ -1531,7 +1558,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
 | Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 in 4c/4d; SP-015 (maneuver) in 5b; Attack in Phase 6 |
-| Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7 | ✅ SQ-001–005 done; SQ-006–009 defer to Phase 7b (visual + command) |
+| Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7, 7b | ✅ SQ-001–005 done (Phase 7); SQ-006–009 visual activation UI in Phase 7b |
 | Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
 | Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ✅ (core flow; activation steps in 5/7) |
@@ -1543,7 +1570,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
 | Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
 | Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ✅ MV-001–015 done (overlap MV-016+ in 5b-2) |
-| Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7 | ✅ SM-001–005, SM-010–015, SM-030–032 done; SM-020–024 (attacks), SM-040–042 (activation UI) defer to Phase 7b |
+| Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7, 7b | ✅ SM-001–005, SM-010–015, SM-030–032 done (Phase 7); SM-040–042 (activation UI) done (Phase 7b) |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |

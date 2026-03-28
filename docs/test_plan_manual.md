@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 65 scripts, 1250 tests, 2237 asserts — all passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 75 scripts, 1385 tests — 1384 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -2900,3 +2900,124 @@ Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
 | 5 | Verify defense tokens still work | Token spending unchanged |
 
 **Pass criteria:** All existing functionality (ship activation, movement, attacks, defense tokens) works identically to before Phase 7.
+
+---
+
+## Phase 7b — Squadron Activation UI
+
+**What this phase adds:** An interactive modal that guides the player through squadron activation: select → choose action (Move / Attack / Skip) → execute → next. Includes movement + armament range overlays, engagement-based button restrictions, visual dimming of activated tokens, and re-open button when the modal is dismissed.
+
+**Automated gate:** 75 scripts, 1385 tests, 1384 passing, 1 pre-existing failure. Run the GUT suite first.
+
+---
+
+### MT-7b.1 — Squadron modal appears after handoff
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance the game to the Squadron Phase | Handoff overlay / "Your Turn" banner shows |
+| 2 | Dismiss the handoff | Squadron Activation Modal appears at bottom-centre |
+| 3 | Check modal title | Shows "Squadron Phase — [Faction Name]" |
+| 4 | Check subtitle | Shows "Activate squadron 1 of 2" |
+
+**Pass criteria:** Modal appears correctly after handoff and displays the right faction and activation count.
+
+---
+
+### MT-7b.2 — Select a squadron to activate
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click on a friendly unactivated squadron | Modal transitions to show squadron name + action buttons |
+| 2 | Check overlay circles | Movement range circle (brownish) + armament range circle (green/red) appear centred on the squadron |
+| 3 | Click on an enemy squadron | Error message shown: "Not your squadron" |
+| 4 | Click on an already-activated squadron | Error message shown: "Already activated this round" |
+
+**Pass criteria:** Only valid friendly unactivated squadrons can be selected. Overlays appear on selection.
+
+---
+
+### MT-7b.3 — Engagement-based button restrictions
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select an ENGAGED squadron (enemy at distance 1) | Move button is disabled with tooltip "Engaged — cannot move" |
+| 2 | Check Skip button | Skip is disabled with tooltip "Engaged — must attack an engaged enemy" |
+| 3 | Check Attack button | Attack is enabled |
+| 4 | Select an UNENGAGED squadron | All three buttons (Move, Attack, Skip) are enabled |
+
+**Pass criteria:** Engaged squadrons cannot move or skip, per SM-011/SM-012.
+
+---
+
+### MT-7b.4 — Squadron movement (snap + commit)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select unengaged squadron, press Move | Prompt: "Click on the board to place the squadron" |
+| 2 | Click within the movement range circle | Squadron token snaps to clicked position, "Commit Move" button appears |
+| 3 | Click outside the movement range | Error: "Too far: exceeds distance N." — token stays at original position |
+| 4 | Click overlapping another squadron | Error: "Overlaps another squadron." |
+| 5 | Press "Commit Move" | Move is finalised, activation ends, squadron dims |
+| 6 | Press Escape during movement | Squadron reverts to original position, returns to action choice |
+
+**Pass criteria:** Movement validates distance and overlap, commits correctly, and Escape reverts.
+
+---
+
+### MT-7b.5 — Squadron attack flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a squadron, press Attack | Attack executor opens with the squadron pre-selected as attacker |
+| 2 | Complete the attack via the attack flow | Attack resolves, modal shows "Activation complete" |
+| 3 | Cancel the attack (Escape) | Returns to action choice buttons |
+
+**Pass criteria:** Attack delegates to the existing AttackExecutor in squadron mode.
+
+---
+
+### MT-7b.6 — Skip activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select an unengaged squadron, press Skip | Activation ends, squadron dims to alpha 0.4 |
+| 2 | Verify engagement restriction | Skip button is disabled for engaged squadrons |
+
+**Pass criteria:** Skip ends the activation without performing any action.
+
+---
+
+### MT-7b.7 — Activated visual (alpha dimming)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a squadron (via any action) | Token's alpha reduces to ~0.4 (visibly dimmer) |
+| 2 | Check unactivated squadrons | They remain at full alpha (1.0) |
+| 3 | Advance to next round (Status Phase resets) | All squadron alphas restore to 1.0 |
+
+**Pass criteria:** Activated squadrons are visually distinguished by reduced opacity.
+
+---
+
+### MT-7b.8 — Modal dismiss and re-open
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press "✕ Close" or Escape on the modal | Modal hides, "Show Squadron Modal" button appears at bottom-centre |
+| 2 | Press the "Show Squadron Modal" button | Modal re-opens with its previous state |
+
+**Pass criteria:** Dismissing the modal doesn't cancel activation flow; player can always re-open.
+
+---
+
+### MT-7b.9 — No regressions: full game flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play through Command → Ship → Squadron → Status | All phases transition correctly |
+| 2 | Verify ship activation flow unchanged | Dial drag, activation modal, maneuver tool work |
+| 3 | Verify attack flow unchanged | Ship attacks work identically |
+| 4 | After 2 squadron activations, turn passes to opponent | Turn management unchanged |
+
+**Pass criteria:** All existing functionality works identically to before Phase 7b.

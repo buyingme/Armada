@@ -156,6 +156,14 @@ var _attack_sim_def_zone_name: String = ""
 ## Requirements: AE-FLOW-001.
 var _attack_exec_mode: bool = false
 
+## Whether the executor is in squadron attack execution mode (Squadron Phase).
+## When true, the attacker is a squadron (not a ship hull zone).
+## Requirements: SQA-ATK-001.
+var _attack_exec_squad_mode: bool = false
+
+## The SquadronToken being activated for attack (Squadron Phase only).
+var _attack_exec_squad_token: SquadronToken = null
+
 ## The ShipToken being activated, whose hull zones are the only valid
 ## attacker choices during attack execution.
 ## Requirements: AE-FLOW-002.
@@ -349,6 +357,62 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 	_log.info("Attack execution: range overlay shown, awaiting hull zone.")
 
 
+## Starts the squadron attack execution flow from the Squadron Activation
+## Modal.  Pre-selects the squadron as attacker; enters target selection.
+## Requirements: SQA-ATK-001, SQA-ATK-002.
+func start_squadron_attack(squadron_token: SquadronToken) -> void:
+	_log.info("Squadron attack step entered.")
+	if squadron_token == null:
+		_log.info("Cannot start squadron attack — no token.")
+		return
+	dismiss_other_tools_requested.emit()
+	dismiss()
+	# Set execution mode flags.
+	_attack_exec_mode = true
+	_attack_exec_squad_mode = true
+	_attack_exec_squad_token = squadron_token
+	_attack_exec_ship_token = null
+	_attack_exec_fired_zones.clear()
+	_attack_exec_current_attack = 0
+	_attack_exec_dice_results.clear()
+	_attack_exec_pool.clear()
+	_attack_exec_range_band = ""
+	_attack_exec_cf_dial_used = false
+	_attack_exec_cf_token_used = false
+	_attack_exec_attacked_squads.clear()
+	# Pre-select the squadron as attacker.
+	var inst: SquadronInstance = squadron_token.get_squadron_instance()
+	var squad_name: String = "Squadron"
+	if inst and inst.squadron_data:
+		squad_name = inst.squadron_data.squadron_name
+	_attack_sim_atk_ship = null
+	_attack_sim_atk_zone = -1
+	_attack_sim_atk_squad = squadron_token
+	_attack_sim_atk_name = squad_name
+	_attack_sim_atk_zone_name = ""
+	# Enter target selection mode directly.
+	_attack_sim_selecting = false
+	_attack_sim_target_selecting = true
+	# Create the info panel on a CanvasLayer.
+	if _attack_sim_panel == null:
+		_attack_sim_panel = AttackSimPanel.new()
+		var layer: CanvasLayer = CanvasLayer.new()
+		layer.name = "AttackSimPanelLayer"
+		layer.layer = 90
+		add_child(layer)
+		layer.add_child(_attack_sim_panel)
+	if not _attack_sim_panel.attack_done_pressed.is_connected(
+			_finish_attack_execution):
+		_attack_sim_panel.attack_done_pressed.connect(
+				_finish_attack_execution)
+	_connect_attack_panel_signals()
+	_attack_sim_panel.show_squadron_selected(squad_name)
+	_attack_sim_panel.show_skip_attack_button()
+	# Show visual aids for the squadron.
+	_attack_sim_show_squadron_visuals(squadron_token)
+	_log.info("Squadron attack: target selection active for %s." % squad_name)
+
+
 ## Routes a ship token click. Returns true if handled.
 func handle_ship_click(token: ShipToken) -> bool:
 	if _attack_sim_target_selecting:
@@ -461,6 +525,8 @@ func has_any_attack_target(ship_token: ShipToken) -> bool:
 ## Resets all attack execution state variables.
 func _reset_exec_state() -> void:
 	_attack_exec_mode = false
+	_attack_exec_squad_mode = false
+	_attack_exec_squad_token = null
 	_attack_exec_ship_token = null
 	_attack_exec_fired_zones.clear()
 	_attack_exec_current_attack = 0

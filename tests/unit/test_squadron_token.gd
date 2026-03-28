@@ -70,3 +70,24 @@ func test_get_radius_px_returns_non_negative() -> void:
 	token.setup(_placement)
 	assert_true(token.get_radius_px() >= 0.0,
 			"Base radius should be non-negative even with uninitialised GameScale")
+
+
+# --- Activated visual ---
+
+func test_set_activated_visual_true_dims_alpha() -> void:
+	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
+	add_child_autofree(token)
+	token.setup(_placement)
+	token.set_activated_visual(true)
+	assert_almost_eq(token.modulate.a, 0.4, 0.01,
+			"Activated visual should dim alpha to 0.4")
+
+
+func test_set_activated_visual_false_restores_alpha() -> void:
+	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
+	add_child_autofree(token)
+	token.setup(_placement)
+	token.set_activated_visual(true)
+	token.set_activated_visual(false)
+	assert_almost_eq(token.modulate.a, 1.0, 0.01,
+			"Deactivated visual should restore alpha to 1.0")

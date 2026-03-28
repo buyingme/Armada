@@ -78,6 +78,16 @@ func get_squadron_instance() -> SquadronInstance:
 	return _squadron_instance
 
 
+## Dims or restores the token to indicate activation status.
+## [param activated] — true to dim (alpha ~0.4), false to restore.
+## Requirements: SQA-TM-004.
+func set_activated_visual(activated: bool) -> void:
+	if activated:
+		modulate.a = 0.4
+	else:
+		modulate.a = 1.0
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:

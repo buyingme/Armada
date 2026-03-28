@@ -153,6 +153,23 @@ var _ship_activation_state: ShipActivationState = null
 ## on the previous frame, so the toast fires only on crossing (DBG-033).
 var _was_in_deploy_zone: bool = true
 
+## --- Phase 7b: Squadron Activation flow state ---
+
+## Squadron Activation Modal (bottom-centre, guides through squadron actions).
+## Requirements: SQA-001–013.
+var _squadron_modal: SquadronActivationModal = null
+
+## "Show Squadron Modal" button (appears when modal is dismissed).
+## Requirements: SQA-011, SQA-013.
+var _show_squadron_modal_button: ShowSquadronModalButton = null
+
+## Move overlay (movement + armament range circles) shown on squadron select.
+## Requirements: SQM-001, SQM-002.
+var _squadron_move_overlay: SquadronMoveOverlay = null
+
+## Saved original position of the moving squadron (for revert on cancel).
+var _squadron_move_original_pos: Vector2 = Vector2.ZERO
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -270,6 +287,9 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Phase 7b: Squadron movement — Escape cancels move, board click places.
+	if _handle_squadron_move_input(event):
+		return
 	# Attack simulator: Escape dismisses.
 	if _attack_executor and _attack_executor.handle_escape(event):
 		return
@@ -522,6 +542,11 @@ func _on_token_clicked(token: ShipToken) -> void:
 func _on_squadron_clicked(token: SquadronToken) -> void:
 	if _attack_executor and _attack_executor.handle_squadron_click(token):
 		return
+	# Phase 7b: route to squadron activation modal.
+	if _squadron_modal != null and _squadron_modal.visible:
+		if _squadron_modal.handle_squadron_click(token):
+			_on_squadron_selected_in_modal(token)
+			return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
 		_was_in_deploy_zone = true
@@ -553,6 +578,8 @@ func _on_viewport_resized() -> void:
 		_show_activation_button.update_position(vp_size)
 	if _activation_modal != null and _activation_modal.visible:
 		_activation_modal.centre_on_screen(vp_size)
+	if _show_squadron_modal_button != null:
+		_show_squadron_modal_button.update_position(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -829,6 +856,27 @@ func _create_turn_management_ui() -> void:
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
 
+	# Phase 7b: Squadron Activation Modal.
+	_squadron_modal = SquadronActivationModal.new()
+	_squadron_modal.name = "SquadronActivationModal"
+	_squadron_modal.move_requested.connect(_on_squadron_move_requested)
+	_squadron_modal.move_commit_requested.connect(
+			_on_squadron_move_commit)
+	_squadron_modal.attack_requested.connect(
+			_on_squadron_attack_requested)
+	_squadron_modal.activation_done.connect(
+			_on_squadron_activation_done)
+	_squadron_modal.modal_closed.connect(
+			_on_squadron_modal_closed)
+	layer.add_child(_squadron_modal)
+
+	# Phase 7b: Show Squadron Modal button.
+	_show_squadron_modal_button = ShowSquadronModalButton.new()
+	_show_squadron_modal_button.name = "ShowSquadronModalButton"
+	_show_squadron_modal_button.squadron_modal_requested.connect(
+			_on_show_squadron_modal_requested)
+	layer.add_child(_show_squadron_modal_button)
+
 
 ## Creates a phase / round HUD label at the top-centre of the screen.
 func _create_phase_hud() -> void:
@@ -894,9 +942,10 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
 		Constants.GamePhase.SQUADRON:
-			# Placeholder — auto-passes immediately.
+			# Phase 7b: Squadron modal opens after handoff.
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
+			_show_activation_button.hide_button()
 		_:
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
@@ -1052,7 +1101,7 @@ func _on_handoff_accepted() -> void:
 			# "End Activation" appears only after the dial is dropped (Phase 4c).
 			pass
 		Constants.GamePhase.SQUADRON:
-			pass
+			_begin_squadron_activation_flow()
 
 
 ## Swaps card panel sides so the active player's faction panel is on the
@@ -1403,9 +1452,15 @@ func _on_attack_step_entered() -> void:
 
 ## Called when the attack execution step is fully complete.
 ## Advances activation state and re-opens the modal.
-## Requirements: AE-FLOW-003, AE-CONF-002.
+## Routes to the squadron modal when a squadron attack just completed.
+## Requirements: AE-FLOW-003, AE-CONF-002, SQA-ATK-003.
 func _on_attack_exec_completed() -> void:
 	_log.info("Attack exec completed — advancing activation step.")
+	# Phase 7b: squadron attack completed — route to squadron modal.
+	if _squadron_modal and _squadron_modal.get_state() \
+			== SquadronActivationModal.State.ATTACKING:
+		_squadron_modal.notify_attack_completed()
+		return
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
 	if _activation_modal and _ship_activation_state:
@@ -1419,9 +1474,15 @@ func _on_attack_exec_completed() -> void:
 
 ## Called when the player cancels attack execution (Escape).
 ## Re-opens the activation modal without advancing.
-## Requirements: AE-FLOW-004.
+## Routes to the squadron modal when a squadron attack was cancelled.
+## Requirements: AE-FLOW-004, SQA-ATK-005.
 func _on_attack_exec_cancelled() -> void:
 	_log.info("Attack exec cancelled — returning to activation modal.")
+	# Phase 7b: squadron attack cancelled — route to squadron modal.
+	if _squadron_modal and _squadron_modal.get_state() \
+			== SquadronActivationModal.State.ATTACKING:
+		_squadron_modal.notify_attack_cancelled()
+		return
 	if _activation_modal and _ship_activation_state:
 		_activation_modal.set_attack_skippable(
 				not _attack_executor.has_any_attack_target(
@@ -1902,3 +1963,227 @@ func _on_dismiss_other_tools_requested() -> void:
 	_dismiss_range_overlay()
 	_dismiss_targeting_list()
 	_dismiss_maneuver_tool()
+
+
+# ---------------------------------------------------------------------------
+# Squadron Phase Activation (Phase 7b)
+# ---------------------------------------------------------------------------
+
+
+## Starts the squadron activation flow for the current player.
+## Called after the handoff overlay is dismissed.
+## Requirements: SQA-001, SQA-TM-001.
+func _begin_squadron_activation_flow() -> void:
+	# Update engagement flags before showing the modal.
+	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
+	EngagementResolver.update_engagement_flags(all_squads)
+	if _squadron_modal:
+		_squadron_modal.open_for_turn(1, Constants.SQUADRONS_PER_ACTIVATION)
+	_log.info("Squadron activation flow started for player %d." %
+			GameManager.active_player)
+
+
+## Called after the squadron modal accepts a squadron click.
+## Shows the movement + armament range overlay centred on the token.
+## Requirements: SQM-001, SQM-002.
+func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
+	_remove_squadron_overlay()
+	var instance: SquadronInstance = token.get_squadron_instance()
+	if instance == null:
+		return
+	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
+	var can_move: bool = EngagementResolver.can_squadron_move(
+			instance, token.global_position, all_squads)
+	var faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
+	if instance.squadron_data:
+		faction = instance.squadron_data.faction
+	var speed: int = 3
+	if instance.squadron_data:
+		speed = instance.squadron_data.speed
+	_squadron_move_overlay = SquadronMoveOverlay.new()
+	_squadron_move_overlay.name = "SquadronMoveOverlay"
+	_token_container.add_child(_squadron_move_overlay)
+	_token_container.move_child(_squadron_move_overlay, 0)
+	_squadron_move_overlay.setup(
+			token.global_position, speed, can_move, faction)
+	_log.info("Squadron overlay shown for %s (can_move=%s)." % [
+			instance.data_key, str(can_move)])
+
+
+## Called when the modal emits [signal SquadronActivationModal.move_requested].
+## Saves the original position and prepares for click-to-place.
+## Requirements: SQM-003.
+func _on_squadron_move_requested(token: SquadronToken) -> void:
+	_squadron_move_original_pos = token.global_position
+	_log.info("Squadron move requested — original pos saved.")
+
+
+## Called when the modal emits
+## [signal SquadronActivationModal.move_commit_requested].
+## Finalises the squadron's position, updates engagement, emits EventBus.
+## Requirements: SQM-006, SQM-007.
+func _on_squadron_move_commit(token: SquadronToken) -> void:
+	_remove_squadron_overlay()
+	# Update engagement flags for all squadrons after the move.
+	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
+	EngagementResolver.update_engagement_flags(all_squads)
+	EventBus.squadron_moved.emit(token)
+	_log.info("Squadron move committed — engagement updated.")
+
+
+## Called when the modal emits
+## [signal SquadronActivationModal.attack_requested].
+## Delegates to the attack executor in squadron mode.
+## Requirements: SQA-ATK-001.
+func _on_squadron_attack_requested(token: SquadronToken) -> void:
+	if _attack_executor:
+		_attack_executor.start_squadron_attack(token)
+	var key: String = "?"
+	var inst: SquadronInstance = token.get_squadron_instance()
+	if inst:
+		key = inst.data_key
+	_log.info("Squadron attack requested for %s." % key)
+
+
+## Called when a single squadron activation is done.
+## Emits the EventBus signal, dims the token visually, and removes overlay.
+## Requirements: SQA-TM-002, SQA-013.
+func _on_squadron_activation_done(instance: SquadronInstance) -> void:
+	EventBus.squadron_activation_ended.emit(instance)
+	# Dim the activated token.
+	var token: SquadronToken = _find_squadron_token_for_instance(instance)
+	if token:
+		token.set_activated_visual(true)
+	_remove_squadron_overlay()
+	_log.info("Squadron activation done: %s" % instance.data_key)
+
+
+## Called when the squadron modal is dismissed by the player.
+## Shows the floating ShowSquadronModalButton.
+## Requirements: SQA-011.
+func _on_squadron_modal_closed() -> void:
+	if _show_squadron_modal_button:
+		_show_squadron_modal_button.show_button()
+		_show_squadron_modal_button.update_position(
+				get_viewport().get_visible_rect().size)
+	_log.info("Squadron modal closed — button shown.")
+
+
+## Called when the player presses the ShowSquadronModalButton.
+## Re-shows the squadron modal.
+## Requirements: SQA-013.
+func _on_show_squadron_modal_requested() -> void:
+	if _show_squadron_modal_button:
+		_show_squadron_modal_button.hide_button()
+	if _squadron_modal:
+		_squadron_modal.visible = true
+	_log.info("Squadron modal re-opened via button.")
+
+
+## Handles board input during squadron movement.
+## Escape reverts to original position; left-click validates and places.
+## Returns true if the event was consumed.
+## Requirements: SQM-003, SQM-004, SQM-005.
+func _handle_squadron_move_input(event: InputEvent) -> bool:
+	if _squadron_modal == null or not _squadron_modal.visible:
+		return false
+	var modal_state: SquadronActivationModal.State = \
+			_squadron_modal.get_state()
+	if modal_state != SquadronActivationModal.State.MOVING \
+			and modal_state != SquadronActivationModal.State.MOVE_PREVIEW:
+		return false
+	var token: SquadronToken = _squadron_modal.get_selected_token()
+	if token == null:
+		return false
+	# Escape: revert position and go back to ACTION_CHOICE.
+	if event is InputEventKey:
+		var key: InputEventKey = event as InputEventKey
+		if key.pressed and key.keycode == KEY_ESCAPE:
+			token.global_position = _squadron_move_original_pos
+			_squadron_modal._transition_to(
+					SquadronActivationModal.State.ACTION_CHOICE)
+			get_viewport().set_input_as_handled()
+			return true
+	# Left click: validate placement and snap.
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			var world_pos: Vector2 = get_global_mouse_position()
+			_try_place_squadron(token, world_pos)
+			get_viewport().set_input_as_handled()
+			return true
+	return false
+
+
+## Attempts to place the squadron at [param world_pos] during MOVING state.
+## Validates via [SquadronMover] and notifies the modal of success/failure.
+## Requirements: SQM-004, SQM-005.
+func _try_place_squadron(
+		token: SquadronToken, world_pos: Vector2) -> void:
+	var instance: SquadronInstance = token.get_squadron_instance()
+	if instance == null:
+		return
+	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
+	var bases: Array[ShipBase] = _build_ship_bases()
+	var error: String = SquadronMover.validate_move(
+			instance, _squadron_move_original_pos, world_pos,
+			all_squads, bases)
+	if error.is_empty():
+		token.global_position = world_pos
+		_squadron_modal.notify_move_preview_success()
+		_log.info("Squadron placed at %s." % str(world_pos))
+	else:
+		_squadron_modal.notify_move_preview_failed(error)
+		_log.info("Squadron placement invalid: %s" % error)
+
+
+## Removes the squadron movement overlay if present.
+func _remove_squadron_overlay() -> void:
+	if _squadron_move_overlay:
+		_squadron_move_overlay.queue_free()
+		_squadron_move_overlay = null
+
+
+## Finds the [SquadronToken] on the board bound to the given instance.
+## Returns null if not found.
+func _find_squadron_token_for_instance(
+		instance: SquadronInstance) -> SquadronToken:
+	for child: Node in _token_container.get_children():
+		if child is SquadronToken:
+			var st: SquadronToken = child as SquadronToken
+			if st.get_squadron_instance() == instance:
+				return st
+	return null
+
+
+## Builds an array of {"instance": SquadronInstance, "position": Vector2}
+## for all non-destroyed squadrons on the board.
+## Used for engagement resolution and move validation.
+func _build_all_squadron_positions() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for child: Node in _token_container.get_children():
+		if child is SquadronToken:
+			var st: SquadronToken = child as SquadronToken
+			var inst: SquadronInstance = st.get_squadron_instance()
+			if inst and not inst.is_destroyed():
+				result.append({
+					"instance": inst,
+					"position": st.global_position,
+				})
+	return result
+
+
+## Builds an array of [ShipBase] for all ships on the board.
+## Used for squadron move validation (overlap check).
+func _build_ship_bases() -> Array[ShipBase]:
+	var result: Array[ShipBase] = []
+	for child: Node in _token_container.get_children():
+		if child is ShipToken:
+			var ship: ShipToken = child as ShipToken
+			var inst: ShipInstance = ship.get_ship_instance()
+			if inst and inst.ship_data:
+				var xform: Transform2D = Transform2D(
+						ship.global_rotation, ship.global_position)
+				result.append(ShipBase.new(
+						inst.ship_data.ship_size, xform))
+	return result

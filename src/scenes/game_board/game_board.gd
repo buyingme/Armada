@@ -2021,7 +2021,8 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	_token_container.add_child(_squadron_move_overlay)
 	_token_container.move_child(_squadron_move_overlay, 0)
 	_squadron_move_overlay.setup(
-			token.global_position, speed, can_move, faction)
+			token.global_position, speed, can_move, faction,
+			token.get_radius_px())
 	# Tell the modal which actions are available for this squadron.
 	_squadron_modal.set_action_availability(can_move, has_targets)
 	_log.info("Squadron overlay shown for %s (can_move=%s, targets=%s)." % [

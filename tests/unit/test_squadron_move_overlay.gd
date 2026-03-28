@@ -98,3 +98,47 @@ func test_get_max_move_distance_higher_speed_larger() -> void:
 	var d3: float = SquadronMoveOverlay._get_max_move_distance(3)
 	assert_gt(d3, d1,
 			"Speed 3 move distance should exceed speed 1")
+
+
+# ===========================================================================
+# base_radius — overlay circles enlarged by squadron base radius
+# ===========================================================================
+
+func test_base_radius_increases_move_radius() -> void:
+	var base_r: float = GameScale.squadron_base_diameter_px * 0.5
+	var overlay_no_r: SquadronMoveOverlay = SquadronMoveOverlay.new()
+	add_child_autofree(overlay_no_r)
+	overlay_no_r.setup(Vector2.ZERO, 3, true,
+			Constants.Faction.REBEL_ALLIANCE, 0.0)
+	var overlay_with_r: SquadronMoveOverlay = SquadronMoveOverlay.new()
+	add_child_autofree(overlay_with_r)
+	overlay_with_r.setup(Vector2.ZERO, 3, true,
+			Constants.Faction.REBEL_ALLIANCE, base_r)
+	assert_almost_eq(
+			overlay_with_r.get_move_radius_px(),
+			overlay_no_r.get_move_radius_px() + base_r, 0.01,
+			"Move radius should increase by base_radius")
+
+
+func test_base_radius_increases_armament_radius() -> void:
+	var base_r: float = GameScale.squadron_base_diameter_px * 0.5
+	var overlay_no_r: SquadronMoveOverlay = SquadronMoveOverlay.new()
+	add_child_autofree(overlay_no_r)
+	overlay_no_r.setup(Vector2.ZERO, 3, true,
+			Constants.Faction.REBEL_ALLIANCE, 0.0)
+	var overlay_with_r: SquadronMoveOverlay = SquadronMoveOverlay.new()
+	add_child_autofree(overlay_with_r)
+	overlay_with_r.setup(Vector2.ZERO, 3, true,
+			Constants.Faction.REBEL_ALLIANCE, base_r)
+	assert_almost_eq(
+			overlay_with_r._armament_radius_px,
+			overlay_no_r._armament_radius_px + base_r, 0.01,
+			"Armament radius should increase by base_radius")
+
+
+func test_base_radius_zero_when_cannot_move() -> void:
+	var base_r: float = GameScale.squadron_base_diameter_px * 0.5
+	_overlay.setup(Vector2.ZERO, 3, false,
+			Constants.Faction.REBEL_ALLIANCE, base_r)
+	assert_eq(_overlay.get_move_radius_px(), 0.0,
+			"Move radius should remain 0 when can_move is false")

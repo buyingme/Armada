@@ -48,15 +48,21 @@ var _armament_colour: Color = ARMAMENT_COLOUR_REBEL
 ## [param speed] — the squadron's speed value.
 ## [param can_move] — whether the squadron is allowed to move.
 ## [param faction] — the squadron's faction (determines armament circle colour).
+## [param base_radius] — the squadron token's base radius in pixels.
+##   The drawn circles are enlarged by this amount so their edge represents
+##   the furthest point the token's edge can reach (not its centre).
+## Rules Reference: "Range and Distance", p.11 — measured from nearest edge.
 func setup(
 		center_pos: Vector2,
 		speed: int,
 		can_move: bool,
-		faction: Constants.Faction) -> void:
+		faction: Constants.Faction,
+		base_radius: float = 0.0) -> void:
 	position = center_pos
 	_show_movement = can_move
-	_move_radius_px = _get_max_move_distance(speed) if can_move else 0.0
-	_armament_radius_px = _get_distance_1_px()
+	_move_radius_px = (_get_max_move_distance(speed) + base_radius) \
+			if can_move else 0.0
+	_armament_radius_px = _get_distance_1_px() + base_radius
 	if faction == Constants.Faction.GALACTIC_EMPIRE:
 		_armament_colour = ARMAMENT_COLOUR_IMPERIAL
 	else:

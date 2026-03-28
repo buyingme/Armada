@@ -816,8 +816,13 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 		return
 	# Faction guard: in attack execution mode, only enemy ships
 	# (AE-TGT-001).
-	if _attack_exec_mode and _attack_exec_ship_token:
-		if token.get_faction() == _attack_exec_ship_token.get_faction():
+	if _attack_exec_mode:
+		var atk_faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
+		if _attack_exec_ship_token:
+			atk_faction = _attack_exec_ship_token.get_faction()
+		elif _attack_exec_squad_token:
+			atk_faction = _attack_exec_squad_token.get_faction()
+		if token.get_faction() == atk_faction:
 			_log.info("Attack exec: same-faction target rejected.")
 			TooltipManager.show_text("Cannot target a friendly ship.",
 					Vector2.INF, 2.0, true)
@@ -880,8 +885,13 @@ func _attack_sim_handle_target_squadron_click(
 					Vector2.INF, 2.0, true)
 			return
 	# Faction guard: in attack execution mode, only enemy squadrons.
-	if _attack_exec_mode and _attack_exec_ship_token:
-		if token.get_faction() == _attack_exec_ship_token.get_faction():
+	if _attack_exec_mode:
+		var atk_faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
+		if _attack_exec_ship_token:
+			atk_faction = _attack_exec_ship_token.get_faction()
+		elif _attack_exec_squad_token:
+			atk_faction = _attack_exec_squad_token.get_faction()
+		if token.get_faction() == atk_faction:
 			_log.info("Attack exec: same-faction squadron rejected.")
 			TooltipManager.show_text(
 					"Cannot target a friendly squadron.",
@@ -1062,23 +1072,14 @@ func _attack_sim_compute_and_show_los() -> void:
 ## Computes the dice pool text for the current attacker/target pair at the
 ## given [param range_band]. Uses the ship's battery armament for the
 ## selected hull zone, or anti-squadron armament when targeting a squadron.
+## For squadron attackers, uses anti-squadron or battery armament from
+## SquadronData.
 ## Requirements: AE-PNL-002.
-## Rules Reference: "Attack", Step 2, p.2.
+## Rules Reference: "Attack", Step 2, p.2; "Squadron Attacks", RRG p.19.
 func _compute_attack_dice_text(range_band: String) -> String:
-	if _attack_sim_atk_ship == null:
+	if _attack_sim_atk_ship == null and _attack_sim_atk_squad == null:
 		return "0 dice"
-	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
-	if ship_data == null:
-		return "0 dice"
-	var armament: Dictionary = {}
-	if _attack_sim_def_squad:
-		# Ship attacking squadron: use anti-squadron armament.
-		armament = ship_data.anti_squadron_armament
-	else:
-		# Ship attacking ship: use battery armament for the selected zone.
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_atk_zone, "FRONT")
-		armament = ship_data.battery_armament.get(zone_key, {})
+	var armament: Dictionary = _resolve_attacker_armament()
 	return DicePool.format_attack_pool(armament, range_band)
 
 
@@ -1368,19 +1369,23 @@ func _connect_attack_panel_signals() -> void:
 
 ## Begins the Phase 6b-2 attack sequence after target and range are known.
 ## Checks for a CF dial and starts the appropriate step.
-## Requirements: AE-CF-001, AE-CF-002.
+## For squadron attackers, CF dials are not available — skip straight to roll.
+## Requirements: AE-CF-001, AE-CF-002, SQA-ATK-001.
 ## Rules Reference: "Concentrate Fire", p.3 — "While attacking, the ship
 ## may add 1 die to its attack pool of a color that is already in its
 ## attack pool."
 func _attack_exec_begin_sequence(range_band: String) -> void:
-	if _attack_sim_panel == null or _attack_exec_ship_token == null:
+	if _attack_sim_panel == null:
+		return
+	if _attack_exec_ship_token == null and _attack_exec_squad_token == null:
 		return
 	# Compute the string-keyed pool.
 	_attack_exec_pool = _compute_attack_pool_dict(range_band)
 	# Show Skip Attack button.
 	_attack_sim_panel.show_skip_attack_button()
-	# Check CF dial availability.
-	if not _attack_exec_cf_dial_used and _attack_exec_has_cf_dial():
+	# Check CF dial availability (ship attackers only — squadrons have no dials).
+	if _attack_exec_ship_token and not _attack_exec_cf_dial_used \
+			and _attack_exec_has_cf_dial():
 		# Offer CF dial: colours must be present in pool.
 		var available: Array[String] = _get_cf_dial_colours(
 				_attack_exec_pool)
@@ -1421,19 +1426,37 @@ func _get_cf_dial_colours(pool: Dictionary) -> Array[String]:
 ## Computes the string-keyed dice pool for the current attacker/target.
 ## Same logic as _compute_attack_dice_text but returns the Dictionary.
 func _compute_attack_pool_dict(range_band: String) -> Dictionary:
-	if _attack_sim_atk_ship == null:
+	if _attack_sim_atk_ship == null and _attack_sim_atk_squad == null:
 		return {}
-	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
-	if ship_data == null:
-		return {}
-	var armament: Dictionary = {}
-	if _attack_sim_def_squad:
-		armament = ship_data.anti_squadron_armament
-	else:
+	var armament: Dictionary = _resolve_attacker_armament()
+	return DicePool.get_attack_pool(armament, range_band)
+
+
+## Resolves the attacker's armament dictionary for the current
+## attacker/target pair.  Handles ship (battery / anti-squadron) and
+## squadron (battery / anti-squadron) attackers.
+## Rules Reference: "Attack", Step 2, p.2; "Squadron Attacks", RRG p.19.
+func _resolve_attacker_armament() -> Dictionary:
+	# Ship attacker.
+	if _attack_sim_atk_ship:
+		var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
+		if ship_data == null:
+			return {}
+		if _attack_sim_def_squad:
+			return ship_data.anti_squadron_armament
 		var zone_key: String = _ZONE_NAMES.get(
 				_attack_sim_atk_zone, "FRONT")
-		armament = ship_data.battery_armament.get(zone_key, {})
-	return DicePool.get_attack_pool(armament, range_band)
+		return ship_data.battery_armament.get(zone_key, {})
+	# Squadron attacker.
+	if _attack_sim_atk_squad:
+		var inst: SquadronInstance = \
+				_attack_sim_atk_squad.get_squadron_instance()
+		if inst == null or inst.squadron_data == null:
+			return {}
+		if _attack_sim_def_squad:
+			return inst.squadron_data.anti_squadron_armament
+		return inst.squadron_data.battery_armament
+	return {}
 
 
 ## Shows the Roll Dice button.

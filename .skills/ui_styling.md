@@ -101,13 +101,17 @@ consistency with the majority of existing UI code.
 
 | Pattern | Code | Used by |
 |---------|------|---------|
-| **Centred on screen** | `position = (viewport_size - custom_minimum_size) * 0.5` | CommandDialPicker, CommandDialOrderModal, **ActivationModal** |
+| **Centred on screen** | `position = (viewport_size - custom_minimum_size) * 0.5` | CommandDialPicker, CommandDialOrderModal |
+| **Bottom-centre (anchored)** | Anchor-based: `PRESET_CENTER_BOTTOM`, offsets `-120`/`-40` | AttackSimPanel, **ActivationModal** |
 | Bottom-centre button | `position = Vector2((vp.x - size.x) * 0.5, vp.y - size.y - 24)` | EndActivationButton |
 | Right-side panel | `position = Vector2(vp.x - width - 16, 16)` | (reserved for future sidebar panels) |
 
 > **Rule:** Modals that the user interacts with step-by-step (pickers,
-> activation sequences) must be **centred**.  Only persistent HUD elements
-> may be anchored to edges.
+> activation sequences) must be **centred** or **bottom-centred**.
+> Only persistent HUD elements may be anchored to edges.
+> The ActivationModal and AttackSimPanel share the same bottom-centre
+> position — the ShowActivationButton is hidden while the attack panel
+> is active.
 
 ---
 

@@ -35,8 +35,10 @@ signal ready_for_maneuver()
 ## Emitted when the player presses the close / dismiss button.
 signal modal_closed()
 
-## Panel minimum size — matches CommandDialPicker proportions.
-const MODAL_MIN_SIZE: Vector2 = Vector2(380, 300)
+## Panel width cap — matches AttackSimPanel proportions.
+const MODAL_MAX_WIDTH: float = 360.0
+## Panel width fraction of viewport width.
+const MODAL_WIDTH_FRACTION: float = 0.35
 
 ## Step names for display.
 const STEP_NAMES: Array[String] = [
@@ -92,7 +94,6 @@ var _maneuver_tool_shown: bool = false
 
 func _init() -> void:
 	visible = false
-	custom_minimum_size = MODAL_MIN_SIZE
 
 
 ## Marks the Attack step as skippable (no valid targets).
@@ -167,29 +168,41 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## Builds the full modal UI from scratch.
-## Styled to match CommandDialPicker / CommandDialOrderModal
+## Positioned at bottom-centre, matching AttackSimPanel layout.
 ## (see .skills/ui_styling.md §1, §3, §4).
 func _build_ui() -> void:
 	_clear_ui()
 
-	# Panel style — identical to CommandDialPicker.
+	# Panel style — identical to AttackSimPanel / CommandDialPicker.
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
+	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
 
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	add_child(margin)
+	# Bottom-centre positioning — matches AttackSimPanel.
+	var vp: Vector2 = Vector2(1280, 720)
+	if get_viewport():
+		vp = get_viewport().get_visible_rect().size
+	var panel_w: float = minf(MODAL_MAX_WIDTH, vp.x * MODAL_WIDTH_FRACTION)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	anchors_preset = Control.PRESET_CENTER_BOTTOM
+	anchor_left = 0.5
+	anchor_right = 0.5
+	anchor_top = 1.0
+	anchor_bottom = 1.0
+	offset_left = -panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -120.0
+	offset_bottom = -40.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
+	add_child(vbox)
 
 	# Title — ship name.
 	_title_label = Label.new()
@@ -540,8 +553,11 @@ func _auto_skip_current() -> void:
 # ---------------------------------------------------------------------------
 
 
-## Centres the modal on the given viewport size.
-## Matches CommandDialPicker / CommandDialOrderModal positioning.
+## Updates the bottom-centre anchored position for the given viewport size.
+## Matches AttackSimPanel positioning.
 func centre_on_screen(viewport_size: Vector2) -> void:
-	var panel_size: Vector2 = custom_minimum_size
-	position = (viewport_size - panel_size) * 0.5
+	var panel_w: float = minf(MODAL_MAX_WIDTH,
+			viewport_size.x * MODAL_WIDTH_FRACTION)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	offset_left = -panel_w * 0.5
+	offset_right = panel_w * 0.5

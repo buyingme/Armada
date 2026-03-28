@@ -1369,13 +1369,19 @@ func _hide_phase5b_ui() -> void:
 
 
 ## Called when the activation modal is dismissed (Escape or ✕ Close).
-## Re-shows the "Show Activation Sequence" button so the player can reopen.
+## Re-shows the "Show Activation Sequence" button so the player can reopen,
+## unless the attack panel is currently active (same screen position).
 func _on_activation_modal_closed() -> void:
 	_log.info("Activation modal dismissed by player.")
-	if _ship_activation_state != null and _show_activation_button:
-		_show_activation_button.show_button()
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_show_activation_button.update_position(vp_size)
+	if _ship_activation_state == null or _show_activation_button == null:
+		return
+	# Do not show the button while the attack executor is active —
+	# both occupy the same bottom-centre position.
+	if _attack_executor and _attack_executor.is_in_exec_mode():
+		return
+	_show_activation_button.show_button()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_show_activation_button.update_position(vp_size)
 
 
 ## Called when the player presses "Execute Attack ►" in the activation modal.
@@ -1387,6 +1393,10 @@ func _on_attack_step_entered() -> void:
 	if _ship_activation_state == null or _activating_ship_token == null:
 		_log.info("Cannot start attack — no activation state or token.")
 		return
+	# Hide the "Show Activation Sequence" button while the attack panel
+	# is on-screen — both occupy the same bottom-centre position.
+	if _show_activation_button:
+		_show_activation_button.hide_button()
 	if _attack_executor:
 		_attack_executor.start_ship_attack(_activating_ship_token)
 

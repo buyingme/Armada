@@ -659,7 +659,7 @@ func _move_squadron_token(
 ## shows a one-shot toast warning. Resets when the token re-enters.
 ## DBG-033 — advisory toast on zone crossing in debug mode.
 func _check_zone_crossing_toast(
-		token: Node2D, top_y: float, bottom_y: float
+		token: Node2D, _top_y: float, _bottom_y: float
 ) -> void:
 	var faction: Constants.Faction = Constants.Faction.GALACTIC_EMPIRE
 	var token_name: String = token.name
@@ -912,7 +912,7 @@ func _begin_command_dial_flow() -> void:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
-	var current_round: int = gs.current_round
+	var _current_round: int = gs.current_round
 	var assigning: int = GameManager.get_command_assigning_player()
 
 	# In hot-seat, only show ships for the assigning player.
@@ -1865,7 +1865,7 @@ func _create_attack_executor() -> void:
 	_attack_executor = AttackExecutor.new()
 	_attack_executor.name = "AttackExecutor"
 	add_child(_attack_executor)
-	_attack_executor.initialize(self, _token_container, _camera)
+	_attack_executor.initialize(self , _token_container, _camera)
 	_attack_executor.attack_exec_completed.connect(
 			_on_attack_exec_completed)
 	_attack_executor.attack_exec_cancelled.connect(
@@ -1887,4 +1887,3 @@ func _on_dismiss_other_tools_requested() -> void:
 	_dismiss_range_overlay()
 	_dismiss_targeting_list()
 	_dismiss_maneuver_tool()
-

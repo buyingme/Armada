@@ -8,6 +8,7 @@
 ## every write to prevent data loss on crash.
 ##
 ## Requirements: LOG-002, LOG-003, LOG-005, LOG-006, LOG-007.
+@static_unload
 class_name GameLogger
 extends RefCounted
 

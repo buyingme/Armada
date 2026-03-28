@@ -12,6 +12,10 @@
 class_name AttackExecutor
 extends Node
 
+## Preloaded script reference for calling static functions without triggering
+## STATIC_CALLED_ON_INSTANCE warnings (Constants is an autoload instance).
+const ConstantsScript := preload("res://src/autoload/constants.gd")
+
 
 ## Emitted when the attack execution step is fully complete.
 ## GameBoard should advance the activation state and reopen the modal.
@@ -74,7 +78,8 @@ const _ZONE_NAMES: Dictionary = {
 # ---------------------------------------------------------------------------
 
 ## Reference to the parent GameBoard (for get_ship_tokens/get_squadron_tokens).
-var _board: GameBoard = null
+## Typed as Node2D to avoid a circular class_name dependency with GameBoard.
+var _board: Node2D = null
 
 ## Container for all token nodes (for adding overlays).
 var _token_container: Node2D = null
@@ -242,7 +247,7 @@ var _defense_commit_queue: Array[int] = []
 
 
 ## Initializes the executor with references to board infrastructure.
-func initialize(board: GameBoard, token_container: Node2D,
+func initialize(board: Node2D, token_container: Node2D,
 		camera: BoardCamera) -> void:
 	_board = board
 	_token_container = token_container
@@ -1798,18 +1803,18 @@ func _on_evade_die_selected(die_index: int) -> void:
 ## Rules Reference: "Redirect", p.11 — "the defender chooses one hull zone
 ## adjacent to the defending hull zone and may suffer up to that adjacent
 ## zone's remaining shields in that zone instead."
-func _attack_exec_start_redirect(def_inst: ShipInstance) -> void:
+func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 	_attack_exec_redirect_step = true
 	# The redirect budget is all the current damage.
 	_attack_exec_redirect_remaining = _attack_exec_modified_damage
 	# Get adjacent zones to the defending hull zone.
 	var def_zone: Constants.HullZone = (
 			_attack_sim_def_zone as Constants.HullZone)
-	var adjacent: Array = Constants.get_adjacent_hull_zones(def_zone)
+	var adjacent: Array = ConstantsScript.get_adjacent_hull_zones(def_zone)
 	_log.info(
 			"Redirect: %d damage to redirect from %s. Adjacent: %s"
 			% [_attack_exec_redirect_remaining,
-			Constants.hull_zone_to_string(def_zone),
+			ConstantsScript.hull_zone_to_string(def_zone),
 			str(adjacent)])
 	if _attack_sim_panel:
 		_attack_sim_panel.show_redirect_section(
@@ -1829,7 +1834,7 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 	if def_inst == null:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
-	var zone_str: String = Constants.hull_zone_to_string(zone_enum)
+	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
 	var zone_shields: int = int(
 			def_inst.current_shields.get(zone_str, 0))
 	if zone_shields <= 0:
@@ -1858,11 +1863,11 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 			var def_zone: Constants.HullZone = (
 					_attack_sim_def_zone as Constants.HullZone)
 			var adjacent: Array = \
-					Constants.get_adjacent_hull_zones(def_zone)
+					ConstantsScript.get_adjacent_hull_zones(def_zone)
 			var has_shields: bool = false
 			for adj_zone: Variant in adjacent:
 				var adj_str: String = \
-						Constants.hull_zone_to_string(
+						ConstantsScript.hull_zone_to_string(
 						adj_zone as Constants.HullZone)
 				if int(def_inst.current_shields.get(
 						adj_str, 0)) > 0:
@@ -2016,7 +2021,7 @@ func _resolve_ship_damage(damage: int) -> void:
 	if def_inst == null:
 		_log.error("Ship instance is null — cannot resolve damage.")
 		return
-	var def_zone_str: String = Constants.hull_zone_to_string(
+	var def_zone_str: String = ConstantsScript.hull_zone_to_string(
 			_attack_sim_def_zone as Constants.HullZone)
 	var remaining: int = damage
 	# Step 1: Absorb damage with shields.

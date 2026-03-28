@@ -56,6 +56,15 @@ func _ready() -> void:
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST \
+			or what == NOTIFICATION_PREDELETE:
+		# Release the GameState RefCounted chain so scripts are freed cleanly
+		# at exit (avoids "resources still in use" warnings).
+		current_game_state = null
+		_activating_ship = null
+
+
 ## Starts a new game with the given configuration.
 func start_new_game(_config: Dictionary = {}) -> void:
 	current_game_state = GameState.new()

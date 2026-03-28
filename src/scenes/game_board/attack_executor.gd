@@ -227,7 +227,7 @@ var _attack_exec_redirect_zone: int = -1
 ## Requirements: AE-DEF-014.
 var _attack_exec_contain_used: bool = false
 
-## Whether the Brace token was spent (deferred to Step 5).
+## Whether the Brace token was spent this attack.
 ## Requirements: AE-DEF-010.
 var _attack_exec_brace_used: bool = false
 
@@ -1719,13 +1719,20 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 			_attack_exec_start_evade()
 			return # Don't disable button here; evade step handles it
 		Constants.DefenseToken.BRACE:
-			# Deferred to Step 5 (Resolve Damage): halve total damage.
-			## Rules Reference: "Brace", RRG v1.5.0, p.3.
+			# Applied immediately: halve damage total, rounded up.
+			## Rules Reference: "Brace", RRG v1.5.0, p.3 — "the total
+			## damage is reduced to half, rounded up."
+			## Must resolve before Redirect so Redirect operates on the
+			## halved total (canonical order: Brace → Redirect).
 			_attack_exec_brace_used = true
-			_log.info("Brace: will halve damage in Step 5.")
+			if _attack_exec_modified_damage > 0:
+				_attack_exec_modified_damage = ceili(
+						float(_attack_exec_modified_damage) / 2.0)
+			_log.info("Brace: damage halved to %d." % [
+					_attack_exec_modified_damage])
 			if _attack_sim_panel:
 				_attack_sim_panel.update_defense_damage(
-						_attack_exec_modified_damage, true)
+						_attack_exec_modified_damage)
 		Constants.DefenseToken.REDIRECT:
 			# Enter redirect mode — player must click hull zone.
 			_attack_exec_start_redirect(def_inst)
@@ -1815,10 +1822,10 @@ func _on_evade_die_selected(die_index: int) -> void:
 		if _attack_sim_panel:
 			_attack_sim_panel.update_die_result(die_index, {
 				"color": color, "face": new_face})
-	# Update damage display (with brace pending if applicable).
+	# Update damage display.
 	if _attack_sim_panel:
 		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage, _attack_exec_brace_used)
+				_attack_exec_modified_damage)
 	# Disable the Evade button.
 	if _attack_sim_panel:
 		_attack_sim_panel.disable_defense_token_button(
@@ -1887,7 +1894,7 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 			_attack_exec_modified_damage])
 	if _attack_sim_panel:
 		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage, _attack_exec_brace_used)
+				_attack_exec_modified_damage)
 		if _attack_exec_redirect_remaining > 0:
 			# Check if any adjacent zone still has shields.
 			var def_zone: Constants.HullZone = (
@@ -1929,10 +1936,49 @@ func _on_attack_defense_done() -> void:
 			_attack_sim_panel.hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
-	_defense_commit_queue = selected
+	# Sort tokens into canonical resolution order (RRG "Defense Tokens"):
+	# Scatter → Evade → Brace → Redirect → Contain.
+	# This ensures Brace halves damage before Redirect distributes it.
+	_defense_commit_queue = _sort_defense_tokens_canonical(selected)
 	_log.info("Defense commit: %d tokens queued." %
 			_defense_commit_queue.size())
 	_process_next_defense_commit()
+
+
+## Canonical defense token resolution order.
+## Rules Reference: "Defense Tokens", p.5 — effects resolve in a
+## fixed sequence: Scatter (cancel) → Evade (dice mod) → Brace
+## (halve total) → Redirect (distribute) → Contain (prevent crit).
+const _DEFENSE_RESOLVE_ORDER: Dictionary = {
+	Constants.DefenseToken.SCATTER: 0,
+	Constants.DefenseToken.EVADE: 1,
+	Constants.DefenseToken.BRACE: 2,
+	Constants.DefenseToken.REDIRECT: 3,
+	Constants.DefenseToken.CONTAIN: 4,
+}
+
+
+## Sorts token indices into canonical RRG resolution order.
+func _sort_defense_tokens_canonical(
+		indices: Array[int]) -> Array[int]:
+	if _attack_sim_def_ship == null:
+		return indices
+	var def_inst: ShipInstance = \
+			_attack_sim_def_ship.get_ship_instance()
+	if def_inst == null:
+		return indices
+	var sorted: Array[int] = indices.duplicate()
+	sorted.sort_custom(func(a: int, b: int) -> bool:
+		var type_a: Constants.DefenseToken = \
+				def_inst.defense_tokens[a]["type"] \
+				as Constants.DefenseToken
+		var type_b: Constants.DefenseToken = \
+				def_inst.defense_tokens[b]["type"] \
+				as Constants.DefenseToken
+		return _DEFENSE_RESOLVE_ORDER.get(type_a, 99) < \
+				_DEFENSE_RESOLVE_ORDER.get(type_b, 99)
+	)
+	return sorted
 
 
 ## Processes the next defense token in the commit queue.
@@ -1986,13 +2032,8 @@ func _attack_exec_resolve_damage() -> void:
 	var final_damage: int = _attack_exec_modified_damage
 	if _attack_exec_scatter_used:
 		final_damage = 0
-	# Apply Brace here (deferred from Step 4 to Step 5).
-	## Rules Reference: "Brace", RRG v1.5.0, p.3 — "When damage is
-	## totaled during the 'Resolve Damage' step, the total is reduced
-	## to half, rounded up."
-	if _attack_exec_brace_used and final_damage > 0:
-		final_damage = ceili(float(final_damage) / 2.0)
-		_log.info("Brace (Step 5): damage halved to %d." % final_damage)
+	# Brace is already applied during Step 4 (canonical order before
+	# Redirect), so _attack_exec_modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
 	if final_damage <= 0:
 		_log.info("No damage to resolve.")

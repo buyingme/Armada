@@ -203,6 +203,7 @@ const INITIAL_PROMPT: String = "Select a hull zone or squadron as the attacker."
 func _init() -> void:
 	name = "AttackSimPanel"
 	visible = false
+	_apply_anchor_position()
 
 
 ## Builds the panel UI and makes it visible with the initial prompt.
@@ -354,6 +355,23 @@ func get_body_text() -> String:
 # UI Construction
 # =========================================================================
 
+## Sets bottom-centre anchoring once — must not be called from _build_ui
+## to avoid Godot offset recalculation on repeated anchor writes.
+func _apply_anchor_position() -> void:
+	var vp: Vector2 = Vector2(1280, 720)
+	if get_viewport():
+		vp = get_viewport().get_visible_rect().size
+	var panel_w: float = minf(360.0, vp.x * 0.35)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	offset_left = -panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -40.0 - 300.0
+	offset_bottom = -40.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
 ## Builds the panel structure and applies standard modal styling.
 func _build_ui() -> void:
 	_clear_content()
@@ -365,24 +383,6 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
-	# Sizing.
-	var vp: Vector2 = Vector2(1280, 720)
-	if get_viewport():
-		vp = get_viewport().get_visible_rect().size
-	var panel_w: float = minf(360.0, vp.x * 0.35)
-	custom_minimum_size = Vector2(panel_w, 0.0)
-	# Position: bottom-centre, above the toolbar.
-	anchors_preset = Control.PRESET_CENTER_BOTTOM
-	anchor_left = 0.5
-	anchor_right = 0.5
-	anchor_top = 1.0
-	anchor_bottom = 1.0
-	offset_left = - panel_w * 0.5
-	offset_right = panel_w * 0.5
-	offset_top = -120.0
-	offset_bottom = -40.0
-	grow_horizontal = Control.GROW_DIRECTION_BOTH
-	grow_vertical = Control.GROW_DIRECTION_BEGIN
 	# Content container.
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 8)

@@ -94,6 +94,7 @@ var _maneuver_tool_shown: bool = false
 
 func _init() -> void:
 	visible = false
+	_apply_anchor_position()
 
 
 ## Marks the Attack step as skippable (no valid targets).
@@ -167,6 +168,23 @@ func _unhandled_input(event: InputEvent) -> void:
 # ---------------------------------------------------------------------------
 
 
+## Sets bottom-centre anchoring once — must not be called from _build_ui
+## to avoid Godot offset recalculation on repeated anchor writes.
+func _apply_anchor_position() -> void:
+	var vp: Vector2 = Vector2(1280, 720)
+	if get_viewport():
+		vp = get_viewport().get_visible_rect().size
+	var panel_w: float = minf(MODAL_MAX_WIDTH, vp.x * MODAL_WIDTH_FRACTION)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	offset_left = -panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -40.0 - 420.0
+	offset_bottom = -40.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
 ## Builds the full modal UI from scratch.
 ## Positioned at bottom-centre, matching AttackSimPanel layout.
 ## (see .skills/ui_styling.md §1, §3, §4).
@@ -181,24 +199,6 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
-
-	# Bottom-centre positioning — matches AttackSimPanel.
-	var vp: Vector2 = Vector2(1280, 720)
-	if get_viewport():
-		vp = get_viewport().get_visible_rect().size
-	var panel_w: float = minf(MODAL_MAX_WIDTH, vp.x * MODAL_WIDTH_FRACTION)
-	custom_minimum_size = Vector2(panel_w, 0.0)
-	anchors_preset = Control.PRESET_CENTER_BOTTOM
-	anchor_left = 0.5
-	anchor_right = 0.5
-	anchor_top = 1.0
-	anchor_bottom = 1.0
-	offset_left = -panel_w * 0.5
-	offset_right = panel_w * 0.5
-	offset_top = -120.0
-	offset_bottom = -40.0
-	grow_horizontal = Control.GROW_DIRECTION_BOTH
-	grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)

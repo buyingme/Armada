@@ -964,6 +964,7 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 		_:
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
+			_hide_squadron_phase_ui()
 
 
 ## Called when a new round begins.
@@ -1430,6 +1431,15 @@ func _hide_phase5b_ui() -> void:
 	if _activation_modal:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
+
+
+## Hides all Squadron Phase UI (modal, reopen button, overlay).
+func _hide_squadron_phase_ui() -> void:
+	if _squadron_modal:
+		_squadron_modal.close_modal()
+	if _show_squadron_modal_button:
+		_show_squadron_modal_button.hide_button()
+	_remove_squadron_overlay()
 
 
 ## Called when the activation modal is dismissed (Escape or ✕ Close).
@@ -2098,6 +2108,7 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	else:
 		_log.info("All squadron activations done for player %d." %
 				GameManager.active_player)
+		_hide_squadron_phase_ui()
 
 
 ## Called when the squadron modal is dismissed by the player.

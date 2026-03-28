@@ -406,7 +406,7 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 		_attack_sim_panel.attack_done_pressed.connect(
 				_finish_attack_execution)
 	_connect_attack_panel_signals()
-	_attack_sim_panel.show_squadron_selected(squad_name)
+	_attack_sim_panel.show_initial_squadron_exec(squad_name)
 	_attack_sim_panel.show_skip_attack_button()
 	# Show visual aids for the squadron.
 	_attack_sim_show_squadron_visuals(squadron_token)

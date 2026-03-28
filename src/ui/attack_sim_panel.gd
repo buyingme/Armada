@@ -223,6 +223,17 @@ func show_initial_attack_exec(ship_name: String) -> void:
 	visible = true
 
 
+## Builds the panel UI in attack execution mode for a squadron attacker.
+## Unlike ship attacks, the attacker is pre-selected — go straight to
+## target selection.
+## Requirements: SQA-ATK-001, AE-PNL-001.
+func show_initial_squadron_exec(squad_name: String) -> void:
+	_attack_execution_mode = true
+	_build_ui()
+	_set_prompt("Attacking: %s" % squad_name, "Select a target.")
+	visible = true
+
+
 ## Updates the panel to show attacker confirmation for a hull zone.
 ## [param ship_name] — display name of the selected ship.
 ## [param zone_name] — hull zone string (e.g. "FRONT").

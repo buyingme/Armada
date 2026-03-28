@@ -760,9 +760,10 @@ func test_squad_no_target_when_no_armament() -> void:
 
 func test_squad_ship_target_los_blocked_by_other_hull_zone() -> void:
 	# Arrange — squadron is directly to the LEFT of an enemy ship facing up.
-	# At distance 1, the FRONT hull zone's LOS enters through the LEFT edge
-	# so FRONT should be blocked. The LEFT zone itself should remain valid.
-	# Rules Reference: "Line of Sight", bullet 4.
+	# The LOS to FRONT enters the LEFT edge in the FRONT third → not blocked.
+	# The LOS to REAR enters the LEFT edge in the REAR third → not blocked.
+	# The LOS to RIGHT enters the LEFT edge in the middle third → blocked.
+	# Rules Reference: "Line of Sight", bullet 4; "Hull Zones", p.9.
 	var enemy: TargetingListBuilder.ShipInfo = _make_ship(
 			"ISD", 1, Vector2(500, 500), 0.0)
 	# Place squadron just inside distance 1 of the left edge.
@@ -772,8 +773,8 @@ func test_squad_ship_target_los_blocked_by_other_hull_zone() -> void:
 	# Act
 	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
 			[enemy], [squad], 0)
-	# Assert — the squadron should NOT see FRONT as a valid defending zone
-	# because LOS to the FRONT targeting point enters through the LEFT edge.
+	# Assert — LEFT, FRONT, and REAR should be reachable; RIGHT should be
+	# blocked because its LOS enters through the LEFT zone (middle third).
 	var sq_result: TargetingListBuilder.SquadTargetingResult = \
 			build_result.squad_results[0]
 	var target_zones: Array = []
@@ -781,12 +782,12 @@ func test_squad_ship_target_los_blocked_by_other_hull_zone() -> void:
 		var te: TargetingListBuilder.TargetEntry = entry as TargetingListBuilder.TargetEntry
 		if te.target_name == "ISD":
 			target_zones.append(te.target_zone)
-	# LEFT should be present (direct LOS through left edge).
 	assert_has(target_zones, Constants.HullZone.LEFT,
 			"LEFT zone should be reachable from squadron to the left")
-	# FRONT should be blocked (LOS enters through LEFT edge).
-	assert_does_not_have(target_zones, Constants.HullZone.FRONT,
-			"FRONT zone should be blocked — LOS enters through LEFT edge")
+	assert_has(target_zones, Constants.HullZone.FRONT,
+			"FRONT zone reachable — LOS enters LEFT edge in FRONT third")
+	assert_does_not_have(target_zones, Constants.HullZone.RIGHT,
+			"RIGHT zone should be blocked — LOS enters through LEFT zone")
 
 
 func test_squad_ship_target_obstructed_by_intervening_ship() -> void:

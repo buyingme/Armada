@@ -117,21 +117,21 @@ func test_los_ship_to_ship_clear_when_direct_path() -> void:
 
 func test_los_blocked_when_enters_through_different_hull_zone() -> void:
 	# Arrange — attacker is to the left of a defender who faces straight up.
-	# LOS from the attacker enters the defender's LEFT zone but we claim
-	# the defending zone is FRONT.
+	# LOS line enters the defender's LEFT zone (middle band of LEFT edge)
+	# but the defending zone is RIGHT → blocked.
 	var atk_los: Vector2 = Vector2(200, 300)
-	var def_los: Vector2 = Vector2(500, 265)  # defender's front LOS point
+	var def_los: Vector2 = Vector2(520, 300)  # defender's right LOS point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
 	# Act
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_ship_to_ship(
-					atk_los, def_los, Constants.HullZone.FRONT,
+					atk_los, def_los, Constants.HullZone.RIGHT,
 					def_pos, 0.0, def_hw, def_hl, [], [])
 	# Assert
 	assert_false(result.has_los,
-			"LOS entering through LEFT should block FRONT zone")
+			"LOS entering through LEFT should block RIGHT zone")
 
 
 # =========================================================================
@@ -219,10 +219,11 @@ func test_los_squad_to_ship_clear_when_direct_path() -> void:
 
 func test_los_squad_to_ship_blocked_by_other_hull_zone() -> void:
 	# Arrange — squadron is to the left of defender facing up.
-	# LOS targets the FRONT hull zone — but the line enters through LEFT.
+	# LOS targets the RIGHT hull zone — but the line enters through LEFT
+	# (middle band of the left edge).
 	var squad_centre: Vector2 = Vector2(200, 300)
 	var squad_r: float = 15.0
-	var def_los: Vector2 = Vector2(500, 265)  # front targeting point
+	var def_los: Vector2 = Vector2(520, 300)  # right hull zone point
 	var def_pos: Vector2 = Vector2(500, 300)
 	var def_hw: float = 20.0
 	var def_hl: float = 35.0
@@ -230,11 +231,11 @@ func test_los_squad_to_ship_blocked_by_other_hull_zone() -> void:
 	var result: LineOfSightChecker.LOSResult = \
 			LineOfSightChecker.trace_los_squad_to_ship(
 					squad_centre, squad_r,
-					def_los, Constants.HullZone.FRONT,
+					def_los, Constants.HullZone.RIGHT,
 					def_pos, 0.0, def_hw, def_hl, [], [])
 	# Assert
 	assert_false(result.has_los,
-			"Squad LOS entering through LEFT should block FRONT zone")
+			"Squad LOS entering through LEFT should block RIGHT zone")
 
 
 # =========================================================================
@@ -355,3 +356,104 @@ func test_trace_los_squad_to_squad_obstructed() -> void:
 			"Squad-to-squad LOS should be obstructed by intervening ship.")
 	assert_has(result.obstructed_by, "Blocker",
 			"Obstructed-by list should include the blocker.")
+
+
+# =========================================================================
+# _classify_local_point (point-based hull zone determination)
+# =========================================================================
+
+func test_classify_local_point_returns_front_for_negative_y() -> void:
+	# Point well into the front third (y < front_y = -half_l + third).
+	# half_l=120, third=80, front_y=-40.
+	var zone: Constants.HullZone = LineOfSightChecker._classify_local_point(
+			Vector2(0.0, -80.0), 74.0, 120.0)
+	assert_eq(zone, Constants.HullZone.FRONT,
+			"Point with y << front_y should be FRONT")
+
+
+func test_classify_local_point_returns_rear_for_positive_y() -> void:
+	# Point well into the rear third (y > rear_y = half_l - third).
+	# rear_y = 40.
+	var zone: Constants.HullZone = LineOfSightChecker._classify_local_point(
+			Vector2(0.0, 80.0), 74.0, 120.0)
+	assert_eq(zone, Constants.HullZone.REAR,
+			"Point with y >> rear_y should be REAR")
+
+
+func test_classify_local_point_returns_left_for_negative_x_in_middle() -> void:
+	# Point in the middle band with negative x — LEFT zone.
+	var zone: Constants.HullZone = LineOfSightChecker._classify_local_point(
+			Vector2(-30.0, 0.0), 74.0, 120.0)
+	assert_eq(zone, Constants.HullZone.LEFT,
+			"Point with x < 0 in middle band should be LEFT")
+
+
+func test_classify_local_point_returns_right_for_positive_x_in_middle() -> void:
+	# Point in the middle band with positive x — RIGHT zone.
+	var zone: Constants.HullZone = LineOfSightChecker._classify_local_point(
+			Vector2(30.0, 0.0), 74.0, 120.0)
+	assert_eq(zone, Constants.HullZone.RIGHT,
+			"Point with x > 0 in middle band should be RIGHT")
+
+
+# =========================================================================
+# Bug-fix regression: LOS enters side edge in rear/front third
+# =========================================================================
+
+func test_los_not_blocked_entering_right_edge_in_rear_third() -> void:
+	## Regression test for the Nebulon-B → VSD REAR LOS bug.
+	## The LOS line enters the RIGHT edge of a wide base in the REAR third.
+	## Old code assigned the entire RIGHT edge to the RIGHT zone → blocked.
+	## Fix: classify the entry point by 1/3-length → REAR zone → not blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 74.0
+	var def_hl: float = 120.0
+	# Attacker to the right, slightly behind: enters RIGHT edge in REAR third.
+	var atk_los: Vector2 = Vector2(800, 350)
+	var def_los: Vector2 = Vector2(500, 420)  # REAR LOS point
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, def_hw, def_hl, [], [])
+	# Assert
+	assert_true(result.has_los,
+			"LOS entering RIGHT edge in REAR third should NOT block REAR target")
+
+
+func test_los_blocked_entering_right_edge_in_middle_third() -> void:
+	## LOS enters the RIGHT edge in the middle third (the RIGHT zone).
+	## Targeting REAR → entry zone RIGHT ≠ REAR → correctly blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 74.0
+	var def_hl: float = 120.0
+	# Attacker far to the upper-right: enters RIGHT edge in middle third.
+	var atk_los: Vector2 = Vector2(800, 0)
+	var def_los: Vector2 = Vector2(500, 420)  # REAR LOS point
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, def_hw, def_hl, [], [])
+	# Assert
+	assert_false(result.has_los,
+			"LOS entering RIGHT edge in middle third should block REAR target")
+
+
+func test_los_not_blocked_entering_left_edge_in_front_third() -> void:
+	## Mirror scenario: LOS enters LEFT edge in the FRONT third.
+	## Targeting FRONT → entry zone FRONT = FRONT → not blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var def_hw: float = 74.0
+	var def_hl: float = 120.0
+	# Attacker to the upper-left: enters LEFT edge in FRONT third.
+	var atk_los: Vector2 = Vector2(200, 250)
+	var def_los: Vector2 = Vector2(500, 180)  # FRONT LOS point
+	# Act
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.FRONT,
+					def_pos, 0.0, def_hw, def_hl, [], [])
+	# Assert
+	assert_true(result.has_los,
+			"LOS entering LEFT edge in FRONT third should NOT block FRONT target")

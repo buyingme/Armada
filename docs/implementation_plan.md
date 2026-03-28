@@ -1181,6 +1181,22 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Post-Phase-5d LOS Bug Fix ✅
+
+**Bug:** `_los_blocked_by_other_hull_zone()` in `LineOfSightChecker` assigned each rectangle edge entirely to one hull zone (e.g. the full RIGHT edge → RIGHT zone). For ships whose base is taller than wide (medium/large), the LEFT and RIGHT edges span FRONT, LEFT/RIGHT, and REAR hull zones. LOS entering the RIGHT edge in the REAR third was incorrectly classified as entering the RIGHT zone, causing false "LOS Blocked" results (e.g. Nebulon-B RIGHT arc → VSD REAR).
+
+**Fix:** After finding the first perimeter intersection, convert the entry point to the defender's local space and classify the hull zone using the 1/3-length division rule (same as `ShipToken.get_hull_zone_at()`). Added `_classify_local_point()` helper. Removed stale `TODO(HZ-EDGE-001)`.
+
+| Task | File | Details | Status |
+|------|------|---------|--------|
+| Point-based hull zone classification at entry point | `src/core/line_of_sight_checker.gd` | Replace edge-based zone with `_classify_local_point()` | ✅ |
+| New `_classify_local_point()` static helper | `src/core/line_of_sight_checker.gd` | 1/3-length division: FRONT/REAR by y, LEFT/RIGHT by x sign | ✅ |
+| Update LOS + targeting tests for corrected behaviour | `tests/unit/test_line_of_sight_checker.gd`, `tests/unit/test_targeting_list_builder.gd` | 7 new tests, 3 updated assertions | ✅ |
+
+**Tests:** 65 scripts, 1223 tests, 2207 asserts — 1222 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
 ### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions

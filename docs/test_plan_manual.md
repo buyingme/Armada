@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L and post-Phase-4c bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 60 scripts, 1107 tests, 2063 asserts — all passing (1 pre-existing Nebulon-B placement failure).
@@ -2547,3 +2547,30 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | 4 | After auto-skip finishes | Maneuver step is the active step; Attack row shows ✓ checkmark; "Execute Attack ►" button was **never** shown |
 
 **Pass criteria:** When no valid targets exist, the Attack step is auto-skipped in the modal without showing the Execute Attack button. The player proceeds directly to the Maneuver step.
+
+---
+
+## Post-Phase-5d LOS Bug Fix
+
+**What this fix changes:** `LineOfSightChecker._los_blocked_by_other_hull_zone()` now classifies the LOS entry point by its position on the defender's base (1/3-length division) instead of assigning the entire rectangle edge to one hull zone. This corrects false "LOS Blocked" results when the entry point is in the correct hull zone but on a side edge.
+
+### MT-LOS-FIX.1 — Nebulon-B RIGHT arc → VSD REAR is now clear
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place Nebulon-B roughly abeam and slightly behind the VSD (so the RIGHT arc faces the VSD's rear quarter) | Both ships on board |
+| 2 | Open the Targeting List (T button) | Targeting modal shows outgoing targets from Nebulon-B |
+| 3 | Check that VSD REAR appears as a valid target from the Nebulon-B RIGHT arc | REAR zone listed with range and dice; LOS status is "Clear" or "Obstructed" (not "Blocked") |
+
+**Pass criteria:** The Nebulon-B can target the VSD's REAR hull zone from its RIGHT arc when positioned abeam. LOS is no longer falsely blocked.
+
+### MT-LOS-FIX.2 — LOS entering the correct hull zone through a side edge
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place an attacker directly to the LEFT of a defender | Attacker abeam defender |
+| 2 | Open Targeting List from attacker's perspective | Modal shows targets |
+| 3 | Look at LEFT zone entry | LEFT zone is reachable (LOS line enters LEFT edge in the LEFT zone) |
+| 4 | Look at RIGHT zone entry | RIGHT zone is blocked (LOS would cross the base from LEFT zone to RIGHT zone) |
+
+**Pass criteria:** LOS correctly allows targeting zones whose portion of the side edge is crossed by the LOS line, and blocks zones where the line enters through a different hull zone.

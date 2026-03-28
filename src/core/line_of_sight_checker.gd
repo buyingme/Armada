@@ -246,10 +246,10 @@ static func segment_intersects_polygon(
 ## that is NOT the defending hull zone.
 ## Returns true if blocked (no LOS).
 ## Requirements: TL-LOS-004.
-## TODO(HZ-EDGE-001): Switch to arc-based hull-zone edges
-##   (RangeFinder.get_hull_zone_edge_from_arcs) when arc_pts are available.
-##   Currently uses rectangle-corner edges, which is slightly inaccurate
-##   in the small "lip" areas around template corners on FRONT/REAR.
+## Rules Reference: "Hull Zones", p.9 — the LEFT and RIGHT edges of the
+## base span multiple hull zones divided by the firing arc boundaries.
+## We find the first entry point on the base perimeter and use the 1/3
+## length division to determine which hull zone it belongs to.
 static func _los_blocked_by_other_hull_zone(
 		seg_start: Vector2,
 		seg_end: Vector2,
@@ -258,8 +258,8 @@ static func _los_blocked_by_other_hull_zone(
 		def_rot: float,
 		def_half_w: float,
 		def_half_l: float) -> bool:
-	# Build the 4 edges of the defender base and check which edge the
-	# segment crosses first.
+	# Build the 4 edges of the defender base and find the earliest
+	# intersection point on the perimeter.
 	var zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.REAR,
@@ -267,7 +267,6 @@ static func _los_blocked_by_other_hull_zone(
 		Constants.HullZone.RIGHT,
 	]
 	var best_t: float = INF
-	var entry_zone: Constants.HullZone = def_zone
 	for zone: int in zones:
 		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
 				def_pos, def_rot, def_half_w, def_half_l,
@@ -276,11 +275,36 @@ static func _los_blocked_by_other_hull_zone(
 				seg_start, seg_end, edge[0], edge[1])
 		if t >= 0.0 and t < best_t:
 			best_t = t
-			entry_zone = zone as Constants.HullZone
 	if best_t >= INF:
 		# Segment doesn't cross defender base — not blocked.
 		return false
+	# Compute the world-space entry point and convert to defender local space.
+	var entry_world: Vector2 = seg_start + (seg_end - seg_start) * best_t
+	var entry_local: Vector2 = (entry_world - def_pos).rotated(-def_rot)
+	# Determine hull zone at the entry point using the 1/3-length division
+	# (same geometry as ShipToken.get_hull_zone_at).
+	var entry_zone: Constants.HullZone = _classify_local_point(
+			entry_local, def_half_w, def_half_l)
 	return entry_zone != def_zone
+
+
+## Classifies a point in the defender's local space into a hull zone using
+## the 1/3-length division rule.
+## Rules Reference: "Hull Zones", p.9.
+static func _classify_local_point(
+		local: Vector2,
+		half_w: float,
+		half_l: float) -> Constants.HullZone:
+	var third: float = half_l * 2.0 / 3.0
+	var front_y: float = -half_l + third
+	var rear_y: float = half_l - third
+	if local.y < front_y:
+		return Constants.HullZone.FRONT
+	if local.y > rear_y:
+		return Constants.HullZone.REAR
+	if local.x < 0.0:
+		return Constants.HullZone.LEFT
+	return Constants.HullZone.RIGHT
 
 
 ## Checks all bodies for obstruction and accumulates into [param result].

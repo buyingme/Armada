@@ -1257,11 +1257,41 @@ all 5 damage calculation call sites in the attack flow.
 |-------------|------|---------|--------|
 | `get_face_damage_vs_squadron()` | `src/core/dice.gd` | CRITICAL → 0, HIT_CRITICAL → 1 | ✅ |
 | `calculate_damage_vs_squadron()` | `src/core/dice.gd` | Sums hit-only damage | ✅ |
-| `_calc_attack_damage()` helper | `src/scenes/game_board/game_board.gd` | Dispatches by defender type | ✅ |
-| All call sites updated | `src/scenes/game_board/game_board.gd` | 5 call sites use `_calc_attack_damage()` | ✅ |
+| `_calc_attack_damage()` helper | `src/scenes/game_board/attack_executor.gd` | Dispatches by defender type | ✅ |
+| All call sites updated | `src/scenes/game_board/attack_executor.gd` | 5 call sites use `_calc_attack_damage()` | ✅ |
 | Unit tests (6 new) | `tests/unit/test_dice.gd` | Crit ignored, hit-crit → 1, mixed pool, etc. | ✅ |
 
 **Tests:** 65 scripts, 1250 tests, 2237 asserts — 1249 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
+### AttackExecutor Extraction Refactoring ✅
+
+**Motivation:** `game_board.gd` had grown to 4057 lines with ~60 attack-related
+functions. Before implementing Phase 7 (Squadron Phase), the attack subsystem was
+extracted into a dedicated `AttackExecutor` node to improve maintainability.
+
+**What changed:** ~2000 lines of attack simulator and attack execution code moved
+from `game_board.gd` to a new `attack_executor.gd`. `GameBoard` creates the
+executor as a child node and delegates via a 13-method + 3-signal interface. No
+game logic was altered — pure structural refactoring.
+
+| Deliverable | File | Details | Status |
+|-------------|------|---------|--------|
+| New `AttackExecutor` class (~2100 lines) | `src/scenes/game_board/attack_executor.gd` | All attack simulator + execution logic, extends Node | ✅ |
+| `GameBoard` delegation wiring | `src/scenes/game_board/game_board.gd` | Reduced from 4057 → ~1890 lines, delegates via `_attack_executor` | ✅ |
+| Architecture docs updated | `docs/arc42/05_building_block_view.md` | AttackExecutor added to component table | ✅ |
+| Runtime view updated | `docs/arc42/06_runtime_view.md` | Attack resolution sequence diagrams filled in | ✅ |
+| Manual test plan updated | `docs/test_plan_manual.md` | MT-AE.1–MT-AE.11 refactoring verification tests | ✅ |
+
+**Interface:** `initialize()`, `set_damage_deck()`, `on_simulator_requested()`,
+`start_ship_attack()`, `handle_ship_click()`, `handle_squadron_click()`,
+`handle_escape()`, `dismiss()`, `is_active()`, `is_selecting()`,
+`is_target_selecting()`, `is_in_exec_mode()`, `has_any_attack_target()`
+
+**Signals:** `attack_exec_completed`, `attack_exec_cancelled`, `dismiss_other_tools_requested`
+
+**Tests:** 65 scripts, 1250 tests, 2237 asserts — 1249 passing, 1 pre-existing Nebulon-B placement failure (unchanged)
 
 ---
 

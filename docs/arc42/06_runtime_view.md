@@ -86,7 +86,62 @@ Activation Modal opens (centred, dark-blue panel)
 
 ## 6.3 Attack Resolution Sequence
 
-> **TODO:** Detailed sequence diagrams will be created during Phase 6.
+The attack system is split between `GameBoard` (activation flow) and
+`AttackExecutor` (all attack-specific logic).
+
+### 6.3.1 Free-form Attack Simulator
+
+```
+Player presses "A" or Attack toolbar button
+    │
+    ▼
+EventBus.attack_simulator_requested  →  GameBoard._on_attack_simulator_requested()
+    │                                         └─ delegates to AttackExecutor.on_simulator_requested()
+    ▼
+AttackExecutor enters SELECTING mode — click a friendly ship hull zone
+    │
+    ├─ Player clicks hull zone  →  attacker selected, enter TARGET_SELECTING mode
+    │    └─ Arcs drawn, range/LOS ready
+    │
+    ├─ Player clicks enemy ship/squadron  →  target selected
+    │    ├─ LOS traced (obstruction check)
+    │    ├─ Range computed (dice colour at range)
+    │    └─ Arc match validated (target in firing arc?)
+    │
+    └─ Press Escape / click empty  →  deselect and return to SELECTING
+```
+
+### 6.3.2 Attack Execution (Activation Step 4)
+
+```
+ActivationModal Step 4 ("Attack")  →  GameBoard._on_attack_step_entered()
+    │                                       └─ AttackExecutor.start_ship_attack(ship_token)
+    ▼
+AttackExecutor enters EXEC mode
+    │
+    ├─ 1  Declare target + hull zone  (player clicks target)
+    ├─ 2  Roll attack dice (Concentrate Fire dial/token may reroll)
+    ├─ 3  Spend accuracy icons → lock defence tokens
+    ├─ 4  Defender spends defence tokens (Evade, Brace, Redirect, Scatter, Contain)
+    ├─ 5  Resolve damage → shields first, overflow to hull, draw damage cards
+    └─ 6  Declare additional attack (if valid targets remain) or finish
+              │
+              ▼
+         AttackExecutor emits attack_exec_completed  →  GameBoard._on_attack_exec_completed()
+              └─ Advances ShipActivationState, reopens ActivationModal
+```
+
+### Key Participants
+
+| Component | Role |
+|-----------|------|
+| `AttackExecutor` (Node) | All attack logic: simulator, execution, dice, defence tokens, damage |
+| `GameBoard` (Node2D) | Delegates to AttackExecutor, manages activation flow callbacks |
+| `ShipActivationState` (RefCounted) | Tracks current activation step |
+| `DicePool` (RefCounted) | Dice rolling and modification |
+| `DamageDeck` (RefCounted) | Draw damage cards for hull damage |
+| `AttackDicePanel` (Control) | Dice display, reroll, confirm buttons |
+| `EventBus` (Autoload) | Signals: `attack_simulator_requested`, `attack_dice_confirmed`, … |
 
 ## 6.4 Movement Sequence
 

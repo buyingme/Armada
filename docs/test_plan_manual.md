@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2). Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 60 scripts, 1107 tests, 2063 asserts — all passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 65 scripts, 1250 tests, 2237 asserts — all passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -2611,3 +2611,153 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | 4 | Check FRONT/REAR/RIGHT zones | FRONT, REAR, RIGHT are blocked (LOS crosses at least one boundary to reach them) |
 
 **Pass criteria:** Only the hull zone on the same side as the attacker is reachable; all others are blocked by arc boundaries.
+
+---
+
+## Refactoring: AttackExecutor Extraction
+
+**What this refactoring changes:** All attack simulator and attack execution logic (~2000 lines) was extracted from `game_board.gd` into a new `attack_executor.gd` file. `GameBoard` now delegates to `AttackExecutor` via a clean 13-method + 3-signal interface. No game logic was changed — this is a pure structural refactoring. Every test case below should behave identically to before.
+
+### Setup
+
+Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
+
+---
+
+### MT-AE.1 — Automated test baseline unchanged
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 65 scripts, 1250 tests |
+| 2 | Check failures | Exactly 1 failure (pre-existing Nebulon-B deployment) |
+
+**Pass criteria:** Same test count and same single pre-existing failure as before the refactoring.
+
+---
+
+### MT-AE.2 — Attack Simulator toggle (free-form mode)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run GameBoard scene, press **A** | Attack Simulator activates — toolbar button highlights, cursor changes |
+| 2 | Click on a friendly ship | Hull zone outlines appear around the ship (attacker selected) |
+| 3 | Click on an enemy ship or squadron | LOS line drawn, range displayed, dice pool shown in targeting info |
+| 4 | Press **A** again (or click the toolbar button) | Attack Simulator deactivates — all overlays dismissed |
+| 5 | Press **Escape** while an attacker is selected | Attacker deselected, simulator returns to selecting mode |
+
+**Pass criteria:** All attack simulator interactions work identically to before the extraction.
+
+---
+
+### MT-AE.3 — Attack Simulator: LOS and range display
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select an attacker hull zone, then click a target | LOS line appears between attacker and target |
+| 2 | Check the LOS label | Shows "Clear" or "Obstructed" with range band (Close/Medium/Long) |
+| 3 | Move camera to verify line endpoints | Line starts at attacker hull zone, ends at target's nearest edge |
+| 4 | Select a target that is out of range | Range shows "Out of Range" or equivalent, no dice pool |
+
+**Pass criteria:** LOS lines, range labels, and obstruction checks display correctly.
+
+---
+
+### MT-AE.4 — Attack Execution from Activation Modal (Step 4)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship (drag command dial) and open the Activation Modal | Modal shows 5 steps |
+| 2 | Click "Attack" step | Attack executor enters target selection mode for the activated ship |
+| 3 | Click a valid enemy target | Dice panel appears with rolled dice |
+| 4 | If ship has Concentrate Fire dial: check that CF reroll option appears | Dice panel shows "Reroll" button |
+| 5 | Click Confirm | Attack proceeds to accuracy/defense phase |
+
+**Pass criteria:** Activation modal correctly triggers attack execution, dice roll shows correct pool for hull zone and range.
+
+---
+
+### MT-AE.5 — Defense Tokens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During an attack execution, reach the defense token step | Defense token overlay appears on the defender |
+| 2 | Click Evade token | One die removed (long range) or rerolled (medium range) |
+| 3 | Click Brace (on a different attack) | Total damage halved (rounded up) |
+| 4 | Click Scatter | Attack cancelled, 0 damage dealt |
+| 5 | Click Redirect | Redirect prompt appears asking for zone(s) to redirect damage |
+| 6 | Verify spent tokens change state | Green → red (exhausted), or red → removed |
+
+**Pass criteria:** All five defense token types function correctly, token states update visually.
+
+---
+
+### MT-AE.6 — Accuracy Spending
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Roll dice that include accuracy icon(s) | Accuracy spending step appears |
+| 2 | Click a defender defense token to lock it | Token visually marked as locked, cannot be spent |
+| 3 | Click Done / Skip | Proceed to defense token step |
+
+**Pass criteria:** Accuracy icons lock defense tokens, locked tokens cannot be spent by defender.
+
+---
+
+### MT-AE.7 — Damage Resolution
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete an attack against a ship | Damage applied: shields reduced first |
+| 2 | Exceed shields on the targeted zone | Overflow damage goes to hull, damage cards drawn |
+| 3 | Check ship card panel | Shield values updated, hull bar reduced, damage cards visible |
+
+**Pass criteria:** Shield → hull overflow works correctly, damage cards appear in ship card panel.
+
+---
+
+### MT-AE.8 — Two-Hull-Zone Attack Sequence
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack with a ship that has targets in multiple hull zones | After first HZ attack resolves, prompted to attack from another zone |
+| 2 | Choose to attack from second hull zone | New target selection for second zone, cannot re-target same squadron |
+| 3 | Skip the second attack | Attack step completes, modal reopens |
+
+**Pass criteria:** Multi-zone attack sequence works; each zone can only attack once per activation.
+
+---
+
+### MT-AE.9 — Anti-Squadron Attack (Step 6 Loop)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack with a ship that has multiple squadrons in range | After attacking one squadron, prompted for next |
+| 2 | Attack a second squadron from the same hull zone | Dice rolled for second target |
+| 3 | Skip remaining targets | Attack completes |
+
+**Pass criteria:** Squadron targets cycle correctly, each squadron attacked at most once per zone.
+
+---
+
+### MT-AE.10 — Skip Attack and Escape Cancel
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In the Activation Modal, click Attack when targets exist | Attack execution begins |
+| 2 | Press **Escape** during target selection | Attack cancelled, modal reopens at Attack step (not advanced) |
+| 3 | Click "Skip Attack" (if no targets or after attacking) | Attack step completes normally |
+
+**Pass criteria:** Escape cancels without advancing; skip advances the activation step.
+
+---
+
+### MT-AE.11 — Dismiss Other Tools on Attack
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate the Range Overlay (press R) | Range overlay visible |
+| 2 | Press A to activate Attack Simulator | Range overlay dismissed automatically |
+| 3 | Activate the Maneuver Tool (press M) | Maneuver tool visible |
+| 4 | Press A to activate Attack Simulator | Maneuver tool dismissed automatically |
+
+**Pass criteria:** Attack simulator dismisses other tools when activated, preventing visual conflicts.

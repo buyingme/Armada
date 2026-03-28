@@ -50,7 +50,6 @@
 ### Planned (Not Yet Implemented)
 
 - **RulesEngine** — Validates actions against game rules
-- **CombatResolver** — Handles attack resolution, dice rolling, defense tokens
 - **CommandProcessor** — Command dial/token processing (beyond Navigate)
 
 ## 5.3 Level 2 — UI Detail
@@ -59,7 +58,8 @@
 
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
-| `GameBoard` | Node2D | `src/scenes/game_board.gd` | Main play area, ship/token rendering, camera |
+| `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, delegates attack to AttackExecutor |
+| `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack simulator (free-form) and attack execution (activation Step 4): targeting, LOS, dice, defense tokens, damage |
 | `ShipToken` | Node2D | `src/scenes/ship_token.gd` | Ship base rendering, command dial icon, labels |
 | `ShipCardPanel` | Control | `src/scenes/ship_card_panel.gd` | Ship card display, defense tokens, command tokens |
 | `CommandDialPicker` | Control | `src/ui/command_dial_picker.gd` | Centred modal for choosing command dials |
@@ -72,6 +72,4 @@
 
 ### Planned (Not Yet Implemented)
 
-- **DicePanel** — Dice rolling visualization
 - **FleetBuilder** — Pre-game fleet construction interface
-- **SquadronToken** — Squadron rendering

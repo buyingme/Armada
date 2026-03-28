@@ -100,6 +100,14 @@ var _rogue_has_moved: bool = false
 ## Whether the Rogue squadron has already attacked this activation.
 var _rogue_has_attacked: bool = false
 
+## Whether the selected squadron can move (not engaged, speed > 0).
+## Set by [method set_action_availability] from the game board.
+var _can_move: bool = true
+
+## Whether the selected squadron has at least one valid attack target.
+## Set by [method set_action_availability] from the game board.
+var _has_targets: bool = true
+
 
 # ---------------------------------------------------------------------------
 # UI elements
@@ -196,6 +204,27 @@ func notify_move_preview_success() -> void:
 	_transition_to(State.MOVE_PREVIEW)
 
 
+## Called by game_board when the move is placed by clicking during MOVING.
+## Directly finishes the activation (no Commit Move step needed).
+func notify_move_completed() -> void:
+	if _has_rogue and not _rogue_has_moved:
+		_rogue_has_moved = true
+		if _rogue_has_attacked:
+			_finish_activation()
+		else:
+			# Rogue can still attack.
+			_transition_to(State.ACTION_CHOICE)
+	else:
+		_finish_activation()
+
+
+## Called by game_board when the player presses Escape during MOVING.
+## Reverts the token to its original position (done by game_board) and
+## returns to ACTION_CHOICE so the player can pick a different action.
+func cancel_move() -> void:
+	_transition_to(State.ACTION_CHOICE)
+
+
 ## Called by game_board when the move preview placement was invalid.
 ## [param reason] — human-readable error message.
 func notify_move_preview_failed(reason: String) -> void:
@@ -226,6 +255,17 @@ func close_modal() -> void:
 	_selected_instance = null
 	_state = State.WAITING_FOR_SELECTION
 	visible = false
+
+
+## Sets which actions are available for the currently selected squadron.
+## Called by game_board after [method _on_squadron_selected_in_modal].
+## [param can_move] — false if engaged or speed 0.
+## [param has_targets] — false if no enemies in range.
+func set_action_availability(can_move: bool, has_targets: bool) -> void:
+	_can_move = can_move
+	_has_targets = has_targets
+	if _state == State.ACTION_CHOICE:
+		_update_action_buttons()
 
 
 ## Returns the currently selected squadron token (or null).
@@ -270,6 +310,9 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 			and instance.squadron_data.has_keyword("Rogue")
 	_rogue_has_moved = false
 	_rogue_has_attacked = false
+	# Defaults — game_board overrides via set_action_availability().
+	_can_move = not _is_engaged
+	_has_targets = true
 	_log.info("Selected squadron: %s (engaged=%s, rogue=%s)" % [
 			instance.data_key, str(_is_engaged), str(_has_rogue)])
 	_transition_to(State.ACTION_CHOICE)
@@ -419,7 +462,7 @@ func _update_ui() -> void:
 			_update_action_buttons()
 		State.MOVING:
 			_subtitle_label.text = _get_squadron_name()
-			_prompt_label.text = "Click on the board to place the squadron"
+			_prompt_label.text = "Move the squadron, then click to place"
 			_button_container.visible = false
 			_commit_move_button.visible = false
 		State.MOVE_PREVIEW:
@@ -440,24 +483,22 @@ func _update_ui() -> void:
 
 
 func _update_action_buttons() -> void:
-	# Move button — disabled if engaged (unless Grit/Heavy allows).
-	var can_move: bool = not _is_engaged
+	# Move button — hidden if squadron cannot move (engaged or no targets
+	# computed by game_board).  Also hidden if Rogue already moved.
+	var can_move: bool = _can_move
 	if _has_rogue and _rogue_has_moved:
 		can_move = false
-	_move_button.disabled = not can_move
-	if not can_move and _is_engaged:
-		_move_button.tooltip_text = "Engaged — cannot move"
-	elif not can_move:
-		_move_button.tooltip_text = "Already moved"
-	else:
-		_move_button.tooltip_text = ""
+	_move_button.visible = can_move
+	_move_button.disabled = false
+	_move_button.tooltip_text = ""
 
-	# Attack button.
-	var can_attack: bool = true
+	# Attack button — hidden if no valid targets in range.
+	var can_attack: bool = _has_targets
 	if _has_rogue and _rogue_has_attacked:
 		can_attack = false
-	_attack_button.disabled = not can_attack
-	if not can_attack:
+	_attack_button.visible = can_attack
+	_attack_button.disabled = false
+	if not can_attack and _has_rogue and _rogue_has_attacked:
 		_attack_button.tooltip_text = "Already attacked"
 	else:
 		_attack_button.tooltip_text = ""
@@ -468,11 +509,18 @@ func _update_action_buttons() -> void:
 		# Rogue engaged can still skip if they've already attacked.
 		if _rogue_has_attacked or not _is_engaged:
 			can_skip = true
+	_skip_button.visible = true
 	_skip_button.disabled = not can_skip
 	if not can_skip:
 		_skip_button.tooltip_text = "Engaged — must attack an engaged enemy"
 	else:
 		_skip_button.tooltip_text = ""
+
+	# Update the prompt if no actions are available (edge case).
+	if not can_move and not can_attack and not can_skip:
+		_prompt_label.text = "No actions available — skip to end."
+		_skip_button.visible = true
+		_skip_button.disabled = false
 
 
 func _get_active_faction_name() -> String:

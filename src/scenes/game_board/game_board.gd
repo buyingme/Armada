@@ -170,6 +170,13 @@ var _squadron_move_overlay: SquadronMoveOverlay = null
 ## Saved original position of the moving squadron (for revert on cancel).
 var _squadron_move_original_pos: Vector2 = Vector2.ZERO
 
+## Maximum movement distance in pixels for the currently moving squadron.
+var _squadron_move_max_dist: float = 0.0
+
+## How many squadron activations have been completed this turn.
+## Reset in [method _begin_squadron_activation_flow].
+var _squadron_activation_count: int = 0
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -259,6 +266,9 @@ func _process(_delta: float) -> void:
 	if _drag_active and _drag_preview:
 		var mouse: Vector2 = get_viewport().get_mouse_position()
 		_drag_preview.position = mouse - _drag_preview.size * 0.5
+
+	# Phase 7b: Squadron follows mouse during MOVING state.
+	_move_squadron_during_activation()
 
 	if not DebugMode.has_selection():
 		return
@@ -1974,6 +1984,7 @@ func _on_dismiss_other_tools_requested() -> void:
 ## Called after the handoff overlay is dismissed.
 ## Requirements: SQA-001, SQA-TM-001.
 func _begin_squadron_activation_flow() -> void:
+	_squadron_activation_count = 0
 	# Update engagement flags before showing the modal.
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	EngagementResolver.update_engagement_flags(all_squads)
@@ -1985,6 +1996,7 @@ func _begin_squadron_activation_flow() -> void:
 
 ## Called after the squadron modal accepts a squadron click.
 ## Shows the movement + armament range overlay centred on the token.
+## Computes action availability and passes it to the modal.
 ## Requirements: SQM-001, SQM-002.
 func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	_remove_squadron_overlay()
@@ -1994,28 +2006,39 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	var can_move: bool = EngagementResolver.can_squadron_move(
 			instance, token.global_position, all_squads)
+	var has_targets: bool = _squadron_has_valid_targets(
+			instance, token, all_squads)
 	var faction: Constants.Faction = Constants.Faction.REBEL_ALLIANCE
 	if instance.squadron_data:
 		faction = instance.squadron_data.faction
 	var speed: int = 3
 	if instance.squadron_data:
 		speed = instance.squadron_data.speed
+	# Cache the max move distance for real-time clamping.
+	_squadron_move_max_dist = SquadronMover._get_max_move_distance(speed)
 	_squadron_move_overlay = SquadronMoveOverlay.new()
 	_squadron_move_overlay.name = "SquadronMoveOverlay"
 	_token_container.add_child(_squadron_move_overlay)
 	_token_container.move_child(_squadron_move_overlay, 0)
 	_squadron_move_overlay.setup(
 			token.global_position, speed, can_move, faction)
-	_log.info("Squadron overlay shown for %s (can_move=%s)." % [
-			instance.data_key, str(can_move)])
+	# Tell the modal which actions are available for this squadron.
+	_squadron_modal.set_action_availability(can_move, has_targets)
+	_log.info("Squadron overlay shown for %s (can_move=%s, targets=%s)." % [
+			instance.data_key, str(can_move), str(has_targets)])
 
 
 ## Called when the modal emits [signal SquadronActivationModal.move_requested].
-## Saves the original position and prepares for click-to-place.
+## Saves the original position for real-time mouse following.
 ## Requirements: SQM-003.
 func _on_squadron_move_requested(token: SquadronToken) -> void:
 	_squadron_move_original_pos = token.global_position
-	_log.info("Squadron move requested — original pos saved.")
+	# Recompute max distance (safety; already cached in _on_squadron_selected).
+	var instance: SquadronInstance = token.get_squadron_instance()
+	if instance and instance.squadron_data:
+		_squadron_move_max_dist = SquadronMover._get_max_move_distance(
+				instance.squadron_data.speed)
+	_log.info("Squadron move started — token follows mouse.")
 
 
 ## Called when the modal emits
@@ -2046,8 +2069,9 @@ func _on_squadron_attack_requested(token: SquadronToken) -> void:
 
 
 ## Called when a single squadron activation is done.
-## Emits the EventBus signal, dims the token visually, and removes overlay.
-## Requirements: SQA-TM-002, SQA-013.
+## Emits the EventBus signal, dims the token visually, removes overlay,
+## and opens the modal for the next activation if applicable.
+## Requirements: SQA-TM-002, SQA-TM-003, SQA-013.
 func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	EventBus.squadron_activation_ended.emit(instance)
 	# Dim the activated token.
@@ -2055,7 +2079,19 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	if token:
 		token.set_activated_visual(true)
 	_remove_squadron_overlay()
-	_log.info("Squadron activation done: %s" % instance.data_key)
+	_squadron_activation_count += 1
+	_log.info("Squadron activation done: %s (%d of %d)" % [
+			instance.data_key, _squadron_activation_count,
+			Constants.SQUADRONS_PER_ACTIVATION])
+	# Advance to the next activation if more remain.
+	if _squadron_activation_count < Constants.SQUADRONS_PER_ACTIVATION:
+		var next_num: int = _squadron_activation_count + 1
+		if _squadron_modal:
+			_squadron_modal.open_for_turn(
+					next_num, Constants.SQUADRONS_PER_ACTIVATION)
+	else:
+		_log.info("All squadron activations done for player %d." %
+				GameManager.active_player)
 
 
 ## Called when the squadron modal is dismissed by the player.
@@ -2081,7 +2117,9 @@ func _on_show_squadron_modal_requested() -> void:
 
 
 ## Handles board input during squadron movement.
-## Escape reverts to original position; left-click validates and places.
+## Escape reverts to original position; left-click commits the current pos.
+## The token already follows the mouse each frame via
+## [method _move_squadron_during_activation].
 ## Returns true if the event was consumed.
 ## Requirements: SQM-003, SQM-004, SQM-005.
 func _handle_squadron_move_input(event: InputEvent) -> bool:
@@ -2089,8 +2127,7 @@ func _handle_squadron_move_input(event: InputEvent) -> bool:
 		return false
 	var modal_state: SquadronActivationModal.State = \
 			_squadron_modal.get_state()
-	if modal_state != SquadronActivationModal.State.MOVING \
-			and modal_state != SquadronActivationModal.State.MOVE_PREVIEW:
+	if modal_state != SquadronActivationModal.State.MOVING:
 		return false
 	var token: SquadronToken = _squadron_modal.get_selected_token()
 	if token == null:
@@ -2100,41 +2137,64 @@ func _handle_squadron_move_input(event: InputEvent) -> bool:
 		var key: InputEventKey = event as InputEventKey
 		if key.pressed and key.keycode == KEY_ESCAPE:
 			token.global_position = _squadron_move_original_pos
-			_squadron_modal._transition_to(
-					SquadronActivationModal.State.ACTION_CHOICE)
+			_squadron_modal.cancel_move()
 			get_viewport().set_input_as_handled()
 			return true
-	# Left click: validate placement and snap.
+	# Left click: commit current position (already clamped + resolved).
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			var world_pos: Vector2 = get_global_mouse_position()
-			_try_place_squadron(token, world_pos)
+			_commit_squadron_placement(token)
 			get_viewport().set_input_as_handled()
 			return true
 	return false
 
 
-## Attempts to place the squadron at [param world_pos] during MOVING state.
-## Validates via [SquadronMover] and notifies the modal of success/failure.
+## Commits the squadron's current position after a click during MOVING.
+## Validates via [SquadronMover] as a safety check (position was clamped
+## in real-time, so this should always pass).
 ## Requirements: SQM-004, SQM-005.
-func _try_place_squadron(
-		token: SquadronToken, world_pos: Vector2) -> void:
+func _commit_squadron_placement(token: SquadronToken) -> void:
 	var instance: SquadronInstance = token.get_squadron_instance()
 	if instance == null:
 		return
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	var bases: Array[ShipBase] = _build_ship_bases()
 	var error: String = SquadronMover.validate_move(
-			instance, _squadron_move_original_pos, world_pos,
+			instance, _squadron_move_original_pos, token.global_position,
 			all_squads, bases)
 	if error.is_empty():
-		token.global_position = world_pos
-		_squadron_modal.notify_move_preview_success()
-		_log.info("Squadron placed at %s." % str(world_pos))
+		_squadron_modal.notify_move_completed()
+		_on_squadron_move_commit(token)
+		_log.info("Squadron placed at %s." % str(token.global_position))
 	else:
 		_squadron_modal.notify_move_preview_failed(error)
 		_log.info("Squadron placement invalid: %s" % error)
+
+
+## Moves the currently-moving squadron token to follow the mouse each frame.
+## The desired position is clamped to the maximum movement distance from
+## the original position, then collision-resolved via [TokenMover].
+## Requirements: SQM-003.
+func _move_squadron_during_activation() -> void:
+	if _squadron_modal == null or not _squadron_modal.visible:
+		return
+	if _squadron_modal.get_state() != SquadronActivationModal.State.MOVING:
+		return
+	var token: SquadronToken = _squadron_modal.get_selected_token()
+	if token == null:
+		return
+	var desired: Vector2 = get_global_mouse_position()
+	# Clamp to max movement distance from original position.
+	var offset: Vector2 = desired - _squadron_move_original_pos
+	if offset.length() > _squadron_move_max_dist:
+		desired = _squadron_move_original_pos + \
+				offset.normalized() * _squadron_move_max_dist
+	# Resolve collisions (overlap with other tokens / ships).
+	var side: float = GameScale.play_area_side_px
+	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
+	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
+	_move_squadron_token(token, desired, side, top_y, bottom_y, false)
 
 
 ## Removes the squadron movement overlay if present.
@@ -2187,3 +2247,46 @@ func _build_ship_bases() -> Array[ShipBase]:
 				result.append(ShipBase.new(
 						inst.ship_data.ship_size, xform))
 	return result
+
+
+## Returns true if the squadron has at least one valid attack target
+## (enemy squadron or enemy ship) within distance 1.
+## Squadron attacks always occur at close range (distance 1).
+## Rules Reference: "Squadron Attacks", RRG p.19.
+func _squadron_has_valid_targets(
+		instance: SquadronInstance,
+		token: SquadronToken,
+		all_squads: Array[Dictionary]) -> bool:
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = EngagementResolver._get_distance_1_px()
+	var pos: Vector2 = token.global_position
+	# Check enemy squadrons at distance 1.
+	for entry: Dictionary in all_squads:
+		var other: SquadronInstance = entry["instance"] as SquadronInstance
+		if other == instance:
+			continue
+		if other.owner_player == instance.owner_player:
+			continue
+		if other.is_destroyed():
+			continue
+		var other_pos: Vector2 = entry["position"] as Vector2
+		var edge_dist: float = pos.distance_to(other_pos) - radius * 2.0
+		if edge_dist <= dist1_px:
+			return true
+	# Check enemy ships at distance 1 (close range for battery armament).
+	for child: Node in _token_container.get_children():
+		if not child is ShipToken:
+			continue
+		var ship: ShipToken = child as ShipToken
+		var ship_inst: ShipInstance = ship.get_ship_instance()
+		if ship_inst == null:
+			continue
+		if ship_inst.owner_player == instance.owner_player:
+			continue
+		# Approximate distance: centre-to-centre minus radii.
+		var ship_half: float = ship.get_half_length()
+		var dist: float = pos.distance_to(ship.global_position)
+		var edge_approx: float = dist - radius - ship_half
+		if edge_approx <= dist1_px:
+			return true
+	return false

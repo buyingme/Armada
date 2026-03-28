@@ -180,7 +180,7 @@ func test_click_when_hidden_returns_false() -> void:
 # Action buttons — engagement rules
 # ===========================================================================
 
-func test_engaged_squadron_move_disabled() -> void:
+func test_engaged_squadron_move_hidden() -> void:
 	GameManager.start_new_game()
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SQUADRON
@@ -191,8 +191,8 @@ func test_engaged_squadron_move_disabled() -> void:
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
-	assert_true(_modal._move_button.disabled,
-			"Move button should be disabled when engaged (SM-011)")
+	assert_false(_modal._move_button.visible,
+			"Move button should be hidden when engaged (SM-011)")
 
 
 func test_engaged_squadron_skip_disabled() -> void:
@@ -225,7 +225,7 @@ func test_engaged_squadron_attack_enabled() -> void:
 			"Attack button should be enabled for engaged squadron")
 
 
-func test_unengaged_squadron_all_buttons_enabled() -> void:
+func test_unengaged_squadron_all_buttons_visible() -> void:
 	GameManager.start_new_game()
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SQUADRON
@@ -236,12 +236,12 @@ func test_unengaged_squadron_all_buttons_enabled() -> void:
 	_modal.open_for_turn(1, 2)
 	var token: SquadronToken = _make_token(inst)
 	_modal.handle_squadron_click(token)
-	assert_false(_modal._move_button.disabled,
-			"Move should be enabled when not engaged")
-	assert_false(_modal._attack_button.disabled,
-			"Attack should be enabled when not engaged")
-	assert_false(_modal._skip_button.disabled,
-			"Skip should be enabled when not engaged")
+	assert_true(_modal._move_button.visible,
+			"Move should be visible when not engaged")
+	assert_true(_modal._attack_button.visible,
+			"Attack should be visible when not engaged")
+	assert_true(_modal._skip_button.visible,
+			"Skip should be visible when not engaged")
 
 
 # ===========================================================================
@@ -369,3 +369,83 @@ func test_close_button_hides_modal() -> void:
 	_modal._on_close_pressed()
 	assert_false(_modal.visible,
 			"Modal should be hidden after close button press")
+
+
+# ===========================================================================
+# set_action_availability
+# ===========================================================================
+
+func test_set_action_availability_hides_move() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0, false)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	_modal.set_action_availability(false, true)
+	assert_false(_modal._move_button.visible,
+			"Move button should be hidden when can_move=false")
+	assert_true(_modal._attack_button.visible,
+			"Attack button should remain visible when has_targets=true")
+
+
+func test_set_action_availability_hides_attack() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0, false)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	_modal.set_action_availability(true, false)
+	assert_true(_modal._move_button.visible,
+			"Move button should remain visible when can_move=true")
+	assert_false(_modal._attack_button.visible,
+			"Attack button should be hidden when has_targets=false")
+
+
+# ===========================================================================
+# notify_move_completed and cancel_move
+# ===========================================================================
+
+func test_notify_move_completed_finishes_activation() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	_modal._transition_to(SquadronActivationModal.State.MOVING)
+	_modal.notify_move_completed()
+	assert_eq(int(_modal.get_state()),
+			int(SquadronActivationModal.State.DONE),
+			"Non-Rogue should go to DONE after move completed")
+
+
+func test_cancel_move_returns_to_action_choice() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	_modal._transition_to(SquadronActivationModal.State.MOVING)
+	_modal.cancel_move()
+	assert_eq(int(_modal.get_state()),
+			int(SquadronActivationModal.State.ACTION_CHOICE),
+			"cancel_move should return to ACTION_CHOICE")

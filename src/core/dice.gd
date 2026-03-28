@@ -72,6 +72,20 @@ static func calculate_damage(results: Array[Dictionary]) -> int:
 	return total
 
 
+## Returns the total damage from dice results when the defender is a squadron.
+## Critical icons do not count as damage vs squadrons.
+## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
+## defender are ships, this icon adds one damage to the damage total."
+## A HIT_CRITICAL face counts only its hit portion (1 damage).
+static func calculate_damage_vs_squadron(
+		results: Array[Dictionary]) -> int:
+	var total: int = 0
+	for result: Dictionary in results:
+		total += get_face_damage_vs_squadron(
+				result["face"] as Constants.DiceFace)
+	return total
+
+
 ## Returns the damage value for a given dice face.
 static func get_face_damage(face: Constants.DiceFace) -> int:
 	match face:
@@ -81,6 +95,28 @@ static func get_face_damage(face: Constants.DiceFace) -> int:
 			return 1
 		Constants.DiceFace.HIT_CRITICAL:
 			return 2
+		Constants.DiceFace.HIT_HIT:
+			return 2
+		Constants.DiceFace.ACCURACY:
+			return 0
+		Constants.DiceFace.BLANK:
+			return 0
+		_:
+			return 0
+
+
+## Returns the damage value for a dice face when attacking a squadron.
+## Critical icons do not add damage vs squadrons — only hit icons count.
+## Rules Reference: "Dice Icons", p.5 — critical adds damage only if
+## both attacker and defender are ships.
+static func get_face_damage_vs_squadron(face: Constants.DiceFace) -> int:
+	match face:
+		Constants.DiceFace.HIT:
+			return 1
+		Constants.DiceFace.CRITICAL:
+			return 0
+		Constants.DiceFace.HIT_CRITICAL:
+			return 1
 		Constants.DiceFace.HIT_HIT:
 			return 2
 		Constants.DiceFace.ACCURACY:

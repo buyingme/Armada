@@ -1239,6 +1239,32 @@ the single source of truth.
 
 ---
 
+### Post-Phase-6c Bug Fix — Critical Icons vs Squadrons ✅
+
+**Problem:** `Dice.calculate_damage()` always counted CRITICAL faces as 1 damage and
+HIT_CRITICAL faces as 2 damage, regardless of the defender type. Per rules (RRG "Dice
+Icons", p.5): "**Critical:** If the attacker and defender are ships, this icon adds one
+damage to the damage total." Critical icons should deal **zero** damage against
+squadrons; HIT_CRITICAL should count only the hit portion (1 damage).
+
+**Fix:** Added `Dice.calculate_damage_vs_squadron()` and
+`Dice.get_face_damage_vs_squadron()` which exclude the critical damage component. Added
+`_calc_attack_damage()` helper in `game_board.gd` that dispatches to the correct method
+based on whether the defender is a squadron (`_attack_sim_def_squad != null`). Updated
+all 5 damage calculation call sites in the attack flow.
+
+| Deliverable | File | Details | Status |
+|-------------|------|---------|--------|
+| `get_face_damage_vs_squadron()` | `src/core/dice.gd` | CRITICAL → 0, HIT_CRITICAL → 1 | ✅ |
+| `calculate_damage_vs_squadron()` | `src/core/dice.gd` | Sums hit-only damage | ✅ |
+| `_calc_attack_damage()` helper | `src/scenes/game_board/game_board.gd` | Dispatches by defender type | ✅ |
+| All call sites updated | `src/scenes/game_board/game_board.gd` | 5 call sites use `_calc_attack_damage()` | ✅ |
+| Unit tests (6 new) | `tests/unit/test_dice.gd` | Crit ignored, hit-crit → 1, mixed pool, etc. | ✅ |
+
+**Tests:** 65 scripts, 1250 tests, 2237 asserts — 1249 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
 ### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions

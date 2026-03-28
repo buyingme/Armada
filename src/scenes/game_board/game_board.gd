@@ -3044,7 +3044,7 @@ func _on_attack_roll_dice() -> void:
 		_attack_sim_panel.hide_roll_button()
 		_attack_sim_panel.show_dice_results(_attack_exec_dice_results)
 	# Log results.
-	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
 	_log.info("Dice rolled: %d dice, %d damage." % [
 			_attack_exec_dice_results.size(), damage])
 	# Check CF token for reroll.
@@ -3109,7 +3109,7 @@ func _on_attack_cf_token_skipped() -> void:
 func _attack_exec_show_confirm() -> void:
 	if _attack_sim_panel:
 		_attack_sim_panel.show_confirm_button()
-	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
 	_log.info("Final dice: %d damage. Awaiting confirm." % damage)
 
 
@@ -3119,7 +3119,7 @@ func _attack_exec_show_confirm() -> void:
 ## Requirements: AE-CONF-002, AE-ACC-001, AE-DEF-001, AE-DMG-001.
 ## Rules Reference: "Attack", Steps 3–5.
 func _on_attack_confirm() -> void:
-	var damage: int = Dice.calculate_damage(_attack_exec_dice_results)
+	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
 	_log.info("Attack confirmed: %d damage. Starting Step 3 (accuracy)." %
 			damage)
 	if _attack_sim_panel:
@@ -3419,7 +3419,7 @@ func _on_evade_die_selected(die_index: int) -> void:
 	if range_band == Constants.RANGE_BAND_LONG:
 		# Remove the chosen die.
 		_attack_exec_dice_results.remove_at(die_index)
-		_attack_exec_modified_damage = Dice.calculate_damage(
+		_attack_exec_modified_damage = _calc_attack_damage(
 				_attack_exec_dice_results)
 		_log.info("Evade (long): removed die %d. Damage now %d." % [
 				die_index, _attack_exec_modified_damage])
@@ -3434,7 +3434,7 @@ func _on_evade_die_selected(die_index: int) -> void:
 				die_result["color"] as Constants.DiceColor)
 		var new_face: Constants.DiceFace = Dice.roll_die(color)
 		_attack_exec_dice_results[die_index]["face"] = new_face
-		_attack_exec_modified_damage = Dice.calculate_damage(
+		_attack_exec_modified_damage = _calc_attack_damage(
 				_attack_exec_dice_results)
 		_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
 				% [range_band, die_index, str(new_face),
@@ -3591,6 +3591,17 @@ func _on_redirect_done_early() -> void:
 	if _attack_sim_panel:
 		_attack_sim_panel.hide_redirect_section()
 	_process_next_defense_commit()
+
+
+## Returns the damage total for the current dice pool, using the correct
+## formula for the defender type. Critical icons only count as damage when
+## both attacker and defender are ships.
+## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
+## defender are ships, this icon adds one damage to the damage total."
+func _calc_attack_damage(results: Array[Dictionary]) -> int:
+	if _attack_sim_def_squad != null:
+		return Dice.calculate_damage_vs_squadron(results)
+	return Dice.calculate_damage(results)
 
 
 # =========================================================================

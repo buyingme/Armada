@@ -152,6 +152,58 @@ func test_calculate_damage_empty() -> void:
 	assert_eq(Dice.calculate_damage(results), 0, "Empty results should deal 0 damage")
 
 
+# --- Calculate Damage vs Squadron ---
+
+func test_calculate_damage_vs_squadron_hit_counts() -> void:
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.HIT},
+	]
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 2,
+			"HITs should deal normal damage vs squadrons")
+
+
+func test_calculate_damage_vs_squadron_crit_ignored() -> void:
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.CRITICAL},
+	]
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 0,
+			"CRITICAL should deal 0 damage vs squadrons (RRG Dice Icons p.5)")
+
+
+func test_calculate_damage_vs_squadron_hit_crit_counts_hit_only() -> void:
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.BLACK, "face": Constants.DiceFace.HIT_CRITICAL},
+	]
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 1,
+			"HIT_CRITICAL should deal 1 (hit only) vs squadrons")
+
+
+func test_calculate_damage_vs_squadron_hit_hit_counts_both() -> void:
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT_HIT},
+	]
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 2,
+			"HIT_HIT should deal 2 damage vs squadrons")
+
+
+func test_calculate_damage_vs_squadron_mixed_pool() -> void:
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.CRITICAL},
+		{"color": Constants.DiceColor.BLACK, "face": Constants.DiceFace.HIT_CRITICAL},
+		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.ACCURACY},
+	]
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 2,
+			"HIT(1) + CRIT(0) + HIT_CRIT(1) + ACC(0) = 2 vs squadrons")
+
+
+func test_calculate_damage_vs_squadron_empty() -> void:
+	var results: Array[Dictionary] = []
+	assert_eq(Dice.calculate_damage_vs_squadron(results), 0,
+			"Empty results should deal 0 damage vs squadrons")
+
+
 # --- get_face_image_path ---
 
 func test_get_face_image_path_red_hit_returns_correct_path() -> void:

@@ -434,7 +434,7 @@ func _on_label_layer_draw() -> void:
 		_draw_label_on(offsets, "shield_rear",
 				str(_ship_instance.current_shields.get("REAR", 0)), font_size)
 		_draw_label_on(offsets, "hull",
-				str(_ship_instance.current_hull), font_size)
+				str(_ship_instance.get_remaining_hull()), font_size)
 		_draw_label_on(offsets, "speed",
 				str(_ship_instance.current_speed), font_size)
 	else:

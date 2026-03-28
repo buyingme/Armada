@@ -140,6 +140,34 @@ func test_add_faceup_damage() -> void:
 			"Should have 1 faceup damage card")
 
 
+# --- Remaining Hull (computed) ---
+
+func test_get_remaining_hull_no_damage() -> void:
+	assert_eq(_instance.get_remaining_hull(), 5,
+			"Remaining hull should equal max hull when no damage dealt")
+
+
+func test_get_remaining_hull_after_facedown_damage() -> void:
+	_instance.add_facedown_damage(DamageCard.create("Ship", "D1"))
+	_instance.add_facedown_damage(DamageCard.create("Ship", "D2"))
+	assert_eq(_instance.get_remaining_hull(), 3,
+			"Remaining hull should be 5 - 2 = 3 after 2 facedown cards")
+
+
+func test_get_remaining_hull_after_mixed_damage() -> void:
+	_instance.add_faceup_damage(DamageCard.create("Crew", "Crit"))
+	_instance.add_facedown_damage(DamageCard.create("Ship", "D1"))
+	assert_eq(_instance.get_remaining_hull(), 3,
+			"Remaining hull should be 5 - 2 = 3 with mixed damage cards")
+
+
+func test_get_remaining_hull_at_destruction() -> void:
+	for i: int in range(_ship_data.hull):
+		_instance.add_facedown_damage(DamageCard.create("Ship", "D%d" % i))
+	assert_eq(_instance.get_remaining_hull(), 0,
+			"Remaining hull should be 0 when damage equals max hull")
+
+
 # --- Shields ---
 
 func test_reduce_shields_normal() -> void:

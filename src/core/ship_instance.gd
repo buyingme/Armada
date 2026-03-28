@@ -90,6 +90,14 @@ func get_total_damage() -> int:
 	return facedown_damage.size() + faceup_damage.size()
 
 
+## Returns the remaining hull points (max hull minus damage cards dealt).
+## This is the computed "current hull" value; prefer this over the [current_hull]
+## field which is only set at creation.
+## Rules Reference: "Damage", p.4 — ship destroyed when cards >= hull.
+func get_remaining_hull() -> int:
+	return ship_data.hull - get_total_damage()
+
+
 ## Returns true if this ship is destroyed (damage >= hull value).
 ## Rules Reference: DM-003.
 func is_destroyed() -> bool:

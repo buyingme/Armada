@@ -1217,6 +1217,28 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Post-Phase-6c Bug Fix — Hull Display ✅
+
+**Problem:** `ShipInstance.current_hull` was set once at creation and never decremented
+when damage cards were dealt. The ship token always showed the max hull value regardless
+of damage taken. The `ship_hull_changed` signal emitted the correct computed value, but
+the display in `ship_token.gd` read the stale `current_hull` field instead.
+
+**Fix (Option A — computed display):** Added `ShipInstance.get_remaining_hull()` which
+returns `ship_data.hull - get_total_damage()`. Updated `ship_token.gd` to call this
+instead of reading `current_hull`. No dual bookkeeping — the damage card arrays remain
+the single source of truth.
+
+| Deliverable | File | Details | Status |
+|-------------|------|---------|--------|
+| `get_remaining_hull()` method | `src/core/ship_instance.gd` | Returns `ship_data.hull - get_total_damage()` | ✅ |
+| Hull label uses computed value | `src/scenes/tokens/ship_token.gd` | `_on_label_layer_draw()` calls `get_remaining_hull()` | ✅ |
+| Unit tests (4 new) | `tests/unit/test_ship_instance.gd` | No damage, facedown, mixed, at destruction | ✅ |
+
+**Tests:** 65 scripts, 1244 tests, 2231 asserts — 1243 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
 ### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions

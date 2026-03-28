@@ -1197,6 +1197,26 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
+### Post-Phase-5d LOS Bug Fix v2 — Arc-Boundary Intersection ✅
+
+**Bug:** The 1/3-length-division heuristic from the previous LOS fix still produced false "LOS Blocked" results (e.g. Nebulon-B FRONT arc → VSD LEFT arc). The heuristic splits the ship rectangle into thirds by length, but hull zones are actually separated by diagonal arc boundary lines (inner_point → outer_point) defined in each ship's JSON. The 1/3 rule does not match these real boundaries.
+
+**Fix:** Check whether the LOS segment crosses any of the 4 arc boundary lines (front_left, front_right, rear_left, rear_right). If the LOS line crosses any boundary, it enters through a different hull zone → blocked. The rectangle+classify approach is kept as a fallback when arc data is unavailable.
+
+| Task | File | Details | Status |
+|------|------|---------|--------|
+| Primary arc-boundary intersection check | `src/core/line_of_sight_checker.gd` | `_los_blocked_by_arc_boundaries()`, `_has_arc_boundary_keys()`, `_ARC_BOUNDARY_PAIRS` const | ✅ |
+| `get_blocking_boundary_info()` debug helper | `src/core/line_of_sight_checker.gd` | Returns boundary name, inner/outer points, intersection point for logging | ✅ |
+| Fallback preserved as `_los_blocked_by_rect_classify()` | `src/core/line_of_sight_checker.gd` | Original 1/3-length approach used when no arc data | ✅ |
+| Pass arc boundary data from all call sites | `game_board.gd`, `targeting_list_builder.gd` | `def_arc_pts` parameter added to `trace_los_ship_to_ship()`, `trace_los_squad_to_ship()`, `is_range_path_blocked()` | ✅ |
+| Debug logging for blocked LOS | `game_board.gd` | Log boundary name + inner/outer/intersection points when LOS is blocked | ✅ |
+| Arc-boundary unit tests | `test_line_of_sight_checker.gd` | 17 new tests: arc-boundary clear/blocked, rotated defender, `get_blocking_boundary_info()`, `_has_arc_boundary_keys()` | ✅ |
+| Targeting list builder test updated | `test_targeting_list_builder.gd` | `test_squad_ship_target_los_blocked_by_other_hull_zone` adjusted for diagonal boundaries | ✅ |
+
+**Tests:** 65 scripts, 1240 tests, 2226 asserts — 1239 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
 ### Phase 6: Attack Resolution ⏳ attack pipeline for ship-vs-ship, ship-vs-squadron, and the Concentrate Fire command.
 **Prerequisites:** Phase 1 (RangeMeasurer, FiringArc), Phase 3 (ShipInstance, DamageDeck), Phase 5 (activation flow)
 **Duration estimate:** 3–4 sessions

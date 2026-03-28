@@ -2542,6 +2542,19 @@ func _attack_sim_compute_and_show_los() -> void:
 	if not los_result.has_los:
 		status = AttackSimOverlay.LOSStatus.BLOCKED
 		los_text = "Blocked"
+		# Debug: log the arc boundary that blocked LOS.
+		if _attack_sim_def_ship:
+			var def_arc: Dictionary = \
+					_attack_sim_def_ship.get_firing_arc_world_points()
+			var info: Dictionary = \
+					LineOfSightChecker.get_blocking_boundary_info(
+							atk_pt, def_pt, def_arc)
+			if not info.is_empty():
+				_log.debug(
+						"LOS blocked by boundary '%s': " % info["boundary"]
+						+ "inner=%s outer=%s ix=%s." % [
+								info["inner"], info["outer"],
+								info["intersection"]])
 	elif los_result.obstructed:
 		status = AttackSimOverlay.LOSStatus.OBSTRUCTED
 		if los_result.obstructed_by.size() > 0:
@@ -2683,7 +2696,8 @@ func _attack_sim_trace_los(atk_pt: Vector2,
 				_attack_sim_def_zone as Constants.HullZone,
 				ds.global_position, ds.rotation,
 				ds.get_half_width(), ds.get_half_length(),
-				bodies, obstacles)
+				bodies, obstacles,
+				ds.get_firing_arc_world_points())
 	# Ship → Squadron
 	if _attack_sim_atk_ship and _attack_sim_def_squad:
 		return LineOfSightChecker.trace_los_ship_to_squadron(
@@ -2701,7 +2715,8 @@ func _attack_sim_trace_los(atk_pt: Vector2,
 				_attack_sim_def_zone as Constants.HullZone,
 				ds.global_position, ds.rotation,
 				ds.get_half_width(), ds.get_half_length(),
-				bodies, obstacles)
+				bodies, obstacles,
+				ds.get_firing_arc_world_points())
 	# Squadron → Squadron — no hull zone blocking, just obstruction.
 	if _attack_sim_atk_squad and _attack_sim_def_squad:
 		return LineOfSightChecker.trace_los_squad_to_squad(

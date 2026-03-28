@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2). Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 60 scripts, 1107 tests, 2063 asserts — all passing (1 pre-existing Nebulon-B placement failure).
@@ -2574,3 +2574,40 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | 4 | Look at RIGHT zone entry | RIGHT zone is blocked (LOS would cross the base from LEFT zone to RIGHT zone) |
 
 **Pass criteria:** LOS correctly allows targeting zones whose portion of the side edge is crossed by the LOS line, and blocks zones where the line enters through a different hull zone.
+
+---
+
+## Post-Phase-5d LOS Bug Fix v2 — Arc-Boundary Intersection
+
+**What this fix changes:** Replaces the 1/3-length heuristic with the real arc boundary lines from each ship's JSON data. `LineOfSightChecker._los_blocked_by_arc_boundaries()` checks whether the LOS segment crosses any of the 4 arc boundary lines (front_left, front_right, rear_left, rear_right). Each boundary is defined by inner_point → outer_point. When LOS is blocked, the game log now includes the boundary name, inner/outer points, and intersection coordinates. The 1/3-length approach is kept as a fallback when arc data is unavailable.
+
+### MT-LOS-FIX2.1 — Nebulon-B FRONT arc → VSD LEFT is now clear
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place Nebulon-B so its FRONT arc faces the VSD's LEFT side | Both ships on board |
+| 2 | Open the Targeting List (T button) | Modal shows outgoing targets from Nebulon-B |
+| 3 | Check that VSD LEFT appears as a valid target from the Nebulon-B FRONT arc | LEFT zone listed with range and dice; LOS status is "Clear" or "Obstructed" (not "Blocked") |
+
+**Pass criteria:** The Nebulon-B can target the VSD's LEFT hull zone from its FRONT arc. LOS is no longer falsely blocked.
+
+### MT-LOS-FIX2.2 — Debug logging shows boundary details when blocked
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position attacker so LOS to a specific zone IS blocked (e.g. from right side to FRONT) | Setup requires LOS to cross an arc boundary |
+| 2 | Click on the ship to trigger targeting / LOS computation | Game log output visible |
+| 3 | Check the game log for the LOS blocked entry | Log shows "LOS boundary crossed: <name>, inner: (x,y), outer: (x,y), intersection: (x,y)" |
+
+**Pass criteria:** When LOS is blocked, the log contains the boundary name and coordinate data for debugging.
+
+### MT-LOS-FIX2.3 — Correct zones still reachable from each side
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place attacker directly to the LEFT of a defender | Attacker abeam defender |
+| 2 | Open Targeting List | Modal shows targets |
+| 3 | Check LEFT zone | LEFT zone is reachable (LOS does not cross any arc boundary) |
+| 4 | Check FRONT/REAR/RIGHT zones | FRONT, REAR, RIGHT are blocked (LOS crosses at least one boundary to reach them) |
+
+**Pass criteria:** Only the hull zone on the same side as the attacker is reachable; all others are blocked by arc boundaries.

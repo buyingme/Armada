@@ -457,3 +457,231 @@ func test_los_not_blocked_entering_left_edge_in_front_third() -> void:
 	# Assert
 	assert_true(result.has_los,
 			"LOS entering LEFT edge in FRONT third should NOT block FRONT target")
+
+
+# =========================================================================
+# Arc-boundary path: _los_blocked_by_arc_boundaries
+# =========================================================================
+
+func test_arc_boundary_los_clear_when_not_crossing_any_boundary() -> void:
+	## LOS line from directly behind the defender to the REAR zone.
+	## The line does not cross any arc boundary → not blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var atk_los: Vector2 = Vector2(500, 600)   # directly behind
+	var def_los: Vector2 = Vector2(500, 335)   # rear LOS point
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_true(result.has_los,
+			"LOS approaching REAR from behind should NOT cross arc boundaries")
+
+
+func test_arc_boundary_los_blocked_crossing_front_left_boundary() -> void:
+	## LOS line from the left side to the FRONT zone.
+	## The line crosses the front_left boundary → blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var atk_los: Vector2 = Vector2(200, 300)   # to the left
+	var def_los: Vector2 = Vector2(500, 265)   # front LOS point
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.FRONT,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_false(result.has_los,
+			"LOS from left to FRONT should cross front_left boundary → blocked")
+
+
+func test_arc_boundary_los_blocked_crossing_rear_right_boundary() -> void:
+	## LOS line from the right side to the REAR zone.
+	## The line crosses the rear_right boundary → blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var atk_los: Vector2 = Vector2(800, 300)   # to the right
+	var def_los: Vector2 = Vector2(500, 335)   # rear LOS point
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.REAR,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_false(result.has_los,
+			"LOS from right to REAR should cross rear_right boundary → blocked")
+
+
+func test_arc_boundary_los_clear_to_left_from_left() -> void:
+	## LOS line from the left side to the LEFT zone.
+	## The line does NOT cross any arc boundary → not blocked.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var atk_los: Vector2 = Vector2(200, 300)   # to the left
+	var def_los: Vector2 = Vector2(480, 300)   # left LOS point
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.LEFT,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_true(result.has_los,
+			"LOS from left to LEFT zone should NOT cross any boundary")
+
+
+func test_arc_boundary_los_clear_to_front_from_front() -> void:
+	## LOS from directly ahead to FRONT zone — no boundary crossed.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var atk_los: Vector2 = Vector2(500, 100)   # directly ahead
+	var def_los: Vector2 = Vector2(500, 265)   # front LOS point
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.FRONT,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_true(result.has_los,
+			"LOS from directly ahead to FRONT should be clear")
+
+
+func test_arc_boundary_squad_to_ship_clear() -> void:
+	## Squad directly behind defender, targeting REAR — no crossing.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					Vector2(500, 500), 15.0,
+					Vector2(500, 335), Constants.HullZone.REAR,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_true(result.has_los,
+			"Squad behind → REAR with arc data should be clear")
+
+
+func test_arc_boundary_squad_to_ship_blocked() -> void:
+	## Squad to the left, targeting RIGHT — crosses boundary.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					Vector2(200, 300), 15.0,
+					Vector2(520, 300), Constants.HullZone.RIGHT,
+					def_pos, 0.0, 20.0, 35.0, [], [], arc_pts)
+	assert_false(result.has_los,
+			"Squad left → RIGHT with arc data should be blocked")
+
+
+func test_arc_boundary_is_range_path_blocked_clear() -> void:
+	## Range path from ahead into FRONT — no boundary crossed.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var blocked: bool = LineOfSightChecker.is_range_path_blocked(
+			Vector2(500, 100), Vector2(500, 265),
+			Constants.HullZone.FRONT,
+			def_pos, 0.0, 20.0, 35.0, arc_pts)
+	assert_false(blocked,
+			"Range path from ahead into FRONT should not be blocked (arc data)")
+
+
+func test_arc_boundary_is_range_path_blocked_wrong_zone() -> void:
+	## Range path from the left into FRONT — crosses front_left boundary.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var blocked: bool = LineOfSightChecker.is_range_path_blocked(
+			Vector2(200, 300), Vector2(500, 265),
+			Constants.HullZone.FRONT,
+			def_pos, 0.0, 20.0, 35.0, arc_pts)
+	assert_true(blocked,
+			"Range path from left into FRONT should be blocked (arc data)")
+
+
+# =========================================================================
+# Arc-boundary with rotated defender
+# =========================================================================
+
+func test_arc_boundary_rotated_defender_clear() -> void:
+	## Defender rotated 90° clockwise (PI/2). Its FRONT now points RIGHT.
+	## LOS from the right side to FRONT — should be clear.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var rot: float = PI / 2.0
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, rot)
+	var atk_los: Vector2 = Vector2(700, 300)   # to the right = ahead of rotated ship
+	var def_los: Vector2 = Vector2(535, 300)   # front LOS point (rotated)
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.FRONT,
+					def_pos, rot, 20.0, 35.0, [], [], arc_pts)
+	assert_true(result.has_los,
+			"LOS to FRONT of 90°-rotated defender from ahead should be clear")
+
+
+func test_arc_boundary_rotated_defender_blocked() -> void:
+	## Defender rotated 90° CW. FRONT points right. LOS from below to FRONT
+	## must cross front_right boundary (which now points downward-right).
+	var def_pos: Vector2 = Vector2(500, 300)
+	var rot: float = PI / 2.0
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, rot)
+	var atk_los: Vector2 = Vector2(500, 600)   # below = to the rear side
+	var def_los: Vector2 = Vector2(535, 300)   # front LOS point (rotated)
+	var result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, Constants.HullZone.FRONT,
+					def_pos, rot, 20.0, 35.0, [], [], arc_pts)
+	assert_false(result.has_los,
+			"LOS from rear-side to FRONT of 90°-rotated defender should be blocked")
+
+
+# =========================================================================
+# get_blocking_boundary_info
+# =========================================================================
+
+func test_get_blocking_boundary_info_returns_empty_when_clear() -> void:
+	## No boundary crossed → empty dict.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var info: Dictionary = LineOfSightChecker.get_blocking_boundary_info(
+			Vector2(500, 600), Vector2(500, 335), arc_pts)
+	assert_true(info.is_empty(),
+			"Should return empty dict when no boundary is crossed")
+
+
+func test_get_blocking_boundary_info_returns_boundary_when_blocked() -> void:
+	## LOS from left to FRONT crosses front_left boundary.
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var info: Dictionary = LineOfSightChecker.get_blocking_boundary_info(
+			Vector2(200, 300), Vector2(500, 265), arc_pts)
+	assert_false(info.is_empty(),
+			"Should return boundary info when LOS is blocked")
+	assert_true(info.has("boundary"),
+			"Info should contain 'boundary' key")
+	assert_true(info.has("inner"),
+			"Info should contain 'inner' key")
+	assert_true(info.has("outer"),
+			"Info should contain 'outer' key")
+	assert_true(info.has("intersection"),
+			"Info should contain 'intersection' key")
+
+
+func test_get_blocking_boundary_info_returns_empty_without_arc_data() -> void:
+	## Missing arc data → empty dict (graceful fallback).
+	var info: Dictionary = LineOfSightChecker.get_blocking_boundary_info(
+			Vector2(200, 300), Vector2(500, 265), {})
+	assert_true(info.is_empty(),
+			"Should return empty dict when arc data is missing")
+
+
+# =========================================================================
+# _has_arc_boundary_keys
+# =========================================================================
+
+func test_has_arc_boundary_keys_true_for_complete_dict() -> void:
+	var arc_pts: Dictionary = _make_arc_pts(Vector2.ZERO, 0.0)
+	assert_true(LineOfSightChecker._has_arc_boundary_keys(arc_pts),
+			"Complete arc_pts should return true")
+
+
+func test_has_arc_boundary_keys_false_for_empty_dict() -> void:
+	assert_false(LineOfSightChecker._has_arc_boundary_keys({}),
+			"Empty dict should return false")
+
+
+func test_has_arc_boundary_keys_false_for_partial_dict() -> void:
+	var partial: Dictionary = {
+		"inner_point_front_left": Vector2.ZERO,
+		"outer_point_front_left": Vector2(10, 10),
+	}
+	assert_false(LineOfSightChecker._has_arc_boundary_keys(partial),
+			"Partial dict missing keys should return false")

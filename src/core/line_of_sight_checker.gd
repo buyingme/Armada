@@ -74,6 +74,9 @@ class ObstructionBody:
 ## [param def_half_l]    — defender half-length.
 ## [param bodies]        — array of ObstructionBody for intervening ships.
 ## [param obstacles]     — array of ObstructionBody for obstacles (future).
+## [param def_arc_pts]   — (optional) defender arc boundary points in world
+##   space.  When present the hull-zone blocking check uses the real arc
+##   boundary lines instead of rectangle-edge heuristics.
 ## Requirements: TL-LOS-001, TL-LOS-004, TL-LOS-005, TL-LOS-008.
 static func trace_los_ship_to_ship(
 		atk_los_pt: Vector2,
@@ -84,12 +87,13 @@ static func trace_los_ship_to_ship(
 		def_half_w: float,
 		def_half_l: float,
 		bodies: Array,
-		obstacles: Array) -> LOSResult:
+		obstacles: Array,
+		def_arc_pts: Dictionary = {}) -> LOSResult:
 	var result: LOSResult = LOSResult.new()
 	# TL-LOS-004: check if LOS line enters defender through a different HZ.
 	if _los_blocked_by_other_hull_zone(
 			atk_los_pt, def_los_pt, def_zone,
-			def_pos, def_rot, def_half_w, def_half_l):
+			def_pos, def_rot, def_half_w, def_half_l, def_arc_pts):
 		result.has_los = false
 		return result
 	# TL-LOS-005/008: check intervening ships and obstacles.
@@ -132,6 +136,8 @@ static func trace_los_ship_to_squadron(
 ## [param def_half_l]    — defender half-length.
 ## [param bodies]        — array of ObstructionBody for intervening ships.
 ## [param obstacles]     — array of ObstructionBody for obstacles (future).
+## [param def_arc_pts]   — (optional) defender arc boundary points in world
+##   space.
 ## Requirements: TL-LOS-003, TL-LOS-004, TL-LOS-005, TL-LOS-008.
 static func trace_los_squad_to_ship(
 		squad_centre: Vector2,
@@ -143,7 +149,8 @@ static func trace_los_squad_to_ship(
 		def_half_w: float,
 		def_half_l: float,
 		bodies: Array,
-		obstacles: Array) -> LOSResult:
+		obstacles: Array,
+		def_arc_pts: Dictionary = {}) -> LOSResult:
 	# LOS origin = closest point on squadron base to defender's LOS point.
 	var los_origin: Vector2 = RangeFinder.closest_point_on_circle(
 			def_los_pt, squad_centre, squad_radius)
@@ -151,7 +158,7 @@ static func trace_los_squad_to_ship(
 	# TL-LOS-004: check if LOS line enters defender through a different HZ.
 	if _los_blocked_by_other_hull_zone(
 			los_origin, def_los_pt, def_zone,
-			def_pos, def_rot, def_half_w, def_half_l):
+			def_pos, def_rot, def_half_w, def_half_l, def_arc_pts):
 		result.has_los = false
 		return result
 	# TL-LOS-005/008: check intervening ships and obstacles.
@@ -199,6 +206,7 @@ static func trace_los_squad_to_squad(
 ## [param def_edge_pt]   — closest in-arc point on defender edge (already computed).
 ## [param def_zone]       — the defending hull zone.
 ## [param def_pos/rot/hw/hl] — defender geometry.
+## [param def_arc_pts]    — (optional) defender arc boundary points.
 static func is_range_path_blocked(
 		atk_edge_pt: Vector2,
 		def_edge_pt: Vector2,
@@ -206,10 +214,11 @@ static func is_range_path_blocked(
 		def_pos: Vector2,
 		def_rot: float,
 		def_half_w: float,
-		def_half_l: float) -> bool:
+		def_half_l: float,
+		def_arc_pts: Dictionary = {}) -> bool:
 	return _los_blocked_by_other_hull_zone(
 			atk_edge_pt, def_edge_pt, def_zone,
-			def_pos, def_rot, def_half_w, def_half_l)
+			def_pos, def_rot, def_half_w, def_half_l, def_arc_pts)
 
 
 # =========================================================================
@@ -246,10 +255,16 @@ static func segment_intersects_polygon(
 ## that is NOT the defending hull zone.
 ## Returns true if blocked (no LOS).
 ## Requirements: TL-LOS-004.
-## Rules Reference: "Hull Zones", p.9 — the LEFT and RIGHT edges of the
-## base span multiple hull zones divided by the firing arc boundaries.
-## We find the first entry point on the base perimeter and use the 1/3
-## length division to determine which hull zone it belongs to.
+## Rules Reference: "Line of Sight", p.10; "Hull Zones", p.9.
+##
+## When [param def_arc_pts] contains the firing arc boundary data, we
+## check whether the LOS segment crosses any of the 4 arc boundary lines
+## (inner_point → outer_point).  Each boundary separates two adjacent hull
+## zones; if the segment crosses any boundary, it must be entering through
+## a hull zone other than the one containing the LOS target point.
+##
+## Fallback: when arc data is absent, we use the rectangle-edge +
+## 1/3-length-division heuristic.
 static func _los_blocked_by_other_hull_zone(
 		seg_start: Vector2,
 		seg_end: Vector2,
@@ -257,9 +272,65 @@ static func _los_blocked_by_other_hull_zone(
 		def_pos: Vector2,
 		def_rot: float,
 		def_half_w: float,
+		def_half_l: float,
+		def_arc_pts: Dictionary = {}) -> bool:
+	# --- Primary path: arc boundary intersection ---
+	if _has_arc_boundary_keys(def_arc_pts):
+		return _los_blocked_by_arc_boundaries(
+				seg_start, seg_end, def_arc_pts)
+	# --- Fallback: rectangle edge + 1/3-length classification ---
+	return _los_blocked_by_rect_classify(
+			seg_start, seg_end, def_zone,
+			def_pos, def_rot, def_half_w, def_half_l)
+
+
+## Returns true when [param arc_pts] contains all 8 boundary keys needed
+## for the arc-based check.
+static func _has_arc_boundary_keys(arc_pts: Dictionary) -> bool:
+	if arc_pts.is_empty():
+		return false
+	for key: String in _ARC_BOUNDARY_PAIRS:
+		if not arc_pts.has(key):
+			return false
+	return true
+
+
+## The 4 arc boundary segments, each as [inner_key, outer_key].
+const _ARC_BOUNDARY_PAIRS: Array[String] = [
+	"inner_point_front_left", "outer_point_front_left",
+	"inner_point_front_right", "outer_point_front_right",
+	"inner_point_rear_left", "outer_point_rear_left",
+	"inner_point_rear_right", "outer_point_rear_right",
+]
+
+
+## Checks if the LOS segment crosses any of the 4 arc boundary lines.
+## Each boundary is drawn from the inner point (near ship centre) to the
+## outer point (on the base edge).  Crossing any boundary means the LOS
+## line passes through more than one hull zone → blocked.
+## Rules Reference: "Hull Zones", p.9.
+static func _los_blocked_by_arc_boundaries(
+		seg_start: Vector2,
+		seg_end: Vector2,
+		arc_pts: Dictionary) -> bool:
+	for i: int in range(0, _ARC_BOUNDARY_PAIRS.size(), 2):
+		var inner: Vector2 = arc_pts[_ARC_BOUNDARY_PAIRS[i]]
+		var outer: Vector2 = arc_pts[_ARC_BOUNDARY_PAIRS[i + 1]]
+		if _segments_intersect(seg_start, seg_end, inner, outer):
+			return true
+	return false
+
+
+## Fallback hull-zone blocking when arc boundary data is unavailable.
+## Uses rectangle edges and the 1/3-length classification heuristic.
+static func _los_blocked_by_rect_classify(
+		seg_start: Vector2,
+		seg_end: Vector2,
+		def_zone: Constants.HullZone,
+		def_pos: Vector2,
+		def_rot: float,
+		def_half_w: float,
 		def_half_l: float) -> bool:
-	# Build the 4 edges of the defender base and find the earliest
-	# intersection point on the perimeter.
 	var zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.REAR,
@@ -276,13 +347,9 @@ static func _los_blocked_by_other_hull_zone(
 		if t >= 0.0 and t < best_t:
 			best_t = t
 	if best_t >= INF:
-		# Segment doesn't cross defender base — not blocked.
 		return false
-	# Compute the world-space entry point and convert to defender local space.
 	var entry_world: Vector2 = seg_start + (seg_end - seg_start) * best_t
 	var entry_local: Vector2 = (entry_world - def_pos).rotated(-def_rot)
-	# Determine hull zone at the entry point using the 1/3-length division
-	# (same geometry as ShipToken.get_hull_zone_at).
 	var entry_zone: Constants.HullZone = _classify_local_point(
 			entry_local, def_half_w, def_half_l)
 	return entry_zone != def_zone
@@ -305,6 +372,43 @@ static func _classify_local_point(
 	if local.x < 0.0:
 		return Constants.HullZone.LEFT
 	return Constants.HullZone.RIGHT
+
+
+## Returns the first arc boundary crossed by the LOS segment together
+## with the intersection point world-space coordinates, or an empty
+## dictionary when no boundary is crossed.
+## Used for debug logging.
+static func get_blocking_boundary_info(
+		seg_start: Vector2,
+		seg_end: Vector2,
+		arc_pts: Dictionary) -> Dictionary:
+	if not _has_arc_boundary_keys(arc_pts):
+		return {}
+	var best_t: float = INF
+	var best_inner: Vector2 = Vector2.ZERO
+	var best_outer: Vector2 = Vector2.ZERO
+	var best_label: String = ""
+	for i: int in range(0, _ARC_BOUNDARY_PAIRS.size(), 2):
+		var inner_key: String = _ARC_BOUNDARY_PAIRS[i]
+		var outer_key: String = _ARC_BOUNDARY_PAIRS[i + 1]
+		var inner: Vector2 = arc_pts[inner_key]
+		var outer: Vector2 = arc_pts[outer_key]
+		var t: float = _segment_intersection_t(
+				seg_start, seg_end, inner, outer)
+		if t >= 0.0 and t < best_t:
+			best_t = t
+			best_inner = inner
+			best_outer = outer
+			best_label = inner_key.replace("inner_point_", "")
+	if best_t >= INF:
+		return {}
+	var ix: Vector2 = seg_start + (seg_end - seg_start) * best_t
+	return {
+		"boundary": best_label,
+		"inner": best_inner,
+		"outer": best_outer,
+		"intersection": ix,
+	}
 
 
 ## Checks all bodies for obstruction and accumulates into [param result].

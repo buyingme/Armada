@@ -352,7 +352,8 @@ static func _check_ship_target(
 						atk_los, def_los, def_hz,
 						defender.pos, defender.rot,
 						defender.half_w, defender.half_l,
-						bodies, [])
+						bodies, [],
+						defender.arc_pts)
 		if not los_result.has_los:
 			continue
 		# TL-LOS-004: also check range path blocking.
@@ -364,7 +365,8 @@ static func _check_ship_target(
 				def_edge[0].lerp(def_edge[1], 0.5),
 				def_hz,
 				defender.pos, defender.rot,
-				defender.half_w, defender.half_l)
+				defender.half_w, defender.half_l,
+				defender.arc_pts)
 		if range_blocked:
 			continue
 		var entry: TargetEntry = TargetEntry.new()
@@ -515,7 +517,8 @@ static func _build_incoming_threats(
 								atk_los, def_los, fhz,
 								friendly.pos, friendly.rot,
 								friendly.half_w, friendly.half_l,
-								bodies, [])
+								bodies, [],
+								friendly.arc_pts)
 				if not los_result.has_los:
 					continue
 				var threat: ThreatEntry = ThreatEntry.new()
@@ -607,7 +610,8 @@ static func _build_squad_entry(
 								def_los, def_hz,
 								es.pos, es.rot,
 								es.half_w, es.half_l,
-								bodies, [])
+								bodies, [],
+								es.arc_pts)
 				if not los_result.has_los:
 					log.debug("    LOS blocked for zone %s — skipped" %
 							_hz_key(def_hz))
@@ -619,7 +623,8 @@ static func _build_squad_entry(
 										cp, squad.pos, squad.radius),
 								cp, def_hz,
 								es.pos, es.rot,
-								es.half_w, es.half_l)
+								es.half_w, es.half_l,
+								es.arc_pts)
 				if range_blocked:
 					log.debug("    range path blocked for zone %s — skipped" %
 							_hz_key(def_hz))

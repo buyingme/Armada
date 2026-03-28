@@ -279,7 +279,15 @@ func _process(_delta: float) -> void:
 ## converting it to rotation and consuming the event so the camera does not zoom.
 ## DBG-012 — pinch gesture rotates selected token.
 ## Also intercepts mouse release during dial drag (Phase 4c).
+## Also intercepts squadron placement clicks/Escape in MOVING state —
+## must run in _input so the event is consumed before GUI Controls
+## (the SquadronActivationModal panel) and before SquadronToken's
+## _unhandled_input (which would eat the click since the token follows
+## the mouse).
 func _input(event: InputEvent) -> void:
+	# Phase 7b: Squadron movement — intercept before GUI / token can consume.
+	if _handle_squadron_move_input(event):
+		return
 	# Handle dial drag release (Phase 4c).
 	if _drag_active and event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -297,9 +305,6 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
-	# Phase 7b: Squadron movement — Escape cancels move, board click places.
-	if _handle_squadron_move_input(event):
-		return
 	# Attack simulator: Escape dismisses.
 	if _attack_executor and _attack_executor.handle_escape(event):
 		return

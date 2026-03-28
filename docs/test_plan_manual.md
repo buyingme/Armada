@@ -2478,9 +2478,11 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Activate a ship and enter the Attack step | Attack panel appears with "Select attacking hull zone" prompt AND a visible "Skip Attack" button |
-| 2 | Click "Skip Attack" without selecting a hull zone | Attack step ends cleanly; activation advances to Maneuver step |
+| 2 | Click "Skip Attack" without selecting a hull zone | Confirmation prompt appears: "Really skip attack?" with Yes / No buttons; Skip Attack button hidden |
+| 3 | Click "No" | Confirmation dismissed; Skip Attack button reappears |
+| 4 | Click "Skip Attack" again, then click "Yes" | Attack step ends cleanly; activation advances to Maneuver step |
 
-**Pass criteria:** Player can skip attacks at any point, even before selecting a hull zone.
+**Pass criteria:** Player can skip attacks at any point, even before selecting a hull zone. Skipping requires Yes/No confirmation.
 
 ---
 

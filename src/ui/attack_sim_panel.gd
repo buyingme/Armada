@@ -128,6 +128,12 @@ var _cf_token_skip_button: Button = null
 var _confirm_button: Button = null
 ## "Skip Attack" button — skips the entire attack.
 var _skip_attack_button: Button = null
+## Confirmation prompt shown after pressing "Skip Attack".
+var _skip_confirm_container: HBoxContainer = null
+## "Yes" button inside the skip-attack confirmation prompt.
+var _skip_confirm_yes: Button = null
+## "No" button inside the skip-attack confirmation prompt.
+var _skip_confirm_no: Button = null
 
 ## --- Phase 6c-1: Accuracy spending UI ---
 
@@ -471,6 +477,25 @@ func _build_ui() -> void:
 	_skip_attack_button.visible = false
 	_skip_attack_button.pressed.connect(_on_skip_attack_pressed)
 	_content.add_child(_skip_attack_button)
+	# Skip-attack confirmation prompt (hidden by default).
+	_skip_confirm_container = HBoxContainer.new()
+	_skip_confirm_container.add_theme_constant_override("separation", 8)
+	_skip_confirm_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_skip_confirm_container.visible = false
+	var skip_lbl: Label = Label.new()
+	skip_lbl.text = "Really skip attack?"
+	_skip_confirm_container.add_child(skip_lbl)
+	_skip_confirm_yes = Button.new()
+	_skip_confirm_yes.text = "Yes"
+	_skip_confirm_yes.custom_minimum_size = Vector2(60.0, 28.0)
+	_skip_confirm_yes.pressed.connect(_on_skip_confirm_yes)
+	_skip_confirm_container.add_child(_skip_confirm_yes)
+	_skip_confirm_no = Button.new()
+	_skip_confirm_no.text = "No"
+	_skip_confirm_no.custom_minimum_size = Vector2(60.0, 28.0)
+	_skip_confirm_no.pressed.connect(_on_skip_confirm_no)
+	_skip_confirm_container.add_child(_skip_confirm_no)
+	_content.add_child(_skip_confirm_container)
 	# --- Phase 6c-1: Accuracy section ---
 	_accuracy_container = VBoxContainer.new()
 	_accuracy_container.add_theme_constant_override("separation", 4)
@@ -573,6 +598,9 @@ func _clear_content() -> void:
 		_cf_token_skip_button = null
 		_confirm_button = null
 		_skip_attack_button = null
+		_skip_confirm_container = null
+		_skip_confirm_yes = null
+		_skip_confirm_no = null
 		_accuracy_container = null
 		_accuracy_token_buttons = null
 		_accuracy_confirm_button = null
@@ -774,15 +802,17 @@ func hide_confirm_button() -> void:
 		_confirm_button.visible = false
 
 
-## Shows the "Skip Attack" button.
+## Shows the "Skip Attack" button (resets any pending confirmation).
 ## Requirements: AE-SKIP-001.
 func show_skip_attack_button() -> void:
+	_hide_skip_confirm()
 	if _skip_attack_button:
 		_skip_attack_button.visible = true
 
 
-## Hides the "Skip Attack" button.
+## Hides the "Skip Attack" button and any pending confirmation.
 func hide_skip_attack_button() -> void:
+	_hide_skip_confirm()
 	if _skip_attack_button:
 		_skip_attack_button.visible = false
 
@@ -791,8 +821,32 @@ func _on_confirm_pressed() -> void:
 	confirm_pressed.emit()
 
 
+## Shows the "Really skip attack?" confirmation instead of
+## emitting immediately.
 func _on_skip_attack_pressed() -> void:
+	if _skip_attack_button:
+		_skip_attack_button.visible = false
+	if _skip_confirm_container:
+		_skip_confirm_container.visible = true
+
+
+## Player confirmed the skip.
+func _on_skip_confirm_yes() -> void:
+	_hide_skip_confirm()
 	skip_attack_pressed.emit()
+
+
+## Player cancelled the skip — restore the Skip Attack button.
+func _on_skip_confirm_no() -> void:
+	_hide_skip_confirm()
+	if _skip_attack_button:
+		_skip_attack_button.visible = true
+
+
+## Hides the skip-attack confirmation prompt.
+func _hide_skip_confirm() -> void:
+	if _skip_confirm_container:
+		_skip_confirm_container.visible = false
 
 
 # =========================================================================

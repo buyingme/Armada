@@ -347,8 +347,12 @@ func test_skip_attack_signal_emitted() -> void:
 	_panel.show_initial_attack_exec("Test Ship")
 	watch_signals(_panel)
 	_panel._on_skip_attack_pressed()
+	# Signal is deferred until the player confirms Yes.
+	assert_signal_not_emitted(_panel, "skip_attack_pressed",
+			"skip_attack_pressed should not emit before confirmation.")
+	_panel._on_skip_confirm_yes()
 	assert_signal_emitted(_panel, "skip_attack_pressed",
-			"skip_attack_pressed should be emitted.")
+			"skip_attack_pressed should be emitted after Yes.")
 
 
 # ── Phase 6b-2: show_dice_count exec mode no Done button ────────────
@@ -410,3 +414,76 @@ func test_skip_attack_button_hidden_after_hide() -> void:
 	_panel.hide_skip_attack_button()
 	assert_false(_panel._skip_attack_button.visible,
 			"Skip Attack should be hidden after hide_skip_attack_button.")
+
+
+# =========================================================================
+# Skip Attack Confirmation Prompt
+# =========================================================================
+
+
+func test_skip_confirm_hidden_initially() -> void:
+	_panel.show_initial()
+	assert_false(_panel._skip_confirm_container.visible,
+			"Skip confirmation should be hidden initially.")
+
+
+func test_skip_confirm_shown_on_skip_press() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	_panel._on_skip_attack_pressed()
+	assert_true(_panel._skip_confirm_container.visible,
+			"Skip confirmation should appear after pressing Skip Attack.")
+	assert_false(_panel._skip_attack_button.visible,
+			"Skip Attack button should be hidden during confirmation.")
+
+
+func test_skip_confirm_yes_emits_signal() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	watch_signals(_panel)
+	_panel._on_skip_attack_pressed()
+	_panel._on_skip_confirm_yes()
+	assert_signal_emitted(_panel, "skip_attack_pressed",
+			"Confirming Yes should emit skip_attack_pressed.")
+
+
+func test_skip_confirm_no_restores_button() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	_panel._on_skip_attack_pressed()
+	_panel._on_skip_confirm_no()
+	assert_false(_panel._skip_confirm_container.visible,
+			"Confirmation should hide after pressing No.")
+	assert_true(_panel._skip_attack_button.visible,
+			"Skip Attack button should reappear after pressing No.")
+
+
+func test_skip_confirm_no_does_not_emit() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	watch_signals(_panel)
+	_panel._on_skip_attack_pressed()
+	_panel._on_skip_confirm_no()
+	assert_signal_not_emitted(_panel, "skip_attack_pressed",
+			"Pressing No should not emit skip_attack_pressed.")
+
+
+func test_show_skip_resets_pending_confirm() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	_panel._on_skip_attack_pressed()
+	# Re-showing skip should dismiss the confirmation.
+	_panel.show_skip_attack_button()
+	assert_false(_panel._skip_confirm_container.visible,
+			"show_skip_attack_button should dismiss pending confirmation.")
+	assert_true(_panel._skip_attack_button.visible,
+			"Skip Attack button should be visible after re-show.")
+
+
+func test_hide_skip_also_hides_confirm() -> void:
+	_panel.show_initial()
+	_panel.show_skip_attack_button()
+	_panel._on_skip_attack_pressed()
+	_panel.hide_skip_attack_button()
+	assert_false(_panel._skip_confirm_container.visible,
+			"hide_skip_attack_button should also hide confirmation.")

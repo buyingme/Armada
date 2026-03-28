@@ -1610,6 +1610,8 @@ func _on_attack_exec_done() -> void:
 		_ship_activation_state.advance_step()
 	# Re-open the activation modal.
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_attack_skippable(
+				not _ship_has_any_attack_target(_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
 		_activation_modal.centre_on_screen(vp_size)
@@ -1624,6 +1626,8 @@ func _on_activation_sequence_requested() -> void:
 		_log.info("No activation state — cannot open modal.")
 		return
 	if _activation_modal:
+		_activation_modal.set_attack_skippable(
+				not _ship_has_any_attack_target(_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
 		_activation_modal.centre_on_screen(vp_size)
@@ -2842,6 +2846,9 @@ func _handle_attack_sim_escape(event: InputEvent) -> bool:
 			_attack_exec_range_band = ""
 			_attack_exec_cf_dial_used = false
 			if _activation_modal and _ship_activation_state:
+				_activation_modal.set_attack_skippable(
+						not _ship_has_any_attack_target(
+						_activating_ship_token))
 				_activation_modal.open(_ship_activation_state)
 				var vp_size: Vector2 = get_viewport().get_visible_rect().size
 				_activation_modal.centre_on_screen(vp_size)
@@ -3841,6 +3848,25 @@ func _attack_exec_has_any_valid_target() -> bool:
 		if _attack_exec_zone_has_targets(
 				_attack_exec_ship_token,
 				zone as Constants.HullZone):
+			return true
+	return false
+
+
+## Returns true if the given ship token has at least one valid attack target
+## from any of its four hull zones. Unlike [method _attack_exec_has_any_valid_target]
+## this does NOT exclude fired zones — it is used before the attack step
+## begins to decide whether the modal should auto-skip the Attack step.
+## Rules Reference: "Attack", p.2 — a ship is not required to attack.
+func _ship_has_any_attack_target(ship_token: ShipToken) -> bool:
+	if ship_token == null:
+		return false
+	var all_zones: Array[int] = [
+		Constants.HullZone.FRONT, Constants.HullZone.LEFT,
+		Constants.HullZone.RIGHT, Constants.HullZone.REAR,
+	]
+	for zone: int in all_zones:
+		if _attack_exec_zone_has_targets(
+				ship_token, zone as Constants.HullZone):
 			return true
 	return false
 

@@ -81,6 +81,10 @@ var _attack_button: Button = null
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
+## When true the Attack step is auto-skipped (no valid targets).
+## Set by the game board via [method set_attack_skippable] before opening.
+var _skip_attack: bool = false
+
 ## True once the maneuver tool has been shown (Execute pressed once).
 ## Second press commits the maneuver.
 var _maneuver_tool_shown: bool = false
@@ -89,6 +93,13 @@ var _maneuver_tool_shown: bool = false
 func _init() -> void:
 	visible = false
 	custom_minimum_size = MODAL_MIN_SIZE
+
+
+## Marks the Attack step as skippable (no valid targets).
+## Call this before [method open] so the auto-skip chain includes Attack.
+## Rules Reference: "Attack", p.2 — a ship is not required to attack.
+func set_attack_skippable(skip: bool) -> void:
+	_skip_attack = skip
 
 
 ## Opens the modal for the given activation state.
@@ -104,6 +115,10 @@ func open(state: ShipActivationState) -> void:
 	# Auto-advance past Reveal (already done by Phase 4c).
 	if state.get_current_step() == ShipActivationState.Step.REVEAL:
 		state.advance_step()
+		_start_auto_skip()
+	# Re-opened at Attack with no targets — auto-skip the step.
+	elif (_skip_attack
+			and state.get_current_step() == ShipActivationState.Step.ATTACK):
 		_start_auto_skip()
 
 
@@ -348,11 +363,15 @@ func _update_step_display() -> void:
 				status_label.text = "Not yet implemented"
 				status_label.modulate = Color(0.9, 0.7, 0.3)
 			elif i == 3:
-				# Attack step — show the Execute Attack button.
-				status_label.text = ""
-				if _attack_button:
-					_attack_button.visible = true
-					_attack_button.disabled = false
+				# Attack step — show button or "No targets" badge.
+				if _skip_attack:
+					status_label.text = "No targets"
+					status_label.modulate = Color(0.9, 0.7, 0.3)
+				else:
+					status_label.text = ""
+					if _attack_button:
+						_attack_button.visible = true
+						_attack_button.disabled = false
 			elif i == 4:
 				# Execute Maneuver step — show the action button.
 				status_label.text = ""
@@ -478,17 +497,23 @@ func _start_auto_skip() -> void:
 	_try_auto_skip_next()
 
 
-## Attempts to auto-skip the current step if it's a placeholder.
+## Attempts to auto-skip the current step if it's a placeholder or
+## a skippable attack (no valid targets).
 ## Uses call_deferred to avoid processing in the same frame.
 func _try_auto_skip_next() -> void:
 	if not _auto_skipping or _activation_state == null:
 		return
 	var current: int = int(_activation_state.get_current_step())
 	# Steps 1, 2 (SQUADRON, REPAIR) are placeholders — auto-skip them.
+	# Step 3 (ATTACK) is also skipped when _skip_attack is true.
 	if current in [ShipActivationState.Step.SQUADRON,
 			ShipActivationState.Step.REPAIR]:
 		_update_step_display()
 		# Use a short delay via a timer (0.3s) for visual feedback.
+		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
+		timer.timeout.connect(_auto_skip_current)
+	elif _skip_attack and current == ShipActivationState.Step.ATTACK:
+		_update_step_display()
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
 		timer.timeout.connect(_auto_skip_current)
 	else:

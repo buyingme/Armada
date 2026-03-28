@@ -2492,3 +2492,16 @@ ship (select hull zone, target, roll dice, confirm with Confirm Attack).
 | 2 | If no valid targets exist from any remaining unfired hull zone | Second attack auto-skips; attack step ends; activation advances to Maneuver |
 
 **Pass criteria:** Second attack auto-skips when no remaining hull zones have valid targets.
+
+---
+
+### MT-6c.19 — Attack step auto-checkmarked in modal when no targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place ships so the activating ship has no enemy in arc/range from any hull zone | Setup: e.g. place enemy off-board or far beyond range |
+| 2 | Activate the ship (reveal dial) and press "Show Activation Sequence" | Activation modal opens |
+| 3 | Observe the auto-skip sequence | Squadron → Repair → **Attack** all auto-skip with 0.3s delays; Attack row briefly shows "No targets" badge in amber |
+| 4 | After auto-skip finishes | Maneuver step is the active step; Attack row shows ✓ checkmark; "Execute Attack ►" button was **never** shown |
+
+**Pass criteria:** When no valid targets exist, the Attack step is auto-skipped in the modal without showing the Execute Attack button. The player proceeds directly to the Maneuver step.

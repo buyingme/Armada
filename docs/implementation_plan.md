@@ -1020,6 +1020,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | AE-SKIP-004 | Auto-skip entire attack when no hull zone has valid targets (enemy in arc + at range) | `_attack_exec_has_any_valid_target()` |
 | AE-SKIP-005 | Auto-skip second attack when no remaining unfired hull zone has valid targets | Check in `_attack_exec_prepare_next_attack()` |
 | AE-SKIP-006 | "Skip Attack" button shown immediately at hull zone selection phase (not just after target/dice phase) | Shown in `_on_attack_step_entered()` |
+| AE-SKIP-007 | When no valid targets, Attack step is auto-checkmarked in the activation modal (no Execute Attack button appears) | `ActivationModal.set_attack_skippable()` + `_ship_has_any_attack_target()` |
 
 #### Implementation Tasks
 

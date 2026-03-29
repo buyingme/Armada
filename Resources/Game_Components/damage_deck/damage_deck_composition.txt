@@ -1,0 +1,32 @@
+Damage Cards with Crew Trait
+
+Blinded Gunners x2 - Crew - While attacking, you cannot spend Icon Dice Accuracy icons.
+Comm Noise x2 - Crew - Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.
+Compartment Fire x2 - Crew - You cannot ready your defense tokens.
+Crew Panic x2 - Crew - Before you reveal a command dial, you must either suffer 1 damage or discard that dial. If you discard it, do not reveal a dial this round.
+Damaged Controls x2 - Crew - When you overlap a ship or obstacle, deal 1 facedown damage card to your ship (in addition to all other obstacle effects).
+[This card’s effect resolves during the Move Ship step while executing a maneuver. FaQ Version 3.3.1; Dec. 2017]
+Injured Crew x4 - Crew - Choose and discard 1 of your defense tokens. Then flip this card facedown.
+Life Support Failure x2 - Crew - Discard all of your command tokens. You cannot not have any command tokens.
+
+Damage Cards with Ship Trait
+
+Capacitor Failure x2 - Ship - If a hull zone has no remaining shields, you cannot recover shields in it nor move shields to it. If that hull zone is defending, you cannot spend Icon DefToken Redirect tokens.
+Coolant Discharge x2 - Ship - Only one attack you perform each round can target a ship.
+Damaged Munitions x2 - Ship - When attacking a ship, before you roll your attack pool, remove 1 die of your choice.
+Depowered Armament x2 - Ship - You cannot attack at long range.
+Disengaged Fire Control x2 - Ship - When declaring the target of an attack, you cannot choose a target against whom the attack would be obstructed.
+Faulty Countermeasures x2 - Ship - You cannot spend exhausted defense tokens.
+Point-defense Failure x2- Ship - When attacking a squadron, before you roll your attack pool, remove 1 die of your choice.
+Power Failure x2 - Ship - Your engineering value is reduced to half its value, rounded down.
+[If a ship has two Power Failure damage cards, it fully applies one, then applies the other. For example, a ship with an Engineering value of “5” would be reduced to “2” and then reduced again to “1.” FaQ Version 3.3.1; Dec. 2017]
+Projector Misaligned x2 - Ship - Your hull zone with the most remaining shields loses all of its shields. If multiple hull zones are tied, choose between the tied hull zones. Then flip this card face down.
+[Ignore Luke Skywalker’s ability while resolving this and “Shield Failure” damage card effects. FaQ Version 3.3.1; Dec. 2017]
+Ruptured Engine x2 - Ship - After you execute a maneuver, if the speed on your speed dial is greater than "1", suffer 1 damage.
+Shield Failure x2 - Ship - Your opponent may choose up to 2 of your hull zones. Each of the chosen hull zones loses 1 shield. Then flip this card facedown.
+[Ignore Luke Skywalker’s ability while resolving this and “Projector Misaligned” damage card effects. FaQ Version 3.3.1; Dec. 2017]
+Structural Damage x8 - Ship - Deal 1 facedown damage card to your ship. Then flip this card facedown.
+Targeter Disruption x2 - Ship - While attacking, you cannot resolve critical effects.
+Thrust Control Malfunction x2 - Ship - The yaw value for the last adjustable joint at your current speed is reduced by 1.
+[An adjustable joint is a joint with a yaw value of “I” or “II”; a joint with a yaw value of “-“ is not affected. This card affects the yaw value printed on the speed chart; that value can still be increased by the Icon Command Navigate command or other card effects. This card only affects maneuvers executed at the ship’s current speed (the number on its speed dial). FaQ Version 3.3.1; Dec. 2017]
+Thruster Fissure x2 - Ship - when you change your speed by 1 or more, suffer 1 damage.

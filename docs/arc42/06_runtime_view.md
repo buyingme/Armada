@@ -227,20 +227,56 @@ _advance_squadron_phase_turn()
 
 ### Effect/Hook Pipeline
 
+The EffectRegistry resolves named hook points throughout the game loop.
+Effects (keywords, damage cards, upgrades) register for hooks and mutate
+a shared EffectContext when triggered. See §8.9 for the full hook catalogue.
+
 ```
+Attack Flow Hook Sequence
+─────────────────────────
+AttackExecutor (target selection)
+    ├─ resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)    ── Coolant Discharge, Depowered Armament, Disengaged FC
+    │
+AttackExecutor (dice pool assembly)
+    ├─ resolve_hook(&"ATTACK_GATHER_DICE", ctx)         ── Damaged Munitions, Point-Defense Failure
+    │
+AttackExecutor (accuracy spending)
+    ├─ resolve_hook(&"ATTACK_SPEND_ACCURACY", ctx)      ── Blinded Gunners
+    │
+AttackExecutor (defense token spending)
+    ├─ resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)     ── Faulty Countermeasures, Capacitor Failure
+    │
+AttackExecutor (resolve critical)
+    ├─ resolve_hook(&"ATTACK_RESOLVE_CRITICAL", ctx)    ── Targeter Disruption
+    │
 AttackExecutor._calc_attack_damage(results)
+    ├─ resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)         ── Bomber (existing)
+
+Movement Flow Hook Sequence
+───────────────────────────
+ManeuverTool (yaw calculation)
+    ├─ resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)    ── Thrust Control Malfunction
     │
-    ├─ Base damage calculated (standard or vs-squadron)
+After maneuver committed
+    ├─ resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)     ── Ruptured Engine, Damaged Controls
     │
-    ├─ If EffectRegistry exists:
-    │    ├─ Create EffectContext (hook, attacker, defender, damage_total, ...)
-    │    ├─ EffectRegistry.resolve_hook(&"ATTACK_CALC_DAMAGE", context)
-    │    │    └─ For each registered effect (sorted by player_priority):
-    │    │         ├─ effect.should_trigger(context)?
-    │    │         └─ effect.resolve(context)  → mutates context.damage_total
-    │    └─ Return context.damage_total
-    │
-    └─ Else: return base damage
+Navigate command / speed change
+    ├─ resolve_hook(&"ON_SPEED_CHANGE", ctx)             ── Thruster Fissure
+
+Command & Status Hooks
+──────────────────────
+Ship activation (before dial reveal)
+    ├─ resolve_hook(&"BEFORE_REVEAL_DIAL", ctx)          ── Crew Panic
+
+Repair command resolution
+    ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)       ── Power Failure
+    ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Capacitor Failure
+
+Status phase (token readying)
+    ├─ resolve_hook(&"STATUS_READY_TOKENS", ctx)         ── Compartment Fire
+
+Command token gain
+    ├─ resolve_hook(&"ON_COMMAND_TOKEN_GAIN", ctx)       ── Life Support Failure
 ```
 
 ### Engagement Resolution

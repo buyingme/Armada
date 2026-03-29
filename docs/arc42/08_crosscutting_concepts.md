@@ -375,22 +375,88 @@ checks with an extensible architecture.
                                │                      ▲
                                │ resolve_hook()       │ extends
                                ▼                      │
-                       ┌───────────────┐     ┌────────┴────────┐
-                       │ EffectContext │     │ BomberEffect    │
-                       │ (mutable bag) │     │ EscortEffect    │
-                       └───────────────┘     │ SwarmEffect     │
-                                             └─────────────────┘
+                       ┌───────────────┐     ┌────────┴────────────────┐
+                       │ EffectContext │     │ BomberEffect            │
+                       │ (mutable bag) │     │ EscortEffect            │
+                       └───────────────┘     │ SwarmEffect             │
+                                             │ StructuralDamageEffect  │
+                                             │ BlindedGunnersEffect    │
+                                             │ … (22 damage card types)│
+                                             └─────────────────────────┘
 ```
 
 ### 8.9.3 Hook Points
 
-| Hook Name | Where Resolved | Purpose |
-|-----------|---------------|---------|
-| `ATTACK_CALC_DAMAGE` | `AttackExecutor._calc_attack_damage()` | Modify final damage total (Bomber) |
-| `ATTACK_MODIFY_DICE_ATTACKER` | (future) attack step 3 | Modify dice pool (Swarm reroll) |
-| `SQUADRON_MUST_ATTACK_ENGAGED` | (future) target selection | Force targeting Escort squadrons |
+All hooks are resolved via `EffectRegistry.resolve_hook(hook_name, context)`.
+Context fields are read/written through the shared `EffectContext` data bag.
+Unless noted, new context fields are passed via `EffectContext.metadata`.
 
-### 8.9.4 Resolution Order
+#### Attack Pipeline Hooks
+
+| # | Hook Name | Call Site | Purpose | Cards Using It |
+|---|-----------|----------|---------|----------------|
+| 0 | `ATTACK_CALC_DAMAGE` | `AttackExecutor._calc_attack_damage()` | Modify final damage total | Bomber (keyword) |
+| 1 | `ATTACK_VALIDATE_TARGET` | Target selection in attack flow | Block illegal targets | Coolant Discharge (1 ship/round), Depowered Armament (no long range), Disengaged Fire Control (no obstructed) |
+| 2 | `ATTACK_GATHER_DICE` | After assembling dice pool, before roll | Remove dice from pool | Damaged Munitions (−1 die vs ship), Point-Defense Failure (−1 die vs squadron) |
+| 3 | `ATTACK_SPEND_ACCURACY` | During accuracy-spending sub-step | Block accuracy spending | Blinded Gunners (cannot spend accuracy icons) |
+| 4 | `ATTACK_RESOLVE_CRITICAL` | Before resolving standard critical effect | Block critical effects | Targeter Disruption (cannot resolve critical effects) |
+| 5 | `DEFENSE_VALIDATE_TOKEN` | When checking if a defense token can be spent | Block specific token spending | Faulty Countermeasures (no exhausted tokens), Capacitor Failure (no Redirect if zone shields = 0) |
+
+**Context fields:**
+- Hook 1: `metadata.target_is_ship` (bool), `metadata.is_obstructed` (bool), `metadata.ship_attacks_this_round` (int). Sets `cancelled`.
+- Hook 2: `dice_pool` (existing). Effect removes entries.
+- Hook 3: Sets `cancelled` to block accuracy spending.
+- Hook 4: Sets `critical_allowed = false` (existing field).
+- Hook 5: `metadata.token_type` (Constants.DefenseToken), `metadata.token_state` (Constants.DefenseTokenState), `defending_zone` (existing). Sets `cancelled`.
+
+#### Movement Pipeline Hooks
+
+| # | Hook Name | Call Site | Purpose | Cards Using It |
+|---|-----------|----------|---------|----------------|
+| 6 | `MANEUVER_DETERMINE_YAWS` | ManeuverTool yaw calculation | Reduce yaw at joints | Thrust Control Malfunction (last adjustable joint −1 yaw) |
+| 7 | `AFTER_MANEUVER_EXECUTE` | After maneuver is committed | Post-move triggers | Ruptured Engine (suffer 1 dmg if speed > 1), Damaged Controls (+1 facedown on overlap) |
+| 8 | `ON_SPEED_CHANGE` | When speed dial value changes | Speed-change triggers | Thruster Fissure (suffer 1 dmg on any speed change) |
+
+**Context fields:**
+- Hook 6: `metadata.yaw_values` (Array[int], mutated). `metadata.ship_speed` (int).
+- Hook 7: `metadata.ship_speed` (int), `metadata.did_overlap` (bool).
+- Hook 8: `metadata.old_speed` (int), `metadata.new_speed` (int).
+
+#### Command & Status Phase Hooks
+
+| # | Hook Name | Call Site | Purpose | Cards Using It |
+|---|-----------|----------|---------|----------------|
+| 9 | `BEFORE_REVEAL_DIAL` | Start of ship activation, before dial reveal | Pre-reveal penalties | Crew Panic (suffer 1 dmg or discard dial) |
+| 10 | `CALC_ENGINEERING_VALUE` | RepairResolver.get_engineering_points() | Modify engineering value | Power Failure (halve, rounded down; stackable) |
+| 11 | `STATUS_READY_TOKENS` | GameManager._begin_status_phase() | Block token readying | Compartment Fire (cannot ready defense tokens) |
+
+**Context fields:**
+- Hook 9: `metadata.dial_discarded` (bool, set if player chooses to discard).
+- Hook 10: `metadata.engineering_value` (int, mutated by each Power Failure).
+- Hook 11: Sets `cancelled` to block token readying for this ship.
+
+#### Repair & Token Hooks
+
+| # | Hook Name | Call Site | Purpose | Cards Using It |
+|---|-----------|----------|---------|----------------|
+| 12 | `REPAIR_VALIDATE_SHIELD` | RepairResolver.recover_shields() / move_shields() | Block shield ops on empty zones | Capacitor Failure (cannot recover/move shields to zone with 0 shields) |
+| 13 | `ON_COMMAND_TOKEN_GAIN` | GameManager command token logic | Block token gain | Life Support Failure (cannot have command tokens) |
+
+**Context fields:**
+- Hook 12: `metadata.target_zone` (String), `metadata.target_zone_shields` (int). Sets `cancelled`.
+- Hook 13: Sets `cancelled` to block token acquisition.
+
+### 8.9.4 Immediate vs Persistent Damage Card Effects
+
+Damage cards fall into two categories:
+
+| Timing | Behaviour | Hook Needed? | Cards |
+|--------|-----------|-------------|-------|
+| **Immediate** | Resolved inline when dealt faceup, then flipped facedown | No hook — resolved by `DamageDeck`/`AttackExecutor` at deal time | Structural Damage (×8), Projector Misaligned (×2), Shield Failure (×2), Comm Noise (×2), Injured Crew (×4) |
+| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more hooks above | Blinded Gunners, Capacitor Failure, Compartment Fire, Coolant Discharge, Crew Panic, Damaged Controls, Damaged Munitions, Depowered Armament, Disengaged FC, Faulty Countermeasures, Point-Defense Failure, Power Failure, Ruptured Engine, Targeter Disruption, Thrust Control Malfunction, Thruster Fissure |
+| **Hybrid** | Immediate action + persistent restriction; stays faceup | Yes | Life Support Failure (discard all tokens immediately; cannot gain tokens while faceup) |
+
+### 8.9.5 Resolution Order
 
 1. All effects registered for the current hook are collected
 2. Effects are sorted by `player_priority` (initiative player = 0, other = 1)
@@ -398,22 +464,27 @@ checks with an extensible architecture.
 4. If true, `resolve(context)` mutates the shared `EffectContext`
 5. After all effects resolve, the caller reads the mutated context
 
-### 8.9.5 Adding New Effects
+### 8.9.6 Adding New Effects
 
-To add a new keyword or upgrade effect:
+To add a new keyword, upgrade, or damage card effect:
 
 1. Create a new class extending `GameEffect` in `src/core/effects/`
-2. Override `get_hooks()` → return the hook StringNames to listen on
-3. Override `should_trigger(context)` → return true when the effect applies
-4. Override `resolve(context)` → mutate the context data bag
-5. Register in `EffectFactory` (for keywords) or at game start (for upgrades)
+   - Keywords: `src/core/effects/keywords/`
+   - Damage cards: `src/core/effects/damage_cards/`
+2. Set `source_type` to the appropriate `EffectSource` enum value
+3. Override `get_hooks()` → return the hook StringNames to listen on
+4. Override `should_trigger(context)` → return true when the effect applies
+5. Override `resolve(context)` → mutate the context data bag
+6. Register in `EffectFactory` (for keywords) or when the card enters play (for damage/upgrades)
+7. Unregister when the card leaves play (discarded, flipped facedown, ship destroyed)
 
-### 8.9.6 Design Decisions
+### 8.9.7 Design Decisions
 
 - **RefCounted, not Node:** Effects are pure logic, no scene tree dependency
 - **Mutable context:** Single object passed by reference avoids allocations
 - **Priority sort:** Ensures initiative player's effects resolve first (RRG "Effects and Timing")
 - **Optional flag:** `is_optional` on GameEffect supports future player-choice effects
+- **Metadata dict:** New hook-specific fields use `EffectContext.metadata` to keep the class stable across phases
 
 ## 8.10 Reusable Anchor-Based Panel Layout
 

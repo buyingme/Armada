@@ -120,7 +120,7 @@ func end_game(
 		details["round"] = current_game_state.current_round
 	else:
 		details = {
-			"winner_index": -1,
+			"winner_index": - 1,
 			"reason": reason,
 			"scores": [0, 0],
 			"round": 0,

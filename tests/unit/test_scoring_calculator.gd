@@ -94,7 +94,7 @@ func _make_squadron(
 func test_score_destroyed_enemy_ship() -> void:
 	# Arrange — player 1 has one ship (cost 73), destroyed.
 	var state: GameState = _make_state(
-			[], [{"cost": 73, "destroyed": true}])
+			[], [ {"cost": 73, "destroyed": true}])
 	# Act — player 0 scores.
 	var score: int = _calc.calculate_score(0, state)
 	# Assert
@@ -104,7 +104,7 @@ func test_score_destroyed_enemy_ship() -> void:
 func test_score_destroyed_enemy_squadron() -> void:
 	# Arrange — player 1 has one squadron (cost 12), destroyed.
 	var state: GameState = _make_state(
-			[], [], [], [{"cost": 12, "destroyed": true}])
+			[], [], [], [ {"cost": 12, "destroyed": true}])
 	# Act
 	var score: int = _calc.calculate_score(0, state)
 	# Assert
@@ -116,9 +116,9 @@ func test_score_mixed_destroyed() -> void:
 	# + 1 alive ship (44) + 1 alive squad (12).
 	var state: GameState = _make_state(
 			[],
-			[{"cost": 57, "destroyed": true}, {"cost": 44, "destroyed": false}],
+			[ {"cost": 57, "destroyed": true}, {"cost": 44, "destroyed": false}],
 			[],
-			[{"cost": 11, "destroyed": true}, {"cost": 12, "destroyed": false}])
+			[ {"cost": 11, "destroyed": true}, {"cost": 12, "destroyed": false}])
 	# Act
 	var score: int = _calc.calculate_score(0, state)
 	# Assert
@@ -129,8 +129,8 @@ func test_score_mixed_destroyed() -> void:
 func test_score_no_destroyed_returns_zero() -> void:
 	# Arrange — all units alive.
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": false}],
-			[{"cost": 60, "destroyed": false}])
+			[ {"cost": 50, "destroyed": false}],
+			[ {"cost": 60, "destroyed": false}])
 	# Act
 	var score: int = _calc.calculate_score(0, state)
 	# Assert
@@ -140,8 +140,8 @@ func test_score_no_destroyed_returns_zero() -> void:
 func test_score_symmetric() -> void:
 	# Arrange — each player destroyed one enemy ship.
 	var state: GameState = _make_state(
-			[{"cost": 30, "destroyed": true}],
-			[{"cost": 50, "destroyed": true}])
+			[ {"cost": 30, "destroyed": true}],
+			[ {"cost": 50, "destroyed": true}])
 	# Act
 	var score_0: int = _calc.calculate_score(0, state)
 	var score_1: int = _calc.calculate_score(1, state)
@@ -156,7 +156,7 @@ func test_score_symmetric() -> void:
 
 func test_all_ships_destroyed_is_eliminated() -> void:
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true}], [])
+			[ {"cost": 50, "destroyed": true}], [])
 	assert_true(_calc.is_fleet_eliminated(0, state),
 			"All ships destroyed → eliminated")
 
@@ -164,15 +164,15 @@ func test_all_ships_destroyed_is_eliminated() -> void:
 func test_squadrons_alone_no_elimination() -> void:
 	# All ships destroyed, but squadrons remain.
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true}], [],
-			[{"cost": 12, "destroyed": false}], [])
+			[ {"cost": 50, "destroyed": true}], [],
+			[ {"cost": 12, "destroyed": false}], [])
 	assert_true(_calc.is_fleet_eliminated(0, state),
 			"Surviving squadrons alone do not prevent elimination")
 
 
 func test_partial_destruction_not_eliminated() -> void:
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true},
+			[ {"cost": 50, "destroyed": true},
 			 {"cost": 60, "destroyed": false}], [])
 	assert_false(_calc.is_fleet_eliminated(0, state),
 			"At least one ship alive → not eliminated")
@@ -191,8 +191,8 @@ func test_no_ships_not_eliminated() -> void:
 
 func test_elimination_winner_is_opponent() -> void:
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true}],
-			[{"cost": 60, "destroyed": false}])
+			[ {"cost": 50, "destroyed": true}],
+			[ {"cost": 60, "destroyed": false}])
 	var result: Dictionary = _calc.determine_winner(state, "elimination", 0)
 	assert_eq(result["winner_index"], 1,
 			"Opponent of eliminated player wins")
@@ -203,8 +203,8 @@ func test_elimination_winner_is_opponent() -> void:
 func test_round6_higher_score_wins() -> void:
 	# Player 0 destroyed more of player 1's fleet.
 	var state: GameState = _make_state(
-			[{"cost": 30, "destroyed": false}],
-			[{"cost": 60, "destroyed": true}])
+			[ {"cost": 30, "destroyed": false}],
+			[ {"cost": 60, "destroyed": true}])
 	var result: Dictionary = _calc.determine_winner(state, "round_6")
 	assert_eq(result["winner_index"], 0,
 			"Higher score wins after round 6")
@@ -215,8 +215,8 @@ func test_round6_higher_score_wins() -> void:
 func test_tiebreaker_second_player_wins() -> void:
 	# Both players scored equally. Initiative player is 0, so second is 1.
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true}],
-			[{"cost": 50, "destroyed": true}],
+			[ {"cost": 50, "destroyed": true}],
+			[ {"cost": 50, "destroyed": true}],
 			[], [], 0)
 	var result: Dictionary = _calc.determine_winner(state, "round_6")
 	assert_eq(result["winner_index"], 1,
@@ -226,10 +226,10 @@ func test_tiebreaker_second_player_wins() -> void:
 func test_mutual_destruction_higher_score_wins() -> void:
 	# Both fleets wiped. Player 0's fleet was worth more.
 	var state: GameState = _make_state(
-			[{"cost": 30, "destroyed": true}],
-			[{"cost": 60, "destroyed": true}],
-			[{"cost": 10, "destroyed": true}],
-			[{"cost": 5, "destroyed": true}])
+			[ {"cost": 30, "destroyed": true}],
+			[ {"cost": 60, "destroyed": true}],
+			[ {"cost": 10, "destroyed": true}],
+			[ {"cost": 5, "destroyed": true}])
 	# Player 0 scores: 60 (ship) + 5 (squad) = 65.
 	# Player 1 scores: 30 (ship) + 10 (squad) = 40.
 	var result: Dictionary = _calc.determine_winner(
@@ -243,8 +243,8 @@ func test_mutual_destruction_higher_score_wins() -> void:
 func test_mutual_destruction_tie_second_player_wins() -> void:
 	# Both fleets wiped, equal scores.
 	var state: GameState = _make_state(
-			[{"cost": 50, "destroyed": true}],
-			[{"cost": 50, "destroyed": true}],
+			[ {"cost": 50, "destroyed": true}],
+			[ {"cost": 50, "destroyed": true}],
 			[], [], 0)
 	var result: Dictionary = _calc.determine_winner(
 			state, "mutual_destruction")

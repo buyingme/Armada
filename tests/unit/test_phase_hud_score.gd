@@ -77,7 +77,7 @@ func _make_ship(cost: int, destroyed: bool, owner: int) -> ShipInstance:
 func test_hud_shows_zero_scores_no_destruction() -> void:
 	# Arrange.
 	var state: GameState = _make_state(
-			[{"cost": 50}], [{"cost": 60}])
+			[ {"cost": 50}], [ {"cost": 60}])
 	# Act.
 	var text: String = _format_hud_text(2, "Ship Phase", state)
 	# Assert.
@@ -89,8 +89,8 @@ func test_hud_shows_zero_scores_no_destruction() -> void:
 func test_hud_shows_score_after_destruction() -> void:
 	# Arrange — Imperial ship (cost 73) destroyed.
 	var state: GameState = _make_state(
-			[{"cost": 50}],
-			[{"cost": 73, "destroyed": true}])
+			[ {"cost": 50}],
+			[ {"cost": 73, "destroyed": true}])
 	# Act.
 	var text: String = _format_hud_text(3, "Ship Phase", state)
 	# Assert.
@@ -102,8 +102,8 @@ func test_hud_shows_score_after_destruction() -> void:
 func test_hud_shows_both_player_scores() -> void:
 	# Arrange — Rebel ship (cost 40) destroyed, Imperial ship (cost 55) also.
 	var state: GameState = _make_state(
-			[{"cost": 40, "destroyed": true}],
-			[{"cost": 55, "destroyed": true}])
+			[ {"cost": 40, "destroyed": true}],
+			[ {"cost": 55, "destroyed": true}])
 	# Act.
 	var text: String = _format_hud_text(4, "Squadron Phase", state)
 	# Assert.

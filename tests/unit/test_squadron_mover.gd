@@ -37,16 +37,15 @@ func test_move_within_speed_band_valid() -> void:
 			"Move within speed band should be valid")
 
 
-func test_move_too_far_returns_error() -> void:
+func test_move_far_accepted_distance_enforced_by_clamp() -> void:
 	var sq: SquadronInstance = _make_squadron(1)
-	# Move much farther than speed 1 allows.
+	# Distance enforcement is the responsibility of the real-time clamp
+	# in GameBoard._move_squadron_during_activation, not validate_move.
 	var far_pos: Vector2 = Vector2(99999, 0)
 	var result: String = SquadronMover.validate_move(
 			sq, Vector2.ZERO, far_pos, [], [])
-	assert_ne(result, "",
-			"Move beyond speed distance should return error (SM-001)")
-	assert_true(result.contains("Too far"),
-			"Error message should indicate 'Too far'")
+	assert_eq(result, "",
+			"validate_move should accept any distance (clamp is authoritative)")
 
 
 # ===========================================================================

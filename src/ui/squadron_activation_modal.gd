@@ -58,12 +58,12 @@ const BOTTOM_OFFSET_Y: float = -40.0
 # ---------------------------------------------------------------------------
 
 enum State {
-	WAITING_FOR_SELECTION,  ## Prompt "Click a squadron to activate".
-	ACTION_CHOICE,          ## Show Move / Attack / Skip buttons.
-	MOVING,                 ## Waiting for placement click → Commit Move.
-	MOVE_PREVIEW,           ## Token snapped to preview pos — show Commit Move.
-	ATTACKING,              ## Attack executor is running.
-	DONE,                   ## Current activation finished; advance or next.
+	WAITING_FOR_SELECTION, ## Prompt "Click a squadron to activate".
+	ACTION_CHOICE, ## Show Move / Attack / Skip buttons.
+	MOVING, ## Waiting for placement click → Commit Move.
+	MOVE_PREVIEW, ## Token snapped to preview pos — show Commit Move.
+	ATTACKING, ## Attack executor is running.
+	DONE, ## Current activation finished; advance or next.
 }
 
 var _state: State = State.WAITING_FOR_SELECTION
@@ -432,7 +432,7 @@ func _build_ui() -> void:
 func _apply_anchor_position() -> void:
 	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	offset_left = BOTTOM_OFFSET_X
-	offset_right = -BOTTOM_OFFSET_X
+	offset_right = - BOTTOM_OFFSET_X
 	offset_top = BOTTOM_OFFSET_Y - 220
 	offset_bottom = BOTTOM_OFFSET_Y
 

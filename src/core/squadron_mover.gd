@@ -11,13 +11,16 @@ extends RefCounted
 
 ## Validates whether a squadron can be placed at [param target_pos].
 ## Returns an empty string if valid, or an error message if invalid.
+## Distance is enforced by the real-time clamp in
+## [method GameBoard._move_squadron_during_activation] — this function
+## only checks placement constraints (overlap with ships / squadrons).
 ## [param squadron] — the squadron being moved.
 ## [param origin_pos] — current centre position of the squadron.
 ## [param target_pos] — proposed new centre position.
 ## [param all_squadron_positions] — Array of {"instance": SquadronInstance,
 ##     "position": Vector2} for overlap checks.
 ## [param ship_bases] — Array of ShipBase for ship overlap checks.
-## Requirements: SM-001–005.
+## Requirements: SM-003, SM-005.
 static func validate_move(
 		squadron: SquadronInstance,
 		origin_pos: Vector2,
@@ -28,15 +31,6 @@ static func validate_move(
 	# SM-005: staying in place is always valid.
 	if origin_pos.distance_to(target_pos) < 1.0:
 		return ""
-	# SM-001/002: must be within the distance band matching speed.
-	var speed: int = squadron.squadron_data.speed if squadron.squadron_data else 3
-	var max_distance_px: float = _get_max_move_distance(speed)
-	var edge_distance: float = origin_pos.distance_to(target_pos)
-	# The distance is measured from the nearest edge — but since the
-	# squadron's base stays the same radius, centre-to-centre equals
-	# edge-to-edge when both ends have the same radius.
-	if edge_distance > max_distance_px:
-		return "Too far: exceeds distance %d." % speed
 	# SM-003: cannot overlap another squadron.
 	var target_base: SquadronBase = SquadronBase.new(target_pos, radius)
 	for entry: Dictionary in all_squadron_positions:

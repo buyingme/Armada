@@ -99,7 +99,7 @@ func test_engaged_enemies_excludes_far_enemy() -> void:
 func test_engaged_enemies_ignores_destroyed() -> void:
 	var sq_a: SquadronInstance = _make_squadron(0)
 	var sq_b: SquadronInstance = _make_squadron(1)
-	sq_b.suffer_damage(sq_b.current_hull)  # destroy it
+	sq_b.suffer_damage(sq_b.current_hull) # destroy it
 	var all: Array[Dictionary] = [
 		_entry(sq_a, Vector2.ZERO),
 		_entry(sq_b, Vector2(10, 0)),
@@ -160,7 +160,7 @@ func test_update_engagement_flags_sets_true() -> void:
 func test_update_engagement_flags_clears_when_far() -> void:
 	var sq_a: SquadronInstance = _make_squadron(0)
 	var sq_b: SquadronInstance = _make_squadron(1)
-	sq_a.is_engaged = true  # pre-set to true
+	sq_a.is_engaged = true # pre-set to true
 	var all: Array[Dictionary] = [
 		_entry(sq_a, Vector2.ZERO),
 		_entry(sq_b, Vector2(9999, 0)),
@@ -301,7 +301,7 @@ func test_swarm_eligible_true_when_friendly_also_engages() -> void:
 	var all: Array[Dictionary] = [
 		_entry(attacker, Vector2.ZERO),
 		_entry(target, Vector2(dist, 0)),
-		_entry(friendly, Vector2(dist * 2.0, 0)),  # close to target
+		_entry(friendly, Vector2(dist * 2.0, 0)), # close to target
 	]
 	# Friendly is dist from target (within range 1 of target).
 	# But let's place friendly close to target to ensure engagement.

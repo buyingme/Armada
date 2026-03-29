@@ -30,12 +30,12 @@ func should_trigger(context: EffectContext) -> bool:
 	if context.defender == null:
 		return false
 	if context.defender == owner:
-		return false  # targeting this Escort is fine
+		return false # targeting this Escort is fine
 	# Check the defender has Escort — if so, selecting it is allowed.
 	if context.defender is SquadronInstance:
 		var def_sq: SquadronInstance = context.defender as SquadronInstance
 		if def_sq.squadron_data and def_sq.squadron_data.has_keyword("Escort"):
-			return false  # targeting another Escort is fine
+			return false # targeting another Escort is fine
 	return true
 
 

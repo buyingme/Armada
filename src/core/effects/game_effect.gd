@@ -18,10 +18,10 @@ extends RefCounted
 
 ## Source categories for effects — used for ordering and identification.
 enum EffectSource {
-	KEYWORD,      ## Squadron keyword (Bomber, Escort, Swarm, …)
+	KEYWORD, ## Squadron keyword (Bomber, Escort, Swarm, …)
 	UPGRADE_CARD, ## Ship upgrade card (Title, Commander, Turbolaser, …)
-	DAMAGE_CARD,  ## Faceup damage card effect
-	OBJECTIVE,    ## Objective card rule modification
+	DAMAGE_CARD, ## Faceup damage card effect
+	OBJECTIVE, ## Objective card rule modification
 	DEFENSE_TOKEN, ## Defense token effect (future: Salvo, Contain, …)
 }
 

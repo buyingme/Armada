@@ -2214,6 +2214,13 @@ func _move_squadron_during_activation() -> void:
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
 	_move_squadron_token(token, desired, side, top_y, bottom_y, false)
+	# Re-clamp after collision resolution — the resolver may push the
+	# token slightly past the movement distance.  The visual ring is the
+	# single source of truth for movement range.
+	var post_offset: Vector2 = token.global_position - _squadron_move_original_pos
+	if post_offset.length() > _squadron_move_max_dist:
+		token.global_position = _squadron_move_original_pos + \
+				post_offset.normalized() * _squadron_move_max_dist
 	# Keep the armament (attack range) ring centred on the token.
 	if _squadron_move_overlay:
 		_squadron_move_overlay.update_tracking_position(token.global_position)

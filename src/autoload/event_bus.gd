@@ -181,6 +181,14 @@ signal repair_card_discarded(ship_instance: RefCounted, card: RefCounted)
 ## Rules Reference: CM-037.
 signal repair_command_resolved(ship_instance: RefCounted, points_spent: int)
 
+## Emitted when a damage card flips between faceup and facedown.
+## [param ship_instance] — the ship carrying the card.
+## [param card] — the DamageCard that flipped.
+## [param is_faceup] — true if the card is now faceup, false if facedown.
+## Rules Reference: "Damage Cards" — immediate effects flip facedown.
+signal damage_card_flipped(ship_instance: RefCounted, card: RefCounted,
+		is_faceup: bool)
+
 
 # --- Turn Management Events (original Phase 4b) ---
 

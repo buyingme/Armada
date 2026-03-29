@@ -171,6 +171,19 @@ func get_spent_history() -> Array[Dictionary]:
 	return _spent_history.duplicate()
 
 
+## Discards the top dial from the stack (regardless of state).
+## Used by the Comm Noise damage card effect.
+## Rules Reference: "Comm Noise" — discard the top command dial.
+## Returns the discarded dial dictionary, or empty dict if stack is empty.
+func discard_top() -> Dictionary:
+	if _dials.is_empty():
+		_log.info("Cannot discard top — stack is empty")
+		return {}
+	var dial: Dictionary = _dials.pop_front()
+	_log.info("Discarded top dial: command=%s" % str(dial.get("command", -1)))
+	return dial
+
+
 ## Clears the spent dial history. Called at the start of a new round so the
 ## spent activation marker from the previous round is removed.
 ## Rules Reference: The spent dial is an "activation marker" for the current

@@ -185,8 +185,8 @@ func test_life_support_failure_flips_facedown() -> void:
 	var card: DamageCard = _make_faceup_card(
 			ship, "life_support_failure", "Life Support Failure")
 	_resolver().resolve(card, ship, deck)
-	assert_false(card.is_faceup,
-			"Card should flip facedown after effect")
+	assert_true(card.is_faceup,
+			"Card should stay faceup — hybrid persistent effect")
 
 
 func test_life_support_failure_no_tokens_still_succeeds() -> void:

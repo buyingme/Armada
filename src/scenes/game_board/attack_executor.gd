@@ -1384,6 +1384,22 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		return
 	# Compute the string-keyed pool.
 	_attack_exec_pool = _compute_attack_pool_dict(range_band)
+	# Hook: ATTACK_GATHER_DICE — Damaged Munitions / Point-Defense Failure.
+	if _effect_registry:
+		var gd_ctx: EffectContext = EffectContext.new()
+		gd_ctx.dice_pool = _attack_exec_pool
+		if _attack_exec_ship_token and _attack_exec_ship_token is ShipToken:
+			gd_ctx.attacker = (
+					_attack_exec_ship_token as ShipToken
+					).get_ship_instance()
+		if _attack_sim_def_squad:
+			gd_ctx.defender = _attack_sim_def_squad.get_squadron_instance()
+		elif _attack_sim_def_ship and _attack_sim_def_ship is ShipToken:
+			gd_ctx.defender = (
+					_attack_sim_def_ship as ShipToken).get_ship_instance()
+		gd_ctx = _effect_registry.resolve_hook(
+				&"ATTACK_GATHER_DICE", gd_ctx)
+		_attack_exec_pool = gd_ctx.dice_pool
 	# Show Skip Attack button.
 	_attack_sim_panel.show_skip_attack_button()
 	# Check CF dial availability (ship attackers only — squadrons have no dials).
@@ -1623,6 +1639,17 @@ func _on_attack_confirm() -> void:
 func _attack_exec_start_accuracy() -> void:
 	_attack_exec_accuracy_step = true
 	var acc_count: int = Dice.count_accuracy(_attack_exec_dice_results)
+	# Hook: ATTACK_SPEND_ACCURACY — Blinded Gunners blocks accuracy spending.
+	if acc_count > 0 and _effect_registry:
+		var acc_ctx: EffectContext = EffectContext.new()
+		if _attack_sim_atk_ship is ShipToken:
+			acc_ctx.attacker = (
+					_attack_sim_atk_ship as ShipToken).get_ship_instance()
+		acc_ctx = _effect_registry.resolve_hook(
+				&"ATTACK_SPEND_ACCURACY", acc_ctx)
+		if acc_ctx.cancelled:
+			_log.info("Accuracy spending blocked by damage card effect.")
+			acc_count = 0
 	# Only ships have defense tokens; squadrons skip accuracy step.
 	if _attack_sim_def_ship == null or acc_count == 0:
 		_log.info("No accuracy icons or squadron defender — skipping "
@@ -2202,6 +2229,18 @@ func _resolve_ship_damage(damage: int) -> void:
 			_attack_exec_dice_results)
 	var first_card_faceup: bool = (has_crit
 			and not _attack_exec_contain_used)
+	# Hook: ATTACK_RESOLVE_CRITICAL — Targeter Disruption can block critical.
+	if first_card_faceup and _effect_registry:
+		var crit_ctx: EffectContext = EffectContext.new()
+		if _attack_sim_atk_ship is ShipToken:
+			crit_ctx.attacker = (
+					_attack_sim_atk_ship as ShipToken).get_ship_instance()
+		crit_ctx.critical_allowed = true
+		crit_ctx = _effect_registry.resolve_hook(
+				&"ATTACK_RESOLVE_CRITICAL", crit_ctx)
+		if not crit_ctx.critical_allowed:
+			first_card_faceup = false
+			_log.info("Critical effect blocked by damage card effect.")
 	var cards_dealt: int = 0
 	for i: int in range(remaining):
 		if _damage_deck == null:
@@ -2214,6 +2253,10 @@ func _resolve_ship_damage(damage: int) -> void:
 		if i == 0 and first_card_faceup:
 			card.is_faceup = true
 			def_inst.add_faceup_damage(card)
+			# Register persistent damage card effect (DM-005).
+			if _effect_registry and DamageCardEffectFactory.is_persistent(card):
+				DamageCardEffectFactory.register_effect(
+						card, def_inst, _effect_registry)
 			_log.info(
 					"Dealt faceup damage card: %s (standard critical)."
 					% card.title)

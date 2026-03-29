@@ -137,19 +137,18 @@ func _resolve_projector_misaligned(card: DamageCard,
 	return true
 
 
-## Life Support Failure: Discard all command tokens, then flip facedown.
-## (Note: the persistent effect "You cannot have command tokens" is handled
-## by the persistent effect system in sub-phase 9e.)
+## Life Support Failure: Discard all command tokens.
+## This card stays FACEUP because it has a persistent effect:
+## "You cannot have command tokens" (registered in DamageCardEffectFactory).
 ## Rules Reference: "Life Support Failure" card text.
 func _resolve_life_support_failure(card: DamageCard,
 		ship: ShipInstance) -> bool:
 	if ship.command_tokens:
 		ship.command_tokens.clear()
 		EventBus.command_tokens_changed.emit(ship)
-	_log.info("Life Support Failure: discarded all command tokens.")
-	card.flip_facedown()
-	_move_to_facedown(card, ship)
-	EventBus.damage_card_flipped.emit(ship, card, false)
+	_log.info("Life Support Failure: discarded all command tokens. " +
+			"Card stays faceup (persistent).")
+	# Card stays faceup — persistent effect registered separately.
 	return true
 
 

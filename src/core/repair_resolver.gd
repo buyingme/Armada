@@ -41,17 +41,24 @@ var _token_points: int = 0
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("RepairResolver")
 
+## Optional EffectRegistry for hook resolution (Power Failure,
+## Capacitor Failure, persistent effect unregistration).
+var _effect_registry: EffectRegistry = null
+
 
 ## Creates a RepairResolver for the given ship.
 ## Examines the ship's revealed dial and command tokens to determine
 ## available engineering points.
 ## [param ship] — the ShipInstance being repaired.
 ## [param deck] — the shared DamageDeck for discarding cards.
+## [param registry] — optional EffectRegistry for damage card hooks.
 ## Rules Reference: CM-031, CM-032.
-static func create(ship: ShipInstance, deck: DamageDeck) -> RepairResolver:
+static func create(ship: ShipInstance, deck: DamageDeck,
+		registry: EffectRegistry = null) -> RepairResolver:
 	var resolver: RepairResolver = RepairResolver.new()
 	resolver._ship = ship
 	resolver._damage_deck = deck
+	resolver._effect_registry = registry
 	resolver._resolve_availability(ship)
 	return resolver
 
@@ -205,12 +212,16 @@ func can_repair_card(card: DamageCard) -> bool:
 
 
 ## Discards [param card] from the ship and returns it to the damage deck.
+## Unregisters any persistent effect tied to this card.
 ## Returns true if successful.
 ## Rules Reference: CM-035 — choose and discard one faceup or facedown card.
 func repair_hull(card: DamageCard) -> bool:
 	if not can_repair_card(card):
 		_log.info("Cannot repair card '%s'." % card.title)
 		return false
+	# Unregister persistent effect before removing the card.
+	if card.is_faceup and _effect_registry:
+		DamageCardEffectFactory.unregister_effect(card, _effect_registry)
 	var removed: bool = _ship.remove_damage_card(card)
 	if not removed:
 		_log.error("Failed to remove card '%s' from ship." % card.title)
@@ -277,6 +288,22 @@ func _resolve_availability(ship: ShipInstance) -> void:
 
 	_total_points = _dial_points + _token_points
 	_remaining_points = _total_points
+
+	# Hook: CALC_ENGINEERING_VALUE — Power Failure halves engineering.
+	if _effect_registry and _total_points > 0:
+		var eng_ctx: EffectContext = EffectContext.new()
+		eng_ctx.set_meta_value("ship", _ship)
+		eng_ctx.set_meta_value("engineering_value", _total_points)
+		eng_ctx = _effect_registry.resolve_hook(
+				&"CALC_ENGINEERING_VALUE", eng_ctx)
+		var modified: int = int(eng_ctx.get_meta_value(
+				"engineering_value", _total_points))
+		if modified != _total_points:
+			_log.info("Engineering value modified: %d → %d (damage effect)"
+					% [_total_points, modified])
+			_total_points = modified
+			_remaining_points = _total_points
+
 	_log.info("Repair availability: dial=%s(%d pts), token=%s(%d pts), total=%d" %
 			[str(_has_repair_dial), _dial_points,
 			str(_has_repair_token), _token_points, _total_points])

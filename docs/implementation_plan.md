@@ -1387,19 +1387,22 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 8: Status Phase & Game Flow ⏳ and victory conditions.
+### Phase 8: Status Phase & Game Flow ✅ `e780aba` (79 scripts, 1431 tests)
 **Prerequisites:** Phases 4–7 (all phase logic)
 **Duration estimate:** 1–2 sessions
 
-> **Placeholder implemented (Phase 4b extension, updated in Phase 4c):**
-> `_begin_status_phase()` currently performs the core cleanup automatically:
-> readies exhausted defense tokens (ST-001), flips the initiative token side
-> (ST-002 — changes squadron activation slider colour but does NOT change which
-> player has initiative; see IN-001/IN-003), clears spent dial history,
-> resets ship/squadron activation flags (ST-004), then auto-advances to the
-> next round. Game ends after round 6 (GF-001–003).
-> Phase 8 will add the remaining items: elimination checks, scoring, victory screen,
-> and the persistent HUD.
+> **Completed in three sub-phases:**
+> - **8a** (`9b34f3f`): ScoringCalculator (RefCounted), elimination check via
+>   `ship_destroyed`/`squadron_destroyed` signals, enhanced `game_ended(details)`
+>   signal (breaking change from `winner_index: int` to `details: Dictionary`),
+>   fade-out tween on destroyed tokens (0.8 s).
+> - **8b** (`f280634`): VictoryScreen overlay (CanvasLayer 110) — winner banner,
+>   scores, reason text, "Play Again" / "Quit" buttons.
+> - **8c** (`e780aba`): Phase HUD expanded to show live scores:
+>   `"Round N — Phase  |  Rebel: X  |  Imperial: Y"`.
+>
+> **Deferred:** UI-014 (activation sidebar) → Phase 10; UI-009 (damage deck count) → future.
+> **Eliminated:** Initiative token slider colour (ST-002 visual) — not relevant for digital.
 
 | Task | Layer | Requirements | Deliverables |
 |------|-------|-------------|--------------|
@@ -1523,7 +1526,7 @@ Phase 0 (Scale & Assets)
 | Phase 6 | ~45 | — | ~967 |
 | Phase 7 | ~30 | **75** | **1325** |
 | Phase 7b | ~30 | **39** | **1385** |
-| Phase 8 | ~20 | — | ~1405 |
+| Phase 8 | ~20 | **31** | **1431** |
 | Phase 9 | ~15 | — | ~1420 |
 | Phase 10 | ~20 | — | ~1440 |
 | **Total** | **~420 new** | | **~1440** |
@@ -1553,13 +1556,13 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 
 | Section | Reqs | Covered In Phase(s) | Status |
 |---------|------|---------------------|--------|
-| Game Overview (GO-001–006) | 6 | Phase 8 | ⏳ |
+| Game Overview (GO-001–006) | 6 | Phase 8 | ✅ |
 | Setup (SU-001–030) | 18 | Phase 0, 2, 3 | ✅ SU-001, SU-003, SU-010–030 done |
-| Game Flow (GF-001–004) | 4 | Phase 8 | ⏳ |
+| Game Flow (GF-001–004) | 4 | Phase 8 | ✅ |
 | Command Phase (CP-001–008) | 8 | Phase 4, 4b | ✅ (CP-001 hot-seat adaptation in 4b) |
 | Ship Phase (SP-001–016) | 16 | Phase 4b, 4c, 4d, 5, 6 | ⏳ SP-010/011 in 4c/4d; SP-015 (maneuver) in 5b; Attack in Phase 6 |
 | Squadron Phase (SQ-001–009) | 9 | Phase 4b, 7, 7b | ✅ SQ-001–005 done (Phase 7); SQ-006–009 visual activation UI in Phase 7b |
-| Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ⏳ ST-001/002/004 placeholder in 4b; initiative clarified in 4c |
+| Status Phase (ST-001–004) | 4 | Phase 4b, 4c, 8 | ✅ ST-001/002/004 placeholder in 4b; initiative clarified in 4c; elimination + scoring in 8 |
 | Play Mode (PM-001–004) | 4 | Phase 4b | ✅ |
 | Turn Flow (TF-001–014) | 14 | Phase 4b, 5, 7, 8 | ✅ (core flow; activation steps in 5/7) |
 | Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |
@@ -1572,7 +1575,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ✅ MV-001–015 done (overlap MV-016+ in 5b-2) |
 | Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7, 7b | ✅ SM-001–005, SM-010–015, SM-030–032 done (Phase 7); SM-040–042 (activation UI) done (Phase 7b) |
 | Overlapping (OV-001–021) | 8 | Phase 5 |
-| Winning/Scoring (WN-001–004) | 4 | Phase 8 |
+| Winning/Scoring (WN-001–004) | 4 | Phase 8 | ✅ |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
 | UI Requirements (UI-001–028) | 28 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10 |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |

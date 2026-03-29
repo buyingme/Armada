@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 75 scripts, 1385 tests — 1384 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 79 scripts, 1431 tests — 1430 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3021,3 +3021,91 @@ Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
 | 4 | After 2 squadron activations, turn passes to opponent | Turn management unchanged |
 
 **Pass criteria:** All existing functionality works identically to before Phase 7b.
+
+---
+
+## Phase 8 — Status Phase & Game Flow
+
+**What this phase adds:** ScoringCalculator for fleet-point scoring, elimination checks triggered by ship/squadron destruction, VictoryScreen overlay at game end, live score display in the phase HUD, and a 0.8 s fade-out tween on destroyed tokens.
+
+**Commits:** `9b34f3f` (8a: scoring + elimination), `f280634` (8b: victory screen), `e780aba` (8c: HUD scores).
+**Test baseline after phase:** 79 scripts, 1431 tests, 1430 passing.
+
+### MT-8.1 — Phase HUD shows live scores
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the Learning Scenario (F5) | Phase HUD label visible at top-centre |
+| 2 | Read the HUD text during Command Phase | Shows `Round 1 — Command Phase  \|  Rebel: 0  \|  Imperial: 0` |
+| 3 | Advance to Ship Phase | HUD updates to `Round 1 — Ship Phase  \|  Rebel: 0  \|  Imperial: 0` |
+
+**Pass criteria:** HUD displays round, phase name, and both faction scores (both 0 at start).
+
+### MT-8.2 — Score updates on destruction
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play until a ship or squadron is destroyed via combat | HUD score for the destroying player increases |
+| 2 | Verify the increase matches the destroyed unit's point cost | Score equals the sum of all destroyed enemy point costs |
+
+**Pass criteria:** Scores reflect fleet points of destroyed enemy units in real time.
+
+### MT-8.3 — Destroyed token fade-out
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a ship or squadron in combat | Token fades to transparent over ~0.8 seconds |
+| 2 | After fade completes | Token is no longer visible (but still in scene tree) |
+
+**Pass criteria:** Smooth fade-out animation, no abrupt disappearance.
+
+### MT-8.4 — Game ends after round 6
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play through 6 full rounds (Command → Ship → Squadron → Status × 6) | VictoryScreen overlay appears after round 6 Status Phase |
+| 2 | VictoryScreen displays winner, scores, round number, and reason | Winner is faction with higher fleet points; reason is "All 6 rounds completed" |
+| 3 | Scores match the HUD values shown before the screen appeared | No discrepancy |
+
+**Pass criteria:** Game correctly ends after 6 rounds with accurate scoring.
+
+### MT-8.5 — Elimination ends game immediately
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy all enemy ships (not just squadrons) during combat | VictoryScreen appears immediately (not deferred to Status Phase) |
+| 2 | Reason text shows "Fleet eliminated" | Winner is the non-eliminated player |
+| 3 | Scores are computed at the moment of elimination | Points reflect all destroyed units up to that point |
+
+**Pass criteria:** Elimination triggers instant game end with correct scoring.
+
+### MT-8.6 — VictoryScreen buttons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | On VictoryScreen, click **Play Again** | Scene reloads; a fresh game starts from round 1 |
+| 2 | On VictoryScreen, click **Quit** | Application closes |
+
+**Pass criteria:** Both buttons function correctly.
+
+### MT-8.7 — VictoryScreen styling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger VictoryScreen (round 6 end or elimination) | Dark overlay covers entire screen |
+| 2 | Winner text is displayed in gold, centred | Text is legible against dark background |
+| 3 | Scores for both factions shown | Layout is centred and readable |
+
+**Pass criteria:** VictoryScreen is visually clean and informative.
+
+### MT-8.8 — No regressions: full game flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play through Command → Ship → Squadron → Status for at least 2 rounds | All phases transition correctly |
+| 2 | Verify ship activation flow unchanged | Dial drag, activation modal, maneuver tool work |
+| 3 | Verify attack flow unchanged | Ship and squadron attacks work identically |
+| 4 | Verify squadron activation unchanged | Modal opens, select, move, attack, skip all work |
+| 5 | Status phase resets tokens and advances round | Defense tokens ready, activation flags cleared |
+
+**Pass criteria:** All existing functionality works identically to before Phase 8.

@@ -135,7 +135,7 @@ func test_centre_on_screen_updates_bottom_centre_offsets() -> void:
 	_modal.open(_ship)
 	_modal.centre_on_screen(Vector2(1920, 1080))
 	var panel_w: float = _modal.custom_minimum_size.x
-	assert_almost_eq(_modal.offset_left, - panel_w * 0.5, 1.0,
+	assert_almost_eq(_modal.offset_left, -panel_w * 0.5, 1.0,
 			"offset_left should be -half panel width")
 	assert_almost_eq(_modal.offset_right, panel_w * 0.5, 1.0,
 			"offset_right should be +half panel width")

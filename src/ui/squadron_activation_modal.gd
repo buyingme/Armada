@@ -353,7 +353,7 @@ func _build_ui() -> void:
 	_vbox.add_theme_constant_override("separation", 8)
 	# Explicit min-width so the autowrap _prompt_label computes a correct
 	# minimum height before the PanelContainer propagates its width.
-	var content_w: float = (- BOTTOM_OFFSET_X) * 2.0 - 32.0  # 240 - 32 = 208
+	var content_w: float = (-BOTTOM_OFFSET_X) * 2.0 - 32.0 # 240 - 32 = 208
 	_vbox.custom_minimum_size.x = maxf(content_w, 100.0)
 	_margin.add_child(_vbox)
 

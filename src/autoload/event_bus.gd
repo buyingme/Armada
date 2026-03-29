@@ -11,8 +11,11 @@ extends Node
 ## Emitted when a new game starts.
 signal game_started()
 
-## Emitted when the game ends. [param winner_index] indicates the winning player.
-signal game_ended(winner_index: int)
+## Emitted when the game ends.
+## [param details] — Dictionary with keys: "winner_index" (int), "reason"
+## (String: "elimination"/"round_6"/"mutual_destruction"), "scores" (Array[int]),
+## "round" (int).
+signal game_ended(details: Dictionary)
 
 ## Emitted when a new round begins. [param round_number] is the current round (1-based).
 signal round_started(round_number: int)

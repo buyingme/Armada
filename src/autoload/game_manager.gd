@@ -68,6 +68,9 @@ func _ready() -> void:
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 	EventBus.squadron_activation_ended.connect(
 			_on_squadron_activation_ended)
+	# Phase 8 — continuous elimination check (GF-004, WN-001).
+	EventBus.ship_destroyed.connect(_on_ship_destroyed)
+	EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
 
 
 func _notification(what: int) -> void:
@@ -94,10 +97,35 @@ func start_new_game(_config: Dictionary = {}) -> void:
 	_start_round()
 
 
-## Ends the current game.
-func end_game(winner_index: int = -1) -> void:
+## Scoring calculator (created lazily, reused across end-game checks).
+var _scoring: ScoringCalculator = null
+
+
+## Ends the current game, computing scores and determining the winner.
+## [param reason] — why the game ended: "elimination", "round_6", or
+##   "mutual_destruction".
+## [param eliminated_player] — the player whose fleet was wiped (only used
+##   when [param reason] is "elimination").
+## Rules Reference: WN-001–004, GO-004, GF-003.
+func end_game(
+		reason: String = "round_6",
+		eliminated_player: int = -1) -> void:
 	is_game_active = false
-	EventBus.game_ended.emit(winner_index)
+	if _scoring == null:
+		_scoring = ScoringCalculator.new()
+	var details: Dictionary = {}
+	if current_game_state:
+		details = _scoring.determine_winner(
+				current_game_state, reason, eliminated_player)
+		details["round"] = current_game_state.current_round
+	else:
+		details = {
+			"winner_index": -1,
+			"reason": reason,
+			"scores": [0, 0],
+			"round": 0,
+		}
+	EventBus.game_ended.emit(details)
 
 
 ## Applies pre-assigned (fixed) command dials to all ships for round 1,
@@ -202,7 +230,7 @@ func _start_round() -> void:
 	current_game_state.current_round += 1
 
 	if current_game_state.current_round > Constants.MAX_ROUNDS:
-		end_game()
+		end_game("round_6")
 		return
 
 	# Reset submission tracking for the new round.
@@ -722,3 +750,50 @@ func _perform_status_phase_cleanup() -> void:
 	# initiative for the entire game." Initiative does NOT change.
 	_log.info("Status Phase: cleanup complete. Initiative stays with player %d." % [
 			current_game_state.initiative_player])
+
+
+# ---------------------------------------------------------------------------
+# Elimination & scoring — Phase 8 (GF-004, WN-001, GO-004)
+# ---------------------------------------------------------------------------
+
+## Called when any ship is destroyed during an attack.
+## Checks if the owning player has lost all ships → immediate game end.
+## If both fleets lost their last ship in the same attack, that's mutual
+## destruction — scored by points (RRG p.21).
+## Rules Reference: "Winning and Losing", RRG p.21; GF-004, WN-001.
+func _on_ship_destroyed(ship: Node) -> void:
+	if not is_game_active or not current_game_state:
+		return
+	# Determine which player owns this ship.
+	var owner: int = -1
+	if ship.has_method("get_ship_instance"):
+		var si: ShipInstance = ship.get_ship_instance()
+		if si != null:
+			owner = si.owner_player
+	if owner < 0:
+		return
+	_check_elimination()
+
+
+## Called when any squadron is destroyed.  Squadrons alone never trigger
+## elimination (GO-004), but we may want to update score HUD later.
+func _on_squadron_destroyed(_squadron: Node) -> void:
+	pass # Score HUD update handled in game_board.gd.
+
+
+## Checks whether either (or both) player fleets have been eliminated.
+## Must be called after damage resolution so [method is_destroyed] is current.
+## Rules Reference: "Winning and Losing", RRG p.21; GF-004, WN-001.
+func _check_elimination() -> void:
+	if not is_game_active or not current_game_state:
+		return
+	if _scoring == null:
+		_scoring = ScoringCalculator.new()
+	var p0_elim: bool = _scoring.is_fleet_eliminated(0, current_game_state)
+	var p1_elim: bool = _scoring.is_fleet_eliminated(1, current_game_state)
+	if p0_elim and p1_elim:
+		end_game("mutual_destruction")
+	elif p0_elim:
+		end_game("elimination", 0)
+	elif p1_elim:
+		end_game("elimination", 1)

@@ -164,8 +164,12 @@ func _on_game_started() -> void:
 
 
 ## LOG-010 — game_ended.
-func _on_game_ended(winner_index: int) -> void:
-	_log.info("game_ended — Winner: %d" % winner_index)
+func _on_game_ended(details: Dictionary) -> void:
+	var winner: int = details.get("winner_index", -1)
+	var reason: String = details.get("reason", "unknown")
+	var scores: Array = details.get("scores", [0, 0])
+	_log.info("game_ended — Winner: %d, Reason: %s, Scores: %s" % [
+			winner, reason, str(scores)])
 
 
 ## LOG-011 — round_started.

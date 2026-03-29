@@ -164,7 +164,7 @@ func test_activation_ended_logged() -> void:
 
 func test_game_ended_logged() -> void:
 	GameManager.start_new_game()
-	GameManager.end_game(0)
+	GameManager.end_game("round_6")
 	var content: String = _get_log_content()
 	assert_string_contains(content, "game_ended",
 			"Should log game_ended")

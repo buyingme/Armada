@@ -415,7 +415,7 @@ func _build_ui() -> void:
 	_content.add_theme_constant_override("separation", 8)
 	# Set explicit min-width so autowrap labels can compute correct heights
 	# during the first layout pass (before the PanelContainer propagates width).
-	var _margin_h: float = 32.0  # 16 px content-margin on each side
+	var _margin_h: float = 32.0 # 16 px content-margin on each side
 	_content.custom_minimum_size.x = maxf(
 			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(_content)
@@ -626,8 +626,6 @@ func _build_ui() -> void:
 	_damage_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_damage_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_damage_info_container.add_child(_damage_info_label)
-
-
 
 
 ## Updates the title and body text.

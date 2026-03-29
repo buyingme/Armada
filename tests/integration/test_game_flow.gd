@@ -11,6 +11,7 @@ var _phase_changed_phases: Array = []
 var _game_started: bool = false
 var _game_ended: bool = false
 var _game_ended_winner: int = -1
+var _game_ended_details: Dictionary = {}
 
 
 func before_each() -> void:
@@ -20,6 +21,7 @@ func before_each() -> void:
 	_game_started = false
 	_game_ended = false
 	_game_ended_winner = -1
+	_game_ended_details = {}
 
 	EventBus.round_started.connect(_on_round_started)
 	EventBus.round_ended.connect(_on_round_ended)
@@ -64,9 +66,10 @@ func _on_game_started() -> void:
 	_game_started = true
 
 
-func _on_game_ended(winner: int) -> void:
+func _on_game_ended(details: Dictionary) -> void:
 	_game_ended = true
-	_game_ended_winner = winner
+	_game_ended_winner = details.get("winner_index", -1)
+	_game_ended_details = details
 
 
 # --- Tests ---
@@ -129,9 +132,10 @@ func test_game_ends_after_six_rounds() -> void:
 
 func test_end_game_emits_signal_with_winner() -> void:
 	GameManager.start_new_game()
-	GameManager.end_game(0)
+	GameManager.end_game("round_6")
 	assert_true(_game_ended, "Should emit game_ended signal")
-	assert_eq(_game_ended_winner, 0, "Winner should be player 0")
+	assert_eq(_game_ended_details.get("reason"), "round_6",
+			"Reason should be round_6")
 
 
 func test_phase_changed_signals_fired() -> void:

@@ -211,7 +211,7 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	# Explicit min-width prevents autowrap labels from reporting a huge
 	# minimum height before the PanelContainer propagates its width.
-	var _margin_h: float = 32.0  # 16 px content-margin on each side
+	var _margin_h: float = 32.0 # 16 px content-margin on each side
 	vbox.custom_minimum_size.x = maxf(
 			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(vbox)

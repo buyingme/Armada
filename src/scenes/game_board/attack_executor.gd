@@ -2169,7 +2169,7 @@ func _resolve_squadron_damage(damage: int) -> void:
 	if sq_inst.is_destroyed():
 		_log.info("Squadron destroyed!")
 		EventBus.squadron_destroyed.emit(_attack_sim_def_squad)
-		_attack_sim_def_squad.visible = false
+		_fade_out_token(_attack_sim_def_squad)
 
 
 ## Resolves damage against a ship.
@@ -2241,7 +2241,7 @@ func _resolve_ship_damage(damage: int) -> void:
 	if def_inst.is_destroyed():
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
 		EventBus.ship_destroyed.emit(_attack_sim_def_ship)
-		_attack_sim_def_ship.visible = false
+		_fade_out_token(_attack_sim_def_ship)
 
 
 ## Waits briefly to show the damage info, then proceeds to finalize.
@@ -2543,3 +2543,18 @@ func _on_attack_skip() -> void:
 		return
 	_log.info("Attack skipped by player.")
 	_finish_attack_execution()
+
+
+## Fades out a destroyed token over 0.8 seconds, then hides it.
+## Called when a ship or squadron is destroyed during an attack.
+## Rules Reference: GF-004 — destroyed ships are removed from play.
+func _fade_out_token(token: Node2D) -> void:
+	if token == null:
+		return
+	var tween: Tween = token.create_tween()
+	tween.tween_property(token, "modulate:a", 0.0, 0.8)
+	tween.tween_callback(func() -> void:
+		token.visible = false
+		# Reset alpha so the token could theoretically be shown again.
+		token.modulate.a = 1.0
+	)

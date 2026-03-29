@@ -414,3 +414,55 @@ To add a new keyword or upgrade effect:
 - **Mutable context:** Single object passed by reference avoids allocations
 - **Priority sort:** Ensures initiative player's effects resolve first (RRG "Effects and Timing")
 - **Optional flag:** `is_optional` on GameEffect supports future player-choice effects
+
+## 8.10 Reusable Anchor-Based Panel Layout
+
+### 8.10.1 Problem
+
+Several modal panels (`AttackSimPanel`, `ActivationModal`,
+`SquadronActivationModal`) are positioned via Godot's
+`PRESET_CENTER_BOTTOM` anchor preset, grow upward
+(`GROW_DIRECTION_BEGIN`), and are **reused** across multiple game phases
+rather than re-created.  This reuse exposes three interrelated Godot
+layout behaviours that combine to cause panels to appear at the wrong
+size or drift off-screen:
+
+| Behaviour | Root Cause | Visible Symptom |
+|-----------|-----------|-----------------|
+| **Stale cached size** | `PanelContainer.size` retains its previous height after children are removed | Panel appears at old (large) size on reopen |
+| **Offset drift** | Setting `size = Vector2.ZERO` on an anchor-based control triggers offset recalculation to preserve screen position | Panel drifts upward by ~388 px per reopen cycle |
+| **Hidden-child inflation** | Children with `visible = false` contribute to min-size during synchronous `add_child()`; only excluded in the deferred layout pass | Panel inflates to ~648 px (all sections) instead of ~120 px (visible only) |
+
+The deferred layout pass that corrects hidden-child inflation fires
+automatically the **first** time a panel becomes visible, but is
+**not re-scheduled on panel reuse** — the second and subsequent attacks
+retain the inflated size permanently.
+
+### 8.10.2 Solution Pattern
+
+A four-step reset sequence applied in `_build_ui()` and every `show_*()`
+method:
+
+```
+_clear_content()          ← remove_child() before queue_free()
+size = Vector2.ZERO       ← zero stale cached height
+offset_top/bottom = -40   ← re-pin canonical offsets (counteracts drift)
+_request_deferred_layout()← call_deferred forces re-layout next frame
+```
+
+> Full pattern with code examples: `.skills/ui_styling.md` § 10.
+
+### 8.10.3 Affected Components
+
+- `src/ui/attack_sim_panel.gd` — attack execution / simulator panel
+- `src/ui/activation_modal.gd` — ship activation step tracker
+- `src/ui/squadron_activation_modal.gd` — squadron activation flow
+
+### 8.10.4 Key Insight
+
+Godot's anchor/offset system is **bidirectional**: changing `size`
+recalculates offsets, and changing offsets recalculates size.  When
+resetting a reused panel, both must be set in the correct order
+(size first, then offsets) within the same frame to avoid accumulating
+drift.  A deferred layout reset on the next frame handles the
+hidden-child inflation that cannot be resolved synchronously.

@@ -75,11 +75,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Builds the entire modal UI from the targeting results.
 func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
-	# Clear old content.
-	if _scroll:
-		_scroll.queue_free()
-		_scroll = null
-		_content = null
+	# Clear old content — remove + queue_free all children so stale nodes
+	# don't inflate the PanelContainer's minimum size.
+	for child: Node in get_children():
+		remove_child(child)
+		child.queue_free()
+	_scroll = null
+	_content = null
 	# Panel style (standard modal).
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)

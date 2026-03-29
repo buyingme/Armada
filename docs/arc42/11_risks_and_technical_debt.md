@@ -19,6 +19,7 @@
 | TD-3 | No data import pipeline from source rules | Medium | Build JSON → Resource converter during data phase |
 | TD-4 | 59 functions exceed the 30-line guideline (across ~20 files) | Medium | Growth from 48→59 during Phase 5a/5b (maneuver tool scene, activation modal, ship token drawing). Most are UI construction or draw methods. Refactor incrementally when touched; extract helper methods where clarity improves. Not blocking — UI builders lose locality if over-decomposed. |
 | TD-5 | `UpgradeData` resource class unused in production code | Low | Placeholder for Phase 7 (Upgrade Cards). Keep as-is until needed. |
+| TD-6 | Reusable anchor-based panels may flash at inflated size for one frame before deferred layout correction | Low | Cosmetic only — the `_request_deferred_layout()` pattern (ADR-011) corrects sizing on the next frame. If noticeable, mitigate by creating hidden sections lazily instead of pre-building them in `_build_ui()`. |
 
 > **Note:** This section will be updated as the project evolves.
-> **Last audit:** Phase 5b complete — 56 src files (12,659 lines), 50 test files (10,094 lines), 847 tests passing across 50 scripts, 1,635 asserts. Architecture compliance, static typing, and doc comment coverage all PASS.
+> **Last audit:** Phase 6c complete — modal layout reset pattern documented (ADR-011). Architecture compliance, static typing, and doc comment coverage all PASS.

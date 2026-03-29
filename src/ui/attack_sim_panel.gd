@@ -212,6 +212,7 @@ func show_initial() -> void:
 	_build_ui()
 	_set_prompt("Attack Simulator", INITIAL_PROMPT)
 	visible = true
+	_request_deferred_layout()
 
 
 ## Builds the panel UI in attack execution mode with initial hull zone prompt.
@@ -222,6 +223,7 @@ func show_initial_attack_exec(ship_name: String) -> void:
 	_set_prompt("%s — Attack" % ship_name,
 			"Select attacking hull zone.")
 	visible = true
+	_request_deferred_layout()
 
 
 ## Builds the panel UI in attack execution mode for a squadron attacker.
@@ -233,6 +235,7 @@ func show_initial_squadron_exec(squad_name: String) -> void:
 	_build_ui()
 	_set_prompt("Attacking: %s" % squad_name, "Select a target.")
 	visible = true
+	_request_deferred_layout()
 
 
 ## Updates the panel to show attacker confirmation for a hull zone.
@@ -355,6 +358,23 @@ func get_body_text() -> String:
 # UI Construction
 # =========================================================================
 
+## Schedules a one-frame-deferred layout reset.  Hidden children inflate
+## the PanelContainer to ~648 px during the synchronous add_child() pass.
+## Godot only excludes them in the deferred layout pass that fires when the
+## panel first becomes visible — but on a *reuse* (already shown once) no
+## such pass is scheduled automatically.  This helper forces it.
+func _request_deferred_layout() -> void:
+	call_deferred("_deferred_layout_reset")
+
+
+## Resets size + offsets on the next frame so the panel shrinks to fit
+## only its visible children.
+func _deferred_layout_reset() -> void:
+	size = Vector2.ZERO
+	offset_top = -40.0
+	offset_bottom = -40.0
+
+
 ## Sets bottom-centre anchoring once — must not be called from _build_ui
 ## to avoid Godot offset recalculation on repeated anchor writes.
 func _apply_anchor_position() -> void:
@@ -375,6 +395,13 @@ func _apply_anchor_position() -> void:
 ## Builds the panel structure and applies standard modal styling.
 func _build_ui() -> void:
 	_clear_content()
+	# First zero the cached size (prevents the PanelContainer from
+	# retaining its old expanded height, e.g. 648 px from a previous
+	# attack).  This shifts offsets as a side-effect, so we immediately
+	# re-pin them to the canonical -40 values afterwards.
+	size = Vector2.ZERO
+	offset_top = -40.0
+	offset_bottom = -40.0
 	# Panel style (standard modal).
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
@@ -386,6 +413,11 @@ func _build_ui() -> void:
 	# Content container.
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 8)
+	# Set explicit min-width so autowrap labels can compute correct heights
+	# during the first layout pass (before the PanelContainer propagates width).
+	var _margin_h: float = 32.0  # 16 px content-margin on each side
+	_content.custom_minimum_size.x = maxf(
+			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(_content)
 	# Title label.
 	_title_label = Label.new()
@@ -596,6 +628,8 @@ func _build_ui() -> void:
 	_damage_info_container.add_child(_damage_info_label)
 
 
+
+
 ## Updates the title and body text.
 func _set_prompt(title: String, body: String) -> void:
 	if _title_label:
@@ -605,8 +639,11 @@ func _set_prompt(title: String, body: String) -> void:
 
 
 ## Removes all content children.
+## Uses remove_child() before queue_free() so the old VBox is excluded
+## from PanelContainer's minimum-size computation immediately.
 func _clear_content() -> void:
 	if _content:
+		remove_child(_content)
 		_content.queue_free()
 		_content = null
 		_title_label = null

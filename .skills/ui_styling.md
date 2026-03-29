@@ -170,6 +170,107 @@ Every modal must provide a way to close / leave it:
 
 ---
 
+## 10. Reusable Anchor-Based Panels — Layout Reset Pattern
+
+### Problem
+
+`PanelContainer` modals positioned via `PRESET_CENTER_BOTTOM` (or any
+anchor preset) and reused across multiple game phases exhibit **three
+interrelated Godot layout bugs**:
+
+1. **Stale `.size`:** After a previous session inflated the panel (e.g.
+   dice + defense + redirect sections → 648 px), the `.size` property
+   retains that value even after all children are removed.
+2. **Offset drift:** Setting `size = Vector2.ZERO` on an anchor-based
+   control causes Godot to **recalculate offsets** to preserve the
+   current screen position.  Each reopen adds the old height to the
+   offset, accumulating drift (~388 px per cycle).
+3. **Hidden-child inflation:** Children created with `visible = false`
+   still contribute to `PanelContainer`'s minimum-size computation
+   during the **synchronous** `add_child()` call.  Godot only excludes
+   them in the **deferred** layout pass.  The first time a panel
+   becomes visible, Godot schedules that deferred pass automatically.
+   On panel **reuse** (already shown once), no such pass is scheduled —
+   so the 648 px sticks permanently.
+
+### Required Pattern
+
+Apply **all three steps** in this exact order inside `_build_ui()` and
+the `show_*()` methods:
+
+```gdscript
+## In _build_ui():
+func _build_ui() -> void:
+    _clear_content()                     # 1. Remove old children first
+    size = Vector2.ZERO                  # 2. Zero stale cached size
+    offset_top = -40.0                   # 3. Re-pin canonical offsets
+    offset_bottom = -40.0                #    (counteracts drift from step 2)
+    # … add children …
+
+## In every show_*() method:
+func show_initial_attack_exec(ship_name: String) -> void:
+    _build_ui()
+    _set_prompt(…)
+    visible = true
+    _request_deferred_layout()           # 4. Force deferred re-layout
+```
+
+The deferred helper:
+
+```gdscript
+## Schedules a one-frame-deferred layout reset.
+## Needed because hidden children inflate the PanelContainer during
+## synchronous add_child(); Godot only excludes them in the deferred
+## layout pass — which is not auto-scheduled on panel reuse.
+func _request_deferred_layout() -> void:
+    call_deferred("_deferred_layout_reset")
+
+func _deferred_layout_reset() -> void:
+    size = Vector2.ZERO
+    offset_top = -40.0
+    offset_bottom = -40.0
+```
+
+### Why each step matters
+
+| Step | Without it | Symptom |
+|------|-----------|---------|
+| `_clear_content()` with `remove_child()` | Old VBox stays in tree during rebuild | Stale minimum-size doubles the panel height |
+| `size = Vector2.ZERO` | PanelContainer keeps inflated height from previous session | Panel appears at old (large) size |
+| Offset re-pin (`-40.0`) | `size = Vector2.ZERO` corrupts offsets via Godot's recalc | Panel drifts off-screen (~388 px per reopen) |
+| `_request_deferred_layout()` | Hidden children inflate to ~648 px; no deferred pass corrects it on reuse | Panel too tall, extends above viewport |
+| `remove_child()` before `queue_free()` | `queue_free()` is deferred — child is still in tree during current frame | PanelContainer reports stale minimum size |
+
+### `_clear_content()` pattern
+
+Always `remove_child()` before `queue_free()`:
+
+```gdscript
+func _clear_content() -> void:
+    if _content:
+        remove_child(_content)      # Exclude from min-size NOW
+        _content.queue_free()       # Actual cleanup is deferred
+        _content = null
+```
+
+### Checklist for reusable anchor-based panels
+
+- [ ] `_clear_content()` uses `remove_child()` before `queue_free()`
+- [ ] `_build_ui()` resets `size = Vector2.ZERO` then re-pins offsets
+- [ ] VBoxContainer child gets explicit `custom_minimum_size.x`
+- [ ] Every `show_*()` method calls `_request_deferred_layout()` after `visible = true`
+- [ ] Anchors / presets are set only once in `_init()` via `_apply_anchor_position()`
+
+### Files using this pattern
+
+| File | Panel type |
+|------|-----------|
+| `src/ui/attack_sim_panel.gd` | Attack execution / simulator |
+| `src/ui/activation_modal.gd` | Ship activation sequence |
+| `src/ui/squadron_activation_modal.gd` | Squadron activation |
+
+---
+
 ## Checklist for New UI Elements
 
 Before committing any new `PanelContainer` modal or overlay:

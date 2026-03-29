@@ -190,6 +190,13 @@ func _apply_anchor_position() -> void:
 ## (see .skills/ui_styling.md §1, §3, §4).
 func _build_ui() -> void:
 	_clear_ui()
+	# First zero the cached size (prevents the PanelContainer from
+	# retaining its old expanded height from a previous activation).
+	# This shifts offsets as a side-effect, so we immediately re-pin
+	# them to the canonical -40 values afterwards.
+	size = Vector2.ZERO
+	offset_top = -40.0
+	offset_bottom = -40.0
 
 	# Panel style — identical to AttackSimPanel / CommandDialPicker.
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -202,6 +209,11 @@ func _build_ui() -> void:
 
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
+	# Explicit min-width prevents autowrap labels from reporting a huge
+	# minimum height before the PanelContainer propagates its width.
+	var _margin_h: float = 32.0  # 16 px content-margin on each side
+	vbox.custom_minimum_size.x = maxf(
+			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(vbox)
 
 	# Title — ship name.
@@ -323,8 +335,11 @@ func _create_step_row(step_index: int) -> PanelContainer:
 
 
 ## Clears all children from the modal.
+## Uses remove_child() before queue_free() so old children are excluded
+## from PanelContainer's minimum-size computation immediately.
 func _clear_ui() -> void:
 	for child: Node in get_children():
+		remove_child(child)
 		child.queue_free()
 	_step_rows.clear()
 	_step_container = null

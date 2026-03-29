@@ -154,6 +154,36 @@ signal command_dial_order_requested(ship_instance: RefCounted)
 
 # --- Turn Management Events (Phase 4b) ---
 
+# --- Repair Command Events (Phase 9) ---
+
+## Emitted when shields are moved between zones via the repair command.
+## [param ship_instance] — the ship whose shields changed.
+## [param from_zone] — source hull zone String key.
+## [param to_zone] — destination hull zone String key.
+## Rules Reference: CM-033.
+signal repair_shields_moved(ship_instance: RefCounted, from_zone: String, to_zone: String)
+
+## Emitted when a shield is recovered on a zone via the repair command.
+## [param ship_instance] — the ship.
+## [param zone] — the hull zone String key.
+## Rules Reference: CM-034.
+signal repair_shields_recovered(ship_instance: RefCounted, zone: String)
+
+## Emitted when a damage card is discarded via the repair command.
+## [param ship_instance] — the ship.
+## [param card] — the DamageCard that was discarded.
+## Rules Reference: CM-035.
+signal repair_card_discarded(ship_instance: RefCounted, card: RefCounted)
+
+## Emitted when the repair command resolution is complete.
+## [param ship_instance] — the ship.
+## [param points_spent] — total engineering points spent.
+## Rules Reference: CM-037.
+signal repair_command_resolved(ship_instance: RefCounted, points_spent: int)
+
+
+# --- Turn Management Events (original Phase 4b) ---
+
 ## Emitted when the active player changes.
 ## [param player_index] — the new active player (0 or 1).
 ## Requirements: TF-001 — only the active player can interact.

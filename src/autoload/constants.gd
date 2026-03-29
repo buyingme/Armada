@@ -142,6 +142,18 @@ const COMMAND_VALUE_SMALL: int = 1
 const COMMAND_VALUE_MEDIUM: int = 2
 const COMMAND_VALUE_LARGE: int = 3
 
+## --- Repair (Engineering) Command Costs ---
+## Rules Reference: RRG "Engineering", p.4; CM-033–CM-035.
+
+## Cost to move 1 shield between adjacent zones (reduce source, increase target).
+const REPAIR_MOVE_SHIELDS_COST: int = 1
+
+## Cost to recover 1 shield point on any hull zone.
+const REPAIR_RECOVER_SHIELDS_COST: int = 2
+
+## Cost to discard 1 faceup or facedown damage card.
+const REPAIR_HULL_COST: int = 3
+
 
 ## Returns the maximum speed for a given ship size.
 static func get_max_speed(ship_size: ShipSize) -> int:

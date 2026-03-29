@@ -131,6 +131,23 @@ func add_faceup_damage(card: RefCounted) -> void:
 	faceup_damage.append(card)
 
 
+## Removes a specific damage card from this ship's damage arrays.
+## Searches faceup first, then facedown. Returns true if the card was found
+## and removed. The caller is responsible for discarding the card back to
+## the DamageDeck.
+## Rules Reference: CM-035 — repair hull discards a damage card.
+func remove_damage_card(card: RefCounted) -> bool:
+	var idx: int = faceup_damage.find(card)
+	if idx >= 0:
+		faceup_damage.remove_at(idx)
+		return true
+	idx = facedown_damage.find(card)
+	if idx >= 0:
+		facedown_damage.remove_at(idx)
+		return true
+	return false
+
+
 ## Restores shields in the given hull zone by [amount], clamped to max.
 ## Returns the actual amount restored.
 ## Rules Reference: "Engineering", repair shields.

@@ -38,8 +38,8 @@ func _make_ship_instance() -> ShipInstance:
 	sd.command_value = 2
 	sd.squadron_value = 2
 	sd.engineering_value = 3
-	sd.speed_chart = [[1], [1, 1], [1, 1, 1]]
-	var si: ShipInstance = ShipInstance.create_from_data("test_ship", sd, 0)
+	sd.navigation_chart = [[1], [1, 1], [1, 1, 1]]
+	var si: ShipInstance = ShipInstance.create_from_data("test_ship", sd, 0, 0)
 	return si
 
 

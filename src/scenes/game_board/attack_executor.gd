@@ -2232,6 +2232,9 @@ func _resolve_ship_damage(damage: int) -> void:
 			_attack_exec_dice_results)
 	var first_card_faceup: bool = (has_crit
 			and not _attack_exec_contain_used)
+	_log.info("Damage cards: remaining=%d, has_crit=%s, contain=%s, "
+			% [remaining, has_crit, _attack_exec_contain_used]
+			+ "first_faceup=%s." % first_card_faceup)
 	# Hook: ATTACK_RESOLVE_CRITICAL — Targeter Disruption can block critical.
 	if first_card_faceup and _effect_registry:
 		var crit_ctx: EffectContext = EffectContext.new()
@@ -2247,6 +2250,7 @@ func _resolve_ship_damage(damage: int) -> void:
 	var cards_dealt: int = 0
 	var faceup_card_name: String = ""
 	for i: int in range(remaining):
+		_log.info("Dealing card %d/%d …" % [i + 1, remaining])
 		if _damage_deck == null:
 			_log.error("No damage deck available!")
 			break
@@ -2254,19 +2258,25 @@ func _resolve_ship_damage(damage: int) -> void:
 		if card == null:
 			_log.error("Damage deck is empty!")
 			break
+		_log.info("Drew card: '%s' [%s] (timing=%s, effect_id=%s)."
+				% [card.title, card.trait_type, card.timing,
+				card.effect_id])
 		if i == 0 and first_card_faceup:
 			card.is_faceup = true
 			def_inst.add_faceup_damage(card)
 			faceup_card_name = card.title
+			_log.info("Faceup card added to ship damage list.")
 			# Register persistent damage card effect (DM-005).
 			if _effect_registry and DamageCardEffectFactory.is_persistent(card):
 				DamageCardEffectFactory.register_effect(
 						card, def_inst, _effect_registry)
+				_log.info("Persistent effect registered for '%s'."
+						% card.title)
 			# Emit signal so other systems can react to the faceup card.
 			EventBus.damage_card_flipped.emit(def_inst, card, true)
 			_log.info(
 					"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
-					% [card.title, card.card_trait])
+					% [card.title, card.trait_type])
 			# Resolve immediate effect if applicable (DM-005).
 			_resolve_immediate_card_effect(card, def_inst)
 		else:
@@ -2275,6 +2285,7 @@ func _resolve_ship_damage(damage: int) -> void:
 					"Dealt facedown damage card #%d to %s."
 					% [i + 1, def_inst.ship_data.ship_name])
 		cards_dealt += 1
+	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
 	if cards_dealt > 0:
 		var new_hull: int = def_inst.ship_data.hull - (
 				def_inst.get_total_damage())

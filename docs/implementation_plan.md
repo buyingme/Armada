@@ -1449,6 +1449,10 @@ game logic was altered — pure structural refactoring.
 | Movement preview polish | Presentation | UI-010 | Smooth ghost, snap-to-valid |
 | Range ruler tool (player-draggable) | Presentation | UI-012 | Measurement overlay |
 | Turn order sidebar | Presentation | UI-014 | Activation status for all units |
+| Fix Shield Failure card effect (multi-zone, −1 shield each) | Core | DM-010–015 | `ImmediateEffectResolver`, choice model, updated tests |
+| Fix Injured Crew card effect (discard defense token) | Core | — | `ImmediateEffectResolver`, updated tests |
+| Fix Comm Noise card effect (reduce speed or change dial) | Core | — | `ImmediateEffectResolver`, updated tests |
+| Opponent choice UI for immediate damage cards | Presentation | DM-011 | Zone/token picker modal for opponent |
 | Network message protocol | Application | NW-001–008 | Message types for all sync points |
 | Server-side RNG | Core | NW-004 | Dice roll authority on server |
 | State snapshot & reconnection | Application | NW-006 | Full GameState serialization for rejoin |

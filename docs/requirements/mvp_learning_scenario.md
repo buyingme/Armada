@@ -405,6 +405,26 @@ All ship/squadron data is sourced from the verified JSON files in `Resources/Gam
 | DM-008 | If no cards remain in the damage deck, shuffle the discard pile to form a new deck. | RRG "Damage" |
 | DM-009 | Each damage card has either the "Ship" or "Crew" trait (no inherent effect in MVP, but must be tracked). | RRG "Damage" |
 
+### 11.1a Immediate Damage Card Effects — Shield Failure
+
+Card text: *"Your opponent may choose up to 2 of your hull zones. Each of the chosen hull zones loses 1 shield. Then flip this card facedown."*
+FAQ: *"Ignore Luke Skywalker's ability while resolving this and 'Projector Misaligned' damage card effects."*
+
+| ID | Requirement | Rules Source |
+|----|-------------|-------------- |
+| DM-010 | Shield Failure is an **immediate** effect: it resolves the instant the card is dealt faceup, before the next damage card is dealt. | RRG "Damage Cards", p.4 |
+| DM-011 | The **opponent** (not the damaged ship's owner) makes the zone choice. In hot-seat mode the current attacker is the opponent. | Shield Failure card text |
+| DM-012 | The opponent may choose **up to 2** hull zones (i.e., 0, 1, or 2). "May" means the opponent can choose to affect zero zones. | Shield Failure card text |
+| DM-013 | Each chosen hull zone loses exactly **1 shield** (not all shields). If a zone has 0 shields it is still a legal choice but nothing changes. | Shield Failure card text |
+| DM-014 | The same hull zone **cannot** be chosen twice for a single Shield Failure resolution. | Implicit: "choose up to 2 of your hull zones" implies distinct zones. |
+| DM-015 | After resolving, the card is flipped **facedown** and moved from the faceup to facedown damage list. | Shield Failure card text |
+
+> **Known defect (Phase 9d):** The current `ImmediateEffectResolver._resolve_shield_failure()` incorrectly zeros **all** shields in a **single** chosen zone instead of removing 1 shield from up to 2 zones. The choice model also only supports single-select. See implementation plan for the fix task.
+
+> **Related card-text deviations (flagged for future correction):**
+> - **Injured Crew** — Should *"Choose and discard 1 of your defense tokens"* (current impl offers exhaust as an alternative, which is wrong).
+> - **Comm Noise** — Should *"Your opponent may either reduce your speed by 1 or choose a new command on your top command dial"* (current impl discards dial/token instead).
+
 ### 11.2 Squadron Damage
 
 | ID | Requirement | Rules Source |

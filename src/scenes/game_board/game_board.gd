@@ -90,6 +90,10 @@ var _your_turn_banner: YourTurnBanner = null
 ## Requirements: WN-001–004.
 var _victory_screen: VictoryScreen = null
 
+## Scoring calculator for live HUD score display.
+## Requirements: GF-001–004.
+var _scoring: ScoringCalculator = ScoringCalculator.new()
+
 ## "End Activation" button (Ship / Squadron Phases).
 ## Requirements: TF-005, TF-011.
 var _end_activation_button: EndActivationButton = null
@@ -455,6 +459,9 @@ func _connect_signals() -> void:
 	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
 	# Game end (Phase 8).
 	EventBus.game_ended.connect(_on_game_ended)
+	# Live score updates in HUD (Phase 8c).
+	EventBus.ship_destroyed.connect(_on_score_changed)
+	EventBus.squadron_destroyed.connect(_on_score_changed)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -923,22 +930,40 @@ func _create_phase_hud() -> void:
 # ---------------------------------------------------------------------------
 
 ## Updates the phase HUD label text and position.
+## Displays round, phase, and live scores for both players.
+## Format: "Round 3 — Ship Phase  |  Rebel: 42  |  Imperial: 0"
+## Requirements: GF-001–004, UI-003.
 func _update_phase_hud() -> void:
 	if _phase_hud_label == null:
 		return
 	var round_num: int = GameManager.get_current_round()
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
 	var phase_name: String = PHASE_NAMES.get(phase, "Unknown")
+	var base_text: String = ""
 	if round_num > 0:
-		_phase_hud_label.text = "Round %d — %s" % [round_num, phase_name]
+		base_text = "Round %d — %s" % [round_num, phase_name]
 	else:
-		_phase_hud_label.text = phase_name
+		base_text = phase_name
+	# Append live scores when a game is in progress.
+	# Player 0 = Rebel Alliance, Player 1 = Galactic Empire.
+	var state: GameState = GameManager.current_game_state
+	if state != null:
+		var rebel_score: int = _scoring.calculate_score(0, state)
+		var imperial_score: int = _scoring.calculate_score(1, state)
+		base_text += "  |  Rebel: %d  |  Imperial: %d" % [
+				rebel_score, imperial_score]
+	_phase_hud_label.text = base_text
 	# Centre the label horizontally.
 	var vp_size: Vector2 = Vector2(1280, 720)
 	if is_inside_tree():
 		vp_size = get_viewport().get_visible_rect().size
 	_phase_hud_label.position = Vector2(
 			(vp_size.x - _phase_hud_label.size.x) * 0.5, 8)
+
+
+## Called when a ship or squadron is destroyed — refreshes the HUD scores.
+func _on_score_changed(_token: Node) -> void:
+	_update_phase_hud()
 
 
 # ---------------------------------------------------------------------------

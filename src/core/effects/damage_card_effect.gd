@@ -339,5 +339,5 @@ func _resolve_crew_panic(context: EffectContext) -> void:
 ## Power Failure: halve engineering value (rounded down), stackable.
 func _resolve_power_failure(context: EffectContext) -> void:
 	var eng: int = int(context.get_meta_value("engineering_value", 0))
-	eng = eng / 2  # Integer division = floor.
+	eng = eng / 2 # Integer division = floor.
 	context.set_meta_value("engineering_value", eng)

@@ -90,6 +90,9 @@ var _camera: BoardCamera = null
 ## Shared damage deck for the game.
 var _damage_deck: DamageDeck = null
 
+## Resolver for immediate faceup damage card effects (DM-005).
+var _immediate_resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("AttackExecutor")
 
@@ -2242,6 +2245,7 @@ func _resolve_ship_damage(damage: int) -> void:
 			first_card_faceup = false
 			_log.info("Critical effect blocked by damage card effect.")
 	var cards_dealt: int = 0
+	var faceup_card_name: String = ""
 	for i: int in range(remaining):
 		if _damage_deck == null:
 			_log.error("No damage deck available!")
@@ -2253,15 +2257,23 @@ func _resolve_ship_damage(damage: int) -> void:
 		if i == 0 and first_card_faceup:
 			card.is_faceup = true
 			def_inst.add_faceup_damage(card)
+			faceup_card_name = card.title
 			# Register persistent damage card effect (DM-005).
 			if _effect_registry and DamageCardEffectFactory.is_persistent(card):
 				DamageCardEffectFactory.register_effect(
 						card, def_inst, _effect_registry)
+			# Emit signal so other systems can react to the faceup card.
+			EventBus.damage_card_flipped.emit(def_inst, card, true)
 			_log.info(
-					"Dealt faceup damage card: %s (standard critical)."
-					% card.title)
+					"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
+					% [card.title, card.card_trait])
+			# Resolve immediate effect if applicable (DM-005).
+			_resolve_immediate_card_effect(card, def_inst)
 		else:
 			def_inst.add_facedown_damage(card)
+			_log.info(
+					"Dealt facedown damage card #%d to %s."
+					% [i + 1, def_inst.ship_data.ship_name])
 		cards_dealt += 1
 	if cards_dealt > 0:
 		var new_hull: int = def_inst.ship_data.hull - (
@@ -2270,11 +2282,17 @@ func _resolve_ship_damage(damage: int) -> void:
 		EventBus.ship_damaged.emit(
 				_attack_sim_def_ship, cards_dealt,
 				_attack_sim_def_zone as Constants.HullZone)
+		_log.info("Hull remaining: %d/%d after %d card(s) dealt to %s." % [
+				new_hull, def_inst.ship_data.hull, cards_dealt,
+				def_inst.ship_data.ship_name])
 	# Build damage summary.
-	var summary: String = "%s: %d shield, %d cards" % [
+	var summary: String = "%s: %d shield, %d card(s)" % [
 			def_zone_str, shield_absorbed, cards_dealt]
-	if first_card_faceup and cards_dealt > 0:
-		summary += " (1st faceup)"
+	if faceup_card_name != "":
+		summary += " — CRIT: %s" % faceup_card_name
+	var hull_remaining: int = def_inst.ship_data.hull - (
+			def_inst.get_total_damage())
+	summary += " | Hull %d/%d" % [hull_remaining, def_inst.ship_data.hull]
 	if _attack_sim_panel:
 		_attack_sim_panel.show_damage_info(summary)
 	_log.info("Damage resolved: %s" % summary)
@@ -2285,6 +2303,48 @@ func _resolve_ship_damage(damage: int) -> void:
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
 		EventBus.ship_destroyed.emit(_attack_sim_def_ship)
 		_fade_out_token(_attack_sim_def_ship)
+
+
+## Resolves the immediate one-shot effect of a faceup damage card, if any.
+## Auto-resolve cards (Structural Damage, Projector Misaligned, Life Support
+## Failure) are handled immediately. Choice cards (Injured Crew, Shield
+## Failure, Comm Noise) auto-resolve with the first available option for now.
+## Rules Reference: RRG "Damage Cards", p.4; DM-005.
+func _resolve_immediate_card_effect(card: DamageCard,
+		ship: ShipInstance) -> void:
+	if not ImmediateEffectResolver.is_immediate(card):
+		return
+	var choice_info: Dictionary = _immediate_resolver.get_required_choice(
+			card, ship)
+	if choice_info.is_empty():
+		# Auto-resolve (no opponent choice needed).
+		var ok: bool = _immediate_resolver.resolve(
+				card, ship, _damage_deck)
+		if ok:
+			_log.info("Immediate effect resolved: '%s'." % card.title)
+		else:
+			_log.warn("Immediate effect failed: '%s'." % card.title)
+		return
+	# Choice-based card — pick the first available option automatically.
+	# TODO: Present a choice UI to the opponent (Phase 10 UI polish).
+	var options: Array = choice_info.get("options", [])
+	var selected: Dictionary = {}
+	for opt: Dictionary in options:
+		if opt.get("available", false):
+			selected = {"id": opt.get("id", "")}
+			break
+	if selected.is_empty():
+		_log.warn("No available choice for '%s'. " % card.title +
+				"Auto-resolving without choice.")
+		_immediate_resolver.resolve(card, ship, _damage_deck)
+		return
+	var ok: bool = _immediate_resolver.resolve(
+			card, ship, _damage_deck, selected)
+	if ok:
+		_log.info("Immediate effect resolved: '%s' (auto-chose '%s')." % [
+				card.title, selected.get("id", "")])
+	else:
+		_log.warn("Immediate effect failed: '%s'." % card.title)
 
 
 ## Waits briefly to show the damage info, then proceeds to finalize.

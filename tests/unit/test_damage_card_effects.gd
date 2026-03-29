@@ -252,7 +252,7 @@ func test_damaged_munitions_removes_one_die() -> void:
 	var e: DamageCardEffect = _make_effect("damaged_munitions", ship)
 	var ctx: EffectContext = _make_context(&"ATTACK_GATHER_DICE")
 	ctx.attacker = ship
-	ctx.dice_pool = {0: 2, 1: 1}  # 2 red, 1 blue
+	ctx.dice_pool = {0: 2, 1: 1} # 2 red, 1 blue
 	e.resolve(ctx)
 	var total: int = 0
 	for count: Variant in ctx.dice_pool.values():

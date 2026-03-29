@@ -126,7 +126,7 @@ func test_even_engineering_value_token_calculation() -> void:
 
 func test_move_shields_costs_one_point() -> void:
 	var ship: ShipInstance = _make_ship(4, true, false)
-	ship.reduce_shields("REAR", 1)  # REAR now 0/1 — can receive.
+	ship.reduce_shields("REAR", 1) # REAR now 0/1 — can receive.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	var result: bool = resolver.move_shields("FRONT", "REAR")
@@ -137,7 +137,7 @@ func test_move_shields_costs_one_point() -> void:
 
 func test_move_shields_updates_ship_shields() -> void:
 	var ship: ShipInstance = _make_ship(4, true, false)
-	ship.reduce_shields("REAR", 1)  # REAR now 0/1.
+	ship.reduce_shields("REAR", 1) # REAR now 0/1.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	resolver.move_shields("FRONT", "REAR")
@@ -177,7 +177,7 @@ func test_move_shields_fails_same_zone() -> void:
 func test_move_shields_fails_insufficient_points() -> void:
 	# Token only with eng_value=1 → ceil(1/2) = 1 point. Spend it.
 	var ship: ShipInstance = _make_ship(1, false, true, 3, 2, 2, 0)
-	ship.reduce_shields("LEFT", 1)  # LEFT now 1.
+	ship.reduce_shields("LEFT", 1) # LEFT now 1.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	# Spend the 1 point on a move.
@@ -190,7 +190,7 @@ func test_move_shields_fails_insufficient_points() -> void:
 func test_move_shields_works_to_non_full_zone() -> void:
 	# Damage FRONT shields so it can receive.
 	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 2, 1)
-	ship.reduce_shields("FRONT", 2)  # FRONT now 1/3.
+	ship.reduce_shields("FRONT", 2) # FRONT now 1/3.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	var result: bool = resolver.move_shields("LEFT", "FRONT")
@@ -208,7 +208,7 @@ func test_move_shields_works_to_non_full_zone() -> void:
 
 func test_recover_shields_costs_two_points() -> void:
 	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 2, 1)
-	ship.reduce_shields("FRONT", 1)  # FRONT now 2/3.
+	ship.reduce_shields("FRONT", 1) # FRONT now 2/3.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	var result: bool = resolver.recover_shields("FRONT")
@@ -219,7 +219,7 @@ func test_recover_shields_costs_two_points() -> void:
 
 func test_recover_shields_updates_ship() -> void:
 	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 2, 1)
-	ship.reduce_shields("FRONT", 2)  # FRONT now 1/3.
+	ship.reduce_shields("FRONT", 2) # FRONT now 1/3.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	resolver.recover_shields("FRONT")
@@ -327,8 +327,8 @@ func test_repair_hull_fails_insufficient_points() -> void:
 func test_multiple_effects_in_sequence() -> void:
 	# eng_value=4, dial = 4 points. Spend: move(1) + recover(2) = 3.
 	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 2, 1)
-	ship.reduce_shields("FRONT", 2)  # FRONT now 1/3.
-	ship.reduce_shields("LEFT", 1)   # LEFT now 1/2.
+	ship.reduce_shields("FRONT", 2) # FRONT now 1/3.
+	ship.reduce_shields("LEFT", 1) # LEFT now 1/2.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	# Move (1 pt): LEFT → FRONT.
@@ -346,8 +346,8 @@ func test_multiple_effects_in_sequence() -> void:
 func test_same_effect_multiple_times() -> void:
 	# eng_value=4, dial = 4 points. Move 4 times.
 	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 2, 1)
-	ship.reduce_shields("FRONT", 3)  # FRONT now 0/3.
-	ship.reduce_shields("REAR", 1)   # REAR now 0/1.
+	ship.reduce_shields("FRONT", 3) # FRONT now 0/3.
+	ship.reduce_shields("REAR", 1) # REAR now 0/1.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	# Move LEFT→FRONT 2 times.
@@ -386,7 +386,7 @@ func test_finalize_spends_token_only_when_used() -> void:
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	# Spend exactly dial points (4) — token should NOT be consumed.
-	ship.reduce_shields("FRONT", 3)  # FRONT 0/3.
+	ship.reduce_shields("FRONT", 3) # FRONT 0/3.
 	resolver.move_shields("LEFT", "FRONT")
 	resolver.move_shields("LEFT", "FRONT")
 	resolver.move_shields("RIGHT", "FRONT")
@@ -399,14 +399,14 @@ func test_finalize_spends_token_only_when_used() -> void:
 
 func test_finalize_spends_token_when_exceeding_dial() -> void:
 	var ship: ShipInstance = _make_ship(4, true, true)
-	ship.reduce_shields("FRONT", 3)  # FRONT 0/3.
+	ship.reduce_shields("FRONT", 3) # FRONT 0/3.
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	# Total = 6 points (4 dial + 2 token). Spend 5.
-	resolver.move_shields("LEFT", "FRONT")  # 1 pt
-	resolver.move_shields("LEFT", "FRONT")  # 1 pt
-	resolver.move_shields("RIGHT", "FRONT")  # 1 pt -> FRONT now 3/3
-	resolver.recover_shields("LEFT")  # 2 pts -> LEFT 0→1 (was 0 after moves)
+	resolver.move_shields("LEFT", "FRONT") # 1 pt
+	resolver.move_shields("LEFT", "FRONT") # 1 pt
+	resolver.move_shields("RIGHT", "FRONT") # 1 pt -> FRONT now 3/3
+	resolver.recover_shields("LEFT") # 2 pts -> LEFT 0→1 (was 0 after moves)
 	# 5 points spent > 4 dial points. Token must be spent.
 	resolver.finalize()
 	assert_false(ship.command_tokens.has_token(Constants.CommandType.REPAIR),

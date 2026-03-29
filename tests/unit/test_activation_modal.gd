@@ -156,11 +156,12 @@ func test_attack_step_checkmarked_after_skip() -> void:
 
 
 func test_full_auto_skip_chain_skips_attack_step() -> void:
-	# Open from REVEAL with skip attack — should auto-skip all through
-	# SQUADRON, REPAIR, ATTACK and stop at MANEUVER.
+	# Open from REVEAL with skip attack and skip repair — should auto-skip
+	# all through SQUADRON, REPAIR, ATTACK and stop at MANEUVER.
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.REVEAL)
 	_modal.set_attack_skippable(true)
+	_modal.set_repair_skippable(true)
 	_modal.open(state)
 	# 3 steps × 0.3s = 0.9s; give 1.2s margin.
 	await get_tree().create_timer(1.2).timeout
@@ -173,6 +174,7 @@ func test_full_auto_skip_chain_stops_at_attack_when_not_skippable() -> void:
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.REVEAL)
 	_modal.set_attack_skippable(false)
+	_modal.set_repair_skippable(true)
 	_modal.open(state)
 	# 2 steps × 0.3s = 0.6s; give 1.0s margin.
 	await get_tree().create_timer(1.0).timeout

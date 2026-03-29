@@ -29,6 +29,9 @@ signal maneuver_commit_requested()
 ## Requirements: AE-ACT-001.
 signal attack_step_entered()
 
+## Emitted when the player clicks "Execute Repair ►" — starts repair flow.
+signal repair_step_entered()
+
 ## Emitted when the modal wants to auto-skip to maneuver (all placeholders done).
 signal ready_for_maneuver()
 
@@ -50,7 +53,7 @@ const STEP_NAMES: Array[String] = [
 ]
 
 ## Which steps are placeholders (not yet implemented).
-const PLACEHOLDER_STEPS: Array[int] = [1, 2] ## indices into STEP_NAMES
+const PLACEHOLDER_STEPS: Array[int] = [1] ## indices into STEP_NAMES
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ActivationModal")
@@ -80,12 +83,19 @@ var _execute_button: Button = null
 ## Requirements: AE-ACT-001.
 var _attack_button: Button = null
 
+## "Execute Repair" button inside the repair step row.
+var _repair_button: Button = null
+
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
 ## When true the Attack step is auto-skipped (no valid targets).
 ## Set by the game board via [method set_attack_skippable] before opening.
 var _skip_attack: bool = false
+
+## When true the Repair step is auto-skipped (no dial or token).
+## Set by the game board via [method set_repair_skippable] before opening.
+var _skip_repair: bool = false
 
 ## True once the maneuver tool has been shown (Execute pressed once).
 ## Second press commits the maneuver.
@@ -102,6 +112,13 @@ func _init() -> void:
 ## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 func set_attack_skippable(skip: bool) -> void:
 	_skip_attack = skip
+
+
+## Marks the Repair step as skippable (no repair dial or token).
+## Call this before [method open] so the auto-skip chain includes Repair.
+## Rules Reference: "Engineering", p.4 — only available with dial or token.
+func set_repair_skippable(skip: bool) -> void:
+	_skip_repair = skip
 
 
 ## Opens the modal for the given activation state.
@@ -325,6 +342,15 @@ func _create_step_row(step_index: int) -> PanelContainer:
 		_attack_button.pressed.connect(_on_attack_pressed)
 		hbox.add_child(_attack_button)
 
+	# For step 3 (Repair): add "Execute Repair" button.
+	if step_index == 2:
+		_repair_button = Button.new()
+		_repair_button.text = "Execute Repair ►"
+		_repair_button.custom_minimum_size = Vector2(130, 28)
+		_repair_button.visible = false
+		_repair_button.pressed.connect(_on_repair_pressed)
+		hbox.add_child(_repair_button)
+
 	# Status label (shows badge or checkmark).
 	var status: Label = Label.new()
 	status.name = "StatusLabel"
@@ -348,6 +374,7 @@ func _clear_ui() -> void:
 	_token_label = null
 	_execute_button = null
 	_attack_button = null
+	_repair_button = null
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +417,16 @@ func _update_step_display() -> void:
 			if i in PLACEHOLDER_STEPS:
 				status_label.text = "Not yet implemented"
 				status_label.modulate = Color(0.9, 0.7, 0.3)
+			elif i == 2:
+				# Repair step — show button or "No dial/token" badge.
+				if _skip_repair:
+					status_label.text = "No repair available"
+					status_label.modulate = Color(0.9, 0.7, 0.3)
+				else:
+					status_label.text = ""
+					if _repair_button:
+						_repair_button.visible = true
+						_repair_button.disabled = false
 			elif i == 3:
 				# Attack step — show button or "No targets" badge.
 				if _skip_attack:
@@ -424,6 +461,8 @@ func _update_step_display() -> void:
 				_execute_button.visible = false
 			if i == 3 and _attack_button:
 				_attack_button.visible = false
+			if i == 2 and _repair_button:
+				_repair_button.visible = false
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -507,6 +546,15 @@ func _on_attack_pressed() -> void:
 	modal_closed.emit()
 
 
+## Called when the "Execute Repair ►" button is pressed.
+## Emits [signal repair_step_entered] and closes the modal.
+func _on_repair_pressed() -> void:
+	_log.info("Execute Repair pressed — starting repair flow.")
+	repair_step_entered.emit()
+	close()
+	modal_closed.emit()
+
+
 ## Called when the "✕ Close" button is pressed.
 func _on_close_pressed() -> void:
 	close()
@@ -532,12 +580,15 @@ func _try_auto_skip_next() -> void:
 	if not _auto_skipping or _activation_state == null:
 		return
 	var current: int = int(_activation_state.get_current_step())
-	# Steps 1, 2 (SQUADRON, REPAIR) are placeholders — auto-skip them.
+	# Step 1 (SQUADRON) is a placeholder — auto-skip.
+	# Step 2 (REPAIR) is skipped when _skip_repair is true.
 	# Step 3 (ATTACK) is also skipped when _skip_attack is true.
-	if current in [ShipActivationState.Step.SQUADRON,
-			ShipActivationState.Step.REPAIR]:
+	if current == ShipActivationState.Step.SQUADRON:
 		_update_step_display()
-		# Use a short delay via a timer (0.3s) for visual feedback.
+		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
+		timer.timeout.connect(_auto_skip_current)
+	elif _skip_repair and current == ShipActivationState.Step.REPAIR:
+		_update_step_display()
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
 		timer.timeout.connect(_auto_skip_current)
 	elif _skip_attack and current == ShipActivationState.Step.ATTACK:

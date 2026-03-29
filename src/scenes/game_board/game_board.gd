@@ -153,6 +153,9 @@ var _show_activation_button: ShowActivationButton = null
 ## Requirements: ACT-001–004.
 var _activation_modal: ActivationModal = null
 
+## Repair panel modal (centred, used during Repair step).
+var _repair_panel: RepairPanel = null
+
 ## Current ship activation state tracker (nil when not in activation).
 ## Requirements: FLOW-004.
 var _ship_activation_state: ShipActivationState = null
@@ -609,6 +612,8 @@ func _on_viewport_resized() -> void:
 		_show_activation_button.update_position(vp_size)
 	if _activation_modal != null and _activation_modal.visible:
 		_activation_modal.centre_on_screen(vp_size)
+	if _repair_panel != null and _repair_panel.visible:
+		_repair_panel.centre_on_screen(vp_size)
 	if _show_squadron_modal_button != null:
 		_show_squadron_modal_button.update_position(vp_size)
 
@@ -883,9 +888,18 @@ func _create_turn_management_ui() -> void:
 			_on_execute_maneuver)
 	_activation_modal.attack_step_entered.connect(
 			_on_attack_step_entered)
+	_activation_modal.repair_step_entered.connect(
+			_on_repair_step_entered)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
+
+	# Phase 9: Repair panel (centred, same style as ActivationModal).
+	_repair_panel = RepairPanel.new()
+	_repair_panel.name = "RepairPanel"
+	_repair_panel.repair_done.connect(_on_repair_done)
+	_repair_panel.repair_skipped.connect(_on_repair_done)
+	layer.add_child(_repair_panel)
 
 	# Phase 7b: Squadron Activation Modal.
 	_squadron_modal = SquadronActivationModal.new()
@@ -1529,6 +1543,51 @@ func _on_attack_step_entered() -> void:
 		_attack_executor.start_ship_attack(_activating_ship_token)
 
 
+## Called when the player presses "Execute Repair ►" in the activation modal.
+## Creates a RepairResolver and opens the RepairPanel.
+## Rules Reference: RRG "Engineering", p.4; CM-030–CM-037.
+func _on_repair_step_entered() -> void:
+	_log.info("Repair step entered — opening RepairPanel.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		_log.info("Cannot start repair — no activation state or token.")
+		return
+	var ship: ShipInstance = _activating_ship_token.get_ship_instance()
+	if ship == null:
+		return
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	var resolver: RepairResolver = RepairResolver.create(
+			ship, _damage_deck, registry)
+	if resolver.is_empty():
+		_log.info("No engineering points — auto-advancing repair step.")
+		_on_repair_done()
+		return
+	if _show_activation_button:
+		_show_activation_button.hide_button()
+	if _repair_panel:
+		_repair_panel.open(resolver, ship)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_repair_panel.centre_on_screen(vp_size)
+
+
+## Called when the repair panel finishes (Done or Skip pressed).
+## Advances activation state and re-opens the activation modal.
+func _on_repair_done() -> void:
+	_log.info("Repair done — advancing activation step.")
+	if _ship_activation_state:
+		_ship_activation_state.advance_step()
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
+		_activation_modal.set_attack_skippable(
+				not _attack_executor.has_any_attack_target(
+				_activating_ship_token))
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.centre_on_screen(vp_size)
+
+
 ## Called when the attack execution step is fully complete.
 ## Advances activation state and re-opens the modal.
 ## Routes to the squadron modal when a squadron attack just completed.
@@ -1543,6 +1602,8 @@ func _on_attack_exec_completed() -> void:
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
@@ -1563,6 +1624,8 @@ func _on_attack_exec_cancelled() -> void:
 		_squadron_modal.notify_attack_cancelled()
 		return
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
@@ -1580,6 +1643,8 @@ func _on_activation_sequence_requested() -> void:
 		_log.info("No activation state — cannot open modal.")
 		return
 	if _activation_modal:
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
@@ -2372,4 +2437,29 @@ func _squadron_has_valid_targets(
 		var edge_approx: float = dist - radius - ship_half
 		if edge_approx <= dist1_px:
 			return true
+	return false
+
+
+## Returns true if the given ship token has a revealed Repair dial
+## or a Repair command token — meaning the Repair step should not
+## be auto-skipped.
+## Rules Reference: CM-030 — Engineering requires dial or token.
+func _has_repair_resources(ship_token: Variant) -> bool:
+	if ship_token == null:
+		return false
+	if not ship_token is ShipToken:
+		return false
+	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
+	if inst == null:
+		return false
+	# Check revealed dial.
+	if inst.command_dial_stack:
+		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
+		if not revealed.is_empty() and \
+				int(revealed.get("command", -1)) == Constants.CommandType.REPAIR:
+			return true
+	# Check command token.
+	if inst.command_tokens and \
+			inst.command_tokens.has_token(Constants.CommandType.REPAIR):
+		return true
 	return false

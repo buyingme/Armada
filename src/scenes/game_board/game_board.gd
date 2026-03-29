@@ -2154,6 +2154,8 @@ func _handle_squadron_move_input(event: InputEvent) -> bool:
 		var key: InputEventKey = event as InputEventKey
 		if key.pressed and key.keycode == KEY_ESCAPE:
 			token.global_position = _squadron_move_original_pos
+			if _squadron_move_overlay:
+				_squadron_move_overlay.reset_tracking()
 			_squadron_modal.cancel_move()
 			get_viewport().set_input_as_handled()
 			return true
@@ -2212,6 +2214,9 @@ func _move_squadron_during_activation() -> void:
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
 	_move_squadron_token(token, desired, side, top_y, bottom_y, false)
+	# Keep the armament (attack range) ring centred on the token.
+	if _squadron_move_overlay:
+		_squadron_move_overlay.update_tracking_position(token.global_position)
 
 
 ## Removes the squadron movement overlay if present.

@@ -41,6 +41,11 @@ var _show_movement: bool = true
 var _armament_radius_px: float = 0.0
 ## Faction colour for the armament circle.
 var _armament_colour: Color = ARMAMENT_COLOUR_REBEL
+## Offset (in local space) at which the armament circle is drawn.
+## When Vector2.ZERO, the armament ring is centred on the overlay's
+## origin (the squadron's initial position).  During movement the
+## offset is updated so the ring follows the token's drag position.
+var _armament_offset: Vector2 = Vector2.ZERO
 
 
 ## Configures the overlay for a given squadron.
@@ -75,15 +80,34 @@ func get_move_radius_px() -> float:
 	return _move_radius_px
 
 
+## Updates the armament circle position to track a world-space point.
+## The movement circle remains at the overlay's origin.
+## Call each frame during squadron drag to keep the attack range ring
+## centred on the token's current position.
+func update_tracking_position(world_pos: Vector2) -> void:
+	var new_offset: Vector2 = world_pos - position
+	if new_offset != _armament_offset:
+		_armament_offset = new_offset
+		queue_redraw()
+
+
+## Resets the armament circle back to the overlay's origin.
+## Called when movement is cancelled (Escape) so the ring snaps back.
+func reset_tracking() -> void:
+	if _armament_offset != Vector2.ZERO:
+		_armament_offset = Vector2.ZERO
+		queue_redraw()
+
+
 func _draw() -> void:
-	# Movement range circle (filled + outline).
+	# Movement range circle (filled + outline) — stays at initial position.
 	if _show_movement and _move_radius_px > 0.0:
 		draw_circle(Vector2.ZERO, _move_radius_px, MOVE_FILL_COLOUR)
 		draw_arc(Vector2.ZERO, _move_radius_px, 0.0, TAU,
 				CIRCLE_SEGMENTS, MOVE_OUTLINE_COLOUR, MOVE_OUTLINE_WIDTH, true)
-	# Armament range circle (outline only).
+	# Armament range circle (outline only) — follows tracking offset.
 	if _armament_radius_px > 0.0:
-		draw_arc(Vector2.ZERO, _armament_radius_px, 0.0, TAU,
+		draw_arc(_armament_offset, _armament_radius_px, 0.0, TAU,
 				CIRCLE_SEGMENTS, _armament_colour, ARMAMENT_OUTLINE_WIDTH, true)
 
 

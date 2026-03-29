@@ -142,3 +142,52 @@ func test_base_radius_zero_when_cannot_move() -> void:
 			Constants.Faction.REBEL_ALLIANCE, base_r)
 	assert_eq(_overlay.get_move_radius_px(), 0.0,
 			"Move radius should remain 0 when can_move is false")
+
+
+# ===========================================================================
+# update_tracking_position — armament ring follows token during drag
+# ===========================================================================
+
+func test_initial_armament_offset_is_zero() -> void:
+	_overlay.setup(Vector2(100, 200), 3, true,
+			Constants.Faction.REBEL_ALLIANCE)
+	assert_eq(_overlay._armament_offset, Vector2.ZERO,
+			"Armament offset should start at Vector2.ZERO")
+
+
+func test_update_tracking_position_sets_offset() -> void:
+	var origin: Vector2 = Vector2(100, 200)
+	_overlay.setup(origin, 3, true, Constants.Faction.REBEL_ALLIANCE)
+	_overlay.update_tracking_position(Vector2(150, 250))
+	assert_eq(_overlay._armament_offset, Vector2(50, 50),
+			"Armament offset should equal new_pos minus overlay position")
+
+
+func test_update_tracking_position_same_pos_no_change() -> void:
+	var origin: Vector2 = Vector2(100, 200)
+	_overlay.setup(origin, 3, true, Constants.Faction.REBEL_ALLIANCE)
+	_overlay.update_tracking_position(origin)
+	assert_eq(_overlay._armament_offset, Vector2.ZERO,
+			"Offset should remain zero when tracking position equals origin")
+
+
+func test_reset_tracking_clears_offset() -> void:
+	var origin: Vector2 = Vector2(100, 200)
+	_overlay.setup(origin, 3, true, Constants.Faction.REBEL_ALLIANCE)
+	_overlay.update_tracking_position(Vector2(300, 400))
+	assert_ne(_overlay._armament_offset, Vector2.ZERO,
+			"Offset should be non-zero after update")
+	_overlay.reset_tracking()
+	assert_eq(_overlay._armament_offset, Vector2.ZERO,
+			"Offset should be reset to Vector2.ZERO after reset_tracking")
+
+
+func test_successive_tracking_updates_replace_offset() -> void:
+	var origin: Vector2 = Vector2(100, 200)
+	_overlay.setup(origin, 3, true, Constants.Faction.REBEL_ALLIANCE)
+	_overlay.update_tracking_position(Vector2(200, 300))
+	assert_eq(_overlay._armament_offset, Vector2(100, 100),
+			"First update offset should be (100, 100)")
+	_overlay.update_tracking_position(Vector2(120, 210))
+	assert_eq(_overlay._armament_offset, Vector2(20, 10),
+			"Second update should replace offset with (20, 10)")

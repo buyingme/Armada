@@ -86,6 +86,10 @@ var _handoff_overlay: HandoffOverlay = null
 ## Requirements: HO-004, HO-005.
 var _your_turn_banner: YourTurnBanner = null
 
+## Victory screen overlay shown when the game ends.
+## Requirements: WN-001–004.
+var _victory_screen: VictoryScreen = null
+
 ## "End Activation" button (Ship / Squadron Phases).
 ## Requirements: TF-005, TF-011.
 var _end_activation_button: EndActivationButton = null
@@ -449,6 +453,8 @@ func _connect_signals() -> void:
 	EventBus.targeting_list_requested.connect(_on_targeting_list_requested)
 	# Attack simulator (Phase 6a) — delegated to AttackExecutor.
 	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
+	# Game end (Phase 8).
+	EventBus.game_ended.connect(_on_game_ended)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -933,6 +939,26 @@ func _update_phase_hud() -> void:
 		vp_size = get_viewport().get_visible_rect().size
 	_phase_hud_label.position = Vector2(
 			(vp_size.x - _phase_hud_label.size.x) * 0.5, 8)
+
+
+# ---------------------------------------------------------------------------
+# Game end — Phase 8 (WN-001–004)
+# ---------------------------------------------------------------------------
+
+## Called when the game ends (elimination, round 6, or mutual destruction).
+## Creates and displays the VictoryScreen overlay.
+func _on_game_ended(details: Dictionary) -> void:
+	if _victory_screen != null:
+		return # Already shown.
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "VictoryScreenLayer"
+	layer.layer = 110
+	add_child(layer)
+	_victory_screen = VictoryScreen.new()
+	layer.add_child(_victory_screen)
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_victory_screen.update_size(vp_size)
+	_victory_screen.show_results(details)
 
 
 # ---------------------------------------------------------------------------

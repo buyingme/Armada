@@ -1419,21 +1419,23 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 9: Repair Command & Damage Cards ⏳ and damage card effects.
+### Phase 9: Repair Command & Damage Cards ✅ `c26f18f`→`32fcb29`
 **Prerequisites:** Phase 3 (DamageDeck, ShipInstance), Phase 6 (damage cards used in attacks)
-**Duration estimate:** 1–2 sessions
+**Duration estimate:** 1–2 sessions | **Actual:** 6 sub-phases across 2 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| Repair command resolution | Core | CM-030–037 | Engineering points, shield/hull repair, damage discard |
-| Damage card data (52 cards) | Data | DM-005, DM-009, GC-012 | `Resources/Game_Components/ships/damage_cards.json` (or dedicated folder TBD) |
-| Faceup damage card effects | Core | DM-005 | Effect system (hook points for future upgrade effects) |
-| Damage card UI (faceup/facedown display) | Presentation | UI-002 | Card detail view on click |
-| Repair command UI | Presentation | — | Engineering point allocation interface |
+| Task | Layer | Requirements | Deliverables | Status |
+|------|-------|-------------|--------------|--------|
+| Damage card JSON data (52 cards, 22 types) | Data | DM-005, DM-009, GC-012 | `Resources/Game_Components/damage_cards.json` | ✅ 9a `c26f18f` |
+| DamageCard + DamageDeck load from JSON | Core | — | `src/core/damage_card.gd`, `damage_deck.gd` enhanced | ✅ 9a `c26f18f` |
+| RepairResolver (engineering points) | Core | CM-030–037 | `src/core/repair_resolver.gd`, constants, signals | ✅ 9b `3b3e4ef` |
+| Ship destruction cleanup | Core | DM-033 | `clear_all_damage_cards()`, GameManager wiring | ✅ 9c `9cdff39` |
+| ImmediateEffectResolver (6 cards) | Core | DM-005 | `src/core/immediate_effect_resolver.gd` | ✅ 9d `37f4aaf` |
+| Persistent damage card effects (16 cards) | Core | DM-005 | `DamageCardEffect`, `DamageCardEffectFactory`, hook wiring | ✅ 9e `7adb68c` |
+| RepairPanel + activation wiring | Presentation | — | `src/ui/repair_panel.gd`, activation modal integration | ✅ 9f `32fcb29` |
 
-**Architecture hook:** Damage card effects use the same timing/effect pattern that future upgrade cards will use (Priority 1 in future_stages.md).
+**Architecture hook:** Damage card effects use the same `GameEffect`/`EffectRegistry` pipeline that future upgrade cards will use (Priority 1 in future_stages.md). 13 new hooks documented in arc42 §8.9.
 
-**Tests:** ~15 (engineering math, shield cap, hull repair, damage card shuffling, effect resolution)
+**Tests:** 133 new tests (84 scripts, 1564 total, 1563 passing)
 
 ---
 
@@ -1527,7 +1529,7 @@ Phase 0 (Scale & Assets)
 | Phase 7 | ~30 | **75** | **1325** |
 | Phase 7b | ~30 | **39** | **1385** |
 | Phase 8 | ~20 | **31** | **1431** |
-| Phase 9 | ~15 | — | ~1420 |
+| Phase 9 | ~15 | **133** | **1564** |
 | Phase 10 | ~20 | — | ~1440 |
 | **Total** | **~420 new** | | **~1440** |
 
@@ -1546,7 +1548,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
-| Damage card effect pattern | Phase 9 | Upgrade card effects (same pattern) |
+| Damage card effect pattern | Phase 9 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 13 hooks |
 
 ---
 
@@ -1568,10 +1570,10 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Board Perspective (BP-001–006) | 6 | Phase 4b | ✅ |
 | Player Handoff (HO-001–005) | 5 | Phase 4b | ✅ |
 | Initiative (IN-001–003) | 3 | Phase 4b | ✅ |
-| Commands (CM-001–042) | 22 | Phase 4, 4d, 5, 6, 7, 9 | ⏳ CM-004–006 in 4d; CM-010–013 (Navigate) in 5b |
+| Commands (CM-001–042) | 22 | Phase 4, 4d, 5, 6, 7, 9 | ✅ CM-030–037 (Repair) done in Phase 9 |
 | Attack Resolution (AT-001–063) | 28 | Phase 1, 6 | ⏳ |
 | Defense Tokens (DT-001–021) | 10 | Phase 6 | ⏳ |
-| Damage (DM-001–033) | 12 | Phase 6, 9 | ⏳ |
+| Damage (DM-001–033) | 12 | Phase 6, 9 | ✅ DM-001–009 in Phase 6; DM-005 effects + DM-030–033 cleanup in Phase 9 |
 | Ship Movement (MV-001–022) | 13 | Phase 1, 5 | ✅ MV-001–015 done (overlap MV-016+ in 5b-2) |
 | Squadron Mechanics (SM-001–042) | 18 | Phase 1, 7, 7b | ✅ SM-001–005, SM-010–015, SM-030–032 done (Phase 7); SM-040–042 (activation UI) done (Phase 7b) |
 | Overlapping (OV-001–021) | 8 | Phase 5 |

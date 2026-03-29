@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 79 scripts, 1431 tests — 1430 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 84 scripts, 1564 tests — 1563 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3109,3 +3109,92 @@ Open `src/scenes/game_board/game_board.tscn` in the editor and press **F6**.
 | 5 | Status phase resets tokens and advances round | Defense tokens ready, activation flags cleared |
 
 **Pass criteria:** All existing functionality works identically to before Phase 8.
+
+---
+
+## Phase 9 — Repair Command & Damage Cards
+
+**What this phase adds:** Full damage card system (52 cards, 22 types), immediate and persistent damage effects via EffectRegistry, RepairResolver for engineering point allocation, RepairPanel UI in activation flow, and ship destruction cleanup.
+
+### Setup
+
+Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
+
+---
+
+### MT-9.1 — Damage card dealt facedown on hull damage
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Attack a ship and deal hull damage (total damage exceeds shields in target zone) | Damage card dealt for each hull point of damage |
+| 2 | Check game log for "dealt facedown damage card" messages | One message per hull damage dealt |
+| 3 | Damage cards are from the damage deck (not infinite) | Deck draw count decreases |
+
+**Pass criteria:** Hull damage correctly deals facedown damage cards.
+
+---
+
+### MT-9.2 — Critical hit flips card faceup with effect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal a critical hit to a ship (at least one critical result in dice pool) | First damage card is dealt faceup |
+| 2 | Check game log for faceup card details | Card title and effect text shown |
+| 3 | If card is immediate (e.g., "Structural Damage", "Shield Failure") | Effect resolves instantly; log confirms effect applied |
+| 4 | If card is persistent (e.g., "Ruptured Engine", "Damaged Controls") | Card stays faceup; effect remains registered |
+
+**Pass criteria:** Critical hits flip the first card faceup and resolve effects correctly.
+
+---
+
+### MT-9.3 — Repair step appears in activation modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a Repair (Engineering) command dial to a ship | Dial visible in command stack |
+| 2 | Activate that ship — advance through Reveal and Squadron steps | Activation modal shows step 3: "Execute Repair ►" button |
+| 3 | Ship has NO Repair dial or token | Step 3 shows "No repair available" and auto-skips |
+
+**Pass criteria:** Repair step is interactive when resources exist, auto-skips otherwise.
+
+---
+
+### MT-9.4 — RepairPanel operations
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click "Execute Repair ►" on a ship with Repair dial | RepairPanel opens showing available engineering points |
+| 2 | RepairPanel shows "Move Shields (1 pt)" with zone buttons | Each valid adjacent zone pair has a button |
+| 3 | Click a "Move Shields" button | Shield moves between zones; points decrease by 1; UI refreshes |
+| 4 | RepairPanel shows "Recover Shields (2 pts)" with zone buttons | Only zones below maximum show buttons |
+| 5 | Click "Recover Shields" on a zone | Shield count increases by 1; points decrease by 2 |
+| 6 | RepairPanel shows "Discard Damage Card (3 pts)" with card buttons | Only ships with faceup damage cards show discard buttons |
+| 7 | Click a card discard button | Card removed from ship; points decrease by 3 |
+| 8 | Click "Done" | Panel closes; activation advances to Attack step |
+
+**Pass criteria:** All three repair operations work correctly with proper point deduction.
+
+---
+
+### MT-9.5 — Ship destruction cleans up damage cards
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a ship (deal enough damage to exceed hull) | Ship token fades out |
+| 2 | Check game log | "Ship destroyed" message, damage cards cleared |
+| 3 | No orphaned damage card effects remain | No errors in subsequent rounds from the destroyed ship's effects |
+
+**Pass criteria:** Destroyed ships release all damage cards and unregister effects cleanly.
+
+---
+
+### MT-9.6 — No regressions: full game flow with damage
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play a full game (all 6 rounds) with attacks dealing damage | No crashes or errors |
+| 2 | Verify activation flow: Reveal → Squadron → Repair → Attack → Maneuver | All steps transition correctly |
+| 3 | Verify damage deck reshuffles discards when empty | Game continues without deck exhaustion errors |
+| 4 | Verify persistent effects apply in subsequent attacks | E.g., "Ruptured Engine" reduces max speed |
+
+**Pass criteria:** Complete game with damage cards functioning throughout all rounds.

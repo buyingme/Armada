@@ -48,12 +48,11 @@ func close() -> void:
 ## Godot offset recalculation on repeated anchor writes.
 func _apply_anchor_position() -> void:
 	var panel_w: float = 520.0
-	var panel_h: float = 600.0
-	custom_minimum_size = Vector2(panel_w, panel_h)
+	custom_minimum_size = Vector2(panel_w, 0.0)
 	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
-	offset_top = -40.0 - panel_h
+	offset_top = -40.0
 	offset_bottom = -40.0
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -99,8 +98,6 @@ func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
 	# Update bottom-centre anchor widths.
 	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
-	offset_top = -40.0 - panel_h
-	offset_bottom = -40.0
 	# Margin container.
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)

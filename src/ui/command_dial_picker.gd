@@ -270,7 +270,7 @@ func _apply_anchor_position() -> void:
 	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
-	offset_top = -40.0 - 320.0
+	offset_top = -40.0
 	offset_bottom = -40.0
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BEGIN

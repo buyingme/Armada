@@ -5,38 +5,17 @@
 ## the discard pile is automatically shuffled to form a new deck (DM-008).
 ##
 ## The standard Armada damage deck has 52 cards:
-##   7 unique critical effects × 4 copies each = 28 cards with Ship trait
-##   6 unique critical effects × 4 copies each = 24 cards with Crew trait
-## Total: 52 cards.
-##
-## In the MVP, only the trait is tracked. Actual critical effect text is
-## stored for future phases.
+##   15 unique critical effects with Ship trait (36 cards total)
+##    7 unique critical effects with Crew trait (16 cards total)
+## Card data is loaded from Resources/Game_Components/damage_cards.json.
 ##
 ## Rules Reference: SU-029, DM-007, DM-008, DM-009.
 class_name DamageDeck
 extends RefCounted
 
 
-## The standard deck composition: {title: {trait: String, count: int}}.
-## 7 Ship-trait cards × 4 copies = 28 Ship cards.
-## 6 Crew-trait cards × 4 copies = 24 Crew cards.
-## Total = 52.
-## Rules Reference: RRG "Damage Cards".
-const DECK_COMPOSITION: Array[Dictionary] = [
-	{"title": "Blinded Gunners", "trait": "Ship", "count": 4},
-	{"title": "Damaged Controls", "trait": "Ship", "count": 4},
-	{"title": "Damaged Munitions", "trait": "Ship", "count": 4},
-	{"title": "Disengaged Fire Control", "trait": "Ship", "count": 4},
-	{"title": "Projector Failure", "trait": "Ship", "count": 4},
-	{"title": "Ruptured Engine", "trait": "Ship", "count": 4},
-	{"title": "Structural Damage", "trait": "Ship", "count": 4},
-	{"title": "Compartment Fire", "trait": "Crew", "count": 4},
-	{"title": "Crew Panic", "trait": "Crew", "count": 4},
-	{"title": "Damaged Sensors", "trait": "Crew", "count": 4},
-	{"title": "Injured Crew", "trait": "Crew", "count": 4},
-	{"title": "Life Support Failure", "trait": "Crew", "count": 4},
-	{"title": "Overheated Reactor", "trait": "Crew", "count": 4},
-]
+## Path to the authoritative damage-card data JSON.
+const DATA_FILE: String = "damage_cards.json"
 
 ## Total number of cards in a standard damage deck.
 const DECK_SIZE: int = 52
@@ -52,15 +31,28 @@ var _discard_pile: Array[DamageCard] = []
 
 
 ## Builds and shuffles a standard 52-card damage deck.
+## Card data is loaded from the JSON data file via AssetLoader.
 ## Rules Reference: SU-029 — the damage deck is shuffled and placed facedown.
 func initialize() -> void:
 	_draw_pile.clear()
 	_discard_pile.clear()
-	for entry: Dictionary in DECK_COMPOSITION:
-		for i: int in range(int(entry["count"])):
-			var card: DamageCard = DamageCard.create(
-					entry["trait"], entry["title"])
+
+	var data: Dictionary = AssetLoader.load_json("", DATA_FILE)
+	if data.is_empty() or not data.has("cards"):
+		_log.error("Failed to load damage card data from %s" % DATA_FILE)
+		return
+
+	var cards_array: Array = data["cards"]
+	for entry: Dictionary in cards_array:
+		var count: int = int(entry.get("count", 0))
+		for i: int in range(count):
+			var card: DamageCard = DamageCard.from_data(entry)
 			_draw_pile.append(card)
+
+	if _draw_pile.size() != DECK_SIZE:
+		_log.warning("Damage deck has %d cards, expected %d" % [
+				_draw_pile.size(), DECK_SIZE])
+
 	_shuffle_draw_pile()
 	_log.info("Damage deck initialised: %d cards" % _draw_pile.size())
 

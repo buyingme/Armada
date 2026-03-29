@@ -37,8 +37,8 @@ func test_deck_composition_ship_trait_count() -> void:
 		var card: DamageCard = _deck.draw_card()
 		if card.trait_type == "Ship":
 			ship_count += 1
-	assert_eq(ship_count, 28,
-			"Should have 28 Ship-trait cards (7 types × 4)")
+	assert_eq(ship_count, 36,
+			"Should have 36 Ship-trait cards (15 types)")
 
 
 func test_deck_composition_crew_trait_count() -> void:
@@ -47,8 +47,8 @@ func test_deck_composition_crew_trait_count() -> void:
 		var card: DamageCard = _deck.draw_card()
 		if card.trait_type == "Crew":
 			crew_count += 1
-	assert_eq(crew_count, 24,
-			"Should have 24 Crew-trait cards (6 types × 4)")
+	assert_eq(crew_count, 16,
+			"Should have 16 Crew-trait cards (7 types)")
 
 
 # --- Draw ---

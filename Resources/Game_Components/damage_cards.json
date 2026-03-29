@@ -1,0 +1,180 @@
+{
+  "cards": [
+    {
+      "title": "Blinded Gunners",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "While attacking, you cannot spend accuracy icons.",
+      "effect_id": "blinded_gunners"
+    },
+    {
+      "title": "Comm Noise",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "immediate",
+      "effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+      "effect_id": "comm_noise"
+    },
+    {
+      "title": "Compartment Fire",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "You cannot ready your defense tokens.",
+      "effect_id": "compartment_fire"
+    },
+    {
+      "title": "Crew Panic",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "Before you reveal a command dial, you must either suffer 1 damage or discard that dial. If you discard it, do not reveal a dial this round.",
+      "effect_id": "crew_panic"
+    },
+    {
+      "title": "Damaged Controls",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "When you overlap a ship or obstacle, deal 1 facedown damage card to your ship (in addition to all other obstacle effects).",
+      "effect_id": "damaged_controls"
+    },
+    {
+      "title": "Injured Crew",
+      "trait": "Crew",
+      "count": 4,
+      "timing": "immediate",
+      "effect_text": "Choose and discard 1 of your defense tokens. Then flip this card facedown.",
+      "effect_id": "injured_crew"
+    },
+    {
+      "title": "Life Support Failure",
+      "trait": "Crew",
+      "count": 2,
+      "timing": "immediate_persistent",
+      "effect_text": "Discard all of your command tokens. You cannot have any command tokens.",
+      "effect_id": "life_support_failure"
+    },
+    {
+      "title": "Capacitor Failure",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "If a hull zone has no remaining shields, you cannot recover shields in it nor move shields to it. If that hull zone is defending, you cannot spend Redirect tokens.",
+      "effect_id": "capacitor_failure"
+    },
+    {
+      "title": "Coolant Discharge",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "Only one attack you perform each round can target a ship.",
+      "effect_id": "coolant_discharge"
+    },
+    {
+      "title": "Damaged Munitions",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "When attacking a ship, before you roll your attack pool, remove 1 die of your choice.",
+      "effect_id": "damaged_munitions"
+    },
+    {
+      "title": "Depowered Armament",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "You cannot attack at long range.",
+      "effect_id": "depowered_armament"
+    },
+    {
+      "title": "Disengaged Fire Control",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "When declaring the target of an attack, you cannot choose a target against whom the attack would be obstructed.",
+      "effect_id": "disengaged_fire_control"
+    },
+    {
+      "title": "Faulty Countermeasures",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "You cannot spend exhausted defense tokens.",
+      "effect_id": "faulty_countermeasures"
+    },
+    {
+      "title": "Point-Defense Failure",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "When attacking a squadron, before you roll your attack pool, remove 1 die of your choice.",
+      "effect_id": "point_defense_failure"
+    },
+    {
+      "title": "Power Failure",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "Your engineering value is reduced to half its value, rounded down.",
+      "effect_id": "power_failure"
+    },
+    {
+      "title": "Projector Misaligned",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "immediate",
+      "effect_text": "Your hull zone with the most remaining shields loses all of its shields. If multiple hull zones are tied, choose between the tied hull zones. Then flip this card facedown.",
+      "effect_id": "projector_misaligned"
+    },
+    {
+      "title": "Ruptured Engine",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "After you execute a maneuver, if the speed on your speed dial is greater than 1, suffer 1 damage.",
+      "effect_id": "ruptured_engine"
+    },
+    {
+      "title": "Shield Failure",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "immediate",
+      "effect_text": "Your opponent may choose up to 2 of your hull zones. Each of the chosen hull zones loses 1 shield. Then flip this card facedown.",
+      "effect_id": "shield_failure"
+    },
+    {
+      "title": "Structural Damage",
+      "trait": "Ship",
+      "count": 8,
+      "timing": "immediate",
+      "effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+      "effect_id": "structural_damage"
+    },
+    {
+      "title": "Targeter Disruption",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "While attacking, you cannot resolve critical effects.",
+      "effect_id": "targeter_disruption"
+    },
+    {
+      "title": "Thrust Control Malfunction",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "The yaw value for the last adjustable joint at your current speed is reduced by 1.",
+      "effect_id": "thrust_control_malfunction"
+    },
+    {
+      "title": "Thruster Fissure",
+      "trait": "Ship",
+      "count": 2,
+      "timing": "persistent",
+      "effect_text": "When you change your speed by 1 or more, suffer 1 damage.",
+      "effect_id": "thruster_fissure"
+    }
+  ]
+}

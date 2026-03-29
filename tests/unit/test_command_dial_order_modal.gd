@@ -131,12 +131,13 @@ func test_queued_dials_excludes_spent() -> void:
 
 # --- centre_on_screen() ---
 
-func test_centre_on_screen_positions_in_middle() -> void:
+func test_centre_on_screen_updates_bottom_centre_offsets() -> void:
 	_modal.open(_ship)
 	_modal.centre_on_screen(Vector2(1920, 1080))
-	var expected_x: float = (1920 - _modal.custom_minimum_size.x) * 0.5
-	var expected_y: float = (1080 - _modal.custom_minimum_size.y) * 0.5
-	assert_almost_eq(_modal.position.x, expected_x, 1.0,
-			"Modal should be horizontally centred")
-	assert_almost_eq(_modal.position.y, expected_y, 1.0,
-			"Modal should be vertically centred")
+	var panel_w: float = _modal.custom_minimum_size.x
+	assert_almost_eq(_modal.offset_left, - panel_w * 0.5, 1.0,
+			"offset_left should be -half panel width")
+	assert_almost_eq(_modal.offset_right, panel_w * 0.5, 1.0,
+			"offset_right should be +half panel width")
+	assert_almost_eq(_modal.offset_bottom, -40.0, 1.0,
+			"Modal should be 40px above screen bottom")

@@ -25,6 +25,7 @@ var _content: VBoxContainer = null
 func _init() -> void:
 	name = "TargetingListModal"
 	visible = false
+	_apply_anchor_position()
 
 
 ## Builds and displays the targeting list content.
@@ -41,6 +42,21 @@ func close() -> void:
 		_scroll.queue_free()
 		_scroll = null
 		_content = null
+
+
+## Sets bottom-centre anchoring once — called from _init to avoid
+## Godot offset recalculation on repeated anchor writes.
+func _apply_anchor_position() -> void:
+	var panel_w: float = 520.0
+	var panel_h: float = 600.0
+	custom_minimum_size = Vector2(panel_w, panel_h)
+	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	offset_left = - panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -40.0 - panel_h
+	offset_bottom = -40.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
 ## Handles Escape key to dismiss.
@@ -80,8 +96,11 @@ func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
 	var panel_h: float = minf(vp.y * 0.8, 600.0)
 	custom_minimum_size = Vector2(panel_w, panel_h)
 	size = custom_minimum_size
-	# Centre on screen.
-	position = (vp - size) * 0.5
+	# Update bottom-centre anchor widths.
+	offset_left = - panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -40.0 - panel_h
+	offset_bottom = -40.0
 	# Margin container.
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)

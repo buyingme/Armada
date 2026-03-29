@@ -33,6 +33,10 @@ var _order_container: HBoxContainer = null
 var _empty_label: Label = null
 
 
+func _init() -> void:
+	_apply_anchor_position()
+
+
 ## Opens the modal for the given ship.
 ## [param ship] — the ShipInstance whose dial order to display.
 func open(ship: ShipInstance) -> void:
@@ -162,10 +166,26 @@ func _get_cmd_icon_texture(cmd: int) -> Texture2D:
 	return AssetLoader.load_texture("command_tokens/", filename)
 
 
-## Centres this modal on the given viewport size.
+## Updates the bottom-centre anchored position width for the given viewport.
 func centre_on_screen(viewport_size: Vector2) -> void:
-	var panel_size: Vector2 = custom_minimum_size
-	position = (viewport_size - panel_size) * 0.5
+	var panel_w: float = minf(320.0, viewport_size.x * 0.35)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	offset_left = - panel_w * 0.5
+	offset_right = panel_w * 0.5
+
+
+## Sets bottom-centre anchoring once — called from _init to avoid
+## Godot offset recalculation on repeated anchor writes.
+func _apply_anchor_position() -> void:
+	var panel_w: float = 320.0
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	offset_left = - panel_w * 0.5
+	offset_right = panel_w * 0.5
+	offset_top = -40.0 - 160.0
+	offset_bottom = -40.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
 ## Handle click-anywhere-to-close.

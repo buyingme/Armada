@@ -27,6 +27,11 @@ var objectives: Dictionary = {}
 ## Rules Reference: "Effect Use and Timing", RRG p.5; ET-001–004.
 var effect_registry: EffectRegistry = null
 
+## The shared damage deck for this game.
+## Set by the scenario setup code; used by RepairResolver and destruction cleanup.
+## Rules Reference: DM-001 — shared 52-card deck.
+var damage_deck: DamageDeck = null
+
 
 ## Initializes a new game state with default values.
 func initialize() -> void:

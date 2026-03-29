@@ -148,6 +148,18 @@ func remove_damage_card(card: RefCounted) -> bool:
 	return false
 
 
+## Removes and returns ALL damage cards (facedown + faceup) from this ship.
+## Used during destruction cleanup to return cards to the discard pile.
+## Rules Reference: DM-030 — destroyed ships return their cards.
+func clear_all_damage_cards() -> Array:
+	var cards: Array = []
+	cards.append_array(facedown_damage)
+	cards.append_array(faceup_damage)
+	facedown_damage.clear()
+	faceup_damage.clear()
+	return cards
+
+
 ## Restores shields in the given hull zone by [amount], clamped to max.
 ## Returns the actual amount restored.
 ## Rules Reference: "Engineering", repair shields.

@@ -766,13 +766,25 @@ func _on_ship_destroyed(ship: Node) -> void:
 		return
 	# Determine which player owns this ship.
 	var owner: int = -1
+	var si: ShipInstance = null
 	if ship.has_method("get_ship_instance"):
-		var si: ShipInstance = ship.get_ship_instance()
+		si = ship.get_ship_instance()
 		if si != null:
 			owner = si.owner_player
 	if owner < 0:
 		return
+	# Check elimination FIRST — before cleanup changes is_destroyed() result.
 	_check_elimination()
+	# --- Destruction cleanup (DM-030) ---
+	# 1. Unregister all persistent effects owned by this ship.
+	if current_game_state and current_game_state.effect_registry and si:
+		current_game_state.effect_registry.unregister_by_owner(si)
+	# 2. Return all damage cards to the discard pile.
+	if si:
+		var cards: Array = si.clear_all_damage_cards()
+		if current_game_state and current_game_state.damage_deck:
+			for card: Variant in cards:
+				current_game_state.damage_deck.discard(card)
 
 
 ## Called when any squadron is destroyed.  Squadrons alone never trigger

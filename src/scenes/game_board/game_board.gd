@@ -474,6 +474,9 @@ func _spawn_learning_scenario_tokens() -> void:
 	_load_map_texture(setup.get_map_image_filename())
 	# Initialise the shared damage deck for this game.
 	_damage_deck = setup.get_damage_deck()
+	# Store on GameState so GameManager can access it for destruction cleanup.
+	if GameManager.current_game_state:
+		GameManager.current_game_state.damage_deck = _damage_deck
 	# Pass deck to the attack executor.
 	if _attack_executor:
 		_attack_executor.set_damage_deck(_damage_deck)

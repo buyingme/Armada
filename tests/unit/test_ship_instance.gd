@@ -345,3 +345,38 @@ func test_command_tokens_max_matches_command_value() -> void:
 func test_command_tokens_starts_empty() -> void:
 	assert_eq(_instance.command_tokens.get_token_count(), 0,
 			"Command tokens should start empty")
+
+
+# --- is_fully_healthy ---
+
+
+func test_is_fully_healthy_true_at_creation() -> void:
+	assert_true(_instance.is_fully_healthy(),
+			"Freshly created ship should be fully healthy")
+
+
+func test_is_fully_healthy_false_with_facedown_damage() -> void:
+	var card: RefCounted = RefCounted.new()
+	_instance.add_facedown_damage(card)
+	assert_false(_instance.is_fully_healthy(),
+			"Ship with facedown damage should not be fully healthy")
+
+
+func test_is_fully_healthy_false_with_faceup_damage() -> void:
+	var card: RefCounted = RefCounted.new()
+	_instance.add_faceup_damage(card)
+	assert_false(_instance.is_fully_healthy(),
+			"Ship with faceup damage should not be fully healthy")
+
+
+func test_is_fully_healthy_false_with_reduced_shields() -> void:
+	_instance.reduce_shields("FRONT", 1)
+	assert_false(_instance.is_fully_healthy(),
+			"Ship with reduced shields should not be fully healthy")
+
+
+func test_is_fully_healthy_true_after_shields_restored() -> void:
+	_instance.reduce_shields("FRONT", 1)
+	_instance.restore_shields("FRONT", 1)
+	assert_true(_instance.is_fully_healthy(),
+			"Ship should be fully healthy after shields restored")

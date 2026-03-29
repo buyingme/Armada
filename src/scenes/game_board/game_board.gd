@@ -1563,6 +1563,12 @@ func _on_repair_step_entered() -> void:
 		_log.info("No engineering points — auto-advancing repair step.")
 		_on_repair_done()
 		return
+	if not resolver.has_any_repair_target():
+		_log.info("Ship at full strength — nothing to repair. "
+				+ "Consuming dial/token and auto-advancing.")
+		resolver.finalize()
+		_on_repair_done()
+		return
 	if _show_activation_button:
 		_show_activation_button.hide_button()
 	if _repair_panel:
@@ -2441,8 +2447,9 @@ func _squadron_has_valid_targets(
 
 
 ## Returns true if the given ship token has a revealed Repair dial
-## or a Repair command token — meaning the Repair step should not
-## be auto-skipped.
+## or a Repair command token **and** the ship actually has something
+## to repair (damage cards or shields below max).  When false the
+## Repair step is auto-skipped in the activation modal.
 ## Rules Reference: CM-030 — Engineering requires dial or token.
 func _has_repair_resources(ship_token: Variant) -> bool:
 	if ship_token == null:
@@ -2452,14 +2459,18 @@ func _has_repair_resources(ship_token: Variant) -> bool:
 	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
 	if inst == null:
 		return false
+	var has_resource: bool = false
 	# Check revealed dial.
 	if inst.command_dial_stack:
 		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
 		if not revealed.is_empty() and \
 				int(revealed.get("command", -1)) == Constants.CommandType.REPAIR:
-			return true
+			has_resource = true
 	# Check command token.
-	if inst.command_tokens and \
+	if not has_resource and inst.command_tokens and \
 			inst.command_tokens.has_token(Constants.CommandType.REPAIR):
-		return true
-	return false
+		has_resource = true
+	if not has_resource:
+		return false
+	# Even with resources, skip if the ship is at full health.
+	return not inst.is_fully_healthy()

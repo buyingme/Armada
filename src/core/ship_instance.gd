@@ -104,6 +104,20 @@ func is_destroyed() -> bool:
 	return get_total_damage() >= ship_data.hull
 
 
+## Returns true if the ship has full hull (zero damage cards) and all
+## shields are at their maximum values.  Used by the repair-skip logic to
+## avoid showing an empty RepairPanel.
+## Rules Reference: CM-030 — engineering command has no effect when there
+## is nothing to repair.
+func is_fully_healthy() -> bool:
+	if get_total_damage() > 0:
+		return false
+	for zone: String in current_shields:
+		if int(current_shields[zone]) < get_max_shields(zone):
+			return false
+	return true
+
+
 ## Returns the maximum shield value for the given hull zone from the template.
 func get_max_shields(zone: String) -> int:
 	return int(ship_data.shields.get(zone, 0))

@@ -3154,8 +3154,9 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | Assign a Repair (Engineering) command dial to a ship | Dial visible in command stack |
 | 2 | Activate that ship — advance through Reveal and Squadron steps | Activation modal shows step 3: "Execute Repair ►" button |
 | 3 | Ship has NO Repair dial or token | Step 3 shows "No repair available" and auto-skips |
+| 4 | Ship has Repair dial but full hull and full shields (nothing to repair) | Step 3 auto-skips with log "Ship at full strength"; dial/token is still consumed |
 
-**Pass criteria:** Repair step is interactive when resources exist, auto-skips otherwise.
+**Pass criteria:** Repair step is interactive when resources exist AND the ship has something to repair. Auto-skips when no resources or nothing to repair.
 
 ---
 
@@ -3168,7 +3169,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Click a "Move Shields" button | Shield moves between zones; points decrease by 1; UI refreshes |
 | 4 | RepairPanel shows "Recover Shields (2 pts)" with zone buttons | Only zones below maximum show buttons |
 | 5 | Click "Recover Shields" on a zone | Shield count increases by 1; points decrease by 2 |
-| 6 | RepairPanel shows "Discard Damage Card (3 pts)" with card buttons | Only ships with faceup damage cards show discard buttons |
+| 6 | RepairPanel shows "Discard Damage Card (3 pts)" with card buttons | Faceup cards shown by name (▲), facedown cards shown as generic (▼); both are discardable |
 | 7 | Click a card discard button | Card removed from ship; points decrease by 3 |
 | 8 | Click "Done" | Panel closes; activation advances to Attack step |
 

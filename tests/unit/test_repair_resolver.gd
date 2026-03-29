@@ -469,3 +469,35 @@ func test_remove_nonexistent_card_returns_false() -> void:
 	var card: DamageCard = DamageCard.create("Ship", "Test")
 	var removed: bool = ship.remove_damage_card(card)
 	assert_false(removed, "Should return false for card not on ship")
+
+
+# ---------------------------------------------------------------------------
+# has_any_repair_target (full-health skip)
+# ---------------------------------------------------------------------------
+
+
+func test_has_any_repair_target_false_at_full_health() -> void:
+	var ship: ShipInstance = _make_ship()
+	var deck: DamageDeck = _make_deck()
+	var resolver: RepairResolver = RepairResolver.create(ship, deck)
+	assert_false(resolver.has_any_repair_target(),
+			"Full-health ship should have no repair targets")
+
+
+func test_has_any_repair_target_true_with_damage_card() -> void:
+	var ship: ShipInstance = _make_ship()
+	var card: DamageCard = DamageCard.create("Ship", "Test")
+	ship.add_facedown_damage(card)
+	var deck: DamageDeck = _make_deck()
+	var resolver: RepairResolver = RepairResolver.create(ship, deck)
+	assert_true(resolver.has_any_repair_target(),
+			"Ship with damage card should have a repair target")
+
+
+func test_has_any_repair_target_true_with_reduced_shields() -> void:
+	var ship: ShipInstance = _make_ship(4, true, false, 3, 2, 1, 1)
+	ship.reduce_shields("RIGHT", 1)
+	var deck: DamageDeck = _make_deck()
+	var resolver: RepairResolver = RepairResolver.create(ship, deck)
+	assert_true(resolver.has_any_repair_target(),
+			"Ship with reduced shields should have a repair target")

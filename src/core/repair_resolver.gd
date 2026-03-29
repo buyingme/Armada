@@ -93,6 +93,22 @@ func is_empty() -> bool:
 	return _total_points == 0
 
 
+## Returns true if the ship has at least one repairable condition:
+## damage cards to discard, or shields below maximum in any zone.
+## When false the RepairPanel has nothing to offer, so the step can be
+## skipped even when engineering points are available.
+## Rules Reference: CM-033, CM-034, CM-035.
+func has_any_repair_target() -> bool:
+	if _ship == null:
+		return false
+	if _ship.get_total_damage() > 0:
+		return true
+	for zone: String in _ship.current_shields:
+		if int(_ship.current_shields[zone]) < _ship.get_max_shields(zone):
+			return true
+	return false
+
+
 # ---------------------------------------------------------------------------
 # Move Shields — 1 engineering point (CM-033)
 # ---------------------------------------------------------------------------

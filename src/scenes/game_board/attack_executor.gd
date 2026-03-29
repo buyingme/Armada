@@ -579,15 +579,18 @@ func _attack_sim_clear_target_state() -> void:
 
 
 ## Returns the damage total for the current dice pool, using the correct
-## formula for the defender type. Critical icons only count as damage when
-## both attacker and defender are ships.
+## formula for the combatant types. Critical icons only count as damage when
+## both attacker and defender are ships; if either combatant is a squadron
+## the no-critical formula is used.
 ## After the base calculation, the ATTACK_CALC_DAMAGE hook is resolved
 ## so keyword effects (e.g. Bomber) can adjust the total.
 ## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
 ## defender are ships, this icon adds one damage to the damage total."
 func _calc_attack_damage(results: Array[Dictionary]) -> int:
 	var base_damage: int
-	if _attack_sim_def_squad != null:
+	# Critical icons only add damage when BOTH attacker and defender are ships.
+	# If either combatant is a squadron, use the no-critical formula.
+	if _attack_sim_def_squad != null or _attack_sim_atk_squad != null:
 		base_damage = Dice.calculate_damage_vs_squadron(results)
 	else:
 		base_damage = Dice.calculate_damage(results)

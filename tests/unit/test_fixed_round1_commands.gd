@@ -37,9 +37,9 @@ func test_get_fixed_round1_commands_returns_three_ships() -> void:
 			"Should have commands for 3 ships (CR90, Neb-B, VSD)")
 
 
-## CR90 gets exactly 1 command: Repair.
-## Rules Reference: LTP p.10 — "CR90 Corvette: Repair"
-func test_cr90_gets_repair() -> void:
+## CR90 gets exactly 1 command: Squadron.
+## Learning Scenario JSON: "cr90_corvette_a": ["squadron"]
+func test_cr90_gets_squadron() -> void:
 	# Arrange
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	var cmds: Dictionary = setup.get_fixed_round1_commands()
@@ -50,8 +50,8 @@ func test_cr90_gets_repair() -> void:
 	# Assert
 	assert_eq(cr90_cmds.size(), 1,
 			"CR90 should have 1 command (command value = 1)")
-	assert_eq(cr90_cmds[0], Constants.CommandType.REPAIR,
-			"CR90 command should be REPAIR")
+	assert_eq(cr90_cmds[0], Constants.CommandType.SQUADRON,
+			"CR90 command should be SQUADRON")
 
 
 ## Nebulon-B gets Concentrate Fire (top), Squadron (bottom).
@@ -73,10 +73,10 @@ func test_nebulon_b_gets_concentrate_fire_squadron() -> void:
 			"Nebulon-B bottom dial should be SQUADRON")
 
 
-## VSD gets Repair (top), Navigate (middle), Concentrate Fire (bottom).
-## Rules Reference: LTP p.10 — "Victory II-class Star Destroyer:
-## Repair, Navigate, Concentrate Fire"
-func test_vsd_gets_repair_navigate_concentrate_fire() -> void:
+## VSD gets Squadron (top), Navigate (middle), Concentrate Fire (bottom).
+## Learning Scenario JSON: "victory_ii_class_star_destroyer":
+## ["squadron", "navigate", "concentrate_fire"]
+func test_vsd_gets_squadron_navigate_concentrate_fire() -> void:
 	# Arrange
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	var cmds: Dictionary = setup.get_fixed_round1_commands()
@@ -87,8 +87,8 @@ func test_vsd_gets_repair_navigate_concentrate_fire() -> void:
 	# Assert
 	assert_eq(vsd_cmds.size(), 3,
 			"VSD should have 3 commands (command value = 3)")
-	assert_eq(vsd_cmds[0], Constants.CommandType.REPAIR,
-			"VSD top dial should be REPAIR")
+	assert_eq(vsd_cmds[0], Constants.CommandType.SQUADRON,
+			"VSD top dial should be SQUADRON")
 	assert_eq(vsd_cmds[1], Constants.CommandType.NAVIGATE,
 			"VSD middle dial should be NAVIGATE")
 	assert_eq(vsd_cmds[2], Constants.CommandType.CONCENTRATE_FIRE,
@@ -222,8 +222,8 @@ func test_cr90_has_correct_dials_after_apply() -> void:
 	assert_eq(cr90.command_dial_stack.get_dial_count(), 1,
 			"CR90 should have 1 dial assigned")
 	assert_eq(cr90.command_dial_stack.get_top_command(),
-			Constants.CommandType.REPAIR,
-			"CR90 top dial should be REPAIR")
+			Constants.CommandType.SQUADRON,
+			"CR90 top dial should be SQUADRON")
 
 
 ## Nebulon-B stack: Concentrate Fire on top, Squadron on bottom.
@@ -247,7 +247,7 @@ func test_neb_has_correct_dial_order_after_apply() -> void:
 			"Nebulon-B bottom dial should be SQUADRON")
 
 
-## VSD stack: Repair (top), Navigate (middle), Concentrate Fire (bottom).
+## VSD stack: Squadron (top), Navigate (middle), Concentrate Fire (bottom).
 func test_vsd_has_correct_dial_order_after_apply() -> void:
 	# Arrange
 	var ships: Dictionary = _setup_game_with_ships()
@@ -262,8 +262,8 @@ func test_vsd_has_correct_dial_order_after_apply() -> void:
 	assert_eq(vsd.command_dial_stack.get_dial_count(), 3,
 			"VSD should have 3 dials assigned")
 	var dials: Array[Dictionary] = vsd.command_dial_stack.get_all_dials()
-	assert_eq(int(dials[0]["command"]), Constants.CommandType.REPAIR,
-			"VSD top dial should be REPAIR")
+	assert_eq(int(dials[0]["command"]), Constants.CommandType.SQUADRON,
+			"VSD top dial should be SQUADRON")
 	assert_eq(int(dials[1]["command"]), Constants.CommandType.NAVIGATE,
 			"VSD middle dial should be NAVIGATE")
 	assert_eq(int(dials[2]["command"]), Constants.CommandType.CONCENTRATE_FIRE,

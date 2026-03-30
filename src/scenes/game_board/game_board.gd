@@ -178,6 +178,10 @@ var _show_squadron_modal_button: ShowSquadronModalButton = null
 ## Requirements: SQM-001, SQM-002.
 var _squadron_move_overlay: SquadronMoveOverlay = null
 
+## Range band overlay (close–medium) shown during squadron command selection.
+## Requirements: CM-020.
+var _squad_cmd_range_overlay: SquadronCommandRangeOverlay = null
+
 ## Saved original position of the moving squadron (for revert on cancel).
 var _squadron_move_original_pos: Vector2 = Vector2.ZERO
 
@@ -1620,6 +1624,8 @@ func _on_squadron_step_entered() -> void:
 		return
 	if _show_activation_button:
 		_show_activation_button.hide_button()
+	# Show the close–medium range overlay around the activating ship.
+	_show_squad_cmd_range_overlay(_activating_ship_token.global_position)
 	if _squadron_modal:
 		_squadron_modal.open_for_command(resolver, _activating_ship_token)
 
@@ -1631,6 +1637,7 @@ func _on_squadron_step_entered() -> void:
 ## Rules Reference: CM-020.
 func _on_squadron_command_done() -> void:
 	_log.info("Squadron command done — advancing activation step.")
+	_dismiss_squad_cmd_range_overlay()
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
 	# Show the activation button again.
@@ -2011,6 +2018,26 @@ func _cancel_range_overlay_selection() -> void:
 	_range_overlay_selecting = false
 	TooltipManager.hide_tooltip()
 	_log.info("Range overlay selection cancelled.")
+
+
+## Shows the close–medium range band overlay around a ship during
+## the Squadron command selection step.
+## Requirements: CM-020.
+func _show_squad_cmd_range_overlay(ship_pos: Vector2) -> void:
+	_dismiss_squad_cmd_range_overlay()
+	_squad_cmd_range_overlay = SquadronCommandRangeOverlay.new()
+	_squad_cmd_range_overlay.name = "SquadCmdRangeOverlay"
+	_token_container.add_child(_squad_cmd_range_overlay)
+	_token_container.move_child(_squad_cmd_range_overlay, 0)
+	_squad_cmd_range_overlay.setup(ship_pos)
+	_log.info("Squadron command range overlay displayed.")
+
+
+## Removes the squadron command range band overlay.
+func _dismiss_squad_cmd_range_overlay() -> void:
+	if _squad_cmd_range_overlay:
+		_squad_cmd_range_overlay.queue_free()
+		_squad_cmd_range_overlay = null
 
 
 ## Checks if an Escape key press should dismiss the range overlay.

@@ -154,6 +154,14 @@ func open(state: ShipActivationState) -> void:
 	if state.get_current_step() == ShipActivationState.Step.REVEAL:
 		state.advance_step()
 		_start_auto_skip()
+	# Re-opened at Squadron with no dial/token — auto-skip the step.
+	elif (_skip_squadron
+			and state.get_current_step() == ShipActivationState.Step.SQUADRON):
+		_start_auto_skip()
+	# Re-opened at Repair with no dial/token — auto-skip the step.
+	elif (_skip_repair
+			and state.get_current_step() == ShipActivationState.Step.REPAIR):
+		_start_auto_skip()
 	# Re-opened at Attack with no targets — auto-skip the step.
 	elif (_skip_attack
 			and state.get_current_step() == ShipActivationState.Step.ATTACK):

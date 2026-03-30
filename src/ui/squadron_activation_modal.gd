@@ -727,4 +727,13 @@ func _on_done_pressed() -> void:
 func _on_close_pressed() -> void:
 	_log.info("Modal dismissed.")
 	visible = false
-	modal_closed.emit()
+	if _is_command_mode:
+		# Treat dismiss as "finish command early" — finalize and advance.
+		_selected_token = null
+		_selected_instance = null
+		_transition_to(State.DONE)
+		if _command_resolver != null:
+			_command_resolver.finalize()
+		command_done.emit()
+	else:
+		modal_closed.emit()

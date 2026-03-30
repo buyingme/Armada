@@ -1525,6 +1525,10 @@ func _on_activation_modal_closed() -> void:
 	# both occupy the same bottom-centre position.
 	if _attack_executor and _attack_executor.is_in_exec_mode():
 		return
+	# Do not show the button while the squadron command modal is active.
+	if _squadron_modal and _squadron_modal.visible \
+			and _squadron_modal.is_command_mode():
+		return
 	_show_activation_button.show_button()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_show_activation_button.update_position(vp_size)
@@ -2298,7 +2302,9 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	_remove_squadron_overlay()
 	# In command mode the modal manages the cycle internally;
 	# do not touch squadron-phase counters or open_for_turn.
+	# Mark activated manually since GameManager ignores SHIP-phase events.
 	if _squadron_modal and _squadron_modal.is_command_mode():
+		instance.activated_this_round = true
 		_log.info("Command-mode activation done: %s" % instance.data_key)
 		return
 	_squadron_activation_count += 1
@@ -2321,6 +2327,15 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 ## Shows the floating ShowSquadronModalButton.
 ## Requirements: SQA-011.
 func _on_squadron_modal_closed() -> void:
+	# In command mode, show the activation button instead of the
+	# squadron-phase reopen button.
+	if _squadron_modal and _squadron_modal.is_command_mode():
+		_log.info("Squadron command modal dismissed — show activation button.")
+		if _show_activation_button and _ship_activation_state:
+			_show_activation_button.show_button()
+			_show_activation_button.update_position(
+					get_viewport().get_visible_rect().size)
+		return
 	if _show_squadron_modal_button:
 		_show_squadron_modal_button.show_button()
 		_show_squadron_modal_button.update_position(

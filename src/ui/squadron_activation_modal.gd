@@ -357,11 +357,14 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 				token.global_position):
 			_show_error("Out of range (requires close–medium).")
 			return false
-	# Call GameManager to formally activate.
-	GameManager.activate_squadron(instance)
-	if GameManager.get_activating_squadron() != instance:
-		_show_error("Activation rejected by GameManager.")
-		return false
+	# In squadron-phase mode, call GameManager to formally activate.
+	# In command mode (SHIP phase) we skip GameManager — the ship is the
+	# activating entity, not the squadron phase turn tracker.
+	if not _is_command_mode:
+		GameManager.activate_squadron(instance)
+		if GameManager.get_activating_squadron() != instance:
+			_show_error("Activation rejected by GameManager.")
+			return false
 	_selected_token = token
 	_selected_instance = instance
 	_is_engaged = instance.is_engaged

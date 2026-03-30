@@ -32,6 +32,10 @@ signal attack_step_entered()
 ## Emitted when the player clicks "Execute Repair ►" — starts repair flow.
 signal repair_step_entered()
 
+## Emitted when the player clicks "Execute Squadron ►" — starts squadron command.
+## Requirements: CM-020.
+signal squadron_step_entered()
+
 ## Emitted when the modal wants to auto-skip to maneuver (all placeholders done).
 signal ready_for_maneuver()
 
@@ -53,7 +57,7 @@ const STEP_NAMES: Array[String] = [
 ]
 
 ## Which steps are placeholders (not yet implemented).
-const PLACEHOLDER_STEPS: Array[int] = [1] ## indices into STEP_NAMES
+const PLACEHOLDER_STEPS: Array[int] = [] ## Formerly [1]; squadron step is now actionable
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ActivationModal")
@@ -86,6 +90,10 @@ var _attack_button: Button = null
 ## "Execute Repair" button inside the repair step row.
 var _repair_button: Button = null
 
+## "Execute Squadron" button inside the squadron step row.
+## Requirements: CM-020.
+var _squadron_button: Button = null
+
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
@@ -96,6 +104,10 @@ var _skip_attack: bool = false
 ## When true the Repair step is auto-skipped (no dial or token).
 ## Set by the game board via [method set_repair_skippable] before opening.
 var _skip_repair: bool = false
+
+## When true the Squadron step is auto-skipped (no squadron dial or token).
+## Set by the game board via [method set_squadron_skippable] before opening.
+var _skip_squadron: bool = false
 
 ## True once the maneuver tool has been shown (Execute pressed once).
 ## Second press commits the maneuver.
@@ -119,6 +131,13 @@ func set_attack_skippable(skip: bool) -> void:
 ## Rules Reference: "Engineering", p.4 — only available with dial or token.
 func set_repair_skippable(skip: bool) -> void:
 	_skip_repair = skip
+
+
+## Marks the Squadron step as skippable (no squadron dial or token).
+## Call this before [method open] so the auto-skip chain includes Squadron.
+## Rules Reference: "Commands", p.4 — squadron command needs dial or token.
+func set_squadron_skippable(skip: bool) -> void:
+	_skip_squadron = skip
 
 
 ## Opens the modal for the given activation state.
@@ -351,6 +370,15 @@ func _create_step_row(step_index: int) -> PanelContainer:
 		_repair_button.pressed.connect(_on_repair_pressed)
 		hbox.add_child(_repair_button)
 
+	# For step 2 (Squadron): add "Execute Squadron" button.
+	if step_index == 1:
+		_squadron_button = Button.new()
+		_squadron_button.text = "Execute Squadron ►"
+		_squadron_button.custom_minimum_size = Vector2(140, 28)
+		_squadron_button.visible = false
+		_squadron_button.pressed.connect(_on_squadron_pressed)
+		hbox.add_child(_squadron_button)
+
 	# Status label (shows badge or checkmark).
 	var status: Label = Label.new()
 	status.name = "StatusLabel"
@@ -375,6 +403,7 @@ func _clear_ui() -> void:
 	_execute_button = null
 	_attack_button = null
 	_repair_button = null
+	_squadron_button = null
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +446,16 @@ func _update_step_display() -> void:
 			if i in PLACEHOLDER_STEPS:
 				status_label.text = "Not yet implemented"
 				status_label.modulate = Color(0.9, 0.7, 0.3)
+			elif i == 1:
+				# Squadron step — show button or "No squadron available" badge.
+				if _skip_squadron:
+					status_label.text = "No squadron available"
+					status_label.modulate = Color(0.9, 0.7, 0.3)
+				else:
+					status_label.text = ""
+					if _squadron_button:
+						_squadron_button.visible = true
+						_squadron_button.disabled = false
 			elif i == 2:
 				# Repair step — show button or "No dial/token" badge.
 				if _skip_repair:
@@ -463,6 +502,8 @@ func _update_step_display() -> void:
 				_attack_button.visible = false
 			if i == 2 and _repair_button:
 				_repair_button.visible = false
+			if i == 1 and _squadron_button:
+				_squadron_button.visible = false
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -546,6 +587,15 @@ func _on_attack_pressed() -> void:
 	modal_closed.emit()
 
 
+## Called when the "Execute Squadron ►" button is pressed.
+## Emits [signal squadron_step_entered] and closes the modal.
+func _on_squadron_pressed() -> void:
+	_log.info("Execute Squadron pressed — starting squadron command flow.")
+	squadron_step_entered.emit()
+	close()
+	modal_closed.emit()
+
+
 ## Called when the "Execute Repair ►" button is pressed.
 ## Emits [signal repair_step_entered] and closes the modal.
 func _on_repair_pressed() -> void:
@@ -574,16 +624,16 @@ func _start_auto_skip() -> void:
 
 
 ## Attempts to auto-skip the current step if it's a placeholder or
-## a skippable attack (no valid targets).
+## a skippable step (no resources or no targets).
 ## Uses call_deferred to avoid processing in the same frame.
 func _try_auto_skip_next() -> void:
 	if not _auto_skipping or _activation_state == null:
 		return
 	var current: int = int(_activation_state.get_current_step())
-	# Step 1 (SQUADRON) is a placeholder — auto-skip.
+	# Step 1 (SQUADRON) is skipped when _skip_squadron is true.
 	# Step 2 (REPAIR) is skipped when _skip_repair is true.
-	# Step 3 (ATTACK) is also skipped when _skip_attack is true.
-	if current == ShipActivationState.Step.SQUADRON:
+	# Step 3 (ATTACK) is skipped when _skip_attack is true.
+	if _skip_squadron and current == ShipActivationState.Step.SQUADRON:
 		_update_step_display()
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
 		timer.timeout.connect(_auto_skip_current)
@@ -598,7 +648,10 @@ func _try_auto_skip_next() -> void:
 	else:
 		_auto_skipping = false
 		_update_step_display()
-		if current == ShipActivationState.Step.ATTACK:
+		if current == ShipActivationState.Step.SQUADRON:
+			_log.info("Auto-skip complete — squadron step active. " +
+					"Player must press Execute Squadron.")
+		elif current == ShipActivationState.Step.ATTACK:
 			_log.info("Auto-skip complete — attack step active. " +
 					"Player must press Execute Attack.")
 		elif current == ShipActivationState.Step.MANEUVER:

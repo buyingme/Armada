@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 84 scripts, 1564 tests — 1563 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 85 scripts, 1589 tests — 1588 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3199,3 +3199,73 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 4 | Verify persistent effects apply in subsequent attacks | E.g., "Ruptured Engine" reduces max speed |
 
 **Pass criteria:** Complete game with damage cards functioning throughout all rounds.
+
+---
+
+## Phase 9.5 — Squadron Command (Dial & Token)
+
+**What this phase adds:** Ships with a revealed Squadron dial and/or Squadron command token can activate friendly squadrons at close–medium range during their activation. Each activated squadron can move **and** attack in either order (same as Rogue). The activation modal now shows a real "Execute Squadron ►" button instead of auto-skipping.
+
+### MT-9.5.1 — Squadron step visible in activation modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a **Squadron** dial to a ship that has friendly squadrons nearby | Dial reveals on drop |
+| 2 | Click "Show Activation Sequence" | Activation modal opens |
+| 3 | Observe step 2 (Squadron) | Shows **"Execute Squadron ►"** button (not "No squadron available") |
+| 4 | Observe step row styling | Squadron step is highlighted as the current active step |
+
+### MT-9.5.2 — Squadron step auto-skipped without resources
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a **Navigate** dial to a ship (no Squadron token either) | Dial reveals |
+| 2 | Click "Show Activation Sequence" | Activation modal opens |
+| 3 | Observe step 2 (Squadron) | Shows "No squadron available" and auto-skips past it |
+
+### MT-9.5.3 — Squadron command activates squadrons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click "Execute Squadron ►" on a ship with Squadron dial (squadron_value=2) | Squadron activation modal opens in command mode |
+| 2 | Title bar shows "Squadron Command — [Ship Name]" | Correct ship name displayed |
+| 3 | Click a friendly squadron **within** close–medium range | Squadron is selected; move/attack buttons appear |
+| 4 | Move the squadron, then attack with it (or vice versa) | Both actions complete; activation count decrements |
+| 5 | Second squadron selection prompt appears | "Click a friendly squadron at close–medium range" |
+| 6 | Select and activate a second squadron | Both move and attack complete |
+| 7 | After 2 activations, modal closes | `command_done` fires; activation modal re-opens at Repair step |
+
+### MT-9.5.4 — Out-of-range squadron rejected
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open squadron command for a ship | Command mode modal opens |
+| 2 | Click a friendly squadron that is **far away** (beyond medium range) | Toast: "Squadron out of range — must be at close–medium range." |
+| 3 | Squadron is not selected | Modal stays in WAITING_FOR_SELECTION |
+
+### MT-9.5.5 — Done button ends command early
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open squadron command for a ship with squadron_value=3 | 3 activations available |
+| 2 | Activate 1 squadron (move + attack) | 2 remaining |
+| 3 | Click "Done" button | Command ends early; dial/token consumed; activation modal re-opens |
+
+### MT-9.5.6 — Token-only grants 1 activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Convert a Squadron dial to a token (drag dial to ship card) | Token added |
+| 2 | Assign a Navigate dial next round; activate the ship | Ship has Navigate dial + Squadron token |
+| 3 | Click "Execute Squadron ►" | Command mode opens with 1 activation only |
+| 4 | Activate 1 squadron | Command completes; token consumed |
+
+### MT-9.5.7 — Dial + token combined
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Give a ship a Squadron dial and a Squadron token | E.g., VSD (sq_val=3) + token = 4 |
+| 2 | Activate the ship and click "Execute Squadron ►" | 4 activations available |
+| 3 | Activate 4 squadrons | All complete; both dial and token consumed |
+
+**Pass criteria:** Squadron command works with dial, token, and combined; range filtering rejects distant squadrons; early Done correctly finalizes.

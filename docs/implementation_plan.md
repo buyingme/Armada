@@ -507,7 +507,7 @@ step. This was replaced with **projection-based push-out** (DBG-020 revised, DBG
 > 2. **Attack step (SP-013, SP-014):** Up to 2 attacks from different hull zones. Deferred entirely to Phase 6.
 > 3. **Execute Maneuver step (SP-015):** Mandatory movement using the maneuver tool. Deferred entirely to Phase 5.
 > 4. **Navigate command resolution (CM-010–013):** Speed/yaw modification during movement. Deferred to Phase 5.
-> 5. **Squadron command resolution (CM-020–022):** Activate squadrons at range after dial reveal. Deferred to Phase 7.
+> 5. **Squadron command resolution (CM-020–022):** Activate squadrons at range after dial reveal. ✅ Implemented in Phase 9.5.
 > 6. **Repair command resolution (CM-030–037):** Engineering points for shield/hull recovery. Deferred to Phase 9.
 > 7. **Concentrate Fire (CM-040–042):** Extra die / reroll during attack. Deferred to Phase 6.
 > 8. **CM-007 (unused dial discard):** If the dial is not spent during activation, it should be discarded. Phase 4c always spends/discards on End Activation. Full logic in Phase 5.
@@ -1436,6 +1436,28 @@ game logic was altered — pure structural refactoring.
 **Architecture hook:** Damage card effects use the same `GameEffect`/`EffectRegistry` pipeline that future upgrade cards will use (Priority 1 in future_stages.md). 13 new hooks documented in arc42 §8.9.
 
 **Tests:** 133 new tests (84 scripts, 1564 total, 1563 passing)
+
+---
+
+### Phase 9.5: Squadron Command (Dial & Token) ✅
+**Prerequisites:** Phase 7b (Squadron Activation Modal), Phase 9 (RepairResolver pattern)
+**Duration estimate:** 1 session | **Actual:** 1 session
+
+| Task | Layer | Requirements | Deliverables | Status |
+|------|-------|-------------|--------------|--------|
+| SquadronCommandResolver | Core | CM-020–022 | `src/core/squadron_command_resolver.gd` | ✅ |
+| SquadronActivationModal dual-mode | Presentation | CM-020 | Generalized move+attack flow; `open_for_command()`, range check, Done button | ✅ |
+| ActivationModal squadron step | Presentation | CM-020 | `squadron_step_entered` signal, "Execute Squadron ►" button, auto-skip logic | ✅ |
+| GameBoard wiring | Presentation | CM-020–022 | `_on_squadron_step_entered()`, `_on_squadron_command_done()`, `_has_squadron_resources()` | ✅ |
+| Unit tests | Test | — | `tests/unit/test_squadron_command_resolver.gd` (17 tests) | ✅ |
+
+**Key design decisions:**
+- Reused SquadronActivationModal by generalizing the Rogue "move AND attack" flow into `_allow_move_and_attack`
+- SquadronCommandResolver follows the RepairResolver factory pattern: `create()` → budget queries → `use_activation()` → `finalize()`
+- Range check uses edge-to-edge approximation (same as existing `_squadron_has_valid_targets()`)
+- Resolver calls `finalize()` (spending dial/token) from the modal before emitting `command_done`
+
+**Tests:** 17 new tests (85 scripts, 1589 total, 1588 passing)
 
 ---
 

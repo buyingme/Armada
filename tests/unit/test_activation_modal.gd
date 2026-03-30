@@ -156,10 +156,11 @@ func test_attack_step_checkmarked_after_skip() -> void:
 
 
 func test_full_auto_skip_chain_skips_attack_step() -> void:
-	# Open from REVEAL with skip attack and skip repair — should auto-skip
-	# all through SQUADRON, REPAIR, ATTACK and stop at MANEUVER.
+	# Open from REVEAL with skip attack, skip repair, and skip squadron —
+	# should auto-skip all through SQUADRON, REPAIR, ATTACK and stop at MANEUVER.
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.REVEAL)
+	_modal.set_squadron_skippable(true)
 	_modal.set_attack_skippable(true)
 	_modal.set_repair_skippable(true)
 	_modal.open(state)
@@ -173,6 +174,7 @@ func test_full_auto_skip_chain_skips_attack_step() -> void:
 func test_full_auto_skip_chain_stops_at_attack_when_not_skippable() -> void:
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.REVEAL)
+	_modal.set_squadron_skippable(true)
 	_modal.set_attack_skippable(false)
 	_modal.set_repair_skippable(true)
 	_modal.open(state)

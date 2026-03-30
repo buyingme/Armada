@@ -36,6 +36,10 @@ signal skip_requested()
 ## The game board should emit [code]EventBus.squadron_activation_ended[/code].
 signal activation_done(squadron_instance: SquadronInstance)
 
+## All command activations are done (or player pressed Done early).
+## Only emitted in command mode.
+signal command_done()
+
 ## The modal was closed / dismissed by the player.
 signal modal_closed()
 
@@ -91,14 +95,28 @@ var _max_activations: int = Constants.SQUADRONS_PER_ACTIVATION
 ## Whether the selected squadron is engaged.
 var _is_engaged: bool = false
 
-## Whether the selected squadron has Rogue.
+## Whether the selected squadron can move AND attack (either order).
+## True when: activated by a Squadron command, OR has Rogue keyword.
+## False during Squadron Phase for non-Rogue squadrons (move OR attack).
+var _allow_move_and_attack: bool = false
+
+## Whether the selected squadron has Rogue keyword.
 var _has_rogue: bool = false
 
-## Whether the Rogue squadron has already moved this activation.
-var _rogue_has_moved: bool = false
+## Whether the squadron has already moved this activation.
+var _has_moved: bool = false
 
-## Whether the Rogue squadron has already attacked this activation.
-var _rogue_has_attacked: bool = false
+## Whether the squadron has already attacked this activation.
+var _has_attacked: bool = false
+
+## True when operating in command mode (during Ship Phase activation).
+var _is_command_mode: bool = false
+
+## The SquadronCommandResolver (non-null only in command mode).
+var _command_resolver: SquadronCommandResolver = null
+
+## The commanding ship token (non-null only in command mode).
+var _command_ship_token: Variant = null
 
 ## Whether the selected squadron can move (not engaged, speed > 0).
 ## Set by [method set_action_availability] from the game board.
@@ -122,6 +140,7 @@ var _button_container: HBoxContainer = null
 var _move_button: Button = null
 var _attack_button: Button = null
 var _skip_button: Button = null
+var _done_button: Button = null
 var _commit_move_button: Button = null
 var _close_button: Button = null
 var _error_label: Label = null
@@ -152,7 +171,7 @@ func _unhandled_input(event: InputEvent) -> void:
 # Public API
 # ---------------------------------------------------------------------------
 
-## Opens the modal for a new turn.
+## Opens the modal for a new turn during the Squadron Phase.
 ## [param activation_num] — which activation within the turn (1 or 2).
 ## [param max_act] — how many activations this turn allows.
 func open_for_turn(activation_num: int, max_act: int) -> void:
@@ -160,11 +179,36 @@ func open_for_turn(activation_num: int, max_act: int) -> void:
 	_max_activations = max_act
 	_selected_token = null
 	_selected_instance = null
-	_rogue_has_moved = false
-	_rogue_has_attacked = false
+	_has_moved = false
+	_has_attacked = false
+	_is_command_mode = false
+	_command_resolver = null
+	_command_ship_token = null
 	_transition_to(State.WAITING_FOR_SELECTION)
 	visible = true
 	_log.info("Opened for activation %d of %d." % [activation_num, max_act])
+
+
+## Opens the modal for a Squadron Command during ship activation.
+## All squadrons activated this way can move AND attack in either order.
+## [param resolver] — the SquadronCommandResolver tracking activations.
+## [param ship_token] — the ship token issuing the command.
+## Rules Reference: CM-020, CM-021, CM-022.
+func open_for_command(resolver: SquadronCommandResolver,
+		ship_token: Variant) -> void:
+	_is_command_mode = true
+	_command_resolver = resolver
+	_command_ship_token = ship_token
+	_activation_number = resolver.get_activations_used() + 1
+	_max_activations = resolver.get_max_activations()
+	_selected_token = null
+	_selected_instance = null
+	_has_moved = false
+	_has_attacked = false
+	_transition_to(State.WAITING_FOR_SELECTION)
+	visible = true
+	_log.info("Opened for squadron command: activation %d of %d." % [
+			_activation_number, _max_activations])
 
 
 ## Called by game_board when a squadron token is clicked.
@@ -207,12 +251,12 @@ func notify_move_preview_success() -> void:
 ## Called by game_board when the move is placed by clicking during MOVING.
 ## Directly finishes the activation (no Commit Move step needed).
 func notify_move_completed() -> void:
-	if _has_rogue and not _rogue_has_moved:
-		_rogue_has_moved = true
-		if _rogue_has_attacked:
+	if _allow_move_and_attack and not _has_moved:
+		_has_moved = true
+		if _has_attacked:
 			_finish_activation()
 		else:
-			# Rogue can still attack.
+			# Can still attack.
 			_transition_to(State.ACTION_CHOICE)
 	else:
 		_finish_activation()
@@ -233,12 +277,12 @@ func notify_move_preview_failed(reason: String) -> void:
 
 ## Called by game_board when the attack executor finishes.
 func notify_attack_completed() -> void:
-	if _has_rogue and not _rogue_has_attacked:
-		_rogue_has_attacked = true
-		if _rogue_has_moved:
+	if _allow_move_and_attack and not _has_attacked:
+		_has_attacked = true
+		if _has_moved:
 			_finish_activation()
 		else:
-			# Rogue can still move.
+			# Can still move.
 			_transition_to(State.ACTION_CHOICE)
 	else:
 		_finish_activation()
@@ -249,10 +293,13 @@ func notify_attack_cancelled() -> void:
 	_transition_to(State.ACTION_CHOICE)
 
 
-## Resets the modal when the squadron phase ends.
+## Resets the modal when the squadron phase or command ends.
 func close_modal() -> void:
 	_selected_token = null
 	_selected_instance = null
+	_is_command_mode = false
+	_command_resolver = null
+	_command_ship_token = null
 	_state = State.WAITING_FOR_SELECTION
 	visible = false
 
@@ -278,6 +325,12 @@ func get_state() -> State:
 	return _state
 
 
+## Returns true when the modal is operating in squadron command mode
+## (i.e. opened via [method open_for_command]).
+func is_command_mode() -> bool:
+	return _is_command_mode
+
+
 # ---------------------------------------------------------------------------
 # Private — state transitions
 # ---------------------------------------------------------------------------
@@ -298,6 +351,12 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 	if instance.activated_this_round:
 		_show_error("Already activated this round.")
 		return false
+	# Range check in command mode — squadron must be at close–medium range.
+	if _is_command_mode and _command_resolver != null:
+		if not _command_resolver.is_squadron_in_range(
+				token.global_position):
+			_show_error("Out of range (requires close–medium).")
+			return false
 	# Call GameManager to formally activate.
 	GameManager.activate_squadron(instance)
 	if GameManager.get_activating_squadron() != instance:
@@ -308,13 +367,20 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 	_is_engaged = instance.is_engaged
 	_has_rogue = instance.squadron_data != null \
 			and instance.squadron_data.has_keyword("Rogue")
-	_rogue_has_moved = false
-	_rogue_has_attacked = false
+	# In command mode, ALL squadrons can move and attack (CM-021).
+	# In phase mode, only Rogue squadrons can do both.
+	_allow_move_and_attack = _is_command_mode or _has_rogue
+	_has_moved = false
+	_has_attacked = false
 	# Defaults — game_board overrides via set_action_availability().
 	_can_move = not _is_engaged
 	_has_targets = true
-	_log.info("Selected squadron: %s (engaged=%s, rogue=%s)" % [
-			instance.data_key, str(_is_engaged), str(_has_rogue)])
+	_log.info("Selected squadron: %s (engaged=%s, move_and_attack=%s)" % [
+			instance.data_key, str(_is_engaged),
+			str(_allow_move_and_attack)])
+	# Consume an activation slot in command mode.
+	if _is_command_mode and _command_resolver != null:
+		_command_resolver.use_activation()
 	_transition_to(State.ACTION_CHOICE)
 	return true
 
@@ -325,6 +391,29 @@ func _finish_activation() -> void:
 		activation_done.emit(_selected_instance)
 	_selected_token = null
 	_selected_instance = null
+	# In command mode, check if more activations remain.
+	if _is_command_mode and _command_resolver != null:
+		if _command_resolver.is_done():
+			_log.info("All command activations used — emitting command_done.")
+			_command_resolver.finalize()
+			command_done.emit()
+		else:
+			_log.info("Command activation %d of %d — ready for next." % [
+					_command_resolver.get_activations_used(),
+					_command_resolver.get_max_activations()])
+			_transition_to(State.WAITING_FOR_SELECTION)
+
+
+## Ends the squadron command early (player pressed Done).
+## Emits command_done even if activations remain.
+func _finish_command_early() -> void:
+	_log.info("Squadron command ended early by player.")
+	_selected_token = null
+	_selected_instance = null
+	_transition_to(State.DONE)
+	if _command_resolver != null:
+		_command_resolver.finalize()
+	command_done.emit()
 
 
 # ---------------------------------------------------------------------------
@@ -411,6 +500,14 @@ func _build_ui() -> void:
 	_skip_button.pressed.connect(_on_skip_pressed)
 	_button_container.add_child(_skip_button)
 
+	# Done button — ends the squadron command early (command mode only).
+	_done_button = Button.new()
+	_done_button.text = "Done"
+	_done_button.custom_minimum_size = Vector2(90, 36)
+	_done_button.pressed.connect(_on_done_pressed)
+	_done_button.visible = false
+	_button_container.add_child(_done_button)
+
 	# Commit Move button (hidden by default).
 	_commit_move_button = Button.new()
 	_commit_move_button.text = "Commit Move"
@@ -450,14 +547,25 @@ func _apply_anchor_position() -> void:
 func _update_ui() -> void:
 	_error_label.visible = false
 	var faction_name: String = _get_active_faction_name()
-	_title_label.text = "Squadron Phase — %s" % faction_name
+	if _is_command_mode:
+		var ship_name: String = _get_command_ship_name()
+		_title_label.text = "Squadron Command — %s" % ship_name
+	else:
+		_title_label.text = "Squadron Phase — %s" % faction_name
 
 	match _state:
 		State.WAITING_FOR_SELECTION:
 			_subtitle_label.text = "Activate squadron %d of %d" % [
 					_activation_number, _max_activations]
-			_prompt_label.text = "Click a squadron to activate"
-			_button_container.visible = false
+			if _is_command_mode:
+				_prompt_label.text = "Click a friendly squadron at close–medium range"
+			else:
+				_prompt_label.text = "Click a squadron to activate"
+			_button_container.visible = _is_command_mode
+			_move_button.visible = false
+			_attack_button.visible = false
+			_skip_button.visible = false
+			_done_button.visible = _is_command_mode
 			_commit_move_button.visible = false
 		State.ACTION_CHOICE:
 			var squad_name: String = _get_squadron_name()
@@ -489,10 +597,10 @@ func _update_ui() -> void:
 
 
 func _update_action_buttons() -> void:
-	# Move button — hidden if squadron cannot move (engaged or no targets
-	# computed by game_board).  Also hidden if Rogue already moved.
+	# Move button — hidden if squadron cannot move (engaged or speed 0).
+	# Also hidden if already moved during a move-and-attack activation.
 	var can_move: bool = _can_move
-	if _has_rogue and _rogue_has_moved:
+	if _allow_move_and_attack and _has_moved:
 		can_move = false
 	_move_button.visible = can_move
 	_move_button.disabled = false
@@ -500,20 +608,20 @@ func _update_action_buttons() -> void:
 
 	# Attack button — hidden if no valid targets in range.
 	var can_attack: bool = _has_targets
-	if _has_rogue and _rogue_has_attacked:
+	if _allow_move_and_attack and _has_attacked:
 		can_attack = false
 	_attack_button.visible = can_attack
 	_attack_button.disabled = false
-	if not can_attack and _has_rogue and _rogue_has_attacked:
+	if not can_attack and _allow_move_and_attack and _has_attacked:
 		_attack_button.tooltip_text = "Already attacked"
 	else:
 		_attack_button.tooltip_text = ""
 
 	# Skip button — disabled if engaged (SM-012: must attack).
 	var can_skip: bool = not _is_engaged
-	if _has_rogue:
-		# Rogue engaged can still skip if they've already attacked.
-		if _rogue_has_attacked or not _is_engaged:
+	if _allow_move_and_attack:
+		# Move-and-attack: can skip if already attacked or not engaged.
+		if _has_attacked or not _is_engaged:
 			can_skip = true
 	_skip_button.visible = true
 	_skip_button.disabled = not can_skip
@@ -521,6 +629,10 @@ func _update_action_buttons() -> void:
 		_skip_button.tooltip_text = "Engaged — must attack an engaged enemy"
 	else:
 		_skip_button.tooltip_text = ""
+
+	# Done button — only in command mode, hidden during ACTION_CHOICE
+	# for the selected squadron (Skip is used to end the current activation).
+	_done_button.visible = false
 
 	# Update the prompt if no actions are available (edge case).
 	if not can_move and not can_attack and not can_skip:
@@ -554,6 +666,15 @@ func _get_squadron_name() -> String:
 	return "Unknown"
 
 
+## Returns the commanding ship's display name (command mode only).
+func _get_command_ship_name() -> String:
+	if _command_resolver != null and _command_resolver.get_ship() != null:
+		var ship: ShipInstance = _command_resolver.get_ship()
+		if ship.ship_data != null:
+			return ship.ship_data.ship_name
+	return "Ship"
+
+
 func _show_error(msg: String) -> void:
 	_error_label.text = msg
 	_error_label.visible = true
@@ -584,15 +705,20 @@ func _on_skip_pressed() -> void:
 func _on_commit_move_pressed() -> void:
 	_log.info("Commit Move pressed for %s" % _get_squadron_name())
 	move_commit_requested.emit(_selected_token)
-	if _has_rogue and not _rogue_has_moved:
-		_rogue_has_moved = true
-		if _rogue_has_attacked:
+	if _allow_move_and_attack and not _has_moved:
+		_has_moved = true
+		if _has_attacked:
 			_finish_activation()
 		else:
-			# Rogue can still attack.
+			# Can still attack.
 			_transition_to(State.ACTION_CHOICE)
 	else:
 		_finish_activation()
+
+
+func _on_done_pressed() -> void:
+	_log.info("Done pressed — ending squadron command early.")
+	_finish_command_early()
 
 
 func _on_close_pressed() -> void:

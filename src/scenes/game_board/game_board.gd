@@ -890,6 +890,8 @@ func _create_turn_management_ui() -> void:
 			_on_attack_step_entered)
 	_activation_modal.repair_step_entered.connect(
 			_on_repair_step_entered)
+	_activation_modal.squadron_step_entered.connect(
+			_on_squadron_step_entered)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
@@ -911,6 +913,8 @@ func _create_turn_management_ui() -> void:
 			_on_squadron_attack_requested)
 	_squadron_modal.activation_done.connect(
 			_on_squadron_activation_done)
+	_squadron_modal.command_done.connect(
+			_on_squadron_command_done)
 	_squadron_modal.modal_closed.connect(
 			_on_squadron_modal_closed)
 	layer.add_child(_squadron_modal)
@@ -1577,6 +1581,70 @@ func _on_repair_step_entered() -> void:
 		_repair_panel.centre_on_screen(vp_size)
 
 
+## Called when the player presses "Execute Squadron ►" in the activation modal.
+## Creates a SquadronCommandResolver and opens the SquadronActivationModal
+## in command mode.
+## Rules Reference: RRG "Commands" p.4 — Squadron; CM-020–CM-022.
+func _on_squadron_step_entered() -> void:
+	_log.info("Squadron step entered — starting squadron command flow.")
+	if _ship_activation_state == null or _activating_ship_token == null:
+		_log.info("Cannot start squadron command — no activation state.")
+		return
+	var ship: ShipInstance = _activating_ship_token.get_ship_instance()
+	if ship == null:
+		return
+	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
+			ship, _activating_ship_token.global_position)
+	if resolver.is_empty():
+		_log.info("No squadron activations available — auto-advancing.")
+		_on_squadron_command_done()
+		return
+	# Check if there are any eligible friendly squadrons in range.
+	var has_target: bool = false
+	var tokens: Array[SquadronToken] = get_squadron_tokens()
+	for sq_token: SquadronToken in tokens:
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.owner_player == ship.owner_player \
+				and resolver.is_squadron_in_range(sq_token.global_position):
+			has_target = true
+			break
+	if not has_target:
+		_log.info("No friendly squadrons in range — consuming resources "
+				+ "and auto-advancing.")
+		resolver.finalize()
+		_on_squadron_command_done()
+		return
+	if _show_activation_button:
+		_show_activation_button.hide_button()
+	if _squadron_modal:
+		_squadron_modal.open_for_command(resolver, _activating_ship_token)
+
+
+## Called when the squadron command flow is complete (all activations used
+## or the player finishes early).
+## Finalizes the resolver (spends dial/token), advances the activation
+## step, and re-opens the activation modal.
+## Rules Reference: CM-020.
+func _on_squadron_command_done() -> void:
+	_log.info("Squadron command done — advancing activation step.")
+	if _ship_activation_state:
+		_ship_activation_state.advance_step()
+	# Show the activation button again.
+	if _show_activation_button and _activating_ship_token:
+		_show_activation_button.show_button()
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
+		_activation_modal.set_attack_skippable(
+				not _attack_executor.has_any_attack_target(
+				_activating_ship_token))
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.centre_on_screen(vp_size)
+
+
 ## Called when the repair panel finishes (Done or Skip pressed).
 ## Advances activation state and re-opens the activation modal.
 func _on_repair_done() -> void:
@@ -1584,6 +1652,8 @@ func _on_repair_done() -> void:
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1608,6 +1678,8 @@ func _on_attack_exec_completed() -> void:
 	if _ship_activation_state:
 		_ship_activation_state.advance_step()
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1630,6 +1702,8 @@ func _on_attack_exec_cancelled() -> void:
 		_squadron_modal.notify_attack_cancelled()
 		return
 	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1649,6 +1723,8 @@ func _on_activation_sequence_requested() -> void:
 		_log.info("No activation state — cannot open modal.")
 		return
 	if _activation_modal:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -2220,6 +2296,11 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	if token:
 		token.set_activated_visual(true)
 	_remove_squadron_overlay()
+	# In command mode the modal manages the cycle internally;
+	# do not touch squadron-phase counters or open_for_turn.
+	if _squadron_modal and _squadron_modal.is_command_mode():
+		_log.info("Command-mode activation done: %s" % instance.data_key)
+		return
 	_squadron_activation_count += 1
 	_log.info("Squadron activation done: %s (%d of %d)" % [
 			instance.data_key, _squadron_activation_count,
@@ -2474,3 +2555,37 @@ func _has_repair_resources(ship_token: Variant) -> bool:
 		return false
 	# Even with resources, skip if the ship is at full health.
 	return not inst.is_fully_healthy()
+
+
+## Returns true if the given ship token has a revealed Squadron dial
+## or a Squadron command token **and** there is at least one friendly
+## squadron on the board.  When false the Squadron step is auto-skipped
+## in the activation modal.
+## Rules Reference: CM-020 — Squadron requires dial or token.
+func _has_squadron_resources(ship_token: Variant) -> bool:
+	if ship_token == null or not ship_token is ShipToken:
+		return false
+	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
+	if inst == null:
+		return false
+	var has_resource: bool = false
+	# Check revealed dial.
+	if inst.command_dial_stack:
+		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
+		if not revealed.is_empty() and \
+				int(revealed.get("command", -1)) == \
+				Constants.CommandType.SQUADRON:
+			has_resource = true
+	# Check command token.
+	if not has_resource and inst.command_tokens and \
+			inst.command_tokens.has_token(Constants.CommandType.SQUADRON):
+		has_resource = true
+	if not has_resource:
+		return false
+	# Even with resources, skip if no friendly squadrons exist.
+	var tokens: Array[SquadronToken] = get_squadron_tokens()
+	for sq_token: SquadronToken in tokens:
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.owner_player == inst.owner_player:
+			return true
+	return false

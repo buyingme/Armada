@@ -175,7 +175,7 @@ func finalize() -> void:
 					Constants.CommandType.SQUADRON)
 			EventBus.command_tokens_changed.emit(_ship)
 	_log.info(("Squadron command finalized: %d / %d activations used. "
-			+ "Dial spent=%s, token spent=%s.") % [
+			+"Dial spent=%s, token spent=%s.") % [
 			_activations_used, _max_activations,
 			str(_has_dial), str(_has_token)])
 
@@ -206,7 +206,7 @@ func _resolve_availability(ship: ShipInstance) -> void:
 		_max_activations += 1
 
 	_log.info(("Squadron command availability: dial=%s (sq_val=%d), "
-			+ "token=%s, max_activations=%d.") % [
+			+"token=%s, max_activations=%d.") % [
 			str(_has_dial),
 			ship.ship_data.squadron_value if ship.ship_data else 0,
 			str(_has_token), _max_activations])

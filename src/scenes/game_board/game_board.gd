@@ -178,9 +178,10 @@ var _show_squadron_modal_button: ShowSquadronModalButton = null
 ## Requirements: SQM-001, SQM-002.
 var _squadron_move_overlay: SquadronMoveOverlay = null
 
-## Range band overlay (close–medium) shown during squadron command selection.
+## Range overlay (arc-based) shown during squadron command selection.
+## Reuses the same RangeOverlayScene as the R-button and attack flow.
 ## Requirements: CM-020.
-var _squad_cmd_range_overlay: SquadronCommandRangeOverlay = null
+var _squad_cmd_range_overlay: RangeOverlayScene = null
 
 ## Saved original position of the moving squadron (for revert on cancel).
 var _squadron_move_original_pos: Vector2 = Vector2.ZERO
@@ -1624,8 +1625,9 @@ func _on_squadron_step_entered() -> void:
 		return
 	if _show_activation_button:
 		_show_activation_button.hide_button()
-	# Show the close–medium range overlay around the activating ship.
-	_show_squad_cmd_range_overlay(_activating_ship_token.global_position)
+	# Show the per-ship range overlay (arcs + range bands) so the
+	# player can see which squadrons are within close–medium range.
+	_show_squad_cmd_range_overlay(_activating_ship_token)
 	if _squadron_modal:
 		_squadron_modal.open_for_command(resolver, _activating_ship_token)
 
@@ -2020,16 +2022,17 @@ func _cancel_range_overlay_selection() -> void:
 	_log.info("Range overlay selection cancelled.")
 
 
-## Shows the close–medium range band overlay around a ship during
+## Shows the per-ship range overlay (with arcs and range bands) during
 ## the Squadron command selection step.
+## Reuses [RangeOverlayScene] — identical to the R-button overlay.
 ## Requirements: CM-020.
-func _show_squad_cmd_range_overlay(ship_pos: Vector2) -> void:
+func _show_squad_cmd_range_overlay(ship_token: ShipToken) -> void:
 	_dismiss_squad_cmd_range_overlay()
-	_squad_cmd_range_overlay = SquadronCommandRangeOverlay.new()
+	_squad_cmd_range_overlay = RangeOverlayScene.new()
 	_squad_cmd_range_overlay.name = "SquadCmdRangeOverlay"
 	_token_container.add_child(_squad_cmd_range_overlay)
 	_token_container.move_child(_squad_cmd_range_overlay, 0)
-	_squad_cmd_range_overlay.setup(ship_pos)
+	_squad_cmd_range_overlay.setup(ship_token)
 	_log.info("Squadron command range overlay displayed.")
 
 

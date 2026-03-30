@@ -2234,7 +2234,7 @@ func _resolve_ship_damage(damage: int) -> void:
 			and not _attack_exec_contain_used)
 	_log.info("Damage cards: remaining=%d, has_crit=%s, contain=%s, "
 			% [remaining, has_crit, _attack_exec_contain_used]
-			+ "first_faceup=%s." % first_card_faceup)
+			+"first_faceup=%s." % first_card_faceup)
 	# Hook: ATTACK_RESOLVE_CRITICAL — Targeter Disruption can block critical.
 	if first_card_faceup and _effect_registry:
 		var crit_ctx: EffectContext = EffectContext.new()

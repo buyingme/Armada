@@ -399,6 +399,8 @@ func _finish_activation() -> void:
 		if _command_resolver.is_done():
 			_log.info("All command activations used — emitting command_done.")
 			_command_resolver.finalize()
+			_is_command_mode = false
+			visible = false
 			command_done.emit()
 		else:
 			_log.info("Command activation %d of %d — ready for next." % [
@@ -416,6 +418,8 @@ func _finish_command_early() -> void:
 	_transition_to(State.DONE)
 	if _command_resolver != null:
 		_command_resolver.finalize()
+	_is_command_mode = false
+	visible = false
 	command_done.emit()
 
 
@@ -729,11 +733,6 @@ func _on_close_pressed() -> void:
 	visible = false
 	if _is_command_mode:
 		# Treat dismiss as "finish command early" — finalize and advance.
-		_selected_token = null
-		_selected_instance = null
-		_transition_to(State.DONE)
-		if _command_resolver != null:
-			_command_resolver.finalize()
-		command_done.emit()
+		_finish_command_early()
 	else:
 		modal_closed.emit()

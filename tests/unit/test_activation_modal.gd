@@ -255,3 +255,32 @@ func test_end_activation_closes_modal() -> void:
 	_modal._on_end_activation_pressed()
 	assert_false(_modal.visible,
 			"Modal should be hidden after End Activation press.")
+
+
+# ---------------------------------------------------------------------------
+# Modal stays open after maneuver commit
+# ---------------------------------------------------------------------------
+
+
+func test_modal_stays_open_after_maneuver_commit() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	# Simulate first press (show tool) then second press (commit).
+	_modal._on_execute_pressed() ## shows tool
+	_modal._on_execute_pressed() ## commits maneuver
+	assert_true(_modal.visible,
+			"Modal should stay visible after maneuver commit.")
+
+
+func test_maneuver_commit_emits_signal_without_close() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	watch_signals(_modal)
+	_modal.open(state)
+	_modal._on_execute_pressed() ## shows tool
+	_modal._on_execute_pressed() ## commits maneuver
+	assert_signal_emitted(_modal, "maneuver_commit_requested",
+			"maneuver_commit_requested should emit on commit press.")
+	assert_signal_not_emitted(_modal, "modal_closed",
+			"modal_closed should NOT emit on maneuver commit.")

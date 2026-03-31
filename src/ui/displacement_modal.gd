@@ -163,7 +163,7 @@ func _apply_anchor_position() -> void:
 	var panel_w: float = minf(MODAL_MAX_WIDTH, vp.x * MODAL_WIDTH_FRACTION)
 	custom_minimum_size = Vector2(panel_w, 0.0)
 	set_anchors_preset(Control.PRESET_CENTER)
-	offset_left = -panel_w * 0.5
+	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
 	offset_top = 0.0
 	offset_bottom = 0.0

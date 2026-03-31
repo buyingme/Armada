@@ -1912,10 +1912,14 @@ func _show_end_activation_after_maneuver() -> void:
 	# Update state to reflect completion.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step() ## MANEUVER → DONE
-	# Re-show the activation modal with all steps checked and
-	# the "End Activation ►" button visible.
+	# If the modal is still open (normal commit path), just refresh it
+	# so it shows all steps checked + "End Activation ►".  If it was
+	# closed (displacement path closes it), re-open it.
 	if _activation_modal and _ship_activation_state:
-		_activation_modal.open(_ship_activation_state)
+		if _activation_modal.is_open():
+			_activation_modal.refresh()
+		else:
+			_activation_modal.open(_ship_activation_state)
 	# Re-show the "Show Activation Sequence" button so the player
 	# can close and reopen the modal before pressing End Activation.
 	_show_activation_sequence_button()
@@ -1962,10 +1966,11 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 	# Build toast text.
 	var toast_parts: Array[String] = []
 	if result.stayed_in_place:
-		toast_parts.append("Overlap at all speeds — ship stays in place.")
+		toast_parts.append(
+				"⚠ Collision detected! Ship stays in place (speed 0).")
 	else:
 		toast_parts.append(
-				"Overlap resolved at speed %d (was %d)."
+				"⚠ Collision detected! Speed temporarily reduced to %d (was %d)."
 				% [result.final_speed, result.original_speed])
 	# Deal one facedown damage to the moving ship.
 	_deal_overlap_facedown(moving_inst, _activating_ship_token)

@@ -630,12 +630,12 @@ func _on_execute_pressed() -> void:
 		maneuver_step_entered.emit()
 	else:
 		# Phase 2 — commit the maneuver (snap ship).
+		# The modal stays open — it will update to DONE step with the
+		# "End Activation ►" button once the game board finishes.
 		_log.info("Commit maneuver pressed — snapping ship.")
 		if _execute_button:
 			_execute_button.disabled = true
 		maneuver_commit_requested.emit()
-		close()
-		modal_closed.emit()
 
 
 ## Called when the "Execute Attack ►" button is pressed.

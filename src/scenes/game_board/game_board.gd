@@ -897,6 +897,8 @@ func _create_turn_management_ui() -> void:
 			_on_repair_step_entered)
 	_activation_modal.squadron_step_entered.connect(
 			_on_squadron_step_entered)
+	_activation_modal.squadron_step_skipped.connect(
+			_on_squadron_step_skipped)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
 	layer.add_child(_activation_modal)
@@ -1632,6 +1634,28 @@ func _on_squadron_step_entered() -> void:
 		_squadron_modal.open_for_command(resolver, _activating_ship_token)
 
 
+## Called when the player presses "Skip" on the squadron step (token only).
+## Advances the activation step without entering the squadron command flow.
+## Rules Reference: "Commands" p.4 — spending a command token is optional.
+func _on_squadron_step_skipped() -> void:
+	_log.info("Squadron step skipped by player (token not spent).")
+	if _ship_activation_state:
+		_ship_activation_state.advance_step()
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.set_squadron_skippable(
+				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
+		_activation_modal.set_repair_skippable(
+				not _has_repair_resources(_activating_ship_token))
+		_activation_modal.set_attack_skippable(
+				not _attack_executor.has_any_attack_target(
+				_activating_ship_token))
+		_activation_modal.open(_ship_activation_state)
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_modal.centre_on_screen(vp_size)
+
+
 ## Called when the squadron command flow is complete (all activations used
 ## or the player finishes early).
 ## Finalizes the resolver (spends dial/token), advances the activation
@@ -1648,6 +1672,8 @@ func _on_squadron_command_done() -> void:
 	if _activation_modal and _ship_activation_state:
 		_activation_modal.set_squadron_skippable(
 				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1667,6 +1693,8 @@ func _on_repair_done() -> void:
 	if _activation_modal and _ship_activation_state:
 		_activation_modal.set_squadron_skippable(
 				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1693,6 +1721,8 @@ func _on_attack_exec_completed() -> void:
 	if _activation_modal and _ship_activation_state:
 		_activation_modal.set_squadron_skippable(
 				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1717,6 +1747,8 @@ func _on_attack_exec_cancelled() -> void:
 	if _activation_modal and _ship_activation_state:
 		_activation_modal.set_squadron_skippable(
 				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -1738,6 +1770,8 @@ func _on_activation_sequence_requested() -> void:
 	if _activation_modal:
 		_activation_modal.set_squadron_skippable(
 				not _has_squadron_resources(_activating_ship_token))
+		_activation_modal.set_squadron_token_only(
+				_is_squadron_token_only(_activating_ship_token))
 		_activation_modal.set_repair_skippable(
 				not _has_repair_resources(_activating_ship_token))
 		_activation_modal.set_attack_skippable(
@@ -2640,3 +2674,25 @@ func _has_squadron_resources(ship_token: Variant) -> bool:
 		if sq_inst and sq_inst.owner_player == inst.owner_player:
 			return true
 	return false
+
+
+## Returns true if the ship has a Squadron token but no matching dial.
+## In that case spending the token is optional and the player should be
+## offered a "Skip" button.
+## Rules Reference: "Commands" p.4 — command tokens are optional.
+func _is_squadron_token_only(ship_token: Variant) -> bool:
+	if ship_token == null or not ship_token is ShipToken:
+		return false
+	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
+	if inst == null:
+		return false
+	var has_dial: bool = false
+	if inst.command_dial_stack:
+		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
+		if not revealed.is_empty() and \
+				int(revealed.get("command", -1)) == \
+				Constants.CommandType.SQUADRON:
+			has_dial = true
+	var has_token: bool = inst.command_tokens != null and \
+			inst.command_tokens.has_token(Constants.CommandType.SQUADRON)
+	return has_token and not has_dial

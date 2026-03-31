@@ -2378,11 +2378,17 @@ func _attack_exec_finalize_attack() -> void:
 		_attack_sim_panel.hide_redirect_section()
 	# Rotate camera back to the attacker's perspective for hull zone
 	# selection or the squadron loop. Requirement: AE-DEF-011.
-	if _camera and PlayMode.is_hot_seat() and _attack_exec_ship_token:
-		var atk_inst: ShipInstance = (
-				_attack_exec_ship_token.get_ship_instance())
-		if atk_inst:
-			_camera.rotate_to_player(atk_inst.owner_player)
+	if _camera and PlayMode.is_hot_seat():
+		if _attack_exec_ship_token:
+			var atk_inst: ShipInstance = (
+					_attack_exec_ship_token.get_ship_instance())
+			if atk_inst:
+				_camera.rotate_to_player(atk_inst.owner_player)
+		elif _attack_exec_squad_token:
+			var sq_inst: SquadronInstance = (
+					_attack_exec_squad_token.get_squadron_instance())
+			if sq_inst:
+				_camera.rotate_to_player(sq_inst.owner_player)
 	# --- Squadron defender: Step 6 loop ---
 	if _attack_sim_def_squad:
 		_attack_exec_attacked_squads.append(_attack_sim_def_squad)

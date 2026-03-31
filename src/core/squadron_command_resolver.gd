@@ -159,17 +159,21 @@ func use_activation() -> bool:
 
 ## Spends the dial and/or token that were used.
 ## The dial is always consumed if available (even if 0 activations used).
-## The token is consumed only if the dial alone didn't cover all activations,
-## or if no dial was available.
+## The token is consumed only if at least one activation was used
+## (i.e. the player actually chose to spend it).
 ## Should be called when the squadron command step finishes.
 ## Rules Reference: RRG "Commands" — spending rules.
 func finalize() -> void:
-	# Spend the dial (always consumed if present).
+	# If no activations were used and there's no dial, don't spend anything.
+	# The player chose not to use the token.
+	var spent_anything: bool = _activations_used > 0
+	# Spend the dial (always consumed if present — it was revealed).
 	if _has_dial and _ship.command_dial_stack:
 		_ship.command_dial_stack.spend_revealed()
 		EventBus.command_dials_changed.emit(_ship)
-	# Spend the token if it contributed activations.
-	if _has_token:
+		spent_anything = true
+	# Spend the token only if activations were actually used from it.
+	if _has_token and spent_anything:
 		if _ship.command_tokens:
 			_ship.command_tokens.spend_token(
 					Constants.CommandType.SQUADRON)

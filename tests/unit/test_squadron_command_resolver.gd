@@ -234,16 +234,34 @@ func test_finalize_spends_token() -> void:
 	assert_true(ship.command_tokens.has_token(
 			Constants.CommandType.SQUADRON),
 			"Token should exist before finalize")
+	resolver.use_activation()
 	resolver.finalize()
 	assert_false(ship.command_tokens.has_token(
 			Constants.CommandType.SQUADRON),
 			"Token should be consumed after finalize (CM-022)")
 
 
+## Rules Reference: "Commands" p.4 — spending a command token is optional.
+func test_finalize_does_not_spend_token_if_no_activations_used() -> void:
+	var ship: ShipInstance = _make_ship(2, false, true)
+	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
+			ship, Vector2.ZERO)
+	assert_true(ship.command_tokens.has_token(
+			Constants.CommandType.SQUADRON),
+			"Token should exist before finalize")
+	# Finalize without using any activations — token should be kept.
+	resolver.finalize()
+	assert_true(ship.command_tokens.has_token(
+			Constants.CommandType.SQUADRON),
+			"Token should be kept when no activations used")
+
+
 func test_finalize_spends_both_dial_and_token() -> void:
 	var ship: ShipInstance = _make_ship(2, true, true)
 	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
 			ship, Vector2.ZERO)
+	# Use at least one activation so the token counts as spent.
+	resolver.use_activation()
 	resolver.finalize()
 	var after_dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	assert_true(after_dial.is_empty(),

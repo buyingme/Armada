@@ -36,6 +36,10 @@ signal repair_step_entered()
 ## Requirements: CM-020.
 signal squadron_step_entered()
 
+## Emitted when the player chooses to skip the squadron step (token only).
+## Rules Reference: "Commands" p.4 — spending a command token is optional.
+signal squadron_step_skipped()
+
 ## Emitted when the modal wants to auto-skip to maneuver (all placeholders done).
 signal ready_for_maneuver()
 
@@ -94,6 +98,9 @@ var _repair_button: Button = null
 ## Requirements: CM-020.
 var _squadron_button: Button = null
 
+## "Skip" button inside the squadron step (shown when token-only).
+var _squadron_skip_button: Button = null
+
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
@@ -108,6 +115,11 @@ var _skip_repair: bool = false
 ## When true the Squadron step is auto-skipped (no squadron dial or token).
 ## Set by the game board via [method set_squadron_skippable] before opening.
 var _skip_squadron: bool = false
+
+## When true the ship has a Squadron token but no matching dial.
+## The player may choose to skip (not spend the token).
+## Rules Reference: "Commands" p.4 — command tokens are optional.
+var _squadron_token_only: bool = false
 
 ## True once the maneuver tool has been shown (Execute pressed once).
 ## Second press commits the maneuver.
@@ -138,6 +150,13 @@ func set_repair_skippable(skip: bool) -> void:
 ## Rules Reference: "Commands", p.4 — squadron command needs dial or token.
 func set_squadron_skippable(skip: bool) -> void:
 	_skip_squadron = skip
+
+
+## Marks whether the ship only has a Squadron token (no dial).
+## When true a "Skip" button is shown alongside "Execute Squadron".
+## Rules Reference: "Commands" p.4 — spending a command token is optional.
+func set_squadron_token_only(token_only: bool) -> void:
+	_squadron_token_only = token_only
 
 
 ## Opens the modal for the given activation state.
@@ -378,7 +397,7 @@ func _create_step_row(step_index: int) -> PanelContainer:
 		_repair_button.pressed.connect(_on_repair_pressed)
 		hbox.add_child(_repair_button)
 
-	# For step 2 (Squadron): add "Execute Squadron" button.
+	# For step 2 (Squadron): add "Execute Squadron" button and optional skip.
 	if step_index == 1:
 		_squadron_button = Button.new()
 		_squadron_button.text = "Execute Squadron ►"
@@ -386,6 +405,12 @@ func _create_step_row(step_index: int) -> PanelContainer:
 		_squadron_button.visible = false
 		_squadron_button.pressed.connect(_on_squadron_pressed)
 		hbox.add_child(_squadron_button)
+		_squadron_skip_button = Button.new()
+		_squadron_skip_button.text = "Skip"
+		_squadron_skip_button.custom_minimum_size = Vector2(60, 28)
+		_squadron_skip_button.visible = false
+		_squadron_skip_button.pressed.connect(_on_squadron_skip_pressed)
+		hbox.add_child(_squadron_skip_button)
 
 	# Status label (shows badge or checkmark).
 	var status: Label = Label.new()
@@ -412,6 +437,7 @@ func _clear_ui() -> void:
 	_attack_button = null
 	_repair_button = null
 	_squadron_button = null
+	_squadron_skip_button = null
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +490,9 @@ func _update_step_display() -> void:
 					if _squadron_button:
 						_squadron_button.visible = true
 						_squadron_button.disabled = false
+					if _squadron_skip_button:
+						_squadron_skip_button.visible = _squadron_token_only
+						_squadron_skip_button.disabled = false
 			elif i == 2:
 				# Repair step — show button or "No dial/token" badge.
 				if _skip_repair:
@@ -512,6 +541,8 @@ func _update_step_display() -> void:
 				_repair_button.visible = false
 			if i == 1 and _squadron_button:
 				_squadron_button.visible = false
+		if i == 1 and _squadron_skip_button:
+				_squadron_skip_button.visible = false
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -600,6 +631,16 @@ func _on_attack_pressed() -> void:
 func _on_squadron_pressed() -> void:
 	_log.info("Execute Squadron pressed — starting squadron command flow.")
 	squadron_step_entered.emit()
+	close()
+	modal_closed.emit()
+
+
+## Called when the "Skip" button next to Squadron is pressed.
+## Emits [signal squadron_step_skipped] to advance without spending.
+## Rules Reference: "Commands" p.4 — command tokens are optional.
+func _on_squadron_skip_pressed() -> void:
+	_log.info("Squadron step skipped by player (token only).")
+	squadron_step_skipped.emit()
 	close()
 	modal_closed.emit()
 

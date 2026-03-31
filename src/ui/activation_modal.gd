@@ -541,7 +541,7 @@ func _update_step_display() -> void:
 				_repair_button.visible = false
 			if i == 1 and _squadron_button:
 				_squadron_button.visible = false
-		if i == 1 and _squadron_skip_button:
+			if i == 1 and _squadron_skip_button:
 				_squadron_skip_button.visible = false
 
 

@@ -2434,8 +2434,14 @@ func _commit_squadron_placement(token: SquadronToken) -> void:
 			instance, _squadron_move_original_pos, token.global_position,
 			all_squads, bases)
 	if error.is_empty():
-		_squadron_modal.notify_move_completed()
+		# Commit first so engagement flags are up-to-date for target check.
 		_on_squadron_move_commit(token)
+		# Recalculate targets at the new position and inform the modal.
+		var updated_squads: Array[Dictionary] = _build_all_squadron_positions()
+		var new_has_targets: bool = _squadron_has_valid_targets(
+				instance, token, updated_squads)
+		_squadron_modal.set_action_availability(false, new_has_targets)
+		_squadron_modal.notify_move_completed()
 		_log.info("Squadron placed at %s." % str(token.global_position))
 	else:
 		_squadron_modal.notify_move_preview_failed(error)

@@ -255,6 +255,10 @@ func notify_move_completed() -> void:
 		_has_moved = true
 		if _has_attacked:
 			_finish_activation()
+		elif not _has_targets:
+			# No valid attack targets at new position — auto-finish.
+			_log.info("No targets after move — auto-finishing activation.")
+			_finish_activation()
 		else:
 			# Can still attack.
 			_transition_to(State.ACTION_CHOICE)

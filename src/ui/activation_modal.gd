@@ -637,12 +637,11 @@ func _on_squadron_pressed() -> void:
 
 ## Called when the "Skip" button next to Squadron is pressed.
 ## Emits [signal squadron_step_skipped] to advance without spending.
+## The modal stays open — the game board will re-open it at the next step.
 ## Rules Reference: "Commands" p.4 — command tokens are optional.
 func _on_squadron_skip_pressed() -> void:
 	_log.info("Squadron step skipped by player (token only).")
 	squadron_step_skipped.emit()
-	close()
-	modal_closed.emit()
 
 
 ## Called when the "Execute Repair ►" button is pressed.

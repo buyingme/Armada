@@ -1629,6 +1629,15 @@ func _on_attack_confirm() -> void:
 	_attack_exec_brace_used = false
 	_attack_exec_redirect_step = false
 	_attack_exec_evade_step = false
+	# Zero damage — skip accuracy and defense entirely since there is
+	# nothing to mitigate.  Go straight to damage resolution which will
+	# show "No damage dealt." and advance to the next attack.
+	if damage == 0:
+		_log.info("No damage in roll — skipping accuracy & defense.")
+		_attack_exec_accuracy_step = false
+		_attack_exec_defense_step = false
+		_attack_exec_resolve_damage()
+		return
 	_attack_exec_start_accuracy()
 
 

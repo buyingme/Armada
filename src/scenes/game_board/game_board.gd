@@ -208,11 +208,11 @@ var _displacement_index: int = 0
 ## True while a displaced squadron follows the mouse (snap-to-edge mode).
 var _displacement_moving: bool = false
 
-## Commit button shown during squadron displacement.
-var _displacement_commit_btn: Button = null
+## Displacement modal panel (squadron checklist + commit).
+var _displacement_modal: DisplacementModal = null
 
-## CanvasLayer for the displacement commit button.
-var _displacement_btn_layer: CanvasLayer = null
+## CanvasLayer for the displacement modal.
+var _displacement_modal_layer: CanvasLayer = null
 
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
@@ -345,16 +345,11 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
-	# Squadron displacement: left-click locks or repositions.
-	if _displacement_queue.size() > 0 and event is InputEventMouseButton:
+	# Squadron displacement: left-click locks the currently moving squadron.
+	if _displacement_moving and event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			if _displacement_moving:
-				# Lock at current snapped position.
-				_lock_displacement_position()
-			else:
-				# Re-enter mouse-follow to reposition.
-				_unlock_displacement_position()
+			_lock_displacement_position()
 			get_viewport().set_input_as_handled()
 			return
 	# Attack simulator: Escape dismisses.
@@ -2041,9 +2036,9 @@ func _find_displaced_squadrons(ship_base: ShipBase) -> Array[SquadronToken]:
 	return displaced
 
 
-## Starts the squadron displacement flow.  Flips the camera to the
-## opposing player, then auto-places each displaced squadron at the
-## nearest ship edge and lets the player drag & commit each one.
+## Starts the squadron displacement flow.  Hides the "Show Activation
+## Sequence" button, flips the camera to the opposing player, then
+## presents a modal for placing each displaced squadron.
 ## Rules Reference: RRG "Overlapping", p.8 — OV-002, OV-003.
 func _start_squadron_displacement(
 		displaced: Array[SquadronToken],
@@ -2052,6 +2047,11 @@ func _start_squadron_displacement(
 	_displacement_ship_base = ship_base
 	_displacement_index = 0
 	_displacement_moving = false
+	# Hide the activation sequence button during displacement.
+	if _show_activation_button:
+		_show_activation_button.hide_button()
+	if _activation_modal and _activation_modal.is_open():
+		_activation_modal.close()
 	_log.info("Starting squadron displacement: %d squadron(s)."
 			% displaced.size())
 	# Flip camera to the opposing player.
@@ -2066,30 +2066,28 @@ func _start_squadron_displacement(
 
 ## Called once the camera finishes rotating to the opponent's view.
 func _on_displacement_camera_ready() -> void:
-	_create_displacement_commit_button()
-	_prompt_next_displacement()
+	_create_displacement_modal()
+	_select_displacement_squadron(_displacement_modal.get_first_unchecked())
 
 
-## Prompts the opponent to place the next displaced squadron.
-## Auto-places it at the nearest ship edge and enters mouse-follow mode.
-func _prompt_next_displacement() -> void:
-	if _displacement_index >= _displacement_queue.size():
-		# All displaced squadrons have been placed.
-		_finish_displacement()
+## Selects a squadron for placement: auto-places it at the nearest ship
+## edge and enters mouse-follow mode.  Updates the modal to highlight
+## the active row.
+func _select_displacement_squadron(index: int) -> void:
+	if index < 0 or index >= _displacement_queue.size():
 		return
-	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
+	_displacement_index = index
+	var sq_token: SquadronToken = _displacement_queue[index]
 	var sq_radius: float = sq_token.get_radius_px()
 	# Auto-place at the nearest ship edge from the old position.
 	var snap_pos: Vector2 = OverlapResolver.snap_to_ship_edge(
 			sq_token.global_position, sq_radius, _displacement_ship_base)
 	sq_token.global_position = snap_pos
 	sq_token.visible = true
-	var sq_name: String = _get_squadron_display_name(sq_token)
-	TooltipManager.show_text(
-			"Move %s around the ship. Click to lock, then Commit ►."
-			% sq_name, Vector2.INF, 0.0, true)
 	_displacement_moving = true
-	_update_displacement_commit_button(false)
+	if _displacement_modal:
+		_displacement_modal.set_active(index)
+	var sq_name: String = _get_squadron_display_name(sq_token)
 	_log.info("Displacement: auto-placed %s at %s — mouse-follow active."
 			% [sq_name, str(snap_pos)])
 
@@ -2110,55 +2108,53 @@ func _move_displaced_squadron_to_mouse() -> void:
 
 
 ## Called on left-click during displacement: locks the squadron at its
-## current snapped position and enables the Commit button.
+## current snapped position and checks it in the modal.  Auto-selects
+## the next unchecked squadron if one exists.
 func _lock_displacement_position() -> void:
 	_displacement_moving = false
-	_update_displacement_commit_button(true)
 	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
 	var sq_name: String = _get_squadron_display_name(sq_token)
-	TooltipManager.show_text(
-			"%s locked. Press Commit ► or click to reposition."
-			% sq_name, Vector2.INF, 0.0, true)
 	_log.info("Displacement: %s locked at %s."
 			% [sq_name, str(sq_token.global_position)])
+	# Check in modal.
+	if _displacement_modal:
+		_displacement_modal.check_squadron(_displacement_index)
+		# Auto-select the next unchecked squadron.
+		var next: int = _displacement_modal.get_first_unchecked()
+		if next >= 0:
+			_select_displacement_squadron(next)
 
 
-## Re-enters mouse-follow mode for the current displaced squadron
-## (player clicked again after locking to reposition).
-func _unlock_displacement_position() -> void:
-	if _displacement_index >= _displacement_queue.size():
-		return
+## Called when the modal emits squadron_selected (row click on unchecked).
+func _on_displacement_row_selected(index: int) -> void:
+	_select_displacement_squadron(index)
+
+
+## Called when the modal emits squadron_unchecked (row click on checked).
+## Un-checks the squadron and re-enters mouse-follow for repositioning.
+func _on_displacement_row_unchecked(index: int) -> void:
+	_displacement_index = index
 	_displacement_moving = true
-	_update_displacement_commit_button(false)
-	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
-	var sq_name: String = _get_squadron_display_name(sq_token)
-	TooltipManager.show_text(
-			"Move %s around the ship. Click to lock, then Commit ►."
-			% sq_name, Vector2.INF, 0.0, true)
-	_log.info("Displacement: %s unlocked for repositioning."
-			% sq_name)
+	if _displacement_modal:
+		_displacement_modal.uncheck_squadron(index)
+	var sq_name: String = _get_squadron_display_name(
+			_displacement_queue[index])
+	_log.info("Displacement: %s unchecked for repositioning." % sq_name)
 
 
-## Called when the Commit button is pressed during displacement.
-## Advances to the next displaced squadron or finishes.
-func _on_displacement_commit_pressed() -> void:
-	if _displacement_index >= _displacement_queue.size():
-		return
-	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
-	var sq_name: String = _get_squadron_display_name(sq_token)
-	_log.info("Displacement committed: %s at %s."
-			% [sq_name, str(sq_token.global_position)])
-	_displacement_index += 1
-	_prompt_next_displacement()
+## Called when the modal emits placement_committed (all checked, commit pressed).
+func _on_displacement_committed() -> void:
+	_log.info("Displacement commit pressed — all squadrons placed.")
+	_finish_displacement()
 
 
-## Finishes the displacement flow: removes UI, flips camera back,
-## and ends the activation.
+## Finishes the displacement flow: removes modal, flips camera back,
+## and ends the activation (triggering normal turn transition + banner).
 func _finish_displacement() -> void:
 	_displacement_moving = false
 	_displacement_queue.clear()
 	_displacement_ship_base = null
-	_remove_displacement_commit_button()
+	_remove_displacement_modal()
 	TooltipManager.hide()
 	_log.info("All displaced squadrons placed — flipping camera back.")
 	# Flip camera back to the active player.
@@ -2171,42 +2167,45 @@ func _finish_displacement() -> void:
 
 
 ## Called when the camera returns to the active player after displacement.
+## Fires activation_ended which triggers the normal turn transition
+## (GameManager advances turn → active_player_changed → YourTurnBanner).
 func _on_displacement_camera_returned() -> void:
 	_show_end_activation_after_maneuver()
 
 
-## Creates the displacement Commit button on a CanvasLayer.
-func _create_displacement_commit_button() -> void:
-	if _displacement_btn_layer != null:
+## Creates the displacement modal on a CanvasLayer and wires its signals.
+func _create_displacement_modal() -> void:
+	if _displacement_modal_layer != null:
 		return
-	_displacement_btn_layer = CanvasLayer.new()
-	_displacement_btn_layer.name = "DisplacementBtnLayer"
-	_displacement_btn_layer.layer = 96
-	add_child(_displacement_btn_layer)
-	_displacement_commit_btn = Button.new()
-	_displacement_commit_btn.text = "Commit ►"
-	_displacement_commit_btn.custom_minimum_size = Vector2(160, 44)
-	_displacement_commit_btn.disabled = true
-	_displacement_commit_btn.pressed.connect(_on_displacement_commit_pressed)
-	_displacement_btn_layer.add_child(_displacement_commit_btn)
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_displacement_commit_btn.position = Vector2(
-			(vp_size.x - 160.0) * 0.5,
-			vp_size.y - 44.0 - 24.0)
+	_displacement_modal_layer = CanvasLayer.new()
+	_displacement_modal_layer.name = "DisplacementModalLayer"
+	_displacement_modal_layer.layer = 96
+	add_child(_displacement_modal_layer)
+
+	_displacement_modal = DisplacementModal.new()
+	_displacement_modal.name = "DisplacementModal"
+	# Build the names list from the queue.
+	var names: Array[String] = []
+	for sq_token: SquadronToken in _displacement_queue:
+		names.append(_get_squadron_display_name(sq_token))
+	_displacement_modal.squadron_selected.connect(
+			_on_displacement_row_selected)
+	_displacement_modal.squadron_unchecked.connect(
+			_on_displacement_row_unchecked)
+	_displacement_modal.placement_committed.connect(
+			_on_displacement_committed)
+	_displacement_modal_layer.add_child(_displacement_modal)
+	_displacement_modal.open(names)
 
 
-## Enables or disables the displacement Commit button.
-func _update_displacement_commit_button(enabled: bool) -> void:
-	if _displacement_commit_btn:
-		_displacement_commit_btn.disabled = not enabled
-
-
-## Removes the displacement Commit button and its CanvasLayer.
-func _remove_displacement_commit_button() -> void:
-	if _displacement_btn_layer:
-		_displacement_btn_layer.queue_free()
-		_displacement_btn_layer = null
-		_displacement_commit_btn = null
+## Removes the displacement modal and its CanvasLayer.
+func _remove_displacement_modal() -> void:
+	if _displacement_modal:
+		_displacement_modal.close_and_clear()
+	if _displacement_modal_layer:
+		_displacement_modal_layer.queue_free()
+		_displacement_modal_layer = null
+		_displacement_modal = null
 
 
 ## Returns a display-friendly name for a squadron token.

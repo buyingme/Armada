@@ -829,11 +829,11 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
 | 1 | Ship–ship overlap detection | Core | OV-010–013 | `OverlapResolver.check_ship_ship_overlap()` — speed reduction loop, facedown damage to both ships | ✅ |
-| 2 | Ship–squadron overlap handling | Core + Presentation | OV-001–004 | `OverlapResolver.find_overlapped_squadrons()`, `validate_squadron_placement()`, `snap_to_ship_edge()`; snap-to-edge displacement flow with camera flip, mouse-follow, commit button in `game_board.gd` | ✅ |
+| 2 | Ship–squadron overlap handling | Core + Presentation | OV-001–004 | `OverlapResolver.find_overlapped_squadrons()`, `validate_squadron_placement()`, `snap_to_ship_edge()`; `DisplacementModal` (squadron checklist with check/uncheck + commit); snap-to-edge displacement flow with camera flip, mouse-follow in `game_board.gd` | ✅ |
 | 3 | Maneuver tool side fallback | Core | MV-013 | Already implemented — skipped | ✅ |
-| 4 | Tests | Test | OV-001–013 | `test_overlap_resolver.gd` — 13 tests covering overlap detection, displacement, placement validation, speed restore, snap-to-edge | ✅ |
+| 4 | Tests | Test | OV-001–013 | `test_overlap_resolver.gd` — 13 tests; `test_displacement_modal.gd` — 14 tests (open/close, check/uncheck, all_checked, first_unchecked, single-squadron edge case) | ✅ |
 
-**Tests:** 13 (86 scripts, 1603 tests, 1602 passing — pre-existing Nebulon-B failure)
+**Tests:** 27 (87 scripts, 1617 tests, 1616 passing — pre-existing Nebulon-B failure)
 
 ---
 

@@ -3,7 +3,7 @@
 > **Scope:** Phases 0–5d, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 86 scripts, 1603 tests — 1602 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 87 scripts, 1617 tests — 1616 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3274,9 +3274,9 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 
 ## Phase 5b-2 — Overlap Handling
 
-**What this phase adds:** Ship–ship overlap detection with automatic temporary speed reduction and facedown damage to both ships. Ship–squadron overlap detection with click-to-place displacement by the opposing player. Toast notifications for overlap events.
+**What this phase adds:** Ship–ship overlap detection with automatic temporary speed reduction and facedown damage to both ships. Ship–squadron overlap detection with displacement modal (squadron checklist + commit) for the opposing player. Toast notifications for overlap events.
 
-**Automated coverage:** `test_overlap_resolver.gd` — 10 tests covering overlap detection, speed reduction loop, stay-in-place, squadron overlap detection, and placement validation. Manual tests below cover visual/interaction aspects only.
+**Automated coverage:** `test_overlap_resolver.gd` — 13 tests covering overlap detection, speed reduction, placement validation, snap-to-edge. `test_displacement_modal.gd` — 14 tests covering open/close, check/uncheck, all_checked, first_unchecked, single-squadron edge case. Manual tests below cover visual/interaction aspects only.
 
 ### MT-5b2.1 — Ship–ship overlap causes speed reduction and damage
 
@@ -3296,26 +3296,26 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Observe ship position | Ship remains at its original position |
 | 4 | Both ships take 1 facedown damage | Card panels updated |
 
-### MT-5b2.3 — Ship–squadron overlap triggers displacement with screen flip
+### MT-5b2.3 — Ship–squadron overlap triggers displacement modal with screen flip
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Position a squadron in the path of a moving ship | Squadron will be overlapped |
-| 2 | Activate the ship and commit maneuver | Camera rotates 180° to the opposing player's perspective |
-| 3 | Displaced squadron auto-placed touching the ship edge | Squadron visible at nearest edge; tooltip: "Move [Name] around the ship. Click to lock, then Commit ►." |
-| 4 | Move the mouse around the ship | Squadron follows the cursor, always snapped to the ship edge |
-| 5 | Left-click to lock position | Tooltip: "[Name] locked. Press Commit ► or click to reposition."; Commit button enabled |
-| 6 | Click elsewhere on the board | Squadron re-enters mouse-follow mode (repositioning) |
-| 7 | Click to lock again, then press Commit ► | Next displaced squadron begins or displacement completes |
-| 8 | After all squadrons committed | Camera rotates back to the active player; activation ends |
+| 2 | Activate the ship and commit maneuver | "Show Activation Sequence" button hides; camera rotates 180° to the opposing player's perspective |
+| 3 | Displacement Modal appears | Title: "Squadron Displacement"; lists displaced squadron(s) with ► on the first row; "Commit Placement ►" button disabled |
+| 4 | First squadron auto-placed at ship edge, mouse-follow active | Squadron snapped to ship edge, follows cursor |
+| 5 | Left-click to lock position | ✓ checkmark on that squadron's row; next unchecked auto-selected |
+| 6 | Click a checked row in the modal | Row unchecks, squadron re-enters mouse-follow for repositioning |
+| 7 | Lock all squadrons | All rows show ✓; "Commit Placement ►" button enabled |
+| 8 | Press "Commit Placement ►" | Modal closes; camera rotates back to active player; activation ends; "Your Turn" banner shown for next player |
 
-### MT-5b2.4 — Multiple displaced squadrons handled sequentially
+### MT-5b2.4 — Multiple displaced squadrons handled via modal checklist
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Position multiple squadrons in the ship's path | Multiple overlap |
-| 2 | Commit the maneuver | First squadron auto-placed and enters mouse-follow |
-| 3 | Lock and commit the first squadron | Second squadron auto-placed and enters mouse-follow |
-| 4 | Lock and commit all remaining | Camera flips back; activation ends |
+| 2 | Commit the maneuver | Modal lists all displaced squadrons; first row highlighted with ► |
+| 3 | Lock the first squadron | ✓ on first row; second row auto-selected with ► |
+| 4 | Lock remaining; press Commit | Camera flips back; activation ends; next player's turn |
 
-**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; displaced squadrons snap to ship edge, follow mouse, lock on click, confirm with Commit button; camera flips to opponent before and back after displacement.
+**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; displacement shows modal checklist with check/uncheck, snap-to-edge mouse-follow, Commit button; "Show Activation Sequence" hidden during displacement; camera flips to opponent before displacement and back after; "Your Turn" banner appears for the next player after commit.

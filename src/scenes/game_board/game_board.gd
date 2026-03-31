@@ -2047,6 +2047,10 @@ func _start_squadron_displacement(
 	_displacement_ship_base = ship_base
 	_displacement_index = 0
 	_displacement_moving = false
+	# Disable input on displaced squadron tokens so their _unhandled_input
+	# doesn't consume clicks meant for the displacement lock action.
+	for sq: SquadronToken in displaced:
+		sq.set_process_unhandled_input(false)
 	# Hide the activation sequence button during displacement.
 	if _show_activation_button:
 		_show_activation_button.hide_button()
@@ -2152,10 +2156,13 @@ func _on_displacement_committed() -> void:
 ## and ends the activation (triggering normal turn transition + banner).
 func _finish_displacement() -> void:
 	_displacement_moving = false
+	# Re-enable input on displaced squadron tokens.
+	for sq: SquadronToken in _displacement_queue:
+		sq.set_process_unhandled_input(true)
 	_displacement_queue.clear()
 	_displacement_ship_base = null
 	_remove_displacement_modal()
-	TooltipManager.hide()
+	TooltipManager.hide_tooltip()
 	_log.info("All displaced squadrons placed — flipping camera back.")
 	# Flip camera back to the active player.
 	var active: int = GameManager.get_active_player()

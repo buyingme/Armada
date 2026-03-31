@@ -932,6 +932,8 @@ func _create_turn_management_ui() -> void:
 			_on_squadron_step_skipped)
 	_activation_modal.modal_closed.connect(
 			_on_activation_modal_closed)
+	_activation_modal.end_activation_requested.connect(
+			_on_activation_end_requested)
 	layer.add_child(_activation_modal)
 
 	# Phase 9: Repair panel (centred, same style as ActivationModal).
@@ -1901,16 +1903,30 @@ func _on_execute_maneuver() -> void:
 	_log.info("Ship snapped to final position.")
 
 
-## Auto-ends the activation after maneuver execution.
-## Advances the step to DONE and emits activation_ended so the
-## GameManager spends the dial, marks the ship activated, and advances
-## the turn — no extra button press required.
+## Shows the activation modal at the DONE step so the player can review
+## all completed steps and deliberately end their activation.
+## Replaces the previous auto-end behaviour (activation_ended was emitted
+## immediately after maneuver).
 ## Requirements: AC-5b-11, FLOW-002.
 func _show_end_activation_after_maneuver() -> void:
-	# Update state to reflect completion before signalling.
+	# Update state to reflect completion.
 	if _ship_activation_state:
 		_ship_activation_state.advance_step() ## MANEUVER → DONE
-	# Auto-end the activation (next player's turn).
+	# Re-show the activation modal with all steps checked and
+	# the "End Activation ►" button visible.
+	if _activation_modal and _ship_activation_state:
+		_activation_modal.open(_ship_activation_state)
+	# Re-show the "Show Activation Sequence" button so the player
+	# can close and reopen the modal before pressing End Activation.
+	_show_activation_sequence_button()
+
+
+## Called when the player presses "End Activation ►" in the modal.
+## Emits activation_ended so GameManager spends the dial, marks the ship
+## activated, and advances the turn.
+## Rules Reference: RRG "Ship Activation" p.16 — activation ends.
+func _on_activation_end_requested() -> void:
+	_log.info("Player ended activation via End Activation button.")
 	EventBus.activation_ended.emit()
 
 

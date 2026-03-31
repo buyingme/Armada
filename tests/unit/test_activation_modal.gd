@@ -195,3 +195,63 @@ func test_attack_step_entered_signal_not_emitted_when_skippable() -> void:
 	await get_tree().create_timer(0.5).timeout
 	assert_signal_not_emitted(_modal, "attack_step_entered",
 			"attack_step_entered should not emit when skippable.")
+
+
+# ---------------------------------------------------------------------------
+# End Activation button (DONE step)
+# ---------------------------------------------------------------------------
+
+
+func test_end_activation_button_hidden_before_done() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	assert_false(_modal._end_activation_button.visible,
+			"End Activation button should be hidden before DONE step.")
+
+
+func test_end_activation_button_visible_at_done() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	assert_true(_modal._end_activation_button.visible,
+			"End Activation button should be visible when step is DONE.")
+
+
+func test_end_activation_button_not_disabled_at_done() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	assert_false(_modal._end_activation_button.disabled,
+			"End Activation button should not be disabled at DONE.")
+
+
+func test_all_steps_checked_at_done() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	for i: int in range(_modal._step_rows.size()):
+		var row: PanelContainer = _modal._step_rows[i]
+		var status: Label = _modal._find_status_label(row)
+		assert_eq(status.text, "✓",
+				"Step %d should show checkmark at DONE." % i)
+
+
+func test_end_activation_emits_signal() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	watch_signals(_modal)
+	_modal.open(state)
+	_modal._on_end_activation_pressed()
+	assert_signal_emitted(_modal, "end_activation_requested",
+			"Pressing End Activation should emit end_activation_requested.")
+
+
+func test_end_activation_closes_modal() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	assert_true(_modal.visible, "Modal should be visible before press.")
+	_modal._on_end_activation_pressed()
+	assert_false(_modal.visible,
+			"Modal should be hidden after End Activation press.")

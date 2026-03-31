@@ -46,6 +46,10 @@ signal ready_for_maneuver()
 ## Emitted when the player presses the close / dismiss button.
 signal modal_closed()
 
+## Emitted when the player presses "End Activation ►" after all steps complete.
+## The game board uses this to emit EventBus.activation_ended.
+signal end_activation_requested()
+
 ## Panel width cap — matches AttackSimPanel proportions.
 const MODAL_MAX_WIDTH: float = 360.0
 ## Panel width fraction of viewport width.
@@ -100,6 +104,9 @@ var _squadron_button: Button = null
 
 ## "Skip" button inside the squadron step (shown when token-only).
 var _squadron_skip_button: Button = null
+
+## "End Activation ►" button shown when all steps are complete (DONE).
+var _end_activation_button: Button = null
 
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
@@ -319,6 +326,17 @@ func _build_ui() -> void:
 		_step_container.add_child(row)
 		_step_rows.append(row)
 
+	# "End Activation ►" button — shown only when step == DONE.
+	var end_container: HBoxContainer = HBoxContainer.new()
+	end_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_end_activation_button = Button.new()
+	_end_activation_button.text = "End Activation ►"
+	_end_activation_button.custom_minimum_size = Vector2(200, 40)
+	_end_activation_button.visible = false
+	_end_activation_button.pressed.connect(_on_end_activation_pressed)
+	end_container.add_child(_end_activation_button)
+	vbox.add_child(end_container)
+
 	# Separator before close hint.
 	var sep2: HSeparator = HSeparator.new()
 	vbox.add_child(sep2)
@@ -438,6 +456,7 @@ func _clear_ui() -> void:
 	_repair_button = null
 	_squadron_button = null
 	_squadron_skip_button = null
+	_end_activation_button = null
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +562,12 @@ func _update_step_display() -> void:
 				_squadron_button.visible = false
 			if i == 1 and _squadron_skip_button:
 				_squadron_skip_button.visible = false
+
+	# Show "End Activation ►" only when all steps are done.
+	if _end_activation_button:
+		var is_done: bool = (current >= int(ShipActivationState.Step.DONE))
+		_end_activation_button.visible = is_done
+		_end_activation_button.disabled = false
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -653,6 +678,18 @@ func _on_repair_pressed() -> void:
 
 ## Called when the "✕ Close" button is pressed.
 func _on_close_pressed() -> void:
+	close()
+	modal_closed.emit()
+
+
+## Called when the "End Activation ►" button is pressed.
+## Emits [signal end_activation_requested] so the game board can end the
+## current activation and pass the turn to the other player.
+## Rules Reference: RRG "Ship Activation" p.16 — activation ends after
+## all five steps are complete.
+func _on_end_activation_pressed() -> void:
+	_log.info("End Activation pressed — requesting activation end.")
+	end_activation_requested.emit()
 	close()
 	modal_closed.emit()
 

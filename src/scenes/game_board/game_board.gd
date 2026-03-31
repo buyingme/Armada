@@ -193,6 +193,21 @@ var _squadron_move_max_dist: float = 0.0
 ## Reset in [method _begin_squadron_activation_flow].
 var _squadron_activation_count: int = 0
 
+## --- Phase 5b-2: Overlap / displacement state ---
+
+## Queue of displaced squadron tokens awaiting placement by the opponent.
+## Populated in [method _start_squadron_displacement].
+var _displacement_queue: Array[SquadronToken] = []
+
+## The ship base that displaced the squadrons (for touch-validation).
+var _displacement_ship_base: ShipBase = null
+
+## Index into [member _displacement_queue] for the next squadron to place.
+var _displacement_index: int = 0
+
+## True while the opponent may click to place a displaced squadron.
+var _displacement_click_active: bool = false
+
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
 	Constants.GamePhase.SETUP: "Setup",
@@ -321,6 +336,14 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
+	# Squadron displacement: click to place a displaced squadron.
+	if _displacement_click_active and event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			var world_pos: Vector2 = get_global_mouse_position()
+			_handle_displacement_click(world_pos)
+			get_viewport().set_input_as_handled()
+			return
 	# Attack simulator: Escape dismisses.
 	if _attack_executor and _attack_executor.handle_escape(event):
 		return
@@ -1817,8 +1840,10 @@ func _on_maneuver_step_entered() -> void:
 
 
 ## Called when the player commits the maneuver (modal "Commit ►" button).
-## Snaps the ship to the final transform and shows End Activation.
-## Requirements: EXE-001, EXE-002, AC-5b-08, AC-5b-09, AC-5b-12, AC-5b-13.
+## Snaps the ship to the final transform, resolves ship–ship and
+## ship–squadron overlaps, then ends the activation.
+## Requirements: EXE-001, EXE-002, AC-5b-08, AC-5b-09, AC-5b-12, AC-5b-13,
+##     OV-001–004, OV-010–013.
 func _on_execute_maneuver() -> void:
 	_log.info("Execute maneuver requested.")
 	if _ship_activation_state == null or _activating_ship_token == null:
@@ -1831,19 +1856,40 @@ func _on_execute_maneuver() -> void:
 	var start_pos: Vector2 = attach["position"]
 	var start_rot: float = attach["rotation"]
 	var ghost_side: String = tool_state.compute_ghost_side()
-	var final_xform: Transform2D = tool_state.compute_final_transform(
-			start_pos, start_rot, ghost_side)
+	# --- Ship–ship overlap resolution (OV-010–013) ---
+	var original_xform: Transform2D = Transform2D(
+			_activating_ship_token.global_rotation,
+			_activating_ship_token.global_position)
+	var ship_size: Constants.ShipSize = _activating_ship_token.get_ship_size()
+	var other_bases: Array = _build_other_ship_bases(_activating_ship_token)
+	var resolver: OverlapResolver = OverlapResolver.new()
+	var result: OverlapResolver.ShipShipResult = (
+			resolver.check_ship_ship_overlap(
+					tool_state, start_pos, start_rot, ghost_side,
+					ship_size, other_bases, original_xform))
+	var final_xform: Transform2D = result.final_transform
 	# Snap ship to final position.
 	_activating_ship_token.global_position = final_xform.origin
 	_activating_ship_token.global_rotation = final_xform.get_rotation()
+	# Deal overlap damage if any ship–ship overlap occurred.
+	if result.overlaps or result.stayed_in_place:
+		_apply_overlap_damage(result)
+	# --- Ship–squadron overlap resolution (OV-001–004) ---
+	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
+	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
+			moved_ship_base)
 	# Mark maneuver executed.
 	_ship_activation_state.mark_maneuver_executed()
 	# Emit ship_moved.
 	EventBus.ship_moved.emit(_activating_ship_token)
 	# Dismiss maneuver tool.
 	_dismiss_maneuver_tool()
-	# Show End Activation.
-	_show_end_activation_after_maneuver()
+	# If squadrons were displaced, start the displacement flow;
+	# otherwise end activation immediately.
+	if displaced.size() > 0:
+		_start_squadron_displacement(displaced, moved_ship_base)
+	else:
+		_show_end_activation_after_maneuver()
 	_log.info("Ship snapped to final position.")
 
 
@@ -1858,6 +1904,211 @@ func _show_end_activation_after_maneuver() -> void:
 		_ship_activation_state.advance_step() ## MANEUVER → DONE
 	# Auto-end the activation (next player's turn).
 	EventBus.activation_ended.emit()
+
+
+# ---------------------------------------------------------------------------
+# Overlap Resolution (Phase 5b-2) — OV-001–013
+# ---------------------------------------------------------------------------
+
+## Builds an Array of [ShipBase] for every ship on the board except
+## [param exclude].  Used for ship–ship overlap checks.
+func _build_other_ship_bases(exclude: ShipToken) -> Array:
+	var bases: Array = []
+	for token: ShipToken in get_ship_tokens():
+		if token == exclude:
+			continue
+		var inst: ShipInstance = token.get_ship_instance()
+		if inst and inst.is_destroyed():
+			continue
+		var xform: Transform2D = Transform2D(
+				token.global_rotation, token.global_position)
+		bases.append(ShipBase.new(token.get_ship_size(), xform))
+	return bases
+
+
+## Deals one facedown damage card to both the moving ship and the
+## closest overlapping ship after an overlap resolution.
+## Rules Reference: RRG "Overlapping", p.8 — OV-011.
+func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
+	var moving_inst: ShipInstance = (
+			_activating_ship_token.get_ship_instance())
+	# Identify the overlapped ship token.
+	var other_token: ShipToken = _get_other_ship_token(
+			result.overlapped_ship_index)
+	# Build toast text.
+	var toast_parts: Array[String] = []
+	if result.stayed_in_place:
+		toast_parts.append("Overlap at all speeds — ship stays in place.")
+	else:
+		toast_parts.append(
+				"Overlap resolved at speed %d (was %d)."
+				% [result.final_speed, result.original_speed])
+	# Deal one facedown damage to the moving ship.
+	_deal_overlap_facedown(moving_inst, _activating_ship_token)
+	toast_parts.append("%s takes 1 damage."
+			% moving_inst.ship_data.ship_name)
+	# Deal one facedown damage to the overlapped ship.
+	if other_token:
+		var other_inst: ShipInstance = other_token.get_ship_instance()
+		if other_inst:
+			_deal_overlap_facedown(other_inst, other_token)
+			toast_parts.append("%s takes 1 damage."
+					% other_inst.ship_data.ship_name)
+	TooltipManager.show_text(
+			"\n".join(toast_parts), Vector2.INF, 3.0)
+	_log.info("Overlap damage applied: %s" % " | ".join(toast_parts))
+
+
+## Deals a single facedown damage card to [param inst] and emits the
+## appropriate EventBus signals.  Checks for destruction afterwards.
+## Rules Reference: RRG "Overlapping", p.8 — OV-011.
+func _deal_overlap_facedown(inst: ShipInstance, token: ShipToken) -> void:
+	if _damage_deck == null:
+		_log.error("No damage deck — cannot deal overlap damage.")
+		return
+	var card: DamageCard = _damage_deck.draw_card()
+	if card == null:
+		_log.error("Damage deck empty — cannot deal overlap damage.")
+		return
+	inst.add_facedown_damage(card)
+	var new_hull: int = inst.ship_data.hull - inst.get_total_damage()
+	EventBus.ship_hull_changed.emit(inst, new_hull)
+	EventBus.ship_damaged.emit(token, 1, Constants.HullZone.FRONT)
+	_log.info("Overlap facedown damage dealt to %s. Hull: %d/%d."
+			% [inst.ship_data.ship_name, new_hull, inst.ship_data.hull])
+	if inst.is_destroyed():
+		_log.info("Ship destroyed by overlap: %s" % inst.data_key)
+		EventBus.ship_destroyed.emit(token)
+		_fade_out_destroyed_token(token)
+
+
+## Fades out a destroyed ship token (visual only).
+func _fade_out_destroyed_token(token: Node2D) -> void:
+	if token == null:
+		return
+	var tween: Tween = token.create_tween()
+	tween.tween_property(token, "modulate:a", 0.0, 0.8)
+	tween.tween_callback(func() -> void:
+		token.visible = false
+		token.modulate.a = 1.0
+	)
+
+
+## Returns the [ShipToken] corresponding to an index among the "other"
+## ships (excluding the active ship, matching _build_other_ship_bases order).
+func _get_other_ship_token(index: int) -> ShipToken:
+	if index < 0:
+		return null
+	var idx: int = 0
+	for token: ShipToken in get_ship_tokens():
+		if token == _activating_ship_token:
+			continue
+		var inst: ShipInstance = token.get_ship_instance()
+		if inst and inst.is_destroyed():
+			continue
+		if idx == index:
+			return token
+		idx += 1
+	return null
+
+
+## Finds all squadron tokens whose bases overlap the given ship base.
+## Returns the list of displaced [SquadronToken] nodes.
+## Rules Reference: RRG "Overlapping", p.8 — OV-001.
+func _find_displaced_squadrons(ship_base: ShipBase) -> Array[SquadronToken]:
+	var displaced: Array[SquadronToken] = []
+	for sq_token: SquadronToken in get_squadron_tokens():
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
+			continue
+		var sq_base: SquadronBase = SquadronBase.new(
+				sq_token.global_position, sq_token.get_radius_px())
+		if sq_base.overlaps_ship(ship_base):
+			displaced.append(sq_token)
+	return displaced
+
+
+## Starts the squadron displacement flow.  The opposing player places
+## each displaced squadron one at a time, touching the ship's base.
+## Rules Reference: RRG "Overlapping", p.8 — OV-002, OV-003.
+func _start_squadron_displacement(
+		displaced: Array[SquadronToken],
+		ship_base: ShipBase) -> void:
+	_displacement_queue = displaced.duplicate()
+	_displacement_ship_base = ship_base
+	_displacement_index = 0
+	_log.info("Starting squadron displacement: %d squadron(s)."
+			% displaced.size())
+	_prompt_next_displacement()
+
+
+## Prompts the opponent to place the next displaced squadron.
+func _prompt_next_displacement() -> void:
+	if _displacement_index >= _displacement_queue.size():
+		# All displaced squadrons have been placed.
+		_log.info("All displaced squadrons placed.")
+		_displacement_queue.clear()
+		_displacement_ship_base = null
+		_show_end_activation_after_maneuver()
+		return
+	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
+	# Hide the squadron at its old position (it is overlapping the ship).
+	sq_token.visible = false
+	var sq_name: String = ""
+	var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+	if sq_inst and sq_inst.squadron_data:
+		sq_name = sq_inst.squadron_data.squadron_name
+	else:
+		sq_name = "Squadron"
+	TooltipManager.show_text(
+			"Place %s touching the ship. Click to set position."
+			% sq_name, Vector2.INF, 0.0, true)
+	_displacement_click_active = true
+	_log.info("Awaiting placement for displaced squadron: %s" % sq_name)
+
+
+## Handles a click during squadron displacement placement.
+func _handle_displacement_click(world_pos: Vector2) -> void:
+	if not _displacement_click_active:
+		return
+	if _displacement_index >= _displacement_queue.size():
+		return
+	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
+	var sq_radius: float = sq_token.get_radius_px()
+	# Build other-ship and other-squadron lists for validation.
+	var other_ships: Array = []
+	for token: ShipToken in get_ship_tokens():
+		var inst: ShipInstance = token.get_ship_instance()
+		if inst and inst.is_destroyed():
+			continue
+		var xform: Transform2D = Transform2D(
+				token.global_rotation, token.global_position)
+		other_ships.append(ShipBase.new(token.get_ship_size(), xform))
+	var other_squads: Array = []
+	for other_sq: SquadronToken in get_squadron_tokens():
+		if other_sq == sq_token:
+			continue
+		if not other_sq.visible:
+			# Skip other displaced squadrons not yet placed.
+			continue
+		other_squads.append(SquadronBase.new(
+				other_sq.global_position, other_sq.get_radius_px()))
+	var resolver: OverlapResolver = OverlapResolver.new()
+	var error: String = resolver.validate_squadron_placement(
+			world_pos, sq_radius, _displacement_ship_base,
+			other_ships, other_squads)
+	if error != "":
+		TooltipManager.show_text(error, Vector2.INF, 2.0)
+		_log.info("Displacement rejected: %s" % error)
+		return
+	# Place the squadron.
+	sq_token.global_position = world_pos
+	sq_token.visible = true
+	_displacement_click_active = false
+	TooltipManager.hide()
+	_log.info("Displaced squadron placed at %s." % str(world_pos))
+	_displacement_index += 1
+	_prompt_next_displacement()
 
 
 # ---------------------------------------------------------------------------

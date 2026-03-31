@@ -821,19 +821,19 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5b-2: Overlap Handling ⏳
+### Phase 5b-2: Overlap Handling ✅
 **Goal:** Handle ship–ship and ship–squadron overlaps during movement.
 **Prerequisites:** Phase 5b (maneuver execution)
 **Duration estimate:** 1 session
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
-| 1 | Ship–ship overlap detection | Core | OV-010–013 | Detect overlap at final position; temp speed reduction loop; facedown damage to both ships | ⏳ |
-| 2 | Ship–squadron overlap handling | Core | OV-001–004 | Opponent places displaced squadrons | ⏳ |
-| 3 | Maneuver tool side fallback | Core | MV-013 | If ship overlaps tool on computed side, use opposite side | ⏳ |
-| 4 | Tests | Test | OV-001–013 | Overlap scenarios, displacement, damage | ⏳ |
+| 1 | Ship–ship overlap detection | Core | OV-010–013 | `OverlapResolver.check_ship_ship_overlap()` — speed reduction loop, facedown damage to both ships | ✅ |
+| 2 | Ship–squadron overlap handling | Core + Presentation | OV-001–004 | `OverlapResolver.find_overlapped_squadrons()`, `validate_squadron_placement()`; click-to-place displacement flow in `game_board.gd` | ✅ |
+| 3 | Maneuver tool side fallback | Core | MV-013 | Already implemented — skipped | ✅ |
+| 4 | Tests | Test | OV-001–013 | `test_overlap_resolver.gd` — 10 tests covering overlap detection, displacement, placement validation, speed restore | ✅ |
 
-**Tests:** ~10 (overlap detection, displacement, damage)
+**Tests:** 10 (86 scripts, 1600 tests, 1599 passing — pre-existing Nebulon-B failure)
 
 ---
 

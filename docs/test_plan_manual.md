@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 85 scripts, 1589 tests — 1588 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 86 scripts, 1600 tests — 1599 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3269,3 +3269,49 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Activate 4 squadrons | All complete; both dial and token consumed |
 
 **Pass criteria:** Squadron command works with dial, token, and combined; range filtering rejects distant squadrons; early Done correctly finalizes.
+
+---
+
+## Phase 5b-2 — Overlap Handling
+
+**What this phase adds:** Ship–ship overlap detection with automatic temporary speed reduction and facedown damage to both ships. Ship–squadron overlap detection with click-to-place displacement by the opposing player. Toast notifications for overlap events.
+
+**Automated coverage:** `test_overlap_resolver.gd` — 10 tests covering overlap detection, speed reduction loop, stay-in-place, squadron overlap detection, and placement validation. Manual tests below cover visual/interaction aspects only.
+
+### MT-5b2.1 — Ship–ship overlap causes speed reduction and damage
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position two opposing ships such that one will overlap the other after maneuver | Ships on collision course |
+| 2 | Activate the moving ship and commit maneuver | Toast: "Overlap resolved at speed N (was M). [Ship1] takes 1 damage. [Ship2] takes 1 damage." |
+| 3 | Observe ship position | Ship is at the reduced-speed position, not overlapping the other ship |
+| 4 | Open ship card panels for both ships | Each shows 1 additional facedown damage card |
+
+### MT-5b2.2 — Ship stays in place at speed 0
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position two ships directly overlapping (debug drag) | Ships on top of each other |
+| 2 | Activate the top ship and commit maneuver | Toast: "Overlap at all speeds — ship stays in place." + damage messages |
+| 3 | Observe ship position | Ship remains at its original position |
+| 4 | Both ships take 1 facedown damage | Card panels updated |
+
+### MT-5b2.3 — Ship–squadron overlap triggers displacement
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position a squadron in the path of a moving ship | Squadron will be overlapped |
+| 2 | Activate the ship and commit maneuver | Squadron disappears; tooltip: "Place [Name] touching the ship. Click to set position." |
+| 3 | Click a valid position touching the ship | Squadron reappears at clicked position |
+| 4 | If multiple squadrons displaced, repeat for each | Each gets its own placement prompt |
+
+### MT-5b2.4 — Displacement validation rejects bad placements
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During displacement, click far from the ship | Toast: "Squadron must be placed touching the ship." |
+| 2 | Click on top of the ship | Toast: "Squadron cannot overlap the ship." |
+| 3 | Click on top of another squadron | Toast: "Squadron cannot overlap another squadron." |
+| 4 | Click a valid position touching the ship | Squadron placed successfully |
+
+**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; squadron displacement works with click-to-place; invalid placements are rejected with clear messages.

@@ -3,7 +3,7 @@
 > **Scope:** Phases 0–5d, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 86 scripts, 1600 tests — 1599 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 86 scripts, 1603 tests — 1602 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3296,22 +3296,26 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Observe ship position | Ship remains at its original position |
 | 4 | Both ships take 1 facedown damage | Card panels updated |
 
-### MT-5b2.3 — Ship–squadron overlap triggers displacement
+### MT-5b2.3 — Ship–squadron overlap triggers displacement with screen flip
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Position a squadron in the path of a moving ship | Squadron will be overlapped |
-| 2 | Activate the ship and commit maneuver | Squadron disappears; tooltip: "Place [Name] touching the ship. Click to set position." |
-| 3 | Click a valid position touching the ship | Squadron reappears at clicked position |
-| 4 | If multiple squadrons displaced, repeat for each | Each gets its own placement prompt |
+| 2 | Activate the ship and commit maneuver | Camera rotates 180° to the opposing player's perspective |
+| 3 | Displaced squadron auto-placed touching the ship edge | Squadron visible at nearest edge; tooltip: "Move [Name] around the ship. Click to lock, then Commit ►." |
+| 4 | Move the mouse around the ship | Squadron follows the cursor, always snapped to the ship edge |
+| 5 | Left-click to lock position | Tooltip: "[Name] locked. Press Commit ► or click to reposition."; Commit button enabled |
+| 6 | Click elsewhere on the board | Squadron re-enters mouse-follow mode (repositioning) |
+| 7 | Click to lock again, then press Commit ► | Next displaced squadron begins or displacement completes |
+| 8 | After all squadrons committed | Camera rotates back to the active player; activation ends |
 
-### MT-5b2.4 — Displacement validation rejects bad placements
+### MT-5b2.4 — Multiple displaced squadrons handled sequentially
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | During displacement, click far from the ship | Toast: "Squadron must be placed touching the ship." |
-| 2 | Click on top of the ship | Toast: "Squadron cannot overlap the ship." |
-| 3 | Click on top of another squadron | Toast: "Squadron cannot overlap another squadron." |
-| 4 | Click a valid position touching the ship | Squadron placed successfully |
+| 1 | Position multiple squadrons in the ship's path | Multiple overlap |
+| 2 | Commit the maneuver | First squadron auto-placed and enters mouse-follow |
+| 3 | Lock and commit the first squadron | Second squadron auto-placed and enters mouse-follow |
+| 4 | Lock and commit all remaining | Camera flips back; activation ends |
 
-**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; squadron displacement works with click-to-place; invalid placements are rejected with clear messages.
+**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; displaced squadrons snap to ship edge, follow mouse, lock on click, confirm with Commit button; camera flips to opponent before and back after displacement.

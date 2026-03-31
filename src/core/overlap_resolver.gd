@@ -207,3 +207,32 @@ func validate_squadron_placement(
 		if sq.overlaps_squadron(other):
 			return "Squadron cannot overlap another squadron."
 	return ""
+
+
+## Computes a snap position so the squadron circle is always in base
+## contact with the ship polygon (tangent to the nearest edge).
+##
+## [param mouse_pos] — the desired world position (e.g. mouse cursor).
+## [param squad_radius] — the squadron's base radius in pixels.
+## [param ship_base] — the [ShipBase] the squadron must touch.
+##
+## Returns the snapped squadron centre: the closest point on the ship
+## polygon to [param mouse_pos], offset outward by [param squad_radius]
+## plus a tiny gap to avoid triggering overlap detection.
+## Rules Reference: RRG "Overlapping", p.8 — OV-002.
+static func snap_to_ship_edge(
+		mouse_pos: Vector2,
+		squad_radius: float,
+		ship_base: ShipBase) -> Vector2:
+	var poly: PackedVector2Array = ship_base.get_base_polygon()
+	var closest: Vector2 = Geometry2DHelper.closest_point_on_polygon(
+			mouse_pos, poly)
+	# Direction from the ship edge outward toward the mouse.
+	var dir: Vector2 = (mouse_pos - closest)
+	if dir.length_squared() < 0.001:
+		# Mouse is exactly on the edge — use the outward normal.
+		dir = (closest - ship_base.ship_transform.origin).normalized()
+	else:
+		dir = dir.normalized()
+	# Offset by radius + 1px to guarantee "touching but not overlapping".
+	return closest + dir * (squad_radius + 1.0)

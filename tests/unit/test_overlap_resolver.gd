@@ -241,3 +241,52 @@ func test_validate_placement_overlapping_other_squadron_rejected() -> void:
 			"Placement overlapping another squadron should be rejected.")
 	assert_string_contains(error, "squadron",
 			"Error should mention 'squadron'.")
+
+
+# ---------------------------------------------------------------------------
+# snap_to_ship_edge
+# ---------------------------------------------------------------------------
+
+func test_snap_to_ship_edge_places_outside_ship() -> void:
+	# Arrange: ship at origin, mouse far to the right.
+	var ship_base: ShipBase = _make_ship_base(Vector2(0.0, 0.0))
+	var mouse_pos: Vector2 = Vector2(500.0, 0.0)
+	var squad_radius: float = 10.0
+	# Act.
+	var snapped: Vector2 = OverlapResolver.snap_to_ship_edge(
+			mouse_pos, squad_radius, ship_base)
+	# Assert: snapped position should be outside the ship polygon.
+	var sq: SquadronBase = SquadronBase.new(snapped, squad_radius)
+	assert_false(sq.overlaps_ship(ship_base),
+			"Snapped squadron should not overlap the ship.")
+
+
+func test_snap_to_ship_edge_is_near_ship() -> void:
+	# Arrange: ship at origin, mouse far to the right.
+	var ship_base: ShipBase = _make_ship_base(Vector2(0.0, 0.0))
+	var mouse_pos: Vector2 = Vector2(500.0, 0.0)
+	var squad_radius: float = 10.0
+	# Act.
+	var snapped: Vector2 = OverlapResolver.snap_to_ship_edge(
+			mouse_pos, squad_radius, ship_base)
+	# Assert: snapped position should be close to the ship edge.
+	var ship_poly: PackedVector2Array = ship_base.get_base_polygon()
+	var dist: float = Geometry2DHelper.distance_point_to_polygon(
+			snapped, ship_poly)
+	# dist should be approximately squad_radius + 1 (the gap).
+	assert_almost_eq(dist, squad_radius + 1.0, 2.0,
+			"Snapped position should be ~radius from ship edge.")
+
+
+func test_snap_to_ship_edge_varies_with_mouse_angle() -> void:
+	# Arrange: ship at origin.
+	var ship_base: ShipBase = _make_ship_base(Vector2(0.0, 0.0))
+	var squad_radius: float = 10.0
+	# Act: snap from two different angles.
+	var snap_right: Vector2 = OverlapResolver.snap_to_ship_edge(
+			Vector2(500.0, 0.0), squad_radius, ship_base)
+	var snap_top: Vector2 = OverlapResolver.snap_to_ship_edge(
+			Vector2(0.0, -500.0), squad_radius, ship_base)
+	# Assert: the two positions should be different.
+	assert_ne(snap_right, snap_top,
+			"Snapping from different angles should produce different positions.")

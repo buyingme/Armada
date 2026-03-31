@@ -872,7 +872,12 @@ func _attack_sim_handle_target_squadron_click(
 			_attack_sim_deselect_target()
 		return
 	# Check: clicking the attacker squadron → deselect both (AS-TGT-021).
+	# In squadron exec mode the attacker is pre-selected and has only one
+	# hull zone (its base), so deselection is not allowed (SQA-ATK-006).
 	if _attack_sim_atk_squad == token:
+		if _attack_exec_squad_mode:
+			_log.info("Attacker re-clicked in squad exec — ignored.")
+			return
 		_log.info("Attacker re-clicked — both deselected.")
 		_attack_sim_deselect_both()
 		return

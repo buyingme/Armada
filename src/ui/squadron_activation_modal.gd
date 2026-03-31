@@ -340,7 +340,14 @@ func is_command_mode() -> bool:
 # ---------------------------------------------------------------------------
 
 func _transition_to(new_state: State) -> void:
+	var was_attacking: bool = (_state == State.ATTACKING)
 	_state = new_state
+	# Hide the modal while the attack executor is active so it does not
+	# overlap with the attack panel.  Re-show when leaving ATTACKING.
+	if new_state == State.ATTACKING:
+		visible = false
+	elif was_attacking:
+		visible = true
 	_update_ui()
 
 

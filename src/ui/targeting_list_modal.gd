@@ -82,37 +82,38 @@ func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
 		child.queue_free()
 	_scroll = null
 	_content = null
+	# Zero the cached size first (prevents the PanelContainer from
+	# retaining its old expanded height from a previous open).
+	# This shifts offsets as a side-effect, so we immediately re-pin
+	# them to the canonical -40 values afterwards.
+	# See .skills/ui_styling.md §10 — anchor panel reset pattern.
+	size = Vector2.ZERO
+	offset_top = -40.0
+	offset_bottom = -40.0
 	# Panel style (standard modal).
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
+	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
-	# Sizing.
+	# Sizing — width only; height determined by content + scroll cap.
 	var vp: Vector2 = Vector2(1280, 720)
 	if get_viewport():
 		vp = get_viewport().get_visible_rect().size
 	var panel_w: float = minf(520.0, vp.x * 0.45)
-	var panel_h: float = minf(vp.y * 0.8, 600.0)
-	custom_minimum_size = Vector2(panel_w, panel_h)
-	size = custom_minimum_size
-	# Update bottom-centre anchor widths.
+	var max_h: float = minf(vp.y * 0.8, 600.0)
+	custom_minimum_size = Vector2(panel_w, 0.0)
+	# Re-pin bottom-centre anchor widths.
 	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
-	# Margin container.
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(margin)
-	# Scroll container.
+	# Scroll container — capped at max_h so the panel doesn't overflow.
 	_scroll = ScrollContainer.new()
-	_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_scroll.custom_minimum_size = Vector2(0.0, max_h)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(_scroll)
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_scroll)
 	# Content.
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 12)

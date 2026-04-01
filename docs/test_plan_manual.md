@@ -3,7 +3,7 @@
 > **Scope:** Phases 0–5d, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 87 scripts, 1617 tests — 1616 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3274,16 +3274,16 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 
 ## Phase 5b-2 — Overlap Handling
 
-**What this phase adds:** Ship–ship overlap detection with automatic temporary speed reduction and facedown damage to both ships. Ship–squadron overlap detection with displacement modal (squadron checklist + commit) for the opposing player. Toast notifications for overlap events.
+**What this phase adds:** Ship–ship overlap detection with automatic temporary speed reduction and facedown damage to both ships. Ship–squadron overlap detection with displacement modal (squadron checklist + commit) for the opposing player. Amber collision message inside activation modal. “End Activation ►” button (player must deliberately end activation). Modal stays open after commit.
 
-**Automated coverage:** `test_overlap_resolver.gd` — 13 tests covering overlap detection, speed reduction, placement validation, snap-to-edge. `test_displacement_modal.gd` — 14 tests covering open/close, check/uncheck, all_checked, first_unchecked, single-squadron edge case. Manual tests below cover visual/interaction aspects only.
+**Automated coverage:** `test_overlap_resolver.gd` — 13 tests covering overlap detection, speed reduction, placement validation, snap-to-edge. `test_displacement_modal.gd` — 14 tests covering open/close, check/uncheck, all_checked, first_unchecked, single-squadron edge case. `test_activation_modal.gd` — 11 new tests covering End Activation button visibility/signal/close, modal-stays-open, collision label. Manual tests below cover visual/interaction aspects only.
 
 ### MT-5b2.1 — Ship–ship overlap causes speed reduction and damage
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Position two opposing ships such that one will overlap the other after maneuver | Ships on collision course |
-| 2 | Activate the moving ship and commit maneuver | Toast: "Overlap resolved at speed N (was M). [Ship1] takes 1 damage. [Ship2] takes 1 damage." |
+| 2 | Activate the moving ship and commit maneuver | Amber collision label in activation modal: “⚠ Collision detected! Speed temporarily reduced to N (was M).” + per-ship damage lines |
 | 3 | Observe ship position | Ship is at the reduced-speed position, not overlapping the other ship |
 | 4 | Open ship card panels for both ships | Each shows 1 additional facedown damage card |
 
@@ -3292,7 +3292,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Position two ships directly overlapping (debug drag) | Ships on top of each other |
-| 2 | Activate the top ship and commit maneuver | Toast: "Overlap at all speeds — ship stays in place." + damage messages |
+| 2 | Activate the top ship and commit maneuver | Amber collision label in activation modal: “⚠ Collision detected! Speed temporarily reduced to 0.” + damage messages |
 | 3 | Observe ship position | Ship remains at its original position |
 | 4 | Both ships take 1 facedown damage | Card panels updated |
 
@@ -3307,7 +3307,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 5 | Left-click to lock position | ✓ checkmark on that squadron's row; next unchecked auto-selected |
 | 6 | Click a checked row in the modal | Row unchecks, squadron re-enters mouse-follow for repositioning |
 | 7 | Lock all squadrons | All rows show ✓; "Commit Placement ►" button enabled |
-| 8 | Press "Commit Placement ►" | Modal closes; camera rotates back to active player; activation ends; "Your Turn" banner shown for next player |
+| 8 | Press "Commit Placement ►" | Modal closes; camera rotates back to active player; activation modal re-opens showing all 5 steps checked + “End Activation ►” button; press it to end activation; "Your Turn" banner shown for next player |
 
 ### MT-5b2.4 — Multiple displaced squadrons handled via modal checklist
 
@@ -3316,6 +3316,25 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | Position multiple squadrons in the ship's path | Multiple overlap |
 | 2 | Commit the maneuver | Modal lists all displaced squadrons; first row highlighted with ► |
 | 3 | Lock the first squadron | ✓ on first row; second row auto-selected with ► |
-| 4 | Lock remaining; press Commit | Camera flips back; activation ends; next player's turn |
+| 4 | Lock remaining; press Commit | Camera flips back; activation modal re-opens with all steps checked + “End Activation ►”; press it to end; next player's turn |
 
-**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; displacement shows modal checklist with check/uncheck, snap-to-edge mouse-follow, Commit button; "Show Activation Sequence" hidden during displacement; camera flips to opponent before displacement and back after; "Your Turn" banner appears for the next player after commit.
+
+### MT-5b2.5 — End Activation button flow (no overlap)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with no obstructions and commit maneuver | Activation modal stays open (does not close after commit) |
+| 2 | Observe modal | All 5 step rows show green ✓; “End Activation ►” button appears at bottom |
+| 3 | Press “End Activation ►” | Modal closes; `activation_ended` fires; next player’s turn starts; "Your Turn" banner shown |
+
+### MT-5b2.6 — Collision label visibility in modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Commit a maneuver that causes a ship–ship overlap | Activation modal stays open |
+| 2 | Observe modal | Amber label between step rows and End Activation button: "⚠ Collision detected! Speed temporarily reduced to N (was M)." followed by per-ship damage lines |
+| 3 | Press “End Activation ►” | Modal closes; activation ends normally |
+| 4 | Activate a different ship (no collision) and commit | Modal re-opens with no collision label (label hidden) |
+
+
+**Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; amber collision label shown inside activation modal; displacement shows modal checklist with check/uncheck, snap-to-edge mouse-follow, Commit button; "Show Activation Sequence" hidden during displacement; camera flips to opponent before displacement and back after; activation modal re-opens with all steps checked after commit; “End Activation ►” button must be pressed to end activation; "Your Turn" banner appears for the next player after end activation.

@@ -55,11 +55,17 @@
 | `SwarmEffect` | GameEffect | `src/core/effects/keywords/swarm_effect.gd` | Swarm keyword: reroll worst die when friendly also engaged |
 | `EngagementResolver` | RefCounted | `src/core/engagement_resolver.gd` | Edge-to-edge distance-1 engagement checks, valid target filtering |
 | `SquadronMover` | RefCounted | `src/core/squadron_mover.gd` | Distance band + overlap validation for squadron placement |
+| `AttackResolver` | RefCounted | `src/core/attack_resolver.gd` | Core attack pipeline: targeting, LOS, dice, defense tokens, damage application |
+| `OverlapResolver` | RefCounted | `src/core/overlap_resolver.gd` | Ship–ship overlap (speed reduction loop, facedown damage) and ship–squadron overlap (displacement list, placement validation, snap-to-edge) |
+| `RepairResolver` | RefCounted | `src/core/repair_resolver.gd` | Repair command: dial/token budget, recover shields / discard damage cards |
+| `SquadronCommandResolver` | RefCounted | `src/core/squadron_command_resolver.gd` | Squadron command: dial/token activation budget, range check, finalize spend |
+| `ScoringCalculator` | RefCounted | `src/core/scoring_calculator.gd` | End-of-game scoring: ship/squadron destruction points, objective tokens, margin-of-victory table |
+| `DamageCardEffectFactory` | RefCounted | `src/core/damage_card_effect_factory.gd` | Factory for damage card effects — creates `GameEffect` instances for each critical card type |
+| `ImmediateEffectResolver` | RefCounted | `src/core/immediate_effect_resolver.gd` | Resolves faceup damage card immediate effects (Structural Damage, Projector Misaligned, etc.) |
 
 ### Planned (Not Yet Implemented)
 
 - **RulesEngine** — Validates actions against game rules
-- **CommandProcessor** — Command dial/token processing (beyond Navigate)
 
 ## 5.3 Level 2 — UI Detail
 
@@ -70,13 +76,29 @@
 | `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, delegates attack to AttackExecutor |
 | `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack simulator (free-form) and attack execution (activation Step 4): targeting, LOS, dice, defense tokens, damage |
 | `ShipToken` | Node2D | `src/scenes/ship_token.gd` | Ship base rendering, command dial icon, labels |
-| `ShipCardPanel` | Control | `src/scenes/ship_card_panel.gd` | Ship card display, defense tokens, command tokens |
+| `ShipCardPanel` | Control | `src/ui/ship_card_panel.gd` | Ship card display, defense tokens, command tokens |
 | `CommandDialPicker` | Control | `src/ui/command_dial_picker.gd` | Centred modal for choosing command dials |
-| `ActivationModal` | Control | `src/scenes/activation_modal.gd` | Centred panel for activation steps (5 sub-steps, two-phase button) |
+| `CommandDialOrderModal` | Control | `src/ui/command_dial_order_modal.gd` | Multi-ship dial assignment order modal |
+| `ActivationModal` | Control | `src/ui/activation_modal.gd` | Centred panel for activation steps (5 sub-steps, two-phase Execute/Commit button, End Activation button, collision label) |
+| `DisplacementModal` | Control | `src/ui/displacement_modal.gd` | Squadron displacement checklist modal — check/uncheck, commit placement |
+| `RepairPanel` | Control | `src/ui/repair_panel.gd` | Repair command UI: recover shields / discard damage cards |
+| `TargetingListModal` | Control | `src/ui/targeting_list_modal.gd` | Targeting list showing valid ship/squadron targets for attack |
+| `AttackSimPanel` | Control | `src/ui/attack_sim_panel.gd` | Free-form attack simulation panel |
+| `DefenseTokenDisplay` | Control | `src/ui/defense_token_display.gd` | Reusable defense token row widget |
+| `SquadronActivationModal` | Control | `src/ui/squadron_activation_modal.gd` | Squadron phase activation modal: move + attack flow, rogue/command dual mode |
+| `SquadronMoveOverlay` | Control | `src/ui/squadron_move_overlay.gd` | Visual overlay for squadron movement range bands |
+| `ShowSquadronModalButton` | Control | `src/ui/show_squadron_modal_button.gd` | Button to open squadron activation modal during squadron phase |
+| `ShowActivationButton` | Control | `src/ui/show_activation_button.gd` | "Show Activation Sequence" button shown after dial reveal |
+| `ExecuteManeuverButton` | Control | `src/ui/execute_maneuver_button.gd` | Two-phase Execute/Commit maneuver button |
+| `EndActivationButton` | Control | `src/ui/end_activation_button.gd` | "End Activation ►" button to deliberately end ship activation |
 | `ManeuverToolScene` | Node2D | `src/scenes/tools/maneuver_tool_scene.gd` | Visual maneuver tool: segments, joints, speed buttons, ghost |
 | `ActionToolbar` | HBoxContainer | `src/ui/action_toolbar.gd` | Lower-right toolbar: tooltip toggle, maneuver display button |
 | `PhaseIndicator` | Control | `src/ui/phase_indicator.gd` | Current phase and round display |
 | `TooltipPanel` | PanelContainer | `src/ui/tooltip_panel.gd` | Hover/programmatic tooltip popup |
+| `HandoffOverlay` | Control | `src/ui/handoff_overlay.gd` | Player turn handoff overlay |
+| `YourTurnBanner` | Control | `src/ui/your_turn_banner.gd` | Animated "Your Turn" banner at start of player's activation |
+| `VictoryScreen` | Control | `src/ui/victory_screen.gd` | End-of-game victory/defeat screen with scoring breakdown |
+| `DebugHelpPanel` | Control | `src/ui/debug_help_panel.gd` | Debug keybinding help overlay |
 | `HUDLayer` | CanvasLayer | `src/scenes/hud_layer.gd` | HUD container for panels, indicators |
 
 ### Planned (Not Yet Implemented)

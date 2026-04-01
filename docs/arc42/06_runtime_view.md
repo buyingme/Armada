@@ -48,29 +48,55 @@ Dial revealed (icon behind base)
     │
 Activation Modal opens (centred, dark-blue panel)
     │
-    ├─ Step 1: Reveal Command Dial ✓ (already done)
-    ├─ Step 2: Squadron Command   → auto-skip ("Not yet implemented")
-    ├─ Step 3: Repair Command     → auto-skip
-    ├─ Step 4: Attack             → auto-skip
-    └─ Step 5: Execute Maneuver   → active
+    ├─ Step 1: Reveal Command Dial   ✓ (already done)
+    ├─ Step 2: Squadron Command      → "Execute Squadron ►" (if dial/token available; else auto-skip)
+    │    └─ Opens SquadronActivationModal → move + attack flow → returns to modal
+    ├─ Step 3: Repair Command        → "Execute Repair ►" (if dial/token available; else auto-skip)
+    │    └─ Opens RepairPanel → recover shields / discard damage → returns to modal
+    ├─ Step 4: Attack                → "Execute Attack ►" (always available)
+    │    └─ Opens AttackExecutor in EXEC mode → targeting, dice, defense, damage → returns to modal
+    └─ Step 5: Execute Maneuver      → "Execute Maneuver ►"
          │
          ▼
-    "Execute Maneuver ►" button in modal
+    Modal stays open but button enters "Execute" phase
          │
-         ▼  (player presses)
+         ▼  (player presses "Execute Maneuver ►")
          │
-    Modal closes → maneuver tool appears on ship (activation mode)
+    Maneuver tool appears on ship (activation mode)
     Player adjusts joints, speed (±1/±2 via Navigate), yaw bonus
          │
          ▼
     Player reopens modal → "Commit Maneuver ►" button
          │
-         ▼  (player presses)
+         ▼  (player presses "Commit Maneuver ►")
+         │
+    ┌─ OverlapResolver.check_ship_ship_overlap() ─┐
+    │  If collision detected:                      │
+    │    Speed reduced iteratively until no overlap │
+    │    Both ships take 1 facedown damage card    │
+    │    Amber collision label shown in modal      │
+    └──────────────────────────────────────────────┘
+         │
+    ┌─ OverlapResolver.find_overlapped_squadrons() ─┐
+    │  If squadron overlap detected:                 │
+    │    Camera flips 180° to opposing player        │
+    │    DisplacementModal opens (checklist)          │
+    │    Player places each squadron at ship edge     │
+    │    "Commit Placement ►" → camera flips back     │
+    └────────────────────────────────────────────────┘
          │
     Ship snaps to final position
     Navigate token removed (if spent)
     EventBus.ship_moved emitted
-    Activation auto-ends → next player's turn
+    Modal stays open — all 5 steps show green ✓
+         │
+         ▼
+    "End Activation ►" button appears at bottom of modal
+         │
+         ▼  (player presses)
+         │
+    EventBus.activation_ended emitted → next player's turn
+    "Your Turn" banner shown for next player
 ```
 
 ### Key Participants
@@ -78,9 +104,11 @@ Activation Modal opens (centred, dark-blue panel)
 | Component | Role |
 |-----------|------|
 | `ShipActivationState` (RefCounted) | Tracks current step, spent commands |
-| `ActivationModal` (Control) | Centred UI panel, step sequence, two-phase button |
+| `ActivationModal` (Control) | Centred UI panel, step sequence, two-phase button, collision label, End Activation button |
 | `ManeuverToolState` (RefCounted) | Activation-mode state: Navigate budget, yaw bonus |
 | `ManeuverToolScene` (Node2D) | Visual tool with joints, speed buttons, ghost |
+| `OverlapResolver` (RefCounted) | Ship–ship overlap (speed reduction + damage), ship–squadron overlap (displacement list) |
+| `DisplacementModal` (Control) | Squadron displacement checklist: check/uncheck, snap-to-edge, commit |
 | `CommandTokenManager` (RefCounted) | Spends Navigate token on commit |
 | `EventBus` (Autoload) | Signals: `ship_activated`, `ship_moved`, `activation_ended` |
 
@@ -206,8 +234,8 @@ _squadrons_activated_this_turn = 0
 │    - Must not be activated  │     ├─ Validates not already activated
 │    - No double activation   │     └─ Sets _activating_squadron
 │                             │
-│  Squadron moves + attacks   │    (future: movement UI + attack execution)
-│                             │
+│  Squadron moves + attacks   │    SquadronActivationModal handles move + attack
+│                             │    SquadronMover validates distance-band placement
 │  EventBus.squadron_activation_ended.emit(squadron)
 │    └─ _on_squadron_activation_ended()
 │        ├─ squadron.activated_this_round = true

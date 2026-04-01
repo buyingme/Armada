@@ -537,3 +537,52 @@ resetting a reused panel, both must be set in the correct order
 (size first, then offsets) within the same frame to avoid accumulating
 drift.  A deferred layout reset on the next frame handles the
 hidden-child inflation that cannot be resolved synchronously.
+
+## 8.11 Overlap & Displacement Pattern
+
+### 8.11.1 Context
+
+After a ship commits its maneuver, the game must check for overlaps with other ships and squadrons. This involves two distinct resolution paths, both handled by `OverlapResolver` (RefCounted, scene-tree independent).
+
+### 8.11.2 Ship–Ship Overlap Resolution
+
+```
+ManeuverToolScene.commit_maneuver()
+    └─ OverlapResolver.check_ship_ship_overlap(moving_ship, all_ships)
+        └─ For speed N down to 0:
+            compute_final_transform(speed=trial)
+            if no overlap → return {reduced_speed, [ship_a, ship_b]}
+        └─ Both ships take 1 facedown damage card
+        └─ Collision info emitted via EventBus.collision_detected
+        └─ ActivationModal shows amber collision label
+```
+
+- **Pure core logic**: `OverlapResolver` only computes overlap geometry and returns results — no Node dependencies.
+- **Presentation layer** (`game_board.gd`) interprets the result and drives UI (collision label, damage card draw).
+- Speed reduction is temporary (for position computation only); `ShipInstance.current_speed` is not permanently changed.
+
+### 8.11.3 Ship–Squadron Overlap Resolution (Displacement)
+
+```
+After maneuver commit:
+    OverlapResolver.find_overlapped_squadrons(ship, all_squadrons)
+        └─ Returns list of overlapped squadrons
+    
+    Camera flips 180° to opposing player's perspective
+    DisplacementModal opens (checklist of displaced squadrons)
+        └─ For each squadron:
+              OverlapResolver.snap_to_ship_edge(squadron_pos, ship) → initial position
+              Mouse-follow mode for fine placement
+              OverlapResolver.validate_squadron_placement(pos, ship) → Boolean
+              Left-click → lock position (✓ in checklist)
+        └─ "Commit Placement ►" enabled when all checked
+        └─ Camera flips back to active player
+```
+
+- **Displacement is an opponent action**: the opposing player places the squadrons, not the active player.
+- **Snap-to-edge** provides a valid starting position; the player can adjust within the ship's footprint boundary.
+- The `DisplacementModal` follows the same panel styling conventions as other modals (§8.10).
+
+### 8.11.4 End-of-Activation Flow
+
+After maneuver commit (with or without overlap), the activation modal stays open showing all 5 steps checked. An "End Activation ►" button appears at the bottom. The player must deliberately press it to emit `activation_ended`. This prevents accidental activation ending and gives the player a moment to review the collision result.

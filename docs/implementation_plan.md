@@ -704,7 +704,7 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 | 6 | Two-phase Execute/Commit button | Presentation | EXE-001, AC-5b-08 | Embedded in activation modal step 5 row: Phase 1 "Execute Maneuver ►" opens maneuver tool; Phase 2 "Commit Maneuver ►" commits position. Modal closes during both phases. | ✅ |
 | 7 | Ship snap placement | Presentation | EXE-002, EXE-003, MV-010–014, AC-5b-09 | Ship token transform set to `compute_final_transform()` result; side from `compute_ghost_side()`; instant snap | ✅ |
 | 8 | Speed 0 maneuver | Core | EXE-004, MV-015, AC-5b-10 | No tool displayed; ship stays in place; maneuver counts as executed | ✅ |
-| 9 | Activation flow rewiring + auto-end | Presentation | FLOW-001–003, AC-5b-11 | "Show Activation Sequence" button replaces immediate End Activation after dial reveal. After Commit, `activation_ended` emits automatically — no manual End Activation button press required. Next player's turn starts immediately. | ✅ |
+| 9 | Activation flow rewiring + End Activation button | Presentation | FLOW-001–003, AC-5b-11 | "Show Activation Sequence" button replaces immediate End Activation after dial reveal. After Commit the modal re-opens showing all 5 steps checked; an "End Activation ►" button appears at the bottom. Player must press it to emit `activation_ended`. Modal stays open after commit — it is not closed/re-opened. | ✅ |
 | 10 | Token spend highlight | Presentation | NAV-007, AC-5b-07 | Reddish semi-transparent overlay on Navigate token in ship card panel when speed change would require the token; Navigate token removed from ship on commit | ✅ |
 | 11 | Tests | Test | AC-5b-01–15 | Unit: ShipActivationState step tracking, Navigate speed/yaw logic, combined dial+token, bounds; Integration: activation flow end-to-end | ✅ |
 
@@ -822,18 +822,22 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 ---
 
 ### Phase 5b-2: Overlap Handling ✅
-**Goal:** Handle ship–ship and ship–squadron overlaps during movement.
+**Goal:** Handle ship–ship and ship–squadron overlaps during movement. End-of-activation UX: “End Activation ►” button, collision message in modal, modal stays open after commit.
 **Prerequisites:** Phase 5b (maneuver execution)
-**Duration estimate:** 1 session
+**Duration estimate:** 1 session | **Actual:** 3 sessions (overlap + displacement modal + end-activation UX)
+**Commits:** `28234d5` (initial overlap), `2430973` (displacement modal), `5fba484` (bug fixes), `6654846` (End Activation button), `35bf16c` (collision msg + modal stays open), `1481071` (collision label in modal)
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
 | 1 | Ship–ship overlap detection | Core | OV-010–013 | `OverlapResolver.check_ship_ship_overlap()` — speed reduction loop, facedown damage to both ships | ✅ |
 | 2 | Ship–squadron overlap handling | Core + Presentation | OV-001–004 | `OverlapResolver.find_overlapped_squadrons()`, `validate_squadron_placement()`, `snap_to_ship_edge()`; `DisplacementModal` (squadron checklist with check/uncheck + commit); snap-to-edge displacement flow with camera flip, mouse-follow in `game_board.gd` | ✅ |
 | 3 | Maneuver tool side fallback | Core | MV-013 | Already implemented — skipped | ✅ |
-| 4 | Tests | Test | OV-001–013 | `test_overlap_resolver.gd` — 13 tests; `test_displacement_modal.gd` — 14 tests (open/close, check/uncheck, all_checked, first_unchecked, single-squadron edge case) | ✅ |
+| 4 | “End Activation ►” button | Presentation | AC-5b-11, FLOW-002 | `ActivationModal.end_activation_requested` signal; button shown at DONE step with all 5 steps checked; player must deliberately end activation | ✅ |
+| 5 | Modal stays open after commit | Presentation | AC-5b-08 | `_on_execute_pressed()` no longer closes modal; `_show_end_activation_after_maneuver()` refreshes in-place or re-opens (displacement path) | ✅ |
+| 6 | Collision message in modal | Presentation | OV-010–013 | Amber `_collision_label` between step rows and End Activation button; shows “⚠ Collision detected! Speed temporarily reduced to X (was Y).” + per-ship damage lines | ✅ |
+| 7 | Tests | Test | OV-001–013 | `test_overlap_resolver.gd` — 13 tests; `test_displacement_modal.gd` — 14 tests; `test_activation_modal.gd` — 11 new tests (End Activation visibility/signal/close, modal-stays-open, collision label) | ✅ |
 
-**Tests:** 27 (87 scripts, 1617 tests, 1616 passing — pre-existing Nebulon-B failure)
+**Tests:** 38 new (87 scripts, 1628 tests, 1627 passing — pre-existing Nebulon-B failure)
 
 ---
 
@@ -1550,14 +1554,15 @@ Phase 0 (Scale & Assets)
 | Phase 5b | ~25 | **35** | **847** |
 | Phase 5c | ~12 | **12** | **862** |
 | Phase 5d | ~50 | **54** | **916** |
-| Phase 5b-2 | ~10 | — | ~922 |
+| Phase 5b-2 | ~10 | **38** | **1628** |
 | Phase 6 | ~45 | — | ~967 |
 | Phase 7 | ~30 | **75** | **1325** |
 | Phase 7b | ~30 | **39** | **1385** |
 | Phase 8 | ~20 | **31** | **1431** |
 | Phase 9 | ~15 | **133** | **1564** |
-| Phase 10 | ~20 | — | ~1440 |
-| **Total** | **~420 new** | | **~1440** |
+| Phase 9.5 | ~10 | **26** | **1590** |
+| Phase 10 | ~20 | — | ~1610 |
+| **Total** | **~420+ new** | | **1628 actual** |
 
 ---
 

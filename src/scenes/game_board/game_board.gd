@@ -1884,6 +1884,10 @@ func _on_execute_maneuver() -> void:
 	# Deal overlap damage if any ship–ship overlap occurred.
 	if result.overlaps or result.stayed_in_place:
 		_apply_overlap_damage(result)
+	else:
+		# No collision — clear any stale message.
+		if _activation_modal:
+			_activation_modal.set_collision_message("")
 	# --- Ship–squadron overlap resolution (OV-001–004) ---
 	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
 	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
@@ -1983,8 +1987,9 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 			_deal_overlap_facedown(other_inst, other_token)
 			toast_parts.append("%s takes 1 damage."
 					% other_inst.ship_data.ship_name)
-	TooltipManager.show_text(
-			"\n".join(toast_parts), Vector2.INF, 3.0)
+	# Show collision info inside the activation modal so it's unmissable.
+	if _activation_modal:
+		_activation_modal.set_collision_message("\n".join(toast_parts))
 	_log.info("Overlap damage applied: %s" % " | ".join(toast_parts))
 
 

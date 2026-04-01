@@ -284,3 +284,38 @@ func test_maneuver_commit_emits_signal_without_close() -> void:
 			"maneuver_commit_requested should emit on commit press.")
 	assert_signal_not_emitted(_modal, "modal_closed",
 			"modal_closed should NOT emit on maneuver commit.")
+
+
+# ---------------------------------------------------------------------------
+# Collision message label
+# ---------------------------------------------------------------------------
+
+
+func test_collision_label_hidden_by_default() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	assert_false(_modal._collision_label.visible,
+			"Collision label should be hidden by default.")
+
+
+func test_set_collision_message_shows_label() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	_modal.set_collision_message("⚠ Collision detected! Speed reduced to 1.")
+	assert_true(_modal._collision_label.visible,
+			"Collision label should be visible after set_collision_message.")
+	assert_eq(_modal._collision_label.text,
+			"⚠ Collision detected! Speed reduced to 1.",
+			"Collision label text should match set value.")
+
+
+func test_set_collision_message_empty_hides_label() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	_modal.open(state)
+	_modal.set_collision_message("Some message")
+	_modal.set_collision_message("")
+	assert_false(_modal._collision_label.visible,
+			"Collision label should be hidden after empty message.")

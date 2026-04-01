@@ -108,6 +108,9 @@ var _squadron_skip_button: Button = null
 ## "End Activation ►" button shown when all steps are complete (DONE).
 var _end_activation_button: Button = null
 
+## Label showing collision/overlap info (between step rows and End button).
+var _collision_label: Label = null
+
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
@@ -221,6 +224,20 @@ func refresh() -> void:
 	_update_step_display()
 
 
+## Sets the collision/overlap message shown between the step rows and
+## the End Activation button.  Pass an empty string to hide.
+## Called by the game board after overlap resolution.
+func set_collision_message(text: String) -> void:
+	if _collision_label == null:
+		return
+	if text.is_empty():
+		_collision_label.visible = false
+		_collision_label.text = ""
+	else:
+		_collision_label.text = text
+		_collision_label.visible = true
+
+
 ## Escape key dismisses the modal.
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
@@ -325,6 +342,17 @@ func _build_ui() -> void:
 		var row: PanelContainer = _create_step_row(i)
 		_step_container.add_child(row)
 		_step_rows.append(row)
+
+	# Collision info label — shown when an overlap/collision occurred.
+	_collision_label = Label.new()
+	_collision_label.name = "CollisionLabel"
+	_collision_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_collision_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_collision_label.add_theme_font_size_override("font_size", 13)
+	_collision_label.add_theme_color_override("font_color",
+			Color(1.0, 0.75, 0.3))
+	_collision_label.visible = false
+	vbox.add_child(_collision_label)
 
 	# "End Activation ►" button — shown only when step == DONE.
 	var end_container: HBoxContainer = HBoxContainer.new()
@@ -457,6 +485,7 @@ func _clear_ui() -> void:
 	_squadron_button = null
 	_squadron_skip_button = null
 	_end_activation_button = null
+	_collision_label = null
 
 
 # ---------------------------------------------------------------------------

@@ -93,6 +93,21 @@ var _damage_deck: DamageDeck = null
 ## Resolver for immediate faceup damage card effects (DM-005).
 var _immediate_resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
 
+## Handoff overlay reference for hot-seat player transitions (DM-011).
+var _handoff_overlay: HandoffOverlay = null
+
+## Choice modal for immediate damage card effects (DM-011).
+var _opponent_choice_modal: OpponentChoiceModal = null
+
+## Pending faceup card that needs a player choice before its effect resolves.
+var _pending_immediate_card: DamageCard = null
+
+## Pending ship instance for the deferred immediate effect.
+var _pending_immediate_ship: ShipInstance = null
+
+## Pending choice descriptor for the deferred immediate effect.
+var _pending_immediate_choice: Dictionary = {}
+
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("AttackExecutor")
 
@@ -277,6 +292,11 @@ func set_effect_registry(registry: EffectRegistry) -> void:
 ## Sets the shared damage deck reference.
 func set_damage_deck(deck: DamageDeck) -> void:
 	_damage_deck = deck
+
+
+## Sets the handoff overlay reference for hot-seat immediate-effect choices.
+func set_handoff_overlay(overlay: HandoffOverlay) -> void:
+	_handoff_overlay = overlay
 
 
 ## Handles the "Attack Simulator" toolbar button/key press.
@@ -2185,6 +2205,11 @@ func _attack_exec_resolve_damage() -> void:
 	# --- Ship defender ---
 	if _attack_sim_def_ship:
 		_resolve_ship_damage(final_damage)
+		# If a choice-based immediate effect is pending, show the modal
+		# flow instead of finalising immediately (DM-011).
+		if _pending_immediate_card != null:
+			_start_immediate_choice_flow()
+			return
 		_attack_exec_finalize_after_delay()
 		return
 	_log.error("No defender found for damage resolution!")
@@ -2333,8 +2358,9 @@ func _resolve_ship_damage(damage: int) -> void:
 ## Resolves the immediate one-shot effect of a faceup damage card, if any.
 ## Auto-resolve cards (Structural Damage, Projector Misaligned, Life Support
 ## Failure) are handled immediately. Choice cards (Injured Crew, Shield
-## Failure, Comm Noise) auto-resolve with the first available option for now.
-## Rules Reference: RRG "Damage Cards", p.4; DM-005.
+## Failure, Comm Noise) are deferred — the pending state is stored and the
+## choice modal is shown after the damage summary.
+## Rules Reference: RRG "Damage Cards", p.4; DM-005, DM-011.
 func _resolve_immediate_card_effect(card: DamageCard,
 		ship: ShipInstance) -> void:
 	if not ImmediateEffectResolver.is_immediate(card):
@@ -2342,7 +2368,7 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	var choice_info: Dictionary = _immediate_resolver.get_required_choice(
 			card, ship)
 	if choice_info.is_empty():
-		# Auto-resolve (no opponent choice needed).
+		# Auto-resolve (no player choice needed).
 		var ok: bool = _immediate_resolver.resolve(
 				card, ship, _damage_deck)
 		if ok:
@@ -2350,26 +2376,116 @@ func _resolve_immediate_card_effect(card: DamageCard,
 		else:
 			_log.warn("Immediate effect failed: '%s'." % card.title)
 		return
-	# Choice-based card — pick the first available option automatically.
-	# TODO: Present a choice UI to the opponent (Phase 10 UI polish).
-	var options: Array = choice_info.get("options", [])
-	var selected: Dictionary = {}
-	for opt: Dictionary in options:
-		if opt.get("available", false):
-			selected = {"id": opt.get("id", "")}
-			break
-	if selected.is_empty():
-		_log.warn("No available choice for '%s'. " % card.title +
-				"Auto-resolving without choice.")
-		_immediate_resolver.resolve(card, ship, _damage_deck)
+	# Choice-based card — store pending state for the modal flow.
+	_pending_immediate_card = card
+	_pending_immediate_ship = ship
+	_pending_immediate_choice = choice_info
+	_log.info("Immediate effect deferred for modal: '%s' (chooser=%s)."
+			% [card.title, choice_info.get("chooser", "?")])
+
+
+# ---------------------------------------------------------------------------
+# Phase 10a — Immediate Effect Choice Modal Flow (DM-011)
+# ---------------------------------------------------------------------------
+
+
+## Starts the immediate-effect choice flow: handoff (if hot-seat) → modal.
+## Called from [method _attack_exec_resolve_damage] when a pending choice
+## exists. On completion, resolves the effect and finalises the attack.
+func _start_immediate_choice_flow() -> void:
+	_ensure_choice_modal()
+	var chooser: String = _pending_immediate_choice.get("chooser", "opponent")
+	var chooser_player: int = _get_chooser_player_index(chooser)
+	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
+			% [chooser, chooser_player,
+			_pending_immediate_choice.get("card_title", "?")])
+	if PlayMode.is_hot_seat() and _camera:
+		_camera.rotate_to_player(chooser_player)
+		if _handoff_overlay:
+			_handoff_overlay.show_handoff(
+					chooser_player, "Damage Card Choice")
+			var vp_size: Vector2 = Vector2(1280, 720)
+			if get_viewport():
+				vp_size = get_viewport().get_visible_rect().size
+			_handoff_overlay.update_size(vp_size)
+			if not EventBus.handoff_accepted.is_connected(
+					_on_immediate_handoff_accepted):
+				EventBus.handoff_accepted.connect(
+						_on_immediate_handoff_accepted,
+						CONNECT_ONE_SHOT)
+			return
+	# Non-hot-seat or no handoff overlay: show modal directly.
+	_show_immediate_choice_modal()
+
+
+## Called when the handoff "Ready" button is pressed during the
+## immediate-effect choice flow.
+func _on_immediate_handoff_accepted() -> void:
+	_show_immediate_choice_modal()
+
+
+## Creates and shows the OpponentChoiceModal with the pending choice.
+func _show_immediate_choice_modal() -> void:
+	_ensure_choice_modal()
+	if not _opponent_choice_modal.choice_confirmed.is_connected(
+			_on_immediate_choice_confirmed):
+		_opponent_choice_modal.choice_confirmed.connect(
+				_on_immediate_choice_confirmed, CONNECT_ONE_SHOT)
+	_opponent_choice_modal.open(_pending_immediate_choice)
+
+
+## Called when the player confirms their selection in the choice modal.
+func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
+	var card: DamageCard = _pending_immediate_card
+	var ship: ShipInstance = _pending_immediate_ship
+	# Clear pending state.
+	_pending_immediate_card = null
+	_pending_immediate_ship = null
+	_pending_immediate_choice = {}
+	if card == null or ship == null:
+		_log.error("Immediate choice confirmed but no pending card/ship!")
+		_attack_exec_finalize_after_delay()
 		return
 	var ok: bool = _immediate_resolver.resolve(
-			card, ship, _damage_deck, selected)
+			card, ship, _damage_deck, selection)
 	if ok:
-		_log.info("Immediate effect resolved: '%s' (auto-chose '%s')." % [
-				card.title, selected.get("id", "")])
+		_log.info("Immediate effect resolved: '%s' (choice=%s)." % [
+				card.title, str(selection)])
 	else:
-		_log.warn("Immediate effect failed: '%s'." % card.title)
+		_log.warn("Immediate effect failed: '%s' (choice=%s)." % [
+				card.title, str(selection)])
+	# Update hull/shield display after the effect.
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	EventBus.ship_hull_changed.emit(ship, new_hull)
+	_attack_exec_finalize_after_delay()
+
+
+## Returns the player index for the given chooser role relative to the
+## current attack's defender.
+func _get_chooser_player_index(chooser: String) -> int:
+	# "owner" = the defender (ship owner). "opponent" = the attacker.
+	if _attack_sim_def_ship:
+		var def_inst: ShipInstance = (
+				_attack_sim_def_ship.get_ship_instance())
+		if def_inst:
+			if chooser == "owner":
+				return def_inst.owner_player
+			# "opponent" = the other player.
+			return 1 - def_inst.owner_player
+	return 0
+
+
+## Lazily creates the OpponentChoiceModal on a high CanvasLayer.
+func _ensure_choice_modal() -> void:
+	if _opponent_choice_modal != null:
+		return
+	_opponent_choice_modal = OpponentChoiceModal.new()
+	_opponent_choice_modal.name = "OpponentChoiceModal"
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "ChoiceModalLayer"
+	layer.layer = 95
+	add_child(layer)
+	layer.add_child(_opponent_choice_modal)
 
 
 ## Waits briefly to show the damage info, then proceeds to finalize.

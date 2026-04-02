@@ -1466,27 +1466,55 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 10: UI Polish & Network Foundation ⏳ and lay network multiplayer groundwork.
+### Phase 10a: Immediate Damage Card Fixes + Opponent Choice UI ✅
+**Goal:** Fix the 3 damage cards with incorrect effects (known defects from Phase 9d), and build a generic choice modal so the opponent/owner can make decisions instead of the current auto-pick-first-option hack.
+**Prerequisites:** Phase 9 (ImmediateEffectResolver, DamageCard, DamageDeck)
+**Duration estimate:** 1 session
+**Requirements:** DM-010–015, Card texts for Injured Crew / Comm Noise
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Fix Shield Failure (multi-zone, −1 each) | Core | DM-010–015 | Rewrite `_resolve_shield_failure()`: accept `{"zones": Array[String]}` (up to 2 distinct zones), each loses 1 shield. Rewrite `_get_shield_failure_choices()` to return multi-select descriptor. | ✅ |
+| 2 | Fix Injured Crew (owner discards defense token) | Core | Card text | Rewrite `_resolve_injured_crew()`: ship's **owner** chooses and discards 1 defense token (ready or exhausted). Remove exhaust alternative. `chooser = "owner"`. | ✅ |
+| 3 | Fix Comm Noise (reduce speed OR change top dial) | Core | Card text | Rewrite `_resolve_comm_noise()`: opponent picks (a) reduce speed by 1, or (b) choose a new command for top dial. Add `CommandDialStack.replace_top_command()`. | ✅ |
+| 4 | Update `get_required_choice()` return format | Core | — | Add `"chooser": "opponent"/"owner"`, `"multi_select": bool`, `"max_selections": int`, `"card_title": String`, `"effect_text": String` to returned Dictionary. | ✅ |
+| 5 | OpponentChoiceModal — generic choice UI | Presentation | DM-011 | New `src/ui/opponent_choice_modal.gd`: title, effect text, radio/checkbox options, Confirm button. §10 anchor reset. Emits `choice_confirmed(selection: Dictionary)`. | ✅ |
+| 6 | Wire modal into AttackExecutor | Presentation | DM-011 | Replace auto-pick in `_resolve_immediate_card_effect()`. Show handoff banner for opponent choices (Shield Failure, Comm Noise); show modal directly for owner choices (Injured Crew). Await `choice_confirmed`. | ✅ |
+| 7 | Unit tests — fixed effects | Test | — | Shield Failure multi-zone (0/1/2 zones, −1 each, duplicate rejected). Injured Crew discard-only. Comm Noise speed-reduce + dial-change. ~15 new/updated tests. | ✅ |
+
+**Tests:** 1636 total (87 scripts, 2886 asserts) — +8 new tests for fixed effects
+
+---
+
+### Phase 10b: UI Polish (Card Detail View, Activation Sidebar, Movement Preview) ⏳
+**Goal:** Add card detail overlay, turn order sidebar, and movement preview polish.
+**Prerequisites:** Phase 10a, all prior phases
+**Duration estimate:** 1 session
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 8 | Card detail view overlay | Presentation | UI-002 | New `src/ui/card_detail_overlay.gd`: full-screen semi-transparent overlay + large card image centred. Right-click on ship card panel entry → show artwork from `Resources/Game_Components/`. Click anywhere or Escape to dismiss. | ⏳ |
+| 9 | Turn order / activation sidebar | Presentation | UI-014 | New `src/ui/activation_sidebar.gd`: vertical panel on screen edge. All ships + squadrons grouped by faction. Activated/unactivated icons. Updates via `ship_activated` / `squadron_activated` signals. Collapsible. Initiative ★ marker. | ⏳ |
+| 10 | Movement preview polish | Presentation | UI-010 | Enhance ghost ship: pulse opacity animation (0.3↔0.5 over 1s), collision indicator ("BLOCKED" in red text). | ⏳ |
+
+**Tests:** ~5 (sidebar state tracking)
+
+---
+
+### Phase 10c: Network Foundation ⏳ (deferred)
+**Goal:** Lay network multiplayer groundwork.
 **Prerequisites:** All prior phases
 **Duration estimate:** 2–3 sessions
 
-| Task | Layer | Requirements | Deliverables |
-|------|-------|-------------|--------------|
-| Card detail view (ship, squadron, damage) | Presentation | UI-002 | Full-size card overlay on click |
-| Movement preview polish | Presentation | UI-010 | Smooth ghost, snap-to-valid |
-| Range ruler tool (player-draggable) | Presentation | UI-012 | Measurement overlay |
-| Turn order sidebar | Presentation | UI-014 | Activation status for all units |
-| Fix Shield Failure card effect (multi-zone, −1 shield each) | Core | DM-010–015 | `ImmediateEffectResolver`, choice model, updated tests |
-| Fix Injured Crew card effect (discard defense token) | Core | — | `ImmediateEffectResolver`, updated tests |
-| Fix Comm Noise card effect (reduce speed or change dial) | Core | — | `ImmediateEffectResolver`, updated tests |
-| Opponent choice UI for immediate damage cards | Presentation | DM-011 | Zone/token picker modal for opponent |
-| Network message protocol | Application | NW-001–008 | Message types for all sync points |
-| Server-side RNG | Core | NW-004 | Dice roll authority on server |
-| State snapshot & reconnection | Application | NW-006 | Full GameState serialization for rejoin |
-| Secret information hiding | Application | NW-005 | Command dials only sent to owner |
-| Turn timer (optional) | Application | NW-008 | Configurable per-player timer |
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 11 | Network message protocol | Application | NW-001–003 | Message type definitions for all sync points | ⏳ |
+| 12 | Server-side RNG | Core | NW-004 | Dice roll authority on server | ⏳ |
+| 13 | State snapshot & reconnection | Application | NW-001, NW-006 | Full GameState serialization for all state added in Phases 4–9 | ⏳ |
+| 14 | Secret information hiding | Application | NW-005 | Command dials only sent to owner | ⏳ |
+| 15 | Turn timer (optional) | Application | NW-008 | Configurable per-player timer | ⏳ |
 
-**Tests:** ~20 (serialization roundtrip, network message validation, reconnection state)
+**Tests:** ~20 (serialization roundtrip, message validation)
 
 ---
 

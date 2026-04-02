@@ -519,6 +519,10 @@ func _spawn_learning_scenario_tokens() -> void:
 	# Pass deck to the attack executor.
 	if _attack_executor:
 		_attack_executor.set_damage_deck(_damage_deck)
+	# Pass the handoff overlay so the executor can show it for
+	# immediate damage card choices (DM-011).
+	if _attack_executor and _handoff_overlay:
+		_attack_executor.set_handoff_overlay(_handoff_overlay)
 	# Wire the effect registry to the attack executor.
 	if _attack_executor and GameManager.current_game_state \
 			and GameManager.current_game_state.effect_registry:

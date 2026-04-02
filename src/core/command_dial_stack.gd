@@ -184,6 +184,25 @@ func discard_top() -> Dictionary:
 	return dial
 
 
+## Replaces the command type of the top hidden dial.
+## Used by the Comm Noise damage card effect ("choose a new command on
+## your top command dial").
+## Rules Reference: "Comm Noise" card text.
+## [param new_command] — the new Constants.CommandType value.
+## Returns true if replacement succeeded, false if stack empty or top not hidden.
+func replace_top_command(new_command: int) -> bool:
+	if _dials.is_empty():
+		_log.info("Cannot replace top — stack is empty")
+		return false
+	if _dials[0]["state"] != STATE_HIDDEN:
+		_log.warn("Cannot replace top — state is %s" % _dials[0]["state"])
+		return false
+	var old_cmd: int = int(_dials[0]["command"])
+	_dials[0]["command"] = new_command
+	_log.info("Replaced top dial command: %d → %d" % [old_cmd, new_command])
+	return true
+
+
 ## Clears the spent dial history. Called at the start of a new round so the
 ## spent activation marker from the previous round is removed.
 ## Rules Reference: The spent dial is an "activation marker" for the current

@@ -2313,6 +2313,7 @@ func _resolve_ship_damage(damage: int) -> void:
 						% card.title)
 			# Emit signal so other systems can react to the faceup card.
 			EventBus.damage_card_flipped.emit(def_inst, card, true)
+			EventBus.damage_card_dealt.emit(def_inst, card, true)
 			_log.info(
 					"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 					% [card.title, card.trait_type])
@@ -2320,6 +2321,7 @@ func _resolve_ship_damage(damage: int) -> void:
 			_resolve_immediate_card_effect(card, def_inst)
 		else:
 			def_inst.add_facedown_damage(card)
+			EventBus.damage_card_dealt.emit(def_inst, card, false)
 			_log.info(
 					"Dealt facedown damage card #%d to %s."
 					% [i + 1, def_inst.ship_data.ship_name])

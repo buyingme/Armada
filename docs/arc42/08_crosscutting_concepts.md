@@ -567,7 +567,7 @@ ManeuverToolScene.commit_maneuver()
 After maneuver commit:
     OverlapResolver.find_overlapped_squadrons(ship, all_squadrons)
         └─ Returns list of overlapped squadrons
-    
+
     Camera flips 180° to opposing player's perspective
     DisplacementModal opens (checklist of displaced squadrons)
         └─ For each squadron:

@@ -549,6 +549,8 @@ func _connect_signals() -> void:
 	# Live score updates in HUD (Phase 8c).
 	EventBus.ship_destroyed.connect(_on_score_changed)
 	EventBus.squadron_destroyed.connect(_on_score_changed)
+	# Damage card dealt toast (Phase 10b — item 5).
+	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -1680,7 +1682,7 @@ func _on_repair_step_entered() -> void:
 		return
 	if not resolver.has_any_repair_target():
 		_log.info("Ship at full strength — nothing to repair. "
-				+ "Consuming dial/token and auto-advancing.")
+				+"Consuming dial/token and auto-advancing.")
 		resolver.finalize()
 		_on_repair_done()
 		return
@@ -1721,7 +1723,7 @@ func _on_squadron_step_entered() -> void:
 			break
 	if not has_target:
 		_log.info("No friendly squadrons in range — consuming resources "
-				+ "and auto-advancing.")
+				+"and auto-advancing.")
 		resolver.finalize()
 		_on_squadron_command_done()
 		return
@@ -2072,6 +2074,7 @@ func _deal_overlap_facedown(inst: ShipInstance, token: ShipToken) -> void:
 		_log.error("Damage deck empty — cannot deal overlap damage.")
 		return
 	inst.add_facedown_damage(card)
+	EventBus.damage_card_dealt.emit(inst, card, false)
 	var new_hull: int = inst.ship_data.hull - inst.get_total_damage()
 	EventBus.ship_hull_changed.emit(inst, new_hull)
 	EventBus.ship_damaged.emit(token, 1, Constants.HullZone.FRONT)
@@ -2093,6 +2096,25 @@ func _fade_out_destroyed_token(token: Node2D) -> void:
 		token.visible = false
 		token.modulate.a = 1.0
 	)
+
+
+## Shows a brief toast when a damage card is dealt to a ship.
+## Faceup cards show the card name in red; facedown cards show a generic message.
+## [param ship_instance] — the ShipInstance receiving the card.
+## [param card] — the DamageCard that was dealt.
+## [param is_faceup] — true if dealt faceup (critical), false if facedown.
+func _on_damage_card_dealt(ship_instance: RefCounted, card: RefCounted,
+		is_faceup: bool) -> void:
+	var ship_name: String = "Ship"
+	if ship_instance is ShipInstance and ship_instance.ship_data:
+		ship_name = ship_instance.ship_data.ship_name
+	var msg: String = ""
+	if is_faceup and card is DamageCard:
+		var dc: DamageCard = card as DamageCard
+		msg = "%s — CRIT: %s" % [ship_name, dc.title]
+	else:
+		msg = "%s — damage card dealt" % ship_name
+	TooltipManager.show_text(msg, Vector2.INF, 2.0, true)
 
 
 ## Returns the [ShipToken] corresponding to an index among the "other"

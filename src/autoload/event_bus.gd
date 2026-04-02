@@ -189,8 +189,14 @@ signal repair_command_resolved(ship_instance: RefCounted, points_spent: int)
 signal damage_card_flipped(ship_instance: RefCounted, card: RefCounted,
 		is_faceup: bool)
 
-
-# --- Turn Management Events (original Phase 4b) ---
+## Emitted each time a damage card is dealt to a ship (faceup or facedown).
+## Used by the UI to show a toast notification.
+## [param ship_instance] — the ShipInstance receiving the card.
+## [param card] — the DamageCard that was dealt.
+## [param is_faceup] — true if dealt faceup (critical), false if facedown.
+## Rules Reference: DM-005, DM-006.
+signal damage_card_dealt(ship_instance: RefCounted, card: RefCounted,
+		is_faceup: bool)
 
 ## Emitted when the active player changes.
 ## [param player_index] — the new active player (0 or 1).

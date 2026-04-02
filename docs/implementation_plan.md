@@ -1486,18 +1486,18 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 10b: UI Polish (Card Detail View, Activation Sidebar, Movement Preview) ⏳
+### Phase 10b: UI Polish (Card Detail View, Activation Sidebar, Movement Preview) ✅
 **Goal:** Add card detail overlay, turn order sidebar, and movement preview polish.
 **Prerequisites:** Phase 10a, all prior phases
 **Duration estimate:** 1 session
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
-| 8 | Card detail view overlay | Presentation | UI-002 | New `src/ui/card_detail_overlay.gd`: full-screen semi-transparent overlay + large card image centred. Right-click on ship card panel entry → show artwork from `Resources/Game_Components/`. Click anywhere or Escape to dismiss. | ⏳ |
-| 9 | Turn order / activation sidebar | Presentation | UI-014 | New `src/ui/activation_sidebar.gd`: vertical panel on screen edge. All ships + squadrons grouped by faction. Activated/unactivated icons. Updates via `ship_activated` / `squadron_activated` signals. Collapsible. Initiative ★ marker. | ⏳ |
-| 10 | Movement preview polish | Presentation | UI-010 | Enhance ghost ship: pulse opacity animation (0.3↔0.5 over 1s), collision indicator ("BLOCKED" in red text). | ⏳ |
+| 8 | Card detail view overlay | Presentation | UI-002 | New `src/ui/card_detail_overlay.gd`: full-screen semi-transparent overlay + large card image centred. Right-click on ship card panel entry → show artwork from `Resources/Game_Components/`. Click anywhere or Escape to dismiss. | ✅ |
+| 9 | Turn order / activation sidebar | Presentation | UI-014 | New `src/ui/activation_sidebar.gd`: slide-in panel on lower-left edge (20 px peek, click to expand/collapse). Ships + squadrons grouped by faction with faction colours (Rebel orange, Imperial green). Activated units grey, destroyed units red. Currently-activating unit shown in **bold**. Initiative ★ marker. Updates via EventBus signals. | ✅ |
+| 10 | Movement preview polish | Presentation | UI-010 | Ghost ship at static 0.35 alpha (pulse animation evaluated and removed — visual noise). `set_collision_preview()` API + "BLOCKED" label (red) for future wiring. | ✅ |
 
-**Tests:** ~5 (sidebar state tracking)
+**Tests:** 1636 (87 scripts, 2886 asserts) — presentation-only changes, no new unit tests needed
 
 ---
 

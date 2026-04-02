@@ -69,6 +69,12 @@ var _scenario_saver: ScenarioSaver = ScenarioSaver.new()
 var _rebel_card_panel: ShipCardPanel = null
 var _imperial_card_panel: ShipCardPanel = null
 
+## Full-screen overlay for viewing card detail art (UI-002).
+var _card_detail_overlay: CardDetailOverlay = null
+
+## Activation sidebar showing ship/squadron activation status (UI-014).
+var _activation_sidebar: ActivationSidebar = null
+
 ## Command Dial Picker modal (shared, one at a time).
 var _command_dial_picker: CommandDialPicker = null
 
@@ -447,6 +453,30 @@ func _create_ship_card_panels() -> void:
 			Constants.Faction.GALACTIC_EMPIRE, false, 1)
 	layer.add_child(_imperial_card_panel)
 
+	# Connect right-click → card detail overlay (UI-002).
+	_rebel_card_panel.card_detail_requested.connect(
+			_on_card_detail_requested)
+	_imperial_card_panel.card_detail_requested.connect(
+			_on_card_detail_requested)
+
+	# Card detail overlay on a higher layer so it covers the panels.
+	var detail_layer: CanvasLayer = CanvasLayer.new()
+	detail_layer.name = "CardDetailLayer"
+	detail_layer.layer = 85
+	add_child(detail_layer)
+	_card_detail_overlay = CardDetailOverlay.new()
+	_card_detail_overlay.name = "CardDetailOverlay"
+	detail_layer.add_child(_card_detail_overlay)
+
+	# Activation sidebar on its own layer (UI-014).
+	var sidebar_layer: CanvasLayer = CanvasLayer.new()
+	sidebar_layer.name = "ActivationSidebarLayer"
+	sidebar_layer.layer = 45
+	add_child(sidebar_layer)
+	_activation_sidebar = ActivationSidebar.new()
+	_activation_sidebar.name = "ActivationSidebar"
+	sidebar_layer.add_child(_activation_sidebar)
+
 
 ## Adds a ship instance to the correct faction's card panel.
 ## Rules Reference: SU-026 — defense tokens placed next to ship card.
@@ -465,7 +495,25 @@ func _update_card_panel_positions() -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_rebel_card_panel.update_position(vp_size)
 	_imperial_card_panel.update_position(vp_size)
+	if _card_detail_overlay:
+		_card_detail_overlay.update_size(vp_size)
 
+
+## Handles the card_detail_requested signal from a ShipCardPanel.
+## Loads the full card texture and shows it in the overlay.
+## Requirements: UI-002.
+func _on_card_detail_requested(data_key: String,
+		ship_name: String) -> void:
+	if _card_detail_overlay == null:
+		return
+	var texture: Texture2D = AssetLoader.load_texture(
+			"ships/", "%s_card.png" % data_key)
+	if texture:
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_card_detail_overlay.update_size(vp_size)
+		_card_detail_overlay.show_card(texture, ship_name)
+	else:
+		_log.warn("No card texture for '%s'." % data_key)
 
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
@@ -558,6 +606,12 @@ func _spawn_learning_scenario_tokens() -> void:
 			_token_container.get_child_count())
 	# Update panel positions now that entries have been added.
 	_update_card_panel_positions()
+	# Populate the activation sidebar with all ships/squadrons (UI-014).
+	if _activation_sidebar and GameManager.current_game_state:
+		_activation_sidebar.populate(GameManager.current_game_state)
+		_activation_sidebar.connect_signals()
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_activation_sidebar.update_position(vp_size)
 
 
 ## Instantiates and configures a ShipToken for the given placement.
@@ -656,6 +710,8 @@ func _on_viewport_resized() -> void:
 		_repair_panel.centre_on_screen(vp_size)
 	if _show_squadron_modal_button != null:
 		_show_squadron_modal_button.update_position(vp_size)
+	if _activation_sidebar != null:
+		_activation_sidebar.update_position(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.
@@ -1417,6 +1473,8 @@ func _complete_ship_activation(token: ShipToken) -> void:
 		token.show_revealed_dial(cmd)
 	_activating_ship_token = token
 	_ship_activation_state = ShipActivationState.create(_drag_ship_instance)
+	if _activation_sidebar and _drag_ship_instance:
+		_activation_sidebar.highlight_active(_drag_ship_instance)
 	_clean_up_drag()
 	_show_activation_sequence_button()
 	_log.info("Ship activated via dial drop: '%s'." % ship_key)
@@ -1439,6 +1497,8 @@ func _complete_token_conversion() -> void:
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
 	_ship_activation_state = ShipActivationState.create(ship)
 	_activating_ship_token = _find_ship_token_for_instance(ship)
+	if _activation_sidebar:
+		_activation_sidebar.highlight_active(ship)
 
 	var needs_discard: bool = result.get("needs_discard", false)
 	if needs_discard:
@@ -1517,6 +1577,9 @@ func _on_board_activation_ended() -> void:
 	if _activation_modal:
 		_activation_modal.close_and_clear()
 	_ship_activation_state = null
+	if _activation_sidebar:
+		_activation_sidebar.clear_active()
+		_activation_sidebar.refresh()
 	_dismiss_maneuver_tool()
 	_dismiss_range_overlay()
 	# Re-enable simulation tool buttons.

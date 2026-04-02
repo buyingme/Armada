@@ -76,6 +76,12 @@ var _ghost_range_overlay: RangeOverlayScene = null
 ## Whether the ghost range overlay is currently requested.
 var _ghost_overlay_active: bool = false
 
+## Whether the ghost is showing a collision (BLOCKED) indicator.
+var _ghost_blocked: bool = false
+
+## Label node for the "BLOCKED" collision indicator on the ghost.
+var _blocked_label: Label = null
+
 
 ## Initialises the tool for a specific ship token.
 ## [param ship_token] — the ship to attach the tool to.
@@ -177,6 +183,16 @@ func _create_sprites() -> void:
 	_yaw_badge_layer.draw.connect(_on_yaw_badge_draw)
 	_yaw_badge_layer.visible = false
 	add_child(_yaw_badge_layer)
+	## "BLOCKED" collision indicator label on the ghost.
+	_blocked_label = Label.new()
+	_blocked_label.name = "BlockedLabel"
+	_blocked_label.text = "BLOCKED"
+	_blocked_label.add_theme_font_size_override("font_size", 18)
+	_blocked_label.add_theme_color_override("font_color",
+			Color(1.0, 0.2, 0.2))
+	_blocked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_blocked_label.visible = false
+	add_child(_blocked_label)
 	## Bold font for labels.
 	var sf: SystemFont = SystemFont.new()
 	sf.font_weight = 700
@@ -334,6 +350,7 @@ func _update_ghost(start_pos: Vector2, start_rot: float) -> void:
 	_ghost_sprite.visible = true
 	_setup_ghost_texture()
 	_update_ghost_speed_label(final_xform)
+	_update_blocked_label(final_xform)
 	# Keep the ghost range overlay in sync when joints change.
 	if _ghost_overlay_active:
 		_create_or_update_ghost_overlay()
@@ -354,6 +371,30 @@ func _setup_ghost_texture() -> void:
 	var tex_size: Vector2 = Vector2(tex.get_width(), tex.get_height())
 	_ghost_sprite.scale = GameScale.get_base_sprite_scale(
 			_ship_token.get_ship_size(), tex_size)
+
+
+## Sets whether the ghost shows a "BLOCKED" collision indicator.
+## Call from the board when overlap detection determines the ghost position
+## would collide with another ship.
+## [param blocked] — true to show, false to hide.
+## Requirements: UI-010.
+func set_collision_preview(blocked: bool) -> void:
+	_ghost_blocked = blocked
+	if _blocked_label:
+		_blocked_label.visible = blocked and _ghost_sprite \
+				and _ghost_sprite.visible
+
+
+## Positions the "BLOCKED" label above the ghost sprite centre.
+func _update_blocked_label(final_xform: Transform2D) -> void:
+	if _blocked_label == null:
+		return
+	_blocked_label.visible = _ghost_blocked
+	if not _ghost_blocked:
+		return
+	_blocked_label.global_position = final_xform.origin + Vector2(
+			-40.0, -60.0)
+	_blocked_label.global_rotation = 0.0
 
 
 ## Toggles the range overlay on the ghost preview.

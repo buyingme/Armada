@@ -3385,3 +3385,43 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 
 
 **Pass criteria:** Ship–ship overlap auto-resolves with speed reduction and damage; amber collision label shown inside activation modal; displacement shows modal checklist with check/uncheck, snap-to-edge mouse-follow, Commit button; "Show Activation Sequence" hidden during displacement; camera flips to opponent before displacement and back after; activation modal re-opens with all steps checked after commit; “End Activation ►” button must be pressed to end activation; "Your Turn" banner appears for the next player after end activation.
+
+
+---
+
+## Phase 10b — UI Polish (Card Detail View, Activation Sidebar, Movement Preview)
+
+**What this phase adds:** Right-click on a ship card panel entry opens a full-screen card detail overlay (UI-002). An activation sidebar (UI-014) on the top centre shows all ships/squadrons grouped by faction with activated/unactivated status and initiative marker. Ghost ship preview now pulses opacity (UI-010). A `set_collision_preview()` API is available on the maneuver tool for future "BLOCKED" indicator wiring.
+
+### MT-10b.1 — Card detail overlay via right-click
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and observe the ship card panels on left and right edges | Both panels display ship entries with names and defense tokens |
+| 2 | Right-click on a Rebel ship entry in the left panel | Full-screen semi-transparent overlay appears with the ship's card artwork centred and a title label at the top |
+| 3 | Observe the overlay | Card image is large (up to 85% viewport height, 60% viewport width), background is dark semi-transparent |
+| 4 | Click anywhere on the overlay | Overlay dismisses |
+| 5 | Right-click on an Imperial ship entry in the right panel | Overlay appears again with that ship's card artwork |
+| 6 | Press Escape | Overlay dismisses |
+
+### MT-10b.2 — Activation sidebar (lower-left slide-in)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game; advance to Ship Phase | A narrow panel (20 px peek) appears at the lower-left edge listing all ships and squadrons grouped by faction |
+| 2 | Click the peek strip | Panel slides out (0.25 s ease) showing full entries; Rebel names in orange, Imperial names in green; initiative player's faction has a star marker; ships show filled circle prefix, squadrons show diamond prefix |
+| 3 | Click the panel again | Panel slides back to the 20 px peek |
+| 4 | Activate a ship | That ship's entry dims (grey); while activating, the entry is shown in **bold** |
+| 5 | Complete the ship's activation | Bold removed; entry stays grey |
+| 6 | Advance to Squadron Phase | Sidebar remains visible; all squadron entries are bright (faction-coloured) |
+| 7 | Advance past Squadron Phase (e.g., to Status Phase) | Sidebar hides |
+
+### MT-10b.3 — Ghost ship static preview
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Display the maneuver tool on a ship | Ghost preview appears at projected final position at ~0.35 alpha (static, no animation) |
+| 2 | Click a joint to change yaw | Ghost updates position smoothly |
+| 3 | Dismiss the maneuver tool | Ghost disappears cleanly |
+
+**Pass criteria:** Right-click opens card detail overlay with correct artwork; overlay dismisses on click or Escape; sidebar slides in/out from lower-left with faction colours (Rebel orange, Imperial green) and bold highlighting for the currently-activating unit; activated units dim; ghost ship preview appears at static alpha.

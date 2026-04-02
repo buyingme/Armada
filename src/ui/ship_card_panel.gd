@@ -20,9 +20,17 @@
 ## of camera pan/zoom.
 ##
 ## Rules Reference: SU-026 — defense tokens placed next to ship card.
-## Requirements: GC-005, GC-008, GC-011, GC-018, UI-006, UI-016–023.
+## Requirements: GC-005, GC-008, GC-011, GC-018, UI-002, UI-006, UI-016–023.
 class_name ShipCardPanel
 extends VBoxContainer
+
+
+## Emitted when the player right-clicks a ship card entry to view the
+## full card artwork.
+## [param data_key] — the ship's data key (e.g. "cr90_corvette_a").
+## [param ship_name] — the ship's display name.
+## Requirements: UI-002.
+signal card_detail_requested(data_key: String, ship_name: String)
 
 
 ## Map from [Constants.DefenseToken] enum to filename stem.
@@ -273,18 +281,30 @@ func _compute_panel_size() -> Vector2:
 	return Vector2(max_w, total_h)
 
 
-## Handles left-click on a ship card entry to toggle magnify.
+## Handles left-click on a ship card entry to toggle magnify, and
+## right-click to request the full card detail overlay.
 ## Dial clicks are routed to [method _on_dial_container_gui_input] instead.
 ## Blocked during discard mode to prevent the token column from being
 ## repopulated (which would wipe out the clickable discard UI).
-## Requirements: UI-018.
+## Requirements: UI-002, UI-018.
 func _on_entry_gui_input(event: InputEvent, index: int) -> void:
 	if not event is InputEventMouseButton:
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
-	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+	if not mb.pressed:
 		return
 	if index < 0 or index >= _entries.size():
+		return
+	# Right-click → show card detail overlay (UI-002).
+	if mb.button_index == MOUSE_BUTTON_RIGHT:
+		var entry: Dictionary = _entries[index]
+		var inst: ShipInstance = entry["instance"]
+		card_detail_requested.emit(inst.data_key,
+				inst.ship_data.ship_name)
+		accept_event()
+		return
+	# Left-click → toggle magnify.
+	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return
 	# Block magnify while a discard choice is pending.
 	if _discard_mode_ship != null:

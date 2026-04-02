@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
@@ -1721,6 +1721,53 @@ Run `scripts/run_board.sh` or open `game_board.tscn` and press **F6**.
 | 2 | All previous manual tests still pass | No regression in ship→ship targeting or other features |
 
 **Pass criteria:** Anti-squadron armament used for ship→squadron dice; squadron incoming threats appear at distance 1 only; 956 tests pass.
+
+---
+
+## Phase 5d-2 — Targeting List: Squadron Sections & Hull Zone Detail
+
+**Scope:** Squadron outgoing/incoming sections in targeting list modal; per-defending-hull-zone detail for ship→ship targets; UI formatting with zone labels.
+**Note:** All features were implemented incrementally across Phases 5d, 5d-fix, 7, 7b, and 8 rather than as a dedicated session. This section documents the manual verification checks.
+
+### MT-5d-2.1 — Squadron outgoing targets: ship at distance 1
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place a friendly X-wing squadron at distance 1 of an enemy ship | Targeting list shows a squadron section with the enemy ship as an outgoing target |
+| 2 | Verify dice display | Battery armament dice shown (from squadron JSON data), not anti-squadron dice |
+| 3 | Move squadron beyond distance 1 | Enemy ship disappears from outgoing targets |
+
+### MT-5d-2.2 — Squadron outgoing targets: enemy squadron at distance 1
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place a friendly X-wing near an enemy TIE Fighter at distance 1 | Targeting list shows the TIE Fighter as an outgoing target with anti-squadron dice |
+| 2 | Verify range display | Shows "in range" (no hull zone label) |
+
+### MT-5d-2.3 — Squadron incoming threats section
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Place an enemy Victory I with anti-sq armament in arc of a friendly squadron | Incoming threats section shows the Victory I |
+| 2 | Place an enemy TIE Fighter at distance 1 of the friendly squadron | TIE Fighter appears in incoming threats |
+| 3 | Move the TIE Fighter beyond distance 1 | TIE Fighter disappears from incoming threats |
+
+### MT-5d-2.4 — Ship→ship hull zone detail
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open targeting list for a ship with multiple enemy hull zones reachable | Each reachable defending hull zone appears as a separate line |
+| 2 | Verify format | Lines show "Name FRONT→REAR at medium range (2 red, 1 blue)" style with attacking→defending zone labels |
+| 3 | Verify colour coding | Range-band colours match: grey (close), blue (medium), red (long) |
+
+### MT-5d-2.5 — Squadron section header styling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open targeting list with both ship and squadron sections | Squadron headers use green colour, distinct from gold ship headers |
+| 2 | Sections appear in order: ship outgoing, ship incoming, squadron outgoing, squadron incoming | Correct ordering |
+
+**Pass criteria:** Squadron sections render with correct outgoing/incoming data; hull zone detail lines show per-zone breakdown; colour and formatting match spec.
 
 ---
 

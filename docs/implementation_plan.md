@@ -796,28 +796,29 @@ Three fix commits addressed issues discovered during multi-round playtesting:
 
 ---
 
-### Phase 5d-2: Targeting List — Squadron Sections & Hull Zone Detail ⏳
+### Phase 5d-2: Targeting List — Squadron Sections & Hull Zone Detail ✅
 **Goal:** Extend the targeting list with three enhancements: (1) Add friendly squadron sections showing outgoing targets (ships + squadrons at distance 1) and incoming threats (enemy ships' anti-squadron arcs + enemy squadrons at distance 1). (2) Show per-defending-hull-zone breakdown for ship → ship targets instead of collapsing to the single closest zone. (3) Update the UI modal to display squadron sections and hull zone detail lines.
 **Prerequisites:** Phase 5d (Targeting List Tool), Phase 5d-fix (squadron armament)
 **Duration estimate:** 1–2 sessions
+**Note:** All tasks were implemented incrementally during Phases 5d, 5d-fix, 7, 7b, and 8 rather than as a dedicated session. Code review confirmed all deliverables present in `targeting_list_builder.gd` (849 lines) and `targeting_list_modal.gd` (338 lines). Tests cover all acceptance criteria.
 **Requirements:** TL-LIST-011–014, TL-RNG-003, TL-RNG-005, AC-TL-30–37
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
-| 1 | Add `target_zone` field to `TargetEntry` | Core | TL-LIST-013, AC-TL-35 | Optional `Constants.HullZone` on `TargetEntry`; populated for ship → ship, empty for squadron targets | ⏳ |
-| 2 | Ship → ship: emit one `TargetEntry` per reachable defending hull zone | Core | TL-LIST-013, AC-TL-34 | `_check_ship_target` returns `Array[TargetEntry]` instead of collapsing to best; each entry carries `target_zone`, its own range/dice/obstruction | ⏳ |
-| 3 | `SquadTargetingResult` + `_build_squad_entry` | Core | TL-LIST-011, TL-LIST-014, AC-TL-30–32 | New inner class; `_build_squad_entry` checks distance 1 to enemy ships (battery dice) and enemy squads (anti-sq dice); 360° arc, no LOS | ⏳ |
-| 4 | `_build_incoming_squad_threats` | Core | TL-LIST-012, AC-TL-33 | Enemy ships with anti-sq armament in arc at range → threat; enemy squads at distance 1 → threat | ⏳ |
-| 5 | `build()` returns combined results | Core | TL-LIST-014 | Return structure includes both `Array[ShipTargetingResult]` and `Array[SquadTargetingResult]`; backward-compatible wrapper or new return type | ⏳ |
-| 6 | `TargetingListModal` — squadron sections | Presentation | AC-TL-36 | New `_build_squad_section()` renders squadron outgoing + incoming after ship sections | ⏳ |
-| 7 | `TargetingListModal` — hull zone detail display | Presentation | AC-TL-37 | Ship → ship lines show "FRONT → LEFT at medium range (2 red, 1 blue)" format | ⏳ |
-| 8 | `game_board.gd` — collect friendly squad infos for builder | Presentation | TL-LIST-011 | Pass friendly squadrons to builder alongside enemy squads | ⏳ |
-| 9 | Unit tests — squadron targeting | Test | AC-TL-18, AC-TL-30–33 | Squad → ship, squad → squad, incoming to squads, empty states | ⏳ |
-| 10 | Unit tests — per-hull-zone detail | Test | AC-TL-18, AC-TL-34–35 | Ship → ship returns multiple entries with different target_zones | ⏳ |
-| 11 | Update requirements & docs | Docs | — | targeting_list.md, manual test plan | ⏳ |
+| 1 | Add `target_zone` field to `TargetEntry` | Core | TL-LIST-013, AC-TL-35 | `target_zone: Constants.HullZone` + `has_target_zone: bool` on `TargetEntry`; populated for ship → ship, false for squadron targets | ✅ |
+| 2 | Ship → ship: emit one `TargetEntry` per reachable defending hull zone | Core | TL-LIST-013, AC-TL-34 | `_check_ship_target` returns `Array` of entries — one per defending zone with its own range/dice/obstruction/LOS | ✅ |
+| 3 | `SquadTargetingResult` + `_build_squad_entry` | Core | TL-LIST-011, TL-LIST-014, AC-TL-30–32 | `SquadTargetingResult` class; `_build_squad_entry` checks distance 1 to enemy ships (battery dice, with LOS + range-path blocking per defending hull zone) and enemy squads (anti-sq dice); 360° arc | ✅ |
+| 4 | `_build_incoming_squad_threats` | Core | TL-LIST-012, AC-TL-33 | Enemy ships with anti-sq armament in arc at range → threat; enemy squads at distance 1 → threat | ✅ |
+| 5 | `build()` returns combined results | Core | TL-LIST-014 | `BuildResult` contains `ship_results: Array` and `squad_results: Array`; builder populates both in single pass | ✅ |
+| 6 | `TargetingListModal` — squadron sections | Presentation | AC-TL-36 | `_build_squad_section()` renders squadron outgoing + incoming after ship sections; green header colour distinguishes from ships | ✅ |
+| 7 | `TargetingListModal` — hull zone detail display | Presentation | AC-TL-37 | Ship → ship lines show "Name FRONT→REAR at medium range (2 red, 1 blue)" format; squadron → ship shows "Name in range" | ✅ |
+| 8 | `game_board.gd` — collect friendly squad infos for builder | Presentation | TL-LIST-011 | `_collect_squad_infos()` populates `SquadInfo` with `battery_armament` and `anti_squadron_armament` from JSON; passed to `build()` | ✅ |
+| 9 | Unit tests — squadron targeting | Test | AC-TL-18, AC-TL-30–33 | `test_targeting_list_builder.gd`: `test_squad_targets_enemy_ship_at_distance_1`, `test_squad_targets_enemy_squadron_at_distance_1`, `test_squad_no_target_when_beyond_distance_1`, `test_squad_no_target_when_no_armament`, `test_squad_ship_target_los_blocked_by_other_hull_zone`, `test_squad_ship_target_obstructed_by_intervening_ship`, `test_squad_incoming_threat_from_enemy_ship`, `test_squad_incoming_threat_from_enemy_squadron`, `test_squad_no_incoming_threat_when_enemy_squad_far`, `test_measure_squad_to_squad_distance_*` | ✅ |
+| 10 | Unit tests — per-hull-zone detail | Test | AC-TL-18, AC-TL-34–35 | `test_ship_target_has_target_zone` — verifies multi-entry return with distinct `target_zone` per defending hull zone | ✅ |
+| 11 | Update requirements & docs | Docs | — | targeting_list.md (TL-LIST-011–014 written), implementation plan updated | ✅ |
 
 **Requirements covered:** TL-LIST-011–014, TL-RNG-003, TL-RNG-005, AC-TL-30–37
-**Tests:** ~15–20 new tests
+**Tests:** 11 tests covering squadron targeting (in `test_targeting_list_builder.gd` — total 33 tests in file)
 
 ---
 
@@ -1554,6 +1555,7 @@ Phase 0 (Scale & Assets)
 | Phase 5b | ~25 | **35** | **847** |
 | Phase 5c | ~12 | **12** | **862** |
 | Phase 5d | ~50 | **54** | **916** |
+| Phase 5d-2 | ~15 | *(included in prior phases)* | — |
 | Phase 5b-2 | ~10 | **38** | **1628** |
 | Phase 6 | ~45 | — | ~967 |
 | Phase 7 | ~30 | **75** | **1325** |

@@ -3570,3 +3570,58 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | A ship has many damage cards (e.g. 5+ faceup) | All cards fit within the viewport — row scales down proportionally if needed |
 
 **Pass criteria:** Overlay shows cards in a flat horizontal row (faceup left, card-back + ×N right); ×N always shown (including ×1); faceup card NOT flipped until overlay dismissed after attack; panel click shows ALL damage cards with "Damage Cards" title; row scales down when many cards; Escape also dismisses.
+
+---
+
+## Phase 11 — Splash Screen & Main Menu
+
+> **Launch with:** `./scripts/run_game.sh`
+> **Requirements:** UI-029 – UI-033
+
+### MT-11.1 — Splash screen displays on launch
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game via `./scripts/run_game.sh` | The `splash.jpg` image fills the viewport as a background |
+| 2 | Observe the title text | "ARMADA" (large) and "digital" (smaller) are centred horizontally in the top 1/3 |
+| 3 | Wait and do NOT click or press any key | The main menu modal does NOT appear immediately |
+
+### MT-11.2 — Menu modal appears after 2 seconds
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | On the splash screen, wait ~2 seconds without input | A modal panel appears in the centre of the screen |
+| 2 | Observe the modal | Contains 4 buttons: "New Game", "Load Game", "Learning Scenario", "Quit" |
+| 3 | Observe the splash background | The splash image remains visible behind the modal |
+
+### MT-11.3 — Input skips splash timer
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game | Splash screen appears, no modal yet |
+| 2 | Click anywhere (or press any key) before 2 seconds | Menu modal appears immediately |
+
+### MT-11.4 — "Learning Scenario" starts the game
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Menu modal is visible | 4 buttons shown |
+| 2 | Click "Learning Scenario" | Scene transitions to the game board with all learning scenario tokens placed |
+
+### MT-11.5 — Placeholder buttons show toast
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Menu modal is visible | 4 buttons shown |
+| 2 | Click "New Game" | A "Coming Soon" toast appears near the bottom of the screen |
+| 3 | Click "Load Game" | A "Coming Soon" toast appears near the bottom of the screen |
+| 4 | Wait ~2 seconds | Toast disappears |
+
+### MT-11.6 — Quit closes the application
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Menu modal is visible | 4 buttons shown |
+| 2 | Click "Quit" | Application window closes |
+
+**Pass criteria:** Splash image fills viewport; title text in top 1/3; menu reveals after 2 s or on input; Learning Scenario transitions to game board; New Game / Load Game show "Coming Soon" toast; Quit closes the app.

@@ -615,6 +615,11 @@ These are the digital representations required for the MVP.
 | UI-026 | When a ship's activation ends ("End Activation" pressed), the revealed command dial is removed from the board and moves to the **spent dials** area below the command stack in the ship card panel (see UI-020). The ship is marked as activated for the round. | User req; SP-002, CM-007, TF-005 |
 | UI-027 | As soon as the player initiates a drag on the topmost command dial, a **help text** is displayed on screen: *"Drag to ship for full command effect · Drag to ship card for command token"*. The help text remains visible for the duration of the drag and disappears when the drag ends (drop or cancel). | User req; aids SP-011 keep-or-convert decision |
 | UI-028 | If the command dial is dragged onto the ship's **card panel entry** (instead of the ship token on the board), the dial is **converted to a matching command token**: (1) a command token of the same type is added to the ship (subject to CM-004/CM-005 duplicate/overflow rules), (2) the dial is immediately moved to the **spent dials** area below the stack (same as UI-020), and (3) the ship's activation begins (same state as a board drop, minus the revealed dial on the board). The token is available for use in the current or a later round per CM-006. | User req; SP-011b, CM-004–006 |
+| UI-029 | On game launch, a splash screen is displayed using `splash.jpg` as a full-viewport background. The text "ARMADA" and "digital" are rendered as two centred lines in large bold text in the top 1/3 of the viewport. | Entry point visual |
+| UI-030 | After 2 seconds on the splash screen, a main menu modal appears over the splash background. Any click or key press during the wait skips the timer immediately. The modal contains 4 buttons: New Game, Load Game, Learning Scenario, Quit. | Timed reveal with skip |
+| UI-031 | "Learning Scenario" transitions to the game board scene (`game_board.tscn`). | Scene transition |
+| UI-032 | "New Game" and "Load Game" are clickable placeholder buttons that show a "Coming Soon" toast when pressed. | Future scope |
+| UI-033 | "Quit" closes the application. | `get_tree().quit()` |
 
 ## 23. Network Multiplayer Considerations
 

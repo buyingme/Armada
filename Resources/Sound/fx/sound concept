@@ -1,0 +1,13 @@
+make each sound configurable in its volume (proper config file)
+
+on pressing menu item play droid_sound.wav
+on pressing any skip button play skip_beep.wav
+on pressing any confirm button play droid_sound.wav
+
+on roll attack dice
+ on any capital ship play turbolasers_shooting.mp3
+ on rebel squadron play 4 x x-wing_shooting in a rythmic way: shoot /300 ms / shoot / 100 ms / shoot / 300 ms / shoot (rhythm configurable in the config file)
+ on imperial sqadron play3 x tie_shooting in a rhythmic way: shoot / 300 ms / shoot / 100 ms / shoot
+on movement confirmation
+    on capital ship play star_destroyer_flyby.mp3
+    on imperial squadron movement confirmation

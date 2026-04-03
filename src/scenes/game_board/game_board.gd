@@ -558,6 +558,7 @@ func _on_damage_overview_requested(
 	_damage_summary_overlay.show_summary(
 			faceup_textures, facedown_count, back_tex,
 			inst.ship_data.ship_name, "Damage Cards")
+	_set_phase_hud_visible(false)
 
 
 ## Handles the damage_summary_requested signal from EventBus.
@@ -584,12 +585,21 @@ func _on_damage_summary_requested(_ship_instance: RefCounted,
 	_damage_summary_overlay.update_size(vp_size)
 	_damage_summary_overlay.show_summary(
 			faceup_textures, facedown_count, back_tex, ship_name)
+	_set_phase_hud_visible(false)
 
 
 ## Forwards the overlay's dismissed signal to EventBus so AttackExecutor
 ## can resolve deferred immediate effects.
 func _on_damage_summary_dismissed() -> void:
+	_set_phase_hud_visible(true)
 	EventBus.damage_summary_dismissed.emit()
+
+
+## Toggles the phase / round HUD label visibility.
+## Hidden while the DamageSummaryOverlay is open to avoid text overlap.
+func _set_phase_hud_visible(show: bool) -> void:
+	if _phase_hud_label != null:
+		_phase_hud_label.visible = show
 
 
 ## Connects EventBus and DebugMode signals relevant to the board.

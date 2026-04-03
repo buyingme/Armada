@@ -51,6 +51,11 @@ var activated_this_round: bool = false
 ## The player index that controls this ship (0 or 1).
 var owner_player: int = 0
 
+## Permanent destruction flag. Once set via [method mark_destroyed], the ship
+## remains destroyed even after damage cards are returned to the deck.
+## Rules Reference: DM-003 — ship destroyed when damage cards >= hull.
+var _destroyed: bool = false
+
 ## The command dial stack for this ship.
 ## Rules Reference: CP-001–007 — command dials per ship.
 var command_dial_stack: CommandDialStack = null
@@ -98,10 +103,20 @@ func get_remaining_hull() -> int:
 	return ship_data.hull - get_total_damage()
 
 
-## Returns true if this ship is destroyed (damage >= hull value).
+## Returns true if this ship is destroyed (damage >= hull value or
+## [method mark_destroyed] was called).
 ## Rules Reference: DM-003.
 func is_destroyed() -> bool:
-	return get_total_damage() >= ship_data.hull
+	return _destroyed or get_total_damage() >= ship_data.hull
+
+
+## Permanently marks this ship as destroyed. Call this before emitting the
+## [code]ship_destroyed[/code] signal so that handlers (scoring, elimination)
+## always see a consistent state — even after [method clear_all_damage_cards]
+## returns the cards to the deck.
+## Rules Reference: DM-003.
+func mark_destroyed() -> void:
+	_destroyed = true
 
 
 ## Returns true if the ship has full hull (zero damage cards) and all

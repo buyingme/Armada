@@ -2194,6 +2194,7 @@ func _deal_overlap_facedown(inst: ShipInstance, token: ShipToken) -> void:
 	_log.info("Overlap facedown damage dealt to %s. Hull: %d/%d."
 			% [inst.ship_data.ship_name, new_hull, inst.ship_data.hull])
 	if inst.is_destroyed():
+		inst.mark_destroyed()
 		_log.info("Ship destroyed by overlap: %s" % inst.data_key)
 		EventBus.ship_destroyed.emit(token)
 		_fade_out_destroyed_token(token)

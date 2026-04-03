@@ -102,6 +102,22 @@ func test_is_destroyed_when_hull_zero() -> void:
 			"Squadron should be destroyed at hull 0")
 
 
+func test_mark_destroyed_sets_flag() -> void:
+	_instance.mark_destroyed()
+	assert_true(_instance.is_destroyed(),
+			"Squadron should be destroyed after mark_destroyed()")
+
+
+func test_mark_destroyed_persists_even_if_hull_restored() -> void:
+	# Arrange — mark destroyed, then reset hull (hypothetical edge case).
+	_instance.suffer_damage(3)
+	_instance.mark_destroyed()
+	_instance.current_hull = 3
+	# Assert — must still report destroyed.
+	assert_true(_instance.is_destroyed(),
+			"Squadron must stay destroyed after mark_destroyed()")
+
+
 # --- Defense Tokens ---
 
 func test_get_active_token_count() -> void:

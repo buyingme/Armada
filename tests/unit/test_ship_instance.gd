@@ -126,6 +126,24 @@ func test_is_destroyed_true_above_hull() -> void:
 			"Ship should be destroyed when damage > hull")
 
 
+func test_mark_destroyed_sets_flag() -> void:
+	_instance.mark_destroyed()
+	assert_true(_instance.is_destroyed(),
+			"Ship should be destroyed after mark_destroyed()")
+
+
+func test_mark_destroyed_persists_after_clear_all_damage_cards() -> void:
+	# Arrange — deal lethal damage, then mark destroyed and clear cards
+	# (simulates the real GameManager destruction cleanup flow).
+	for i: int in range(_ship_data.hull):
+		_instance.facedown_damage.append(DamageCard.create("Ship", "D%d" % i))
+	_instance.mark_destroyed()
+	_instance.clear_all_damage_cards()
+	# Assert — must still report destroyed even with 0 damage cards.
+	assert_true(_instance.is_destroyed(),
+			"Ship must stay destroyed after damage cards are returned (DM-003)")
+
+
 func test_add_facedown_damage() -> void:
 	var card: DamageCard = DamageCard.create("Ship", "Test")
 	_instance.add_facedown_damage(card)

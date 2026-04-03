@@ -2386,6 +2386,7 @@ func _resolve_squadron_damage(damage: int) -> void:
 				actual, sq_inst.current_hull,
 				sq_inst.squadron_data.hull])
 	if sq_inst.is_destroyed():
+		sq_inst.mark_destroyed()
 		_log.info("Squadron destroyed!")
 		EventBus.squadron_destroyed.emit(_attack_sim_def_squad)
 		_fade_out_token(_attack_sim_def_squad)
@@ -2520,6 +2521,7 @@ func _resolve_ship_damage(damage: int) -> void:
 	EventBus.damage_resolved.emit(
 			_attack_sim_def_ship, damage)
 	if def_inst.is_destroyed():
+		def_inst.mark_destroyed()
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
 		EventBus.ship_destroyed.emit(_attack_sim_def_ship)
 		_fade_out_token(_attack_sim_def_ship)

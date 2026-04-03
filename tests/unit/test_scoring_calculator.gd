@@ -65,9 +65,9 @@ func _make_ship(cost: int, destroyed: bool, owner: int) -> ShipInstance:
 	si.current_hull = data.hull
 	si.owner_player = owner
 	if destroyed:
-		# Deal enough facedown damage to destroy.
-		for i: int in range(data.hull):
-			si.facedown_damage.append(RefCounted.new())
+		# Use the permanent flag so scoring stays correct even after
+		# clear_all_damage_cards() (the real destruction flow calls this).
+		si.mark_destroyed()
 	return si
 
 
@@ -83,6 +83,7 @@ func _make_squadron(
 	sq.current_hull = data.hull
 	sq.owner_player = owner
 	if destroyed:
+		sq.mark_destroyed()
 		sq.current_hull = 0
 	return sq
 
@@ -250,3 +251,30 @@ func test_mutual_destruction_tie_second_player_wins() -> void:
 			state, "mutual_destruction")
 	assert_eq(result["winner_index"], 1,
 			"Tied mutual destruction → second player wins")
+
+
+## Regression: ship marked destroyed via flag must still score after its
+## damage cards are returned to the discard pile (clear_all_damage_cards).
+func test_score_persists_after_clear_all_damage_cards() -> void:
+	# Arrange — create a destroyed ship, then clear its damage (simulating
+	# the GameManager cleanup flow that caused the original bug).
+	var data: ShipData = ShipData.new()
+	data.point_cost = 57
+	data.hull = 4
+	var si: ShipInstance = ShipInstance.new()
+	si.ship_data = data
+	si.current_hull = data.hull
+	si.owner_player = 1
+	si.mark_destroyed()
+	# Simulate the cards being returned.
+	si.facedown_damage.clear()
+	si.faceup_damage.clear()
+	# Build state.
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.player_states[1].ships.append(si)
+	# Act
+	var score: int = _calc.calculate_score(0, state)
+	# Assert
+	assert_eq(score, 57,
+			"Score must include destroyed ship even after damage cards cleared")

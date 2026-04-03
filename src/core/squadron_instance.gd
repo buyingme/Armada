@@ -31,6 +31,11 @@ var is_engaged: bool = false
 ## The player index that controls this squadron (0 or 1).
 var owner_player: int = 0
 
+## Permanent destruction flag. Once set via [method mark_destroyed], the
+## squadron remains destroyed even if hull is later manipulated.
+## Rules Reference: "Squadrons", p.14.
+var _destroyed: bool = false
+
 ## Defense tokens with their current states (for unique squadrons).
 ## Array of dictionaries: {"type": Constants.DefenseToken, "state": Constants.DefenseTokenState}
 var defense_tokens: Array[Dictionary] = []
@@ -54,9 +59,16 @@ static func create_from_data(
 	return inst
 
 
-## Returns true if this squadron is destroyed (hull <= 0).
+## Returns true if this squadron is destroyed (hull <= 0 or
+## [method mark_destroyed] was called).
 func is_destroyed() -> bool:
-	return current_hull <= 0
+	return _destroyed or current_hull <= 0
+
+
+## Permanently marks this squadron as destroyed.
+## Rules Reference: "Squadrons", p.14.
+func mark_destroyed() -> void:
+	_destroyed = true
 
 
 ## Suffers [amount] damage, reducing hull. Returns actual damage dealt.

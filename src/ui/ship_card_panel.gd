@@ -1190,6 +1190,9 @@ func _populate_damage_cards(col: VBoxContainer,
 	var dmg_h: float = DAMAGE_CARD_HEIGHT_PX * scale_factor
 	var faceup: Array = instance.faceup_damage
 	var facedown_count: int = instance.facedown_damage.size()
+	_log.info("Populating damage col for '%s': %d faceup, %d facedown"
+			% [instance.ship_data.ship_name, faceup.size(),
+				facedown_count])
 
 	# -- Faceup card thumbnails --
 	for card: RefCounted in faceup:
@@ -1212,6 +1215,7 @@ func _populate_damage_cards(col: VBoxContainer,
 		col.add_child(rect)
 
 	# -- Facedown counter badge --
+	var bw: float = 0.0
 	if facedown_count > 0:
 		var badge: HBoxContainer = HBoxContainer.new()
 		badge.add_theme_constant_override("separation", 2)
@@ -1227,27 +1231,33 @@ func _populate_damage_cards(col: VBoxContainer,
 			var b_aspect: float = (
 					float(back_tex.get_width())
 					/ maxf(float(back_tex.get_height()), 1.0))
-			var bw: float = dmg_h * b_aspect
+			bw = dmg_h * b_aspect
 			back_rect.custom_minimum_size = Vector2(bw, dmg_h)
 			badge.add_child(back_rect)
 
 		var label: Label = Label.new()
 		label.text = "×%d" % facedown_count
-		label.add_theme_font_size_override(
-				"font_size", int(dmg_h * 0.55))
+		var font_sz: int = int(dmg_h * 0.55)
+		label.add_theme_font_size_override("font_size", font_sz)
 		label.add_theme_color_override(
 				"font_color", Color.WHITE)
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		badge.add_child(label)
-		badge.custom_minimum_size.y = dmg_h
+
+		# Compute badge minimum width so _compute_panel_size() can
+		# account for the full damage column (prevents ×N clipping).
+		var badge_w: float = bw + 2.0 + font_sz * 1.5
+		badge.custom_minimum_size = Vector2(badge_w, dmg_h)
 		badge.mouse_filter = Control.MOUSE_FILTER_PASS
 		col.add_child(badge)
 
-	_set_children_mouse_pass(col)
-	# Restore MOUSE_FILTER_STOP on faceup thumbnails for right-click.
+	# Set badge and its children to PASS so clicks propagate up.
+	# Faceup TextureRects already have MOUSE_FILTER_STOP set above;
+	# we must NOT call _set_children_mouse_pass(col) here because it
+	# would wipe their STOP and break right-click capture.
 	for child: Node in col.get_children():
-		if child is TextureRect:
-			child.mouse_filter = Control.MOUSE_FILTER_STOP
+		if child is HBoxContainer:
+			_set_children_mouse_pass(child as Control)
 
 
 ## Handles right-click on a faceup damage card thumbnail to open the
@@ -1260,8 +1270,12 @@ func _on_damage_card_right_click(event: InputEvent,
 	var mb: InputEventMouseButton = event as InputEventMouseButton
 	if mb.button_index != MOUSE_BUTTON_RIGHT or not mb.pressed:
 		return
+	_log.info("Damage card detail requested: %s" % card.title)
 	card_detail_requested.emit(
 			card.effect_id, card.title)
+	# Stop propagation so the entry container does not also fire
+	# its own card_detail_requested for the ship card.
+	get_viewport().set_input_as_handled()
 
 
 ## Called when a damage card is dealt or flipped — refreshes the
@@ -1288,6 +1302,12 @@ func _on_damage_card_repaired(ship_instance: RefCounted,
 func _refresh_damage_for_ship(ship_instance: RefCounted) -> void:
 	for entry: Dictionary in _entries:
 		if entry["instance"] == ship_instance:
+			var inst: ShipInstance = entry["instance"] as ShipInstance
+			_log.info("Refreshing damage column for '%s' "
+					% inst.ship_data.ship_name
+					+ "(faceup=%d, facedown=%d)"
+					% [inst.faceup_damage.size(),
+						inst.facedown_damage.size()])
 			var scale_factor: float = (
 					GameScale.card_panel_magnify_factor
 					if entry["magnified"] else 1.0)

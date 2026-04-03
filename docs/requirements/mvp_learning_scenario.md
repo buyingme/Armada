@@ -771,6 +771,10 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | MUS-008 | Victory: Imperial winner → `imperial_march.mp3`, Rebel winner → `rebel_theme.mp3`. | Victory theming |
 | MUS-009 | All music volumes are configurable per track in `sound_config.json`. | Config |
 | MUS-010 | Crossfade duration is configurable (default 3.0 s). | Config |
+| MUS-011 | ActionToolbar play/pause toggle (⏸/▶) pauses and resumes the current track via `MusicManager.toggle_pause()`. | Player controls |
+| MUS-012 | ActionToolbar next-track button (⏭) skips to the next playlist track via `MusicManager.skip_to_next()`. Cancels any active destruction override. | Player controls |
+| MUS-013 | ActionToolbar volume buttons (−/+) adjust music volume in 10 % steps (0–100 %) via `MusicManager.set_volume_percent()`. | Player controls |
+| MUS-014 | Audio control buttons remain always enabled; they are not affected by `set_tool_buttons_disabled()`. | UX |
 
 ---
 
@@ -804,5 +808,5 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | Debug Mode | 13 | Dev tooling |
 | Game Logging | 18 | Dev tooling |
 | Sound Effects | 10 | User, UX |
-| Music | 10 | User, UX |
-| **Total** | **~278** | |
+| Music | 14 | User, UX |
+| **Total** | **~282** | |

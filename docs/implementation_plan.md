@@ -1604,7 +1604,22 @@ status phase cleanup.
 
 ---
 
-## Dependency Graph
+### Post-Phase-12 Feature — Audio Controls in ActionToolbar ✅
+
+**Goal:** Give the player in-game controls for music playback — play/pause toggle,
+next-track skip, and volume ±10 % buttons — without leaving the game board.
+
+**Prerequisites:** Phase 12 (MusicManager exists), ActionToolbar (Phase 5c/5d)
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | MusicManager public API | Application | MUS-011–013 | `toggle_pause()`, `is_paused()`, `skip_to_next()`, `get_volume_percent()`, `set_volume_percent()`, `_volume_multiplier` state | ✅ |
+| 2 | Audio buttons in ActionToolbar | Presentation | MUS-011–014 | `_create_audio_separator()`, `_create_music_toggle_button()` (⏸/▶), `_create_music_next_button()` (⏭), `_create_vol_down_button()` (−), `_create_vol_up_button()` (+) | ✅ |
+| 3 | Requirements & docs | Docs | — | MUS-011–014 in `mvp_learning_scenario.md`, this section, arc42, test plan | ✅ |
+
+**Files modified:** `src/autoload/music_manager.gd`, `src/ui/action_toolbar.gd`, `docs/requirements/mvp_learning_scenario.md`, `docs/implementation_plan.md`, `docs/arc42/05_building_block_view.md`, `docs/test_plan_manual.md`
+
+---
 
 ```
 Phase 0 (Scale & Assets)
@@ -1728,7 +1743,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
 | UI Requirements (UI-001–034) | 34 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10, 11 | ✅ UI-029–034 done (Phase 11) |
 | Sound Effects (SFX-001–010) | 10 | Phase 12 | ✅ |
-| Music (MUS-001–010) | 10 | Phase 12 | ✅ |
+| Music (MUS-001–014) | 14 | Phase 12 | ✅ |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

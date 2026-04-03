@@ -26,7 +26,7 @@
 | **UI / Scenes** | Visual scenes, HUD elements, menus, game board rendering | `src/scenes/`, `src/ui/` |
 | **Game Core** | Rules engine, game state, phase management, combat resolution | `src/core/` |
 | **Data Layer** | Data models as Godot Resources (ships, squadrons, upgrades) | `src/models/` |
-| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager) | `src/autoload/` |
+| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager, SfxManager, MusicManager) | `src/autoload/` |
 | **Assets** | Textures, audio, fonts, shaders | `assets/` |
 | **Tests** | Unit and integration tests | `tests/` |
 
@@ -92,7 +92,7 @@
 | `ExecuteManeuverButton` | Control | `src/ui/execute_maneuver_button.gd` | Two-phase Execute/Commit maneuver button |
 | `EndActivationButton` | Control | `src/ui/end_activation_button.gd` | "End Activation ►" button to deliberately end ship activation |
 | `ManeuverToolScene` | Node2D | `src/scenes/tools/maneuver_tool_scene.gd` | Visual maneuver tool: segments, joints, speed buttons, ghost |
-| `ActionToolbar` | HBoxContainer | `src/ui/action_toolbar.gd` | Lower-right toolbar: tooltip toggle, maneuver display button |
+| `ActionToolbar` | HBoxContainer | `src/ui/action_toolbar.gd` | Lower-right toolbar: tooltip toggle, M/R/T/A tool buttons, audio controls (⏸/▶ ⏭ −/+) |
 | `PhaseIndicator` | Control | `src/ui/phase_indicator.gd` | Current phase and round display |
 | `TooltipPanel` | PanelContainer | `src/ui/tooltip_panel.gd` | Hover/programmatic tooltip popup |
 | `HandoffOverlay` | Control | `src/ui/handoff_overlay.gd` | Player turn handoff overlay |

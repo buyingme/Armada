@@ -3849,3 +3849,53 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Observe the surviving ships | Their defense tokens are readied, activation flags reset |
 
 **Pass criteria:** Destroyed ships/squadrons are visually dimmed and non-interactive. They are skipped in all phase transitions. Only surviving units participate in the game loop.
+
+---
+
+## Audio Controls in ActionToolbar
+
+**What this adds:** Four new buttons in the lower-right ActionToolbar — play/pause toggle (⏸/▶), next track (⏭), volume down (−), and volume up (+) — separated from the tool buttons by a thin divider.
+
+**Requirements:** MUS-011, MUS-012, MUS-013, MUS-014.
+
+### MT-AUDIO.01 — Play/pause toggle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game; music is playing | ⏸ button visible in toolbar |
+| 2 | Click ⏸ | Music pauses; button text changes to ▶; skip_beep SFX plays |
+| 3 | Click ▶ | Music resumes from where it paused; button text changes back to ⏸ |
+
+### MT-AUDIO.02 — Next track
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During gameplay, note the current track | Music is playing |
+| 2 | Click ⏭ | Current track crossfades to next track in shuffled playlist; skip_beep SFX plays |
+| 3 | If previously paused, click ⏭ | Music resumes on the next track; toggle label shows ⏸ |
+
+### MT-AUDIO.03 — Volume controls
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click + multiple times | Music volume increases audibly; no distortion at 100% |
+| 2 | Click − multiple times | Music volume decreases audibly; at 0% music is silent |
+| 3 | Click + after reaching 0% | Volume starts increasing again from 10% |
+| 4 | Click − when already at 0% | No change; no error |
+| 5 | Click + when already at 100% | No change; no error |
+
+### MT-AUDIO.04 — Audio buttons always enabled
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter an activation that disables M/R/T/A buttons | Tool buttons are greyed out |
+| 2 | Click ⏸, ⏭, −, + | All four audio buttons still respond (not disabled); music control works |
+
+### MT-AUDIO.05 — Destruction override + skip
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a capital ship so override music plays | Imperial March or Rebel Theme starts |
+| 2 | Click ⏭ | Override is cancelled; next track in shuffled playlist plays |
+
+**Pass criteria:** All four audio buttons work at any time. Volume clamps at 0–100%. Play/pause label toggles correctly. Skip cancels destruction overrides. Audio buttons are never disabled by tool-button gating.

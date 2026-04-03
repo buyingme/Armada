@@ -57,6 +57,16 @@ var _playlist: Array[String] = []
 ## Index of the currently playing track within [member _playlist].
 var _playlist_index: int = -1
 
+## True while music is paused by the user.
+var _paused: bool = false
+
+## User-controlled volume multiplier (0.0–1.0). Applied on top of per-track
+## volumes from the config file. 1.0 = full config volume, 0.0 = muted.
+var _volume_multiplier: float = 1.0
+
+## Step size for volume +/− buttons (10%).
+const VOLUME_STEP: float = 0.1
+
 
 func _ready() -> void:
 	_load_config()
@@ -87,6 +97,50 @@ func stop() -> void:
 	var current: AudioStreamPlayer = _get_current_player()
 	if current.playing:
 		_fade_out(current)
+
+
+## Toggles between paused and playing. When pausing, the current player is
+## set to stream-paused; when resuming it continues from the same position.
+## Requirements: MUS-011.
+func toggle_pause() -> void:
+	_paused = not _paused
+	var current: AudioStreamPlayer = _get_current_player()
+	current.stream_paused = _paused
+	_log.info("Music %s." % ("paused" if _paused else "resumed"))
+
+
+## Returns [code]true[/code] when music is currently paused.
+func is_paused() -> bool:
+	return _paused
+
+
+## Skips to the next track in the shuffled playlist with a crossfade.
+## If currently in a destruction override, the override is cancelled.
+## Requirements: MUS-012.
+func skip_to_next() -> void:
+	_override_active = false
+	if _paused:
+		_paused = false
+		var current: AudioStreamPlayer = _get_current_player()
+		current.stream_paused = false
+	_advance_playlist()
+	_log.info("Skipped to next track.")
+
+
+## Returns the current music volume as a percentage (0–100).
+func get_volume_percent() -> int:
+	return roundi(_volume_multiplier * 100.0)
+
+
+## Sets the music volume to [param percent] (clamped 0–100). Applies
+## immediately to the currently audible player.
+## Requirements: MUS-013.
+func set_volume_percent(percent: int) -> void:
+	_volume_multiplier = clampf(float(percent) / 100.0, 0.0, 1.0)
+	var current: AudioStreamPlayer = _get_current_player()
+	var track_vol: float = _volumes.get(_current_track_key, 1.0)
+	current.volume_db = linear_to_db(track_vol * _volume_multiplier)
+	_log.info("Music volume: %d%%." % get_volume_percent())
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +257,8 @@ func _crossfade_to(key: String) -> void:
 
 	# Prepare incoming player.
 	incoming.stream = _streams[key]
-	incoming.volume_db = linear_to_db(_volumes.get(key, 1.0))
+	var track_vol: float = _volumes.get(key, 1.0)
+	incoming.volume_db = linear_to_db(track_vol * _volume_multiplier)
 	incoming.play()
 
 	# Fade out outgoing.

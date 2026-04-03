@@ -87,6 +87,14 @@ signal redirect_zone_selected(zone: int)
 ## attack die of its choice."
 signal evade_die_confirmed(die_index: int)
 
+## Emitted when the attacker chooses which die colour to remove due to
+## obstruction.
+## [param colour_key] — "RED", "BLUE", or "BLACK".
+## Requirements: AE-OBS-001.
+## Rules Reference: "Obstructed", RRG v1.5.0, p.10 — "the attacker must
+## remove one die of his choice from his attack pool."
+signal obstruction_die_selected(colour_key: String)
+
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackSimPanel")
@@ -116,6 +124,10 @@ var _cf_dial_container: VBoxContainer = null
 var _cf_dial_buttons: HBoxContainer = null
 ## Skip button for the CF dial section.
 var _cf_dial_skip_button: Button = null
+## Obstruction die-removal section container.
+var _obstruction_container: VBoxContainer = null
+## HBox holding colour buttons for obstruction removal.
+var _obstruction_buttons: HBoxContainer = null
 ## "Roll Dice" button.
 var _roll_button: Button = null
 ## HBox holding die face TextureRects.
@@ -318,6 +330,7 @@ func hide_dice_count() -> void:
 	if _done_button:
 		_done_button.visible = false
 	hide_cf_dial_section()
+	hide_obstruction_section()
 	hide_roll_button()
 	hide_dice_results()
 	hide_cf_token_section()
@@ -471,6 +484,20 @@ func _build_ui() -> void:
 	_cf_dial_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_cf_dial_skip_button.pressed.connect(_on_cf_dial_skip)
 	_cf_dial_container.add_child(_cf_dial_skip_button)
+	# Obstruction die-removal section (hidden by default).
+	_obstruction_container = VBoxContainer.new()
+	_obstruction_container.add_theme_constant_override("separation", 4)
+	_obstruction_container.visible = false
+	var obs_label: Label = Label.new()
+	obs_label.text = "Obstructed \u2014 remove 1 die:"
+	obs_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	obs_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	_obstruction_container.add_child(obs_label)
+	_obstruction_buttons = HBoxContainer.new()
+	_obstruction_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	_obstruction_buttons.add_theme_constant_override("separation", 8)
+	_obstruction_container.add_child(_obstruction_buttons)
+	_content.add_child(_obstruction_container)
 	# Roll Dice button.
 	_roll_button = Button.new()
 	_roll_button.text = "Roll Dice"
@@ -502,10 +529,6 @@ func _build_ui() -> void:
 	_cf_token_buttons.add_theme_constant_override("separation", 6)
 	_cf_token_container.add_child(_cf_token_buttons)
 	_cf_token_reroll_button = Button.new()
-	_cf_token_reroll_button.text = "Reroll"
-	_cf_token_reroll_button.custom_minimum_size = Vector2(80.0, 28.0)
-	_cf_token_reroll_button.disabled = true
-	_cf_token_reroll_button.pressed.connect(_on_cf_token_reroll)
 	_cf_token_buttons.add_child(_cf_token_reroll_button)
 	_cf_token_skip_button = Button.new()
 	_cf_token_skip_button.text = "Skip"
@@ -651,6 +674,8 @@ func _clear_content() -> void:
 		_cf_dial_container = null
 		_cf_dial_buttons = null
 		_cf_dial_skip_button = null
+		_obstruction_container = null
+		_obstruction_buttons = null
 		_roll_button = null
 		_dice_container = null
 		_cf_token_container = null
@@ -741,6 +766,58 @@ func _on_cf_dial_colour(colour_key: String) -> void:
 func _on_cf_dial_skip() -> void:
 	SfxManager.play_sfx("skip_beep")
 	cf_dial_skipped.emit()
+
+
+# =========================================================================
+# Phase 6b-2 — Obstruction Die Removal
+# =========================================================================
+
+## Shows the obstruction die-colour choice buttons.
+## [param available_colours] — colour keys ("RED", "BLUE", "BLACK") the
+## attacker may choose from.
+## Requirements: AE-OBS-002.
+func show_obstruction_die_choice(available_colours: Array[String]) -> void:
+	if not _obstruction_buttons or not _obstruction_container:
+		return
+	# Clear any previous buttons.
+	for child: Node in _obstruction_buttons.get_children():
+		child.queue_free()
+	for colour_key: String in available_colours:
+		var btn: Button = Button.new()
+		var display: String = _CF_COLOUR_DISPLAY.get(colour_key, colour_key)
+		btn.text = display
+		btn.custom_minimum_size = Vector2(70.0, 28.0)
+		if _CF_COLOUR_TINTS.has(colour_key):
+			btn.add_theme_color_override("font_color", _CF_COLOUR_TINTS[colour_key])
+		btn.pressed.connect(_on_obstruction_colour.bind(colour_key))
+		_obstruction_buttons.add_child(btn)
+	_obstruction_container.visible = true
+
+
+## Shows an auto-skip message when no dice remain to remove.
+## Requirements: AE-OBS-003.
+func show_obstruction_auto_skip() -> void:
+	if not _obstruction_container:
+		return
+	for child: Node in _obstruction_buttons.get_children():
+		child.queue_free()
+	var msg: Label = Label.new()
+	msg.text = "(no removable dice — skipped)"
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	_obstruction_buttons.add_child(msg)
+	_obstruction_container.visible = true
+
+
+## Hides the obstruction section.
+func hide_obstruction_section() -> void:
+	if _obstruction_container:
+		_obstruction_container.visible = false
+
+
+func _on_obstruction_colour(colour_key: String) -> void:
+	SfxManager.play_sfx("droid_sound")
+	obstruction_die_selected.emit(colour_key)
 
 
 # =========================================================================

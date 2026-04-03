@@ -274,6 +274,15 @@ var _attack_exec_redirect_step: bool = false
 ## Whether we are in the evade die-selection sub-step.
 var _attack_exec_evade_step: bool = false
 
+## Whether the current attack is obstructed (die must be removed before roll).
+## Rules Reference: "Obstructed", RRG v1.5.0, p.10 — "the attacker must
+## remove 1 die of his choice from the attack pool."
+## Requirements: AE-OBS-001.
+var _attack_exec_obstructed: bool = false
+
+## Whether we are in the obstruction die-removal sub-step.
+var _attack_exec_obstruction_step: bool = false
+
 ## Queue of defense token indices being processed during commit.
 var _defense_commit_queue: Array[int] = []
 
@@ -583,6 +592,8 @@ func _reset_exec_state() -> void:
 	_attack_exec_brace_used = false
 	_attack_exec_redirect_step = false
 	_attack_exec_evade_step = false
+	_attack_exec_obstructed = false
+	_attack_exec_obstruction_step = false
 	_awaiting_damage_summary = false
 	_deferred_immediate_card = null
 	_deferred_immediate_ship = null
@@ -1053,6 +1064,8 @@ func _attack_sim_compute_and_show_los() -> void:
 	var def_pt: Vector2 = endpoints["def"]
 	var los_result: LineOfSightChecker.LOSResult = _attack_sim_trace_los(
 			atk_pt, def_pt)
+	# Reset obstruction flag for this target evaluation.
+	_attack_exec_obstructed = false
 	# Determine overlay status.
 	var status: int = AttackSimOverlay.LOSStatus.CLEAR
 	var los_text: String = "Clear"
@@ -1074,6 +1087,7 @@ func _attack_sim_compute_and_show_los() -> void:
 								info["intersection"]])
 	elif los_result.obstructed:
 		status = AttackSimOverlay.LOSStatus.OBSTRUCTED
+		_attack_exec_obstructed = true
 		if los_result.obstructed_by.size() > 0:
 			los_text = "Obstructed by %s" % ", ".join(
 					los_result.obstructed_by)
@@ -1378,6 +1392,9 @@ func _connect_attack_panel_signals() -> void:
 		p.cf_dial_colour_selected.connect(_on_attack_cf_dial_colour)
 	if not p.cf_dial_skipped.is_connected(_on_attack_cf_dial_skipped):
 		p.cf_dial_skipped.connect(_on_attack_cf_dial_skipped)
+	if not p.obstruction_die_selected.is_connected(
+			_on_obstruction_die_selected):
+		p.obstruction_die_selected.connect(_on_obstruction_die_selected)
 	if not p.roll_dice_pressed.is_connected(_on_attack_roll_dice):
 		p.roll_dice_pressed.connect(_on_attack_roll_dice)
 	if not p.cf_token_reroll_requested.is_connected(
@@ -1444,6 +1461,32 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		_attack_exec_pool = gd_ctx.dice_pool
 	# Show Skip Attack button.
 	_attack_sim_panel.show_skip_attack_button()
+	# Obstruction: attacker must remove 1 die before rolling.
+	# Rules Reference: "Obstructed", RRG v1.5.0, p.10 — "the attacker
+	# must remove 1 die of his choice from the attack pool."
+	# Requirements: AE-OBS-001, AE-OBS-002.
+	if _attack_exec_obstructed:
+		var removable: Array[String] = []
+		for colour_key: String in _attack_exec_pool:
+			if int(_attack_exec_pool[colour_key]) > 0:
+				removable.append(colour_key)
+		if removable.size() == 0:
+			# Pool already empty — auto-skip.
+			_log.info("Obstruction: pool empty — skipping attack.")
+			_attack_sim_panel.show_obstruction_auto_skip()
+			return
+		elif removable.size() == 1:
+			# Only one colour — auto-remove without prompting.
+			_attack_exec_remove_obstruction_die(removable[0])
+			return
+		else:
+			# Multiple colours — let the attacker choose.
+			_attack_exec_obstruction_step = true
+			_attack_sim_panel.show_obstruction_die_choice(removable)
+			_log.info(
+					"Obstruction: awaiting die removal choice from %s."
+					% [str(removable)])
+			return
 	# Check CF dial availability (ship attackers only — squadrons have no dials).
 	if _attack_exec_ship_token and not _attack_exec_cf_dial_used \
 			and _attack_exec_has_cf_dial():
@@ -1524,8 +1567,64 @@ func _resolve_attacker_armament() -> Dictionary:
 func _attack_exec_show_roll_button() -> void:
 	if _attack_sim_panel:
 		_attack_sim_panel.hide_cf_dial_section()
+		_attack_sim_panel.hide_obstruction_section()
 		_attack_sim_panel.show_roll_button()
 	_log.info("Awaiting dice roll.")
+
+
+## Removes 1 die of the given [param colour_key] from the pool due to
+## obstruction, updates the dice count display, and continues the sequence.
+## Requirements: AE-OBS-001, AE-OBS-002.
+## Rules Reference: "Obstructed", RRG v1.5.0, p.10.
+func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
+	var current: int = int(_attack_exec_pool.get(colour_key, 0))
+	if current > 0:
+		_attack_exec_pool[colour_key] = current - 1
+		if _attack_exec_pool[colour_key] <= 0:
+			_attack_exec_pool.erase(colour_key)
+	_log.info("Obstruction: removed 1 %s die. Pool: %s." % [
+			colour_key, DicePool.format_pool(_attack_exec_pool)])
+	# Update dice count display.
+	if _attack_sim_panel:
+		var dice_text: String = DicePool.format_pool(_attack_exec_pool)
+		_attack_sim_panel.show_dice_count(dice_text)
+		_attack_sim_panel.hide_obstruction_section()
+	# Check if pool is now empty — auto-skip.
+	var total: int = 0
+	for key: String in _attack_exec_pool:
+		total += int(_attack_exec_pool[key])
+	if total <= 0:
+		_log.info("Obstruction: pool empty after removal — skipping attack.")
+		if _attack_sim_panel:
+			_attack_sim_panel.show_obstruction_auto_skip()
+		return
+	# Continue to CF dial or Roll.
+	_attack_exec_continue_after_obstruction()
+
+
+## Called when the attacker selects a die colour to remove for obstruction.
+## Requirements: AE-OBS-002.
+func _on_obstruction_die_selected(colour_key: String) -> void:
+	if not _attack_exec_obstruction_step:
+		return
+	_attack_exec_obstruction_step = false
+	_attack_exec_remove_obstruction_die(colour_key)
+
+
+## Continues the attack sequence after the obstruction die has been removed.
+## Checks CF dial availability and proceeds to roll if none.
+func _attack_exec_continue_after_obstruction() -> void:
+	if _attack_exec_ship_token and not _attack_exec_cf_dial_used \
+			and _attack_exec_has_cf_dial():
+		var available: Array[String] = _get_cf_dial_colours(
+				_attack_exec_pool)
+		if available.size() > 0:
+			if _attack_sim_panel:
+				_attack_sim_panel.show_cf_dial_section(available)
+			_log.info("CF dial available — offering colours: %s." % [
+					str(available)])
+			return
+	_attack_exec_show_roll_button()
 
 
 ## Called when the player selects a colour for the CF dial extra die.

@@ -3,7 +3,7 @@
 > **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, 11, 12, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 87 scripts, 1636 tests — 1635 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3761,3 +3761,40 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Press ESC again, click "Yes" | `droid_sound.wav` plays; transitions to main menu |
 
 **Pass criteria:** Music plays with crossfade transitions at menu load, game start, score changes, ship destruction, and victory. SFX fire on all confirm/skip buttons without doubling. Dice rolls produce correct SFX (turbolasers vs rhythmic squadron shots). Movement SFX plays on commit (ship flyby or faction-specific squadron flyby). Volume levels are consistent and not distorted.
+
+---
+
+## Post-Phase 12 — Bug Fixes (Music Loop, Modal Cleanup, Obstruction Dice)
+
+**What this batch fixes:**
+1. **Bug 1 (MUS-LOOP):** Background music tracks did not loop — they played once and stopped.
+2. **Bug 2/3 (MODAL-CLEANUP):** Squadron modal, activation modal, and repair panel remained visible when a new phase started or an activation ended.
+3. **Bug 5 (OBS-DICE):** Obstruction did not remove a die from the attack pool — the attacker must choose which die colour to remove.
+
+### MT-BF.01 — Music looping
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, leave it idle on round 1 | Background music track plays |
+| 2 | Wait for the track to finish its full duration (~2–3 min) | Track seamlessly loops from the beginning — no silence gap |
+
+### MT-BF.02 — Modal cleanup on phase change
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open the Squadron Activation modal during Squadron Phase | Modal is visible |
+| 2 | End the Squadron Phase (complete all activations) | Modal disappears; Status Phase UI appears cleanly |
+| 3 | Open a ship activation, open the Repair panel | Repair panel is visible |
+| 4 | End that ship's activation | Repair panel and activation modal both close |
+
+### MT-BF.03 — Obstruction die removal (defender chooses)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position ships so a squadron obstructs LOS between attacker and defender | Obstruction detected log message appears |
+| 2 | Observe the attack panel after dice pool is gathered | Orange label "Obstructed — remove 1 die:" appears with colour buttons for each available colour |
+| 3 | Click a colour button (e.g. "Red") | That die is removed from the pool count, obstruction section hides, CF dial or Roll Dice proceeds |
+| 4 | Repeat with only 1 colour in the pool | Die is auto-removed (no choice shown), attack continues |
+| 5 | Repeat with an empty pool edge case | "(no removable dice — skipped)" message appears briefly, attack continues |
+
+**Pass criteria:** Music loops indefinitely. Modals are cleaned up on phase/activation transitions. Obstruction removes exactly 1 die chosen by the attacker (or auto-removed when only 1 colour exists).

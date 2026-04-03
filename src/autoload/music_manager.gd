@@ -274,6 +274,11 @@ func _load_config() -> void:
 			if stream == null:
 				_log.warn("Could not load music stream: %s" % path)
 				continue
+			# Ensure music tracks loop automatically.
+			if stream is AudioStreamMP3:
+				(stream as AudioStreamMP3).loop = true
+			elif stream is AudioStreamOggVorbis:
+				(stream as AudioStreamOggVorbis).loop = true
 			_streams[key] = stream
 			_volumes[key] = float(entry.get("volume", 1.0))
 

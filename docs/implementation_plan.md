@@ -1534,7 +1534,7 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 12: Sound & Music 🔄
+### Phase 12: Sound & Music ✅
 **Goal:** Add SFX for all button interactions + dice rolls + movement, and dynamic background music with crossfade, score-based track switching, destruction overrides, and victory themes.
 **Prerequisites:** Phase 11 (main menu), Phase 8 (scoring/victory)
 **Duration estimate:** 1 session

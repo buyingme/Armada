@@ -1235,10 +1235,12 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 		Constants.GamePhase.COMMAND:
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
+			_hide_squadron_phase_ui()
 		Constants.GamePhase.SHIP:
 			# Button hidden until a ship is activated via dial drag (Phase 4c).
 			_end_activation_button.hide_button()
 			_hide_phase5b_ui()
+			_hide_squadron_phase_ui()
 		Constants.GamePhase.SQUADRON:
 			# Phase 7b: Squadron modal opens after handoff.
 			_end_activation_button.hide_button()
@@ -1687,6 +1689,7 @@ func _on_board_activation_ended() -> void:
 		_show_activation_button.hide_button()
 	if _activation_modal:
 		_activation_modal.close_and_clear()
+	_hide_squadron_phase_ui()
 	_ship_activation_state = null
 	if _activation_sidebar:
 		_activation_sidebar.clear_active()

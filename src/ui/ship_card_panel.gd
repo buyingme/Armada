@@ -33,6 +33,9 @@ extends VBoxContainer
 signal card_detail_requested(data_key: String, ship_name: String)
 
 
+## Height of damage card thumbnails in the side panel (pixels at 1× scale).
+const DAMAGE_CARD_HEIGHT_PX: float = 28.0
+
 ## Map from [Constants.DefenseToken] enum to filename stem.
 const TOKEN_FILENAMES: Dictionary = {
 	Constants.DefenseToken.EVADE: "token_evade",
@@ -199,6 +202,14 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	_populate_cmd_token_column(cmd_token_col, instance, 1.0)
 	entry_container.add_child(cmd_token_col)
 
+	# --- Far-right column: damage cards (faceup thumbnails + facedown badge) ---
+	var damage_col: VBoxContainer = VBoxContainer.new()
+	damage_col.add_theme_constant_override("separation", int(token_gap))
+	damage_col.alignment = BoxContainer.ALIGNMENT_BEGIN
+	damage_col.mouse_filter = Control.MOUSE_FILTER_PASS
+	_populate_damage_cards(damage_col, instance, 1.0)
+	entry_container.add_child(damage_col)
+
 	# Make the entry clickable for magnify toggle.
 	entry_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	entry_container.gui_input.connect(
@@ -213,6 +224,7 @@ func add_ship_entry(instance: ShipInstance) -> void:
 		"dial_gap": dial_gap,
 		"dial_container": dial_container,
 		"cmd_token_col": cmd_token_col,
+		"damage_col": damage_col,
 		"magnified": false,
 	})
 
@@ -270,9 +282,21 @@ func _compute_panel_size() -> Vector2:
 			if child is TextureRect:
 				cmd_col_w = maxf(cmd_col_w, child.custom_minimum_size.x)
 
+		# Damage column width.
+		var dmg_col: VBoxContainer = entry.get(
+				"damage_col", null) as VBoxContainer
+		var dmg_col_w: float = 0.0
+		if dmg_col:
+			for child: Node in dmg_col.get_children():
+				if child is Control:
+					dmg_col_w = maxf(
+							dmg_col_w, child.custom_minimum_size.x)
+
 		var entry_w: float = col_w + token_gap + card_w
 		if cmd_col_w > 0.0:
 			entry_w += token_gap + cmd_col_w
+		if dmg_col_w > 0.0:
+			entry_w += token_gap + dmg_col_w
 		max_w = maxf(max_w, entry_w)
 		total_h += card_h
 		if i > 0:
@@ -536,6 +560,12 @@ func _apply_entry_size(entry: Dictionary,
 	var cmd_col: VBoxContainer = entry["cmd_token_col"]
 	_populate_cmd_token_column(cmd_col, instance, scale_factor)
 
+	# Re-populate damage card column at new scale.
+	var dmg_col: VBoxContainer = entry.get(
+			"damage_col", null) as VBoxContainer
+	if dmg_col:
+		_populate_damage_cards(dmg_col, instance, scale_factor)
+
 
 ## Scales all TextureRect children in a VBoxContainer to a given height.
 func _scale_vbox_textures(col: VBoxContainer, token_h: float) -> void:
@@ -583,6 +613,15 @@ func _connect_eventbus_signals() -> void:
 			_on_navigate_token_spend_preview):
 		EventBus.navigate_token_spend_preview.connect(
 				_on_navigate_token_spend_preview)
+	if not EventBus.damage_card_dealt.is_connected(
+			_on_damage_cards_changed):
+		EventBus.damage_card_dealt.connect(_on_damage_cards_changed)
+	if not EventBus.damage_card_flipped.is_connected(
+			_on_damage_cards_changed):
+		EventBus.damage_card_flipped.connect(_on_damage_cards_changed)
+	if not EventBus.repair_card_discarded.is_connected(
+			_on_damage_card_repaired):
+		EventBus.repair_card_discarded.connect(_on_damage_card_repaired)
 
 
 ## EventBus callback: a ship's defense token state changed.
@@ -1105,3 +1144,156 @@ func get_ship_instance_at_screen_pos(screen_pos: Vector2) -> ShipInstance:
 func _load_card_texture(data_key: String) -> Texture2D:
 	var filename: String = "%s_card.png" % data_key
 	return AssetLoader.load_texture("ships/", filename)
+
+
+# ---------------------------------------------------------------------------
+# Damage card column
+# ---------------------------------------------------------------------------
+
+## Loads (or returns cached) the texture for a faceup damage card.
+## File naming convention: damage_<effect_id>.png
+func _get_damage_card_texture(effect_id: String) -> Texture2D:
+	var cache_key: String = "dmg_" + effect_id
+	if _tex_cache.has(cache_key):
+		return _tex_cache[cache_key] as Texture2D
+	var filename: String = "damage_%s.png" % effect_id
+	var tex: Texture2D = AssetLoader.load_texture(
+			"damage_deck/", filename)
+	if tex:
+		_tex_cache[cache_key] = tex
+	return tex
+
+
+## Loads (or returns cached) the damage card back texture.
+func _get_damage_back_texture() -> Texture2D:
+	var cache_key: String = "dmg_back"
+	if _tex_cache.has(cache_key):
+		return _tex_cache[cache_key] as Texture2D
+	var tex: Texture2D = AssetLoader.load_texture(
+			"damage_deck/", "damage_back.png")
+	if tex:
+		_tex_cache[cache_key] = tex
+	return tex
+
+
+## Rebuilds the damage card column for a ship entry.
+## Shows one thumbnail per faceup card (right-clickable for detail)
+## and a single card-back badge with ×N count for facedown cards.
+## [param col] — the VBoxContainer to populate.
+## [param instance] — the ShipInstance whose damage to display.
+## [param scale_factor] — current magnify scale (1.0 or magnify_factor).
+func _populate_damage_cards(col: VBoxContainer,
+		instance: ShipInstance, scale_factor: float) -> void:
+	for child: Node in col.get_children():
+		child.queue_free()
+
+	var dmg_h: float = DAMAGE_CARD_HEIGHT_PX * scale_factor
+	var faceup: Array = instance.faceup_damage
+	var facedown_count: int = instance.facedown_damage.size()
+
+	# -- Faceup card thumbnails --
+	for card: RefCounted in faceup:
+		var tex: Texture2D = _get_damage_card_texture(card.effect_id)
+		if tex == null:
+			continue
+		var rect: TextureRect = TextureRect.new()
+		rect.texture = tex
+		rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var t_aspect: float = (
+				float(tex.get_width())
+				/ maxf(float(tex.get_height()), 1.0))
+		var tw: float = dmg_h * t_aspect
+		rect.custom_minimum_size = Vector2(tw, dmg_h)
+		rect.mouse_filter = Control.MOUSE_FILTER_STOP
+		rect.tooltip_text = card.title
+		rect.gui_input.connect(
+				_on_damage_card_right_click.bind(card))
+		col.add_child(rect)
+
+	# -- Facedown counter badge --
+	if facedown_count > 0:
+		var badge: HBoxContainer = HBoxContainer.new()
+		badge.add_theme_constant_override("separation", 2)
+
+		var back_tex: Texture2D = _get_damage_back_texture()
+		if back_tex:
+			var back_rect: TextureRect = TextureRect.new()
+			back_rect.texture = back_tex
+			back_rect.expand_mode = (
+					TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL)
+			back_rect.stretch_mode = (
+					TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+			var b_aspect: float = (
+					float(back_tex.get_width())
+					/ maxf(float(back_tex.get_height()), 1.0))
+			var bw: float = dmg_h * b_aspect
+			back_rect.custom_minimum_size = Vector2(bw, dmg_h)
+			badge.add_child(back_rect)
+
+		var label: Label = Label.new()
+		label.text = "×%d" % facedown_count
+		label.add_theme_font_size_override(
+				"font_size", int(dmg_h * 0.55))
+		label.add_theme_color_override(
+				"font_color", Color.WHITE)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.add_child(label)
+		badge.custom_minimum_size.y = dmg_h
+		badge.mouse_filter = Control.MOUSE_FILTER_PASS
+		col.add_child(badge)
+
+	_set_children_mouse_pass(col)
+	# Restore MOUSE_FILTER_STOP on faceup thumbnails for right-click.
+	for child: Node in col.get_children():
+		if child is TextureRect:
+			child.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+## Handles right-click on a faceup damage card thumbnail to open the
+## card detail overlay showing the full damage card art.
+## Rules Reference: "Damage Cards" — players may inspect faceup cards.
+func _on_damage_card_right_click(event: InputEvent,
+		card: RefCounted) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_RIGHT or not mb.pressed:
+		return
+	card_detail_requested.emit(
+			card.effect_id, card.title)
+
+
+## Called when a damage card is dealt or flipped — refreshes the
+## damage column for the affected ship entry.
+## [param ship_instance] — the ShipInstance that changed.
+## [param _card] — the DamageCard (unused).
+## [param _is_faceup] — faceup state (unused).
+func _on_damage_cards_changed(ship_instance: RefCounted,
+		_card: RefCounted, _is_faceup: bool) -> void:
+	_refresh_damage_for_ship(ship_instance)
+
+
+## Called when a damage card is repaired/discarded — refreshes the
+## damage column for the affected ship entry.
+## [param ship_instance] — the ShipInstance that changed.
+## [param _card] — the DamageCard that was discarded (unused).
+func _on_damage_card_repaired(ship_instance: RefCounted,
+		_card: RefCounted) -> void:
+	_refresh_damage_for_ship(ship_instance)
+
+
+## Internal helper — finds the matching entry for [param ship_instance]
+## and rebuilds its damage column at the current scale.
+func _refresh_damage_for_ship(ship_instance: RefCounted) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] == ship_instance:
+			var scale_factor: float = (
+					GameScale.card_panel_magnify_factor
+					if entry["magnified"] else 1.0)
+			_populate_damage_cards(
+					entry["damage_col"] as VBoxContainer,
+					entry["instance"] as ShipInstance,
+					scale_factor)
+			_refresh_panel_position()
+			return

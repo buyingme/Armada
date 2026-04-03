@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
@@ -3425,3 +3425,71 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Dismiss the maneuver tool | Ghost disappears cleanly |
 
 **Pass criteria:** Right-click opens card detail overlay with correct artwork; overlay dismisses on click or Escape; sidebar slides in/out from lower-left with faction colours (Rebel orange, Imperial green) and bold highlighting for the currently-activating unit; activated units dim; ghost ship preview appears at static alpha.
+
+---
+
+## Damage Card Display in Ship Card Panel
+
+**What this phase adds:** A rightmost damage column in each ship card panel entry showing faceup damage card thumbnails (individually right-clickable for detail overlay) and a facedown counter badge (card-back + ×N). Live EventBus updates refresh the column when cards are dealt, flipped, or repaired. Magnify scaling is supported. A toast notification appears when any damage card is dealt.
+
+### MT-DMG.1 — Faceup damage card thumbnails
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal faceup damage to a ship (e.g., via a critical hit during an attack) | A small thumbnail of the damage card art appears in the rightmost column of that ship's card panel entry |
+| 2 | Deal a second faceup damage card to the same ship | A second thumbnail appears below the first |
+| 3 | Hover over a faceup thumbnail | Tooltip shows the card title (e.g., "Blinded Gunners") |
+| 4 | Right-click on a faceup thumbnail | Card detail overlay opens showing the full damage card artwork and title |
+| 5 | Dismiss the overlay (click or Escape) | Overlay closes; thumbnail remains |
+
+### MT-DMG.2 — Facedown damage counter badge
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal facedown (non-critical) damage to a ship | The damage column shows a single card-back thumbnail with a "×1" label next to it |
+| 2 | Deal two more facedown damage cards | The label updates to "×3" — still only one card-back image |
+| 3 | Verify the badge position | The facedown badge appears below any faceup thumbnails |
+
+### MT-DMG.3 — Mixed faceup and facedown display
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal a mix of faceup and facedown damage to one ship | Faceup thumbnails appear at the top of the column, facedown badge at the bottom |
+| 2 | Count the column items | Number of faceup thumbnails matches faceup cards; badge shows correct ×N for facedown count |
+
+### MT-DMG.4 — Live update on damage dealt
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Observe a ship with no damage | Damage column is empty (no thumbnails or badge) |
+| 2 | Resolve an attack that deals damage | Damage column updates immediately — new thumbnails/badge appear without needing to close or reopen the panel |
+| 3 | A toast notification appears briefly | Toast reads "Ship Name — CRIT: Card Title" for faceup, or "Ship Name — damage card dealt" for facedown |
+
+### MT-DMG.5 — Live update on card flip and repair
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | A faceup damage card is flipped facedown (e.g., via an effect) | The thumbnail disappears from faceup section; facedown badge count increments by 1 |
+| 2 | A facedown damage card is discarded via repair | Facedown badge count decrements; if count reaches 0, badge disappears |
+
+### MT-DMG.6 — Magnify scaling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click a ship card panel entry to magnify it | The damage column thumbnails and badge scale up proportionally with the rest of the entry |
+| 2 | Click again to un-magnify | Damage column returns to normal size |
+
+### MT-DMG.7 — Panel width adjusts for damage column
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Observe a ship with several damage cards | The card panel width has expanded to accommodate the damage column without clipping |
+| 2 | Compare with an undamaged ship | The undamaged ship's entry has no extra width from an empty damage column |
+
+### MT-DMG.8 — No damage column when undamaged
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a fresh game, observe card panels | No damage column content visible on any ship — entries look identical to before this feature |
+
+**Pass criteria:** Faceup damage thumbnails appear individually with correct art and are right-clickable for detail overlay; facedown damage shows as a single card-back with ×N badge; columns update live when cards are dealt, flipped, or repaired; toast appears on card deal; magnify scales the damage column; panel width adjusts; no visual change for undamaged ships.

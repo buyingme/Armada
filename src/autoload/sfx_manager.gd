@@ -26,6 +26,10 @@ var _volumes: Dictionary = {}
 ## Rhythm arrays keyed by rhythm name (e.g. "rebel_squadron_rhythm_ms").
 var _rhythms: Dictionary = {}
 
+## Last-known shield values keyed by "<ship_id>:<zone>".
+## Used to detect shield decreases for SFX.
+var _shield_cache: Dictionary = {}
+
 ## Pool of reusable AudioStreamPlayer nodes.
 var _pool: Array[AudioStreamPlayer] = []
 
@@ -142,6 +146,7 @@ func _connect_signals() -> void:
 	EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
 	EventBus.squadron_hull_changed.connect(_on_squadron_hull_changed)
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
+	EventBus.ship_shields_changed.connect(_on_ship_shields_changed)
 
 
 ## Plays a faction-appropriate flyby sound when a squadron moves.
@@ -186,3 +191,18 @@ func _on_damage_card_dealt(
 		_is_faceup: bool,
 ) -> void:
 	play_sfx("ship_hull_damage")
+
+
+## Plays the shield-deflect SFX when a ship's shields decrease.
+## Compares against a cached value to distinguish hits from repairs.
+## Requirements: SFX-014.
+func _on_ship_shields_changed(
+		ship_instance: RefCounted,
+		zone: String,
+		new_value: int,
+) -> void:
+	var key: String = "%s:%s" % [str(ship_instance.get_instance_id()), zone]
+	var old_value: int = _shield_cache.get(key, new_value + 1) as int
+	_shield_cache[key] = new_value
+	if new_value < old_value:
+		play_sfx("shield_deflect")

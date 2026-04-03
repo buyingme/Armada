@@ -53,6 +53,10 @@
         "squad_hull_damage": {
             "path": "res://Resources/Sound/fx/squad_hull_damage.mp3",
             "volume": 1.0
+        },
+        "shield_deflect": {
+            "path": "res://Resources/Sound/fx/shield_deflect.mp3",
+            "volume": 1.0
         }
     },
 

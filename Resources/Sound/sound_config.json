@@ -3,7 +3,7 @@
 
     "sfx": {
         "droid_sound": {
-            "path": "res://Resources/Sound/fx/droid_sound.wav",
+            "path": "res://Resources/Sound/fx/droid_sound.mp3",
             "volume": 1.0
         },
         "skip_beep": {
@@ -24,7 +24,7 @@
         },
         "star_destroyer_flyby": {
             "path": "res://Resources/Sound/fx/star_destroyer_flyby.mp3",
-            "volume": 1.0
+            "volume": 1.5
         },
         "tie_flyby": {
             "path": "res://Resources/Sound/fx/tie_flyby.mp3",
@@ -36,6 +36,18 @@
         },
         "y_wing_flyby": {
             "path": "res://Resources/Sound/fx/y-wing_flyby.mp3",
+            "volume": 1.0
+        },
+        "ship_destroyed": {
+            "path": "res://Resources/Sound/fx/ship_destroyed.mp3",
+            "volume": 1.0
+        },
+        "ship_hull_damage": {
+            "path": "res://Resources/Sound/fx/ship_hull_damage.mp3",
+            "volume": 1.0
+        },
+        "squad_hull_damage": {
+            "path": "res://Resources/Sound/fx/squad_hull_damage.mp3",
             "volume": 1.0
         }
     },
@@ -49,23 +61,23 @@
     "music": {
         "rebel_theme": {
             "path": "res://Resources/Sound/music/rebel_theme.mp3",
-            "volume": 1.0
+            "volume": 0.2
         },
         "imperial_march": {
             "path": "res://Resources/Sound/music/imperial_march.mp3",
-            "volume": 1.0
+            "volume": 0.2
         },
         "draw_in_game": {
             "path": "res://Resources/Sound/music/draw_in_game.mp3",
-            "volume": 1.0
+            "volume": 0.1
         },
         "imperial_lead_in_game": {
             "path": "res://Resources/Sound/music/imperial_lead_in_game.mp3",
-            "volume": 1.0
+            "volume": 0.1
         },
         "rebel_lead_in_game": {
             "path": "res://Resources/Sound/music/rebel_lead_in_game.mp3",
-            "volume": 1.0
+            "volume": 0.1
         }
     },
 

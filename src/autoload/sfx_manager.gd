@@ -138,6 +138,10 @@ func _acquire_player() -> AudioStreamPlayer:
 ## Connects to EventBus signals that trigger automatic SFX.
 func _connect_signals() -> void:
 	EventBus.squadron_moved.connect(_on_squadron_moved)
+	EventBus.ship_destroyed.connect(_on_ship_destroyed)
+	EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
+	EventBus.squadron_hull_changed.connect(_on_squadron_hull_changed)
+	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
 
 
 ## Plays a faction-appropriate flyby sound when a squadron moves.
@@ -154,3 +158,31 @@ func _on_squadron_moved(token: Node) -> void:
 			play_sfx("tie_flyby")
 		_:
 			play_sfx("x_wing_flyby")
+
+
+## Plays the ship-destroyed SFX when a ship is eliminated.
+## Requirements: SFX-011.
+func _on_ship_destroyed(_ship: Node) -> void:
+	play_sfx("ship_destroyed")
+
+
+## Plays the squadron hull-damage SFX when a squadron takes damage.
+## Requirements: SFX-012.
+func _on_squadron_hull_changed(_squadron_instance: RefCounted, _new_hull: int) -> void:
+	play_sfx("squad_hull_damage")
+
+
+## Plays the squadron hull-damage SFX when a squadron is destroyed.
+## Requirements: SFX-012.
+func _on_squadron_destroyed(_squadron: Node) -> void:
+	play_sfx("squad_hull_damage")
+
+
+## Plays the ship hull-damage SFX when a damage card is dealt to a ship.
+## Requirements: SFX-013.
+func _on_damage_card_dealt(
+		_ship_instance: RefCounted,
+		_card: RefCounted,
+		_is_faceup: bool,
+) -> void:
+	play_sfx("ship_hull_damage")

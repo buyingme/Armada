@@ -1185,6 +1185,7 @@ func _get_damage_back_texture() -> Texture2D:
 func _populate_damage_cards(col: VBoxContainer,
 		instance: ShipInstance, scale_factor: float) -> void:
 	for child: Node in col.get_children():
+		col.remove_child(child)
 		child.queue_free()
 
 	var dmg_h: float = DAMAGE_CARD_HEIGHT_PX * scale_factor

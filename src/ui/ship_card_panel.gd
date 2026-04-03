@@ -38,6 +38,11 @@ signal card_detail_requested(data_key: String, ship_name: String)
 ## [param card_title] — the card's display title.
 signal damage_detail_requested(effect_id: String, card_title: String)
 
+## Emitted when the player clicks a damage card to view ALL damage on the
+## ship in the [DamageSummaryOverlay].
+## [param ship_instance] — the ShipInstance whose damage should be shown.
+signal damage_overview_requested(ship_instance: RefCounted)
+
 
 ## Height of damage card thumbnails in the side panel (pixels at 1× scale).
 const DAMAGE_CARD_HEIGHT_PX: float = 28.0
@@ -1218,7 +1223,7 @@ func _populate_damage_cards(col: VBoxContainer,
 		rect.mouse_filter = Control.MOUSE_FILTER_STOP
 		rect.tooltip_text = card.title
 		rect.gui_input.connect(
-				_on_damage_card_click.bind(card))
+				_on_damage_card_click.bind(card, instance))
 		col.add_child(rect)
 
 	# -- Facedown counter badge --
@@ -1256,7 +1261,8 @@ func _populate_damage_cards(col: VBoxContainer,
 		var badge_w: float = bw + 2.0 + font_sz * 1.5
 		badge.custom_minimum_size = Vector2(badge_w, dmg_h)
 		badge.mouse_filter = Control.MOUSE_FILTER_STOP
-		badge.gui_input.connect(_on_facedown_badge_click)
+		badge.gui_input.connect(
+				_on_facedown_badge_click.bind(instance))
 		col.add_child(badge)
 
 	# Set badge and its children to PASS so clicks propagate up.
@@ -1275,7 +1281,7 @@ func _populate_damage_cards(col: VBoxContainer,
 ## Both left-click and right-click trigger the overlay.
 ## Rules Reference: "Damage Cards" — players may inspect faceup cards.
 func _on_damage_card_click(event: InputEvent,
-		card: RefCounted) -> void:
+		card: RefCounted, ship_instance: RefCounted) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -1284,16 +1290,18 @@ func _on_damage_card_click(event: InputEvent,
 	if mb.button_index != MOUSE_BUTTON_LEFT \
 			and mb.button_index != MOUSE_BUTTON_RIGHT:
 		return
-	_log.info("Damage card detail requested: %s" % card.title)
-	damage_detail_requested.emit(card.effect_id, card.title)
+	_log.info("Damage overview requested for '%s' via card '%s'."
+			% [ship_instance.ship_data.ship_name, card.title])
+	damage_overview_requested.emit(ship_instance)
 	# Stop propagation so the entry container does not also fire
 	# its own card_detail_requested for the ship card or toggle magnify.
 	get_viewport().set_input_as_handled()
 
 
-## Handles click on the facedown damage badge to show the card back
-## in the card detail overlay.
-func _on_facedown_badge_click(event: InputEvent) -> void:
+## Handles click on the facedown damage badge to show all damage cards
+## on the ship in the [DamageSummaryOverlay].
+func _on_facedown_badge_click(event: InputEvent,
+		ship_instance: RefCounted) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
@@ -1302,8 +1310,9 @@ func _on_facedown_badge_click(event: InputEvent) -> void:
 	if mb.button_index != MOUSE_BUTTON_LEFT \
 			and mb.button_index != MOUSE_BUTTON_RIGHT:
 		return
-	_log.info("Facedown damage badge clicked — showing card back.")
-	damage_detail_requested.emit("back", "Damage Card")
+	_log.info("Damage overview requested for '%s' via facedown badge."
+			% ship_instance.ship_data.ship_name)
+	damage_overview_requested.emit(ship_instance)
 	get_viewport().set_input_as_handled()
 
 

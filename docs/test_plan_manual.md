@@ -3497,7 +3497,9 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 
 ## Damage Summary Overlay
 
-**What this feature adds:** When damage cards are dealt during an attack, a full-screen overlay shows all dealt cards at once — faceup cards on the left, facedown card-back shifted 50 px right/down. The faceup critical card remains in its faceup state until the player clicks to dismiss the overlay, after which the immediate card effect (if any) resolves. This lets the player read the critical before it auto-flips facedown.
+**What this feature adds:** A full-screen overlay that displays damage cards in a flat horizontal row: `[faceup₁] [faceup₂] … [card-back] ×N`. Two triggers:
+1. **After an attack** — shows only the cards just dealt (title: "Ship Name — Damage Dealt"). The faceup critical card remains faceup until the player clicks to dismiss, after which the immediate card effect resolves.
+2. **Click damage column** in the ship card panel — shows ALL damage cards currently on that ship (title: "Ship Name — Damage Cards"). No deferred effects.
 
 ### MT-DSO.1 — Overlay appears after damage cards dealt
 
@@ -3507,21 +3509,20 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Observe the overlay title | Shows "Ship Name — Damage Dealt" in amber text at the top |
 | 3 | Observe the hint at the bottom | Shows "Click anywhere or press Escape to close" in muted grey |
 
-### MT-DSO.2 — Faceup card shown correctly
+### MT-DSO.2 — Horizontal row layout
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Resolve an attack with a critical (faceup) card | The faceup card art appears on the left side of the overlay, centered vertically |
+| 1 | Resolve an attack with 1 faceup + 2 facedown cards | Row shows: [faceup card] [card-back] ×2 — all at the same vertical position, centred on screen |
 | 2 | Hover over the faceup card | Tooltip shows the card title |
-| 3 | Observe the card state in the ship card panel (behind the overlay) | The card still shows as faceup in the panel — it has NOT been flipped facedown yet |
+| 3 | Observe the card state in the ship card panel (behind the overlay) | The card still shows as faceup — it has NOT been flipped facedown yet |
 
-### MT-DSO.3 — Facedown cards shown correctly
+### MT-DSO.3 — Facedown counter always visible
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Resolve an attack that deals facedown damage cards | A card-back image appears shifted 50 px right and 50 px down from the faceup group |
-| 2 | If multiple facedown cards were dealt | A "×N" label appears next to the card-back |
-| 3 | Deal only facedown cards (no critical) | The card-back appears centered (no shift since there are no faceup cards) |
+| 1 | Resolve an attack that deals 1 facedown card (no critical) | Row shows: [card-back] ×1 |
+| 2 | Resolve an attack that deals 3 facedown cards | Row shows: [card-back] ×3 |
 
 ### MT-DSO.4 — Dismiss triggers immediate effect
 
@@ -3546,11 +3547,26 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Dismiss the overlay | The opponent choice modal appears (possibly after a hot-seat handoff overlay) |
 | 3 | Make the choice and confirm | The choice card effect resolves; attack finalizes |
 
-### MT-DSO.7 — Viewport resize while overlay is open
+### MT-DSO.7 — Panel click shows all damage cards
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | A ship has 2 faceup + 3 facedown damage cards | Ship card panel shows thumbnails + badge |
+| 2 | Click any faceup thumbnail or the facedown badge | DamageSummaryOverlay opens with title "Ship Name — Damage Cards" |
+| 3 | Observe the row | Shows: [faceup₁] [faceup₂] [card-back] ×3 — all current damage |
+| 4 | Dismiss the overlay | No immediate effects triggered — this is an inspection-only view |
+
+### MT-DSO.8 — Viewport resize while overlay is open
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Overlay is visible | Overlay covers the full screen |
 | 2 | Resize the window | Overlay resizes to match the new viewport size |
 
-**Pass criteria:** Overlay shows all dealt cards (faceup on left, facedown shifted); faceup card is NOT flipped until overlay is dismissed; immediate effects resolve after dismiss; choice-based cards show the modal after dismiss; overlay responds to viewport resize; Escape also dismisses.
+### MT-DSO.9 — Row scales down for many cards
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | A ship has many damage cards (e.g. 5+ faceup) | All cards fit within the viewport — row scales down proportionally if needed |
+
+**Pass criteria:** Overlay shows cards in a flat horizontal row (faceup left, card-back + ×N right); ×N always shown (including ×1); faceup card NOT flipped until overlay dismissed after attack; panel click shows ALL damage cards with "Damage Cards" title; row scales down when many cards; Escape also dismisses.

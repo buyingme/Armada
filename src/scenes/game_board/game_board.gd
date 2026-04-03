@@ -462,11 +462,11 @@ func _create_ship_card_panels() -> void:
 	_imperial_card_panel.card_detail_requested.connect(
 			_on_card_detail_requested)
 
-	# Connect damage card detail overlay.
-	_rebel_card_panel.damage_detail_requested.connect(
-			_on_damage_detail_requested)
-	_imperial_card_panel.damage_detail_requested.connect(
-			_on_damage_detail_requested)
+	# Connect damage card overview overlay (click damage column → show all).
+	_rebel_card_panel.damage_overview_requested.connect(
+			_on_damage_overview_requested)
+	_imperial_card_panel.damage_overview_requested.connect(
+			_on_damage_overview_requested)
 
 	# Card detail overlay on a higher layer so it covers the panels.
 	var detail_layer: CanvasLayer = CanvasLayer.new()
@@ -530,21 +530,34 @@ func _on_card_detail_requested(data_key: String,
 		_log.warn("No card texture for '%s'." % data_key)
 
 
-## Handles the damage_detail_requested signal from a ShipCardPanel.
-## Loads the damage card texture and shows it in the overlay.
-func _on_damage_detail_requested(effect_id: String,
-		card_title: String) -> void:
-	if _card_detail_overlay == null:
+## Handles the damage_overview_requested signal from a ShipCardPanel.
+## Loads ALL damage card textures for the ship and shows them in the
+## DamageSummaryOverlay with the "Damage Cards" title.
+func _on_damage_overview_requested(
+		ship_instance: RefCounted) -> void:
+	if _damage_summary_overlay == null:
 		return
-	var filename: String = "damage_%s.png" % effect_id
-	var texture: Texture2D = AssetLoader.load_texture(
-			"damage_deck/", filename)
-	if texture:
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_card_detail_overlay.update_size(vp_size)
-		_card_detail_overlay.show_card(texture, card_title)
-	else:
-		_log.warn("No damage texture for '%s'." % effect_id)
+	var inst: ShipInstance = ship_instance as ShipInstance
+	if inst == null:
+		return
+	var faceup_textures: Array = []
+	for card: RefCounted in inst.faceup_damage:
+		var eid: String = card.effect_id if card else ""
+		var tex: Texture2D = AssetLoader.load_texture(
+				"damage_deck/", "damage_%s.png" % eid)
+		if tex:
+			faceup_textures.append({
+				"texture": tex,
+				"title": card.title if card else "",
+			})
+	var facedown_count: int = inst.facedown_damage.size()
+	var back_tex: Texture2D = AssetLoader.load_texture(
+			"damage_deck/", "damage_back.png")
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_damage_summary_overlay.update_size(vp_size)
+	_damage_summary_overlay.show_summary(
+			faceup_textures, facedown_count, back_tex,
+			inst.ship_data.ship_name, "Damage Cards")
 
 
 ## Handles the damage_summary_requested signal from EventBus.

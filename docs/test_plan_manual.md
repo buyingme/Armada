@@ -3668,7 +3668,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 
 ## Phase 12 — Sound & Music
 
-**What this phase adds:** SFX for button interactions, dice rolls, and movement; dynamic background music with crossfade, score-based track switching, destruction overrides, and victory themes.
+**What this phase adds:** SFX for button interactions, dice rolls, and movement; dynamic background music with crossfade, shuffled in-game playlist, destruction overrides, and victory themes.
 
 ### MT-12.1 — Main menu music plays on load
 
@@ -3690,7 +3690,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Start Learning Scenario from menu | Game board loads |
-| 2 | Listen for music | `draw_in_game.mp3` plays (0-0 score = tied); rebel_theme fades out with crossfade |
+| 2 | Listen for music | A random in-game track (`in_game_N.mp3`) plays; rebel_theme fades out with crossfade |
 
 ### MT-12.4 — Confirm/skip button SFX during gameplay
 
@@ -3731,19 +3731,20 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | Move a Rebel squadron and commit | `x-wing_flyby.mp3` plays |
 | 2 | Move an Imperial squadron and commit | `tie_flyby.mp3` plays |
 
-### MT-12.9 — Score-based music switching
+### MT-12.9 — Shuffled playlist advances on track end
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Destroy an Imperial squadron (giving Rebel a score lead) | Music crossfades to `rebel_lead_in_game.mp3` |
-| 2 | Destroy a Rebel squadron (equalizing score) | Music crossfades to `draw_in_game.mp3` |
+| 1 | Start a game and note the first in-game track playing | An in-game track is audible |
+| 2 | Wait for the track to finish (or shorten tracks for testing) | A different in-game track crossfades in |
+| 3 | Repeat until several tracks have played | Each track is different; no immediate repeats |
 
 ### MT-12.10 — Destruction override music
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Destroy a Rebel ship (capital ship) | Music switches to `imperial_march.mp3` |
-| 2 | Wait ~60 seconds | Music resumes score-based track (crossfade) |
+| 2 | Wait ~60 seconds | Music resumes shuffled playlist (crossfade to next in-game track) |
 
 ### MT-12.11 — Victory music
 
@@ -3760,7 +3761,7 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Click "No" | `skip_beep.wav` plays; dialog closes |
 | 3 | Press ESC again, click "Yes" | `droid_sound.wav` plays; transitions to main menu |
 
-**Pass criteria:** Music plays with crossfade transitions at menu load, game start, score changes, ship destruction, and victory. SFX fire on all confirm/skip buttons without doubling. Dice rolls produce correct SFX (turbolasers vs rhythmic squadron shots). Movement SFX plays on commit (ship flyby or faction-specific squadron flyby). Volume levels are consistent and not distorted.
+**Pass criteria:** Music plays with crossfade transitions at menu load, game start, track advancement, ship destruction, and victory. SFX fire on all confirm/skip buttons without doubling. Dice rolls produce correct SFX (turbolasers vs rhythmic squadron shots). Movement SFX plays on commit (ship flyby or faction-specific squadron flyby). Volume levels are consistent and not distorted.
 
 ---
 

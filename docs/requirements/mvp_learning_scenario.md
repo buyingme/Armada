@@ -765,9 +765,9 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | MUS-002 | Track transitions use crossfade: outgoing fades out over configurable duration, incoming starts at full volume. | UX |
 | MUS-003 | All music tracks loop until explicitly changed. | UX |
 | MUS-004 | Main menu loads with `rebel_theme.mp3`. | Theming |
-| MUS-005 | Gameplay score logic: tied scores → `draw_in_game.mp3`, Imperial leads → `imperial_lead_in_game.mp3`, Rebel leads → `rebel_lead_in_game.mp3`. Game starts with draw track (0-0). | Dynamic music |
-| MUS-006 | When a Rebel capital ship is destroyed, `imperial_march.mp3` plays for 60 s (configurable), then score logic resumes. | Destruction override |
-| MUS-007 | When an Imperial capital ship is destroyed, `rebel_theme.mp3` plays for 60 s (configurable), then score logic resumes. | Destruction override |
+| MUS-005 | Gameplay music: 12 in-game tracks (`in_game_1.mp3` … `in_game_12.mp3`) are shuffled into a random playlist at game start. When a track finishes it crossfades to the next. After all 12 have played the list is reshuffled. | Dynamic music |
+| MUS-006 | When a Rebel capital ship is destroyed, `imperial_march.mp3` plays for 60 s (configurable), then the shuffled playlist resumes. | Destruction override |
+| MUS-007 | When an Imperial capital ship is destroyed, `rebel_theme.mp3` plays for 60 s (configurable), then the shuffled playlist resumes. | Destruction override |
 | MUS-008 | Victory: Imperial winner → `imperial_march.mp3`, Rebel winner → `rebel_theme.mp3`. | Victory theming |
 | MUS-009 | All music volumes are configurable per track in `sound_config.json`. | Config |
 | MUS-010 | Crossfade duration is configurable (default 3.0 s). | Config |

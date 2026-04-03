@@ -75,20 +75,57 @@
             "path": "res://Resources/Sound/music/imperial_march.mp3",
             "volume": 0.2
         },
-        "draw_in_game": {
-            "path": "res://Resources/Sound/music/draw_in_game.mp3",
+        "in_game_1": {
+            "path": "res://Resources/Sound/music/in_game_1.mp3",
             "volume": 0.1
         },
-        "imperial_lead_in_game": {
-            "path": "res://Resources/Sound/music/imperial_lead_in_game.mp3",
+        "in_game_2": {
+            "path": "res://Resources/Sound/music/in_game_2.mp3",
             "volume": 0.1
         },
-        "rebel_lead_in_game": {
-            "path": "res://Resources/Sound/music/rebel_lead_in_game.mp3",
+        "in_game_3": {
+            "path": "res://Resources/Sound/music/in_game_3.mp3",
+            "volume": 0.1
+        },
+        "in_game_4": {
+            "path": "res://Resources/Sound/music/in_game_4.mp3",
+            "volume": 0.1
+        },
+        "in_game_5": {
+            "path": "res://Resources/Sound/music/in_game_5.mp3",
+            "volume": 0.1
+        },
+        "in_game_6": {
+            "path": "res://Resources/Sound/music/in_game_6.mp3",
+            "volume": 0.1
+        },
+        "in_game_7": {
+            "path": "res://Resources/Sound/music/in_game_7.mp3",
+            "volume": 0.1
+        },
+        "in_game_8": {
+            "path": "res://Resources/Sound/music/in_game_8.mp3",
+            "volume": 0.1
+        },
+        "in_game_9": {
+            "path": "res://Resources/Sound/music/in_game_9.mp3",
+            "volume": 0.1
+        },
+        "in_game_10": {
+            "path": "res://Resources/Sound/music/in_game_10.mp3",
+            "volume": 0.1
+        },
+        "in_game_11": {
+            "path": "res://Resources/Sound/music/in_game_11.mp3",
+            "volume": 0.1
+        },
+        "in_game_12": {
+            "path": "res://Resources/Sound/music/in_game_12.mp3",
             "volume": 0.1
         }
     },
 
+    "in_game_track_count": 12,
     "music_fade_duration_s": 3.0,
     "destruction_override_duration_s": 60.0
 }

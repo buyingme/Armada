@@ -69,15 +69,15 @@
 ### Main Menu
 - `rebel_theme` plays on load.
 
-### Gameplay (score-based)
-- Scores tied → `draw_in_game`
-- Rebel leads → `rebel_lead_in_game`
-- Imperial leads → `imperial_lead_in_game`
-- Game starts at 0-0 → `draw_in_game`
+### Gameplay (shuffled playlist)
+- 12 tracks (`in_game_1` … `in_game_12`) are shuffled at game start.
+- Each track plays once (no loop), then crossfades to the next.
+- After all 12 have played, the list is reshuffled and playback continues.
+- Track count is configurable via `in_game_track_count` in `sound_config.json`.
 
 ### Destruction Override
-- Rebel ship destroyed → `imperial_march` for 60 s, then resume score logic.
-- Imperial ship destroyed → `rebel_theme` for 60 s, then resume score logic.
+- Rebel ship destroyed → `imperial_march` for 60 s, then resume playlist.
+- Imperial ship destroyed → `rebel_theme` for 60 s, then resume playlist.
 - Duration configurable via `destruction_override_duration_s`.
 
 ### Victory

@@ -1535,7 +1535,7 @@ game logic was altered — pure structural refactoring.
 ---
 
 ### Phase 12: Sound & Music ✅
-**Goal:** Add SFX for all button interactions + dice rolls + movement, and dynamic background music with crossfade, score-based track switching, destruction overrides, and victory themes.
+**Goal:** Add SFX for all button interactions + dice rolls + movement, and dynamic background music with crossfade, shuffled in-game playlist (12 tracks), destruction overrides, and victory themes.
 **Prerequisites:** Phase 11 (main menu), Phase 8 (scoring/victory)
 **Duration estimate:** 1 session
 
@@ -1543,7 +1543,7 @@ game logic was altered — pure structural refactoring.
 |---|------|-------|---------|--------------|--------|
 | 1 | Sound config JSON | Data | SFX-010, MUS-009, MUS-010 | `Resources/Sound/sound_config.json`: per-clip volumes, rhythm arrays, fade/override durations | ✅ |
 | 2 | SfxManager autoload | Application | SFX-001–010 | `src/autoload/sfx_manager.gd`: pool of 8 AudioStreamPlayers, `play_sfx()`, `play_rhythmic()`, auto-wired squadron movement SFX via EventBus | ✅ |
-| 3 | MusicManager autoload | Application | MUS-001–010 | `src/autoload/music_manager.gd`: dual-player crossfade, score-based track switching, destruction override timer, victory music via EventBus | ✅ |
+| 3 | MusicManager autoload | Application | MUS-001–010 | `src/autoload/music_manager.gd`: dual-player crossfade, shuffled in-game playlist (12 tracks, auto-advance on finish), destruction override timer, victory music via EventBus | ✅ |
 | 4 | Menu SFX + music | Presentation | SFX-001, MUS-004 | `main_menu.gd`: `droid_sound` on all buttons, `rebel_theme` on load | ✅ |
 | 5 | Confirm/skip SFX wiring | Presentation | SFX-002, SFX-003 | Added `SfxManager.play_sfx()` calls to ~15 UI files: quit modal, activation modal, squadron modal, attack sim panel, repair panel, command dial picker, handoff overlay, etc. | ✅ |
 | 6 | Dice roll SFX | Presentation | SFX-004–006 | `attack_executor.gd._play_dice_roll_sfx()`: turbolasers for ships, rhythmic burst for squadrons (faction-dependent) | ✅ |

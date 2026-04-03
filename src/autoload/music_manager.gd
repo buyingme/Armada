@@ -1,14 +1,15 @@
 ## Music Manager
 ##
 ## Singleton that handles background music playback with crossfade transitions,
-## score-based in-game track switching, destruction overrides, and victory music.
+## shuffled in-game playlist, destruction overrides, and victory music.
 ##
-## Track selection logic during gameplay:
-##   - Scores tied → draw_in_game
-##   - Imperial leads → imperial_lead_in_game
-##   - Rebel leads → rebel_lead_in_game
-## Capital-ship destruction temporarily overrides the track for a configurable
-## duration, then the score-based track resumes.
+## During gameplay the 12 in-game tracks ([code]in_game_1[/code] …
+## [code]in_game_12[/code]) are shuffled into a random playlist. When a track
+## finishes, the next one crossfades in automatically. After all 12 have
+## played the list is reshuffled and playback continues.
+##
+## Capital-ship destruction temporarily overrides the playlist for a
+## configurable duration, then the playlist resumes.
 ##
 ## Requirements: MUS-001 … MUS-010.
 extends Node
@@ -41,14 +42,20 @@ var _a_is_current: bool = true
 ## Key of the currently playing track (empty = silence).
 var _current_track_key: String = ""
 
-## True while a destruction override is active (prevents score-based switching).
+## True while a destruction override is active (prevents playlist advance).
 var _override_active: bool = false
 
 ## Timer for destruction override expiry.
 var _override_timer: SceneTreeTimer = null
 
-## Scoring calculator for score-based music.
-var _scoring: ScoringCalculator = ScoringCalculator.new()
+## Number of in-game tracks (loaded from config, default 12).
+var _in_game_track_count: int = 12
+
+## Shuffled playlist of in-game track keys for the current cycle.
+var _playlist: Array[String] = []
+
+## Index of the currently playing track within [member _playlist].
+var _playlist_index: int = -1
 
 
 func _ready() -> void:
@@ -112,34 +119,34 @@ func _on_ship_destroyed(ship_node: Node) -> void:
 	_start_destruction_override(override_key)
 
 
-## Recalculate scores and switch in-game track when a squadron is destroyed.
-func _on_squadron_destroyed(_squadron_node: Node) -> void:
-	_update_score_music()
+# ---------------------------------------------------------------------------
+# Shuffled playlist
+# ---------------------------------------------------------------------------
+
+## Builds (or reshuffles) the in-game playlist and resets the index.
+func _build_playlist() -> void:
+	_playlist.clear()
+	for i: int in range(1, _in_game_track_count + 1):
+		var key: String = "in_game_%d" % i
+		if _streams.has(key):
+			_playlist.append(key)
+	_playlist.shuffle()
+	_playlist_index = -1
+	_log.info("Playlist shuffled: %d tracks." % _playlist.size())
 
 
-## Recalculate scores and switch in-game track when any score-relevant event
-## occurs (shield/hull changes eventually lead here through destruction signals).
-func _update_score_music() -> void:
+## Advances to the next track in the playlist. Reshuffles when exhausted.
+func _advance_playlist() -> void:
 	if _override_active:
 		return
-	var state: GameState = GameManager.current_game_state
-	if state == null:
-		return
-
-	var score_0: int = _scoring.calculate_score(0, state)
-	var score_1: int = _scoring.calculate_score(1, state)
-
-	var track_key: String = ""
-	if score_0 == score_1:
-		track_key = "draw_in_game"
-	elif score_1 > score_0:
-		# Player 1 (Imperial) leads.
-		track_key = "imperial_lead_in_game"
-	else:
-		# Player 0 (Rebel) leads.
-		track_key = "rebel_lead_in_game"
-
-	play(track_key)
+	if _playlist.is_empty():
+		_build_playlist()
+	_playlist_index += 1
+	if _playlist_index >= _playlist.size():
+		_build_playlist()
+		_playlist_index = 0
+	var key: String = _playlist[_playlist_index]
+	_crossfade_to(key)
 
 
 ## On game_ended, play the winner's faction theme.
@@ -154,11 +161,12 @@ func _on_game_ended(details: Dictionary) -> void:
 		play("rebel_theme")
 
 
-## On game_started, start the draw (neutral) in-game track.
-## Requirements: MUS-005 — game starts at 0-0 (tied).
+## On game_started, shuffle the in-game playlist and start the first track.
+## Requirements: MUS-005 — randomised in-game music.
 func _on_game_started() -> void:
 	_override_active = false
-	play("draw_in_game")
+	_build_playlist()
+	_advance_playlist()
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +174,7 @@ func _on_game_started() -> void:
 # ---------------------------------------------------------------------------
 
 ## Starts a timed destruction override: plays [param key] for the configured
-## duration, then resumes score-based music.
+## duration, then resumes the shuffled playlist.
 func _start_destruction_override(key: String) -> void:
 	_override_active = true
 	play(key)
@@ -178,10 +186,10 @@ func _start_destruction_override(key: String) -> void:
 	_override_timer.timeout.connect(_on_override_expired)
 
 
-## Called when the destruction override timer expires — resume score logic.
+## Called when the destruction override timer expires — resume the playlist.
 func _on_override_expired() -> void:
 	_override_active = false
-	_update_score_music()
+	_advance_playlist()
 
 
 # ---------------------------------------------------------------------------
@@ -229,22 +237,32 @@ func _get_other_player() -> AudioStreamPlayer:
 # ---------------------------------------------------------------------------
 
 ## Creates the two AudioStreamPlayers used for crossfading.
+## Connects the [code]finished[/code] signal so playlist tracks auto-advance.
 func _create_players() -> void:
 	_player_a = AudioStreamPlayer.new()
 	_player_a.bus = "Master"
+	_player_a.finished.connect(_on_player_finished)
 	add_child(_player_a)
 
 	_player_b = AudioStreamPlayer.new()
 	_player_b.bus = "Master"
+	_player_b.finished.connect(_on_player_finished)
 	add_child(_player_b)
 
 
 ## Connects to EventBus signals that drive music changes.
 func _connect_signals() -> void:
 	EventBus.ship_destroyed.connect(_on_ship_destroyed)
-	EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
 	EventBus.game_ended.connect(_on_game_ended)
 	EventBus.game_started.connect(_on_game_started)
+
+
+## Called when an AudioStreamPlayer finishes its stream (non-looping tracks).
+## Advances the playlist if the finished player is the current one and the
+## track that ended was an in-game playlist track.
+func _on_player_finished() -> void:
+	if _current_track_key.begins_with("in_game_"):
+		_advance_playlist()
 
 
 ## Loads and parses the music section of sound_config.json.
@@ -262,6 +280,9 @@ func _load_config() -> void:
 
 	var data: Dictionary = json.data
 
+	# --- In-game track count (how many in_game_N entries to expect) ---
+	_in_game_track_count = int(data.get("in_game_track_count", 12))
+
 	# --- Music entries ---
 	if data.has("music"):
 		var music_section: Dictionary = data["music"]
@@ -274,11 +295,13 @@ func _load_config() -> void:
 			if stream == null:
 				_log.warn("Could not load music stream: %s" % path)
 				continue
-			# Ensure music tracks loop automatically.
+			# In-game playlist tracks do NOT loop — the finished signal
+			# advances to the next track. Menu/override/victory tracks loop.
+			var is_playlist_track: bool = key.begins_with("in_game_")
 			if stream is AudioStreamMP3:
-				(stream as AudioStreamMP3).loop = true
+				(stream as AudioStreamMP3).loop = not is_playlist_track
 			elif stream is AudioStreamOggVorbis:
-				(stream as AudioStreamOggVorbis).loop = true
+				(stream as AudioStreamOggVorbis).loop = not is_playlist_track
 			_streams[key] = stream
 			_volumes[key] = float(entry.get("volume", 1.0))
 

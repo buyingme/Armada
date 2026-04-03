@@ -1578,6 +1578,7 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 func _complete_ship_activation(token: ShipToken) -> void:
 	var ship_key: String = _drag_ship_instance.data_key if _drag_ship_instance \
 			else "?"
+	SfxManager.play_sfx("droid_sound_long")
 	GameManager.activate_ship(_drag_ship_instance)
 	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
 			.get_revealed_dial()

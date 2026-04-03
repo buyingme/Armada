@@ -653,7 +653,7 @@ func _on_execute_pressed() -> void:
 		# Phase 1 — show the maneuver tool.  The modal stays open so the
 		# player can see "Commit Maneuver ►" while setting the course.
 		_log.info("Execute maneuver pressed — showing tool.")
-		SfxManager.play_sfx("droid_sound")
+		SfxManager.play_sfx("droid_sound_long")
 		_maneuver_tool_shown = true
 		if _execute_button:
 			_execute_button.text = "Commit Maneuver ►"
@@ -674,7 +674,7 @@ func _on_execute_pressed() -> void:
 ## can interact with the board.
 ## Requirements: AE-ACT-001.
 func _on_attack_pressed() -> void:
-	SfxManager.play_sfx("droid_sound")
+	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Attack pressed — starting attack flow.")
 	attack_step_entered.emit()
 	close()
@@ -684,7 +684,7 @@ func _on_attack_pressed() -> void:
 ## Called when the "Execute Squadron ►" button is pressed.
 ## Emits [signal squadron_step_entered] and closes the modal.
 func _on_squadron_pressed() -> void:
-	SfxManager.play_sfx("droid_sound")
+	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Squadron pressed — starting squadron command flow.")
 	squadron_step_entered.emit()
 	close()
@@ -704,7 +704,7 @@ func _on_squadron_skip_pressed() -> void:
 ## Called when the "Execute Repair ►" button is pressed.
 ## Emits [signal repair_step_entered] and closes the modal.
 func _on_repair_pressed() -> void:
-	SfxManager.play_sfx("droid_sound")
+	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Repair pressed — starting repair flow.")
 	repair_step_entered.emit()
 	close()

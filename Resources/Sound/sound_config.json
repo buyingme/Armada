@@ -6,6 +6,10 @@
             "path": "res://Resources/Sound/fx/droid_sound.mp3",
             "volume": 1.0
         },
+        "droid_sound_long": {
+            "path": "res://Resources/Sound/fx/droid_sound_long.wav",
+            "volume": 1.0
+        },
         "skip_beep": {
             "path": "res://Resources/Sound/fx/skip_beep.wav",
             "volume": 1.0

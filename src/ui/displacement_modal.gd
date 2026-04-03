@@ -405,5 +405,6 @@ func _on_row_input(event: InputEvent, index: int) -> void:
 func _on_commit_pressed() -> void:
 	if not all_checked():
 		return
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Commit Placement pressed — all squadrons placed.")
 	placement_committed.emit()

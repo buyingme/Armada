@@ -204,11 +204,13 @@ func _centre_content(viewport_size: Vector2) -> void:
 
 ## Restarts the current scene (same Learning Scenario).
 func _on_play_again_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Play Again pressed — reloading scene.")
 	get_tree().reload_current_scene()
 
 
 ## Exits the application.
 func _on_quit_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Quit pressed — exiting application.")
 	get_tree().quit()

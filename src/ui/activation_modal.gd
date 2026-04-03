@@ -653,6 +653,7 @@ func _on_execute_pressed() -> void:
 		# Phase 1 — show the maneuver tool.  The modal stays open so the
 		# player can see "Commit Maneuver ►" while setting the course.
 		_log.info("Execute maneuver pressed — showing tool.")
+		SfxManager.play_sfx("droid_sound")
 		_maneuver_tool_shown = true
 		if _execute_button:
 			_execute_button.text = "Commit Maneuver ►"
@@ -662,6 +663,7 @@ func _on_execute_pressed() -> void:
 		# The modal stays open — it will update to DONE step with the
 		# "End Activation ►" button once the game board finishes.
 		_log.info("Commit maneuver pressed — snapping ship.")
+		SfxManager.play_sfx("star_destroyer_flyby")
 		if _execute_button:
 			_execute_button.disabled = true
 		maneuver_commit_requested.emit()
@@ -672,6 +674,7 @@ func _on_execute_pressed() -> void:
 ## can interact with the board.
 ## Requirements: AE-ACT-001.
 func _on_attack_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Execute Attack pressed — starting attack flow.")
 	attack_step_entered.emit()
 	close()
@@ -681,6 +684,7 @@ func _on_attack_pressed() -> void:
 ## Called when the "Execute Squadron ►" button is pressed.
 ## Emits [signal squadron_step_entered] and closes the modal.
 func _on_squadron_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Execute Squadron pressed — starting squadron command flow.")
 	squadron_step_entered.emit()
 	close()
@@ -692,6 +696,7 @@ func _on_squadron_pressed() -> void:
 ## The modal stays open — the game board will re-open it at the next step.
 ## Rules Reference: "Commands" p.4 — command tokens are optional.
 func _on_squadron_skip_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_log.info("Squadron step skipped by player (token only).")
 	squadron_step_skipped.emit()
 
@@ -699,6 +704,7 @@ func _on_squadron_skip_pressed() -> void:
 ## Called when the "Execute Repair ►" button is pressed.
 ## Emits [signal repair_step_entered] and closes the modal.
 func _on_repair_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Execute Repair pressed — starting repair flow.")
 	repair_step_entered.emit()
 	close()
@@ -707,6 +713,7 @@ func _on_repair_pressed() -> void:
 
 ## Called when the "✕ Close" button is pressed.
 func _on_close_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	close()
 	modal_closed.emit()
 
@@ -717,6 +724,7 @@ func _on_close_pressed() -> void:
 ## Rules Reference: RRG "Ship Activation" p.16 — activation ends after
 ## all five steps are complete.
 func _on_end_activation_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("End Activation pressed — requesting activation end.")
 	end_activation_requested.emit()
 	close()

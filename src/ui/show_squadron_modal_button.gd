@@ -44,5 +44,6 @@ func update_position(viewport_size: Vector2) -> void:
 
 func _on_pressed() -> void:
 	_log.info("Show Squadron Modal pressed.")
+	SfxManager.play_sfx("droid_sound")
 	hide_button()
 	squadron_modal_requested.emit()

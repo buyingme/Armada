@@ -1534,6 +1534,27 @@ game logic was altered — pure structural refactoring.
 
 ---
 
+### Phase 12: Sound & Music 🔄
+**Goal:** Add SFX for all button interactions + dice rolls + movement, and dynamic background music with crossfade, score-based track switching, destruction overrides, and victory themes.
+**Prerequisites:** Phase 11 (main menu), Phase 8 (scoring/victory)
+**Duration estimate:** 1 session
+
+| # | Task | Layer | Req IDs | Deliverables | Status |
+|---|------|-------|---------|--------------|--------|
+| 1 | Sound config JSON | Data | SFX-010, MUS-009, MUS-010 | `Resources/Sound/sound_config.json`: per-clip volumes, rhythm arrays, fade/override durations | ✅ |
+| 2 | SfxManager autoload | Application | SFX-001–010 | `src/autoload/sfx_manager.gd`: pool of 8 AudioStreamPlayers, `play_sfx()`, `play_rhythmic()`, auto-wired squadron movement SFX via EventBus | ✅ |
+| 3 | MusicManager autoload | Application | MUS-001–010 | `src/autoload/music_manager.gd`: dual-player crossfade, score-based track switching, destruction override timer, victory music via EventBus | ✅ |
+| 4 | Menu SFX + music | Presentation | SFX-001, MUS-004 | `main_menu.gd`: `droid_sound` on all buttons, `rebel_theme` on load | ✅ |
+| 5 | Confirm/skip SFX wiring | Presentation | SFX-002, SFX-003 | Added `SfxManager.play_sfx()` calls to ~15 UI files: quit modal, activation modal, squadron modal, attack sim panel, repair panel, command dial picker, handoff overlay, etc. | ✅ |
+| 6 | Dice roll SFX | Presentation | SFX-004–006 | `attack_executor.gd._play_dice_roll_sfx()`: turbolasers for ships, rhythmic burst for squadrons (faction-dependent) | ✅ |
+| 7 | Movement SFX | Presentation | SFX-007–009 | Ship: `star_destroyer_flyby` via execute_maneuver_button. Squadron: faction-specific flyby via `SfxManager._on_squadron_moved()` | ✅ |
+| 8 | Skills documentation | Docs | — | `.skills/sound_and_music.md`: config schema, how-to guides, SFX categories, crossfade pattern | ✅ |
+
+**Files created:** `Resources/Sound/sound_config.json`, `src/autoload/sfx_manager.gd`, `src/autoload/music_manager.gd`, `.skills/sound_and_music.md`
+**Files modified:** `project.godot` (2 autoloads), `main_menu.gd`, `quit_confirmation_modal.gd`, `execute_maneuver_button.gd`, `end_activation_button.gd`, `handoff_overlay.gd`, `damage_summary_overlay.gd`, `victory_screen.gd`, `show_activation_button.gd`, `show_squadron_modal_button.gd`, `command_dial_picker.gd`, `repair_panel.gd`, `opponent_choice_modal.gd`, `activation_modal.gd`, `squadron_activation_modal.gd`, `attack_sim_panel.gd`, `displacement_modal.gd`, `attack_executor.gd`
+
+---
+
 ## Dependency Graph
 
 ```
@@ -1657,6 +1678,8 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 | ✅ |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
 | UI Requirements (UI-001–034) | 34 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10, 11 | ✅ UI-029–034 done (Phase 11) |
+| Sound Effects (SFX-001–010) | 10 | Phase 12 | ✅ |
+| Music (MUS-001–010) | 10 | Phase 12 | ✅ |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

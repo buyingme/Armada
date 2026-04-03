@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, 11, 12, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
@@ -3663,3 +3663,101 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Press Escape | The active modal closes; the quit confirmation does NOT appear |
 
 **Updated pass criteria:** All original criteria plus: ESC shows quit dialog when no modal active; No/Escape dismiss it; Yes returns to main menu; ESC does not trigger quit when another modal is consuming it.
+
+---
+
+## Phase 12 — Sound & Music
+
+**What this phase adds:** SFX for button interactions, dice rolls, and movement; dynamic background music with crossfade, score-based track switching, destruction overrides, and victory themes.
+
+### MT-12.1 — Main menu music plays on load
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the game | Splash screen appears |
+| 2 | Wait for menu modal to appear | `rebel_theme.mp3` begins playing (background music) |
+
+### MT-12.2 — Menu button SFX
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Menu modal is visible | 4 buttons shown |
+| 2 | Click "New Game" | `droid_sound.wav` plays; "Coming Soon" toast appears |
+| 3 | Click "Learning Scenario" | `droid_sound.wav` plays; scene transitions to game board |
+
+### MT-12.3 — Gameplay music starts on game start
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start Learning Scenario from menu | Game board loads |
+| 2 | Listen for music | `draw_in_game.mp3` plays (0-0 score = tied); rebel_theme fades out with crossfade |
+
+### MT-12.4 — Confirm/skip button SFX during gameplay
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Command Phase, assign dials and confirm | `droid_sound.wav` on Confirm button |
+| 2 | Press Ready on player handoff | `droid_sound.wav` plays |
+| 3 | Open activation modal, press Close (✕) | `skip_beep.wav` plays |
+| 4 | In activation modal, skip a step | `skip_beep.wav` plays |
+
+### MT-12.5 — Ship movement SFX
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship, reach Execute Maneuver step | Modal shows "Execute Maneuver ►" |
+| 2 | Click "Execute Maneuver ►" | `droid_sound.wav` plays (shows maneuver tool) |
+| 3 | Click "Commit Maneuver ►" | `star_destroyer_flyby.mp3` plays |
+
+### MT-12.6 — Dice roll SFX (capital ship)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Declare an attack from a ship hull zone | Attack panel appears |
+| 2 | Click "Roll Dice" | `turbolasers_shooting.mp3` plays |
+
+### MT-12.7 — Dice roll SFX (squadron — rhythmic)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a Rebel squadron (X-wing) and choose Attack | Target selection begins |
+| 2 | Select target and click "Roll Dice" | Multi-burst `x-wing_shooting.mp3` plays (4 shots with rhythm pattern) |
+| 3 | Same with Imperial squadron (TIE) | Multi-burst `tie_shooting.mp3` plays (3 shots) |
+
+### MT-12.8 — Squadron movement SFX
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Move a Rebel squadron and commit | `x-wing_flyby.mp3` plays |
+| 2 | Move an Imperial squadron and commit | `tie_flyby.mp3` plays |
+
+### MT-12.9 — Score-based music switching
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy an Imperial squadron (giving Rebel a score lead) | Music crossfades to `rebel_lead_in_game.mp3` |
+| 2 | Destroy a Rebel squadron (equalizing score) | Music crossfades to `draw_in_game.mp3` |
+
+### MT-12.10 — Destruction override music
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a Rebel ship (capital ship) | Music switches to `imperial_march.mp3` |
+| 2 | Wait ~60 seconds | Music resumes score-based track (crossfade) |
+
+### MT-12.11 — Victory music
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play to game end (round 6) with Imperial winning | `imperial_march.mp3` plays on victory screen |
+| 2 | Play to game end with Rebel winning | `rebel_theme.mp3` plays on victory screen |
+
+### MT-12.12 — Quit confirmation SFX
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press ESC during gameplay (no modals active) | Quit dialog appears |
+| 2 | Click "No" | `skip_beep.wav` plays; dialog closes |
+| 3 | Press ESC again, click "Yes" | `droid_sound.wav` plays; transitions to main menu |
+
+**Pass criteria:** Music plays with crossfade transitions at menu load, game start, score changes, ship destruction, and victory. SFX fire on all confirm/skip buttons without doubling. Dice rolls produce correct SFX (turbolasers vs rhythmic squadron shots). Movement SFX plays on commit (ship flyby or faction-specific squadron flyby). Volume levels are consistent and not distorted.

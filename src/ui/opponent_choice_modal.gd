@@ -288,6 +288,7 @@ func _update_confirm_state() -> void:
 
 ## Handles the confirm button press.
 func _on_confirm_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	var choice_type: String = _choice_info.get("choice_type", "")
 	var selection: Dictionary = {}
 

@@ -118,5 +118,6 @@ func _centre_content(viewport_size: Vector2) -> void:
 
 ## Called when the "Ready" button is pressed.
 func _on_ready_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	dismiss()
 	EventBus.handoff_accepted.emit()

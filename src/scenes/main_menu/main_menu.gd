@@ -27,6 +27,7 @@ var _menu_shown: bool = false
 func _ready() -> void:
 	_build_ui()
 	_start_splash_timer()
+	MusicManager.play("rebel_theme")
 
 
 ## Builds the entire UI tree in code: splash background, title text,
@@ -199,21 +200,25 @@ func _show_menu() -> void:
 
 ## Placeholder — shows "Coming Soon" toast. UI-032.
 func _on_new_game_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_show_toast("Coming Soon")
 
 
 ## Placeholder — shows "Coming Soon" toast. UI-032.
 func _on_load_game_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_show_toast("Coming Soon")
 
 
 ## Transitions to the learning scenario game board. UI-031.
 func _on_learning_scenario_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
 ## Quits the application. UI-033.
 func _on_quit_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	get_tree().quit()
 
 

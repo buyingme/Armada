@@ -41,4 +41,5 @@ func update_position(viewport_size: Vector2) -> void:
 
 func _on_pressed() -> void:
 	_log.info("End Activation pressed.")
+	SfxManager.play_sfx("droid_sound")
 	EventBus.activation_ended.emit()

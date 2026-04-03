@@ -63,6 +63,7 @@ func show_summary(faceup_textures: Array, facedown_count: int,
 
 ## Hides the overlay and frees content nodes.
 func dismiss() -> void:
+	SfxManager.play_sfx("skip_beep")
 	visible = false
 	_clear_content()
 	_log.info("Damage summary dismissed.")

@@ -742,6 +742,38 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 
 ---
 
+### Sound Effects (SFX)
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| SFX-001 | Main-menu buttons play `droid_sound.wav` on press. | UI feedback |
+| SFX-002 | Skip / dismiss / cancel / close actions play `skip_beep.wav`. | UI feedback |
+| SFX-003 | Confirm / accept actions play `droid_sound.wav`. Movement confirm plays movement SFX instead. | UI feedback |
+| SFX-004 | Capital ship dice roll plays `turbolasers_shooting.mp3`. | Combat feedback |
+| SFX-005 | Rebel squadron dice roll plays rhythmic `x-wing_shooting.mp3` (4-shot burst: [300,100,300] ms). | Combat feedback |
+| SFX-006 | Imperial squadron dice roll plays rhythmic `tie_shooting.mp3` (3-shot burst: [300,100] ms). | Combat feedback |
+| SFX-007 | Ship movement commit plays `star_destroyer_flyby.mp3` (both factions). | Movement feedback |
+| SFX-008 | Imperial squadron movement plays `tie_flyby.mp3`. | Movement feedback |
+| SFX-009 | Rebel squadron movement plays `x-wing_flyby.mp3`. | Movement feedback |
+| SFX-010 | All SFX volumes are configurable per clip in `sound_config.json`. | Config |
+
+### Music (MUS)
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| MUS-001 | `MusicManager` is a singleton autoload managing background music. | Architecture |
+| MUS-002 | Track transitions use crossfade: outgoing fades out over configurable duration, incoming starts at full volume. | UX |
+| MUS-003 | All music tracks loop until explicitly changed. | UX |
+| MUS-004 | Main menu loads with `rebel_theme.mp3`. | Theming |
+| MUS-005 | Gameplay score logic: tied scores → `draw_in_game.mp3`, Imperial leads → `imperial_lead_in_game.mp3`, Rebel leads → `rebel_lead_in_game.mp3`. Game starts with draw track (0-0). | Dynamic music |
+| MUS-006 | When a Rebel capital ship is destroyed, `imperial_march.mp3` plays for 60 s (configurable), then score logic resumes. | Destruction override |
+| MUS-007 | When an Imperial capital ship is destroyed, `rebel_theme.mp3` plays for 60 s (configurable), then score logic resumes. | Destruction override |
+| MUS-008 | Victory: Imperial winner → `imperial_march.mp3`, Rebel winner → `rebel_theme.mp3`. | Victory theming |
+| MUS-009 | All music volumes are configurable per track in `sound_config.json`. | Config |
+| MUS-010 | Crossfade duration is configurable (default 3.0 s). | Config |
+
+---
+
 ## Traceability Matrix
 
 | Category | Req Count | Source |
@@ -771,4 +803,6 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | Network Multiplayer | 8 | ADR-007 |
 | Debug Mode | 13 | Dev tooling |
 | Game Logging | 18 | Dev tooling |
-| **Total** | **~258** | |
+| Sound Effects | 10 | User, UX |
+| Music | 10 | User, UX |
+| **Total** | **~278** | |

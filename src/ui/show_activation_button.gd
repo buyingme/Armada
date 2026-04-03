@@ -44,5 +44,6 @@ func update_position(viewport_size: Vector2) -> void:
 
 func _on_pressed() -> void:
 	_log.info("Show Activation Sequence pressed.")
+	SfxManager.play_sfx("droid_sound")
 	hide_button()
 	activation_sequence_requested.emit()

@@ -337,6 +337,7 @@ func _on_repair_card(card: DamageCard) -> void:
 
 ## Called when Done is pressed — finalizes and emits signal.
 func _on_done_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	if _resolver:
 		_resolver.finalize()
 	close()
@@ -345,6 +346,7 @@ func _on_done_pressed() -> void:
 
 ## Called when Skip is pressed — no points spent, but finalize anyway.
 func _on_skip_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	# Don't finalize — skip means don't spend resources.
 	close()
 	repair_skipped.emit()

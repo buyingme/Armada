@@ -1343,7 +1343,7 @@ func _refresh_damage_for_ship(ship_instance: RefCounted) -> void:
 			var inst: ShipInstance = entry["instance"] as ShipInstance
 			_log.info("Refreshing damage column for '%s' "
 					% inst.ship_data.ship_name
-					+ "(faceup=%d, facedown=%d)"
+					+"(faceup=%d, facedown=%d)"
 					% [inst.faceup_damage.size(),
 						inst.facedown_damage.size()])
 			var scale_factor: float = (

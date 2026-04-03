@@ -1,7 +1,15 @@
 Music settings is handeled in a proper config file and the relative volume of music files should be configurable.
 We need a music handler, that takes care that any changes to different music files is handeled smoothly. If at any time music stops playing in the game or the music file is changed, fade out the just playing file (3 seconds fade / configurable). The new music file starts at full volume.
-Loop all 
+Loop all music files as long as no other file is started actively.
 
 On the main menu (splash screen), play rebel_theme.mp3
 In game play according to the following logic:
-    If both players have
+    If both players have the same score play draw_in_game.mp3
+    If Imperial player is in the lead play imperial_lead_in_game.mp3
+    If Rebel player is in the lead play rebel_lead_in_game.mp3
+
+On rebel capital ship destroyed play for 1 minute: imperial_march.mp3, then transition back to in game music logic.
+On imperial capital ship destroyed play for 1 minute: rebel_theme, then transition back to in game logic.
+
+On Imperial victory (in game summary screen) play imperial_march.mp3
+On Rebel victory (in game summary screen) play rebel_theme.mp3

@@ -40,5 +40,6 @@ func update_position(viewport_size: Vector2) -> void:
 
 func _on_pressed() -> void:
 	_log.info("Execute Maneuver pressed.")
+	SfxManager.play_sfx("star_destroyer_flyby")
 	hide_button()
 	EventBus.execute_maneuver_requested.emit()

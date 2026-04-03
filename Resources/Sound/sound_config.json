@@ -1,0 +1,74 @@
+{
+    "_comment": "Sound & music configuration. All volumes are linear (0.0 = silent, 1.0 = full). Durations in seconds, rhythm intervals in milliseconds.",
+
+    "sfx": {
+        "droid_sound": {
+            "path": "res://Resources/Sound/fx/droid_sound.wav",
+            "volume": 1.0
+        },
+        "skip_beep": {
+            "path": "res://Resources/Sound/fx/skip_beep.wav",
+            "volume": 1.0
+        },
+        "turbolasers": {
+            "path": "res://Resources/Sound/fx/turbolasers_shooting.mp3",
+            "volume": 1.0
+        },
+        "x_wing_shooting": {
+            "path": "res://Resources/Sound/fx/x-wing_shooting.mp3",
+            "volume": 1.0
+        },
+        "tie_shooting": {
+            "path": "res://Resources/Sound/fx/tie_shooting.mp3",
+            "volume": 1.0
+        },
+        "star_destroyer_flyby": {
+            "path": "res://Resources/Sound/fx/star_destroyer_flyby.mp3",
+            "volume": 1.0
+        },
+        "tie_flyby": {
+            "path": "res://Resources/Sound/fx/tie_flyby.mp3",
+            "volume": 1.0
+        },
+        "x_wing_flyby": {
+            "path": "res://Resources/Sound/fx/x-wing_flyby.mp3",
+            "volume": 1.0
+        },
+        "y_wing_flyby": {
+            "path": "res://Resources/Sound/fx/y-wing_flyby.mp3",
+            "volume": 1.0
+        }
+    },
+
+    "sfx_rhythms": {
+        "_comment": "Arrays of pause durations (ms) between consecutive shots.",
+        "rebel_squadron_rhythm_ms": [300, 100, 300],
+        "imperial_squadron_rhythm_ms": [300, 100]
+    },
+
+    "music": {
+        "rebel_theme": {
+            "path": "res://Resources/Sound/music/rebel_theme.mp3",
+            "volume": 1.0
+        },
+        "imperial_march": {
+            "path": "res://Resources/Sound/music/imperial_march.mp3",
+            "volume": 1.0
+        },
+        "draw_in_game": {
+            "path": "res://Resources/Sound/music/draw_in_game.mp3",
+            "volume": 1.0
+        },
+        "imperial_lead_in_game": {
+            "path": "res://Resources/Sound/music/imperial_lead_in_game.mp3",
+            "volume": 1.0
+        },
+        "rebel_lead_in_game": {
+            "path": "res://Resources/Sound/music/rebel_lead_in_game.mp3",
+            "volume": 1.0
+        }
+    },
+
+    "music_fade_duration_s": 3.0,
+    "destruction_override_duration_s": 60.0
+}

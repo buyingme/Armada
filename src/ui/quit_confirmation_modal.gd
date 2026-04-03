@@ -101,10 +101,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_yes_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	hide_modal()
 	confirmed.emit()
 
 
 func _on_no_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	hide_modal()
 	cancelled.emit()

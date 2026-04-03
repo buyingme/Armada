@@ -1557,10 +1557,12 @@ func _on_attack_cf_dial_skipped() -> void:
 
 
 ## Called when the player presses "Roll Dice".
-## Requirements: AE-DICE-001, AE-DICE-003.
+## Requirements: AE-DICE-001, AE-DICE-003, SFX-004, SFX-005, SFX-006.
 func _on_attack_roll_dice() -> void:
 	_log.info("Rolling dice: %s." % DicePool.format_pool(
 			_attack_exec_pool))
+	# Play dice-roll SFX based on attacker type and faction.
+	_play_dice_roll_sfx()
 	# Convert to engine pool and roll.
 	var engine_pool: Dictionary = DicePool.to_engine_pool(
 			_attack_exec_pool)
@@ -1581,6 +1583,32 @@ func _on_attack_roll_dice() -> void:
 		return
 	# No token — show confirm.
 	_attack_exec_show_confirm()
+
+
+## Plays the appropriate SFX for a dice roll based on whether the attacker
+## is a ship (turbolasers) or squadron (rhythmic burst, faction-dependent).
+## Requirements: SFX-004, SFX-005, SFX-006.
+func _play_dice_roll_sfx() -> void:
+	if _attack_exec_squad_mode and _attack_exec_squad_token:
+		# Squadron attack — rhythmic burst.
+		var inst: SquadronInstance = (
+				_attack_exec_squad_token.get_squadron_instance())
+		if inst and inst.squadron_data:
+			var faction: Constants.Faction = inst.squadron_data.faction
+			match faction:
+				Constants.Faction.GALACTIC_EMPIRE:
+					SfxManager.play_rhythmic(
+							"tie_shooting",
+							"imperial_squadron_rhythm_ms")
+				_:
+					SfxManager.play_rhythmic(
+							"x_wing_shooting",
+							"rebel_squadron_rhythm_ms")
+		else:
+			SfxManager.play_sfx("turbolasers")
+	else:
+		# Capital ship attack — turbolaser salvo.
+		SfxManager.play_sfx("turbolasers")
 
 
 ## Checks whether the activated ship has a CF command token.

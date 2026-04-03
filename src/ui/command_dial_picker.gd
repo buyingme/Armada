@@ -241,6 +241,7 @@ func _on_confirm_pressed() -> void:
 		return
 	if _ship_instance == null:
 		return
+	SfxManager.play_sfx("droid_sound")
 
 	# Convert queued commands to a plain Array for the signal.
 	var commands: Array = []

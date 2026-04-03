@@ -684,6 +684,7 @@ func _clear_content() -> void:
 
 ## Called when the Done button is pressed (sim mode).
 func _on_done_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	attack_done_pressed.emit()
 
 
@@ -733,10 +734,12 @@ func hide_cf_dial_section() -> void:
 
 
 func _on_cf_dial_colour(colour_key: String) -> void:
+	SfxManager.play_sfx("droid_sound")
 	cf_dial_colour_selected.emit(colour_key)
 
 
 func _on_cf_dial_skip() -> void:
+	SfxManager.play_sfx("skip_beep")
 	cf_dial_skipped.emit()
 
 
@@ -841,10 +844,12 @@ func get_selected_reroll_index() -> int:
 
 func _on_cf_token_reroll() -> void:
 	if _selected_reroll_index >= 0:
+		SfxManager.play_sfx("droid_sound")
 		cf_token_reroll_requested.emit(_selected_reroll_index)
 
 
 func _on_cf_token_skip() -> void:
+	SfxManager.play_sfx("skip_beep")
 	cf_token_reroll_skipped.emit()
 
 
@@ -881,12 +886,14 @@ func hide_skip_attack_button() -> void:
 
 
 func _on_confirm_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	confirm_pressed.emit()
 
 
 ## Shows the "Really skip attack?" confirmation instead of
 ## emitting immediately.
 func _on_skip_attack_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	if _skip_attack_button:
 		_skip_attack_button.visible = false
 	if _skip_confirm_container:
@@ -895,12 +902,14 @@ func _on_skip_attack_pressed() -> void:
 
 ## Player confirmed the skip.
 func _on_skip_confirm_yes() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_hide_skip_confirm()
 	skip_attack_pressed.emit()
 
 
 ## Player cancelled the skip — restore the Skip Attack button.
 func _on_skip_confirm_no() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_hide_skip_confirm()
 	if _skip_attack_button:
 		_skip_attack_button.visible = true
@@ -987,6 +996,7 @@ func _on_accuracy_token_pressed(token_index: int) -> void:
 
 
 func _on_accuracy_confirm() -> void:
+	SfxManager.play_sfx("droid_sound")
 	accuracy_confirmed.emit()
 
 
@@ -1189,10 +1199,12 @@ func hide_evade_die_selection() -> void:
 
 
 func _on_defense_done() -> void:
+	SfxManager.play_sfx("droid_sound")
 	defense_tokens_done.emit()
 
 
 func _on_redirect_done_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	redirect_done_pressed.emit()
 
 

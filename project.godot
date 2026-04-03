@@ -27,6 +27,8 @@ DebugMode="*res://src/autoload/debug_mode.gd"
 PlayMode="*res://src/autoload/play_mode.gd"
 LoggingMode="*res://src/autoload/logging_mode.gd"
 TooltipManager="*res://src/autoload/tooltip_manager.gd"
+SfxManager="*res://src/autoload/sfx_manager.gd"
+MusicManager="*res://src/autoload/music_manager.gd"
 
 [display]
 

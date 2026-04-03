@@ -704,23 +704,27 @@ func _show_error(msg: String) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_move_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Move pressed for %s" % _get_squadron_name())
 	_transition_to(State.MOVING)
 	move_requested.emit(_selected_token)
 
 
 func _on_attack_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Attack pressed for %s" % _get_squadron_name())
 	_transition_to(State.ATTACKING)
 	attack_requested.emit(_selected_token)
 
 
 func _on_skip_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_log.info("Skip pressed for %s" % _get_squadron_name())
 	_finish_activation()
 
 
 func _on_commit_move_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Commit Move pressed for %s" % _get_squadron_name())
 	move_commit_requested.emit(_selected_token)
 	if _allow_move_and_attack and not _has_moved:
@@ -735,11 +739,13 @@ func _on_commit_move_pressed() -> void:
 
 
 func _on_done_pressed() -> void:
+	SfxManager.play_sfx("droid_sound")
 	_log.info("Done pressed — ending squadron command early.")
 	_finish_command_early()
 
 
 func _on_close_pressed() -> void:
+	SfxManager.play_sfx("skip_beep")
 	_log.info("Modal dismissed.")
 	visible = false
 	if _is_command_mode:

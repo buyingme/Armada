@@ -61,8 +61,15 @@ static func create_from_data(
 
 ## Returns true if this squadron is destroyed (hull <= 0 or
 ## [method mark_destroyed] was called).
+## A squadron without data (used in tests) is never considered destroyed
+## by the hull check — only the explicit [code]_destroyed[/code] flag
+## applies.
 func is_destroyed() -> bool:
-	return _destroyed or current_hull <= 0
+	if _destroyed:
+		return true
+	if squadron_data == null:
+		return false
+	return current_hull <= 0
 
 
 ## Permanently marks this squadron as destroyed.

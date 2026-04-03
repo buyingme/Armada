@@ -107,7 +107,11 @@ func get_remaining_hull() -> int:
 ## [method mark_destroyed] was called).
 ## Rules Reference: DM-003.
 func is_destroyed() -> bool:
-	return _destroyed or get_total_damage() >= ship_data.hull
+	if _destroyed:
+		return true
+	if ship_data == null or ship_data.hull <= 0:
+		return false
+	return get_total_damage() >= ship_data.hull
 
 
 ## Permanently marks this ship as destroyed. Call this before emitting the

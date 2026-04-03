@@ -333,6 +333,8 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	for s: Variant in ps.ships:
 		if s is ShipInstance:
 			var si: ShipInstance = s as ShipInstance
+			if si.is_destroyed():
+				continue
 			if si.command_dial_stack == null:
 				continue
 			if si.command_dial_stack.get_dials_needed() > 0:
@@ -590,6 +592,8 @@ func _has_unactivated_ships(player_index: int) -> bool:
 	for s: Variant in ps.ships:
 		if s is ShipInstance:
 			var si: ShipInstance = s as ShipInstance
+			if si.is_destroyed():
+				continue
 			if not si.activated_this_round:
 				return true
 	return false
@@ -606,6 +610,8 @@ func _has_unactivated_squadrons(player_index: int) -> bool:
 	for sq: Variant in ps.squadrons:
 		if sq is SquadronInstance:
 			var sqi: SquadronInstance = sq as SquadronInstance
+			if sqi.is_destroyed():
+				continue
 			if not sqi.activated_this_round:
 				return true
 	return false
@@ -734,6 +740,8 @@ func _perform_status_phase_cleanup() -> void:
 		for s: Variant in ps.ships:
 			if s is ShipInstance:
 				var si: ShipInstance = s as ShipInstance
+				if si.is_destroyed():
+					continue
 				si.ready_defense_tokens()
 				si.reset_activation()
 				# Clear spent dial marker so it doesn't persist into the
@@ -744,6 +752,8 @@ func _perform_status_phase_cleanup() -> void:
 		for sq: Variant in ps.squadrons:
 			if sq is SquadronInstance:
 				var sqi: SquadronInstance = sq as SquadronInstance
+				if sqi.is_destroyed():
+					continue
 				sqi.ready_defense_tokens()
 				sqi.reset_activation()
 	# Rules Reference: "Initiative", p.8 — "The first player retains

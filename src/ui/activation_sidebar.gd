@@ -284,8 +284,7 @@ func clear_active() -> void:
 	_active_original_text = ""
 
 
-## Updates the colour of an entry based on its activation/destruction state.
-func _update_entry(instance: Variant) -> void:
+## Updates the colour of an entry based on its activation/destruction state.\n## Destroyed units are ghosted with dark-red text at reduced opacity.\n## Rules Reference: \"Destroyed Ships and Squadrons\", RRG p.7.\nfunc _update_entry(instance: Variant) -> void:
 	if not _entries.has(instance):
 		return
 	var entry: Dictionary = _entries[instance]
@@ -294,12 +293,15 @@ func _update_entry(instance: Variant) -> void:
 			"faction", Constants.Faction.REBEL_ALLIANCE)
 	if instance.is_destroyed():
 		lbl.add_theme_color_override("font_color", DESTROYED_COLOR)
+		lbl.modulate.a = 0.5
 		lbl.text = lbl.text.replace("⬤", "✕").replace("◆", "✕")
 	elif instance.activated_this_round:
 		lbl.add_theme_color_override("font_color", ACTIVATED_COLOR)
+		lbl.modulate.a = 1.0
 	else:
 		lbl.add_theme_color_override("font_color",
 				_faction_active_color(faction))
+		lbl.modulate.a = 1.0
 
 
 ## Clears all entries and sections.

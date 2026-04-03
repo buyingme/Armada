@@ -1555,6 +1555,55 @@ game logic was altered — pure structural refactoring.
 
 ---
 
+### Post-Phase-12 Bug Fix — Ship Destruction Scoring ✅
+
+**Bug:** Destroying a ship (e.g. Nebulon-B) did not mark it as destroyed and did not
+award victory points. Root cause: `GameManager._on_ship_destroyed()` called
+`clear_all_damage_cards()` which zeroed `get_total_damage()`, making `is_destroyed()`
+return false before scoring ran.
+
+**Fix:** Added a permanent `_destroyed` bool flag to `ShipInstance` and
+`SquadronInstance` with `mark_destroyed()` method. Called at all 3 destruction sites
+(ship damage resolution, squadron damage resolution, critical hit destruction) before
+emitting signals. `is_destroyed()` now returns `_destroyed OR damage >= hull`.
+
+| Deliverable | File | Details | Status |
+|-------------|------|---------|--------|
+| `_destroyed` flag + `mark_destroyed()` | `src/core/ship_instance.gd` | Permanent flag survives `clear_all_damage_cards()` | ✅ |
+| `_destroyed` flag + `mark_destroyed()` | `src/core/squadron_instance.gd` | Same pattern for squadrons | ✅ |
+| Call `mark_destroyed()` at all 3 sites | `game_board.gd`, `attack_executor.gd` | Before `ship_destroyed` / `squadron_destroyed` emit | ✅ |
+| `is_destroyed()` null-safe guards | `ship_instance.gd`, `squadron_instance.gd` | Handle nil `ship_data` / `squadron_data` in tests | ✅ |
+
+**Tests:** 87 scripts, 1641 tests — 1640 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
+### Post-Phase-12 Feature — Ghost Destroyed Ships & Squadrons ✅
+
+**Rules basis:** RRG p.7 — "When a ship is destroyed, remove it from the play area …
+Discard its damage cards … return its tokens and dials to the supply. All ship and
+upgrade cards belonging to destroyed ships are inactive."
+
+**What changed:** Destroyed ships and squadrons are now visually ghosted (dimmed) in the
+Ship Card Panel and Activation Sidebar, and skipped by all phase-transition logic. This
+prevents destroyed units from appearing in dial assignment, activation selection, or
+status phase cleanup.
+
+| Deliverable | File | Details | Status |
+|-------------|------|---------|--------|
+| Ghost ship card panel entry | `src/ui/ship_card_panel.gd` | `_on_ship_destroyed()` → `_ghost_entry()`: 35% alpha, MOUSE_FILTER_IGNORE, red "DESTROYED" label, idempotent | ✅ |
+| `_is_ship_phase_eligible()` rejects destroyed | `src/ui/ship_card_panel.gd` | Early return false if `instance.is_destroyed()` | ✅ |
+| Activation sidebar dimming | `src/ui/activation_sidebar.gd` | `_update_entry()` sets `lbl.modulate.a = 0.5` for destroyed entries | ✅ |
+| Skip destroyed in activation checks | `src/autoload/game_manager.gd` | `_has_unactivated_ships()` and `_has_unactivated_squadrons()` skip destroyed | ✅ |
+| Skip destroyed in dial auto-check | `src/autoload/game_manager.gd` | `_on_command_picker_confirmed()` loop skips destroyed | ✅ |
+| Skip destroyed in status phase | `src/autoload/game_manager.gd` | `_perform_status_phase_cleanup()` skips destroyed ships/squadrons | ✅ |
+| Skip destroyed in dial assignment queue | `src/scenes/game_board/game_board.gd` | `_ships_needing_dials` builder skips destroyed ships | ✅ |
+| Unit tests (4 new) | `tests/unit/test_ship_card_panel.gd` | Ghost dims, blocks mouse, idempotent, eligible-rejected | ✅ |
+
+**Tests:** 87 scripts, 1645 tests, 2895 asserts — 1644 passing, 1 pre-existing Nebulon-B placement failure
+
+---
+
 ## Dependency Graph
 
 ```

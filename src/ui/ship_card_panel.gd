@@ -426,6 +426,8 @@ func _handle_dial_stack_click(entry: Dictionary) -> void:
 ## hidden dials remain (the revealed dial counts as available).
 ## Requirements: UI-024.
 func _is_ship_phase_eligible(instance: ShipInstance) -> bool:
+	if instance.is_destroyed():
+		return false
 	if GameManager.get_current_phase() != Constants.GamePhase.SHIP:
 		return false
 	if instance.owner_player != GameManager.get_active_player():
@@ -633,6 +635,54 @@ func _connect_eventbus_signals() -> void:
 	if not EventBus.repair_card_discarded.is_connected(
 			_on_damage_card_repaired):
 		EventBus.repair_card_discarded.connect(_on_damage_card_repaired)
+	if not EventBus.ship_destroyed.is_connected(
+			_on_ship_destroyed):
+		EventBus.ship_destroyed.connect(_on_ship_destroyed)
+
+
+## EventBus callback: a ship is destroyed — ghost the entire card entry.
+## Dims the row to 35 % opacity, overlays a red "DESTROYED" label,
+## and blocks further interaction (magnify, dial clicks, discard clicks).
+## Rules Reference: "Destroyed Ships and Squadrons", RRG p.7 —
+## "All ship and upgrade cards belonging to destroyed ships are inactive."
+func _on_ship_destroyed(ship_node: Node) -> void:
+	if not ship_node.has_method("get_ship_instance"):
+		return
+	var inst: ShipInstance = ship_node.get_ship_instance()
+	if inst == null:
+		return
+	for entry: Dictionary in _entries:
+		if entry["instance"] != inst:
+			continue
+		_ghost_entry(entry)
+		break
+
+
+## Applies the ghost (destroyed) visual to a single card-panel entry.
+## Dims the entire row and overlays a "DESTROYED" banner.
+func _ghost_entry(entry: Dictionary) -> void:
+	var container: HBoxContainer = entry["container"]
+	# Skip if already ghosted.
+	if entry.get("ghosted", false):
+		return
+	entry["ghosted"] = true
+	# Dim the entire entry.
+	container.modulate = Color(1.0, 1.0, 1.0, 0.35)
+	# Block all mouse interaction.
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child: Node in container.get_children():
+		if child is Control:
+			(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Overlay a red "DESTROYED" label.
+	var lbl: Label = Label.new()
+	lbl.text = "DESTROYED"
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	container.add_child(lbl)
+	_log.info("Ghosted card panel entry for '%s'."
+			% (entry["instance"] as ShipInstance).data_key)
 
 
 ## EventBus callback: a ship's defense token state changed.

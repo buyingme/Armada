@@ -301,3 +301,67 @@ func test_setup_viewer_stores_player_index() -> void:
 	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
 	assert_eq(panel._viewer_player, 0,
 			"Viewer player should be stored from setup()")
+
+
+# --- Destroyed ship ghosting ---
+
+func test_ghost_entry_dims_container() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("ghost_test", data, 0)
+	panel.add_ship_entry(inst)
+	# Act — ghost the entry.
+	panel._ghost_entry(panel._entries[0])
+	# Assert
+	var container: HBoxContainer = panel._entries[0]["container"]
+	assert_almost_eq(container.modulate.a, 0.35, 0.01,
+			"Ghosted entry container should be dimmed to ~35% alpha")
+	assert_true(panel._entries[0].get("ghosted", false),
+			"Entry should have ghosted=true flag")
+
+
+func test_ghost_entry_blocks_mouse() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("ghost_mouse", data, 0)
+	panel.add_ship_entry(inst)
+	panel._ghost_entry(panel._entries[0])
+	var container: HBoxContainer = panel._entries[0]["container"]
+	assert_eq(container.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+			"Ghosted entry should ignore mouse input")
+
+
+func test_ghost_entry_idempotent() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("ghost_idem", data, 0)
+	panel.add_ship_entry(inst)
+	panel._ghost_entry(panel._entries[0])
+	var child_count_before: int = (
+			panel._entries[0]["container"] as HBoxContainer).get_child_count()
+	panel._ghost_entry(panel._entries[0])
+	var child_count_after: int = (
+			panel._entries[0]["container"] as HBoxContainer).get_child_count()
+	assert_eq(child_count_after, child_count_before,
+			"Calling _ghost_entry twice should not add duplicate DESTROYED label")
+
+
+func test_is_ship_phase_eligible_false_when_destroyed() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("destroyed_elig", data, 0)
+	inst.mark_destroyed()
+	assert_false(panel._is_ship_phase_eligible(inst),
+			"Destroyed ship must not be eligible for activation")

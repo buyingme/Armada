@@ -1285,6 +1285,8 @@ func _begin_command_dial_flow() -> void:
 		for s: Variant in ps.ships:
 			if s is ShipInstance:
 				var si: ShipInstance = s as ShipInstance
+				if si.is_destroyed():
+					continue
 				if si.command_dial_stack == null:
 					continue
 				var needed: int = si.command_dial_stack.get_dials_needed()

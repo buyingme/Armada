@@ -1,9 +1,9 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, 11, 12, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, 11, 12, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay, plus ghost destroyed ships/squadrons. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 87 scripts, 1636 tests — 1635 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 87 scripts, 1645 tests — 1644 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 
@@ -3798,3 +3798,53 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 5 | Repeat with an empty pool edge case | "(no removable dice — skipped)" message appears briefly, attack continues |
 
 **Pass criteria:** Music loops indefinitely. Modals are cleaned up on phase/activation transitions. Obstruction removes exactly 1 die chosen by the attacker (or auto-removed when only 1 colour exists).
+
+---
+
+## Ghost Destroyed Ships & Squadrons
+
+**What this adds:** After a ship or squadron is destroyed, its Ship Card Panel entry is dimmed to 35% opacity with a red "DESTROYED" label, its Activation Sidebar entry is dimmed to 50%, and it is skipped in all phase-transition logic (dial assignment, activation selection, status phase cleanup).
+
+**Rules basis:** RRG p.7 — "All ship and upgrade cards belonging to destroyed ships are inactive."
+
+### MT-GHOST.01 — Ship Card Panel ghosting on destruction
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game with the learning scenario | Both players' ships visible in Ship Card Panel |
+| 2 | Attack a ship until it is destroyed | Ship token removed from board; destruction SFX plays |
+| 3 | Check the destroyed ship's card panel entry | Entry is dimmed (35% opacity), red "DESTROYED" label visible, entry is non-interactive (clicks do nothing) |
+| 4 | Click on the dimmed entry | No dial drag initiated, no activation triggered |
+
+### MT-GHOST.02 — Activation Sidebar ghosting
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a ship during Ship Phase | Ship marked with ✕ in sidebar |
+| 2 | Observe the destroyed entry in the Activation Sidebar | Text is dimmed to ~50% opacity, colour is dark red |
+| 3 | Destroy a squadron during Squadron Phase | Same ✕ and dimming for the squadron entry |
+
+### MT-GHOST.03 — Destroyed ships skipped in Command Phase
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a player's ship | Ship removed from board |
+| 2 | Advance to next round's Command Phase | Dial picker does NOT request a dial for the destroyed ship |
+| 3 | Submit dials for remaining ships | Phase advances normally |
+
+### MT-GHOST.04 — Destroyed ships skipped in Ship Phase activation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy one of a player's two ships | One ship destroyed |
+| 2 | Advance to Ship Phase | Only the surviving ship can be activated |
+| 3 | Activate the surviving ship | Phase advances (auto-pass for other player or next phase) |
+
+### MT-GHOST.05 — Status Phase skips destroyed ships
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Destroy a ship, advance to Status Phase | Destroyed ship's defense tokens remain exhausted (not readied) |
+| 2 | Observe the surviving ships | Their defense tokens are readied, activation flags reset |
+
+**Pass criteria:** Destroyed ships/squadrons are visually dimmed and non-interactive. They are skipped in all phase transitions. Only surviving units participate in the game loop.

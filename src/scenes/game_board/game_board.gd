@@ -459,6 +459,12 @@ func _create_ship_card_panels() -> void:
 	_imperial_card_panel.card_detail_requested.connect(
 			_on_card_detail_requested)
 
+	# Connect damage card detail overlay.
+	_rebel_card_panel.damage_detail_requested.connect(
+			_on_damage_detail_requested)
+	_imperial_card_panel.damage_detail_requested.connect(
+			_on_damage_detail_requested)
+
 	# Card detail overlay on a higher layer so it covers the panels.
 	var detail_layer: CanvasLayer = CanvasLayer.new()
 	detail_layer.name = "CardDetailLayer"
@@ -514,6 +520,23 @@ func _on_card_detail_requested(data_key: String,
 		_card_detail_overlay.show_card(texture, ship_name)
 	else:
 		_log.warn("No card texture for '%s'." % data_key)
+
+
+## Handles the damage_detail_requested signal from a ShipCardPanel.
+## Loads the damage card texture and shows it in the overlay.
+func _on_damage_detail_requested(effect_id: String,
+		card_title: String) -> void:
+	if _card_detail_overlay == null:
+		return
+	var filename: String = "damage_%s.png" % effect_id
+	var texture: Texture2D = AssetLoader.load_texture(
+			"damage_deck/", filename)
+	if texture:
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_card_detail_overlay.update_size(vp_size)
+		_card_detail_overlay.show_card(texture, card_title)
+	else:
+		_log.warn("No damage texture for '%s'." % effect_id)
 
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:

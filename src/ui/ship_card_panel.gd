@@ -32,6 +32,12 @@ extends VBoxContainer
 ## Requirements: UI-002.
 signal card_detail_requested(data_key: String, ship_name: String)
 
+## Emitted when the player clicks a damage card thumbnail to view
+## the full damage card artwork in the card detail overlay.
+## [param effect_id] — the damage card's effect_id (e.g. "structural_damage").
+## [param card_title] — the card's display title.
+signal damage_detail_requested(effect_id: String, card_title: String)
+
 
 ## Height of damage card thumbnails in the side panel (pixels at 1× scale).
 const DAMAGE_CARD_HEIGHT_PX: float = 28.0
@@ -1212,7 +1218,7 @@ func _populate_damage_cards(col: VBoxContainer,
 		rect.mouse_filter = Control.MOUSE_FILTER_STOP
 		rect.tooltip_text = card.title
 		rect.gui_input.connect(
-				_on_damage_card_right_click.bind(card))
+				_on_damage_card_click.bind(card))
 		col.add_child(rect)
 
 	# -- Facedown counter badge --
@@ -1249,7 +1255,8 @@ func _populate_damage_cards(col: VBoxContainer,
 		# account for the full damage column (prevents ×N clipping).
 		var badge_w: float = bw + 2.0 + font_sz * 1.5
 		badge.custom_minimum_size = Vector2(badge_w, dmg_h)
-		badge.mouse_filter = Control.MOUSE_FILTER_PASS
+		badge.mouse_filter = Control.MOUSE_FILTER_STOP
+		badge.gui_input.connect(_on_facedown_badge_click)
 		col.add_child(badge)
 
 	# Set badge and its children to PASS so clicks propagate up.
@@ -1258,24 +1265,45 @@ func _populate_damage_cards(col: VBoxContainer,
 	# would wipe their STOP and break right-click capture.
 	for child: Node in col.get_children():
 		if child is HBoxContainer:
+			# Badge children (TextureRect + Label) should be PASS so
+			# the click goes to the badge's own gui_input handler.
 			_set_children_mouse_pass(child as Control)
 
 
-## Handles right-click on a faceup damage card thumbnail to open the
+## Handles click on a faceup damage card thumbnail to open the
 ## card detail overlay showing the full damage card art.
+## Both left-click and right-click trigger the overlay.
 ## Rules Reference: "Damage Cards" — players may inspect faceup cards.
-func _on_damage_card_right_click(event: InputEvent,
+func _on_damage_card_click(event: InputEvent,
 		card: RefCounted) -> void:
 	if not (event is InputEventMouseButton):
 		return
 	var mb: InputEventMouseButton = event as InputEventMouseButton
-	if mb.button_index != MOUSE_BUTTON_RIGHT or not mb.pressed:
+	if not mb.pressed:
+		return
+	if mb.button_index != MOUSE_BUTTON_LEFT \
+			and mb.button_index != MOUSE_BUTTON_RIGHT:
 		return
 	_log.info("Damage card detail requested: %s" % card.title)
-	card_detail_requested.emit(
-			card.effect_id, card.title)
+	damage_detail_requested.emit(card.effect_id, card.title)
 	# Stop propagation so the entry container does not also fire
-	# its own card_detail_requested for the ship card.
+	# its own card_detail_requested for the ship card or toggle magnify.
+	get_viewport().set_input_as_handled()
+
+
+## Handles click on the facedown damage badge to show the card back
+## in the card detail overlay.
+func _on_facedown_badge_click(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if not mb.pressed:
+		return
+	if mb.button_index != MOUSE_BUTTON_LEFT \
+			and mb.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	_log.info("Facedown damage badge clicked — showing card back.")
+	damage_detail_requested.emit("back", "Damage Card")
 	get_viewport().set_input_as_handled()
 
 

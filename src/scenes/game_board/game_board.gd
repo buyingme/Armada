@@ -2324,7 +2324,8 @@ func _select_displacement_squadron(index: int) -> void:
 
 
 ## Each frame, snaps the current displaced squadron to the ship edge
-## at the closest point to the mouse cursor.
+## at the closest point to the mouse cursor.  Tints the token red when
+## the proposed position overlaps another squadron or ship.
 func _move_displaced_squadron_to_mouse() -> void:
 	if not _displacement_moving:
 		return
@@ -2336,14 +2337,40 @@ func _move_displaced_squadron_to_mouse() -> void:
 	var snap_pos: Vector2 = OverlapResolver.snap_to_ship_edge(
 			mouse_pos, sq_radius, _displacement_ship_base)
 	sq_token.global_position = snap_pos
+	# Visual overlap feedback: tint red if placement is invalid.
+	var other_squads: Array = _build_displacement_other_squads(sq_token)
+	var other_ships: Array = _build_all_ship_bases()
+	var resolver: OverlapResolver = OverlapResolver.new()
+	var err_msg: String = resolver.validate_squadron_placement(
+			snap_pos, sq_radius, _displacement_ship_base,
+			other_ships, other_squads)
+	if err_msg != "":
+		sq_token.modulate = Color(1.0, 0.4, 0.4)
+	else:
+		sq_token.modulate = Color.WHITE
 
 
 ## Called on left-click during displacement: locks the squadron at its
 ## current snapped position and checks it in the modal.  Auto-selects
 ## the next unchecked squadron if one exists.
+## Rejects the click if the position overlaps another squadron or ship.
+## Rules Reference: RRG "Overlapping", p.8 — OV-002; SM-003.
 func _lock_displacement_position() -> void:
-	_displacement_moving = false
 	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
+	var sq_radius: float = sq_token.get_radius_px()
+	var sq_pos: Vector2 = sq_token.global_position
+	# Validate placement against all other squadrons and ships.
+	var other_squads: Array = _build_displacement_other_squads(sq_token)
+	var other_ships: Array = _build_all_ship_bases()
+	var resolver: OverlapResolver = OverlapResolver.new()
+	var err_msg: String = resolver.validate_squadron_placement(
+			sq_pos, sq_radius, _displacement_ship_base,
+			other_ships, other_squads)
+	if err_msg != "":
+		_log.warn("Displacement placement rejected: %s" % err_msg)
+		return
+	_displacement_moving = false
+	sq_token.modulate = Color.WHITE
 	var sq_name: String = _get_squadron_display_name(sq_token)
 	_log.info("Displacement: %s locked at %s."
 			% [sq_name, str(sq_token.global_position)])
@@ -2383,9 +2410,10 @@ func _on_displacement_committed() -> void:
 ## and ends the activation (triggering normal turn transition + banner).
 func _finish_displacement() -> void:
 	_displacement_moving = false
-	# Re-enable input on displaced squadron tokens.
+	# Re-enable input on displaced squadron tokens and reset tint.
 	for sq: SquadronToken in _displacement_queue:
 		sq.set_process_unhandled_input(true)
+		sq.modulate = Color.WHITE
 	_displacement_queue.clear()
 	_displacement_ship_base = null
 	_remove_displacement_modal()
@@ -2405,6 +2433,53 @@ func _finish_displacement() -> void:
 ## (GameManager advances turn → active_player_changed → YourTurnBanner).
 func _on_displacement_camera_returned() -> void:
 	_show_end_activation_after_maneuver()
+
+
+## Builds an Array of [SquadronBase] for every squadron that is NOT
+## the currently-moving displaced squadron.  This includes:
+## • All non-displaced squadrons on the board.
+## • Displaced squadrons that have already been placed (checked).
+## Used by displacement validation to prevent squadron-squadron overlap.
+## Rules Reference: SM-003 — squadrons cannot overlap each other.
+func _build_displacement_other_squads(
+		exclude_token: SquadronToken) -> Array:
+	var bases: Array = []
+	# All non-displaced board squadrons.
+	for sq_token: SquadronToken in get_squadron_tokens():
+		if sq_token == exclude_token:
+			continue
+		if _displacement_queue.has(sq_token):
+			continue
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
+			continue
+		bases.append(SquadronBase.new(
+				sq_token.global_position, sq_token.get_radius_px()))
+	# Already-placed displaced squadrons (checked in the modal).
+	if _displacement_modal:
+		var checked: Array[bool] = _displacement_modal.get_checked_states()
+		for i: int in range(_displacement_queue.size()):
+			if _displacement_queue[i] == exclude_token:
+				continue
+			if i < checked.size() and checked[i]:
+				var sq: SquadronToken = _displacement_queue[i]
+				bases.append(SquadronBase.new(
+						sq.global_position, sq.get_radius_px()))
+	return bases
+
+
+## Builds an Array of [ShipBase] for every non-destroyed ship on the board.
+## Used by displacement validation to prevent squadron-ship overlap.
+func _build_all_ship_bases() -> Array:
+	var bases: Array = []
+	for token: ShipToken in get_ship_tokens():
+		var inst: ShipInstance = token.get_ship_instance()
+		if inst and inst.is_destroyed():
+			continue
+		var xform: Transform2D = Transform2D(
+				token.global_rotation, token.global_position)
+		bases.append(ShipBase.new(token.get_ship_size(), xform))
+	return bases
 
 
 ## Creates the displacement modal on a CanvasLayer and wires its signals.

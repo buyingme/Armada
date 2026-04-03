@@ -10,4 +10,7 @@ on roll attack dice
  on imperial sqadron play3 x tie_shooting in a rhythmic way: shoot / 300 ms / shoot / 100 ms / shoot
 on movement confirmation
     on capital ship play star_destroyer_flyby.mp3
-    on imperial squadron movement confirmation
+    on imperial squadron movement confirmation play tie_flyby.mp3
+    on rebel squadron movement confirmation play x-wing_flyby.mp3
+
+

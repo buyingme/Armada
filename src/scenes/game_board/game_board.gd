@@ -75,6 +75,10 @@ var _card_detail_overlay: CardDetailOverlay = null
 ## Full-screen overlay for showing damage cards dealt (DM-005).
 var _damage_summary_overlay: DamageSummaryOverlay = null
 
+## Confirmation modal for quitting the game and returning to the main menu.
+## Shown when Escape is pressed with no other modal active. UI-034.
+var _quit_modal: QuitConfirmationModal = null
+
 ## Activation sidebar showing ship/squadron activation status (UI-014).
 var _activation_sidebar: ActivationSidebar = null
 
@@ -380,6 +384,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _handle_tool_shortcut(event):
 		return
 
+	# Quit confirmation: ESC when no other handler consumed it. UI-034.
+	if _handle_quit_escape(event):
+		return
+
 	if not DebugMode.enabled:
 		return
 
@@ -481,6 +489,16 @@ func _create_ship_card_panels() -> void:
 	_damage_summary_overlay.name = "DamageSummaryOverlay"
 	detail_layer.add_child(_damage_summary_overlay)
 	_damage_summary_overlay.dismissed.connect(_on_damage_summary_dismissed)
+
+	# Quit confirmation modal on a high layer (above phase HUD). UI-034.
+	var quit_layer: CanvasLayer = CanvasLayer.new()
+	quit_layer.name = "QuitConfirmationLayer"
+	quit_layer.layer = 95
+	add_child(quit_layer)
+	_quit_modal = QuitConfirmationModal.new()
+	_quit_modal.name = "QuitConfirmationModal"
+	quit_layer.add_child(_quit_modal)
+	_quit_modal.confirmed.connect(_on_quit_confirmed)
 
 	# Activation sidebar on its own layer (UI-014).
 	var sidebar_layer: CanvasLayer = CanvasLayer.new()
@@ -2563,6 +2581,29 @@ func _are_tool_buttons_enabled() -> bool:
 	if _action_toolbar._maneuver_tool_btn and _action_toolbar._maneuver_tool_btn.disabled:
 		return false
 	return true
+
+
+## Shows the quit confirmation modal when Escape is pressed and no other
+## handler consumed the event. Returns true if handled.
+## Requirements: UI-034.
+func _handle_quit_escape(event: InputEvent) -> bool:
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	if _quit_modal == null or _quit_modal.visible:
+		return false
+	_quit_modal.show_modal()
+	get_viewport().set_input_as_handled()
+	return true
+
+
+## Handles the player confirming they want to quit. Transitions to the
+## main menu scene. UI-034.
+func _on_quit_confirmed() -> void:
+	get_tree().change_scene_to_file(
+			"res://src/scenes/main_menu/main_menu.tscn")
 
 
 # ---------------------------------------------------------------------------

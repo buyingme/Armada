@@ -620,6 +620,7 @@ These are the digital representations required for the MVP.
 | UI-031 | "Learning Scenario" transitions to the game board scene (`game_board.tscn`). | Scene transition |
 | UI-032 | "New Game" and "Load Game" are clickable placeholder buttons that show a "Coming Soon" toast when pressed. | Future scope |
 | UI-033 | "Quit" closes the application. | `get_tree().quit()` |
+| UI-034 | During gameplay, pressing Escape (when no other modal or tool is consuming it) shows a centred confirmation dialog: "Quit game and exit to main menu?" with Yes / No buttons. Yes transitions to the main menu scene; No (or pressing Escape again) dismisses the dialog and resumes the game. | In-game exit |
 
 ## 23. Network Multiplayer Considerations
 

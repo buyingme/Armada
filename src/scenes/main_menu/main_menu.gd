@@ -41,42 +41,34 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	# --- Title container — centred horizontally, in top 1/3 ---
-	var title_container: VBoxContainer = VBoxContainer.new()
-	title_container.set_anchors_preset(PRESET_FULL_RECT)
-	title_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_container.alignment = BoxContainer.ALIGNMENT_BEGIN
-	add_child(title_container)
-
-	# Spacer pushes title ~15% down from top.
-	var top_spacer: Control = Control.new()
-	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	top_spacer.custom_minimum_size.y = 40.0
-	top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_container.add_child(top_spacer)
-
+	# --- Title labels — centred horizontally, positioned ~8% from top ---
+	# (moved up by 1/4 screen compared to the original top-1/3 placement)
 	var title_armada: Label = Label.new()
 	title_armada.text = "ARMADA"
 	title_armada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_armada.add_theme_font_size_override("font_size", 64)
+	title_armada.add_theme_font_size_override("font_size", 128)
 	title_armada.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
 	title_armada.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_container.add_child(title_armada)
+	title_armada.anchor_left = 0.0
+	title_armada.anchor_right = 1.0
+	title_armada.anchor_top = 0.08
+	title_armada.anchor_bottom = 0.08
+	title_armada.grow_vertical = Control.GROW_DIRECTION_END
+	add_child(title_armada)
 
 	var title_digital: Label = Label.new()
 	title_digital.text = "digital"
 	title_digital.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_digital.add_theme_font_size_override("font_size", 36)
+	title_digital.add_theme_font_size_override("font_size", 72)
 	title_digital.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95, 0.85))
 	title_digital.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_container.add_child(title_digital)
-
-	# Bottom spacer — takes 2/3 of remaining space so title sits in top 1/3.
-	var bottom_spacer: Control = Control.new()
-	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	bottom_spacer.custom_minimum_size.y = 200.0
-	bottom_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_container.add_child(bottom_spacer)
+	title_digital.anchor_left = 0.0
+	title_digital.anchor_right = 1.0
+	title_digital.anchor_top = 0.08
+	title_digital.anchor_bottom = 0.08
+	title_digital.offset_top = 140.0
+	title_digital.grow_vertical = Control.GROW_DIRECTION_END
+	add_child(title_digital)
 
 	# --- Menu modal (initially hidden) ---
 	_menu_panel = _build_menu_modal()

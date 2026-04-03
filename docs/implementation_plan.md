@@ -1528,6 +1528,7 @@ game logic was altered — pure structural refactoring.
 | 1 | Splash background & title text | Presentation | UI-029 | `main_menu.tscn` / `main_menu.gd` rewritten: `splash.jpg` full-viewport background, "ARMADA" + "digital" two-line title centred in top 1/3 | ✅ |
 | 2 | Menu modal with 2-second reveal | Presentation | UI-030 | Timer-based reveal; any click/key skips to instant show. PanelContainer with standard modal style (§1). 4 buttons: New Game, Load Game, Learning Scenario, Quit. | ✅ |
 | 3 | Button wiring | Presentation | UI-031–033 | Learning Scenario → `change_scene_to_file(game_board.tscn)`. New Game / Load Game → "Coming Soon" toast. Quit → `get_tree().quit()`. | ✅ |
+| 4 | In-game quit confirmation | Presentation | UI-034 | New `src/ui/quit_confirmation_modal.gd`: centred modal with "Quit game and exit to main menu?" + Yes/No. Wired into `game_board.gd` `_unhandled_input` as last ESC fallback. Yes → transition to main menu; No/Escape → dismiss and resume. | ✅ |
 
 **Tests:** 1636 (87 scripts, 2886 asserts) — presentation-only; no new unit tests. Manual test entries in `test_plan_manual.md`.
 
@@ -1655,7 +1656,7 @@ Every requirement from `docs/requirements/mvp_learning_scenario.md` is addressed
 | Overlapping (OV-001–021) | 8 | Phase 5 |
 | Winning/Scoring (WN-001–004) | 4 | Phase 8 | ✅ |
 | Game Components (GC-001–018) | 18 | Phase 0, 2, 3, 4, 5, 6, 7 |
-| UI Requirements (UI-001–033) | 33 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10, 11 | ✅ UI-029–033 done (Phase 11) |
+| UI Requirements (UI-001–034) | 34 | Phase 2, 3, 4, 4b, 4c, 4d, 4f, 5, 6, 7, 8, 10, 11 | ✅ UI-029–034 done (Phase 11) |
 | Network (NW-001–008) | 8 | Phase 4, 4b, 10 |
 | Debug Mode (DBG-001–041) | 13 | Phase 2b | ✅ |
 | Game Logging (LOG-001–033) | 18 | Phase L | ✅ |

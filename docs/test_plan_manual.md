@@ -3625,3 +3625,41 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Click "Quit" | Application window closes |
 
 **Pass criteria:** Splash image fills viewport; title text in top 1/3; menu reveals after 2 s or on input; Learning Scenario transitions to game board; New Game / Load Game show "Coming Soon" toast; Quit closes the app.
+
+### MT-11.7 — In-game ESC shows quit confirmation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start the Learning Scenario from the main menu | Game board loads |
+| 2 | Press Escape when no modal or tool is active | A centred confirmation dialog appears: "Quit game and exit to main menu?" with Yes and No buttons |
+| 3 | The game board is visible behind the dialog | Dialog overlays the board |
+
+### MT-11.8 — Quit confirmation "No" resumes the game
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Quit confirmation dialog is visible | Yes and No buttons shown |
+| 2 | Click "No" | Dialog closes; game resumes normally |
+
+### MT-11.9 — Quit confirmation Escape dismisses
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Quit confirmation dialog is visible | Yes and No buttons shown |
+| 2 | Press Escape | Dialog closes; game resumes (same as clicking No) |
+
+### MT-11.10 — Quit confirmation "Yes" returns to main menu
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Quit confirmation dialog is visible | Yes and No buttons shown |
+| 2 | Click "Yes" | Scene transitions to the main menu (splash screen with menu modal) |
+
+### MT-11.11 — ESC does not open quit dialog when other modal is active
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open any modal (e.g. targeting list, maneuver tool, card detail overlay) | Modal is visible |
+| 2 | Press Escape | The active modal closes; the quit confirmation does NOT appear |
+
+**Updated pass criteria:** All original criteria plus: ESC shows quit dialog when no modal active; No/Escape dismiss it; Yes returns to main menu; ESC does not trigger quit when another modal is consuming it.

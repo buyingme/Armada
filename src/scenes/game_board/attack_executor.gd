@@ -108,6 +108,17 @@ var _pending_immediate_ship: ShipInstance = null
 ## Pending choice descriptor for the deferred immediate effect.
 var _pending_immediate_choice: Dictionary = {}
 
+## True when the DamageSummaryOverlay is visible and we are waiting for the
+## player to dismiss it before resolving immediate card effects.
+var _awaiting_damage_summary: bool = false
+
+## Faceup card whose immediate effect is deferred until the summary overlay
+## is dismissed.  At most one per attack (the first card dealt faceup).
+var _deferred_immediate_card: DamageCard = null
+
+## Ship instance associated with [member _deferred_immediate_card].
+var _deferred_immediate_ship: ShipInstance = null
+
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("AttackExecutor")
 
@@ -572,6 +583,9 @@ func _reset_exec_state() -> void:
 	_attack_exec_brace_used = false
 	_attack_exec_redirect_step = false
 	_attack_exec_evade_step = false
+	_awaiting_damage_summary = false
+	_deferred_immediate_card = null
+	_deferred_immediate_ship = null
 
 
 ## Completes the attack execution step. Cleans up and signals GameBoard.
@@ -2205,6 +2219,15 @@ func _attack_exec_resolve_damage() -> void:
 	# --- Ship defender ---
 	if _attack_sim_def_ship:
 		_resolve_ship_damage(final_damage)
+		# If the damage summary overlay is being shown, wait for the player
+		# to dismiss it before resolving immediate effects and finalising.
+		if _awaiting_damage_summary:
+			EventBus.damage_summary_dismissed.connect(
+					_on_damage_summary_dismissed_continue,
+					CONNECT_ONE_SHOT)
+			return
+		# No summary overlay — resolve deferred immediate effects now.
+		_resolve_deferred_immediate_effect()
 		# If a choice-based immediate effect is pending, show the modal
 		# flow instead of finalising immediately (DM-011).
 		if _pending_immediate_card != null:
@@ -2288,6 +2311,8 @@ func _resolve_ship_damage(damage: int) -> void:
 			_log.info("Critical effect blocked by damage card effect.")
 	var cards_dealt: int = 0
 	var faceup_card_name: String = ""
+	var dealt_faceup_cards: Array = []
+	var dealt_facedown_count: int = 0
 	for i: int in range(remaining):
 		_log.info("Dealing card %d/%d …" % [i + 1, remaining])
 		if _damage_deck == null:
@@ -2304,6 +2329,7 @@ func _resolve_ship_damage(damage: int) -> void:
 			card.is_faceup = true
 			def_inst.add_faceup_damage(card)
 			faceup_card_name = card.title
+			dealt_faceup_cards.append(card)
 			_log.info("Faceup card added to ship damage list.")
 			# Register persistent damage card effect (DM-005).
 			if _effect_registry and DamageCardEffectFactory.is_persistent(card):
@@ -2317,16 +2343,31 @@ func _resolve_ship_damage(damage: int) -> void:
 			_log.info(
 					"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 					% [card.title, card.trait_type])
-			# Resolve immediate effect if applicable (DM-005).
-			_resolve_immediate_card_effect(card, def_inst)
+			# Defer immediate effect until after the damage summary overlay
+			# is dismissed so the player can read the faceup card first.
+			if ImmediateEffectResolver.is_immediate(card):
+				_deferred_immediate_card = card
+				_deferred_immediate_ship = def_inst
+				_log.info("Immediate effect deferred for '%s' "
+						% card.title
+						+ "(awaiting summary dismiss).")
 		else:
 			def_inst.add_facedown_damage(card)
+			dealt_facedown_count += 1
 			EventBus.damage_card_dealt.emit(def_inst, card, false)
 			_log.info(
 					"Dealt facedown damage card #%d to %s."
 					% [i + 1, def_inst.ship_data.ship_name])
 		cards_dealt += 1
 	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
+	# Emit summary signal so DamageSummaryOverlay can display the spread.
+	# The caller will wait for the overlay to be dismissed before resolving
+	# deferred immediate effects and finalising the attack.
+	if cards_dealt > 0:
+		_awaiting_damage_summary = true
+		EventBus.damage_summary_requested.emit(
+				def_inst, dealt_faceup_cards, dealt_facedown_count,
+				def_inst.ship_data.ship_name)
 	if cards_dealt > 0:
 		var new_hull: int = def_inst.ship_data.hull - (
 				def_inst.get_total_damage())
@@ -2384,6 +2425,32 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	_pending_immediate_choice = choice_info
 	_log.info("Immediate effect deferred for modal: '%s' (chooser=%s)."
 			% [card.title, choice_info.get("chooser", "?")])
+
+
+## Resolves the deferred immediate effect stored during the card loop.
+## Called after the DamageSummaryOverlay is dismissed (or immediately if no
+## summary was shown).  Clears the deferred state afterwards.
+func _resolve_deferred_immediate_effect() -> void:
+	if _deferred_immediate_card == null:
+		return
+	var card: DamageCard = _deferred_immediate_card
+	var ship: ShipInstance = _deferred_immediate_ship
+	_deferred_immediate_card = null
+	_deferred_immediate_ship = null
+	_resolve_immediate_card_effect(card, ship)
+
+
+## Callback when the player dismisses the [DamageSummaryOverlay].
+## Resolves deferred immediate effects, then continues the attack flow
+## (choice modal or finalize).
+func _on_damage_summary_dismissed_continue() -> void:
+	_awaiting_damage_summary = false
+	_log.info("Damage summary dismissed — resolving deferred effects.")
+	_resolve_deferred_immediate_effect()
+	if _pending_immediate_card != null:
+		_start_immediate_choice_flow()
+		return
+	_attack_exec_finalize_after_delay()
 
 
 # ---------------------------------------------------------------------------

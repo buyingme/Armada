@@ -198,6 +198,21 @@ signal damage_card_flipped(ship_instance: RefCounted, card: RefCounted,
 signal damage_card_dealt(ship_instance: RefCounted, card: RefCounted,
 		is_faceup: bool)
 
+## Emitted after all damage cards for a single attack have been dealt.
+## Used by [DamageSummaryOverlay] to show a full-screen card spread.
+## [param ship_instance] — the ShipInstance that received damage.
+## [param faceup_cards] — Array of DamageCard dealt faceup.
+## [param facedown_count] — number of facedown cards dealt.
+## [param ship_name] — display name of the damaged ship.
+## Rules Reference: DM-005, DM-006.
+signal damage_summary_requested(ship_instance: RefCounted,
+		faceup_cards: Array, facedown_count: int, ship_name: String)
+
+## Emitted when the player dismisses the [DamageSummaryOverlay].
+## AttackExecutor listens to this to resolve deferred immediate effects.
+## Rules Reference: DM-005 — player sees faceup card before effect resolves.
+signal damage_summary_dismissed()
+
 ## Emitted when the active player changes.
 ## [param player_index] — the new active player (0 or 1).
 ## Requirements: TF-001 — only the active player can interact.

@@ -72,6 +72,9 @@ var _imperial_card_panel: ShipCardPanel = null
 ## Full-screen overlay for viewing card detail art (UI-002).
 var _card_detail_overlay: CardDetailOverlay = null
 
+## Full-screen overlay for showing damage cards dealt (DM-005).
+var _damage_summary_overlay: DamageSummaryOverlay = null
+
 ## Activation sidebar showing ship/squadron activation status (UI-014).
 var _activation_sidebar: ActivationSidebar = null
 
@@ -474,6 +477,11 @@ func _create_ship_card_panels() -> void:
 	_card_detail_overlay.name = "CardDetailOverlay"
 	detail_layer.add_child(_card_detail_overlay)
 
+	_damage_summary_overlay = DamageSummaryOverlay.new()
+	_damage_summary_overlay.name = "DamageSummaryOverlay"
+	detail_layer.add_child(_damage_summary_overlay)
+	_damage_summary_overlay.dismissed.connect(_on_damage_summary_dismissed)
+
 	# Activation sidebar on its own layer (UI-014).
 	var sidebar_layer: CanvasLayer = CanvasLayer.new()
 	sidebar_layer.name = "ActivationSidebarLayer"
@@ -538,6 +546,39 @@ func _on_damage_detail_requested(effect_id: String,
 	else:
 		_log.warn("No damage texture for '%s'." % effect_id)
 
+
+## Handles the damage_summary_requested signal from EventBus.
+## Loads faceup card textures and the card-back, then shows the overlay.
+## Requirements: DM-005, DM-006.
+func _on_damage_summary_requested(_ship_instance: RefCounted,
+		faceup_cards: Array, facedown_count: int,
+		ship_name: String) -> void:
+	if _damage_summary_overlay == null:
+		return
+	var faceup_textures: Array = []
+	for card: RefCounted in faceup_cards:
+		var eid: String = card.effect_id if card else ""
+		var tex: Texture2D = AssetLoader.load_texture(
+				"damage_deck/", "damage_%s.png" % eid)
+		if tex:
+			faceup_textures.append({
+				"texture": tex,
+				"title": card.title if card else "",
+			})
+	var back_tex: Texture2D = AssetLoader.load_texture(
+			"damage_deck/", "damage_back.png")
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_damage_summary_overlay.update_size(vp_size)
+	_damage_summary_overlay.show_summary(
+			faceup_textures, facedown_count, back_tex, ship_name)
+
+
+## Forwards the overlay's dismissed signal to EventBus so AttackExecutor
+## can resolve deferred immediate effects.
+func _on_damage_summary_dismissed() -> void:
+	EventBus.damage_summary_dismissed.emit()
+
+
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
 	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
@@ -574,6 +615,8 @@ func _connect_signals() -> void:
 	EventBus.squadron_destroyed.connect(_on_score_changed)
 	# Damage card dealt toast (Phase 10b — item 5).
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
+	# Damage summary overlay (all dealt cards shown full-screen).
+	EventBus.damage_summary_requested.connect(_on_damage_summary_requested)
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -737,6 +780,8 @@ func _on_viewport_resized() -> void:
 		_show_squadron_modal_button.update_position(vp_size)
 	if _activation_sidebar != null:
 		_activation_sidebar.update_position(vp_size)
+	if _damage_summary_overlay != null and _damage_summary_overlay.visible:
+		_damage_summary_overlay.update_size(vp_size)
 
 
 ## Updates visibility of debug-only UI elements.

@@ -1,6 +1,6 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display. Updated after each phase completes.
+> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay. Updated after each phase completes.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
 > **Current baseline:** 87 scripts, 1628 tests — 1627 passing (1 pre-existing Nebulon-B placement failure).
@@ -3493,3 +3493,64 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | Start a fresh game, observe card panels | No damage column content visible on any ship — entries look identical to before this feature |
 
 **Pass criteria:** Faceup damage thumbnails appear individually with correct art and are right-clickable for detail overlay; facedown damage shows as a single card-back with ×N badge; columns update live when cards are dealt, flipped, or repaired; toast appears on card deal; magnify scales the damage column; panel width adjusts; no visual change for undamaged ships.
+
+
+## Damage Summary Overlay
+
+**What this feature adds:** When damage cards are dealt during an attack, a full-screen overlay shows all dealt cards at once — faceup cards on the left, facedown card-back shifted 50 px right/down. The faceup critical card remains in its faceup state until the player clicks to dismiss the overlay, after which the immediate card effect (if any) resolves. This lets the player read the critical before it auto-flips facedown.
+
+### MT-DSO.1 — Overlay appears after damage cards dealt
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Resolve an attack that deals at least 1 damage card to a ship | A dark semi-transparent overlay appears covering the full screen |
+| 2 | Observe the overlay title | Shows "Ship Name — Damage Dealt" in amber text at the top |
+| 3 | Observe the hint at the bottom | Shows "Click anywhere or press Escape to close" in muted grey |
+
+### MT-DSO.2 — Faceup card shown correctly
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Resolve an attack with a critical (faceup) card | The faceup card art appears on the left side of the overlay, centered vertically |
+| 2 | Hover over the faceup card | Tooltip shows the card title |
+| 3 | Observe the card state in the ship card panel (behind the overlay) | The card still shows as faceup in the panel — it has NOT been flipped facedown yet |
+
+### MT-DSO.3 — Facedown cards shown correctly
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Resolve an attack that deals facedown damage cards | A card-back image appears shifted 50 px right and 50 px down from the faceup group |
+| 2 | If multiple facedown cards were dealt | A "×N" label appears next to the card-back |
+| 3 | Deal only facedown cards (no critical) | The card-back appears centered (no shift since there are no faceup cards) |
+
+### MT-DSO.4 — Dismiss triggers immediate effect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Overlay shows a faceup card with an immediate effect (e.g., Structural Damage, Projector Misaligned) | The card is still faceup — effect has NOT resolved yet |
+| 2 | Click anywhere to dismiss the overlay | Overlay disappears; the immediate effect resolves (e.g., Structural Damage deals an extra facedown card, card flips facedown in the panel) |
+| 3 | Observe the ship card panel | Facedown badge count increases by 1 (Structural Damage) or the card now shows as facedown (most immediate effects) |
+
+### MT-DSO.5 — Dismiss with Escape key
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Overlay is visible after damage dealt | Overlay is showing |
+| 2 | Press Escape | Overlay dismisses; immediate effects resolve; attack flow continues to finalize |
+
+### MT-DSO.6 — Choice-based card defers to modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Resolve an attack dealing a choice-based faceup card (Injured Crew, Shield Failure, or Comm Noise) | Overlay shows the faceup card |
+| 2 | Dismiss the overlay | The opponent choice modal appears (possibly after a hot-seat handoff overlay) |
+| 3 | Make the choice and confirm | The choice card effect resolves; attack finalizes |
+
+### MT-DSO.7 — Viewport resize while overlay is open
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Overlay is visible | Overlay covers the full screen |
+| 2 | Resize the window | Overlay resizes to match the new viewport size |
+
+**Pass criteria:** Overlay shows all dealt cards (faceup on left, facedown shifted); faceup card is NOT flipped until overlay is dismissed; immediate effects resolve after dismiss; choice-based cards show the modal after dismiss; overlay responds to viewport resize; Escape also dismisses.

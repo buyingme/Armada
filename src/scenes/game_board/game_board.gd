@@ -476,7 +476,13 @@ func _create_ship_card_panels() -> void:
 	_imperial_card_panel.damage_overview_requested.connect(
 			_on_damage_overview_requested)
 
-	# Card detail overlay on a higher layer so it covers the panels.
+	_create_card_detail_layer()
+	_create_quit_modal_layer()
+	_create_activation_sidebar_layer()
+
+
+## Creates the card detail and damage summary overlays on a high layer.
+func _create_card_detail_layer() -> void:
 	var detail_layer: CanvasLayer = CanvasLayer.new()
 	detail_layer.name = "CardDetailLayer"
 	detail_layer.layer = 85
@@ -490,7 +496,9 @@ func _create_ship_card_panels() -> void:
 	detail_layer.add_child(_damage_summary_overlay)
 	_damage_summary_overlay.dismissed.connect(_on_damage_summary_dismissed)
 
-	# Quit confirmation modal on a high layer (above phase HUD). UI-034.
+
+## Creates the quit confirmation modal on a top-level layer (UI-034).
+func _create_quit_modal_layer() -> void:
 	var quit_layer: CanvasLayer = CanvasLayer.new()
 	quit_layer.name = "QuitConfirmationLayer"
 	quit_layer.layer = 95
@@ -500,7 +508,9 @@ func _create_ship_card_panels() -> void:
 	quit_layer.add_child(_quit_modal)
 	_quit_modal.confirmed.connect(_on_quit_confirmed)
 
-	# Activation sidebar on its own layer (UI-014).
+
+## Creates the activation sidebar on its own layer (UI-014).
+func _create_activation_sidebar_layer() -> void:
 	var sidebar_layer: CanvasLayer = CanvasLayer.new()
 	sidebar_layer.name = "ActivationSidebarLayer"
 	sidebar_layer.layer = 45
@@ -668,59 +678,55 @@ func _connect_signals() -> void:
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
 	_load_map_texture(setup.get_map_image_filename())
-	# Initialise the shared damage deck for this game.
-	_damage_deck = setup.get_damage_deck()
-	# Store on GameState so GameManager can access it for destruction cleanup.
-	if GameManager.current_game_state:
-		GameManager.current_game_state.damage_deck = _damage_deck
-	# Pass deck to the attack executor.
-	if _attack_executor:
-		_attack_executor.set_damage_deck(_damage_deck)
-	# Pass the handoff overlay so the executor can show it for
-	# immediate damage card choices (DM-011).
-	if _attack_executor and _handoff_overlay:
-		_attack_executor.set_handoff_overlay(_handoff_overlay)
-	# Wire the effect registry to the attack executor.
-	if _attack_executor and GameManager.current_game_state \
-			and GameManager.current_game_state.effect_registry:
-		_attack_executor.set_effect_registry(
-				GameManager.current_game_state.effect_registry)
-	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
-	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
+	_init_scenario_systems(setup)
 	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
 	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
-	# Register the SAME instances in GameManager's GameState so that the
-	# auto-submit logic in GameManager sees the same objects the picker
-	# assigns dials to. Do NOT call populate_game_state() — that creates
-	# separate duplicate instances.
 	_register_instances_in_game_state(ship_instances, squad_instances)
-	# Apply fixed round-1 commands if configured (CP-009, CP-010).
-	# Must happen after instances are registered so GameManager can
-	# find them in the GameState.
 	if setup.has_fixed_round1_commands():
 		var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
 		GameManager.apply_fixed_round1_commands(fixed_cmds)
-	# Spawn ship tokens and bind instances (same order as placements).
-	for i: int in range(ship_placements.size()):
-		var token: ShipToken = _spawn_ship_token(ship_placements[i])
-		if i < ship_instances.size():
-			token.bind_instance(ship_instances[i])
-			_add_ship_to_card_panel(ship_instances[i])
-	# Spawn squadron tokens and bind instances.
-	for i: int in range(squad_placements.size()):
-		var token: SquadronToken = _spawn_squadron_token(squad_placements[i])
-		if i < squad_instances.size():
-			token.bind_instance(squad_instances[i])
+	_spawn_and_bind_tokens(setup, ship_instances, squad_instances)
 	_log.info("Spawned %d tokens for the Learning Scenario." %
 			_token_container.get_child_count())
-	# Update panel positions now that entries have been added.
 	_update_card_panel_positions()
-	# Populate the activation sidebar with all ships/squadrons (UI-014).
 	if _activation_sidebar and GameManager.current_game_state:
 		_activation_sidebar.populate(GameManager.current_game_state)
 		_activation_sidebar.connect_signals()
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
 		_activation_sidebar.update_position(vp_size)
+
+
+## Initialises the damage deck, attack executor references, and effect
+## registry from the given scenario setup.
+func _init_scenario_systems(setup: LearningScenarioSetup) -> void:
+	_damage_deck = setup.get_damage_deck()
+	if GameManager.current_game_state:
+		GameManager.current_game_state.damage_deck = _damage_deck
+	if _attack_executor:
+		_attack_executor.set_damage_deck(_damage_deck)
+	if _attack_executor and _handoff_overlay:
+		_attack_executor.set_handoff_overlay(_handoff_overlay)
+	if _attack_executor and GameManager.current_game_state \
+			and GameManager.current_game_state.effect_registry:
+		_attack_executor.set_effect_registry(
+				GameManager.current_game_state.effect_registry)
+
+
+## Spawns ship and squadron tokens and binds them to their instances.
+func _spawn_and_bind_tokens(setup: LearningScenarioSetup,
+		ship_instances: Array[ShipInstance],
+		squad_instances: Array[SquadronInstance]) -> void:
+	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
+	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
+	for i: int in range(ship_placements.size()):
+		var token: ShipToken = _spawn_ship_token(ship_placements[i])
+		if i < ship_instances.size():
+			token.bind_instance(ship_instances[i])
+			_add_ship_to_card_panel(ship_instances[i])
+	for i: int in range(squad_placements.size()):
+		var token: SquadronToken = _spawn_squadron_token(squad_placements[i])
+		if i < squad_instances.size():
+			token.bind_instance(squad_instances[i])
 
 
 ## Instantiates and configures a ShipToken for the given placement.
@@ -1067,6 +1073,14 @@ func _create_turn_management_ui() -> void:
 	layer.layer = 80
 	add_child(layer)
 
+	_create_core_turn_ui(layer)
+	_create_activation_modal_ui(layer)
+	_create_repair_squadron_ui(layer)
+
+
+## Creates the handoff overlay, "Your Turn" banner, end-activation button,
+## and show-activation button on the given layer.
+func _create_core_turn_ui(layer: CanvasLayer) -> void:
 	_handoff_overlay = HandoffOverlay.new()
 	_handoff_overlay.name = "HandoffOverlay"
 	layer.add_child(_handoff_overlay)
@@ -1079,14 +1093,15 @@ func _create_turn_management_ui() -> void:
 	_end_activation_button.name = "EndActivationButton"
 	layer.add_child(_end_activation_button)
 
-	# Phase 5b: Show Activation Sequence button.
 	_show_activation_button = ShowActivationButton.new()
 	_show_activation_button.name = "ShowActivationButton"
 	_show_activation_button.activation_sequence_requested.connect(
 			_on_activation_sequence_requested)
 	layer.add_child(_show_activation_button)
 
-	# Phase 5b: Activation modal (centred, same style as CommandDialPicker).
+
+## Creates the activation modal and connects its signals.
+func _create_activation_modal_ui(layer: CanvasLayer) -> void:
 	_activation_modal = ActivationModal.new()
 	_activation_modal.name = "ActivationModal"
 	_activation_modal.maneuver_step_entered.connect(
@@ -1107,14 +1122,15 @@ func _create_turn_management_ui() -> void:
 			_on_activation_end_requested)
 	layer.add_child(_activation_modal)
 
-	# Phase 9: Repair panel (centred, same style as ActivationModal).
+
+## Creates the repair panel, squadron modal, and show-squadron button.
+func _create_repair_squadron_ui(layer: CanvasLayer) -> void:
 	_repair_panel = RepairPanel.new()
 	_repair_panel.name = "RepairPanel"
 	_repair_panel.repair_done.connect(_on_repair_done)
 	_repair_panel.repair_skipped.connect(_on_repair_done)
 	layer.add_child(_repair_panel)
 
-	# Phase 7b: Squadron Activation Modal.
 	_squadron_modal = SquadronActivationModal.new()
 	_squadron_modal.name = "SquadronActivationModal"
 	_squadron_modal.move_requested.connect(_on_squadron_move_requested)
@@ -1130,7 +1146,6 @@ func _create_turn_management_ui() -> void:
 			_on_squadron_modal_closed)
 	layer.add_child(_squadron_modal)
 
-	# Phase 7b: Show Squadron Modal button.
 	_show_squadron_modal_button = ShowSquadronModalButton.new()
 	_show_squadron_modal_button.name = "ShowSquadronModalButton"
 	_show_squadron_modal_button.squadron_modal_requested.connect(
@@ -1477,46 +1492,56 @@ func _create_drag_preview(cmd: int = -1) -> void:
 	var dial_w: float = GameScale.card_panel_dial_width_px
 	var dial_h: float = GameScale.card_panel_dial_height_px
 
-	# Outer container holds the composited dial (background + icon).
 	_drag_preview = Control.new()
 	_drag_preview.custom_minimum_size = Vector2(dial_w, dial_h)
 	_drag_preview.size = Vector2(dial_w, dial_h)
 	_drag_preview.modulate.a = 0.75
 	_drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Dial background (hidden-dial circle).
-	var bg_tex: Texture2D = AssetLoader.load_texture(
-			"command_tokens/", "cmd_dial_hidden.png")
-	if bg_tex:
-		var bg_rect: TextureRect = TextureRect.new()
-		bg_rect.texture = bg_tex
-		bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		bg_rect.custom_minimum_size = Vector2(dial_w, dial_h)
-		bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_drag_preview.add_child(bg_rect)
-
-	# Command icon on top of the dial background.
-	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
-	if not icon_file.is_empty():
-		var icon_tex: Texture2D = AssetLoader.load_texture(
-				"command_tokens/", icon_file)
-		if icon_tex:
-			var icon_rect: TextureRect = TextureRect.new()
-			icon_rect.texture = icon_tex
-			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			var icon_size: float = dial_h * 0.7
-			var icon_offset: float = (dial_h - icon_size) * 0.5
-			icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
-			icon_rect.position = Vector2(
-					(dial_w - icon_size) * 0.5, icon_offset)
-			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_drag_preview.add_child(icon_rect)
+	_add_dial_bg_rect(_drag_preview, dial_w, dial_h)
+	_add_dial_icon_rect(_drag_preview, cmd, dial_w, dial_h)
 
 	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
 	if tm_layer:
 		tm_layer.add_child(_drag_preview)
+
+
+## Adds the dial background texture to the preview container.
+func _add_dial_bg_rect(container: Control, w: float, h: float) -> void:
+	var bg_tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", "cmd_dial_hidden.png")
+	if bg_tex == null:
+		return
+	var bg_rect: TextureRect = TextureRect.new()
+	bg_rect.texture = bg_tex
+	bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	bg_rect.custom_minimum_size = Vector2(w, h)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(bg_rect)
+
+
+## Adds the command icon texture on top of the dial background.
+func _add_dial_icon_rect(container: Control, cmd: int,
+		dial_w: float, dial_h: float) -> void:
+	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
+	if icon_file.is_empty():
+		return
+	var icon_tex: Texture2D = AssetLoader.load_texture(
+			"command_tokens/", icon_file)
+	if icon_tex == null:
+		return
+	var icon_rect: TextureRect = TextureRect.new()
+	icon_rect.texture = icon_tex
+	icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var icon_size: float = dial_h * 0.7
+	var icon_offset: float = (dial_h - icon_size) * 0.5
+	icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
+	icon_rect.position = Vector2(
+			(dial_w - icon_size) * 0.5, icon_offset)
+	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(icon_rect)
 
 
 ## Handles mouse button release during dial drag.
@@ -1830,16 +1855,7 @@ func _on_squadron_step_entered() -> void:
 		_log.info("No squadron activations available — auto-advancing.")
 		_on_squadron_command_done()
 		return
-	# Check if there are any eligible friendly squadrons in range.
-	var has_target: bool = false
-	var tokens: Array[SquadronToken] = get_squadron_tokens()
-	for sq_token: SquadronToken in tokens:
-		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and sq_inst.owner_player == ship.owner_player \
-				and resolver.is_squadron_in_range(sq_token.global_position):
-			has_target = true
-			break
-	if not has_target:
+	if not _has_eligible_squadron_in_range(ship, resolver):
 		_log.info("No friendly squadrons in range — consuming resources "
 				+"and auto-advancing.")
 		resolver.finalize()
@@ -1847,11 +1863,22 @@ func _on_squadron_step_entered() -> void:
 		return
 	if _show_activation_button:
 		_show_activation_button.hide_button()
-	# Show the per-ship range overlay (arcs + range bands) so the
-	# player can see which squadrons are within close–medium range.
 	_show_squad_cmd_range_overlay(_activating_ship_token)
 	if _squadron_modal:
 		_squadron_modal.open_for_command(resolver, _activating_ship_token)
+
+
+## Returns true if at least one friendly non-activated squadron is within
+## range of the ship's squadron command resolver.
+func _has_eligible_squadron_in_range(ship: ShipInstance,
+		resolver: SquadronCommandResolver) -> bool:
+	var tokens: Array[SquadronToken] = get_squadron_tokens()
+	for sq_token: SquadronToken in tokens:
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.owner_player == ship.owner_player \
+				and resolver.is_squadron_in_range(sq_token.global_position):
+			return true
+	return false
 
 
 ## Called when the player presses "Skip" on the squadron step (token only).
@@ -2047,13 +2074,33 @@ func _on_execute_maneuver() -> void:
 		return
 	if _maneuver_tool_scene == null:
 		return
+	var final_xform: Transform2D = _resolve_maneuver_overlaps()
+	_activating_ship_token.global_position = final_xform.origin
+	_activating_ship_token.global_rotation = final_xform.get_rotation()
+	# Ship–squadron overlap resolution (OV-001–004).
+	var ship_size: Constants.ShipSize = _activating_ship_token.get_ship_size()
+	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
+	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
+			moved_ship_base)
+	_ship_activation_state.mark_maneuver_executed()
+	EventBus.ship_moved.emit(_activating_ship_token)
+	_dismiss_maneuver_tool()
+	if displaced.size() > 0:
+		_start_squadron_displacement(displaced, moved_ship_base)
+	else:
+		_show_end_activation_after_maneuver()
+	_log.info("Ship snapped to final position.")
+
+
+## Computes the final transform after ship–ship overlap resolution.
+## Applies overlap damage if a collision occurred.
+## Requirements: OV-010–013.
+func _resolve_maneuver_overlaps() -> Transform2D:
 	var tool_state: ManeuverToolState = _maneuver_tool_scene.get_state()
-	# Compute final transform.
 	var attach: Dictionary = _maneuver_tool_scene._compute_attachment()
 	var start_pos: Vector2 = attach["position"]
 	var start_rot: float = attach["rotation"]
 	var ghost_side: String = tool_state.compute_ghost_side()
-	# --- Ship–ship overlap resolution (OV-010–013) ---
 	var original_xform: Transform2D = Transform2D(
 			_activating_ship_token.global_rotation,
 			_activating_ship_token.global_position)
@@ -2064,34 +2111,12 @@ func _on_execute_maneuver() -> void:
 			resolver.check_ship_ship_overlap(
 					tool_state, start_pos, start_rot, ghost_side,
 					ship_size, other_bases, original_xform))
-	var final_xform: Transform2D = result.final_transform
-	# Snap ship to final position.
-	_activating_ship_token.global_position = final_xform.origin
-	_activating_ship_token.global_rotation = final_xform.get_rotation()
-	# Deal overlap damage if any ship–ship overlap occurred.
 	if result.overlaps or result.stayed_in_place:
 		_apply_overlap_damage(result)
 	else:
-		# No collision — clear any stale message.
 		if _activation_modal:
 			_activation_modal.set_collision_message("")
-	# --- Ship–squadron overlap resolution (OV-001–004) ---
-	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
-	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
-			moved_ship_base)
-	# Mark maneuver executed.
-	_ship_activation_state.mark_maneuver_executed()
-	# Emit ship_moved.
-	EventBus.ship_moved.emit(_activating_ship_token)
-	# Dismiss maneuver tool.
-	_dismiss_maneuver_tool()
-	# If squadrons were displaced, start the displacement flow;
-	# otherwise end activation immediately.
-	if displaced.size() > 0:
-		_start_squadron_displacement(displaced, moved_ship_base)
-	else:
-		_show_end_activation_after_maneuver()
-	_log.info("Ship snapped to final position.")
+	return result.final_transform
 
 
 ## Shows the activation modal at the DONE step so the player can review
@@ -3279,36 +3304,49 @@ func _squadron_has_valid_targets(
 		instance: SquadronInstance,
 		token: SquadronToken,
 		all_squads: Array[Dictionary]) -> bool:
+	if _any_enemy_squadron_in_range(instance, token, all_squads):
+		return true
+	return _any_enemy_ship_in_range(instance, token)
+
+
+## Returns true if any enemy squadron is within distance 1 of [param token].
+func _any_enemy_squadron_in_range(
+		instance: SquadronInstance,
+		token: SquadronToken,
+		all_squads: Array[Dictionary]) -> bool:
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var dist1_px: float = EngagementResolver._get_distance_1_px()
 	var pos: Vector2 = token.global_position
-	# Check enemy squadrons at distance 1.
 	for entry: Dictionary in all_squads:
 		var other: SquadronInstance = entry["instance"] as SquadronInstance
-		if other == instance:
-			continue
-		if other.owner_player == instance.owner_player:
+		if other == instance or other.owner_player == instance.owner_player:
 			continue
 		if other.is_destroyed():
 			continue
-		var other_pos: Vector2 = entry["position"] as Vector2
-		var edge_dist: float = pos.distance_to(other_pos) - radius * 2.0
+		var edge_dist: float = pos.distance_to(
+				entry["position"] as Vector2) - radius * 2.0
 		if edge_dist <= dist1_px:
 			return true
-	# Check enemy ships at distance 1 (close range for battery armament).
+	return false
+
+
+## Returns true if any enemy ship is within distance 1 of [param token].
+func _any_enemy_ship_in_range(
+		instance: SquadronInstance,
+		token: SquadronToken) -> bool:
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = EngagementResolver._get_distance_1_px()
+	var pos: Vector2 = token.global_position
 	for child: Node in _token_container.get_children():
 		if not child is ShipToken:
 			continue
 		var ship: ShipToken = child as ShipToken
 		var ship_inst: ShipInstance = ship.get_ship_instance()
-		if ship_inst == null:
+		if ship_inst == null or ship_inst.owner_player == instance.owner_player:
 			continue
-		if ship_inst.owner_player == instance.owner_player:
-			continue
-		# Approximate distance: centre-to-centre minus radii.
 		var ship_half: float = ship.get_half_length()
-		var dist: float = pos.distance_to(ship.global_position)
-		var edge_approx: float = dist - radius - ship_half
+		var edge_approx: float = pos.distance_to(
+				ship.global_position) - radius - ship_half
 		if edge_approx <= dist1_px:
 			return true
 	return false

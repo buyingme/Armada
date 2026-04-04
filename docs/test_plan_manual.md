@@ -3951,3 +3951,49 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 3 | Advance to Command Phase, set dials | Dial stack shows correct facedown dials with overlap; after reveal, top dial shows command icon |
 | 4 | Deal damage to a ship | Faceup damage thumbnails appear with tooltips; facedown cards show card-back badge with ×N count |
 | 5 | Enter Discard Token mode, click a token | Token is removed, sidebar updates correctly |
+
+### MT-A1-06.01 — Repair panel rendering after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with a Repair command dial | Repair panel appears with correct title, repair point count, and action buttons |
+| 2 | Click shield restoration or discard-damage actions | Panel interaction works; shield/damage updates reflected in Ship Card Panel |
+| 3 | Dismiss panel via "Done" | Panel disappears cleanly |
+
+### MT-A1-07.01 — Displacement modal after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger a ship overlap that requires squadron displacement | Displacement modal appears listing affected squadrons |
+| 2 | Select displacement positions | Commit button becomes enabled |
+| 3 | Press Commit | Squadrons move to new positions; modal closes |
+
+### MT-A1-08.01 — Game board UI after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game | Board loads with ship/squadron tokens, ship card panels, turn HUD, and action toolbar |
+| 2 | Enter Command Phase | Dial picker modal opens; assign dials normally |
+| 3 | Enter Ship Phase, activate a ship | Activation modal sequence (Reveal → Squadron → Repair → Attack → Maneuver) works |
+| 4 | Perform Execute Maneuver | Maneuver tool + ghost preview appear; overlapping tokens displaced |
+| 5 | Enter Squadron Phase | Squadron activation modal works normally |
+
+### MT-A1-09.01 — Attack execution after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press "A" or click the Attack toolbar button | Enters attack simulator mode with range overlay |
+| 2 | Click an attacker hull zone, then a valid target | LOS line drawn; range line drawn; dice pool displayed in panel |
+| 3 | Click the attacker's own ship as target | Tooltip "Cannot target the same ship." appears; click rejected |
+| 4 | During Ship Phase, press "Execute Attack ►" | Full attack sequence: attacker zone → target → dice → accuracy → defense → damage |
+| 5 | Spend a defense token (Brace, Evade, Redirect, Scatter) | Token effect applied correctly; token exhausts visually |
+| 6 | Attack multiple hull zones (Victory-class) | After first attack, next zone offered; previously fired zone locked |
+| 7 | Perform anti-squadron attack loop | Each squadron targeted once; "already attacked" tooltip for duplicates |
+
+### MT-A1-10.01 — Game manager functions after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game with fixed round-1 commands | Pre-assigned dials appear; command phase skipped in round 1 |
+| 2 | In Command Phase (round 2+), assign and confirm dials | Phase transitions normally after all ships assigned |
+| 3 | Activate a ship, convert dial to token | "Activate as Token" adds the command token correctly |

@@ -154,33 +154,40 @@ func apply_fixed_round1_commands(commands: Dictionary) -> void:
 		for s: Variant in ps.ships:
 			if not s is ShipInstance:
 				continue
-			var ship: ShipInstance = s as ShipInstance
-			if not commands.has(ship.data_key):
-				_log.warn("No fixed commands for ship '%s' — skipping." % ship.data_key)
-				continue
-			var cmds: Variant = commands[ship.data_key]
-			if not cmds is Array:
-				continue
-			var typed_cmds: Array[int] = []
-			for cmd: Variant in (cmds as Array):
-				typed_cmds.append(cmd as int)
-			var ok: bool = ship.command_dial_stack.assign_dials(
-					typed_cmds, 1)
-			if ok:
+			if _assign_fixed_commands_to_ship(
+					s as ShipInstance, commands):
 				assigned_count += 1
-				_log.info("Auto-assigned round 1 commands: %s = %s" % [
-						ship.data_key, str(typed_cmds)])
-				EventBus.command_dials_changed.emit(ship)
-			else:
-				_log.warn("assign_dials failed for '%s' (fixed commands)." % ship.data_key)
 
-	# Mark both players as submitted and skip the command phase.
 	_command_submitted = [true, true]
 	_command_assigning_player = -1
 	fixed_commands_applied = true
 	_log.info("Fixed round-1 commands applied to %d ships. Skipping command phase." % assigned_count)
 	EventBus.command_phase_complete.emit()
 	advance_phase()
+
+
+## Assigns fixed commands to a single ship from the commands dictionary.
+## Returns true if assignment succeeded.
+func _assign_fixed_commands_to_ship(ship: ShipInstance,
+		commands: Dictionary) -> bool:
+	if not commands.has(ship.data_key):
+		_log.warn("No fixed commands for ship '%s' — skipping." % ship.data_key)
+		return false
+	var cmds: Variant = commands[ship.data_key]
+	if not cmds is Array:
+		return false
+	var typed_cmds: Array[int] = []
+	for cmd: Variant in (cmds as Array):
+		typed_cmds.append(cmd as int)
+	var ok: bool = ship.command_dial_stack.assign_dials(
+			typed_cmds, 1)
+	if ok:
+		_log.info("Auto-assigned round 1 commands: %s = %s" % [
+				ship.data_key, str(typed_cmds)])
+		EventBus.command_dials_changed.emit(ship)
+	else:
+		_log.warn("assign_dials failed for '%s' (fixed commands)." % ship.data_key)
+	return ok
 
 
 ## Returns the current round number.
@@ -308,7 +315,6 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	if ship.command_dial_stack == null:
 		return
 
-	# Convert plain Array to typed Array[int].
 	var typed_commands: Array[int] = []
 	for cmd: Variant in commands:
 		typed_commands.append(cmd as int)
@@ -320,8 +326,12 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 				ship.ship_data.ship_name if ship.ship_data else "?"])
 	EventBus.command_dials_changed.emit(ship)
 
-	# Auto-check whether all ships for this player are done.
-	var player_index: int = ship.owner_player
+	_check_player_all_assigned(ship.owner_player)
+
+
+## Checks if all ships for the given player have been assigned dials.
+## If so, marks the player as submitted and emits the signal.
+func _check_player_all_assigned(player_index: int) -> void:
 	if player_index < 0 or player_index >= Constants.PLAYER_COUNT:
 		return
 
@@ -344,10 +354,6 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	if all_assigned:
 		_command_submitted[player_index] = true
 		EventBus.command_dials_submitted.emit(player_index)
-		# NOTE: Do NOT call _check_command_phase_complete() here.
-		# The emit above synchronously triggers _on_command_dials_submitted,
-		# which already calls _check_command_phase_complete(). Calling it
-		# again would double-advance the phase (Command → Ship → Squadron).
 
 
 ## Checks whether both players have submitted and, if so, ends the Command
@@ -453,7 +459,6 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 		_log.warn("Cannot activate — ship has no command dial stack.")
 		return {}
 
-	# The dial may already be revealed (early reveal on drag start).
 	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
@@ -462,31 +467,15 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 		return {}
 
 	var cmd: int = int(dial.get("command", 0))
-
-	# Immediately spend the revealed dial (goes to spent area).
 	ship.command_dial_stack.spend_revealed()
 
-	# Force-add the token — overflow and duplicate are handled after.
 	var token_added: bool = false
 	var needs_discard: bool = false
 	if ship.command_tokens:
-		var result: Dictionary = ship.command_tokens.force_add_token(cmd)
-		token_added = true
-
-		if result.get("duplicate", false):
-			# Auto-discard the duplicate immediately (CM-005).
-			ship.command_tokens.remove_token(cmd)
-			EventBus.command_tokens_changed.emit(ship)
-			EventBus.duplicate_token_discarded.emit(ship, cmd)
-			_log.info("Duplicate token %d auto-discarded for %s" % [cmd, ship.data_key])
-		elif result.get("overflow", false):
-			# Player must choose which token to discard (CM-004).
-			needs_discard = true
-			EventBus.command_tokens_changed.emit(ship)
-			EventBus.token_discard_required.emit(ship)
-			_log.info("Token overflow for %s — player must discard one." % ship.data_key)
-		else:
-			EventBus.command_tokens_changed.emit(ship)
+		var add_result: Dictionary = _handle_token_add_result(
+				ship, cmd)
+		token_added = add_result.get("token_added", false)
+		needs_discard = add_result.get("needs_discard", false)
 
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
@@ -494,6 +483,29 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 	_log.info("Ship activated (token convert): %s (command: %d, token_added: %s, needs_discard: %s)" % [
 			ship.data_key, cmd, str(token_added), str(needs_discard)])
 	return {"command": cmd, "token_added": token_added, "needs_discard": needs_discard}
+
+
+## Force-adds a command token and handles duplicate / overflow cases.
+## Returns a dictionary with "token_added" and "needs_discard" keys.
+func _handle_token_add_result(ship: ShipInstance,
+		cmd: int) -> Dictionary:
+	var result: Dictionary = ship.command_tokens.force_add_token(cmd)
+
+	if result.get("duplicate", false):
+		ship.command_tokens.remove_token(cmd)
+		EventBus.command_tokens_changed.emit(ship)
+		EventBus.duplicate_token_discarded.emit(ship, cmd)
+		_log.info("Duplicate token %d auto-discarded for %s" % [cmd, ship.data_key])
+		return {"token_added": true, "needs_discard": false}
+
+	if result.get("overflow", false):
+		EventBus.command_tokens_changed.emit(ship)
+		EventBus.token_discard_required.emit(ship)
+		_log.info("Token overflow for %s — player must discard one." % ship.data_key)
+		return {"token_added": true, "needs_discard": true}
+
+	EventBus.command_tokens_changed.emit(ship)
+	return {"token_added": true, "needs_discard": false}
 
 
 # ---------------------------------------------------------------------------

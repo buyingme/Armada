@@ -565,6 +565,10 @@ func _build_cf_token_section() -> void:
 	_cf_token_buttons.add_theme_constant_override("separation", 6)
 	_cf_token_container.add_child(_cf_token_buttons)
 	_cf_token_reroll_button = Button.new()
+	_cf_token_reroll_button.text = "Reroll"
+	_cf_token_reroll_button.custom_minimum_size = Vector2(60.0, 28.0)
+	_cf_token_reroll_button.disabled = true
+	_cf_token_reroll_button.pressed.connect(_on_cf_token_reroll)
 	_cf_token_buttons.add_child(_cf_token_reroll_button)
 	_cf_token_skip_button = Button.new()
 	_cf_token_skip_button.text = "Skip"

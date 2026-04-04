@@ -1623,6 +1623,33 @@ next-track skip, and volume ±10 % buttons — without leaving the game board.
 
 ---
 
+### Refactoring Phase A — Oversized-Function Extraction 🔄
+
+**Goal:** Split every function exceeding 30 lines into focused helpers
+(≤ 30 body lines each). Pure structural refactoring — no game-logic changes.
+See `docs/refactoring_plan.md` and `docs/refactoring_test_strategy.md`.
+
+| # | Task | Target File | Deliverables | Status |
+|---|------|-------------|--------------|--------|
+| A1-01 | Split `_build_ui()` + `_clear_content()` + `show_defense_section()` | `src/ui/attack_sim_panel.gd` | 14 `_build_<section>()` helpers; `_null_core_widget_refs()`, `_null_attack_step_refs()`, `_null_defense_step_refs()`, `_reset_selection_state()`; `_populate_defense_token_buttons()` | ✅ `efe474a` |
+| A1-02 | Split `_build_ui()` + `_create_step_row()` + `_update_step_display()` | `src/ui/activation_modal.gd` | 7 `_build_*()` section helpers; `_create_action_button()` + `_add_step_action_buttons()`; `_style_past_step()`, `_style_current_step()`, `_style_future_step()` + 6 sub-helpers | ✅ |
+| A1-03 | Split oversized functions | `src/ui/squadron_activation_modal.gd` | — | ⏳ |
+| A1-04 | Split oversized functions | `src/ui/ship_card_panel.gd` | — | ⏳ |
+| A1-05 | Split oversized functions | `src/ui/action_toolbar.gd` | — | ⏳ |
+| A1-06 | Split oversized functions | `src/ui/repair_panel.gd` | — | ⏳ |
+| A1-07 | Split oversized functions | `src/ui/displacement_modal.gd` | — | ⏳ |
+| A1-08 | Split oversized functions | `src/scenes/game_board/game_board.gd` | — | ⏳ |
+| A1-09 | Split oversized functions | `src/scenes/game_board/attack_executor.gd` | — | ⏳ |
+| A1-10 | Split oversized functions | `src/autoload/game_manager.gd` | — | ⏳ |
+
+**Bug fixes included in A1-02 commit:**
+- fix(squadron): guard modal re-open with phase check — prevents race condition where `EventBus.squadron_activation_ended` triggers synchronous phase transition before counter check, re-opening modal into the next round
+- fix(status): emit `ship_defense_token_changed` after readying — UI now visually refreshes exhausted → ready tokens during Status Phase
+
+**Tests:** 87 scripts, 1645 tests, 1644 passing, 1 pre-existing failure (Nebulon-B placement)
+
+---
+
 ```
 Phase 0 (Scale & Assets)
     │

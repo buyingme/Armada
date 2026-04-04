@@ -1256,6 +1256,8 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 ## Called when a new round begins.
 func _on_round_started(_round_number: int) -> void:
 	_update_phase_hud()
+	# Safety net: ensure squadron-phase UI never leaks into a new round.
+	_hide_squadron_phase_ui()
 
 
 ## Builds the ordered queue of ships needing dials and opens the first
@@ -3068,6 +3070,13 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	_log.info("Squadron activation done: %s (%d of %d)" % [
 			instance.data_key, _squadron_activation_count,
 			Constants.SQUADRONS_PER_ACTIVATION])
+	# The EventBus emit above may trigger a synchronous phase transition
+	# (GameManager detects no more unactivated squadrons → advance_phase
+	# through STATUS into the next round's COMMAND).  If that happened,
+	# we must NOT re-open the modal.
+	if GameManager.get_current_phase() != Constants.GamePhase.SQUADRON:
+		_log.info("Phase already advanced past SQUADRON — skip re-open.")
+		return
 	# Advance to the next activation if more remain.
 	if _squadron_activation_count < Constants.SQUADRONS_PER_ACTIVATION:
 		var next_num: int = _squadron_activation_count + 1

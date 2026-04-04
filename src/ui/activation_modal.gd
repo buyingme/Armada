@@ -284,8 +284,20 @@ func _build_ui() -> void:
 	size = Vector2.ZERO
 	offset_top = -40.0
 	offset_bottom = -40.0
+	_build_panel_style()
+	var vbox: VBoxContainer = _build_content_container()
+	_build_header_labels(vbox)
+	vbox.add_child(HSeparator.new())
+	_build_step_section(vbox)
+	_build_collision_label(vbox)
+	_build_end_activation_section(vbox)
+	vbox.add_child(HSeparator.new())
+	_build_footer(vbox)
+	_update_command_info()
 
-	# Panel style — identical to AttackSimPanel / CommandDialPicker.
+
+## Creates and applies the standard modal panel StyleBox.
+func _build_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -294,16 +306,20 @@ func _build_ui() -> void:
 	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
 
+
+## Creates the main VBoxContainer for all panel content.
+func _build_content_container() -> VBoxContainer:
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
-	# Explicit min-width prevents autowrap labels from reporting a huge
-	# minimum height before the PanelContainer propagates its width.
 	var _margin_h: float = 32.0 # 16 px content-margin on each side
 	vbox.custom_minimum_size.x = maxf(
 			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(vbox)
+	return vbox
 
-	# Title — ship name.
+
+## Creates the title, command info, and token info labels.
+func _build_header_labels(vbox: VBoxContainer) -> void:
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _activation_state and _activation_state.get_ship() and \
@@ -313,29 +329,22 @@ func _build_ui() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_title_label)
-
-	# Command info.
 	_command_label = Label.new()
 	_command_label.text = ""
 	_command_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_command_label)
-
-	# Token info.
 	_token_label = Label.new()
 	_token_label.text = ""
 	_token_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_token_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(_token_label)
 
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
 
-	# Step rows.
+## Creates the step rows container and populates all 5 step rows.
+func _build_step_section(vbox: VBoxContainer) -> void:
 	_step_container = VBoxContainer.new()
 	_step_container.add_theme_constant_override("separation", 4)
 	vbox.add_child(_step_container)
-
 	_step_rows.clear()
 	_execute_button = null
 	for i: int in range(STEP_NAMES.size()):
@@ -343,7 +352,9 @@ func _build_ui() -> void:
 		_step_container.add_child(row)
 		_step_rows.append(row)
 
-	# Collision info label — shown when an overlap/collision occurred.
+
+## Creates the collision info label (shown on overlap/collision).
+func _build_collision_label(vbox: VBoxContainer) -> void:
 	_collision_label = Label.new()
 	_collision_label.name = "CollisionLabel"
 	_collision_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -354,7 +365,9 @@ func _build_ui() -> void:
 	_collision_label.visible = false
 	vbox.add_child(_collision_label)
 
-	# "End Activation ►" button — shown only when step == DONE.
+
+## Creates the "End Activation ►" button section.
+func _build_end_activation_section(vbox: VBoxContainer) -> void:
 	var end_container: HBoxContainer = HBoxContainer.new()
 	end_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_end_activation_button = Button.new()
@@ -365,11 +378,9 @@ func _build_ui() -> void:
 	end_container.add_child(_end_activation_button)
 	vbox.add_child(end_container)
 
-	# Separator before close hint.
-	var sep2: HSeparator = HSeparator.new()
-	vbox.add_child(sep2)
 
-	# Close button row.
+## Creates the Close button and Escape hint at the bottom.
+func _build_footer(vbox: VBoxContainer) -> void:
 	var close_container: HBoxContainer = HBoxContainer.new()
 	close_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	var close_btn: Button = Button.new()
@@ -378,8 +389,6 @@ func _build_ui() -> void:
 	close_btn.pressed.connect(_on_close_pressed)
 	close_container.add_child(close_btn)
 	vbox.add_child(close_container)
-
-	# Dismiss hint.
 	var hint: Label = Label.new()
 	hint.text = "Press Escape to dismiss"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -387,84 +396,73 @@ func _build_ui() -> void:
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	vbox.add_child(hint)
 
-	_update_command_info()
-
 
 ## Creates a single step row.
 ## Step 5 (index 4, Execute Maneuver) gets an embedded action button.
 func _create_step_row(step_index: int) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	# Apply row style.
 	var row_style: StyleBoxFlat = StyleBoxFlat.new()
 	row_style.bg_color = Color(0.08, 0.08, 0.12, 0.6)
 	row_style.border_color = Color(0.2, 0.25, 0.35, 0.4)
 	row_style.set_border_width_all(1)
 	row_style.set_corner_radius_all(4)
 	panel.add_theme_stylebox_override("panel", row_style)
-
 	var hbox: HBoxContainer = HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
 	panel.add_child(hbox)
-
 	var lbl: Label = Label.new()
 	lbl.text = STEP_NAMES[step_index]
 	lbl.name = "StepLabel"
 	hbox.add_child(lbl)
-
-	# Spacer.
 	var spacer: Control = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(spacer)
-
-	# For step 5 (Execute Maneuver): add an actionable button.
-	if step_index == 4:
-		_execute_button = Button.new()
-		_execute_button.text = "Execute Maneuver ►"
-		_execute_button.custom_minimum_size = Vector2(130, 28)
-		_execute_button.visible = false
-		_execute_button.pressed.connect(_on_execute_pressed)
-		hbox.add_child(_execute_button)
-
-	# For step 4 (Attack): add "Execute Attack" button.
-	if step_index == 3:
-		_attack_button = Button.new()
-		_attack_button.text = "Execute Attack ►"
-		_attack_button.custom_minimum_size = Vector2(130, 28)
-		_attack_button.visible = false
-		_attack_button.pressed.connect(_on_attack_pressed)
-		hbox.add_child(_attack_button)
-
-	# For step 3 (Repair): add "Execute Repair" button.
-	if step_index == 2:
-		_repair_button = Button.new()
-		_repair_button.text = "Execute Repair ►"
-		_repair_button.custom_minimum_size = Vector2(130, 28)
-		_repair_button.visible = false
-		_repair_button.pressed.connect(_on_repair_pressed)
-		hbox.add_child(_repair_button)
-
-	# For step 2 (Squadron): add "Execute Squadron" button and optional skip.
-	if step_index == 1:
-		_squadron_button = Button.new()
-		_squadron_button.text = "Execute Squadron ►"
-		_squadron_button.custom_minimum_size = Vector2(140, 28)
-		_squadron_button.visible = false
-		_squadron_button.pressed.connect(_on_squadron_pressed)
-		hbox.add_child(_squadron_button)
-		_squadron_skip_button = Button.new()
-		_squadron_skip_button.text = "Skip"
-		_squadron_skip_button.custom_minimum_size = Vector2(60, 28)
-		_squadron_skip_button.visible = false
-		_squadron_skip_button.pressed.connect(_on_squadron_skip_pressed)
-		hbox.add_child(_squadron_skip_button)
-
-	# Status label (shows badge or checkmark).
+	_add_step_action_buttons(step_index, hbox)
 	var status: Label = Label.new()
 	status.name = "StatusLabel"
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hbox.add_child(status)
-
 	return panel
+
+
+## Adds step-specific action buttons to the step row HBox.
+func _add_step_action_buttons(step_index: int, hbox: HBoxContainer) -> void:
+	match step_index:
+		4:
+			_execute_button = _create_action_button(
+					"Execute Maneuver ►", Vector2(130, 28),
+					_on_execute_pressed)
+			hbox.add_child(_execute_button)
+		3:
+			_attack_button = _create_action_button(
+					"Execute Attack ►", Vector2(130, 28),
+					_on_attack_pressed)
+			hbox.add_child(_attack_button)
+		2:
+			_repair_button = _create_action_button(
+					"Execute Repair ►", Vector2(130, 28),
+					_on_repair_pressed)
+			hbox.add_child(_repair_button)
+		1:
+			_squadron_button = _create_action_button(
+					"Execute Squadron ►", Vector2(140, 28),
+					_on_squadron_pressed)
+			hbox.add_child(_squadron_button)
+			_squadron_skip_button = _create_action_button(
+					"Skip", Vector2(60, 28),
+					_on_squadron_skip_pressed)
+			hbox.add_child(_squadron_skip_button)
+
+
+## Creates a hidden action button with the given text, size, and callback.
+func _create_action_button(text: String, min_size: Vector2,
+		callback: Callable) -> Button:
+	var btn: Button = Button.new()
+	btn.text = text
+	btn.custom_minimum_size = min_size
+	btn.visible = false
+	btn.pressed.connect(callback)
+	return btn
 
 
 ## Clears all children from the modal.
@@ -499,100 +497,147 @@ func _update_step_display() -> void:
 	if _activation_state == null:
 		return
 	var current: int = int(_activation_state.get_current_step())
-	# Steps map: REVEAL=0, SQUADRON=1, REPAIR=2, ATTACK=3, MANEUVER=4, DONE=5
 	for i: int in range(_step_rows.size()):
 		var row: PanelContainer = _step_rows[i]
 		var status_label: Label = _find_status_label(row)
 		if status_label == null:
 			continue
-
-		var row_style: StyleBoxFlat = StyleBoxFlat.new()
-		row_style.set_border_width_all(1)
-		row_style.set_corner_radius_all(4)
-
-		var step_val: int = i # 0=REVEAL, 1=SQUADRON, ...
-		if step_val < current:
-			# Past step — completed.
-			row_style.bg_color = Color(0.1, 0.1, 0.14, 0.8)
-			row_style.border_color = Color(0.3, 0.35, 0.45, 0.6)
-			row.add_theme_stylebox_override("panel", row_style)
-			status_label.text = "✓"
-			status_label.modulate = Color(0.4, 0.9, 0.4)
-			row.modulate = Color.WHITE
-		elif step_val == current:
-			# Current step — active.
-			row_style.bg_color = Color(0.18, 0.22, 0.32, 1.0)
-			row_style.border_color = Color(0.5, 0.6, 0.8, 1.0)
-			row.add_theme_stylebox_override("panel", row_style)
-			row.modulate = Color.WHITE
-			if i in PLACEHOLDER_STEPS:
-				status_label.text = "Not yet implemented"
-				status_label.modulate = Color(0.9, 0.7, 0.3)
-			elif i == 1:
-				# Squadron step — show button or "No squadron available" badge.
-				if _skip_squadron:
-					status_label.text = "No squadron available"
-					status_label.modulate = Color(0.9, 0.7, 0.3)
-				else:
-					status_label.text = ""
-					if _squadron_button:
-						_squadron_button.visible = true
-						_squadron_button.disabled = false
-					if _squadron_skip_button:
-						_squadron_skip_button.visible = _squadron_token_only
-						_squadron_skip_button.disabled = false
-			elif i == 2:
-				# Repair step — show button or "No dial/token" badge.
-				if _skip_repair:
-					status_label.text = "No repair available"
-					status_label.modulate = Color(0.9, 0.7, 0.3)
-				else:
-					status_label.text = ""
-					if _repair_button:
-						_repair_button.visible = true
-						_repair_button.disabled = false
-			elif i == 3:
-				# Attack step — show button or "No targets" badge.
-				if _skip_attack:
-					status_label.text = "No targets"
-					status_label.modulate = Color(0.9, 0.7, 0.3)
-				else:
-					status_label.text = ""
-					if _attack_button:
-						_attack_button.visible = true
-						_attack_button.disabled = false
-			elif i == 4:
-				# Execute Maneuver step — show the action button.
-				status_label.text = ""
-				if _execute_button:
-					_execute_button.visible = true
-					_execute_button.disabled = false
-					if _maneuver_tool_shown:
-						_execute_button.text = "Commit Maneuver ►"
-					else:
-						_execute_button.text = "Execute Maneuver ►"
-			else:
-				status_label.text = "►"
-				status_label.modulate = Color.WHITE
+		if i < current:
+			_style_past_step(row, status_label)
+		elif i == current:
+			_style_current_step(i, row, status_label)
 		else:
-			# Future step — dimmed.
-			row_style.bg_color = Color(0.08, 0.08, 0.12, 0.6)
-			row_style.border_color = Color(0.2, 0.25, 0.35, 0.4)
-			row.add_theme_stylebox_override("panel", row_style)
-			status_label.text = ""
-			row.modulate = Color(0.5, 0.5, 0.5)
-			if i == 4 and _execute_button:
+			_style_future_step(i, row, status_label)
+	_update_end_activation_visibility(current)
+
+
+## Applies completed-step styling (green checkmark, muted background).
+func _style_past_step(row: PanelContainer, status_label: Label) -> void:
+	var row_style: StyleBoxFlat = StyleBoxFlat.new()
+	row_style.set_border_width_all(1)
+	row_style.set_corner_radius_all(4)
+	row_style.bg_color = Color(0.1, 0.1, 0.14, 0.8)
+	row_style.border_color = Color(0.3, 0.35, 0.45, 0.6)
+	row.add_theme_stylebox_override("panel", row_style)
+	status_label.text = "✓"
+	status_label.modulate = Color(0.4, 0.9, 0.4)
+	row.modulate = Color.WHITE
+
+
+## Applies active-step styling and shows the relevant action buttons.
+func _style_current_step(i: int, row: PanelContainer,
+		status_label: Label) -> void:
+	var row_style: StyleBoxFlat = StyleBoxFlat.new()
+	row_style.set_border_width_all(1)
+	row_style.set_corner_radius_all(4)
+	row_style.bg_color = Color(0.18, 0.22, 0.32, 1.0)
+	row_style.border_color = Color(0.5, 0.6, 0.8, 1.0)
+	row.add_theme_stylebox_override("panel", row_style)
+	row.modulate = Color.WHITE
+	if i in PLACEHOLDER_STEPS:
+		status_label.text = "Not yet implemented"
+		status_label.modulate = Color(0.9, 0.7, 0.3)
+		return
+	match i:
+		1:
+			_style_current_squadron_step(status_label)
+		2:
+			_style_current_repair_step(status_label)
+		3:
+			_style_current_attack_step(status_label)
+		4:
+			_style_current_maneuver_step(status_label)
+		_:
+			status_label.text = "►"
+			status_label.modulate = Color.WHITE
+
+
+## Configures the Squadron step when it is the current step.
+func _style_current_squadron_step(status_label: Label) -> void:
+	if _skip_squadron:
+		status_label.text = "No squadron available"
+		status_label.modulate = Color(0.9, 0.7, 0.3)
+	else:
+		status_label.text = ""
+		if _squadron_button:
+			_squadron_button.visible = true
+			_squadron_button.disabled = false
+		if _squadron_skip_button:
+			_squadron_skip_button.visible = _squadron_token_only
+			_squadron_skip_button.disabled = false
+
+
+## Configures the Repair step when it is the current step.
+func _style_current_repair_step(status_label: Label) -> void:
+	if _skip_repair:
+		status_label.text = "No repair available"
+		status_label.modulate = Color(0.9, 0.7, 0.3)
+	else:
+		status_label.text = ""
+		if _repair_button:
+			_repair_button.visible = true
+			_repair_button.disabled = false
+
+
+## Configures the Attack step when it is the current step.
+func _style_current_attack_step(status_label: Label) -> void:
+	if _skip_attack:
+		status_label.text = "No targets"
+		status_label.modulate = Color(0.9, 0.7, 0.3)
+	else:
+		status_label.text = ""
+		if _attack_button:
+			_attack_button.visible = true
+			_attack_button.disabled = false
+
+
+## Configures the Maneuver step when it is the current step.
+func _style_current_maneuver_step(status_label: Label) -> void:
+	status_label.text = ""
+	if _execute_button:
+		_execute_button.visible = true
+		_execute_button.disabled = false
+		if _maneuver_tool_shown:
+			_execute_button.text = "Commit Maneuver ►"
+		else:
+			_execute_button.text = "Execute Maneuver ►"
+
+
+## Applies future-step styling (dimmed, buttons hidden).
+func _style_future_step(i: int, row: PanelContainer,
+		status_label: Label) -> void:
+	var row_style: StyleBoxFlat = StyleBoxFlat.new()
+	row_style.set_border_width_all(1)
+	row_style.set_corner_radius_all(4)
+	row_style.bg_color = Color(0.08, 0.08, 0.12, 0.6)
+	row_style.border_color = Color(0.2, 0.25, 0.35, 0.4)
+	row.add_theme_stylebox_override("panel", row_style)
+	status_label.text = ""
+	row.modulate = Color(0.5, 0.5, 0.5)
+	_hide_step_buttons(i)
+
+
+## Hides action buttons for a future (not-yet-reached) step.
+func _hide_step_buttons(i: int) -> void:
+	match i:
+		4:
+			if _execute_button:
 				_execute_button.visible = false
-			if i == 3 and _attack_button:
+		3:
+			if _attack_button:
 				_attack_button.visible = false
-			if i == 2 and _repair_button:
+		2:
+			if _repair_button:
 				_repair_button.visible = false
-			if i == 1 and _squadron_button:
+		1:
+			if _squadron_button:
 				_squadron_button.visible = false
-			if i == 1 and _squadron_skip_button:
+			if _squadron_skip_button:
 				_squadron_skip_button.visible = false
 
-	# Show "End Activation ►" only when all steps are done.
+
+## Shows/hides the End Activation button based on step progress.
+func _update_end_activation_visibility(current: int) -> void:
 	if _end_activation_button:
 		var is_done: bool = (current >= int(ShipActivationState.Step.DONE))
 		_end_activation_button.visible = is_done

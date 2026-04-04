@@ -3900,3 +3900,33 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 2 | Click ⏭ | Override is cancelled; next track in shuffled playlist plays |
 
 **Pass criteria:** All four audio buttons work at any time. Volume clamps at 0–100%. Play/pause label toggles correctly. Skip cancels destruction overrides. Audio buttons are never disabled by tool-button gating.
+
+---
+
+## Refactoring Phase A — Manual Verification
+
+### MT-A1-02.01 — Activation modal step display after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, assign command dials, advance to Ship Phase | Ship Phase HUD appears |
+| 2 | Click a ship to open Activation Modal | Modal opens with 5 step rows; current step highlighted blue, future steps dimmed |
+| 3 | Walk through activation: Reveal → Squadron → Repair → Attack → Maneuver | Each step highlights in turn; completed steps show green ✓ |
+| 4 | After all steps complete | "End Activation ►" button appears |
+| 5 | Press Escape to dismiss modal, click ship to re-open | Modal re-opens with preserved state |
+| 6 | Resize window while modal is open | Layout remains intact |
+
+### MT-A1-02.02 — Squadron modal cleanup at round boundary
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance to Squadron Phase, activate squadron(s) | Squadron modal appears and works normally |
+| 2 | Complete all squadron activations for both players | Modal disappears; game transitions through Status Phase to next round's Command Phase |
+| 3 | Verify no stale squadron modal is visible during Command Phase | No squadron modal present |
+
+### MT-A1-02.03 — Defense tokens readied visually after Status Phase
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Ship Phase, perform an attack and spend a defense token (Brace/Evade) | Token turns red/exhausted in Ship Card Panel |
+| 2 | Complete the round (Ship → Squadron → Status → Command) | After Status Phase, exhausted tokens flip back to green/ready in Ship Card Panel |

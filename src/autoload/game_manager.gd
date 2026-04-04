@@ -743,6 +743,7 @@ func _perform_status_phase_cleanup() -> void:
 				if si.is_destroyed():
 					continue
 				si.ready_defense_tokens()
+				EventBus.ship_defense_token_changed.emit(si)
 				si.reset_activation()
 				# Clear spent dial marker so it doesn't persist into the
 				# next round's card panel display.

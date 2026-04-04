@@ -1,6 +1,8 @@
-# Implementation Plan — Learning Scenario MVP
+# Implementation Plan — Learning Scenario MVP ✅
 
 > **Scope:** Implement the complete Learning Scenario from the core set Learn to Play booklet.
+> **Status:** **MVP COMPLETE** — all 12 phases plus post-phase features and bug fixes delivered.
+> Final test baseline: 87 scripts, 1 645 tests, 1 644 passing (1 pre-existing Nebulon-B placement failure).
 > **Prerequisite:** All graphic assets must be provided and in place before coding begins.
 
 ## Table of Contents

@@ -1,9 +1,10 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Phases 0–5d, 5d-2, 4g, 2c, L, 5b-2, 6a, 6a-4, 6b-1, 6b-3, 7b, 8, 9, 9.5, 11, 12, plus post-Phase-L, post-Phase-4c, and post-Phase-5d LOS bug fixes (v1 + v2), plus AttackExecutor extraction refactoring, plus damage card panel display, plus damage summary overlay, plus ghost destroyed ships/squadrons. Updated after each phase completes.
+> **Scope:** Full Learning Scenario MVP — Phases 0–12, all post-phase bug fixes and features.
+> **Status:** **MVP COMPLETE** — all phases delivered and manually verified.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 87 scripts, 1645 tests — 1644 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 87 scripts, 1 645 tests — 1 644 passing (1 pre-existing Nebulon-B placement failure).
 
 ---
 

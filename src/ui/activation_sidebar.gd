@@ -109,8 +109,6 @@ func _init() -> void:
 	add_child(_content)
 
 
-
-
 ## Populates the sidebar with ships and squadrons from both players.
 ## [param game_state] — the current GameState.
 func populate(game_state: Variant) -> void:
@@ -345,7 +343,7 @@ func _expanded_pos() -> Vector2:
 
 ## Returns the panel position when collapsed (only PEEK_WIDTH visible).
 func _collapsed_pos() -> Vector2:
-	return Vector2(-(size.x - PEEK_WIDTH),
+	return Vector2(- (size.x - PEEK_WIDTH),
 			_viewport_size.y - size.y - BOTTOM_MARGIN)
 
 
@@ -363,7 +361,7 @@ func _toggle_expanded() -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
 	_slide_tween = create_tween()
-	_slide_tween.tween_property(self, "position", target,
+	_slide_tween.tween_property(self , "position", target,
 			SLIDE_DURATION).set_trans(
 			Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 

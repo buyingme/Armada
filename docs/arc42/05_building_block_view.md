@@ -37,11 +37,10 @@
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
 | `GameState` | RefCounted | `src/core/game_state.gd` | Round, phase, fleet and ship tracking |
-| `PhaseState` | RefCounted | `src/core/phase_state.gd` | Phase/sub-phase transitions, initiative |
-| `DicePool` | RefCounted | `src/core/dice.gd` | Dice rolling and modification |
-| `FleetBuilder` | RefCounted | `src/core/fleet_builder.gd` | Fleet construction and validation |
+| `PlayerState` | RefCounted | `src/core/player_state.gd` | Per-player fleet data, ship/squadron lists |
+| `Dice` | RefCounted | `src/core/dice.gd` | Single die roll and face tables |
+| `DicePool` | RefCounted | `src/core/dice_pool.gd` | Pool assembly and batch rolling |
 | `ManeuverCalculator` | RefCounted | `src/core/maneuver_calculator.gd` | Chain-computation of tool joints and final transform |
-| `ManeuverTool` | RefCounted | `src/core/maneuver_tool.gd` | Maneuver state: joint angles, speed, yaw validation |
 | `ManeuverToolState` | RefCounted | `src/core/maneuver_tool_state.gd` | Activation-mode state: Navigate budget, yaw bonus, commit |
 | `ShipActivationState` | RefCounted | `src/core/ship_activation_state.gd` | Activation step tracking, command spending |
 | `CommandTokenManager` | RefCounted | `src/core/command_token_manager.gd` | Token pool management, add/remove/spend |
@@ -55,7 +54,7 @@
 | `SwarmEffect` | GameEffect | `src/core/effects/keywords/swarm_effect.gd` | Swarm keyword: reroll worst die when friendly also engaged |
 | `EngagementResolver` | RefCounted | `src/core/engagement_resolver.gd` | Edge-to-edge distance-1 engagement checks, valid target filtering |
 | `SquadronMover` | RefCounted | `src/core/squadron_mover.gd` | Distance band + overlap validation for squadron placement |
-| `AttackResolver` | RefCounted | `src/core/attack_resolver.gd` | Core attack pipeline: targeting, LOS, dice, defense tokens, damage application |
+| `LineOfSightChecker` | RefCounted | `src/core/line_of_sight_checker.gd` | LOS edge-to-edge tracing, obstruction detection |
 | `OverlapResolver` | RefCounted | `src/core/overlap_resolver.gd` | Ship–ship overlap (speed reduction loop, facedown damage) and ship–squadron overlap (displacement list, placement validation, snap-to-edge) |
 | `RepairResolver` | RefCounted | `src/core/repair_resolver.gd` | Repair command: dial/token budget, recover shields / discard damage cards |
 | `SquadronCommandResolver` | RefCounted | `src/core/squadron_command_resolver.gd` | Squadron command: dial/token activation budget, range check, finalize spend |
@@ -63,9 +62,23 @@
 | `DamageCardEffectFactory` | RefCounted | `src/core/damage_card_effect_factory.gd` | Factory for damage card effects — creates `GameEffect` instances for each critical card type |
 | `ImmediateEffectResolver` | RefCounted | `src/core/immediate_effect_resolver.gd` | Resolves faceup damage card immediate effects (Structural Damage, Projector Misaligned, etc.) |
 
-### Planned (Not Yet Implemented)
+### Additional Core Components
 
-- **RulesEngine** — Validates actions against game rules
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `ShipInstance` | RefCounted | `src/core/ship_instance.gd` | Runtime ship state: shields, damage cards, defense tokens, speed |
+| `SquadronInstance` | RefCounted | `src/core/squadron_instance.gd` | Runtime squadron state: hull, activation, defense tokens |
+| `ShipBase` | RefCounted | `src/core/ship_base.gd` | Ship geometry: base polygon, hull zone edges |
+| `SquadronBase` | RefCounted | `src/core/squadron_base.gd` | Squadron geometry: circular base |
+| `FiringArc` | RefCounted | `src/core/firing_arc.gd` | Arc polygon and point-in-arc tests |
+| `RangeFinder` | RefCounted | `src/core/range_finder.gd` | Edge-to-edge closest-point range measurement |
+| `RangeMeasurer` | RefCounted | `src/core/range_measurer.gd` | High-level range-band lookup |
+| `TokenMover` | RefCounted | `src/core/token_mover.gd` | Debug token drag with collision avoidance |
+| `CommandDialStack` | RefCounted | `src/core/command_dial_stack.gd` | Per-ship dial queue: assign, reveal, peek |
+| `DamageCard` | RefCounted | `src/core/damage_card.gd` | Single damage card: face-up/down, effect ID |
+| `DamageDeck` | RefCounted | `src/core/damage_deck.gd` | 33-card damage deck with shuffle and draw |
+| `TargetingListBuilder` | RefCounted | `src/core/targeting_list_builder.gd` | Builds targeting data for all ship/squadron pairs |
+| `LearningScenarioSetup` | RefCounted | `src/core/learning_scenario_setup.gd` | Loads learning scenario JSON and spawns initial placement |
 
 ## 5.3 Level 2 — UI Detail
 
@@ -99,8 +112,19 @@
 | `YourTurnBanner` | Control | `src/ui/your_turn_banner.gd` | Animated "Your Turn" banner at start of player's activation |
 | `VictoryScreen` | Control | `src/ui/victory_screen.gd` | End-of-game victory/defeat screen with scoring breakdown |
 | `DebugHelpPanel` | Control | `src/ui/debug_help_panel.gd` | Debug keybinding help overlay |
-| `HUDLayer` | CanvasLayer | `src/scenes/hud_layer.gd` | HUD container for panels, indicators |
+### Data Layer
 
-### Planned (Not Yet Implemented)
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `ShipData` | Resource | `src/models/ship_data.gd` | Ship card data loaded from JSON |
+| `SquadronData` | Resource | `src/models/squadron_data.gd` | Squadron card data loaded from JSON |
+| `UpgradeData` | Resource | `src/models/upgrade_data.gd` | Upgrade card data (placeholder for future use) |
+| `TokenPlacement` | RefCounted | `src/models/token_placement.gd` | Scenario placement data |
 
-- **FleetBuilder** — Pre-game fleet construction interface
+### Utilities
+
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `AssetLoader` | RefCounted | `src/utils/asset_loader.gd` | JSON loading, card art lookup, data parsing |
+| `GameLogger` | RefCounted | `src/utils/logger.gd` | Structured logging with file output |
+| `ScenarioSaver` | RefCounted | `src/utils/scenario_saver.gd` | Debug position export to JSON |

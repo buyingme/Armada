@@ -1,6 +1,5 @@
 {
     "_comment": "Sound & music configuration. All volumes are linear (0.0 = silent, 1.0 = full). Durations in seconds, rhythm intervals in milliseconds.",
-
     "sfx": {
         "droid_sound": {
             "path": "res://Resources/Sound/fx/droid_sound.mp3",
@@ -59,13 +58,18 @@
             "volume": 1.0
         }
     },
-
     "sfx_rhythms": {
         "_comment": "Arrays of pause durations (ms) between consecutive shots.",
-        "rebel_squadron_rhythm_ms": [300, 100, 300],
-        "imperial_squadron_rhythm_ms": [300, 100]
+        "rebel_squadron_rhythm_ms": [
+            300,
+            100,
+            300
+        ],
+        "imperial_squadron_rhythm_ms": [
+            300,
+            100
+        ]
     },
-
     "music": {
         "rebel_theme": {
             "path": "res://Resources/Sound/music/rebel_theme.mp3",
@@ -124,7 +128,6 @@
             "volume": 0.1
         }
     },
-
     "in_game_track_count": 12,
     "music_fade_duration_s": 3.0,
     "destruction_override_duration_s": 60.0

@@ -415,7 +415,24 @@ func _build_ui() -> void:
 	size = Vector2.ZERO
 	offset_top = -40.0
 	offset_bottom = -40.0
-	# Panel style (standard modal).
+	_build_panel_style()
+	_build_content_container()
+	_build_title_body_labels()
+	_build_dice_count_section()
+	_build_cf_dial_section()
+	_build_obstruction_section()
+	_build_roll_button()
+	_build_dice_results_section()
+	_build_cf_token_section()
+	_build_confirm_skip_section()
+	_build_accuracy_section()
+	_build_defense_section()
+	_build_redirect_section()
+	_build_damage_info_section()
+
+
+## Creates and applies the standard modal panel StyleBox.
+func _build_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -423,29 +440,35 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
-	# Content container.
+
+
+## Creates the main VBoxContainer for all panel content.
+func _build_content_container() -> void:
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 8)
-	# Set explicit min-width so autowrap labels can compute correct heights
-	# during the first layout pass (before the PanelContainer propagates width).
 	var _margin_h: float = 32.0 # 16 px content-margin on each side
 	_content.custom_minimum_size.x = maxf(
 			custom_minimum_size.x - _margin_h, 100.0)
 	add_child(_content)
-	# Title label.
+
+
+## Creates the title and body text labels.
+func _build_title_body_labels() -> void:
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 16)
 	_title_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_content.add_child(_title_label)
-	# Body label.
 	_body_label = Label.new()
 	_body_label.add_theme_font_size_override("font_size", 13)
 	_body_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	_body_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_content.add_child(_body_label)
-	# Dice count label (attack execution mode only, hidden initially).
+
+
+## Creates the dice count label and Done button (sim mode).
+func _build_dice_count_section() -> void:
 	_dice_count_label = Label.new()
 	_dice_count_label.add_theme_font_size_override("font_size", 14)
 	_dice_count_label.add_theme_color_override("font_color",
@@ -453,7 +476,6 @@ func _build_ui() -> void:
 	_dice_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dice_count_label.visible = false
 	_content.add_child(_dice_count_label)
-	# Done button (sim mode only, hidden initially).
 	_done_button = Button.new()
 	_done_button.text = "Done"
 	_done_button.custom_minimum_size = Vector2(80.0, 32.0)
@@ -461,8 +483,10 @@ func _build_ui() -> void:
 	_done_button.visible = false
 	_done_button.pressed.connect(_on_done_pressed)
 	_content.add_child(_done_button)
-	# --- Phase 6b-2 UI elements (hidden by default) ---
-	# CF dial section: label + colour buttons + skip.
+
+
+## Creates the Concentrate Fire dial colour-selection section.
+func _build_cf_dial_section() -> void:
 	_cf_dial_container = VBoxContainer.new()
 	_cf_dial_container.add_theme_constant_override("separation", 4)
 	_cf_dial_container.visible = false
@@ -484,7 +508,10 @@ func _build_ui() -> void:
 	_cf_dial_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_cf_dial_skip_button.pressed.connect(_on_cf_dial_skip)
 	_cf_dial_container.add_child(_cf_dial_skip_button)
-	# Obstruction die-removal section (hidden by default).
+
+
+## Creates the obstruction die-removal section.
+func _build_obstruction_section() -> void:
 	_obstruction_container = VBoxContainer.new()
 	_obstruction_container.add_theme_constant_override("separation", 4)
 	_obstruction_container.visible = false
@@ -498,7 +525,10 @@ func _build_ui() -> void:
 	_obstruction_buttons.add_theme_constant_override("separation", 8)
 	_obstruction_container.add_child(_obstruction_buttons)
 	_content.add_child(_obstruction_container)
-	# Roll Dice button.
+
+
+## Creates the Roll Dice button.
+func _build_roll_button() -> void:
 	_roll_button = Button.new()
 	_roll_button.text = "Roll Dice"
 	_roll_button.custom_minimum_size = Vector2(100.0, 32.0)
@@ -506,13 +536,19 @@ func _build_ui() -> void:
 	_roll_button.visible = false
 	_roll_button.pressed.connect(_on_roll_pressed)
 	_content.add_child(_roll_button)
-	# Dice results container (TextureRect images).
+
+
+## Creates the dice results container and CF token reroll section.
+func _build_dice_results_section() -> void:
 	_dice_container = HBoxContainer.new()
 	_dice_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_dice_container.add_theme_constant_override("separation", 4)
 	_dice_container.visible = false
 	_content.add_child(_dice_container)
-	# CF token reroll section: label + reroll/skip buttons.
+
+
+## Creates the CF token reroll section (label + reroll/skip buttons).
+func _build_cf_token_section() -> void:
 	_cf_token_container = VBoxContainer.new()
 	_cf_token_container.add_theme_constant_override("separation", 4)
 	_cf_token_container.visible = false
@@ -535,7 +571,10 @@ func _build_ui() -> void:
 	_cf_token_skip_button.custom_minimum_size = Vector2(60.0, 28.0)
 	_cf_token_skip_button.pressed.connect(_on_cf_token_skip)
 	_cf_token_buttons.add_child(_cf_token_skip_button)
-	# Confirm button.
+
+
+## Creates the Confirm button, Skip Attack button, and skip confirmation.
+func _build_confirm_skip_section() -> void:
 	_confirm_button = Button.new()
 	_confirm_button.text = "Confirm"
 	_confirm_button.custom_minimum_size = Vector2(100.0, 32.0)
@@ -543,7 +582,6 @@ func _build_ui() -> void:
 	_confirm_button.visible = false
 	_confirm_button.pressed.connect(_on_confirm_pressed)
 	_content.add_child(_confirm_button)
-	# Skip Attack button.
 	_skip_attack_button = Button.new()
 	_skip_attack_button.text = "Skip Attack"
 	_skip_attack_button.custom_minimum_size = Vector2(100.0, 28.0)
@@ -551,7 +589,11 @@ func _build_ui() -> void:
 	_skip_attack_button.visible = false
 	_skip_attack_button.pressed.connect(_on_skip_attack_pressed)
 	_content.add_child(_skip_attack_button)
-	# Skip-attack confirmation prompt (hidden by default).
+	_build_skip_confirm_prompt()
+
+
+## Creates the skip-attack confirmation prompt (Yes/No).
+func _build_skip_confirm_prompt() -> void:
 	_skip_confirm_container = HBoxContainer.new()
 	_skip_confirm_container.add_theme_constant_override("separation", 8)
 	_skip_confirm_container.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -570,7 +612,10 @@ func _build_ui() -> void:
 	_skip_confirm_no.pressed.connect(_on_skip_confirm_no)
 	_skip_confirm_container.add_child(_skip_confirm_no)
 	_content.add_child(_skip_confirm_container)
-	# --- Phase 6c-1: Accuracy section ---
+
+
+## Creates the accuracy token-locking section.
+func _build_accuracy_section() -> void:
 	_accuracy_container = VBoxContainer.new()
 	_accuracy_container.add_theme_constant_override("separation", 4)
 	_accuracy_container.visible = false
@@ -592,7 +637,10 @@ func _build_ui() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_accuracy_confirm_button.pressed.connect(_on_accuracy_confirm)
 	_accuracy_container.add_child(_accuracy_confirm_button)
-	# --- Phase 6c-2: Defense token section ---
+
+
+## Creates the defense token spending section.
+func _build_defense_section() -> void:
 	_defense_container = VBoxContainer.new()
 	_defense_container.add_theme_constant_override("separation", 4)
 	_defense_container.visible = false
@@ -614,7 +662,10 @@ func _build_ui() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_defense_done_button.pressed.connect(_on_defense_done)
 	_defense_container.add_child(_defense_done_button)
-	# --- Phase 6c-2: Redirect zone selection ---
+
+
+## Creates the redirect zone selection section.
+func _build_redirect_section() -> void:
 	_redirect_container = VBoxContainer.new()
 	_redirect_container.add_theme_constant_override("separation", 4)
 	_redirect_container.visible = false
@@ -637,7 +688,10 @@ func _build_ui() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_redirect_done_button.pressed.connect(_on_redirect_done_pressed)
 	_redirect_container.add_child(_redirect_done_button)
-	# --- Phase 6c-3: Damage resolution info ---
+
+
+## Creates the damage resolution info section.
+func _build_damage_info_section() -> void:
 	_damage_info_container = VBoxContainer.new()
 	_damage_info_container.add_theme_constant_override("separation", 4)
 	_damage_info_container.visible = false
@@ -666,45 +720,65 @@ func _clear_content() -> void:
 	if _content:
 		remove_child(_content)
 		_content.queue_free()
-		_content = null
-		_title_label = null
-		_body_label = null
-		_dice_count_label = null
-		_done_button = null
-		_cf_dial_container = null
-		_cf_dial_buttons = null
-		_cf_dial_skip_button = null
-		_obstruction_container = null
-		_obstruction_buttons = null
-		_roll_button = null
-		_dice_container = null
-		_cf_token_container = null
-		_cf_token_buttons = null
-		_cf_token_reroll_button = null
-		_cf_token_skip_button = null
-		_confirm_button = null
-		_skip_attack_button = null
-		_skip_confirm_container = null
-		_skip_confirm_yes = null
-		_skip_confirm_no = null
-		_accuracy_container = null
-		_accuracy_token_buttons = null
-		_accuracy_confirm_button = null
-		_accuracy_locked_indices.clear()
-		_accuracy_budget = 0
-		_defense_container = null
-		_defense_token_buttons = null
-		_defense_done_button = null
-		_defense_info_label = null
-		_defense_selected_indices.clear()
-		_redirect_container = null
-		_redirect_zone_buttons = null
-		_redirect_info_label = null
-		_redirect_done_button = null
-		_damage_info_container = null
-		_damage_info_label = null
-		_dice_textures.clear()
-		_selected_reroll_index = -1
+	_content = null
+	_null_core_widget_refs()
+	_null_attack_step_refs()
+	_null_defense_step_refs()
+	_reset_selection_state()
+
+
+## Nulls core widget references (title, body, dice count, done, roll, etc.).
+func _null_core_widget_refs() -> void:
+	_title_label = null
+	_body_label = null
+	_dice_count_label = null
+	_done_button = null
+	_roll_button = null
+	_dice_container = null
+	_confirm_button = null
+
+
+## Nulls attack-step widget references (CF dial, obstruction, CF token, skip).
+func _null_attack_step_refs() -> void:
+	_cf_dial_container = null
+	_cf_dial_buttons = null
+	_cf_dial_skip_button = null
+	_obstruction_container = null
+	_obstruction_buttons = null
+	_cf_token_container = null
+	_cf_token_buttons = null
+	_cf_token_reroll_button = null
+	_cf_token_skip_button = null
+	_skip_attack_button = null
+	_skip_confirm_container = null
+	_skip_confirm_yes = null
+	_skip_confirm_no = null
+
+
+## Nulls defense-step widget references (accuracy, defense, redirect, damage).
+func _null_defense_step_refs() -> void:
+	_accuracy_container = null
+	_accuracy_token_buttons = null
+	_accuracy_confirm_button = null
+	_defense_container = null
+	_defense_token_buttons = null
+	_defense_done_button = null
+	_defense_info_label = null
+	_redirect_container = null
+	_redirect_zone_buttons = null
+	_redirect_info_label = null
+	_redirect_done_button = null
+	_damage_info_container = null
+	_damage_info_label = null
+
+
+## Resets selection/state tracking variables.
+func _reset_selection_state() -> void:
+	_accuracy_locked_indices.clear()
+	_accuracy_budget = 0
+	_defense_selected_indices.clear()
+	_dice_textures.clear()
+	_selected_reroll_index = -1
 
 
 ## Called when the Done button is pressed (sim mode).
@@ -1125,7 +1199,17 @@ func show_defense_section(tokens: Array[Dictionary],
 					"Damage: %d — Speed 0: cannot spend tokens." % damage)
 		_defense_container.visible = true
 		return
-	# Build token buttons.
+	_populate_defense_token_buttons(tokens, locked_indices)
+	# Re-show Commit button (may have been hidden during a previous commit).
+	if _defense_done_button:
+		_defense_done_button.visible = true
+		_defense_done_button.text = "Commit Defense"
+	_defense_container.visible = true
+
+
+## Populates _defense_token_buttons with one button per non-discarded token.
+func _populate_defense_token_buttons(tokens: Array[Dictionary],
+		locked_indices: Array[int]) -> void:
 	for i: int in range(tokens.size()):
 		var token: Dictionary = tokens[i]
 		var state: Constants.DefenseTokenState = (
@@ -1143,11 +1227,6 @@ func show_defense_section(tokens: Array[Dictionary],
 		var btn: Button = _create_token_button(token, i)
 		btn.pressed.connect(_on_defense_token_pressed.bind(i))
 		_defense_token_buttons.add_child(btn)
-	# Re-show Commit button (may have been hidden during a previous commit).
-	if _defense_done_button:
-		_defense_done_button.visible = true
-		_defense_done_button.text = "Commit Defense"
-	_defense_container.visible = true
 
 
 ## Hides the defense section.

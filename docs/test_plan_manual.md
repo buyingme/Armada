@@ -3941,3 +3941,13 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 4 | Attack or skip | Activation completes normally |
 | 5 | During Ship Phase, use a Squadron command | Squadron command modal opens with ship name title and range restriction |
 | 6 | Press Escape to dismiss, re-open | State preserved |
+
+### MT-A1-04.01 — Ship card panel rendering after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game | Both players' ship cards appear in the sidebar with correct card art, defense tokens, and command dials |
+| 2 | Click a ship card entry | Entry magnifies; click again to shrink back; art, tokens, and dials scale correctly |
+| 3 | Advance to Command Phase, set dials | Dial stack shows correct facedown dials with overlap; after reveal, top dial shows command icon |
+| 4 | Deal damage to a ship | Faceup damage thumbnails appear with tooltips; facedown cards show card-back badge with ×N count |
+| 5 | Enter Discard Token mode, click a token | Token is removed, sidebar updates correctly |

@@ -143,55 +143,58 @@ func get_entry_count() -> int:
 ## Layout: [left_col(tokens + dial_stack) | card_image | cmd_token_col].
 ## [param instance] — the runtime ship state object.
 func add_ship_entry(instance: ShipInstance) -> void:
-	var card_h: float = GameScale.card_panel_card_height_px
-	var card_w: float = GameScale.card_panel_card_width_px
-	var token_h: float = GameScale.card_panel_token_height_px
 	var token_gap: float = GameScale.card_panel_token_gap_px
-
 	var entry_container: HBoxContainer = HBoxContainer.new()
 	entry_container.add_theme_constant_override("separation",
 			int(token_gap))
+	var left: Dictionary = _build_left_column(instance, token_gap)
+	entry_container.add_child(left["left_col"])
+	_build_card_image(entry_container, instance)
+	var cmd_token_col: VBoxContainer = _build_right_column(
+			instance, token_gap, "cmd_token")
+	entry_container.add_child(cmd_token_col)
+	var damage_col: VBoxContainer = _build_right_column(
+			instance, token_gap, "damage")
+	entry_container.add_child(damage_col)
+	_register_entry(entry_container, instance, left, cmd_token_col,
+			damage_col)
 
-	# --- Left column: defense tokens + command dial stack ---
+
+## Builds the left column: defense tokens, dial gap, and dial stack.
+func _build_left_column(instance: ShipInstance,
+		token_gap: float) -> Dictionary:
+	var token_h: float = GameScale.card_panel_token_height_px
 	var left_col: VBoxContainer = VBoxContainer.new()
 	left_col.add_theme_constant_override("separation", 0)
 	left_col.alignment = BoxContainer.ALIGNMENT_BEGIN
-
 	var token_col: VBoxContainer = VBoxContainer.new()
 	token_col.add_theme_constant_override("separation", int(token_gap))
 	token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_populate_token_column(token_col, instance.defense_tokens, token_h)
 	left_col.add_child(token_col)
-
-	# Configurable gap between defense tokens and command dial stack.
 	var dial_gap: Control = Control.new()
 	dial_gap.custom_minimum_size = Vector2(
 			0, GameScale.card_panel_dial_top_gap_px)
 	dial_gap.mouse_filter = Control.MOUSE_FILTER_PASS
 	left_col.add_child(dial_gap)
-
 	var dial_container: VBoxContainer = VBoxContainer.new()
 	dial_container.add_theme_constant_override("separation", 0)
 	_populate_dial_stack(dial_container, instance, 1.0)
 	left_col.add_child(dial_container)
-
-	# --- Mouse filter setup ---
-	# Child containers default to MOUSE_FILTER_STOP in Godot 4, which
-	# silently consumes clicks before they reach entry_container.  Set all
-	# non-dial containers to PASS so clicks propagate up for magnify.
-	# The dial_container keeps STOP and has its own gui_input handler.
 	left_col.mouse_filter = Control.MOUSE_FILTER_PASS
 	token_col.mouse_filter = Control.MOUSE_FILTER_PASS
-
-	# Dial container captures clicks directly for the two-step activation
-	# flow and the dial-order modal — bypasses coordinate comparison.
 	dial_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	dial_container.gui_input.connect(
 			_on_dial_container_gui_input.bind(_entries.size()))
+	return {"left_col": left_col, "token_col": token_col,
+			"dial_gap": dial_gap, "dial_container": dial_container}
 
-	entry_container.add_child(left_col)
 
-	# --- Centre: ship card image ---
+## Adds the ship card image to the entry container.
+func _build_card_image(container: HBoxContainer,
+		instance: ShipInstance) -> void:
+	var card_h: float = GameScale.card_panel_card_height_px
+	var card_w: float = GameScale.card_panel_card_width_px
 	var card_texture: Texture2D = _load_card_texture(instance.data_key)
 	if card_texture:
 		var card_rect: TextureRect = TextureRect.new()
@@ -200,45 +203,46 @@ func add_ship_entry(instance: ShipInstance) -> void:
 		card_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card_rect.custom_minimum_size = Vector2(card_w, card_h)
 		card_rect.mouse_filter = Control.MOUSE_FILTER_PASS
-		entry_container.add_child(card_rect)
+		container.add_child(card_rect)
 	else:
 		var log: GameLogger = GameLogger.new("ShipCardPanel")
 		log.info("No card texture found for '%s'" % instance.data_key)
 
-	# --- Right column: command tokens ---
-	var cmd_token_col: VBoxContainer = VBoxContainer.new()
-	cmd_token_col.add_theme_constant_override("separation", int(token_gap))
-	cmd_token_col.alignment = BoxContainer.ALIGNMENT_BEGIN
-	cmd_token_col.mouse_filter = Control.MOUSE_FILTER_PASS
-	_populate_cmd_token_column(cmd_token_col, instance, 1.0)
-	entry_container.add_child(cmd_token_col)
 
-	# --- Far-right column: damage cards (faceup thumbnails + facedown badge) ---
-	var damage_col: VBoxContainer = VBoxContainer.new()
-	damage_col.add_theme_constant_override("separation", int(token_gap))
-	damage_col.alignment = BoxContainer.ALIGNMENT_BEGIN
-	damage_col.mouse_filter = Control.MOUSE_FILTER_PASS
-	_populate_damage_cards(damage_col, instance, 1.0)
-	entry_container.add_child(damage_col)
+## Builds a right-side column (command tokens or damage cards).
+func _build_right_column(instance: ShipInstance,
+		token_gap: float, kind: String) -> VBoxContainer:
+	var col: VBoxContainer = VBoxContainer.new()
+	col.add_theme_constant_override("separation", int(token_gap))
+	col.alignment = BoxContainer.ALIGNMENT_BEGIN
+	col.mouse_filter = Control.MOUSE_FILTER_PASS
+	if kind == "cmd_token":
+		_populate_cmd_token_column(col, instance, 1.0)
+	else:
+		_populate_damage_cards(col, instance, 1.0)
+	return col
 
-	# Make the entry clickable for magnify toggle.
+
+## Registers a fully-built entry in the _entries array and wires signals.
+func _register_entry(entry_container: HBoxContainer,
+		instance: ShipInstance, left: Dictionary,
+		cmd_token_col: VBoxContainer,
+		damage_col: VBoxContainer) -> void:
 	entry_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	entry_container.gui_input.connect(
 			_on_entry_gui_input.bind(_entries.size()))
-
 	add_child(entry_container)
 	_entries.append({
 		"instance": instance,
 		"container": entry_container,
-		"left_col": left_col,
-		"token_col": token_col,
-		"dial_gap": dial_gap,
-		"dial_container": dial_container,
+		"left_col": left["left_col"],
+		"token_col": left["token_col"],
+		"dial_gap": left["dial_gap"],
+		"dial_container": left["dial_container"],
 		"cmd_token_col": cmd_token_col,
 		"damage_col": damage_col,
 		"magnified": false,
 	})
-
 	_connect_eventbus_signals()
 	_register_hover_tooltips(_entries.back())
 
@@ -274,46 +278,64 @@ func _compute_panel_size() -> Vector2:
 				if entry["magnified"] else 1.0)
 		var card_w: float = GameScale.card_panel_card_width_px * factor
 		var card_h: float = GameScale.card_panel_card_height_px * factor
-
-		# Left column width = max of token column and dial container.
-		var col: VBoxContainer = entry["token_col"]
-		var col_w: float = 0.0
-		for child: Node in col.get_children():
-			if child is TextureRect:
-				col_w = maxf(col_w, child.custom_minimum_size.x)
-		# Dial stack is vertical — its width equals one dial width.
-		var dial_cont: VBoxContainer = entry["dial_container"]
-		var dial_w_: float = GameScale.card_panel_dial_width_px * factor
-		col_w = maxf(col_w, dial_w_)
-
-		# Right column width = command token column.
-		var cmd_col: VBoxContainer = entry["cmd_token_col"]
-		var cmd_col_w: float = 0.0
-		for child: Node in cmd_col.get_children():
-			if child is TextureRect:
-				cmd_col_w = maxf(cmd_col_w, child.custom_minimum_size.x)
-
-		# Damage column width.
-		var dmg_col: VBoxContainer = entry.get(
-				"damage_col", null) as VBoxContainer
-		var dmg_col_w: float = 0.0
-		if dmg_col:
-			for child: Node in dmg_col.get_children():
-				if child is Control:
-					dmg_col_w = maxf(
-							dmg_col_w, child.custom_minimum_size.x)
-
-		var entry_w: float = col_w + token_gap + card_w
-		if cmd_col_w > 0.0:
-			entry_w += token_gap + cmd_col_w
-		if dmg_col_w > 0.0:
-			entry_w += token_gap + dmg_col_w
+		var entry_w: float = _compute_entry_width(
+				entry, factor, token_gap, card_w)
 		max_w = maxf(max_w, entry_w)
 		total_h += card_h
 		if i > 0:
 			total_h += entry_gap
 
 	return Vector2(max_w, total_h)
+
+
+## Computes the total width of a single ship entry row, summing the left
+## token/dial column, the card, the command-token column, and the damage
+## column (if present).
+func _compute_entry_width(entry: Dictionary, factor: float,
+		token_gap: float, card_w: float) -> float:
+	# Left column width = max of token column and dial container.
+	var col: VBoxContainer = entry["token_col"]
+	var col_w: float = _max_child_width(col)
+	var dial_w_: float = GameScale.card_panel_dial_width_px * factor
+	col_w = maxf(col_w, dial_w_)
+
+	# Right column width = command token column.
+	var cmd_col: VBoxContainer = entry["cmd_token_col"]
+	var cmd_col_w: float = _max_child_width(cmd_col)
+
+	# Damage column width.
+	var dmg_col: VBoxContainer = entry.get(
+			"damage_col", null) as VBoxContainer
+	var dmg_col_w: float = 0.0
+	if dmg_col:
+		dmg_col_w = _max_child_width_control(dmg_col)
+
+	var entry_w: float = col_w + token_gap + card_w
+	if cmd_col_w > 0.0:
+		entry_w += token_gap + cmd_col_w
+	if dmg_col_w > 0.0:
+		entry_w += token_gap + dmg_col_w
+	return entry_w
+
+
+## Returns the maximum [member custom_minimum_size].x among [TextureRect]
+## children of [param container].
+func _max_child_width(container: Control) -> float:
+	var w: float = 0.0
+	for child: Node in container.get_children():
+		if child is TextureRect:
+			w = maxf(w, child.custom_minimum_size.x)
+	return w
+
+
+## Returns the maximum [member custom_minimum_size].x among [Control]
+## children of [param container].
+func _max_child_width_control(container: Control) -> float:
+	var w: float = 0.0
+	for child: Node in container.get_children():
+		if child is Control:
+			w = maxf(w, child.custom_minimum_size.x)
+	return w
 
 
 ## Handles left-click on a ship card entry to toggle magnify, and
@@ -381,44 +403,51 @@ func _on_dial_container_gui_input(event: InputEvent, index: int) -> void:
 ## Rules Reference: UI-024 — drag topmost dial to activate during Ship Phase.
 func _handle_dial_stack_click(entry: Dictionary) -> void:
 	var instance: ShipInstance = entry["instance"]
-	# Only allow viewing own ship's dials.
 	if _viewer_player >= 0 and instance.owner_player != _viewer_player:
 		_log.info("Dial click ignored — viewer %d, owner %d." \
 				% [_viewer_player, instance.owner_player])
 		return
-
-	# Ship Phase two-step: (1) click reveals dial, (2) click starts drag.
-	if _is_ship_phase_eligible(instance):
-		var revealed: Dictionary = instance.command_dial_stack \
-				.get_revealed_dial()
-		if not revealed.is_empty():
-			# Step 2: dial already revealed → start drag.
-			_log.info("Dial step 2 — emitting drag_started for '%s'." \
-					% instance.data_key)
-			EventBus.dial_drag_started.emit(instance)
-			return
-		if instance.command_dial_stack.get_hidden_count() > 0:
-			# Unreveal any other ship's dial first (player changed their mind).
-			_unreveal_other_ships(instance)
-			# Step 1: reveal the top dial (stays on stack).
-			_log.info("Dial step 1 — revealing top for '%s'." \
-					% instance.data_key)
-			instance.command_dial_stack.reveal_top()
-			EventBus.command_dials_changed.emit(instance)
-			return
-		_log.info("Dial click on '%s' — eligible but no revealed/hidden dials." \
-				% instance.data_key)
-	else:
-		_log.info("Dial click on '%s' — not eligible (phase=%d, active=%d, " \
-				% [instance.data_key,
-					int(GameManager.get_current_phase()),
-					GameManager.get_active_player()]
-				+"activated=%s, stack=%s, activating=%s)." \
-				% [str(instance.activated_this_round),
-					str(instance.command_dial_stack != null),
-					str(GameManager.get_activating_ship() != null)])
-
+	if _try_ship_phase_activation(instance):
+		return
+	if not _is_ship_phase_eligible(instance):
+		_log_ineligible_dial_click(instance)
 	EventBus.command_dial_order_requested.emit(instance)
+
+
+## Attempts the two-step Ship Phase dial flow (reveal, then drag).
+## Returns true if the click was handled.
+func _try_ship_phase_activation(instance: ShipInstance) -> bool:
+	if not _is_ship_phase_eligible(instance):
+		return false
+	var revealed: Dictionary = instance.command_dial_stack \
+			.get_revealed_dial()
+	if not revealed.is_empty():
+		_log.info("Dial step 2 — emitting drag_started for '%s'." \
+				% instance.data_key)
+		EventBus.dial_drag_started.emit(instance)
+		return true
+	if instance.command_dial_stack.get_hidden_count() > 0:
+		_unreveal_other_ships(instance)
+		_log.info("Dial step 1 — revealing top for '%s'." \
+				% instance.data_key)
+		instance.command_dial_stack.reveal_top()
+		EventBus.command_dials_changed.emit(instance)
+		return true
+	_log.info("Dial click on '%s' — eligible but no revealed/hidden dials." \
+			% instance.data_key)
+	return false
+
+
+## Logs detailed diagnostics for an ineligible dial click.
+func _log_ineligible_dial_click(instance: ShipInstance) -> void:
+	_log.info("Dial click on '%s' — not eligible (phase=%d, active=%d, " \
+			% [instance.data_key,
+				int(GameManager.get_current_phase()),
+				GameManager.get_active_player()]
+			+"activated=%s, stack=%s, activating=%s)." \
+			% [str(instance.activated_this_round),
+				str(instance.command_dial_stack != null),
+				str(GameManager.get_activating_ship() != null)])
 
 
 ## Returns true if the ship is eligible for Ship Phase activation.
@@ -602,42 +631,32 @@ func _scale_vbox_textures(col: VBoxContainer, token_h: float) -> void:
 
 ## Connects EventBus signals (idempotent).
 func _connect_eventbus_signals() -> void:
-	if not EventBus.ship_defense_token_changed.is_connected(
-			_on_defense_tokens_changed):
-		EventBus.ship_defense_token_changed.connect(
-				_on_defense_tokens_changed)
-	if not EventBus.command_dials_changed.is_connected(
-			_on_command_dials_changed):
-		EventBus.command_dials_changed.connect(
-				_on_command_dials_changed)
-	if not EventBus.command_tokens_changed.is_connected(
-			_on_command_tokens_changed):
-		EventBus.command_tokens_changed.connect(
-				_on_command_tokens_changed)
-	if not EventBus.token_discard_required.is_connected(
-			_on_token_discard_required):
-		EventBus.token_discard_required.connect(
-				_on_token_discard_required)
-	if not EventBus.duplicate_token_discarded.is_connected(
-			_on_duplicate_token_discarded):
-		EventBus.duplicate_token_discarded.connect(
-				_on_duplicate_token_discarded)
-	if not EventBus.navigate_token_spend_preview.is_connected(
-			_on_navigate_token_spend_preview):
-		EventBus.navigate_token_spend_preview.connect(
-				_on_navigate_token_spend_preview)
-	if not EventBus.damage_card_dealt.is_connected(
-			_on_damage_cards_changed):
-		EventBus.damage_card_dealt.connect(_on_damage_cards_changed)
-	if not EventBus.damage_card_flipped.is_connected(
-			_on_damage_cards_changed):
-		EventBus.damage_card_flipped.connect(_on_damage_cards_changed)
-	if not EventBus.repair_card_discarded.is_connected(
-			_on_damage_card_repaired):
-		EventBus.repair_card_discarded.connect(_on_damage_card_repaired)
-	if not EventBus.ship_destroyed.is_connected(
-			_on_ship_destroyed):
-		EventBus.ship_destroyed.connect(_on_ship_destroyed)
+	_safe_connect(EventBus.ship_defense_token_changed,
+			_on_defense_tokens_changed)
+	_safe_connect(EventBus.command_dials_changed,
+			_on_command_dials_changed)
+	_safe_connect(EventBus.command_tokens_changed,
+			_on_command_tokens_changed)
+	_safe_connect(EventBus.token_discard_required,
+			_on_token_discard_required)
+	_safe_connect(EventBus.duplicate_token_discarded,
+			_on_duplicate_token_discarded)
+	_safe_connect(EventBus.navigate_token_spend_preview,
+			_on_navigate_token_spend_preview)
+	_safe_connect(EventBus.damage_card_dealt,
+			_on_damage_cards_changed)
+	_safe_connect(EventBus.damage_card_flipped,
+			_on_damage_cards_changed)
+	_safe_connect(EventBus.repair_card_discarded,
+			_on_damage_card_repaired)
+	_safe_connect(EventBus.ship_destroyed,
+			_on_ship_destroyed)
+
+
+## Connects a signal to a callback if not already connected.
+func _safe_connect(sig: Signal, callback: Callable) -> void:
+	if not sig.is_connected(callback):
+		sig.connect(callback)
 
 
 ## EventBus callback: a ship is destroyed — ghost the entire card entry.
@@ -884,20 +903,7 @@ func _on_discard_token_click(event: InputEvent,
 	if _discard_mode_ship == null:
 		return
 
-	# Determine the command type from the token's index in the column.
-	var col: VBoxContainer = tex_rect.get_parent() as VBoxContainer
-	if col == null:
-		return
-	# The first child may be the DiscardPrompt label — skip it.
-	var token_index: int = -1
-	var idx: int = 0
-	for child: Node in col.get_children():
-		if child is TextureRect:
-			if child == tex_rect:
-				token_index = idx
-				break
-			idx += 1
-
+	var token_index: int = _find_token_index_in_column(tex_rect)
 	var tokens: Array[int] = _discard_mode_ship.command_tokens.get_tokens()
 	if token_index < 0 or token_index >= tokens.size():
 		_log.warn("Discard click — invalid token index %d" % token_index)
@@ -913,6 +919,23 @@ func _on_discard_token_click(event: InputEvent,
 
 	EventBus.command_tokens_changed.emit(ship_ref)
 	EventBus.token_discarded.emit(ship_ref, cmd_type)
+
+
+## Finds the zero-based token index of [param tex_rect] among the
+## [TextureRect] children of its parent column. Returns -1 if not found.
+## The first child may be a DiscardPrompt label — non-TextureRect children
+## are skipped.
+func _find_token_index_in_column(tex_rect: TextureRect) -> int:
+	var col: VBoxContainer = tex_rect.get_parent() as VBoxContainer
+	if col == null:
+		return -1
+	var idx: int = 0
+	for child: Node in col.get_children():
+		if child is TextureRect:
+			if child == tex_rect:
+				return idx
+			idx += 1
+	return -1
 
 
 # ---------------------------------------------------------------------------
@@ -992,43 +1015,39 @@ func _populate_dial_stack(container: VBoxContainer,
 	var offset: int = int(GameScale.card_panel_dial_stack_offset_px
 			* scale_factor)
 
-	# Use a zero-spacing outer container so we can control the gap between
-	# the active stack and the spent dial precisely.
 	container.add_theme_constant_override("separation", 0)
 
-	# --- Active dial stack with negative overlap ---
-	# Revealed dial (if any) is shown face-up on top; hidden dials below.
+	var stack_h: float = _build_active_dial_stack(
+			container, revealed, hidden_dials, dial_w, dial_h, offset)
+
+	var total_container_h: float = stack_h + _build_spent_marker_section(
+			container, spent_marker, scale_factor, dial_w, dial_h)
+
+	container.custom_minimum_size = Vector2(dial_w, total_container_h)
+	_set_children_mouse_pass(container)
+
+
+## Builds the active (revealed + hidden) dial stack and adds it to
+## [param container].  Returns the computed stack height.
+func _build_active_dial_stack(container: VBoxContainer,
+		revealed: Dictionary, hidden_dials: Array,
+		dial_w: float, dial_h: float, offset: int) -> float:
 	var active_stack: VBoxContainer = VBoxContainer.new()
 	active_stack.add_theme_constant_override("separation", -offset)
-	# Centre the stack within the parent (which may be wider than dial_w
-	# when defence tokens are wider).  SIZE_SHRINK_CENTER keeps it at
-	# custom_minimum_size width and centres horizontally.
 	active_stack.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
-	# Show the revealed dial face-up on top of the stack (two-step flow).
 	if not revealed.is_empty():
 		var cmd: int = int(revealed.get("command", 0))
-		var rect: Control = _create_dial_rect(cmd, true, dial_w, dial_h)
-		active_stack.add_child(rect)
+		active_stack.add_child(_create_dial_rect(cmd, true, dial_w, dial_h))
 
-	# Render hidden dials — ALL use cmd_dial_hidden.png (facedown).
-	# Rules Reference: CP-006 — dials are facedown.
 	for i: int in range(hidden_dials.size()):
-		var rect: Control = _create_dial_rect(
-				0, false, dial_w, dial_h)
-		active_stack.add_child(rect)
+		active_stack.add_child(_create_dial_rect(0, false, dial_w, dial_h))
 
-	# In a VBoxContainer with negative separation, later children draw on
-	# top of earlier ones.  We want the first child (top of the physical
-	# stack) to appear in front, so give it the highest z_index.
+	# Earlier children should appear in front (higher z_index).
 	var child_count: int = active_stack.get_child_count()
 	for i: int in range(child_count):
 		active_stack.get_child(i).z_index = child_count - i
 
-	# Set the active stack's minimum size so Containers allocate correct
-	# space.  Do NOT set .size — that overrides the parent Container's
-	# layout-managed width (which may be wider than dial_w when defense
-	# tokens are wider) and causes the stack to jump left on reveal.
 	var total_dials: int = (0 if revealed.is_empty() else 1) + hidden_dials.size()
 	var stack_h: float = 0.0
 	if total_dials > 0:
@@ -1036,26 +1055,25 @@ func _populate_dial_stack(container: VBoxContainer,
 	active_stack.custom_minimum_size = Vector2(dial_w, stack_h)
 
 	container.add_child(active_stack)
+	return stack_h
 
-	# --- Spent dial (activation marker) — below stack with ~0.5 cm gap ---
-	var total_container_h: float = stack_h
-	if not spent_marker.is_empty():
-		var spent_gap_px: float = 12.0 * scale_factor
-		var spacer: Control = Control.new()
-		spacer.custom_minimum_size = Vector2(0, spent_gap_px)
-		container.add_child(spacer)
-		var spent_rect: Control = _create_dial_rect(
-				int(spent_marker.get("command", 0)), true, dial_w, dial_h)
-		spent_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		container.add_child(spent_rect)
-		total_container_h += spent_gap_px + dial_h
 
-	# Set minimum size so parent Containers allocate correct space.
-	# Do NOT set .size — see active_stack comment above.
-	container.custom_minimum_size = Vector2(dial_w, total_container_h)
-
-	# Let clicks on children propagate up to dial_container's gui_input.
-	_set_children_mouse_pass(container)
+## Adds the spent-dial activation marker below the active stack with a
+## ~0.5 cm gap.  Returns the additional height consumed (0 if no marker).
+func _build_spent_marker_section(container: VBoxContainer,
+		spent_marker: Dictionary, scale_factor: float,
+		dial_w: float, dial_h: float) -> float:
+	if spent_marker.is_empty():
+		return 0.0
+	var spent_gap_px: float = 12.0 * scale_factor
+	var spacer: Control = Control.new()
+	spacer.custom_minimum_size = Vector2(0, spent_gap_px)
+	container.add_child(spacer)
+	var spent_rect: Control = _create_dial_rect(
+			int(spent_marker.get("command", 0)), true, dial_w, dial_h)
+	spent_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	container.add_child(spent_rect)
+	return spent_gap_px + dial_h
 
 
 ## Creates a Control for a single command dial.
@@ -1068,19 +1086,27 @@ func _populate_dial_stack(container: VBoxContainer,
 func _create_dial_rect(cmd: int, show_icon: bool,
 		w: float, h: float) -> Control:
 	if not show_icon:
-		var bg_tex: Texture2D = _get_dial_hidden_texture()
-		var rect: TextureRect = TextureRect.new()
-		if bg_tex:
-			rect.texture = bg_tex
-		rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		rect.custom_minimum_size = Vector2(w, h)
-		return rect
+		return _create_hidden_dial_rect(w, h)
+	return _create_revealed_dial_rect(cmd, w, h)
 
-	# Composite: dial background + command icon on top.
+
+## Creates a facedown dial TextureRect.
+func _create_hidden_dial_rect(w: float, h: float) -> TextureRect:
+	var bg_tex: Texture2D = _get_dial_hidden_texture()
+	var rect: TextureRect = TextureRect.new()
+	if bg_tex:
+		rect.texture = bg_tex
+	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rect.custom_minimum_size = Vector2(w, h)
+	return rect
+
+
+## Creates a revealed dial: background + command icon composited.
+func _create_revealed_dial_rect(cmd: int,
+		w: float, h: float) -> Control:
 	var panel: Control = Control.new()
 	panel.custom_minimum_size = Vector2(w, h)
-
 	var bg_tex: Texture2D = _get_dial_hidden_texture()
 	if bg_tex:
 		var bg_rect: TextureRect = TextureRect.new()
@@ -1089,7 +1115,6 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 		bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		bg_rect.custom_minimum_size = Vector2(w, h)
 		panel.add_child(bg_rect)
-
 	var icon_tex: Texture2D = _get_cmd_icon_texture(cmd)
 	if icon_tex:
 		var icon_rect: TextureRect = TextureRect.new()
@@ -1101,7 +1126,6 @@ func _create_dial_rect(cmd: int, show_icon: bool,
 		icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
 		icon_rect.position = Vector2((w - icon_size) * 0.5, icon_offset)
 		panel.add_child(icon_rect)
-
 	return panel
 
 
@@ -1256,74 +1280,80 @@ func _populate_damage_cards(col: VBoxContainer,
 			% [instance.ship_data.ship_name, faceup.size(),
 				facedown_count])
 
-	# -- Faceup card thumbnails --
 	for card: RefCounted in faceup:
-		var tex: Texture2D = _get_damage_card_texture(card.effect_id)
-		if tex == null:
-			continue
-		var rect: TextureRect = TextureRect.new()
-		rect.texture = tex
-		rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var t_aspect: float = (
-				float(tex.get_width())
-				/ maxf(float(tex.get_height()), 1.0))
-		var tw: float = dmg_h * t_aspect
-		rect.custom_minimum_size = Vector2(tw, dmg_h)
-		rect.mouse_filter = Control.MOUSE_FILTER_STOP
-		rect.tooltip_text = card.title
-		rect.gui_input.connect(
-				_on_damage_card_click.bind(card, instance))
-		col.add_child(rect)
+		var rect: TextureRect = _create_faceup_damage_rect(
+				card, instance, dmg_h)
+		if rect:
+			col.add_child(rect)
 
-	# -- Facedown counter badge --
-	var bw: float = 0.0
 	if facedown_count > 0:
-		var badge: HBoxContainer = HBoxContainer.new()
-		badge.add_theme_constant_override("separation", 2)
+		col.add_child(_create_facedown_badge(
+				facedown_count, instance, dmg_h))
 
-		var back_tex: Texture2D = _get_damage_back_texture()
-		if back_tex:
-			var back_rect: TextureRect = TextureRect.new()
-			back_rect.texture = back_tex
-			back_rect.expand_mode = (
-					TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL)
-			back_rect.stretch_mode = (
-					TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-			var b_aspect: float = (
-					float(back_tex.get_width())
-					/ maxf(float(back_tex.get_height()), 1.0))
-			bw = dmg_h * b_aspect
-			back_rect.custom_minimum_size = Vector2(bw, dmg_h)
-			badge.add_child(back_rect)
-
-		var label: Label = Label.new()
-		label.text = "×%d" % facedown_count
-		var font_sz: int = int(dmg_h * 0.55)
-		label.add_theme_font_size_override("font_size", font_sz)
-		label.add_theme_color_override(
-				"font_color", Color.WHITE)
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		badge.add_child(label)
-
-		# Compute badge minimum width so _compute_panel_size() can
-		# account for the full damage column (prevents ×N clipping).
-		var badge_w: float = bw + 2.0 + font_sz * 1.5
-		badge.custom_minimum_size = Vector2(badge_w, dmg_h)
-		badge.mouse_filter = Control.MOUSE_FILTER_STOP
-		badge.gui_input.connect(
-				_on_facedown_badge_click.bind(instance))
-		col.add_child(badge)
-
-	# Set badge and its children to PASS so clicks propagate up.
-	# Faceup TextureRects already have MOUSE_FILTER_STOP set above;
-	# we must NOT call _set_children_mouse_pass(col) here because it
-	# would wipe their STOP and break right-click capture.
+	# Set badge children to PASS so clicks propagate up.
+	# Faceup TextureRects keep MOUSE_FILTER_STOP for right-click capture.
 	for child: Node in col.get_children():
 		if child is HBoxContainer:
-			# Badge children (TextureRect + Label) should be PASS so
-			# the click goes to the badge's own gui_input handler.
 			_set_children_mouse_pass(child as Control)
+
+
+## Creates a [TextureRect] thumbnail for a single faceup damage card.
+## Returns null if the texture cannot be loaded.
+func _create_faceup_damage_rect(card: RefCounted,
+		instance: ShipInstance, dmg_h: float) -> TextureRect:
+	var tex: Texture2D = _get_damage_card_texture(card.effect_id)
+	if tex == null:
+		return null
+	var rect: TextureRect = TextureRect.new()
+	rect.texture = tex
+	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var t_aspect: float = (
+			float(tex.get_width())
+			/ maxf(float(tex.get_height()), 1.0))
+	rect.custom_minimum_size = Vector2(dmg_h * t_aspect, dmg_h)
+	rect.mouse_filter = Control.MOUSE_FILTER_STOP
+	rect.tooltip_text = card.title
+	rect.gui_input.connect(
+			_on_damage_card_click.bind(card, instance))
+	return rect
+
+
+## Creates an HBoxContainer badge showing a card-back thumbnail and "×N"
+## label for facedown damage cards.
+func _create_facedown_badge(facedown_count: int,
+		instance: ShipInstance, dmg_h: float) -> HBoxContainer:
+	var badge: HBoxContainer = HBoxContainer.new()
+	badge.add_theme_constant_override("separation", 2)
+
+	var bw: float = 0.0
+	var back_tex: Texture2D = _get_damage_back_texture()
+	if back_tex:
+		var back_rect: TextureRect = TextureRect.new()
+		back_rect.texture = back_tex
+		back_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		back_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var b_aspect: float = (
+				float(back_tex.get_width())
+				/ maxf(float(back_tex.get_height()), 1.0))
+		bw = dmg_h * b_aspect
+		back_rect.custom_minimum_size = Vector2(bw, dmg_h)
+		badge.add_child(back_rect)
+
+	var label: Label = Label.new()
+	label.text = "×%d" % facedown_count
+	var font_sz: int = int(dmg_h * 0.55)
+	label.add_theme_font_size_override("font_size", font_sz)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.add_child(label)
+
+	var badge_w: float = bw + 2.0 + font_sz * 1.5
+	badge.custom_minimum_size = Vector2(badge_w, dmg_h)
+	badge.mouse_filter = Control.MOUSE_FILTER_STOP
+	badge.gui_input.connect(
+			_on_facedown_badge_click.bind(instance))
+	return badge
 
 
 ## Handles click on a faceup damage card thumbnail to open the

@@ -8,7 +8,9 @@
 > manual testing if GUT passes with **87 scripts, 1 645 tests, 1 644 passing**.
 > If any count drops, stop and fix parse errors before continuing.
 >
-> **Status:** Phase A in progress.
+> **Status:** Phase A in progress.  
+> Completed: A1-01 through A1-04, A1-09, A1-11, A2-01 through A2-05, A3-01, A4-03.  
+> Remaining: A1-05 through A1-08, A1-10, A1-12, A1-13, A4-01, A4-02, A4-04 through A4-07.
 
 ---
 
@@ -46,7 +48,7 @@ Each sub-step refactors one UI file. Listed in order of implementation.
 
 ---
 
-#### A1-01: `attack_sim_panel.gd` — 3 oversized functions (218 + 43 + 36 lines)
+#### A1-01: `attack_sim_panel.gd` — 3 oversized functions (218 + 43 + 36 lines) ✅
 
 **What changes:** `_build_ui()` (218 lines) split into ~12 `_build_<section>()`
 helpers. `_clear_content()` (43 lines) and `show_defense_section()` (36 lines)
@@ -69,7 +71,7 @@ split into smaller helpers.
 
 ---
 
-#### A1-02: `activation_modal.gd` — 3 oversized (90 + 82 + 57 lines)
+#### A1-02: `activation_modal.gd` — 3 oversized (90 + 82 + 57 lines) ✅
 
 **What changes:** `_build_ui()` (82 lines) split into section builders.
 `_update_step_display()` (90 lines) split per-step. `_create_step_row()`
@@ -89,7 +91,7 @@ split into smaller helpers.
 
 ---
 
-#### A1-03: `squadron_activation_modal.gd` — 4 oversized (82 + 49 + 38 + 31 lines)
+#### A1-03: `squadron_activation_modal.gd` — 4 oversized (82 + 49 + 38 + 31 lines) ✅
 
 **What changes:** `_build_ui()`, `_update_ui()`, `_try_select_squadron()`,
 `_update_action_buttons()` each split into helpers.
@@ -107,7 +109,7 @@ split into smaller helpers.
 
 ---
 
-#### A1-04: `ship_card_panel.gd` — 8 oversized functions
+#### A1-04: `ship_card_panel.gd` — 8 oversized functions ✅
 
 **What changes:** `add_ship_entry()` (72), `_populate_damage_cards()` (64),
 `_populate_dial_stack()` (50), `_compute_panel_size()` (43),
@@ -181,7 +183,7 @@ button section builders.
 
 ---
 
-#### A1-09: `repair_panel.gd` — 1 oversized (55 lines)
+#### A1-09: `repair_panel.gd` — 1 oversized (55 lines) ✅
 
 **Manual test:**
 
@@ -206,7 +208,7 @@ button section builders.
 
 ---
 
-#### A1-11: `displacement_modal.gd` — 1 oversized (51 lines)
+#### A1-11: `displacement_modal.gd` — 1 oversized (51 lines) ✅
 
 **Manual test:**
 
@@ -225,13 +227,19 @@ button section builders.
 
 | # | Action | Expected Result |
 |---|--------|-----------------|
-| 1 | Click dial stack re-order button | Order modal appears with dials |
-| 2 | Re-order dials | Drag/select to reorder works |
-| 3 | Confirm | Stack updates |
+| 1 | Click own ship's command dial stack in Ship Card Panel | Read-only order modal appears showing queued (hidden) dials in stack order, leftmost = next to reveal |
+| 2 | Verify dial icons and position labels | Each dial shows correct command icon with #1, #2, … label below |
+| 3 | Click anywhere on the modal | Modal dismisses cleanly |
+| 4 | Click opponent's dial stack | Nothing happens (UI-023: opponent dials hidden) |
+
+> **Rules Reference:** "Command Dials", bullet 5, p. 5 — *"A player can look
+> at their ships' facedown command dials at any time. When a player looks at
+> a ship's command dials, they must preserve the order in which the command
+> dials are stacked."* — No reorder functionality exists.
 
 ---
 
-#### A1-13: Small UI files — `tooltip_panel.gd`, `defense_token_display.gd`, `quit_confirmation_modal.gd`, `debug_help_panel.gd`
+#### A1-13: UI files — `tooltip_panel.gd` (48), `defense_token_display.gd` (40), `quit_confirmation_modal.gd` (38), `debug_help_panel.gd` (36)
 
 **Manual test (one pass for all 4):**
 
@@ -245,10 +253,11 @@ button section builders.
 
 ---
 
-### A2: AttackExecutor Oversized Functions
+### A2: AttackExecutor Oversized Functions ✅
 
 23 oversized functions in `attack_executor.gd`. Implemented in batches
-grouped by responsibility.
+grouped by responsibility. All 21 original + 5 newly-discovered oversized
+functions split. 0 functions >30 lines remain.
 
 #### A2-01: Damage resolution — `_resolve_ship_damage()` (115 lines)
 
@@ -341,11 +350,11 @@ validation steps, damage adjustment, zone scanning.
 
 ---
 
-### A3: GameBoard Oversized Functions
+### A3: GameBoard Oversized Functions ✅
 
 7 oversized functions in `game_board.gd`.
 
-#### A3-01: All 7 functions in one step
+#### A3-01: All 7 functions in one step ✅
 
 **What changes:** `_create_turn_management_ui()` (62),
 `_create_ship_card_panels()` (49), `_on_execute_maneuver()` (40),
@@ -389,7 +398,7 @@ Grouped into a single implementation step per file.
 
 ---
 
-#### A4-03: `game_manager.gd` — 3 oversized
+#### A4-03: `game_manager.gd` — 3 oversized ✅
 
 **Manual test:**
 

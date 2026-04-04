@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Planning — not yet started.
+> **Status:** Phase A in progress — A1 (UI), A2 (attack_executor), A3 (game_board), and A4-03 (game_manager) partially complete.  
 > **Baseline:** 87 scripts, 1 645 tests, 1 644 passing (commit `8e64c6b`).
 
 ---
@@ -196,32 +196,30 @@ Detailed requirements for each are in `docs/requirements/future_stages.md`.
 Bring all 95 oversized functions under the 30-line limit by extracting
 private helper methods within the same file.
 
-#### A1: UI `_build_ui()` Methods (12 files)
+#### A1: UI `_build_ui()` Methods (12 files) — 6/12 complete
 
 Each monolithic `_build_ui()` becomes a sequence of `_build_<section>()`
 calls. Pure construction code with no branching logic.
 
-**Files:** `attack_sim_panel.gd` (218→12 helpers), `activation_modal.gd`
-(82→6), `squadron_activation_modal.gd` (82→6), `victory_screen.gd`
-(73→5), `opponent_choice_modal.gd` (73→5), `command_dial_picker.gd`
-(58→4), `repair_panel.gd` (55→4), `targeting_list_modal.gd` (52→4),
-`displacement_modal.gd` (51→4), `main_menu.gd` (50→4),
-`command_dial_order_modal.gd` (64→4), `debug_help_panel.gd` (36→3).
+**Completed:** `attack_sim_panel.gd` ✅, `activation_modal.gd` ✅,
+`squadron_activation_modal.gd` ✅, `ship_card_panel.gd` ✅ (8 funcs),
+`repair_panel.gd` ✅, `displacement_modal.gd` ✅.
 
-#### A2: `attack_executor.gd` Oversized Functions (~25 functions)
+**Remaining:** `damage_summary_overlay.gd` (86),
+`opponent_choice_modal.gd` (73), `victory_screen.gd` (73),
+`command_dial_picker.gd` (58+45), `targeting_list_modal.gd` (52+39+33+33),
+`command_dial_order_modal.gd` (64).
 
-| Function | Lines | Action |
-|----------|-------|--------|
-| `_resolve_ship_damage()` | 115 | Extract `_apply_scatter()`, `_apply_brace()`, `_deal_damage_cards()`, `_emit_damage_events()` |
-| `_attack_sim_handle_target_ship_click()` | 59 | Extract arc validation, range computation, panel update |
-| `_attack_sim_handle_target_squadron_click()` | 59 | Same pattern |
-| `_attack_sim_compute_and_show_los()` | 60 | Extract LOS trace, obstruction check, overlay update |
-| `_on_attack_redirect_zone_selected()` | 54 | Extract validation, damage split, panel update |
-| `_attack_exec_begin_sequence()` | 51 | Extract pool computation, panel setup, overlay creation |
-| `start_ship_attack()` | 50 | Extract state reset, panel creation, auto-skip check |
-| Remaining ~18 functions | 31–48 | Same helper-extraction pattern |
+**Skipped (no oversized):** `action_toolbar.gd`, `tooltip_panel.gd`,
+`defense_token_display.gd`, `quit_confirmation_modal.gd`,
+`debug_help_panel.gd`.
 
-#### A3: `game_board.gd` Oversized Functions (~6 functions)
+#### A2: `attack_executor.gd` Oversized Functions (~25 functions) ✅
+
+All 21 original + 5 newly-discovered oversized functions split into ~50
+helpers. 0 functions >30 code lines remain (145 total functions).
+
+#### A3: `game_board.gd` Oversized Functions (~6 functions) ✅
 
 | Function | Lines | Action |
 |----------|-------|--------|
@@ -232,11 +230,14 @@ calls. Pure construction code with no branching logic.
 | `_create_drag_preview()` | 37 | Extract style/layout helpers |
 | `_on_squadron_step_entered()` | 33 | Extract guard checks |
 
-#### A4: Other Files (~20 functions)
+#### A4: Other Files (~20 functions) — partially complete
 
-Oversized functions in `ship_card_panel.gd` (7 funcs), `overlap_resolver.gd`
-(3), `token_mover.gd` (3), `maneuver_tool_scene.gd` (5), `game_manager.gd`
-(3), and scattered single-function files.
+**Completed:** `ship_card_panel.gd` (8 funcs) ✅, `game_manager.gd` (3 funcs) ✅,
+`action_toolbar.gd` (no oversized) ✅.
+
+**Remaining:** `overlap_resolver.gd` (2), `token_mover.gd` (4),
+`maneuver_tool_scene.gd` (5), `damage_card_effect.gd` (3), `main_menu.gd` (2),
+and ~8 single-function files.
 
 #### A Verification
 

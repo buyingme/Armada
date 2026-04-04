@@ -352,22 +352,33 @@ func _transition_to(new_state: State) -> void:
 
 
 func _try_select_squadron(token: SquadronToken) -> bool:
+	var instance: SquadronInstance = _validate_squadron_selection(token)
+	if instance == null:
+		return false
+	_apply_squadron_selection(token, instance)
+	return true
+
+
+## Validates that the token's squadron can be selected for activation.
+## Returns the SquadronInstance on success, or null (with error shown).
+func _validate_squadron_selection(
+		token: SquadronToken) -> SquadronInstance:
 	var instance: SquadronInstance = token.get_squadron_instance()
 	if instance == null:
 		_show_error("No instance bound to token.")
-		return false
+		return null
 	if instance.owner_player != GameManager.active_player:
 		_show_error("Not your squadron.")
-		return false
+		return null
 	if instance.activated_this_round:
 		_show_error("Already activated this round.")
-		return false
+		return null
 	# Range check in command mode — squadron must be at close–medium range.
 	if _is_command_mode and _command_resolver != null:
 		if not _command_resolver.is_squadron_in_range(
 				token.global_position):
 			_show_error("Out of range (requires close–medium).")
-			return false
+			return null
 	# In squadron-phase mode, call GameManager to formally activate.
 	# In command mode (SHIP phase) we skip GameManager — the ship is the
 	# activating entity, not the squadron phase turn tracker.
@@ -375,7 +386,14 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 		GameManager.activate_squadron(instance)
 		if GameManager.get_activating_squadron() != instance:
 			_show_error("Activation rejected by GameManager.")
-			return false
+			return null
+	return instance
+
+
+## Applies a validated squadron selection — sets state fields and
+## transitions to ACTION_CHOICE.
+func _apply_squadron_selection(token: SquadronToken,
+		instance: SquadronInstance) -> void:
 	_selected_token = token
 	_selected_instance = instance
 	_is_engaged = instance.is_engaged
@@ -396,7 +414,6 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 	if _is_command_mode and _command_resolver != null:
 		_command_resolver.use_activation()
 	_transition_to(State.ACTION_CHOICE)
-	return true
 
 
 func _finish_activation() -> void:
@@ -439,7 +456,17 @@ func _finish_command_early() -> void:
 # ---------------------------------------------------------------------------
 
 func _build_ui() -> void:
-	# Panel style.
+	_build_panel_style()
+	_build_margin_container()
+	_build_content_vbox()
+	_build_labels()
+	_build_action_buttons()
+	_build_commit_move_button()
+	_build_close_button()
+
+
+## Creates and applies the standard modal panel StyleBox.
+func _build_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -447,7 +474,9 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
 
-	# Margin.
+
+## Creates the MarginContainer with standard insets.
+func _build_margin_container() -> void:
 	_margin = MarginContainer.new()
 	_margin.add_theme_constant_override("margin_left", 16)
 	_margin.add_theme_constant_override("margin_right", 16)
@@ -455,37 +484,33 @@ func _build_ui() -> void:
 	_margin.add_theme_constant_override("margin_bottom", 12)
 	add_child(_margin)
 
-	# VBox.
+
+## Creates the main VBoxContainer with minimum-width calculation.
+func _build_content_vbox() -> void:
 	_vbox = VBoxContainer.new()
 	_vbox.add_theme_constant_override("separation", 8)
-	# Explicit min-width so the autowrap _prompt_label computes a correct
-	# minimum height before the PanelContainer propagates its width.
-	var content_w: float = (-BOTTOM_OFFSET_X) * 2.0 - 32.0 # 240 - 32 = 208
+	var content_w: float = (-BOTTOM_OFFSET_X) * 2.0 - 32.0
 	_vbox.custom_minimum_size.x = maxf(content_w, 100.0)
 	_margin.add_child(_vbox)
 
-	# Title.
+
+## Creates the title, subtitle, prompt, and error labels.
+func _build_labels() -> void:
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 16)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.text = "Squadron Phase"
 	_vbox.add_child(_title_label)
-
-	# Subtitle.
 	_subtitle_label = Label.new()
 	_subtitle_label.add_theme_font_size_override("font_size", 12)
 	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle_label.add_theme_color_override(
 			"font_color", Color(0.6, 0.6, 0.6))
 	_vbox.add_child(_subtitle_label)
-
-	# Prompt.
 	_prompt_label = Label.new()
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(_prompt_label)
-
-	# Error label (hidden by default).
 	_error_label = Label.new()
 	_error_label.add_theme_font_size_override("font_size", 12)
 	_error_label.add_theme_color_override(
@@ -494,39 +519,40 @@ func _build_ui() -> void:
 	_error_label.visible = false
 	_vbox.add_child(_error_label)
 
-	# Action buttons.
+
+## Creates the Move / Attack / Skip / Done action buttons.
+func _build_action_buttons() -> void:
 	_button_container = HBoxContainer.new()
 	_button_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_button_container.add_theme_constant_override("separation", 8)
 	_vbox.add_child(_button_container)
-
-	_move_button = Button.new()
-	_move_button.text = "Move"
-	_move_button.custom_minimum_size = Vector2(90, 36)
-	_move_button.pressed.connect(_on_move_pressed)
+	_move_button = _create_action_button("Move", Vector2(90, 36),
+			_on_move_pressed)
 	_button_container.add_child(_move_button)
-
-	_attack_button = Button.new()
-	_attack_button.text = "Attack"
-	_attack_button.custom_minimum_size = Vector2(90, 36)
-	_attack_button.pressed.connect(_on_attack_pressed)
+	_attack_button = _create_action_button("Attack", Vector2(90, 36),
+			_on_attack_pressed)
 	_button_container.add_child(_attack_button)
-
-	_skip_button = Button.new()
-	_skip_button.text = "Skip"
-	_skip_button.custom_minimum_size = Vector2(90, 36)
-	_skip_button.pressed.connect(_on_skip_pressed)
+	_skip_button = _create_action_button("Skip", Vector2(90, 36),
+			_on_skip_pressed)
 	_button_container.add_child(_skip_button)
-
-	# Done button — ends the squadron command early (command mode only).
-	_done_button = Button.new()
-	_done_button.text = "Done"
-	_done_button.custom_minimum_size = Vector2(90, 36)
-	_done_button.pressed.connect(_on_done_pressed)
+	_done_button = _create_action_button("Done", Vector2(90, 36),
+			_on_done_pressed)
 	_done_button.visible = false
 	_button_container.add_child(_done_button)
 
-	# Commit Move button (hidden by default).
+
+## Creates a Button with the given text, minimum size, and callback.
+func _create_action_button(text: String, min_size: Vector2,
+		callback: Callable) -> Button:
+	var btn: Button = Button.new()
+	btn.text = text
+	btn.custom_minimum_size = min_size
+	btn.pressed.connect(callback)
+	return btn
+
+
+## Creates the "Commit Move" button (hidden by default).
+func _build_commit_move_button() -> void:
 	_commit_move_button = Button.new()
 	_commit_move_button.text = "Commit Move"
 	_commit_move_button.custom_minimum_size = Vector2(200, 44)
@@ -537,7 +563,9 @@ func _build_ui() -> void:
 	commit_hbox.add_child(_commit_move_button)
 	_vbox.add_child(commit_hbox)
 
-	# Close button.
+
+## Creates the "✕ Close" button (right-aligned).
+func _build_close_button() -> void:
 	_close_button = Button.new()
 	_close_button.text = "✕ Close"
 	_close_button.custom_minimum_size = Vector2(80, 28)
@@ -570,48 +598,77 @@ func _update_ui() -> void:
 		_title_label.text = "Squadron Command — %s" % ship_name
 	else:
 		_title_label.text = "Squadron Phase — %s" % faction_name
-
 	match _state:
 		State.WAITING_FOR_SELECTION:
-			_subtitle_label.text = "Activate squadron %d of %d" % [
-					_activation_number, _max_activations]
-			if _is_command_mode:
-				_prompt_label.text = "Click a friendly squadron at close–medium range"
-			else:
-				_prompt_label.text = "Click a squadron to activate"
-			_button_container.visible = _is_command_mode
-			_move_button.visible = false
-			_attack_button.visible = false
-			_skip_button.visible = false
-			_done_button.visible = _is_command_mode
-			_commit_move_button.visible = false
+			_update_ui_waiting()
 		State.ACTION_CHOICE:
-			var squad_name: String = _get_squadron_name()
-			_subtitle_label.text = squad_name
-			_prompt_label.text = "Choose an action:"
-			_button_container.visible = true
-			_commit_move_button.visible = false
-			_update_action_buttons()
+			_update_ui_action_choice()
 		State.MOVING:
-			_subtitle_label.text = _get_squadron_name()
-			_prompt_label.text = "Move the squadron, then click to place"
-			_button_container.visible = false
-			_commit_move_button.visible = false
+			_update_ui_moving()
 		State.MOVE_PREVIEW:
-			_subtitle_label.text = _get_squadron_name()
-			_prompt_label.text = "Squadron placed — confirm or click again"
-			_button_container.visible = false
-			_commit_move_button.visible = true
+			_update_ui_move_preview()
 		State.ATTACKING:
-			_subtitle_label.text = _get_squadron_name()
-			_prompt_label.text = "Resolving attack…"
-			_button_container.visible = false
-			_commit_move_button.visible = false
+			_update_ui_attacking()
 		State.DONE:
-			_subtitle_label.text = ""
-			_prompt_label.text = "Activation complete."
-			_button_container.visible = false
-			_commit_move_button.visible = false
+			_update_ui_done()
+
+
+## Updates UI for the WAITING_FOR_SELECTION state.
+func _update_ui_waiting() -> void:
+	_subtitle_label.text = "Activate squadron %d of %d" % [
+			_activation_number, _max_activations]
+	if _is_command_mode:
+		_prompt_label.text = "Click a friendly squadron at close–medium range"
+	else:
+		_prompt_label.text = "Click a squadron to activate"
+	_button_container.visible = _is_command_mode
+	_move_button.visible = false
+	_attack_button.visible = false
+	_skip_button.visible = false
+	_done_button.visible = _is_command_mode
+	_commit_move_button.visible = false
+
+
+## Updates UI for the ACTION_CHOICE state.
+func _update_ui_action_choice() -> void:
+	var squad_name: String = _get_squadron_name()
+	_subtitle_label.text = squad_name
+	_prompt_label.text = "Choose an action:"
+	_button_container.visible = true
+	_commit_move_button.visible = false
+	_update_action_buttons()
+
+
+## Updates UI for the MOVING state.
+func _update_ui_moving() -> void:
+	_subtitle_label.text = _get_squadron_name()
+	_prompt_label.text = "Move the squadron, then click to place"
+	_button_container.visible = false
+	_commit_move_button.visible = false
+
+
+## Updates UI for the MOVE_PREVIEW state.
+func _update_ui_move_preview() -> void:
+	_subtitle_label.text = _get_squadron_name()
+	_prompt_label.text = "Squadron placed — confirm or click again"
+	_button_container.visible = false
+	_commit_move_button.visible = true
+
+
+## Updates UI for the ATTACKING state.
+func _update_ui_attacking() -> void:
+	_subtitle_label.text = _get_squadron_name()
+	_prompt_label.text = "Resolving attack…"
+	_button_container.visible = false
+	_commit_move_button.visible = false
+
+
+## Updates UI for the DONE state.
+func _update_ui_done() -> void:
+	_subtitle_label.text = ""
+	_prompt_label.text = "Activation complete."
+	_button_container.visible = false
+	_commit_move_button.visible = false
 
 
 func _update_action_buttons() -> void:

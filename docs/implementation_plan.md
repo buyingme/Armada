@@ -1633,7 +1633,7 @@ See `docs/refactoring_plan.md` and `docs/refactoring_test_strategy.md`.
 |---|------|-------------|--------------|--------|
 | A1-01 | Split `_build_ui()` + `_clear_content()` + `show_defense_section()` | `src/ui/attack_sim_panel.gd` | 14 `_build_<section>()` helpers; `_null_core_widget_refs()`, `_null_attack_step_refs()`, `_null_defense_step_refs()`, `_reset_selection_state()`; `_populate_defense_token_buttons()` | ✅ `efe474a` |
 | A1-02 | Split `_build_ui()` + `_create_step_row()` + `_update_step_display()` | `src/ui/activation_modal.gd` | 7 `_build_*()` section helpers; `_create_action_button()` + `_add_step_action_buttons()`; `_style_past_step()`, `_style_current_step()`, `_style_future_step()` + 6 sub-helpers | ✅ |
-| A1-03 | Split oversized functions | `src/ui/squadron_activation_modal.gd` | — | ⏳ |
+| A1-03 | Split `_build_ui()` + `_update_ui()` + `_try_select_squadron()` | `src/ui/squadron_activation_modal.gd` | 8 `_build_*()` helpers + `_create_action_button()`; 6 `_update_ui_*()` state helpers; `_validate_squadron_selection()` + `_apply_squadron_selection()` | ✅ |
 | A1-04 | Split oversized functions | `src/ui/ship_card_panel.gd` | — | ⏳ |
 | A1-05 | Split oversized functions | `src/ui/action_toolbar.gd` | — | ⏳ |
 | A1-06 | Split oversized functions | `src/ui/repair_panel.gd` | — | ⏳ |

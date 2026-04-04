@@ -5,7 +5,7 @@
 **MVP Complete** — The Learning Scenario is fully playable end-to-end: 6-round game
 with command dials, ship movement (maneuver tool), ship/squadron combat with full
 attack pipeline (dice, defense tokens, damage cards), repair commands, squadron
-commands, scoring, victory screen, hot-seat multiplayer, SFX, and dynamic music. 
+commands, scoring, victory screen, hot-seat multiplayer, SFX, and dynamic music.
 94 source files (30 491 lines), 88 test files (21 641 lines), 87 test scripts,
 1 645 tests, 1 644 passing.
 

@@ -3930,3 +3930,14 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 |------|--------|----------|
 | 1 | During Ship Phase, perform an attack and spend a defense token (Brace/Evade) | Token turns red/exhausted in Ship Card Panel |
 | 2 | Complete the round (Ship → Squadron → Status → Command) | After Status Phase, exhausted tokens flip back to green/ready in Ship Card Panel |
+
+### MT-A1-03.01 — Squadron modal after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance to Squadron Phase | Squadron modal appears with correct title/subtitle |
+| 2 | Click a squadron to activate | Move/Attack/Skip buttons appear |
+| 3 | Move the squadron, commit move | "Commit Move" button appears and works |
+| 4 | Attack or skip | Activation completes normally |
+| 5 | During Ship Phase, use a Squadron command | Squadron command modal opens with ship name title and range restriction |
+| 6 | Press Escape to dismiss, re-open | State preserved |

@@ -249,6 +249,36 @@ These are subtle bugs actually encountered in this project:
 
 ---
 
+## Mandatory Manual Test Gate
+
+**Before every commit, you MUST prompt the user for manual testing.**
+
+This is a hard gate — no commit may happen without user approval.
+
+### Workflow
+
+1. **Run the automated test suite** and report the results (pass count, script count, failures).
+2. **Provide manual test steps** — specific actions the user should perform in the running game to verify the change visually/interactively. Be concrete: which scene to run, what to click, what should appear on screen.
+3. **Wait for user approval** — ask explicitly: *"Please run the manual tests above and confirm the results. Should I commit?"*
+4. **Only commit after the user confirms.** If the user reports a problem, fix it and repeat from step 1.
+
+### What Manual Test Steps Should Cover
+
+- Visual correctness (layout, colours, text, sizing)
+- Interaction correctness (clicks, drags, keyboard input)
+- State transitions visible in the UI (panels opening/closing, tokens changing)
+- Anything GUT cannot verify (rendering, audio, animation timing)
+
+### When to Skip (Rare)
+
+- Docs-only changes (no code touched)
+- Test-only additions where no source code was modified
+- Skill/config file updates (like this one)
+
+Even in these cases, state explicitly: *"This is a docs/test-only change — no manual test needed. Should I commit?"*
+
+---
+
 ## Git Commits
 
 The terminal tool struggles with multi-line quoted strings. Commits **must** follow this pattern:

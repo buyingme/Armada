@@ -229,3 +229,16 @@ Requirements before any commit:
 - ✅ Total test count matches expectation (no silent drops)
 - ✅ No `Parse Error:` in output
 - ✅ Implementation plan updated if a phase task was completed
+
+### Manual Test Gate (Mandatory)
+
+After automated tests pass, **always prompt the user** for manual testing before committing:
+
+1. Report the automated test results (pass count, script count, assert count).
+2. Provide concrete manual test steps describing what to launch, click, and observe.
+3. **Wait for the user's explicit approval** before running `git commit`.
+4. If the user reports a defect, fix it and re-run this entire checklist.
+
+See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate" for full details.
+
+This gate applies to all code changes. Only docs-only or test-only commits (no source changes) may skip manual testing — but still ask the user to confirm before committing.

@@ -107,6 +107,8 @@ func _init() -> void:
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 4)
 	add_child(_content)
+	# Reposition when the panel's layout size changes (entries added/removed).
+	resized.connect(_on_self_resized)
 
 
 ## Populates the sidebar with ships and squadrons from both players.
@@ -282,7 +284,10 @@ func clear_active() -> void:
 	_active_original_text = ""
 
 
-## Updates the colour of an entry based on its activation/destruction state.\n## Destroyed units are ghosted with dark-red text at reduced opacity.\n## Rules Reference: \"Destroyed Ships and Squadrons\", RRG p.7.\nfunc _update_entry(instance: Variant) -> void:
+## Updates the colour of an entry based on its activation/destruction state.
+## Destroyed units are ghosted with dark-red text at reduced opacity.
+## Rules Reference: "Destroyed Ships and Squadrons", RRG p.7.
+func _update_entry(instance: Variant) -> void:
 	if not _entries.has(instance):
 		return
 	var entry: Dictionary = _entries[instance]
@@ -407,6 +412,14 @@ func _on_squadron_destroyed(sq_node: Node) -> void:
 		var inst: Variant = sq_node.get_squadron_instance()
 		if inst:
 			_update_entry(inst)
+
+
+## Recalculates position when the panel size changes after layout.
+func _on_self_resized() -> void:
+	if _expanded:
+		position = _expanded_pos()
+	else:
+		position = _collapsed_pos()
 
 
 ## Show/hide based on game phase.

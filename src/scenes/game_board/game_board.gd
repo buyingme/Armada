@@ -1185,12 +1185,13 @@ func _update_phase_hud() -> void:
 		base_text += "  |  Rebel: %d  |  Imperial: %d" % [
 				rebel_score, imperial_score]
 	_phase_hud_label.text = base_text
-	# Centre the label horizontally.
+	# Centre the label by spanning the full viewport width.
+	# horizontal_alignment = CENTER handles the text centering.
 	var vp_size: Vector2 = Vector2(1280, 720)
 	if is_inside_tree():
 		vp_size = get_viewport().get_visible_rect().size
-	_phase_hud_label.position = Vector2(
-			(vp_size.x - _phase_hud_label.size.x) * 0.5, 8)
+	_phase_hud_label.position = Vector2(0, 8)
+	_phase_hud_label.size = Vector2(vp_size.x, _phase_hud_label.size.y)
 
 
 ## Called when a ship or squadron is destroyed — refreshes the HUD scores.

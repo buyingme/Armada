@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase A in progress — A1 (UI), A2 (attack_executor), A3 (game_board), and A4-03 (game_manager) partially complete.  
+> **Status:** Phase A in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete.
 > **Baseline:** 87 scripts, 1 645 tests, 1 644 passing (commit `8e64c6b`).
 
 ---
@@ -196,23 +196,22 @@ Detailed requirements for each are in `docs/requirements/future_stages.md`.
 Bring all 95 oversized functions under the 30-line limit by extracting
 private helper methods within the same file.
 
-#### A1: UI `_build_ui()` Methods (12 files) — 6/12 complete
+#### A1: UI `_build_ui()` Methods (13 files) ✅
 
 Each monolithic `_build_ui()` becomes a sequence of `_build_<section>()`
 calls. Pure construction code with no branching logic.
 
 **Completed:** `attack_sim_panel.gd` ✅, `activation_modal.gd` ✅,
 `squadron_activation_modal.gd` ✅, `ship_card_panel.gd` ✅ (8 funcs),
-`repair_panel.gd` ✅, `displacement_modal.gd` ✅.
+`repair_panel.gd` ✅, `displacement_modal.gd` ✅,
+`damage_summary_overlay.gd` ✅, `opponent_choice_modal.gd` ✅,
+`victory_screen.gd` ✅, `command_dial_picker.gd` ✅ (2 funcs),
+`targeting_list_modal.gd` ✅ (4 funcs),
+`command_dial_order_modal.gd` ✅,
+`tooltip_panel.gd` ✅, `defense_token_display.gd` ✅,
+`quit_confirmation_modal.gd` ✅, `debug_help_panel.gd` ✅.
 
-**Remaining:** `damage_summary_overlay.gd` (86),
-`opponent_choice_modal.gd` (73), `victory_screen.gd` (73),
-`command_dial_picker.gd` (58+45), `targeting_list_modal.gd` (52+39+33+33),
-`command_dial_order_modal.gd` (64).
-
-**Skipped (no oversized):** `action_toolbar.gd`, `tooltip_panel.gd`,
-`defense_token_display.gd`, `quit_confirmation_modal.gd`,
-`debug_help_panel.gd`.
+**Skipped (no oversized):** `action_toolbar.gd`.
 
 #### A2: `attack_executor.gd` Oversized Functions (~25 functions) ✅
 

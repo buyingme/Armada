@@ -113,22 +113,27 @@ func is_open() -> bool:
 
 ## Builds the complete picker UI.
 func _build_ui() -> void:
-	# Clear previous content.
 	for child: Node in get_children():
 		child.queue_free()
-
 	custom_minimum_size = Vector2(400, 320)
-
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)
 	margin.add_theme_constant_override("margin_right", 16)
 	margin.add_theme_constant_override("margin_top", 12)
 	margin.add_theme_constant_override("margin_bottom", 12)
-
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
+	_build_title_and_subtitle(vbox)
+	_build_existing_stack_display(vbox)
+	_build_command_selection(vbox)
+	_build_stack_and_confirm(vbox)
+	margin.add_child(vbox)
+	add_child(margin)
+	_apply_panel_style()
 
-	# Title.
+
+## Builds the title and subtitle labels.
+func _build_title_and_subtitle(parent: VBoxContainer) -> void:
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _ship_instance and _ship_instance.ship_data:
@@ -137,44 +142,35 @@ func _build_ui() -> void:
 			ship_name, _current_round]
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_title_label)
-
-	# Subtitle showing how many dials needed.
+	parent.add_child(_title_label)
 	var subtitle: Label = Label.new()
 	subtitle.text = "Select %d command%s:" % [
 			_dials_needed, "" if _dials_needed == 1 else "s"]
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(subtitle)
+	parent.add_child(subtitle)
 
-	# Show existing dials already in the stack (from previous rounds).
-	# This gives the player context for what commands are coming up.
-	_build_existing_stack_display(vbox)
 
-	# Selection area: 4 command icons in cycle order.
+## Builds the 4 command icon selection row.
+func _build_command_selection(parent: VBoxContainer) -> void:
 	_selection_container = HBoxContainer.new()
 	_selection_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_selection_container.add_theme_constant_override("separation", 16)
 	for cmd: int in COMMAND_CYCLE:
 		var icon_btn: VBoxContainer = _create_icon_button(cmd, ICON_SIZE)
 		_selection_container.add_child(icon_btn)
-	vbox.add_child(_selection_container)
+	parent.add_child(_selection_container)
 
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
 
-	# Stack label.
+## Builds the stack display, separator and confirm button.
+func _build_stack_and_confirm(parent: VBoxContainer) -> void:
+	parent.add_child(HSeparator.new())
 	_stack_label = Label.new()
 	_stack_label.text = "Dial Stack (top → bottom):"
-	vbox.add_child(_stack_label)
-
-	# Stack area: shows queued dials.
+	parent.add_child(_stack_label)
 	_stack_container = HBoxContainer.new()
 	_stack_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_stack_container.add_theme_constant_override("separation", 8)
-	vbox.add_child(_stack_container)
-
-	# Confirm button.
+	parent.add_child(_stack_container)
 	_confirm_button = Button.new()
 	_confirm_button.text = "CONFIRM"
 	_confirm_button.custom_minimum_size = Vector2(120, 36)
@@ -182,12 +178,11 @@ func _build_ui() -> void:
 	var btn_container: HBoxContainer = HBoxContainer.new()
 	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_container.add_child(_confirm_button)
-	vbox.add_child(btn_container)
+	parent.add_child(btn_container)
 
-	margin.add_child(vbox)
-	add_child(margin)
 
-	# Style the panel.
+## Applies the standard modal panel style.
+func _apply_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -359,18 +354,28 @@ func _create_stack_entry(cmd: int, index: int) -> VBoxContainer:
 ## Only shown when there are hidden dials (rounds 2+). Gives the player
 ## context about upcoming commands they assigned in prior rounds.
 func _build_existing_stack_display(parent: VBoxContainer) -> void:
-	if _ship_instance == null or _ship_instance.command_dial_stack == null:
+	var hidden_cmds: Array[int] = _get_hidden_commands()
+	if hidden_cmds.is_empty():
 		return
+	_add_existing_stack_label(parent)
+	_add_existing_stack_icons(parent, hidden_cmds)
+
+
+## Returns the hidden command types from the ship's dial stack.
+func _get_hidden_commands() -> Array[int]:
+	if _ship_instance == null or _ship_instance.command_dial_stack == null:
+		return []
 	var all_dials: Array[Dictionary] = _ship_instance.command_dial_stack \
 			.get_all_dials()
-	# Only show existing hidden dials (not revealed or spent).
 	var hidden_cmds: Array[int] = []
 	for dial: Dictionary in all_dials:
 		if dial.get("state", "") == CommandDialStack.STATE_HIDDEN:
 			hidden_cmds.append(int(dial.get("command", 0)))
-	if hidden_cmds.is_empty():
-		return
+	return hidden_cmds
 
+
+## Adds the "Existing stack" header label.
+func _add_existing_stack_label(parent: VBoxContainer) -> void:
 	var existing_label: Label = Label.new()
 	existing_label.text = "Existing stack (top → bottom):"
 	existing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -379,6 +384,10 @@ func _build_existing_stack_display(parent: VBoxContainer) -> void:
 			"font_color", Color(0.7, 0.7, 0.7, 0.8))
 	parent.add_child(existing_label)
 
+
+## Adds the row of small faded icons for existing hidden dials.
+func _add_existing_stack_icons(parent: VBoxContainer,
+		hidden_cmds: Array[int]) -> void:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 6)

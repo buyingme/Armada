@@ -69,25 +69,46 @@ func _rebuild_sprites() -> void:
 	for s: Sprite2D in _sprites:
 		s.queue_free()
 	_sprites.clear()
-	# Calculate total width for centring.
-	var visible_count: int = 0
-	for t: Dictionary in _tokens:
-		var state: int = int(t.get("state", 0))
-		if state != Constants.DefenseTokenState.DISCARDED:
-			visible_count += 1
+	var visible_count: int = _count_visible_tokens()
 	if visible_count == 0:
 		return
-	# Each token is scaled to TOKEN_DISPLAY_HEIGHT_PX; width proportional.
-	# Source PNGs are ~70×37 → aspect ~1.89.
 	var first_tex: Texture2D = _get_first_visible_texture()
 	if first_tex == null:
 		return
+	var layout: Dictionary = _compute_layout(first_tex, visible_count)
+	_create_token_sprites(layout)
+
+
+## Counts non-discarded tokens.
+func _count_visible_tokens() -> int:
+	var count: int = 0
+	for t: Dictionary in _tokens:
+		var state: int = int(t.get("state", 0))
+		if state != Constants.DefenseTokenState.DISCARDED:
+			count += 1
+	return count
+
+
+## Computes layout parameters for token sprite positioning.
+func _compute_layout(first_tex: Texture2D, visible_count: int) -> Dictionary:
 	var src_w: float = float(first_tex.get_width())
 	var src_h: float = float(first_tex.get_height())
 	var scale_factor: float = TOKEN_DISPLAY_HEIGHT_PX / src_h if src_h > 0 else 1.0
 	var token_w: float = src_w * scale_factor
 	var total_w: float = token_w * visible_count + TOKEN_GAP_PX * (visible_count - 1)
 	var x_start: float = - total_w * 0.5 + token_w * 0.5
+	return {
+		"scale_factor": scale_factor,
+		"token_w": token_w,
+		"x_start": x_start,
+	}
+
+
+## Creates positioned Sprite2D children for each visible token.
+func _create_token_sprites(layout: Dictionary) -> void:
+	var scale_factor: float = layout["scale_factor"]
+	var token_w: float = layout["token_w"]
+	var x_start: float = layout["x_start"]
 	var idx: int = 0
 	for t: Dictionary in _tokens:
 		var state: int = int(t.get("state", 0))

@@ -26,7 +26,19 @@ func _init() -> void:
 
 ## Builds the modal UI: question label + Yes / No buttons.
 func _build_ui() -> void:
-	# Standard modal style (ui_styling.md §1).
+	_apply_panel_style()
+	var margin: MarginContainer = _build_margin_layout()
+	add_child(margin)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(vbox)
+	_add_question_label(vbox)
+	_add_button_row(vbox)
+
+
+## Applies the standard modal panel style (ui_styling.md §1).
+func _apply_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -34,40 +46,39 @@ func _build_ui() -> void:
 	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
 
-	# Inner margin (ui_styling.md §3).
+
+## Creates the inner MarginContainer.
+func _build_margin_layout() -> MarginContainer:
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 24)
 	margin.add_theme_constant_override("margin_right", 24)
 	margin.add_theme_constant_override("margin_top", 20)
 	margin.add_theme_constant_override("margin_bottom", 20)
-	add_child(margin)
+	return margin
 
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	margin.add_child(vbox)
 
-	# Question text.
+## Adds the question text label.
+func _add_question_label(parent: VBoxContainer) -> void:
 	var label: Label = Label.new()
 	label.text = "Quit game and exit to main menu?"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 18)
 	label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(label)
+	parent.add_child(label)
 
-	# Button row.
+
+## Adds the Yes / No button row.
+func _add_button_row(parent: VBoxContainer) -> void:
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 16)
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(btn_row)
-
+	parent.add_child(btn_row)
 	var btn_yes: Button = Button.new()
 	btn_yes.text = "Yes"
 	btn_yes.custom_minimum_size = Vector2(100, 36)
 	btn_yes.pressed.connect(_on_yes_pressed)
 	btn_row.add_child(btn_yes)
-
 	var btn_no: Button = Button.new()
 	btn_no.text = "No"
 	btn_no.custom_minimum_size = Vector2(100, 36)

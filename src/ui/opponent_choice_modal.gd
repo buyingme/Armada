@@ -147,8 +147,20 @@ func _build_ui() -> void:
 	size = Vector2.ZERO
 	offset_top = 0.0
 	offset_bottom = 0.0
+	_apply_panel_style()
+	_content = VBoxContainer.new()
+	_content.add_theme_constant_override("separation", 12)
+	_content.name = "ContentVBox"
+	add_child(_content)
+	_build_header_section()
+	_content.add_child(HSeparator.new())
+	_build_option_buttons()
+	_build_confirm_section()
+	_update_confirm_state()
 
-	# Panel style.
+
+## Applies the standard modal panel style.
+func _apply_panel_style() -> void:
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	panel_style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -157,12 +169,9 @@ func _build_ui() -> void:
 	panel_style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", panel_style)
 
-	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 12)
-	_content.name = "ContentVBox"
-	add_child(_content)
 
-	# Title.
+## Builds title, effect text, and chooser labels.
+func _build_header_section() -> void:
 	_title_label = Label.new()
 	_title_label.text = _choice_info.get("card_title", "Damage Card Effect")
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -170,8 +179,6 @@ func _build_ui() -> void:
 	_title_label.add_theme_color_override("font_color",
 			Color(0.9, 0.85, 0.6))
 	_content.add_child(_title_label)
-
-	# Effect text.
 	_effect_label = Label.new()
 	_effect_label.text = _choice_info.get("effect_text", "")
 	_effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -179,24 +186,18 @@ func _build_ui() -> void:
 	_effect_label.add_theme_color_override("font_color",
 			Color(0.7, 0.7, 0.8))
 	_content.add_child(_effect_label)
-
-	# Chooser label.
 	var chooser: String = _choice_info.get("chooser", "opponent")
-	var chooser_text: String = "Opponent chooses:"
-	if chooser == "owner":
-		chooser_text = "Ship owner chooses:"
 	var chooser_label: Label = Label.new()
-	chooser_label.text = chooser_text
+	chooser_label.text = "Ship owner chooses:" if chooser == "owner" \
+			else "Opponent chooses:"
 	chooser_label.add_theme_font_size_override("font_size", 16)
 	chooser_label.add_theme_color_override("font_color",
 			Color(0.4, 0.7, 1.0))
 	_content.add_child(chooser_label)
 
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	_content.add_child(sep)
 
-	# Options.
+## Builds option toggle buttons and optional multi-select hint.
+func _build_option_buttons() -> void:
 	var options: Array = _choice_info.get("options", [])
 	_option_buttons.clear()
 	for i: int in range(options.size()):
@@ -210,8 +211,6 @@ func _build_ui() -> void:
 		btn.add_theme_font_size_override("font_size", 14)
 		_option_buttons.append(btn)
 		_content.add_child(btn)
-
-	# Multi-select hint.
 	if _multi_select:
 		var hint: Label = Label.new()
 		hint.text = "(Select up to %d — or none)" % _max_selections
@@ -220,11 +219,10 @@ func _build_ui() -> void:
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_content.add_child(hint)
 
-	# Separator before confirm.
-	var sep2: HSeparator = HSeparator.new()
-	_content.add_child(sep2)
 
-	# Confirm button.
+## Builds the separator and centred Confirm button.
+func _build_confirm_section() -> void:
+	_content.add_child(HSeparator.new())
 	var btn_container: HBoxContainer = HBoxContainer.new()
 	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_confirm_button = Button.new()
@@ -233,8 +231,6 @@ func _build_ui() -> void:
 	_confirm_button.pressed.connect(_on_confirm_pressed)
 	btn_container.add_child(_confirm_button)
 	_content.add_child(btn_container)
-
-	_update_confirm_state()
 
 
 # ---------------------------------------------------------------------------

@@ -28,23 +28,32 @@ var _rich_label: RichTextLabel = null
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
+	_apply_style_box()
+	var margin: MarginContainer = _build_margin_container()
+	add_child(margin)
+	_rich_label = _build_rich_label()
+	margin.add_child(_rich_label)
+	custom_minimum_size.x = 0.0
+	size.x = 0.0
 
-	# --- StyleBox ---
+
+## Creates and applies the panel StyleBoxFlat.
+func _apply_style_box() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = GameScale.tooltip_bg_color
 	style.corner_radius_top_left = GameScale.tooltip_corner_radius
 	style.corner_radius_top_right = GameScale.tooltip_corner_radius
 	style.corner_radius_bottom_left = GameScale.tooltip_corner_radius
 	style.corner_radius_bottom_right = GameScale.tooltip_corner_radius
-	# Content margins are handled by the MarginContainer, so set panel's
-	# content margin to zero to avoid double-padding.
 	style.content_margin_left = 0
 	style.content_margin_right = 0
 	style.content_margin_top = 0
 	style.content_margin_bottom = 0
 	add_theme_stylebox_override("panel", style)
 
-	# --- MarginContainer for inner padding ---
+
+## Creates a MarginContainer with tooltip padding constants.
+func _build_margin_container() -> MarginContainer:
 	var margin: MarginContainer = MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override(
@@ -55,34 +64,32 @@ func _init() -> void:
 			"margin_top", GameScale.tooltip_padding_v)
 	margin.add_theme_constant_override(
 			"margin_bottom", GameScale.tooltip_padding_v)
-	add_child(margin)
+	return margin
 
-	# --- RichTextLabel ---
-	_rich_label = RichTextLabel.new()
-	_rich_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rich_label.bbcode_enabled = true
-	_rich_label.fit_content = true
-	_rich_label.scroll_active = false
-	_rich_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_rich_label.add_theme_font_size_override(
+
+## Creates the RichTextLabel with all theme overrides.
+func _build_rich_label() -> RichTextLabel:
+	var label: RichTextLabel = RichTextLabel.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override(
 			"normal_font_size", GameScale.tooltip_font_size)
-	_rich_label.add_theme_font_size_override(
+	label.add_theme_font_size_override(
 			"bold_font_size", GameScale.tooltip_font_size)
-	_rich_label.add_theme_font_size_override(
+	label.add_theme_font_size_override(
 			"italics_font_size", GameScale.tooltip_font_size)
-	_rich_label.add_theme_color_override(
+	label.add_theme_color_override(
 			"default_color", GameScale.tooltip_text_color)
-	_rich_label.add_theme_color_override(
+	label.add_theme_color_override(
 			"font_shadow_color", GameScale.tooltip_shadow_color)
-	_rich_label.add_theme_constant_override(
+	label.add_theme_constant_override(
 			"shadow_offset_x", GameScale.tooltip_shadow_offset)
-	_rich_label.add_theme_constant_override(
+	label.add_theme_constant_override(
 			"shadow_offset_y", GameScale.tooltip_shadow_offset)
-	margin.add_child(_rich_label)
-
-	# Enforce max width (the panel will shrink-wrap when text is shorter).
-	custom_minimum_size.x = 0.0
-	size.x = 0.0
+	return label
 
 
 ## Sets the BBCode content.  Measures at max_width, then widens if the

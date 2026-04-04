@@ -8,8 +8,8 @@
 > manual testing if GUT passes with **87 scripts, 1 645 tests, 1 644 passing**.
 > If any count drops, stop and fix parse errors before continuing.
 >
-> **Status:** Phase A in progress.  
-> Completed: A1-01 through A1-04, A1-09, A1-11, A2-01 through A2-05, A3-01, A4-03.  
+> **Status:** Phase A in progress.
+> Completed: A1-01 through A1-04, A1-09, A1-11, A2-01 through A2-05, A3-01, A4-03.
 > Remaining: A1-05 through A1-08, A1-10, A1-12, A1-13, A4-01, A4-02, A4-04 through A4-07.
 
 ---
@@ -131,7 +131,7 @@ into helpers.
 
 ---
 
-#### A1-05: `damage_summary_overlay.gd` — 1 oversized (86 lines)
+#### A1-05: `damage_summary_overlay.gd` — 1 oversized (86 lines) ✅
 
 **What changes:** `_build_content()` split into header, card list, and
 button section builders.
@@ -146,7 +146,7 @@ button section builders.
 
 ---
 
-#### A1-06: `opponent_choice_modal.gd` — 1 oversized (73 lines)
+#### A1-06: `opponent_choice_modal.gd` — 1 oversized (73 lines) ✅
 
 **Manual test:**
 
@@ -157,7 +157,7 @@ button section builders.
 
 ---
 
-#### A1-07: `victory_screen.gd` — 1 oversized (73 lines)
+#### A1-07: `victory_screen.gd` — 1 oversized (73 lines) ✅
 
 **Manual test:**
 
@@ -169,7 +169,7 @@ button section builders.
 
 ---
 
-#### A1-08: `command_dial_picker.gd` — 2 oversized (58 + 45 lines)
+#### A1-08: `command_dial_picker.gd` — 2 oversized (58 + 45 lines) ✅
 
 **Manual test:**
 
@@ -195,7 +195,7 @@ button section builders.
 
 ---
 
-#### A1-10: `targeting_list_modal.gd` — 4 oversized (52 + 39 + 33 + 33 lines)
+#### A1-10: `targeting_list_modal.gd` — 4 oversized (52 + 39 + 33 + 33 lines) ✅
 
 **Manual test:**
 
@@ -221,7 +221,7 @@ button section builders.
 
 ---
 
-#### A1-12: `command_dial_order_modal.gd` — 1 oversized (64 lines)
+#### A1-12: `command_dial_order_modal.gd` — 1 oversized (64 lines) ✅
 
 **Manual test:**
 
@@ -239,7 +239,7 @@ button section builders.
 
 ---
 
-#### A1-13: UI files — `tooltip_panel.gd` (48), `defense_token_display.gd` (40), `quit_confirmation_modal.gd` (38), `debug_help_panel.gd` (36)
+#### A1-13: UI files — `tooltip_panel.gd` (48), `defense_token_display.gd` (40), `quit_confirmation_modal.gd` (38), `debug_help_panel.gd` (36) ✅
 
 **Manual test (one pass for all 4):**
 

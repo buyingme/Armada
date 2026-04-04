@@ -42,7 +42,17 @@ func _ready() -> void:
 
 ## Constructs the panel layout.
 func _build_ui() -> void:
-	# Panel background via StyleBoxFlat.
+	_apply_panel_style()
+	position = Vector2(MARGIN_LEFT_PX, MARGIN_TOP_PX)
+	custom_minimum_size = Vector2(PANEL_WIDTH_PX, 0)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	add_child(vbox)
+	_populate_shortcut_entries(vbox)
+
+
+## Applies the debug panel's background style.
+func _apply_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = BG_COLOUR
 	style.corner_radius_top_left = 6
@@ -55,13 +65,9 @@ func _build_ui() -> void:
 	style.content_margin_bottom = 10.0
 	add_theme_stylebox_override("panel", style)
 
-	position = Vector2(MARGIN_LEFT_PX, MARGIN_TOP_PX)
-	custom_minimum_size = Vector2(PANEL_WIDTH_PX, 0)
 
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	add_child(vbox)
-
+## Populates all section headers, separators, and shortcut lines.
+func _populate_shortcut_entries(vbox: VBoxContainer) -> void:
 	_add_header(vbox, "DEBUG MODE")
 	_add_separator(vbox)
 	_add_line(vbox, "F12", "Toggle debug mode")

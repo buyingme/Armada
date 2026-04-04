@@ -75,22 +75,28 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Builds the entire modal UI from the targeting results.
 func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
-	# Clear old content — remove + queue_free all children so stale nodes
-	# don't inflate the PanelContainer's minimum size.
+	_clear_old_content()
+	_apply_panel_style()
+	var vp: Vector2 = _get_viewport_size()
+	_setup_scroll_and_content(vp)
+	_build_targeting_sections(build_result)
+	_add_dimmed_label("Press Escape or T to close")
+
+
+## Clears old children and resets anchor offsets.
+func _clear_old_content() -> void:
 	for child: Node in get_children():
 		remove_child(child)
 		child.queue_free()
 	_scroll = null
 	_content = null
-	# Zero the cached size first (prevents the PanelContainer from
-	# retaining its old expanded height from a previous open).
-	# This shifts offsets as a side-effect, so we immediately re-pin
-	# them to the canonical -40 values afterwards.
-	# See .skills/ui_styling.md §10 — anchor panel reset pattern.
 	size = Vector2.ZERO
 	offset_top = -40.0
 	offset_bottom = -40.0
-	# Panel style (standard modal).
+
+
+## Applies the standard modal panel style.
+func _apply_panel_style() -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
 	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
@@ -98,41 +104,48 @@ func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(16)
 	add_theme_stylebox_override("panel", style)
-	# Sizing — width only; height determined by content + scroll cap.
+
+
+## Returns the effective viewport size for layout calculations.
+func _get_viewport_size() -> Vector2:
 	var vp: Vector2 = Vector2(1280, 720)
 	if get_viewport():
 		vp = get_viewport().get_visible_rect().size
+	return vp
+
+
+## Creates the scroll container, content VBox, and title.
+func _setup_scroll_and_content(vp: Vector2) -> void:
 	var panel_w: float = minf(520.0, vp.x * 0.45)
 	var max_h: float = minf(vp.y * 0.8, 600.0)
 	custom_minimum_size = Vector2(panel_w, 0.0)
-	# Re-pin bottom-centre anchor widths.
 	offset_left = - panel_w * 0.5
 	offset_right = panel_w * 0.5
-	# Scroll container — capped at max_h so the panel doesn't overflow.
 	_scroll = ScrollContainer.new()
 	_scroll.custom_minimum_size = Vector2(0.0, max_h)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(_scroll)
-	# Content.
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 12)
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_content)
-	# Title.
 	var title: Label = Label.new()
 	title.text = "Targeting List"
 	title.add_theme_font_size_override("font_size", 16)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_content.add_child(title)
-	# Ship sections.
+
+
+## Iterates ship and squadron results, building sections.
+func _build_targeting_sections(
+		build_result: TargetingListBuilder.BuildResult) -> void:
 	var has_content: bool = false
 	for result: Variant in build_result.ship_results:
 		var r: TargetingListBuilder.ShipTargetingResult = \
 				result as TargetingListBuilder.ShipTargetingResult
 		_build_ship_section(r)
 		has_content = true
-	# Squadron sections (AC-TL-36: after ship sections).
 	for sq_result: Variant in build_result.squad_results:
 		var sr: TargetingListBuilder.SquadTargetingResult = \
 				sq_result as TargetingListBuilder.SquadTargetingResult
@@ -140,48 +153,14 @@ func _build_ui(build_result: TargetingListBuilder.BuildResult) -> void:
 		has_content = true
 	if not has_content:
 		_add_dimmed_label("— No ships or squadrons to display —")
-	# Hint.
-	_add_dimmed_label("Press Escape or T to close")
 
 
 ## Builds one ship section (outgoing + incoming).
 func _build_ship_section(
 		result: TargetingListBuilder.ShipTargetingResult) -> void:
-	# Ship header.
-	var header: Label = Label.new()
-	header.text = result.ship_name
-	header.add_theme_font_size_override("font_size", 15)
-	header.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-	_content.add_child(header)
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	_content.add_child(sep)
-	# Outgoing targets.
-	var out_header: Label = Label.new()
-	out_header.text = "  Outgoing targets:"
-	out_header.add_theme_font_size_override("font_size", 13)
-	out_header.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
-	_content.add_child(out_header)
-	if result.outgoing.is_empty():
-		_add_dimmed_label("    — No targets in range —")
-	else:
-		for entry: Variant in result.outgoing:
-			var te: TargetingListBuilder.TargetEntry = \
-					entry as TargetingListBuilder.TargetEntry
-			_add_target_line(te)
-	# Incoming threats.
-	var in_header: Label = Label.new()
-	in_header.text = "  Incoming threats:"
-	in_header.add_theme_font_size_override("font_size", 13)
-	in_header.add_theme_color_override("font_color", Color(1.0, 0.7, 0.7))
-	_content.add_child(in_header)
-	if result.incoming.is_empty():
-		_add_dimmed_label("    — No incoming threats —")
-	else:
-		for threat: Variant in result.incoming:
-			var te: TargetingListBuilder.ThreatEntry = \
-					threat as TargetingListBuilder.ThreatEntry
-			_add_threat_line(te)
+	_add_section_header(result.ship_name, Color(0.9, 0.85, 0.6))
+	_add_outgoing_targets(result.outgoing)
+	_add_incoming_threats(result.incoming)
 
 
 ## Adds a target line showing attacking and (if applicable) defending hull zone.
@@ -189,46 +168,35 @@ func _build_ship_section(
 ## For squadron targets: shows "Name in range of ARC arc ..."
 ## Requirements: TL-LIST-006, TL-LIST-013, TL-UI-006, AC-TL-37.
 func _add_target_line(entry: TargetingListBuilder.TargetEntry) -> void:
-	var text: String
-	if entry.has_target_zone:
-		# Ship → ship: show attacking arc → defending hull zone.
-		if entry.range_band == "in range":
-			text = "    %s %s→%s in range (%s)" % [
-				entry.target_name,
-				_hz_display(entry.arc),
-				_hz_display(entry.target_zone),
-				RangeFinder.format_dice(entry.dice),
-			]
-		else:
-			text = "    %s %s→%s at %s range (%s)" % [
-				entry.target_name,
-				_hz_display(entry.arc),
-				_hz_display(entry.target_zone),
-				entry.range_band,
-				RangeFinder.format_dice(entry.dice),
-			]
-	elif entry.range_band == "in range":
-		text = "    %s in range of %s arc (%s)" % [
-			entry.target_name,
-			_hz_display(entry.arc),
-			RangeFinder.format_dice(entry.dice),
-		]
-	else:
-		text = "    %s at %s range of %s arc (%s)" % [
-			entry.target_name,
-			entry.range_band,
-			_hz_display(entry.arc),
-			RangeFinder.format_dice(entry.dice),
-		]
+	var text: String = _format_target_text(entry)
 	if entry.obstructed:
 		text += " — obstructed"
 	var label: Label = Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 12)
-	# Colour coding (TL-UI-006).
 	label.add_theme_color_override("font_color", _range_colour(
 			entry.range_band, entry.obstructed))
 	_content.add_child(label)
+
+
+## Formats the target text string for a TargetEntry.
+func _format_target_text(
+		entry: TargetingListBuilder.TargetEntry) -> String:
+	var dice_str: String = RangeFinder.format_dice(entry.dice)
+	if entry.has_target_zone:
+		var arcs: String = "%s→%s" % [
+				_hz_display(entry.arc), _hz_display(entry.target_zone)]
+		if entry.range_band == "in range":
+			return "    %s %s in range (%s)" % [
+					entry.target_name, arcs, dice_str]
+		return "    %s %s at %s range (%s)" % [
+				entry.target_name, arcs, entry.range_band, dice_str]
+	if entry.range_band == "in range":
+		return "    %s in range of %s arc (%s)" % [
+				entry.target_name, _hz_display(entry.arc), dice_str]
+	return "    %s at %s range of %s arc (%s)" % [
+			entry.target_name, entry.range_band,
+			_hz_display(entry.arc), dice_str]
 
 
 ## Adds a threat line: "<Friendly> is at <range> range of <Enemy>'s <ARC> arc"
@@ -260,41 +228,52 @@ func _add_threat_line(threat: TargetingListBuilder.ThreatEntry) -> void:
 ## Requirements: TL-LIST-011, TL-LIST-012, AC-TL-36.
 func _build_squad_section(
 		result: TargetingListBuilder.SquadTargetingResult) -> void:
-	# Squadron header (different colour from ships).
+	_add_section_header(
+			result.squad_name + " (squadron)", Color(0.6, 0.9, 0.7))
+	_add_outgoing_targets(result.outgoing)
+	_add_incoming_threats(result.incoming)
+
+
+## Adds a coloured section header label with a separator below it.
+func _add_section_header(text: String, colour: Color) -> void:
 	var header: Label = Label.new()
-	header.text = result.squad_name + " (squadron)"
+	header.text = text
 	header.add_theme_font_size_override("font_size", 15)
-	header.add_theme_color_override("font_color", Color(0.6, 0.9, 0.7))
+	header.add_theme_color_override("font_color", colour)
 	_content.add_child(header)
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	_content.add_child(sep)
-	# Outgoing targets.
+	_content.add_child(HSeparator.new())
+
+
+## Adds outgoing target entries with a sub-header.
+func _add_outgoing_targets(outgoing: Array) -> void:
 	var out_header: Label = Label.new()
 	out_header.text = "  Outgoing targets:"
 	out_header.add_theme_font_size_override("font_size", 13)
 	out_header.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
 	_content.add_child(out_header)
-	if result.outgoing.is_empty():
+	if outgoing.is_empty():
 		_add_dimmed_label("    — No targets in range —")
-	else:
-		for entry: Variant in result.outgoing:
-			var te: TargetingListBuilder.TargetEntry = \
-					entry as TargetingListBuilder.TargetEntry
-			_add_target_line(te)
-	# Incoming threats.
+		return
+	for entry: Variant in outgoing:
+		var te: TargetingListBuilder.TargetEntry = \
+				entry as TargetingListBuilder.TargetEntry
+		_add_target_line(te)
+
+
+## Adds incoming threat entries with a sub-header.
+func _add_incoming_threats(incoming: Array) -> void:
 	var in_header: Label = Label.new()
 	in_header.text = "  Incoming threats:"
 	in_header.add_theme_font_size_override("font_size", 13)
 	in_header.add_theme_color_override("font_color", Color(1.0, 0.7, 0.7))
 	_content.add_child(in_header)
-	if result.incoming.is_empty():
+	if incoming.is_empty():
 		_add_dimmed_label("    — No incoming threats —")
-	else:
-		for threat: Variant in result.incoming:
-			var te: TargetingListBuilder.ThreatEntry = \
-					threat as TargetingListBuilder.ThreatEntry
-			_add_threat_line(te)
+		return
+	for threat: Variant in incoming:
+		var te: TargetingListBuilder.ThreatEntry = \
+				threat as TargetingListBuilder.ThreatEntry
+		_add_threat_line(te)
 
 
 ## Adds a dimmed hint/placeholder label.

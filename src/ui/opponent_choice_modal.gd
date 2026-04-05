@@ -149,7 +149,7 @@ func _build_ui() -> void:
 	offset_bottom = 0.0
 	_apply_panel_style()
 	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 12)
+	_content.add_theme_constant_override("separation", 6)
 	_content.name = "ContentVBox"
 	add_child(_content)
 	_build_header_section()
@@ -204,7 +204,7 @@ func _build_option_buttons() -> void:
 		var opt: Dictionary = options[i]
 		var btn: Button = Button.new()
 		btn.text = opt.get("label", "Option %d" % i)
-		btn.custom_minimum_size = Vector2(0, 36)
+		btn.custom_minimum_size = Vector2(0, 24)
 		btn.toggle_mode = true
 		btn.disabled = not opt.get("available", true)
 		btn.pressed.connect(_on_option_pressed.bind(i))

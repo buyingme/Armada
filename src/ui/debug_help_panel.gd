@@ -87,6 +87,9 @@ func _populate_shortcut_entries(vbox: VBoxContainer) -> void:
 	_add_line(vbox, "M", "Maneuver Tool (toggle)")
 	_add_line(vbox, "R", "Range Overlay (toggle)")
 	_add_line(vbox, "T", "Targeting List (toggle)")
+	_add_separator(vbox)
+	_add_section_header(vbox, "Cheats")
+	_add_line(vbox, "Shift + D", "Deal faceup damage card")
 
 
 ## Adds the main header label to the container.

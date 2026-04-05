@@ -684,6 +684,14 @@ Per ADR-007, the architecture is designed with network multiplayer from day one.
 | DBG-040 | In debug mode, a **"Save Positions"** action (button or keyboard shortcut) writes the current world-space positions and rotations of all tokens back to the active scenario JSON file (e.g. `learning_scenario.json`), overwriting the placement entries. | Enables iterative visual layout |
 | DBG-041 | The saved positions must use the same normalised coordinate format (`position_x`, `position_y` as fractions of play area, `rotation_degrees`) already used in scenario JSON files, so they are immediately reloadable. | Roundtrip consistency |
 
+### 19.6 Debug Damage Dealing
+
+| ID | Requirement | Notes |
+|----|-------------|-------|
+| DBG-050 | In debug mode, pressing **Shift+D** enters "deal damage" targeting mode. A tooltip reads "Click a ship to deal faceup damage". Clicking a ship token opens an `OpponentChoiceModal` listing all 22 damage card types (title + trait). Selecting one draws a card from the damage deck, overrides its `effect_id` and `title` to match, and deals it faceup to the target ship with the full pipeline (persistent effect registration, immediate effect resolution, EventBus signals). Pressing **Escape** cancels targeting mode. | Accelerates manual testing of damage card effects without playing through full combat |
+| DBG-051 | The debug help panel (`DebugHelpPanel`) lists the **Shift+D** shortcut under a "Cheats" section. | Discoverability |
+| DBG-052 | If the damage deck is empty when the card would be drawn, a toast notification is shown: "Damage deck empty". The targeting mode is cancelled. | Edge case |
+
 ## 25. Game Logging
 
 > **Scope:** Structured file-based logging of game flow events (phase transitions,

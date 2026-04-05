@@ -175,6 +175,23 @@ var _crew_panic_modal: OpponentChoiceModal = null
 ## Whether the pending Crew Panic modal is for a token-conversion activation.
 var _pending_crew_panic_is_token_convert: bool = false
 
+## --- Debug damage dealing state (DBG-050) ---
+
+## Whether we are in "click a ship to deal faceup damage" targeting mode.
+var _debug_damage_targeting: bool = false
+
+## Lazily created OpponentChoiceModal for the debug damage card picker.
+var _debug_damage_modal: OpponentChoiceModal = null
+
+## The ShipToken that was clicked during debug damage targeting.
+var _debug_damage_target_token: ShipToken = null
+
+## Deferred immediate-effect card awaiting choice resolution.
+var _debug_immediate_card: DamageCard = null
+
+## Ship that received the deferred immediate-effect card.
+var _debug_immediate_ship: ShipInstance = null
+
 ## --- Phase 5b: Activation flow state ---
 
 ## "Show Activation Sequence" button (replaces End Activation after dial reveal).
@@ -401,6 +418,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Available in all modes; guarded by the same disabled flag as toolbar buttons.
 	# Requirements: MT-U-007, RO-008, TL-UI-003a.
 	if _handle_tool_shortcut(event):
+		return
+
+	# Debug damage targeting: Escape cancels. DBG-050.
+	if _handle_debug_damage_escape(event):
+		return
+
+	# Debug damage dealing: Shift+D enters targeting mode. DBG-050.
+	if _handle_debug_damage_shortcut(event):
 		return
 
 	# Quit confirmation: ESC when no other handler consumed it. UI-034.
@@ -792,6 +817,9 @@ func _on_token_clicked(token: ShipToken) -> void:
 		return
 	if _maneuver_tool_selecting:
 		_show_maneuver_tool(token)
+		return
+	if _debug_damage_targeting:
+		_open_debug_damage_modal(token)
 		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
@@ -3671,3 +3699,245 @@ func _is_squadron_token_only(ship_token: Variant) -> bool:
 	var has_token: bool = inst.command_tokens != null and \
 			inst.command_tokens.has_token(Constants.CommandType.SQUADRON)
 	return has_token and not has_dial
+
+
+# ---------------------------------------------------------------------------
+# Debug Damage Dealing (Shift+D) — DBG-050, DBG-051, DBG-052
+# ---------------------------------------------------------------------------
+
+## All 22 damage card types: [effect_id, title, trait].
+const DEBUG_DAMAGE_CARDS: Array[Array] = [
+	["blinded_gunners", "Blinded Gunners", "Crew"],
+	["comm_noise", "Comm Noise", "Crew"],
+	["compartment_fire", "Compartment Fire", "Crew"],
+	["crew_panic", "Crew Panic", "Crew"],
+	["damaged_controls", "Damaged Controls", "Crew"],
+	["injured_crew", "Injured Crew", "Crew"],
+	["life_support_failure", "Life Support Failure", "Crew"],
+	["capacitor_failure", "Capacitor Failure", "Ship"],
+	["coolant_discharge", "Coolant Discharge", "Ship"],
+	["damaged_munitions", "Damaged Munitions", "Ship"],
+	["depowered_armament", "Depowered Armament", "Ship"],
+	["disengaged_fire_control", "Disengaged Fire Control", "Ship"],
+	["faulty_countermeasures", "Faulty Countermeasures", "Ship"],
+	["point_defense_failure", "Point-Defense Failure", "Ship"],
+	["power_failure", "Power Failure", "Ship"],
+	["projector_misaligned", "Projector Misaligned", "Ship"],
+	["ruptured_engine", "Ruptured Engine", "Ship"],
+	["shield_failure", "Shield Failure", "Ship"],
+	["structural_damage", "Structural Damage", "Ship"],
+	["targeter_disruption", "Targeter Disruption", "Ship"],
+	["thrust_control_malfunction", "Thrust Control Malfunction", "Ship"],
+	["thruster_fissure", "Thruster Fissure", "Ship"],
+]
+
+
+## Handles Shift+D to enter debug damage targeting mode.
+## Returns true if the event was consumed.
+func _handle_debug_damage_shortcut(event: InputEvent) -> bool:
+	if not DebugMode.enabled:
+		return false
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return false
+	if key_event.keycode != KEY_D or not key_event.shift_pressed:
+		return false
+	_debug_damage_targeting = true
+	TooltipManager.show_text(
+			"Click a ship to deal faceup damage", Vector2.INF, 0.0, true)
+	_log.info("Debug damage targeting mode entered (Shift+D).")
+	get_viewport().set_input_as_handled()
+	return true
+
+
+## Handles Escape to cancel debug damage targeting mode.
+## Returns true if the event was consumed.
+func _handle_debug_damage_escape(event: InputEvent) -> bool:
+	if not _debug_damage_targeting:
+		return false
+	if not event is InputEventKey:
+		return false
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
+		return false
+	_cancel_debug_damage_targeting()
+	get_viewport().set_input_as_handled()
+	return true
+
+
+## Cancels debug damage targeting mode and hides the tooltip.
+func _cancel_debug_damage_targeting() -> void:
+	_debug_damage_targeting = false
+	_debug_damage_target_token = null
+	TooltipManager.hide_tooltip()
+	_log.info("Debug damage targeting cancelled.")
+
+
+## Opens the damage card picker modal for the clicked ship.
+func _open_debug_damage_modal(token: ShipToken) -> void:
+	_debug_damage_targeting = false
+	_debug_damage_target_token = token
+	TooltipManager.hide_tooltip()
+	_ensure_debug_damage_modal()
+	var options: Array[Dictionary] = []
+	for entry: Array in DEBUG_DAMAGE_CARDS:
+		options.append({
+			"id": entry[0] as String,
+			"label": "%s (%s)" % [entry[1], entry[2]],
+			"available": true,
+		})
+	var choice_info: Dictionary = {
+		"card_title": "Debug: Deal Faceup Damage",
+		"effect_text": "Choose a damage card to deal faceup.",
+		"chooser": "owner",
+		"multi_select": false,
+		"max_selections": 1,
+		"options": options,
+	}
+	_debug_damage_modal.open(choice_info)
+	_log.info("Debug damage modal opened for '%s'." %
+			token.get_ship_instance().ship_data.ship_name)
+
+
+## Lazily creates the debug damage modal on a CanvasLayer.
+func _ensure_debug_damage_modal() -> void:
+	if _debug_damage_modal != null:
+		return
+	_debug_damage_modal = OpponentChoiceModal.new()
+	_debug_damage_modal.name = "DebugDamageModal"
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "DebugDamageModalLayer"
+	layer.layer = 120
+	add_child(layer)
+	layer.add_child(_debug_damage_modal)
+	_debug_damage_modal.choice_confirmed.connect(
+			_on_debug_damage_card_chosen)
+
+
+## Callback when the player picks a damage card from the debug modal.
+func _on_debug_damage_card_chosen(selection: Dictionary) -> void:
+	_debug_damage_modal.close_and_clear()
+	var chosen_id: String = str(selection.get("id", ""))
+	if chosen_id.is_empty():
+		_log.warn("Debug damage: no card selected.")
+		return
+	if _debug_damage_target_token == null:
+		_log.warn("Debug damage: no target ship.")
+		return
+	var ship: ShipInstance = _debug_damage_target_token.get_ship_instance()
+	if ship == null:
+		_log.warn("Debug damage: target has no ShipInstance.")
+		return
+	_debug_deal_faceup_card(ship, chosen_id)
+	_debug_damage_target_token = null
+
+
+## Draws a card from the damage deck, overrides its identity, and deals
+## it faceup to the ship with the full pipeline.
+## DBG-050 — debug damage dealing.
+func _debug_deal_faceup_card(ship: ShipInstance,
+		effect_id: String) -> void:
+	if _damage_deck == null:
+		TooltipManager.show_text("Damage deck not available", Vector2.INF, 3.0)
+		return
+	var card: DamageCard = _damage_deck.draw_card()
+	if card == null:
+		TooltipManager.show_text("Damage deck empty", Vector2.INF, 3.0)
+		_log.warn("Debug damage: deck empty.")
+		return
+	# Find the title for this effect_id.
+	var title: String = effect_id
+	var timing: String = "persistent"
+	for entry: Array in DEBUG_DAMAGE_CARDS:
+		if entry[0] as String == effect_id:
+			title = entry[1] as String
+			break
+	# Determine timing from data.
+	match effect_id:
+		"comm_noise", "injured_crew", "projector_misaligned", \
+				"shield_failure", "structural_damage":
+			timing = "immediate"
+		"life_support_failure":
+			timing = "immediate_persistent"
+		_:
+			timing = "persistent"
+	# Override card identity.
+	card.effect_id = effect_id
+	card.title = title
+	card.timing = timing
+	card.trait_type = "Ship"
+	for entry: Array in DEBUG_DAMAGE_CARDS:
+		if entry[0] as String == effect_id:
+			card.trait_type = entry[2] as String
+			break
+	card.is_faceup = true
+	ship.add_faceup_damage(card)
+	_log.info("Debug: dealt faceup '%s' [%s] to %s." % [
+			title, effect_id, ship.ship_data.ship_name])
+	# Register persistent effect if applicable.
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry and DamageCardEffectFactory.is_persistent(card):
+		DamageCardEffectFactory.register_effect(card, ship, registry)
+		_log.info("Debug: persistent effect registered for '%s'." % title)
+	# Emit standard signals so UI updates (card panel, hull display).
+	EventBus.damage_card_flipped.emit(ship, card, true)
+	EventBus.damage_card_dealt.emit(ship, card, true)
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	EventBus.ship_hull_changed.emit(ship, new_hull)
+	# Resolve immediate effect if applicable.
+	if ImmediateEffectResolver.is_immediate(card):
+		_resolve_debug_immediate_effect(card, ship)
+	TooltipManager.show_text(
+			"Dealt: %s" % title, Vector2.INF, 2.5)
+
+
+## Resolves an immediate damage card effect dealt via the debug tool.
+## Auto-resolve cards resolve instantly; choice cards open a second
+## modal for the player to make their selection.
+func _resolve_debug_immediate_effect(card: DamageCard,
+		ship: ShipInstance) -> void:
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var choice_info: Dictionary = resolver.get_required_choice(card, ship)
+	if choice_info.is_empty():
+		var ok: bool = resolver.resolve(card, ship, _damage_deck)
+		if ok:
+			_log.info("Debug: immediate effect auto-resolved for '%s'." %
+					card.title)
+	else:
+		# Choice needed — open a second modal using the same debug modal.
+		_debug_immediate_card = card
+		_debug_immediate_ship = ship
+		_ensure_debug_damage_modal()
+		_debug_damage_modal.choice_confirmed.disconnect(
+				_on_debug_damage_card_chosen)
+		_debug_damage_modal.choice_confirmed.connect(
+				_on_debug_immediate_choice_confirmed)
+		_debug_damage_modal.open(choice_info)
+		_log.info("Debug: choice modal opened for immediate '%s'." %
+				card.title)
+
+
+## Callback when the player confirms their immediate-effect choice
+## (e.g. Injured Crew token, Shield Failure zones, Comm Noise action).
+func _on_debug_immediate_choice_confirmed(selection: Dictionary) -> void:
+	_debug_damage_modal.close_and_clear()
+	# Reconnect the normal handler.
+	_debug_damage_modal.choice_confirmed.disconnect(
+			_on_debug_immediate_choice_confirmed)
+	_debug_damage_modal.choice_confirmed.connect(
+			_on_debug_damage_card_chosen)
+	if _debug_immediate_card == null or _debug_immediate_ship == null:
+		return
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var ok: bool = resolver.resolve(
+			_debug_immediate_card, _debug_immediate_ship,
+			_damage_deck, selection)
+	if ok:
+		_log.info("Debug: immediate effect resolved for '%s'." %
+				_debug_immediate_card.title)
+	_debug_immediate_card = null
+	_debug_immediate_ship = null

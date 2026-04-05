@@ -1794,6 +1794,24 @@ Phase 0 (Scale & Assets)
 | Cards fully working | 13 / 22 | **22 / 22** ✅ |
 | Bugs | 2 | **0** ✅ |
 
+### Phase 9.7: Debug Faceup Damage Dealing (Shift+D) 🔄
+
+**Goal:** Add a debug-mode keyboard shortcut (Shift+D) that lets the tester deal any of the 22 faceup damage cards to a clicked ship, bypassing combat. Accelerates manual testing of all damage card effects.
+
+**Requirements:** DBG-050, DBG-051, DBG-052
+
+#### Implementation Steps
+
+| Step | Task | Status |
+|------|------|--------|
+| 1 | Add `_debug_damage_targeting: bool` state + Shift+D handler in `game_board.gd` | 🔄 |
+| 2 | Route ship click to damage card choice modal when targeting | 🔄 |
+| 3 | On card choice: draw from deck, override effect_id/title, deal faceup with full pipeline | 🔄 |
+| 4 | Escape cancels targeting mode | 🔄 |
+| 5 | Update `DebugHelpPanel` with Shift+D entry under "Cheats" section | 🔄 |
+| 6 | Add requirement DBG-050–052 | 🔄 |
+| 7 | Add MT-9.7.01 manual test scenario | 🔄 |
+
 ---
 
 ## Architecture Hooks for Future Stages

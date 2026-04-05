@@ -4189,3 +4189,24 @@ GUT baseline after fixes: 88 scripts, 1 652 tests, all passing.
 | 1 | Deal Crew Panic faceup to a ship | Card appears faceup |
 | 2 | On activation, choose "Discard dial" to flip Crew Panic facedown | Crew Panic card flips facedown |
 | 3 | On subsequent activations, dial reveals normally | No Crew Panic prompt — effect is fully unregistered |
+
+---
+
+## Phase 9.7 — Debug Faceup Damage Dealing (Shift+D)
+
+**What this phase adds:** A debug-mode cheat key (Shift+D) that lets the tester deal any faceup damage card to any ship, bypassing combat. Enables rapid manual testing of all 22 damage card effects.
+
+**Prerequisite:** Debug mode toggle (F12) working. Phase 9.6 complete (all hooks wired).
+
+### MT-9.7.01 — Debug deal faceup damage via Shift+D
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press F12 to enable debug mode | Debug HUD appears; help panel shows Shift+D under "Cheats" |
+| 2 | Press Shift+D | Tooltip: "Click a ship to deal faceup damage" |
+| 3 | Click a ship token | OpponentChoiceModal opens listing all 22 damage card types |
+| 4 | Select "Ruptured Engine" and confirm | Card dealt faceup to ship; card panel updates; persistent effect registered |
+| 5 | Execute a maneuver at speed 2 on that ship | Ruptured Engine fires — extra facedown damage dealt |
+| 6 | Press Shift+D again, click same ship, select "Structural Damage" | Immediate effect resolves: extra facedown card dealt, Structural Damage flips facedown |
+| 7 | Press Shift+D then Escape | Targeting mode cancelled; no modal appears |
+| 8 | Without debug mode (F12 off), press Shift+D | Nothing happens |

@@ -229,14 +229,31 @@ helpers. 0 functions >30 code lines remain (145 total functions).
 | `_create_drag_preview()` | 37 | Extract style/layout helpers |
 | `_on_squadron_step_entered()` | 33 | Extract guard checks |
 
-#### A4: Other Files (~20 functions) — partially complete
+#### A4: Other Files (29 functions across 13 files) ✅
 
-**Completed:** `ship_card_panel.gd` (8 funcs) ✅, `game_manager.gd` (3 funcs) ✅,
-`action_toolbar.gd` (no oversized) ✅.
+**Completed:** All 29 oversized functions across 13 files split into
+focused helpers (≤ 30 body lines each).
 
-**Remaining:** `overlap_resolver.gd` (2), `token_mover.gd` (4),
-`maneuver_tool_scene.gd` (5), `damage_card_effect.gd` (3), `main_menu.gd` (2),
-and ~8 single-function files.
+| File | Functions Split | Helpers Extracted |
+|------|----------------|-------------------|
+| `ship_card_panel.gd` | 8 | 17 |
+| `game_manager.gd` | 3 | 3 |
+| `overlap_resolver.gd` | 1 | 4 |
+| `token_mover.gd` | 2 | 6 |
+| `damage_card_effect.gd` | 3 | 3 |
+| `main_menu.gd` | 2 | 5 |
+| `maneuver_tool_scene.gd` | 5 | 9 |
+| `targeting_list_builder.gd` | 7 | ~20 |
+| `game_scale.gd` | 1 | 1 |
+| `music_manager.gd` | 1 | 1 |
+| `immediate_effect_resolver.gd` | 1 | 1 |
+| `maneuver_tool_state.gd` | 1 | 2 |
+| `range_finder.gd` | 2 | 4 |
+| `repair_resolver.gd` | 1 | 1 |
+| `firing_arc_overlay.gd` | 1 | 2 |
+| `ship_token.gd` | 1 | 2 |
+
+**Skipped (no oversized):** `action_toolbar.gd`.
 
 #### A Verification
 

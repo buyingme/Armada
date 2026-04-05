@@ -501,7 +501,8 @@ size or drift off-screen:
 | Behaviour | Root Cause | Visible Symptom |
 |-----------|-----------|-----------------|
 | **Stale cached size** | `PanelContainer.size` retains its previous height after children are removed | Panel appears at old (large) size on reopen |
-| **Offset drift** | Setting `size = Vector2.ZERO` on an anchor-based control triggers offset recalculation to preserve screen position | Panel drifts upward by ~388 px per reopen cycle |
+| **Vertical offset drift** | Setting `size.y = 0` on an anchor-based control triggers vertical offset recalculation | Panel drifts upward by ~388 px per reopen cycle (mitigated by re-pinning `offset_top/bottom`) |
+| **Horizontal drift** | Setting `size = Vector2.ZERO` (full vector) resets width; when content inflates beyond `custom_minimum_size.x`, Godot preserves the left edge and grows rightward | Panel centre shifts left by ~20 px per reopen cycle |
 | **Hidden-child inflation** | Children with `visible = false` contribute to min-size during synchronous `add_child()`; only excluded in the deferred layout pass | Panel inflates to ~648 px (all sections) instead of ~120 px (visible only) |
 
 The deferred layout pass that corrects hidden-child inflation fires
@@ -516,10 +517,16 @@ method:
 
 ```
 _clear_content()          ← remove_child() before queue_free()
-size = Vector2.ZERO       ← zero stale cached height
-offset_top/bottom = -40   ← re-pin canonical offsets (counteracts drift)
+size.y = 0                ← zero stale cached HEIGHT only (not width!)
+offset_top/bottom = -40   ← re-pin canonical vertical offsets
 _request_deferred_layout()← call_deferred forces re-layout next frame
 ```
+
+> **Critical:** Use `size.y = 0`, **not** `size = Vector2.ZERO`.  Zeroing
+> the full vector resets horizontal width; when content children inflate
+> the panel beyond `custom_minimum_size.x`, Godot preserves the left edge
+> and grows rightward, causing the panel centre to shift left by ~20 px
+> per reopen cycle.
 
 > Full pattern with code examples: `.skills/ui_styling.md` § 10.
 
@@ -533,10 +540,13 @@ _request_deferred_layout()← call_deferred forces re-layout next frame
 
 Godot's anchor/offset system is **bidirectional**: changing `size`
 recalculates offsets, and changing offsets recalculates size.  When
-resetting a reused panel, both must be set in the correct order
-(size first, then offsets) within the same frame to avoid accumulating
-drift.  A deferred layout reset on the next frame handles the
-hidden-child inflation that cannot be resolved synchronously.
+resetting a reused panel, only the **vertical** component of `size`
+should be zeroed (`size.y = 0`), followed by re-pinning vertical
+offsets (`offset_top/bottom = -40`) within the same frame.  Zeroing
+the full vector (`size = Vector2.ZERO`) also resets horizontal width,
+causing horizontal drift when content exceeds `custom_minimum_size.x`.
+A deferred layout reset on the next frame handles the hidden-child
+inflation that cannot be resolved synchronously.
 
 ## 8.11 Overlap & Displacement Pattern
 

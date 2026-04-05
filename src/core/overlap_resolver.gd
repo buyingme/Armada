@@ -65,75 +65,92 @@ func check_ship_ship_overlap(
 
 	# Try at current speed, then reduce until 0.
 	while current_speed >= 0:
-		var xform: Transform2D
-		if current_speed == 0:
-			# Speed 0: ship stays in place.
-			xform = original_transform
-		else:
-			tool_state.set_simulated_speed(current_speed)
-			xform = tool_state.compute_final_transform(
-					attach_pos, attach_rot, ghost_side)
+		var xform: Transform2D = _compute_xform_at_speed(
+				tool_state, current_speed, attach_pos,
+				attach_rot, ghost_side, original_transform)
+		var closest_idx: int = _find_closest_overlap(
+				moving_ship_size, xform, other_ships)
 
-		var moving_base: ShipBase = ShipBase.new(
-				moving_ship_size, xform)
-		var moving_poly: PackedVector2Array = moving_base.get_base_polygon()
-
-		# Check overlap against every other ship.
-		var overlap_found: bool = false
-		var closest_idx: int = -1
-		var closest_dist: float = INF
-
-		for i: int in range(other_ships.size()):
-			var other: ShipBase = other_ships[i] as ShipBase
-			var other_poly: PackedVector2Array = other.get_base_polygon()
-			var dist: float = Geometry2DHelper.distance_polygon_to_polygon(
-					moving_poly, other_poly)
-			if dist <= 0.0:
-				overlap_found = true
-				# Track closest for damage assignment.
-				var d: float = xform.origin.distance_to(
-						other.ship_transform.origin)
-				if d < closest_dist:
-					closest_dist = d
-					closest_idx = i
-
-		if not overlap_found:
-			# No overlap — maneuver succeeds at this speed.
-			result.overlaps = (current_speed != result.original_speed)
-			result.final_transform = xform
-			result.final_speed = current_speed
-			result.overlapped_ship_index = closest_idx
-			result.stayed_in_place = false
-			if result.overlaps:
-				# We reduced speed but found a valid position.
-				# The overlapped_ship_index from the LAST overlapping
-				# attempt is the one that receives damage.
-				result.overlapped_ship_index = _last_overlap_idx
-			_log.info("Maneuver resolved at speed %d (original %d)." % [
-					current_speed, result.original_speed])
-			# Restore simulated speed to original.
+		if closest_idx < 0:
+			_fill_success_result(result, current_speed, xform)
 			tool_state.set_simulated_speed(result.original_speed)
 			return result
 
-		# Record the overlapping ship for this attempt.
 		_last_overlap_idx = closest_idx
 		_log.info("Overlap at speed %d with ship %d — reducing." % [
 				current_speed, closest_idx])
 		current_speed -= 1
 
-	# Speed reached 0 and still overlaps: ship stays at original position.
-	# OV-010: "This process continues until the ship can finish its
-	# maneuver, even if that maneuver is to remain in place at speed 0."
-	# OV-011: Both ships still take damage.
+	_fill_stayed_in_place_result(result, original_transform)
+	tool_state.set_simulated_speed(result.original_speed)
+	return result
+
+
+## Computes the ship transform at a given speed (0 = original position).
+func _compute_xform_at_speed(
+		tool_state: ManeuverToolState,
+		speed: int,
+		attach_pos: Vector2,
+		attach_rot: float,
+		ghost_side: String,
+		original_transform: Transform2D) -> Transform2D:
+	if speed == 0:
+		return original_transform
+	tool_state.set_simulated_speed(speed)
+	return tool_state.compute_final_transform(
+			attach_pos, attach_rot, ghost_side)
+
+
+## Returns the index of the closest overlapping ship, or -1 if none.
+func _find_closest_overlap(
+		ship_size: Constants.ShipSize,
+		xform: Transform2D,
+		other_ships: Array) -> int:
+	var moving_base: ShipBase = ShipBase.new(ship_size, xform)
+	var moving_poly: PackedVector2Array = moving_base.get_base_polygon()
+	var closest_idx: int = -1
+	var closest_dist: float = INF
+
+	for i: int in range(other_ships.size()):
+		var other: ShipBase = other_ships[i] as ShipBase
+		var other_poly: PackedVector2Array = other.get_base_polygon()
+		var dist: float = Geometry2DHelper.distance_polygon_to_polygon(
+				moving_poly, other_poly)
+		if dist <= 0.0:
+			var d: float = xform.origin.distance_to(
+					other.ship_transform.origin)
+			if d < closest_dist:
+				closest_dist = d
+				closest_idx = i
+	return closest_idx
+
+
+## Fills the result for a successful (non-stuck) maneuver.
+func _fill_success_result(
+		result: ShipShipResult,
+		speed: int,
+		xform: Transform2D) -> void:
+	result.overlaps = (speed != result.original_speed)
+	result.final_transform = xform
+	result.final_speed = speed
+	result.stayed_in_place = false
+	if result.overlaps:
+		result.overlapped_ship_index = _last_overlap_idx
+	_log.info("Maneuver resolved at speed %d (original %d)." % [
+			speed, result.original_speed])
+
+
+## Fills the result when the ship cannot move (speed 0, still overlapping).
+## Rules Reference: RRG "Overlapping", p.8; OV-010, OV-011.
+func _fill_stayed_in_place_result(
+		result: ShipShipResult,
+		original_transform: Transform2D) -> void:
 	result.overlaps = true
 	result.final_transform = original_transform
 	result.final_speed = 0
 	result.overlapped_ship_index = _last_overlap_idx
 	result.stayed_in_place = true
 	_log.info("Ship stays in place (speed 0). Overlap damage applies.")
-	# Restore simulated speed.
-	tool_state.set_simulated_speed(result.original_speed)
-	return result
 
 
 ## Index of the last-found overlapping ship (used for damage assignment).

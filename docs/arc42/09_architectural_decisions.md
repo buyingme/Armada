@@ -169,7 +169,7 @@ Each decision follows this structure:
 - **Status:** Accepted
 - **Date:** 2026-03-29
 - **Context:** Modal panels (AttackSimPanel, ActivationModal) are positioned at bottom-centre via `PRESET_CENTER_BOTTOM` and reused across multiple ship activations. On reuse, three interacting Godot layout behaviours caused panels to either retain stale heights (648 px vs expected 120 px), drift off-screen (offsets accumulating ~388 px per cycle), or fail to shrink because hidden children still contribute to min-size during synchronous `add_child()`. The deferred layout pass that corrects hidden-child inflation fires only on first visibility — not on reuse.
-- **Decision:** Adopt a mandatory four-step reset pattern: (1) `remove_child()` before `queue_free()` in clear methods, (2) `size = Vector2.ZERO` to clear stale height, (3) immediate offset re-pin to canonical values (`-40.0`), (4) `call_deferred("_deferred_layout_reset")` after setting `visible = true` to force a next-frame layout correction. Document as `.skills/ui_styling.md` § 10.
+- **Decision:** Adopt a mandatory four-step reset pattern: (1) `remove_child()` before `queue_free()` in clear methods, (2) `size.y = 0` to clear stale height (**not** `size = Vector2.ZERO` — zeroing width causes horizontal drift when content exceeds `custom_minimum_size.x`), (3) immediate vertical offset re-pin to canonical values (`-40.0`), (4) `call_deferred("_deferred_layout_reset")` after setting `visible = true` to force a next-frame layout correction. Document as `.skills/ui_styling.md` § 10.
 - **Consequences:**
   - (+) Panels reliably reset to correct size on every reuse
   - (+) Bottom-centre positioning is maintained regardless of activation history

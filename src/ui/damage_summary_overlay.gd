@@ -53,6 +53,9 @@ func show_summary(faceup_textures: Array, facedown_count: int,
 		title_suffix: String = "Damage Dealt") -> void:
 	_clear_content()
 	if faceup_textures.is_empty() and facedown_count == 0:
+		# Nothing to display — emit dismissed so callers waiting on the
+		# signal (e.g. AttackExecutor) are never left hanging.
+		dismissed.emit()
 		return
 	visible = true
 	_build_content(faceup_textures, facedown_count,

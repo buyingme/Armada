@@ -139,6 +139,7 @@ var _maneuver_tool_shown: bool = false
 func _init() -> void:
 	visible = false
 	_apply_anchor_position()
+	_log_offsets("_init")
 
 
 ## Marks the Attack step as skippable (no valid targets).
@@ -173,9 +174,14 @@ func set_squadron_token_only(token_only: bool) -> void:
 ## [param state] — the ShipActivationState tracking this activation.
 func open(state: ShipActivationState) -> void:
 	_activation_state = state
+	_log_offsets("open:before_build")
 	_build_ui()
+	_log_offsets("open:after_build")
 	_update_step_display()
+	_log_offsets("open:after_step_display")
 	visible = true
+	_request_deferred_layout()
+	_log_offsets("open:after_visible+deferred_queued")
 	# Grab focus so Escape key works immediately.
 	set_process_unhandled_input(true)
 	_log.info("Activation modal opened.")
@@ -220,8 +226,22 @@ func is_open() -> bool:
 
 
 ## Updates the visual display to match current step.
+## Schedules a deferred layout reset because toggling button visibility
+## inside [method _update_step_display] changes the panel's minimum size.
 func refresh() -> void:
 	_update_step_display()
+	if visible:
+		_request_deferred_layout()
+		_log_offsets("refresh")
+
+
+## Logs current offset/size values for drift diagnostics.
+## Remove once the left-drift issue is confirmed fixed.
+func _log_offsets(tag: String) -> void:
+	_log.info("[OFFSETS] %s: L=%.1f R=%.1f T=%.1f B=%.1f sz=(%d,%d) pos=(%d,%d) anchors=(%.2f,%.2f,%.2f,%.2f)" % [
+			tag, offset_left, offset_right, offset_top, offset_bottom,
+			int(size.x), int(size.y), int(position.x), int(position.y),
+			anchor_left, anchor_top, anchor_right, anchor_bottom])
 
 
 ## Sets the collision/overlap message shown between the step rows and
@@ -236,6 +256,8 @@ func set_collision_message(text: String) -> void:
 	else:
 		_collision_label.text = text
 		_collision_label.visible = true
+	if visible:
+		_request_deferred_layout()
 
 
 ## Escape key dismisses the modal.
@@ -274,16 +296,20 @@ func _apply_anchor_position() -> void:
 
 ## Builds the full modal UI from scratch.
 ## Positioned at bottom-centre, matching AttackSimPanel layout.
-## (see .skills/ui_styling.md §1, §3, §4).
+## (see .skills/ui_styling.md §1, §3, §4, §10).
 func _build_ui() -> void:
 	_clear_ui()
-	# First zero the cached size (prevents the PanelContainer from
-	# retaining its old expanded height from a previous activation).
-	# This shifts offsets as a side-effect, so we immediately re-pin
-	# them to the canonical -40 values afterwards.
-	size = Vector2.ZERO
+	_log_offsets("_build_ui:after_clear")
+	# §10 anchor reset: zero stale cached HEIGHT only.  Using size.y = 0
+	# instead of size = Vector2.ZERO prevents Godot from recalculating
+	# horizontal offsets when the panel shrinks from content-inflated
+	# width back to custom_minimum_size — which caused leftward drift.
+	# Horizontal offsets are set once in _init() via _apply_anchor_position().
+	size.y = 0
+	_log_offsets("_build_ui:after_size_y_zero")
 	offset_top = -40.0
 	offset_bottom = -40.0
+	_log_offsets("_build_ui:after_repin_vert")
 	_build_panel_style()
 	var vbox: VBoxContainer = _build_content_container()
 	_build_header_labels(vbox)
@@ -838,10 +864,30 @@ func _auto_skip_current() -> void:
 
 
 ## Updates the bottom-centre anchored position for the given viewport size.
-## Matches AttackSimPanel positioning.
-func centre_on_screen(viewport_size: Vector2) -> void:
-	var panel_w: float = minf(MODAL_MAX_WIDTH,
-			viewport_size.x * MODAL_WIDTH_FRACTION)
-	custom_minimum_size = Vector2(panel_w, 0.0)
-	offset_left = - panel_w * 0.5
-	offset_right = panel_w * 0.5
+## Called only from the viewport-resize handler.  Re-runs the full anchor
+## setup (the single source of truth for all offsets) and then schedules
+## a deferred vertical reset to handle stale cached size.
+func centre_on_screen(_viewport_size: Vector2) -> void:
+	_log_offsets("centre_on_screen:before")
+	_apply_anchor_position()
+	_request_deferred_layout()
+	_log_offsets("centre_on_screen:after")
+
+
+## Schedules a deferred layout reset so Godot's layout pass completes
+## before we re-pin the control offsets.  Without this, adding children
+## in [method _build_ui] causes Godot to recalculate offsets on the next
+## frame, drifting the panel left.  Mirrors AttackSimPanel §10 pattern.
+func _request_deferred_layout() -> void:
+	call_deferred("_deferred_layout_reset")
+
+
+## Resets size + vertical offsets on the next frame so the panel shrinks
+## to fit only its visible children.  Horizontal offsets are never touched
+## here — they are set once in [method _apply_anchor_position] (§10).
+func _deferred_layout_reset() -> void:
+	_log_offsets("_deferred:before")
+	size.y = 0
+	offset_top = -40.0
+	offset_bottom = -40.0
+	_log_offsets("_deferred:after")

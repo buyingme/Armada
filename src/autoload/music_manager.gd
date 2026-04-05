@@ -334,36 +334,33 @@ func _load_config() -> void:
 		return
 
 	var data: Dictionary = json.data
-
-	# --- In-game track count (how many in_game_N entries to expect) ---
 	_in_game_track_count = int(data.get("in_game_track_count", 12))
-
-	# --- Music entries ---
-	if data.has("music"):
-		var music_section: Dictionary = data["music"]
-		for key: String in music_section.keys():
-			var entry: Dictionary = music_section[key]
-			var path: String = entry.get("path", "")
-			if path.is_empty():
-				continue
-			var stream: AudioStream = load(path)
-			if stream == null:
-				_log.warn("Could not load music stream: %s" % path)
-				continue
-			# In-game playlist tracks do NOT loop — the finished signal
-			# advances to the next track. Menu/override/victory tracks loop.
-			var is_playlist_track: bool = key.begins_with("in_game_")
-			if stream is AudioStreamMP3:
-				(stream as AudioStreamMP3).loop = not is_playlist_track
-			elif stream is AudioStreamOggVorbis:
-				(stream as AudioStreamOggVorbis).loop = not is_playlist_track
-			_streams[key] = stream
-			_volumes[key] = float(entry.get("volume", 1.0))
-
-	# --- Global settings ---
+	_load_music_entries(data)
 	_fade_duration = float(data.get("music_fade_duration_s", 3.0))
 	_destruction_override_duration = float(
 			data.get("destruction_override_duration_s", 60.0))
-
 	_log.info("Loaded %d music tracks. Fade: %.1fs, override: %.0fs."
 			% [_streams.size(), _fade_duration, _destruction_override_duration])
+
+
+## Parses each entry in the "music" section and loads AudioStreams.
+func _load_music_entries(data: Dictionary) -> void:
+	if not data.has("music"):
+		return
+	var music_section: Dictionary = data["music"]
+	for key: String in music_section.keys():
+		var entry: Dictionary = music_section[key]
+		var path: String = entry.get("path", "")
+		if path.is_empty():
+			continue
+		var stream: AudioStream = load(path)
+		if stream == null:
+			_log.warn("Could not load music stream: %s" % path)
+			continue
+		var is_playlist_track: bool = key.begins_with("in_game_")
+		if stream is AudioStreamMP3:
+			(stream as AudioStreamMP3).loop = not is_playlist_track
+		elif stream is AudioStreamOggVorbis:
+			(stream as AudioStreamOggVorbis).loop = not is_playlist_track
+		_streams[key] = stream
+		_volumes[key] = float(entry.get("volume", 1.0))

@@ -148,6 +148,8 @@ func move_shields(from_zone: String, to_zone: String) -> bool:
 	if not can_move_shields_between(from_zone, to_zone):
 		_log.info("Cannot move shields from %s to %s." % [from_zone, to_zone])
 		return false
+	if not _is_shield_op_allowed(to_zone):
+		return false
 	_ship.reduce_shields(from_zone, 1)
 	_ship.restore_shields(to_zone, 1)
 	_remaining_points -= Constants.REPAIR_MOVE_SHIELDS_COST
@@ -192,6 +194,8 @@ func can_recover_shields_on(zone: String) -> bool:
 func recover_shields(zone: String) -> bool:
 	if not can_recover_shields_on(zone):
 		_log.info("Cannot recover shield on %s." % zone)
+		return false
+	if not _is_shield_op_allowed(zone):
 		return false
 	_ship.restore_shields(zone, 1)
 	_remaining_points -= Constants.REPAIR_RECOVER_SHIELDS_COST
@@ -305,21 +309,46 @@ func _resolve_availability(ship: ShipInstance) -> void:
 	_total_points = _dial_points + _token_points
 	_remaining_points = _total_points
 
-	# Hook: CALC_ENGINEERING_VALUE — Power Failure halves engineering.
-	if _effect_registry and _total_points > 0:
-		var eng_ctx: EffectContext = EffectContext.new()
-		eng_ctx.set_meta_value("ship", _ship)
-		eng_ctx.set_meta_value("engineering_value", _total_points)
-		eng_ctx = _effect_registry.resolve_hook(
-				&"CALC_ENGINEERING_VALUE", eng_ctx)
-		var modified: int = int(eng_ctx.get_meta_value(
-				"engineering_value", _total_points))
-		if modified != _total_points:
-			_log.info("Engineering value modified: %d → %d (damage effect)"
-					% [_total_points, modified])
-			_total_points = modified
-			_remaining_points = _total_points
+	_apply_engineering_hook()
 
 	_log.info("Repair availability: dial=%s(%d pts), token=%s(%d pts), total=%d" %
 			[str(_has_repair_dial), _dial_points,
 			str(_has_repair_token), _token_points, _total_points])
+
+
+## Applies the CALC_ENGINEERING_VALUE hook (e.g. Power Failure halves value).
+func _apply_engineering_hook() -> void:
+	if not _effect_registry or _total_points <= 0:
+		return
+	var eng_ctx: EffectContext = EffectContext.new()
+	eng_ctx.set_meta_value("ship", _ship)
+	eng_ctx.set_meta_value("engineering_value", _total_points)
+	eng_ctx = _effect_registry.resolve_hook(
+			&"CALC_ENGINEERING_VALUE", eng_ctx)
+	var modified: int = int(eng_ctx.get_meta_value(
+			"engineering_value", _total_points))
+	if modified != _total_points:
+		_log.info("Engineering value modified: %d → %d (damage effect)"
+				% [_total_points, modified])
+		_total_points = modified
+		_remaining_points = _total_points
+
+
+## Checks the REPAIR_VALIDATE_SHIELD hook for [param zone].
+## Returns true if the operation is allowed (not cancelled).
+## Capacitor Failure blocks shield operations targeting zones with 0 shields.
+## Rules Reference: RRG "Damage Cards", p.4; "Capacitor Failure" card text.
+func _is_shield_op_allowed(zone: String) -> bool:
+	if not _effect_registry:
+		return true
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", _ship)
+	ctx.set_meta_value(
+			"target_zone_shields",
+			int(_ship.current_shields.get(zone, 0)))
+	ctx = _effect_registry.resolve_hook(
+			&"REPAIR_VALIDATE_SHIELD", ctx)
+	if ctx.cancelled:
+		_log.info("Shield operation on %s blocked by damage effect." % zone)
+		return false
+	return true

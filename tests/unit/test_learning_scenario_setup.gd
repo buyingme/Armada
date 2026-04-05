@@ -118,11 +118,14 @@ func test_victory_ii_in_top_deployment_zone() -> void:
 
 func test_rebels_in_bottom_deployment_zone() -> void:
 	var cr90: TokenPlacement = _find_by_key("cr90_corvette_a")
-	var neb: TokenPlacement = _find_by_key("nebulon_b_escort_frigate")
 	assert_true(cr90.pos_y > 0.60,
 			"CR90 should be in the bottom (Rebel) zone (pos_y > 0.60)")
-	assert_true(neb.pos_y > 0.60,
-			"Nebulon-B should be in the bottom (Rebel) zone (pos_y > 0.60)")
+
+
+func test_nebulon_b_in_centre_of_board() -> void:
+	var neb: TokenPlacement = _find_by_key("nebulon_b_escort_frigate")
+	assert_true(neb.pos_y > 0.25 and neb.pos_y < 0.50,
+			"Nebulon-B should be in the centre area (0.25 < pos_y < 0.50)")
 
 
 # --- Pixel position conversion ---

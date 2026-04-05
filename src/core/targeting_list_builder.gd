@@ -151,11 +151,35 @@ static func build(
 	_log.debug("=== build() start — active_player=%d, ships=%d, squads=%d ===" % [
 			active_player, ships.size(), squadrons.size()])
 	var build_result: BuildResult = BuildResult.new()
+	var fleets: Dictionary = _sort_into_fleets(
+			ships, squadrons, active_player)
+	var friendly_ships: Array = fleets["friendly_ships"]
+	var enemy_ships: Array = fleets["enemy_ships"]
+	var friendly_squads: Array = fleets["friendly_squads"]
+	var enemy_squads: Array = fleets["enemy_squads"]
+	_log.debug("friendly=%d ships + %d squads, enemies=%d ships + %d squads" % [
+			friendly_ships.size(), friendly_squads.size(),
+			enemy_ships.size(), enemy_squads.size()])
+	var all_ship_bodies: Array = _build_all_ship_bodies(ships)
+	_build_friendly_ship_results(_log, build_result, friendly_ships,
+			enemy_ships, enemy_squads, all_ship_bodies)
+	_build_ghost_result(_log, build_result, ghost,
+			enemy_ships, enemy_squads, all_ship_bodies)
+	_build_friendly_squad_results(_log, build_result, friendly_squads,
+			enemy_ships, enemy_squads, all_ship_bodies)
+	_log.debug("=== build() complete — %d ship + %d squad results ===" % [
+			build_result.ship_results.size(),
+			build_result.squad_results.size()])
+	return build_result
+
+
+## Sorts ships and squadrons into friendly/enemy arrays.
+static func _sort_into_fleets(ships: Array, squadrons: Array,
+		active_player: int) -> Dictionary:
 	var friendly_ships: Array = []
 	var enemy_ships: Array = []
 	var friendly_squads: Array = []
 	var enemy_squads: Array = []
-	# Sort into friendly and enemy.
 	for ship: Variant in ships:
 		var s: ShipInfo = ship as ShipInfo
 		if s.owner_player == active_player:
@@ -168,51 +192,72 @@ static func build(
 			friendly_squads.append(sq)
 		else:
 			enemy_squads.append(sq)
-	_log.debug("friendly=%d ships + %d squads, enemies=%d ships + %d squads" % [
-			friendly_ships.size(), friendly_squads.size(),
-			enemy_ships.size(), enemy_squads.size()])
-	# Build obstruction bodies from ALL ships (used for LOS checks).
-	var all_ship_bodies: Array = []
-	for ship2: Variant in ships:
-		var s2: ShipInfo = ship2 as ShipInfo
-		all_ship_bodies.append({
-			"info": s2,
+	return {
+		"friendly_ships": friendly_ships,
+		"enemy_ships": enemy_ships,
+		"friendly_squads": friendly_squads,
+		"enemy_squads": enemy_squads,
+	}
+
+
+## Builds ObstructionBody entries from ALL ships for LOS checks.
+static func _build_all_ship_bodies(ships: Array) -> Array:
+	var bodies: Array = []
+	for ship: Variant in ships:
+		var s: ShipInfo = ship as ShipInfo
+		bodies.append({
+			"info": s,
 			"body": LineOfSightChecker.ObstructionBody.from_ship_base(
-					s2.ship_name, s2.pos, s2.rot, s2.half_w, s2.half_l),
+					s.ship_name, s.pos, s.rot, s.half_w, s.half_l),
 		})
-	# Process each friendly ship.
+	return bodies
+
+
+## Processes each friendly ship and appends results to [param build_result].
+static func _build_friendly_ship_results(log: GameLogger,
+		build_result: BuildResult, friendly_ships: Array,
+		enemy_ships: Array, enemy_squads: Array,
+		all_ship_bodies: Array) -> void:
 	for friendly: Variant in friendly_ships:
 		var fs: ShipInfo = friendly as ShipInfo
-		_log_ship_geometry(_log, fs)
+		_log_ship_geometry(log, fs)
 		var entry: ShipTargetingResult = _build_ship_entry(
-				_log, fs, enemy_ships, enemy_squads, all_ship_bodies)
-		# Incoming threats from enemy ships and squadrons.
+				log, fs, enemy_ships, enemy_squads, all_ship_bodies)
 		entry.incoming = _build_incoming_threats(
 				fs, enemy_ships, enemy_squads, all_ship_bodies)
 		build_result.ship_results.append(entry)
-	# Ghost section.
-	if ghost != null:
-		_log_ship_geometry(_log, ghost)
-		var ghost_entry: ShipTargetingResult = _build_ship_entry(
-				_log, ghost, enemy_ships, enemy_squads, all_ship_bodies)
-		ghost_entry.incoming = _build_incoming_threats(
-				ghost, enemy_ships, enemy_squads, all_ship_bodies)
-		ghost_entry.ship_name = ghost.ship_name + " (projected)"
-		build_result.ship_results.append(ghost_entry)
-	# Process each friendly squadron (TL-LIST-011, TL-LIST-012).
+
+
+## Processes the optional ghost ship and appends to [param build_result].
+static func _build_ghost_result(log: GameLogger,
+		build_result: BuildResult, ghost: ShipInfo,
+		enemy_ships: Array, enemy_squads: Array,
+		all_ship_bodies: Array) -> void:
+	if ghost == null:
+		return
+	_log_ship_geometry(log, ghost)
+	var ghost_entry: ShipTargetingResult = _build_ship_entry(
+			log, ghost, enemy_ships, enemy_squads, all_ship_bodies)
+	ghost_entry.incoming = _build_incoming_threats(
+			ghost, enemy_ships, enemy_squads, all_ship_bodies)
+	ghost_entry.ship_name = ghost.ship_name + " (projected)"
+	build_result.ship_results.append(ghost_entry)
+
+
+## Processes each friendly squadron and appends to [param build_result].
+static func _build_friendly_squad_results(log: GameLogger,
+		build_result: BuildResult, friendly_squads: Array,
+		enemy_ships: Array, enemy_squads: Array,
+		all_ship_bodies: Array) -> void:
 	for friendly_sq: Variant in friendly_squads:
 		var fsq: SquadInfo = friendly_sq as SquadInfo
-		_log.debug("[%s] pos=%s r=%.0f" % [
+		log.debug("[%s] pos=%s r=%.0f" % [
 				fsq.squad_name, _v2str(fsq.pos), fsq.radius])
 		var sq_entry: SquadTargetingResult = _build_squad_entry(
-				_log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
+				log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
 		sq_entry.incoming = _build_incoming_squad_threats(
-				_log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
+				log, fsq, enemy_ships, enemy_squads, all_ship_bodies)
 		build_result.squad_results.append(sq_entry)
-	_log.debug("=== build() complete — %d ship + %d squad results ===" % [
-			build_result.ship_results.size(),
-			build_result.squad_results.size()])
-	return build_result
 
 
 ## Logs the geometry of a ship (position, rotation, arc boundary world points).
@@ -318,73 +363,104 @@ static func _check_ship_target(
 	var results: Array = []
 	for dz: int in def_zones:
 		var def_hz: Constants.HullZone = dz as Constants.HullZone
-		var def_edge: Array[Vector2] = _get_ship_edge(defender, def_hz)
-		# Step 1: arc containment test (TL-ARC-006 step 1).
-		var in_arc: bool = RangeFinder.is_hull_zone_edge_in_arc(
-				def_edge, atk_zone, atk.arc_pts)
-		log.debug("      def_zone %s edge=[%s..%s] in_arc=%s" % [
-				_hz_key(def_hz), _v2str(def_edge[0]),
-				_v2str(def_edge[-1]), str(in_arc)])
-		if not in_arc:
-			continue
-		# Step 2: range measurement within arc (TL-ARC-006 step 2).
-		var dist: float = RangeFinder.measure_attack_range_ship(
-				atk_edge, def_edge, atk_zone, atk.arc_pts)
-		if dist >= INF:
-			log.debug("      dist=INF — skipped")
-			continue
-		var band: String = GameScale.get_range_band(dist)
-		log.debug("      dist=%.1f band=%s" % [dist, band])
-		if band == Constants.RANGE_BAND_BEYOND:
-			continue
-		# Step 3: max attack range filter (TL-RNG-004).
-		if not RangeFinder.is_within_max_range(band, armament):
-			continue
-		# Step 4: LOS check (TL-LOS-001, TL-LOS-004).
-		var atk_los: Vector2 = atk.los_pts.get(
-				_hz_key(atk_zone), atk.pos)
-		var def_los: Vector2 = defender.los_pts.get(
-				_hz_key(def_hz), defender.pos)
-		# Build intervening ship bodies (exclude attacker and defender).
-		var bodies: Array = _get_intervening_bodies(atk, defender, all_ship_bodies)
-		var los_result: LineOfSightChecker.LOSResult = \
-				LineOfSightChecker.trace_los_ship_to_ship(
-						atk_los, def_los, def_hz,
-						defender.pos, defender.rot,
-						defender.half_w, defender.half_l,
-						bodies, [],
-						defender.arc_pts)
-		if not los_result.has_los:
-			continue
-		# TL-LOS-004: also check range path blocking.
-		# Approximate range path endpoints.
-		var range_blocked: bool = LineOfSightChecker.is_range_path_blocked(
-				RangeFinder.closest_point_on_segment(
-						def_edge[0].lerp(def_edge[1], 0.5),
-						atk_edge[0], atk_edge[1]),
-				def_edge[0].lerp(def_edge[1], 0.5),
-				def_hz,
-				defender.pos, defender.rot,
-				defender.half_w, defender.half_l,
-				defender.arc_pts)
-		if range_blocked:
-			continue
-		var entry: TargetEntry = TargetEntry.new()
-		entry.target_name = defender.ship_name
-		entry.arc = atk_zone
-		entry.target_zone = def_hz
-		entry.has_target_zone = true
-		entry.range_band = band
-		entry.dice = RangeFinder.dice_at_range(armament, band)
-		entry.obstructed = los_result.obstructed
-		entry.obstructed_by = los_result.obstructed_by
-		results.append(entry)
-		log.debug("    -> HIT ship '%s' atk=%s def=%s band=%s dist=%.1f" % [
-				defender.ship_name, _hz_key(atk_zone),
-				_hz_key(def_hz), band, dist])
+		var entry: TargetEntry = _validate_ship_zone(
+				log, atk, atk_zone, atk_edge, armament,
+				defender, def_hz, all_ship_bodies)
+		if entry != null:
+			results.append(entry)
 	if results.is_empty():
 		log.debug("    -> no valid target from '%s'" % defender.ship_name)
 	return results
+
+
+## Validates one defending hull zone of [param defender] as a target.
+## Returns a TargetEntry if valid, null otherwise.
+static func _validate_ship_zone(
+		log: GameLogger,
+		atk: ShipInfo,
+		atk_zone: Constants.HullZone,
+		atk_edge: Array[Vector2],
+		armament: Dictionary,
+		defender: ShipInfo,
+		def_hz: Constants.HullZone,
+		all_ship_bodies: Array) -> TargetEntry:
+	var def_edge: Array[Vector2] = _get_ship_edge(defender, def_hz)
+	var in_arc: bool = RangeFinder.is_hull_zone_edge_in_arc(
+			def_edge, atk_zone, atk.arc_pts)
+	log.debug("      def_zone %s edge=[%s..%s] in_arc=%s" % [
+			_hz_key(def_hz), _v2str(def_edge[0]),
+			_v2str(def_edge[-1]), str(in_arc)])
+	if not in_arc:
+		return null
+	var dist: float = RangeFinder.measure_attack_range_ship(
+			atk_edge, def_edge, atk_zone, atk.arc_pts)
+	if dist >= INF:
+		log.debug("      dist=INF — skipped")
+		return null
+	var band: String = GameScale.get_range_band(dist)
+	log.debug("      dist=%.1f band=%s" % [dist, band])
+	if band == Constants.RANGE_BAND_BEYOND:
+		return null
+	if not RangeFinder.is_within_max_range(band, armament):
+		return null
+	var los_result: LineOfSightChecker.LOSResult = _check_ship_los(
+			atk, atk_zone, atk_edge, defender, def_hz, def_edge,
+			all_ship_bodies)
+	if los_result == null:
+		return null
+	var entry: TargetEntry = TargetEntry.new()
+	entry.target_name = defender.ship_name
+	entry.arc = atk_zone
+	entry.target_zone = def_hz
+	entry.has_target_zone = true
+	entry.range_band = band
+	entry.dice = RangeFinder.dice_at_range(armament, band)
+	entry.obstructed = los_result.obstructed
+	entry.obstructed_by = los_result.obstructed_by
+	log.debug("    -> HIT ship '%s' atk=%s def=%s band=%s dist=%.1f" % [
+			defender.ship_name, _hz_key(atk_zone),
+			_hz_key(def_hz), band, dist])
+	return entry
+
+
+## Performs LOS trace and range-path blocking for ship→ship.
+## Returns LOSResult if LOS and range path are valid, null otherwise.
+## Requirements: TL-LOS-001, TL-LOS-004.
+static func _check_ship_los(
+		atk: ShipInfo,
+		atk_zone: Constants.HullZone,
+		atk_edge: Array[Vector2],
+		defender: ShipInfo,
+		def_hz: Constants.HullZone,
+		def_edge: Array[Vector2],
+		all_ship_bodies: Array) -> LineOfSightChecker.LOSResult:
+	var atk_los: Vector2 = atk.los_pts.get(
+			_hz_key(atk_zone), atk.pos)
+	var def_los: Vector2 = defender.los_pts.get(
+			_hz_key(def_hz), defender.pos)
+	var bodies: Array = _get_intervening_bodies(atk, defender,
+			all_ship_bodies)
+	var los_result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_ship_to_ship(
+					atk_los, def_los, def_hz,
+					defender.pos, defender.rot,
+					defender.half_w, defender.half_l,
+					bodies, [],
+					defender.arc_pts)
+	if not los_result.has_los:
+		return null
+	var range_blocked: bool = LineOfSightChecker.is_range_path_blocked(
+			RangeFinder.closest_point_on_segment(
+					def_edge[0].lerp(def_edge[1], 0.5),
+					atk_edge[0], atk_edge[1]),
+			def_edge[0].lerp(def_edge[1], 0.5),
+			def_hz,
+			defender.pos, defender.rot,
+			defender.half_w, defender.half_l,
+			defender.arc_pts)
+	if range_blocked:
+		return null
+	return los_result
 
 
 ## Checks if one enemy squadron is a valid target from a given hull zone.
@@ -398,10 +474,8 @@ static func _check_squadron_target(
 		anti_sq_armament: Dictionary,
 		squad: SquadInfo,
 		all_ship_bodies: Array) -> TargetEntry:
-	# Skip if no anti-squadron armament.
 	if anti_sq_armament.is_empty():
 		return null
-	# Arc test.
 	var in_arc: bool = RangeFinder.is_squadron_in_arc(
 			squad.pos, squad.radius, atk_zone, atk.arc_pts)
 	log.debug("    check squad '%s' pos=%s r=%.0f %s arc in_arc=%s" % [
@@ -409,7 +483,6 @@ static func _check_squadron_target(
 			_hz_key(atk_zone), str(in_arc)])
 	if not in_arc:
 		return null
-	# Range measurement.
 	var dist: float = RangeFinder.measure_attack_range_squadron(
 			atk_edge, squad.pos, squad.radius, atk_zone, atk.arc_pts)
 	if dist >= INF:
@@ -422,7 +495,24 @@ static func _check_squadron_target(
 	if not RangeFinder.is_within_max_range(band, anti_sq_armament):
 		log.debug("      beyond max range for armament — skipped")
 		return null
-	# LOS check (ship → squadron).
+	var los_result: LineOfSightChecker.LOSResult = \
+			_check_squad_los(atk, atk_zone, squad, all_ship_bodies)
+	if not los_result.has_los:
+		log.debug("      no LOS — skipped")
+		return null
+	log.debug("    -> HIT squad '%s' zone=%s band=%s dist=%.1f" % [
+			squad.squad_name, _hz_key(atk_zone), band, dist])
+	return _make_squad_target_entry(
+			squad, atk_zone, anti_sq_armament, band, los_result)
+
+
+## Performs LOS trace from a ship hull zone to a squadron.
+## Requirements: TL-LOS-001.
+static func _check_squad_los(
+		atk: ShipInfo,
+		atk_zone: Constants.HullZone,
+		squad: SquadInfo,
+		all_ship_bodies: Array) -> LineOfSightChecker.LOSResult:
 	var atk_los: Vector2 = atk.los_pts.get(_hz_key(atk_zone), atk.pos)
 	var bodies: Array = []
 	for entry: Variant in all_ship_bodies:
@@ -431,19 +521,20 @@ static func _check_squadron_target(
 		if info.ship_name == atk.ship_name:
 			continue
 		bodies.append(d["body"])
-	var los_result: LineOfSightChecker.LOSResult = \
-			LineOfSightChecker.trace_los_ship_to_squadron(
-					atk_los, squad.pos, squad.radius, bodies, [])
-	if not los_result.has_los:
-		log.debug("      no LOS — skipped")
-		return null
-	log.debug("    -> HIT squad '%s' zone=%s band=%s dist=%.1f" % [
-			squad.squad_name, _hz_key(atk_zone), band, dist])
+	return LineOfSightChecker.trace_los_ship_to_squadron(
+			atk_los, squad.pos, squad.radius, bodies, [])
+
+
+## Creates a TargetEntry for a squadron target.
+static func _make_squad_target_entry(
+		squad: SquadInfo,
+		atk_zone: Constants.HullZone,
+		anti_sq_armament: Dictionary,
+		band: String,
+		los_result: LineOfSightChecker.LOSResult) -> TargetEntry:
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = squad.squad_name
 	entry.arc = atk_zone
-	# Compute dice using the measured band, then override range_band
-	# for display — squadrons have a single engagement range.
 	entry.dice = RangeFinder.dice_at_range(anti_sq_armament, band)
 	entry.range_band = "in range"
 	entry.obstructed = los_result.obstructed
@@ -464,92 +555,100 @@ static func _build_incoming_threats(
 		enemy_squads: Array,
 		all_ship_bodies: Array) -> Array:
 	var threats: Array = []
+	_collect_incoming_ship_threats(
+			friendly, enemy_ships, all_ship_bodies, threats)
+	_collect_incoming_squad_threats_to_ship(
+			friendly, enemy_squads, threats)
+	return threats
+
+
+## Collects ship-to-ship incoming threats and appends to [param out].
+static func _collect_incoming_ship_threats(
+		friendly: ShipInfo, enemy_ships: Array,
+		all_ship_bodies: Array, out: Array) -> void:
 	var zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.LEFT,
 		Constants.HullZone.RIGHT,
 		Constants.HullZone.REAR,
 	]
-	# --- Ship threats ---
 	for enemy: Variant in enemy_ships:
 		var es: ShipInfo = enemy as ShipInfo
 		for zone: int in zones:
 			var hz: Constants.HullZone = zone as Constants.HullZone
-			var armament: Dictionary = es.battery_armament.get(
-					_hz_key(hz), {})
-			if armament.is_empty():
-				continue
-			var atk_edge: Array[Vector2] = _get_ship_edge(es, hz)
-			# Check each friendly hull zone.
-			var friendly_zones: Array = [
-				Constants.HullZone.FRONT,
-				Constants.HullZone.LEFT,
-				Constants.HullZone.RIGHT,
-				Constants.HullZone.REAR,
-			]
-			var found_threat: bool = false
-			for fz: int in friendly_zones:
-				if found_threat:
-					break
-				var fhz: Constants.HullZone = fz as Constants.HullZone
-				var def_edge: Array[Vector2] = _get_ship_edge(friendly, fhz)
-				if not RangeFinder.is_hull_zone_edge_in_arc(
-						def_edge, hz, es.arc_pts):
-					continue
-				var dist: float = RangeFinder.measure_attack_range_ship(
-						atk_edge, def_edge, hz, es.arc_pts)
-				if dist >= INF:
-					continue
-				var band: String = GameScale.get_range_band(dist)
-				if band == Constants.RANGE_BAND_BEYOND:
-					continue
-				if not RangeFinder.is_within_max_range(band, armament):
-					continue
-				# LOS check.
-				var atk_los: Vector2 = es.los_pts.get(
-						_hz_key(hz), es.pos)
-				var def_los: Vector2 = friendly.los_pts.get(
-						_hz_key(fhz), friendly.pos)
-				var bodies: Array = _get_intervening_bodies(
-						es, friendly, all_ship_bodies)
-				var los_result: LineOfSightChecker.LOSResult = \
-						LineOfSightChecker.trace_los_ship_to_ship(
-								atk_los, def_los, fhz,
-								friendly.pos, friendly.rot,
-								friendly.half_w, friendly.half_l,
-								bodies, [],
-								friendly.arc_pts)
-				if not los_result.has_los:
-					continue
-				var threat: ThreatEntry = ThreatEntry.new()
-				threat.friendly_name = friendly.ship_name
-				threat.enemy_name = es.ship_name
-				threat.arc = hz
-				threat.range_band = band
-				threat.obstructed = los_result.obstructed
-				threats.append(threat)
-				found_threat = true
-	# --- Squadron threats (TL-LIST-008) ---
-	# Squadrons attack at distance 1 (close range) with 360° arc.
-	# No LOS check needed (squadrons don't have hull zones to block).
+			var threat: ThreatEntry = _check_ship_threat_from_zone(
+					friendly, es, hz, all_ship_bodies)
+			if threat != null:
+				out.append(threat)
+
+
+## Checks whether [param enemy] can threaten [param friendly] from
+## hull zone [param hz].  Returns a ThreatEntry or null.
+static func _check_ship_threat_from_zone(
+		friendly: ShipInfo, enemy: ShipInfo,
+		hz: Constants.HullZone,
+		all_ship_bodies: Array) -> ThreatEntry:
+	var armament: Dictionary = enemy.battery_armament.get(
+			_hz_key(hz), {})
+	if armament.is_empty():
+		return null
+	var atk_edge: Array[Vector2] = _get_ship_edge(enemy, hz)
+	var friendly_zones: Array = [
+		Constants.HullZone.FRONT,
+		Constants.HullZone.LEFT,
+		Constants.HullZone.RIGHT,
+		Constants.HullZone.REAR,
+	]
+	for fz: int in friendly_zones:
+		var fhz: Constants.HullZone = fz as Constants.HullZone
+		var def_edge: Array[Vector2] = _get_ship_edge(friendly, fhz)
+		if not RangeFinder.is_hull_zone_edge_in_arc(
+				def_edge, hz, enemy.arc_pts):
+			continue
+		var dist: float = RangeFinder.measure_attack_range_ship(
+				atk_edge, def_edge, hz, enemy.arc_pts)
+		if dist >= INF:
+			continue
+		var band: String = GameScale.get_range_band(dist)
+		if band == Constants.RANGE_BAND_BEYOND:
+			continue
+		if not RangeFinder.is_within_max_range(band, armament):
+			continue
+		var los_result: LineOfSightChecker.LOSResult = _check_ship_los(
+				enemy, hz, atk_edge, friendly, fhz, def_edge,
+				all_ship_bodies)
+		if los_result == null:
+			continue
+		var threat: ThreatEntry = ThreatEntry.new()
+		threat.friendly_name = friendly.ship_name
+		threat.enemy_name = enemy.ship_name
+		threat.arc = hz
+		threat.range_band = band
+		threat.obstructed = los_result.obstructed
+		return threat
+	return null
+
+
+## Collects squadron-to-ship incoming threats and appends to [param out].
+## Squadrons attack at distance 1 (close range) with 360° arc.
+## Requirements: TL-LIST-008.
+static func _collect_incoming_squad_threats_to_ship(
+		friendly: ShipInfo, enemy_squads: Array, out: Array) -> void:
 	for squad: Variant in enemy_squads:
 		var sq: SquadInfo = squad as SquadInfo
 		if sq.battery_armament.is_empty():
 			continue
-		# Measure from squadron base edge to nearest point on ship base.
 		var dist: float = _measure_squad_to_ship_distance(sq, friendly)
 		var band: String = GameScale.get_range_band(dist)
-		# Squadron attack range is distance 1 = close range only.
 		if band != Constants.RANGE_BAND_CLOSE:
 			continue
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = friendly.ship_name
 		threat.enemy_name = sq.squad_name
-		threat.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
+		threat.arc = Constants.HullZone.FRONT
 		threat.range_band = "in range"
 		threat.obstructed = false
-		threats.append(threat)
-	return threats
+		out.append(threat)
 
 
 # =========================================================================
@@ -569,99 +668,117 @@ static func _build_squad_entry(
 		all_ship_bodies: Array) -> SquadTargetingResult:
 	var result: SquadTargetingResult = SquadTargetingResult.new()
 	result.squad_name = squad.squad_name
-	# --- vs enemy ships (use battery_armament) ---
-	# List each reachable defending hull zone separately — the player must
-	# declare which hull zone to attack (same as ship → ship detail).
-	# Rules Reference: "Attack", Step 1 — "The attacker must declare the
-	# defending hull zone."
-	if not squad.battery_armament.is_empty():
-		var def_zones: Array = [
-			Constants.HullZone.FRONT,
-			Constants.HullZone.LEFT,
-			Constants.HullZone.RIGHT,
-			Constants.HullZone.REAR,
-		]
-		for enemy: Variant in enemy_ships:
-			var es: ShipInfo = enemy as ShipInfo
-			for dz: int in def_zones:
-				var def_hz: Constants.HullZone = dz as Constants.HullZone
-				var edge: Array[Vector2] = _get_ship_edge(es, def_hz)
-				var cp: Vector2 = RangeFinder.closest_point_on_polyline(
-						squad.pos, edge)
-				var dist: float = squad.pos.distance_to(cp) - squad.radius
-				if dist < 0.0:
-					dist = 0.0
-				var band: String = GameScale.get_range_band(dist)
-				log.debug("  squad '%s' -> ship '%s' %s dist=%.1f band=%s" % [
-						squad.squad_name, es.ship_name,
-						_hz_key(def_hz), dist, band])
-				if band != Constants.RANGE_BAND_CLOSE:
-					continue
-				# LOS check — TL-LOS-003 + TL-LOS-004.
-				# Trace from closest point on squadron base to defender's
-				# targeting point; check hull-zone blocking on the defender.
-				var def_los: Vector2 = es.los_pts.get(
-						_hz_key(def_hz), es.pos)
-				var bodies: Array = _get_intervening_squad_bodies(
-						es, all_ship_bodies)
-				var los_result: LineOfSightChecker.LOSResult = \
-						LineOfSightChecker.trace_los_squad_to_ship(
-								squad.pos, squad.radius,
-								def_los, def_hz,
-								es.pos, es.rot,
-								es.half_w, es.half_l,
-								bodies, [],
-								es.arc_pts)
-				if not los_result.has_los:
-					log.debug("    LOS blocked for zone %s — skipped" %
-							_hz_key(def_hz))
-					continue
-				# TL-LOS-004: range path blocking.
-				var range_blocked: bool = \
-						LineOfSightChecker.is_range_path_blocked(
-								RangeFinder.closest_point_on_circle(
-										cp, squad.pos, squad.radius),
-								cp, def_hz,
-								es.pos, es.rot,
-								es.half_w, es.half_l,
-								es.arc_pts)
-				if range_blocked:
-					log.debug("    range path blocked for zone %s — skipped" %
-							_hz_key(def_hz))
-					continue
-				var entry: TargetEntry = TargetEntry.new()
-				entry.target_name = es.ship_name
-				entry.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
-				entry.target_zone = def_hz
-				entry.has_target_zone = true
-				entry.range_band = "in range"
-				entry.dice = RangeFinder.dice_at_range(
-						squad.battery_armament, band)
-				entry.obstructed = los_result.obstructed
-				entry.obstructed_by = los_result.obstructed_by
-				result.outgoing.append(entry)
-				log.debug("    -> HIT ship '%s' zone=%s" % [
-						es.ship_name, _hz_key(def_hz)])
-	# --- vs enemy squadrons (use anti_squadron_armament) ---
-	if not squad.anti_squadron_armament.is_empty():
-		for enemy_sq: Variant in enemy_squads:
-			var esq: SquadInfo = enemy_sq as SquadInfo
-			var dist: float = _measure_squad_to_squad_distance(squad, esq)
-			var band: String = GameScale.get_range_band(dist)
-			log.debug("  squad '%s' -> squad '%s' dist=%.1f band=%s" % [
-					squad.squad_name, esq.squad_name, dist, band])
-			if band != Constants.RANGE_BAND_CLOSE:
-				continue
-			var entry: TargetEntry = TargetEntry.new()
-			entry.target_name = esq.squad_name
-			entry.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
-			entry.has_target_zone = false
-			entry.range_band = "in range"
-			entry.dice = RangeFinder.dice_at_range(
-					squad.anti_squadron_armament, band)
-			result.outgoing.append(entry)
-			log.debug("    -> HIT squad '%s'" % esq.squad_name)
+	_collect_squad_vs_ships(log, squad, enemy_ships,
+			all_ship_bodies, result.outgoing)
+	_collect_squad_vs_squads(log, squad, enemy_squads, result.outgoing)
 	return result
+
+
+## Collects outgoing targets from a friendly squadron vs enemy ships.
+## Appends TargetEntry items to [param out].
+## Rules Reference: "Attack", Step 1 — "The attacker must declare the
+## defending hull zone."
+static func _collect_squad_vs_ships(log: GameLogger, squad: SquadInfo,
+		enemy_ships: Array, all_ship_bodies: Array,
+		out: Array) -> void:
+	if squad.battery_armament.is_empty():
+		return
+	var def_zones: Array = [
+		Constants.HullZone.FRONT,
+		Constants.HullZone.LEFT,
+		Constants.HullZone.RIGHT,
+		Constants.HullZone.REAR,
+	]
+	for enemy: Variant in enemy_ships:
+		var es: ShipInfo = enemy as ShipInfo
+		for dz: int in def_zones:
+			var def_hz: Constants.HullZone = dz as Constants.HullZone
+			var entry: TargetEntry = _check_squad_vs_ship_zone(
+					log, squad, es, def_hz, all_ship_bodies)
+			if entry != null:
+				out.append(entry)
+
+
+## Validates one defending hull zone for a squadron→ship attack.
+## Returns a TargetEntry if valid, null otherwise.
+## Requirements: TL-LOS-003, TL-LOS-004.
+static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
+		es: ShipInfo, def_hz: Constants.HullZone,
+		all_ship_bodies: Array) -> TargetEntry:
+	var edge: Array[Vector2] = _get_ship_edge(es, def_hz)
+	var cp: Vector2 = RangeFinder.closest_point_on_polyline(
+			squad.pos, edge)
+	var dist: float = squad.pos.distance_to(cp) - squad.radius
+	if dist < 0.0:
+		dist = 0.0
+	var band: String = GameScale.get_range_band(dist)
+	log.debug("  squad '%s' -> ship '%s' %s dist=%.1f band=%s" % [
+			squad.squad_name, es.ship_name,
+			_hz_key(def_hz), dist, band])
+	if band != Constants.RANGE_BAND_CLOSE:
+		return null
+	var def_los: Vector2 = es.los_pts.get(_hz_key(def_hz), es.pos)
+	var bodies: Array = _get_intervening_squad_bodies(es, all_ship_bodies)
+	var los_result: LineOfSightChecker.LOSResult = \
+			LineOfSightChecker.trace_los_squad_to_ship(
+					squad.pos, squad.radius,
+					def_los, def_hz,
+					es.pos, es.rot,
+					es.half_w, es.half_l,
+					bodies, [],
+					es.arc_pts)
+	if not los_result.has_los:
+		log.debug("    LOS blocked for zone %s — skipped" %
+				_hz_key(def_hz))
+		return null
+	var range_blocked: bool = LineOfSightChecker.is_range_path_blocked(
+			RangeFinder.closest_point_on_circle(
+					cp, squad.pos, squad.radius),
+			cp, def_hz,
+			es.pos, es.rot,
+			es.half_w, es.half_l,
+			es.arc_pts)
+	if range_blocked:
+		log.debug("    range path blocked for zone %s — skipped" %
+				_hz_key(def_hz))
+		return null
+	var entry: TargetEntry = TargetEntry.new()
+	entry.target_name = es.ship_name
+	entry.arc = Constants.HullZone.FRONT
+	entry.target_zone = def_hz
+	entry.has_target_zone = true
+	entry.range_band = "in range"
+	entry.dice = RangeFinder.dice_at_range(squad.battery_armament, band)
+	entry.obstructed = los_result.obstructed
+	entry.obstructed_by = los_result.obstructed_by
+	log.debug("    -> HIT ship '%s' zone=%s" % [
+			es.ship_name, _hz_key(def_hz)])
+	return entry
+
+
+## Collects outgoing targets from a friendly squadron vs enemy squadrons.
+## Appends TargetEntry items to [param out].
+static func _collect_squad_vs_squads(log: GameLogger, squad: SquadInfo,
+		enemy_squads: Array, out: Array) -> void:
+	if squad.anti_squadron_armament.is_empty():
+		return
+	for enemy_sq: Variant in enemy_squads:
+		var esq: SquadInfo = enemy_sq as SquadInfo
+		var dist: float = _measure_squad_to_squad_distance(squad, esq)
+		var band: String = GameScale.get_range_band(dist)
+		log.debug("  squad '%s' -> squad '%s' dist=%.1f band=%s" % [
+				squad.squad_name, esq.squad_name, dist, band])
+		if band != Constants.RANGE_BAND_CLOSE:
+			continue
+		var entry: TargetEntry = TargetEntry.new()
+		entry.target_name = esq.squad_name
+		entry.arc = Constants.HullZone.FRONT
+		entry.has_target_zone = false
+		entry.range_band = "in range"
+		entry.dice = RangeFinder.dice_at_range(
+				squad.anti_squadron_armament, band)
+		out.append(entry)
+		log.debug("    -> HIT squad '%s'" % esq.squad_name)
 
 
 ## Builds incoming threats for one friendly squadron from all enemy ships
@@ -674,64 +791,72 @@ static func _build_incoming_squad_threats(
 		enemy_squads: Array,
 		all_ship_bodies: Array) -> Array:
 	var threats: Array = []
+	_collect_ship_threats_to_squad(
+			log, squad, enemy_ships, all_ship_bodies, threats)
+	_collect_squad_threats_to_squad(log, squad, enemy_squads, threats)
+	return threats
+
+
+## Collects ship→squadron incoming threats and appends to [param out].
+static func _collect_ship_threats_to_squad(log: GameLogger,
+		squad: SquadInfo, enemy_ships: Array,
+		all_ship_bodies: Array, out: Array) -> void:
 	var zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.LEFT,
 		Constants.HullZone.RIGHT,
 		Constants.HullZone.REAR,
 	]
-	# --- Ship threats (enemy ship → friendly squadron) ---
 	for enemy: Variant in enemy_ships:
 		var es: ShipInfo = enemy as ShipInfo
 		if es.anti_squadron_armament.is_empty():
 			continue
-		var found_threat: bool = false
-		for zone: int in zones:
-			if found_threat:
-				break
-			var hz: Constants.HullZone = zone as Constants.HullZone
-			var atk_edge: Array[Vector2] = _get_ship_edge(es, hz)
-			# Arc containment test.
-			if not RangeFinder.is_squadron_in_arc(
-					squad.pos, squad.radius, hz, es.arc_pts):
-				continue
-			# Range measurement.
-			var dist: float = RangeFinder.measure_attack_range_squadron(
-					atk_edge, squad.pos, squad.radius, hz, es.arc_pts)
-			if dist >= INF:
-				continue
-			var band: String = GameScale.get_range_band(dist)
-			if band == Constants.RANGE_BAND_BEYOND:
-				continue
-			if not RangeFinder.is_within_max_range(
-					band, es.anti_squadron_armament):
-				continue
-			# LOS check (ship → squadron).
-			var atk_los: Vector2 = es.los_pts.get(_hz_key(hz), es.pos)
-			var bodies: Array = []
-			for body_entry: Variant in all_ship_bodies:
-				var d: Dictionary = body_entry as Dictionary
-				var info: ShipInfo = d["info"] as ShipInfo
-				if info.ship_name == es.ship_name:
-					continue
-				bodies.append(d["body"])
-			var los_result: LineOfSightChecker.LOSResult = \
-					LineOfSightChecker.trace_los_ship_to_squadron(
-							atk_los, squad.pos, squad.radius,
-							bodies, [])
-			if not los_result.has_los:
-				continue
-			var threat: ThreatEntry = ThreatEntry.new()
-			threat.friendly_name = squad.squad_name
-			threat.enemy_name = es.ship_name
-			threat.arc = hz
-			threat.range_band = band
-			threat.obstructed = los_result.obstructed
-			threats.append(threat)
-			found_threat = true
-			log.debug("  squad '%s' threatened by ship '%s' %s arc" % [
-					squad.squad_name, es.ship_name, _hz_key(hz)])
-	# --- Squadron threats (enemy squadron → friendly squadron) ---
+		var threat: ThreatEntry = _check_ship_threat_to_squad(
+				log, squad, es, zones, all_ship_bodies)
+		if threat != null:
+			out.append(threat)
+
+
+## Checks if [param es] can threaten [param squad] from any hull zone.
+## Returns the first valid ThreatEntry, or null.
+static func _check_ship_threat_to_squad(log: GameLogger,
+		squad: SquadInfo, es: ShipInfo, zones: Array,
+		all_ship_bodies: Array) -> ThreatEntry:
+	for zone: int in zones:
+		var hz: Constants.HullZone = zone as Constants.HullZone
+		var atk_edge: Array[Vector2] = _get_ship_edge(es, hz)
+		if not RangeFinder.is_squadron_in_arc(
+				squad.pos, squad.radius, hz, es.arc_pts):
+			continue
+		var dist: float = RangeFinder.measure_attack_range_squadron(
+				atk_edge, squad.pos, squad.radius, hz, es.arc_pts)
+		if dist >= INF:
+			continue
+		var band: String = GameScale.get_range_band(dist)
+		if band == Constants.RANGE_BAND_BEYOND:
+			continue
+		if not RangeFinder.is_within_max_range(
+				band, es.anti_squadron_armament):
+			continue
+		var los_result: LineOfSightChecker.LOSResult = \
+				_check_squad_los(es, hz, squad, all_ship_bodies)
+		if not los_result.has_los:
+			continue
+		var threat: ThreatEntry = ThreatEntry.new()
+		threat.friendly_name = squad.squad_name
+		threat.enemy_name = es.ship_name
+		threat.arc = hz
+		threat.range_band = band
+		threat.obstructed = los_result.obstructed
+		log.debug("  squad '%s' threatened by ship '%s' %s arc" % [
+				squad.squad_name, es.ship_name, _hz_key(hz)])
+		return threat
+	return null
+
+
+## Collects squad→squad incoming threats and appends to [param out].
+static func _collect_squad_threats_to_squad(log: GameLogger,
+		squad: SquadInfo, enemy_squads: Array, out: Array) -> void:
 	for enemy_sq: Variant in enemy_squads:
 		var esq: SquadInfo = enemy_sq as SquadInfo
 		if esq.anti_squadron_armament.is_empty():
@@ -743,13 +868,12 @@ static func _build_incoming_squad_threats(
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = squad.squad_name
 		threat.enemy_name = esq.squad_name
-		threat.arc = Constants.HullZone.FRONT # Placeholder — 360° arc.
+		threat.arc = Constants.HullZone.FRONT
 		threat.range_band = "in range"
 		threat.obstructed = false
-		threats.append(threat)
+		out.append(threat)
 		log.debug("  squad '%s' threatened by squad '%s'" % [
 				squad.squad_name, esq.squad_name])
-	return threats
 
 
 # =========================================================================

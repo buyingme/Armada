@@ -99,8 +99,12 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 		speed = instance.current_speed
 		var ship_data: ShipData = ship_token.get_ship_data()
 		if ship_data:
-			nav_chart = ship_data.navigation_chart
+			nav_chart = ship_data.navigation_chart.duplicate(true)
 			max_speed = ship_data.max_speed
+	# MANEUVER_DETERMINE_YAWS hook — Thrust Control Malfunction reduces
+	# last joint yaw by 1 at each speed level.
+	# Rules Reference: "Thrust Control Malfunction" card text.
+	nav_chart = _apply_yaw_hooks(nav_chart, instance)
 	_state.setup(speed, nav_chart, ship_size, max_speed)
 	_load_textures()
 	_create_sprites()
@@ -137,6 +141,55 @@ func refresh() -> void:
 	_update_visual()
 
 
+## Applies the MANEUVER_DETERMINE_YAWS hook to each speed level of
+## the nav chart, allowing damage cards (e.g. Thrust Control Malfunction)
+## to reduce yaw values.  Returns the (possibly modified) nav chart.
+## Rules Reference: "Thrust Control Malfunction" card text.
+func _apply_yaw_hooks(nav_chart: Array,
+		ship: ShipInstance) -> Array:
+	if ship == null:
+		return nav_chart
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null:
+		return nav_chart
+	for speed_idx: int in range(nav_chart.size()):
+		var yaw_arr: Array = (nav_chart[speed_idx] as Array).duplicate()
+		var ctx: EffectContext = EffectContext.new()
+		ctx.set_meta_value("ship", ship)
+		ctx.set_meta_value("yaw_values", yaw_arr)
+		ctx = registry.resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)
+		nav_chart[speed_idx] = ctx.get_meta_value("yaw_values", yaw_arr)
+	return nav_chart
+
+
+## Resolves the ON_SPEED_CHANGE hook after a Navigate speed change.
+## Thruster Fissure: suffer 1 facedown damage when speed changes.
+## Rules Reference: "Thruster Fissure" card text.
+func _resolve_speed_change_hook() -> void:
+	if not _activation_state:
+		return
+	var ship: ShipInstance = _activation_state.get_ship()
+	if ship == null:
+		return
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null:
+		return
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("damage_deck",
+			GameManager.current_game_state.damage_deck
+			if GameManager.current_game_state else null)
+	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
+	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
+		var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+		EventBus.ship_hull_changed.emit(ship, new_hull)
+		_log.info("Speed change damage dealt (hull now %d)." % new_hull)
+
+
 # ------------------------------------------------------------------
 # Texture and sprite creation
 # ------------------------------------------------------------------
@@ -151,8 +204,19 @@ func _load_textures() -> void:
 			_textures[key] = AssetLoader.load_texture("tools/", img)
 
 
-## Creates the 5 segment sprites and the ghost preview sprite.
+## Creates all child nodes: segment sprites, ghost preview, overlay layers.
 func _create_sprites() -> void:
+	_create_segment_sprites()
+	_create_ghost_sprite()
+	_create_overlay_layers()
+	_create_blocked_label()
+	var sf: SystemFont = SystemFont.new()
+	sf.font_weight = 700
+	_label_font = sf
+
+
+## Creates the 5 segment sprites used to render the maneuver tool pieces.
+func _create_segment_sprites() -> void:
 	for i: int in range(ManeuverToolState.TOTAL_SEGMENTS):
 		var sprite: Sprite2D = Sprite2D.new()
 		sprite.centered = false
@@ -160,30 +224,38 @@ func _create_sprites() -> void:
 		sprite.visible = false
 		add_child(sprite)
 		_segment_sprites.append(sprite)
+
+
+## Creates the semi-transparent ghost ship preview sprite.
+func _create_ghost_sprite() -> void:
 	_ghost_sprite = Sprite2D.new()
 	_ghost_sprite.name = "GhostPreview"
 	_ghost_sprite.modulate = Color(1, 1, 1, GHOST_ALPHA)
 	_ghost_sprite.visible = false
 	add_child(_ghost_sprite)
-	## Speed button overlay drawn on top of the end segment.
+
+
+## Creates Node2D draw layers for speed buttons, ghost label, and yaw badges.
+func _create_overlay_layers() -> void:
 	_speed_button_layer = Node2D.new()
 	_speed_button_layer.name = "SpeedButtons"
 	_speed_button_layer.draw.connect(_on_speed_button_draw)
 	_speed_button_layer.visible = false
 	add_child(_speed_button_layer)
-	## Speed label overlay drawn on the ghost ship.
 	_ghost_label_layer = Node2D.new()
 	_ghost_label_layer.name = "GhostSpeedLabel"
 	_ghost_label_layer.draw.connect(_on_ghost_label_draw)
 	_ghost_label_layer.visible = false
 	add_child(_ghost_label_layer)
-	## Yaw bonus badge overlay drawn at joint positions.
 	_yaw_badge_layer = Node2D.new()
 	_yaw_badge_layer.name = "YawBadges"
 	_yaw_badge_layer.draw.connect(_on_yaw_badge_draw)
 	_yaw_badge_layer.visible = false
 	add_child(_yaw_badge_layer)
-	## "BLOCKED" collision indicator label on the ghost.
+
+
+## Creates the "BLOCKED" collision indicator label on the ghost.
+func _create_blocked_label() -> void:
 	_blocked_label = Label.new()
 	_blocked_label.name = "BlockedLabel"
 	_blocked_label.text = "BLOCKED"
@@ -193,10 +265,6 @@ func _create_sprites() -> void:
 	_blocked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_blocked_label.visible = false
 	add_child(_blocked_label)
-	## Bold font for labels.
-	var sf: SystemFont = SystemFont.new()
-	sf.font_weight = 700
-	_label_font = sf
 
 
 # ------------------------------------------------------------------
@@ -262,51 +330,63 @@ func _log_chain(segs: Array, joints: Array) -> void:
 			_state.get_speed(), s])
 	var active: int = _state.get_active_segment_count()
 	for i: int in range(active):
-		var seg_type: String = _state.get_segment_type(i)
-		var xform: Transform2D = segs[i] as Transform2D
-		var cfg: Dictionary = GameScale.maneuver_tool_config.get(
-				seg_type, {})
-		var entry_px: Vector2 = cfg.get("entry_intersection",
-				Vector2.ZERO) as Vector2
-		var exit_px: Vector2 = cfg.get("exit_intersection",
-				Vector2.ZERO) as Vector2
-		var rot: float = xform.get_rotation()
-		## World position of entry (= xform.origin by definition).
-		var entry_world: Vector2 = xform.origin
-		## World position of exit pixel (offset from entry in local space,
-		## scaled uniformly, then rotated).
-		var exit_world: Vector2 = Vector2.INF
-		if cfg.has("exit_intersection"):
-			var local_exit: Vector2 = (exit_px - entry_px) * s
-			exit_world = entry_world + local_exit.rotated(rot)
-		_log.info(
-				"  [%d] %s  entry_px=%s  exit_px=%s" % [
-				i, seg_type, entry_px, exit_px])
-		_log.info(
-				"       entry_world=(%.1f, %.1f)  rot=%.2f°" % [
-				entry_world.x, entry_world.y, rad_to_deg(rot)])
-		if exit_world != Vector2.INF:
-			_log.info(
-					"       exit_world=(%.1f, %.1f)" % [
-					exit_world.x, exit_world.y])
-		else:
-			_log.info("       (no exit — end segment)")
-		var cl: Vector2 = cfg.get("contact_left",
-				Vector2.ZERO) as Vector2
-		var cr: Vector2 = cfg.get("contact_right",
-				Vector2.ZERO) as Vector2
-		var cl_world: Vector2 = entry_world + (
-				(cl - entry_px) * s).rotated(rot)
-		var cr_world: Vector2 = entry_world + (
-				(cr - entry_px) * s).rotated(rot)
-		_log.info(
-				"       contact_L_world=(%.1f, %.1f)  contact_R_world=(%.1f, %.1f)" % [
-				cl_world.x, cl_world.y, cr_world.x, cr_world.y])
+		_log_segment(i, segs[i] as Transform2D, s)
 	for j: int in range(joints.size()):
 		var jpos: Vector2 = joints[j] as Vector2
 		_log.info("  Joint %d  world=(%.1f, %.1f)" % [
 				j, jpos.x, jpos.y])
 	_log.info("=== End Chain ===")
+
+
+## Logs a single segment's entry/exit/contact world positions.
+func _log_segment(i: int, xform: Transform2D, s: float) -> void:
+	var seg_type: String = _state.get_segment_type(i)
+	var cfg: Dictionary = GameScale.maneuver_tool_config.get(
+			seg_type, {})
+	var entry_px: Vector2 = cfg.get("entry_intersection",
+			Vector2.ZERO) as Vector2
+	var exit_px: Vector2 = cfg.get("exit_intersection",
+			Vector2.ZERO) as Vector2
+	var rot: float = xform.get_rotation()
+	var entry_world: Vector2 = xform.origin
+	_log.info(
+			"  [%d] %s  entry_px=%s  exit_px=%s" % [
+			i, seg_type, entry_px, exit_px])
+	_log.info(
+			"       entry_world=(%.1f, %.1f)  rot=%.2f°" % [
+			entry_world.x, entry_world.y, rad_to_deg(rot)])
+	_log_segment_exit(cfg, entry_px, entry_world, rot, s)
+	_log_segment_contacts(cfg, entry_px, entry_world, rot, s)
+
+
+## Logs the exit-world position for a segment, if available.
+func _log_segment_exit(cfg: Dictionary, entry_px: Vector2,
+		entry_world: Vector2, rot: float, s: float) -> void:
+	if not cfg.has("exit_intersection"):
+		_log.info("       (no exit — end segment)")
+		return
+	var exit_px: Vector2 = cfg["exit_intersection"] as Vector2
+	var local_exit: Vector2 = (exit_px - entry_px) * s
+	var exit_world: Vector2 = entry_world + local_exit.rotated(rot)
+	_log.info(
+			"       exit_world=(%.1f, %.1f)" % [
+			exit_world.x, exit_world.y])
+
+
+## Logs the contact-left and contact-right world positions for a segment.
+func _log_segment_contacts(cfg: Dictionary, entry_px: Vector2,
+		entry_world: Vector2, rot: float, s: float) -> void:
+	var cl: Vector2 = cfg.get("contact_left",
+			Vector2.ZERO) as Vector2
+	var cr: Vector2 = cfg.get("contact_right",
+			Vector2.ZERO) as Vector2
+	var cl_world: Vector2 = entry_world + (
+			(cl - entry_px) * s).rotated(rot)
+	var cr_world: Vector2 = entry_world + (
+			(cr - entry_px) * s).rotated(rot)
+	_log.info(
+			"       contact_L_world=(%.1f, %.1f)  contact_R_world=(%.1f, %.1f)" % [
+			cl_world.x, cl_world.y, cr_world.x, cr_world.y])
 
 
 ## Positions and configures each active segment sprite.
@@ -430,30 +510,12 @@ func get_ghost_transform() -> Dictionary:
 	if ship_data == null:
 		return {}
 	var inst: ShipInstance = _ship_token.get_ship_instance()
-	# Compute firing arc boundary points in ghost world space.
 	var ghost_pos: Vector2 = _ghost_sprite.global_position
 	var ghost_rot: float = _ghost_sprite.global_rotation
-	var arc_pts: Dictionary = {}
-	if not ship_data.firing_arc_boundaries.is_empty() and _ghost_sprite.texture:
-		var tex_w: float = float(_ghost_sprite.texture.get_width())
-		var tex_h: float = float(_ghost_sprite.texture.get_height())
-		var sp_scale: Vector2 = _ghost_sprite.scale
-		for key: String in ship_data.firing_arc_boundaries:
-			var png_coord: Vector2 = ship_data.firing_arc_boundaries[key]
-			var local: Vector2 = (png_coord - Vector2(tex_w, tex_h) * 0.5) * sp_scale
-			arc_pts[key] = ghost_pos + local.rotated(ghost_rot)
-	# LOS origins in ghost world space.
-	var los_pts: Dictionary = {}
-	if not ship_data.line_of_sight_origins.is_empty() and _ghost_sprite.texture:
-		var tex_w2: float = float(_ghost_sprite.texture.get_width())
-		var tex_h2: float = float(_ghost_sprite.texture.get_height())
-		var sp_scale2: Vector2 = _ghost_sprite.scale
-		for key2: String in ship_data.line_of_sight_origins:
-			if key2.begins_with("_"):
-				continue
-			var png_coord2: Vector2 = ship_data.line_of_sight_origins[key2]
-			var local2: Vector2 = (png_coord2 - Vector2(tex_w2, tex_h2) * 0.5) * sp_scale2
-			los_pts[key2] = ghost_pos + local2.rotated(ghost_rot)
+	var arc_pts: Dictionary = _map_points_to_world(
+			ship_data.firing_arc_boundaries, ghost_pos, ghost_rot, false)
+	var los_pts: Dictionary = _map_points_to_world(
+			ship_data.line_of_sight_origins, ghost_pos, ghost_rot, true)
 	return {
 		"ship_name": ship_data.ship_name,
 		"data_key": _ship_token.get_meta("data_key", ""),
@@ -467,6 +529,26 @@ func get_ghost_transform() -> Dictionary:
 		"battery_armament": ship_data.battery_armament,
 		"anti_squadron_armament": ship_data.anti_squadron_armament,
 	}
+
+
+## Maps a dictionary of png-space coordinates to world-space positions
+## relative to the ghost sprite.  If [param skip_underscore] is true,
+## keys starting with "_" are omitted.
+func _map_points_to_world(source: Dictionary, ghost_pos: Vector2,
+		ghost_rot: float, skip_underscore: bool) -> Dictionary:
+	var result: Dictionary = {}
+	if source.is_empty() or _ghost_sprite.texture == null:
+		return result
+	var tex_w: float = float(_ghost_sprite.texture.get_width())
+	var tex_h: float = float(_ghost_sprite.texture.get_height())
+	var sp_scale: Vector2 = _ghost_sprite.scale
+	for key: String in source:
+		if skip_underscore and key.begins_with("_"):
+			continue
+		var png_coord: Vector2 = source[key]
+		var local: Vector2 = (png_coord - Vector2(tex_w, tex_h) * 0.5) * sp_scale
+		result[key] = ghost_pos + local.rotated(ghost_rot)
+	return result
 
 
 ## Creates or repositions the range overlay on the ghost preview.
@@ -620,30 +702,27 @@ func _on_speed_button_draw() -> void:
 			"speed_increase_button", Vector2.ZERO) as Vector2
 	var minus_local: Vector2 = (btn_minus_px - entry_px) * s
 	var plus_local: Vector2 = (btn_plus_px - entry_px) * s
-	var bg_color: Color = Color(0.15, 0.15, 0.18, 0.85)
-	var text_color: Color = Color.WHITE
 	var font_size: int = maxi(1, roundi(16.0 * s))
+	_draw_circle_button(minus_local, "-", font_size)
+	_draw_circle_button(plus_local, "+", font_size)
+
+
+## Draws a single circular button with centred [param label] text at
+## [param local_pos] on the speed button layer.
+func _draw_circle_button(local_pos: Vector2, label: String,
+		font_size: int) -> void:
+	var bg_color: Color = Color(0.15, 0.15, 0.18, 0.85)
+	_speed_button_layer.draw_circle(local_pos,
+			SPEED_BUTTON_DRAW_RADIUS, bg_color)
 	var ascent: float = _label_font.get_ascent(font_size)
 	var descent: float = _label_font.get_descent(font_size)
 	var text_h: float = ascent + descent
-	## Draw minus button.
-	_speed_button_layer.draw_circle(minus_local,
-			SPEED_BUTTON_DRAW_RADIUS, bg_color)
-	var minus_text_size: Vector2 = _label_font.get_string_size(
-			"-", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var text_size: Vector2 = _label_font.get_string_size(
+			label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 	_speed_button_layer.draw_string(_label_font, Vector2(
-			minus_local.x - minus_text_size.x * 0.5,
-			minus_local.y + text_h * 0.5 - descent),
-			"-", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
-	## Draw plus button.
-	_speed_button_layer.draw_circle(plus_local,
-			SPEED_BUTTON_DRAW_RADIUS, bg_color)
-	var plus_text_size: Vector2 = _label_font.get_string_size(
-			"+", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	_speed_button_layer.draw_string(_label_font, Vector2(
-			plus_local.x - plus_text_size.x * 0.5,
-			plus_local.y + text_h * 0.5 - descent),
-			"+", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+			local_pos.x - text_size.x * 0.5,
+			local_pos.y + text_h * 0.5 - descent),
+			label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
 
 
 ## Returns the world positions of the speed − and + buttons.
@@ -705,6 +784,9 @@ func _handle_speed_change(delta: int) -> void:
 			EventBus.navigate_token_spend_preview.emit(
 					_activation_state.get_ship(),
 					_activation_state.is_using_token_for_speed())
+			# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
+			# Rules Reference: "Thruster Fissure" card text.
+			_resolve_speed_change_hook()
 	else:
 		var old_speed: int = _state.get_simulated_speed()
 		_state.set_simulated_speed(old_speed + delta)
@@ -738,17 +820,35 @@ func _update_ghost_speed_label(ghost_xform: Transform2D) -> void:
 func _on_ghost_label_draw() -> void:
 	if _state == null or _label_font == null or _ship_token == null:
 		return
+	var label_info: Dictionary = _compute_ghost_label_layout()
+	if label_info.is_empty():
+		return
+	var text: String = str(_state.get_simulated_speed())
+	var font_size: int = label_info["font_size"] as int
+	var local_pos: Vector2 = label_info["local_pos"] as Vector2
+	var text_size: Vector2 = _label_font.get_string_size(
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var draw_pos: Vector2 = Vector2(
+			local_pos.x - text_size.x * 0.5,
+			local_pos.y + text_size.y * 0.25)
+	_ghost_label_layer.draw_string(_label_font, draw_pos, text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+
+
+## Computes the local draw position and font size for the ghost speed label.
+## Returns an empty Dictionary if the required data is unavailable.
+func _compute_ghost_label_layout() -> Dictionary:
 	var ship_data: ShipData = _ship_token.get_ship_data()
 	if ship_data == null:
-		return
+		return {}
 	var offsets: Dictionary = ship_data.token_label_offsets
 	if not offsets.has("speed"):
-		return
+		return {}
 	var base_offset: Vector2 = offsets["speed"] as Vector2
 	var base_region: Vector2 = GameScale.get_base_region(
 			_state.get_ship_size())
 	if base_region.x <= 0.0 or base_region.y <= 0.0:
-		return
+		return {}
 	var tex_size: Vector2 = Vector2.ZERO
 	if _ghost_sprite and _ghost_sprite.texture:
 		tex_size = Vector2(_ghost_sprite.texture.get_width(),
@@ -760,14 +860,7 @@ func _on_ghost_label_draw() -> void:
 	var avg_scale: float = (sprite_scale.x + sprite_scale.y) * 0.5
 	var font_size: int = maxi(1, roundi(
 			float(LABEL_FONT_SIZE_PNG_PX) * avg_scale))
-	var text: String = str(_state.get_simulated_speed())
-	var text_size: Vector2 = _label_font.get_string_size(
-			text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	var draw_pos: Vector2 = Vector2(
-			local_pos.x - text_size.x * 0.5,
-			local_pos.y + text_size.y * 0.25)
-	_ghost_label_layer.draw_string(_label_font, draw_pos, text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+	return {"local_pos": local_pos, "font_size": font_size}
 
 
 # ------------------------------------------------------------------

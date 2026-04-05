@@ -2,7 +2,7 @@
 
 > **Scope:** Implement the complete Learning Scenario from the core set Learn to Play booklet.
 > **Status:** **MVP COMPLETE** — all 12 phases plus post-phase features and bug fixes delivered.
-> Final test baseline: 87 scripts, 1 645 tests, 1 644 passing (1 pre-existing Nebulon-B placement failure).
+> Final test baseline: 88 scripts, 1 652 tests, all passing.
 > **Prerequisite:** All graphic assets must be provided and in place before coding begins.
 
 ## Table of Contents
@@ -1623,7 +1623,7 @@ next-track skip, and volume ±10 % buttons — without leaving the game board.
 
 ---
 
-### Refactoring Phase A — Oversized-Function Extraction 🔄
+### Refactoring Phase A — Oversized-Function Extraction ✅
 
 **Goal:** Split every function exceeding 30 lines into focused helpers
 (≤ 30 body lines each). Pure structural refactoring — no game-logic changes.
@@ -1641,12 +1641,13 @@ See `docs/refactoring_plan.md` and `docs/refactoring_test_strategy.md`.
 | A1-08 | Split 7 oversized functions (51→65 funcs) | `src/scenes/game_board/game_board.gd` | `_create_card_detail_layer`, `_create_quit_modal_layer`, `_create_activation_sidebar_layer`; `_init_scenario_systems`, `_spawn_and_bind_tokens`; `_create_core_turn_ui`, `_create_activation_modal_ui`, `_create_repair_squadron_ui`; `_add_dial_bg_rect`, `_add_dial_icon_rect`; `_has_eligible_squadron_in_range`; `_resolve_maneuver_overlaps`; `_any_enemy_squadron_in_range`, `_any_enemy_ship_in_range` | ✅ |
 | A1-09 | Split 21+5 oversized functions (100→145 funcs) | `src/scenes/game_board/attack_executor.gd` | ~50 extracted helpers including `_init_ship_attack_state`, `_ensure_attack_sim_panel`, `_show_ship_range_overlay`, `_select_attacker_ship_zone`, `_validate_target_ship_click`, `_validate_target_squadron_click`, `_reject_target`, `_reject_already_attacked_squad`, `_determine_los_status`, `_update_los_overlay_and_panel`, `_build_obstruction_bodies`, `_trace_los_to_ship_target`, `_trace_los_to_squad_target`, `_measure_range_from_ship`, `_connect_attack_sequence_signals`, `_connect_defense_phase_signals`, `_apply_gather_dice_hook`, `_handle_obstruction_step`, `_resolve_accuracy_count`, `_count_lockable_tokens`, `_can_defender_spend_tokens`, `_is_defense_token_spendable`, `_resolve_spend_method`, `_apply_scatter_effect`, `_apply_brace_effect`, `_apply_evade_remove`, `_apply_evade_reroll`, `_apply_single_redirect`, `_check_redirect_continuation`, `_absorb_shields`, `_determine_first_card_faceup`, `_deal_damage_cards`, `_draw_next_damage_card`, `_deal_single_faceup_card`, `_emit_ship_damage_events`, `_build_damage_summary`, `_rotate_camera_to_attacker`, `_finalize_squadron_attack`, `_zone_has_enemy_ship_target`, `_zone_has_enemy_squad_target`, `_reset_for_next_attack`, `_show_next_attack_panel`, `_clear_attack_sim_overlays`, `_reset_deferred_damage_state` | ✅ |
 | A1-10 | Split 3 oversized functions | `src/autoload/game_manager.gd` | `_assign_fixed_commands_to_ship`, `_check_player_all_assigned`, `_handle_token_add_result` | ✅ |
+| A4 | Split remaining 29 oversized functions across 13 files | `overlap_resolver`, `token_mover`, `damage_card_effect`, `main_menu`, `maneuver_tool_scene`, `targeting_list_builder`, `game_scale`, `music_manager`, `immediate_effect_resolver`, `maneuver_tool_state`, `range_finder`, `repair_resolver`, `firing_arc_overlay`, `ship_token` | ~80 extracted helpers; 0 functions > 30 body lines remain in codebase | ✅ |
 
 **Bug fixes included in A1-02 commit:**
 - fix(squadron): guard modal re-open with phase check — prevents race condition where `EventBus.squadron_activation_ended` triggers synchronous phase transition before counter check, re-opening modal into the next round
 - fix(status): emit `ship_defense_token_changed` after readying — UI now visually refreshes exhausted → ready tokens during Status Phase
 
-**Tests:** 87 scripts, 1645 tests, 1644 passing, 1 pre-existing failure (Nebulon-B placement)
+**Tests:** 87 scripts, 1648 tests, 1647 passing, 1 pre-existing failure (Nebulon-B placement)
 
 ---
 
@@ -1722,7 +1723,76 @@ Phase 0 (Scale & Assets)
 | Phase 9 | ~15 | **133** | **1564** |
 | Phase 9.5 | ~10 | **26** | **1590** |
 | Phase 10 | ~20 | — | ~1610 |
-| **Total** | **~420+ new** | | **1628 actual** |
+| Post-A4 fixes | — | **7** | **1652** |
+| **Total** | **~420+ new** | | **1652 actual** |
+
+---
+
+### Post-A4 Bug Fixes — Attack Flow, Squadron Ghost, Modal Drift ✅
+
+**Goal:** Fix three gameplay bugs found during post-refactoring playtesting.
+
+| Task | Layer | Bug | Fix |
+|------|-------|-----|-----|
+| Attack flow stall on damage summary dismiss | Presentation | Dismissing overlay without selecting new target left attack panel hidden | Emit `dismissed` signal on early return; rename missing skin texture |
+| Squadron ghost timing | Presentation | `set_activated_visual(true)` called after `EventBus` emit — board saw stale state | Move visual update before signal emit |
+| Modal horizontal drift (ActivationModal + AttackSimPanel) | Presentation | `size = Vector2.ZERO` zeroed width; content inflation → left-edge preserved → centre shifted left ~20 px/cycle | Changed to `size.y = 0` (vertical only) in both `_build_ui()` and `_deferred_layout_reset()` |
+| Learning scenario round-1 commands | Data | Commands updated to rules-compliant values | Updated `learning_scenario.json` + adjusted 6 unit tests |
+
+**Tests:** 88 scripts, 1 652 tests, all passing (2 905 asserts).
+**Documentation:** Updated `.skills/ui_styling.md` §10, `docs/arc42/08_crosscutting_concepts.md` §8.10, ADR-011.
+
+---
+
+### Phase 9.6: Wire Remaining Damage Card Effect Hooks ✅
+
+**Goal:** Connect the 8 unresolved hooks so that all 22 damage card effects actually fire during gameplay. Fix the Projector Misaligned logic bug and the Crew Panic unregister gap.
+
+**Status:** Complete — all 8 hooks wired, both bugs fixed, 16 new tests added. Tests: 1668 (88 scripts, 2929 asserts).
+
+#### Missing Hook Wiring (8 hooks, 11 affected cards)
+
+| # | Hook | Call Site Needed | Cards Affected | Complexity |
+|---|------|-----------------|---------------|------------|
+| 1 | `AFTER_MANEUVER_EXECUTE` | `game_board.gd` — after `mark_maneuver_executed()`, before `_show_end_activation_after_maneuver()` | Ruptured Engine (suffer 1 dmg if speed > 1), Damaged Controls (+1 facedown on overlap) | Medium — must deal facedown cards, update hull display, handle potential ship destruction |
+| 2 | `MANEUVER_DETERMINE_YAWS` | `maneuver_tool_scene.gd` or wherever yaw array is computed | Thrust Control Malfunction (last adjustable joint −1 yaw) | Low — mutate yaw array before maneuver tool builds |
+| 3 | `ON_SPEED_CHANGE` | `game_board.gd` or wherever speed dial is changed during maneuver | Thruster Fissure (suffer 1 dmg on any speed change) | Medium — must trigger from speed +/- buttons |
+| 4 | `BEFORE_REVEAL_DIAL` | `game_board.gd` — at start of ship activation, before dial reveal | Crew Panic (suffer 1 dmg or discard dial) | High — requires player choice modal; dial discard changes command phase flow |
+| 5 | `STATUS_READY_TOKENS` | `game_manager.gd` — `_begin_status_phase()` token-readying loop | Compartment Fire (cannot ready defense tokens) | Low — skip readying for affected ship |
+| 6 | `ON_COMMAND_TOKEN_GAIN` | `game_manager.gd` — command token gain logic (dial convert, etc.) | Life Support Failure (cannot gain command tokens) | Low — cancel token gain |
+| 7 | `ATTACK_VALIDATE_TARGET` | `attack_executor.gd` — target selection validation | Coolant Discharge (only 1 ship attack/round), Depowered Armament (no long range), Disengaged Fire Control (no obstructed) | Medium — needs cancel + tooltip feedback |
+| 8 | `REPAIR_VALIDATE_SHIELD` | `repair_resolver.gd` — `recover_shields()` / `move_shields()` | Capacitor Failure (block shield ops on 0-shield zone) | Low — cancel if target zone has 0 shields |
+
+#### Bug Fixes (2)
+
+| # | Bug | Card | Current Behaviour | Correct Behaviour |
+|---|-----|------|------------------|-------------------|
+| B1 | **Projector Misaligned wrong logic** | Projector Misaligned | Reduces each zone's shields by 1 | Zone with **most** shields loses **all** shields; tied zones → owner choice |
+| B2 | **Crew Panic self-discard leak** | Crew Panic | When player chooses to discard Crew Panic card instead of taking damage, the persistent effect is not unregistered from `EffectRegistry` | Must call `DamageCardEffectFactory.unregister_effect()` on self-discard |
+
+#### Implementation Order
+
+| Step | Task | Status |
+|------|------|--------|
+| 1 | Fix Projector Misaligned logic + update tests | ✅ |
+| 2 | Wire `ATTACK_VALIDATE_TARGET` in attack_executor.gd | ✅ |
+| 3 | Wire `REPAIR_VALIDATE_SHIELD` in repair_resolver.gd | ✅ |
+| 4 | Wire `STATUS_READY_TOKENS` in game_manager.gd | ✅ |
+| 5 | Wire `ON_COMMAND_TOKEN_GAIN` in game_manager.gd | ✅ |
+| 6 | Wire `MANEUVER_DETERMINE_YAWS` in maneuver tool | ✅ |
+| 7 | Wire `AFTER_MANEUVER_EXECUTE` in game_board.gd (Ruptured Engine + Damaged Controls) | ✅ |
+| 8 | Wire `ON_SPEED_CHANGE` in speed change handler | ✅ |
+| 9 | Wire `BEFORE_REVEAL_DIAL` in activation start + add choice modal for Crew Panic | ✅ |
+| 10 | Fix Crew Panic self-discard unregister bug | ✅ |
+| 11 | Integration tests: pipeline tests for all 8 hooks | ✅ |
+
+#### Wiring Status Summary (current → target)
+
+| Metric | Before | After Phase 9.6 |
+|--------|---------|-----------------|
+| Hooks wired | 6 / 14 | **14 / 14** ✅ |
+| Cards fully working | 13 / 22 | **22 / 22** ✅ |
+| Bugs | 2 | **0** ✅ |
 
 ---
 
@@ -1739,7 +1809,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
-| Damage card effect pattern | Phase 9 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 13 hooks |
+| Damage card effect pattern | Phase 9, 9.6 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 14/14 hooks wired |
 
 ---
 

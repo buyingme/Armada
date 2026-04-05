@@ -70,9 +70,17 @@ func set_arc_boundaries(local_boundaries: Dictionary) -> void:
 	if local_boundaries.is_empty():
 		queue_redraw()
 		return
-	# Each ship has 4 boundary lines (FL, FR, RL, RR).
-	# They separate adjacent hull zones.
-	var boundary_defs: Array[Dictionary] = [
+	var boundary_defs: Array[Dictionary] = _get_boundary_defs()
+	for bd: Dictionary in boundary_defs:
+		_add_boundary_from_def(bd, local_boundaries)
+	# Set debug extend distance based on play area size.
+	_debug_extend_px = GameScale.play_area_side_px * 2.0
+	queue_redraw()
+
+
+## Returns the 4 boundary line definitions (FL, FR, RL, RR).
+static func _get_boundary_defs() -> Array[Dictionary]:
+	return [
 		{
 			"inner": "inner_point_front_left",
 			"outer": "outer_point_front_left",
@@ -94,25 +102,26 @@ func set_arc_boundaries(local_boundaries: Dictionary) -> void:
 			"zones": [Constants.HullZone.REAR, Constants.HullZone.RIGHT],
 		},
 	]
-	for bd: Dictionary in boundary_defs:
-		var inner_key: String = bd["inner"]
-		var outer_key: String = bd["outer"]
-		if not local_boundaries.has(inner_key) or \
-				not local_boundaries.has(outer_key):
-			continue
-		var inner: Vector2 = local_boundaries[inner_key]
-		var outer: Vector2 = local_boundaries[outer_key]
-		var direction: Vector2 = (outer - inner)
-		if direction.length_squared() < 1e-8:
-			continue
-		_boundary_lines.append({
-			"inner": inner,
-			"dir": direction.normalized(),
-		})
-		_boundary_zones.append(bd["zones"] as Array)
-	# Set debug extend distance based on play area size.
-	_debug_extend_px = GameScale.play_area_side_px * 2.0
-	queue_redraw()
+
+
+## Parses one boundary definition and appends to the overlay arrays.
+func _add_boundary_from_def(
+		bd: Dictionary, local_boundaries: Dictionary) -> void:
+	var inner_key: String = bd["inner"]
+	var outer_key: String = bd["outer"]
+	if not local_boundaries.has(inner_key) or \
+			not local_boundaries.has(outer_key):
+		return
+	var inner: Vector2 = local_boundaries[inner_key]
+	var outer: Vector2 = local_boundaries[outer_key]
+	var direction: Vector2 = (outer - inner)
+	if direction.length_squared() < 1e-8:
+		return
+	_boundary_lines.append({
+		"inner": inner,
+		"dir": direction.normalized(),
+	})
+	_boundary_zones.append(bd["zones"] as Array)
 
 
 func _draw() -> void:

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bjkh5yc0ivlj8"
-path="res://.godot/imported/damage_thrust_control_mal.png-834e7c67c684ad195465986736a82b4c.ctex"
+uid="uid://c37fev5cpk8rj"
+path="res://.godot/imported/damage_thrust_control_malfunction.png-9732aa0b8ff2d060595bc701599d7b57.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Resources/Game_Components/damage_deck/damage_thrust_control_mal.png"
-dest_files=["res://.godot/imported/damage_thrust_control_mal.png-834e7c67c684ad195465986736a82b4c.ctex"]
+source_file="res://Resources/Game_Components/damage_deck/damage_thrust_control_malfunction.png"
+dest_files=["res://.godot/imported/damage_thrust_control_malfunction.png-9732aa0b8ff2d060595bc701599d7b57.ctex"]
 
 [params]
 

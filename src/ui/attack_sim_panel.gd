@@ -128,6 +128,8 @@ var _cf_dial_skip_button: Button = null
 var _obstruction_container: VBoxContainer = null
 ## HBox holding colour buttons for obstruction removal.
 var _obstruction_buttons: HBoxContainer = null
+## Empty-pool notice container (target beyond range / no dice).
+var _empty_pool_container: VBoxContainer = null
 ## "Roll Dice" button.
 var _roll_button: Button = null
 ## HBox holding die face TextureRects.
@@ -314,6 +316,7 @@ func show_target_selected(atk_name: String, atk_zone: String,
 ## [param dice_text] — formatted string like "2 red, 1 blue".
 ## Requirements: AE-PNL-002.
 func show_dice_count(dice_text: String) -> void:
+	hide_empty_pool_section()
 	if _dice_count_label:
 		_dice_count_label.text = "Dice: %s" % dice_text
 		_dice_count_label.visible = true
@@ -331,6 +334,7 @@ func hide_dice_count() -> void:
 		_done_button.visible = false
 	hide_cf_dial_section()
 	hide_obstruction_section()
+	hide_empty_pool_section()
 	hide_roll_button()
 	hide_dice_results()
 	hide_cf_token_section()
@@ -383,7 +387,7 @@ func _request_deferred_layout() -> void:
 ## Resets size + offsets on the next frame so the panel shrinks to fit
 ## only its visible children.
 func _deferred_layout_reset() -> void:
-	size = Vector2.ZERO
+	size.y = 0
 	offset_top = -40.0
 	offset_bottom = -40.0
 
@@ -408,11 +412,12 @@ func _apply_anchor_position() -> void:
 ## Builds the panel structure and applies standard modal styling.
 func _build_ui() -> void:
 	_clear_content()
-	# First zero the cached size (prevents the PanelContainer from
-	# retaining its old expanded height, e.g. 648 px from a previous
-	# attack).  This shifts offsets as a side-effect, so we immediately
-	# re-pin them to the canonical -40 values afterwards.
-	size = Vector2.ZERO
+	# Zero the cached height (prevents the PanelContainer from retaining
+	# its old expanded height, e.g. 648 px from a previous attack).  Only
+	# reset the vertical component — zeroing width would shrink the panel
+	# horizontally, and Godot preserves the left edge, shifting the centre
+	# leftward on every reopen.
+	size.y = 0
 	offset_top = -40.0
 	offset_bottom = -40.0
 	_build_panel_style()
@@ -421,6 +426,7 @@ func _build_ui() -> void:
 	_build_dice_count_section()
 	_build_cf_dial_section()
 	_build_obstruction_section()
+	_build_empty_pool_section()
 	_build_roll_button()
 	_build_dice_results_section()
 	_build_cf_token_section()
@@ -525,6 +531,19 @@ func _build_obstruction_section() -> void:
 	_obstruction_buttons.add_theme_constant_override("separation", 8)
 	_obstruction_container.add_child(_obstruction_buttons)
 	_content.add_child(_obstruction_container)
+
+
+## Creates the empty-pool notice section (hidden by default).
+func _build_empty_pool_section() -> void:
+	_empty_pool_container = VBoxContainer.new()
+	_empty_pool_container.add_theme_constant_override("separation", 4)
+	_empty_pool_container.visible = false
+	var pool_label: Label = Label.new()
+	pool_label.text = "No dice in pool \u2014 select a different target"
+	pool_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pool_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	_empty_pool_container.add_child(pool_label)
+	_content.add_child(_empty_pool_container)
 
 
 ## Creates the Roll Dice button.
@@ -749,6 +768,7 @@ func _null_attack_step_refs() -> void:
 	_cf_dial_skip_button = null
 	_obstruction_container = null
 	_obstruction_buttons = null
+	_empty_pool_container = null
 	_cf_token_container = null
 	_cf_token_buttons = null
 	_cf_token_reroll_button = null
@@ -885,6 +905,21 @@ func show_obstruction_auto_skip() -> void:
 	msg.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	_obstruction_buttons.add_child(msg)
 	_obstruction_container.visible = true
+
+
+## Shows the empty-pool notice when no dice can be added to the pool
+## (e.g. target beyond range, or all dice removed by persistent effects).
+## Rules Reference: "Attack", Step 1, p.2 — "The attacker must be able
+## to add at least one die to the attack pool."
+func show_empty_pool_auto_skip() -> void:
+	if _empty_pool_container:
+		_empty_pool_container.visible = true
+
+
+## Hides the empty-pool notice section.
+func hide_empty_pool_section() -> void:
+	if _empty_pool_container:
+		_empty_pool_container.visible = false
 
 
 ## Hides the obstruction section.

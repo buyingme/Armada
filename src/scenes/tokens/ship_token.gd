@@ -228,44 +228,36 @@ func show_revealed_dial(command_type: int) -> void:
 	if bg_tex == null:
 		return
 
-	## Container Node2D holds background sprite + icon sprite.
-	_revealed_dial_sprite = Node2D.new()
-
-	## Scale the dial to game-scale size (~30 mm physical diameter).
-	## Rules Reference: physical command dial is ~30 mm.
-	## ruler_length_px / 305 mm per foot × 30 mm ≈ 70.8 px at 720px ruler.
 	var dial_game_px: float = GameScale.ruler_length_px * (30.0 / 305.0)
 
-	# Background sprite (facedown dial graphic).
-	var bg_sprite: Sprite2D = Sprite2D.new()
-	bg_sprite.texture = bg_tex
-	var bg_max: float = maxf(float(bg_tex.get_width()),
-			float(bg_tex.get_height()))
-	if bg_max > 0.0:
-		var s: float = dial_game_px / bg_max
-		bg_sprite.scale = Vector2(s, s)
-	_revealed_dial_sprite.add_child(bg_sprite)
-
-	# Command icon sprite on top (slightly smaller to fit inside dial).
+	_revealed_dial_sprite = Node2D.new()
+	_add_scaled_sprite(_revealed_dial_sprite, bg_tex, dial_game_px)
 	if icon_tex != null:
-		var icon_sprite: Sprite2D = Sprite2D.new()
-		icon_sprite.texture = icon_tex
-		var icon_max: float = maxf(float(icon_tex.get_width()),
-				float(icon_tex.get_height()))
-		var icon_dial_px: float = dial_game_px * 0.75
-		if icon_max > 0.0:
-			var si: float = icon_dial_px / icon_max
-			icon_sprite.scale = Vector2(si, si)
-		_revealed_dial_sprite.add_child(icon_sprite)
+		_add_scaled_sprite(
+				_revealed_dial_sprite, icon_tex, dial_game_px * 0.75)
+	_revealed_dial_sprite.position = _compute_dial_position(dial_game_px)
+	add_child(_revealed_dial_sprite)
 
-	## Position: 1 cm behind the aft edge of the base.
-	## Aft direction = positive Y in local space (nose points toward -Y).
+
+## Creates a centred Sprite2D scaled to [param target_px] and adds it to
+## [param parent].
+func _add_scaled_sprite(
+		parent: Node2D, tex: Texture2D, target_px: float) -> void:
+	var sprite: Sprite2D = Sprite2D.new()
+	sprite.texture = tex
+	var max_dim: float = maxf(
+			float(tex.get_width()), float(tex.get_height()))
+	if max_dim > 0.0:
+		var s: float = target_px / max_dim
+		sprite.scale = Vector2(s, s)
+	parent.add_child(sprite)
+
+
+## Returns the local position for the revealed dial (1 cm aft of base edge).
+func _compute_dial_position(dial_game_px: float) -> Vector2:
 	var one_cm_px: float = GameScale.ruler_length_px / 30.48
 	var dial_half_h: float = dial_game_px * 0.5
-	_revealed_dial_sprite.position = Vector2(
-			0.0, _half_l + one_cm_px + dial_half_h)
-
-	add_child(_revealed_dial_sprite)
+	return Vector2(0.0, _half_l + one_cm_px + dial_half_h)
 
 
 ## Hides and removes the revealed command dial sprite from the board.

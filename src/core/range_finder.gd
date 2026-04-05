@@ -394,9 +394,20 @@ static func measure_attack_range_ship_endpoints(
 		def_edge: Array[Vector2],
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> Dictionary:
-	var best: float = INF
-	var best_atk: Vector2 = Vector2.ZERO
-	var best_def: Vector2 = Vector2.ZERO
+	var result: Dictionary = {
+		"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+	_scan_def_edge_forward(
+			def_edge, atk_edge, atk_zone, atk_arc_pts, result)
+	_scan_def_edge_reverse(
+			def_edge, atk_edge, atk_zone, atk_arc_pts, result)
+	return result
+
+
+## Forward scan: sample defender edge, find closest on attacker edge.
+static func _scan_def_edge_forward(
+		def_edge: Array[Vector2], atk_edge: Array[Vector2],
+		atk_zone: Constants.HullZone, atk_arc_pts: Dictionary,
+		result: Dictionary) -> void:
 	var count: int = EDGE_SAMPLE_COUNT
 	for seg_idx: int in range(def_edge.size() - 1):
 		var d_a: Vector2 = def_edge[seg_idx]
@@ -408,27 +419,32 @@ static func measure_attack_range_ship_endpoints(
 				continue
 			var cp: Vector2 = closest_point_on_polyline(def_pt, atk_edge)
 			var d: float = cp.distance_to(def_pt)
-			if d < best:
-				best = d
-				best_atk = cp
-				best_def = def_pt
+			if d < result["distance"]:
+				result["distance"] = d
+				result["atk_pt"] = cp
+				result["def_pt"] = def_pt
+
+
+## Reverse scan: from attacker vertices, sample defender edge in arc.
+static func _scan_def_edge_reverse(
+		def_edge: Array[Vector2], atk_edge: Array[Vector2],
+		atk_zone: Constants.HullZone, atk_arc_pts: Dictionary,
+		result: Dictionary) -> void:
+	var count: int = EDGE_SAMPLE_COUNT
 	for atk_pt: Vector2 in atk_edge:
-		for seg_idx2: int in range(def_edge.size() - 1):
-			var d_a2: Vector2 = def_edge[seg_idx2]
-			var d_b2: Vector2 = def_edge[seg_idx2 + 1]
+		for seg_idx: int in range(def_edge.size() - 1):
+			var d_a: Vector2 = def_edge[seg_idx]
+			var d_b: Vector2 = def_edge[seg_idx + 1]
 			for j: int in range(count + 1):
-				var t2: float = float(j) / float(count)
-				var def_pt2: Vector2 = d_a2.lerp(d_b2, t2)
-				if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
+				var t: float = float(j) / float(count)
+				var def_pt: Vector2 = d_a.lerp(d_b, t)
+				if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
 					continue
-				var d2: float = atk_pt.distance_to(def_pt2)
-				if d2 < best:
-					best = d2
-					best_atk = atk_pt
-					best_def = def_pt2
-	if best == INF:
-		return {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
-	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
+				var d: float = atk_pt.distance_to(def_pt)
+				if d < result["distance"]:
+					result["distance"] = d
+					result["atk_pt"] = atk_pt
+					result["def_pt"] = def_pt
 
 
 ## Like [method measure_attack_range_squadron] but also returns the two closest
@@ -444,9 +460,6 @@ static func measure_attack_range_squadron_endpoints(
 		squad_radius: float,
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> Dictionary:
-	var best: float = INF
-	var best_atk: Vector2 = Vector2.ZERO
-	var best_def: Vector2 = Vector2.ZERO
 	# Analytical closest point (optimal for common case).
 	var cp_on_edge: Vector2 = closest_point_on_polyline(
 			squad_centre, atk_edge)
@@ -458,33 +471,52 @@ static func measure_attack_range_squadron_endpoints(
 			"atk_pt": cp_on_edge,
 			"def_pt": cp_on_circle,
 		}
-	# Sampling fallback for arc-boundary cases.
+	var result: Dictionary = {
+		"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
+	_scan_circle_in_arc(
+			atk_edge, squad_centre, squad_radius,
+			atk_zone, atk_arc_pts, result)
+	_scan_circle_from_vertices(
+			atk_edge, squad_centre, squad_radius,
+			atk_zone, atk_arc_pts, result)
+	return result
+
+
+## Sampling fallback: check evenly-spaced circle points inside the arc.
+static func _scan_circle_in_arc(
+		atk_edge: Array[Vector2], squad_centre: Vector2,
+		squad_radius: float, atk_zone: Constants.HullZone,
+		atk_arc_pts: Dictionary, result: Dictionary) -> void:
 	var sample_count: int = 32
 	for i: int in range(sample_count):
 		var angle: float = float(i) * TAU / float(sample_count)
-		var pt: Vector2 = squad_centre + Vector2(squad_radius, 0.0).rotated(angle)
+		var pt: Vector2 = squad_centre \
+				+ Vector2(squad_radius, 0.0).rotated(angle)
 		if not is_point_in_arc(pt, atk_zone, atk_arc_pts):
 			continue
 		var cp: Vector2 = closest_point_on_polyline(pt, atk_edge)
 		var d: float = cp.distance_to(pt)
-		if d < best:
-			best = d
-			best_atk = cp
-			best_def = pt
-	# Reverse direction: attacker polyline vertices → closest in-arc circle point.
+		if d < result["distance"]:
+			result["distance"] = d
+			result["atk_pt"] = cp
+			result["def_pt"] = pt
+
+
+## Reverse: from attacker vertices, find closest in-arc circle point.
+static func _scan_circle_from_vertices(
+		atk_edge: Array[Vector2], squad_centre: Vector2,
+		squad_radius: float, atk_zone: Constants.HullZone,
+		atk_arc_pts: Dictionary, result: Dictionary) -> void:
 	for atk_pt: Vector2 in atk_edge:
 		var cp_c: Vector2 = closest_point_on_circle(
 				atk_pt, squad_centre, squad_radius)
 		if not is_point_in_arc(cp_c, atk_zone, atk_arc_pts):
 			continue
-		var d2: float = atk_pt.distance_to(cp_c)
-		if d2 < best:
-			best = d2
-			best_atk = atk_pt
-			best_def = cp_c
-	if best == INF:
-		return {"distance": INF, "atk_pt": Vector2.ZERO, "def_pt": Vector2.ZERO}
-	return {"distance": best, "atk_pt": best_atk, "def_pt": best_def}
+		var d: float = atk_pt.distance_to(cp_c)
+		if d < result["distance"]:
+			result["distance"] = d
+			result["atk_pt"] = atk_pt
+			result["def_pt"] = cp_c
 
 
 ## Measures range from a squadron base to a ship hull-zone edge (polyline).

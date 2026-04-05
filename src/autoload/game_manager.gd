@@ -487,8 +487,14 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 
 ## Force-adds a command token and handles duplicate / overflow cases.
 ## Returns a dictionary with "token_added" and "needs_discard" keys.
+## ON_COMMAND_TOKEN_GAIN hook — Life Support Failure blocks token gain.
+## Rules Reference: "Life Support Failure" card text.
 func _handle_token_add_result(ship: ShipInstance,
 		cmd: int) -> Dictionary:
+	# Check for damage card effects that block token gain.
+	if _is_token_gain_blocked(ship):
+		_log.info("Token gain blocked for %s (damage effect)." % ship.data_key)
+		return {"token_added": false, "needs_discard": false}
 	var result: Dictionary = ship.command_tokens.force_add_token(cmd)
 
 	if result.get("duplicate", false):
@@ -754,8 +760,14 @@ func _perform_status_phase_cleanup() -> void:
 				var si: ShipInstance = s as ShipInstance
 				if si.is_destroyed():
 					continue
-				si.ready_defense_tokens()
-				EventBus.ship_defense_token_changed.emit(si)
+				# STATUS_READY_TOKENS hook — Compartment Fire blocks readying.
+				# Rules Reference: "Compartment Fire" card text.
+				if not _is_token_ready_blocked(si):
+					si.ready_defense_tokens()
+					EventBus.ship_defense_token_changed.emit(si)
+				else:
+					_log.info("Token readying blocked for %s (damage effect)."
+							% si.data_key)
 				si.reset_activation()
 				# Clear spent dial marker so it doesn't persist into the
 				# next round's card panel display.
@@ -773,6 +785,32 @@ func _perform_status_phase_cleanup() -> void:
 	# initiative for the entire game." Initiative does NOT change.
 	_log.info("Status Phase: cleanup complete. Initiative stays with player %d." % [
 			current_game_state.initiative_player])
+
+
+## Returns true if the STATUS_READY_TOKENS hook cancels readying
+## for [param ship] (e.g. Compartment Fire).
+## Rules Reference: RRG "Damage Cards", p.4; "Compartment Fire".
+func _is_token_ready_blocked(ship: ShipInstance) -> bool:
+	if not current_game_state or not current_game_state.effect_registry:
+		return false
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx = current_game_state.effect_registry.resolve_hook(
+			&"STATUS_READY_TOKENS", ctx)
+	return ctx.cancelled
+
+
+## Returns true if the ON_COMMAND_TOKEN_GAIN hook cancels token gain
+## for [param ship] (e.g. Life Support Failure).
+## Rules Reference: RRG "Damage Cards", p.4; "Life Support Failure".
+func _is_token_gain_blocked(ship: ShipInstance) -> bool:
+	if not current_game_state or not current_game_state.effect_registry:
+		return false
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx = current_game_state.effect_registry.resolve_hook(
+			&"ON_COMMAND_TOKEN_GAIN", ctx)
+	return ctx.cancelled
 
 
 # ---------------------------------------------------------------------------

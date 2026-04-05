@@ -202,8 +202,8 @@ the `show_*()` methods:
 ## In _build_ui():
 func _build_ui() -> void:
     _clear_content()                     # 1. Remove old children first
-    size = Vector2.ZERO                  # 2. Zero stale cached size
-    offset_top = -40.0                   # 3. Re-pin canonical offsets
+    size.y = 0                           # 2. Zero stale cached HEIGHT only
+    offset_top = -40.0                   # 3. Re-pin canonical vertical offsets
     offset_bottom = -40.0                #    (counteracts drift from step 2)
     # … add children …
 
@@ -226,18 +226,26 @@ func _request_deferred_layout() -> void:
     call_deferred("_deferred_layout_reset")
 
 func _deferred_layout_reset() -> void:
-    size = Vector2.ZERO
+    size.y = 0
     offset_top = -40.0
     offset_bottom = -40.0
 ```
+
+> **Why `size.y = 0` and not `size = Vector2.ZERO`?**  Zeroing the full
+> vector resets the **horizontal** width as well.  When content children
+> later inflate the panel beyond `custom_minimum_size.x` (e.g. 360 → 401),
+> Godot preserves the **left** edge position and grows rightward, shifting
+> the visual centre leftward by ~20 px per reopen cycle.  Resetting only
+> `size.y` avoids this horizontal drift while still clearing the stale
+> cached height.
 
 ### Why each step matters
 
 | Step | Without it | Symptom |
 |------|-----------|---------|
 | `_clear_content()` with `remove_child()` | Old VBox stays in tree during rebuild | Stale minimum-size doubles the panel height |
-| `size = Vector2.ZERO` | PanelContainer keeps inflated height from previous session | Panel appears at old (large) size |
-| Offset re-pin (`-40.0`) | `size = Vector2.ZERO` corrupts offsets via Godot's recalc | Panel drifts off-screen (~388 px per reopen) |
+| `size.y = 0` | PanelContainer keeps inflated height from previous session | Panel appears at old (large) size |
+| Offset re-pin (`-40.0`) | `size.y = 0` shifts vertical offsets via Godot's recalc | Panel drifts off-screen (~388 px per reopen) |
 | `_request_deferred_layout()` | Hidden children inflate to ~648 px; no deferred pass corrects it on reuse | Panel too tall, extends above viewport |
 | `remove_child()` before `queue_free()` | `queue_free()` is deferred — child is still in tree during current frame | PanelContainer reports stale minimum size |
 
@@ -256,7 +264,7 @@ func _clear_content() -> void:
 ### Checklist for reusable anchor-based panels
 
 - [ ] `_clear_content()` uses `remove_child()` before `queue_free()`
-- [ ] `_build_ui()` resets `size = Vector2.ZERO` then re-pins offsets
+- [ ] `_build_ui()` resets `size.y = 0` then re-pins vertical offsets
 - [ ] VBoxContainer child gets explicit `custom_minimum_size.x`
 - [ ] Every `show_*()` method calls `_request_deferred_layout()` after `visible = true`
 - [ ] Anchors / presets are set only once in `_init()` via `_apply_anchor_position()`

@@ -206,7 +206,18 @@ func compute_final_transform(
 	var last_idx: int = segs.size() - 1
 	var last_seg: Transform2D = segs[last_idx] as Transform2D
 	var seg_rot: float = last_seg.get_rotation()
-	## Determine which contact maps to which ship corner.
+	var contact_world: Vector2 = _compute_contact_world(
+			last_idx, last_seg, seg_rot, side)
+	var center_pos: Vector2 = _compute_center_from_contact(
+			contact_world, seg_rot, side)
+	return Transform2D(seg_rot, center_pos)
+
+
+## Returns the world-space contact point where the ship corner meets
+## the last maneuver segment.
+func _compute_contact_world(
+		last_idx: int, last_seg: Transform2D,
+		seg_rot: float, side: String) -> Vector2:
 	var seg_type: String = get_segment_type(last_idx)
 	var cfg: Dictionary = GameScale.maneuver_tool_config.get(
 			seg_type, {})
@@ -218,9 +229,13 @@ func compute_final_transform(
 			Vector2.ZERO) as Vector2
 	var contact_offset: Vector2 = (
 			contact_pt - entry_px) * get_tool_scale()
-	var contact_world: Vector2 = last_seg.origin \
-			+ contact_offset.rotated(seg_rot)
-	## Corner-to-centre offset.
+	return last_seg.origin + contact_offset.rotated(seg_rot)
+
+
+## Offsets from the contact corner to the ship centre.
+func _compute_center_from_contact(
+		contact_world: Vector2, seg_rot: float,
+		side: String) -> Vector2:
 	var base: Vector2 = GameScale.get_base_size(_ship_size)
 	var half_w: float = base.x * 0.5
 	var half_len: float = base.y * 0.5
@@ -229,9 +244,7 @@ func compute_final_transform(
 		corner_to_center = Vector2(half_w, half_len)
 	else:
 		corner_to_center = Vector2(-half_w, half_len)
-	var center_pos: Vector2 = contact_world \
-			+ corner_to_center.rotated(seg_rot)
-	return Transform2D(seg_rot, center_pos)
+	return contact_world + corner_to_center.rotated(seg_rot)
 
 
 ## Internal: applies a click delta to a joint with validation.

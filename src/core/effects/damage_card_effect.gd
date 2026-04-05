@@ -29,16 +29,13 @@ func _init() -> void:
 ## Returns the hook points this effect responds to, based on [member effect_id].
 func get_hooks() -> Array[StringName]:
 	match effect_id:
-		# --- Attack hooks ---
 		"coolant_discharge":
 			return [&"ATTACK_VALIDATE_TARGET", &"ATTACK_CALC_DAMAGE"]
 		"depowered_armament":
 			return [&"ATTACK_VALIDATE_TARGET"]
 		"disengaged_fire_control":
 			return [&"ATTACK_VALIDATE_TARGET"]
-		"damaged_munitions":
-			return [&"ATTACK_GATHER_DICE"]
-		"point_defense_failure":
+		"damaged_munitions", "point_defense_failure":
 			return [&"ATTACK_GATHER_DICE"]
 		"blinded_gunners":
 			return [&"ATTACK_SPEND_ACCURACY"]
@@ -46,23 +43,25 @@ func get_hooks() -> Array[StringName]:
 			return [&"ATTACK_RESOLVE_CRITICAL"]
 		"faulty_countermeasures":
 			return [&"DEFENSE_VALIDATE_TOKEN"]
-		# --- Movement hooks ---
+		_:
+			return _get_non_attack_hooks()
+
+
+## Returns hooks for movement, command, and repair effects.
+func _get_non_attack_hooks() -> Array[StringName]:
+	match effect_id:
 		"thrust_control_malfunction":
 			return [&"MANEUVER_DETERMINE_YAWS"]
-		"ruptured_engine":
-			return [&"AFTER_MANEUVER_EXECUTE"]
-		"damaged_controls":
+		"ruptured_engine", "damaged_controls":
 			return [&"AFTER_MANEUVER_EXECUTE"]
 		"thruster_fissure":
 			return [&"ON_SPEED_CHANGE"]
-		# --- Command & Status hooks ---
 		"crew_panic":
 			return [&"BEFORE_REVEAL_DIAL"]
 		"power_failure":
 			return [&"CALC_ENGINEERING_VALUE"]
 		"compartment_fire":
 			return [&"STATUS_READY_TOKENS"]
-		# --- Repair & Token hooks ---
 		"capacitor_failure":
 			return [&"DEFENSE_VALIDATE_TOKEN", &"REPAIR_VALIDATE_SHIELD"]
 		"life_support_failure":
@@ -77,57 +76,40 @@ func should_trigger(context: EffectContext) -> bool:
 	if context == null or owner == null:
 		return false
 	match effect_id:
-		# --- ATTACK_VALIDATE_TARGET (hooks 1) ---
 		"coolant_discharge":
 			return _trigger_coolant_discharge(context)
 		"depowered_armament":
 			return _trigger_depowered_armament(context)
 		"disengaged_fire_control":
 			return _trigger_disengaged_fire_control(context)
-		# --- ATTACK_GATHER_DICE (hook 2) ---
 		"damaged_munitions":
 			return context.attacker == owner
 		"point_defense_failure":
 			return context.attacker == owner and \
 					context.defender is SquadronInstance
-		# --- ATTACK_SPEND_ACCURACY (hook 3) ---
 		"blinded_gunners":
 			return context.attacker == owner
-		# --- ATTACK_RESOLVE_CRITICAL (hook 4) ---
 		"targeter_disruption":
 			return context.attacker == owner
-		# --- DEFENSE_VALIDATE_TOKEN (hook 5) ---
 		"faulty_countermeasures":
 			return _trigger_faulty_countermeasures(context)
 		"capacitor_failure":
 			return _trigger_capacitor_failure(context)
-		# --- ATTACK_CALC_DAMAGE (for Coolant Discharge bonus) ---
-		# Checked by hook name + effect_id.
-		# --- MANEUVER_DETERMINE_YAWS (hook 6) ---
-		"thrust_control_malfunction":
+		_:
+			return _should_trigger_non_attack(context)
+
+
+## Checks non-attack effects (movement, command, repair, status).
+func _should_trigger_non_attack(context: EffectContext) -> bool:
+	match effect_id:
+		"thrust_control_malfunction", "thruster_fissure", \
+				"crew_panic", "power_failure", "compartment_fire", \
+				"life_support_failure":
 			return context.get_meta_value("ship", null) == owner
-		# --- AFTER_MANEUVER_EXECUTE (hook 7) ---
 		"ruptured_engine":
 			return _trigger_ruptured_engine(context)
 		"damaged_controls":
 			return _trigger_damaged_controls(context)
-		# --- ON_SPEED_CHANGE (hook 8) ---
-		"thruster_fissure":
-			return context.get_meta_value("ship", null) == owner
-		# --- BEFORE_REVEAL_DIAL (hook 9) ---
-		"crew_panic":
-			return context.get_meta_value("ship", null) == owner
-		# --- CALC_ENGINEERING_VALUE (hook 10) ---
-		"power_failure":
-			return context.get_meta_value("ship", null) == owner
-		# --- STATUS_READY_TOKENS (hook 11) ---
-		"compartment_fire":
-			return context.get_meta_value("ship", null) == owner
-		# --- REPAIR_VALIDATE_SHIELD (hook 12) ---
-		# Capacitor Failure handles this in _trigger_capacitor_failure.
-		# --- ON_COMMAND_TOKEN_GAIN (hook 13) ---
-		"life_support_failure":
-			return context.get_meta_value("ship", null) == owner
 		_:
 			return false
 
@@ -137,38 +119,31 @@ func resolve(context: EffectContext) -> void:
 	match effect_id:
 		"coolant_discharge":
 			_resolve_coolant_discharge(context)
-		"depowered_armament":
+		"depowered_armament", "disengaged_fire_control", \
+				"blinded_gunners", "faulty_countermeasures", \
+				"compartment_fire", "life_support_failure":
 			context.cancelled = true
-		"disengaged_fire_control":
-			context.cancelled = true
-		"damaged_munitions":
+		"damaged_munitions", "point_defense_failure":
 			_resolve_remove_one_die(context)
-		"point_defense_failure":
-			_resolve_remove_one_die(context)
-		"blinded_gunners":
-			context.cancelled = true
 		"targeter_disruption":
 			context.critical_allowed = false
-		"faulty_countermeasures":
-			context.cancelled = true
 		"capacitor_failure":
 			_resolve_capacitor_failure(context)
+		_:
+			_resolve_non_attack(context)
+
+
+## Resolves movement, command, and repair effects.
+func _resolve_non_attack(context: EffectContext) -> void:
+	match effect_id:
 		"thrust_control_malfunction":
 			_resolve_thrust_control(context)
-		"ruptured_engine":
-			_resolve_suffer_facedown(context)
-		"damaged_controls":
-			_resolve_suffer_facedown(context)
-		"thruster_fissure":
+		"ruptured_engine", "damaged_controls", "thruster_fissure":
 			_resolve_suffer_facedown(context)
 		"crew_panic":
 			_resolve_crew_panic(context)
 		"power_failure":
 			_resolve_power_failure(context)
-		"compartment_fire":
-			context.cancelled = true
-		"life_support_failure":
-			context.cancelled = true
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +295,8 @@ func _resolve_suffer_facedown(context: EffectContext) -> void:
 
 ## Crew Panic: suffer 1 facedown OR discard this card.
 ## The player's choice is stored in metadata.dial_discarded.
+## When discarding, the effect is unregistered from the EffectRegistry.
+## Rules Reference: "Crew Panic" card text.
 func _resolve_crew_panic(context: EffectContext) -> void:
 	var discard_card: bool = context.get_meta_value(
 			"dial_discarded", false) as bool
@@ -331,6 +308,12 @@ func _resolve_crew_panic(context: EffectContext) -> void:
 			(ship as ShipInstance).remove_damage_card(damage_card)
 			if deck is DamageDeck:
 				(deck as DamageDeck).discard(damage_card)
+			# Unregister this persistent effect from the registry.
+			var registry: Variant = context.get_meta_value(
+					"effect_registry", null)
+			if registry is EffectRegistry:
+				DamageCardEffectFactory.unregister_effect(
+						damage_card, registry as EffectRegistry)
 	else:
 		# Suffer 1 facedown damage card.
 		_resolve_suffer_facedown(context)

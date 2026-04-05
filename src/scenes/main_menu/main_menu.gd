@@ -33,7 +33,16 @@ func _ready() -> void:
 ## Builds the entire UI tree in code: splash background, title text,
 ## menu modal (initially hidden), and toast label.
 func _build_ui() -> void:
-	# --- Splash background ---
+	_build_splash_background()
+	_build_title_labels()
+	_menu_panel = _build_menu_modal()
+	_menu_panel.visible = false
+	add_child(_menu_panel)
+	_build_toast_label()
+
+
+## Creates the full-screen splash background image.
+func _build_splash_background() -> void:
 	var bg: TextureRect = TextureRect.new()
 	bg.texture = load(SPLASH_PATH) as Texture2D
 	bg.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
@@ -42,13 +51,15 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	# --- Title labels — centred horizontally, positioned ~8% from top ---
-	# (moved up by 1/4 screen compared to the original top-1/3 placement)
+
+## Creates the "ARMADA" and "digital" title labels at the top of the screen.
+func _build_title_labels() -> void:
 	var title_armada: Label = Label.new()
 	title_armada.text = "ARMADA"
 	title_armada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_armada.add_theme_font_size_override("font_size", 128)
-	title_armada.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
+	title_armada.add_theme_color_override("font_color",
+			Color(1.0, 1.0, 1.0, 0.95))
 	title_armada.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_armada.anchor_left = 0.0
 	title_armada.anchor_right = 1.0
@@ -61,7 +72,8 @@ func _build_ui() -> void:
 	title_digital.text = "digital"
 	title_digital.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_digital.add_theme_font_size_override("font_size", 72)
-	title_digital.add_theme_color_override("font_color", Color(0.8, 0.85, 0.95, 0.85))
+	title_digital.add_theme_color_override("font_color",
+			Color(0.8, 0.85, 0.95, 0.85))
 	title_digital.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_digital.anchor_left = 0.0
 	title_digital.anchor_right = 1.0
@@ -71,12 +83,9 @@ func _build_ui() -> void:
 	title_digital.grow_vertical = Control.GROW_DIRECTION_END
 	add_child(title_digital)
 
-	# --- Menu modal (initially hidden) ---
-	_menu_panel = _build_menu_modal()
-	_menu_panel.visible = false
-	add_child(_menu_panel)
 
-	# --- Toast label (initially hidden) ---
+## Creates the toast label (initially hidden) at the bottom of the screen.
+func _build_toast_label() -> void:
 	_toast_label = Label.new()
 	_toast_label.text = ""
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -87,7 +96,8 @@ func _build_ui() -> void:
 	_toast_label.offset_left = -150.0
 	_toast_label.offset_right = 150.0
 	_toast_label.add_theme_font_size_override("font_size", 16)
-	_toast_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))
+	_toast_label.add_theme_color_override("font_color",
+			Color(0.9, 0.7, 0.3))
 	_toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast_label.visible = false
 	add_child(_toast_label)
@@ -100,16 +110,8 @@ func _build_menu_modal() -> PanelContainer:
 	panel.custom_minimum_size = Vector2(320, 0)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.add_theme_stylebox_override("panel", _create_modal_style())
 
-	# Standard modal style (ui_styling.md §1).
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
-	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", style)
-
-	# Inner margin (ui_styling.md §3).
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 24)
 	margin.add_theme_constant_override("margin_right", 24)
@@ -121,20 +123,30 @@ func _build_menu_modal() -> PanelContainer:
 	vbox.add_theme_constant_override("separation", 12)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	margin.add_child(vbox)
+	_populate_menu_vbox(vbox)
+	return panel
 
-	# Modal title.
+
+## Creates the modal panel StyleBoxFlat (ui_styling.md §1).
+func _create_modal_style() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
+	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	return style
+
+
+## Adds title, separator, and game-mode buttons to [param vbox].
+func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	var title: Label = Label.new()
 	title.text = "Main Menu"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
 	title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	vbox.add_child(title)
+	vbox.add_child(HSeparator.new())
 
-	# Separator.
-	var sep: HSeparator = HSeparator.new()
-	vbox.add_child(sep)
-
-	# Buttons.
 	var btn_new_game: Button = _create_menu_button("New Game")
 	btn_new_game.pressed.connect(_on_new_game_pressed)
 	vbox.add_child(btn_new_game)
@@ -147,7 +159,6 @@ func _build_menu_modal() -> PanelContainer:
 	btn_learning.pressed.connect(_on_learning_scenario_pressed)
 	vbox.add_child(btn_learning)
 
-	# Extra space before Quit.
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size.y = 8.0
 	vbox.add_child(spacer)
@@ -155,8 +166,6 @@ func _build_menu_modal() -> PanelContainer:
 	var btn_quit: Button = _create_menu_button("Quit")
 	btn_quit.pressed.connect(_on_quit_pressed)
 	vbox.add_child(btn_quit)
-
-	return panel
 
 
 ## Creates a standard menu button with consistent sizing.

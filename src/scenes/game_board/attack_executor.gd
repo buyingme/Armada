@@ -1501,9 +1501,24 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		return
 	if _attack_exec_ship_token == null and _attack_exec_squad_token == null:
 		return
+	# --- ATTACK_VALIDATE_TARGET hook (Coolant Discharge, Depowered
+	# Armament, Disengaged Fire Control) — reject attack if cancelled.
+	# Rules Reference: RRG "Damage Cards", p.4; ET-001.
+	if _is_attack_blocked_by_damage(range_band):
+		return
 	_attack_exec_pool = _compute_attack_pool_dict(range_band)
 	_apply_gather_dice_hook()
 	_attack_sim_panel.show_skip_attack_button()
+	# Empty pool guard: if no dice remain after gather-dice hooks, the
+	# attack cannot be declared.
+	# Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
+	# able to add at least one die to the attack pool."
+	var _begin_total: int = DicePool.get_total_count(_attack_exec_pool)
+	if _begin_total <= 0:
+		_log.info("No dice in pool — cannot declare attack.")
+		if _attack_sim_panel:
+			_attack_sim_panel.show_empty_pool_auto_skip()
+		return
 	# Obstruction: attacker must remove 1 die before rolling.
 	# Rules Reference: "Obstructed", RRG v1.5.0, p.10.
 	# Requirements: AE-OBS-001, AE-OBS-002.
@@ -1541,6 +1556,38 @@ func _apply_gather_dice_hook() -> void:
 	gd_ctx = _effect_registry.resolve_hook(
 			&"ATTACK_GATHER_DICE", gd_ctx)
 	_attack_exec_pool = gd_ctx.dice_pool
+
+
+## Checks whether a persistent damage card effect blocks this attack.
+## Builds an ATTACK_VALIDATE_TARGET context with range, obstruction,
+## and attack count, then resolves the hook.
+## Returns true (attack blocked) if any effect sets cancelled.
+## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
+## "Depowered Armament", "Disengaged Fire Control".
+func _is_attack_blocked_by_damage(range_band: String) -> bool:
+	if not _effect_registry:
+		return false
+	var ctx: EffectContext = EffectContext.new()
+	if _attack_exec_ship_token and _attack_exec_ship_token is ShipToken:
+		ctx.attacker = (
+				_attack_exec_ship_token as ShipToken
+				).get_ship_instance()
+	elif _attack_exec_squad_token:
+		ctx.attacker = _attack_exec_squad_token.get_squadron_instance()
+	ctx.range_band = range_band
+	ctx.set_meta_value("is_obstructed", _attack_exec_obstructed)
+	ctx.set_meta_value(
+			"ship_attacks_this_round", _attack_exec_current_attack)
+	ctx = _effect_registry.resolve_hook(
+			&"ATTACK_VALIDATE_TARGET", ctx)
+	if ctx.cancelled:
+		_log.info("Attack blocked by damage card effect.")
+		if _attack_sim_panel:
+			_attack_sim_panel.show_empty_pool_auto_skip()
+		TooltipManager.show_text(
+				"Attack blocked by damage card.", Vector2.INF, 2.0, true)
+		return true
+	return false
 
 
 ## Handles obstruction die removal: auto-remove, auto-skip, or prompt.
@@ -1998,17 +2045,22 @@ func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 	return true
 
 
-## Returns the number of spendable (non-discarded, non-locked) tokens.
+## Returns the number of spendable (non-discarded, non-locked, not
+## blocked by persistent effects) tokens.
+## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 	var count: int = 0
 	for i: int in range(inst.defense_tokens.size()):
 		if i in _attack_exec_locked_tokens:
 			continue
+		var token: Dictionary = inst.defense_tokens[i]
 		var state: Constants.DefenseTokenState = (
-				inst.defense_tokens[i]["state"]
-				as Constants.DefenseTokenState)
-		if state != Constants.DefenseTokenState.DISCARDED:
-			count += 1
+				token["state"] as Constants.DefenseTokenState)
+		if state == Constants.DefenseTokenState.DISCARDED:
+			continue
+		if _is_token_blocked_by_effect(inst, token):
+			continue
+		count += 1
 	return count
 
 
@@ -2048,6 +2100,9 @@ func _on_attack_defense_token_spent(token_index: int,
 
 
 ## Returns true if the token at the given index can be spent.
+## Checks discard state, one-per-type limit, accuracy locks, and
+## persistent damage card effects (DEFENSE_VALIDATE_TOKEN hook).
+## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _is_defense_token_spendable(token_index: int,
 		token: Dictionary) -> bool:
 	var token_type: Constants.DefenseToken = (
@@ -2064,6 +2119,10 @@ func _is_defense_token_spendable(token_index: int,
 		_log.info("Token %d is locked by accuracy — ignoring." %
 				token_index)
 		return false
+	if _is_token_blocked_by_effect(_get_defender_instance(), token):
+		_log.info("Token %d blocked by persistent effect — ignoring."
+				% token_index)
+		return false
 	return true
 
 
@@ -2075,6 +2134,36 @@ func _resolve_spend_method(spend_method: String,
 	if token_state == Constants.DefenseTokenState.EXHAUSTED:
 		return "discard"
 	return spend_method
+
+
+## Returns the current defender's ShipInstance, or null.
+func _get_defender_instance() -> ShipInstance:
+	if _attack_sim_def_ship == null:
+		return null
+	return _attack_sim_def_ship.get_ship_instance()
+
+
+## Returns true if a persistent damage card effect blocks spending this
+## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
+## context's cancelled flag.
+## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
+func _is_token_blocked_by_effect(inst: ShipInstance,
+		token: Dictionary) -> bool:
+	if _effect_registry == null:
+		return false
+	if inst == null:
+		return false
+	var ctx: EffectContext = EffectContext.new()
+	ctx.defender = inst
+	var token_type: Constants.DefenseToken = (
+			token["type"] as Constants.DefenseToken)
+	var token_state: Constants.DefenseTokenState = (
+			token["state"] as Constants.DefenseTokenState)
+	ctx.set_meta_value("token_type", token_type)
+	ctx.set_meta_value("token_state", token_state)
+	ctx = _effect_registry.resolve_hook(
+			&"DEFENSE_VALIDATE_TOKEN", ctx)
+	return ctx.cancelled
 
 
 ## Applies the effect of a defense token to the current attack.

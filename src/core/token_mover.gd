@@ -72,49 +72,81 @@ func resolve_ship_position(
 	var half_l: float = base_size.y * 0.5
 
 	# Step 1 — apply boundary constraints to the desired position.
-	var candidate: Vector2 = desired_pos
-	candidate = _clamp_to_play_area(candidate, play_area_side)
-	if enforce_deploy_zones:
-		candidate = _apply_deploy_zone_ship(
-				candidate, half_w, half_l, rotation_rad, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
+	var candidate: Vector2 = _clamp_ship_candidate(
+			desired_pos, half_w, half_l, rotation_rad, faction,
+			deploy_line_y_top, deploy_line_y_bottom, play_area_side,
+			enforce_deploy_zones)
 
 	# Step 2 — if no overlap, return immediately.
 	if not _ship_overlaps_any(candidate, rotation_rad, half_w, half_l,
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Step 3 — primary push-outs from each overlapping blocker.
-	var primary: Dictionary = _collect_ship_pushouts(
-			candidate, rotation_rad, half_w, half_l,
-			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side,
+	# Steps 3+4 — primary push-out, then cascade fallback.
+	return _resolve_ship_pushout(
+			desired_pos, current_pos, candidate, rotation_rad,
+			half_w, half_l, faction, other_ship_rects, other_squad_circles,
+			deploy_line_y_top, deploy_line_y_bottom, play_area_side,
 			enforce_deploy_zones)
+
+
+## Clamps a desired position to play-area and (optionally) deployment zone.
+func _clamp_ship_candidate(
+		pos: Vector2, hw: float, hl: float, rot: float,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool) -> Vector2:
+	var result: Vector2 = _clamp_to_play_area(pos, side)
+	if enforce_zones:
+		result = _apply_deploy_zone_ship(
+				result, hw, hl, rot, faction, top_y, bottom_y)
+	return result
+
+
+## Performs primary + cascade push-out for a ship, returning the best
+## valid position or [param current_pos] as fallback.
+func _resolve_ship_pushout(
+		desired_pos: Vector2, current_pos: Vector2,
+		candidate: Vector2, rot: float, hw: float, hl: float,
+		faction: Constants.Faction,
+		other_ships: Array, other_squads: Array,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool) -> Vector2:
+	var primary: Dictionary = _collect_ship_pushouts(
+			candidate, rot, hw, hl, other_ships, other_squads,
+			faction, top_y, bottom_y, side, enforce_zones)
 	var best: Vector2 = _pick_closest(primary.valid, candidate)
 	if best != Vector2.INF:
 		_log.debug("Ship resolved (primary): mouse=(%.0f,%.0f) result=(%.0f,%.0f) v=%d i=%d" % [
 				desired_pos.x, desired_pos.y, best.x, best.y,
 				primary.valid.size(), primary.invalid.size()])
 		return best
-
-	# Step 4 — cascade: re-push each failed candidate from all blockers.
-	var all_secondary: Array = []
-	for pos: Vector2 in primary.invalid:
-		var secondary: Dictionary = _collect_ship_pushouts(
-				pos, rotation_rad, half_w, half_l,
-				other_ship_rects, other_squad_circles,
-				faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side,
-				enforce_deploy_zones)
-		all_secondary.append_array(secondary.valid)
-	best = _pick_closest(all_secondary, candidate)
+	best = _cascade_ship_pushout(
+			primary.invalid, rot, hw, hl, other_ships, other_squads,
+			faction, top_y, bottom_y, side, enforce_zones, candidate)
 	if best != Vector2.INF:
 		_log.debug("Ship resolved (cascade): mouse=(%.0f,%.0f) result=(%.0f,%.0f)" % [
 				desired_pos.x, desired_pos.y, best.x, best.y])
 		return best
-
 	_log.debug("Ship push-out fallback to current_pos (mouse=%.0f,%.0f)" % [
 			desired_pos.x, desired_pos.y])
 	return current_pos
+
+
+## Re-pushes each failed candidate from all blockers (cascade step).
+func _cascade_ship_pushout(
+		invalid: Array, rot: float, hw: float, hl: float,
+		other_ships: Array, other_squads: Array,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool, candidate: Vector2) -> Vector2:
+	var all_secondary: Array = []
+	for pos: Vector2 in invalid:
+		var secondary: Dictionary = _collect_ship_pushouts(
+				pos, rot, hw, hl, other_ships, other_squads,
+				faction, top_y, bottom_y, side, enforce_zones)
+		all_secondary.append_array(secondary.valid)
+	return _pick_closest(all_secondary, candidate)
 
 
 ## Resolves a desired position for a squadron token.
@@ -133,48 +165,81 @@ func resolve_squadron_position(
 		play_area_side: float,
 		enforce_deploy_zones: bool = true
 ) -> Vector2:
-	var candidate: Vector2 = desired_pos
-	candidate = _clamp_to_play_area(candidate, play_area_side)
-	if enforce_deploy_zones:
-		candidate = _apply_deploy_zone_circle(
-				candidate, radius, faction,
-				deploy_line_y_top, deploy_line_y_bottom)
+	var candidate: Vector2 = _clamp_circle_candidate(
+			desired_pos, radius, faction,
+			deploy_line_y_top, deploy_line_y_bottom, play_area_side,
+			enforce_deploy_zones)
 
 	if not _circle_overlaps_any(candidate, radius,
 			other_ship_rects, other_squad_circles):
 		return candidate
 
-	# Step 3 — primary push-outs from each overlapping blocker.
-	var primary: Dictionary = _collect_circle_pushouts(
-			candidate, radius,
+	# Steps 3+4 — primary push-out, then cascade fallback.
+	return _resolve_circle_pushout(
+			desired_pos, current_pos, candidate, radius, faction,
 			other_ship_rects, other_squad_circles,
-			faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side,
+			deploy_line_y_top, deploy_line_y_bottom, play_area_side,
 			enforce_deploy_zones)
+
+
+## Clamps a desired position to play-area and (optionally) deployment zone
+## for a circular (squadron) footprint.
+func _clamp_circle_candidate(
+		pos: Vector2, radius: float,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool) -> Vector2:
+	var result: Vector2 = _clamp_to_play_area(pos, side)
+	if enforce_zones:
+		result = _apply_deploy_zone_circle(
+				result, radius, faction, top_y, bottom_y)
+	return result
+
+
+## Performs primary + cascade push-out for a squadron, returning the best
+## valid position or [param current_pos] as fallback.
+func _resolve_circle_pushout(
+		desired_pos: Vector2, current_pos: Vector2,
+		candidate: Vector2, radius: float,
+		faction: Constants.Faction,
+		other_ships: Array, other_squads: Array,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool) -> Vector2:
+	var primary: Dictionary = _collect_circle_pushouts(
+			candidate, radius, other_ships, other_squads,
+			faction, top_y, bottom_y, side, enforce_zones)
 	var best: Vector2 = _pick_closest(primary.valid, candidate)
 	if best != Vector2.INF:
 		_log.debug("Squadron resolved (primary): mouse=(%.0f,%.0f) result=(%.0f,%.0f) v=%d i=%d" % [
 				desired_pos.x, desired_pos.y, best.x, best.y,
 				primary.valid.size(), primary.invalid.size()])
 		return best
-
-	# Step 4 — cascade: re-push each failed candidate from all blockers.
-	var all_secondary: Array = []
-	for pos: Vector2 in primary.invalid:
-		var secondary: Dictionary = _collect_circle_pushouts(
-				pos, radius,
-				other_ship_rects, other_squad_circles,
-				faction, deploy_line_y_top, deploy_line_y_bottom, play_area_side,
-				enforce_deploy_zones)
-		all_secondary.append_array(secondary.valid)
-	best = _pick_closest(all_secondary, candidate)
+	best = _cascade_circle_pushout(
+			primary.invalid, radius, other_ships, other_squads,
+			faction, top_y, bottom_y, side, enforce_zones, candidate)
 	if best != Vector2.INF:
 		_log.debug("Squadron resolved (cascade): mouse=(%.0f,%.0f) result=(%.0f,%.0f)" % [
 				desired_pos.x, desired_pos.y, best.x, best.y])
 		return best
-
 	_log.debug("Squadron push-out fallback to current_pos (mouse=%.0f,%.0f)" % [
 			desired_pos.x, desired_pos.y])
 	return current_pos
+
+
+## Re-pushes each failed candidate from all blockers (circle cascade step).
+func _cascade_circle_pushout(
+		invalid: Array, radius: float,
+		other_ships: Array, other_squads: Array,
+		faction: Constants.Faction,
+		top_y: float, bottom_y: float, side: float,
+		enforce_zones: bool, candidate: Vector2) -> Vector2:
+	var all_secondary: Array = []
+	for pos: Vector2 in invalid:
+		var secondary: Dictionary = _collect_circle_pushouts(
+				pos, radius, other_ships, other_squads,
+				faction, top_y, bottom_y, side, enforce_zones)
+		all_secondary.append_array(secondary.valid)
+	return _pick_closest(all_secondary, candidate)
 
 
 # ---------------------------------------------------------------------------

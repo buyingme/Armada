@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bughjvkr6mwyr"
-path="res://.godot/imported/damage_disengaged_fc.png-6b2c5b1e25c211b5863ce4c3010ed910.ctex"
+uid="uid://c6p3tb6du730w"
+path="res://.godot/imported/damage_disengaged_fire_control.png-5cbd5ffe35d7f1a57f86679619156eef.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Resources/Game_Components/damage_deck/damage_disengaged_fc.png"
-dest_files=["res://.godot/imported/damage_disengaged_fc.png-6b2c5b1e25c211b5863ce4c3010ed910.ctex"]
+source_file="res://Resources/Game_Components/damage_deck/damage_disengaged_fire_control.png"
+dest_files=["res://.godot/imported/damage_disengaged_fire_control.png-5cbd5ffe35d7f1a57f86679619156eef.ctex"]
 
 [params]
 

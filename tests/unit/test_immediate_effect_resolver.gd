@@ -118,34 +118,34 @@ func test_structural_damage_no_choice_needed() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Projector Misaligned — reduce all zones by 1, then flip facedown
+# Projector Misaligned — strip all shields from zone with most, flip facedown
 # ---------------------------------------------------------------------------
 
 
-func test_projector_misaligned_reduces_all_zones() -> void:
+func test_projector_misaligned_strips_highest_zone() -> void:
 	var ship: ShipInstance = _make_ship(3, 2, 2, 1)
 	var deck: DamageDeck = _make_deck()
 	var card: DamageCard = _make_faceup_card(
 			ship, "projector_misaligned", "Projector Misaligned")
 	_resolver().resolve(card, ship, deck)
-	assert_eq(int(ship.current_shields["FRONT"]), 2,
-			"FRONT should be 3-1=2")
-	assert_eq(int(ship.current_shields["LEFT"]), 1,
-			"LEFT should be 2-1=1")
-	assert_eq(int(ship.current_shields["RIGHT"]), 1,
-			"RIGHT should be 2-1=1")
-	assert_eq(int(ship.current_shields["REAR"]), 0,
-			"REAR should be 1-1=0")
+	assert_eq(int(ship.current_shields["FRONT"]), 0,
+			"FRONT (highest=3) should lose all shields")
+	assert_eq(int(ship.current_shields["LEFT"]), 2,
+			"LEFT should be unchanged")
+	assert_eq(int(ship.current_shields["RIGHT"]), 2,
+			"RIGHT should be unchanged")
+	assert_eq(int(ship.current_shields["REAR"]), 1,
+			"REAR should be unchanged")
 
 
-func test_projector_misaligned_does_not_go_below_zero() -> void:
-	var ship: ShipInstance = _make_ship(1, 0, 0, 0)
+func test_projector_misaligned_no_shields_is_noop() -> void:
+	var ship: ShipInstance = _make_ship(0, 0, 0, 0)
 	var deck: DamageDeck = _make_deck()
 	var card: DamageCard = _make_faceup_card(
 			ship, "projector_misaligned", "Projector Misaligned")
 	_resolver().resolve(card, ship, deck)
 	assert_eq(int(ship.current_shields["FRONT"]), 0,
-			"FRONT should be 0 (was 1)")
+			"FRONT should remain 0")
 	assert_eq(int(ship.current_shields["LEFT"]), 0,
 			"LEFT should remain 0")
 
@@ -158,6 +158,43 @@ func test_projector_misaligned_flips_facedown() -> void:
 	_resolver().resolve(card, ship, deck)
 	assert_false(card.is_faceup,
 			"Card should flip facedown after effect")
+
+
+func test_projector_misaligned_unique_max_no_choice() -> void:
+	var ship: ShipInstance = _make_ship(3, 2, 2, 1)
+	var card: DamageCard = _make_faceup_card(
+			ship, "projector_misaligned", "Projector Misaligned")
+	var choices: Dictionary = _resolver().get_required_choice(card, ship)
+	assert_true(choices.is_empty(),
+			"No choice needed when FRONT is unique maximum")
+
+
+func test_projector_misaligned_tied_zones_require_choice() -> void:
+	var ship: ShipInstance = _make_ship(3, 3, 1, 0)
+	var card: DamageCard = _make_faceup_card(
+			ship, "projector_misaligned", "Projector Misaligned")
+	var choices: Dictionary = _resolver().get_required_choice(card, ship)
+	assert_false(choices.is_empty(),
+			"Should require choice when FRONT and LEFT are tied")
+	assert_eq(choices["choice_type"], "projector_misaligned",
+			"Choice type should be 'projector_misaligned'")
+	assert_eq(choices["chooser"], "owner",
+			"Chooser should be 'owner'")
+	var options: Array = choices.get("options", [])
+	assert_eq(options.size(), 2,
+			"Should list exactly the 2 tied zones")
+
+
+func test_projector_misaligned_choice_strips_selected_zone() -> void:
+	var ship: ShipInstance = _make_ship(3, 3, 1, 0)
+	var deck: DamageDeck = _make_deck()
+	var card: DamageCard = _make_faceup_card(
+			ship, "projector_misaligned", "Projector Misaligned")
+	_resolver().resolve(card, ship, deck, {"id": "zone_LEFT"})
+	assert_eq(int(ship.current_shields["LEFT"]), 0,
+			"LEFT chosen — should lose all 3 shields")
+	assert_eq(int(ship.current_shields["FRONT"]), 3,
+			"FRONT should be unchanged")
 
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,7 @@ const CHOICE_NONE: String = ""
 const CHOICE_INJURED_CREW: String = "injured_crew"
 const CHOICE_SHIELD_FAILURE: String = "shield_failure"
 const CHOICE_COMM_NOISE: String = "comm_noise"
+const CHOICE_PROJECTOR_MISALIGNED: String = "projector_misaligned"
 
 var _log: GameLogger = GameLogger.new("ImmediateEffectResolver")
 
@@ -62,6 +63,8 @@ func get_required_choice(card: DamageCard,
 			return _get_shield_failure_choices(ship, card)
 		"comm_noise":
 			return _get_comm_noise_choices(ship, card)
+		"projector_misaligned":
+			return _get_projector_misaligned_choices(ship, card)
 		_:
 			return {}
 
@@ -84,7 +87,7 @@ func resolve(card: DamageCard, ship: ShipInstance,
 		"structural_damage":
 			return _resolve_structural_damage(card, ship, deck)
 		"projector_misaligned":
-			return _resolve_projector_misaligned(card, ship)
+			return _resolve_projector_misaligned(card, ship, choice)
 		"life_support_failure":
 			return _resolve_life_support_failure(card, ship)
 		"injured_crew":
@@ -125,23 +128,46 @@ func _resolve_structural_damage(card: DamageCard,
 	return true
 
 
-## Projector Misaligned: Reduce each hull zone's shields by 1, then flip
-## this card facedown.
+## Projector Misaligned: The hull zone with the most remaining shields
+## loses ALL of its shields. If tied, owner chooses between tied zones.
+## Then flip this card facedown.
 ## Rules Reference: "Projector Misaligned" card text.
 func _resolve_projector_misaligned(card: DamageCard,
-		ship: ShipInstance) -> bool:
-	for zone: String in ship.current_shields.keys():
-		var current: int = int(ship.current_shields.get(zone, 0))
-		if current > 0:
-			ship.reduce_shields(zone, 1)
+		ship: ShipInstance, choice: Dictionary = {}) -> bool:
+	var zone_to_strip: String = _pick_projector_zone(ship, choice)
+	if zone_to_strip.is_empty():
+		_log.info("Projector Misaligned: no zone with shields.")
+	else:
+		var amount: int = int(ship.current_shields.get(zone_to_strip, 0))
+		if amount > 0:
+			ship.reduce_shields(zone_to_strip, amount)
 			EventBus.ship_shields_changed.emit(
-					ship, zone,
-					int(ship.current_shields.get(zone, 0)))
-	_log.info("Projector Misaligned: reduced all hull zone shields by 1.")
+					ship, zone_to_strip,
+					int(ship.current_shields.get(zone_to_strip, 0)))
+		_log.info("Projector Misaligned: %s lost all %d shields." % [
+				zone_to_strip, amount])
 	card.flip_facedown()
 	_move_to_facedown(card, ship)
 	EventBus.damage_card_flipped.emit(ship, card, false)
 	return true
+
+
+## Determines which zone Projector Misaligned strips.  If the player
+## provided a choice (tied case), use it; otherwise pick the unique max.
+func _pick_projector_zone(ship: ShipInstance,
+		choice: Dictionary) -> String:
+	var chosen_id: String = str(choice.get("id", ""))
+	if chosen_id.begins_with("zone_"):
+		return chosen_id.substr(5)
+	# Auto-resolve: find the zone with the most shields.
+	var best_zone: String = ""
+	var best_val: int = 0
+	for zone: String in ship.current_shields.keys():
+		var val: int = int(ship.current_shields.get(zone, 0))
+		if val > best_val:
+			best_val = val
+			best_zone = zone
+	return best_zone
 
 
 ## Life Support Failure: Discard all command tokens.
@@ -336,14 +362,35 @@ func _get_shield_failure_choices(
 ## new command on your top command dial."
 func _get_comm_noise_choices(
 		ship: ShipInstance, card: DamageCard) -> Dictionary:
+	var options: Array[Dictionary] = _build_comm_noise_options(ship)
+	if options.is_empty():
+		return {}
+	var has_available: bool = false
+	for opt: Dictionary in options:
+		if opt.get("available", false):
+			has_available = true
+			break
+	if not has_available:
+		return {}
+	return {
+		"choice_type": CHOICE_COMM_NOISE,
+		"chooser": "opponent",
+		"multi_select": false,
+		"max_selections": 1,
+		"card_title": card.title,
+		"effect_text": card.effect_text,
+		"options": options,
+	}
+
+
+## Builds the option list for a Comm Noise choice.
+func _build_comm_noise_options(ship: ShipInstance) -> Array[Dictionary]:
 	var options: Array[Dictionary] = []
-	# Option A: reduce speed by 1 (available if speed > 0).
 	options.append({
 		"id": "reduce_speed",
 		"label": "Reduce speed by 1 (current: %d)" % ship.current_speed,
 		"available": ship.current_speed > 0,
 	})
-	# Option B: choose a new command on top dial (one sub-option per command).
 	if ship.command_dial_stack and \
 			ship.command_dial_stack.get_hidden_count() > 0:
 		for cmd_type: int in [
@@ -356,19 +403,43 @@ func _get_comm_noise_choices(
 				"label": "Change top dial to %s" % _command_type_name(cmd_type),
 				"available": true,
 			})
-	if options.is_empty():
+	return options
+
+
+## Returns choice options for Projector Misaligned when multiple zones
+## are tied for the most shields.  Returns empty if a unique maximum exists.
+## The OWNER chooses which tied zone loses all shields.
+## Card text: "The hull zone with the most remaining shields loses all of
+## its shields. If tied, the ship's owner chooses."
+func _get_projector_misaligned_choices(
+		ship: ShipInstance, card: DamageCard) -> Dictionary:
+	# Find the maximum shield value.
+	var best_val: int = 0
+	for zone: String in ship.current_shields.keys():
+		var val: int = int(ship.current_shields.get(zone, 0))
+		if val > best_val:
+			best_val = val
+	if best_val <= 0:
 		return {}
-	# Check if ANY option is available.
-	var has_available: bool = false
-	for opt: Dictionary in options:
-		if opt.get("available", false):
-			has_available = true
-			break
-	if not has_available:
+	# Collect all zones tied at the maximum.
+	var tied: Array[String] = []
+	for zone: String in ship.current_shields.keys():
+		if int(ship.current_shields.get(zone, 0)) == best_val:
+			tied.append(zone)
+	# Unique maximum — auto-resolve, no choice needed.
+	if tied.size() <= 1:
 		return {}
+	# Tied — present a choice to the ship's owner.
+	var options: Array[Dictionary] = []
+	for zone: String in tied:
+		options.append({
+			"id": "zone_%s" % zone,
+			"label": "%s (%d shields)" % [zone, best_val],
+			"available": true,
+		})
 	return {
-		"choice_type": CHOICE_COMM_NOISE,
-		"chooser": "opponent",
+		"choice_type": CHOICE_PROJECTOR_MISALIGNED,
+		"chooser": "owner",
 		"multi_select": false,
 		"max_selections": 1,
 		"card_title": card.title,

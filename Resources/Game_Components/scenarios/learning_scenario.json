@@ -4,14 +4,14 @@
     "_status": "VERIFIED",
     "fixed_round1_commands": {
         "cr90_corvette_a": [
-            "squadron"
+            "repair"
         ],
         "nebulon_b_escort_frigate": [
-            "concentrate_fire",
+            "navigate",
             "squadron"
         ],
         "victory_ii_class_star_destroyer": [
-            "squadron",
+            "repair",
             "navigate",
             "concentrate_fire"
         ]

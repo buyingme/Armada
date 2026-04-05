@@ -4,7 +4,7 @@
 > **Status:** **MVP COMPLETE** — all phases delivered and manually verified.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 87 scripts, 1 645 tests — 1 644 passing (1 pre-existing Nebulon-B placement failure).
+> **Current baseline:** 88 scripts, 1 652 tests, all passing.
 
 ---
 
@@ -3997,3 +3997,195 @@ Run the game board scene: `src/scenes/game_board/game_board.tscn` via **F6**.
 | 1 | Start a game with fixed round-1 commands | Pre-assigned dials appear; command phase skipped in round 1 |
 | 2 | In Command Phase (round 2+), assign and confirm dials | Phase transitions normally after all ships assigned |
 | 3 | Activate a ship, convert dial to token | "Activate as Token" adds the command token correctly |
+
+---
+
+## Refactoring Phase A4 — Remaining Oversized Functions
+
+Phase A4 completed the extraction of all remaining oversized functions
+(> 30 body lines) across 13 files. Pure structural refactoring — no
+game-logic changes. GUT baseline unchanged: 87 scripts, 1648 tests,
+1647 passing, 1 pre-existing failure.
+
+### MT-A4.01 — Core logic after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship, execute maneuver | Maneuver tool and ghost preview behave correctly; final position matches expected |
+| 2 | Maneuver into another ship | Overlap resolution triggers; pushed ship repositions; no stuck tokens |
+| 3 | Perform ship-to-ship attack | Range/LOS measurement works; dice pool correct for hull zone |
+| 4 | Perform ship-to-squadron attack | Range/LOS measurement works; damage applied correctly |
+| 5 | Activate Repair command | Engineering points calculated correctly; hull/shield repair works |
+| 6 | Trigger a Comm Noise damage card | Opponent choice modal appears with reduce-speed and change-dial options |
+
+### MT-A4.02 — Visual/presentation after refactoring
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch game from main menu | Splash background, title labels, and menu modal render correctly |
+| 2 | Open the board; observe ship tokens | Firing arc boundary lines display correctly on all ships |
+| 3 | Reveal a command dial | Dial icon sprite appears behind the ship at correct scale and position |
+| 4 | Start maneuver; observe speed +/- buttons | Circle buttons draw correctly; ghost label text renders cleanly |
+| 5 | Hover over a token; check tooltip | Tooltip background, text, and shadow colours match config |
+| 6 | Open targeting list (via "T" key or toolbar) | All ship/squadron targets listed with correct range, LOS, and threat info |
+---
+
+## Post-A4 Bug Fixes — Attack Flow, Squadron Ghost, Modal Drift
+
+Three gameplay bugs found during post-A4 playtesting, plus a
+learning-scenario data update to rules-compliant round-1 commands.
+
+**Bug 1 — Attack flow stall:** Dismissing the damage summary overlay
+without selecting a new target caused the attack panel to never
+reappear. Fix: emit `dismissed` signal on early return and rename
+a skin texture to match the expected filename.
+
+**Bug 2 — Squadron ghost timing:** The activated-visual flag was
+set *after* `EventBus.squadron_activation_ended` emitted, so the
+board handler saw the old (non-activated) state. Fix: move
+`set_activated_visual(true)` before the signal emit.
+
+**Bug 3 — Modal horizontal drift:** Both the ActivationModal and
+AttackSimPanel drifted leftward by ~20 px per reopen cycle.
+Root cause: `size = Vector2.ZERO` in `_build_ui()` and
+`_deferred_layout_reset()` zeroed the horizontal width; when
+content children inflated the panel beyond `custom_minimum_size.x`
+(360 → 401 px), Godot preserved the left edge and grew rightward,
+shifting the visual centre leftward each cycle. Fix: changed to
+`size.y = 0` (vertical only) in both panels. Updated §10 pattern
+in `.skills/ui_styling.md` and ADR-011.
+
+GUT baseline after fixes: 88 scripts, 1 652 tests, all passing.
+
+### MT-PostA4.01 — Attack flow completes without stalling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start an attack against any ship | Attack panel appears with dice |
+| 2 | Complete the attack (confirm dice, skip/use defense tokens, resolve damage) | Damage summary overlay appears |
+| 3 | Dismiss the damage summary overlay | Attack panel closes cleanly; activation modal returns |
+| 4 | Repeat 2–3 more attacks in the same game | No stalls; attack flow restarts correctly each time |
+
+### MT-PostA4.02 — Squadron activation visual persists
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter Squadron Phase | Squadron tokens are clickable |
+| 2 | Activate a squadron (click → move/attack → done) | Squadron shows activated visual (dimmed/marked) |
+| 3 | Activate remaining squadrons | Each squadron retains its activated visual after completion |
+| 4 | Advance to Status Phase and back to next round | Activated visuals reset at round start |
+
+### MT-PostA4.03 — Attack panel stays centred across reopens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start an attack | Attack panel appears centred at bottom of screen |
+| 2 | Complete the attack and dismiss the damage summary | Panel closes |
+| 3 | Start another attack | Panel reappears at the **same** centred position |
+| 4 | Repeat 3–4 more attacks | Panel horizontal position remains stable — no leftward drift |
+
+### MT-PostA4.04 — Activation modal stays centred across reopens
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship | Activation modal appears centred at bottom |
+| 2 | Complete all steps, end activation | Modal closes |
+| 3 | Activate the next ship | Modal reappears at the **same** centred position |
+| 4 | Repeat for all ships in the round | Modal horizontal position remains stable |
+
+---
+
+## Phase 9.6 — Wire Remaining Damage Card Effect Hooks
+
+**What this phase adds:** Connects the 8 unresolved effect hooks so that all 22 damage card effects actually fire during gameplay. Fixes the Projector Misaligned logic bug and the Crew Panic unregister leak.
+
+**Prerequisite:** Post-A4 bug fixes complete. All 88 scripts / 1 652 tests passing.
+
+### MT-9.6.01 — Ruptured Engine triggers after maneuver at speed ≥ 2
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Ruptured Engine faceup to a ship (e.g. via attack critical) | Card appears faceup on ship card panel |
+| 2 | On that ship's next activation, execute a maneuver at speed 2 | After maneuver commits, ship suffers 1 facedown damage card (hull decreases by 1) |
+| 3 | Repeat maneuver at speed 1 | No extra damage dealt |
+
+### MT-9.6.02 — Damaged Controls triggers on overlap
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Damaged Controls faceup to a ship | Card appears faceup on ship card panel |
+| 2 | Maneuver that ship so it overlaps another ship | Normal overlap resolution + 1 additional facedown damage card from Damaged Controls |
+
+### MT-9.6.03 — Thrust Control Malfunction reduces yaw
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Thrust Control Malfunction faceup to a ship | Card appears faceup |
+| 2 | Start that ship's maneuver | Last adjustable joint has 1 less yaw click available than the chart shows |
+
+### MT-9.6.04 — Thruster Fissure triggers on speed change
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Thruster Fissure faceup to a ship | Card appears faceup |
+| 2 | During that ship's maneuver, press speed +/- to change speed | Ship suffers 1 facedown damage card immediately |
+| 3 | Execute the maneuver at the same speed (no change) | No extra damage |
+
+### MT-9.6.05 — Crew Panic triggers before dial reveal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Crew Panic faceup to a ship | Card appears faceup |
+| 2 | On that ship's next activation, before dial reveals | Choice modal: "Suffer 1 damage" or "Discard your dial" |
+| 3 | Choose "Suffer 1 damage" | Ship takes 1 facedown damage; dial reveals normally |
+| 4 | (Alternative) Choose "Discard dial" | Dial is removed; Crew Panic card flips facedown; ship skips this activation's command |
+
+### MT-9.6.06 — Compartment Fire blocks token readying
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Compartment Fire faceup to a ship | Card appears faceup |
+| 2 | Spend (exhaust) a defense token during an attack | Token shows exhausted state |
+| 3 | Advance to Status Phase | Affected ship's defense tokens do NOT ready; other ships' tokens ready normally |
+
+### MT-9.6.07 — Life Support Failure blocks token gain
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Life Support Failure faceup to a ship | All command tokens discarded immediately; card stays faceup |
+| 2 | Attempt to convert a dial to a token on that ship | Token gain is blocked; tooltip or message explains why |
+
+### MT-9.6.08 — Attack validation effects (Depowered Armament, Disengaged FC, Coolant Discharge)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Depowered Armament to a ship | Card appears faceup |
+| 2 | Try to attack a target at long range from that ship | Attack is blocked; tooltip: "Cannot attack at long range (Depowered Armament)" |
+| 3 | Attack at close or medium range | Attack proceeds normally |
+| 4 | Deal Disengaged Fire Control to a ship | Card appears faceup |
+| 5 | Try to attack an obstructed target | Attack is blocked; tooltip explains |
+| 6 | Deal Coolant Discharge to a ship | Card appears faceup; first ship attack works normally (+1 damage at close range) |
+| 7 | Try to start a second ship attack in the same activation | Attack is blocked (once per round limit) |
+
+### MT-9.6.09 — Capacitor Failure blocks shield recovery
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Capacitor Failure to a ship | Card appears faceup |
+| 2 | Spend a Repair command to recover shields on a zone that has 0 shields | Recovery is blocked |
+| 3 | Recover shields on a zone with ≥ 1 shield | Recovery works normally |
+
+### MT-9.6.10 — Projector Misaligned (corrected logic)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Projector Misaligned faceup to a ship with shields: Front=3, Right=1, Left=2, Rear=1 | Zone with most shields (Front, 3) loses ALL shields → Front becomes 0. Other zones unchanged. Card flips facedown. |
+| 2 | (Tied case) Ship with Front=2, Rear=2, Left=1, Right=1 | Choice modal: "Choose a hull zone" between Front and Rear. Selected zone loses all shields. |
+
+### MT-9.6.11 — Crew Panic self-discard cleans up effect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Crew Panic faceup to a ship | Card appears faceup |
+| 2 | On activation, choose "Discard dial" to flip Crew Panic facedown | Crew Panic card flips facedown |
+| 3 | On subsequent activations, dial reveals normally | No Crew Panic prompt — effect is fully unregistered |

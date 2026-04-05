@@ -135,6 +135,11 @@ var _maneuver_tool_selecting: bool = false
 ## Active ManeuverToolScene instance (null when not displayed).
 var _maneuver_tool_scene: ManeuverToolScene = null
 
+## Whether the last committed maneuver resulted in a ship–ship overlap.
+## Set by [method _resolve_maneuver_overlaps_ex], consumed by the
+## AFTER_MANEUVER_EXECUTE hook.
+var _last_maneuver_overlapped: bool = false
+
 ## --- Range Overlay state ---
 
 ## Whether we are in "select ship for range overlay" mode.
@@ -155,6 +160,20 @@ var _attack_executor: AttackExecutor = null
 
 ## Shared damage deck for the game. Initialised during scenario setup.
 var _damage_deck: DamageDeck = null
+
+## --- Crew Panic BEFORE_REVEAL_DIAL modal state ---
+
+## Pending ShipToken for the Crew Panic choice callback.
+var _pending_crew_panic_token: ShipToken = null
+
+## Pending ship key for the Crew Panic choice callback.
+var _pending_crew_panic_ship_key: String = ""
+
+## Lazily created OpponentChoiceModal for the Crew Panic prompt.
+var _crew_panic_modal: OpponentChoiceModal = null
+
+## Whether the pending Crew Panic modal is for a token-conversion activation.
+var _pending_crew_panic_is_token_convert: bool = false
 
 ## --- Phase 5b: Activation flow state ---
 
@@ -1273,6 +1292,9 @@ func _on_round_started(_round_number: int) -> void:
 	_update_phase_hud()
 	# Safety net: ensure squadron-phase UI never leaks into a new round.
 	_hide_squadron_phase_ui()
+	# Restore squadron token opacity after Status Phase dimming.
+	for sq_token: SquadronToken in get_squadron_tokens():
+		sq_token.set_activated_visual(false)
 
 
 ## Builds the ordered queue of ships needing dials and opens the first
@@ -1609,6 +1631,15 @@ func _complete_ship_activation(token: ShipToken) -> void:
 	var ship_key: String = _drag_ship_instance.data_key if _drag_ship_instance \
 			else "?"
 	SfxManager.play_sfx("droid_sound_long")
+	# BEFORE_REVEAL_DIAL hook — Crew Panic may interrupt activation.
+	# Rules Reference: "Crew Panic" card text.
+	if _check_crew_panic_before_reveal(token):
+		return  # Modal shown; activation continues in callback.
+	_finish_ship_activation(token, ship_key)
+
+
+## Finishes the dial-based activation after any pre-reveal hooks resolve.
+func _finish_ship_activation(token: ShipToken, ship_key: String) -> void:
 	GameManager.activate_ship(_drag_ship_instance)
 	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
 			.get_revealed_dial()
@@ -1624,6 +1655,176 @@ func _complete_ship_activation(token: ShipToken) -> void:
 	_log.info("Ship activated via dial drop: '%s'." % ship_key)
 
 
+## Checks if BEFORE_REVEAL_DIAL effects need to fire (Crew Panic).
+## Returns true if a modal was shown (activation deferred to callback).
+## Rules Reference: "Crew Panic" card text — "Before you reveal a command
+## dial, you may discard this card. If you do not, you must suffer 1
+## facedown damage card."
+func _check_crew_panic_before_reveal(token: ShipToken) -> bool:
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null:
+		return false
+	var ship: ShipInstance = _drag_ship_instance
+	if ship == null:
+		return false
+	var effects: Array[GameEffect] = registry.get_effects_for_hook(
+			&"BEFORE_REVEAL_DIAL")
+	var crew_panic_effect: DamageCardEffect = null
+	for eff: GameEffect in effects:
+		if eff is DamageCardEffect:
+			var dce: DamageCardEffect = eff as DamageCardEffect
+			if dce.effect_id == "crew_panic" and dce.owner == ship:
+				crew_panic_effect = dce
+				break
+	if crew_panic_effect == null:
+		return false
+	# Show the Crew Panic choice modal.
+	_pending_crew_panic_token = token
+	_pending_crew_panic_ship_key = ship.data_key
+	var choice_info: Dictionary = {
+		"choice_type": "crew_panic",
+		"chooser": "owner",
+		"multi_select": false,
+		"max_selections": 1,
+		"card_title": "Crew Panic",
+		"effect_text": "Before you reveal a command dial, you may discard "
+				+ "this card. If you do not, you must suffer 1 facedown "
+				+ "damage card.",
+		"options": [
+			{"id": "discard_card", "label": "Discard Crew Panic",
+					"available": true},
+			{"id": "suffer_damage", "label": "Suffer 1 facedown damage",
+					"available": true},
+		],
+	}
+	_ensure_crew_panic_modal()
+	if not _crew_panic_modal.choice_confirmed.is_connected(
+			_on_crew_panic_choice):
+		_crew_panic_modal.choice_confirmed.connect(
+				_on_crew_panic_choice, CONNECT_ONE_SHOT)
+	_crew_panic_modal.open(choice_info)
+	_log.info("Crew Panic — showing choice modal for %s." % ship.data_key)
+	return true
+
+
+## Callback when the player makes their Crew Panic choice.
+func _on_crew_panic_choice(selection: Dictionary) -> void:
+	var token: ShipToken = _pending_crew_panic_token
+	var ship_key: String = _pending_crew_panic_ship_key
+	_pending_crew_panic_token = null
+	_pending_crew_panic_ship_key = ""
+	if token == null or _drag_ship_instance == null:
+		_log.error("Crew Panic choice callback but no pending state!")
+		return
+	var chose_discard: bool = str(selection.get("id", "")) == "discard_card"
+	# Resolve the BEFORE_REVEAL_DIAL hook with the player's choice.
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry:
+		var ctx: EffectContext = EffectContext.new()
+		ctx.set_meta_value("ship", _drag_ship_instance)
+		ctx.set_meta_value("damage_deck", _damage_deck)
+		ctx.set_meta_value("dial_discarded", chose_discard)
+		ctx.set_meta_value("effect_registry", registry)
+		registry.resolve_hook(&"BEFORE_REVEAL_DIAL", ctx)
+		if ctx.get_meta_value("extra_damage_dealt", false) as bool:
+			var ship: ShipInstance = _drag_ship_instance
+			var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+			EventBus.ship_hull_changed.emit(ship, new_hull)
+			_log.info("Crew Panic damage dealt (hull now %d)." % new_hull)
+	_finish_ship_activation(token, ship_key)
+
+
+## Lazily creates the Crew Panic choice modal.
+func _ensure_crew_panic_modal() -> void:
+	if _crew_panic_modal != null:
+		return
+	_crew_panic_modal = OpponentChoiceModal.new()
+	_crew_panic_modal.name = "CrewPanicModal"
+	var layer: CanvasLayer = CanvasLayer.new()
+	layer.name = "CrewPanicModalLayer"
+	layer.layer = 95
+	add_child(layer)
+	layer.add_child(_crew_panic_modal)
+
+
+## Checks Crew Panic before a token-conversion activation.
+## Returns true if a modal was shown (conversion deferred to callback).
+func _check_crew_panic_before_token_convert() -> bool:
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null or _drag_ship_instance == null:
+		return false
+	var ship: ShipInstance = _drag_ship_instance
+	var effects: Array[GameEffect] = registry.get_effects_for_hook(
+			&"BEFORE_REVEAL_DIAL")
+	var has_crew_panic: bool = false
+	for eff: GameEffect in effects:
+		if eff is DamageCardEffect:
+			var dce: DamageCardEffect = eff as DamageCardEffect
+			if dce.effect_id == "crew_panic" and dce.owner == ship:
+				has_crew_panic = true
+				break
+	if not has_crew_panic:
+		return false
+	_pending_crew_panic_is_token_convert = true
+	var choice_info: Dictionary = {
+		"choice_type": "crew_panic",
+		"chooser": "owner",
+		"multi_select": false,
+		"max_selections": 1,
+		"card_title": "Crew Panic",
+		"effect_text": "Before you reveal a command dial, you may discard "
+				+ "this card. If you do not, you must suffer 1 facedown "
+				+ "damage card.",
+		"options": [
+			{"id": "discard_card", "label": "Discard Crew Panic",
+					"available": true},
+			{"id": "suffer_damage", "label": "Suffer 1 facedown damage",
+					"available": true},
+		],
+	}
+	_ensure_crew_panic_modal()
+	if not _crew_panic_modal.choice_confirmed.is_connected(
+			_on_crew_panic_token_convert_choice):
+		_crew_panic_modal.choice_confirmed.connect(
+				_on_crew_panic_token_convert_choice, CONNECT_ONE_SHOT)
+	_crew_panic_modal.open(choice_info)
+	_log.info("Crew Panic — showing choice modal for token convert %s."
+			% ship.data_key)
+	return true
+
+
+## Callback when the player makes their Crew Panic choice during token
+## conversion activation.
+func _on_crew_panic_token_convert_choice(selection: Dictionary) -> void:
+	_pending_crew_panic_is_token_convert = false
+	if _drag_ship_instance == null:
+		_log.error("Crew Panic token-convert choice but no ship!")
+		return
+	var chose_discard: bool = str(selection.get("id", "")) == "discard_card"
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry:
+		var ctx: EffectContext = EffectContext.new()
+		ctx.set_meta_value("ship", _drag_ship_instance)
+		ctx.set_meta_value("damage_deck", _damage_deck)
+		ctx.set_meta_value("dial_discarded", chose_discard)
+		ctx.set_meta_value("effect_registry", registry)
+		registry.resolve_hook(&"BEFORE_REVEAL_DIAL", ctx)
+		if ctx.get_meta_value("extra_damage_dealt", false) as bool:
+			var ship: ShipInstance = _drag_ship_instance
+			var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+			EventBus.ship_hull_changed.emit(ship, new_hull)
+			_log.info("Crew Panic damage dealt (hull now %d)." % new_hull)
+	_finish_token_conversion(_drag_ship_instance)
+
+
 ## Completes a "convert to token" activation: reveals and immediately spends
 ## the dial, attempts to add a matching command token, and shows the End
 ## Activation button. No revealed dial sprite is shown on the board.
@@ -1634,6 +1835,15 @@ func _complete_ship_activation(token: ShipToken) -> void:
 ## Requirements: UI-028, SP-011, CM-004–006.
 func _complete_token_conversion() -> void:
 	var ship: ShipInstance = _drag_ship_instance
+	SfxManager.play_sfx("droid_sound_long")
+	# BEFORE_REVEAL_DIAL hook — Crew Panic may interrupt activation.
+	if _check_crew_panic_before_token_convert():
+		return  # Modal shown; activation continues in callback.
+	_finish_token_conversion(ship)
+
+
+## Finishes the token-conversion activation after any pre-reveal hooks.
+func _finish_token_conversion(ship: ShipInstance) -> void:
 	# Clean up drag state FIRST so that hide_tooltip() fires before
 	# activate_ship_as_token() emits duplicate/overflow signals that may
 	# call show_text() again (preventing the toast from being killed).
@@ -1899,8 +2109,6 @@ func _on_squadron_step_skipped() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the squadron command flow is complete (all activations used
@@ -1927,8 +2135,6 @@ func _on_squadron_command_done() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the repair panel finishes (Done or Skip pressed).
@@ -1948,8 +2154,6 @@ func _on_repair_done() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the attack execution step is fully complete.
@@ -1976,8 +2180,6 @@ func _on_attack_exec_completed() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the player cancels attack execution (Escape).
@@ -2002,8 +2204,6 @@ func _on_attack_exec_cancelled() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the player presses "Show Activation Sequence".
@@ -2025,8 +2225,6 @@ func _on_activation_sequence_requested() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activating_ship_token))
 		_activation_modal.open(_ship_activation_state)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_activation_modal.centre_on_screen(vp_size)
 
 
 ## Called when the activation modal reaches the Execute Maneuver step.
@@ -2074,7 +2272,8 @@ func _on_execute_maneuver() -> void:
 		return
 	if _maneuver_tool_scene == null:
 		return
-	var final_xform: Transform2D = _resolve_maneuver_overlaps()
+	var overlap_occurred: bool = false
+	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex(overlap_occurred)
 	_activating_ship_token.global_position = final_xform.origin
 	_activating_ship_token.global_rotation = final_xform.get_rotation()
 	# Ship–squadron overlap resolution (OV-001–004).
@@ -2083,6 +2282,9 @@ func _on_execute_maneuver() -> void:
 	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
 			moved_ship_base)
 	_ship_activation_state.mark_maneuver_executed()
+	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
+	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
+	_resolve_after_maneuver_hook(overlap_occurred)
 	EventBus.ship_moved.emit(_activating_ship_token)
 	_dismiss_maneuver_tool()
 	if displaced.size() > 0:
@@ -2094,8 +2296,10 @@ func _on_execute_maneuver() -> void:
 
 ## Computes the final transform after ship–ship overlap resolution.
 ## Applies overlap damage if a collision occurred.
+## Sets [member _last_maneuver_overlapped] for the AFTER_MANEUVER_EXECUTE hook.
 ## Requirements: OV-010–013.
-func _resolve_maneuver_overlaps() -> Transform2D:
+func _resolve_maneuver_overlaps_ex(
+		_overlap_out: bool) -> Transform2D:
 	var tool_state: ManeuverToolState = _maneuver_tool_scene.get_state()
 	var attach: Dictionary = _maneuver_tool_scene._compute_attachment()
 	var start_pos: Vector2 = attach["position"]
@@ -2111,12 +2315,38 @@ func _resolve_maneuver_overlaps() -> Transform2D:
 			resolver.check_ship_ship_overlap(
 					tool_state, start_pos, start_rot, ghost_side,
 					ship_size, other_bases, original_xform))
-	if result.overlaps or result.stayed_in_place:
+	_last_maneuver_overlapped = result.overlaps or result.stayed_in_place
+	if _last_maneuver_overlapped:
 		_apply_overlap_damage(result)
 	else:
 		if _activation_modal:
 			_activation_modal.set_collision_message("")
 	return result.final_transform
+
+
+## Resolves the AFTER_MANEUVER_EXECUTE hook for persistent damage cards.
+## Ruptured Engine: suffer 1 facedown if speed > 1.
+## Damaged Controls: suffer 1 facedown if overlapping an obstacle.
+## Rules Reference: "Ruptured Engine", "Damaged Controls" card texts.
+func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null:
+		return
+	var ship: ShipInstance = _activating_ship_token.get_ship_instance()
+	if ship == null:
+		return
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("ship_speed", ship.current_speed)
+	ctx.set_meta_value("did_overlap", did_overlap)
+	ctx.set_meta_value("damage_deck", _damage_deck)
+	ctx = registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
+	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
+		var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+		EventBus.ship_hull_changed.emit(ship, new_hull)
+		_log.info("After-maneuver damage dealt (hull now %d)." % new_hull)
 
 
 ## Shows the activation modal at the DONE step so the player can review
@@ -3078,11 +3308,16 @@ func _on_squadron_attack_requested(token: SquadronToken) -> void:
 ## and opens the modal for the next activation if applicable.
 ## Requirements: SQA-TM-002, SQA-TM-003, SQA-013.
 func _on_squadron_activation_done(instance: SquadronInstance) -> void:
-	EventBus.squadron_activation_ended.emit(instance)
-	# Dim the activated token.
+	# Dim the activated token BEFORE emitting the signal.
+	# The emit may trigger a synchronous phase transition
+	# (SQUADRON → STATUS → next round's COMMAND), which fires
+	# round_started and resets all token visuals.  If we dim
+	# after the emit, the reset runs first and the dim re-ghosts
+	# the last activated token.
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
 	if token:
 		token.set_activated_visual(true)
+	EventBus.squadron_activation_ended.emit(instance)
 	_remove_squadron_overlay()
 	# In command mode the modal manages the cycle internally;
 	# do not touch squadron-phase counters or open_for_turn.

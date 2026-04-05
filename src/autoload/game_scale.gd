@@ -359,18 +359,10 @@ func _load_tooltip(config: Dictionary) -> void:
 			tooltip_corner_radius))
 	tooltip_padding_h = int(tt.get("padding_h", tooltip_padding_h))
 	tooltip_padding_v = int(tt.get("padding_v", tooltip_padding_v))
-	var bg: Array = tt.get("bg_color", []) as Array
-	if bg.size() == 4:
-		tooltip_bg_color = Color(float(bg[0]), float(bg[1]),
-				float(bg[2]), float(bg[3]))
-	var tc: Array = tt.get("text_color", []) as Array
-	if tc.size() == 4:
-		tooltip_text_color = Color(float(tc[0]), float(tc[1]),
-				float(tc[2]), float(tc[3]))
-	var sc: Array = tt.get("shadow_color", []) as Array
-	if sc.size() == 4:
-		tooltip_shadow_color = Color(float(sc[0]), float(sc[1]),
-				float(sc[2]), float(sc[3]))
+	tooltip_bg_color = _parse_color(tt, "bg_color", tooltip_bg_color)
+	tooltip_text_color = _parse_color(tt, "text_color", tooltip_text_color)
+	tooltip_shadow_color = _parse_color(
+			tt, "shadow_color", tooltip_shadow_color)
 	tooltip_shadow_offset = int(tt.get("shadow_offset",
 			tooltip_shadow_offset))
 	tooltip_toggle_button_size = float(tt.get("toggle_button_size",
@@ -378,6 +370,17 @@ func _load_tooltip(config: Dictionary) -> void:
 	tooltip_toggle_button_edge_padding = float(
 			tt.get("toggle_button_edge_padding",
 			tooltip_toggle_button_edge_padding))
+
+
+## Parses a 4-element RGBA array from [param section] at [param key].
+## Returns [param fallback] if the key is missing or malformed.
+func _parse_color(section: Dictionary, key: String,
+		fallback: Color) -> Color:
+	var arr: Array = section.get(key, []) as Array
+	if arr.size() == 4:
+		return Color(float(arr[0]), float(arr[1]),
+				float(arr[2]), float(arr[3]))
+	return fallback
 
 
 ## Loads maneuver_tool section from the config dictionary.

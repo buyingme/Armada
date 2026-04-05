@@ -578,3 +578,334 @@ func test_life_support_failure_blocks_token_gain() -> void:
 	e.resolve(ctx)
 	assert_true(ctx.cancelled,
 			"Should cancel command token gain")
+
+
+# ---------------------------------------------------------------------------
+# Integration: Faulty Countermeasures via EffectRegistry pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_faulty_countermeasures_pipeline_blocks_exhausted_token() -> void:
+	# Arrange — register the effect via the full pipeline.
+	var ship: ShipInstance = _make_ship()
+	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
+	var reg: EffectRegistry = EffectRegistry.new()
+	reg.register(e)
+	# Act — resolve the hook with an exhausted token.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.defender = ship
+	ctx.set_meta_value("token_state",
+			Constants.DefenseTokenState.EXHAUSTED)
+	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Exhausted token should be blocked through the full pipeline")
+
+
+func test_faulty_countermeasures_pipeline_allows_ready_token() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
+	var reg: EffectRegistry = EffectRegistry.new()
+	reg.register(e)
+	# Act — resolve with a ready token.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.defender = ship
+	ctx.set_meta_value("token_state",
+			Constants.DefenseTokenState.READY)
+	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
+	# Assert
+	assert_false(ctx.cancelled,
+			"Ready token should NOT be blocked")
+
+
+func test_faulty_countermeasures_pipeline_ignores_other_ship() -> void:
+	# Arrange — effect owner is ship_a, defender is ship_b.
+	var ship_a: ShipInstance = _make_ship(0)
+	var ship_b: ShipInstance = _make_ship(1)
+	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship_a)
+	var reg: EffectRegistry = EffectRegistry.new()
+	reg.register(e)
+	# Act — resolve with ship_b as defender.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.defender = ship_b
+	ctx.set_meta_value("token_state",
+			Constants.DefenseTokenState.EXHAUSTED)
+	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
+	# Assert
+	assert_false(ctx.cancelled,
+			"Effect should not fire on a different ship")
+
+
+# ---------------------------------------------------------------------------
+# Integration: Crew Panic unregister on discard via EffectRegistry
+# ---------------------------------------------------------------------------
+
+
+func test_crew_panic_discard_unregisters_from_registry() -> void:
+	# Arrange — register Crew Panic via the factory.
+	var ship: ShipInstance = _make_ship()
+	var card: DamageCard = _make_card("crew_panic")
+	ship.add_faceup_damage(card)
+	var reg: EffectRegistry = EffectRegistry.new()
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_not_null(effect, "Effect should be created")
+	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect registered")
+	# Act — resolve BEFORE_REVEAL_DIAL with dial_discarded = true,
+	# passing the registry via metadata.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.hook = &"BEFORE_REVEAL_DIAL"
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("damage_deck", _make_deck())
+	ctx.set_meta_value("dial_discarded", true)
+	ctx.set_meta_value("effect_registry", reg)
+	effect.resolve(ctx)
+	# Assert — card removed from ship AND effect unregistered.
+	assert_false(ship.faceup_damage.has(card),
+			"Damage card should be removed from ship")
+	assert_eq(reg.get_effect_count(), 0,
+			"Effect should be unregistered from registry after discard")
+
+
+func test_crew_panic_suffer_keeps_registration() -> void:
+	# Arrange — register Crew Panic.
+	var ship: ShipInstance = _make_ship()
+	var card: DamageCard = _make_card("crew_panic")
+	ship.add_faceup_damage(card)
+	var reg: EffectRegistry = EffectRegistry.new()
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	# Act — resolve with dial_discarded = false (suffer damage).
+	var ctx: EffectContext = EffectContext.new()
+	ctx.hook = &"BEFORE_REVEAL_DIAL"
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("damage_deck", _make_deck())
+	ctx.set_meta_value("dial_discarded", false)
+	ctx.set_meta_value("effect_registry", reg)
+	effect.resolve(ctx)
+	# Assert — effect should remain registered.
+	assert_eq(reg.get_effect_count(), 1,
+			"Effect should remain registered when choosing to suffer damage")
+
+
+# ---------------------------------------------------------------------------
+# Integration: ATTACK_VALIDATE_TARGET pipeline (multiple effects)
+# ---------------------------------------------------------------------------
+
+
+func test_attack_validate_pipeline_coolant_discharge_blocks() -> void:
+	# Arrange — register Coolant Discharge.
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("coolant_discharge")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — ship already attacked once.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.attacker = ship
+	ctx.set_meta_value("ship_attacks_this_round", 1)
+	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Second attack should be cancelled by Coolant Discharge pipeline")
+
+
+func test_attack_validate_pipeline_depowered_armament_blocks_long() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("depowered_armament")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — attack at long range.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.attacker = ship
+	ctx.range_band = "long"
+	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Long-range attack should be cancelled by Depowered Armament")
+
+
+func test_attack_validate_pipeline_disengaged_fire_blocks_obstructed() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("disengaged_fire_control")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — obstructed attack.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.attacker = ship
+	ctx.set_meta_value("is_obstructed", true)
+	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Obstructed attack should be cancelled by Disengaged Fire Control")
+
+
+# ---------------------------------------------------------------------------
+# Integration: REPAIR_VALIDATE_SHIELD pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_repair_validate_pipeline_capacitor_blocks_empty_zone() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("capacitor_failure")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — try to repair a zone with 0 shields.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("target_zone_shields", 0)
+	ctx = reg.resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Repair to 0-shield zone should be blocked by Capacitor Failure")
+
+
+func test_repair_validate_pipeline_capacitor_allows_shielded_zone() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("capacitor_failure")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — repair a zone with shields.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("target_zone_shields", 2)
+	ctx = reg.resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)
+	# Assert
+	assert_false(ctx.cancelled,
+			"Repair to shielded zone should be allowed")
+
+
+# ---------------------------------------------------------------------------
+# Integration: STATUS_READY_TOKENS pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_status_ready_pipeline_compartment_fire_blocks() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("compartment_fire")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx = reg.resolve_hook(&"STATUS_READY_TOKENS", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Token readying should be blocked by Compartment Fire")
+
+
+# ---------------------------------------------------------------------------
+# Integration: ON_COMMAND_TOKEN_GAIN pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_token_gain_pipeline_life_support_blocks() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("life_support_failure")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx = reg.resolve_hook(&"ON_COMMAND_TOKEN_GAIN", ctx)
+	# Assert
+	assert_true(ctx.cancelled,
+			"Token gain should be blocked by Life Support Failure")
+
+
+# ---------------------------------------------------------------------------
+# Integration: MANEUVER_DETERMINE_YAWS pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_yaw_pipeline_thrust_control_reduces_last() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("thrust_control_malfunction")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	# Act — speed 3 with yaw_values [0, 1, 1].
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("yaw_values", [0, 1, 1])
+	ctx = reg.resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)
+	# Assert
+	var yaws: Array = ctx.get_meta_value("yaw_values") as Array
+	assert_eq(int(yaws[2]), 0,
+			"Last joint yaw should be reduced from 1 to 0")
+	assert_eq(int(yaws[0]), 0,
+			"First joint should be unaffected")
+
+
+# ---------------------------------------------------------------------------
+# Integration: AFTER_MANEUVER_EXECUTE pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_after_maneuver_pipeline_ruptured_engine_damage() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var deck: DamageDeck = _make_deck()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("ruptured_engine")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	var dmg_before: int = ship.facedown_damage.size()
+	# Act — speed 2.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("ship_speed", 2)
+	ctx.set_meta_value("damage_deck", deck)
+	ctx.set_meta_value("did_overlap", false)
+	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
+	# Assert
+	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
+			"Ruptured Engine should deal 1 facedown at speed 2 via pipeline")
+
+
+func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var deck: DamageDeck = _make_deck()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("damaged_controls")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	var dmg_before: int = ship.facedown_damage.size()
+	# Act — overlapped obstacle.
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("ship_speed", 1)
+	ctx.set_meta_value("damage_deck", deck)
+	ctx.set_meta_value("did_overlap", true)
+	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
+	# Assert
+	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
+			"Damaged Controls should deal 1 facedown on overlap via pipeline")
+
+
+# ---------------------------------------------------------------------------
+# Integration: ON_SPEED_CHANGE pipeline
+# ---------------------------------------------------------------------------
+
+
+func test_speed_change_pipeline_thruster_fissure_damage() -> void:
+	# Arrange
+	var ship: ShipInstance = _make_ship()
+	var deck: DamageDeck = _make_deck()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("thruster_fissure")
+	DamageCardEffectFactory.register_effect(card, ship, reg)
+	var dmg_before: int = ship.facedown_damage.size()
+	# Act
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("damage_deck", deck)
+	ctx = reg.resolve_hook(&"ON_SPEED_CHANGE", ctx)
+	# Assert
+	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
+			"Thruster Fissure should deal 1 facedown on speed change")

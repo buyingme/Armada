@@ -293,27 +293,21 @@ func _resolve_suffer_facedown(context: EffectContext) -> void:
 		context.set_meta_value("extra_damage_dealt", true)
 
 
-## Crew Panic: suffer 1 facedown OR discard this card.
+## Crew Panic: suffer 1 facedown damage OR discard the top command dial.
 ## The player's choice is stored in metadata.dial_discarded.
-## When discarding, the effect is unregistered from the EffectRegistry.
-## Rules Reference: "Crew Panic" card text.
+## Crew Panic is persistent — the card stays faceup and triggers every
+## activation until repaired.
+## Rules Reference: "Crew Panic" card text — "Before you reveal a command
+## dial, you must either suffer 1 damage or discard that dial.  If you
+## discard it, do not reveal a dial this round."
 func _resolve_crew_panic(context: EffectContext) -> void:
-	var discard_card: bool = context.get_meta_value(
+	var discard_dial: bool = context.get_meta_value(
 			"dial_discarded", false) as bool
-	if discard_card:
-		# The player chose to discard this damage card instead.
-		var ship: Variant = context.get_meta_value("ship", null)
-		var deck: Variant = context.get_meta_value("damage_deck", null)
-		if ship is ShipInstance and damage_card:
-			(ship as ShipInstance).remove_damage_card(damage_card)
-			if deck is DamageDeck:
-				(deck as DamageDeck).discard(damage_card)
-			# Unregister this persistent effect from the registry.
-			var registry: Variant = context.get_meta_value(
-					"effect_registry", null)
-			if registry is EffectRegistry:
-				DamageCardEffectFactory.unregister_effect(
-						damage_card, registry as EffectRegistry)
+	if discard_dial:
+		# The player chose to discard the top command dial.
+		# Set a flag so the game board knows to spend/discard the dial
+		# and skip the normal dial command for this activation.
+		context.set_meta_value("crew_panic_dial_discarded", true)
 	else:
 		# Suffer 1 facedown damage card.
 		_resolve_suffer_facedown(context)

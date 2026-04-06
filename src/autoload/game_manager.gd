@@ -432,6 +432,22 @@ func activate_ship(ship: ShipInstance) -> void:
 			ship.data_key, int(dial.get("command", -1))])
 
 
+## Activates a ship without requiring a revealed dial.
+## Used when Crew Panic discards the command dial before reveal.
+## The ship is marked as activating but has no command for this round.
+## Rules Reference: "Crew Panic" — "discard that dial … do not reveal a
+## dial this round."
+func force_activate_ship(ship: ShipInstance) -> void:
+	if _activating_ship != null:
+		_log.warn("Cannot force-activate — already activating a ship.")
+		return
+	if ship.activated_this_round:
+		_log.warn("Cannot force-activate — already activated this round.")
+		return
+	_activating_ship = ship
+	_log.info("Ship force-activated (no dial): %s" % ship.data_key)
+
+
 ## Starts a ship's activation by revealing and immediately spending its top
 ## command dial, then attempting to convert it to a matching command token.
 ## The dial goes directly to the spent area (activation marker) instead of

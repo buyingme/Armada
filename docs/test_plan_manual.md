@@ -4135,10 +4135,13 @@ GUT baseline after fixes: 88 scripts, 1 652 tests, all passing.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Deal Crew Panic faceup to a ship | Card appears faceup |
-| 2 | On that ship's next activation, before dial reveals | Choice modal: "Suffer 1 damage" or "Discard your dial" |
-| 3 | Choose "Suffer 1 damage" | Ship takes 1 facedown damage; dial reveals normally |
-| 4 | (Alternative) Choose "Discard dial" | Dial is removed; Crew Panic card flips facedown; ship skips this activation's command |
+| 1 | Shift+D a ship → select Crew Panic | Card appears faceup |
+| 2 | Click the ship's dial stack (first click) | Dial reveals normally |
+| 3 | Click the revealed dial (second click) | **Crew Panic modal appears immediately** — no drag preview visible |
+| 4 | Choose "Suffer 1 facedown damage" | Ship takes 1 facedown damage; **drag starts** and dial preview follows cursor |
+| 5 | Drop dial on ship token | Ship activates with full command effect |
+| 6 | (Alternative at step 4) Choose "Discard command dial" | Dial disappears from card panel; ship activates with no command (Activation Sequence button appears) |
+| 7 | End Activation → confirm activation ends cleanly | No orphan drag preview, no stale modal |
 
 ### MT-9.6.06 — Compartment Fire blocks token readying
 
@@ -4182,13 +4185,15 @@ GUT baseline after fixes: 88 scripts, 1 652 tests, all passing.
 | 1 | Deal Projector Misaligned faceup to a ship with shields: Front=3, Right=1, Left=2, Rear=1 | Zone with most shields (Front, 3) loses ALL shields → Front becomes 0. Other zones unchanged. Card flips facedown. |
 | 2 | (Tied case) Ship with Front=2, Rear=2, Left=1, Right=1 | Choice modal: "Choose a hull zone" between Front and Rear. Selected zone loses all shields. |
 
-### MT-9.6.11 — Crew Panic self-discard cleans up effect
+### MT-9.6.11 — Crew Panic is persistent (fires every round)
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Deal Crew Panic faceup to a ship | Card appears faceup |
-| 2 | On activation, choose "Discard dial" to flip Crew Panic facedown | Crew Panic card flips facedown |
-| 3 | On subsequent activations, dial reveals normally | No Crew Panic prompt — effect is fully unregistered |
+| 1 | Shift+D a ship → select Crew Panic | Card appears faceup |
+| 2 | Activate ship, choose "Discard command dial" | Dial discarded; ship activates without command; **Crew Panic card stays faceup** |
+| 3 | Next round: activate same ship | Crew Panic modal appears again |
+| 4 | Choose "Suffer 1 facedown damage" this time | Damage dealt; drag starts; activation proceeds normally |
+| 5 | Next round: activate same ship again | Crew Panic modal appears yet again (card is still faceup and registered) |
 
 ---
 

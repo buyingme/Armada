@@ -508,19 +508,20 @@ func test_crew_panic_suffer_damage() -> void:
 			"Should suffer 1 facedown damage")
 
 
-func test_crew_panic_discard_card() -> void:
+func test_crew_panic_discard_dial_sets_flag() -> void:
 	var ship: ShipInstance = _make_ship()
-	var deck: DamageDeck = _make_deck()
 	var card: DamageCard = _make_card("crew_panic")
 	ship.add_faceup_damage(card)
 	var e: DamageCardEffect = _make_effect("crew_panic", ship, card)
 	var ctx: EffectContext = _make_context(&"BEFORE_REVEAL_DIAL")
 	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", deck)
+	ctx.set_meta_value("damage_deck", _make_deck())
 	ctx.set_meta_value("dial_discarded", true)
 	e.resolve(ctx)
-	assert_false(ship.faceup_damage.has(card),
-			"Card should be removed from ship")
+	assert_true(ctx.get_meta_value("crew_panic_dial_discarded", false) as bool,
+			"Should set crew_panic_dial_discarded flag")
+	assert_true(ship.faceup_damage.has(card),
+			"Crew Panic card should remain faceup (persistent)")
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +643,7 @@ func test_faulty_countermeasures_pipeline_ignores_other_ship() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_crew_panic_discard_unregisters_from_registry() -> void:
+func test_crew_panic_discard_keeps_registration() -> void:
 	# Arrange — register Crew Panic via the factory.
 	var ship: ShipInstance = _make_ship()
 	var card: DamageCard = _make_card("crew_panic")
@@ -652,8 +653,8 @@ func test_crew_panic_discard_unregisters_from_registry() -> void:
 			card, ship, reg)
 	assert_not_null(effect, "Effect should be created")
 	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect registered")
-	# Act — resolve BEFORE_REVEAL_DIAL with dial_discarded = true,
-	# passing the registry via metadata.
+	# Act — resolve BEFORE_REVEAL_DIAL with dial_discarded = true.
+	# Crew Panic is persistent: the card stays faceup and registered.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.hook = &"BEFORE_REVEAL_DIAL"
 	ctx.set_meta_value("ship", ship)
@@ -661,11 +662,13 @@ func test_crew_panic_discard_unregisters_from_registry() -> void:
 	ctx.set_meta_value("dial_discarded", true)
 	ctx.set_meta_value("effect_registry", reg)
 	effect.resolve(ctx)
-	# Assert — card removed from ship AND effect unregistered.
-	assert_false(ship.faceup_damage.has(card),
-			"Damage card should be removed from ship")
-	assert_eq(reg.get_effect_count(), 0,
-			"Effect should be unregistered from registry after discard")
+	# Assert — card still on ship AND effect still registered.
+	assert_true(ship.faceup_damage.has(card),
+			"Crew Panic card should remain faceup (persistent)")
+	assert_eq(reg.get_effect_count(), 1,
+			"Effect should remain registered (Crew Panic is permanent)")
+	assert_true(ctx.get_meta_value("crew_panic_dial_discarded", false) as bool,
+			"Should set crew_panic_dial_discarded flag")
 
 
 func test_crew_panic_suffer_keeps_registration() -> void:

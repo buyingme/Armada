@@ -1794,7 +1794,7 @@ Phase 0 (Scale & Assets)
 | Cards fully working | 13 / 22 | **22 / 22** ✅ |
 | Bugs | 2 | **0** ✅ |
 
-### Phase 9.7: Debug Faceup Damage Dealing (Shift+D) 🔄
+### Phase 9.7: Debug Faceup Damage Dealing (Shift+D) ✅
 
 **Goal:** Add a debug-mode keyboard shortcut (Shift+D) that lets the tester deal any of the 22 faceup damage cards to a clicked ship, bypassing combat. Accelerates manual testing of all damage card effects.
 
@@ -1804,13 +1804,25 @@ Phase 0 (Scale & Assets)
 
 | Step | Task | Status |
 |------|------|--------|
-| 1 | Add `_debug_damage_targeting: bool` state + Shift+D handler in `game_board.gd` | 🔄 |
-| 2 | Route ship click to damage card choice modal when targeting | 🔄 |
-| 3 | On card choice: draw from deck, override effect_id/title, deal faceup with full pipeline | 🔄 |
-| 4 | Escape cancels targeting mode | 🔄 |
-| 5 | Update `DebugHelpPanel` with Shift+D entry under "Cheats" section | 🔄 |
-| 6 | Add requirement DBG-050–052 | 🔄 |
-| 7 | Add MT-9.7.01 manual test scenario | 🔄 |
+| 1 | Add `_debug_damage_targeting: bool` state + Shift+D handler in `game_board.gd` | ✅ |
+| 2 | Route ship click to damage card choice modal when targeting | ✅ |
+| 3 | On card choice: draw from deck, override effect_id/title, deal faceup with full pipeline | ✅ |
+| 4 | Escape cancels targeting mode | ✅ |
+| 5 | Update `DebugHelpPanel` with Shift+D entry under "Cheats" section | ✅ |
+| 6 | Add requirement DBG-050–052 | ✅ |
+| 7 | Add MT-9.7.01 manual test scenario | ✅ |
+
+**Commit:** `53fed22` → Phase 9.7 complete
+
+#### Bugfixes applied post-merge
+
+| Fix | Description | Commit |
+|-----|-------------|--------|
+| Modal spacing | Reduced OpponentChoiceModal content VBox separation 12→6, button min height 36→24 | `2f0bf64` |
+| Comm Noise effect_text | `_debug_deal_faceup_card()` now loads correct `effect_text` from `damage_cards.json` when overriding card identity | (this commit) |
+| Crew Panic timing | Moved Crew Panic check from drop time to **before drag starts** in `_on_dial_drag_started()`. Eliminated 5 interrelated bugs (modal too late, drag cancelled during modal, null state in callback, double-click needed, no effect after confirm). | (this commit) |
+| Crew Panic logic | Crew Panic is persistent — choosing "discard dial" sets a flag and spends the dial instead of removing the card. Card stays faceup and fires every round. | (this commit) |
+| Crew Panic text | Modal now reads "discard that dial" (not "discard this card") per corrected rules text | (this commit) |
 
 ---
 
@@ -1828,6 +1840,14 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
 | Damage card effect pattern | Phase 9, 9.6 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 14/14 hooks wired |
+
+#### Phase 9.7 metrics
+
+| Metric | Before | After Phase 9.7 |
+|--------|--------|------------------|
+| Test scripts | 88 | 88 |
+| Tests | 1668 | 1668 |
+| Asserts | 2931 | 2931 |
 
 ---
 

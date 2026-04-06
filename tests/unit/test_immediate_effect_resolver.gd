@@ -75,6 +75,14 @@ func test_is_immediate_false_for_persistent_card() -> void:
 			"Card with timing='persistent' should not be immediate")
 
 
+func test_is_immediate_true_for_immediate_persistent_card() -> void:
+	var card: DamageCard = DamageCard.create("Crew", "Life Support Failure")
+	card.timing = "immediate_persistent"
+	card.effect_id = "life_support_failure"
+	assert_true(ImmediateEffectResolver.is_immediate(card),
+			"Card with timing='immediate_persistent' should be immediate")
+
+
 # ---------------------------------------------------------------------------
 # Structural Damage — deal 1 extra facedown, then flip facedown
 # ---------------------------------------------------------------------------

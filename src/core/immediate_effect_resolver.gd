@@ -46,7 +46,7 @@ var _log: GameLogger = GameLogger.new("ImmediateEffectResolver")
 
 ## Returns true if the given card has an immediate effect.
 static func is_immediate(card: DamageCard) -> bool:
-	return card.timing == "immediate"
+	return card.timing == "immediate" or card.timing == "immediate_persistent"
 
 
 ## Returns the choice descriptor for a card that requires player input.

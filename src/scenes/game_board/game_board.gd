@@ -2264,8 +2264,7 @@ func _on_execute_maneuver() -> void:
 		return
 	if _maneuver_tool_scene == null:
 		return
-	var overlap_occurred: bool = false
-	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex(overlap_occurred)
+	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex()
 	_activating_ship_token.global_position = final_xform.origin
 	_activating_ship_token.global_rotation = final_xform.get_rotation()
 	# Ship–squadron overlap resolution (OV-001–004).
@@ -2276,7 +2275,7 @@ func _on_execute_maneuver() -> void:
 	_ship_activation_state.mark_maneuver_executed()
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
-	_resolve_after_maneuver_hook(overlap_occurred)
+	_resolve_after_maneuver_hook(_last_maneuver_overlapped)
 	EventBus.ship_moved.emit(_activating_ship_token)
 	_dismiss_maneuver_tool()
 	if displaced.size() > 0:
@@ -2290,8 +2289,7 @@ func _on_execute_maneuver() -> void:
 ## Applies overlap damage if a collision occurred.
 ## Sets [member _last_maneuver_overlapped] for the AFTER_MANEUVER_EXECUTE hook.
 ## Requirements: OV-010–013.
-func _resolve_maneuver_overlaps_ex(
-		_overlap_out: bool) -> Transform2D:
+func _resolve_maneuver_overlaps_ex() -> Transform2D:
 	var tool_state: ManeuverToolState = _maneuver_tool_scene.get_state()
 	var attach: Dictionary = _maneuver_tool_scene._compute_attachment()
 	var start_pos: Vector2 = attach["position"]

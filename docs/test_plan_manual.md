@@ -4384,3 +4384,39 @@ CanvasLayer for the DEBUG HUD and connects DebugMode signals internally.
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | In debug mode, press the save-positions shortcut | Console logs "Token positions saved successfully" (or the file is written) |
+
+---
+
+## Refactoring Phase C5 — Extract ManeuverToolController
+
+**What this phase changes:** 2 maneuver-tool variables (`_maneuver_tool_selecting`,
+`_maneuver_tool_scene`) and 4 functions moved from `game_board.gd` into a new
+`ManeuverToolController` (child Node).  The controller exposes `get_scene()` for
+activation-flow code that reads ManeuverToolScene state, and
+`show_activation_tool()` for the activation-mode creation path.
+`game_board.gd` uses a `_dismiss_maneuver_tool_with_preview()` wrapper to pass
+the activation ship for navigate-token preview cleanup.
+
+### MT-C5.01 — Simulation maneuver tool (M key / toolbar)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press M or click the Maneuver Tool toolbar button | Toast "Select a ship" appears; cursor is in selection mode |
+| 2 | Click a ship token | Maneuver tool attaches to the ship (joint handles visible) |
+| 3 | Press M again (or Escape) | Maneuver tool dismisses |
+
+### MT-C5.02 — Activation-mode maneuver tool
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Ship Phase, activate a ship with speed > 0 | Activation sequence modal appears |
+| 2 | Reach the Maneuver step | Maneuver tool appears on the activating ship in activation mode (Execute button in modal) |
+| 3 | Adjust joints and click Execute | Ship snaps to final position; tool dismisses |
+
+### MT-C5.03 — Ghost range overlay toggle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Show the maneuver tool on a ship (M key + click) | Tool visible |
+| 2 | Press R (range overlay shortcut) | Range overlay appears on the ghost preview (not requiring separate ship selection) |
+| 3 | Press R again | Ghost range overlay dismisses |

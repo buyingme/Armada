@@ -146,11 +146,9 @@ var _activating_ship_token: ShipToken = null
 
 ## --- Maneuver Tool state (Phase 5a) ---
 
-## Whether we are in "select ship for maneuver tool" mode.
-var _maneuver_tool_selecting: bool = false
-
-## Active ManeuverToolScene instance (null when not displayed).
-var _maneuver_tool_scene: ManeuverToolScene = null
+## Maneuver tool controller — owns selection flag and ManeuverToolScene.
+## Created in [method _create_maneuver_tool_controller].
+var _maneuver_tool_controller: ManeuverToolController = null
 
 ## Whether the last committed maneuver resulted in a ship–ship overlap.
 ## Set by [method _resolve_maneuver_overlaps_ex], consumed by the
@@ -287,6 +285,7 @@ func _ready() -> void:
 	_create_phase_hud()
 	_create_action_toolbar()
 	_create_attack_executor()
+	_create_maneuver_tool_controller()
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
@@ -400,7 +399,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _handle_range_overlay_escape(event):
 		return
 	# Maneuver tool: Escape dismisses or cancels selection.
-	if _handle_maneuver_tool_escape(event):
+	if _maneuver_tool_controller.handle_escape(event):
 		return
 
 	# Keyboard shortcuts for tool buttons (M / R / T).
@@ -663,7 +662,8 @@ func _connect_signals() -> void:
 
 	#region Maneuver tool signals
 	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
-	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
+	EventBus.maneuver_tool_dismissed.connect(
+			func() -> void: _maneuver_tool_controller.dismiss(null))
 	#endregion
 
 	#region Range overlay signals
@@ -789,8 +789,8 @@ func _on_token_clicked(token: ShipToken) -> void:
 	if _range_overlay_selecting:
 		_show_range_overlay(token)
 		return
-	if _maneuver_tool_selecting:
-		_show_maneuver_tool(token)
+	if _maneuver_tool_controller.is_selecting():
+		_maneuver_tool_controller.show_tool(token)
 		return
 	if _debug_damage_targeting:
 		_open_debug_damage_modal(token)
@@ -1543,7 +1543,7 @@ func _on_board_activation_ended() -> void:
 	if _activation_sidebar:
 		_activation_sidebar.clear_active()
 		_activation_sidebar.refresh()
-	_dismiss_maneuver_tool()
+	_dismiss_maneuver_tool_with_preview()
 	_dismiss_range_overlay()
 	# Re-enable simulation tool buttons.
 	if _action_toolbar:
@@ -1855,15 +1855,11 @@ func _on_maneuver_step_entered() -> void:
 		_show_end_activation_after_maneuver()
 		return
 	# Show the maneuver tool in activation mode.
-	_dismiss_maneuver_tool()
+	_maneuver_tool_controller.show_activation_tool(
+			_activating_ship_token, _ship_activation_state)
 	# Disable the simulation maneuver button while activation tool is active.
 	if _action_toolbar:
 		_action_toolbar.set_tool_buttons_disabled(true)
-	_maneuver_tool_scene = ManeuverToolScene.new()
-	_maneuver_tool_scene.name = "ManeuverToolScene"
-	_token_container.add_child(_maneuver_tool_scene)
-	_maneuver_tool_scene.setup(_activating_ship_token)
-	_maneuver_tool_scene.set_activation_mode(_ship_activation_state)
 	# Yaw bonus (Navigate dial) is applied interactively when the player
 	# clicks a joint beyond its base limit — not auto-assigned to joint 0.
 	# Modal's embedded Execute button is already visible — no extra button needed.
@@ -1878,7 +1874,7 @@ func _on_execute_maneuver() -> void:
 	_log.info("Execute maneuver requested.")
 	if _ship_activation_state == null or _activating_ship_token == null:
 		return
-	if _maneuver_tool_scene == null:
+	if _maneuver_tool_controller.get_scene() == null:
 		return
 	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex()
 	_activating_ship_token.global_position = final_xform.origin
@@ -1893,7 +1889,7 @@ func _on_execute_maneuver() -> void:
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
 	_resolve_after_maneuver_hook(_last_maneuver_overlapped)
 	EventBus.ship_moved.emit(_activating_ship_token)
-	_dismiss_maneuver_tool()
+	_dismiss_maneuver_tool_with_preview()
 	if displaced.size() > 0:
 		_displacement_controller.start(displaced, moved_ship_base)
 	else:
@@ -1906,8 +1902,9 @@ func _on_execute_maneuver() -> void:
 ## Sets [member _last_maneuver_overlapped] for the AFTER_MANEUVER_EXECUTE hook.
 ## Requirements: OV-010–013.
 func _resolve_maneuver_overlaps_ex() -> Transform2D:
-	var tool_state: ManeuverToolState = _maneuver_tool_scene.get_state()
-	var attach: Dictionary = _maneuver_tool_scene._compute_attachment()
+	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	var tool_state: ManeuverToolState = mt_scene.get_state()
+	var attach: Dictionary = mt_scene._compute_attachment()
 	var start_pos: Vector2 = attach["position"]
 	var start_rot: float = attach["rotation"]
 	var ghost_side: String = tool_state.compute_ghost_side()
@@ -2154,73 +2151,17 @@ func _create_action_toolbar() -> void:
 func _on_maneuver_tool_requested() -> void:
 	# Block simulation requests while the activation-mode maneuver tool
 	# is active — the player must use the modal's Commit button instead.
-	if _ship_activation_state != null and _maneuver_tool_scene != null:
+	if _ship_activation_state != null \
+			and _maneuver_tool_controller.get_scene() != null:
 		_log.info("Simulation maneuver blocked — activation maneuver in progress.")
 		return
-	if _maneuver_tool_scene:
-		_dismiss_maneuver_tool()
+	if _maneuver_tool_controller.get_scene():
+		_dismiss_maneuver_tool_with_preview()
 		return
-	if _maneuver_tool_selecting:
-		_cancel_maneuver_tool_selection()
+	if _maneuver_tool_controller.is_selecting():
+		_maneuver_tool_controller.cancel_selection()
 		return
-	_maneuver_tool_selecting = true
-	TooltipManager.show_text("Select a ship", Vector2.INF, 0.0, true)
-	_log.info("Maneuver tool: ship selection mode active.")
-
-
-## Shows the maneuver tool attached to the given ship token.
-## Requirements: MT-U-004, MT-G-005, AC-08.
-func _show_maneuver_tool(token: ShipToken) -> void:
-	_maneuver_tool_selecting = false
-	TooltipManager.hide_tooltip()
-	if _maneuver_tool_scene:
-		_maneuver_tool_scene.queue_free()
-	_maneuver_tool_scene = ManeuverToolScene.new()
-	_maneuver_tool_scene.name = "ManeuverToolScene"
-	_token_container.add_child(_maneuver_tool_scene)
-	_maneuver_tool_scene.setup(token)
-	_log.info("Maneuver tool displayed on ship.")
-
-
-## Dismisses the maneuver tool and exits selection mode.
-## Requirements: MT-U-005, MT-U-006, AC-15.
-func _dismiss_maneuver_tool() -> void:
-	_maneuver_tool_selecting = false
-	TooltipManager.hide_tooltip()
-	# Clear Navigate token spend preview overlay.
-	if _ship_activation_state and _ship_activation_state.get_ship():
-		EventBus.navigate_token_spend_preview.emit(
-				_ship_activation_state.get_ship(), false)
-	if _maneuver_tool_scene:
-		_maneuver_tool_scene.queue_free()
-		_maneuver_tool_scene = null
-	_log.info("Maneuver tool dismissed.")
-
-
-## Cancels ship selection mode without showing the tool.
-func _cancel_maneuver_tool_selection() -> void:
-	_maneuver_tool_selecting = false
-	TooltipManager.hide_tooltip()
-	_log.info("Maneuver tool selection cancelled.")
-
-
-## Checks if an Escape key press should dismiss the maneuver tool.
-## Returns true if the event was consumed.
-func _handle_maneuver_tool_escape(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
-		return false
-	if _maneuver_tool_scene:
-		_dismiss_maneuver_tool()
-		get_viewport().set_input_as_handled()
-		return true
-	if _maneuver_tool_selecting:
-		_cancel_maneuver_tool_selection()
-		get_viewport().set_input_as_handled()
-		return true
-	return false
+	_maneuver_tool_controller.start_selection()
 
 
 ## Handles keyboard shortcuts for the tool buttons (M / R / T).
@@ -2303,8 +2244,9 @@ func _on_quit_confirmed() -> void:
 ## Requirements: RO-001, RO-002.
 func _on_range_overlay_requested() -> void:
 	# If a maneuver tool is active, toggle the overlay on the ghost.
-	if _maneuver_tool_scene:
-		_maneuver_tool_scene.toggle_ghost_range_overlay()
+	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if mt_scene:
+		mt_scene.toggle_ghost_range_overlay()
 		return
 	if _range_overlay_scene:
 		_dismiss_range_overlay()
@@ -2498,11 +2440,12 @@ func _collect_squad_infos() -> Array:
 ## Returns null if no ghost is present.
 ## Requirements: TL-LIST-004.
 func _collect_ghost_info() -> TargetingListBuilder.ShipInfo:
-	if _maneuver_tool_scene == null:
+	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if mt_scene == null:
 		return null
-	if not _maneuver_tool_scene.has_method("get_ghost_transform"):
+	if not mt_scene.has_method("get_ghost_transform"):
 		return null
-	var ghost_data: Dictionary = _maneuver_tool_scene.get_ghost_transform()
+	var ghost_data: Dictionary = mt_scene.get_ghost_transform()
 	if ghost_data.is_empty():
 		return null
 	var info: TargetingListBuilder.ShipInfo = TargetingListBuilder.ShipInfo.new()
@@ -2539,6 +2482,23 @@ func _create_attack_executor() -> void:
 			_on_attack_exec_cancelled)
 	_attack_executor.dismiss_other_tools_requested.connect(
 			_on_dismiss_other_tools_requested)
+
+
+## Creates the [ManeuverToolController] child node.
+func _create_maneuver_tool_controller() -> void:
+	_maneuver_tool_controller = ManeuverToolController.new()
+	_maneuver_tool_controller.name = "ManeuverToolController"
+	add_child(_maneuver_tool_controller)
+	_maneuver_tool_controller.initialize(_token_container)
+
+
+## Dismisses the maneuver tool, passing the current activation ship so the
+## Navigate-token spend preview overlay is cleared when appropriate.
+func _dismiss_maneuver_tool_with_preview() -> void:
+	var ship: ShipInstance = null
+	if _ship_activation_state:
+		ship = _ship_activation_state.get_ship()
+	_maneuver_tool_controller.dismiss(ship)
 
 
 ## Creates the [DebugController] child node with overlay, HUD, and saver.
@@ -2597,7 +2557,7 @@ func _on_attack_simulator_requested() -> void:
 func _on_dismiss_other_tools_requested() -> void:
 	_dismiss_range_overlay()
 	_dismiss_targeting_list()
-	_dismiss_maneuver_tool()
+	_dismiss_maneuver_tool_with_preview()
 
 
 # ---------------------------------------------------------------------------

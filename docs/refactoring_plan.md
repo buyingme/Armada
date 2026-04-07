@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅.
+> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -366,15 +366,20 @@ game_board connects these to set `_activating_ship_token`.
 > `game_board.gd`: 3 419 → 3 314 lines (−105).
 > Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
-#### C5: `ManeuverToolController` (4 isolated funcs, 2 vars)
+#### C5: `ManeuverToolController` (4 isolated funcs, 2 vars) ✅
 
 | Moved Vars | Moved Functions |
-|------------|-----------------|
+|------------|------------------|
 | `_maneuver_tool_selecting`, `_maneuver_tool_scene` | `_show_maneuver_tool`, `_cancel_maneuver_tool_selection`, `_handle_maneuver_tool_escape`, `_dismiss_maneuver_tool` |
 
-**Cross-cluster:** 5 functions read `_activating_ship_token` — resolved by
-passing it as a parameter or reading from `ActivationContext` (Phase F
-prep: for now, pass as argument).
+> **123 lines extracted.** Cross-cluster refs to `_maneuver_tool_scene` in
+> `_on_execute_maneuver`, `_resolve_maneuver_overlaps_ex`,
+> `_on_range_overlay_requested`, and `_collect_ghost_info` resolved via
+> `get_scene()` getter. `_dismiss_maneuver_tool` replaced by
+> `_dismiss_maneuver_tool_with_preview()` wrapper that passes
+> `_ship_activation_state` ship.
+> `game_board.gd`: 3 315 → 3 274 lines (−41).
+> Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
 #### C6: `RangeToolController` (4 isolated funcs, 2 vars)
 

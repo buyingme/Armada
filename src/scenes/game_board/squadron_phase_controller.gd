@@ -248,7 +248,7 @@ func process_squadron_movement() -> void:
 	var token: SquadronToken = _squadron_modal.get_selected_token()
 	if token == null:
 		return
-	var desired: Vector2 = get_global_mouse_position()
+	var desired: Vector2 = _token_container.get_global_mouse_position()
 	var offset: Vector2 = desired - _squadron_move_original_pos
 	if offset.length() > _squadron_move_max_dist:
 		desired = _squadron_move_original_pos + \

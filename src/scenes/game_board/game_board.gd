@@ -787,7 +787,8 @@ func _on_squadron_clicked(token: SquadronToken) -> void:
 	if _attack_executor and _attack_executor.handle_squadron_click(token):
 		return
 	# Phase 7b: route to squadron activation modal.
-	if _squadron_phase_controller.try_handle_squadron_click(token):
+	if _squadron_phase_controller \
+			and _squadron_phase_controller.try_handle_squadron_click(token):
 		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
@@ -1545,7 +1546,8 @@ func _on_activation_modal_closed() -> void:
 	if _attack_executor and _attack_executor.is_in_exec_mode():
 		return
 	# Do not show the button while the squadron command modal is active.
-	if _squadron_phase_controller.is_modal_visible() \
+	if _squadron_phase_controller \
+			and _squadron_phase_controller.is_modal_visible() \
 			and _squadron_phase_controller.is_command_mode():
 		return
 	_show_activation_button.show_button()
@@ -1718,7 +1720,8 @@ func _on_repair_done() -> void:
 func _on_attack_exec_completed() -> void:
 	_log.info("Attack exec completed — advancing activation step.")
 	# Phase 7b: squadron attack completed — route to squadron modal.
-	if _squadron_phase_controller.is_in_attacking_state():
+	if _squadron_phase_controller \
+			and _squadron_phase_controller.is_in_attacking_state():
 		_squadron_phase_controller.notify_attack_completed()
 		return
 	if _ship_activation_state:
@@ -1743,7 +1746,8 @@ func _on_attack_exec_completed() -> void:
 func _on_attack_exec_cancelled() -> void:
 	_log.info("Attack exec cancelled — returning to activation modal.")
 	# Phase 7b: squadron attack cancelled — route to squadron modal.
-	if _squadron_phase_controller.is_in_attacking_state():
+	if _squadron_phase_controller \
+			and _squadron_phase_controller.is_in_attacking_state():
 		_squadron_phase_controller.notify_attack_cancelled()
 		return
 	if _activation_modal and _ship_activation_state:

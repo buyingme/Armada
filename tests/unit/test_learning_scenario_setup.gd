@@ -122,10 +122,10 @@ func test_rebels_in_bottom_deployment_zone() -> void:
 			"CR90 should be in the bottom (Rebel) zone (pos_y > 0.60)")
 
 
-func test_nebulon_b_in_centre_of_board() -> void:
+func test_nebulon_b_in_rebel_deployment_zone() -> void:
 	var neb: TokenPlacement = _find_by_key("nebulon_b_escort_frigate")
-	assert_true(neb.pos_y > 0.25 and neb.pos_y < 0.50,
-			"Nebulon-B should be in the centre area (0.25 < pos_y < 0.50)")
+	assert_true(neb.pos_y > 0.60,
+			"Nebulon-B should be in the bottom (Rebel) zone (pos_y > 0.60)")
 
 
 # --- Pixel position conversion ---

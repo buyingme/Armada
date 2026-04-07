@@ -142,7 +142,7 @@ func start_dial_drag(ship: ShipInstance) -> void:
 	_create_drag_preview(cmd)
 	TooltipManager.show_text(
 			"Drag to ship for full command effect\n"
-			+ "Drag to ship card for command token")
+			+"Drag to ship card for command token")
 	_log.info("Dial drag started for '%s' (command: %d)." % [
 			ship.data_key, cmd])
 
@@ -167,7 +167,7 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	# BEFORE_REVEAL_DIAL hook — Crew Panic must fire before the drag.
 	# Rules Reference: "Crew Panic" — "Before you reveal a command dial …"
 	if _check_crew_panic_fn.call(ship):
-		return  # Modal shown; drag will start (or not) in the callback.
+		return # Modal shown; drag will start (or not) in the callback.
 	start_dial_drag(ship)
 
 

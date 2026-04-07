@@ -4354,6 +4354,8 @@ CanvasLayer for the DEBUG HUD and connects DebugMode signals internally.
 `game_board.gd` calls three public methods: `handle_debug_click()`,
 `check_zone_crossing_toast()`, and `reset_zone_tracking()`.
 
+**Commit:** `6121dc6` — Tests: 1 669 (88 scripts, 2 932 asserts).
+
 ### MT-C4.01 — Debug mode toggle
 
 | Step | Action | Expected |

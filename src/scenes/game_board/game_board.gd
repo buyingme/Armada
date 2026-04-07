@@ -1433,8 +1433,8 @@ func _check_crew_panic_before_drag(ship: ShipInstance) -> bool:
 		"max_selections": 1,
 		"card_title": "Crew Panic",
 		"effect_text": "Before you reveal a command dial, you must either "
-				+ "suffer 1 damage or discard that dial. If you discard it, "
-				+ "do not reveal a dial this round.",
+				+"suffer 1 damage or discard that dial. If you discard it, "
+				+"do not reveal a dial this round.",
 		"options": [
 			{"id": "discard_card", "label": "Discard command dial",
 					"available": true},

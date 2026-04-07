@@ -220,11 +220,11 @@ func _build_ui() -> void:
 			custom_minimum_size.x - margin_h, 100.0)
 	add_child(_content)
 
-	_build_header(_content)
+	_content.add_child(_build_header())
 	_content.add_child(HSeparator.new())
-	_build_squadron_rows(_content)
+	_content.add_child(_build_squadron_rows())
 	_content.add_child(HSeparator.new())
-	_build_commit_button(_content)
+	_content.add_child(_build_commit_button())
 
 
 ## Applies the standard modal panel style (ui_styling.md §1).
@@ -238,13 +238,14 @@ func _apply_panel_style() -> void:
 	add_theme_stylebox_override("panel", style)
 
 
-## Builds the title and instruction labels.
-func _build_header(container: VBoxContainer) -> void:
+## Creates the title and instruction labels.
+func _build_header() -> VBoxContainer:
+	var header: VBoxContainer = VBoxContainer.new()
 	_title_label = Label.new()
 	_title_label.text = "Squadron Displacement"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	container.add_child(_title_label)
+	header.add_child(_title_label)
 
 	var info_label: Label = Label.new()
 	info_label.text = "Place each squadron in base contact with the ship."
@@ -252,14 +253,14 @@ func _build_header(container: VBoxContainer) -> void:
 	info_label.add_theme_font_size_override("font_size", 12)
 	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	container.add_child(info_label)
+	header.add_child(info_label)
+	return header
 
 
 ## Creates the squadron row list.
-func _build_squadron_rows(container: VBoxContainer) -> void:
+func _build_squadron_rows() -> VBoxContainer:
 	_row_container = VBoxContainer.new()
 	_row_container.add_theme_constant_override("separation", 4)
-	container.add_child(_row_container)
 
 	_rows.clear()
 	_row_labels.clear()
@@ -268,10 +269,11 @@ func _build_squadron_rows(container: VBoxContainer) -> void:
 		var row: PanelContainer = _create_row(i)
 		_row_container.add_child(row)
 		_rows.append(row)
+	return _row_container
 
 
-## Adds the commit button row.
-func _build_commit_button(container: VBoxContainer) -> void:
+## Creates the commit button row.
+func _build_commit_button() -> HBoxContainer:
 	var btn_container: HBoxContainer = HBoxContainer.new()
 	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_commit_button = Button.new()
@@ -280,7 +282,7 @@ func _build_commit_button(container: VBoxContainer) -> void:
 	_commit_button.disabled = true
 	_commit_button.pressed.connect(_on_commit_pressed)
 	btn_container.add_child(_commit_button)
-	container.add_child(btn_container)
+	return btn_container
 
 
 ## Creates a single squadron row with status icon and label.

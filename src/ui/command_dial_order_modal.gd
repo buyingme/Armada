@@ -68,16 +68,16 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", 12)
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)
-	_build_title(vbox)
-	_build_dial_entries(vbox)
-	_build_dismiss_hint(vbox)
+	vbox.add_child(_build_title())
+	vbox.add_child(_build_dial_entries())
+	vbox.add_child(_build_dismiss_hint())
 	margin.add_child(vbox)
 	add_child(margin)
 	_apply_panel_style()
 
 
-## Builds the title label.
-func _build_title(parent: VBoxContainer) -> void:
+## Creates the title label.
+func _build_title() -> Label:
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _ship_instance and _ship_instance.ship_data:
@@ -85,11 +85,12 @@ func _build_title(parent: VBoxContainer) -> void:
 	_title_label.text = "Command Dial Order — %s" % ship_name
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	parent.add_child(_title_label)
+	return _title_label
 
 
-## Builds dial order entries or the empty label.
-func _build_dial_entries(parent: VBoxContainer) -> void:
+## Creates dial order entries or the empty label inside a container.
+func _build_dial_entries() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
 	_order_container = HBoxContainer.new()
 	_order_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_order_container.add_theme_constant_override("separation", 12)
@@ -98,11 +99,12 @@ func _build_dial_entries(parent: VBoxContainer) -> void:
 		_empty_label = Label.new()
 		_empty_label.text = "No dials in stack."
 		_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		parent.add_child(_empty_label)
+		section.add_child(_empty_label)
 	else:
 		for i: int in range(queued.size()):
 			_order_container.add_child(_create_dial_entry(queued[i], i))
-	parent.add_child(_order_container)
+	section.add_child(_order_container)
+	return section
 
 
 ## Creates a single dial entry VBox (icon + position label).
@@ -127,14 +129,14 @@ func _create_dial_entry(entry: Dictionary, index: int) -> VBoxContainer:
 	return entry_vbox
 
 
-## Adds the dismiss hint label.
-func _build_dismiss_hint(parent: VBoxContainer) -> void:
+## Creates the dismiss hint label.
+func _build_dismiss_hint() -> Label:
 	var hint: Label = Label.new()
 	hint.text = "Click anywhere to close"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	parent.add_child(hint)
+	return hint
 
 
 ## Applies the standard modal panel style.

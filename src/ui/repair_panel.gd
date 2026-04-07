@@ -123,13 +123,13 @@ func _build_ui() -> void:
 	var vbox: VBoxContainer = _create_content_vbox()
 	add_child(vbox)
 
-	_build_title_section(vbox)
-	_build_points_section(vbox)
+	vbox.add_child(_build_title_section())
+	vbox.add_child(_build_points_section())
 	vbox.add_child(HSeparator.new())
-	_build_actions_section(vbox)
+	vbox.add_child(_build_actions_section())
 	vbox.add_child(HSeparator.new())
-	_build_button_row(vbox)
-	_build_dismiss_hint(vbox)
+	vbox.add_child(_build_button_row())
+	vbox.add_child(_build_dismiss_hint())
 
 
 ## Applies the standard modal panel style.
@@ -153,8 +153,8 @@ func _create_content_vbox() -> VBoxContainer:
 	return vbox
 
 
-## Adds the title label showing "Repair — <ship_name>".
-func _build_title_section(vbox: VBoxContainer) -> void:
+## Creates the title label showing "Repair — <ship_name>".
+func _build_title_section() -> Label:
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _ship and _ship.ship_data:
@@ -162,26 +162,26 @@ func _build_title_section(vbox: VBoxContainer) -> void:
 	_title_label.text = "Repair — %s" % ship_name
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_title_label)
+	return _title_label
 
 
-## Adds the repair points display label.
-func _build_points_section(vbox: VBoxContainer) -> void:
+## Creates the repair points display label.
+func _build_points_section() -> Label:
 	_points_label = Label.new()
 	_points_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_points_label.add_theme_font_size_override("font_size", 13)
-	vbox.add_child(_points_label)
+	return _points_label
 
 
-## Adds the actions container for repair choices.
-func _build_actions_section(vbox: VBoxContainer) -> void:
+## Creates the actions container for repair choices.
+func _build_actions_section() -> VBoxContainer:
 	_actions_container = VBoxContainer.new()
 	_actions_container.add_theme_constant_override("separation", 6)
-	vbox.add_child(_actions_container)
+	return _actions_container
 
 
-## Adds the Skip / Done button row.
-func _build_button_row(vbox: VBoxContainer) -> void:
+## Creates the Skip / Done button row.
+func _build_button_row() -> HBoxContainer:
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 12)
@@ -198,17 +198,17 @@ func _build_button_row(vbox: VBoxContainer) -> void:
 	_done_button.pressed.connect(_on_done_pressed)
 	btn_row.add_child(_done_button)
 
-	vbox.add_child(btn_row)
+	return btn_row
 
 
-## Adds the "Press Escape to finish" hint label.
-func _build_dismiss_hint(vbox: VBoxContainer) -> void:
+## Creates the "Press Escape to finish" hint label.
+func _build_dismiss_hint() -> Label:
 	var hint: Label = Label.new()
 	hint.text = "Press Escape to finish"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	vbox.add_child(hint)
+	return hint
 
 
 ## Clears all children from the panel.

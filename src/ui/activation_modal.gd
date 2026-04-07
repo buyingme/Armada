@@ -312,13 +312,13 @@ func _build_ui() -> void:
 	_log_offsets("_build_ui:after_repin_vert")
 	_build_panel_style()
 	var vbox: VBoxContainer = _build_content_container()
-	_build_header_labels(vbox)
+	vbox.add_child(_build_header_labels())
 	vbox.add_child(HSeparator.new())
-	_build_step_section(vbox)
-	_build_collision_label(vbox)
-	_build_end_activation_section(vbox)
+	vbox.add_child(_build_step_section())
+	vbox.add_child(_build_collision_label())
+	vbox.add_child(_build_end_activation_section())
 	vbox.add_child(HSeparator.new())
-	_build_footer(vbox)
+	vbox.add_child(_build_footer())
 	_update_command_info()
 
 
@@ -345,7 +345,9 @@ func _build_content_container() -> VBoxContainer:
 
 
 ## Creates the title, command info, and token info labels.
-func _build_header_labels(vbox: VBoxContainer) -> void:
+func _build_header_labels() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 12)
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _activation_state and _activation_state.get_ship() and \
@@ -354,33 +356,34 @@ func _build_header_labels(vbox: VBoxContainer) -> void:
 	_title_label.text = "Ship Activation — %s" % ship_name
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_title_label)
+	section.add_child(_title_label)
 	_command_label = Label.new()
 	_command_label.text = ""
 	_command_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_command_label)
+	section.add_child(_command_label)
 	_token_label = Label.new()
 	_token_label.text = ""
 	_token_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_token_label.add_theme_font_size_override("font_size", 12)
-	vbox.add_child(_token_label)
+	section.add_child(_token_label)
+	return section
 
 
 ## Creates the step rows container and populates all 5 step rows.
-func _build_step_section(vbox: VBoxContainer) -> void:
+func _build_step_section() -> VBoxContainer:
 	_step_container = VBoxContainer.new()
 	_step_container.add_theme_constant_override("separation", 4)
-	vbox.add_child(_step_container)
 	_step_rows.clear()
 	_execute_button = null
 	for i: int in range(STEP_NAMES.size()):
 		var row: PanelContainer = _create_step_row(i)
 		_step_container.add_child(row)
 		_step_rows.append(row)
+	return _step_container
 
 
 ## Creates the collision info label (shown on overlap/collision).
-func _build_collision_label(vbox: VBoxContainer) -> void:
+func _build_collision_label() -> Label:
 	_collision_label = Label.new()
 	_collision_label.name = "CollisionLabel"
 	_collision_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -389,11 +392,11 @@ func _build_collision_label(vbox: VBoxContainer) -> void:
 	_collision_label.add_theme_color_override("font_color",
 			Color(1.0, 0.75, 0.3))
 	_collision_label.visible = false
-	vbox.add_child(_collision_label)
+	return _collision_label
 
 
 ## Creates the "End Activation ►" button section.
-func _build_end_activation_section(vbox: VBoxContainer) -> void:
+func _build_end_activation_section() -> HBoxContainer:
 	var end_container: HBoxContainer = HBoxContainer.new()
 	end_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_end_activation_button = Button.new()
@@ -402,11 +405,13 @@ func _build_end_activation_section(vbox: VBoxContainer) -> void:
 	_end_activation_button.visible = false
 	_end_activation_button.pressed.connect(_on_end_activation_pressed)
 	end_container.add_child(_end_activation_button)
-	vbox.add_child(end_container)
+	return end_container
 
 
 ## Creates the Close button and Escape hint at the bottom.
-func _build_footer(vbox: VBoxContainer) -> void:
+func _build_footer() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 12)
 	var close_container: HBoxContainer = HBoxContainer.new()
 	close_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	var close_btn: Button = Button.new()
@@ -414,13 +419,14 @@ func _build_footer(vbox: VBoxContainer) -> void:
 	close_btn.custom_minimum_size = Vector2(120, 36)
 	close_btn.pressed.connect(_on_close_pressed)
 	close_container.add_child(close_btn)
-	vbox.add_child(close_container)
+	section.add_child(close_container)
 	var hint: Label = Label.new()
 	hint.text = "Press Escape to dismiss"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	vbox.add_child(hint)
+	section.add_child(hint)
+	return section
 
 
 ## Creates a single step row.

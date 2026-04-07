@@ -149,7 +149,9 @@ func add_ship_entry(instance: ShipInstance) -> void:
 			int(token_gap))
 	var left: Dictionary = _build_left_column(instance, token_gap)
 	entry_container.add_child(left["left_col"])
-	_build_card_image(entry_container, instance)
+	var card_image: Control = _build_card_image(instance)
+	if card_image:
+		entry_container.add_child(card_image)
 	var cmd_token_col: VBoxContainer = _build_right_column(
 			instance, token_gap, "cmd_token")
 	entry_container.add_child(cmd_token_col)
@@ -190,9 +192,8 @@ func _build_left_column(instance: ShipInstance,
 			"dial_gap": dial_gap, "dial_container": dial_container}
 
 
-## Adds the ship card image to the entry container.
-func _build_card_image(container: HBoxContainer,
-		instance: ShipInstance) -> void:
+## Creates the ship card image TextureRect (or null if no texture found).
+func _build_card_image(instance: ShipInstance) -> Control:
 	var card_h: float = GameScale.card_panel_card_height_px
 	var card_w: float = GameScale.card_panel_card_width_px
 	var card_texture: Texture2D = _load_card_texture(instance.data_key)
@@ -203,10 +204,10 @@ func _build_card_image(container: HBoxContainer,
 		card_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card_rect.custom_minimum_size = Vector2(card_w, card_h)
 		card_rect.mouse_filter = Control.MOUSE_FILTER_PASS
-		container.add_child(card_rect)
-	else:
-		var log: GameLogger = GameLogger.new("ShipCardPanel")
-		log.info("No card texture found for '%s'" % instance.data_key)
+		return card_rect
+	var log: GameLogger = GameLogger.new("ShipCardPanel")
+	log.info("No card texture found for '%s'" % instance.data_key)
+	return null
 
 
 ## Builds a right-side column (command tokens or damage cards).

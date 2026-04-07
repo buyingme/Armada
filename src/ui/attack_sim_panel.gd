@@ -421,20 +421,21 @@ func _build_ui() -> void:
 	offset_top = -40.0
 	offset_bottom = -40.0
 	_build_panel_style()
-	_build_content_container()
-	_build_title_body_labels()
-	_build_dice_count_section()
-	_build_cf_dial_section()
-	_build_obstruction_section()
-	_build_empty_pool_section()
-	_build_roll_button()
-	_build_dice_results_section()
-	_build_cf_token_section()
-	_build_confirm_skip_section()
-	_build_accuracy_section()
-	_build_defense_section()
-	_build_redirect_section()
-	_build_damage_info_section()
+	_content = _build_content_container()
+	add_child(_content)
+	_content.add_child(_build_title_body_labels())
+	_content.add_child(_build_dice_count_section())
+	_content.add_child(_build_cf_dial_section())
+	_content.add_child(_build_obstruction_section())
+	_content.add_child(_build_empty_pool_section())
+	_content.add_child(_build_roll_button())
+	_content.add_child(_build_dice_results_section())
+	_content.add_child(_build_cf_token_section())
+	_content.add_child(_build_confirm_skip_section())
+	_content.add_child(_build_accuracy_section())
+	_content.add_child(_build_defense_section())
+	_content.add_child(_build_redirect_section())
+	_content.add_child(_build_damage_info_section())
 
 
 ## Creates and applies the standard modal panel StyleBox.
@@ -449,54 +450,59 @@ func _build_panel_style() -> void:
 
 
 ## Creates the main VBoxContainer for all panel content.
-func _build_content_container() -> void:
-	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 8)
+func _build_content_container() -> VBoxContainer:
+	var content: VBoxContainer = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
 	var _margin_h: float = 32.0 # 16 px content-margin on each side
-	_content.custom_minimum_size.x = maxf(
+	content.custom_minimum_size.x = maxf(
 			custom_minimum_size.x - _margin_h, 100.0)
-	add_child(_content)
+	return content
 
 
 ## Creates the title and body text labels.
-func _build_title_body_labels() -> void:
+func _build_title_body_labels() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 16)
 	_title_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_content.add_child(_title_label)
+	section.add_child(_title_label)
 	_body_label = Label.new()
 	_body_label.add_theme_font_size_override("font_size", 13)
 	_body_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	_body_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_content.add_child(_body_label)
+	section.add_child(_body_label)
+	return section
 
 
 ## Creates the dice count label and Done button (sim mode).
-func _build_dice_count_section() -> void:
+func _build_dice_count_section() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
 	_dice_count_label = Label.new()
 	_dice_count_label.add_theme_font_size_override("font_size", 14)
 	_dice_count_label.add_theme_color_override("font_color",
 			Color(0.6, 0.85, 1.0))
 	_dice_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dice_count_label.visible = false
-	_content.add_child(_dice_count_label)
+	section.add_child(_dice_count_label)
 	_done_button = Button.new()
 	_done_button.text = "Done"
 	_done_button.custom_minimum_size = Vector2(80.0, 32.0)
 	_done_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_done_button.visible = false
 	_done_button.pressed.connect(_on_done_pressed)
-	_content.add_child(_done_button)
+	section.add_child(_done_button)
+	return section
 
 
 ## Creates the Concentrate Fire dial colour-selection section.
-func _build_cf_dial_section() -> void:
+func _build_cf_dial_section() -> VBoxContainer:
 	_cf_dial_container = VBoxContainer.new()
 	_cf_dial_container.add_theme_constant_override("separation", 4)
 	_cf_dial_container.visible = false
-	_content.add_child(_cf_dial_container)
 	var cf_dial_label: Label = Label.new()
 	cf_dial_label.text = "CF Dial — add 1 die:"
 	cf_dial_label.add_theme_font_size_override("font_size", 13)
@@ -514,10 +520,11 @@ func _build_cf_dial_section() -> void:
 	_cf_dial_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_cf_dial_skip_button.pressed.connect(_on_cf_dial_skip)
 	_cf_dial_container.add_child(_cf_dial_skip_button)
+	return _cf_dial_container
 
 
 ## Creates the obstruction die-removal section.
-func _build_obstruction_section() -> void:
+func _build_obstruction_section() -> VBoxContainer:
 	_obstruction_container = VBoxContainer.new()
 	_obstruction_container.add_theme_constant_override("separation", 4)
 	_obstruction_container.visible = false
@@ -530,11 +537,11 @@ func _build_obstruction_section() -> void:
 	_obstruction_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_obstruction_buttons.add_theme_constant_override("separation", 8)
 	_obstruction_container.add_child(_obstruction_buttons)
-	_content.add_child(_obstruction_container)
+	return _obstruction_container
 
 
 ## Creates the empty-pool notice section (hidden by default).
-func _build_empty_pool_section() -> void:
+func _build_empty_pool_section() -> VBoxContainer:
 	_empty_pool_container = VBoxContainer.new()
 	_empty_pool_container.add_theme_constant_override("separation", 4)
 	_empty_pool_container.visible = false
@@ -543,35 +550,34 @@ func _build_empty_pool_section() -> void:
 	pool_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pool_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	_empty_pool_container.add_child(pool_label)
-	_content.add_child(_empty_pool_container)
+	return _empty_pool_container
 
 
 ## Creates the Roll Dice button.
-func _build_roll_button() -> void:
+func _build_roll_button() -> Button:
 	_roll_button = Button.new()
 	_roll_button.text = "Roll Dice"
 	_roll_button.custom_minimum_size = Vector2(100.0, 32.0)
 	_roll_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_roll_button.visible = false
 	_roll_button.pressed.connect(_on_roll_pressed)
-	_content.add_child(_roll_button)
+	return _roll_button
 
 
 ## Creates the dice results container and CF token reroll section.
-func _build_dice_results_section() -> void:
+func _build_dice_results_section() -> HBoxContainer:
 	_dice_container = HBoxContainer.new()
 	_dice_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_dice_container.add_theme_constant_override("separation", 4)
 	_dice_container.visible = false
-	_content.add_child(_dice_container)
+	return _dice_container
 
 
 ## Creates the CF token reroll section (label + reroll/skip buttons).
-func _build_cf_token_section() -> void:
+func _build_cf_token_section() -> VBoxContainer:
 	_cf_token_container = VBoxContainer.new()
 	_cf_token_container.add_theme_constant_override("separation", 4)
 	_cf_token_container.visible = false
-	_content.add_child(_cf_token_container)
 	var cf_token_label: Label = Label.new()
 	cf_token_label.text = "CF Token — select a die to reroll:"
 	cf_token_label.add_theme_font_size_override("font_size", 13)
@@ -594,29 +600,33 @@ func _build_cf_token_section() -> void:
 	_cf_token_skip_button.custom_minimum_size = Vector2(60.0, 28.0)
 	_cf_token_skip_button.pressed.connect(_on_cf_token_skip)
 	_cf_token_buttons.add_child(_cf_token_skip_button)
+	return _cf_token_container
 
 
 ## Creates the Confirm button, Skip Attack button, and skip confirmation.
-func _build_confirm_skip_section() -> void:
+func _build_confirm_skip_section() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
 	_confirm_button = Button.new()
 	_confirm_button.text = "Confirm"
 	_confirm_button.custom_minimum_size = Vector2(100.0, 32.0)
 	_confirm_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_confirm_button.visible = false
 	_confirm_button.pressed.connect(_on_confirm_pressed)
-	_content.add_child(_confirm_button)
+	section.add_child(_confirm_button)
 	_skip_attack_button = Button.new()
 	_skip_attack_button.text = "Skip Attack"
 	_skip_attack_button.custom_minimum_size = Vector2(100.0, 28.0)
 	_skip_attack_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_skip_attack_button.visible = false
 	_skip_attack_button.pressed.connect(_on_skip_attack_pressed)
-	_content.add_child(_skip_attack_button)
-	_build_skip_confirm_prompt()
+	section.add_child(_skip_attack_button)
+	section.add_child(_build_skip_confirm_prompt())
+	return section
 
 
 ## Creates the skip-attack confirmation prompt (Yes/No).
-func _build_skip_confirm_prompt() -> void:
+func _build_skip_confirm_prompt() -> HBoxContainer:
 	_skip_confirm_container = HBoxContainer.new()
 	_skip_confirm_container.add_theme_constant_override("separation", 8)
 	_skip_confirm_container.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -634,15 +644,14 @@ func _build_skip_confirm_prompt() -> void:
 	_skip_confirm_no.custom_minimum_size = Vector2(60.0, 28.0)
 	_skip_confirm_no.pressed.connect(_on_skip_confirm_no)
 	_skip_confirm_container.add_child(_skip_confirm_no)
-	_content.add_child(_skip_confirm_container)
+	return _skip_confirm_container
 
 
 ## Creates the accuracy token-locking section.
-func _build_accuracy_section() -> void:
+func _build_accuracy_section() -> VBoxContainer:
 	_accuracy_container = VBoxContainer.new()
 	_accuracy_container.add_theme_constant_override("separation", 4)
 	_accuracy_container.visible = false
-	_content.add_child(_accuracy_container)
 	var acc_label: Label = Label.new()
 	acc_label.text = "Accuracy — lock defender tokens:"
 	acc_label.add_theme_font_size_override("font_size", 13)
@@ -660,14 +669,14 @@ func _build_accuracy_section() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_accuracy_confirm_button.pressed.connect(_on_accuracy_confirm)
 	_accuracy_container.add_child(_accuracy_confirm_button)
+	return _accuracy_container
 
 
 ## Creates the defense token spending section.
-func _build_defense_section() -> void:
+func _build_defense_section() -> VBoxContainer:
 	_defense_container = VBoxContainer.new()
 	_defense_container.add_theme_constant_override("separation", 4)
 	_defense_container.visible = false
-	_content.add_child(_defense_container)
 	_defense_info_label = Label.new()
 	_defense_info_label.add_theme_font_size_override("font_size", 13)
 	_defense_info_label.add_theme_color_override("font_color",
@@ -685,14 +694,14 @@ func _build_defense_section() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_defense_done_button.pressed.connect(_on_defense_done)
 	_defense_container.add_child(_defense_done_button)
+	return _defense_container
 
 
 ## Creates the redirect zone selection section.
-func _build_redirect_section() -> void:
+func _build_redirect_section() -> VBoxContainer:
 	_redirect_container = VBoxContainer.new()
 	_redirect_container.add_theme_constant_override("separation", 4)
 	_redirect_container.visible = false
-	_content.add_child(_redirect_container)
 	_redirect_info_label = Label.new()
 	_redirect_info_label.text = "Redirect — select adjacent zone:"
 	_redirect_info_label.add_theme_font_size_override("font_size", 13)
@@ -711,14 +720,14 @@ func _build_redirect_section() -> void:
 			Control.SIZE_SHRINK_CENTER)
 	_redirect_done_button.pressed.connect(_on_redirect_done_pressed)
 	_redirect_container.add_child(_redirect_done_button)
+	return _redirect_container
 
 
 ## Creates the damage resolution info section.
-func _build_damage_info_section() -> void:
+func _build_damage_info_section() -> VBoxContainer:
 	_damage_info_container = VBoxContainer.new()
 	_damage_info_container.add_theme_constant_override("separation", 4)
 	_damage_info_container.visible = false
-	_content.add_child(_damage_info_container)
 	_damage_info_label = Label.new()
 	_damage_info_label.add_theme_font_size_override("font_size", 13)
 	_damage_info_label.add_theme_color_override("font_color",
@@ -726,6 +735,7 @@ func _build_damage_info_section() -> void:
 	_damage_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_damage_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_damage_info_container.add_child(_damage_info_label)
+	return _damage_info_container
 
 
 ## Updates the title and body text.

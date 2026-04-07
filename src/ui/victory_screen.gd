@@ -101,14 +101,16 @@ func _build_ui() -> void:
 	_content_vbox.add_theme_constant_override("separation", 20)
 	_content_vbox.name = "ContentVBox"
 	add_child(_content_vbox)
-	_build_title_section(winner_name, reason, round_num)
-	_build_score_section(winner, loser, winner_name, loser_name, scores)
-	_build_button_row()
+	_content_vbox.add_child(_build_title_section(winner_name, reason, round_num))
+	_content_vbox.add_child(_build_score_section(
+			winner, loser, winner_name, loser_name, scores))
+	_content_vbox.add_child(_build_button_row())
 
 
-## Builds the title and reason labels.
+## Creates the title and reason labels.
 func _build_title_section(winner_name: String, reason: String,
-		round_num: int) -> void:
+		round_num: int) -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
 	_title_label = Label.new()
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 40)
@@ -116,7 +118,7 @@ func _build_title_section(winner_name: String, reason: String,
 			"font_color", Color(1.0, 0.85, 0.3))
 	_title_label.text = "%s Wins!" % winner_name
 	_title_label.name = "TitleLabel"
-	_content_vbox.add_child(_title_label)
+	section.add_child(_title_label)
 	_reason_label = Label.new()
 	_reason_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_reason_label.add_theme_font_size_override("font_size", 18)
@@ -126,16 +128,18 @@ func _build_title_section(winner_name: String, reason: String,
 	if round_num > 0:
 		_reason_label.text += "  (Round %d)" % round_num
 	_reason_label.name = "ReasonLabel"
-	_content_vbox.add_child(_reason_label)
+	section.add_child(_reason_label)
+	return section
 
 
-## Builds the separator + score label + spacer.
+## Creates the separator + score label + spacer.
 func _build_score_section(winner: int, loser: int,
 		winner_name: String, loser_name: String,
-		scores: Array) -> void:
+		scores: Array) -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
 	var sep: HSeparator = HSeparator.new()
 	sep.add_theme_constant_override("separation", 8)
-	_content_vbox.add_child(sep)
+	section.add_child(sep)
 	var score_text: String = ""
 	if winner >= 0 and loser >= 0:
 		var w_score: int = scores[winner] if winner < scores.size() else 0
@@ -151,19 +155,19 @@ func _build_score_section(winner: int, loser: int,
 			"font_color", Color(0.9, 0.9, 0.95))
 	_score_label.text = score_text
 	_score_label.name = "ScoreLabel"
-	_content_vbox.add_child(_score_label)
+	section.add_child(_score_label)
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size = Vector2(0, 16)
-	_content_vbox.add_child(spacer)
+	section.add_child(spacer)
+	return section
 
 
-## Builds the Play Again / Quit button row.
-func _build_button_row() -> void:
+## Creates the Play Again / Quit button row.
+func _build_button_row() -> HBoxContainer:
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 24)
 	btn_row.name = "ButtonRow"
-	_content_vbox.add_child(btn_row)
 	_play_again_button = Button.new()
 	_play_again_button.text = "Play Again"
 	_play_again_button.custom_minimum_size = Vector2(160, 48)
@@ -176,6 +180,7 @@ func _build_button_row() -> void:
 	_quit_button.name = "QuitButton"
 	_quit_button.pressed.connect(_on_quit_pressed)
 	btn_row.add_child(_quit_button)
+	return btn_row
 
 
 # ---------------------------------------------------------------------------

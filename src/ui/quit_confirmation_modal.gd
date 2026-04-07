@@ -33,8 +33,8 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override("separation", 16)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	margin.add_child(vbox)
-	_add_question_label(vbox)
-	_add_button_row(vbox)
+	vbox.add_child(_build_question_label())
+	vbox.add_child(_build_button_row())
 
 
 ## Applies the standard modal panel style (ui_styling.md §1).
@@ -57,23 +57,22 @@ func _build_margin_layout() -> MarginContainer:
 	return margin
 
 
-## Adds the question text label.
-func _add_question_label(parent: VBoxContainer) -> void:
+## Creates the question text label.
+func _build_question_label() -> Label:
 	var label: Label = Label.new()
 	label.text = "Quit game and exit to main menu?"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 18)
 	label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	parent.add_child(label)
+	return label
 
 
-## Adds the Yes / No button row.
-func _add_button_row(parent: VBoxContainer) -> void:
+## Creates the Yes / No button row.
+func _build_button_row() -> HBoxContainer:
 	var btn_row: HBoxContainer = HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 16)
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	parent.add_child(btn_row)
 	var btn_yes: Button = Button.new()
 	btn_yes.text = "Yes"
 	btn_yes.custom_minimum_size = Vector2(100, 36)
@@ -84,6 +83,7 @@ func _add_button_row(parent: VBoxContainer) -> void:
 	btn_no.custom_minimum_size = Vector2(100, 36)
 	btn_no.pressed.connect(_on_no_pressed)
 	btn_row.add_child(btn_no)
+	return btn_row
 
 
 ## Shows the modal centred on viewport.

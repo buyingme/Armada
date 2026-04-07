@@ -457,12 +457,14 @@ func _finish_command_early() -> void:
 
 func _build_ui() -> void:
 	_build_panel_style()
-	_build_margin_container()
-	_build_content_vbox()
-	_build_labels()
-	_build_action_buttons()
-	_build_commit_move_button()
-	_build_close_button()
+	_margin = _build_margin_container()
+	add_child(_margin)
+	_vbox = _build_content_vbox()
+	_margin.add_child(_vbox)
+	_vbox.add_child(_build_labels())
+	_vbox.add_child(_build_action_buttons())
+	_vbox.add_child(_build_commit_move_button())
+	_vbox.add_child(_build_close_button())
 
 
 ## Creates and applies the standard modal panel StyleBox.
@@ -476,56 +478,58 @@ func _build_panel_style() -> void:
 
 
 ## Creates the MarginContainer with standard insets.
-func _build_margin_container() -> void:
-	_margin = MarginContainer.new()
-	_margin.add_theme_constant_override("margin_left", 16)
-	_margin.add_theme_constant_override("margin_right", 16)
-	_margin.add_theme_constant_override("margin_top", 12)
-	_margin.add_theme_constant_override("margin_bottom", 12)
-	add_child(_margin)
+func _build_margin_container() -> MarginContainer:
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	return margin
 
 
 ## Creates the main VBoxContainer with minimum-width calculation.
-func _build_content_vbox() -> void:
-	_vbox = VBoxContainer.new()
-	_vbox.add_theme_constant_override("separation", 8)
+func _build_content_vbox() -> VBoxContainer:
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
 	var content_w: float = (-BOTTOM_OFFSET_X) * 2.0 - 32.0
-	_vbox.custom_minimum_size.x = maxf(content_w, 100.0)
-	_margin.add_child(_vbox)
+	vbox.custom_minimum_size.x = maxf(content_w, 100.0)
+	return vbox
 
 
 ## Creates the title, subtitle, prompt, and error labels.
-func _build_labels() -> void:
+func _build_labels() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 16)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.text = "Squadron Phase"
-	_vbox.add_child(_title_label)
+	section.add_child(_title_label)
 	_subtitle_label = Label.new()
 	_subtitle_label.add_theme_font_size_override("font_size", 12)
 	_subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle_label.add_theme_color_override(
 			"font_color", Color(0.6, 0.6, 0.6))
-	_vbox.add_child(_subtitle_label)
+	section.add_child(_subtitle_label)
 	_prompt_label = Label.new()
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_vbox.add_child(_prompt_label)
+	section.add_child(_prompt_label)
 	_error_label = Label.new()
 	_error_label.add_theme_font_size_override("font_size", 12)
 	_error_label.add_theme_color_override(
 			"font_color", Color(0.9, 0.3, 0.3))
 	_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_error_label.visible = false
-	_vbox.add_child(_error_label)
+	section.add_child(_error_label)
+	return section
 
 
 ## Creates the Move / Attack / Skip / Done action buttons.
-func _build_action_buttons() -> void:
+func _build_action_buttons() -> HBoxContainer:
 	_button_container = HBoxContainer.new()
 	_button_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_button_container.add_theme_constant_override("separation", 8)
-	_vbox.add_child(_button_container)
 	_move_button = _create_action_button("Move", Vector2(90, 36),
 			_on_move_pressed)
 	_button_container.add_child(_move_button)
@@ -539,6 +543,7 @@ func _build_action_buttons() -> void:
 			_on_done_pressed)
 	_done_button.visible = false
 	_button_container.add_child(_done_button)
+	return _button_container
 
 
 ## Creates a Button with the given text, minimum size, and callback.
@@ -552,7 +557,7 @@ func _create_action_button(text: String, min_size: Vector2,
 
 
 ## Creates the "Commit Move" button (hidden by default).
-func _build_commit_move_button() -> void:
+func _build_commit_move_button() -> HBoxContainer:
 	_commit_move_button = Button.new()
 	_commit_move_button.text = "Commit Move"
 	_commit_move_button.custom_minimum_size = Vector2(200, 44)
@@ -561,11 +566,11 @@ func _build_commit_move_button() -> void:
 	var commit_hbox: HBoxContainer = HBoxContainer.new()
 	commit_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	commit_hbox.add_child(_commit_move_button)
-	_vbox.add_child(commit_hbox)
+	return commit_hbox
 
 
 ## Creates the "✕ Close" button (right-aligned).
-func _build_close_button() -> void:
+func _build_close_button() -> HBoxContainer:
 	_close_button = Button.new()
 	_close_button.text = "✕ Close"
 	_close_button.custom_minimum_size = Vector2(80, 28)
@@ -573,7 +578,7 @@ func _build_close_button() -> void:
 	var close_hbox: HBoxContainer = HBoxContainer.new()
 	close_hbox.alignment = BoxContainer.ALIGNMENT_END
 	close_hbox.add_child(_close_button)
-	_vbox.add_child(close_hbox)
+	return close_hbox
 
 
 func _apply_anchor_position() -> void:

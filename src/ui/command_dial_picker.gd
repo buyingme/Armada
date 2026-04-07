@@ -123,17 +123,18 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", 12)
 	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
-	_build_title_and_subtitle(vbox)
-	_build_existing_stack_display(vbox)
-	_build_command_selection(vbox)
-	_build_stack_and_confirm(vbox)
+	vbox.add_child(_build_title_and_subtitle())
+	vbox.add_child(_build_existing_stack_display())
+	vbox.add_child(_build_command_selection())
+	vbox.add_child(_build_stack_and_confirm())
 	margin.add_child(vbox)
 	add_child(margin)
 	_apply_panel_style()
 
 
-## Builds the title and subtitle labels.
-func _build_title_and_subtitle(parent: VBoxContainer) -> void:
+## Creates the title and subtitle labels.
+func _build_title_and_subtitle() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
 	_title_label = Label.new()
 	var ship_name: String = ""
 	if _ship_instance and _ship_instance.ship_data:
@@ -142,35 +143,38 @@ func _build_title_and_subtitle(parent: VBoxContainer) -> void:
 			ship_name, _current_round]
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 16)
-	parent.add_child(_title_label)
+	section.add_child(_title_label)
 	var subtitle: Label = Label.new()
 	subtitle.text = "Select %d command%s:" % [
 			_dials_needed, "" if _dials_needed == 1 else "s"]
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	parent.add_child(subtitle)
+	section.add_child(subtitle)
+	return section
 
 
-## Builds the 4 command icon selection row.
-func _build_command_selection(parent: VBoxContainer) -> void:
+## Creates the 4 command icon selection row.
+func _build_command_selection() -> HBoxContainer:
 	_selection_container = HBoxContainer.new()
 	_selection_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_selection_container.add_theme_constant_override("separation", 16)
 	for cmd: int in COMMAND_CYCLE:
 		var icon_btn: VBoxContainer = _create_icon_button(cmd, ICON_SIZE)
 		_selection_container.add_child(icon_btn)
-	parent.add_child(_selection_container)
+	return _selection_container
 
 
-## Builds the stack display, separator and confirm button.
-func _build_stack_and_confirm(parent: VBoxContainer) -> void:
-	parent.add_child(HSeparator.new())
+## Creates the stack display, separator and confirm button.
+func _build_stack_and_confirm() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 12)
+	section.add_child(HSeparator.new())
 	_stack_label = Label.new()
 	_stack_label.text = "Dial Stack (top → bottom):"
-	parent.add_child(_stack_label)
+	section.add_child(_stack_label)
 	_stack_container = HBoxContainer.new()
 	_stack_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	_stack_container.add_theme_constant_override("separation", 8)
-	parent.add_child(_stack_container)
+	section.add_child(_stack_container)
 	_confirm_button = Button.new()
 	_confirm_button.text = "CONFIRM"
 	_confirm_button.custom_minimum_size = Vector2(120, 36)
@@ -178,7 +182,8 @@ func _build_stack_and_confirm(parent: VBoxContainer) -> void:
 	var btn_container: HBoxContainer = HBoxContainer.new()
 	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_container.add_child(_confirm_button)
-	parent.add_child(btn_container)
+	section.add_child(btn_container)
+	return section
 
 
 ## Applies the standard modal panel style.
@@ -350,15 +355,17 @@ func _create_stack_entry(cmd: int, index: int) -> VBoxContainer:
 	return col
 
 
-## Builds a display of existing dials already in the command stack.
+## Creates a display of existing dials already in the command stack.
 ## Only shown when there are hidden dials (rounds 2+). Gives the player
 ## context about upcoming commands they assigned in prior rounds.
-func _build_existing_stack_display(parent: VBoxContainer) -> void:
+func _build_existing_stack_display() -> VBoxContainer:
+	var section: VBoxContainer = VBoxContainer.new()
 	var hidden_cmds: Array[int] = _get_hidden_commands()
 	if hidden_cmds.is_empty():
-		return
-	_add_existing_stack_label(parent)
-	_add_existing_stack_icons(parent, hidden_cmds)
+		return section
+	_add_existing_stack_label(section)
+	_add_existing_stack_icons(section, hidden_cmds)
+	return section
 
 
 ## Returns the hidden command types from the ship's dial stack.

@@ -57,14 +57,9 @@ var _camera: BoardCamera = null
 ## Write: _create_token_container() only. Extractable: pass via initialize().
 var _token_container: Node2D = null
 
-## Deployment zone overlay (visible in debug mode only).
-var _deploy_overlay: DeploymentZoneOverlay = null
-
-## Debug HUD label (shows "DEBUG" in top-left corner).
-var _debug_label: Label = null
-
-## Debug help panel showing all keyboard shortcuts.
-var _debug_help_panel: DebugHelpPanel = null
+## Debug controller — owns deploy overlay, debug HUD, help panel, and
+## scenario saver.  Created in [method _create_debug_controller].
+var _debug_controller: DebugController = null
 
 ## Background map texture loaded from the scenario JSON (may be null).
 var _map_texture: Texture2D = null
@@ -74,9 +69,6 @@ var _map_texture: Texture2D = null
 ## validation, overlap resolution. Write: never after init.
 ## Extractable: pass via initialize() to ManeuverToolController.
 var _token_mover: TokenMover = TokenMover.new()
-
-## Scenario saver utility.
-var _scenario_saver: ScenarioSaver = ScenarioSaver.new()
 
 ## Ship card side panels: Rebel (left) and Imperial (right).
 ## Rules Reference: SU-026, UI-016, UI-017.
@@ -242,10 +234,6 @@ var _repair_panel: RepairPanel = null
 ## Requirements: FLOW-004.
 var _ship_activation_state: ShipActivationState = null
 
-## Tracks whether the currently dragged token was inside its deployment zone
-## on the previous frame, so the toast fires only on crossing (DBG-033).
-var _was_in_deploy_zone: bool = true
-
 ## --- Phase 7b: Squadron Activation flow state ---
 
 ## Squadron Activation Modal (bottom-centre, guides through squadron actions).
@@ -292,8 +280,7 @@ const PHASE_NAMES: Dictionary = {
 func _ready() -> void:
 	_create_camera()
 	_create_token_container()
-	_create_deploy_overlay()
-	_create_debug_label()
+	_create_debug_controller()
 	_create_ship_card_panels()
 	_create_command_phase_controller()
 	_create_turn_management_ui()
@@ -306,7 +293,6 @@ func _ready() -> void:
 	GameManager.start_new_game()
 	_spawn_learning_scenario_tokens()
 	_connect_signals()
-	_update_debug_visibility()
 	queue_redraw()
 	# The phase_changed and active_player_changed signals fired inside
 	# start_new_game() before _connect_signals(), so trigger the initial
@@ -439,7 +425,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseButton:
-		_handle_debug_click(event as InputEventMouseButton)
+		_debug_controller.handle_debug_click(event as InputEventMouseButton)
 
 
 # ---------------------------------------------------------------------------
@@ -458,36 +444,6 @@ func _create_token_container() -> void:
 	_token_container = Node2D.new()
 	_token_container.name = "TokenContainer"
 	add_child(_token_container)
-
-
-## Creates the deployment zone overlay (initially hidden).
-func _create_deploy_overlay() -> void:
-	_deploy_overlay = DeploymentZoneOverlay.new()
-	_deploy_overlay.name = "DeploymentZoneOverlay"
-	_deploy_overlay.visible = false
-	add_child(_deploy_overlay)
-
-
-## Creates the debug-mode HUD on a CanvasLayer (label + help panel).
-func _create_debug_label() -> void:
-	var layer: CanvasLayer = CanvasLayer.new()
-	layer.name = "DebugHUDLayer"
-	layer.layer = 100
-	add_child(layer)
-
-	_debug_label = Label.new()
-	_debug_label.text = "DEBUG"
-	_debug_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
-	_debug_label.add_theme_font_size_override("font_size", 24)
-	_debug_label.position = Vector2(10, 10)
-	_debug_label.visible = false
-	layer.add_child(_debug_label)
-
-	_debug_help_panel = DebugHelpPanel.new()
-	_debug_help_panel.name = "DebugHelpPanel"
-	_debug_help_panel.position = Vector2(10, 44)
-	_debug_help_panel.visible = false
-	layer.add_child(_debug_help_panel)
 
 
 ## Creates ship card side panels on a CanvasLayer.
@@ -683,8 +639,8 @@ func _set_phase_hud_visible(show: bool) -> void:
 func _connect_signals() -> void:
 	#region Debug & viewport signals
 	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
-	DebugMode.debug_mode_changed.connect(_on_debug_mode_changed)
-	DebugMode.save_positions_requested.connect(_on_save_positions)
+	# debug_mode_changed / save_positions_requested are connected inside
+	# DebugController.initialize().
 	get_tree().root.size_changed.connect(_on_viewport_resized)
 	#endregion
 
@@ -841,7 +797,7 @@ func _on_token_clicked(token: ShipToken) -> void:
 		return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
-		_was_in_deploy_zone = true
+		_debug_controller.reset_zone_tracking()
 	else:
 		EventBus.element_selected.emit(token)
 
@@ -857,7 +813,7 @@ func _on_squadron_clicked(token: SquadronToken) -> void:
 			return
 	if DebugMode.enabled:
 		DebugMode.select_token(token)
-		_was_in_deploy_zone = true
+		_debug_controller.reset_zone_tracking()
 	else:
 		EventBus.element_selected.emit(token)
 
@@ -898,37 +854,6 @@ func _register_resizable(node: Control, method: StringName,
 	})
 
 
-## Updates visibility of debug-only UI elements.
-func _on_debug_mode_changed(_enabled: bool) -> void:
-	_update_debug_visibility()
-
-
-## Toggles debug-specific overlays.
-func _update_debug_visibility() -> void:
-	var on: bool = DebugMode.enabled
-	if _deploy_overlay:
-		_deploy_overlay.visible = on
-	if _debug_label:
-		_debug_label.visible = on
-	if _debug_help_panel:
-		_debug_help_panel.visible = on
-
-
-## Handles left-click in debug mode: clicks on empty space deselect.
-## DBG-010 — left-click empty space deselects.
-func _handle_debug_click(event: InputEventMouseButton) -> void:
-	if not event.pressed:
-		return
-	if event.button_index != MOUSE_BUTTON_LEFT:
-		return
-	# If we have a selection and clicked empty space, deselect.
-	# Token clicks are handled by token _input → token_clicked signal first.
-	# If input reaches here, no token was hit.
-	if DebugMode.has_selection():
-		DebugMode.deselect_token()
-		get_viewport().set_input_as_handled()
-
-
 ## Handles two-finger magnify gesture as rotation for the selected token.
 ## DBG-012 — trackpad gesture rotates.
 func _handle_debug_rotate(event: InputEventMagnifyGesture) -> void:
@@ -967,7 +892,7 @@ func _move_selected_token_to_mouse() -> void:
 
 	# Check zone crossing for toast warning (debug mode only).
 	if DebugMode.enabled:
-		_check_zone_crossing_toast(token, top_y, bottom_y)
+		_debug_controller.check_zone_crossing_toast(token, top_y, bottom_y)
 
 
 ## Resolves and applies position for a ship token.
@@ -1003,31 +928,6 @@ func _move_squadron_token(
 	token.position = new_pos
 
 
-## Checks if a dragged token just crossed outside its deployment zone and
-## shows a one-shot toast warning. Resets when the token re-enters.
-## DBG-033 — advisory toast on zone crossing in debug mode.
-func _check_zone_crossing_toast(
-		token: Node2D, _top_y: float, _bottom_y: float
-) -> void:
-	var faction: Constants.Faction = Constants.Faction.GALACTIC_EMPIRE
-	var token_name: String = token.name
-	if token is ShipToken:
-		faction = (token as ShipToken).get_faction()
-		var data: ShipData = (token as ShipToken).get_ship_data()
-		if data != null:
-			token_name = data.ship_name
-	elif token is SquadronToken:
-		faction = (token as SquadronToken).get_faction()
-		token_name = token.name
-	var in_zone: bool = DeploymentZoneOverlay.is_in_deploy_zone(
-			token.position.y, faction)
-	if _was_in_deploy_zone and not in_zone:
-		TooltipManager.show_text(
-				"%s is outside deployment zone" % token_name,
-				Vector2.INF, 3.0)
-	_was_in_deploy_zone = in_zone
-
-
 ## Builds collision descriptors for all ship tokens except [exclude].
 func _build_other_ship_rects(exclude: Node) -> Array:
 	var result: Array = []
@@ -1058,19 +958,6 @@ func _build_other_squad_circles(exclude: Node) -> Array:
 				"radius": squad.get_radius_px(),
 			})
 	return result
-
-
-## Saves all token positions to the learning scenario JSON.
-## DBG-040, DBG-041
-func _on_save_positions() -> void:
-	var success: bool = _scenario_saver.save_positions(
-			"scenarios/", "learning_scenario.json",
-			get_ship_tokens(), get_squadron_tokens(),
-			GameScale.play_area_side_px)
-	if success:
-		_log.info("Token positions saved successfully.")
-	else:
-		_log.error("Failed to save token positions.")
 
 
 # ---------------------------------------------------------------------------
@@ -2652,6 +2539,14 @@ func _create_attack_executor() -> void:
 			_on_attack_exec_cancelled)
 	_attack_executor.dismiss_other_tools_requested.connect(
 			_on_dismiss_other_tools_requested)
+
+
+## Creates the [DebugController] child node with overlay, HUD, and saver.
+func _create_debug_controller() -> void:
+	_debug_controller = DebugController.new()
+	_debug_controller.name = "DebugController"
+	add_child(_debug_controller)
+	_debug_controller.initialize(self, get_ship_tokens, get_squadron_tokens)
 
 
 ## Creates the [DisplacementController] child node and wires its signals.

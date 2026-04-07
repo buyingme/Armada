@@ -4323,6 +4323,8 @@ UI.  `game_board.gd` calls `begin_command_dial_flow()` from
 `_on_handoff_accepted` and connects the controller's `phase_complete` signal to
 `_update_phase_hud`.
 
+**Commit:** `8042b86` — Tests: 1 669 (88 scripts, 2 932 asserts).
+
 ### MT-C3.01 — Command dial assignment flow
 
 | Step | Action | Expected |
@@ -4339,3 +4341,44 @@ UI.  `game_board.gd` calls `begin_command_dial_flow()` from
 |------|--------|----------|
 | 1 | During Command Phase, reach a ship that already has dial(s) in its stack | "Command Dial Order" modal appears allowing reorder / confirmation |
 | 2 | Confirm the order | Picker advances to next ship normally |
+
+---
+
+## Refactoring Phase C4 — Extract DebugController
+
+**What this phase changes:** 5 debug-related variables (`_deploy_overlay`,
+`_debug_label`, `_debug_help_panel`, `_was_in_deploy_zone`, `_scenario_saver`)
+and 7 functions (including `_on_debug_mode_changed`) moved from `game_board.gd`
+into a new `DebugController` (child Node).  The controller creates its own
+CanvasLayer for the DEBUG HUD and connects DebugMode signals internally.
+`game_board.gd` calls three public methods: `handle_debug_click()`,
+`check_zone_crossing_toast()`, and `reset_zone_tracking()`.
+
+### MT-C4.01 — Debug mode toggle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press the debug toggle key (`) | "DEBUG" label appears at top-left; deployment zone overlay becomes visible; help panel shows shortcuts |
+| 2 | Press the toggle key again | All debug overlays disappear |
+
+### MT-C4.02 — Debug select / deselect / drag
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode; click a ship token | Token highlights (selected) |
+| 2 | Move the mouse | Token follows mouse with collision resolution |
+| 3 | Click empty space | Token deselects; stops following mouse |
+
+### MT-C4.03 — Deployment zone crossing toast
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In debug mode, select a token near its deployment zone edge | Token follows mouse |
+| 2 | Drag the token outside its deployment zone boundary | Toast appears: "<ship name> is outside deployment zone" |
+| 3 | Drag it back inside the zone, then outside again | Toast fires again on each crossing |
+
+### MT-C4.04 — Save positions (debug)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In debug mode, press the save-positions shortcut | Console logs "Token positions saved successfully" (or the file is written) |

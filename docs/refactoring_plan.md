@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅.
+> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -356,11 +356,15 @@ game_board connects these to set `_activating_ship_token`.
 > `game_board.gd`: 3 527 → 3 419 lines (−108).
 > Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
-#### C4: `DebugController` (6 isolated funcs, 5 vars)
+#### C4: `DebugController` (6 isolated funcs, 5 vars) ✅
 
 | Moved Vars | Moved Functions |
-|------------|-----------------|
+|------------|------------------|
 | `_deploy_overlay`, `_debug_label`, `_debug_help_panel`, `_was_in_deploy_zone`, `_scenario_saver` | `_create_deploy_overlay`, `_create_debug_label`, `_update_debug_visibility`, `_check_zone_crossing_toast`, `_on_save_positions`, `_handle_debug_click` |
+
+> Also moved `_on_debug_mode_changed` (1-line delegate). **180 lines extracted.**
+> `game_board.gd`: 3 419 → 3 314 lines (−105).
+> Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
 #### C5: `ManeuverToolController` (4 isolated funcs, 2 vars)
 

@@ -4498,3 +4498,8 @@ injected as Callables at `initialize()`.
 | 2 | Click the "Show Squadron Modal" button | Modal reopens |
 
 **Commit:** `35cb7e3` — Tests: 1 669 (88 scripts, 2 932 asserts).
+
+**Bug fix commits:**
+- `f2098d2` — Inline lambda extraction (multi-line lambda in function-call args silently Nil'd)
+- `30ae6c8` — `get_global_mouse_position()` on Node base + null guards on all call sites
+- `8ca3bf9` — `_ready()` init order: controller must exist before `create_ui()` is called

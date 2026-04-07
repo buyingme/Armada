@@ -393,7 +393,7 @@ game_board connects these to set `_activating_ship_token`.
 > `game_board.gd`: 3 275 → 3 227 lines (−48).
 > Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
-#### C7: `SquadronPhaseController` (21 funcs, 7 vars)
+#### C7: `SquadronPhaseController` (21 funcs, 7 vars) ✅
 
 | Moved Vars | Moved Functions |
 |------------|-----------------|
@@ -406,13 +406,22 @@ game_board connects these to set `_activating_ship_token`.
 **Shared helpers injected at init:**
 - `_token_container: Node2D`, `get_squadron_tokens: Callable`, `get_ship_tokens: Callable`, `move_squadron_token: Callable`
 
+> **~540 lines extracted.** 19/21 isolated functions + 2 cross-cluster
+> functions moved. Cross-cluster refs to `_attack_executor` and
+> `_show_activation_button` resolved via injected Callables.
+> Three post-extraction bug fixes: inline lambda extraction (`f2098d2`),
+> `get_global_mouse_position()` on Node base (`30ae6c8`), and
+> `_ready()` init order (`8ca3bf9`).
+> `game_board.gd`: 3 227 → 2 799 lines (−428).
+> Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
+
 #### C Actual Outcome
 
 | Metric | Before C | Planned (C1–C6) | After C6 | After C7 |
 |--------|----------|-----------------|----------|----------|
-| `game_board.gd` lines | 3 390 | ~1 800 | 3 227 | **2 791** |
+| `game_board.gd` lines | 3 390 | ~1 800 | 3 227 | **2 799** |
 | Extracted controllers | 1 (AE) | 7 | 7 | **8** |
-| Largest controller | 3 008 (AE) | ~300 | 385 | **540** (Squadron) |
+| Largest controller | 3 008 (AE) | ~300 | 385 | **543** (Squadron) |
 | Total lines extracted | — | ~1 590 | 1 291 | **~1 730** |
 
 **Not extracted (stays in game_board — deferred to Phase F):**

@@ -4503,3 +4503,69 @@ injected as Callables at `initialize()`.
 - `f2098d2` — Inline lambda extraction (multi-line lambda in function-call args silently Nil'd)
 - `30ae6c8` — `get_global_mouse_position()` on Node base + null guards on all call sites
 - `8ca3bf9` — `_ready()` init order: controller must exist before `create_ui()` is called
+
+---
+
+## Phase D1 — Section Builder Methods (Return-Pattern Normalize)
+
+> **Commit:** `c35653b` — refactor(ui): D1 — normalize `_build_*` methods to return pattern
+> **Tests:** 1 669 (88 scripts, 2 932 asserts)
+
+**What this phase changes:** Converts all `_build_*()` section methods across 13 UI files from void (adding to parent/member) to the return pattern (create, configure, return). No user-visible behaviour change — this is a purely internal consistency refactor.
+
+**Manual testing goal:** Confirm that every affected modal/panel still renders correctly and functions as before.
+
+### MT-D1.01 — Command Dial Picker visual check
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game, reach Command Phase | Command Dial Picker opens for first ship |
+| 2 | Verify title shows ship name + round | Title, subtitle, command icons, stack area all render correctly |
+| 3 | Select commands and press CONFIRM | Picker closes; dial assigned |
+
+### MT-D1.02 — Activation Modal visual check
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Reach Ship Phase, click a ship to activate | Activation modal opens at bottom-centre |
+| 2 | Verify 5 step rows with correct labels | Header labels, step rows, End Activation button, Close/Escape hint all present |
+| 3 | Execute maneuver + attack through the modal | All steps advance; modal closes on End Activation |
+
+### MT-D1.03 — Attack Sim Panel visual check
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start an attack (Execute Attack in activation modal) | Attack panel opens at bottom-centre |
+| 2 | Verify sections: title, dice count, roll button | All sections render; hidden sections stay hidden |
+| 3 | Roll dice, go through CF/accuracy/defense/redirect steps | Each section appears and functions when its step activates |
+
+### MT-D1.04 — Squadron Activation Modal visual check
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Reach Squadron Phase | Squadron modal opens with title + prompt |
+| 2 | Click a friendly squadron | Action buttons (Move/Attack/Skip) appear |
+| 3 | Dismiss (Escape) and reopen via button | Modal reopens correctly |
+
+### MT-D1.05 — Repair Panel + Displacement Modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with a Repair dial | Repair panel opens with title, points, actions, buttons |
+| 2 | If displacement triggers after overlap resolution | Displacement modal opens with header, squadron rows, commit button |
+
+### MT-D1.06 — Victory Screen + Opponent Choice Modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play to game end (or force via debug) | Victory screen shows with title, scores, Play Again / Quit buttons |
+| 2 | If a damage card requires opponent choice | Opponent choice modal shows with title, effect text, option buttons, Confirm |
+
+### MT-D1.07 — Targeting List + Quit Confirmation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press "T" during Ship Phase | Targeting list modal opens with scrollable ship/squadron sections |
+| 2 | Press Escape to open quit confirmation | Quit modal shows question label + Yes/No buttons |
+
+**Pass criteria:** All modals/panels render identically to pre-D1. No visual regressions, no missing widgets, no layout drift. All buttons function. 1 669 tests pass.

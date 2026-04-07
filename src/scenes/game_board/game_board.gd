@@ -141,16 +141,14 @@ var _end_activation_button: EndActivationButton = null
 ## is confirmed. Initiative player's ships come first.
 var _ships_needing_dials: Array[ShipInstance] = []
 
-## --- Dial drag state (Phase 4c: Ship Activation Trigger) ---
+## --- Dial drag controller (Phase 4c: Ship Activation Trigger) ---
 
-## Whether a command dial drag is currently in progress.
-var _drag_active: bool = false
-## The ShipInstance whose dial is being dragged.
-var _drag_ship_instance: ShipInstance = null
-## Floating preview Control shown during drag (on TurnManagement layer).
-var _drag_preview: Control = null
+## Controller owning dial drag-and-drop state and preview UI.
+## Created in [method _create_dial_drag_controller].
+var _dial_drag_controller: DialDragController = null
+
 ## The ShipToken currently being activated (dial shown behind base).
-## SHARED — Created: _on_dial_drag_started(). Read: maneuver tool, attack
+## SHARED — Created: DialDragController signals. Read: maneuver tool, attack
 ## step, repair step, squadron step, overlap resolution, displacement.
 ## Write: dial drag start/end, activation end. Extractable: move to
 ## ActivationContext (Phase F) or pass as argument to controllers.
@@ -203,7 +201,7 @@ var _damage_deck: DamageDeck = null
 ## --- Crew Panic BEFORE_REVEAL_DIAL modal state ---
 
 ## Ship instance for the pending Crew Panic choice (stored independently
-## of `_drag_ship_instance` because no drag is active during the modal).
+## of the drag controller's state because no drag is active during the modal).
 var _pending_crew_panic_ship: ShipInstance = null
 
 ## Pending ship key for the Crew Panic choice callback.
@@ -305,6 +303,7 @@ func _ready() -> void:
 	_create_action_toolbar()
 	_create_attack_executor()
 	_create_displacement_controller()
+	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
 	GameManager.start_new_game()
 	_spawn_learning_scenario_tokens()
@@ -369,11 +368,6 @@ func _draw() -> void:
 
 
 func _process(_delta: float) -> void:
-	# Move dial drag preview to follow mouse (Phase 4c).
-	if _drag_active and _drag_preview:
-		var mouse: Vector2 = get_viewport().get_mouse_position()
-		_drag_preview.position = mouse - _drag_preview.size * 0.5
-
 	# Phase 7b: Squadron follows mouse during MOVING state.
 	_move_squadron_during_activation()
 
@@ -385,7 +379,6 @@ func _process(_delta: float) -> void:
 ## Intercepts magnify gesture BEFORE the camera when a token is selected,
 ## converting it to rotation and consuming the event so the camera does not zoom.
 ## DBG-012 — pinch gesture rotates selected token.
-## Also intercepts mouse release during dial drag (Phase 4c).
 ## Also intercepts squadron placement clicks/Escape in MOVING state —
 ## must run in _input so the event is consumed before GUI Controls
 ## (the SquadronActivationModal panel) and before SquadronToken's
@@ -395,13 +388,6 @@ func _input(event: InputEvent) -> void:
 	# Phase 7b: Squadron movement — intercept before GUI / token can consume.
 	if _handle_squadron_move_input(event):
 		return
-	# Handle dial drag release (Phase 4c).
-	if _drag_active and event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
-			_handle_drag_release()
-			get_viewport().set_input_as_handled()
-			return
 
 	if not DebugMode.has_selection():
 		return
@@ -718,8 +704,8 @@ func _connect_signals() -> void:
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 	#endregion
 
-	#region Ship activation signals (dial drag, activation end)
-	EventBus.dial_drag_started.connect(_on_dial_drag_started)
+	#region Ship activation signals (dial drag controller, activation end)
+	# EventBus.dial_drag_started is connected inside DialDragController.initialize().
 	EventBus.activation_ended.connect(_on_board_activation_ended)
 	#endregion
 
@@ -1542,137 +1528,57 @@ func _show_end_activation_button() -> void:
 
 # ---------------------------------------------------------------------------
 # Dial drag-and-drop — Ship Activation (Phase 4c)
+# Drag state + preview UI managed by DialDragController.
 # ---------------------------------------------------------------------------
 
-## Called when the player clicks on an already-revealed command dial in the
-## card panel (second click of the two-step flow). The dial was revealed by
-## the first click in ShipCardPanel._handle_dial_stack_click().
-## If Crew Panic is active, the modal is shown BEFORE the drag starts.
-## Requirements: UI-024, UI-027.
-func _on_dial_drag_started(ship_ref: RefCounted) -> void:
-	if not ship_ref is ShipInstance:
-		_log.info("dial_drag_started ignored — ship_ref is not ShipInstance.")
-		return
-	if _drag_active:
-		_log.info("dial_drag_started ignored — drag already active.")
-		return
-	var ship: ShipInstance = ship_ref as ShipInstance
-	# BEFORE_REVEAL_DIAL hook — Crew Panic must fire before the drag.
-	# Rules Reference: "Crew Panic" — "Before you reveal a command dial …"
-	if _check_crew_panic_before_drag(ship):
-		return  # Modal shown; drag will start (or not) in the callback.
-	_start_dial_drag(ship)
-
-
-## Starts the command-dial drag for [param ship].
-## Separated from [method _on_dial_drag_started] so that the Crew Panic
-## callback can resume the drag after the modal is dismissed.
-func _start_dial_drag(ship: ShipInstance) -> void:
-	_drag_active = true
-	_drag_ship_instance = ship
-	# Dial is already revealed — read the command type for the preview icon.
+## Called by [signal DialDragController.ship_activated] when the player drops
+## the dial on the owning ship token.  Sets up activation state and shows the
+## activation-sequence button.
+## Requirements: UI-024, UI-025, SP-010, ACT-007, FLOW-002.
+func _on_dial_ship_activated(token: ShipToken, ship: ShipInstance) -> void:
+	GameManager.activate_ship(ship)
 	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	var cmd: int = int(revealed.get("command", 0)) if not revealed.is_empty() \
-			else -1
-	_create_drag_preview(cmd)
-	TooltipManager.show_text(
-			"Drag to ship for full command effect\n"
-			+ "Drag to ship card for command token")
-	_log.info("Dial drag started for '%s' (command: %d)." % [
-			ship.data_key, cmd])
+	if not revealed.is_empty():
+		var cmd: int = int(revealed.get("command", 0))
+		token.show_revealed_dial(cmd)
+	_activating_ship_token = token
+	_ship_activation_state = ShipActivationState.create(ship)
+	if _activation_sidebar and ship:
+		_activation_sidebar.highlight_active(ship)
+	_show_activation_sequence_button()
+	_log.info("Ship activated via dial drop: '%s'." % ship.data_key)
 
 
-## Map from CommandType to icon filename for the drag preview.
-const CMD_DRAG_ICON_FILES: Dictionary = {
-	Constants.CommandType.NAVIGATE: "cmd_navigate.png",
-	Constants.CommandType.SQUADRON: "cmd_squadron.png",
-	Constants.CommandType.CONCENTRATE_FIRE: "cmd_concentrate_fire.png",
-	Constants.CommandType.REPAIR: "cmd_repair.png",
-}
+## Called by [signal DialDragController.token_converted] when the player drops
+## the dial on the owning ship's card-panel entry.  Converts the dial to a
+## command token.
+## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
+## a command token of the same type."
+## Requirements: UI-028, SP-011, CM-004–006.
+func _on_dial_token_converted(ship: ShipInstance) -> void:
+	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	_ship_activation_state = ShipActivationState.create(ship)
+	_activating_ship_token = _find_ship_token_for_instance(ship)
+	if _activation_sidebar:
+		_activation_sidebar.highlight_active(ship)
 
-
-## Creates a semi-transparent floating dial preview on the TurnManagement layer.
-## Shows the dial background with the revealed command icon composited on top
-## when [param cmd] is valid, otherwise the hidden dial back.  The preview
-## matches the dial size used on the card panel (no enlargement).
-func _create_drag_preview(cmd: int = -1) -> void:
-	var dial_w: float = GameScale.card_panel_dial_width_px
-	var dial_h: float = GameScale.card_panel_dial_height_px
-
-	_drag_preview = Control.new()
-	_drag_preview.custom_minimum_size = Vector2(dial_w, dial_h)
-	_drag_preview.size = Vector2(dial_w, dial_h)
-	_drag_preview.modulate.a = 0.75
-	_drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_add_dial_bg_rect(_drag_preview, dial_w, dial_h)
-	_add_dial_icon_rect(_drag_preview, cmd, dial_w, dial_h)
-
-	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
-	if tm_layer:
-		tm_layer.add_child(_drag_preview)
-
-
-## Adds the dial background texture to the preview container.
-func _add_dial_bg_rect(container: Control, w: float, h: float) -> void:
-	var bg_tex: Texture2D = AssetLoader.load_texture(
-			"command_tokens/", "cmd_dial_hidden.png")
-	if bg_tex == null:
-		return
-	var bg_rect: TextureRect = TextureRect.new()
-	bg_rect.texture = bg_tex
-	bg_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bg_rect.custom_minimum_size = Vector2(w, h)
-	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	container.add_child(bg_rect)
-
-
-## Adds the command icon texture on top of the dial background.
-func _add_dial_icon_rect(container: Control, cmd: int,
-		dial_w: float, dial_h: float) -> void:
-	var icon_file: String = CMD_DRAG_ICON_FILES.get(cmd, "")
-	if icon_file.is_empty():
-		return
-	var icon_tex: Texture2D = AssetLoader.load_texture(
-			"command_tokens/", icon_file)
-	if icon_tex == null:
-		return
-	var icon_rect: TextureRect = TextureRect.new()
-	icon_rect.texture = icon_tex
-	icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var icon_size: float = dial_h * 0.7
-	var icon_offset: float = (dial_h - icon_size) * 0.5
-	icon_rect.custom_minimum_size = Vector2(icon_size, icon_size)
-	icon_rect.position = Vector2(
-			(dial_w - icon_size) * 0.5, icon_offset)
-	icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	container.add_child(icon_rect)
-
-
-## Handles mouse button release during dial drag.
-## First checks if the mouse is over the dragged ship's card panel entry
-## (convert to token). Falls back to checking ship tokens on the board
-## (keep for full effect). Otherwise cancels the drag.
-## Requirements: UI-024, UI-028.
-func _handle_drag_release() -> void:
-	var screen_pos: Vector2 = get_viewport().get_mouse_position()
-
-	# Check card panel drop first (convert to command token).
-	var card_hit: ShipInstance = _find_card_panel_hit(screen_pos)
-	if card_hit and card_hit == _drag_ship_instance:
-		_complete_token_conversion()
-		return
-
-	# Check board ship token drop (keep dial for full command effect).
-	var world_pos: Vector2 = get_global_mouse_position()
-	var target_token: ShipToken = _find_ship_token_at(world_pos)
-
-	if target_token and _is_valid_drop_target(target_token):
-		_complete_ship_activation(target_token)
+	var needs_discard: bool = result.get("needs_discard", false)
+	if needs_discard:
+		# Delay activation sequence button until the discard is resolved.
+		if not EventBus.token_discarded.is_connected(
+				_on_token_discard_resolved):
+			EventBus.token_discarded.connect(
+					_on_token_discard_resolved, CONNECT_ONE_SHOT)
 	else:
-		_cancel_drag()
+		_show_activation_sequence_button()
+
+	var cmd_name: String = ""
+	if not result.is_empty():
+		cmd_name = Constants.CommandType.keys()[result["command"]]
+	_log.info("Ship activated via card drop (token convert): '%s' (%s, added=%s, discard=%s)." % [
+			ship.data_key if ship else "?", cmd_name,
+			str(result.get("token_added", false)),
+			str(needs_discard)])
 
 
 ## Finds the ship token whose base contains [param world_pos], or null.
@@ -1685,19 +1591,6 @@ func _find_ship_token_at(world_pos: Vector2) -> ShipToken:
 	return null
 
 
-## Returns true if [param token] is a valid drop target for the current drag.
-## The token must be bound to the same ShipInstance being dragged, and the
-## ship must not already be activated.
-func _is_valid_drop_target(token: ShipToken) -> bool:
-	if _drag_ship_instance == null:
-		return false
-	if token.get_ship_instance() != _drag_ship_instance:
-		return false
-	if _drag_ship_instance.activated_this_round:
-		return false
-	return true
-
-
 ## Finds the ShipToken on the board bound to the given ShipInstance.
 ## Returns null if not found.
 func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
@@ -1707,34 +1600,6 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 			if st.get_ship_instance() == ship:
 				return st
 	return null
-
-
-## Completes a ship activation: reveals the dial, shows it behind the base,
-## and shows the "Show Activation Sequence" button.
-## Crew Panic is checked BEFORE the drag starts (see [method _on_dial_drag_started]).
-## Requirements: UI-024, UI-025, SP-010, ACT-007, FLOW-002.
-func _complete_ship_activation(token: ShipToken) -> void:
-	var ship_key: String = _drag_ship_instance.data_key if _drag_ship_instance \
-			else "?"
-	SfxManager.play_sfx("droid_sound_long")
-	_finish_ship_activation(token, ship_key)
-
-
-## Finishes the dial-based activation after any pre-reveal hooks resolve.
-func _finish_ship_activation(token: ShipToken, ship_key: String) -> void:
-	GameManager.activate_ship(_drag_ship_instance)
-	var revealed: Dictionary = _drag_ship_instance.command_dial_stack \
-			.get_revealed_dial()
-	if not revealed.is_empty():
-		var cmd: int = int(revealed.get("command", 0))
-		token.show_revealed_dial(cmd)
-	_activating_ship_token = token
-	_ship_activation_state = ShipActivationState.create(_drag_ship_instance)
-	if _activation_sidebar and _drag_ship_instance:
-		_activation_sidebar.highlight_active(_drag_ship_instance)
-	_clean_up_drag()
-	_show_activation_sequence_button()
-	_log.info("Ship activated via dial drop: '%s'." % ship_key)
 
 
 ## Finishes activation when Crew Panic discarded the dial.
@@ -1762,7 +1627,7 @@ func _finish_crew_panic_dial_discarded(
 
 
 ## Checks if BEFORE_REVEAL_DIAL effects need to fire (Crew Panic).
-## Called from [method _on_dial_drag_started] BEFORE the drag begins.
+## Called from [DialDragController] via callable BEFORE the drag begins.
 ## Returns true if a modal was shown (drag will start — or not — in the
 ## callback).
 ## Rules Reference: "Crew Panic" card text — "Before you reveal a command
@@ -1851,7 +1716,7 @@ func _on_crew_panic_choice(selection: Dictionary) -> void:
 		_finish_crew_panic_dial_discarded(ship, ship_key)
 	else:
 		# Player chose to suffer damage — resume the normal drag flow.
-		_start_dial_drag(ship)
+		_dial_drag_controller.start_dial_drag(ship)
 
 
 ## Lazily creates the Crew Panic choice modal.
@@ -1865,51 +1730,6 @@ func _ensure_crew_panic_modal() -> void:
 	layer.layer = 95
 	add_child(layer)
 	layer.add_child(_crew_panic_modal)
-
-
-## Completes a "convert to token" activation: reveals and immediately spends
-## the dial, attempts to add a matching command token, and shows the End
-## Activation button. No revealed dial sprite is shown on the board.
-## If overflow triggers a discard prompt, the End Activation button is delayed
-## until the player resolves the discard.
-## Rules Reference: "Command Dials", p.3 — "spend the command dial to gain
-## a command token of the same type."
-## Requirements: UI-028, SP-011, CM-004–006.
-func _complete_token_conversion() -> void:
-	var ship: ShipInstance = _drag_ship_instance
-	SfxManager.play_sfx("droid_sound_long")
-	_finish_token_conversion(ship)
-
-
-## Finishes the token-conversion activation after any pre-reveal hooks.
-func _finish_token_conversion(ship: ShipInstance) -> void:
-	# Clean up drag state FIRST so that hide_tooltip() fires before
-	# activate_ship_as_token() emits duplicate/overflow signals that may
-	# call show_text() again (preventing the toast from being killed).
-	_clean_up_drag()
-	var result: Dictionary = GameManager.activate_ship_as_token(ship)
-	_ship_activation_state = ShipActivationState.create(ship)
-	_activating_ship_token = _find_ship_token_for_instance(ship)
-	if _activation_sidebar:
-		_activation_sidebar.highlight_active(ship)
-
-	var needs_discard: bool = result.get("needs_discard", false)
-	if needs_discard:
-		# Delay activation sequence button until the discard is resolved.
-		if not EventBus.token_discarded.is_connected(
-				_on_token_discard_resolved):
-			EventBus.token_discarded.connect(
-					_on_token_discard_resolved, CONNECT_ONE_SHOT)
-	else:
-		_show_activation_sequence_button()
-
-	var cmd_name: String = ""
-	if not result.is_empty():
-		cmd_name = Constants.CommandType.keys()[result["command"]]
-	_log.info("Ship activated via card drop (token convert): '%s' (%s, added=%s, discard=%s)." % [
-			ship.data_key if ship else "?", cmd_name,
-			str(result.get("token_added", false)),
-			str(needs_discard)])
 
 
 ## Called (one-shot) when the player resolves a token overflow discard.
@@ -1933,28 +1753,6 @@ func _find_card_panel_hit(screen_pos: Vector2) -> ShipInstance:
 		if hit:
 			return hit
 	return null
-
-
-## Cancels the current dial drag (invalid drop target or no target).
-## Unreveals the dial so it returns to the hidden state.
-func _cancel_drag() -> void:
-	_log.info("Dial drag cancelled.")
-	# Unreveal the dial before cleaning up (which clears _drag_ship_instance).
-	if _drag_ship_instance:
-		_drag_ship_instance.command_dial_stack.unreveal_top()
-		EventBus.command_dials_changed.emit(_drag_ship_instance)
-	_clean_up_drag()
-	EventBus.dial_drag_cancelled.emit()
-
-
-## Cleans up drag state and removes the floating preview and help text.
-func _clean_up_drag() -> void:
-	_drag_active = false
-	_drag_ship_instance = null
-	if _drag_preview:
-		_drag_preview.queue_free()
-		_drag_preview = null
-	TooltipManager.hide_tooltip()
 
 
 ## Called when End Activation is pressed — cleans up the dial sprite on the
@@ -2982,6 +2780,21 @@ func _create_displacement_controller() -> void:
 			_show_activation_button, _activation_modal)
 	_displacement_controller.displacement_completed.connect(
 			_show_end_activation_after_maneuver)
+
+
+## Creates the [DialDragController] child node and wires its signals.
+func _create_dial_drag_controller() -> void:
+	var tm_layer: CanvasLayer = get_node_or_null("TurnManagementLayer")
+	_dial_drag_controller = DialDragController.new()
+	_dial_drag_controller.name = "DialDragController"
+	add_child(_dial_drag_controller)
+	_dial_drag_controller.initialize(
+			_find_ship_token_at, _find_card_panel_hit,
+			_check_crew_panic_before_drag, tm_layer)
+	_dial_drag_controller.ship_activated.connect(
+			_on_dial_ship_activated)
+	_dial_drag_controller.token_converted.connect(
+			_on_dial_token_converted)
 
 
 ## Delegates the Attack Simulator toolbar / keyboard toggle to the executor.

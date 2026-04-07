@@ -4256,3 +4256,57 @@ purely an interface change that eliminates a circular type-dodge.
 | 1 | Deal Capacitor Failure (Shift+D) to a ship with 0 shields on the defending zone | Card appears faceup |
 | 2 | Attack that ship on the zero-shield zone | Redirect token is blocked (greyed out / cannot spend) |
 | 3 | Attack the same ship on a zone with ≥ 1 shields | Redirect token is available normally |
+
+---
+
+## Refactoring Phase C1 — Extract DisplacementController
+
+**What this phase changes:** All 12 displacement functions and 6 state variables
+moved from `game_board.gd` into a new `DisplacementController` (child Node2D).
+No new behaviour — purely structural; the controller communicates back via signal.
+
+**Commit:** `a9e18c7` — Tests: 1 669 (88 scripts, 2 932 asserts).
+
+### MT-C1.01 — Squadron displacement after ship maneuver
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship adjacent to enemy squadrons | Activation flow starts |
+| 2 | Execute a maneuver that overlaps the squadrons | Camera rotates to opponent view; displacement modal appears listing displaced squadron(s) |
+| 3 | Mouse-follow each squadron to the ship edge; left-click to lock | Squadron snaps to edge; tints red if placement invalid, white if valid |
+| 4 | Click "Commit" when all squadrons placed | Modal closes; camera rotates back to active player |
+| 5 | Confirm activation resumes | End Activation button appears; flow continues normally |
+
+---
+
+## Refactoring Phase C2 — Extract DialDragController
+
+**What this phase changes:** 3 drag-state variables and 8+ drag functions
+(start, preview, release, cancel, cleanup) moved from `game_board.gd` into a
+new `DialDragController` (child Node2D).  GameBoard receives `ship_activated`
+and `token_converted` signals to set up activation state.
+
+**Tests:** 1 669 (88 scripts, 2 932 asserts).
+
+### MT-C2.01 — Dial drag to ship token (full activation)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | In Ship Phase, click a ship's hidden dial in the card panel | Dial reveals (first click) |
+| 2 | Click the revealed dial again | Floating semi-transparent dial preview appears and follows mouse |
+| 3 | Drag the preview over the owning ship token on the board; release | Activation sound plays; dial sprite shows behind ship base; "Show Activation Sequence" button appears |
+| 4 | Complete the activation sequence | Flow proceeds normally through all steps |
+
+### MT-C2.02 — Dial drag to card panel (token conversion)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click a ship's hidden dial, then click the revealed dial | Floating preview appears |
+| 2 | Drag the preview back over the same ship's card panel entry; release | Activation sound plays; dial is spent; command token added to ship; "Show Activation Sequence" button appears |
+
+### MT-C2.03 — Dial drag miss (cancel)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a dial drag | Floating preview appears |
+| 2 | Release the mouse over empty space (not on ship or card panel) | Preview disappears; dial returns to hidden state; no activation occurs |

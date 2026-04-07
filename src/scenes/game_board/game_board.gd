@@ -279,26 +279,9 @@ var _squadron_move_max_dist: float = 0.0
 ## Reset in [method _begin_squadron_activation_flow].
 var _squadron_activation_count: int = 0
 
-## --- Phase 5b-2: Overlap / displacement state ---
-
-## Queue of displaced squadron tokens awaiting placement by the opponent.
-## Populated in [method _start_squadron_displacement].
-var _displacement_queue: Array[SquadronToken] = []
-
-## The ship base that displaced the squadrons (for touch-validation).
-var _displacement_ship_base: ShipBase = null
-
-## Index into [member _displacement_queue] for the next squadron to place.
-var _displacement_index: int = 0
-
-## True while a displaced squadron follows the mouse (snap-to-edge mode).
-var _displacement_moving: bool = false
-
-## Displacement modal panel (squadron checklist + commit).
-var _displacement_modal: DisplacementModal = null
-
-## CanvasLayer for the displacement modal.
-var _displacement_modal_layer: CanvasLayer = null
+## Displacement controller — owns all displacement state and UI.
+## Created in [method _create_displacement_controller].
+var _displacement_controller: DisplacementController = null
 
 ## Human-readable names for each game phase.
 const PHASE_NAMES: Dictionary = {
@@ -321,6 +304,7 @@ func _ready() -> void:
 	_create_phase_hud()
 	_create_action_toolbar()
 	_create_attack_executor()
+	_create_displacement_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
 	GameManager.start_new_game()
 	_spawn_learning_scenario_tokens()
@@ -393,9 +377,6 @@ func _process(_delta: float) -> void:
 	# Phase 7b: Squadron follows mouse during MOVING state.
 	_move_squadron_during_activation()
 
-	# Phase 5b-2: Displaced squadron follows mouse, snapped to ship edge.
-	_move_displaced_squadron_to_mouse()
-
 	if not DebugMode.has_selection():
 		return
 	_move_selected_token_to_mouse()
@@ -432,12 +413,13 @@ func _input(event: InputEvent) -> void:
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
 	# Squadron displacement: left-click locks the currently moving squadron.
-	if _displacement_moving and event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			_lock_displacement_position()
-			get_viewport().set_input_as_handled()
-			return
+	if _displacement_controller and _displacement_controller.is_displacement_active():
+		if event is InputEventMouseButton:
+			var mb: InputEventMouseButton = event as InputEventMouseButton
+			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+				_displacement_controller.handle_lock_click()
+				get_viewport().set_input_as_handled()
+				return
 	# Attack simulator: Escape dismisses.
 	if _attack_executor and _attack_executor.handle_escape(event):
 		return
@@ -2344,7 +2326,7 @@ func _on_execute_maneuver() -> void:
 	EventBus.ship_moved.emit(_activating_ship_token)
 	_dismiss_maneuver_tool()
 	if displaced.size() > 0:
-		_start_squadron_displacement(displaced, moved_ship_base)
+		_displacement_controller.start(displaced, moved_ship_base)
 	else:
 		_show_end_activation_after_maneuver()
 	_log.info("Ship snapped to final position.")
@@ -2578,268 +2560,6 @@ func _find_displaced_squadrons(ship_base: ShipBase) -> Array[SquadronToken]:
 		if sq_base.overlaps_ship(ship_base):
 			displaced.append(sq_token)
 	return displaced
-
-
-## Starts the squadron displacement flow.  Hides the "Show Activation
-## Sequence" button, flips the camera to the opposing player, then
-## presents a modal for placing each displaced squadron.
-## Rules Reference: RRG "Overlapping", p.8 — OV-002, OV-003.
-func _start_squadron_displacement(
-		displaced: Array[SquadronToken],
-		ship_base: ShipBase) -> void:
-	_displacement_queue = displaced.duplicate()
-	_displacement_ship_base = ship_base
-	_displacement_index = 0
-	_displacement_moving = false
-	# Disable input on displaced squadron tokens so their _unhandled_input
-	# doesn't consume clicks meant for the displacement lock action.
-	for sq: SquadronToken in displaced:
-		sq.set_process_unhandled_input(false)
-	# Hide the activation sequence button during displacement.
-	if _show_activation_button:
-		_show_activation_button.hide_button()
-	if _activation_modal and _activation_modal.is_open():
-		_activation_modal.close()
-	_log.info("Starting squadron displacement: %d squadron(s)."
-			% displaced.size())
-	# Flip camera to the opposing player.
-	var opponent: int = 1 - GameManager.get_active_player()
-	_camera.rotate_to_player(opponent)
-	# Wait for the rotation to finish before prompting.
-	if not EventBus.perspective_change_complete.is_connected(
-			_on_displacement_camera_ready):
-		EventBus.perspective_change_complete.connect(
-				_on_displacement_camera_ready, CONNECT_ONE_SHOT)
-
-
-## Called once the camera finishes rotating to the opponent's view.
-func _on_displacement_camera_ready() -> void:
-	_create_displacement_modal()
-	_select_displacement_squadron(_displacement_modal.get_first_unchecked())
-
-
-## Selects a squadron for placement: auto-places it at the nearest ship
-## edge and enters mouse-follow mode.  Updates the modal to highlight
-## the active row.
-func _select_displacement_squadron(index: int) -> void:
-	if index < 0 or index >= _displacement_queue.size():
-		return
-	_displacement_index = index
-	var sq_token: SquadronToken = _displacement_queue[index]
-	var sq_radius: float = sq_token.get_radius_px()
-	# Auto-place at the nearest ship edge from the old position.
-	var snap_pos: Vector2 = OverlapResolver.snap_to_ship_edge(
-			sq_token.global_position, sq_radius, _displacement_ship_base)
-	sq_token.global_position = snap_pos
-	sq_token.visible = true
-	_displacement_moving = true
-	if _displacement_modal:
-		_displacement_modal.set_active(index)
-	var sq_name: String = _get_squadron_display_name(sq_token)
-	_log.info("Displacement: auto-placed %s at %s — mouse-follow active."
-			% [sq_name, str(snap_pos)])
-
-
-## Each frame, snaps the current displaced squadron to the ship edge
-## at the closest point to the mouse cursor.  Tints the token red when
-## the proposed position overlaps another squadron or ship.
-func _move_displaced_squadron_to_mouse() -> void:
-	if not _displacement_moving:
-		return
-	if _displacement_index >= _displacement_queue.size():
-		return
-	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
-	var mouse_pos: Vector2 = get_global_mouse_position()
-	var sq_radius: float = sq_token.get_radius_px()
-	var snap_pos: Vector2 = OverlapResolver.snap_to_ship_edge(
-			mouse_pos, sq_radius, _displacement_ship_base)
-	sq_token.global_position = snap_pos
-	# Visual overlap feedback: tint red if placement is invalid.
-	var other_squads: Array = _build_displacement_other_squads(sq_token)
-	var other_ships: Array = _build_all_ship_bases()
-	var resolver: OverlapResolver = OverlapResolver.new()
-	var err_msg: String = resolver.validate_squadron_placement(
-			snap_pos, sq_radius, _displacement_ship_base,
-			other_ships, other_squads)
-	if err_msg != "":
-		sq_token.modulate = Color(1.0, 0.4, 0.4)
-	else:
-		sq_token.modulate = Color.WHITE
-
-
-## Called on left-click during displacement: locks the squadron at its
-## current snapped position and checks it in the modal.  Auto-selects
-## the next unchecked squadron if one exists.
-## Rejects the click if the position overlaps another squadron or ship.
-## Rules Reference: RRG "Overlapping", p.8 — OV-002; SM-003.
-func _lock_displacement_position() -> void:
-	var sq_token: SquadronToken = _displacement_queue[_displacement_index]
-	var sq_radius: float = sq_token.get_radius_px()
-	var sq_pos: Vector2 = sq_token.global_position
-	# Validate placement against all other squadrons and ships.
-	var other_squads: Array = _build_displacement_other_squads(sq_token)
-	var other_ships: Array = _build_all_ship_bases()
-	var resolver: OverlapResolver = OverlapResolver.new()
-	var err_msg: String = resolver.validate_squadron_placement(
-			sq_pos, sq_radius, _displacement_ship_base,
-			other_ships, other_squads)
-	if err_msg != "":
-		_log.warn("Displacement placement rejected: %s" % err_msg)
-		return
-	_displacement_moving = false
-	sq_token.modulate = Color.WHITE
-	var sq_name: String = _get_squadron_display_name(sq_token)
-	_log.info("Displacement: %s locked at %s."
-			% [sq_name, str(sq_token.global_position)])
-	# Check in modal.
-	if _displacement_modal:
-		_displacement_modal.check_squadron(_displacement_index)
-		# Auto-select the next unchecked squadron.
-		var next: int = _displacement_modal.get_first_unchecked()
-		if next >= 0:
-			_select_displacement_squadron(next)
-
-
-## Called when the modal emits squadron_selected (row click on unchecked).
-func _on_displacement_row_selected(index: int) -> void:
-	_select_displacement_squadron(index)
-
-
-## Called when the modal emits squadron_unchecked (row click on checked).
-## Un-checks the squadron and re-enters mouse-follow for repositioning.
-func _on_displacement_row_unchecked(index: int) -> void:
-	_displacement_index = index
-	_displacement_moving = true
-	if _displacement_modal:
-		_displacement_modal.uncheck_squadron(index)
-	var sq_name: String = _get_squadron_display_name(
-			_displacement_queue[index])
-	_log.info("Displacement: %s unchecked for repositioning." % sq_name)
-
-
-## Called when the modal emits placement_committed (all checked, commit pressed).
-func _on_displacement_committed() -> void:
-	_log.info("Displacement commit pressed — all squadrons placed.")
-	_finish_displacement()
-
-
-## Finishes the displacement flow: removes modal, flips camera back,
-## and ends the activation (triggering normal turn transition + banner).
-func _finish_displacement() -> void:
-	_displacement_moving = false
-	# Re-enable input on displaced squadron tokens and reset tint.
-	for sq: SquadronToken in _displacement_queue:
-		sq.set_process_unhandled_input(true)
-		sq.modulate = Color.WHITE
-	_displacement_queue.clear()
-	_displacement_ship_base = null
-	_remove_displacement_modal()
-	TooltipManager.hide_tooltip()
-	_log.info("All displaced squadrons placed — flipping camera back.")
-	# Flip camera back to the active player.
-	var active: int = GameManager.get_active_player()
-	_camera.rotate_to_player(active)
-	if not EventBus.perspective_change_complete.is_connected(
-			_on_displacement_camera_returned):
-		EventBus.perspective_change_complete.connect(
-				_on_displacement_camera_returned, CONNECT_ONE_SHOT)
-
-
-## Called when the camera returns to the active player after displacement.
-## Fires activation_ended which triggers the normal turn transition
-## (GameManager advances turn → active_player_changed → YourTurnBanner).
-func _on_displacement_camera_returned() -> void:
-	_show_end_activation_after_maneuver()
-
-
-## Builds an Array of [SquadronBase] for every squadron that is NOT
-## the currently-moving displaced squadron.  This includes:
-## • All non-displaced squadrons on the board.
-## • Displaced squadrons that have already been placed (checked).
-## Used by displacement validation to prevent squadron-squadron overlap.
-## Rules Reference: SM-003 — squadrons cannot overlap each other.
-func _build_displacement_other_squads(
-		exclude_token: SquadronToken) -> Array:
-	var bases: Array = []
-	# All non-displaced board squadrons.
-	for sq_token: SquadronToken in get_squadron_tokens():
-		if sq_token == exclude_token:
-			continue
-		if _displacement_queue.has(sq_token):
-			continue
-		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and sq_inst.is_destroyed():
-			continue
-		bases.append(SquadronBase.new(
-				sq_token.global_position, sq_token.get_radius_px()))
-	# Already-placed displaced squadrons (checked in the modal).
-	if _displacement_modal:
-		var checked: Array[bool] = _displacement_modal.get_checked_states()
-		for i: int in range(_displacement_queue.size()):
-			if _displacement_queue[i] == exclude_token:
-				continue
-			if i < checked.size() and checked[i]:
-				var sq: SquadronToken = _displacement_queue[i]
-				bases.append(SquadronBase.new(
-						sq.global_position, sq.get_radius_px()))
-	return bases
-
-
-## Builds an Array of [ShipBase] for every non-destroyed ship on the board.
-## Used by displacement validation to prevent squadron-ship overlap.
-func _build_all_ship_bases() -> Array:
-	var bases: Array = []
-	for token: ShipToken in get_ship_tokens():
-		var inst: ShipInstance = token.get_ship_instance()
-		if inst and inst.is_destroyed():
-			continue
-		var xform: Transform2D = Transform2D(
-				token.global_rotation, token.global_position)
-		bases.append(ShipBase.new(token.get_ship_size(), xform))
-	return bases
-
-
-## Creates the displacement modal on a CanvasLayer and wires its signals.
-func _create_displacement_modal() -> void:
-	if _displacement_modal_layer != null:
-		return
-	_displacement_modal_layer = CanvasLayer.new()
-	_displacement_modal_layer.name = "DisplacementModalLayer"
-	_displacement_modal_layer.layer = 96
-	add_child(_displacement_modal_layer)
-
-	_displacement_modal = DisplacementModal.new()
-	_displacement_modal.name = "DisplacementModal"
-	# Build the names list from the queue.
-	var names: Array[String] = []
-	for sq_token: SquadronToken in _displacement_queue:
-		names.append(_get_squadron_display_name(sq_token))
-	_displacement_modal.squadron_selected.connect(
-			_on_displacement_row_selected)
-	_displacement_modal.squadron_unchecked.connect(
-			_on_displacement_row_unchecked)
-	_displacement_modal.placement_committed.connect(
-			_on_displacement_committed)
-	_displacement_modal_layer.add_child(_displacement_modal)
-	_displacement_modal.open(names)
-
-
-## Removes the displacement modal and its CanvasLayer.
-func _remove_displacement_modal() -> void:
-	if _displacement_modal:
-		_displacement_modal.close_and_clear()
-	if _displacement_modal_layer:
-		_displacement_modal_layer.queue_free()
-		_displacement_modal_layer = null
-		_displacement_modal = null
-
-
-## Returns a display-friendly name for a squadron token.
-func _get_squadron_display_name(sq_token: SquadronToken) -> String:
-	var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-	if sq_inst and sq_inst.squadron_data:
-		return sq_inst.squadron_data.squadron_name
-	return "Squadron"
 
 
 # ---------------------------------------------------------------------------
@@ -3250,6 +2970,18 @@ func _create_attack_executor() -> void:
 			_on_attack_exec_cancelled)
 	_attack_executor.dismiss_other_tools_requested.connect(
 			_on_dismiss_other_tools_requested)
+
+
+## Creates the [DisplacementController] child node and wires its signals.
+func _create_displacement_controller() -> void:
+	_displacement_controller = DisplacementController.new()
+	_displacement_controller.name = "DisplacementController"
+	add_child(_displacement_controller)
+	_displacement_controller.initialize(
+			_camera, get_squadron_tokens, get_ship_tokens,
+			_show_activation_button, _activation_modal)
+	_displacement_controller.displacement_completed.connect(
+			_show_end_activation_after_maneuver)
 
 
 ## Delegates the Attack Simulator toolbar / keyboard toggle to the executor.

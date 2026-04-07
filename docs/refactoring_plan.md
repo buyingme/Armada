@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase B complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1 ✅, B2 ✅, B3 ✅, B4 ✅.
+> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -326,7 +326,7 @@ dedicated controller nodes. Each controller:
 - Communicates back via signals.
 - Owns its cluster's member variables (moved, not copied).
 
-#### C1: `DisplacementController` (10 isolated funcs, 6 vars)
+#### C1: `DisplacementController` (10 isolated funcs, 6 vars) ✅
 
 | Moved Vars | Moved Functions |
 |------------|-----------------|

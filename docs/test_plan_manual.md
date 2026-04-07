@@ -4496,3 +4496,5 @@ injected as Callables at `initialize()`.
 |------|--------|----------|
 | 1 | During Squadron Phase, dismiss the modal (Escape / ✕) | "Show Squadron Modal" button appears at bottom |
 | 2 | Click the "Show Squadron Modal" button | Modal reopens |
+
+**Commit:** `35cb7e3` — Tests: 1 669 (88 scripts, 2 932 asserts).

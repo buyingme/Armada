@@ -381,13 +381,34 @@ game_board connects these to set `_activating_ship_token`.
 > `game_board.gd`: 3 315 → 3 274 lines (−41).
 > Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
-#### C6: `RangeToolController` (4 isolated funcs, 2 vars)
+#### C6: `RangeToolController` (4 isolated funcs, 2 vars) ✅
 
 | Moved Vars | Moved Functions |
 |------------|-----------------|
 | `_range_overlay_selecting`, `_range_overlay_scene` | `_show_range_overlay`, `_dismiss_range_overlay`, `_cancel_range_overlay_selection`, `_handle_range_overlay_escape` |
 
-#### C Expected Outcome
+> **106 lines extracted.** `_on_range_overlay_requested` stays in game_board
+> for toggle logic (delegates to controller). Separate `_squad_cmd_range_overlay`
+> (different lifecycle) untouched.
+> `game_board.gd`: 3 275 → 3 227 lines (−48).
+> Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
+
+#### C Actual Outcome
+
+| Metric | Before C | Planned | Actual |
+|--------|----------|---------|--------|
+| `game_board.gd` lines | 3 390 | ~1 800 | **3 227** |
+| Extracted controllers | 1 (AE) | 7 | **7** (6 new + AE) |
+| Largest controller | 3 008 (AE) | ~300 | **385** (Displacement) |
+| Total lines extracted | — | ~1 590 | **1 291** |
+
+**Gap analysis:** `game_board.gd` is 3 227 vs the planned ~1 800.
+The ~1 400-line gap is expected — the plan explicitly left ACTIVATION
+(11 isolated + 20 cross-cluster), SQUADRON_PHASE (12 isolated + 10
+cross-cluster), and UI_PANELS (13 isolated + 5 cross-cluster) in
+game_board. These are addressed in Phase F.
+
+#### C Expected Outcome (original plan)
 
 | Metric | Before | After |
 |--------|--------|-------|

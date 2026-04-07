@@ -4457,3 +4457,5 @@ its own lifecycle.
 | 1 | Show maneuver tool on a ship (M + click) | Tool visible |
 | 2 | Press R | Range overlay appears on the ghost preview |
 | 3 | Press R again | Ghost overlay dismisses |
+
+**Commit:** `8526886` — Tests: 1 669 (88 scripts, 2 932 asserts).

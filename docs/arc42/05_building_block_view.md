@@ -86,8 +86,15 @@
 
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
-| `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, delegates attack to AttackExecutor |
+| `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, activation backbone, delegates to child controllers |
 | `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack simulator (free-form) and attack execution (activation Step 4): targeting, LOS, dice, defense tokens, damage |
+| `DisplacementController` | Node | `src/scenes/game_board/displacement_controller.gd` | Squadron displacement flow after ship maneuver overlap |
+| `DialDragController` | Node | `src/scenes/game_board/dial_drag_controller.gd` | Command dial drag-and-drop to activate ships |
+| `CommandPhaseController` | Node | `src/scenes/game_board/command_phase_controller.gd` | Command Phase dial assignment flow |
+| `DebugController` | Node | `src/scenes/game_board/debug_controller.gd` | Debug overlay, HUD, zone tracking, scenario saving |
+| `ManeuverToolController` | Node | `src/scenes/game_board/maneuver_tool_controller.gd` | Maneuver tool selection, creation, and dismissal |
+| `RangeToolController` | Node | `src/scenes/game_board/range_tool_controller.gd` | Range overlay selection, creation, and dismissal |
+| `SquadronPhaseController` | Node | `src/scenes/game_board/squadron_phase_controller.gd` | Squadron Phase activation flow: movement, attack delegation, engagement |
 | `ShipToken` | Node2D | `src/scenes/ship_token.gd` | Ship base rendering, command dial icon, labels |
 | `ShipCardPanel` | Control | `src/ui/ship_card_panel.gd` | Ship card display, defense tokens, command tokens |
 | `CommandDialPicker` | Control | `src/ui/command_dial_picker.gd` | Centred modal for choosing command dials |

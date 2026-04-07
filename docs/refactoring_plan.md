@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase C complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅.
+> **Status:** Phase C complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -393,20 +393,31 @@ game_board connects these to set `_activating_ship_token`.
 > `game_board.gd`: 3 275 → 3 227 lines (−48).
 > Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
+#### C7: `SquadronPhaseController` (21 funcs, 7 vars)
+
+| Moved Vars | Moved Functions |
+|------------|-----------------|
+| `_squadron_modal`, `_show_squadron_modal_button`, `_squadron_move_overlay`, `_squad_cmd_range_overlay`, `_squadron_move_original_pos`, `_squadron_move_max_dist`, `_squadron_activation_count` | `_begin_squadron_activation_flow`, `_on_squadron_selected_in_modal`, `_on_squadron_move_requested`, `_on_squadron_move_commit`, `_on_squadron_attack_requested`, `_on_squadron_activation_done`, `_on_squadron_modal_closed`, `_on_show_squadron_modal_requested`, `_handle_squadron_move_input`, `_commit_squadron_placement`, `_move_squadron_during_activation`, `_remove_squadron_overlay`, `_find_squadron_token_for_instance`, `_build_all_squadron_positions`, `_squadron_has_valid_targets`, `_any_enemy_squadron_in_range`, `_any_enemy_ship_in_range`, `_hide_squadron_phase_ui`, `_show_squad_cmd_range_overlay`, `_dismiss_squad_cmd_range_overlay`, `_build_ship_bases` |
+
+**Cross-cluster refs (2/21):**
+- `_on_squadron_modal_closed` reads `_show_activation_button`, `_ship_activation_state` → inject Callable for "show activation button" behaviour
+- `_on_squadron_attack_requested` reads `_attack_executor` → inject Callable for `start_squadron_attack()`
+
+**Shared helpers injected at init:**
+- `_token_container: Node2D`, `get_squadron_tokens: Callable`, `get_ship_tokens: Callable`, `move_squadron_token: Callable`
+
 #### C Actual Outcome
 
-| Metric | Before C | Planned | Actual |
-|--------|----------|---------|--------|
-| `game_board.gd` lines | 3 390 | ~1 800 | **3 227** |
-| Extracted controllers | 1 (AE) | 7 | **7** (6 new + AE) |
-| Largest controller | 3 008 (AE) | ~300 | **385** (Displacement) |
-| Total lines extracted | — | ~1 590 | **1 291** |
+| Metric | Before C | Planned (C1–C6) | After C6 | After C7 |
+|--------|----------|-----------------|----------|----------|
+| `game_board.gd` lines | 3 390 | ~1 800 | 3 227 | **2 791** |
+| Extracted controllers | 1 (AE) | 7 | 7 | **8** |
+| Largest controller | 3 008 (AE) | ~300 | 385 | **540** (Squadron) |
+| Total lines extracted | — | ~1 590 | 1 291 | **~1 730** |
 
-**Gap analysis:** `game_board.gd` is 3 227 vs the planned ~1 800.
-The ~1 400-line gap is expected — the plan explicitly left ACTIVATION
-(11 isolated + 20 cross-cluster), SQUADRON_PHASE (12 isolated + 10
-cross-cluster), and UI_PANELS (13 isolated + 5 cross-cluster) in
-game_board. These are addressed in Phase F.
+**Not extracted (stays in game_board — deferred to Phase F):**
+- ACTIVATION (cross-cutting backbone — needs `ActivationContext`)
+- UI_PANELS (widget creation entangled with ACTIVATION/SQUADRON ownership)
 
 #### C Expected Outcome (original plan)
 

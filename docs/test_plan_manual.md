@@ -4459,3 +4459,40 @@ its own lifecycle.
 | 3 | Press R again | Ghost overlay dismisses |
 
 **Commit:** `8526886` — Tests: 1 669 (88 scripts, 2 932 asserts).
+---
+
+## Refactoring Phase C7 — Extract SquadronPhaseController
+
+**What this phase changes:** 7 squadron-phase variables and 21 functions
+moved from `game_board.gd` into a new `SquadronPhaseController` (child Node).
+The controller owns the `SquadronActivationModal`, `ShowSquadronModalButton`,
+`SquadronMoveOverlay`, squadron command range overlay, and all movement/attack
+delegation logic. Cross-cluster refs (attack executor, activation button)
+injected as Callables at `initialize()`.
+
+### MT-C7.01 — Squadron Phase activation flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Reach Squadron Phase (after all ships activated) | Handoff overlay → Squadron Activation Modal appears |
+| 2 | Click a friendly squadron in the modal | Movement + armament overlay appears on the squadron |
+| 3 | Click "Move" then drag the squadron | Token follows mouse within speed ring |
+| 4 | Left-click to commit placement | Token locks; updated target availability shown |
+| 5 | Click "Attack" (if targets available) | Attack executor opens for squadron attack |
+| 6 | Complete or skip attack | Activation done; modal opens for next activation |
+
+### MT-C7.02 — Squadron command mode (during Ship Phase)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Ship Phase, activate a ship with Squadron dial | Activation modal reaches Squadron step |
+| 2 | Squadron command modal opens in command mode | Range overlay on the activating ship; squadron list shown |
+| 3 | Activate squadrons via the modal | Each activation completes; resolver tracks remaining |
+| 4 | Finish or exhaust activations | Modal closes; activation step advances |
+
+### MT-C7.03 — Squadron modal dismiss + reopen
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Squadron Phase, dismiss the modal (Escape / ✕) | "Show Squadron Modal" button appears at bottom |
+| 2 | Click the "Show Squadron Modal" button | Modal reopens |

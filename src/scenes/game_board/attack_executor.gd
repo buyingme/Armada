@@ -77,9 +77,13 @@ const _ZONE_NAMES: Dictionary = {
 # External references (set via initialize)
 # ---------------------------------------------------------------------------
 
-## Reference to the parent GameBoard (for get_ship_tokens/get_squadron_tokens).
-## Typed as Node2D to avoid a circular class_name dependency with GameBoard.
-var _board: Node2D = null
+## Callable that returns Array[ShipToken] — injected by GameBoard.
+## Replaces the former _board: Node2D reference to avoid a circular
+## class_name dependency and allow isolated testing.
+var _get_ship_tokens: Callable
+
+## Callable that returns Array[SquadronToken] — injected by GameBoard.
+var _get_squadron_tokens: Callable
 
 ## Container for all token nodes (for adding overlays).
 var _token_container: Node2D = null
@@ -297,9 +301,14 @@ var _effect_registry: EffectRegistry = null
 
 
 ## Initializes the executor with references to board infrastructure.
-func initialize(board: Node2D, token_container: Node2D,
+## [param get_ship_tokens] — Callable returning Array[ShipToken].
+## [param get_squadron_tokens] — Callable returning Array[SquadronToken].
+func initialize(get_ship_tokens: Callable,
+		get_squadron_tokens: Callable,
+		token_container: Node2D,
 		camera: BoardCamera) -> void:
-	_board = board
+	_get_ship_tokens = get_ship_tokens
+	_get_squadron_tokens = get_squadron_tokens
 	_token_container = token_container
 	_camera = camera
 
@@ -2161,6 +2170,16 @@ func _is_token_blocked_by_effect(inst: ShipInstance,
 			token["state"] as Constants.DefenseTokenState)
 	ctx.set_meta_value("token_type", token_type)
 	ctx.set_meta_value("token_state", token_state)
+	# Capacitor Failure needs the defending zone's current shield count to
+	# decide whether Redirect is blocked.
+	# Rules Reference: "Capacitor Failure" — if the defending zone has 0
+	# shields the defender cannot spend Redirect tokens.
+	if _attack_sim_def_zone >= 0:
+		var zone_key: String = _ZONE_NAMES.get(
+				_attack_sim_def_zone, "")
+		if zone_key != "" and inst.current_shields.has(zone_key):
+			ctx.set_meta_value("target_zone_shields",
+					int(inst.current_shields[zone_key]))
 	ctx = _effect_registry.resolve_hook(
 			&"DEFENSE_VALIDATE_TOKEN", ctx)
 	return ctx.cancelled
@@ -3010,7 +3029,7 @@ func _attack_exec_has_more_squad_targets() -> bool:
 	if not _attack_sim_atk_ship or not _attack_exec_ship_token:
 		return false
 	var attacker_faction: int = _attack_exec_ship_token.get_faction()
-	for sq_token: SquadronToken in _board.get_squadron_tokens():
+	for sq_token: SquadronToken in _get_squadron_tokens.call():
 		# Must be an enemy.
 		if sq_token.get_faction() == attacker_faction:
 			continue
@@ -3073,7 +3092,7 @@ func _zone_has_enemy_ship_target(ship_token: ShipToken,
 		zone: Constants.HullZone, atk_arc_pts: Dictionary,
 		atk_edge: Array[Vector2],
 		attacker_faction: int) -> bool:
-	for def_token: ShipToken in _board.get_ship_tokens():
+	for def_token: ShipToken in _get_ship_tokens.call():
 		if def_token.get_faction() == attacker_faction:
 			continue
 		if def_token == ship_token:
@@ -3103,7 +3122,7 @@ func _zone_has_enemy_squad_target(
 		zone: Constants.HullZone, atk_arc_pts: Dictionary,
 		atk_edge: Array[Vector2],
 		attacker_faction: int) -> bool:
-	for sq_token: SquadronToken in _board.get_squadron_tokens():
+	for sq_token: SquadronToken in _get_squadron_tokens.call():
 		if sq_token.get_faction() == attacker_faction:
 			continue
 		if not RangeFinder.is_squadron_in_arc(

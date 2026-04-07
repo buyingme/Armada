@@ -7,8 +7,8 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase A in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete.
-> **Baseline:** 87 scripts, 1 645 tests, 1 644 passing (commit `8e64c6b`).
+> **Status:** Phase B in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1 ✅.
+> **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
 
@@ -272,7 +272,7 @@ Confirm: 0 failures, same script/test count, no parse errors.
 
 Make coupling explicit and injectable to prepare for extraction.
 
-#### B1: Replace `_board` Reference With Callables
+#### B1: Replace `_board` Reference With Callables ✅
 
 `attack_executor.gd` holds `_board: Node2D` and calls only
 `_board.get_ship_tokens()` (1 site) and `_board.get_squadron_tokens()`

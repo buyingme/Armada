@@ -3175,7 +3175,9 @@ func _create_attack_executor() -> void:
 	_attack_executor = AttackExecutor.new()
 	_attack_executor.name = "AttackExecutor"
 	add_child(_attack_executor)
-	_attack_executor.initialize(self , _token_container, _camera)
+	_attack_executor.initialize(
+			get_ship_tokens, get_squadron_tokens,
+			_token_container, _camera)
 	_attack_executor.attack_exec_completed.connect(
 			_on_attack_exec_completed)
 	_attack_executor.attack_exec_cancelled.connect(

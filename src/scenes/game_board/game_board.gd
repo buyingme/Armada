@@ -99,11 +99,9 @@ var _quit_modal: QuitConfirmationModal = null
 ## Extractable: pass via initialize() to activation controllers.
 var _activation_sidebar: ActivationSidebar = null
 
-## Command Dial Picker modal (shared, one at a time).
-var _command_dial_picker: CommandDialPicker = null
-
-## Command Dial Order Modal (shared, one at a time).
-var _command_dial_order_modal: CommandDialOrderModal = null
+## Controller owning the command-dial picker, order modal, and ship queue.
+## Created in [method _create_command_phase_controller].
+var _command_phase_controller: CommandPhaseController = null
 
 ## Phase / round HUD label shown at the top-centre of the screen.
 ## SHARED — Created: _create_phase_hud(). Read: phase changes, round
@@ -139,7 +137,7 @@ var _end_activation_button: EndActivationButton = null
 ## Queue of ships still awaiting dial assignment during the Command Phase.
 ## Populated at the start of each Command Phase, drained as each picker
 ## is confirmed. Initiative player's ships come first.
-var _ships_needing_dials: Array[ShipInstance] = []
+
 
 ## --- Dial drag controller (Phase 4c: Ship Activation Trigger) ---
 
@@ -297,7 +295,7 @@ func _ready() -> void:
 	_create_deploy_overlay()
 	_create_debug_label()
 	_create_ship_card_panels()
-	_create_command_phase_ui()
+	_create_command_phase_controller()
 	_create_turn_management_ui()
 	_create_phase_hud()
 	_create_action_toolbar()
@@ -693,10 +691,8 @@ func _connect_signals() -> void:
 	#region Command Phase signals
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.round_started.connect(_on_round_started)
-	EventBus.command_picker_requested.connect(_on_command_picker_requested)
-	EventBus.command_picker_confirmed.connect(_on_picker_confirmed)
-	EventBus.command_dial_order_requested.connect(_on_command_dial_order_requested)
-	EventBus.command_phase_complete.connect(_on_command_phase_complete)
+	# command_picker_requested / confirmed / dial_order_requested / command_phase_complete
+	# are connected inside CommandPhaseController.initialize().
 	#endregion
 
 	#region Turn management signals
@@ -1113,27 +1109,8 @@ func _register_instances_in_game_state(
 
 
 # ---------------------------------------------------------------------------
-# Command-phase UI creation
+# Turn-management UI creation
 # ---------------------------------------------------------------------------
-
-## Instantiates the [CommandDialPicker] and [CommandDialOrderModal] on a
-## CanvasLayer above the card panels so they overlay everything.
-func _create_command_phase_ui() -> void:
-	var layer: CanvasLayer = CanvasLayer.new()
-	layer.name = "CommandPhaseUILayer"
-	layer.layer = 60
-	add_child(layer)
-
-	_command_dial_picker = CommandDialPicker.new()
-	_command_dial_picker.name = "CommandDialPicker"
-	_command_dial_picker.visible = false
-	layer.add_child(_command_dial_picker)
-
-	_command_dial_order_modal = CommandDialOrderModal.new()
-	_command_dial_order_modal.name = "CommandDialOrderModal"
-	_command_dial_order_modal.visible = false
-	layer.add_child(_command_dial_order_modal)
-
 
 ## Creates the turn-management UI: handoff overlay, "Your Turn" banner,
 ## and "End Activation" button on a high-layer CanvasLayer.
@@ -1356,99 +1333,6 @@ func _on_round_started(_round_number: int) -> void:
 		sq_token.set_activated_visual(false)
 
 
-## Builds the ordered queue of ships needing dials and opens the first
-## picker. In hot-seat mode, only queues ships for the currently assigning
-## player; in network mode, queues both (initiative player first).
-## Rules Reference: CP-001 — all ships must be assigned dials.
-## Requirements: TF-002 — initiative player assigns first in hot-seat.
-func _begin_command_dial_flow() -> void:
-	_ships_needing_dials.clear()
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		return
-	var _current_round: int = gs.current_round
-	var assigning: int = GameManager.get_command_assigning_player()
-
-	# In hot-seat, only show ships for the assigning player.
-	var player_order: Array[int] = []
-	if PlayMode.is_hot_seat() and assigning >= 0:
-		player_order.append(assigning)
-	else:
-		player_order.append(gs.initiative_player)
-		player_order.append(1 - gs.initiative_player)
-
-	for pi: int in player_order:
-		var ps: PlayerState = gs.get_player_state(pi)
-		if ps == null:
-			continue
-		for s: Variant in ps.ships:
-			if s is ShipInstance:
-				var si: ShipInstance = s as ShipInstance
-				if si.is_destroyed():
-					continue
-				if si.command_dial_stack == null:
-					continue
-				var needed: int = si.command_dial_stack.get_dials_needed()
-				if needed > 0:
-					_ships_needing_dials.append(si)
-	_log.info("Command Phase: %d ships need dials (player %d)." % [
-			_ships_needing_dials.size(), assigning])
-	_advance_picker_queue()
-
-
-## Opens the picker for the next ship in the queue, or does nothing
-## if the queue is empty (GameManager handles auto-submit).
-func _advance_picker_queue() -> void:
-	if _ships_needing_dials.is_empty():
-		return
-	var ship: ShipInstance = _ships_needing_dials[0]
-	var current_round: int = GameManager.get_current_round()
-	_command_dial_picker.open(ship, current_round)
-	_command_dial_picker.centre_on_screen(
-			get_viewport().get_visible_rect().size)
-
-
-## Called when the player explicitly requests the picker for a ship
-## (e.g. from the card panel). Opens the picker.
-func _on_command_picker_requested(
-		ship_ref: RefCounted, current_round: int) -> void:
-	if ship_ref is ShipInstance:
-		_command_dial_picker.open(
-				ship_ref as ShipInstance, current_round)
-		_command_dial_picker.centre_on_screen(
-				get_viewport().get_visible_rect().size)
-
-
-## Called when the picker confirms dials for a ship.
-## Removes the ship from the queue and advances to the next ship.
-## GameManager handles the actual dial assignment and auto-submit.
-func _on_picker_confirmed(
-		ship_ref: RefCounted, _commands: Array) -> void:
-	if ship_ref is ShipInstance:
-		var idx: int = _ships_needing_dials.find(
-				ship_ref as ShipInstance)
-		if idx >= 0:
-			_ships_needing_dials.remove_at(idx)
-	_advance_picker_queue()
-
-
-## Called when a ship's dial order is requested (from card panel click).
-## Opens the [CommandDialOrderModal].
-func _on_command_dial_order_requested(ship_ref: RefCounted) -> void:
-	if ship_ref is ShipInstance:
-		_command_dial_order_modal.open(ship_ref as ShipInstance)
-		_command_dial_order_modal.centre_on_screen(
-				get_viewport().get_visible_rect().size)
-
-
-## Called when the Command Phase completes (both players submitted).
-## Updates the HUD.
-func _on_command_phase_complete() -> void:
-	_ships_needing_dials.clear()
-	_log.info("Command Phase complete — advancing to Ship Phase.")
-	_update_phase_hud()
-
-
 # ---------------------------------------------------------------------------
 # Turn management signal handlers
 # ---------------------------------------------------------------------------
@@ -1497,7 +1381,7 @@ func _on_handoff_accepted() -> void:
 	match phase:
 		Constants.GamePhase.COMMAND:
 			# Restart the dial flow for the now-assigned player.
-			_begin_command_dial_flow()
+			_command_phase_controller.begin_command_dial_flow()
 		Constants.GamePhase.SHIP:
 			# Player is ready — they can now drag a dial to activate a ship.
 			# "End Activation" appears only after the dial is dropped (Phase 4c).
@@ -2795,6 +2679,15 @@ func _create_dial_drag_controller() -> void:
 			_on_dial_ship_activated)
 	_dial_drag_controller.token_converted.connect(
 			_on_dial_token_converted)
+
+
+## Creates the [CommandPhaseController] child node and wires its signal.
+func _create_command_phase_controller() -> void:
+	_command_phase_controller = CommandPhaseController.new()
+	_command_phase_controller.name = "CommandPhaseController"
+	add_child(_command_phase_controller)
+	_command_phase_controller.initialize()
+	_command_phase_controller.phase_complete.connect(_update_phase_hud)
 
 
 ## Delegates the Attack Simulator toolbar / keyboard toggle to the executor.

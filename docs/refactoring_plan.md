@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅.
+> **Status:** Phase C in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -345,11 +345,16 @@ become signal emissions or direct calls to the controller.
 **Signals emitted:** `ship_activated(token)`, `token_converted(ship)` —
 game_board connects these to set `_activating_ship_token`.
 
-#### C3: `CommandPhaseController` (7 isolated funcs, 4 vars)
+#### C3: `CommandPhaseController` (7 isolated funcs, 3 vars) ✅
 
 | Moved Vars | Moved Functions |
 |------------|-----------------|
-| `_ships_needing_dials`, `_command_dial_picker`, `_command_dial_order_modal`, `_handoff_overlay` | `_begin_command_dial_flow`, `_advance_picker_queue`, `_on_picker_confirmed`, `_on_command_picker_requested`, `_on_command_dial_order_requested`, `_on_command_phase_complete`, `_create_command_phase_ui` |
+| `_ships_needing_dials`, `_command_dial_picker`, `_command_dial_order_modal` | `_begin_command_dial_flow`, `_advance_picker_queue`, `_on_picker_confirmed`, `_on_command_picker_requested`, `_on_command_dial_order_requested`, `_on_command_phase_complete`, `_create_command_phase_ui` |
+
+> `_handoff_overlay` stays in game_board — shared by AttackExecutor and
+> `_on_active_player_changed`. **194 lines extracted.**
+> `game_board.gd`: 3 527 → 3 419 lines (−108).
+> Tests: 88 scripts, 1 669 tests, 2 932 asserts — all passing.
 
 #### C4: `DebugController` (6 isolated funcs, 5 vars)
 

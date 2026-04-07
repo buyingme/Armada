@@ -99,6 +99,7 @@ When creating a new source file:
 3. ✅ Create corresponding test file in `tests/unit/`
 4. ✅ Register in autoload if it's a singleton
 5. ✅ Update arc42 building block view if it's a new component
+6. ✅ **Generate the `.uid` file** — Godot 4.5+ requires a `.uid` sidecar for every script that declares `class_name`. Run `godot --headless --import` after creating the file, then commit the resulting `.gd.uid` alongside the `.gd`. Without it, other scripts that reference the `class_name` will fail with *"Could not find type … in the current scope"*.
 
 ## Resource Assets (`Resources/Game_Components/`)
 

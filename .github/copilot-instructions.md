@@ -108,7 +108,17 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 
 
 GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
 
-### 10. Update Progress Tracking Per Phase
+### 10. Generate `.uid` Files for New Scripts
+
+Godot 4.5+ requires a `.gd.uid` sidecar for every script that declares `class_name`. After creating any new `.gd` file with `class_name`, run:
+
+```bash
+godot --headless --import
+```
+
+Then **commit the resulting `.gd.uid`** alongside the `.gd`. Without it, other scripts referencing the type will fail with *"Could not find type … in the current scope"*.
+
+### 11. Update Progress Tracking Per Phase
 
 When completing a phase task or full phase:
 - Update `docs/implementation_plan.md` status markers (🔄 → ✅, add commit hash and test count)

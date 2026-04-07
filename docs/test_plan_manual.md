@@ -4286,7 +4286,7 @@ No new behaviour — purely structural; the controller communicates back via sig
 new `DialDragController` (child Node2D).  GameBoard receives `ship_activated`
 and `token_converted` signals to set up activation state.
 
-**Tests:** 1 669 (88 scripts, 2 932 asserts).
+**Commit:** `0b1595e` — Tests: 1 669 (88 scripts, 2 932 asserts).
 
 ### MT-C2.01 — Dial drag to ship token (full activation)
 
@@ -4310,3 +4310,32 @@ and `token_converted` signals to set up activation state.
 |------|--------|----------|
 | 1 | Start a dial drag | Floating preview appears |
 | 2 | Release the mouse over empty space (not on ship or card panel) | Preview disappears; dial returns to hidden state; no activation occurs |
+
+---
+
+## Refactoring Phase C3 — Extract CommandPhaseController
+
+**What this phase changes:** 3 command-phase variables (`_ships_needing_dials`,
+`_command_dial_picker`, `_command_dial_order_modal`) and 7 functions moved from
+`game_board.gd` into a new `CommandPhaseController` (child Node).  The
+controller owns its own CanvasLayer (layer 60) for the picker and order-modal
+UI.  `game_board.gd` calls `begin_command_dial_flow()` from
+`_on_handoff_accepted` and connects the controller's `phase_complete` signal to
+`_update_phase_hud`.
+
+### MT-C3.01 — Command dial assignment flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a new game; reach the Command Phase | Handoff overlay appears for the first player |
+| 2 | Accept the handoff | Command Dial Picker opens for the first ship needing a dial |
+| 3 | Select a command in the picker; confirm | Dial is assigned; picker advances to the next ship |
+| 4 | Assign dials for all remaining ships of the current player | After the last ship, picker closes; if a second player exists, handoff overlay appears again |
+| 5 | Complete dials for all players | Phase transitions to Ship Phase (phase HUD updates) |
+
+### MT-C3.02 — Command dial order modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Command Phase, reach a ship that already has dial(s) in its stack | "Command Dial Order" modal appears allowing reorder / confirmation |
+| 2 | Confirm the order | Picker advances to next ship normally |

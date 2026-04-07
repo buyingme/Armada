@@ -329,7 +329,8 @@ func _draw() -> void:
 
 func _process(_delta: float) -> void:
 	# Phase 7b: Squadron follows mouse during MOVING state.
-	_squadron_phase_controller.process_squadron_movement()
+	if _squadron_phase_controller:
+		_squadron_phase_controller.process_squadron_movement()
 
 	if not DebugMode.has_selection():
 		return
@@ -346,7 +347,8 @@ func _process(_delta: float) -> void:
 ## the mouse).
 func _input(event: InputEvent) -> void:
 	# Phase 7b: Squadron movement — intercept before GUI / token can consume.
-	if _squadron_phase_controller.handle_move_input(event):
+	if _squadron_phase_controller \
+			and _squadron_phase_controller.handle_move_input(event):
 		return
 
 	if not DebugMode.has_selection():
@@ -2372,15 +2374,17 @@ func _create_squadron_phase_controller() -> void:
 	_squadron_phase_controller = SquadronPhaseController.new()
 	_squadron_phase_controller.name = "SquadronPhaseController"
 	add_child(_squadron_phase_controller)
+	var start_sq_attack: Callable = func(token: SquadronToken) -> void:
+		if _attack_executor:
+			_attack_executor.start_squadron_attack(token)
+	var show_act_btn: Callable = func() -> void:
+		if _show_activation_button and _activating_ship_token:
+			_show_activation_button.show_button()
 	_squadron_phase_controller.initialize(
 			_token_container,
 			get_squadron_tokens,
-			func(token: SquadronToken) -> void:
-				if _attack_executor:
-					_attack_executor.start_squadron_attack(token),
-			func() -> void:
-				if _show_activation_button and _activating_ship_token:
-					_show_activation_button.show_button(),
+			start_sq_attack,
+			show_act_btn,
 			_move_squadron_token,
 	)
 	_squadron_phase_controller.squadron_command_done.connect(

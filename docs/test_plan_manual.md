@@ -4420,3 +4420,40 @@ the activation ship for navigate-token preview cleanup.
 | 1 | Show the maneuver tool on a ship (M key + click) | Tool visible |
 | 2 | Press R (range overlay shortcut) | Range overlay appears on the ghost preview (not requiring separate ship selection) |
 | 3 | Press R again | Ghost range overlay dismisses |
+**Commit:** `4aac035` — Tests: 1 669 (88 scripts, 2 932 asserts).
+---
+
+## Refactoring Phase C6 — Extract RangeToolController
+
+**What this phase changes:** 2 range-overlay variables (`_range_overlay_selecting`,
+`_range_overlay_scene`) and 4 functions (`_show_range_overlay`, `_dismiss_range_overlay`,
+`_cancel_range_overlay_selection`, `_handle_range_overlay_escape`) moved from
+`game_board.gd` into a new `RangeToolController` (child Node).
+`game_board.gd` keeps `_on_range_overlay_requested` for the toggle logic which
+delegates to the controller, and the separate `_squad_cmd_range_overlay` which has
+its own lifecycle.
+
+### MT-C6.01 — Range overlay via R key
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press R | Toast "Select a ship" appears; cursor is in selection mode |
+| 2 | Click a ship token | Range overlay (coloured arcs + range bands) attaches to the ship |
+| 3 | Press R again | Range overlay dismisses |
+
+### MT-C6.02 — Range overlay Escape handling
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press R to enter selection mode | Toast "Select a ship" visible |
+| 2 | Press Escape | Selection cancelled; toast disappears |
+| 3 | Press R, then click a ship | Overlay visible |
+| 4 | Press Escape | Overlay dismisses |
+
+### MT-C6.03 — Ghost range overlay (maneuver tool active)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Show maneuver tool on a ship (M + click) | Tool visible |
+| 2 | Press R | Range overlay appears on the ghost preview |
+| 3 | Press R again | Ghost overlay dismisses |

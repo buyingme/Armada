@@ -157,11 +157,9 @@ var _last_maneuver_overlapped: bool = false
 
 ## --- Range Overlay state ---
 
-## Whether we are in "select ship for range overlay" mode.
-var _range_overlay_selecting: bool = false
-
-## Active RangeOverlayScene instance (null when not displayed).
-var _range_overlay_scene: RangeOverlayScene = null
+## Range tool controller — owns selection flag and RangeOverlayScene.
+## Created in [method _create_range_tool_controller].
+var _range_tool_controller: RangeToolController = null
 
 ## Targeting list modal (null when not displayed).
 var _targeting_list_modal: TargetingListModal = null
@@ -286,6 +284,7 @@ func _ready() -> void:
 	_create_action_toolbar()
 	_create_attack_executor()
 	_create_maneuver_tool_controller()
+	_create_range_tool_controller()
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
@@ -396,7 +395,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _handle_targeting_list_escape(event):
 		return
 	# Range overlay: Escape dismisses or cancels selection.
-	if _handle_range_overlay_escape(event):
+	if _range_tool_controller.handle_escape(event):
 		return
 	# Maneuver tool: Escape dismisses or cancels selection.
 	if _maneuver_tool_controller.handle_escape(event):
@@ -668,7 +667,8 @@ func _connect_signals() -> void:
 
 	#region Range overlay signals
 	EventBus.range_overlay_requested.connect(_on_range_overlay_requested)
-	EventBus.range_overlay_dismissed.connect(_dismiss_range_overlay)
+	EventBus.range_overlay_dismissed.connect(
+			func() -> void: _range_tool_controller.dismiss())
 	#endregion
 
 	#region Targeting & attack signals
@@ -786,8 +786,8 @@ func _spawn_squadron_token(
 func _on_token_clicked(token: ShipToken) -> void:
 	if _attack_executor and _attack_executor.handle_ship_click(token):
 		return
-	if _range_overlay_selecting:
-		_show_range_overlay(token)
+	if _range_tool_controller.is_selecting():
+		_range_tool_controller.show_overlay(token)
 		return
 	if _maneuver_tool_controller.is_selecting():
 		_maneuver_tool_controller.show_tool(token)
@@ -1544,7 +1544,7 @@ func _on_board_activation_ended() -> void:
 		_activation_sidebar.clear_active()
 		_activation_sidebar.refresh()
 	_dismiss_maneuver_tool_with_preview()
-	_dismiss_range_overlay()
+	_range_tool_controller.dismiss()
 	# Re-enable simulation tool buttons.
 	if _action_toolbar:
 		_action_toolbar.set_tool_buttons_disabled(false)
@@ -2248,49 +2248,13 @@ func _on_range_overlay_requested() -> void:
 	if mt_scene:
 		mt_scene.toggle_ghost_range_overlay()
 		return
-	if _range_overlay_scene:
-		_dismiss_range_overlay()
+	if _range_tool_controller.get_scene():
+		_range_tool_controller.dismiss()
 		return
-	if _range_overlay_selecting:
-		_cancel_range_overlay_selection()
+	if _range_tool_controller.is_selecting():
+		_range_tool_controller.cancel_selection()
 		return
-	_range_overlay_selecting = true
-	TooltipManager.show_text("Select a ship", Vector2.INF, 0.0, true)
-	_log.info("Range overlay: ship selection mode active.")
-
-
-## Shows the range overlay attached to the given ship token.
-## Requirements: RO-003, RO-004, RO-005, RO-006.
-func _show_range_overlay(token: ShipToken) -> void:
-	_range_overlay_selecting = false
-	TooltipManager.hide_tooltip()
-	if _range_overlay_scene:
-		_range_overlay_scene.queue_free()
-	_range_overlay_scene = RangeOverlayScene.new()
-	_range_overlay_scene.name = "RangeOverlayScene"
-	_token_container.add_child(_range_overlay_scene)
-	# Move to index 0 so it draws above the map but behind all tokens.
-	_token_container.move_child(_range_overlay_scene, 0)
-	_range_overlay_scene.setup(token)
-	_log.info("Range overlay displayed on ship.")
-
-
-## Dismisses the range overlay and exits selection mode.
-## Requirements: RO-007.
-func _dismiss_range_overlay() -> void:
-	_range_overlay_selecting = false
-	TooltipManager.hide_tooltip()
-	if _range_overlay_scene:
-		_range_overlay_scene.queue_free()
-		_range_overlay_scene = null
-	_log.info("Range overlay dismissed.")
-
-
-## Cancels ship selection mode without showing the overlay.
-func _cancel_range_overlay_selection() -> void:
-	_range_overlay_selecting = false
-	TooltipManager.hide_tooltip()
-	_log.info("Range overlay selection cancelled.")
+	_range_tool_controller.start_selection()
 
 
 ## Shows the per-ship range overlay (with arcs and range bands) during
@@ -2312,25 +2276,6 @@ func _dismiss_squad_cmd_range_overlay() -> void:
 	if _squad_cmd_range_overlay:
 		_squad_cmd_range_overlay.queue_free()
 		_squad_cmd_range_overlay = null
-
-
-## Checks if an Escape key press should dismiss the range overlay.
-## Returns true if the event was consumed.
-func _handle_range_overlay_escape(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
-		return false
-	if _range_overlay_scene:
-		_dismiss_range_overlay()
-		get_viewport().set_input_as_handled()
-		return true
-	if _range_overlay_selecting:
-		_cancel_range_overlay_selection()
-		get_viewport().set_input_as_handled()
-		return true
-	return false
 
 
 # ---------------------------------------------------------------------------
@@ -2492,6 +2437,14 @@ func _create_maneuver_tool_controller() -> void:
 	_maneuver_tool_controller.initialize(_token_container)
 
 
+## Creates the [RangeToolController] child node.
+func _create_range_tool_controller() -> void:
+	_range_tool_controller = RangeToolController.new()
+	_range_tool_controller.name = "RangeToolController"
+	add_child(_range_tool_controller)
+	_range_tool_controller.initialize(_token_container)
+
+
 ## Dismisses the maneuver tool, passing the current activation ship so the
 ## Navigate-token spend preview overlay is cleared when appropriate.
 func _dismiss_maneuver_tool_with_preview() -> void:
@@ -2506,7 +2459,7 @@ func _create_debug_controller() -> void:
 	_debug_controller = DebugController.new()
 	_debug_controller.name = "DebugController"
 	add_child(_debug_controller)
-	_debug_controller.initialize(self, get_ship_tokens, get_squadron_tokens)
+	_debug_controller.initialize(self , get_ship_tokens, get_squadron_tokens)
 
 
 ## Creates the [DisplacementController] child node and wires its signals.
@@ -2555,7 +2508,7 @@ func _on_attack_simulator_requested() -> void:
 ## Called by [signal AttackExecutor.dismiss_other_tools_requested].
 ## Dismisses range overlay, targeting list, and maneuver tool.
 func _on_dismiss_other_tools_requested() -> void:
-	_dismiss_range_overlay()
+	_range_tool_controller.dismiss()
 	_dismiss_targeting_list()
 	_dismiss_maneuver_tool_with_preview()
 

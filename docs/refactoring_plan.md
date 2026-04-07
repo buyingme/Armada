@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase B in progress — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1 ✅.
+> **Status:** Phase B complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1 ✅, B2 ✅, B3 ✅, B4 ✅.
 > **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
 
 ---
@@ -293,19 +293,19 @@ func initialize(get_ships: Callable, get_squads: Callable,
 Eliminates the circular `Node2D` type-dodge and makes AttackExecutor
 testable in isolation.
 
-#### B2: Group EventBus Connections With `#region`
+#### B2: Group EventBus Connections With `#region` ✅
 
 Add `#region` / `#endregion` comments to `game_board.gd`'s `_ready()` and
 signal-connection sections, labelling each cluster. Zero code change —
 documentation only.
 
-#### B3: Extract `_on_viewport_resized()` Into Data-Driven Dispatch
+#### B3: Extract `_on_viewport_resized()` Into Data-Driven Dispatch ✅
 
 Replace the 12-line `if widget != null: widget.method(vp_size)` chain
 with a registered-widget list. This breaks no interfaces but makes the
 future `UIPanelManager` extraction (Phase F) trivial.
 
-#### B4: Document Shared-Var Contract
+#### B4: Document Shared-Var Contract ✅
 
 For each of the 11 SHARED variables in `game_board.gd`, add a doc comment
 specifying: who creates it, who reads it, who writes it, and whether it

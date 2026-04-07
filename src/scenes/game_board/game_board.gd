@@ -40,10 +40,21 @@ const DEBUG_ROTATE_SENSITIVITY: float = 2.0
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("GameBoard")
 
+## Registry of widgets that need repositioning/resizing on viewport change.
+## Each entry: { "node": Control, "method": StringName, "only_visible": bool }.
+## Populated by [method _register_resizable].
+var _resizable_widgets: Array[Dictionary] = []
+
 ## Camera node reference.
+## SHARED — Created: _create_camera(). Read: displacement (rotation),
+## attack executor (zoom), debug (overlay). Write: _create_camera() only.
+## Extractable: pass via initialize() to controllers.
 var _camera: BoardCamera = null
 
 ## Container for all token nodes.
+## SHARED — Created: _create_token_container(). Read: token spawning,
+## get_ship_tokens(), get_squadron_tokens(), attack executor, displacement.
+## Write: _create_token_container() only. Extractable: pass via initialize().
 var _token_container: Node2D = null
 
 ## Deployment zone overlay (visible in debug mode only).
@@ -59,6 +70,9 @@ var _debug_help_panel: DebugHelpPanel = null
 var _map_texture: Texture2D = null
 
 ## Core mover logic for collision resolution.
+## SHARED — Created: inline. Read: maneuver execution, displacement
+## validation, overlap resolution. Write: never after init.
+## Extractable: pass via initialize() to ManeuverToolController.
 var _token_mover: TokenMover = TokenMover.new()
 
 ## Scenario saver utility.
@@ -80,6 +94,9 @@ var _damage_summary_overlay: DamageSummaryOverlay = null
 var _quit_modal: QuitConfirmationModal = null
 
 ## Activation sidebar showing ship/squadron activation status (UI-014).
+## SHARED — Created: _create_activation_sidebar_layer(). Read: scenario
+## setup (populate), ship activation (highlight). Write: resize registry.
+## Extractable: pass via initialize() to activation controllers.
 var _activation_sidebar: ActivationSidebar = null
 
 ## Command Dial Picker modal (shared, one at a time).
@@ -89,10 +106,16 @@ var _command_dial_picker: CommandDialPicker = null
 var _command_dial_order_modal: CommandDialOrderModal = null
 
 ## Phase / round HUD label shown at the top-centre of the screen.
+## SHARED — Created: _create_phase_hud(). Read: phase changes, round
+## starts, damage summary show/hide, score updates. Write: _create_phase_hud()
+## only. Extractable: move to dedicated HUD controller.
 var _phase_hud_label: Label = null
 
 ## Handoff overlay for hot-seat turn transitions (Command Phase).
 ## Requirements: HO-001, HO-002, HO-003.
+## SHARED — Created: _create_core_turn_ui(). Read: turn management,
+## attack executor (set_handoff_overlay), command phase. Write: resize
+## registry. Extractable: pass via initialize() to turn controllers.
 var _handoff_overlay: HandoffOverlay = null
 
 ## Brief "Your Turn" banner (Ship / Squadron Phases).
@@ -105,6 +128,8 @@ var _victory_screen: VictoryScreen = null
 
 ## Scoring calculator for live HUD score display.
 ## Requirements: GF-001–004.
+## SHARED — Created: inline. Read: phase HUD (score display), game-end
+## (victory screen). Write: never after init. Extractable: pass to HUD/end.
 var _scoring: ScoringCalculator = ScoringCalculator.new()
 
 ## "End Activation" button (Ship / Squadron Phases).
@@ -125,6 +150,10 @@ var _drag_ship_instance: ShipInstance = null
 ## Floating preview Control shown during drag (on TurnManagement layer).
 var _drag_preview: Control = null
 ## The ShipToken currently being activated (dial shown behind base).
+## SHARED — Created: _on_dial_drag_started(). Read: maneuver tool, attack
+## step, repair step, squadron step, overlap resolution, displacement.
+## Write: dial drag start/end, activation end. Extractable: move to
+## ActivationContext (Phase F) or pass as argument to controllers.
 var _activating_ship_token: ShipToken = null
 
 ## --- Maneuver Tool state (Phase 5a) ---
@@ -152,13 +181,23 @@ var _range_overlay_scene: RangeOverlayScene = null
 var _targeting_list_modal: TargetingListModal = null
 
 ## ActionToolbar in the lower-right corner.
+## SHARED — Created: _create_action_toolbar(). Read: dismiss-other-tools,
+## escape handling, phase transitions (button visibility). Write: resize
+## registry. Extractable: pass via initialize() to tool controllers.
 var _action_toolbar: ActionToolbar = null
 
 ## Attack executor — owns all attack simulator / execution logic and UI.
 ## Created in [method _create_attack_executor].
+## SHARED — Created: _create_attack_executor(). Read: ship activation
+## (attack step), attack simulator request, escape handling.
+## Write: _create_attack_executor() only. Already extracted as child Node.
 var _attack_executor: AttackExecutor = null
 
 ## Shared damage deck for the game. Initialised during scenario setup.
+## SHARED — Created: _spawn_learning_scenario_tokens(). Read: attack
+## executor (set_damage_deck), debug damage dealing, immediate effect
+## resolution. Write: scenario setup only. Extractable: pass via
+## initialize() to any controller needing damage draws.
 var _damage_deck: DamageDeck = null
 
 ## --- Crew Panic BEFORE_REVEAL_DIAL modal state ---
@@ -537,6 +576,7 @@ func _create_card_detail_layer() -> void:
 	_damage_summary_overlay.name = "DamageSummaryOverlay"
 	detail_layer.add_child(_damage_summary_overlay)
 	_damage_summary_overlay.dismissed.connect(_on_damage_summary_dismissed)
+	_register_resizable(_damage_summary_overlay, &"update_size", true)
 
 
 ## Creates the quit confirmation modal on a top-level layer (UI-034).
@@ -560,6 +600,7 @@ func _create_activation_sidebar_layer() -> void:
 	_activation_sidebar = ActivationSidebar.new()
 	_activation_sidebar.name = "ActivationSidebar"
 	sidebar_layer.add_child(_activation_sidebar)
+	_register_resizable(_activation_sidebar, &"update_position")
 
 
 ## Adds a ship instance to the correct faction's card panel.
@@ -674,42 +715,57 @@ func _set_phase_hud_visible(show: bool) -> void:
 
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
+	#region Debug & viewport signals
 	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
 	DebugMode.debug_mode_changed.connect(_on_debug_mode_changed)
 	DebugMode.save_positions_requested.connect(_on_save_positions)
 	get_tree().root.size_changed.connect(_on_viewport_resized)
-	# Command phase signals.
+	#endregion
+
+	#region Command Phase signals
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.round_started.connect(_on_round_started)
 	EventBus.command_picker_requested.connect(_on_command_picker_requested)
 	EventBus.command_picker_confirmed.connect(_on_picker_confirmed)
 	EventBus.command_dial_order_requested.connect(_on_command_dial_order_requested)
 	EventBus.command_phase_complete.connect(_on_command_phase_complete)
-	# Turn management signals.
+	#endregion
+
+	#region Turn management signals
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
-	# Ship activation drag-and-drop (Phase 4c).
+	#endregion
+
+	#region Ship activation signals (dial drag, activation end)
 	EventBus.dial_drag_started.connect(_on_dial_drag_started)
 	EventBus.activation_ended.connect(_on_board_activation_ended)
-	# Maneuver tool (Phase 5a).
+	#endregion
+
+	#region Maneuver tool signals
 	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
 	EventBus.maneuver_tool_dismissed.connect(_dismiss_maneuver_tool)
-	# Range overlay.
+	#endregion
+
+	#region Range overlay signals
 	EventBus.range_overlay_requested.connect(_on_range_overlay_requested)
 	EventBus.range_overlay_dismissed.connect(_dismiss_range_overlay)
-	# Targeting list (Phase 5d).
+	#endregion
+
+	#region Targeting & attack signals
 	EventBus.targeting_list_requested.connect(_on_targeting_list_requested)
-	# Attack simulator (Phase 6a) — delegated to AttackExecutor.
 	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
-	# Game end (Phase 8).
+	#endregion
+
+	#region Game end & scoring signals
 	EventBus.game_ended.connect(_on_game_ended)
-	# Live score updates in HUD (Phase 8c).
 	EventBus.ship_destroyed.connect(_on_score_changed)
 	EventBus.squadron_destroyed.connect(_on_score_changed)
-	# Damage card dealt toast (Phase 10b — item 5).
+	#endregion
+
+	#region Damage card signals
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
-	# Damage summary overlay (all dealt cards shown full-screen).
 	EventBus.damage_summary_requested.connect(_on_damage_summary_requested)
+	#endregion
 
 
 ## Places all Learning Scenario tokens from setup data and loads the map image.
@@ -850,30 +906,32 @@ func _on_firing_arc_toggled(token: Node) -> void:
 
 
 ## Repositions ship card panels and turn-management UI when the window is
-## resized.
+## resized. Iterates the registered widget list populated by
+## [method _register_resizable].
 func _on_viewport_resized() -> void:
 	_update_card_panel_positions()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	if _handoff_overlay != null:
-		_handoff_overlay.update_size(vp_size)
-	if _your_turn_banner != null:
-		_your_turn_banner.update_size(vp_size)
-	if _end_activation_button != null:
-		_end_activation_button.update_position(vp_size)
-	if _action_toolbar != null:
-		_action_toolbar.update_position(vp_size)
-	if _show_activation_button != null:
-		_show_activation_button.update_position(vp_size)
-	if _activation_modal != null and _activation_modal.visible:
-		_activation_modal.centre_on_screen(vp_size)
-	if _repair_panel != null and _repair_panel.visible:
-		_repair_panel.centre_on_screen(vp_size)
-	if _show_squadron_modal_button != null:
-		_show_squadron_modal_button.update_position(vp_size)
-	if _activation_sidebar != null:
-		_activation_sidebar.update_position(vp_size)
-	if _damage_summary_overlay != null and _damage_summary_overlay.visible:
-		_damage_summary_overlay.update_size(vp_size)
+	for entry: Dictionary in _resizable_widgets:
+		var node: Control = entry["node"] as Control
+		if node == null:
+			continue
+		if entry["only_visible"] and not node.visible:
+			continue
+		var method: StringName = entry["method"] as StringName
+		node.call(method, vp_size)
+
+
+## Registers a widget for automatic viewport-resize handling.
+## [param node] — the Control to call on resize.
+## [param method] — the method name to invoke with the viewport size.
+## [param only_visible] — when true, skip the call if the widget is hidden.
+func _register_resizable(node: Control, method: StringName,
+		only_visible: bool = false) -> void:
+	_resizable_widgets.append({
+		"node": node,
+		"method": method,
+		"only_visible": only_visible,
+	})
 
 
 ## Updates visibility of debug-only UI elements.
@@ -1129,20 +1187,24 @@ func _create_core_turn_ui(layer: CanvasLayer) -> void:
 	_handoff_overlay = HandoffOverlay.new()
 	_handoff_overlay.name = "HandoffOverlay"
 	layer.add_child(_handoff_overlay)
+	_register_resizable(_handoff_overlay, &"update_size")
 
 	_your_turn_banner = YourTurnBanner.new()
 	_your_turn_banner.name = "YourTurnBanner"
 	layer.add_child(_your_turn_banner)
+	_register_resizable(_your_turn_banner, &"update_size")
 
 	_end_activation_button = EndActivationButton.new()
 	_end_activation_button.name = "EndActivationButton"
 	layer.add_child(_end_activation_button)
+	_register_resizable(_end_activation_button, &"update_position")
 
 	_show_activation_button = ShowActivationButton.new()
 	_show_activation_button.name = "ShowActivationButton"
 	_show_activation_button.activation_sequence_requested.connect(
 			_on_activation_sequence_requested)
 	layer.add_child(_show_activation_button)
+	_register_resizable(_show_activation_button, &"update_position")
 
 
 ## Creates the activation modal and connects its signals.
@@ -1166,6 +1228,7 @@ func _create_activation_modal_ui(layer: CanvasLayer) -> void:
 	_activation_modal.end_activation_requested.connect(
 			_on_activation_end_requested)
 	layer.add_child(_activation_modal)
+	_register_resizable(_activation_modal, &"centre_on_screen", true)
 
 
 ## Creates the repair panel, squadron modal, and show-squadron button.
@@ -1175,6 +1238,7 @@ func _create_repair_squadron_ui(layer: CanvasLayer) -> void:
 	_repair_panel.repair_done.connect(_on_repair_done)
 	_repair_panel.repair_skipped.connect(_on_repair_done)
 	layer.add_child(_repair_panel)
+	_register_resizable(_repair_panel, &"centre_on_screen", true)
 
 	_squadron_modal = SquadronActivationModal.new()
 	_squadron_modal.name = "SquadronActivationModal"
@@ -1196,6 +1260,7 @@ func _create_repair_squadron_ui(layer: CanvasLayer) -> void:
 	_show_squadron_modal_button.squadron_modal_requested.connect(
 			_on_show_squadron_modal_requested)
 	layer.add_child(_show_squadron_modal_button)
+	_register_resizable(_show_squadron_modal_button, &"update_position")
 
 
 ## Creates a phase / round HUD label at the top-centre of the screen.
@@ -2792,6 +2857,7 @@ func _create_action_toolbar() -> void:
 	_action_toolbar.name = "ActionToolbar"
 	layer.add_child(_action_toolbar)
 	_action_toolbar.setup_buttons()
+	_register_resizable(_action_toolbar, &"update_position")
 
 
 ## Handles the "Display Maneuver Tool" button press.

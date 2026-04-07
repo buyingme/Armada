@@ -4,7 +4,7 @@
 > **Status:** **MVP COMPLETE** — all phases delivered and manually verified.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 88 scripts, 1 652 tests, all passing.
+> **Current baseline:** 88 scripts, 1 669 tests, all passing.
 
 ---
 
@@ -4215,3 +4215,44 @@ GUT baseline after fixes: 88 scripts, 1 652 tests, all passing.
 | 6 | Press Shift+D again, click same ship, select "Structural Damage" | Immediate effect resolves: extra facedown card dealt, Structural Damage flips facedown |
 | 7 | Press Shift+D then Escape | Targeting mode cancelled; no modal appears |
 | 8 | Without debug mode (F12 off), press Shift+D | Nothing happens |
+
+---
+
+## Refactoring Phase B1 — Replace `_board` Reference With Callables
+
+**What this phase changes:** `attack_executor.gd` no longer holds a `Node2D`
+reference to `GameBoard`. Two `Callable` parameters (`_get_ship_tokens`,
+`_get_squadron_tokens`) are injected via `initialize()`. No new behaviour —
+purely an interface change that eliminates a circular type-dodge.
+
+**Commit:** `d7a93e1` — Tests: 1 669 (88 scripts, 2 932 asserts).
+
+### MT-B1.01 — Attack Simulator shows valid targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the game board scene (F6) | Board loads, tokens appear |
+| 2 | Hover a ship's hull zone | Valid enemy targets in arc + range highlight correctly (ship and squadron) |
+| 3 | Move hover to a different hull zone | Highlights update to match the new arc |
+
+### MT-B1.02 — Ship-to-ship attack resolves normally
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Initiate a ship attack on an enemy ship | Attack flow starts: dice roll, modification steps, damage applied |
+| 2 | Complete the attack | Flow ends cleanly; damage shows in card panel |
+
+### MT-B1.03 — Multi-squadron attack prompt
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Initiate a ship attack against a squadron | Attack flow proceeds with anti-squadron dice |
+| 2 | After first squadron attack resolves | "More targets?" prompt appears if additional squadrons are in arc + range |
+
+### MT-B1.04 — Capacitor Failure blocks Redirect at zero shields
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal Capacitor Failure (Shift+D) to a ship with 0 shields on the defending zone | Card appears faceup |
+| 2 | Attack that ship on the zero-shield zone | Redirect token is blocked (greyed out / cannot spend) |
+| 3 | Attack the same ship on a zone with ≥ 1 shields | Redirect token is available normally |

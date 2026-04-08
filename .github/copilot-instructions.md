@@ -85,6 +85,7 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Hardcoded scenario placement data (positions, rotations, token list) — write a `scenarios/<name>.json` and load via `AssetLoader.load_json()`
 - ❌ Mixing tabs and spaces in the same file
 - ❌ `if/elif` chains on enum values — use `match`
+- ❌ Rewriting a file > 300 lines in a single edit — use incremental delegation (see `.skills/refactoring_guidelines.md` §8)
 
 ### 8. Game Rules Must Be Cited
 

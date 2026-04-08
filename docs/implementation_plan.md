@@ -1666,7 +1666,7 @@ internally. Callers now do `parent.add_child(_build_section())`.
 **Files changed:** 13 UI files, 63 methods converted.
 **Tests:** 88 scripts, 1669 tests, 2932 asserts — all passing.
 
-#### D2: UIStyleHelper Utility ✅
+#### D2: UIStyleHelper Utility ✅ `a7ff225`
 
 Created `src/utils/ui_style_helper.gd` — centralises repeated style
 constants and factory methods:
@@ -1681,6 +1681,24 @@ constants and factory methods:
 
 **Files changed:** 10 UI files (panel style), 3 UI files (dismiss hints).
 **New file:** `src/utils/ui_style_helper.gd` (30 tests).
+**Tests:** 89 scripts, 1699 tests, 2966 asserts — all passing.
+
+#### D3: Split ShipCardPanel ✅
+
+Extracted construction and populate logic from `ship_card_panel.gd`
+(1 438 → 877 lines) into two focused helpers:
+
+| New file | Type | Lines | Responsibility |
+|----------|------|-------|---------------|
+| `ship_card_entry_builder.gd` | RefCounted | 460 | Build & populate entry rows (tokens, dials, cmd tokens) |
+| `damage_card_display.gd` | RefCounted | 196 | Damage card column (faceup thumbnails + facedown badge) |
+
+`ShipCardPanel` is now a layout coordinator that delegates all building
+and populating to the two helpers. Shared `_tex_cache` is injected via
+constructor. Dead constants (`TOKEN_FILENAMES`, `CMD_ICON_FILENAMES`,
+`CMD_DIAL_HIDDEN_FILE`, `DAMAGE_CARD_HEIGHT_PX`), dead signal
+(`damage_detail_requested`), and all superseded local methods removed.
+
 **Tests:** 89 scripts, 1699 tests, 2966 asserts — all passing.
 
 ---

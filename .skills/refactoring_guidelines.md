@@ -215,6 +215,44 @@ implementation, split before committing.
 
 ## 8. Refactoring-Safe Patterns
 
+### Never rewrite a large file in one shot
+
+When extracting helpers from a file > 500 lines, **never replace the entire
+file in a single edit**.  AI token budgets can be exhausted mid-write, leaving
+the file truncated or the session crashed.
+
+**Incremental delegation pattern (mandatory for files > 300 lines):**
+
+1. **Create extracted helper files first** — `ShipCardEntryBuilder.gd`,
+   `DamageCardDisplay.gd`, etc. — and ensure they compile in isolation.
+2. **Add helper instances** to the coordinator — add member vars and initialise
+   them (2–5 line edit).
+3. **Delegate one method group at a time** — replace 1–3 methods per edit,
+   calling the new helper instead of the local implementation.
+4. **Run tests after each step** — confirm script count and pass count.
+5. **Delete dead code last** — only after all delegations are wired and green.
+
+Each step is a small, targeted edit (< 50 lines changed) that leaves the file
+compilable and testable.  This avoids the risk of a single monolithic rewrite
+exhausting the AI context window.
+
+```gdscript
+# Step 1 — add helper (tiny edit)
+var _builder: ShipCardEntryBuilder
+
+func setup(...) -> void:
+    _builder = ShipCardEntryBuilder.new(_tex_cache)
+
+# Step 2 — delegate one method (small edit)
+func _build_left_column(instance, gap) -> Dictionary:
+    var result := _builder.build_left_column(instance, gap)
+    result["dial_container"].gui_input.connect(
+        _on_dial_container_gui_input.bind(_entries.size()))
+    return result
+
+# Step 3 — after all delegations green, delete the old local methods
+```
+
 ### Preserve public API during extraction
 
 When extracting code from a god object:

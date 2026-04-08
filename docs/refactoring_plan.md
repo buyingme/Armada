@@ -473,11 +473,12 @@ static func create_section_label(text: String, size: int) -> Label:
 
 Reduces duplication across 12+ UI files.
 
-#### D3: Split `ShipCardPanel`
+#### D3: Split `ShipCardPanel` ✅
 
-Extract construction logic into `ShipCardEntryBuilder` (RefCounted) and
-damage display into `DamageCardDisplay` (Control). `ShipCardPanel` becomes
-a layout coordinator (~500 lines).
+Extracted construction logic into `ShipCardEntryBuilder` (RefCounted, 460 lines)
+and damage display into `DamageCardDisplay` (RefCounted, 196 lines).
+`ShipCardPanel` reduced from 1 438 to 877 lines — a layout coordinator that
+delegates building and populating to the two helpers.
 
 ---
 
@@ -779,7 +780,7 @@ Cross-reference with `docs/arc42/11_risks_and_technical_debt.md`:
 | TD-4 | Functions exceeding 30-line guideline | **Phase A** |
 | TD-7 | `game_board.gd` God Object (3 390 lines) | **Phases C + F** |
 | TD-8 | `attack_executor.gd` God Object (3 008 lines) | **Phases A + F4** |
-| TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** |
+| TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** ✅ (877 lines) |
 | TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** |
 | TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** |
 | TD-12 | 64 EventBus signals — spaghetti risk | **Phase E6** |

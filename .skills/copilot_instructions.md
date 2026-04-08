@@ -255,6 +255,21 @@ These are subtle bugs actually encountered in this project:
 
 This is a hard gate — no commit may happen without user approval.
 
+### Large-File Edits — Incremental Only
+
+**Never rewrite a file > 300 lines in a single edit.**  AI token budgets
+can be exhausted mid-write, crashing the session and leaving the file
+truncated.
+
+Follow the **incremental delegation pattern** from
+`.skills/refactoring_guidelines.md` §8:
+
+1. Create extracted helper files first (separate edits).
+2. Add helper member vars + init (tiny edit).
+3. Delegate one method group at a time (small edits, < 50 lines each).
+4. Run tests after each step.
+5. Delete dead code last.
+
 ### Workflow
 
 1. **Run the automated test suite** and report the results (pass count, script count, failures).

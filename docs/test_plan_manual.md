@@ -4629,3 +4629,44 @@ injected as Callables at `initialize()`.
 | 1 | Right-click a ship's dial stack (after dials assigned) | Command dial order modal opens — slightly darker background (intentional variant), same border, "Click anywhere to close" hint in grey |
 
 **Pass criteria:** All modals/panels render identically to pre-D2. No visual regressions. Panel backgrounds, borders, corner radii, margins, and dismiss hint text all match previous appearance. 1 699 tests pass (89 scripts, 2 966 asserts).
+
+---
+
+## Phase D3 — Split ShipCardPanel
+
+> **Goal:** Extract construction and populate logic from `ShipCardPanel` into
+> `ShipCardEntryBuilder` and `DamageCardDisplay`. Pure structural refactoring —
+> no visual or behavioural changes.
+
+### MT-D3.01 — Card Panel Renders Identically
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the game board scene (F6) | Both Rebel and Imperial card panels appear with ship cards, defense tokens, command dials, command tokens — identical to pre-D3 |
+| 2 | Click a ship card to magnify it | Entry expands smoothly, tokens/dials/damage scale correctly |
+| 3 | Click again to un-magnify | Entry returns to normal size |
+
+### MT-D3.02 — Damage Display Works
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Deal faceup and facedown damage to a ship (via debug or gameplay) | Faceup damage thumbnails and facedown "×N" badge appear in the card panel |
+| 2 | Click a faceup damage thumbnail | Damage summary overlay opens showing all damage on that ship |
+| 3 | Click the facedown badge | Same damage summary overlay opens |
+
+### MT-D3.03 — EventBus Updates Reflect
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Exhaust a defense token (via gameplay) | Token appearance changes in the card panel (dimmed/rotated) |
+| 2 | Assign command dials and reveal one | Dial stack updates correctly — revealed dial shows icon, hidden dials show card back |
+| 3 | Gain or spend a command token | Command token column updates in real-time |
+
+### MT-D3.04 — Token Discard Mode
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Trigger token overflow (give a ship a 5th token) | Discard prompt appears, tokens turn pinkish and are clickable |
+| 2 | Click a token to discard | Token removed, discard mode exits, column refreshes |
+
+**Pass criteria:** All card panel visuals and interactions identical to pre-D3. No regressions in token display, dial stacks, damage cards, magnify, or discard mode. 1 699 tests pass (89 scripts, 2 966 asserts).

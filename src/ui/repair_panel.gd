@@ -134,13 +134,8 @@ func _build_ui() -> void:
 
 ## Applies the standard modal panel style.
 func _apply_panel_style() -> void:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
-	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(16)
-	add_theme_stylebox_override("panel", style)
+	add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style())
 
 
 ## Creates the main content VBoxContainer.
@@ -203,12 +198,7 @@ func _build_button_row() -> HBoxContainer:
 
 ## Creates the "Press Escape to finish" hint label.
 func _build_dismiss_hint() -> Label:
-	var hint: Label = Label.new()
-	hint.text = "Press Escape to finish"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	return hint
+	return UIStyleHelper.create_dismiss_hint("Press Escape to finish")
 
 
 ## Clears all children from the panel.

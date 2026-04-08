@@ -1651,6 +1651,40 @@ See `docs/refactoring_plan.md` and `docs/refactoring_test_strategy.md`.
 
 ---
 
+### Refactoring Phase D — UI Builder Cleanup ✅
+
+**Goal:** Standardise UI builder methods and extract common styling into
+a shared utility. Pure structural refactoring — no game-logic changes.
+See `docs/refactoring_plan.md` Phase D.
+
+#### D1: Section Builder Return Pattern ✅ `c35653b`
+
+Converted all void `_build_*()` section methods across 13 UI files to
+return their root container instead of imperatively calling `add_child()`
+internally. Callers now do `parent.add_child(_build_section())`.
+
+**Files changed:** 13 UI files, 63 methods converted.
+**Tests:** 88 scripts, 1669 tests, 2932 asserts — all passing.
+
+#### D2: UIStyleHelper Utility ✅
+
+Created `src/utils/ui_style_helper.gd` — centralises repeated style
+constants and factory methods:
+
+| Extraction | Files Affected | Lines Saved |
+|------------|---------------|-------------|
+| `create_modal_panel_style()` — canonical StyleBoxFlat | 10 modal panels | ~70 |
+| `create_dismiss_hint()` — centered hint label | 3 files | ~15 |
+| Colour constants (`GOLD_TITLE`, `DIMMED_HINT`, etc.) | — | definition site |
+| Font-size tiers (`FONT_TITLE`, `FONT_BODY`, etc.) | — | definition site |
+| `create_title_label()` / `create_section_label()` | — | factory methods |
+
+**Files changed:** 10 UI files (panel style), 3 UI files (dismiss hints).
+**New file:** `src/utils/ui_style_helper.gd` (30 tests).
+**Tests:** 89 scripts, 1699 tests, 2966 asserts — all passing.
+
+---
+
 ```
 Phase 0 (Scale & Assets)
     │

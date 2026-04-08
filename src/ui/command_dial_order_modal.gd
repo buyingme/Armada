@@ -131,21 +131,13 @@ func _create_dial_entry(entry: Dictionary, index: int) -> VBoxContainer:
 
 ## Creates the dismiss hint label.
 func _build_dismiss_hint() -> Label:
-	var hint: Label = Label.new()
-	hint.text = "Click anywhere to close"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	return hint
+	return UIStyleHelper.create_dismiss_hint("Click anywhere to close")
 
 
-## Applies the standard modal panel style.
+## Applies the standard modal panel style with a slightly darker background.
 func _apply_panel_style() -> void:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
+	var style: StyleBoxFlat = UIStyleHelper.create_modal_panel_style(0.0)
 	style.bg_color = Color(0.1, 0.1, 0.15, 0.95)
-	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
 
 

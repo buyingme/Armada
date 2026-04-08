@@ -161,13 +161,8 @@ func _build_ui() -> void:
 
 ## Applies the standard modal panel style.
 func _apply_panel_style() -> void:
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
-	panel_style.border_color = Color(0.4, 0.5, 0.7, 1.0)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(8)
-	panel_style.set_content_margin_all(16)
-	add_theme_stylebox_override("panel", panel_style)
+	add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style())
 
 
 ## Creates title, effect text, and chooser labels.

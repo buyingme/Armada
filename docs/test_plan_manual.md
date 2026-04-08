@@ -4569,3 +4569,63 @@ injected as Callables at `initialize()`.
 | 2 | Press Escape to open quit confirmation | Quit modal shows question label + Yes/No buttons |
 
 **Pass criteria:** All modals/panels render identically to pre-D1. No visual regressions, no missing widgets, no layout drift. All buttons function. 1 669 tests pass.
+
+---
+
+## Phase D2 — UIStyleHelper Utility
+
+**Scope:** `src/utils/ui_style_helper.gd` created; 10 files converted to
+`UIStyleHelper.create_modal_panel_style()`, 3 files converted to
+`UIStyleHelper.create_dismiss_hint()`. GUT covers constants and factories
+(30 tests). Manual tests verify visual parity only.
+
+**Commits:**
+- (this commit) — UIStyleHelper utility + replacements across 10 modal panels + 3 dismiss hints
+
+### MT-D2.01 — Activation Modal Panel Style
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open game, activate a ship with a dial | Activation modal appears — same dark-blue background, blue border, rounded corners, same spacing |
+| 2 | Check dismiss hint at bottom | "Press Escape to dismiss" text is small, grey, centred |
+
+### MT-D2.02 — Attack Sim Panel Style
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start an attack (select attacker zone → select target) | Attack sim panel appears — identical panel style, no layout drift |
+
+### MT-D2.03 — Squadron Activation Modal Style
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter squadron phase, click a squadron | Squadron activation modal opens — dark panel, same border, no content margin gaps |
+
+### MT-D2.04 — Command Dial Picker Style
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During Command Phase, right-click a ship | Command dial picker appears — same panel look, no margin changes |
+
+### MT-D2.05 — Repair Panel + Displacement Modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship with a Repair command | Repair panel opens — same panel style, "Press Escape to finish" hint in grey |
+| 2 | Force displacement after overlap resolution | Displacement modal opens — same panel look, rounded corners |
+
+### MT-D2.06 — Targeting List + Quit Confirmation + Opponent Choice
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press "T" during Ship Phase | Targeting list modal — same panel style as before D2 |
+| 2 | Press Escape to open quit confirmation | Quit modal — same panel, same buttons |
+| 3 | If opponent choice modal triggers | Same panel style, same layout |
+
+### MT-D2.07 — Command Dial Order Modal
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Right-click a ship's dial stack (after dials assigned) | Command dial order modal opens — slightly darker background (intentional variant), same border, "Click anywhere to close" hint in grey |
+
+**Pass criteria:** All modals/panels render identically to pre-D2. No visual regressions. Panel backgrounds, borders, corner radii, margins, and dismiss hint text all match previous appearance. 1 699 tests pass (89 scripts, 2 966 asserts).

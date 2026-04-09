@@ -68,9 +68,10 @@ func get_non_initiative_player_state() -> PlayerState:
 func serialize() -> Dictionary:
 	var data := {
 		"current_round": current_round,
-		"current_phase": current_phase,
+		"current_phase": int(current_phase),
 		"initiative_player": initiative_player,
 		"player_states": [],
+		"damage_deck": damage_deck.serialize() if damage_deck else {},
 	}
 	for ps in player_states:
 		data["player_states"].append(ps.serialize())
@@ -78,11 +79,16 @@ func serialize() -> Dictionary:
 
 
 ## Deserializes a game state from a saved dictionary.
+## Ship/squadron reconstruction inside each PlayerState is left to the
+## caller because it requires template look-ups (ShipData / SquadronData).
 static func deserialize(data: Dictionary) -> GameState:
 	var state := GameState.new()
 	state.current_round = data.get("current_round", 0)
-	state.current_phase = data.get("current_phase", Constants.GamePhase.SETUP) as Constants.GamePhase
+	state.current_phase = int(data.get("current_phase", 0)) as Constants.GamePhase
 	state.initiative_player = data.get("initiative_player", 0)
 	for ps_data in data.get("player_states", []):
 		state.player_states.append(PlayerState.deserialize(ps_data))
+	var deck_data: Dictionary = data.get("damage_deck", {})
+	if not deck_data.is_empty():
+		state.damage_deck = DamageDeck.deserialize(deck_data)
 	return state

@@ -1878,7 +1878,7 @@ func _resolve_maneuver_overlaps_ex() -> Transform2D:
 
 ## Resolves the AFTER_MANEUVER_EXECUTE hook for persistent damage cards.
 ## Ruptured Engine: suffer 1 facedown if speed > 1.
-## Damaged Controls: suffer 1 facedown if overlapping an obstacle.
+## Damaged Controls: suffer 1 facedown if overlapping a ship or obstacle.
 ## Rules Reference: "Ruptured Engine", "Damaged Controls" card texts.
 func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
 	var registry: EffectRegistry = null

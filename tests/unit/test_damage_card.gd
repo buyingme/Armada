@@ -182,3 +182,76 @@ func test_deck_cards_have_valid_timing() -> void:
 		var card: DamageCard = deck.draw_card()
 		assert_has(valid_timings, card.timing,
 				"Card '%s' should have a valid timing value" % card.title)
+
+
+# --- Serialization round-trip ---
+
+func test_serialize_contains_all_keys() -> void:
+	var card: DamageCard = _make_full_card()
+	var data: Dictionary = card.serialize()
+	for key: String in ["trait_type", "title", "is_faceup",
+			"effect_text", "timing", "effect_id"]:
+		assert_true(data.has(key),
+				"serialize() should include key '%s'" % key)
+
+
+func test_serialize_values_match_fields() -> void:
+	var card: DamageCard = _make_full_card()
+	card.flip_faceup()
+	var data: Dictionary = card.serialize()
+	assert_eq(data["trait_type"], "Ship",
+			"Serialized trait_type should match")
+	assert_eq(data["title"], "Structural Damage",
+			"Serialized title should match")
+	assert_true(data["is_faceup"] as bool,
+			"Serialized is_faceup should be true after flip_faceup()")
+	assert_eq(data["effect_text"], "Reduce hull by 1.",
+			"Serialized effect_text should match")
+	assert_eq(data["timing"], "persistent",
+			"Serialized timing should match")
+	assert_eq(data["effect_id"], "structural_damage",
+			"Serialized effect_id should match")
+
+
+func test_deserialize_round_trip_facedown() -> void:
+	var original: DamageCard = _make_full_card()
+	var restored: DamageCard = DamageCard.deserialize(original.serialize())
+	assert_eq(restored.trait_type, original.trait_type,
+			"Round-trip should preserve trait_type")
+	assert_eq(restored.title, original.title,
+			"Round-trip should preserve title")
+	assert_false(restored.is_faceup,
+			"Round-trip should preserve facedown state")
+	assert_eq(restored.effect_id, original.effect_id,
+			"Round-trip should preserve effect_id")
+
+
+func test_deserialize_round_trip_faceup() -> void:
+	var original: DamageCard = _make_full_card()
+	original.flip_faceup()
+	var restored: DamageCard = DamageCard.deserialize(original.serialize())
+	assert_true(restored.is_faceup,
+			"Round-trip should preserve faceup state")
+
+
+func test_deserialize_handles_empty_dict() -> void:
+	var card: DamageCard = DamageCard.deserialize({})
+	assert_eq(card.trait_type, "",
+			"Empty dict should default trait_type to ''")
+	assert_eq(card.title, "",
+			"Empty dict should default title to ''")
+	assert_false(card.is_faceup,
+			"Empty dict should default is_faceup to false")
+
+
+# --- Helper ---
+
+func _make_full_card() -> DamageCard:
+	var data: Dictionary = {
+		"trait": "Ship",
+		"title": "Structural Damage",
+		"effect_text": "Reduce hull by 1.",
+		"timing": "persistent",
+		"effect_id": "structural_damage",
+	}
+	return DamageCard.from_data(data)

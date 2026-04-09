@@ -80,7 +80,7 @@ func setup(faction: Constants.Faction, left_side: bool,
 	_is_left_side = left_side
 	_viewer_player = viewer
 	_builder = ShipCardEntryBuilder.new(_tex_cache)
-	_damage_display = DamageCardDisplay.new(_tex_cache, self)
+	_damage_display = DamageCardDisplay.new(_tex_cache, self )
 	_damage_display.damage_overview_requested.connect(
 			_on_damage_overview_from_display)
 	add_theme_constant_override("separation",

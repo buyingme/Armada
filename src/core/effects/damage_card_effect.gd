@@ -222,7 +222,8 @@ func _trigger_ruptured_engine(context: EffectContext) -> bool:
 	return speed > 1
 
 
-## Damaged Controls: Suffer 1 extra facedown when overlapping an obstacle.
+## Damaged Controls: Suffer 1 extra facedown when overlapping a ship or obstacle.
+## Rules Reference: "Damaged Controls" card text, p.5.
 func _trigger_damaged_controls(context: EffectContext) -> bool:
 	if context.get_meta_value("ship", null) != owner:
 		return false

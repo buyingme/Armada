@@ -4670,3 +4670,23 @@ injected as Callables at `initialize()`.
 | 2 | Click a token to discard | Token removed, discard mode exits, column refreshes |
 
 **Pass criteria:** All card panel visuals and interactions identical to pre-D3. No regressions in token display, dial stacks, damage cards, magnify, or discard mode. 1 699 tests pass (89 scripts, 2 966 asserts).
+
+---
+
+## Phase E — Serialization & EventBus Cleanup
+
+Phase E is pure core-logic and autoload work (no visual changes).
+All validation is covered by GUT tests — **no manual testing required.**
+
+**GUT baseline:** 90 scripts, 1 737 tests, 3 083 asserts — all passing.
+
+### MT-E.01 — Save/Load Smoke Test (optional)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Play a round in the learning scenario | Normal gameplay |
+| 2 | Open Godot debugger or call `SaveGameManager.save_game(GameManager.game_state)` | File created at `user://saves/quicksave.json` |
+| 3 | Inspect the JSON file | Contains `current_round`, `player_states` with ships/squadrons arrays, `damage_deck` draw/discard piles |
+| 4 | Call `SaveGameManager.load_game()` | Returns a `GameState` with correct round, phase, player data |
+
+**Pass criteria:** JSON file is well-formed, round-trip preserves all fields.

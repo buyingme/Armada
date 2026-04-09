@@ -398,3 +398,111 @@ func test_is_fully_healthy_true_after_shields_restored() -> void:
 	_instance.restore_shields("FRONT", 1)
 	assert_true(_instance.is_fully_healthy(),
 			"Ship should be fully healthy after shields restored")
+
+
+# --- Serialization round-trip ---
+
+func test_serialize_contains_expected_keys() -> void:
+	var data: Dictionary = _instance.serialize()
+	for key: String in ["data_key", "current_shields", "current_hull",
+			"current_speed", "defense_tokens", "facedown_damage",
+			"faceup_damage", "activated_this_round", "owner_player",
+			"destroyed", "command_dial_stack", "command_tokens"]:
+		assert_true(data.has(key),
+				"serialize() should include key '%s'" % key)
+
+
+func test_serialize_data_key() -> void:
+	var data: Dictionary = _instance.serialize()
+	assert_eq(data["data_key"], "test_ship",
+			"Serialized data_key should match")
+
+
+func test_serialize_current_speed() -> void:
+	_instance.set_speed(1)
+	var data: Dictionary = _instance.serialize()
+	assert_eq(data["current_speed"], 1,
+			"Serialized current_speed should reflect set_speed()")
+
+
+func test_deserialize_round_trip_basic_fields() -> void:
+	_instance.set_speed(1)
+	_instance.activated_this_round = true
+	_instance.current_hull = 3
+	var data: Dictionary = _instance.serialize()
+	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+	assert_eq(restored.data_key, "test_ship",
+			"Round-trip should preserve data_key")
+	assert_eq(restored.current_speed, 1,
+			"Round-trip should preserve current_speed")
+	assert_eq(restored.current_hull, 3,
+			"Round-trip should preserve current_hull")
+	assert_true(restored.activated_this_round,
+			"Round-trip should preserve activated_this_round")
+	assert_eq(restored.owner_player, 0,
+			"Round-trip should preserve owner_player")
+
+
+func test_deserialize_round_trip_shields() -> void:
+	_instance.reduce_shields("FRONT", 2)
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_eq(int(restored.current_shields["FRONT"]), 1,
+			"Round-trip should preserve reduced shields")
+	assert_eq(int(restored.current_shields["LEFT"]), 2,
+			"Round-trip should preserve untouched shields")
+
+
+func test_deserialize_round_trip_defense_tokens() -> void:
+	_instance.exhaust_defense_token(0)
+	_instance.discard_defense_token(2)
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_eq(restored.defense_tokens.size(), 3,
+			"Round-trip should preserve token count")
+	assert_eq(restored.defense_tokens[0]["state"],
+			Constants.DefenseTokenState.EXHAUSTED,
+			"Round-trip should preserve exhausted state")
+	assert_eq(restored.defense_tokens[1]["state"],
+			Constants.DefenseTokenState.READY,
+			"Round-trip should preserve ready state")
+	assert_eq(restored.defense_tokens[2]["state"],
+			Constants.DefenseTokenState.DISCARDED,
+			"Round-trip should preserve discarded state")
+
+
+func test_deserialize_round_trip_damage_cards() -> void:
+	var fd_card: DamageCard = DamageCard.create("Ship", "Facedown Hit")
+	var fu_card: DamageCard = DamageCard.create("Crew", "Critical Hit")
+	fu_card.flip_faceup()
+	_instance.add_facedown_damage(fd_card)
+	_instance.add_faceup_damage(fu_card)
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_eq(restored.facedown_damage.size(), 1,
+			"Round-trip should preserve facedown damage count")
+	assert_eq(restored.faceup_damage.size(), 1,
+			"Round-trip should preserve faceup damage count")
+	assert_eq((restored.faceup_damage[0] as DamageCard).title,
+			"Critical Hit",
+			"Round-trip should preserve faceup card title")
+	assert_true((restored.faceup_damage[0] as DamageCard).is_faceup,
+			"Round-trip should preserve faceup state on faceup cards")
+
+
+func test_deserialize_round_trip_destroyed_flag() -> void:
+	_instance.mark_destroyed()
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_true(restored.is_destroyed(),
+			"Round-trip should preserve destroyed flag")
+
+
+func test_deserialize_round_trip_command_dial_stack() -> void:
+	_instance.command_dial_stack.command_value = 2
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_not_null(restored.command_dial_stack,
+			"Round-trip should restore command_dial_stack")
+	assert_eq(restored.command_dial_stack.command_value, 2,
+			"Round-trip should preserve command_value")

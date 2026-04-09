@@ -1703,6 +1703,29 @@ constructor. Dead constants (`TOKEN_FILENAMES`, `CMD_ICON_FILENAMES`,
 
 ---
 
+### Refactoring Phase E — Serialization & EventBus Cleanup 🔄
+
+**Goal:** Add `serialize()`/`deserialize()` to all core data classes,
+extend `PlayerState` and `GameState` to include ships/squadrons/damage
+deck, group EventBus signals with `#region` blocks, and create a
+`SaveGameManager` autoload for JSON-based save/load.
+
+| # | Task | Target File(s) | Deliverables | Status |
+|---|------|----------------|--------------|--------|
+| E3 | DamageCard + DamageDeck serialize | `damage_card.gd`, `damage_deck.gd` | `serialize()` / `deserialize()` on both classes; 13 tests | ✅ |
+| E1 | ShipInstance serialize | `ship_instance.gd` | `serialize()` / `deserialize()` (delegates to sub-components); 9 tests | ✅ |
+| E2 | SquadronInstance serialize | `squadron_instance.gd` | `serialize()` / `deserialize()`; 4 tests | ✅ |
+| E4 | ShipActivationState serialize | `ship_activation_state.gd` | `serialize()` / `deserialize()`; 6 tests | ✅ |
+| E6 | EventBus region grouping | `event_bus.gd` | 12 `#region`/`#endregion` blocks replacing `# ---` separators | ✅ |
+| E5 | SaveGameManager autoload | `save_game_manager.gd` | `save_game()`, `load_game()`, `list_saves()`, `delete_save()`; registered in `project.godot`; 7 tests | ✅ |
+| — | PlayerState ships/squads | `player_state.gd` | `serialize()` now includes ships & squadrons arrays | ✅ |
+| — | GameState damage_deck | `game_state.gd` | `serialize()`/`deserialize()` now includes damage deck | ✅ |
+| — | Doc comment fix | `damage_card_effect.gd`, `game_board.gd` | "obstacle" → "ship or obstacle" in Damaged Controls comments | ✅ |
+
+**Tests:** 90 scripts, 1737 tests, 3083 asserts — all passing.
+
+---
+
 ```
 Phase 0 (Scale & Assets)
     │

@@ -140,3 +140,54 @@ func test_reset_activation() -> void:
 	_instance.reset_activation()
 	assert_false(_instance.activated_this_round,
 			"Activation flag should be reset")
+
+
+# --- Serialization round-trip ---
+
+func test_serialize_contains_expected_keys() -> void:
+	var data: Dictionary = _instance.serialize()
+	for key: String in ["data_key", "current_hull", "activated_this_round",
+			"is_engaged", "owner_player", "destroyed", "defense_tokens"]:
+		assert_true(data.has(key),
+				"serialize() should include key '%s'" % key)
+
+
+func test_deserialize_round_trip_basic_fields() -> void:
+	_instance.suffer_damage(1)
+	_instance.activated_this_round = true
+	_instance.is_engaged = true
+	var restored: SquadronInstance = SquadronInstance.deserialize(
+			_instance.serialize(), _squad_data)
+	assert_eq(restored.data_key, "test_squad",
+			"Round-trip should preserve data_key")
+	assert_eq(restored.current_hull, 2,
+			"Round-trip should preserve current_hull")
+	assert_true(restored.activated_this_round,
+			"Round-trip should preserve activated_this_round")
+	assert_true(restored.is_engaged,
+			"Round-trip should preserve is_engaged")
+	assert_eq(restored.owner_player, 1,
+			"Round-trip should preserve owner_player")
+
+
+func test_deserialize_round_trip_defense_tokens() -> void:
+	_instance.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
+	_instance.defense_tokens[1]["state"] = Constants.DefenseTokenState.DISCARDED
+	var restored: SquadronInstance = SquadronInstance.deserialize(
+			_instance.serialize(), _squad_data)
+	assert_eq(restored.defense_tokens.size(), 2,
+			"Round-trip should preserve token count")
+	assert_eq(restored.defense_tokens[0]["state"],
+			Constants.DefenseTokenState.EXHAUSTED,
+			"Round-trip should preserve exhausted state")
+	assert_eq(restored.defense_tokens[1]["state"],
+			Constants.DefenseTokenState.DISCARDED,
+			"Round-trip should preserve discarded state")
+
+
+func test_deserialize_round_trip_destroyed_flag() -> void:
+	_instance.mark_destroyed()
+	var restored: SquadronInstance = SquadronInstance.deserialize(
+			_instance.serialize(), _squad_data)
+	assert_true(restored.is_destroyed(),
+			"Round-trip should preserve destroyed flag")

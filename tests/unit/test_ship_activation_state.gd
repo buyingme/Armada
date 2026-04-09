@@ -374,3 +374,84 @@ func test_mark_maneuver_resolves_navigate_if_dial_used() -> void:
 	state.mark_maneuver_executed()
 	assert_true(state.is_command_resolved(Constants.CommandType.NAVIGATE),
 			"Navigate should be resolved after maneuver with speed change")
+
+
+# ---------------------------------------------------------------------------
+# Serialization round-trip
+# ---------------------------------------------------------------------------
+
+
+func test_serialize_contains_expected_keys() -> void:
+	var ship: ShipInstance = _make_ship()
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	var data: Dictionary = state.serialize()
+	for key: String in ["current_step", "resolved_commands",
+			"has_navigate_dial", "has_navigate_token",
+			"dial_speed_budget", "token_speed_budget",
+			"initial_dial_budget", "initial_token_budget",
+			"yaw_bonus_available", "yaw_bonus_joint",
+			"original_speed", "total_speed_change",
+			"maneuver_executed"]:
+		assert_true(data.has(key),
+				"serialize() should include key '%s'" % key)
+
+
+func test_deserialize_round_trip_step() -> void:
+	var ship: ShipInstance = _make_ship()
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	state.advance_step()
+	state.advance_step()
+	var restored: ShipActivationState = ShipActivationState.deserialize(
+			state.serialize(), ship)
+	assert_eq(restored.get_current_step(),
+			ShipActivationState.Step.REPAIR,
+			"Round-trip should preserve current_step")
+
+
+func test_deserialize_round_trip_navigate_state() -> void:
+	var ship: ShipInstance = _make_ship(2, true, true)
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	state.apply_speed_change(1)
+	var restored: ShipActivationState = ShipActivationState.deserialize(
+			state.serialize(), ship)
+	assert_true(restored.has_navigate_dial(),
+			"Round-trip should preserve has_navigate_dial")
+	assert_true(restored.has_navigate_token(),
+			"Round-trip should preserve has_navigate_token")
+	assert_eq(restored.get_total_speed_change(), 1,
+			"Round-trip should preserve total_speed_change")
+	assert_eq(restored.get_original_speed(), 2,
+			"Round-trip should preserve original_speed")
+
+
+func test_deserialize_round_trip_yaw_bonus() -> void:
+	var ship: ShipInstance = _make_ship(2, true, false)
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	state.apply_yaw_bonus(2)
+	var restored: ShipActivationState = ShipActivationState.deserialize(
+			state.serialize(), ship)
+	assert_false(restored.has_yaw_bonus(),
+			"Round-trip should preserve consumed yaw bonus")
+	assert_eq(restored.get_yaw_bonus_joint(), 2,
+			"Round-trip should preserve yaw bonus joint")
+
+
+func test_deserialize_round_trip_resolved_commands() -> void:
+	var ship: ShipInstance = _make_ship()
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	state.mark_command_resolved(Constants.CommandType.NAVIGATE)
+	var restored: ShipActivationState = ShipActivationState.deserialize(
+			state.serialize(), ship)
+	assert_true(restored.is_command_resolved(
+			Constants.CommandType.NAVIGATE),
+			"Round-trip should preserve resolved commands")
+
+
+func test_deserialize_round_trip_maneuver_executed() -> void:
+	var ship: ShipInstance = _make_ship()
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	state.mark_maneuver_executed()
+	var restored: ShipActivationState = ShipActivationState.deserialize(
+			state.serialize(), ship)
+	assert_true(restored.is_maneuver_executed(),
+			"Round-trip should preserve maneuver_executed")

@@ -78,3 +78,35 @@ func is_persistent() -> bool:
 ## Returns true if this card has an immediate effect (resolves on deal).
 func is_immediate() -> bool:
 	return timing == "immediate" or timing == "immediate_persistent"
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+
+## Serializes this damage card to a dictionary suitable for JSON persistence.
+## Captures all mutable and identity fields needed for round-trip restore.
+func serialize() -> Dictionary:
+	return {
+		"trait_type": trait_type,
+		"title": title,
+		"is_faceup": is_faceup,
+		"effect_text": effect_text,
+		"timing": timing,
+		"effect_id": effect_id,
+	}
+
+
+## Restores a DamageCard from a serialized dictionary.
+## Preserves the [member is_faceup] state (unlike [method from_data] which
+## always creates facedown cards).
+static func deserialize(data: Dictionary) -> DamageCard:
+	var card: DamageCard = DamageCard.new()
+	card.trait_type = data.get("trait_type", "")
+	card.title = data.get("title", "")
+	card.is_faceup = data.get("is_faceup", false) as bool
+	card.effect_text = data.get("effect_text", "")
+	card.timing = data.get("timing", "")
+	card.effect_id = data.get("effect_id", "")
+	return card

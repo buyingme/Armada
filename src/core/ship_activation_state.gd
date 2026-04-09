@@ -357,3 +357,61 @@ func _recompute_budgets() -> void:
 	# Token consumed for the remainder.
 	var token_used: int = mini(abs_change - dial_used, _initial_token_budget)
 	_token_speed_budget = _initial_token_budget - token_used
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+
+## Serializes the activation state to a dictionary.
+## The [member _ship] reference is NOT included — the caller must
+## re-associate the correct [ShipInstance] on deserialization.
+func serialize() -> Dictionary:
+	var resolved: Array[int] = []
+	for key: Variant in _resolved_commands:
+		resolved.append(int(key))
+	return {
+		"current_step": int(_current_step),
+		"resolved_commands": resolved,
+		"has_navigate_dial": _has_navigate_dial,
+		"has_navigate_token": _has_navigate_token,
+		"dial_speed_budget": _dial_speed_budget,
+		"token_speed_budget": _token_speed_budget,
+		"initial_dial_budget": _initial_dial_budget,
+		"initial_token_budget": _initial_token_budget,
+		"yaw_bonus_available": _yaw_bonus_available,
+		"yaw_bonus_joint": _yaw_bonus_joint,
+		"original_speed": _original_speed,
+		"total_speed_change": _total_speed_change,
+		"maneuver_executed": _maneuver_executed,
+	}
+
+
+## Restores a ShipActivationState from a serialized dictionary.
+## [param data] — the dictionary produced by [method serialize].
+## [param ship] — the [ShipInstance] being activated (must be provided
+##     by the caller since ship references are not serialized).
+static func deserialize(
+		data: Dictionary, ship: ShipInstance) -> ShipActivationState:
+	var state: ShipActivationState = ShipActivationState.new()
+	state._ship = ship
+	state._current_step = int(data.get("current_step", 0)) as Step
+	state._has_navigate_dial = data.get(
+			"has_navigate_dial", false) as bool
+	state._has_navigate_token = data.get(
+			"has_navigate_token", false) as bool
+	state._dial_speed_budget = int(data.get("dial_speed_budget", 0))
+	state._token_speed_budget = int(data.get("token_speed_budget", 0))
+	state._initial_dial_budget = int(data.get("initial_dial_budget", 0))
+	state._initial_token_budget = int(data.get("initial_token_budget", 0))
+	state._yaw_bonus_available = data.get(
+			"yaw_bonus_available", false) as bool
+	state._yaw_bonus_joint = int(data.get("yaw_bonus_joint", -1))
+	state._original_speed = int(data.get("original_speed", 0))
+	state._total_speed_change = int(data.get("total_speed_change", 0))
+	state._maneuver_executed = data.get(
+			"maneuver_executed", false) as bool
+	for cmd: Variant in data.get("resolved_commands", []):
+		state._resolved_commands[int(cmd)] = true
+	return state

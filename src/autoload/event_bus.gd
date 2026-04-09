@@ -6,7 +6,7 @@
 extends Node
 
 
-# --- Game Flow Events ---
+#region Game Flow Events
 
 ## Emitted when a new game starts.
 signal game_started()
@@ -26,8 +26,10 @@ signal round_ended(round_number: int)
 ## Emitted when the game phase changes.
 signal phase_changed(new_phase: Constants.GamePhase)
 
+#endregion
 
-# --- Ship Events ---
+
+#region Ship Events
 
 ## Emitted when a ship is activated.
 signal ship_activated(ship: Node)
@@ -68,8 +70,10 @@ signal ship_moved(ship: Node)
 ## Emitted when a squadron's hull points change.
 signal squadron_hull_changed(squadron_instance: RefCounted, new_hull: int)
 
+#endregion
 
-# --- Squadron Events ---
+
+#region Squadron Events
 
 ## Emitted when a squadron is activated.
 signal squadron_activated(squadron: Node)
@@ -85,8 +89,10 @@ signal squadron_destroyed(squadron: Node)
 ## Emitted when a squadron moves.
 signal squadron_moved(squadron: Node)
 
+#endregion
 
-# --- Combat Events ---
+
+#region Combat Events
 
 ## Emitted when an attack is declared.
 signal attack_declared(attacker: Node, defender: Node)
@@ -100,8 +106,10 @@ signal defense_token_spent(ship: Node, token_type: Constants.DefenseToken)
 ## Emitted when damage is resolved.
 signal damage_resolved(target: Node, total_damage: int)
 
+#endregion
 
-# --- UI Events ---
+
+#region UI Events
 
 ## Emitted when a game element is selected by the player.
 signal element_selected(element: Node)
@@ -117,8 +125,10 @@ signal detail_view_requested(element: Node)
 ## Rules Reference: UI-011 — player may show/hide firing arcs on a ship.
 signal firing_arc_toggled(token: Node)
 
+#endregion
 
-# --- Command Phase Events ---
+
+#region Command Phase Events
 
 ## Emitted when a ship's command dial stack changes (dial assigned, revealed, or spent).
 ## [param ship_instance] — the ShipInstance whose dials changed.
@@ -151,10 +161,38 @@ signal command_picker_confirmed(ship_instance: RefCounted, commands: Array)
 ## [param ship_instance] — the ship to inspect.
 signal command_dial_order_requested(ship_instance: RefCounted)
 
+#endregion
 
-# --- Turn Management Events (Phase 4b) ---
 
-# --- Repair Command Events (Phase 9) ---
+#region Turn Management Events
+
+## Emitted when the active player changes.
+## [param player_index] — the new active player (0 or 1).
+## Requirements: TF-001 — only the active player can interact.
+signal active_player_changed(player_index: int)
+
+## Emitted when the active player presses "End Activation" during
+## Ship or Squadron Phase.
+## Requirements: TF-005, TF-011.
+signal activation_ended()
+
+## Emitted when a handoff overlay or "Your Turn" banner is dismissed
+## and the new active player is ready to proceed.
+## Requirements: HO-002, HO-004.
+signal handoff_accepted()
+
+## Emitted when the board perspective should switch to a given player.
+## [param player_index] — the player whose perspective to show.
+## Requirements: BP-001, BP-002.
+signal perspective_change_requested(player_index: int)
+
+## Emitted when the board perspective rotation animation finishes.
+signal perspective_change_complete()
+
+#endregion
+
+
+#region Repair Command Events
 
 ## Emitted when shields are moved between zones via the repair command.
 ## [param ship_instance] — the ship whose shields changed.
@@ -180,6 +218,11 @@ signal repair_card_discarded(ship_instance: RefCounted, card: RefCounted)
 ## [param points_spent] — total engineering points spent.
 ## Rules Reference: CM-037.
 signal repair_command_resolved(ship_instance: RefCounted, points_spent: int)
+
+#endregion
+
+
+#region Damage Card Events
 
 ## Emitted when a damage card flips between faceup and facedown.
 ## [param ship_instance] — the ship carrying the card.
@@ -213,31 +256,10 @@ signal damage_summary_requested(ship_instance: RefCounted,
 ## Rules Reference: DM-005 — player sees faceup card before effect resolves.
 signal damage_summary_dismissed()
 
-## Emitted when the active player changes.
-## [param player_index] — the new active player (0 or 1).
-## Requirements: TF-001 — only the active player can interact.
-signal active_player_changed(player_index: int)
-
-## Emitted when the active player presses "End Activation" during
-## Ship or Squadron Phase.
-## Requirements: TF-005, TF-011.
-signal activation_ended()
-
-## Emitted when a handoff overlay or "Your Turn" banner is dismissed
-## and the new active player is ready to proceed.
-## Requirements: HO-002, HO-004.
-signal handoff_accepted()
-
-## Emitted when the board perspective should switch to a given player.
-## [param player_index] — the player whose perspective to show.
-## Requirements: BP-001, BP-002.
-signal perspective_change_requested(player_index: int)
-
-## Emitted when the board perspective rotation animation finishes.
-signal perspective_change_complete()
+#endregion
 
 
-# --- Ship Activation Events (Phase 4c) ---
+#region Token Discard Events
 
 ## Emitted when a force-added command token causes overflow (tokens > command
 ## value) and the player must choose one token to discard.
@@ -258,6 +280,11 @@ signal token_discarded(ship_instance: RefCounted, discarded_type: int)
 ## [param token_type] — Constants.CommandType value of the discarded duplicate.
 signal duplicate_token_discarded(ship_instance: RefCounted, token_type: int)
 
+#endregion
+
+
+#region Dial Drag Events
+
 ## Emitted when the player starts dragging a command dial from the card panel.
 ## [param ship_instance] — the ship whose topmost dial is being dragged.
 ## Requirements: UI-024.
@@ -266,8 +293,10 @@ signal dial_drag_started(ship_instance: RefCounted)
 ## Emitted when a dial drag is cancelled (released on invalid target).
 signal dial_drag_cancelled()
 
+#endregion
 
-# --- Maneuver Tool Events (Phase 5a) ---
+
+#region Maneuver Tool Events
 
 ## Emitted when the player presses the "Display Maneuver Tool" button.
 ## Requirements: MT-U-002.
@@ -293,8 +322,10 @@ signal targeting_list_requested()
 ## Requirements: AS-ACT-001, AS-ACT-002.
 signal attack_simulator_requested()
 
+#endregion
 
-# --- Activation / Maneuver Execution Events (Phase 5b) ---
+
+#region Activation / Maneuver Execution Events
 
 ## Emitted when the player presses "Show Activation Sequence".
 ## Requirements: ACT-007.
@@ -312,3 +343,5 @@ signal execute_maneuver_requested()
 ## [param ship_node] — the ShipToken that was moved.
 ## Requirements: EXE-002, AC-5b-09, AC-5b-13.
 signal maneuver_executed(ship_node: Node)
+
+#endregion

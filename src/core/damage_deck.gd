@@ -111,3 +111,37 @@ func _reshuffle_discard() -> void:
 	_draw_pile.append_array(_discard_pile)
 	_discard_pile.clear()
 	_shuffle_draw_pile()
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+
+## Serializes the deck state (draw pile order + discard pile order).
+## Cards currently assigned to ships are NOT included — they are serialized
+## with their owning ShipInstance.
+func serialize() -> Dictionary:
+	var draw: Array[Dictionary] = []
+	for card: DamageCard in _draw_pile:
+		draw.append(card.serialize())
+	var discard: Array[Dictionary] = []
+	for card: DamageCard in _discard_pile:
+		discard.append(card.serialize())
+	return {
+		"draw_pile": draw,
+		"discard_pile": discard,
+	}
+
+
+## Restores a DamageDeck from a serialized dictionary.
+## Preserves exact card order (no shuffle).
+static func deserialize(data: Dictionary) -> DamageDeck:
+	var deck: DamageDeck = DamageDeck.new()
+	for card_data: Variant in data.get("draw_pile", []):
+		deck._draw_pile.append(DamageCard.deserialize(
+				card_data as Dictionary))
+	for card_data: Variant in data.get("discard_pile", []):
+		deck._discard_pile.append(DamageCard.deserialize(
+				card_data as Dictionary))
+	return deck

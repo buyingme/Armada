@@ -142,3 +142,54 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 		_:
 			push_error("SquadronInstance: unknown defense token '%s'" % name)
 			return Constants.DefenseToken.EVADE
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+
+## Serializes this squadron's mutable runtime state to a dictionary.
+## The static template ([member squadron_data]) is identified by
+## [member data_key] and must be re-loaded on deserialization.
+func serialize() -> Dictionary:
+	var tokens: Array[Dictionary] = []
+	for token: Dictionary in defense_tokens:
+		tokens.append({
+			"type": int(token["type"]),
+			"state": int(token["state"]),
+		})
+	return {
+		"data_key": data_key,
+		"current_hull": current_hull,
+		"activated_this_round": activated_this_round,
+		"is_engaged": is_engaged,
+		"owner_player": owner_player,
+		"destroyed": _destroyed,
+		"defense_tokens": tokens,
+	}
+
+
+## Restores a SquadronInstance from a serialized dictionary.
+## [param data] — the dictionary produced by [method serialize].
+## [param squad_data_ref] — the static [SquadronData] template.
+##     The caller must look up the template via [code]data["data_key"][/code].
+static func deserialize(
+		data: Dictionary,
+		squad_data_ref: SquadronData) -> SquadronInstance:
+	var inst: SquadronInstance = SquadronInstance.new()
+	inst.data_key = data.get("data_key", "") as String
+	inst.squadron_data = squad_data_ref
+	inst.current_hull = int(data.get("current_hull", 0))
+	inst.activated_this_round = data.get(
+			"activated_this_round", false) as bool
+	inst.is_engaged = data.get("is_engaged", false) as bool
+	inst.owner_player = int(data.get("owner_player", 0))
+	inst._destroyed = data.get("destroyed", false) as bool
+	for t: Variant in data.get("defense_tokens", []):
+		var td: Dictionary = t as Dictionary
+		inst.defense_tokens.append({
+			"type": int(td["type"]) as Constants.DefenseToken,
+			"state": int(td["state"]) as Constants.DefenseTokenState,
+		})
+	return inst

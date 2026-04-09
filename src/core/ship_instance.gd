@@ -292,3 +292,83 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 		_:
 			push_error("ShipInstance: unknown defense token '%s'" % name)
 			return Constants.DefenseToken.EVADE
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+
+## Serializes this ship's mutable runtime state to a dictionary.
+## The static template data ([member ship_data]) is identified by
+## [member data_key] and must be re-loaded on deserialization.
+func serialize() -> Dictionary:
+	var fd_cards: Array[Dictionary] = []
+	for card: Variant in facedown_damage:
+		fd_cards.append((card as DamageCard).serialize())
+	var fu_cards: Array[Dictionary] = []
+	for card: Variant in faceup_damage:
+		fu_cards.append((card as DamageCard).serialize())
+	var tokens: Array[Dictionary] = []
+	for token: Dictionary in defense_tokens:
+		tokens.append({
+			"type": int(token["type"]),
+			"state": int(token["state"]),
+		})
+	return {
+		"data_key": data_key,
+		"current_shields": current_shields.duplicate(),
+		"current_hull": current_hull,
+		"current_speed": current_speed,
+		"defense_tokens": tokens,
+		"facedown_damage": fd_cards,
+		"faceup_damage": fu_cards,
+		"activated_this_round": activated_this_round,
+		"owner_player": owner_player,
+		"destroyed": _destroyed,
+		"command_dial_stack": command_dial_stack.serialize() \
+				if command_dial_stack else {},
+		"command_tokens": command_tokens.serialize() \
+				if command_tokens else {},
+	}
+
+
+## Restores a ShipInstance from a serialized dictionary.
+## [param data] — the dictionary produced by [method serialize].
+## [param ship_data_ref] — the static [ShipData] template for this ship.
+##     The caller must look up the template via [code]data["data_key"][/code].
+static func deserialize(
+		data: Dictionary, ship_data_ref: ShipData) -> ShipInstance:
+	var inst: ShipInstance = ShipInstance.new()
+	inst.data_key = data.get("data_key", "") as String
+	inst.ship_data = ship_data_ref
+	inst.current_shields = (data.get("current_shields", {})
+			as Dictionary).duplicate()
+	inst.current_hull = int(data.get("current_hull", 0))
+	inst.current_speed = int(data.get("current_speed", 0))
+	inst.activated_this_round = data.get(
+			"activated_this_round", false) as bool
+	inst.owner_player = int(data.get("owner_player", 0))
+	inst._destroyed = data.get("destroyed", false) as bool
+	# Defense tokens
+	for t: Variant in data.get("defense_tokens", []):
+		var td: Dictionary = t as Dictionary
+		inst.defense_tokens.append({
+			"type": int(td["type"]) as Constants.DefenseToken,
+			"state": int(td["state"]) as Constants.DefenseTokenState,
+		})
+	# Damage cards
+	for cd: Variant in data.get("facedown_damage", []):
+		inst.facedown_damage.append(DamageCard.deserialize(
+				cd as Dictionary))
+	for cd: Variant in data.get("faceup_damage", []):
+		inst.faceup_damage.append(DamageCard.deserialize(
+				cd as Dictionary))
+	# Sub-components
+	var cds_data: Dictionary = data.get("command_dial_stack", {})
+	inst.command_dial_stack = CommandDialStack.deserialize(cds_data) \
+			if not cds_data.is_empty() else null
+	var ctm_data: Dictionary = data.get("command_tokens", {})
+	inst.command_tokens = CommandTokenManager.deserialize(ctm_data) \
+			if not ctm_data.is_empty() else null
+	return inst

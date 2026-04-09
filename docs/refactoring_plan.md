@@ -694,9 +694,10 @@ call resolver → update panel with result.
 
 **Tests:** ~20 tests covering all 4 combatant combos × arc/LOS/range.
 
-##### F4b: Extract `AttackDiceResolver` (~200 lines)
+##### F4b: Extract `AttackDiceResolver` (~200 lines) ✅
 
 > **Risk: Low** — zero `_attack_sim_panel` references in computation.
+> **Completed:** 259 lines extracted, 10 AE functions delegated, 41 tests.
 
 **Functions that move (10, ~200 body lines):**
 

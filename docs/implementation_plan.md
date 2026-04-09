@@ -1809,6 +1809,29 @@ into two new RefCounted classes:
 | God objects (>1 000 lines) | 2 | 1 | 2 |
 | Controllers / managers | 7 | 10 | 10 |
 
+#### F4b: AttackDiceResolver ✅
+
+Extracted all pure dice/armament computation from `attack_executor.gd`
+into a new RefCounted class:
+
+- **`src/core/attack_dice_resolver.gd`** (~259 lines) — Stateless resolver
+  for armament resolution, dice pool computation, Concentrate Fire dial/token
+  detection, obstruction die removal, gather-dice hook application, damage
+  calculation, and damage-card attack-blocking checks.  Every public method
+  accepts `CombatParticipants` (and optionally `EffectRegistry`) as
+  parameters — no stored mutable state.
+- Public API: `resolve_armament()`, `compute_pool()`, `compute_dice_text()`,
+  `compute_pool_for_parts()`, `apply_gather_hook()`,
+  `is_blocked_by_damage()`, `is_blocked_by_damage_at_range()`,
+  `get_cf_dial_colours()`, `has_cf_dial()`, `has_cf_token()`,
+  `remove_obstruction_die()`, `calc_damage()`.
+- AE wiring: 10 function bodies replaced with one-line delegations.
+  UI side effects (panel updates, tooltip display) remain in AE.
+- `attack_executor.gd` reduced from 3 013 → 2 929 lines (−84 net).
+
+**New file:** `attack_dice_resolver.gd` (41 tests)
+**Tests:** 95 scripts, 1 854 tests, 3 228 asserts — all passing.
+
 ---
 
 ```

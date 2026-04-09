@@ -4810,3 +4810,24 @@ requiring the player to click or skip. ✅
 
 **Pass criteria:** Hull zones with no valid targets are rejected at
 selection time with a clear tooltip message. ✅
+
+### MT-F4b.01 — Dice Pool & Damage Still Work After Resolver Extraction
+
+**Purpose:** Confirm that attack dice pool computation, Concentrate Fire
+dial/token interaction, obstruction die removal, and damage calculation
+all still function correctly after extracting `AttackDiceResolver`.
+This is a pure-refactoring verification — no game-logic changes.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and advance to Ship Phase | Both players' ships can activate |
+| 2 | Activate a ship, select front arc, click enemy ship at close range | Dice pool shows correct colours (red + blue + black for close) |
+| 3 | If CF dial is available, accept or skip | CF dial adds 1 die of chosen colour, or skip proceeds to roll |
+| 4 | Roll dice | Results display with correct damage total |
+| 5 | If CF token available, reroll or skip | Reroll replaces one die, damage recalculates |
+| 6 | Place an obstruction between ships and repeat attack from another zone | Obstruction die removal offered (auto or choice), pool updates |
+| 7 | Attack a squadron from a ship (anti-squadron armament) | Dice pool shows anti-squadron dice; crits don't count as damage |
+
+**Pass criteria:** All attack flows produce identical behaviour to
+pre-extraction. Dice counts, damage totals, CF interaction, and
+obstruction removal work as before.

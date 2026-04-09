@@ -130,6 +130,11 @@ var _log: GameLogger = GameLogger.new("AttackExecutor")
 ## Constructed in [method initialize] with scene-tree callables.
 var _target_resolver: AttackTargetResolver = null
 
+## Pure-computation resolver for armament, dice pools, CF detection,
+## obstruction removal, damage calculation, and damage-card blocking.
+## Constructed in [method initialize].
+var _dice_resolver: AttackDiceResolver = null
+
 
 # ---------------------------------------------------------------------------
 # Attack Simulator state (Phase 6a / 6a-2)
@@ -318,6 +323,7 @@ func initialize(get_ship_tokens: Callable,
 	_target_resolver = AttackTargetResolver.new(
 			get_ship_tokens, get_squadron_tokens,
 			_build_obstruction_bodies)
+	_dice_resolver = AttackDiceResolver.new()
 
 
 ## Sets the [EffectRegistry] for hook resolution during attacks.
@@ -662,30 +668,8 @@ func _build_current_participants() -> CombatParticipants:
 ## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
 ## defender are ships, this icon adds one damage to the damage total."
 func _calc_attack_damage(results: Array[Dictionary]) -> int:
-	var base_damage: int
-	# Critical icons only add damage when BOTH attacker and defender are ships.
-	# If either combatant is a squadron, use the no-critical formula.
-	if _attack_sim_def_squad != null or _attack_sim_atk_squad != null:
-		base_damage = Dice.calculate_damage_vs_squadron(results)
-	else:
-		base_damage = Dice.calculate_damage(results)
-	# Resolve ATTACK_CALC_DAMAGE hook for keyword effects (e.g. Bomber).
-	if _effect_registry != null:
-		var ctx: EffectContext = EffectContext.new()
-		ctx.dice_results = results
-		ctx.damage_total = base_damage
-		# Determine attacker/defender RefCounted references.
-		if _attack_sim_atk_ship != null and _attack_sim_atk_ship is ShipToken:
-			ctx.attacker = (_attack_sim_atk_ship as ShipToken).get_ship_instance()
-		if _attack_sim_atk_squad != null:
-			ctx.attacker = _attack_sim_atk_squad.get_squadron_instance()
-		if _attack_sim_def_squad != null:
-			ctx.defender = _attack_sim_def_squad.get_squadron_instance()
-		elif _attack_sim_def_ship != null and _attack_sim_def_ship is ShipToken:
-			ctx.defender = (_attack_sim_def_ship as ShipToken).get_ship_instance()
-		ctx = _effect_registry.resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)
-		return ctx.damage_total
-	return base_damage
+	var parts: CombatParticipants = _build_current_participants()
+	return _dice_resolver.calc_damage(results, parts, _effect_registry)
 
 
 # ===========================================================================
@@ -1185,10 +1169,8 @@ func _update_los_overlay_and_panel(atk_pt: Vector2, def_pt: Vector2,
 ## Requirements: AE-PNL-002.
 ## Rules Reference: "Attack", Step 2, p.2; "Squadron Attacks", RRG p.19.
 func _compute_attack_dice_text(range_band: String) -> String:
-	if _attack_sim_atk_ship == null and _attack_sim_atk_squad == null:
-		return "0 dice"
-	var armament: Dictionary = _resolve_attacker_armament()
-	return DicePool.format_attack_pool(armament, range_band)
+	var parts: CombatParticipants = _build_current_participants()
+	return _dice_resolver.compute_dice_text(parts, range_band)
 
 
 ## Builds obstruction bodies from all ships excluding attacker/defender.
@@ -1330,22 +1312,9 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 
 ## Applies the ATTACK_GATHER_DICE effect hook to the pool.
 func _apply_gather_dice_hook() -> void:
-	if not _effect_registry:
-		return
-	var gd_ctx: EffectContext = EffectContext.new()
-	gd_ctx.dice_pool = _attack_exec_pool
-	if _attack_exec_ship_token and _attack_exec_ship_token is ShipToken:
-		gd_ctx.attacker = (
-				_attack_exec_ship_token as ShipToken
-				).get_ship_instance()
-	if _attack_sim_def_squad:
-		gd_ctx.defender = _attack_sim_def_squad.get_squadron_instance()
-	elif _attack_sim_def_ship and _attack_sim_def_ship is ShipToken:
-		gd_ctx.defender = (
-				_attack_sim_def_ship as ShipToken).get_ship_instance()
-	gd_ctx = _effect_registry.resolve_hook(
-			&"ATTACK_GATHER_DICE", gd_ctx)
-	_attack_exec_pool = gd_ctx.dice_pool
+	var parts: CombatParticipants = _build_current_participants()
+	_attack_exec_pool = _dice_resolver.apply_gather_hook(
+			_attack_exec_pool, _effect_registry, parts)
 
 
 ## Checks whether a persistent damage card effect blocks this attack.
@@ -1355,29 +1324,17 @@ func _apply_gather_dice_hook() -> void:
 ## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
 ## "Depowered Armament", "Disengaged Fire Control".
 func _is_attack_blocked_by_damage(range_band: String) -> bool:
-	if not _effect_registry:
-		return false
-	var ctx: EffectContext = EffectContext.new()
-	if _attack_exec_ship_token and _attack_exec_ship_token is ShipToken:
-		ctx.attacker = (
-				_attack_exec_ship_token as ShipToken
-				).get_ship_instance()
-	elif _attack_exec_squad_token:
-		ctx.attacker = _attack_exec_squad_token.get_squadron_instance()
-	ctx.range_band = range_band
-	ctx.set_meta_value("is_obstructed", _attack_exec_obstructed)
-	ctx.set_meta_value(
-			"ship_attacks_this_round", _attack_exec_current_attack)
-	ctx = _effect_registry.resolve_hook(
-			&"ATTACK_VALIDATE_TARGET", ctx)
-	if ctx.cancelled:
+	var parts: CombatParticipants = _build_current_participants()
+	var blocked: bool = _dice_resolver.is_blocked_by_damage_at_range(
+			_effect_registry, parts, _attack_exec_obstructed,
+			_attack_exec_current_attack, range_band)
+	if blocked:
 		_log.info("Attack blocked by damage card effect.")
 		if _attack_sim_panel:
 			_attack_sim_panel.show_empty_pool_auto_skip()
 		TooltipManager.show_text(
 				"Attack blocked by damage card.", Vector2.INF, 2.0, true)
-		return true
-	return false
+	return blocked
 
 
 ## Handles obstruction die removal: auto-remove, auto-skip, or prompt.
@@ -1403,14 +1360,7 @@ func _handle_obstruction_step() -> void:
 ## Checks whether the activated ship has a revealed CF dial.
 ## Requirements: AE-CF-001.
 func _attack_exec_has_cf_dial() -> bool:
-	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
-	if inst == null or inst.command_dial_stack == null:
-		return false
-	var dial: Dictionary = inst.command_dial_stack.get_revealed_dial()
-	if dial.is_empty():
-		return false
-	return (dial.get("command", -1) as int) == (
-			Constants.CommandType.CONCENTRATE_FIRE as int)
+	return _dice_resolver.has_cf_dial(_attack_exec_ship_token)
 
 
 ## Returns which colour keys are available for CF dial extra die.
@@ -1418,20 +1368,14 @@ func _attack_exec_has_cf_dial() -> bool:
 ## Requirements: AE-CF-003.
 ## Rules Reference: "Concentrate Fire", p.3.
 func _get_cf_dial_colours(pool: Dictionary) -> Array[String]:
-	var colours: Array[String] = []
-	for key: String in pool:
-		if int(pool[key]) > 0:
-			colours.append(key)
-	return colours
+	return _dice_resolver.get_cf_dial_colours(pool)
 
 
 ## Computes the string-keyed dice pool for the current attacker/target.
 ## Same logic as _compute_attack_dice_text but returns the Dictionary.
 func _compute_attack_pool_dict(range_band: String) -> Dictionary:
-	if _attack_sim_atk_ship == null and _attack_sim_atk_squad == null:
-		return {}
-	var armament: Dictionary = _resolve_attacker_armament()
-	return DicePool.get_attack_pool(armament, range_band)
+	var parts: CombatParticipants = _build_current_participants()
+	return _dice_resolver.compute_pool_for_parts(parts, range_band)
 
 
 ## Resolves the attacker's armament dictionary for the current
@@ -1439,26 +1383,8 @@ func _compute_attack_pool_dict(range_band: String) -> Dictionary:
 ## squadron (battery / anti-squadron) attackers.
 ## Rules Reference: "Attack", Step 2, p.2; "Squadron Attacks", RRG p.19.
 func _resolve_attacker_armament() -> Dictionary:
-	# Ship attacker.
-	if _attack_sim_atk_ship:
-		var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
-		if ship_data == null:
-			return {}
-		if _attack_sim_def_squad:
-			return ship_data.anti_squadron_armament
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_atk_zone, "FRONT")
-		return ship_data.battery_armament.get(zone_key, {})
-	# Squadron attacker.
-	if _attack_sim_atk_squad:
-		var inst: SquadronInstance = \
-				_attack_sim_atk_squad.get_squadron_instance()
-		if inst == null or inst.squadron_data == null:
-			return {}
-		if _attack_sim_def_squad:
-			return inst.squadron_data.anti_squadron_armament
-		return inst.squadron_data.battery_armament
-	return {}
+	var parts: CombatParticipants = _build_current_participants()
+	return _dice_resolver.resolve_armament(parts)
 
 
 ## Shows the Roll Dice button.
@@ -1475,11 +1401,8 @@ func _attack_exec_show_roll_button() -> void:
 ## Requirements: AE-OBS-001, AE-OBS-002.
 ## Rules Reference: "Obstructed", RRG v1.5.0, p.10.
 func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
-	var current: int = int(_attack_exec_pool.get(colour_key, 0))
-	if current > 0:
-		_attack_exec_pool[colour_key] = current - 1
-		if _attack_exec_pool[colour_key] <= 0:
-			_attack_exec_pool.erase(colour_key)
+	_attack_exec_pool = _dice_resolver.remove_obstruction_die(
+			_attack_exec_pool, colour_key)
 	_log.info("Obstruction: removed 1 %s die. Pool: %s." % [
 			colour_key, DicePool.format_pool(_attack_exec_pool)])
 	# Update dice count display.
@@ -1488,9 +1411,7 @@ func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
 		_attack_sim_panel.show_dice_count(dice_text)
 		_attack_sim_panel.hide_obstruction_section()
 	# Check if pool is now empty — auto-skip.
-	var total: int = 0
-	for key: String in _attack_exec_pool:
-		total += int(_attack_exec_pool[key])
+	var total: int = DicePool.get_total_count(_attack_exec_pool)
 	if total <= 0:
 		_log.info("Obstruction: pool empty after removal — skipping attack.")
 		if _attack_sim_panel:
@@ -1611,11 +1532,7 @@ func _play_dice_roll_sfx() -> void:
 ## Checks whether the activated ship has a CF command token.
 ## Requirements: AE-CF-010.
 func _attack_exec_has_cf_token() -> bool:
-	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
-	if inst == null or inst.command_tokens == null:
-		return false
-	return inst.command_tokens.has_token(
-			Constants.CommandType.CONCENTRATE_FIRE)
+	return _dice_resolver.has_cf_token(_attack_exec_ship_token)
 
 
 ## Called when the player selects a die and confirms reroll (CF token).

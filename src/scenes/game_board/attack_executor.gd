@@ -921,6 +921,14 @@ func _validate_target_ship_click(token: ShipToken,
 			return _reject_target(
 					"Attack exec: same-faction target rejected.",
 					"Cannot target a friendly ship.", "friendly")
+	# Squadron loop guard: cannot target ships during Step 6 loop.
+	# Rules Reference: "Attack", Step 6, p.2 — after attacking a squadron,
+	# the attacker may only choose a new *squadron* defender in the same arc.
+	if _attack_exec_mode and _attack_exec_attacked_squads.size() > 0:
+		return _reject_target(
+				"Attack exec: ship target rejected during squadron loop.",
+				"Can only target squadrons during anti-squadron attacks.",
+				"squadron_loop")
 	# Arc check (AS-ARC-001).
 	if _attack_sim_atk_ship:
 		var arc_parts: CombatParticipants = \

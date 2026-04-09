@@ -165,7 +165,7 @@ func _ready() -> void:
 	_panel_mgr = UIPanelManager.new()
 	_panel_mgr.name = "UIPanelManager"
 	add_child(_panel_mgr)
-	_panel_mgr.initialize(self)
+	_panel_mgr.initialize(self )
 	# Wire squadron UI (needs TurnManagementLayer from UIPanelManager).
 	_squadron_phase_controller.create_ui(
 			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)

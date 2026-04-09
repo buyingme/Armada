@@ -85,7 +85,7 @@ func is_ship_target_in_arc(parts: CombatParticipants,
 	var atk_arc_pts: Dictionary = parts.atk_ship \
 			.get_firing_arc_world_points()
 	if atk_arc_pts.is_empty():
-		return true  # No arc data → allow.
+		return true # No arc data → allow.
 	var def_edge: Array[Vector2] = get_ship_edge(
 			def_token, def_zone as Constants.HullZone)
 	return RangeFinder.is_hull_zone_edge_in_arc(
@@ -203,7 +203,7 @@ func _adjust_los_for_squadrons(parts: CombatParticipants,
 func _trace_los(parts: CombatParticipants, atk_pt: Vector2,
 		def_pt: Vector2) -> LineOfSightChecker.LOSResult:
 	var bodies: Array = _get_obstruction_bodies.call()
-	var obstacles: Array = []  # Future: obstacle tokens.
+	var obstacles: Array = [] # Future: obstacle tokens.
 	if parts.def_is_ship():
 		return _trace_los_to_ship_target(
 				parts, atk_pt, def_pt, bodies, obstacles)

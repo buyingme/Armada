@@ -135,6 +135,11 @@ var _target_resolver: AttackTargetResolver = null
 ## Constructed in [method initialize].
 var _dice_resolver: AttackDiceResolver = null
 
+## Pure-computation resolver for defense token spending, token effects,
+## canonical sorting, redirect checks, and faceup card determination.
+## Constructed in [method initialize].
+var _defense_resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+
 
 # ---------------------------------------------------------------------------
 # Attack Simulator state (Phase 6a / 6a-2)
@@ -1676,11 +1681,7 @@ func _resolve_accuracy_count() -> int:
 
 ## Counts non-discarded defense tokens on a ship instance.
 func _count_lockable_tokens(def_inst: ShipInstance) -> int:
-	var lockable: int = 0
-	for token: Dictionary in def_inst.defense_tokens:
-		if token["state"] != Constants.DefenseTokenState.DISCARDED:
-			lockable += 1
-	return lockable
+	return _defense_resolver.count_lockable_tokens(def_inst)
 
 
 ## Called when the player confirms accuracy spending.
@@ -1741,34 +1742,24 @@ func _attack_exec_start_defense() -> void:
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
-	var spendable: int = _count_spendable_defense_tokens(def_inst)
-	if spendable == 0:
-		_log.info("No spendable defense tokens — skipping defense step.")
-		return false
-	## Rules Reference: "Defense Tokens", bullet 4, p.5.
-	if def_inst.current_speed == 0:
-		_log.info("Defender speed 0 — cannot spend defense tokens.")
-		return false
-	return true
+	var result: bool = _defense_resolver.can_spend_tokens(
+			def_inst, _attack_exec_locked_tokens,
+			_effect_registry, _attack_sim_def_zone)
+	if not result:
+		if def_inst.current_speed == 0:
+			_log.info("Defender speed 0 — cannot spend defense tokens.")
+		else:
+			_log.info("No spendable defense tokens — skipping defense step.")
+	return result
 
 
 ## Returns the number of spendable (non-discarded, non-locked, not
 ## blocked by persistent effects) tokens.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
-	var count: int = 0
-	for i: int in range(inst.defense_tokens.size()):
-		if i in _attack_exec_locked_tokens:
-			continue
-		var token: Dictionary = inst.defense_tokens[i]
-		var state: Constants.DefenseTokenState = (
-				token["state"] as Constants.DefenseTokenState)
-		if state == Constants.DefenseTokenState.DISCARDED:
-			continue
-		if _is_token_blocked_by_effect(inst, token):
-			continue
-		count += 1
-	return count
+	return _defense_resolver.count_spendable_tokens(
+			inst, _attack_exec_locked_tokens,
+			_effect_registry, _attack_sim_def_zone)
 
 
 ## Called when the player spends a defense token.
@@ -1812,35 +1803,19 @@ func _on_attack_defense_token_spent(token_index: int,
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _is_defense_token_spendable(token_index: int,
 		token: Dictionary) -> bool:
-	var token_type: Constants.DefenseToken = (
-			token["type"] as Constants.DefenseToken)
-	var token_state: Constants.DefenseTokenState = (
-			token["state"] as Constants.DefenseTokenState)
-	if token_state == Constants.DefenseTokenState.DISCARDED:
-		_log.info("Token %d already discarded — ignoring." % token_index)
-		return false
-	if _attack_exec_spent_tokens.has(token_type):
-		_log.info("Token type already spent this attack — ignoring.")
-		return false
-	if token_index in _attack_exec_locked_tokens:
-		_log.info("Token %d is locked by accuracy — ignoring." %
-				token_index)
-		return false
-	if _is_token_blocked_by_effect(_get_defender_instance(), token):
-		_log.info("Token %d blocked by persistent effect — ignoring."
-				% token_index)
-		return false
-	return true
+	var result: bool = _defense_resolver.is_token_spendable(
+			token_index, token, _attack_exec_spent_tokens,
+			_attack_exec_locked_tokens, _get_defender_instance(),
+			_effect_registry, _attack_sim_def_zone)
+	if not result:
+		_log.info("Token %d not spendable — ignoring." % token_index)
+	return result
 
 
 ## Resolves the actual spend method: exhausted tokens must be discarded.
 func _resolve_spend_method(spend_method: String,
 		token: Dictionary) -> String:
-	var token_state: Constants.DefenseTokenState = (
-			token["state"] as Constants.DefenseTokenState)
-	if token_state == Constants.DefenseTokenState.EXHAUSTED:
-		return "discard"
-	return spend_method
+	return _defense_resolver.resolve_spend_method(spend_method, token)
 
 
 ## Returns the current defender's ShipInstance, or null.
@@ -1856,31 +1831,8 @@ func _get_defender_instance() -> ShipInstance:
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func _is_token_blocked_by_effect(inst: ShipInstance,
 		token: Dictionary) -> bool:
-	if _effect_registry == null:
-		return false
-	if inst == null:
-		return false
-	var ctx: EffectContext = EffectContext.new()
-	ctx.defender = inst
-	var token_type: Constants.DefenseToken = (
-			token["type"] as Constants.DefenseToken)
-	var token_state: Constants.DefenseTokenState = (
-			token["state"] as Constants.DefenseTokenState)
-	ctx.set_meta_value("token_type", token_type)
-	ctx.set_meta_value("token_state", token_state)
-	# Capacitor Failure needs the defending zone's current shield count to
-	# decide whether Redirect is blocked.
-	# Rules Reference: "Capacitor Failure" — if the defending zone has 0
-	# shields the defender cannot spend Redirect tokens.
-	if _attack_sim_def_zone >= 0:
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_def_zone, "")
-		if zone_key != "" and inst.current_shields.has(zone_key):
-			ctx.set_meta_value("target_zone_shields",
-					int(inst.current_shields[zone_key]))
-	ctx = _effect_registry.resolve_hook(
-			&"DEFENSE_VALIDATE_TOKEN", ctx)
-	return ctx.cancelled
+	return _defense_resolver.is_token_blocked_by_effect(
+			inst, token, _effect_registry, _attack_sim_def_zone)
 
 
 ## Applies the effect of a defense token to the current attack.
@@ -1914,7 +1866,8 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 ## Rules Reference: "Scatter", p.11.
 func _apply_scatter_effect() -> void:
 	_attack_exec_scatter_used = true
-	_attack_exec_modified_damage = 0
+	_attack_exec_modified_damage = _defense_resolver.apply_scatter(
+			_attack_exec_modified_damage)
 	_log.info("Scatter: all damage cancelled.")
 	if _attack_sim_panel:
 		_attack_sim_panel.update_defense_damage(0)
@@ -1925,9 +1878,8 @@ func _apply_scatter_effect() -> void:
 ## Rules Reference: "Brace", RRG v1.5.0, p.3.
 func _apply_brace_effect() -> void:
 	_attack_exec_brace_used = true
-	if _attack_exec_modified_damage > 0:
-		_attack_exec_modified_damage = ceili(
-				float(_attack_exec_modified_damage) / 2.0)
+	_attack_exec_modified_damage = _defense_resolver.apply_brace(
+			_attack_exec_modified_damage)
 	_log.info("Brace: damage halved to %d." % [
 			_attack_exec_modified_damage])
 	if _attack_sim_panel:
@@ -1943,11 +1895,9 @@ func _get_token_button_index_for_type(
 	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
 	if def_inst == null:
 		return -1
-	for i: int in range(def_inst.defense_tokens.size()):
-		if def_inst.defense_tokens[i]["type"] == token_type:
-			if _attack_exec_spent_tokens.has(token_type):
-				return i
-	return -1
+	return _defense_resolver.get_token_button_index(
+			token_type, def_inst.defense_tokens,
+			_attack_exec_spent_tokens)
 
 
 ## Starts the Evade die-selection sub-step.
@@ -1994,9 +1944,12 @@ func _on_evade_die_selected(die_index: int) -> void:
 
 ## Evade at long range: removes the selected die.
 func _apply_evade_remove(die_index: int) -> void:
-	_attack_exec_dice_results.remove_at(die_index)
-	_attack_exec_modified_damage = _calc_attack_damage(
-			_attack_exec_dice_results)
+	var parts: CombatParticipants = _build_current_participants()
+	var result: Dictionary = _defense_resolver.apply_evade_remove(
+			die_index, _attack_exec_dice_results, parts,
+			_effect_registry)
+	_attack_exec_dice_results = result["dice_results"]
+	_attack_exec_modified_damage = result["damage"]
 	_log.info("Evade (long): removed die %d. Damage now %d." % [
 			die_index, _attack_exec_modified_damage])
 	if _attack_sim_panel:
@@ -2006,18 +1959,21 @@ func _apply_evade_remove(die_index: int) -> void:
 
 ## Evade at medium/close range: rerolls the selected die.
 func _apply_evade_reroll(die_index: int) -> void:
-	var die_result: Dictionary = (
-			_attack_exec_dice_results[die_index])
-	var color: Constants.DiceColor = (
-			die_result["color"] as Constants.DiceColor)
-	var new_face: Constants.DiceFace = Dice.roll_die(color)
-	_attack_exec_dice_results[die_index]["face"] = new_face
-	_attack_exec_modified_damage = _calc_attack_damage(
-			_attack_exec_dice_results)
+	var parts: CombatParticipants = _build_current_participants()
+	var result: Dictionary = _defense_resolver.apply_evade_reroll(
+			die_index, _attack_exec_dice_results, parts,
+			_effect_registry)
+	_attack_exec_dice_results = result["dice_results"]
+	_attack_exec_modified_damage = result["damage"]
+	var new_face: Constants.DiceFace = (
+			result["new_face"] as Constants.DiceFace)
 	_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
 			% [_attack_exec_range_band, die_index, str(new_face),
 			_attack_exec_modified_damage])
 	if _attack_sim_panel:
+		var color: Constants.DiceColor = (
+				_attack_exec_dice_results[die_index]["color"]
+				as Constants.DiceColor)
 		_attack_sim_panel.update_die_result(die_index, {
 			"color": color, "face": new_face})
 
@@ -2073,15 +2029,9 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 func _apply_single_redirect(zone_enum: Constants.HullZone,
 		def_inst: ShipInstance) -> bool:
 	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
-	var zone_shields: int = int(
-			def_inst.current_shields.get(zone_str, 0))
-	if zone_shields <= 0:
-		_log.info(
-				"Redirect: %s has 0 shields — cannot redirect there."
-				% zone_str)
-		return false
-	if _attack_exec_redirect_remaining <= 0:
-		_log.info("Redirect: no more damage to redirect.")
+	if not _defense_resolver.can_redirect_to_zone(
+			zone_enum, def_inst, _attack_exec_redirect_remaining):
+		_log.info("Redirect: cannot redirect to %s." % zone_str)
 		return false
 	def_inst.reduce_shields(zone_str, 1)
 	EventBus.ship_shields_changed.emit(
@@ -2099,22 +2049,11 @@ func _apply_single_redirect(zone_enum: Constants.HullZone,
 ## possible and the UI was updated; false if redirect is done.
 func _check_redirect_continuation(
 		def_inst: ShipInstance) -> bool:
-	if _attack_exec_redirect_remaining <= 0:
-		if _attack_sim_panel:
-			_attack_sim_panel.hide_redirect_section()
-		return false
 	var def_zone: Constants.HullZone = (
 			_attack_sim_def_zone as Constants.HullZone)
-	var adjacent: Array = ConstantsScript.get_adjacent_hull_zones(def_zone)
-	var has_shields: bool = false
-	for adj_zone: Variant in adjacent:
-		var adj_str: String = \
-				ConstantsScript.hull_zone_to_string(
-				adj_zone as Constants.HullZone)
-		if int(def_inst.current_shields.get(adj_str, 0)) > 0:
-			has_shields = true
-			break
-	if has_shields and _attack_sim_panel:
+	var can_continue: bool = _defense_resolver.can_redirect_continue(
+			_attack_exec_redirect_remaining, def_zone, def_inst)
+	if can_continue and _attack_sim_panel:
 		_attack_sim_panel.update_redirect_remaining(
 				_attack_exec_redirect_remaining)
 		return true
@@ -2149,9 +2088,11 @@ func _on_attack_defense_done() -> void:
 
 
 ## Canonical defense token resolution order.
-## Rules Reference: "Defense Tokens", p.5 — effects resolve in a
+## Rules Reference: \"Defense Tokens\", p.5 — effects resolve in a
 ## fixed sequence: Scatter (cancel) → Evade (dice mod) → Brace
 ## (halve total) → Redirect (distribute) → Contain (prevent crit).
+## Kept as a local alias so existing tests referencing
+## [code]AttackExecutor._DEFENSE_RESOLVE_ORDER[/code] still work.
 const _DEFENSE_RESOLVE_ORDER: Dictionary = {
 	Constants.DefenseToken.SCATTER: 0,
 	Constants.DefenseToken.EVADE: 1,
@@ -2170,18 +2111,8 @@ func _sort_defense_tokens_canonical(
 			_attack_sim_def_ship.get_ship_instance()
 	if def_inst == null:
 		return indices
-	var sorted: Array[int] = indices.duplicate()
-	sorted.sort_custom(func(a: int, b: int) -> bool:
-		var type_a: Constants.DefenseToken = \
-				def_inst.defense_tokens[a]["type"] \
-				as Constants.DefenseToken
-		var type_b: Constants.DefenseToken = \
-				def_inst.defense_tokens[b]["type"] \
-				as Constants.DefenseToken
-		return _DEFENSE_RESOLVE_ORDER.get(type_a, 99) < \
-				_DEFENSE_RESOLVE_ORDER.get(type_b, 99)
-	)
-	return sorted
+	return _defense_resolver.sort_tokens_canonical(
+			indices, def_inst.defense_tokens)
 
 
 ## Processes the next defense token in the commit queue.
@@ -2357,22 +2288,15 @@ func _absorb_shields(def_inst: ShipInstance,
 
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:
-	var has_crit: bool = Dice.has_any_critical(
-			_attack_exec_dice_results)
-	var faceup: bool = (has_crit and not _attack_exec_contain_used)
-	_log.info("Damage cards: has_crit=%s, contain=%s, first_faceup=%s."
-			% [has_crit, _attack_exec_contain_used, faceup])
-	if faceup and _effect_registry:
-		var crit_ctx: EffectContext = EffectContext.new()
-		if _attack_sim_atk_ship is ShipToken:
-			crit_ctx.attacker = (
-					_attack_sim_atk_ship as ShipToken).get_ship_instance()
-		crit_ctx.critical_allowed = true
-		crit_ctx = _effect_registry.resolve_hook(
-				&"ATTACK_RESOLVE_CRITICAL", crit_ctx)
-		if not crit_ctx.critical_allowed:
-			_log.info("Critical effect blocked by damage card effect.")
-			return false
+	var attacker: ShipInstance = null
+	if _attack_sim_atk_ship is ShipToken:
+		attacker = (
+				_attack_sim_atk_ship as ShipToken).get_ship_instance()
+	var faceup: bool = _defense_resolver.determine_first_card_faceup(
+			_attack_exec_dice_results, _attack_exec_contain_used,
+			_effect_registry, attacker)
+	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
+			faceup, _attack_exec_contain_used])
 	return faceup
 
 

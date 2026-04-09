@@ -726,24 +726,14 @@ call resolver for computation, then update the panel.
 
 **Tests:** ~15 tests for pool assembly, CF logic, damage formula.
 
-##### F4c: Extract `DefenseTokenResolver` (~300 lines) — *after F4a+F4b*
+##### F4c: Extract `DefenseTokenResolver` (~300 lines) — *after F4a+F4b* ✅
 
 > **Risk: Medium** — defense flow is a mini state machine.
 
-Extract pure computation of defense token effects:
-- Spendability checks (speed-0 block, exhausted, locked)
-- Scatter effect (cancel all damage)
-- Brace effect (halve damage)
-- Evade effect (remove/reroll at range)
-- Redirect effect (absorb via adjacent zone shields)
-- Contain effect (prevent standard critical)
-
-**What stays in AE:** The defense step state machine (`_attack_exec_defense_step`,
-`_defense_commit_queue`), panel signal handlers, and the sequential
-token-spending loop — these orchestrate the *order* of spending; the
-resolver handles the *math* of each token type.
-
-**Tests:** ~20 tests for each token type × edge cases.
+Extracted pure computation of defense token effects into
+`src/core/defense_token_resolver.gd` (341 lines, 15 public methods).
+AE reduced from 2 930 → 2 853 lines (−77 net). 60 new tests.
+UI side effects (panel updates, EventBus emissions) remain in AE.
 
 ##### F4d: Extract `DamageDealer` (~200 lines) — *after F4a–F4c*
 
@@ -761,7 +751,7 @@ in AE (needs scene tree for the modal).
 |------|-----------|-------------|----------------|------|
 | F4a | `AttackTargetResolver` | ~370 | ~2 915 | **Low** |
 | F4b | `AttackDiceResolver` | ~200 | ~2 715 | **Low** |
-| F4c | `DefenseTokenResolver` | ~300 | ~2 415 | Medium |
+| F4c | `DefenseTokenResolver` | 341 | 2 853 | Medium ✅ |
 | F4d | `DamageDealer` | ~200 | ~2 215 | Medium |
 | **Total** | **4 classes** | **~1 070** | **~2 215** | |
 
@@ -775,13 +765,13 @@ node-bound.
 
 #### F Expected Outcome (Actual + Projected)
 
-| Metric | Before F | After F1–F3 | After F4a–b | After F4c–d |
-|--------|----------|-------------|-------------|-------------|
-| `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 |
-| `attack_executor.gd` lines | ~3 285 | 3 285 | ~2 715 | ~2 215 |
-| God objects (>1 000 lines) | 2 | 2 | 2 | 2 (AE at ~2 215) |
-| Controllers / managers | 7 | 9 | 11 | 13 |
-| Testable RefCounted classes | — | +2 | +4 | +6 |
+| Metric | Before F | After F1–F3 | After F4a–b | After F4c | After F4d |
+|--------|----------|-------------|-------------|-----------|----------|
+| `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 | 2 207 |
+| `attack_executor.gd` lines | ~3 285 | 3 285 | 2 930 | 2 853 | ~2 653 |
+| God objects (>1 000 lines) | 2 | 2 | 2 | 2 | 2 |
+| Controllers / managers | 7 | 9 | 11 | 12 | 13 |
+| Testable RefCounted classes | — | +2 | +4 | +5 | +6 |
 
 `attack_executor.gd` at ~2 215 lines is the irreducible orchestration
 layer — panel wiring, signal handlers, and state transitions that are
@@ -939,7 +929,7 @@ investment). Only network multiplayer requires the full A–G pipeline.
 | Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | ~2 715 | ~2 215 | ~500 | <500 |
 | God objects (>1 000 LOC) | 4 | 4 | 2 | 2 | 2 | 2 | 1 | 0 |
 | Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 | 11/11 | 11/11 | 11/11 |
-| Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 4 | 6 | 6+ | — |
+| Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 5 | 6 | 6+ | — |
 | Player action model | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
 | Network-ready | No | No | No | No | No | No | **Yes** | Yes |
 

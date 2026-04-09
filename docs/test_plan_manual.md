@@ -4830,4 +4830,31 @@ This is a pure-refactoring verification — no game-logic changes.
 
 **Pass criteria:** All attack flows produce identical behaviour to
 pre-extraction. Dice counts, damage totals, CF interaction, and
-obstruction removal work as before.
+obstruction removal work as before. ✅
+
+### MT-F4c.01 — Defense Tokens Still Work After Resolver Extraction
+
+**Purpose:** Confirm that all five defense token types, accuracy locking,
+canonical resolution ordering, redirect zone selection, and faceup
+damage card determination still function correctly after extracting
+`DefenseTokenResolver`. Pure-refactoring verification — no game-logic changes.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and advance to Ship Phase | Both players' ships can activate |
+| 2 | Attack an enemy ship that has defense tokens | Defense token section appears with correct tokens |
+| 3 | If accuracy dice appear, lock a token | Locked token is greyed out and cannot be spent |
+| 4 | Select Brace and commit | Damage total is halved (rounded up) |
+| 5 | In a new attack, select Scatter and commit | Damage total drops to 0 |
+| 6 | In a new attack, select Evade at long range and pick a die | Selected die is removed, damage recalculates |
+| 7 | In a new attack, select Evade at close/medium range and pick a die | Selected die is rerolled, damage recalculates |
+| 8 | In a new attack, select Redirect and click adjacent hull zone | Damage redirects 1 point per click to that zone's shields |
+| 9 | Click "Done Redirecting" before full budget is spent | Redirect ends early, remaining damage stays |
+| 10 | Select Contain, attack produces critical | First damage card is NOT dealt faceup |
+| 11 | Attack without Contain, attack produces critical | First damage card IS dealt faceup |
+| 12 | Defender at speed 0 is attacked | No defense tokens can be spent |
+| 13 | Select Brace + Redirect together | Brace halves first (canonical order), then Redirect distributes the halved total |
+
+**Pass criteria:** All defense token flows produce identical behaviour to
+pre-extraction. Token spending, accuracy locks, canonical ordering,
+redirect zone selection, and critical determination all work as before.

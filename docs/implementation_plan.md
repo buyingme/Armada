@@ -1832,6 +1832,32 @@ into a new RefCounted class:
 **New file:** `attack_dice_resolver.gd` (41 tests)
 **Tests:** 95 scripts, 1 854 tests, 3 228 asserts — all passing.
 
+#### F4c: DefenseTokenResolver ✅
+
+Extracted all defense token computation from `attack_executor.gd`
+into a new RefCounted class:
+
+- **`src/core/defense_token_resolver.gd`** (~341 lines) — Stateless resolver
+  for defense token availability checks, spend-method resolution, token
+  effects (scatter, brace, evade remove/reroll, redirect validation),
+  canonical sorting (Scatter→Evade→Brace→Redirect→Contain), and
+  faceup damage card determination.  Every public method accepts the
+  defender's ShipInstance and attack state as parameters — no stored
+  mutable state.
+- Public API: `count_lockable_tokens()`, `can_spend_tokens()`,
+  `count_spendable_tokens()`, `is_token_spendable()`,
+  `is_token_blocked_by_effect()`, `resolve_spend_method()`,
+  `apply_scatter()`, `apply_brace()`, `apply_evade_remove()`,
+  `apply_evade_reroll()`, `can_redirect_to_zone()`,
+  `can_redirect_continue()`, `sort_tokens_canonical()`,
+  `get_token_button_index()`, `determine_first_card_faceup()`.
+- AE wiring: 15 function bodies replaced with delegations.
+  UI side effects (panel updates, EventBus emissions) remain in AE.
+- `attack_executor.gd` reduced from 2 930 → 2 853 lines (−77 net).
+
+**New file:** `defense_token_resolver.gd` (60 tests)
+**Tests:** 96 scripts, 1 914 tests, 3 298 asserts — all passing.
+
 ---
 
 ```

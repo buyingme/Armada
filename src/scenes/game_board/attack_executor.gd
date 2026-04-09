@@ -2824,14 +2824,71 @@ func _attack_exec_mark_spent_zone() -> void:
 
 
 ## Checks whether there are more enemy squadrons in the current arc
-## that have not yet been attacked during this hull zone's attack.
+## that have not yet been attacked during this hull zone's attack AND
+## that would produce at least one die at their range.
 ## Requirements: AE-SQ-003.
-## Rules Reference: "Attack", Step 6, p.2 — new defender must be inside
-## the firing arc and at attack range of the same attacking hull zone.
+## Rules Reference: "Attack", Step 1, p.2 — attacker must add ≥1 die;
+## Step 6, p.2 — new defender must be in arc and at range.
 func _attack_exec_has_more_squad_targets() -> bool:
 	var parts: CombatParticipants = _build_current_participants()
-	return _target_resolver.has_more_squad_targets(
-			parts, _attack_exec_attacked_squads)
+	if not parts.atk_is_ship():
+		return false
+	var armament: Dictionary = _get_anti_squadron_armament()
+	if armament.is_empty():
+		return false
+	var attacker_faction: int = parts.get_atk_faction()
+	for sq_token: SquadronToken in _get_squadron_tokens.call():
+		if sq_token.get_faction() == attacker_faction:
+			continue
+		if sq_token in _attack_exec_attacked_squads:
+			continue
+		if not _target_resolver.is_squadron_target_in_arc(
+				parts, sq_token):
+			continue
+		if not _target_resolver.is_squadron_at_range(
+				parts, sq_token):
+			continue
+		# Check that armament produces ≥1 die at this range.
+		var range_band: String = _get_squadron_range_band(
+				parts, sq_token)
+		var pool: Dictionary = DicePool.get_attack_pool(
+				armament, range_band)
+		if DicePool.get_total_count(pool) > 0:
+			return true
+	return false
+
+
+## Returns the anti-squadron armament of the current ship attacker.
+func _get_anti_squadron_armament() -> Dictionary:
+	if _attack_sim_atk_ship == null:
+		return {}
+	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
+	if ship_data == null:
+		return {}
+	return ship_data.anti_squadron_armament
+
+
+## Computes the range band to a squadron target from the current
+## attacker hull zone.
+func _get_squadron_range_band(parts: CombatParticipants,
+		sq_token: SquadronToken) -> String:
+	var atk_edge: Array[Vector2] = _target_resolver.get_ship_edge(
+			parts.atk_ship,
+			parts.atk_zone as Constants.HullZone)
+	var atk_arc_pts: Dictionary = parts.atk_ship \
+			.get_firing_arc_world_points()
+	if atk_arc_pts.is_empty():
+		return Constants.RANGE_BAND_BEYOND
+	var range_data: Dictionary = (
+			RangeFinder.measure_attack_range_squadron_endpoints(
+			atk_edge, sq_token.global_position,
+			sq_token.get_radius_px(),
+			parts.atk_zone as Constants.HullZone,
+			atk_arc_pts))
+	var dist: float = range_data.get("distance", INF)
+	if dist >= INF:
+		return Constants.RANGE_BAND_BEYOND
+	return GameScale.get_range_band(dist)
 
 
 ## Returns true if the attacker has valid targets from ANY unfired

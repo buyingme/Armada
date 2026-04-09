@@ -4773,3 +4773,41 @@ SquadronPhaseController) via shared ActivationContext.
 **Pass criteria:** All attack targeting, LOS, range, and arc validation
 work identically to before the extraction. No visual or behavioural
 regressions.
+
+### MT-FIX.01 — Squadron Loop Blocks Ship Targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and reach the Ship Phase | Normal gameplay |
+| 2 | Activate a ship, complete maneuver, enter attack | Attack sim appears |
+| 3 | Select a hull zone with enemy squadrons and an enemy ship in arc | Zone selected |
+| 4 | Attack a squadron and resolve damage | Step 6 loop prompt: "Select next squadron" |
+| 5 | Click the enemy ship instead of a squadron | Tooltip: "Can only target squadrons during anti-squadron attacks." Ship is rejected |
+
+**Pass criteria:** During the Step 6 squadron loop, ship targets are
+blocked with a tooltip. Only squadrons can be selected.
+
+### MT-FIX.02 — Auto-Skip 0-Dice Squadron in Step 6 Loop
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up scenario: Neb-B with 2 enemy squadrons at medium range and 1 at long range in its FRONT arc | Scenario ready |
+| 2 | Attack from the FRONT arc, target and resolve the 1st squadron | Step 6 loop continues |
+| 3 | Target and resolve the 2nd squadron | Step 6 loop continues (3rd squadron at long range) |
+| 4 | Observe: the 3rd squadron at long range yields 0 dice (anti-squadron is blue only) | Auto-skip fires — the 3rd squadron is skipped without player input |
+| 5 | Observe: the system either offers the 2nd hull zone or auto-finishes | No manual "Skip Attack" needed for the 0-dice target |
+
+**Pass criteria:** Squadrons that yield 0 dice at their range are
+automatically skipped during the Step 6 loop. The player never needs
+to manually skip a target the system knows is invalid.
+
+### MT-FIX.03 — Reject Hull Zone With No Valid Targets
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | During attack execution, after the first attack completes | 2nd hull zone selection appears |
+| 2 | Click a hull zone that has no enemy ships or squadrons in arc/range | Tooltip: "No valid targets in [ZONE] arc." Zone is not selected |
+| 3 | Click a hull zone that DOES have valid targets | Zone is selected normally; target selection begins |
+
+**Pass criteria:** Hull zones with no valid targets are rejected at
+selection time with a clear tooltip message.

@@ -744,6 +744,18 @@ func _select_attacker_ship_zone(token: ShipToken, zone: int) -> void:
 	var ship_name: String = ""
 	if token.get_ship_data():
 		ship_name = token.get_ship_data().ship_name
+	# During attack execution, reject zones that have no valid targets.
+	# Rules Reference: "Attack", Step 1, p.2 — a hull zone with no
+	# eligible targets cannot be used to declare an attack.
+	if _attack_exec_mode:
+		if not _target_resolver.zone_has_targets(
+				token, zone as Constants.HullZone):
+			_log.info("Attack exec: %s arc has no valid targets."
+					% zone_name)
+			TooltipManager.show_text(
+					"No valid targets in %s arc." % zone_name,
+					Vector2.INF, 2.0, true)
+			return
 	_log.info("Attacker selected: %s — %s arc." % [ship_name, zone_name])
 	_log.debug("Click at %s → %s hull zone." % [
 			token.get_global_mouse_position(), zone_name])
@@ -1286,6 +1298,14 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	var _begin_total: int = DicePool.get_total_count(_attack_exec_pool)
 	if _begin_total <= 0:
 		_log.info("No dice in pool — cannot declare attack.")
+		# During Step 6 squadron loop: auto-skip this target and re-check.
+		# Rules Reference: "Attack", Step 1, p.2 — attacker must add at
+		# least one die.  A squadron that yields 0 dice at this range is
+		# not a legal target; skip it and look for the next one.
+		if _attack_exec_attacked_squads.size() > 0 \
+				and _attack_sim_def_squad:
+			_auto_skip_zero_dice_squadron()
+			return
 		if _attack_sim_panel:
 			_attack_sim_panel.show_empty_pool_auto_skip()
 		return
@@ -2758,6 +2778,28 @@ func _finalize_squadron_attack() -> void:
 	if _attack_exec_has_more_squad_targets():
 		_attack_exec_prepare_next_squadron()
 		return
+	_end_squadron_loop()
+
+
+## Auto-skips a squadron target that yielded 0 dice (out of armament
+## range).  Marks it as attacked so it won't be retried, then either
+## continues the loop or exits it.
+## Requirements: AE-SQ-003.
+## Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
+## able to add at least one die to the attack pool."
+func _auto_skip_zero_dice_squadron() -> void:
+	_log.info("Auto-skipping squadron (0 dice at this range).")
+	_attack_exec_attacked_squads.append(_attack_sim_def_squad)
+	_attack_sim_clear_target_state()
+	if _attack_exec_has_more_squad_targets():
+		_attack_exec_prepare_next_squadron()
+		return
+	_end_squadron_loop()
+
+
+## Ends the Step 6 squadron loop: marks the zone as fired and either
+## prepares the next hull-zone attack or finishes the attack step.
+func _end_squadron_loop() -> void:
 	if _attack_sim_atk_zone >= 0:
 		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
 	_attack_exec_mark_spent_zone()
@@ -2892,16 +2934,7 @@ func _on_attack_skip() -> void:
 			_attack_sim_target_selecting:
 		_log.info(
 				"Squadron loop skipped — moving to next hull zone.")
-		# Record this zone as fired.
-		if _attack_sim_atk_zone >= 0:
-			_attack_exec_fired_zones.append(_attack_sim_atk_zone)
-		_attack_exec_mark_spent_zone()
-		_attack_exec_current_attack += 1
-		_attack_exec_attacked_squads.clear()
-		if _attack_exec_current_attack < 2:
-			_attack_exec_prepare_next_attack()
-			return
-		_finish_attack_execution()
+		_end_squadron_loop()
 		return
 	_log.info("Attack skipped by player.")
 	_finish_attack_execution()

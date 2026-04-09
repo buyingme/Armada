@@ -25,9 +25,9 @@
 | TD-8 | `attack_executor.gd` is 3 008 lines / 96 functions — single state machine; SIM/EXEC too entangled to split (40/96 funcs cross-cluster) | **High** | Refactoring Phases A + F4 — shrink functions first, then extract AttackUIManager. |
 | TD-9 | `ship_card_panel.gd` is 1 407 lines — UI build + state sync + dial interaction + damage display | Medium | Refactoring Phase D3 — split into layout coordinator + entry builder + damage display. |
 | TD-10 | `attack_sim_panel.gd` is 1 455 lines — monolithic `_build_ui()` (218 lines) | Medium | Refactoring Phases A1 + D1 — extract 12 `_build_<section>()` helpers, then UIStyleHelper. |
-| TD-11 | Missing `serialize()`/`deserialize()` on ShipInstance, SquadronInstance, DamageDeck, DamageCard, ShipActivationState | Medium | Refactoring Phase E — complete serialization + SaveGameManager autoload. |
-| TD-12 | 64 EventBus signals — risk of signal spaghetti as features grow | Medium | Refactoring Phase E6 — group with `#region` blocks by domain. |
+| TD-11 | ~~Missing `serialize()`/`deserialize()` on ShipInstance, SquadronInstance, DamageDeck, DamageCard, ShipActivationState~~ | ~~Medium~~ | **Resolved** — Phase E complete. All classes serializable. `SaveGameManager` autoload with F5/F8 debug keybinds. |
+| TD-12 | ~~64 EventBus signals — risk of signal spaghetti as features grow~~ | ~~Medium~~ | **Resolved** — Phase E6 complete. 12 `#region` blocks group signals by domain. |
 | TD-13 | All UI is procedurally built in GDScript (only 4 `.tscn` files) | Low | Workable but slower iteration; consider `.tscn` for new complex UI. |
 
-> **Last audit:** MVP complete — 87 scripts, 1 645 tests, 1 644 passing.
+> **Last audit:** Refactoring Phase E complete — 90 scripts, 1 737 tests, 3 083 asserts, all passing.
 > Architecture compliance, static typing, and doc comment coverage all PASS.

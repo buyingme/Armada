@@ -7,8 +7,8 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase D2 complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅.
-> **Baseline:** 88 scripts, 1 669 tests, 1 669 passing.
+> **Status:** Phase E complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅.
+> **Baseline:** 90 scripts, 1 737 tests, 3 083 asserts — all passing.
 
 ---
 
@@ -505,25 +505,28 @@ Serialize deck order, discard pile, dealt cards, face-up states.
 
 Serialize current step, completed steps, pending actions.
 
-#### E5: `SaveGameManager` Autoload
+#### E5: `SaveGameManager` Autoload ✅
 
 New autoload that orchestrates full game state save/load:
 ```gdscript
 class_name SaveGameManager
 extends Node
 
-func save_game(slot: int) -> bool:
-func load_game(slot: int) -> bool:
-func list_saves() -> Array[Dictionary]:
+func save_game(game_state: GameState, file_name: String = "quicksave") -> bool:
+func load_game(file_name: String = "quicksave") -> GameState:
+func list_saves() -> Array[String]:
+func delete_save(file_name: String) -> bool:
 ```
 
-Saves to `user://saves/<slot>.json`.
+Saves to `res://saves/<name>.json` (project directory for easy debugging).
+Debug keybinds: **F5** quicksave, **F8** quickload (debug mode only).
 
-#### E6: EventBus Domain Grouping
+#### E6: EventBus Domain Grouping ✅
 
-Add `#region` blocks to `event_bus.gd` grouping the 64 signals by domain:
-Game Flow, Command Phase, Ship Phase, Squadron Phase, Attack, Damage,
-UI/Interaction, Debug.
+Added 12 `#region`/`#endregion` blocks to `event_bus.gd` grouping signals:
+Game Flow, Ship, Squadron, Combat, UI, Command Phase, Turn Management,
+Repair Command, Damage Card, Token Discard, Dial Drag, Maneuver Tool,
+Activation / Maneuver Execution.
 
 ---
 

@@ -4680,13 +4680,14 @@ All validation is covered by GUT tests — **no manual testing required.**
 
 **GUT baseline:** 90 scripts, 1 737 tests, 3 083 asserts — all passing.
 
-### MT-E.01 — Save/Load Smoke Test (optional)
+### MT-E.01 — Save/Load Smoke Test ✅
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Play a round in the learning scenario | Normal gameplay |
-| 2 | Open Godot debugger or call `SaveGameManager.save_game(GameManager.game_state)` | File created at `user://saves/quicksave.json` |
-| 3 | Inspect the JSON file | Contains `current_round`, `player_states` with ships/squadrons arrays, `damage_deck` draw/discard piles |
-| 4 | Call `SaveGameManager.load_game()` | Returns a `GameState` with correct round, phase, player data |
+| 1 | Run the game, play through at least one phase transition | Normal gameplay |
+| 2 | Press **F12** to enable debug mode | Debug HUD appears; help panel shows F5/F8 under "Save / Load" |
+| 3 | Press **F5** | Console logs "Quicksave complete."; file appears at `saves/quicksave.json` in project folder |
+| 4 | Open `saves/quicksave.json` in a text editor | JSON contains `current_round`, `player_states` with ships/squadrons arrays, `damage_deck` draw/discard piles |
+| 5 | Press **F8** | Console logs "Quickload OK — round X, phase Y, p0 score Z, p1 score W" |
 
-**Pass criteria:** JSON file is well-formed, round-trip preserves all fields.
+**Pass criteria:** JSON file is well-formed, round-trip preserves all fields. ✅ Tested manually.

@@ -56,11 +56,21 @@ A centralized `GameLogger` utility provides:
 
 Game state supports serialization/deserialization for:
 
-- Save/Load functionality
+- Save/Load functionality (via `SaveGameManager` autoload)
 - Potential future network synchronization
 - Test fixture generation
 
-All serializable classes implement `serialize() -> Dictionary` and `static deserialize(data: Dictionary)`.
+All serializable classes implement `serialize() -> Dictionary` and
+`static deserialize(data: Dictionary)`.
+
+Serialized classes: `GameState`, `PlayerState`, `ShipInstance`,
+`SquadronInstance`, `DamageDeck`, `DamageCard`, `ShipActivationState`,
+`CommandDialStack`, `CommandTokens`.
+
+`SaveGameManager` saves to `res://saves/` (project directory) as
+pretty-printed JSON. Debug keybinds: **F5** quicksave, **F8** quickload
+(debug mode only). Ship/squadron template re-association after load is
+the caller's responsibility via `AssetLoader` look-ups.
 
 ## 8.7 Code Organization
 

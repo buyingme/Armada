@@ -36,16 +36,55 @@ func _ready() -> void:
 		_log.info("Debug mode auto-enabled via --debug-mode CLI flag")
 
 
-## Keyboard shortcut: F12 toggles debug mode, Ctrl+S saves positions.
+## Keyboard shortcut: F12 toggles debug mode, Ctrl+S saves positions,
+## F5 quicksaves, F8 quickloads (debug mode only).
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event: InputEventKey = event as InputEventKey
 		if key_event.keycode == KEY_F12:
 			enabled = not enabled
 			get_viewport().set_input_as_handled()
-		elif enabled and key_event.keycode == KEY_S and key_event.ctrl_pressed:
-			save_positions_requested.emit()
-			get_viewport().set_input_as_handled()
+		elif enabled:
+			match key_event.keycode:
+				KEY_S:
+					if key_event.ctrl_pressed:
+						save_positions_requested.emit()
+						get_viewport().set_input_as_handled()
+				KEY_F5:
+					_quicksave()
+					get_viewport().set_input_as_handled()
+				KEY_F8:
+					_quickload()
+					get_viewport().set_input_as_handled()
+
+
+## Saves the current game state to [code]res://saves/quicksave.json[/code].
+func _quicksave() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		_log.warn("No active game state to save.")
+		return
+	var ok: bool = SaveGameManager.save_game(gs)
+	if ok:
+		_log.info("Quicksave complete.")
+	else:
+		_log.error("Quicksave failed.")
+
+
+## Loads a game state from [code]res://saves/quicksave.json[/code] and logs it.
+## Full state restoration is not yet implemented — this logs the loaded data
+## so you can verify the JSON round-trip in the console.
+func _quickload() -> void:
+	var loaded: GameState = SaveGameManager.load_game()
+	if loaded == null:
+		_log.warn("Quickload failed — no save file found.")
+		return
+	_log.info("Quickload OK — round %d, phase %d, p0 score %d, p1 score %d" % [
+		loaded.current_round,
+		loaded.current_phase,
+		loaded.player_states[0].score,
+		loaded.player_states[1].score,
+	])
 
 
 ## Selects a token for debug dragging.

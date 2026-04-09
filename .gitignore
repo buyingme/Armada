@@ -38,3 +38,6 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Save game files (generated at runtime)
+saves/

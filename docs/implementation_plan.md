@@ -1703,7 +1703,7 @@ constructor. Dead constants (`TOKEN_FILENAMES`, `CMD_ICON_FILENAMES`,
 
 ---
 
-### Refactoring Phase E — Serialization & EventBus Cleanup 🔄
+### Refactoring Phase E — Serialization & EventBus Cleanup ✅
 
 **Goal:** Add `serialize()`/`deserialize()` to all core data classes,
 extend `PlayerState` and `GameState` to include ships/squadrons/damage

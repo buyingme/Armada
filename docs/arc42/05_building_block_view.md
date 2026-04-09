@@ -26,7 +26,7 @@
 | **UI / Scenes** | Visual scenes, HUD elements, menus, game board rendering | `src/scenes/`, `src/ui/` |
 | **Game Core** | Rules engine, game state, phase management, combat resolution | `src/core/` |
 | **Data Layer** | Data models as Godot Resources (ships, squadrons, upgrades) | `src/models/` |
-| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager, SfxManager, MusicManager) | `src/autoload/` |
+| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager, SfxManager, MusicManager, DebugMode, SaveGameManager) | `src/autoload/` |
 | **Assets** | Textures, audio, fonts, shaders | `assets/` |
 | **Tests** | Unit and integration tests | `tests/` |
 

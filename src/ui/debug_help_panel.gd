@@ -90,6 +90,10 @@ func _populate_shortcut_entries(vbox: VBoxContainer) -> void:
 	_add_separator(vbox)
 	_add_section_header(vbox, "Cheats")
 	_add_line(vbox, "Shift + D", "Deal faceup damage card")
+	_add_separator(vbox)
+	_add_section_header(vbox, "Save / Load")
+	_add_line(vbox, "F5", "Quicksave game state")
+	_add_line(vbox, "F8", "Quickload game state")
 
 
 ## Adds the main header label to the container.

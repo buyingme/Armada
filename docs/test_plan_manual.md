@@ -4691,3 +4691,66 @@ All validation is covered by GUT tests — **no manual testing required.**
 | 5 | Press **F8** | Console logs "Quickload OK — round X, phase Y, p0 score Z, p1 score W" |
 
 **Pass criteria:** JSON file is well-formed, round-trip preserves all fields. ✅ Tested manually.
+
+---
+
+## Refactoring Phase F — Backbone & ActivationContext Extraction
+
+Phase F extracts shared activation state (F1) and UI panel lifecycle (F3)
+from `game_board.gd`. Pure structural refactoring — no game-logic changes.
+
+**GUT baseline:** 92 scripts, 1 754 tests, 3 113 asserts — all passing.
+
+### MT-F.01 — Full Game Flow Regression
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch game → Start Learning Scenario | Board loads; both fleets placed; card panels visible for active player |
+| 2 | Complete command phase (assign dials to all ships) | Dials appear in card panel; phase transitions to Ship Phase |
+| 3 | Activate a ship: reveal dial, execute maneuver, perform attack | Activation modal steps work; maneuver executes; attack resolves |
+| 4 | Complete all ship activations | Ship phase ends; transitions to Squadron Phase |
+| 5 | Activate all squadrons (or pass) | Squadron phase ends; transitions to Status Phase |
+| 6 | Observe Status Phase auto-advance | Tokens ready; round counter increments; handoff overlay appears |
+
+**Pass criteria:** Complete game loop works identically to pre-refactoring.
+
+### MT-F.02 — UI Panel Lifecycle (UIPanelManager)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | On board load, verify card panels | Rebel card panel (left) and Imperial card panel (right) visible with ship entries |
+| 2 | Click a ship entry in card panel | Card detail overlay appears centred with ship art and stats |
+| 3 | Press Escape | Card detail overlay dismisses |
+| 4 | Trigger damage on a ship (via attack or Shift+D in debug) | Damage summary overlay appears when requested |
+| 5 | Press Escape, then press Escape again | Quit confirmation modal appears |
+| 6 | Click "Cancel" on quit modal | Modal dismisses; game continues |
+| 7 | Resize the window | All panels reposition correctly (card panels stay at edges, modals re-centre) |
+| 8 | Observe phase HUD label during phase transitions | Label updates: "Command Phase", "Ship Phase", "Squadron Phase", "Status Phase" |
+| 9 | Observe player handoff overlay between rounds | "Your Turn" banner appears; handoff overlay shows player name |
+
+**Pass criteria:** All UI panels create, display, resize, and dismiss correctly.
+
+### MT-F.03 — Activation Context Shared State
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start ship activation (click eligible ship) | Activation modal appears; ship is highlighted |
+| 2 | During maneuver: overlap another ship | Overlap resolves; "End Activation" button appears after maneuver |
+| 3 | After maneuver, start attack | Attack executor can see the activating ship and its state |
+| 4 | Complete activation | Ship marked as activated; activation context cleared |
+| 5 | Observe that no other system retains stale activation state | Next ship activation starts fresh |
+
+**Pass criteria:** Activation state flows correctly through all controllers
+(ManeuverToolController, DisplacementController, AttackExecutor,
+SquadronPhaseController) via shared ActivationContext.
+
+### MT-F.04 — Save/Load With New Structure
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode (F12), play into round 2 | Normal gameplay |
+| 2 | Press F5 to quicksave | "Quicksave complete." logged |
+| 3 | Press F8 to quickload | "Quickload OK" logged; round/phase/scores restored |
+| 4 | Continue playing after load | Game state is consistent; no errors in console |
+
+**Pass criteria:** Save/load works correctly with UIPanelManager structure.

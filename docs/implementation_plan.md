@@ -1726,6 +1726,67 @@ deck, group EventBus signals with `#region` blocks, and create a
 
 ---
 
+### Refactoring Phase F — Extract Backbone & ActivationContext (partial) ✅
+
+**Goal:** Reduce `game_board.gd` by extracting shared activation state
+into a lightweight RefCounted and all UI panel lifecycle into a dedicated
+manager. See `docs/refactoring_plan.md` Phase F.
+
+#### F1: ActivationContext ✅ `ad61b51`
+
+Created `src/core/activation_context.gd` (60 lines, RefCounted) to hold
+shared activation state previously scattered across `game_board.gd`:
+
+- Properties: `activating_ship_token`, `ship_activation_state`,
+  `last_maneuver_overlapped`
+- Methods: `set_active(token, state)`, `clear()`, `is_active()`
+- Signal: `activation_changed`
+- Injected into ManeuverToolController, DisplacementController,
+  SquadronPhaseController, AttackExecutor
+- 101 references in `game_board.gd` replaced
+- Debug save/load keybinds (F5/F8) added in same commit
+
+**New file:** `src/core/activation_context.gd` (9 tests)
+**Tests:** 91 scripts, 1746 tests, 3097 asserts — all passing.
+
+#### F2: SquadronPhaseController ✅ (completed in C7)
+
+Already extracted during Phase C7.
+
+#### F3: UIPanelManager ✅ `8334d06`
+
+Created `src/scenes/game_board/ui_panel_manager.gd` (435 lines) owning
+all UI panel creation, positioning, resizing, and isolated callbacks:
+
+- 15 public panel properties moved from `game_board.gd`
+- All `_create_*` panel functions (card panels, overlays, modals,
+  sidebars, toolbars, banners, HUD labels)
+- Resize infrastructure: `_resizable_widgets`, `register_resizable()`,
+  `on_viewport_resized()`
+- Isolated callbacks: card detail, damage overview/summary, quit confirm,
+  victory screen, phase HUD update, score changes
+- `PHASE_NAMES` constant
+- `game_board.gd` reduced from 2 789 → 2 207 lines (−582)
+
+**New file:** `src/scenes/game_board/ui_panel_manager.gd` (8 tests)
+**Tests:** 92 scripts, 1754 tests, 3113 asserts — all passing.
+
+#### F4: AttackUIManager — DEFERRED
+
+Analysis showed extraction is impractical at planned scope:
+`_attack_sim_panel` has 159 references across ~80 functions. Only ~15
+functions (~290 lines) are purely UI — the rest interleave panel updates
+with state-machine transitions. Deferred to future incremental work.
+
+| Metric | Before F | Planned | Actual |
+|--------|----------|---------|--------|
+| `game_board.gd` lines | ~2 800 | ~500 | 2 207 |
+| `attack_executor.gd` lines | ~3 285 | ~1 500 | 3 285 |
+| God objects (>1 000 lines) | 2 | 1 | 2 |
+| Controllers / managers | 7 | 10 | 9 |
+
+---
+
 ```
 Phase 0 (Scale & Assets)
     │
@@ -1799,7 +1860,9 @@ Phase 0 (Scale & Assets)
 | Phase 9.5 | ~10 | **26** | **1590** |
 | Phase 10 | ~20 | — | ~1610 |
 | Post-A4 fixes | — | **7** | **1652** |
-| **Total** | **~420+ new** | | **1652 actual** |
+| Refactoring A–E | — | **85** | **1737** |
+| Refactoring F | — | **17** | **1754** |
+| **Total** | **~420+ new** | | **1754 actual** |
 
 ---
 

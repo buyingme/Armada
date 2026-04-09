@@ -7,8 +7,8 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase E complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅.
-> **Baseline:** 90 scripts, 1 737 tests, 3 083 asserts — all passing.
+> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4 deferred.
+> **Baseline:** 92 scripts, 1 754 tests, 3 113 asserts — all passing.
 
 ---
 
@@ -533,69 +533,82 @@ Activation / Maneuver Execution.
 ### Phase F — Extract Backbone & ActivationContext
 
 > **Risk: Medium** — Requires shared-state abstraction. Do after A–E.
+> **Status: Partially complete** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
+> F3 ✅ (`8334d06`), F4 deferred.
 
-After Phases A–E, `game_board.gd` still holds ACTIVATION, SQUADRON_PHASE,
+After Phases A–E, `game_board.gd` still held ACTIVATION, SQUADRON_PHASE,
 and UI_PANELS (~1 800 lines, still above the 500-line industry target).
 
-#### F1: Create `ActivationContext`
+#### F1: Create `ActivationContext` ✅
 
-A lightweight RefCounted that holds the shared activation state:
+Created `src/core/activation_context.gd` (60 lines, RefCounted) holding
+shared activation state with `last_maneuver_overlapped` flag:
 
-```gdscript
-class_name ActivationContext
-extends RefCounted
+- Properties: `activating_ship_token`, `ship_activation_state`,
+  `last_maneuver_overlapped`
+- Methods: `set_active(token, state)`, `clear()`, `is_active()`
+- Signal: `activation_changed`
+- Injected into ManeuverToolController, DisplacementController,
+  SquadronPhaseController, AttackExecutor
+- 101 references in `game_board.gd` replaced to use context
+- Tests: 9 tests in `tests/unit/test_activation_context.gd`
+- Commit: `ad61b51`
 
-signal activation_changed
+#### F2: Extract `SquadronPhaseController` ✅
 
-var activating_ship_token: ShipToken = null
-var ship_activation_state: ShipActivationState = null
+Completed in Phase C7. All squadron-phase logic already lives in
+`src/scenes/game_board/squadron_phase_controller.gd`.
 
-func set_active(token: ShipToken, state: ShipActivationState) -> void:
-    activating_ship_token = token
-    ship_activation_state = state
-    activation_changed.emit()
+#### F3: Extract `UIPanelManager` ✅
 
-func clear() -> void:
-    activating_ship_token = null
-    ship_activation_state = null
-    activation_changed.emit()
-```
+Created `src/scenes/game_board/ui_panel_manager.gd` (435 lines) owning
+all UI panel lifecycle:
 
-Inject `ActivationContext` into every controller that currently reads
-`_activating_ship_token` or `_ship_activation_state`:
-ManeuverToolController, DisplacementController, SquadronPhaseController,
-and AttackExecutor.
+- **15 public panel properties** moved from `game_board.gd`
+- **All `_create_*` panel functions** (card panels, overlays, modals,
+  sidebars, toolbars, banners, HUD labels)
+- **Resize infrastructure:** `_resizable_widgets` array,
+  `register_resizable()`, `on_viewport_resized()`
+- **Isolated callbacks:** card detail, damage overview/summary, quit
+  confirm, victory screen, phase HUD update, score changes
+- **Signal connections:** viewport resize, EventBus.game_ended,
+  ship/squadron_destroyed, damage_summary_requested
+- `PHASE_NAMES` constant moved here
+- `game_board.gd` reduced from 2 789 → 2 207 lines (−582)
+- Tests: 8 tests in `tests/unit/test_ui_panel_manager.gd`
+- Commit: `8334d06`
 
-#### F2: Extract `SquadronPhaseController`
+#### F4: Extract `AttackUIManager` — DEFERRED
 
-With `ActivationContext`, the 10 cross-cluster functions that read
-`_activating_ship_token` now read from the injected context instead.
-12 isolated + 10 previously-cross-cluster functions (7 vars) can move.
+Analysis showed this extraction is impractical at the planned scope:
 
-#### F3: Extract `UIPanelManager`
+- `_attack_sim_panel` has **159 references across ~80 functions**
+- Only ~15 functions (~290 lines) are purely UI — the rest interleave
+  panel updates with state-machine transitions
+- A façade approach would require splitting 80+ handler functions into
+  logic-half + UI-half, touching nearly every function in the file
+- Risk of regression is too high for the benefit gained
+- `attack_executor.gd` remains at 3 285 lines — acceptable as a complex
+  state machine, but flagged as technical debt for future work
 
-Owns all 9 UI_PANELS variables. Handles creation, positioning, resizing,
-and visibility. The data-driven resize dispatch from Phase B3 moves here.
-13 isolated functions move cleanly.
+**Recommended future approach:** When attack flow is next modified,
+incrementally extract self-contained subsystems (e.g., dice UI, defense
+token UI) rather than attempting a monolithic façade extraction.
 
-#### F4: Extract `AttackUIManager` From `attack_executor.gd`
+#### F Expected Outcome (Actual)
 
-Separate the AttackSimPanel lifecycle (create, show, hide, connect signals,
-update sections) from the attack state machine logic. Brings
-`attack_executor.gd` from ~2 800 → ~1 500 lines.
+| Metric | Before F | Plan | Actual |
+|--------|----------|------|--------|
+| `game_board.gd` lines | ~2 800 | ~500 | 2 207 |
+| `attack_executor.gd` lines | ~3 285 | ~1 500 | 3 285 (unchanged) |
+| God objects (>1 000 lines) | 2 | 1 | 2 (GB + AE) |
+| Controllers / managers | 7 | 10 | 9 (+ActivationContext, +UIPanelManager) |
 
-#### F Expected Outcome
-
-| Metric | Before F | After F |
-|--------|----------|---------|
-| `game_board.gd` lines | ~1 800 | ~500 |
-| `attack_executor.gd` lines | ~2 800 | ~1 500 |
-| God objects (>1 000 lines) | 2 | 1 (AE at ~1 500) |
-| Controllers | 7 | 10 |
-
-`attack_executor.gd` at ~1 500 lines is acceptable for a complex state
-machine with 10+ states. Further splitting would fragment the state
-transitions across files, making the flow harder to follow.
+`game_board.gd` is still above the 500-line target but significantly
+reduced. The remaining ~2 200 lines are predominantly activation flow
+orchestration that is tightly coupled to the controllers it coordinates.
+Further extraction would require the Command pattern (Phase G) to
+decouple action dispatch from the board.
 
 ---
 
@@ -742,13 +755,13 @@ investment). Only network multiplayer requires the full A–G pipeline.
 
 ## 6. Quantified Targets
 
-| Metric | Current | After A | After C | After F | After G | Industry Std |
-|--------|---------|---------|---------|---------|---------|-------------|
+| Metric | Current | After A | After C | After F (actual) | After G | Industry Std |
+|--------|---------|---------|---------|-------------------|---------|-------------|
 | Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 |
-| Max file lines | 3 390 | 3 390 | ~1 800 | ~500 | ~500 | <500 |
-| God objects (>1 000 LOC) | 4 | 4 | 2 | 1 | 1 | 0 |
-| Serializable game classes | 6/11 | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 |
-| Scene controller unit tests | 0% | 0% | >50% | >80% | >80% | >80% |
+| Max file lines | 3 390 | 3 390 | ~2 800 | **3 285** (AE unchanged) | ~500 | <500 |
+| God objects (>1 000 LOC) | 4 | 4 | 2 | **2** (GB 2 207 + AE 3 285) | 1 | 0 |
+| Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | **11/11** | 11/11 |
+| Scene controller unit tests | 0% | 0% | >50% | >50% | >80% | >80% |
 | Player action model | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
 | Network-ready | No | No | No | No | **Yes** | Yes |
 
@@ -780,14 +793,14 @@ Cross-reference with `docs/arc42/11_risks_and_technical_debt.md`:
 
 | TD ID | Description | Resolved By |
 |-------|-------------|-------------|
-| TD-4 | Functions exceeding 30-line guideline | **Phase A** |
-| TD-7 | `game_board.gd` God Object (3 390 lines) | **Phases C + F** |
-| TD-8 | `attack_executor.gd` God Object (3 008 lines) | **Phases A + F4** |
+| TD-4 | Functions exceeding 30-line guideline | **Phase A** ✅ |
+| TD-7 | `game_board.gd` God Object (3 390 → 2 207 lines) | **Phases C + F** ✅ (partial — F4 deferred) |
+| TD-8 | `attack_executor.gd` God Object (3 285 lines) | **Phase A** ✅ (functions shrunk). **F4 deferred** (façade impractical). |
 | TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** ✅ (877 lines) |
-| TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** |
-| TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** |
-| TD-12 | 64 EventBus signals — spaghetti risk | **Phase E6** |
-| R-6 | God-object files resist extension | **Phases C + F** |
+| TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** ✅ |
+| TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** ✅ |
+| TD-12 | 64 EventBus signals — spaghetti risk | **Phase E6** ✅ |
+| R-6 | God-object files resist extension | **Phases A–F** ✅ (partial — AE remains) |
 
 ---
 

@@ -61,6 +61,7 @@
 | `ScoringCalculator` | RefCounted | `src/core/scoring_calculator.gd` | End-of-game scoring: ship/squadron destruction points, objective tokens, margin-of-victory table |
 | `DamageCardEffectFactory` | RefCounted | `src/core/damage_card_effect_factory.gd` | Factory for damage card effects — creates `GameEffect` instances for each critical card type |
 | `ImmediateEffectResolver` | RefCounted | `src/core/immediate_effect_resolver.gd` | Resolves faceup damage card immediate effects (Structural Damage, Projector Misaligned, etc.) |
+| `ActivationContext` | RefCounted | `src/core/activation_context.gd` | Shared activation state (current ship, activation state, overlap flag) injected into all controllers |
 
 ### Additional Core Components
 
@@ -87,6 +88,7 @@
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
 | `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, activation backbone, delegates to child controllers |
+| `UIPanelManager` | Node | `src/scenes/game_board/ui_panel_manager.gd` | Owns all UI panel creation, positioning, resizing, and isolated callbacks (card panels, overlays, modals, HUD) |
 | `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack simulator (free-form) and attack execution (activation Step 4): targeting, LOS, dice, defense tokens, damage |
 | `DisplacementController` | Node | `src/scenes/game_board/displacement_controller.gd` | Squadron displacement flow after ship maneuver overlap |
 | `DialDragController` | Node | `src/scenes/game_board/dial_drag_controller.gd` | Command dial drag-and-drop to activate ships |

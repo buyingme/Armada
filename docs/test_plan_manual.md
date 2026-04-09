@@ -4754,3 +4754,22 @@ SquadronPhaseController) via shared ActivationContext.
 | 4 | Continue playing after load | Game state is consistent; no errors in console |
 
 **Pass criteria:** Save/load works correctly with UIPanelManager structure.
+
+### MT-F4a.01 — Attack Targeting Still Works After Resolver Extraction
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game (F6 on `game_board.tscn`) and reach the Ship Phase | Normal gameplay |
+| 2 | Activate a ship and complete its maneuver | Maneuver completes normally |
+| 3 | Click "Declare Attack" to enter attack simulator | Attack sim overlay appears with hull zone selectors |
+| 4 | Select an attacking hull zone (e.g. Front) | Zone highlights; valid targets become clickable |
+| 5 | Click an enemy ship hull zone as target | LOS line drawn, range displayed, dice pool shown |
+| 6 | Observe LOS status text | "Clear" or "Obstructed" displayed correctly |
+| 7 | Observe range band | Correct band (Close/Medium/Long) displayed |
+| 8 | Confirm the attack and play through dice/defense | Attack resolves; damage applied |
+| 9 | If ship has anti-squadron armament, target an enemy squadron | Squadron target in arc, LOS and range work |
+| 10 | Complete the attack; observe "no more targets" auto-skip if applicable | Zones with no valid targets are auto-skipped |
+
+**Pass criteria:** All attack targeting, LOS, range, and arc validation
+work identically to before the extraction. No visual or behavioural
+regressions.

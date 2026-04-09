@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4 deferred.
+> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b–F4d planned.
 > **Baseline:** 92 scripts, 1 754 tests, 3 113 asserts — all passing.
 
 ---
@@ -533,8 +533,8 @@ Activation / Maneuver Execution.
 ### Phase F — Extract Backbone & ActivationContext
 
 > **Risk: Medium** — Requires shared-state abstraction. Do after A–E.
-> **Status: Partially complete** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
-> F3 ✅ (`8334d06`), F4 deferred.
+> **Status: In progress** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
+> F3 ✅ (`8334d06`), F4a ✅, F4b–F4d planned (incremental computation extraction).
 
 After Phases A–E, `game_board.gd` still held ACTIVATION, SQUADRON_PHASE,
 and UI_PANELS (~1 800 lines, still above the 500-line industry target).
@@ -578,37 +578,214 @@ all UI panel lifecycle:
 - Tests: 8 tests in `tests/unit/test_ui_panel_manager.gd`
 - Commit: `8334d06`
 
-#### F4: Extract `AttackUIManager` — DEFERRED
+#### F4: Incremental AttackExecutor Decomposition
 
-Analysis showed this extraction is impractical at the planned scope:
+> **Revised plan:** Instead of extracting the *UI layer* (which is
+> hopelessly interleaved with `_attack_sim_panel`), extract the *pure
+> computation layers* — geometry, dice, defense, damage — as RefCounted
+> classes with zero panel references. The remaining AttackExecutor becomes
+> a thinner orchestrator: "call resolver for geometry → call dice resolver
+> for computation → update panel with result."
 
-- `_attack_sim_panel` has **159 references across ~80 functions**
-- Only ~15 functions (~290 lines) are purely UI — the rest interleave
-  panel updates with state-machine transitions
-- A façade approach would require splitting 80+ handler functions into
-  logic-half + UI-half, touching nearly every function in the file
-- Risk of regression is too high for the benefit gained
-- `attack_executor.gd` remains at 3 285 lines — acceptable as a complex
-  state machine, but flagged as technical debt for future work
+##### Context Data Pattern — `CombatParticipants`
 
-**Recommended future approach:** When attack flow is next modified,
-incrementally extract self-contained subsystems (e.g., dice UI, defense
-token UI) rather than attempting a monolithic façade extraction.
+All four extraction targets (F4a–F4d) need to know *who is attacking whom*.
+Currently this is 10 member variables on AttackExecutor (`_attack_sim_atk_ship`,
+`_attack_sim_atk_zone`, `_attack_sim_atk_squad`, `_attack_sim_def_ship`,
+`_attack_sim_def_zone`, `_attack_sim_def_squad`, plus 4 display-name strings).
 
-#### F Expected Outcome (Actual)
+**Solution:** A lightweight, immutable-by-convention data class
+`CombatParticipants extends RefCounted` in `src/core/`:
 
-| Metric | Before F | Plan | Actual |
-|--------|----------|------|--------|
-| `game_board.gd` lines | ~2 800 | ~500 | 2 207 |
-| `attack_executor.gd` lines | ~3 285 | ~1 500 | 3 285 (unchanged) |
-| God objects (>1 000 lines) | 2 | 1 | 2 (GB + AE) |
-| Controllers / managers | 7 | 10 | 9 (+ActivationContext, +UIPanelManager) |
+```gdscript
+class_name CombatParticipants
+extends RefCounted
 
-`game_board.gd` is still above the 500-line target but significantly
-reduced. The remaining ~2 200 lines are predominantly activation flow
-orchestration that is tightly coupled to the controllers it coordinates.
-Further extraction would require the Command pattern (Phase G) to
-decouple action dispatch from the board.
+## Attacker
+var atk_ship: ShipToken          ## null when attacker is squadron
+var atk_zone: int = -1           ## Constants.HullZone; -1 for squadrons
+var atk_squad: SquadronToken     ## null when attacker is ship
+
+## Defender
+var def_ship: ShipToken          ## null when target is squadron
+var def_zone: int = -1           ## Constants.HullZone; -1 for squadrons
+var def_squad: SquadronToken     ## null when target is ship
+
+## Convenience queries
+func atk_is_ship() -> bool
+func atk_is_squadron() -> bool
+func def_is_ship() -> bool
+func def_is_squadron() -> bool
+func get_atk_faction() -> int
+func get_def_faction() -> int
+
+## Factory
+static func create(atk_ship, atk_zone, atk_squad,
+                   def_ship, def_zone, def_squad) -> CombatParticipants
+```
+
+**Why this pattern:**
+- **Single constructor call** replaces 6 parameters on every resolver method.
+- **Immutable by convention** — created once per attacker/target selection,
+  never mutated. When attacker or target changes, a new instance is created.
+- **Follows existing project pattern** — same shape as `ActivationContext`
+  and `EffectContext` (RefCounted data bag), but read-only by design.
+- **Display names stay in AE** — they are UI concerns, not geometry.
+- **Shared across all resolvers** — same object is passed to
+  `AttackTargetResolver`, `AttackDiceResolver`, `DefenseTokenResolver`,
+  and `DamageDealer`.
+- **Testable** — unit tests create `CombatParticipants` with mock tokens
+  directly, no AttackExecutor needed.
+
+AttackExecutor creates a `CombatParticipants` whenever `_attack_sim_atk_*`
+or `_attack_sim_def_*` are set (in attacker/target selection handlers)
+and stores it as `_participants: CombatParticipants`. All resolver calls
+receive this object.
+
+##### F4a: Extract `AttackTargetResolver` (~370 lines) ✅
+
+> **Risk: Low** — zero `_attack_sim_panel` references.
+
+A `RefCounted` class in `src/core/` owning all pure geometry queries.
+Covers all four combatant combinations:
+- Ship → Ship (all arcs)
+- Ship → Squadron
+- Squadron → Ship
+- Squadron → Squadron
+
+**Functions that move (26, ~370 body lines):**
+
+| Group | Functions | Lines |
+|-------|-----------|-------|
+| Edge geometry | `_get_ship_edge` | 8 |
+| Arc-in-arc checks | `_attack_sim_is_ship_target_in_arc`, `_attack_sim_is_squadron_target_in_arc` | 30 |
+| LOS endpoints + tracing | `_attack_sim_compute_los_endpoints`, `_adjust_los_for_squadrons`, `_attack_sim_trace_los`, `_trace_los_to_ship_target`, `_trace_los_to_squad_target` | 90 |
+| Obstruction body list | `_build_obstruction_bodies` | 14 |
+| LOS determination | `_determine_los_status` | 30 |
+| Range measurement | `_attack_sim_compute_range_endpoints`, `_measure_range_from_ship`, `_attack_exec_is_squadron_at_range` | 66 |
+| Zone-has-target queries | `_attack_exec_zone_has_targets`, `_zone_has_enemy_ship_target`, `_zone_has_enemy_squad_target`, `has_any_attack_target`, `_attack_exec_has_any_valid_target`, `_attack_exec_has_more_squad_targets` | ~115 |
+
+**Constructor injection:**
+```gdscript
+class_name AttackTargetResolver extends RefCounted
+
+func _init(ship_tokens_fn: Callable, squadron_tokens_fn: Callable,
+           obstruction_bodies_fn: Callable) -> void
+```
+
+`_build_obstruction_bodies` needs scene-tree access — solved by passing a
+`Callable` that returns `Array[Node2D]` (same pattern as `_get_ship_tokens`).
+
+**Public API (all methods take explicit params via `CombatParticipants`):**
+- `get_ship_edge(token, zone) -> Array[Vector2]`
+- `is_ship_target_in_arc(parts) -> bool`
+- `is_squadron_target_in_arc(parts) -> bool`
+- `compute_los(parts) -> Dictionary` — returns `{endpoints, result, obstructed}`
+- `compute_range(parts) -> Dictionary` — returns `{distance, atk_pt, def_pt, range_band}`
+- `zone_has_targets(ship, zone) -> bool`
+- `has_any_valid_target(ship, fired_zones) -> bool`
+- `has_more_squad_targets(ship, zone, attacked, faction) -> bool`
+
+**What stays in AE:** The orchestration wrappers that call into the
+resolver and then update the panel/overlay (`_attack_sim_compute_and_show_los`,
+`_update_los_overlay_and_panel`, `_validate_target_ship_click`,
+`_validate_target_squadron_click`). These become 5–10 line functions:
+call resolver → update panel with result.
+
+**Tests:** ~20 tests covering all 4 combatant combos × arc/LOS/range.
+
+##### F4b: Extract `AttackDiceResolver` (~200 lines)
+
+> **Risk: Low** — zero `_attack_sim_panel` references in computation.
+
+**Functions that move (10, ~200 body lines):**
+
+| Group | Functions | Lines |
+|-------|-----------|-------|
+| Armament resolution | `_resolve_attacker_armament`, `_compute_attack_pool_dict`, `_compute_attack_dice_text` | 31 |
+| Pool manipulation | `_apply_gather_dice_hook` (core), `_get_cf_dial_colours`, obstruction die removal (pure) | 44 |
+| CF detection | `_attack_exec_has_cf_dial`, `_attack_exec_has_cf_token` | 18 |
+| Damage calculation | `_calc_attack_damage` | 30 |
+| Attack-blocked check | `_is_attack_blocked_by_damage` (core logic only) | 24 |
+
+**Public API:**
+- `resolve_armament(parts) -> Dictionary` — dice pool for the combatant pair
+- `compute_pool(armament, range_band) -> Dictionary`
+- `apply_gather_hook(pool, registry, parts) -> Dictionary`
+- `is_blocked_by_damage(registry, parts, obstructed) -> bool`
+- `get_cf_dial_colours(pool) -> Array[String]`
+- `has_cf_dial(ship_token) -> bool`
+- `has_cf_token(ship_token) -> bool`
+- `remove_obstruction_die(pool, colour) -> Dictionary`
+- `calc_damage(results, parts, registry) -> int`
+
+**What stays in AE:** Signal handlers (`_on_attack_roll_dice`,
+`_on_attack_cf_dial_colour`, `_on_obstruction_die_selected`) — they
+call resolver for computation, then update the panel.
+
+**Tests:** ~15 tests for pool assembly, CF logic, damage formula.
+
+##### F4c: Extract `DefenseTokenResolver` (~300 lines) — *after F4a+F4b*
+
+> **Risk: Medium** — defense flow is a mini state machine.
+
+Extract pure computation of defense token effects:
+- Spendability checks (speed-0 block, exhausted, locked)
+- Scatter effect (cancel all damage)
+- Brace effect (halve damage)
+- Evade effect (remove/reroll at range)
+- Redirect effect (absorb via adjacent zone shields)
+- Contain effect (prevent standard critical)
+
+**What stays in AE:** The defense step state machine (`_attack_exec_defense_step`,
+`_defense_commit_queue`), panel signal handlers, and the sequential
+token-spending loop — these orchestrate the *order* of spending; the
+resolver handles the *math* of each token type.
+
+**Tests:** ~20 tests for each token type × edge cases.
+
+##### F4d: Extract `DamageDealer` (~200 lines) — *after F4a–F4c*
+
+> **Risk: Medium** — async immediate-effect flow adds complexity.
+
+Extract damage card dealing, hull tracking, destruction detection,
+and damage summary building. The immediate-effect choice modal stays
+in AE (needs scene tree for the modal).
+
+**Tests:** ~10 tests for card dealing, hull calculation, destruction.
+
+##### F4 Expected Outcome
+
+| Step | New class | Lines moved | AE lines after | Risk |
+|------|-----------|-------------|----------------|------|
+| F4a | `AttackTargetResolver` | ~370 | ~2 915 | **Low** |
+| F4b | `AttackDiceResolver` | ~200 | ~2 715 | **Low** |
+| F4c | `DefenseTokenResolver` | ~300 | ~2 415 | Medium |
+| F4d | `DamageDealer` | ~200 | ~2 215 | Medium |
+| **Total** | **4 classes** | **~1 070** | **~2 215** | |
+
+Plus `CombatParticipants` data class (~50 lines, shared by all four).
+
+After F4a+F4b (the safe first batch), AE drops to ~2 715 — still large
+but the extracted logic is the densest and hardest to test in isolation.
+After the full F4, AE at ~2 215 lines is predominantly orchestration
+(panel wiring, signal handlers, state transitions) which is inherently
+node-bound.
+
+#### F Expected Outcome (Actual + Projected)
+
+| Metric | Before F | After F1–F3 | After F4a–b | After F4c–d |
+|--------|----------|-------------|-------------|-------------|
+| `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 |
+| `attack_executor.gd` lines | ~3 285 | 3 285 | ~2 715 | ~2 215 |
+| God objects (>1 000 lines) | 2 | 2 | 2 | 2 (AE at ~2 215) |
+| Controllers / managers | 7 | 9 | 11 | 13 |
+| Testable RefCounted classes | — | +2 | +4 | +6 |
+
+`attack_executor.gd` at ~2 215 lines is the irreducible orchestration
+layer — panel wiring, signal handlers, and state transitions that are
+inherently Node-bound. The complex game-rules logic will be in testable
+RefCounted classes.
 
 ---
 
@@ -755,15 +932,15 @@ investment). Only network multiplayer requires the full A–G pipeline.
 
 ## 6. Quantified Targets
 
-| Metric | Current | After A | After C | After F (actual) | After G | Industry Std |
-|--------|---------|---------|---------|-------------------|---------|-------------|
-| Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 |
-| Max file lines | 3 390 | 3 390 | ~2 800 | **3 285** (AE unchanged) | ~500 | <500 |
-| God objects (>1 000 LOC) | 4 | 4 | 2 | **2** (GB 2 207 + AE 3 285) | 1 | 0 |
-| Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | **11/11** | 11/11 |
-| Scene controller unit tests | 0% | 0% | >50% | >50% | >80% | >80% |
-| Player action model | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
-| Network-ready | No | No | No | No | **Yes** | Yes |
+| Metric | Current | After A | After C | After F1–3 | After F4a–b | After F4c–d | After G | Industry Std |
+|--------|---------|---------|---------|------------|-------------|-------------|---------|-------------|
+| Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 | 0 | 0 |
+| Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | ~2 715 | ~2 215 | ~500 | <500 |
+| God objects (>1 000 LOC) | 4 | 4 | 2 | 2 | 2 | 2 | 1 | 0 |
+| Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 | 11/11 | 11/11 | 11/11 |
+| Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 4 | 6 | 6+ | — |
+| Player action model | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
+| Network-ready | No | No | No | No | No | No | **Yes** | Yes |
 
 ---
 
@@ -795,7 +972,7 @@ Cross-reference with `docs/arc42/11_risks_and_technical_debt.md`:
 |-------|-------------|-------------|
 | TD-4 | Functions exceeding 30-line guideline | **Phase A** ✅ |
 | TD-7 | `game_board.gd` God Object (3 390 → 2 207 lines) | **Phases C + F** ✅ (partial — F4 deferred) |
-| TD-8 | `attack_executor.gd` God Object (3 285 lines) | **Phase A** ✅ (functions shrunk). **F4 deferred** (façade impractical). |
+| TD-8 | `attack_executor.gd` God Object (3 285 lines) | **Phase A** ✅ (functions shrunk). **F4a–d** planned (computation extraction). |
 | TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** ✅ (877 lines) |
 | TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** ✅ |
 | TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** ✅ |

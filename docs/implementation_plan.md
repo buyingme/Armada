@@ -1778,12 +1778,36 @@ Analysis showed extraction is impractical at planned scope:
 functions (~290 lines) are purely UI — the rest interleave panel updates
 with state-machine transitions. Deferred to future incremental work.
 
+#### F4a: AttackTargetResolver + CombatParticipants ✅
+
+Extracted all pure-geometry target queries from `attack_executor.gd`
+into two new RefCounted classes:
+
+- **`src/core/combat_participants.gd`** (~130 lines) — Lightweight
+  immutable-by-convention data class bundling attacker/defender identity
+  (ship/zone/squadron × both sides), with `create()` and
+  `create_attacker_only()` factories and convenience queries.
+- **`src/core/attack_target_resolver.gd`** (~505 lines) — Pure-geometry
+  resolver receiving `Callable` injections for ship/squadron/obstruction
+  tokens. Public API: `get_ship_edge()`, `is_ship_target_in_arc()`,
+  `is_squadron_target_in_arc()`, `compute_los()`, `compute_range()`,
+  `is_squadron_at_range()`, `zone_has_targets()`,
+  `has_any_attack_target()`, `has_any_valid_target()`,
+  `has_more_squad_targets()`.
+- AE wiring: 9 delegation replacements + 14 extracted functions removed.
+  `_build_obstruction_bodies` stays in AE (scene-tree access), passed
+  as Callable to the resolver.
+- `attack_executor.gd` reduced from ~3 285 → 2 914 lines (−371).
+
+**New files:** `combat_participants.gd` (28 tests), `attack_target_resolver.gd` (~30 tests)
+**Tests:** 94 scripts, 1 813 tests, 3 182 asserts — all passing.
+
 | Metric | Before F | Planned | Actual |
 |--------|----------|---------|--------|
 | `game_board.gd` lines | ~2 800 | ~500 | 2 207 |
-| `attack_executor.gd` lines | ~3 285 | ~1 500 | 3 285 |
+| `attack_executor.gd` lines | ~3 285 | ~1 500 | 2 914 |
 | God objects (>1 000 lines) | 2 | 1 | 2 |
-| Controllers / managers | 7 | 10 | 9 |
+| Controllers / managers | 7 | 10 | 10 |
 
 ---
 

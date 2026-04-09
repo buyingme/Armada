@@ -126,6 +126,10 @@ var _deferred_immediate_ship: ShipInstance = null
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("AttackExecutor")
 
+## Pure-geometry resolver for targeting, LOS, range, and target availability.
+## Constructed in [method initialize] with scene-tree callables.
+var _target_resolver: AttackTargetResolver = null
+
 
 # ---------------------------------------------------------------------------
 # Attack Simulator state (Phase 6a / 6a-2)
@@ -311,6 +315,9 @@ func initialize(get_ship_tokens: Callable,
 	_get_squadron_tokens = get_squadron_tokens
 	_token_container = token_container
 	_camera = camera
+	_target_resolver = AttackTargetResolver.new(
+			get_ship_tokens, get_squadron_tokens,
+			_build_obstruction_bodies)
 
 
 ## Sets the [EffectRegistry] for hook resolution during attacks.
@@ -563,17 +570,7 @@ func is_in_exec_mode() -> bool:
 ## begins to decide whether the modal should auto-skip the Attack step.
 ## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 func has_any_attack_target(ship_token: ShipToken) -> bool:
-	if ship_token == null:
-		return false
-	var all_zones: Array[int] = [
-		Constants.HullZone.FRONT, Constants.HullZone.LEFT,
-		Constants.HullZone.RIGHT, Constants.HullZone.REAR,
-	]
-	for zone: int in all_zones:
-		if _attack_exec_zone_has_targets(
-				ship_token, zone as Constants.HullZone):
-			return true
-	return false
+	return _target_resolver.has_any_attack_target(ship_token)
 
 
 # ===========================================================================
@@ -645,6 +642,15 @@ func _attack_sim_clear_target_state() -> void:
 	_attack_sim_def_squad = null
 	_attack_sim_def_name = ""
 	_attack_sim_def_zone_name = ""
+
+
+## Builds a [CombatParticipants] from the current attacker/target state.
+func _build_current_participants() -> CombatParticipants:
+	return CombatParticipants.create(
+			_attack_sim_atk_ship, _attack_sim_atk_zone,
+			_attack_sim_atk_squad,
+			_attack_sim_def_ship, _attack_sim_def_zone,
+			_attack_sim_def_squad)
 
 
 ## Returns the damage total for the current dice pool, using the correct
@@ -917,7 +923,12 @@ func _validate_target_ship_click(token: ShipToken,
 					"Cannot target a friendly ship.", "friendly")
 	# Arc check (AS-ARC-001).
 	if _attack_sim_atk_ship:
-		if not _attack_sim_is_ship_target_in_arc(token, zone):
+		var arc_parts: CombatParticipants = \
+				CombatParticipants.create_attacker_only(
+						_attack_sim_atk_ship, _attack_sim_atk_zone,
+						null)
+		if not _target_resolver.is_ship_target_in_arc(
+				arc_parts, token, zone):
 			return _reject_target("Target rejected: not in arc.",
 					"Defender is not in arc.", "not_in_arc")
 	return ""
@@ -990,7 +1001,12 @@ func _validate_target_squadron_click(
 		return "deselected"
 	# Arc check (AS-ARC-001, skipped for squadron attacker AS-ARC-002).
 	if _attack_sim_atk_ship:
-		if not _attack_sim_is_squadron_target_in_arc(token):
+		var arc_parts: CombatParticipants = \
+				CombatParticipants.create_attacker_only(
+						_attack_sim_atk_ship, _attack_sim_atk_zone,
+						null)
+		if not _target_resolver.is_squadron_target_in_arc(
+				arc_parts, token):
 			return _reject_target("Target rejected: not in arc.",
 					"Defender is not in arc.", "not_in_arc")
 	# Faction guard.
@@ -1093,61 +1109,24 @@ func _attack_sim_deselect_both() -> void:
 ## overlay and info panel with the results.
 ## Requirements: AS-VIS-020–022, AS-PNL-011, AS-LOG-010, AS-RNG-010–014.
 func _attack_sim_compute_and_show_los() -> void:
-	# Determine LOS endpoints and trace result.
-	var endpoints: Dictionary = _attack_sim_compute_los_endpoints()
-	var atk_pt: Vector2 = endpoints["atk"]
-	var def_pt: Vector2 = endpoints["def"]
-	var los_result: LineOfSightChecker.LOSResult = _attack_sim_trace_los(
-			atk_pt, def_pt)
+	var parts: CombatParticipants = _build_current_participants()
+	# Compute LOS via resolver.
+	var los_info: Dictionary = _target_resolver.compute_los(parts)
 	# Reset obstruction flag for this target evaluation.
-	_attack_exec_obstructed = false
-	var los_info: Dictionary = _determine_los_status(
-			los_result, atk_pt, def_pt)
+	_attack_exec_obstructed = los_info["obstructed"]
 	var status: int = los_info["status"]
 	var los_text: String = los_info["text"]
 	_log.info("LOS: %s." % los_text)
-	# Compute range measurement.
-	var range_data: Dictionary = _attack_sim_compute_range_endpoints()
+	# Compute range measurement via resolver.
+	var range_data: Dictionary = _target_resolver.compute_range(parts)
 	var range_distance: float = range_data.get("distance", INF)
 	var range_band: String = Constants.RANGE_BAND_BEYOND
 	if range_distance < INF:
 		range_band = GameScale.get_range_band(range_distance)
 	_log.info("Range: %s (%.0f px)." % [range_band, range_distance])
 	_update_los_overlay_and_panel(
-			atk_pt, def_pt, status, los_text, range_data,
-			range_distance, range_band)
-
-
-## Determines the LOS status and text from a trace result.
-func _determine_los_status(
-		los_result: LineOfSightChecker.LOSResult,
-		atk_pt: Vector2, def_pt: Vector2) -> Dictionary:
-	var status: int = AttackSimOverlay.LOSStatus.CLEAR
-	var los_text: String = "Clear"
-	if not los_result.has_los:
-		status = AttackSimOverlay.LOSStatus.BLOCKED
-		los_text = "Blocked"
-		if _attack_sim_def_ship:
-			var def_arc: Dictionary = \
-					_attack_sim_def_ship.get_firing_arc_world_points()
-			var info: Dictionary = \
-					LineOfSightChecker.get_blocking_boundary_info(
-							atk_pt, def_pt, def_arc)
-			if not info.is_empty():
-				_log.debug(
-						"LOS blocked by boundary '%s': " % info["boundary"]
-						+"inner=%s outer=%s ix=%s." % [
-								info["inner"], info["outer"],
-								info["intersection"]])
-	elif los_result.obstructed:
-		status = AttackSimOverlay.LOSStatus.OBSTRUCTED
-		_attack_exec_obstructed = true
-		if los_result.obstructed_by.size() > 0:
-			los_text = "Obstructed by %s" % ", ".join(
-					los_result.obstructed_by)
-		else:
-			los_text = "Obstructed"
-	return {"status": status, "text": los_text}
+			los_info["atk_pt"], los_info["def_pt"], status, los_text,
+			range_data, range_distance, range_band)
 
 
 ## Updates overlay visuals and panel with LOS/range results, and begins
@@ -1192,80 +1171,6 @@ func _compute_attack_dice_text(range_band: String) -> String:
 	return DicePool.format_attack_pool(armament, range_band)
 
 
-# ===========================================================================
-# LOS Computation
-# ===========================================================================
-
-
-## Computes the LOS line endpoints for the current attacker/target pair.
-## Returns a Dictionary with "atk" and "def" Vector2 keys.
-## Rules Reference: "Line of Sight", p.10.
-func _attack_sim_compute_los_endpoints() -> Dictionary:
-	var atk_pt: Vector2 = Vector2.ZERO
-	var def_pt: Vector2 = Vector2.ZERO
-	# Attacker endpoint.
-	if _attack_sim_atk_ship:
-		var los_pts: Dictionary = \
-				_attack_sim_atk_ship.get_los_origins_world()
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_atk_zone, "FRONT")
-		atk_pt = los_pts.get(zone_key, Vector2.ZERO)
-	# Defender endpoint (depends on type).
-	if _attack_sim_def_ship:
-		var los_pts: Dictionary = \
-				_attack_sim_def_ship.get_los_origins_world()
-		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_def_zone, "FRONT")
-		def_pt = los_pts.get(zone_key, Vector2.ZERO)
-	return _adjust_los_for_squadrons(atk_pt, def_pt)
-
-
-## Adjusts LOS endpoints when one or both combatants are squadrons.
-func _adjust_los_for_squadrons(
-		atk_pt: Vector2, def_pt: Vector2) -> Dictionary:
-	if _attack_sim_atk_ship and _attack_sim_def_squad:
-		def_pt = RangeFinder.closest_point_on_circle(
-				atk_pt,
-				_attack_sim_def_squad.global_position,
-				_attack_sim_def_squad.get_radius_px())
-	if _attack_sim_atk_squad and _attack_sim_def_ship:
-		var d_los_pts: Dictionary = \
-				_attack_sim_def_ship.get_los_origins_world()
-		var d_zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_def_zone, "FRONT")
-		def_pt = d_los_pts.get(d_zone_key, Vector2.ZERO)
-		atk_pt = RangeFinder.closest_point_on_circle(
-				def_pt,
-				_attack_sim_atk_squad.global_position,
-				_attack_sim_atk_squad.get_radius_px())
-	if _attack_sim_atk_squad and _attack_sim_def_squad:
-		atk_pt = RangeFinder.closest_point_on_circle(
-				_attack_sim_def_squad.global_position,
-				_attack_sim_atk_squad.global_position,
-				_attack_sim_atk_squad.get_radius_px())
-		def_pt = RangeFinder.closest_point_on_circle(
-				_attack_sim_atk_squad.global_position,
-				_attack_sim_def_squad.global_position,
-				_attack_sim_def_squad.get_radius_px())
-	return {"atk": atk_pt, "def": def_pt}
-
-
-## Traces LOS between the attacker and target using LineOfSightChecker.
-## Builds obstruction bodies from all ships except the attacker/defender.
-## Requirements: AS-VIS-022, TL-LOS-001–005.
-func _attack_sim_trace_los(atk_pt: Vector2,
-		def_pt: Vector2) -> LineOfSightChecker.LOSResult:
-	var bodies: Array = _build_obstruction_bodies()
-	var obstacles: Array = [] # Future: obstacle tokens.
-	if _attack_sim_def_ship:
-		return _trace_los_to_ship_target(
-				atk_pt, def_pt, bodies, obstacles)
-	if _attack_sim_def_squad:
-		return _trace_los_to_squad_target(
-				atk_pt, bodies, obstacles)
-	return LineOfSightChecker.LOSResult.new()
-
-
 ## Builds obstruction bodies from all ships excluding attacker/defender.
 func _build_obstruction_bodies() -> Array:
 	var bodies: Array = []
@@ -1282,158 +1187,6 @@ func _build_obstruction_bodies() -> Array:
 								st.rotation, st.get_half_width(),
 								st.get_half_length()))
 	return bodies
-
-
-## Traces LOS when the defender is a ship.
-func _trace_los_to_ship_target(atk_pt: Vector2, def_pt: Vector2,
-		bodies: Array, obstacles: Array) -> LineOfSightChecker.LOSResult:
-	var ds: ShipToken = _attack_sim_def_ship
-	if _attack_sim_atk_ship:
-		return LineOfSightChecker.trace_los_ship_to_ship(
-				atk_pt, def_pt,
-				_attack_sim_def_zone as Constants.HullZone,
-				ds.global_position, ds.rotation,
-				ds.get_half_width(), ds.get_half_length(),
-				bodies, obstacles,
-				ds.get_firing_arc_world_points())
-	return LineOfSightChecker.trace_los_squad_to_ship(
-			_attack_sim_atk_squad.global_position,
-			_attack_sim_atk_squad.get_radius_px(),
-			def_pt,
-			_attack_sim_def_zone as Constants.HullZone,
-			ds.global_position, ds.rotation,
-			ds.get_half_width(), ds.get_half_length(),
-			bodies, obstacles,
-			ds.get_firing_arc_world_points())
-
-
-## Traces LOS when the defender is a squadron.
-func _trace_los_to_squad_target(atk_pt: Vector2,
-		bodies: Array, obstacles: Array) -> LineOfSightChecker.LOSResult:
-	if _attack_sim_atk_ship:
-		return LineOfSightChecker.trace_los_ship_to_squadron(
-				atk_pt,
-				_attack_sim_def_squad.global_position,
-				_attack_sim_def_squad.get_radius_px(),
-				bodies, obstacles)
-	return LineOfSightChecker.trace_los_squad_to_squad(
-			_attack_sim_atk_squad.global_position,
-			_attack_sim_atk_squad.get_radius_px(),
-			_attack_sim_def_squad.global_position,
-			_attack_sim_def_squad.get_radius_px(),
-			bodies, obstacles)
-
-
-# ===========================================================================
-# Arc Validation (Phase 6a-3)
-# ===========================================================================
-
-
-## Returns the hull-zone edge polyline for [param token], preferring
-## arc-based multi-segment edges when boundary data with corner_* keys
-## is available, otherwise falling back to rectangle corners.
-## Requirements: HZ-EDGE-001.
-func _get_ship_edge(
-		token: ShipToken, zone: Constants.HullZone) -> Array[Vector2]:
-	var arc_pts: Dictionary = token.get_firing_arc_world_points()
-	if not arc_pts.is_empty() and arc_pts.has("corner_front_left"):
-		return RangeFinder.get_hull_zone_edge_from_arcs(arc_pts, zone)
-	return RangeFinder.get_hull_zone_edge(
-			token.global_position, token.rotation,
-			token.get_half_width(), token.get_half_length(), zone)
-
-
-## Returns true if the defending ship hull zone is inside the attacker's
-## firing arc. Only valid when the attacker is a ship hull zone.
-## Requirements: AS-ARC-001, HZ-EDGE-001.
-func _attack_sim_is_ship_target_in_arc(
-		def_token: ShipToken, def_zone: int) -> bool:
-	if not _attack_sim_atk_ship:
-		return true
-	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
-			.get_firing_arc_world_points()
-	if atk_arc_pts.is_empty():
-		return true # No arc data → allow.
-	var def_edge: Array[Vector2] = _get_ship_edge(
-			def_token, def_zone as Constants.HullZone)
-	return RangeFinder.is_hull_zone_edge_in_arc(
-			def_edge,
-			_attack_sim_atk_zone as Constants.HullZone,
-			atk_arc_pts)
-
-
-## Returns true if the defending squadron is inside the attacker's
-## firing arc. Only valid when the attacker is a ship hull zone.
-## Requirements: AS-ARC-001.
-func _attack_sim_is_squadron_target_in_arc(
-		def_token: SquadronToken) -> bool:
-	if not _attack_sim_atk_ship:
-		return true
-	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
-			.get_firing_arc_world_points()
-	if atk_arc_pts.is_empty():
-		return true
-	return RangeFinder.is_squadron_in_arc(
-			def_token.global_position,
-			def_token.get_radius_px(),
-			_attack_sim_atk_zone as Constants.HullZone,
-			atk_arc_pts)
-
-
-# ===========================================================================
-# Range Measurement (Phase 6a-3)
-# ===========================================================================
-
-
-## Computes the range measurement endpoints and distance for the current
-## attacker/target pair. Returns a Dictionary with "distance" (float),
-## "atk_pt" (Vector2), "def_pt" (Vector2).
-## Requirements: AS-RNG-010, AS-RNG-011, HZ-EDGE-001.
-func _attack_sim_compute_range_endpoints() -> Dictionary:
-	if _attack_sim_atk_ship:
-		return _measure_range_from_ship()
-	# Squadron → Ship
-	if _attack_sim_atk_squad and _attack_sim_def_ship:
-		var def_edge: Array[Vector2] = _get_ship_edge(
-				_attack_sim_def_ship,
-				_attack_sim_def_zone as Constants.HullZone)
-		return RangeFinder.measure_range_squad_to_ship(
-				_attack_sim_atk_squad.global_position,
-				_attack_sim_atk_squad.get_radius_px(),
-				def_edge)
-	# Squadron → Squadron
-	if _attack_sim_atk_squad and _attack_sim_def_squad:
-		return RangeFinder.measure_range_squad_to_squad(
-				_attack_sim_atk_squad.global_position,
-				_attack_sim_atk_squad.get_radius_px(),
-				_attack_sim_def_squad.global_position,
-				_attack_sim_def_squad.get_radius_px())
-	# Fallback.
-	return {"distance": INF, "atk_pt": Vector2.ZERO,
-			"def_pt": Vector2.ZERO}
-
-
-## Computes range from a ship attacker to the current target.
-func _measure_range_from_ship() -> Dictionary:
-	var atk_edge: Array[Vector2] = _get_ship_edge(
-			_attack_sim_atk_ship,
-			_attack_sim_atk_zone as Constants.HullZone)
-	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
-			.get_firing_arc_world_points()
-	if _attack_sim_def_ship:
-		var def_edge: Array[Vector2] = _get_ship_edge(
-				_attack_sim_def_ship,
-				_attack_sim_def_zone as Constants.HullZone)
-		return RangeFinder.measure_attack_range_ship_endpoints(
-				atk_edge, def_edge,
-				_attack_sim_atk_zone as Constants.HullZone,
-				atk_arc_pts)
-	return RangeFinder.measure_attack_range_squadron_endpoints(
-			atk_edge,
-			_attack_sim_def_squad.global_position,
-			_attack_sim_def_squad.get_radius_px(),
-			_attack_sim_atk_zone as Constants.HullZone,
-			atk_arc_pts)
 
 
 # ===========================================================================
@@ -3026,140 +2779,17 @@ func _attack_exec_mark_spent_zone() -> void:
 ## Rules Reference: "Attack", Step 6, p.2 — new defender must be inside
 ## the firing arc and at attack range of the same attacking hull zone.
 func _attack_exec_has_more_squad_targets() -> bool:
-	if not _attack_sim_atk_ship or not _attack_exec_ship_token:
-		return false
-	var attacker_faction: int = _attack_exec_ship_token.get_faction()
-	for sq_token: SquadronToken in _get_squadron_tokens.call():
-		# Must be an enemy.
-		if sq_token.get_faction() == attacker_faction:
-			continue
-		# Must not be already attacked.
-		if sq_token in _attack_exec_attacked_squads:
-			continue
-		# Must be in arc.
-		if not _attack_sim_is_squadron_target_in_arc(sq_token):
-			continue
-		# Must be at attack range (not beyond).
-		if not _attack_exec_is_squadron_at_range(sq_token):
-			continue
-		return true
-	return false
-
-
-## Checks whether a squadron is at attack range (close/medium/long)
-## from the current attacker hull zone.
-## Requirements: AE-SQ-003.
-func _attack_exec_is_squadron_at_range(
-		sq_token: SquadronToken) -> bool:
-	var atk_edge: Array[Vector2] = _get_ship_edge(
-			_attack_sim_atk_ship,
-			_attack_sim_atk_zone as Constants.HullZone)
-	var atk_arc_pts: Dictionary = _attack_sim_atk_ship \
-			.get_firing_arc_world_points()
-	var range_data: Dictionary = (
-			RangeFinder.measure_attack_range_squadron_endpoints(
-			atk_edge, sq_token.global_position,
-			sq_token.get_radius_px(),
-			_attack_sim_atk_zone as Constants.HullZone,
-			atk_arc_pts))
-	var dist: float = range_data.get("distance", INF)
-	if dist >= INF:
-		return false
-	var band: String = GameScale.get_range_band(dist)
-	return band != Constants.RANGE_BAND_BEYOND
-
-
-## Returns true if the given hull zone on the attacker has ANY valid
-## enemy target (ship or squadron) in arc and at attack range.
-## Used to auto-skip attack when no targets exist.
-## Requirements: AE-SKIP-003.
-func _attack_exec_zone_has_targets(ship_token: ShipToken,
-		zone: Constants.HullZone) -> bool:
-	var atk_arc_pts: Dictionary = \
-			ship_token.get_firing_arc_world_points()
-	var atk_edge: Array[Vector2] = _get_ship_edge(ship_token, zone)
-	var attacker_faction: int = ship_token.get_faction()
-	if _zone_has_enemy_ship_target(
-			ship_token, zone, atk_arc_pts, atk_edge,
-			attacker_faction):
-		return true
-	return _zone_has_enemy_squad_target(
-			zone, atk_arc_pts, atk_edge, attacker_faction)
-
-
-## Returns true if any enemy ship hull zone is in arc and range.
-func _zone_has_enemy_ship_target(ship_token: ShipToken,
-		zone: Constants.HullZone, atk_arc_pts: Dictionary,
-		atk_edge: Array[Vector2],
-		attacker_faction: int) -> bool:
-	for def_token: ShipToken in _get_ship_tokens.call():
-		if def_token.get_faction() == attacker_faction:
-			continue
-		if def_token == ship_token:
-			continue
-		for def_zone: int in [Constants.HullZone.FRONT,
-				Constants.HullZone.LEFT, Constants.HullZone.RIGHT,
-				Constants.HullZone.REAR]:
-			var def_edge: Array[Vector2] = _get_ship_edge(
-					def_token, def_zone as Constants.HullZone)
-			if not RangeFinder.is_hull_zone_edge_in_arc(
-					def_edge, zone, atk_arc_pts):
-				continue
-			var range_data: Dictionary = (
-					RangeFinder.measure_attack_range_ship_endpoints(
-					atk_edge, def_edge, zone, atk_arc_pts))
-			var dist: float = range_data.get("distance", INF)
-			if dist >= INF:
-				continue
-			var rng_band: String = GameScale.get_range_band(dist)
-			if rng_band != Constants.RANGE_BAND_BEYOND:
-				return true
-	return false
-
-
-## Returns true if any enemy squadron is in arc and range.
-func _zone_has_enemy_squad_target(
-		zone: Constants.HullZone, atk_arc_pts: Dictionary,
-		atk_edge: Array[Vector2],
-		attacker_faction: int) -> bool:
-	for sq_token: SquadronToken in _get_squadron_tokens.call():
-		if sq_token.get_faction() == attacker_faction:
-			continue
-		if not RangeFinder.is_squadron_in_arc(
-				sq_token.global_position, sq_token.get_radius_px(),
-				zone, atk_arc_pts):
-			continue
-		var range_data: Dictionary = (
-				RangeFinder.measure_attack_range_squadron_endpoints(
-				atk_edge, sq_token.global_position,
-				sq_token.get_radius_px(), zone, atk_arc_pts))
-		var dist: float = range_data.get("distance", INF)
-		if dist >= INF:
-			continue
-		var rng_band: String = GameScale.get_range_band(dist)
-		if rng_band != Constants.RANGE_BAND_BEYOND:
-			return true
-	return false
+	var parts: CombatParticipants = _build_current_participants()
+	return _target_resolver.has_more_squad_targets(
+			parts, _attack_exec_attacked_squads)
 
 
 ## Returns true if the attacker has valid targets from ANY unfired
 ## hull zone.
 ## Requirements: AE-SKIP-003.
 func _attack_exec_has_any_valid_target() -> bool:
-	if _attack_exec_ship_token == null:
-		return false
-	var all_zones: Array[int] = [
-		Constants.HullZone.FRONT, Constants.HullZone.LEFT,
-		Constants.HullZone.RIGHT, Constants.HullZone.REAR,
-	]
-	for zone: int in all_zones:
-		if zone in _attack_exec_fired_zones:
-			continue
-		if _attack_exec_zone_has_targets(
-				_attack_exec_ship_token,
-				zone as Constants.HullZone):
-			return true
-	return false
+	return _target_resolver.has_any_valid_target(
+			_attack_exec_ship_token, _attack_exec_fired_zones)
 
 
 ## Prepares the board for attacking the next squadron in the same arc.

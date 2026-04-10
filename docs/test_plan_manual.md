@@ -4883,3 +4883,23 @@ immediate-effect flows still function correctly after extracting
 **Pass criteria:** All damage resolution flows produce identical behaviour
 to pre-extraction. Shield absorption, card dealing, destruction detection,
 damage summaries, and immediate-effect modals all work as before.
+---
+
+### MT-BUG.01 — Destroyed Units Filtered from Targeting and Activation
+
+**Purpose:** Verify that destroyed squadrons and ships cannot be targeted,
+activated, or interacted with after being destroyed. Covers the fix in
+commit `a69a14c`.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start game, destroy an enemy squadron via attack | Squadron fades out, disappears |
+| 2 | On next activation, try to click where the destroyed squadron was | No targeting highlight, click is ignored |
+| 3 | Open squadron activation modal | Destroyed squadron does NOT appear as selectable |
+| 4 | Advance to next round | Destroyed squadron does NOT reappear or flash |
+| 5 | Attack and destroy a second squadron in the same game | Confirm the first destroyed squadron is still gone |
+| 6 | Verify an attacking ship/squadron cannot select a destroyed unit | Tooltip "Target already destroyed" or no highlight |
+| 7 | Destroy all 2 enemy squadrons (Starter scenario) | Subsequent activations skip squadron targeting cleanly |
+
+**Pass criteria:** Destroyed units are never selectable, never reset visually
+on round change, and never block or confuse the targeting flow.

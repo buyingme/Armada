@@ -89,11 +89,15 @@ func set_activated_visual(activated: bool) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if _squadron_instance and _squadron_instance.is_destroyed():
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			var local_pos: Vector2 = to_local(get_global_mouse_position())
 			if local_pos.length() <= _radius_px:
-				token_clicked.emit(self )
+				token_clicked.emit(self)
 				get_viewport().set_input_as_handled()
 
 

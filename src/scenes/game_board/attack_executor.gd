@@ -903,6 +903,11 @@ func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
 ## and arc check.
 func _validate_target_ship_click(token: ShipToken,
 		zone: int) -> String:
+	# Destroyed guard — destroyed ships cannot be targeted.
+	var ship_inst: ShipInstance = token.get_ship_instance()
+	if ship_inst and ship_inst.is_destroyed():
+		return _reject_target("Target rejected: ship is destroyed.",
+				"That ship has been destroyed.", "destroyed")
 	# Attacker re-click → deselect both (AS-TGT-021).
 	if _attack_sim_atk_ship == token and _attack_sim_atk_zone == zone:
 		if _attack_exec_mode and _attack_exec_attacked_squads.size() > 0:
@@ -1000,6 +1005,11 @@ func _attack_sim_handle_target_squadron_click(
 ## string if the click was handled (deselect/reject).
 func _validate_target_squadron_click(
 		token: SquadronToken) -> String:
+	# Destroyed guard — destroyed squadrons cannot be targeted.
+	var sq_inst: SquadronInstance = token.get_squadron_instance()
+	if sq_inst and sq_inst.is_destroyed():
+		return _reject_target("Target rejected: squadron is destroyed.",
+				"That squadron has been destroyed.", "destroyed")
 	# Attacker re-click → deselect both (AS-TGT-021).
 	if _attack_sim_atk_squad == token:
 		if _attack_exec_squad_mode:
@@ -2680,6 +2690,9 @@ func _attack_exec_has_more_squad_targets() -> bool:
 	for sq_token: SquadronToken in _get_squadron_tokens.call():
 		if sq_token.get_faction() == attacker_faction:
 			continue
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
+			continue
 		if sq_token in _attack_exec_attacked_squads:
 			continue
 		if not _target_resolver.is_squadron_target_in_arc(
@@ -2843,6 +2856,9 @@ func _on_attack_skip() -> void:
 func _fade_out_token(token: Node2D) -> void:
 	if token == null:
 		return
+	# Disable input immediately so the token cannot be clicked during the
+	# fade animation.  Visibility is set to false after the tween.
+	token.set_process_unhandled_input(false)
 	var tween: Tween = token.create_tween()
 	tween.tween_property(token, "modulate:a", 0.0, 0.8)
 	tween.tween_callback(func() -> void:

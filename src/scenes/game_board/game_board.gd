@@ -705,7 +705,11 @@ func _on_round_started(_round_number: int) -> void:
 	# Safety net: ensure squadron-phase UI never leaks into a new round.
 	_squadron_phase_controller.hide_ui()
 	# Restore squadron token opacity after Status Phase dimming.
+	# Skip destroyed squadrons — they must stay hidden.
 	for sq_token: SquadronToken in get_squadron_tokens():
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
+			continue
 		sq_token.set_activated_visual(false)
 
 # ---------------------------------------------------------------------------
@@ -1147,7 +1151,8 @@ func _has_eligible_squadron_in_range(ship: ShipInstance,
 	var tokens: Array[SquadronToken] = get_squadron_tokens()
 	for sq_token: SquadronToken in tokens:
 		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and sq_inst.owner_player == ship.owner_player \
+		if sq_inst and not sq_inst.is_destroyed() \
+				and sq_inst.owner_player == ship.owner_player \
 				and resolver.is_squadron_in_range(sq_token.global_position):
 			return true
 	return false

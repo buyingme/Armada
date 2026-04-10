@@ -706,6 +706,9 @@ func activate_squadron(squadron: SquadronInstance) -> void:
 	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
 		_log.warn("activate_squadron: not in SQUADRON phase.")
 		return
+	if squadron.is_destroyed():
+		_log.warn("activate_squadron: squadron is destroyed.")
+		return
 	if squadron.owner_player != active_player:
 		_log.warn("activate_squadron: squadron not owned by active player.")
 		return

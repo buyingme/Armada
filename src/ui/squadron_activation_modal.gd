@@ -367,6 +367,9 @@ func _validate_squadron_selection(
 	if instance == null:
 		_show_error("No instance bound to token.")
 		return null
+	if instance.is_destroyed():
+		_show_error("That squadron has been destroyed.")
+		return null
 	if instance.owner_player != GameManager.active_player:
 		_show_error("Not your squadron.")
 		return null

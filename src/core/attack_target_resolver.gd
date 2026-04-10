@@ -403,6 +403,9 @@ func _zone_has_enemy_ship_target(ship_token: ShipToken,
 			continue
 		if def_token == ship_token:
 			continue
+		var def_inst: ShipInstance = def_token.get_ship_instance()
+		if def_inst and def_inst.is_destroyed():
+			continue
 		for def_zone: int in [Constants.HullZone.FRONT,
 				Constants.HullZone.LEFT, Constants.HullZone.RIGHT,
 				Constants.HullZone.REAR]:
@@ -431,6 +434,9 @@ func _zone_has_enemy_squad_target(
 		attacker_faction: int) -> bool:
 	for sq_token: SquadronToken in _get_squadron_tokens.call():
 		if sq_token.get_faction() == attacker_faction:
+			continue
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
 			continue
 		if not RangeFinder.is_squadron_in_arc(
 				sq_token.global_position, sq_token.get_radius_px(),
@@ -498,6 +504,9 @@ func has_more_squad_targets(parts: CombatParticipants,
 	var attacker_faction: int = parts.get_atk_faction()
 	for sq_token: SquadronToken in _get_squadron_tokens.call():
 		if sq_token.get_faction() == attacker_faction:
+			continue
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_destroyed():
 			continue
 		if sq_token in attacked_squads:
 			continue

@@ -4903,3 +4903,41 @@ commit `a69a14c`.
 
 **Pass criteria:** Destroyed units are never selectable, never reset visually
 on round change, and never block or confuse the targeting flow.
+---
+
+## Debug Feature — Annotation Snapshots & Toast Notifications
+
+### MT-DBG-ANN.01 — Annotation via Shift+A
+
+**Purpose:** Verify that Shift+A opens the annotation modal, saves the
+annotated game state to `saves/annotations/`, logs it, and shows a toast.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch with `--debug` (or F12 to enable) | Debug HUD visible; help panel shows "Shift + A — Annotate game state" |
+| 2 | Press Shift+A during gameplay | Annotation modal appears, centred, with text input, OK/Cancel buttons |
+| 3 | Type "Test annotation at round 2" and press Enter | Modal closes; toast "Annotation #1 saved." appears at top-centre and fades |
+| 4 | Check `saves/annotations/` directory | A JSON file exists; contains `annotation`, `timestamp`, `round`, `phase`, `counter`, `game_state` keys |
+| 5 | Open the JSON file | `annotation` field matches typed text; `game_state` contains full serialized state |
+| 6 | Press Shift+A again, type another note, click OK | Toast shows "Annotation #2 saved."; second JSON file appears |
+| 7 | Press Shift+A then press Escape | Modal closes; no file created; no toast |
+| 8 | Press Shift+A with empty text and press Enter or click OK | OK button is disabled; nothing happens |
+| 9 | Disable debug mode (F12 off), press Shift+A | Nothing happens — shortcut is inactive |
+
+**Pass criteria:** Annotations are saved with correct metadata and full game
+state. Modal is usable via keyboard (Enter/Escape) and buttons. Toast fades
+correctly. Shortcut only works in debug mode.
+
+### MT-DBG-ANN.02 — Toast on Quicksave / Quickload
+
+**Purpose:** Verify toast notifications appear for F5 (quicksave) and
+F8 (quickload) in debug mode.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enable debug mode, press F5 | Toast "Quicksave complete." appears at top-centre and fades after ~2s |
+| 2 | Press F8 | Toast "Quickload OK — round N." appears and fades |
+| 3 | Delete `saves/quicksave.json`, press F8 | Toast "Quickload failed — no save file." appears |
+
+**Pass criteria:** All three toast variants appear, are readable, fade out
+on their own, and do not interfere with gameplay clicks.

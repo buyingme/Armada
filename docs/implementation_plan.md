@@ -1884,6 +1884,28 @@ into a new RefCounted class:
 **New file:** `damage_dealer.gd` (49 tests)
 **Tests:** 97 scripts, 1 963 tests, 3 372 asserts — all passing.
 
+### Debug Feature — Annotation Snapshots (Shift+A) ✅
+
+**Goal:** Allow the tester to press Shift+A (debug mode only) to enter a
+free-text annotation. On confirm the full serialized GameState is saved
+alongside annotation metadata to `saves/annotations/`, and the annotation
+is logged. Toast notifications added for annotations, quicksave, and
+quickload.
+
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 1 | DebugToast widget — fade-in/hold/fade-out notification | `src/ui/debug_toast.gd` | ✅ |
+| 2 | DebugAnnotationModal — text input modal | `src/ui/debug_annotation_modal.gd` | ✅ |
+| 3 | Annotation save logic + Shift+A keybind | `src/autoload/debug_mode.gd` | ✅ |
+| 4 | Toast on quicksave / quickload | `src/autoload/debug_mode.gd` | ✅ |
+| 5 | DebugHelpPanel — Shift+A entry | `src/ui/debug_help_panel.gd` | ✅ |
+| 6 | Unit tests | 3 test files (32 tests) | ✅ |
+
+**New files:** `debug_toast.gd`, `debug_annotation_modal.gd` + `.uid` sidecars.
+**Test files:** `test_debug_toast.gd`, `test_debug_annotation_modal.gd`,
+`test_debug_annotation.gd`.
+**Tests:** 100 scripts, 1 995 tests, 3 419 asserts — all passing.
+
 ---
 
 ```

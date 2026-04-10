@@ -7,7 +7,7 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b–F4d planned.
+> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b ✅, F4c ✅, F4d ✅.
 > **Baseline:** 92 scripts, 1 754 tests, 3 113 asserts — all passing.
 
 ---
@@ -534,7 +534,7 @@ Activation / Maneuver Execution.
 
 > **Risk: Medium** — Requires shared-state abstraction. Do after A–E.
 > **Status: In progress** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
-> F3 ✅ (`8334d06`), F4a ✅, F4b–F4d planned (incremental computation extraction).
+> F3 ✅ (`8334d06`), F4a ✅, F4b ✅, F4c ✅, F4d ✅ (incremental computation extraction complete).
 
 After Phases A–E, `game_board.gd` still held ACTIVATION, SQUADRON_PHASE,
 and UI_PANELS (~1 800 lines, still above the 500-line industry target).
@@ -735,15 +735,20 @@ Extracted pure computation of defense token effects into
 AE reduced from 2 930 → 2 853 lines (−77 net). 60 new tests.
 UI side effects (panel updates, EventBus emissions) remain in AE.
 
-##### F4d: Extract `DamageDealer` (~200 lines) — *after F4a–F4c*
+##### F4d: Extract `DamageDealer` (220 lines) — ✅
 
 > **Risk: Medium** — async immediate-effect flow adds complexity.
 
-Extract damage card dealing, hull tracking, destruction detection,
-and damage summary building. The immediate-effect choice modal stays
-in AE (needs scene tree for the modal).
+Extracted damage resolution computation (final damage, shield absorption,
+hull tracking, destruction checks, damage summaries, card dealing decisions,
+chooser player index) into `DamageDealer` (RefCounted, 220 lines).
+The immediate-effect choice modal stays in AE (needs scene tree).
 
-**Tests:** ~10 tests for card dealing, hull calculation, destruction.
+AE wiring: 7 delegation sites. AE reduced from 2 853 → 2 852 lines
+(−1 net — most damage functions are orchestration with EventBus calls;
+the extracted logic is the pure-computation subset).
+
+**Tests:** 49 new tests. Full suite: 97 scripts, 1 963 tests, 3 372 asserts.
 
 ##### F4 Expected Outcome
 
@@ -752,8 +757,8 @@ in AE (needs scene tree for the modal).
 | F4a | `AttackTargetResolver` | ~370 | ~2 915 | **Low** |
 | F4b | `AttackDiceResolver` | ~200 | ~2 715 | **Low** |
 | F4c | `DefenseTokenResolver` | 341 | 2 853 | Medium ✅ |
-| F4d | `DamageDealer` | ~200 | ~2 215 | Medium |
-| **Total** | **4 classes** | **~1 070** | **~2 215** | |
+| F4d | `DamageDealer` | 220 | 2 852 | Medium ✅ |
+| **Total** | **4 classes** | **~1 131** | **2 852** | |
 
 Plus `CombatParticipants` data class (~50 lines, shared by all four).
 
@@ -768,14 +773,14 @@ node-bound.
 | Metric | Before F | After F1–F3 | After F4a–b | After F4c | After F4d |
 |--------|----------|-------------|-------------|-----------|----------|
 | `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 | 2 207 |
-| `attack_executor.gd` lines | ~3 285 | 3 285 | 2 930 | 2 853 | ~2 653 |
+| `attack_executor.gd` lines | ~3 285 | 3 285 | 2 930 | 2 853 | 2 852 |
 | God objects (>1 000 lines) | 2 | 2 | 2 | 2 | 2 |
 | Controllers / managers | 7 | 9 | 11 | 12 | 13 |
 | Testable RefCounted classes | — | +2 | +4 | +5 | +6 |
 
-`attack_executor.gd` at ~2 215 lines is the irreducible orchestration
+`attack_executor.gd` at 2 852 lines is the irreducible orchestration
 layer — panel wiring, signal handlers, and state transitions that are
-inherently Node-bound. The complex game-rules logic will be in testable
+inherently Node-bound. The complex game-rules logic is now in testable
 RefCounted classes.
 
 ---

@@ -140,6 +140,11 @@ var _dice_resolver: AttackDiceResolver = null
 ## Constructed in [method initialize].
 var _defense_resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 
+## Pure-computation helper for damage resolution: shield absorption,
+## hull tracking, destruction checks, damage summaries, and card dealing
+## decisions.
+var _damage_dealer: DamageDealer = DamageDealer.new()
+
 
 # ---------------------------------------------------------------------------
 # Attack Simulator state (Phase 6a / 6a-2)
@@ -2163,16 +2168,16 @@ func _on_redirect_done_early() -> void:
 ## Rules Reference: "Damage", p.4 — "Damage is applied one point at a
 ## time."
 func _attack_exec_resolve_damage() -> void:
-	var final_damage: int = _attack_exec_modified_damage
-	if _attack_exec_scatter_used:
-		final_damage = 0
+	var final_damage: int = _damage_dealer.calculate_final_damage(
+			_attack_exec_modified_damage, _attack_exec_scatter_used)
 	# Brace is already applied during Step 4 (canonical order before
 	# Redirect), so _attack_exec_modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
 	if final_damage <= 0:
 		_log.info("No damage to resolve.")
 		if _attack_sim_panel:
-			_attack_sim_panel.show_damage_info("No damage dealt.")
+			_attack_sim_panel.show_damage_info(
+					_damage_dealer.build_no_damage_info())
 		_attack_exec_finalize_after_delay()
 		return
 	# --- Squadron defender ---
@@ -2219,9 +2224,9 @@ func _resolve_squadron_damage(damage: int) -> void:
 			sq_inst.squadron_data.hull])
 	if _attack_sim_panel:
 		_attack_sim_panel.show_damage_info(
-				"Squadron: %d damage → Hull %d/%d" % [
-				actual, sq_inst.current_hull,
-				sq_inst.squadron_data.hull])
+				_damage_dealer.build_squadron_damage_info(
+						actual, sq_inst.current_hull,
+						sq_inst.squadron_data.hull))
 	if sq_inst.is_destroyed():
 		sq_inst.mark_destroyed()
 		_log.info("Squadron destroyed!")
@@ -2312,7 +2317,7 @@ func _deal_damage_cards(def_inst: ShipInstance,
 		var card: DamageCard = _draw_next_damage_card(i, remaining)
 		if card == null:
 			break
-		if i == 0 and first_card_faceup:
+		if _damage_dealer.should_deal_faceup(i, first_card_faceup):
 			_deal_single_faceup_card(card, def_inst)
 			faceup_card_name = card.title
 			dealt_faceup_cards.append(card)
@@ -2355,7 +2360,7 @@ func _deal_single_faceup_card(card: DamageCard,
 	card.is_faceup = true
 	def_inst.add_faceup_damage(card)
 	_log.info("Faceup card added to ship damage list.")
-	if _effect_registry and DamageCardEffectFactory.is_persistent(card):
+	if _effect_registry and _damage_dealer.should_register_persistent(card):
 		DamageCardEffectFactory.register_effect(
 				card, def_inst, _effect_registry)
 		_log.info("Persistent effect registered for '%s'." % card.title)
@@ -2364,7 +2369,7 @@ func _deal_single_faceup_card(card: DamageCard,
 	_log.info(
 			"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 			% [card.title, card.trait_type])
-	if ImmediateEffectResolver.is_immediate(card):
+	if _damage_dealer.has_immediate_effect(card):
 		_deferred_immediate_card = card
 		_deferred_immediate_ship = def_inst
 		_log.info("Immediate effect deferred for '%s' "
@@ -2376,8 +2381,8 @@ func _emit_ship_damage_events(def_inst: ShipInstance,
 		cards_dealt: int) -> void:
 	if cards_dealt <= 0:
 		return
-	var new_hull: int = def_inst.ship_data.hull - (
-			def_inst.get_total_damage())
+	var new_hull: int = _damage_dealer.calculate_hull_remaining(
+			def_inst.ship_data.hull, def_inst.get_total_damage())
 	EventBus.ship_hull_changed.emit(def_inst, new_hull)
 	EventBus.ship_damaged.emit(
 			_attack_sim_def_ship, cards_dealt,
@@ -2391,14 +2396,11 @@ func _emit_ship_damage_events(def_inst: ShipInstance,
 func _build_damage_summary(def_inst: ShipInstance,
 		def_zone_str: String, shield_absorbed: int,
 		cards_dealt: int, faceup_card_name: String) -> String:
-	var summary: String = "%s: %d shield, %d card(s)" % [
-			def_zone_str, shield_absorbed, cards_dealt]
-	if faceup_card_name != "":
-		summary += " — CRIT: %s" % faceup_card_name
-	var hull_remaining: int = def_inst.ship_data.hull - (
-			def_inst.get_total_damage())
-	summary += " | Hull %d/%d" % [hull_remaining, def_inst.ship_data.hull]
-	return summary
+	var hull_remaining: int = _damage_dealer.calculate_hull_remaining(
+			def_inst.ship_data.hull, def_inst.get_total_damage())
+	return _damage_dealer.build_damage_summary(
+			def_zone_str, shield_absorbed, cards_dealt,
+			faceup_card_name, hull_remaining, def_inst.ship_data.hull)
 
 
 ## Resolves the immediate one-shot effect of a faceup damage card, if any.
@@ -2535,15 +2537,12 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 ## Returns the player index for the given chooser role relative to the
 ## current attack's defender.
 func _get_chooser_player_index(chooser: String) -> int:
-	# "owner" = the defender (ship owner). "opponent" = the attacker.
 	if _attack_sim_def_ship:
 		var def_inst: ShipInstance = (
 				_attack_sim_def_ship.get_ship_instance())
 		if def_inst:
-			if chooser == "owner":
-				return def_inst.owner_player
-			# "opponent" = the other player.
-			return 1 - def_inst.owner_player
+			return _damage_dealer.get_chooser_player_index(
+					chooser, def_inst.owner_player)
 	return 0
 
 

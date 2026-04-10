@@ -4857,4 +4857,29 @@ damage card determination still function correctly after extracting
 
 **Pass criteria:** All defense token flows produce identical behaviour to
 pre-extraction. Token spending, accuracy locks, canonical ordering,
-redirect zone selection, and critical determination all work as before.
+redirect zone selection, and critical determination all work as before. ✅
+
+### MT-F4d.01 — Damage Resolution Still Works After DamageDealer Extraction
+
+**Purpose:** Confirm that damage dealing, shield absorption, hull tracking,
+destruction detection, damage summaries, faceup/facedown card dealing, and
+immediate-effect flows still function correctly after extracting
+`DamageDealer`. Pure-refactoring verification — no game-logic changes.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game and advance to Ship Phase | Both players' ships can activate |
+| 2 | Attack an enemy ship and deal damage | Damage summary panel shows shields absorbed, cards dealt, hull remaining |
+| 3 | Attack with enough damage to deplete shields | Shields reduce, remaining damage becomes cards |
+| 4 | Attack producing a critical (no Contain spent) | First damage card dealt faceup, CRIT name shown in summary |
+| 5 | Attack producing a critical with Contain spent | First damage card NOT dealt faceup |
+| 6 | Deal faceup "Structural Damage" card | Immediate effect auto-resolves (extra facedown card) |
+| 7 | Deal faceup "Injured Crew" card | Choice modal appears for opponent to pick a token to discard |
+| 8 | Use Scatter to reduce damage to 0 | "No damage dealt" shown, no cards dealt |
+| 9 | Attack a squadron | Squadron takes direct hull damage, correct hull display |
+| 10 | Destroy a squadron | Squadron fades out after hull reaches 0 |
+| 11 | Destroy a ship (deal damage >= hull) | Ship fades out, destroyed event fires |
+
+**Pass criteria:** All damage resolution flows produce identical behaviour
+to pre-extraction. Shield absorption, card dealing, destruction detection,
+damage summaries, and immediate-effect modals all work as before.

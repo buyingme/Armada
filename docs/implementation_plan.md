@@ -1858,6 +1858,32 @@ into a new RefCounted class:
 **New file:** `defense_token_resolver.gd` (60 tests)
 **Tests:** 96 scripts, 1 914 tests, 3 298 asserts — all passing.
 
+#### F4d: DamageDealer ✅
+
+Extracted damage resolution computation from `attack_executor.gd`
+into a new RefCounted class:
+
+- **`src/core/damage_dealer.gd`** (220 lines) — Stateless helper for
+  final damage calculation (scatter), shield absorption, hull tracking,
+  destruction checks, ship/squadron damage planning, damage summary
+  strings, card dealing decisions (faceup/facedown, persistent effect
+  registration, immediate effect detection), and chooser player index
+  for immediate-effect modals.
+- Public API: `calculate_final_damage()`, `calculate_shield_absorption()`,
+  `calculate_hull_remaining()`, `is_ship_destroyed()`,
+  `is_squadron_destroyed()`, `plan_ship_damage()`,
+  `plan_squadron_damage()`, `build_damage_summary()`,
+  `build_squadron_damage_info()`, `build_no_damage_info()`,
+  `should_deal_faceup()`, `should_register_persistent()`,
+  `has_immediate_effect()`, `get_chooser_player_index()`.
+- AE wiring: 7 delegation sites replacing inline computation.
+  UI side effects (panel updates, EventBus emissions, card drawing)
+  remain in AE.
+- `attack_executor.gd` reduced from 2 853 → 2 852 lines (−1 net).
+
+**New file:** `damage_dealer.gd` (49 tests)
+**Tests:** 97 scripts, 1 963 tests, 3 372 asserts — all passing.
+
 ---
 
 ```

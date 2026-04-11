@@ -551,6 +551,18 @@ static func measure_range_squad_to_squad(
 		atk_radius: float,
 		def_centre: Vector2,
 		def_radius: float) -> Dictionary:
+	# When circles overlap, edge distance is 0 — the closest-point-on-circle
+	# edges cross over each other and distance_to would return an incorrect
+	# positive value.
+	var centre_dist: float = atk_centre.distance_to(def_centre)
+	if centre_dist <= atk_radius + def_radius:
+		# Overlapping or touching — return 0 distance with edge midpoint.
+		var mid: Vector2 = (atk_centre + def_centre) * 0.5
+		return {
+			"distance": 0.0,
+			"atk_pt": mid,
+			"def_pt": mid,
+		}
 	var atk_pt: Vector2 = closest_point_on_circle(
 			def_centre, atk_centre, atk_radius)
 	var def_pt: Vector2 = closest_point_on_circle(

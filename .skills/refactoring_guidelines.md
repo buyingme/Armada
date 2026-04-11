@@ -213,7 +213,27 @@ implementation, split before committing.
 
 ---
 
-## 8. Refactoring-Safe Patterns
+## 8. Single Source of Targeting Geometry
+
+See `.skills/architecture_patterns.md` § "Single Source of Targeting Geometry"
+for the canonical method table.
+
+**Enforcement rule:** When reviewing or generating code that computes
+distance, range, arc containment, or engagement, verify it delegates to
+`RangeFinder` or `EngagementResolver`. If it performs raw `distance_to()`
+minus radius arithmetic, flag it as non-compliant and rewrite to use the
+canonical API.
+
+**Checklist for new range/distance code:**
+
+1. Does `RangeFinder` already have a method for this measurement? → Use it.
+2. Would the measurement benefit other callers? → Add to `RangeFinder`.
+3. Is it truly one-off math? → Still use `RangeFinder` primitives
+   (`closest_point_on_polyline`, `closest_point_on_circle`) and compose.
+
+---
+
+## 9. Refactoring-Safe Patterns
 
 ### Never rewrite a large file in one shot
 
@@ -278,7 +298,7 @@ before continuing. The most common cause is mixed tabs/spaces.
 
 ---
 
-## 9. Quantified Targets (from Refactoring Plan)
+## 10. Quantified Targets (from Refactoring Plan)
 
 These are the project-wide goals. Every code change should move toward them:
 
@@ -293,7 +313,7 @@ These are the project-wide goals. Every code change should move toward them:
 
 ---
 
-## 10. Refactoring Phase Reference
+## 11. Refactoring Phase Reference
 
 When working on a specific refactoring phase, consult `docs/refactoring_plan.md`
 for the detailed steps. Summary:

@@ -354,7 +354,7 @@ func test_fresh_engagement_check_ignores_stale_flag() -> void:
 			sq_rebel, Vector2(100, 100), all)
 	assert_false(fresh,
 			"Fresh check must return false when no enemies present, "
-			+ "regardless of stale is_engaged flag (Bug H)")
+			+"regardless of stale is_engaged flag (Bug H)")
 
 
 func test_fresh_engagement_true_with_nearby_enemy() -> void:
@@ -473,7 +473,7 @@ func test_squad_to_ship_range_rotated_ship() -> void:
 	var hw: float = 74.0
 	var hl: float = 120.0
 	var ship_pos: Vector2 = Vector2(400, 400)
-	var ship_rot: float = PI / 4.0  # 45 degrees
+	var ship_rot: float = PI / 4.0 # 45 degrees
 	# Compute point along the rotated left edge direction.
 	# Left edge start (local): (-hw, -hl) rotated 45°.
 	var corner: Vector2 = ship_pos + Vector2(-hw, -hl).rotated(ship_rot)

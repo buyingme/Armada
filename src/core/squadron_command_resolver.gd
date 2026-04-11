@@ -28,6 +28,15 @@ var _ship: ShipInstance = null
 ## World-space position of the commanding ship (for range checks).
 var _ship_position: Vector2 = Vector2.ZERO
 
+## World-space rotation of the commanding ship in radians.
+var _ship_rotation: float = 0.0
+
+## Half-width of the commanding ship's base (pixels).
+var _ship_half_width: float = 0.0
+
+## Half-length of the commanding ship's base (pixels).
+var _ship_half_length: float = 0.0
+
 ## Whether a Squadron dial is available.
 var _has_dial: bool = false
 
@@ -53,12 +62,21 @@ var _log: GameLogger = GameLogger.new("SqCmdResolver")
 ## available squadron activations.
 ## [param ship] — the ShipInstance issuing the command.
 ## [param ship_pos] — world-space position of the ship token.
+## [param ship_rot] — world-space rotation of the ship token (radians).
+## [param half_w] — half-width of the ship base (pixels).
+## [param half_l] — half-length of the ship base (pixels).
 ## Rules Reference: CM-020, CM-021, CM-022.
 static func create(ship: ShipInstance,
-		ship_pos: Vector2) -> SquadronCommandResolver:
+		ship_pos: Vector2,
+		ship_rot: float,
+		half_w: float,
+		half_l: float) -> SquadronCommandResolver:
 	var resolver: SquadronCommandResolver = SquadronCommandResolver.new()
 	resolver._ship = ship
 	resolver._ship_position = ship_pos
+	resolver._ship_rotation = ship_rot
+	resolver._ship_half_width = half_w
+	resolver._ship_half_length = half_l
 	resolver._resolve_availability(ship)
 	return resolver
 
@@ -112,14 +130,29 @@ func get_ship_position() -> Vector2:
 	return _ship_position
 
 
+## Returns the commanding ship's world rotation (radians).
+func get_ship_rotation() -> float:
+	return _ship_rotation
+
+
+## Returns the commanding ship's base half-width (pixels).
+func get_ship_half_width() -> float:
+	return _ship_half_width
+
+
+## Returns the commanding ship's base half-length (pixels).
+func get_ship_half_length() -> float:
+	return _ship_half_length
+
+
 # ---------------------------------------------------------------------------
 # Range check
 # ---------------------------------------------------------------------------
 
 ## Returns true if a squadron at [param squad_pos] is within
 ## close–medium range of the commanding ship.
-## Uses centre-to-centre distance minus half the ship's longest dimension
-## and squadon radius as an approximation of edge-to-edge distance.
+## Uses [code]RangeFinder.measure_range_squad_to_ship()[/code] per hull zone
+## for accurate polyline edge-to-circle distance measurement.
 ## The threshold is [code]GameScale.range_medium_px[/code].
 ## Rules Reference: CM-021 — "at close–medium range of the ship".
 func is_squadron_in_range(squad_pos: Vector2) -> bool:
@@ -128,14 +161,17 @@ func is_squadron_in_range(squad_pos: Vector2) -> bool:
 		# Fallback if scale not loaded.
 		_log.warn("range_medium_px is 0 — allowing all squadrons.")
 		return true
-	# Approximate edge-to-edge: centre distance minus half of ship's base
-	# dimension and squadron radius.
-	var ship_half: float = _get_ship_half_length()
 	var squad_radius: float = GameScale.squadron_base_diameter_px * 0.5
-	var centre_dist: float = _ship_position.distance_to(squad_pos)
-	var edge_dist: float = maxf(0.0,
-			centre_dist - ship_half - squad_radius)
-	return edge_dist <= medium_px
+	for zone_val: int in Constants.HullZone.values():
+		var zone: Constants.HullZone = zone_val as Constants.HullZone
+		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+				_ship_position, _ship_rotation,
+				_ship_half_width, _ship_half_length, zone)
+		var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+				squad_pos, squad_radius, edge)
+		if result["distance"] <= medium_px:
+			return true
+	return false
 
 
 # ---------------------------------------------------------------------------
@@ -214,18 +250,3 @@ func _resolve_availability(ship: ShipInstance) -> void:
 			str(_has_dial),
 			ship.ship_data.squadron_value if ship.ship_data else 0,
 			str(_has_token), _max_activations])
-
-
-## Returns half the ship's longest base dimension for range approximation.
-func _get_ship_half_length() -> float:
-	if _ship == null or _ship.ship_data == null:
-		return 0.0
-	match _ship.ship_data.ship_size:
-		Constants.ShipSize.SMALL:
-			return GameScale.small_base_length_px * 0.5
-		Constants.ShipSize.MEDIUM:
-			return GameScale.medium_base_length_px * 0.5
-		Constants.ShipSize.LARGE:
-			return GameScale.large_base_length_px * 0.5
-		_:
-			return GameScale.small_base_length_px * 0.5

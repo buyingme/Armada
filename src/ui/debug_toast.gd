@@ -83,7 +83,7 @@ func _position_top_centre() -> void:
 ## Runs the fade-in → hold → fade-out → free sequence.
 func _animate() -> void:
 	var tween: Tween = create_tween()
-	tween.tween_property(self, "modulate:a", 1.0, FADE_DURATION)
+	tween.tween_property(self , "modulate:a", 1.0, FADE_DURATION)
 	tween.tween_interval(HOLD_DURATION)
-	tween.tween_property(self, "modulate:a", 0.0, FADE_DURATION)
+	tween.tween_property(self , "modulate:a", 0.0, FADE_DURATION)
 	tween.tween_callback(queue_free)

@@ -381,7 +381,7 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 func _on_squadron_modal_closed() -> void:
 	if _squadron_modal and _squadron_modal.is_command_mode():
 		_log.info("Squadron command modal dismissed — show activation "
-				+ "button.")
+				+"button.")
 		_show_activation_button.call()
 		return
 	if _show_squadron_modal_button:
@@ -518,6 +518,9 @@ func _squadron_has_valid_targets(
 
 
 ## Returns true if any enemy squadron is within distance 1 of [param token].
+## Uses [code]RangeFinder.measure_range_squad_to_squad()[/code] for accurate
+## circle-to-circle edge distance.
+## Rules Reference: RRG "Range and Distance" p.14.
 func _any_enemy_squadron_in_range(
 		instance: SquadronInstance,
 		token: SquadronToken,
@@ -531,9 +534,9 @@ func _any_enemy_squadron_in_range(
 			continue
 		if other.is_destroyed():
 			continue
-		var edge_dist: float = pos.distance_to(
-				entry["position"] as Vector2) - radius * 2.0
-		if edge_dist <= dist1_px:
+		var result: Dictionary = RangeFinder.measure_range_squad_to_squad(
+				pos, radius, entry["position"] as Vector2, radius)
+		if result["distance"] <= dist1_px:
 			return true
 	return false
 

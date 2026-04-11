@@ -7,8 +7,8 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase F partially complete — A1 ✅, A2 ✅, A3 ✅, A4 partially complete, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b ✅, F4c ✅, F4d ✅.
-> **Baseline:** 92 scripts, 1 754 tests, 3 113 asserts — all passing.
+> **Status:** Phase H complete — A1 ✅, A2 ✅, A3 ✅, A4 ✅, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b ✅, F4c ✅, F4d ✅, H1–H6 ✅.
+> **Baseline:** 99 scripts, 1 994 tests, 3 428 asserts — all passing.
 
 ---
 
@@ -25,6 +25,8 @@
   - [Phase E — Serialization & EventBus Cleanup](#phase-e--serialization--eventbus-cleanup)
   - [Phase F — Extract Backbone & ActivationContext](#phase-f--extract-backbone--activationcontext)
   - [Phase G — Command Pattern (Multiplayer Foundation)](#phase-g--command-pattern-multiplayer-foundation)
+  - [Phase H — Targeting Geometry Centralisation](#phase-h--targeting-geometry-centralisation)
+  - [Phase F5 — AttackExecutor Orchestration Split](#phase-f5--attackexecutor-orchestration-split)
 - [5. Extension Feasibility Matrix](#5-extension-feasibility-matrix)
 - [6. Quantified Targets](#6-quantified-targets)
 - [7. Risk Assessment](#7-risk-assessment)
@@ -46,7 +48,7 @@ features, the codebase needs structural improvement for two reasons:
    coverage, action model, and state/presentation separation that
    multiplayer demands.
 
-This plan addresses both concerns through seven incremental phases (A–G),
+This plan addresses both concerns through nine incremental phases (A–H, F5),
 ordered from zero risk to medium risk, where each phase is independently
 valuable and shippable.
 
@@ -781,7 +783,9 @@ node-bound.
 `attack_executor.gd` at 2 852 lines is the irreducible orchestration
 layer — panel wiring, signal handlers, and state transitions that are
 inherently Node-bound. The complex game-rules logic is now in testable
-RefCounted classes.
+RefCounted classes. Phase F5 plans further decomposition of the
+orchestration layer into `AttackState`, `AttackSimulator`, and
+`TargetingListController`.
 
 ---
 
@@ -909,6 +913,168 @@ automated regression testing of full game sequences.
 
 ---
 
+### Phase H — Targeting Geometry Centralisation
+
+> **Risk: Low** — Replaces inline geometry approximations with calls to
+> existing canonical `RangeFinder` API. No new public APIs except a
+> widened factory signature in H4.
+> **Status: Complete** — H1–H6 ✅.
+
+The playtest audit (Bug I) revealed 6 non-compliant locations where range
+and distance calculations reimplemented `RangeFinder` logic locally, plus
+2 dead-code files (`RangeMeasurer`, `FiringArc`) that were never called.
+
+#### H1: Add Skills Rules — § Single Source of Targeting Geometry ✅
+
+Added to `.skills/architecture_patterns.md`:
+- Canonical method table (8 entries covering all measurement types)
+- Banned targeting patterns (raw `distance_to() - radius`, manual
+  `centre_dist - ship_half - squad_radius`, local reimplementations)
+
+Added to `.skills/refactoring_guidelines.md`:
+- New § 8 "Single Source of Targeting Geometry" with enforcement rule
+  and checklist for new range/distance code
+
+#### H2: Remove Dead Code — `range_measurer.gd` & `firing_arc.gd` ✅
+
+Deleted:
+- `src/core/range_measurer.gd` (94 lines, class `RangeMeasurer`)
+- `src/core/firing_arc.gd` (101 lines, class `FiringArc`)
+- Both `.gd.uid` sidecar files
+- `tests/unit/test_range_measurer.gd` (11 tests)
+- `tests/unit/test_firing_arc.gd` (11 tests)
+- Updated doc comments in `geometry_helper.gd` and `ship_base.gd`
+
+Zero call sites existed in `src/` — confirmed via grep.
+
+#### H3: Fix `_any_enemy_squadron_in_range()` ✅
+
+**File:** `squadron_phase_controller.gd` lines 520–537
+**Finding:** Inline `pos.distance_to(other) - radius * 2.0` for
+squad-to-squad engagement range.
+**Fix:** Replaced with `RangeFinder.measure_range_squad_to_squad()`.
+
+#### H4: Fix `is_squadron_in_range()` ✅
+
+**File:** `squadron_command_resolver.gd` lines 125–138
+**Finding (HIGH):** Circle approximation `centre_dist - ship_half - squad_radius`
+for squadron command range — same Bug I class of error.
+**Fix:**
+- Widened `create()` factory: `create(ship, pos)` → `create(ship, pos, rot, half_w, half_l)`
+- Added `_ship_rotation`, `_ship_half_width`, `_ship_half_length` members
+- Replaced body with loop over 4 hull zones using
+  `RangeFinder.get_hull_zone_edge()` + `measure_range_squad_to_ship()`
+- Removed obsolete `_get_ship_half_length()` helper
+- Updated 1 call site in `game_board.gd`
+- Updated 18 call sites in `test_squadron_command_resolver.gd`
+  (added `_create_resolver()` test helper with default small-ship dims)
+- Fixed 2 boundary tests to use `half_w` (RIGHT edge) instead of `half_l`
+
+#### H5: Fix 3 `targeting_list_builder.gd` Distance Helpers ✅
+
+**File:** `targeting_list_builder.gd`
+**Findings (3 × LOW):**
+1. `_measure_squad_to_ship_distance()` — manual `closest_point_on_polyline`
+   + subtract → `RangeFinder.measure_range_squad_to_ship()` per zone
+2. `_check_squad_vs_ship_zone()` — same pattern → delegated, preserved
+   `cp` (now `def_pt`) for downstream `is_range_path_blocked()` call
+3. `_measure_squad_to_squad_distance()` — manual `centre_dist - r_a - r_b`
+   → `RangeFinder.measure_range_squad_to_squad()["distance"]`
+
+#### H6: Align `engagement_resolver.gd` `_edge_distance()` ✅
+
+**File:** `engagement_resolver.gd` lines 170–174
+**Finding (LOW):** Parallel circle-to-circle implementation.
+**Fix:** Body delegates to `RangeFinder.measure_range_squad_to_squad()`.
+
+#### H Bonus: Fix overlapping-circle edge case in `RangeFinder`
+
+`measure_range_squad_to_squad()` previously returned a positive distance
+when circles overlapped (the closest-point-on-circle edges crossed over).
+Added overlap guard: when `centre_dist <= atk_radius + def_radius`,
+return `{"distance": 0.0, ...}`. Fixes 1 failing test in
+`test_targeting_list_builder.gd`.
+
+#### H Summary
+
+| Step | Risk | Files | Lines Δ |
+|------|------|-------|---------|
+| H1 | None | 2 skills docs | +40 |
+| H2 | None | −4 src, −4 test, 2 doc | −195 |
+| H3 | Low | 1 src | ~5 |
+| H4 | Low-Med | 2 src, 1 test | ~40 src, ~36 test |
+| H5 | Low | 1 src | ~25 |
+| H6 | Very Low | 1 src | ~3 |
+| Bonus | Low | 1 src | +8 |
+| **Total** | **Low** | | **~−80 net** |
+
+**After Phase H:** all 6 non-compliant targeting locations fixed,
+2 dead files removed, skills rules codified, `RangeFinder` overlap edge
+case corrected.
+
+**Test suite:** 99 scripts, 1 994 tests, 3 428 asserts — 0 failures.
+(−2 scripts, −22 tests vs. pre-H baseline due to deleted dead-code tests.)
+
+---
+
+### Phase F5 — AttackExecutor Orchestration Split
+
+> **Risk: Medium** — Significant structural change following the proven
+> ActivationContext (F1) + C7 extraction pattern. Planned after Phase H.
+> **Status: Not started.**
+
+AE is 2 933 lines / 138 functions / 62 member vars. F4a–d extracted the
+pure computation (AttackTargetResolver, AttackDiceResolver,
+DefenseTokenResolver, DamageDealer). What remains is orchestration: panel
+wiring, signal handlers, state transitions — but it clusters into three
+distinct responsibilities.
+
+#### AE Section Analysis
+
+| Section | Lines | Responsibility |
+|---------|-------|----------------|
+| Constants + State + Init | ~317 | Shared state & setup |
+| Public Interface | ~274 | Entry points from game_board |
+| Internal Helpers | ~92 | Utility methods |
+| Attacker Selection (6a) | ~173 | Pick attacker ship/squadron |
+| Target Selection (6a-2) | ~419 | Pick target, LOS/range preview |
+| Orchestration (6b-2) | ~425 | Attack sequence flow |
+| Accuracy (6c-1) | ~75 | Accuracy spending |
+| Defense Tokens (6c-2) | ~451 | Defense token flow |
+| Damage (6c-3) | ~302 | Damage resolution |
+| Immediate Effects (10a) | ~396 | Damage card choice modals |
+
+#### F5a: Create `AttackState` (~120 lines)
+
+New `src/core/attack_state.gd` (RefCounted) holding all attack-flow
+member variables. Same pattern as ActivationContext (F1).
+
+#### F5b: Migrate AE Members to `AttackState`
+
+Replace ~30 member variables in AE with reads/writes to
+`_state: AttackState`. Done in 3–4 incremental edits per variable cluster.
+
+#### F5c: Extract `TargetingListController` (~200 lines)
+
+New `src/scenes/game_board/targeting_list_controller.gd` (extends Node).
+Owns targeting list modal lifecycle + `TargetingListBuilder` integration.
+
+#### F5d: Extract `AttackSimulator` (~600 lines)
+
+New `src/scenes/game_board/attack_simulator.gd` (extends Node).
+Owns Attacker Selection (173 lines) + Target Selection (419 lines).
+
+#### F5 Expected Outcome
+
+| Step | New class | AE lines after | Risk |
+|------|-----------|----------------|------|
+| F5a | `AttackState` | 2 933 (no change) | Low |
+| F5b | — (internal refactor) | ~2 870 | Medium |
+| F5c | `TargetingListController` | ~2 670 | Low-Med |
+| F5d | `AttackSimulator` | ~2 070 | Medium |
+
+---
+
 ## 5. Extension Feasibility Matrix
 
 | Extension | Required Phases | Earliest Start |
@@ -923,20 +1089,24 @@ automated regression testing of full game sequences.
 
 **Six of seven extensions** are accessible after Phases A–E (the safe
 investment). Only network multiplayer requires the full A–G pipeline.
+Phase H is an independent code-quality improvement applicable at any time.
+Phase F5 further reduces AE size, easing future work.
 
 ---
 
 ## 6. Quantified Targets
 
-| Metric | Current | After A | After C | After F1–3 | After F4a–b | After F4c–d | After G | Industry Std |
-|--------|---------|---------|---------|------------|-------------|-------------|---------|-------------|
-| Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 | 0 | 0 |
-| Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | ~2 715 | ~2 215 | ~500 | <500 |
-| God objects (>1 000 LOC) | 4 | 4 | 2 | 2 | 2 | 2 | 1 | 0 |
-| Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 | 11/11 | 11/11 | 11/11 |
-| Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 5 | 6 | 6+ | — |
-| Player action model | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
-| Network-ready | No | No | No | No | No | No | **Yes** | Yes |
+| Metric | Current | After A | After C | After F1–3 | After F4a–d | After H | After F5 | After G | Industry Std |
+|--------|---------|---------|---------|------------|-------------|---------|---------|---------|-------------|
+| Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | 2 852 | 2 933 (AE) | ~2 070 | ~500 | <500 |
+| God objects (>1 000 LOC) | 4 | 4 | 2 | 2 | 2 | 2 | 2 | 1 | 0 |
+| Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 | 11/11 | 11/11 | 11/11 | 11/11 |
+| Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 6 | 6 | 7 | 7+ | — |
+| Dead targeting code | 2 files | 2 | 2 | 2 | 2 | **0** | 0 | 0 | 0 |
+| Non-compliant range checks | 6 | 6 | 6 | 6 | 6 | **0** | 0 | 0 | 0 |
+| Player action model | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | **Command** | Command |
+| Network-ready | No | No | No | No | No | No | No | **Yes** | Yes |
 
 ---
 
@@ -951,6 +1121,8 @@ investment). Only network multiplayer requires the full A–G pipeline.
 | **E** | **Low** | Additive serialization methods + new autoload. |
 | **F** | **Medium** | Introduces shared ActivationContext. Requires updating 20+ functions to read from context instead of member vars. |
 | **G** | **Medium** | Fundamental architectural change. All state-modifying code paths must route through CommandProcessor. |
+| **H** | **Low** | Replaces inline geometry with existing `RangeFinder` API. One factory widening (H4). |
+| **F5** | **Medium** | AE orchestration split. Follows proven F1/C7 extraction pattern but touches many signal handlers. |
 
 **Mitigation strategy for all phases:**
 1. Work one file at a time.
@@ -968,13 +1140,15 @@ Cross-reference with `docs/arc42/11_risks_and_technical_debt.md`:
 |-------|-------------|-------------|
 | TD-4 | Functions exceeding 30-line guideline | **Phase A** ✅ |
 | TD-7 | `game_board.gd` God Object (3 390 → 2 207 lines) | **Phases C + F** ✅ (partial — F4 deferred) |
-| TD-8 | `attack_executor.gd` God Object (3 285 lines) | **Phase A** ✅ (functions shrunk). **F4a–d** planned (computation extraction). |
+| TD-8 | `attack_executor.gd` God Object (2 933 lines) | **Phase A** ✅ (functions shrunk). **F4a–d** ✅ (computation extraction). **F5** planned (orchestration split). |
 | TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** ✅ (877 lines) |
 | TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** ✅ |
 | TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** ✅ |
 | TD-12 | 64 EventBus signals — spaghetti risk | **Phase E6** ✅ |
-| R-6 | God-object files resist extension | **Phases A–F** ✅ (partial — AE remains) |
+| R-6 | God-object files resist extension | **Phases A–F** ✅ (partial — AE remains, F5 planned) |
+| TD-13 | Non-compliant targeting geometry (6 locations) | **Phase H** ✅ |
+| TD-14 | Dead-code targeting files (`RangeMeasurer`, `FiringArc`) | **Phase H2** ✅ |
 
 ---
 
-*Document created: 2026-04-04. Last updated: 2026-04-04.*
+*Document created: 2026-04-04. Last updated: 2026-04-11.*

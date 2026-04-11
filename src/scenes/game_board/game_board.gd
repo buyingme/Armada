@@ -1130,8 +1130,10 @@ func _on_squadron_step_entered() -> void:
 	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
 	if ship == null:
 		return
+	var ship_token: ShipToken = _activation_ctx.activating_ship_token
 	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
-			ship, _activation_ctx.activating_ship_token.global_position)
+			ship, ship_token.global_position, ship_token.global_rotation,
+			ship_token.get_half_width(), ship_token.get_half_length())
 	if resolver.is_empty():
 		_log.info("No squadron activations available — auto-advancing.")
 		_on_squadron_command_done()

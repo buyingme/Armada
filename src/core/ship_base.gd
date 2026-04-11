@@ -62,7 +62,7 @@ func get_hull_zone_centre(zone: Constants.HullZone) -> Vector2:
 
 
 ## Returns the two world-space points defining the firing arc boundary ray
-## between two adjacent hull zones. These rays are used by FiringArc to
+## between two adjacent hull zones. These rays are used by RangeFinder to
 ## determine arc membership. All four arcs share the ship centre origin.
 ##
 ## Rules Reference: "Firing Arcs", p.3; AT-041

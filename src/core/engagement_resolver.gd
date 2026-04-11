@@ -168,7 +168,11 @@ static func _get_distance_1_px() -> float:
 
 
 ## Returns edge-to-edge distance between two circles.
+## Delegates to [code]RangeFinder.measure_range_squad_to_squad()[/code]
+## for single-source compliance.
 static func _edge_distance(
 		pos_a: Vector2, radius_a: float,
 		pos_b: Vector2, radius_b: float) -> float:
-	return maxf(0.0, pos_a.distance_to(pos_b) - radius_a - radius_b)
+	var result: Dictionary = RangeFinder.measure_range_squad_to_squad(
+			pos_a, radius_a, pos_b, radius_b)
+	return result["distance"]

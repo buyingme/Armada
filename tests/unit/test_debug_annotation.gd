@@ -18,7 +18,7 @@ var _debug: Node = null
 func before_each() -> void:
 	_debug = DebugModeScript.new()
 	# Override the annotation directory to avoid polluting real saves.
-	_debug.set("ANNOTATION_DIR", null)  # Can't override const — test via real dir.
+	_debug.set("ANNOTATION_DIR", null) # Can't override const — test via real dir.
 
 
 func after_each() -> void:

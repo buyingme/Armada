@@ -706,11 +706,10 @@ static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
 		es: ShipInfo, def_hz: Constants.HullZone,
 		all_ship_bodies: Array) -> TargetEntry:
 	var edge: Array[Vector2] = _get_ship_edge(es, def_hz)
-	var cp: Vector2 = RangeFinder.closest_point_on_polyline(
-			squad.pos, edge)
-	var dist: float = squad.pos.distance_to(cp) - squad.radius
-	if dist < 0.0:
-		dist = 0.0
+	var range_result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			squad.pos, squad.radius, edge)
+	var dist: float = range_result["distance"]
+	var cp: Vector2 = range_result["def_pt"]
 	var band: String = GameScale.get_range_band(dist)
 	log.debug("  squad '%s' -> ship '%s' %s dist=%.1f band=%s" % [
 			squad.squad_name, es.ship_name,
@@ -881,7 +880,7 @@ static func _collect_squad_threats_to_squad(log: GameLogger,
 # =========================================================================
 
 ## Measures distance from a squadron's base edge to the nearest point on a
-## ship's base (any hull zone). Used for squadron → ship threat range check.
+## ship's base (any hull zone). Uses [code]RangeFinder.measure_range_squad_to_ship()[/code].
 ## Requirements: TL-LIST-008.
 static func _measure_squad_to_ship_distance(
 		squad: SquadInfo, ship: ShipInfo) -> float:
@@ -895,27 +894,21 @@ static func _measure_squad_to_ship_distance(
 	for zone: int in zones:
 		var hz: Constants.HullZone = zone as Constants.HullZone
 		var edge: Array[Vector2] = _get_ship_edge(ship, hz)
-		# Closest point on the hull zone edge from the squadron centre.
-		var cp: Vector2 = RangeFinder.closest_point_on_polyline(
-				squad.pos, edge)
-		# Subtract squadron radius (measure from base edge, not centre).
-		var dist: float = squad.pos.distance_to(cp) - squad.radius
-		if dist < 0.0:
-			dist = 0.0
-		if dist < best_dist:
-			best_dist = dist
+		var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+				squad.pos, squad.radius, edge)
+		if result["distance"] < best_dist:
+			best_dist = result["distance"]
 	return best_dist
 
 
 ## Measures distance between two squadron base edges (edge to edge).
+## Delegates to [code]RangeFinder.measure_range_squad_to_squad()[/code].
 ## Requirements: TL-LIST-011, TL-LIST-012.
 static func _measure_squad_to_squad_distance(
 		sq_a: SquadInfo, sq_b: SquadInfo) -> float:
-	var centre_dist: float = sq_a.pos.distance_to(sq_b.pos)
-	var edge_dist: float = centre_dist - sq_a.radius - sq_b.radius
-	if edge_dist < 0.0:
-		edge_dist = 0.0
-	return edge_dist
+	var result: Dictionary = RangeFinder.measure_range_squad_to_squad(
+			sq_a.pos, sq_a.radius, sq_b.pos, sq_b.radius)
+	return result["distance"]
 
 
 ## Returns the hull-zone key string for a hull zone enum.

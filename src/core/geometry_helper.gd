@@ -4,7 +4,7 @@
 ## closest-point-on-segment, polygon overlap, and related helpers.
 ##
 ## All methods are static. No scene tree dependency.
-## Intended for reuse by FiringArc, RangeMeasurer, and future LOS systems.
+## Intended for reuse by RangeFinder, LineOfSightChecker, and related systems.
 ##
 ## Rules Reference: "Firing Arc", p.3; "Range and Distance", p.10
 class_name Geometry2DHelper

@@ -331,7 +331,7 @@ func test_compute_final_transform_right_side_mirrors_left() -> void:
 	var s: float = ManeuverToolState.get_tool_scale()
 	var corner: Vector2 = Vector2(half_w, -half_l)
 	var offset: Vector2 = (root_entry - root_contact_l) * s
-	offset.x = -offset.x
+	offset.x = - offset.x
 	var attach_pos: Vector2 = corner + offset
 	var left_xform: Transform2D = _state.compute_final_transform(
 			attach_pos, 0.0, "left")
@@ -438,8 +438,8 @@ func test_set_simulated_speed_clamps_joint_clicks() -> void:
 	## Speed 4 joint 3 max yaw = 2; speed 3 joint 2 max yaw = 2.
 	## But at speed 2 only joints 0,1 are active → joint 2,3 zeroed.
 	_state.setup(4, CR90_NAV, Constants.ShipSize.SMALL, 4)
-	_state.click_joint_right(2)  # max 1 at speed 4
-	_state.click_joint_right(3)  # max 2 at speed 4
+	_state.click_joint_right(2) # max 1 at speed 4
+	_state.click_joint_right(3) # max 2 at speed 4
 	_state.click_joint_right(3)
 	_state.set_simulated_speed(2)
 	var clicks: Array[int] = _state.get_joint_clicks()

@@ -5008,3 +5008,42 @@ on their own, and do not interfere with gameplay clicks.
 | 3 | Complete the squadron's activation | Highlight clears or moves to next |
 
 **Pass criteria:** The active squadron is always visually indicated in the sidebar during squadron phase.
+
+---
+
+## Phase H — Targeting Geometry Centralisation
+
+> Phase H replaced inline geometry approximations with canonical
+> `RangeFinder` calls and removed dead code. These tests verify that
+> range-dependent gameplay behaviour remains correct.
+
+### MT-H.01 — Squadron Command Range (H4)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a game; assign a Squadron command dial to a ship | Ship reveals Squadron dial |
+| 2 | Advance to the ship activation phase and activate that ship | Squadron command step begins |
+| 3 | Observe which squadrons are highlighted as eligible | Only friendly squadrons within close–medium range of the ship's hull zone edges are selectable |
+| 4 | Place a friendly squadron far from the ship (> medium range) | That squadron is NOT listed as eligible |
+
+**Pass criteria:** Squadron command eligibility uses accurate hull-zone polyline range, not circle approximation. Eligible list matches expectations from ruler overlays.
+
+### MT-H.02 — Squadron Phase Engagement Check (H3)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter squadron phase with two enemy squadrons near each other | Phase begins |
+| 2 | Select one of the engaged squadrons | Modal shows "engaged" status and limits movement to distance 1 |
+| 3 | Select a squadron far from enemies | Modal shows "not engaged" and allows full movement |
+
+**Pass criteria:** Engagement detection matches ruler distance 1 visually; no false positives or negatives.
+
+### MT-H.03 — Squadron Attack Targeting (H5)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Position a squadron at close range of an enemy ship | Squadron can attack the ship |
+| 2 | Position a squadron at medium range of an enemy ship | Squadron cannot target the ship (squadrons attack at close only) |
+| 3 | Position two enemy squadrons within distance 1 | They can attack each other |
+
+**Pass criteria:** Targeting list correctly reflects close-only range for squadron→ship and distance-1 for squadron→squadron.

@@ -146,6 +146,38 @@ func _on_ship_destroyed(ship: Node) -> void:
     update_score(ship)
 ```
 
+### Single Source of Targeting Geometry
+
+All distance, range, and arc measurements **must** go through the canonical
+static methods in `RangeFinder` (or `EngagementResolver` for engagement).
+No class may re-implement edge-to-edge distance, closest-point, or
+arc-containment logic locally.
+
+#### Canonical Method Table
+
+| Measurement | Canonical Method | File |
+|---|---|---|
+| Squad → Ship hull-zone edge | `RangeFinder.measure_range_squad_to_ship()` | `range_finder.gd` |
+| Squad → Squad | `RangeFinder.measure_range_squad_to_squad()` | `range_finder.gd` |
+| Ship → Ship | `RangeFinder.measure_range_ship_to_ship()` | `range_finder.gd` |
+| Hull-zone edge polyline | `RangeFinder.get_hull_zone_edge()` / `get_hull_zone_edge_from_arcs()` | `range_finder.gd` |
+| Closest point on polyline | `RangeFinder.closest_point_on_polyline()` | `range_finder.gd` |
+| Closest point on circle | `RangeFinder.closest_point_on_circle()` | `range_finder.gd` |
+| Max attack range band | `RangeFinder.max_attack_range_band()` | `range_finder.gd` |
+| Engagement (squad ↔ squad) | `EngagementResolver.is_engaged()` / `_edge_distance()` | `engagement_resolver.gd` |
+
+#### Banned Targeting Patterns
+
+- ❌ Raw `pos.distance_to(other) - radius` for edge-to-edge distance
+- ❌ Manual `centre_dist - ship_half - squad_radius` approximations
+- ❌ Local `closest_point_on_polyline` / `closest_point_on_segment` reimplementations
+- ❌ New utility classes that duplicate `RangeFinder` API (e.g. `RangeMeasurer`, `FiringArc`)
+
+When a new measurement type is needed, **add a method to `RangeFinder`**,
+not a local helper.
+
+---
+
 ## Anti-Patterns to Avoid
 
 | Anti-Pattern | Why | Instead |

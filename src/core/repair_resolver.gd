@@ -249,9 +249,11 @@ func repair_hull(card: DamageCard) -> bool:
 	if _damage_deck:
 		_damage_deck.discard(card)
 	_remaining_points -= Constants.REPAIR_HULL_COST
+	var new_hull: int = _ship.ship_data.hull - _ship.get_total_damage()
+	EventBus.ship_hull_changed.emit(_ship, new_hull)
 	EventBus.repair_card_discarded.emit(_ship, card)
-	_log.info("Repaired card '%s' (remaining pts: %d)" % [
-			card.title, _remaining_points])
+	_log.info("Repaired card '%s' (hull now %d, remaining pts: %d)" % [
+			card.title, new_hull, _remaining_points])
 	return true
 
 

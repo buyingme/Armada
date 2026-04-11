@@ -66,6 +66,10 @@ var _show_activation_button: Callable
 ## Callable: move_squadron_token(token, desired, side, top_y, bottom_y, enforce)
 var _move_squadron_token: Callable
 
+## Callable: highlight_active(instance: Variant) -> void
+## Highlights the given unit in the activation sidebar.
+var _highlight_active: Callable
+
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("SquadronPhaseController")
 
@@ -81,12 +85,14 @@ func initialize(
 		start_squadron_attack: Callable,
 		show_activation_button: Callable,
 		move_squadron_token: Callable,
+		highlight_active: Callable = Callable(),
 ) -> void:
 	_token_container = token_container
 	_get_squadron_tokens = get_squadron_tokens
 	_start_squadron_attack = start_squadron_attack
 	_show_activation_button = show_activation_button
 	_move_squadron_token = move_squadron_token
+	_highlight_active = highlight_active
 
 
 ## Creates and wires the squadron modal + reopen button.
@@ -278,6 +284,8 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	var instance: SquadronInstance = token.get_squadron_instance()
 	if instance == null:
 		return
+	if _highlight_active.is_valid():
+		_highlight_active.call(instance)
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	var can_move: bool = EngagementResolver.can_squadron_move(
 			instance, token.global_position, all_squads)
@@ -489,11 +497,14 @@ func _build_ship_bases() -> Array[ShipBase]:
 
 
 ## Returns true if the squadron has at least one valid attack target.
-## Rules Reference: "Squadron Attacks", RRG p.19.
+## When engaged, only engaged enemy squadrons count as valid targets.
+## Rules Reference: "Squadron Attacks", RRG p.19; "Engagement" p.4.
 func _squadron_has_valid_targets(
 		instance: SquadronInstance,
 		token: SquadronToken,
 		all_squads: Array[Dictionary]) -> bool:
+	if instance.is_engaged:
+		return _any_enemy_squadron_in_range(instance, token, all_squads)
 	if _any_enemy_squadron_in_range(instance, token, all_squads):
 		return true
 	return _any_enemy_ship_in_range(instance, token)

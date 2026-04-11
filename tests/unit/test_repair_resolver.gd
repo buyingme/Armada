@@ -319,6 +319,24 @@ func test_repair_hull_fails_insufficient_points() -> void:
 	assert_false(result, "2 points should not afford 3-point hull repair")
 
 
+func test_repair_hull_emits_ship_hull_changed() -> void:
+	## Verify that repairing a card emits ship_hull_changed
+	## so the ship token refreshes its hull counter display.
+	var ship: ShipInstance = _make_ship(4, true, false)
+	var card: DamageCard = DamageCard.create("Ship", "Structural Damage")
+	ship.add_facedown_damage(card)
+	var deck: DamageDeck = _make_deck()
+	var resolver: RepairResolver = RepairResolver.create(ship, deck)
+	var result: Array = [-1]
+	var on_hull_changed: Callable = func(_s: RefCounted, h: int) -> void:
+		result[0] = h
+	EventBus.ship_hull_changed.connect(on_hull_changed)
+	resolver.repair_hull(card)
+	EventBus.ship_hull_changed.disconnect(on_hull_changed)
+	assert_eq(result[0], 5,
+			"ship_hull_changed should emit with hull=5 after removing card")
+
+
 # ---------------------------------------------------------------------------
 # Combined spending — multiple effects (CM-036)
 # ---------------------------------------------------------------------------

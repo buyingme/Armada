@@ -932,6 +932,18 @@ func _validate_target_ship_click(token: ShipToken,
 			return _reject_target(
 					"Attack exec: same-faction target rejected.",
 					"Cannot target a friendly ship.", "friendly")
+	# Engagement guard (SM-012): engaged squadron must attack engaged enemy.
+	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
+	# cannot move and can only attack squadrons that it is engaged with."
+	if _attack_exec_mode and _attack_exec_squad_mode \
+			and _attack_exec_squad_token:
+		var sq_inst: SquadronInstance = \
+				_attack_exec_squad_token.get_squadron_instance()
+		if sq_inst and sq_inst.is_engaged:
+			return _reject_target(
+					"Attack exec: engaged squadron cannot target ships.",
+					"Engaged — must attack an engaged enemy squadron.",
+					"must_attack_engaged")
 	# Squadron loop guard: cannot target ships during Step 6 loop.
 	# Rules Reference: "Attack", Step 6, p.2 — after attacking a squadron,
 	# the attacker may only choose a new *squadron* defender in the same arc.
@@ -1039,6 +1051,22 @@ func _validate_target_squadron_click(
 			return _reject_target(
 					"Attack exec: same-faction squadron rejected.",
 					"Cannot target a friendly squadron.", "friendly")
+	# Engagement guard (SM-012): if engaged, can only attack engaged enemies.
+	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
+	# … can only attack squadrons that it is engaged with."
+	if _attack_exec_mode and _attack_exec_squad_mode \
+			and _attack_exec_squad_token:
+		var atk_inst: SquadronInstance = \
+				_attack_exec_squad_token.get_squadron_instance()
+		if atk_inst and atk_inst.is_engaged:
+			var def_inst: SquadronInstance = \
+					token.get_squadron_instance()
+			if def_inst and not def_inst.is_engaged:
+				return _reject_target(
+						"Attack exec: engaged attacker cannot target "
+						+ "non-engaged squadron.",
+						"Must attack an engaged enemy squadron.",
+						"must_attack_engaged")
 	# Already-attacked guard (Step 6, AE-SQ-002).
 	if _attack_exec_mode and token in _attack_exec_attacked_squads:
 		return _reject_already_attacked_squad(token)

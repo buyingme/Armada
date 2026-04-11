@@ -4941,3 +4941,70 @@ F8 (quickload) in debug mode.
 
 **Pass criteria:** All three toast variants appear, are readable, fade out
 on their own, and do not interfere with gameplay clicks.
+
+---
+
+## Playtest Bugfixes — Round 1–4 Annotations
+
+> These tests verify the 6 bugs found during the round 1–4 playtest session.
+> GUT tests cover dice pool gating, signal emissions, and overlay math.
+> Manual tests below cover visual / interaction checks only.
+
+### MT-PTBF.01 — Engaged Squadron Cannot Attack Ships (Bug E)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a squadron that is engaged with an enemy squadron | Squadron modal appears |
+| 2 | Click the engaged squadron in the modal | Attack target selection begins |
+| 3 | Attempt to click an enemy ship | Click rejected; tooltip shows "Engaged — must attack an engaged enemy squadron." |
+| 4 | Click the engaged enemy squadron | Attack resolves normally |
+
+**Pass criteria:** Engaged squadrons can only target engaged enemy squadrons; ship clicks are rejected with tooltip.
+
+### MT-PTBF.02 — Zero-Dice Zones Do Not Highlight (Bug B)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Begin a ship attack with a ship that has BLACK-only front armament | Hull zone selector appears |
+| 2 | Place an enemy ship at long range (beyond close) | Front zone should NOT show red highlight (0 black dice at range) |
+| 3 | Move the enemy into close range | Front zone highlights red (black dice valid at close) |
+
+**Pass criteria:** Hull zone highlights only appear when the dice pool has ≥ 1 die at the measured range.
+
+### MT-PTBF.03 — Repair Hull Updates Token Display (Bug F)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Damage a ship to below full hull | Hull counter shows reduced number |
+| 2 | Issue a Repair command and repair a damage card | Hull counter increments immediately after card removal |
+
+**Pass criteria:** Hull counter display updates without requiring a round change or panel toggle.
+
+### MT-PTBF.04 — Dial Sprite Hides on Phase Transition (Bug D)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate the last ship in the ship activation phase | Dial sprite appears above the ship |
+| 2 | Complete its activation (finish attack/move) | Phase transitions to squadron phase; dial sprite disappears |
+| 3 | Verify no ghost dial remains on any ship | Board is clear of stale dial sprites |
+
+**Pass criteria:** No dial sprite persists after the phase transition to squadron phase.
+
+### MT-PTBF.05 — Squadron Attack Circle Uses Distance 1 (Bug C)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Hover or select a squadron to show the attack sim overlay | Circle appears around the squadron base |
+| 2 | Compare circle radius to ruler distance 1 | Circle edge matches distance-1 marking, NOT close range |
+
+**Pass criteria:** The overlay circle radius is `base_radius + distance_bands_px[0]`, visibly smaller than close range.
+
+### MT-PTBF.06 — Sidebar Highlights Active Squadron (Bug A)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter squadron phase | Activation sidebar appears with squadron list |
+| 2 | Select a squadron from the modal | The corresponding sidebar entry highlights (same as ship activation flow) |
+| 3 | Complete the squadron's activation | Highlight clears or moves to next |
+
+**Pass criteria:** The active squadron is always visually indicated in the sidebar during squadron phase.

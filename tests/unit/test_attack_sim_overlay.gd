@@ -55,9 +55,9 @@ func test_setup_squadron_stores_centre_and_radius() -> void:
 	_overlay.setup_squadron(centre, base_radius)
 	assert_eq(_overlay._squad_centre, centre,
 			"Squadron centre should be stored.")
-	var expected_radius: float = base_radius + GameScale.range_close_px
+	var expected_radius: float = base_radius + GameScale.distance_bands_px[0]
 	assert_almost_eq(_overlay._squad_circle_radius, expected_radius, 0.1,
-			"Squadron circle radius should be base_radius + close range.")
+			"Squadron circle radius should be base_radius + distance 1.")
 
 
 func test_clear_resets_draw_flags() -> void:

@@ -122,7 +122,7 @@ var _draw_hull_zone: bool = false
 
 ## World-space centre of the squadron.
 var _squad_centre: Vector2 = Vector2.ZERO
-## Radius of the close-range circle (base radius + close range distance).
+## Radius of the distance-1 attack range circle (base radius + distance 1).
 var _squad_circle_radius: float = 0.0
 ## Whether squadron visuals should be drawn.
 var _draw_squadron: bool = false
@@ -194,7 +194,7 @@ func setup_squadron(centre: Vector2, base_radius: float) -> void:
 	_draw_hull_zone = false
 	_draw_squadron = true
 	_squad_centre = centre
-	_squad_circle_radius = base_radius + GameScale.range_close_px
+	_squad_circle_radius = base_radius + GameScale.distance_bands_px[0]
 	_log.debug("Squadron overlay set up. Centre: %s, radius: %.1f" % [
 			_squad_centre, _squad_circle_radius])
 	queue_redraw()

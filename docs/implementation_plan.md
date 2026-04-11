@@ -1906,6 +1906,24 @@ quickload.
 `test_debug_annotation.gd`.
 **Tests:** 100 scripts, 1 995 tests, 3 419 asserts — all passing.
 
+### Playtest Bugfixes — Round 1–4 Annotations ✅
+
+**Goal:** Fix 6 gameplay bugs discovered during a 4-round playtest session
+with annotation snapshots. Bugs prioritised P1–P6.
+
+| Priority | Bug | Fix Summary | File(s) | Status |
+|----------|-----|-------------|---------|--------|
+| P1 | E — Engaged squads attack ships | Engagement guard in ship/squad click validation; target filter when engaged | `attack_executor.gd`, `squadron_phase_controller.gd` | ✅ |
+| P2 | B — Zero-dice zones highlight | Dice pool gate via `DicePool.get_attack_pool` + `get_total_count` | `attack_target_resolver.gd` | ✅ |
+| P3 | F — Repair hull display stale | Emit `ship_hull_changed` after damage card removal | `repair_resolver.gd` | ✅ |
+| P4 | D — Dial sprite persists | Call `hide_revealed_dial()` before `_activation_ctx.clear()` | `game_board.gd` | ✅ |
+| P5 | C — Squad attack circle too large | Use `distance_bands_px[0]` instead of `range_close_px` | `attack_sim_overlay.gd` | ✅ |
+| P6 | A — Sidebar squad highlight | Wire `highlight_active` callable into squadron phase controller | `squadron_phase_controller.gd`, `game_board.gd` | ✅ |
+
+**New file:** `test_playtest_bugfixes.gd` (13 tests).
+**Commit:** `cd154ff`
+**Tests:** 101 scripts, 2 006 tests, 3 434 asserts — all passing.
+
 ---
 
 ```

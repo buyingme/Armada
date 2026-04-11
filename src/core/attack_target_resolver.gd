@@ -389,7 +389,8 @@ func zone_has_targets(ship_token: ShipToken,
 			attacker_faction):
 		return true
 	return _zone_has_enemy_squad_target(
-			zone, atk_arc_pts, atk_edge, attacker_faction)
+			ship_token, zone, atk_arc_pts, atk_edge,
+			attacker_faction)
 
 
 ## Returns [code]true[/code] if any enemy ship hull zone is in arc and
@@ -421,14 +422,26 @@ func _zone_has_enemy_ship_target(ship_token: ShipToken,
 			if dist >= INF:
 				continue
 			var rng_band: String = GameScale.get_range_band(dist)
-			if rng_band != Constants.RANGE_BAND_BEYOND:
+			if rng_band == Constants.RANGE_BAND_BEYOND:
+				continue
+			var zone_key: String = CombatParticipants.ZONE_NAMES.get(
+					zone, "FRONT")
+			var atk_data: ShipData = ship_token.get_ship_data()
+			if atk_data == null:
+				continue
+			var armament: Dictionary = atk_data.battery_armament.get(
+					zone_key, {})
+			var pool: Dictionary = DicePool.get_attack_pool(
+					armament, rng_band)
+			if DicePool.get_total_count(pool) > 0:
 				return true
 	return false
 
 
 ## Returns [code]true[/code] if any enemy squadron is in arc and range
-## from the given attacker hull zone.
+## from the given attacker hull zone, with at least one anti-squadron die.
 func _zone_has_enemy_squad_target(
+		ship_token: ShipToken,
 		zone: Constants.HullZone, atk_arc_pts: Dictionary,
 		atk_edge: Array[Vector2],
 		attacker_faction: int) -> bool:
@@ -450,7 +463,15 @@ func _zone_has_enemy_squad_target(
 		if dist >= INF:
 			continue
 		var rng_band: String = GameScale.get_range_band(dist)
-		if rng_band != Constants.RANGE_BAND_BEYOND:
+		if rng_band == Constants.RANGE_BAND_BEYOND:
+			continue
+		var atk_data: ShipData = ship_token.get_ship_data()
+		if atk_data == null:
+			continue
+		var as_armament: Dictionary = atk_data.anti_squadron_armament
+		var pool: Dictionary = DicePool.get_attack_pool(
+				as_armament, rng_band)
+		if DicePool.get_total_count(pool) > 0:
 			return true
 	return false
 

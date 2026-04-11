@@ -1045,6 +1045,8 @@ func _hide_phase5b_ui() -> void:
 		_panel_mgr.show_activation_button.hide_button()
 	if _panel_mgr.activation_modal:
 		_panel_mgr.activation_modal.close_and_clear()
+	if _activation_ctx.activating_ship_token:
+		_activation_ctx.activating_ship_token.hide_revealed_dial()
 	_activation_ctx.clear()
 
 ## Called when the activation modal is dismissed (Escape or ✕ Close).
@@ -1817,12 +1819,16 @@ func _create_squadron_phase_controller() -> void:
 		if _panel_mgr and _panel_mgr.show_activation_button \
 				and _activation_ctx.activating_ship_token:
 			_panel_mgr.show_activation_button.show_button()
+	var highlight_sq: Callable = func(inst: Variant) -> void:
+		if _panel_mgr and _panel_mgr.activation_sidebar:
+			_panel_mgr.activation_sidebar.highlight_active(inst)
 	_squadron_phase_controller.initialize(
 			_token_container,
 			get_squadron_tokens,
 			start_sq_attack,
 			show_act_btn,
 			_move_squadron_token,
+			highlight_sq,
 	)
 	_squadron_phase_controller.squadron_command_done.connect(
 			_on_squadron_command_done)

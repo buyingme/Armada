@@ -9,6 +9,7 @@
 ## Bug F: Repair hull display stale
 ## Bug G: CR90 speed-4 navigation chart wrong yaw at joint 1
 ## Bug H: Stale is_engaged flag after mid-turn squadron destruction
+## Bug I: Squadron-to-ship range circle approximation fails at diagonal angles
 extends GutTest
 
 
@@ -373,3 +374,116 @@ func test_fresh_engagement_true_with_nearby_enemy() -> void:
 			sq_rebel, Vector2(100, 100), all)
 	assert_true(fresh,
 			"Fresh check must still detect engagement when enemy is near")
+
+
+# ===========================================================================
+# Bug I — Squadron-to-ship range: polyline edge instead of circle approx
+# ===========================================================================
+
+
+func test_squad_to_ship_range_diagonal_within_distance_1() -> void:
+	## Bug I: A squadron approaching a rectangular ship diagonally can be
+	## within distance 1 of the nearest edge even though the circle
+	## approximation (center_dist - radius - half_length) says "out of range".
+	## Rules Reference: RRG "Range and Distance" p.14.
+	var sq_radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	# Simulate a medium ship (VSD-like): half_w=74, half_l=120.
+	var hw: float = 74.0
+	var hl: float = 120.0
+	var ship_pos: Vector2 = Vector2(400, 400)
+	var ship_rot: float = 0.0
+	# Front-left corner: (326, 280).
+	var corner: Vector2 = ship_pos + Vector2(-hw, -hl)
+	# Place squadron along center→corner direction, at exactly
+	# (sq_radius + dist1_px * 0.9) from the corner — clearly within
+	# distance 1 of the corner, but far enough from ship center that
+	# the circle approximation (which uses half_length) over-estimates.
+	var d_corner: float = corner.distance_to(ship_pos)
+	var dir: Vector2 = (corner - ship_pos).normalized()
+	var sq_pos: Vector2 = corner + dir * (sq_radius + dist1_px * 0.9)
+	# Old circle approx: center_dist - sq_radius - half_length.
+	var old_approx: float = sq_pos.distance_to(ship_pos) \
+			- sq_radius - hl
+	# Proper edge measurement via RangeFinder.
+	var front: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+			ship_pos, ship_rot, hw, hl, Constants.HullZone.FRONT)
+	var left: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+			ship_pos, ship_rot, hw, hl, Constants.HullZone.LEFT)
+	var r_front: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			sq_pos, sq_radius, front)
+	var r_left: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			sq_pos, sq_radius, left)
+	var best: float = minf(r_front["distance"], r_left["distance"])
+	# The polyline measurement should detect the squadron as in-range.
+	assert_lt(best, dist1_px,
+			"Polyline edge distance should correctly report in-range (Bug I)")
+	# The circle approximation should over-estimate — proving the fix matters.
+	assert_gt(old_approx, best,
+			"Circle approx should over-estimate vs polyline edge (Bug I)")
+
+
+func test_squad_to_ship_range_broadside_still_works() -> void:
+	## Bug I complement: broadside approach must still be detected at
+	## distance 1. Both old and new methods should agree here.
+	var sq_radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	var hw: float = 74.0
+	var hl: float = 120.0
+	var ship_pos: Vector2 = Vector2(400, 400)
+	# Place squadron directly to the right, just within distance 1.
+	var edge_x: float = ship_pos.x + hw
+	var sq_x: float = edge_x + sq_radius + dist1_px - 5.0
+	var sq_pos: Vector2 = Vector2(sq_x, 400)
+	var right: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+			ship_pos, 0.0, hw, hl, Constants.HullZone.RIGHT)
+	var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			sq_pos, sq_radius, right)
+	assert_lt(result["distance"], dist1_px,
+			"Broadside approach should be within distance 1 (Bug I)")
+
+
+func test_squad_to_ship_range_out_of_range_rejected() -> void:
+	## Bug I complement: a squadron clearly out of range must not be
+	## reported as in-range.
+	var sq_radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	var hw: float = 74.0
+	var hl: float = 120.0
+	var ship_pos: Vector2 = Vector2(400, 400)
+	# Place squadron far away — well beyond distance 1 from any edge.
+	var sq_pos: Vector2 = Vector2(400, 400 - hl - sq_radius - dist1_px - 50.0)
+	var best: float = INF
+	for zone_val: int in Constants.HullZone.values():
+		var zone: Constants.HullZone = zone_val as Constants.HullZone
+		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+				ship_pos, 0.0, hw, hl, zone)
+		var r: Dictionary = RangeFinder.measure_range_squad_to_ship(
+				sq_pos, sq_radius, edge)
+		best = minf(best, r["distance"])
+	assert_gt(best, dist1_px,
+			"Squadron far away should be out of range (Bug I)")
+
+
+func test_squad_to_ship_range_rotated_ship() -> void:
+	## Bug I: Range check must respect ship rotation.
+	## A 45° rotated ship's left edge extends diagonally.
+	var sq_radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	var hw: float = 74.0
+	var hl: float = 120.0
+	var ship_pos: Vector2 = Vector2(400, 400)
+	var ship_rot: float = PI / 4.0  # 45 degrees
+	# Compute point along the rotated left edge direction.
+	# Left edge start (local): (-hw, -hl) rotated 45°.
+	var corner: Vector2 = ship_pos + Vector2(-hw, -hl).rotated(ship_rot)
+	# Move outward from corner, perpendicular to left edge.
+	# Left edge direction (local) is (0, 1) → rotated = (sin45, cos45).
+	var outward: Vector2 = Vector2(-1, 0).rotated(ship_rot)
+	var sq_pos: Vector2 = corner + outward * (sq_radius + dist1_px * 0.5)
+	var left: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+			ship_pos, ship_rot, hw, hl, Constants.HullZone.LEFT)
+	var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+			sq_pos, sq_radius, left)
+	assert_lt(result["distance"], dist1_px,
+			"Rotated ship edge distance should detect in-range (Bug I)")

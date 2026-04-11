@@ -539,6 +539,10 @@ func _any_enemy_squadron_in_range(
 
 
 ## Returns true if any enemy ship is within distance 1 of [param token].
+## Uses proper polyline edge-to-circle distance via RangeFinder to handle
+## rectangular ship bases correctly at all approach angles.
+## Rules Reference: RRG "Range and Distance" p.14 — "measure from the
+## closest point of the first object to the closest point of the second."
 func _any_enemy_ship_in_range(
 		instance: SquadronInstance,
 		token: SquadronToken) -> bool:
@@ -553,9 +557,25 @@ func _any_enemy_ship_in_range(
 		if ship_inst == null or \
 				ship_inst.owner_player == instance.owner_player:
 			continue
-		var ship_half: float = ship.get_half_length()
-		var edge_approx: float = pos.distance_to(
-				ship.global_position) - radius - ship_half
-		if edge_approx <= dist1_px:
+		if _ship_in_distance_1(pos, radius, ship, dist1_px):
+			return true
+	return false
+
+
+## Returns true if any hull-zone edge of [param ship] is within
+## [param dist1_px] of the squadron circle at [param pos]/[param radius].
+func _ship_in_distance_1(pos: Vector2, radius: float,
+		ship: ShipToken, dist1_px: float) -> bool:
+	var hw: float = ship.get_half_width()
+	var hl: float = ship.get_half_length()
+	var rot: float = ship.global_rotation
+	var sp: Vector2 = ship.global_position
+	for zone_val: int in Constants.HullZone.values():
+		var zone: Constants.HullZone = zone_val as Constants.HullZone
+		var edge: Array[Vector2] = RangeFinder.get_hull_zone_edge(
+				sp, rot, hw, hl, zone)
+		var result: Dictionary = RangeFinder.measure_range_squad_to_ship(
+				pos, radius, edge)
+		if result["distance"] <= dist1_px:
 			return true
 	return false

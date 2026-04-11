@@ -1,12 +1,14 @@
-## Test: Playtest Bugfixes (Round 1–4 Annotations)
+## Test: Playtest Bugfixes (Round 1–6 Annotations)
 ##
-## Regression tests covering all 6 bugs found during the Round 1–4 playtest.
+## Regression tests covering bugs found during playtests.
 ## Bug A: Sidebar squad highlight (visual)
 ## Bug B: Dice-pool auto-skip check
 ## Bug C: Squadron attack range circle too large
 ## Bug D: Dial sprite persists on last-ship phase transition
 ## Bug E: Engaged squadron can attack capital ships
 ## Bug F: Repair hull display stale
+## Bug G: CR90 speed-4 navigation chart wrong yaw at joint 1
+## Bug H: Stale is_engaged flag after mid-turn squadron destruction
 extends GutTest
 
 
@@ -262,3 +264,112 @@ func test_hide_phase5b_hides_dial_before_clearing_context() -> void:
 	token.hide_revealed_dial()
 	assert_null(token._revealed_dial_sprite,
 			"Dial sprite should be null after hide_revealed_dial() (Bug D)")
+
+
+# ===========================================================================
+# Bug G — CR90 speed-4 navigation chart: joint 1 yaw = 1
+# ===========================================================================
+
+
+func test_cr90a_speed4_joint1_yaw_is_1() -> void:
+	## Bug G: The CR90 Corvette A JSON had speed-4 nav chart [0,0,1,2]
+	## but the physical card shows [0,1,1,2]. Joint 1 should be 1.
+	## Rules Reference: CR90 Corvette A ship card.
+	var data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	assert_not_null(data, "CR90 Corvette A should load from JSON")
+	var chart: Array = data.navigation_chart
+	assert_eq(chart.size(), 4,
+			"CR90 should have 4 speed rows")
+	# Speed 4 is chart index 3.
+	var speed4_row: Array = chart[3]
+	assert_eq(speed4_row.size(), 4,
+			"Speed-4 row should have 4 joints")
+	assert_eq(int(speed4_row[1]), 1,
+			"Speed-4 joint 1 must be 1, not 0 (Bug G)")
+
+
+func test_cr90b_speed4_joint1_yaw_is_1() -> void:
+	## Bug G: Same fix applies to CR90 Corvette B.
+	var data: ShipData = AssetLoader.load_ship_data("cr90_corvette_b")
+	assert_not_null(data, "CR90 Corvette B should load from JSON")
+	var chart: Array = data.navigation_chart
+	var speed4_row: Array = chart[3]
+	assert_eq(int(speed4_row[1]), 1,
+			"Speed-4 joint 1 must be 1, not 0 (Bug G)")
+
+
+func test_cr90a_maneuver_calc_speed4_joint1() -> void:
+	## Bug G: ManeuverCalculator.get_max_yaw should return 1 for
+	## speed 4, joint 1 with the corrected CR90 chart.
+	var data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	var yaw: int = ManeuverCalculator.get_max_yaw(
+			data.navigation_chart, 4, 1)
+	assert_eq(yaw, 1,
+			"ManeuverCalculator speed 4, joint 1 must be 1 (Bug G)")
+
+
+# ===========================================================================
+# Bug H — Stale is_engaged flag after mid-turn squadron destruction
+# ===========================================================================
+
+
+func test_engagement_cleared_after_enemy_removed() -> void:
+	## Bug H: After the only engaging enemy is destroyed (removed from
+	## all_squads), update_engagement_flags must clear is_engaged.
+	## Rules Reference: RRG "Engagement" p.4.
+	var sq_rebel: SquadronInstance = _make_squadron(0, true)
+	var sq_empire: SquadronInstance = _make_squadron(1, true)
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	var center_dist: float = dist1_px + 2.0 * radius - 1.0
+	# Start engaged.
+	var all: Array[Dictionary] = [
+		{"instance": sq_rebel, "position": Vector2(100, 100)},
+		{"instance": sq_empire, "position": Vector2(
+				100 + center_dist, 100)},
+	]
+	EngagementResolver.update_engagement_flags(all)
+	assert_true(sq_rebel.is_engaged,
+			"Rebel squadron should be engaged before destruction")
+	# Simulate TIE destruction: remove from all_squads list.
+	var reduced: Array[Dictionary] = [
+		{"instance": sq_rebel, "position": Vector2(100, 100)},
+	]
+	EngagementResolver.update_engagement_flags(reduced)
+	assert_false(sq_rebel.is_engaged,
+			"is_engaged must clear after the engaging enemy is removed (Bug H)")
+
+
+func test_fresh_engagement_check_ignores_stale_flag() -> void:
+	## Bug H: EngagementResolver.is_engaged() must return the correct
+	## state based on positions, regardless of the cached is_engaged flag.
+	var sq_rebel: SquadronInstance = _make_squadron(0, true)
+	# is_engaged flag is true (stale from a previous check), but no
+	# enemies exist in all_squads.
+	var all: Array[Dictionary] = [
+		{"instance": sq_rebel, "position": Vector2(100, 100)},
+	]
+	var fresh: bool = EngagementResolver.is_engaged(
+			sq_rebel, Vector2(100, 100), all)
+	assert_false(fresh,
+			"Fresh check must return false when no enemies present, "
+			+ "regardless of stale is_engaged flag (Bug H)")
+
+
+func test_fresh_engagement_true_with_nearby_enemy() -> void:
+	## Bug H complement: fresh check should still detect engagement
+	## when a live enemy IS within distance 1.
+	var sq_rebel: SquadronInstance = _make_squadron(0, false)
+	var sq_empire: SquadronInstance = _make_squadron(1, false)
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var dist1_px: float = GameScale.distance_bands_px[0]
+	var center_dist: float = dist1_px + 2.0 * radius - 1.0
+	var all: Array[Dictionary] = [
+		{"instance": sq_rebel, "position": Vector2(100, 100)},
+		{"instance": sq_empire, "position": Vector2(
+				100 + center_dist, 100)},
+	]
+	var fresh: bool = EngagementResolver.is_engaged(
+			sq_rebel, Vector2(100, 100), all)
+	assert_true(fresh,
+			"Fresh check must still detect engagement when enemy is near")

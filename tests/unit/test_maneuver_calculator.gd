@@ -4,7 +4,7 @@
 ##   compute_tool_joints, compute_final_transform.
 ##
 ## Uses the CR90 Corvette A navigation chart as reference data:
-##   [[2],[1,2],[0,1,2],[0,0,1,2]]
+##   [[2],[1,2],[0,1,2],[0,1,1,2]]
 ##
 ## Rules Reference: "Maneuver", p.7; "Navigation Chart", p.8; MV-001–006, MV-010–015
 extends GutTest
@@ -13,7 +13,7 @@ extends GutTest
 ## CR90 Corvette A navigation chart (exactly as in JSON).
 ## Row index = speed - 1, column index = joint index.
 ## Value = max yaw clicks (0 = locked).
-var CR90_NAV_CHART: Array = [[2], [1, 2], [0, 1, 2], [0, 0, 1, 2]]
+var CR90_NAV_CHART: Array = [[2], [1, 2], [0, 1, 2], [0, 1, 1, 2]]
 
 
 # ---------------------------------------------------------------------------

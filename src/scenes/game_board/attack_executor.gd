@@ -935,11 +935,10 @@ func _validate_target_ship_click(token: ShipToken,
 	# Engagement guard (SM-012): engaged squadron must attack engaged enemy.
 	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
 	# cannot move and can only attack squadrons that it is engaged with."
+	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
 	if _attack_exec_mode and _attack_exec_squad_mode \
 			and _attack_exec_squad_token:
-		var sq_inst: SquadronInstance = \
-				_attack_exec_squad_token.get_squadron_instance()
-		if sq_inst and sq_inst.is_engaged:
+		if _is_squad_attacker_engaged_fresh():
 			return _reject_target(
 					"Attack exec: engaged squadron cannot target ships.",
 					"Engaged — must attack an engaged enemy squadron.",
@@ -971,6 +970,39 @@ func _reject_target(log_msg: String, tooltip: String,
 	_log.info(log_msg)
 	TooltipManager.show_text(tooltip, Vector2.INF, 2.0, true)
 	return reason
+
+
+## Returns true if the current squadron attacker is freshly engaged.
+## Recomputes from live positions instead of using the cached
+## [member SquadronInstance.is_engaged] flag, which may be stale after
+## a mid-turn squadron destruction.
+## Rules Reference: RRG "Engagement" p.4.
+func _is_squad_attacker_engaged_fresh() -> bool:
+	if _attack_exec_squad_token == null:
+		return false
+	var sq_inst: SquadronInstance = \
+			_attack_exec_squad_token.get_squadron_instance()
+	if sq_inst == null:
+		return false
+	var all_squads: Array[Dictionary] = _build_squadron_positions()
+	return EngagementResolver.is_engaged(
+			sq_inst, _attack_exec_squad_token.global_position,
+			all_squads)
+
+
+## Builds an array of {"instance": …, "position": …} for all
+## non-destroyed squadrons on the board.  Used for fresh engagement
+## checks during target validation.
+func _build_squadron_positions() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for sq_token: SquadronToken in _get_squadron_tokens.call():
+		var inst: SquadronInstance = sq_token.get_squadron_instance()
+		if inst and not inst.is_destroyed():
+			result.append({
+				"instance": inst,
+				"position": sq_token.global_position,
+			})
+	return result
 
 
 ## Returns the attacker faction for target validation guards.
@@ -1054,14 +1086,19 @@ func _validate_target_squadron_click(
 	# Engagement guard (SM-012): if engaged, can only attack engaged enemies.
 	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
 	# … can only attack squadrons that it is engaged with."
+	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
 	if _attack_exec_mode and _attack_exec_squad_mode \
 			and _attack_exec_squad_token:
-		var atk_inst: SquadronInstance = \
-				_attack_exec_squad_token.get_squadron_instance()
-		if atk_inst and atk_inst.is_engaged:
+		if _is_squad_attacker_engaged_fresh():
+			var all_squads: Array[Dictionary] = \
+					_build_squadron_positions()
 			var def_inst: SquadronInstance = \
 					token.get_squadron_instance()
-			if def_inst and not def_inst.is_engaged:
+			var def_engaged: bool = false
+			if def_inst:
+				def_engaged = EngagementResolver.is_engaged(
+						def_inst, token.global_position, all_squads)
+			if not def_engaged:
 				return _reject_target(
 						"Attack exec: engaged attacker cannot target "
 						+ "non-engaged squadron.",

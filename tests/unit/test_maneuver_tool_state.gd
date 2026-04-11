@@ -8,7 +8,7 @@ extends GutTest
 
 
 ## CR90 navigation chart (same as in test_maneuver_calculator.gd).
-var CR90_NAV: Array = [[2], [1, 2], [0, 1, 2], [0, 0, 1, 2]]
+var CR90_NAV: Array = [[2], [1, 2], [0, 1, 2], [0, 1, 1, 2]]
 
 ## Reusable instance.
 var _state: ManeuverToolState = null

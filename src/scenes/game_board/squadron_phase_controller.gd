@@ -287,6 +287,10 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	if _highlight_active.is_valid():
 		_highlight_active.call(instance)
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
+	# Refresh engagement flags from live positions — a squadron may have
+	# been destroyed during a prior activation this turn, leaving the
+	# cached is_engaged flag stale (Bug H).
+	EngagementResolver.update_engagement_flags(all_squads)
 	var can_move: bool = EngagementResolver.can_squadron_move(
 			instance, token.global_position, all_squads)
 	var has_targets: bool = _squadron_has_valid_targets(
@@ -498,12 +502,15 @@ func _build_ship_bases() -> Array[ShipBase]:
 
 ## Returns true if the squadron has at least one valid attack target.
 ## When engaged, only engaged enemy squadrons count as valid targets.
+## Engagement is computed freshly from live positions to avoid stale flags.
 ## Rules Reference: "Squadron Attacks", RRG p.19; "Engagement" p.4.
 func _squadron_has_valid_targets(
 		instance: SquadronInstance,
 		token: SquadronToken,
 		all_squads: Array[Dictionary]) -> bool:
-	if instance.is_engaged:
+	var engaged: bool = EngagementResolver.is_engaged(
+			instance, token.global_position, all_squads)
+	if engaged:
 		return _any_enemy_squadron_in_range(instance, token, all_squads)
 	if _any_enemy_squadron_in_range(instance, token, all_squads):
 		return true

@@ -16,7 +16,7 @@ func _make_ship(speed: int = 2, has_nav_dial: bool = true,
 	var data: ShipData = ShipData.new()
 	data.hull = 4
 	data.max_speed = max_speed
-	data.navigation_chart = [[2], [1, 2], [0, 1, 2], [0, 0, 1, 2]]
+	data.navigation_chart = [[2], [1, 2], [0, 1, 2], [0, 1, 1, 2]]
 	data.command_value = command_value
 	data.shields = {"front": 2, "left": 1, "right": 1, "rear": 1}
 	data.defense_tokens = []

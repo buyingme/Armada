@@ -806,6 +806,17 @@ two god objects were decomposed into focused, testable components:
 - Test suite: 100 scripts, 2 032 tests, 3 552 asserts — 0 failures
 - All manual tests (MT-F5b.01–03, MT-F5c.01–02, MT-F5d.01–03) passed
 
+#### Post-F5 Hotfixes ✅
+
+1. **Escape removal** (`61be60e`): Removed `handle_escape()` from
+   AttackExecutor, TargetSelector, and TargetingListController. Escape
+   routing was redundant (other UI elements serve the same purpose) and
+   caused an infinite loop with dice-phase guards.
+2. **Dice-phase guard fix**: Changed target click guards in TargetSelector
+   from `dice_pool.size() > 0` (pool computed) to `dice_results.size() > 0`
+   (dice actually rolled). Before rolling, players can freely change targets.
+   Added `_state.reset_dice()` in `_deselect_target()` to clear stale pools.
+
 ---
 
 ### Phase G — Command Pattern (Multiplayer Foundation)

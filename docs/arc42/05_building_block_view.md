@@ -79,6 +79,12 @@
 | `DamageCard` | RefCounted | `src/core/damage_card.gd` | Single damage card: face-up/down, effect ID |
 | `DamageDeck` | RefCounted | `src/core/damage_deck.gd` | 33-card damage deck with shuffle and draw |
 | `TargetingListBuilder` | RefCounted | `src/core/targeting_list_builder.gd` | Builds targeting data for all ship/squadron pairs |
+| `AttackState` | RefCounted | `src/core/attack_state.gd` | Shared attack-flow state (attacker/defender identity, dice, CF, defense, deferred damage) |
+| `CombatParticipants` | RefCounted | `src/core/combat_participants.gd` | Immutable data class bundling attacker/defender token/zone identity |
+| `AttackTargetResolver` | RefCounted | `src/core/attack_target_resolver.gd` | Pure-geometry target queries: arc check, LOS, range, zone-has-targets |
+| `AttackDiceResolver` | RefCounted | `src/core/attack_dice_resolver.gd` | Armament resolution, dice pool computation, CF logic, damage calc |
+| `DefenseTokenResolver` | RefCounted | `src/core/defense_token_resolver.gd` | Defense token availability, spend-method resolution, token effects |
+| `DamageDealer` | RefCounted | `src/core/damage_dealer.gd` | Final damage calc, shield absorption, hull tracking, card dealing |
 | `LearningScenarioSetup` | RefCounted | `src/core/learning_scenario_setup.gd` | Loads learning scenario JSON and spawns initial placement |
 
 ## 5.3 Level 2 — UI Detail
@@ -89,7 +95,9 @@
 |-----------|---------|------|---------|
 | `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, activation backbone, delegates to child controllers |
 | `UIPanelManager` | Node | `src/scenes/game_board/ui_panel_manager.gd` | Owns all UI panel creation, positioning, resizing, and isolated callbacks (card panels, overlays, modals, HUD) |
-| `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack simulator (free-form) and attack execution (activation Step 4): targeting, LOS, dice, defense tokens, damage |
+| `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack execution (activation Step 4): dice sequence, defense tokens, damage resolution. Delegates targeting to `TargetSelector` and pure computation to `AttackDiceResolver`, `DefenseTokenResolver`, `DamageDealer` |
+| `TargetSelector` | Node | `src/scenes/game_board/target_selector.gd` | Attacker/target selection pipeline shared by attack simulator and execution. Emits `target_locked` to AE on valid target |
+| `TargetingListController` | Node | `src/scenes/game_board/targeting_list_controller.gd` | Targeting list modal lifecycle + `TargetingListBuilder` integration |
 | `DisplacementController` | Node | `src/scenes/game_board/displacement_controller.gd` | Squadron displacement flow after ship maneuver overlap |
 | `DialDragController` | Node | `src/scenes/game_board/dial_drag_controller.gd` | Command dial drag-and-drop to activate ships |
 | `CommandPhaseController` | Node | `src/scenes/game_board/command_phase_controller.gd` | Command Phase dial assignment flow |

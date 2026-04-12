@@ -544,13 +544,10 @@ func _handle_target_ship_click(token: ShipToken) -> void:
 	if zone < 0:
 		_log.debug("Target click outside ship base — ignored.")
 		return
-	# Dice-phase guard: once the dice sequence has started (pool computed),
-	# only allow deselecting the current target.
-	if _state.exec_mode and _state.dice_pool.size() > 0:
-		if _state.defender_ship == token and _state.defender_zone == zone:
-			_log.info("Target deselected during dice phase — resetting.")
-			reset_dice_ui()
-			_deselect_target()
+	# Post-roll guard: once dice have actually been rolled, the attack is
+	# committed — block all target clicks.  Before rolling, the normal
+	# selection / deselection path handles target changes.
+	if _state.exec_mode and _state.dice_results.size() > 0:
 		return
 	var reject: String = _validate_target_ship_click(token, zone)
 	if reject != "":
@@ -692,13 +689,10 @@ func _get_attacker_faction() -> Constants.Faction:
 ## Requirements: AS-TGT-010–012, AS-TGT-020–021, AS-ARC-001–002.
 func _handle_target_squadron_click(
 		token: SquadronToken) -> void:
-	# Dice-phase guard: once the dice sequence has started (pool computed),
-	# only allow deselecting the current target.
-	if _state.exec_mode and _state.dice_pool.size() > 0:
-		if _state.defender_squadron == token:
-			_log.info("Target deselected during dice phase — resetting.")
-			reset_dice_ui()
-			_deselect_target()
+	# Post-roll guard: once dice have actually been rolled, the attack is
+	# committed — block all target clicks.  Before rolling, the normal
+	# selection / deselection path handles target changes.
+	if _state.exec_mode and _state.dice_results.size() > 0:
 		return
 	var reject: String = _validate_target_squadron_click(token)
 	if reject != "":
@@ -773,7 +767,7 @@ func _validate_target_squadron_click(
 			if not def_engaged:
 				return _reject_target(
 						"Attack exec: engaged attacker cannot target "
-						+ "non-engaged squadron.",
+						+"non-engaged squadron.",
 						"Must attack an engaged enemy squadron.",
 						"must_attack_engaged")
 	# Already-attacked guard (Step 6, AE-SQ-002).
@@ -811,6 +805,11 @@ func _clear_target_state() -> void:
 ## Requirements: AS-TGT-020.
 func _deselect_target() -> void:
 	_clear_target_state()
+	# In exec mode, clear the computed dice pool and hide dice UI so the
+	# player can freely pick a new target before rolling.
+	if _state.exec_mode and _state.dice_pool.size() > 0:
+		_state.reset_dice()
+		reset_dice_ui()
 	# Remove target visuals from overlay (keep attacker visuals).
 	if _overlay:
 		_overlay.clear_target()

@@ -5170,3 +5170,38 @@ on their own, and do not interfere with gameplay clicks.
 **Pass criteria:** Squadron attack works identically to pre-F5d.
 
 **Result: PASS** (2026-04-12)
+
+---
+
+## Hotfix — Target Deselection During Attack Execution
+
+> Fixed dice-phase guard in TargetSelector: changed from `dice_pool.size() > 0`
+> (fires on pool computation) to `dice_results.size() > 0` (fires after actual
+> dice roll). Before rolling, the player can freely deselect and re-select
+> targets. After rolling, clicks are hard-blocked.
+
+### MT-HF.01 — Pre-Roll Target Deselection
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship → enter Attack step | Hull zone chooser appears |
+| 2 | Select a hull zone → click an enemy squadron in range | Target locks; dice pool shows; Roll button visible |
+| 3 | Click the **same** squadron again | Target deselected; dice UI clears; back to "Select a target" prompt |
+| 4 | Click a **different** valid target | New target locks; new dice pool computed; Roll button visible |
+| 5 | Click Roll | Dice roll proceeds normally |
+
+**Pass criteria:** Deselection before rolling works; new target selection works; no stuck state.
+
+**Result: PASS** (2026-04-12)
+
+### MT-HF.02 — Post-Roll Click Block
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select hull zone → click enemy target → click Roll | Dice rolled; results shown |
+| 2 | Click any enemy ship or squadron | Click has no effect (guard blocks) |
+| 3 | Complete the attack normally | Attack resolves correctly |
+
+**Pass criteria:** After dice are rolled, target clicks are blocked; attack flow completes.
+
+**Result: PASS** (2026-04-12)

@@ -1884,7 +1884,97 @@ into a new RefCounted class:
 **New file:** `damage_dealer.gd` (49 tests)
 **Tests:** 97 scripts, 1 963 tests, 3 372 asserts — all passing.
 
-### Debug Feature — Annotation Snapshots (Shift+A) ✅
+### Refactoring Phase H — Targeting Geometry Centralisation ✅
+
+**Goal:** Replace 6 inline geometry approximations with `RangeFinder` API
+calls. Remove 2 dead-code files (`RangeMeasurer`, `FiringArc`). Add
+skills rules to prevent recurrence.
+
+| Step | Task | Status |
+|------|------|--------|
+| H1 | Skills rules — § Single Source of Targeting Geometry | ✅ |
+| H2 | Remove dead code (`range_measurer.gd`, `firing_arc.gd`) — −195 lines | ✅ |
+| H3 | Fix `_any_enemy_squadron_in_range()` in SquadronPhaseController | ✅ |
+| H4 | Fix `is_squadron_in_range()` in SquadronCommandResolver (widened factory) | ✅ |
+| H5 | Fix 3 distance helpers in `targeting_list_builder.gd` | ✅ |
+| H6 | Align `engagement_resolver.gd` `_edge_distance()` | ✅ |
+| Bonus | Fix overlapping-circle edge case in `RangeFinder` | ✅ |
+
+**Commit:** `198b200`
+**Tests:** 99 scripts, 1 994 tests, 3 428 asserts — all passing.
+
+### Refactoring Phase F5 — AttackExecutor Orchestration Split ✅
+
+**Goal:** Split remaining AE orchestration (2 594 lines after F4d) into
+focused components: shared state object, targeting list controller, and
+target selection pipeline.
+
+#### F5a: AttackState ✅
+
+Created `src/core/attack_state.gd` (237 lines, RefCounted) — 37 member
+variables grouped into 7 sections, 4 query helpers, 6 lifecycle methods.
+38 unit tests.
+
+#### F5b: Migrate AE Members → AttackState ✅
+
+Replaced 40 member variables in AE with `_state: AttackState` reads/writes
+(453 rename operations). Removed 147 lines of declarations. Rewrote 6
+reset methods to delegate to `_state` lifecycle.
+AE reduced from 2 938 → 2 594 lines (−344).
+
+#### F5c: TargetingListController ✅
+
+Created `src/scenes/game_board/targeting_list_controller.gd` (184 lines,
+Node) owning targeting list modal lifecycle. Moved 7 methods (~105 lines)
+from `game_board.gd`. GB reduced from 2 221 → 2 116 lines.
+
+#### F5d: TargetSelector ✅
+
+Created `src/scenes/game_board/target_selector.gd` (959 lines, Node)
+owning the entire attacker/target selection pipeline shared by both the
+free-form attack simulator and the real attack execution. Moved 43 methods
+from AE. Divergence via `target_locked(range_band, dice_text)` signal.
+AE reduced from 2 594 → 1 883 lines (−711).
+
+**Commit:** `2d4d0a2`
+**Tests:** 100 scripts, 2 032 tests, 3 552 asserts — all passing.
+
+### Hotfix — Remove Escape Key from Attack Flow ✅
+
+Removed `handle_escape()` from AttackExecutor, TargetSelector, and
+TargetingListController. Escape routing for attack/targeting removed
+from GameBoard. Escape during the attack flow was unused (other UI
+buttons and keys serve that purpose) and caused an infinite loop when
+combined with dice-phase guards.
+
+**Commit:** `61be60e`
+**Tests:** 100 scripts, 2 032 tests, 3 552 asserts — all passing.
+
+### Hotfix — Fix Target Deselection Stuck State ✅
+
+**Bug:** After selecting a target during attack execution (dice pool
+computed, Roll button shown), clicking the target again to deselect
+caused an unrecoverable stuck state. No further clicks were processed.
+
+**Root cause:** The dice-phase guard in `_handle_target_ship_click()` and
+`_handle_target_squadron_click()` checked `_state.dice_pool.size() > 0`,
+which fires as soon as the pool is *computed* (before rolling). After
+deselection, `dice_pool` remained populated, so every subsequent click
+hit the guard and was silently discarded.
+
+**Fix:**
+1. Changed both guards from `dice_pool.size() > 0` to
+   `dice_results.size() > 0` — only block clicks *after* dice are
+   actually rolled (attack committed). Before rolling, the normal
+   selection/deselection path handles target changes freely.
+2. Simplified guards to hard block (no deselect branch needed post-roll
+   since Escape is no longer available).
+3. Added `_state.reset_dice()` + `reset_dice_ui()` in `_deselect_target()`
+   when in exec mode with a computed pool — ensures stale pool/UI are
+   cleaned up on pre-roll target changes.
+
+**Files:** `target_selector.gd` (−17 lines, +15 lines)
+**Tests:** 100 scripts, 2 032 tests, 3 552 asserts — all passing.
 
 **Goal:** Allow the tester to press Shift+A (debug mode only) to enter a
 free-text annotation. On confirm the full serialized GameState is saved

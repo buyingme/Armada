@@ -128,10 +128,11 @@ Then **commit the resulting `.gd.uid`** alongside the `.gd`. Without it, other s
 ### 11. Update Progress Tracking Per Phase
 
 When completing a phase task or full phase:
-- Update `docs/implementation_plan.md` status markers (🔄 → ✅, add commit hash and test count)
-- Update `docs/test_plan_manual.md` — add or update the section for the completed phase
+- Update `docs/progress_summary.md` — add row or update status, commit hash and test count
+- Update `docs/open_topics.md` — add new manual tests, update violation counts, remove resolved items
 - Include both docs files in the phase commit
 - See `.skills/copilot_instructions.md` for the exact update procedure and the MT scenario template
+- Archived originals in `docs/old/` for historical reference
 
 ## Code Generation Workflow
 
@@ -149,8 +150,8 @@ When asked to implement a feature or fix a bug:
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
    ```
 9. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
-10. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
-11. **Update manual test plan** — Add phase section to `docs/test_plan_manual.md` (visual/interaction checks only — skip anything GUT already covers)
+10. **Update progress** — Update `docs/progress_summary.md` and include in commit
+11. **Update open topics** — Add manual tests or remove resolved items in `docs/open_topics.md`
 
 ## Architecture Quick Reference
 

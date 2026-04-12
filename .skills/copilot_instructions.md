@@ -24,7 +24,11 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 
 ## Progress Tracking
 
-The implementation plan at `docs/implementation_plan.md` is the authoritative progress tracker.
+Progress is tracked in two condensed documents:
+- `docs/progress_summary.md` — what has been achieved (phases, metrics, commits)
+- `docs/open_topics.md` — what remains (violations, unwired commands, manual tests)
+
+Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ### Status Markers
 
@@ -36,16 +40,13 @@ The implementation plan at `docs/implementation_plan.md` is the authoritative pr
 
 ### When Completing a Phase
 
-1. Update the phase header: `### Phase N: Name 🔄` → `### Phase N: Name ✅`
-2. Change all `🔄` rows in the phase table to `✅`
-3. Add `**Status:** Complete — committed \`<hash>\`` under the header
-4. Update the tests-delivered line
-5. Include `docs/implementation_plan.md` in the phase commit
-6. **Update `docs/test_plan_manual.md`** — add or update the section for this phase (see below)
+1. Update `docs/progress_summary.md` with the new phase row and test counts
+2. Update `docs/open_topics.md` — remove resolved items, add new manual tests
+3. Include both docs in the phase commit
 
 ### Manual Test Plan — What to Add After Each Phase
 
-`docs/test_plan_manual.md` is the canonical manual QA checklist. After completing a phase, append a new section (or update the existing one) following these rules:
+`docs/open_topics.md` §4 tracks open manual tests. After completing a phase, add new manual test entries following these rules:
 
 - **Format:** `## Phase N — <Name>` header, then one `### MT-N.X` block per test scenario.
 - **One table per scenario:** columns = Step | Action | Expected.

@@ -945,8 +945,8 @@ Uses Godot's built-in `MultiplayerPeer` API (ENet or WebSocket).
 
 #### G5: Deterministic RNG ✅
 
-Implemented in `src/autoload/game_rng.gd`. Seeded `RandomNumberGenerator`
-instance exposed as `GameRng` autoload. Wired into `Dice.roll_die()`,
+Implemented in `src/core/game_rng.gd`. Seeded `RandomNumberGenerator`
+instance exposed as `GameRng` RefCounted class (per `GameState`). Wired into `Dice.roll_die()`,
 `Dice.roll_pool()`, and `DamageDeck.shuffle()`. Seed stored in
 `GameState.rng_seed`.
 **Commit:** `621b8b2`

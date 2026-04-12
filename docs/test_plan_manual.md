@@ -5230,11 +5230,15 @@ resolves correctly. No console errors.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Open project in Godot editor; open Remote debugger | GameRng autoload visible in singleton list |
-| 2 | Run GUT tests: `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 \| grep -i "rng\|game_rng"` | Test file `test_game_rng.gd` runs; 0 failures |
-| 3 | Play a full round; observe dice rolls | Dice produce visual results (not always the same — seed is random per game) |
+| 1 | Run GUT tests: `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 \| grep -i "game_rng"` | Test file `test_game_rng.gd` runs; 0 failures |
+| 2 | Play a full round; observe dice rolls | Dice produce visual results (not always the same — seed is random per game) |
 
-**Pass criteria:** GameRng autoload initialised. Dice use seeded RNG. Tests pass.
+> **Note:** `GameRng` is a `RefCounted` class instantiated per `GameState`, not a
+> Node autoload. Each game gets its own seeded RNG via `GameState.rng`. The seed
+> is serialized with save games and determinism is verified by unit tests
+> (same seed → same sequence).
+
+**Pass criteria:** GameRng unit tests pass. Dice use seeded RNG via `GameState.rng`.
 
 **Result: PASS** (2026-04-12)
 

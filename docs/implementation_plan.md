@@ -2208,12 +2208,13 @@ replay files.
 
 Replaced `randi()` in `Dice.roll_die()`, `Dice.roll_pool()`, and
 `DamageDeck.shuffle()` with a seeded `RandomNumberGenerator` instance
-exposed through the new `GameRng` autoload. The seed is stored in
-`GameState.rng_seed` and propagated to saved games.
+exposed through the new `GameRng` class (`RefCounted`, instantiated per
+`GameState`). The seed is stored in `GameState.rng` and propagated to
+saved games via serialization.
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | `GameRng` autoload (`src/autoload/game_rng.gd`) with `seed`, `randi_range()`, `generate_seed()` | ✅ |
+| 1 | `GameRng` class (`src/core/game_rng.gd`, RefCounted) with `seed`, `randi_range()`, `generate_seed()` | ✅ |
 | 2 | Wire `Dice.roll_die()` + `Dice.roll_pool()` through `GameRng` | ✅ |
 | 3 | Wire `DamageDeck.shuffle()` through `GameRng` | ✅ |
 | 4 | Unit tests (sequence determinism, reseed, range checks) | ✅ |
@@ -2283,7 +2284,7 @@ Record/playback of serialized command sequences. Depends on G2 wiring + G5.
 | Test scripts | 100 | 104 |
 | Tests | 2 032 | 2 098 |
 | Asserts | 3 552 | 3 721 |
-| Autoloads | 11 | 12 (CommandProcessor) |
+| Autoloads | 11 | 12 (+ CommandProcessor) |
 | Command classes | 0 | 7 (1 base + 6 concrete) |
 
 ---

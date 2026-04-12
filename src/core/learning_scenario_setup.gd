@@ -98,10 +98,13 @@ func get_token_count() -> int:
 
 
 ## Returns the shared [DamageDeck] (initialised on first call).
+## If [param rng] is provided, ensures deterministic shuffle order.
 ## Rules Reference: SU-029 — the damage deck is shuffled at setup.
-func get_damage_deck() -> DamageDeck:
+func get_damage_deck(rng: GameRng = null) -> DamageDeck:
 	if _damage_deck == null:
 		_damage_deck = DamageDeck.new()
+		if rng:
+			_damage_deck.set_rng(rng)
 		_damage_deck.initialize()
 	return _damage_deck
 

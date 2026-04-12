@@ -32,6 +32,10 @@ var effect_registry: EffectRegistry = null
 ## Rules Reference: DM-001 — shared 52-card deck.
 var damage_deck: DamageDeck = null
 
+## Seeded random-number generator shared across all game mechanics.
+## Ensures deterministic replay when the same seed is used.
+var rng: GameRng = null
+
 
 ## Initializes a new game state with default values.
 func initialize() -> void:
@@ -39,6 +43,8 @@ func initialize() -> void:
 	current_phase = Constants.GamePhase.SETUP
 	initiative_player = 0
 	effect_registry = EffectRegistry.new()
+	if rng == null:
+		rng = GameRng.new()
 	player_states.clear()
 	for i in range(Constants.PLAYER_COUNT):
 		var ps := PlayerState.new()
@@ -72,6 +78,7 @@ func serialize() -> Dictionary:
 		"initiative_player": initiative_player,
 		"player_states": [],
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
+		"rng": rng.serialize() if rng else {},
 	}
 	for ps in player_states:
 		data["player_states"].append(ps.serialize())
@@ -91,4 +98,7 @@ static func deserialize(data: Dictionary) -> GameState:
 	var deck_data: Dictionary = data.get("damage_deck", {})
 	if not deck_data.is_empty():
 		state.damage_deck = DamageDeck.deserialize(deck_data)
+	var rng_data: Dictionary = data.get("rng", {})
+	if not rng_data.is_empty():
+		state.rng = GameRng.deserialize(rng_data)
 	return state

@@ -29,6 +29,15 @@ var _draw_pile: Array[DamageCard] = []
 ## The discard pile.
 var _discard_pile: Array[DamageCard] = []
 
+## Optional seeded RNG. When set, shuffle uses deterministic ordering.
+var _rng: GameRng = null
+
+
+## Sets the [GameRng] instance used for shuffling.
+## Call before [method initialize] to get a deterministic deck order.
+func set_rng(rng: GameRng) -> void:
+	_rng = rng
+
 
 ## Builds and shuffles a standard 52-card damage deck.
 ## Card data is loaded from the JSON data file via AssetLoader.
@@ -97,8 +106,13 @@ func get_total_count() -> int:
 # ---------------------------------------------------------------------------
 
 ## Fisher-Yates shuffle of the draw pile.
+## Uses [member _rng] when available; otherwise falls back to
+## [method Array.shuffle] (global RNG).
 func _shuffle_draw_pile() -> void:
-	_draw_pile.shuffle()
+	if _rng:
+		_rng.shuffle(_draw_pile)
+	else:
+		_draw_pile.shuffle()
 
 
 ## Moves all discard pile cards into the draw pile and reshuffles.

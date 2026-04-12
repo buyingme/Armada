@@ -443,7 +443,10 @@ func _spawn_learning_scenario_tokens() -> void:
 ## Initialises the damage deck, attack executor references, and effect
 ## registry from the given scenario setup.
 func _init_scenario_systems(setup: LearningScenarioSetup) -> void:
-	_damage_deck = setup.get_damage_deck()
+	var game_rng: GameRng = null
+	if GameManager.current_game_state:
+		game_rng = GameManager.current_game_state.rng
+	_damage_deck = setup.get_damage_deck(game_rng)
 	if GameManager.current_game_state:
 		GameManager.current_game_state.damage_deck = _damage_deck
 	if _attack_executor:

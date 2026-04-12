@@ -43,20 +43,29 @@ const DICE_FACES: Dictionary = {
 
 
 ## Rolls a single die of the given color and returns the face result.
-static func roll_die(color: Constants.DiceColor) -> Constants.DiceFace:
+## If [param rng] is provided, uses it for deterministic rolling;
+## otherwise falls back to global [code]randi()[/code].
+static func roll_die(color: Constants.DiceColor,
+		rng: GameRng = null) -> Constants.DiceFace:
 	var faces: Array = DICE_FACES[color]
-	var index := randi() % faces.size()
+	var index: int
+	if rng:
+		index = rng.randi_range(0, faces.size() - 1)
+	else:
+		index = randi() % faces.size()
 	return faces[index] as Constants.DiceFace
 
 
 ## Rolls a pool of dice and returns an array of results.
 ## [param pool] is a Dictionary mapping DiceColor -> count.
-static func roll_pool(pool: Dictionary) -> Array[Dictionary]:
+## If [param rng] is provided, uses it for deterministic rolling.
+static func roll_pool(pool: Dictionary,
+		rng: GameRng = null) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
 	for color in pool:
 		var count: int = pool[color]
 		for i in range(count):
-			var face := roll_die(color)
+			var face := roll_die(color, rng)
 			results.append({
 				"color": color,
 				"face": face,

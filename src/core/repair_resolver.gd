@@ -262,23 +262,24 @@ func repair_hull(card: DamageCard) -> bool:
 # ---------------------------------------------------------------------------
 
 
-## Finalizes the repair command: spends the dial and/or token.
-## Should be called when the player confirms the repair resolution.
+## Finalizes the repair command: spends the dial, reports token spend.
+## The **caller** is responsible for submitting a [SpendTokenCommand] if
+## the returned dictionary contains a [code]"token_type"[/code] key.
 ## Unspent points are lost (CM-037).
 ## Rules Reference: CM-037.
-func finalize() -> void:
+func finalize() -> Dictionary:
 	var spent: int = get_points_spent()
+	var result: Dictionary = {}
 	# Spend the dial (always consumed if available, even if 0 points used).
 	if _has_repair_dial and _ship.command_dial_stack:
 		_ship.command_dial_stack.spend_revealed()
 		EventBus.command_dials_changed.emit(_ship)
-	# Spend the token only if token points were actually needed.
+	# Report the token spend — caller must submit SpendTokenCommand.
 	if _has_repair_token and spent > _dial_points:
-		if _ship.command_tokens:
-			_ship.command_tokens.spend_token(Constants.CommandType.REPAIR)
-			EventBus.command_tokens_changed.emit(_ship)
+		result = {"token_type": int(Constants.CommandType.REPAIR)}
 	EventBus.repair_command_resolved.emit(_ship, spent)
 	_log.info("Repair finalized: %d/%d points spent." % [spent, _total_points])
+	return result
 
 
 # ---------------------------------------------------------------------------

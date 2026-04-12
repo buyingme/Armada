@@ -1119,7 +1119,8 @@ func _on_repair_step_entered() -> void:
 	if not resolver.has_any_repair_target():
 		_log.info("Ship at full strength — nothing to repair. "
 				+"Consuming dial/token and auto-advancing.")
-		resolver.finalize()
+		var token_result: Dictionary = resolver.finalize()
+		_submit_token_spend_if_needed(ship, token_result)
 		_on_repair_done()
 		return
 	if _panel_mgr.show_activation_button:
@@ -1152,7 +1153,8 @@ func _on_squadron_step_entered() -> void:
 	if not _has_eligible_squadron_in_range(ship, resolver):
 		_log.info("No friendly squadrons in range — consuming resources "
 				+"and auto-advancing.")
-		resolver.finalize()
+		var token_result: Dictionary = resolver.finalize()
+		_submit_token_spend_if_needed(ship, token_result)
 		_on_squadron_command_done()
 		return
 	if _panel_mgr.show_activation_button:
@@ -1215,6 +1217,14 @@ func _on_squadron_command_done() -> void:
 				not _attack_executor.has_any_attack_target(
 				_activation_ctx.activating_ship_token))
 		_panel_mgr.activation_modal.open(_activation_ctx.ship_activation_state)
+
+
+## Submits a [SpendTokenCommand] if a resolver returned token-spend info.\n## [param ship] — the ship that spent the token.\n## [param result] — the dictionary returned by [code]finalize()[/code] or\n## [code]mark_maneuver_executed()[/code]; may contain [code]\"token_type\"[/code].
+func _submit_token_spend_if_needed(ship: ShipInstance,
+		result: Dictionary) -> void:
+	if result.has("token_type"):
+		GameManager.submit_spend_token(ship, result["token_type"])
+
 
 ## Called when the repair panel finishes (Done or Skip pressed).
 ## Advances activation state and re-opens the activation modal.
@@ -1317,7 +1327,8 @@ func _on_maneuver_step_entered() -> void:
 	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
 	if ship.current_speed == 0:
 		_log.info("Speed 0 — executing maneuver without tool.")
-		_activation_ctx.ship_activation_state.mark_maneuver_executed()
+		var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
+		_submit_token_spend_if_needed(ship, token_result)
 		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 		_show_end_activation_after_maneuver()
 		return
@@ -1350,7 +1361,9 @@ func _on_execute_maneuver() -> void:
 	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
 	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
 			moved_ship_base)
-	_activation_ctx.ship_activation_state.mark_maneuver_executed()
+	var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
+	var maneuver_ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
+	_submit_token_spend_if_needed(maneuver_ship, token_result)
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
 	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)

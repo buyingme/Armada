@@ -333,7 +333,7 @@ func test_redirect_zone_validate_bad_zone() -> void:
 	var idx: int = _add_ship(1)
 	var cmd := SelectRedirectZoneCommand.new(1, {
 		"ship_index": idx,
-		"zone": -1,
+		"zone": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject invalid hull zone.")

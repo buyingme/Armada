@@ -648,12 +648,10 @@ func _on_attack_cf_token_reroll(die_index: int) -> void:
 	_state.dice_results[die_index] = new_result
 	_log.info("CF token: rerolled die %d (%s) → %s." % [
 			die_index, str(old_result["face"]), str(new_face)])
-	# Spend the token.
+	# Spend the token via command system.
 	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
 	if inst and inst.command_tokens:
-		inst.command_tokens.spend_token(
-				Constants.CommandType.CONCENTRATE_FIRE)
-		EventBus.command_tokens_changed.emit(inst)
+		GameManager.submit_spend_token(inst, int(Constants.CommandType.CONCENTRATE_FIRE))
 	# Update display.
 	if _get_panel():
 		_get_panel().update_die_result(die_index, new_result)

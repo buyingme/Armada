@@ -392,11 +392,13 @@ func test_finalize_spends_dial() -> void:
 	assert_eq(int(revealed.get("command", -1)),
 			Constants.CommandType.REPAIR,
 			"Revealed dial should be REPAIR before finalize")
-	resolver.finalize()
+	var result: Dictionary = resolver.finalize()
 	# After finalize, the dial should be spent (no longer revealed).
 	var after: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	assert_true(after.is_empty(),
 			"Dial should be spent after finalize (CM-037)")
+	assert_false(result.has("token_type"),
+			"No token_type when only dial used")
 
 
 func test_finalize_spends_token_only_when_used() -> void:
@@ -410,7 +412,9 @@ func test_finalize_spends_token_only_when_used() -> void:
 	resolver.move_shields("RIGHT", "FRONT")
 	resolver.move_shields("RIGHT", "FRONT")
 	# 4 spent = dial points exactly.
-	resolver.finalize()
+	var result: Dictionary = resolver.finalize()
+	assert_false(result.has("token_type"),
+			"No token_type when only dial points used")
 	assert_true(ship.command_tokens.has_token(Constants.CommandType.REPAIR),
 			"Token should NOT be spent when only dial points used")
 
@@ -426,9 +430,15 @@ func test_finalize_spends_token_when_exceeding_dial() -> void:
 	resolver.move_shields("RIGHT", "FRONT") # 1 pt -> FRONT now 3/3
 	resolver.recover_shields("LEFT") # 2 pts -> LEFT 0→1 (was 0 after moves)
 	# 5 points spent > 4 dial points. Token must be spent.
-	resolver.finalize()
-	assert_false(ship.command_tokens.has_token(Constants.CommandType.REPAIR),
-			"Token should be spent when total exceeds dial points (CM-032)")
+	var result: Dictionary = resolver.finalize()
+	assert_true(result.has("token_type"),
+			"finalize() should report token spend (CM-032)")
+	assert_eq(int(result["token_type"]),
+			int(Constants.CommandType.REPAIR),
+			"Reported token_type should be REPAIR")
+	# Token remains on ship — actual spend is via SpendTokenCommand.
+	assert_true(ship.command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Token still present — spending deferred to command system")
 
 
 func test_finalize_emits_repair_resolved_signal() -> void:
@@ -436,7 +446,7 @@ func test_finalize_emits_repair_resolved_signal() -> void:
 	var deck: DamageDeck = _make_deck()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	watch_signals(EventBus)
-	resolver.finalize()
+	var _result: Dictionary = resolver.finalize()
 	assert_signal_emitted(EventBus, "repair_command_resolved",
 			"Should emit repair_command_resolved on finalize (CM-037)")
 
@@ -448,7 +458,7 @@ func test_unspent_points_are_lost() -> void:
 	# Spend 1 of 4 points.
 	ship.reduce_shields("FRONT", 1)
 	resolver.move_shields("LEFT", "FRONT")
-	resolver.finalize()
+	var _result: Dictionary = resolver.finalize()
 	# No way to reclaim the other 3 points (CM-037).
 	assert_eq(resolver.get_points_spent(), 1,
 			"Only 1 point should have been spent")

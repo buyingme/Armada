@@ -475,11 +475,11 @@ of these:
           │  serialize() ↔ deserialize()                     │
           └────────────────┬──────────────┬─────────────────┘
            execute() ↑     │              │ get_pixel_position()
-          ┌──────────┴─────┘              ↓                  
-          │    GameCommand                Presentation Layer  
-          │    (payload: Dictionary)      (pixels via         
-          │    pos_x/pos_y normalised     GameScale.          
-          │    entity refs by index       play_area_size_px)  
+          ┌──────────┴─────┘              ↓
+          │    GameCommand                Presentation Layer
+          │    (payload: Dictionary)      (pixels via
+          │    pos_x/pos_y normalised     GameScale.
+          │    entity refs by index       play_area_size_px)
           └──────────────────────────────────────────────────
                       ↕
           ┌──────────────────────────────────────────────────┐

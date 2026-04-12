@@ -429,7 +429,9 @@ func _finish_activation() -> void:
 	if _is_command_mode and _command_resolver != null:
 		if _command_resolver.is_done():
 			_log.info("All command activations used — emitting command_done.")
-			_command_resolver.finalize()
+			var token_result: Dictionary = _command_resolver.finalize()
+			if token_result.has("token_type"):
+				GameManager.submit_spend_token(_command_resolver.get_ship(), token_result["token_type"])
 			_is_command_mode = false
 			visible = false
 			command_done.emit()
@@ -448,7 +450,9 @@ func _finish_command_early() -> void:
 	_selected_instance = null
 	_transition_to(State.DONE)
 	if _command_resolver != null:
-		_command_resolver.finalize()
+		var token_result: Dictionary = _command_resolver.finalize()
+		if token_result.has("token_type"):
+			GameManager.submit_spend_token(_command_resolver.get_ship(), token_result["token_type"])
 	_is_command_mode = false
 	visible = false
 	command_done.emit()

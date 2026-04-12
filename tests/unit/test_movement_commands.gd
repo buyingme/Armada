@@ -275,7 +275,7 @@ func test_execute_maneuver_validate_invalid_speed() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
-		"speed": -1,
+		"speed": - 1,
 		"yaw_clicks": [0],
 		"pos_x": 0.5,
 		"pos_y": 0.3,
@@ -385,7 +385,7 @@ func test_execute_maneuver_execute_returns_data() -> void:
 		"yaw_clicks": [0, -1],
 		"pos_x": 0.75,
 		"pos_y": 0.42,
-		"rotation_deg": -17.2,
+		"rotation_deg": - 17.2,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("ship_index", -1), idx,

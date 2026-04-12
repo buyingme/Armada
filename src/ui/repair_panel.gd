@@ -351,7 +351,9 @@ func _on_repair_card(card: DamageCard) -> void:
 func _on_done_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
 	if _resolver:
-		_resolver.finalize()
+		var result: Dictionary = _resolver.finalize()
+		if result.has("token_type"):
+			GameManager.submit_spend_token(_resolver.get_ship(), result["token_type"])
 	close()
 	repair_done.emit()
 

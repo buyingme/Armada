@@ -2319,13 +2319,18 @@ Tests: 2156 (106 scripts, 3829 asserts).
 | 4 | Registration in `CommandProcessor._ready()` (12 types total) | ✅ |
 | 5 | Unit tests — 23 tests covering validate/execute/serialize for both commands + get_squadron helper | ✅ |
 
-**Positional data serialization note:** Position/rotation live at the scene
-level (ShipToken/SquadronToken Node2D), not in core models. Movement commands
-carry coordinates in the **payload** rather than modifying ShipInstance/
-SquadronInstance. On replay, the presentation layer reads the result and
-applies position to the scene node. No core model changes were needed.
+**Positional data in core models:** `ShipInstance` and `SquadronInstance`
+now carry normalised `pos_x`, `pos_y` (0.0–1.0) and `rotation_deg` fields,
+matching the `learning_scenario.json` / `TokenPlacement` coordinate system.
+Movement commands (`ExecuteManeuverCommand`, `MoveSquadronCommand`) write
+final normalised positions to the model in `execute()`. Pixel conversion
+uses `get_pixel_position(play_area_size: Vector2)` with `GameScale.play_area_size_px`
+(Vector2, not single float) for rectangular board support.
 
-Tests: 2179 (107 scripts, 3869 asserts).
+See `.skills/serialization_and_commands.md` §3 for the full position pattern.
+
+**Commit:** `5575840`
+Tests: 2188 (107 scripts, 3895 asserts).
 
 #### G4: Network Transport Layer ⏳
 
@@ -2365,15 +2370,15 @@ Record/playback of serialized command sequences.
 
 #### Phase G Metrics
 
-| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring | After G6 |
-|--------|---------------|----------------------|-----------------|----------|
-| Test scripts | 100 | 104 | 104 | 105 |
-| Tests | 2 032 | 2 098 | 2 098 | 2 124 |
-| Asserts | 3 552 | 3 721 | 3 721 | 3 763 |
-| Autoloads | 11 | 12 (+ CommandProcessor) | 12 | 12 |
-| Command classes | 0 | 7 (1 base + 6 concrete) | 7 | 7 |
-| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) | 6 |
-| Core classes | — | — | — | 8 (+ GameReplay) |
+| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring | After G6 | After G2 T2+T3+Pos |
+|--------|---------------|----------------------|-----------------|----------|---------------------|
+| Test scripts | 100 | 104 | 104 | 105 | 107 |
+| Tests | 2 032 | 2 098 | 2 098 | 2 124 | 2 188 |
+| Asserts | 3 552 | 3 721 | 3 721 | 3 763 | 3 895 |
+| Autoloads | 11 | 12 (+ CommandProcessor) | 12 | 12 | 12 |
+| Command classes | 0 | 7 (1 base + 6 concrete) | 7 | 7 | 13 (1 base + 12 concrete) |
+| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) | 6 | 6 |
+| Core classes | — | — | — | 8 (+ GameReplay) | 8 |
 
 ---
 
@@ -2388,7 +2393,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Effect timing points in movement | Phase 5b | Upgrade card effects on movement |
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
-| GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 6 Tier 1 commands + wiring |
+| GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 12 concrete commands + wiring |
 | Deterministic RNG (GameRng) | Phase G (G5) | Replay determinism, network sync | ✅ Seeded RNG in Dice + DamageDeck |
 | GameReplay file format | Phase G (G6) | Replay persistence, regression testing | ✅ v1 format, save/load, CommandProcessor integration |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |

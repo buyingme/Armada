@@ -552,6 +552,23 @@ func _handle_token_add_result(ship: ShipInstance,
 	return {"token_added": true, "needs_discard": false}
 
 
+## Submits a [SpendTokenCommand] for the given ship + token type.
+## Called by Node-layer code after a resolver's [code]finalize()[/code]
+## returns a [code]{"token_type": int}[/code] result.
+## Emits [signal EventBus.command_tokens_changed] on success.
+## [param ship] — the ship to spend the token from.
+## [param token_type] — [Constants.CommandType] int value.
+func submit_spend_token(ship: ShipInstance, token_type: int) -> void:
+	if not current_game_state:
+		return
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SpendTokenCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "token_type": token_type})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if not result.is_empty():
+		EventBus.command_tokens_changed.emit(ship)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

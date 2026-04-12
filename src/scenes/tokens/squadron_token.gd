@@ -97,7 +97,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			var local_pos: Vector2 = to_local(get_global_mouse_position())
 			if local_pos.length() <= _radius_px:
-				token_clicked.emit(self)
+				token_clicked.emit(self )
 				get_viewport().set_input_as_handled()
 
 

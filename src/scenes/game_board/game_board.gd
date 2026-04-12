@@ -102,10 +102,21 @@ var _maneuver_tool_controller: ManeuverToolController = null
 ## Created in [method _create_range_tool_controller].
 var _range_tool_controller: RangeToolController = null
 
-## Attack executor — owns all attack simulator / execution logic and UI.
+## --- Targeting List state (Phase F5c) ---
+
+## Targeting list controller — owns modal lifecycle and data collection.
+## Created in [method _create_targeting_list_controller].
+var _targeting_list_controller: TargetingListController = null
+
+## Target selector — owns attacker/target selection, visual aids, and the
+## attack sim panel. Used by both the free-form simulator and the attack
+## executor. Created in [method _create_target_selector].
+var _target_selector: TargetSelector = null
+
+## Attack executor — owns the dice / defense / damage execution flow.
 ## Created in [method _create_attack_executor].
 ## SHARED — Created: _create_attack_executor(). Read: ship activation
-## (attack step), attack simulator request, escape handling.
+## (attack step), escape handling.
 ## Write: _create_attack_executor() only. Already extracted as child Node.
 var _attack_executor: AttackExecutor = null
 
@@ -169,9 +180,11 @@ func _ready() -> void:
 	# Wire squadron UI (needs TurnManagementLayer from UIPanelManager).
 	_squadron_phase_controller.create_ui(
 			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)
+	_create_target_selector()
 	_create_attack_executor()
 	_create_maneuver_tool_controller()
 	_create_range_tool_controller()
+	_create_targeting_list_controller()
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
@@ -275,7 +288,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _attack_executor and _attack_executor.handle_escape(event):
 		return
 	# Targeting list: Escape dismisses.
-	if _handle_targeting_list_escape(event):
+	if _targeting_list_controller.handle_escape(event):
 		return
 	# Range overlay: Escape dismisses or cancels selection.
 	if _range_tool_controller.handle_escape(event):
@@ -362,7 +375,8 @@ func _connect_signals() -> void:
 	#endregion
 
 	#region Targeting & attack signals
-	EventBus.targeting_list_requested.connect(_on_targeting_list_requested)
+	EventBus.targeting_list_requested.connect(
+			_targeting_list_controller.on_targeting_list_requested)
 	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
 	#endregion
 
@@ -497,7 +511,7 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
-	if _attack_executor and _attack_executor.handle_ship_click(token):
+	if _target_selector and _target_selector.handle_ship_click(token):
 		return
 	if _range_tool_controller.is_selecting():
 		_range_tool_controller.show_overlay(token)
@@ -516,7 +530,7 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
-	if _attack_executor and _attack_executor.handle_squadron_click(token):
+	if _target_selector and _target_selector.handle_squadron_click(token):
 		return
 	# Phase 7b: route to squadron activation modal.
 	if _squadron_phase_controller \
@@ -1653,147 +1667,34 @@ func _on_range_overlay_requested() -> void:
 		return
 	_range_tool_controller.start_selection()
 
-# ---------------------------------------------------------------------------
-# Targeting List (Phase 5d)
-# ---------------------------------------------------------------------------
 
-## Handles the "Targeting List" button press.
-## Toggle behaviour: if the modal is visible, close it. Otherwise open it.
-## Requirements: TL-UI-001, TL-UI-003, TL-UI-004.
-func _on_targeting_list_requested() -> void:
-	if _panel_mgr.targeting_list_modal and _panel_mgr.targeting_list_modal.visible:
-		_dismiss_targeting_list()
-		return
-	_show_targeting_list()
-
-## Builds the targeting data and opens the modal.
-func _show_targeting_list() -> void:
-	_dismiss_targeting_list()
-	var ships_info: Array = _collect_ship_infos()
-	var squads_info: Array = _collect_squad_infos()
-	var active_player: int = GameManager.get_active_player()
-	var ghost: TargetingListBuilder.ShipInfo = _collect_ghost_info()
-	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
-			ships_info, squads_info, active_player, ghost)
-	# Create the modal on a CanvasLayer so it's always on top.
-	if _panel_mgr.targeting_list_modal == null:
-		_panel_mgr.targeting_list_modal = TargetingListModal.new()
-		# Add on a CanvasLayer for screen-space display.
-		var layer: CanvasLayer = CanvasLayer.new()
-		layer.name = "TargetingListLayer"
-		layer.layer = 90
-		add_child(layer)
-		layer.add_child(_panel_mgr.targeting_list_modal)
-	_panel_mgr.targeting_list_modal.show_results(build_result)
-	_log.info("Targeting list opened.")
-
-## Closes the targeting list modal.
-func _dismiss_targeting_list() -> void:
-	if _panel_mgr.targeting_list_modal:
-		_panel_mgr.targeting_list_modal.close()
-	_log.info("Targeting list dismissed.")
-
-## Checks if an Escape key press should dismiss the targeting list.
-## Returns true if the event was consumed.
-func _handle_targeting_list_escape(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
-		return false
-	if _panel_mgr.targeting_list_modal and _panel_mgr.targeting_list_modal.visible:
-		_dismiss_targeting_list()
-		get_viewport().set_input_as_handled()
-		return true
-	return false
-
-## Collects ShipInfo data from all ship tokens on the board.
-func _collect_ship_infos() -> Array:
-	var infos: Array = []
-	var tokens: Array[ShipToken] = get_ship_tokens()
-	for token: ShipToken in tokens:
-		var info: TargetingListBuilder.ShipInfo = TargetingListBuilder.ShipInfo.new()
-		var inst: ShipInstance = token.get_ship_instance()
-		info.ship_name = token.get_ship_data().ship_name if token.get_ship_data() else "Unknown"
-		info.data_key = inst.data_key if inst else ""
-		info.owner_player = inst.owner_player if inst else 0
-		info.pos = token.global_position
-		info.rot = token.global_rotation
-		info.half_w = token.get_half_width()
-		info.half_l = token.get_half_length()
-		info.arc_pts = token.get_firing_arc_world_points()
-		info.los_pts = token.get_los_origins_world()
-		var sd: ShipData = token.get_ship_data()
-		if sd:
-			info.battery_armament = sd.battery_armament
-			info.anti_squadron_armament = sd.anti_squadron_armament
-		infos.append(info)
-	return infos
-
-## Collects SquadInfo data from all squadron tokens on the board.
-## Requirements: TL-LIST-010.
-func _collect_squad_infos() -> Array:
-	var infos: Array = []
-	var tokens: Array[SquadronToken] = get_squadron_tokens()
-	for token: SquadronToken in tokens:
-		var info: TargetingListBuilder.SquadInfo = TargetingListBuilder.SquadInfo.new()
-		var inst: SquadronInstance = token.get_squadron_instance()
-		if inst and inst.squadron_data:
-			info.squad_name = inst.squadron_data.squadron_name
-			info.battery_armament = inst.squadron_data.battery_armament
-			info.anti_squadron_armament = inst.squadron_data.anti_squadron_armament
-		else:
-			info.squad_name = "Squadron"
-		info.owner_player = inst.owner_player if inst else 0
-		info.pos = token.global_position
-		info.radius = token.get_radius_px()
-		infos.append(info)
-	return infos
-
-## Collects ghost ship info from the maneuver tool if active.
-## Returns null if no ghost is present.
-## Requirements: TL-LIST-004.
-func _collect_ghost_info() -> TargetingListBuilder.ShipInfo:
-	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	if mt_scene == null:
-		return null
-	if not mt_scene.has_method("get_ghost_transform"):
-		return null
-	var ghost_data: Dictionary = mt_scene.get_ghost_transform()
-	if ghost_data.is_empty():
-		return null
-	var info: TargetingListBuilder.ShipInfo = TargetingListBuilder.ShipInfo.new()
-	info.ship_name = ghost_data.get("ship_name", "Ghost")
-	info.data_key = ghost_data.get("data_key", "")
-	info.owner_player = ghost_data.get("owner_player", 0)
-	info.pos = ghost_data.get("position", Vector2.ZERO)
-	info.rot = ghost_data.get("rotation", 0.0)
-	info.half_w = ghost_data.get("half_w", 0.0)
-	info.half_l = ghost_data.get("half_l", 0.0)
-	info.arc_pts = ghost_data.get("arc_pts", {})
-	info.los_pts = ghost_data.get("los_pts", {})
-	info.battery_armament = ghost_data.get("battery_armament", {})
-	info.anti_squadron_armament = ghost_data.get("anti_squadron_armament", {})
-	return info
 
 # ---------------------------------------------------------------------------
 # Attack Executor — Setup & Delegation
 # ---------------------------------------------------------------------------
+
+## Creates the [TargetSelector] child node.
+func _create_target_selector() -> void:
+	_target_selector = TargetSelector.new()
+	_target_selector.name = "TargetSelector"
+	add_child(_target_selector)
+	_target_selector.initialize(
+			get_ship_tokens, get_squadron_tokens,
+			_token_container, _camera, AttackState.new(),
+			AttackDiceResolver.new())
+	_target_selector.dismiss_other_tools_requested.connect(
+			_on_dismiss_other_tools_requested)
 
 ## Creates the [AttackExecutor] child node and wires its signals.
 func _create_attack_executor() -> void:
 	_attack_executor = AttackExecutor.new()
 	_attack_executor.name = "AttackExecutor"
 	add_child(_attack_executor)
-	_attack_executor.initialize(
-			get_ship_tokens, get_squadron_tokens,
-			_token_container, _camera)
+	_attack_executor.initialize(_target_selector, _camera)
 	_attack_executor.attack_exec_completed.connect(
 			_on_attack_exec_completed)
 	_attack_executor.attack_exec_cancelled.connect(
 			_on_attack_exec_cancelled)
-	_attack_executor.dismiss_other_tools_requested.connect(
-			_on_dismiss_other_tools_requested)
 
 ## Creates the [ManeuverToolController] child node.
 func _create_maneuver_tool_controller() -> void:
@@ -1808,6 +1709,15 @@ func _create_range_tool_controller() -> void:
 	_range_tool_controller.name = "RangeToolController"
 	add_child(_range_tool_controller)
 	_range_tool_controller.initialize(_token_container)
+
+## Creates the [TargetingListController] child node.
+func _create_targeting_list_controller() -> void:
+	_targeting_list_controller = TargetingListController.new()
+	_targeting_list_controller.name = "TargetingListController"
+	add_child(_targeting_list_controller)
+	_targeting_list_controller.initialize(
+			get_ship_tokens, get_squadron_tokens,
+			_maneuver_tool_controller, _panel_mgr, self)
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:
@@ -1886,14 +1796,14 @@ func _create_command_phase_controller() -> void:
 ## Delegates the Attack Simulator toolbar / keyboard toggle to the executor.
 ## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005.
 func _on_attack_simulator_requested() -> void:
-	if _attack_executor:
-		_attack_executor.on_simulator_requested()
+	if _target_selector:
+		_target_selector.on_simulator_requested()
 
 ## Called by [signal AttackExecutor.dismiss_other_tools_requested].
 ## Dismisses range overlay, targeting list, and maneuver tool.
 func _on_dismiss_other_tools_requested() -> void:
 	_range_tool_controller.dismiss()
-	_dismiss_targeting_list()
+	_targeting_list_controller.dismiss()
 	_dismiss_maneuver_tool_with_preview()
 
 ## Returns true if the given ship token has a revealed Repair dial

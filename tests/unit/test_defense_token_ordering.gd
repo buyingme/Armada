@@ -34,7 +34,7 @@ func _setup_tokens(token_names: Array) -> void:
 	_ship_instance = ShipInstance.create_from_data(
 			"test_def", _ship_data, 2, 0)
 	_ship_token._ship_instance = _ship_instance
-	_executor._attack_sim_def_ship = _ship_token
+	_executor._state.defender_ship = _ship_token
 
 
 # =========================================================================
@@ -164,7 +164,7 @@ func test_sort_subset_of_tokens() -> void:
 
 func test_sort_null_defender_returns_original() -> void:
 	## When no defender ship is set, sorting should return original order.
-	_executor._attack_sim_def_ship = null
+	_executor._state.defender_ship = null
 	var input: Array[int] = [1, 0]
 	var result: Array[int] = _executor._sort_defense_tokens_canonical(input)
 	assert_eq(result[0], 1, "Without defender, order should be unchanged")
@@ -178,42 +178,42 @@ func test_sort_null_defender_returns_original() -> void:
 func test_brace_halves_even_damage() -> void:
 	## 4 damage → Brace → 2.
 	_setup_tokens(["Brace"])
-	_executor._attack_exec_modified_damage = 4
+	_executor._state.modified_damage = 4
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._attack_exec_modified_damage, 2,
+	assert_eq(_executor._state.modified_damage, 2,
 			"Brace should halve 4 damage to 2")
-	assert_true(_executor._attack_exec_brace_used,
+	assert_true(_executor._state.brace_used,
 			"Brace used flag should be set")
 
 
 func test_brace_halves_odd_damage_rounds_up() -> void:
 	## 5 damage → Brace → 3 (ceil(2.5)).
 	_setup_tokens(["Brace"])
-	_executor._attack_exec_modified_damage = 5
+	_executor._state.modified_damage = 5
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._attack_exec_modified_damage, 3,
+	assert_eq(_executor._state.modified_damage, 3,
 			"Brace should halve 5 damage to 3 (rounded up)")
 
 
 func test_brace_on_one_damage() -> void:
 	## 1 damage → Brace → 1 (ceil(0.5)).
 	_setup_tokens(["Brace"])
-	_executor._attack_exec_modified_damage = 1
+	_executor._state.modified_damage = 1
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._attack_exec_modified_damage, 1,
+	assert_eq(_executor._state.modified_damage, 1,
 			"Brace should halve 1 damage to 1 (rounded up)")
 
 
 func test_brace_on_zero_damage() -> void:
 	## 0 damage → Brace → 0.
 	_setup_tokens(["Brace"])
-	_executor._attack_exec_modified_damage = 0
+	_executor._state.modified_damage = 0
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._attack_exec_modified_damage, 0,
+	assert_eq(_executor._state.modified_damage, 0,
 			"Brace on 0 damage should remain 0")
 
 
@@ -221,11 +221,11 @@ func test_brace_then_redirect_sees_halved_total() -> void:
 	## Bug reproduction: 4 damage, Brace + Redirect.
 	## Brace should halve to 2 first; Redirect operates on 2.
 	_setup_tokens(["Brace", "Redirect"])
-	_executor._attack_exec_modified_damage = 4
+	_executor._state.modified_damage = 4
 	# Apply Brace first (canonical order).
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._attack_exec_modified_damage, 2,
+	assert_eq(_executor._state.modified_damage, 2,
 			"After Brace, damage should be 2")
 	# The Redirect would now operate on 2, not 4.
 	# (Redirect itself is interactive, so we just verify the starting total.)
@@ -236,16 +236,16 @@ func test_resolve_damage_no_deferred_brace() -> void:
 	## Set brace_used flag and a known damage total — damage should pass
 	## through unchanged.
 	_setup_tokens(["Brace"])
-	_executor._attack_exec_modified_damage = 3
-	_executor._attack_exec_brace_used = true
-	_executor._attack_exec_scatter_used = false
+	_executor._state.modified_damage = 3
+	_executor._state.brace_used = true
+	_executor._state.scatter_used = false
 	# We can't call _attack_exec_resolve_damage directly because it
 	# requires a defender and spawns timers. Instead, verify the logic
-	# path: final_damage = _attack_exec_modified_damage (no halving).
-	var final_damage: int = _executor._attack_exec_modified_damage
-	if _executor._attack_exec_scatter_used:
+	# path: final_damage = _state.modified_damage (no halving).
+	var final_damage: int = _executor._state.modified_damage
+	if _executor._state.scatter_used:
 		final_damage = 0
 	# The old code would have done: final_damage = ceili(final_damage/2.0)
-	# if _attack_exec_brace_used. That code has been removed.
+	# if _state.brace_used. That code has been removed.
 	assert_eq(final_damage, 3,
 			"Damage should not be re-halved in resolve step")

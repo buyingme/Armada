@@ -7,8 +7,8 @@
 > **Approach:** Bottom-up, incremental, zero-to-low risk per phase.
 > Each phase is independently shippable and leaves the test suite green.
 >
-> **Status:** Phase H complete — A1 ✅, A2 ✅, A3 ✅, A4 ✅, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b ✅, F4c ✅, F4d ✅, H1–H6 ✅.
-> **Baseline:** 99 scripts, 1 994 tests, 3 428 asserts — all passing.
+> **Status:** F5d complete — A1 ✅, A2 ✅, A3 ✅, A4 ✅, B1–B4 ✅, C1 ✅, C2 ✅, C3 ✅, C4 ✅, C5 ✅, C6 ✅, C7 ✅, D1 ✅, D2 ✅, D3 ✅, E1–E6 ✅, F1 ✅, F2 ✅ (C7), F3 ✅, F4a ✅, F4b ✅, F4c ✅, F4d ✅, H1–H6 ✅, F5a ✅, F5b ✅, F5c ✅, F5d ✅.
+> **Baseline:** 100 scripts, 2 032 tests, 3 552 asserts — all passing.
 
 ---
 
@@ -535,8 +535,8 @@ Activation / Maneuver Execution.
 ### Phase F — Extract Backbone & ActivationContext
 
 > **Risk: Medium** — Requires shared-state abstraction. Do after A–E.
-> **Status: In progress** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
-> F3 ✅ (`8334d06`), F4a ✅, F4b ✅, F4c ✅, F4d ✅ (incremental computation extraction complete).
+> **Status: Complete** — F1 ✅ (`ad61b51`), F2 ✅ (done in C7),
+> F3 ✅ (`8334d06`), F4a ✅, F4b ✅, F4c ✅, F4d ✅, F5a ✅, F5b ✅, F5c ✅, F5d ✅.
 
 After Phases A–E, `game_board.gd` still held ACTIVATION, SQUADRON_PHASE,
 and UI_PANELS (~1 800 lines, still above the 500-line industry target).
@@ -772,20 +772,39 @@ node-bound.
 
 #### F Expected Outcome (Actual + Projected)
 
-| Metric | Before F | After F1–F3 | After F4a–b | After F4c | After F4d |
-|--------|----------|-------------|-------------|-----------|----------|
-| `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 | 2 207 |
-| `attack_executor.gd` lines | ~3 285 | 3 285 | 2 930 | 2 853 | 2 852 |
-| God objects (>1 000 lines) | 2 | 2 | 2 | 2 | 2 |
-| Controllers / managers | 7 | 9 | 11 | 12 | 13 |
-| Testable RefCounted classes | — | +2 | +4 | +5 | +6 |
+| Metric | Before F | After F1–F3 | After F4a–b | After F4c | After F4d | After F5 |
+|--------|----------|-------------|-------------|-----------|----------|----------|
+| `game_board.gd` lines | ~2 800 | 2 207 | 2 207 | 2 207 | 2 207 | 2 130 |
+| `attack_executor.gd` lines | ~3 285 | 3 285 | 2 930 | 2 853 | 2 852 | 1 883 |
+| God objects (>1 000 lines) | 2 | 2 | 2 | 2 | 2 | 2 |
+| Controllers / managers | 7 | 9 | 11 | 12 | 13 | 16 |
+| Testable RefCounted classes | — | +2 | +4 | +5 | +6 | +7 |
 
-`attack_executor.gd` at 2 852 lines is the irreducible orchestration
-layer — panel wiring, signal handlers, and state transitions that are
-inherently Node-bound. The complex game-rules logic is now in testable
-RefCounted classes. Phase F5 plans further decomposition of the
-orchestration layer into `AttackState`, `AttackSimulator`, and
-`TargetingListController`.
+#### Phase F Summary
+
+Phase F is **complete**. Across 15 sub-steps (F1–F3, F4a–d, F5a–d) the
+two god objects were decomposed into focused, testable components:
+
+| Class | Type | Lines | Location | Created In |
+|-------|------|-------|----------|------------|
+| `ActivationContext` | RefCounted | 60 | `src/core/` | F1 |
+| `SquadronPhaseController` | Node | ~310 | `src/scenes/game_board/` | C7/F2 |
+| `UIPanelManager` | Node | 435 | `src/scenes/game_board/` | F3 |
+| `CombatParticipants` | RefCounted | 50 | `src/core/` | F4a |
+| `AttackTargetResolver` | RefCounted | ~370 | `src/core/` | F4a |
+| `AttackDiceResolver` | RefCounted | 259 | `src/core/` | F4b |
+| `DefenseTokenResolver` | RefCounted | 341 | `src/core/` | F4c |
+| `DamageDealer` | RefCounted | 220 | `src/core/` | F4d |
+| `AttackState` | RefCounted | 237 | `src/core/` | F5a |
+| `TargetingListController` | Node | 184 | `src/scenes/game_board/` | F5c |
+| `TargetSelector` | Node | 959 | `src/scenes/game_board/` | F5d |
+
+**Net impact:**
+- `game_board.gd`: 3 390 → 2 130 lines (−1 260, −37%)
+- `attack_executor.gd`: 3 285 → 1 883 lines (−1 402, −43%)
+- 11 new classes, 7 testable RefCounted resolvers
+- Test suite: 100 scripts, 2 032 tests, 3 552 asserts — 0 failures
+- All manual tests (MT-F5b.01–03, MT-F5c.01–02, MT-F5d.01–03) passed
 
 ---
 
@@ -918,7 +937,7 @@ automated regression testing of full game sequences.
 > **Risk: Low** — Replaces inline geometry approximations with calls to
 > existing canonical `RangeFinder` API. No new public APIs except a
 > widened factory signature in H4.
-> **Status: Complete** — H1–H6 ✅.
+> **Status: Complete** — H1–H6 ✅. Manual tests passed 2026-04-11.
 
 The playtest audit (Bug I) revealed 6 non-compliant locations where range
 and distance calculations reimplemented `RangeFinder` logic locally, plus
@@ -1015,13 +1034,16 @@ case corrected.
 **Test suite:** 99 scripts, 1 994 tests, 3 428 asserts — 0 failures.
 (−2 scripts, −22 tests vs. pre-H baseline due to deleted dead-code tests.)
 
+**Manual tests:** MT-H.01, MT-H.02, MT-H.03 — all passed 2026-04-11.
+
 ---
 
 ### Phase F5 — AttackExecutor Orchestration Split
 
 > **Risk: Medium** — Significant structural change following the proven
 > ActivationContext (F1) + C7 extraction pattern. Planned after Phase H.
-> **Status: Not started.**
+> **Status: F5a–F5d complete** — AttackState, TargetingListController,
+> TargetSelector extracted and wired.
 
 AE is 2 933 lines / 138 functions / 62 member vars. F4a–d extracted the
 pure computation (AttackTargetResolver, AttackDiceResolver,
@@ -1044,34 +1066,135 @@ distinct responsibilities.
 | Damage (6c-3) | ~302 | Damage resolution |
 | Immediate Effects (10a) | ~396 | Damage card choice modals |
 
-#### F5a: Create `AttackState` (~120 lines)
+#### F5a: Create `AttackState` (~120 lines) ✅
 
-New `src/core/attack_state.gd` (RefCounted) holding all attack-flow
-member variables. Same pattern as ActivationContext (F1).
+New `src/core/attack_state.gd` (RefCounted, 237 lines) holding 37
+attack-flow member variables grouped into 7 sections (execution mode,
+attacker/defender identity, attack tracking, dice, CF, accuracy/defense,
+deferred damage). Provides 4 query helpers (`is_exec_active`,
+`is_squad_attack`, `has_attacker`, `has_defender`) and 6 lifecycle methods
+(`clear_attacker`, `clear_defender`, `reset_dice`, `reset_deferred_damage`,
+`reset_for_next_attack`, `clear_all`). 38 unit tests in
+`test_attack_state.gd` — same ActivationContext (F1) pattern.
 
-#### F5b: Migrate AE Members to `AttackState`
+#### F5b: Migrate AE Members to `AttackState` ✅
 
-Replace ~30 member variables in AE with reads/writes to
-`_state: AttackState`. Done in 3–4 incremental edits per variable cluster.
+Replaced 40 member variables in AE with reads/writes to
+`_state: AttackState` (453 rename operations across attack_executor.gd).
+Removed 147 lines of declarations and doc comments. Rewrote 6 reset
+methods to delegate to `_state` lifecycle:
+- `_reset_exec_state()` → `_state.clear_all()`
+- `_reset_deferred_damage_state()` → `_state.reset_deferred_damage()`
+- `_attack_sim_clear_attacker_state()` → `_state.clear_attacker()`
+- `_attack_sim_clear_target_state()` → `_state.clear_defender()`
+- `_attack_exec_reset_dice_ui()` → `_state.reset_dice()` + UI hide
+- `_reset_for_next_attack()` → `_state.reset_for_next_attack()` + UI
+Also updated 18 references in `test_defense_token_ordering.gd`.
+AE reduced from 2 938 → 2 594 lines (−344).
+Manual tests MT-F5b.01–03 passed 2026-04-11. Game log clean (0 errors, 0 warnings).
 
-#### F5c: Extract `TargetingListController` (~200 lines)
+#### F5c: Extract `TargetingListController` (~200 lines) — ✅ Complete
 
-New `src/scenes/game_board/targeting_list_controller.gd` (extends Node).
+New `src/scenes/game_board/targeting_list_controller.gd` (184 lines, extends Node).
 Owns targeting list modal lifecycle + `TargetingListBuilder` integration.
 
-#### F5d: Extract `AttackSimulator` (~600 lines)
+**Steps performed:**
+1. Created `targeting_list_controller.gd` with public API:
+   - `initialize()` — receives callables + controller/manager refs
+   - `on_targeting_list_requested()` — toggle handler (replaces `_on_targeting_list_requested`)
+   - `dismiss()` — close modal (replaces `_dismiss_targeting_list`)
+   - `handle_escape()` — Escape key consumption (replaces `_handle_targeting_list_escape`)
+2. Moved private helpers: `_show_targeting_list`, `_collect_ship_infos`, `_collect_squad_infos`, `_collect_ghost_info`
+3. Wired in `game_board.gd`: new member + factory + signal delegation
+4. Removed 7 methods (~105 lines) from game_board.gd
 
-New `src/scenes/game_board/attack_simulator.gd` (extends Node).
-Owns Attacker Selection (173 lines) + Target Selection (419 lines).
+game_board.gd reduced from 2 221 → 2 116 lines (−105).
+Baseline: 100 scripts, 2 032 tests, 3 552 asserts — 0 failures.
+Manual tests MT-F5c.01–02 passed 2026-04-11. Game log clean (0 errors, 0 warnings).
+
+#### F5d: Extract `TargetSelector` (~636 lines) — Option B ✅
+
+New `src/scenes/game_board/target_selector.gd` (959 lines, extends Node).
+Owns the entire attacker/target selection pipeline shared by both the
+free-form attack simulator and the real attack execution.
+
+**Implementation completed:**
+1. Created `target_selector.gd` with 43 methods (16 public, 27 private).
+2. Moved all selection, validation, LOS/range, and visual-aid code from AE.
+3. Divergence via `target_locked(range_band, dice_text)` signal — AE
+   connects and begins the dice sequence in exec mode.
+4. AE slimmed from 2 594 → 1 883 lines (−711).
+5. game_board.gd updated: new `_target_selector` member + factory +
+   click/sim/escape routing through TS.
+6. Null-safe `_get_panel()` / `_get_overlay()` helpers on AE for tests
+   that create AE without TS.
+7. UID generated, 100 scripts / 2 032 tests / 3 552 asserts — 0 failures.
+
+New `src/scenes/game_board/target_selector.gd` (extends Node).
+Owns the entire attacker/target selection pipeline shared by both the
+free-form attack simulator and the real attack execution:
+
+**Scope (methods moving from AE → TargetSelector):**
+
+*SIM-ONLY entry points (56 lines):*
+- `on_simulator_requested()` — toolbar/keyboard toggle
+- `_activate_attack_sim()` — creates panel, enters selection mode
+- `_attack_sim_handle_squadron_click()` — squadron-as-attacker (sim only)
+
+*Shared selection + validation + visuals (~580 lines):*
+- `_ensure_attack_sim_panel()` — lazy-create AttackSimPanel
+- `handle_ship_click()` / `handle_squadron_click()` — click routing
+- `handle_escape()` — Escape key consumption
+- `dismiss()` — teardown UI
+- `is_active()`, `is_selecting()`, `is_target_selecting()`, `is_in_exec_mode()`
+- `_attack_sim_clear_attacker_state()` / `_attack_sim_clear_target_state()`
+- `_build_current_participants()`
+- `_attack_sim_handle_ship_click()` — attacker ship click (with exec guards)
+- `_select_attacker_ship_zone()` — stores attacker, transitions to target mode
+- `_attack_sim_show_hull_zone_visuals()` — range overlay + arc overlay
+- `_clear_attack_sim_overlays()`
+- `_attack_sim_show_squadron_visuals()` — close-range circle
+- `_attack_sim_handle_target_ship_click()` — target ship click
+- `_validate_target_ship_click()` — comprehensive target validation
+- `_reject_target()`
+- `_is_squad_attacker_engaged_fresh()`, `_build_squadron_positions()`
+- `_get_attacker_faction()`
+- `_attack_sim_handle_target_squadron_click()` — target squadron click
+- `_validate_target_squadron_click()`
+- `_reject_already_attacked_squad()`
+- `_attack_sim_deselect_target()` / `_attack_sim_deselect_both()`
+- `_attack_sim_compute_and_show_los()` — LOS + range computation
+- `_update_los_overlay_and_panel()` — visual update; **divergence hook**
+- `_build_obstruction_bodies()`
+- `_compute_attack_dice_text()` — dice preview text
+
+**Divergence mechanism:** TargetSelector emits a signal
+`target_locked(range_band: int)` when a valid target is selected.
+In exec mode, AE connects to this signal and begins the dice sequence.
+In sim mode, nothing connects — the panel just shows the preview info.
+
+**Member variables moving to TargetSelector:**
+- `_attack_sim_selecting`, `_attack_sim_target_selecting` (selection flags)
+- `_attack_sim_panel`, `_attack_sim_overlay`, `_attack_sim_range_overlay` (UI)
+- `_target_resolver` (LOS/range)
+
+**Shared refs (injected via initialize):**
+- `_state: AttackState` (passed by reference)
+- `_get_ship_tokens`, `_get_squad_tokens` (callables)
+- `_token_container`, `_camera` (node refs)
+
+**AE keeps:** dice → defense → damage → finalize (~1760 lines), plus
+`start_ship_attack`, `start_squadron_attack`, exec state management,
+and the signal connection to `target_locked`.
 
 #### F5 Expected Outcome
 
 | Step | New class | AE lines after | Risk |
 |------|-----------|----------------|------|
 | F5a | `AttackState` | 2 933 (no change) | Low |
-| F5b | — (internal refactor) | ~2 870 | Medium |
-| F5c | `TargetingListController` | ~2 670 | Low-Med |
-| F5d | `AttackSimulator` | ~2 070 | Medium |
+| F5b | — (internal refactor) | ~2 594 | Medium |
+| F5c | `TargetingListController` | ~2 116 (GB) | Low-Med |
+| F5d | `TargetSelector` | ~1 883 (AE) | Medium |
 
 ---
 
@@ -1099,7 +1222,7 @@ Phase F5 further reduces AE size, easing future work.
 | Metric | Current | After A | After C | After F1–3 | After F4a–d | After H | After F5 | After G | Industry Std |
 |--------|---------|---------|---------|------------|-------------|---------|---------|---------|-------------|
 | Functions >30 lines | 95 | **0** | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | 2 852 | 2 933 (AE) | ~2 070 | ~500 | <500 |
+| Max file lines | 3 390 | 3 390 | ~2 800 | 3 285 (AE) | 2 852 | 2 933 (AE) | ~2 130 | ~500 | <500 |
 | God objects (>1 000 LOC) | 4 | 4 | 2 | 2 | 2 | 2 | 2 | 1 | 0 |
 | Serializable game classes | 6/11 | 6/11 | 6/11 | **11/11** | 11/11 | 11/11 | 11/11 | 11/11 | 11/11 |
 | Testable RefCounted resolvers | 0 | 0 | 0 | 2 | 6 | 6 | 7 | 7+ | — |
@@ -1140,15 +1263,15 @@ Cross-reference with `docs/arc42/11_risks_and_technical_debt.md`:
 |-------|-------------|-------------|
 | TD-4 | Functions exceeding 30-line guideline | **Phase A** ✅ |
 | TD-7 | `game_board.gd` God Object (3 390 → 2 207 lines) | **Phases C + F** ✅ (partial — F4 deferred) |
-| TD-8 | `attack_executor.gd` God Object (2 933 lines) | **Phase A** ✅ (functions shrunk). **F4a–d** ✅ (computation extraction). **F5** planned (orchestration split). |
+| TD-8 | `attack_executor.gd` God Object (3 285 → 1 883 lines) | **Phase A** ✅ (functions shrunk). **F4a–d** ✅ (computation extraction). **F5a–d** ✅ (orchestration split: AttackState + TargetingListController + TargetSelector). |
 | TD-9 | `ship_card_panel.gd` oversized (1 407 lines) | **Phase D3** ✅ (877 lines) |
 | TD-10 | `attack_sim_panel.gd` monolithic `_build_ui()` | **Phase A1 + D1** ✅ |
 | TD-11 | Missing serialization on ShipInstance/SquadronInstance | **Phase E** ✅ |
 | TD-12 | 64 EventBus signals — spaghetti risk | **Phase E6** ✅ |
-| R-6 | God-object files resist extension | **Phases A–F** ✅ (partial — AE remains, F5 planned) |
+| R-6 | God-object files resist extension | **Phases A–F** ✅ (GB −37%, AE −43%). |
 | TD-13 | Non-compliant targeting geometry (6 locations) | **Phase H** ✅ |
 | TD-14 | Dead-code targeting files (`RangeMeasurer`, `FiringArc`) | **Phase H2** ✅ |
 
 ---
 
-*Document created: 2026-04-04. Last updated: 2026-04-11.*
+*Document created: 2026-04-04. Last updated: 2026-04-12.*

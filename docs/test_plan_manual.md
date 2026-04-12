@@ -5016,6 +5016,8 @@ on their own, and do not interfere with gameplay clicks.
 > Phase H replaced inline geometry approximations with canonical
 > `RangeFinder` calls and removed dead code. These tests verify that
 > range-dependent gameplay behaviour remains correct.
+>
+> **Status: All passed** — 2026-04-11.
 
 ### MT-H.01 — Squadron Command Range (H4)
 
@@ -5028,6 +5030,8 @@ on their own, and do not interfere with gameplay clicks.
 
 **Pass criteria:** Squadron command eligibility uses accurate hull-zone polyline range, not circle approximation. Eligible list matches expectations from ruler overlays.
 
+**Result: PASS** (2026-04-11)
+
 ### MT-H.02 — Squadron Phase Engagement Check (H3)
 
 | Step | Action | Expected |
@@ -5038,6 +5042,8 @@ on their own, and do not interfere with gameplay clicks.
 
 **Pass criteria:** Engagement detection matches ruler distance 1 visually; no false positives or negatives.
 
+**Result: PASS** (2026-04-11)
+
 ### MT-H.03 — Squadron Attack Targeting (H5)
 
 | Step | Action | Expected |
@@ -5047,3 +5053,120 @@ on their own, and do not interfere with gameplay clicks.
 | 3 | Position two enemy squadrons within distance 1 | They can attack each other |
 
 **Pass criteria:** Targeting list correctly reflects close-only range for squadron→ship and distance-1 for squadron→squadron.
+
+**Result: PASS** (2026-04-11)
+---
+
+## Phase F5 — AttackExecutor Orchestration Split
+
+> F5a created `AttackState`; F5b migrated 40 member variables from AE
+> into that shared context. These tests verify that all attack flows
+> still work correctly after the internal restructuring.
+>
+> **Status: F5b passed** — 2026-04-11. F5c passed — 2026-04-11. F5d passed — 2026-04-12.
+
+### MT-F5b.01 — Ship Attack Full Flow
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship → enter Attack step | Hull zone selection appears |
+| 2 | Select a hull zone → select a target | Dice pool shown, roll button active |
+| 3 | Roll dice → spend accuracy/defense tokens → resolve damage | Damage applied correctly |
+| 4 | Choose a second hull zone → complete second attack | Flow completes without error |
+
+**Pass criteria:** Full two-attack activation completes. No errors in log.
+
+**Result: PASS** (2026-04-11)
+
+### MT-F5b.02 — Squadron Attack
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Enter Squadron Phase → activate a squadron | Attack option available |
+| 2 | Attack an enemy squadron or ship | Dice roll → damage → resolution completes |
+
+**Pass criteria:** Squadron attack flow works identically to pre-F5b.
+
+**Result: PASS** (2026-04-11)
+
+### MT-F5b.03 — Attack Simulator
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open attack simulator (free-form, not from activation) | Attacker selection mode |
+| 2 | Select attacker hull zone → select target | Info panel shows correct names/zones |
+| 3 | Dismiss simulator | All state cleaned up, no lingering UI |
+
+**Pass criteria:** Simulator displays correct attacker/defender info. Clean dismiss.
+
+**Result: PASS** (2026-04-11)
+
+### MT-F5c.01 — Targeting List Toggle
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Press T (or toolbar button) | Targeting list modal opens with ship/squadron data |
+| 2 | Press T again | Modal closes |
+| 3 | Open modal, press Escape | Modal closes |
+
+**Pass criteria:** Toggle and Escape dismissal work identically to pre-F5c.
+
+**Result: PASS** (2026-04-11)
+
+### MT-F5c.02 — Ghost Ship in Targeting List
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Select a ship's maneuver tool (M) | Maneuver tool visible |
+| 2 | Press T to open targeting list | Ghost entry appears in targeting data |
+
+**Pass criteria:** Ghost ship projection shows in targeting list when maneuver tool is active.
+
+**Result: PASS** (2026-04-11)
+
+> F5d extracted `TargetSelector` from `AttackExecutor`. All attacker/target
+> selection logic (simulator and exec) now lives in TS. AE delegates to TS
+> via `_target_selector` and receives a `target_locked` signal when a valid
+> target is confirmed then diverges into the dice sequence.
+>
+> **Status: F5d passed** — 2026-04-12.
+
+### MT-F5d.01 — Attack Simulator via TargetSelector
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open attack simulator (Q or toolbar) | Attacker selection mode (panel + arcs visible) |
+| 2 | Click a friendly ship → select hull zone | Arc highlight + range overlay shown |
+| 3 | Click an enemy ship in range | Target locks; dice pool text shown in panel |
+| 4 | Press Escape | Simulator dismissed, all overlays cleared |
+| 5 | Re-open simulator → select same attacker/target | Same result; no stale state from step 4 |
+
+**Pass criteria:** Simulator completes full select → lock → dismiss cycle twice without errors.
+
+**Result: PASS** (2026-04-12)
+
+### MT-F5d.02 — Ship Attack Execution (Activation)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Activate a ship → enter Attack step | Hull zone chooser appears |
+| 2 | Select a hull zone → click an enemy in range | Target locks; dice auto-roll proceeds |
+| 3 | Resolve the full attack (spend tokens, deal damage) | Damage applied; attack complete modal shown |
+| 4 | Select a second hull zone → attack again | Second attack completes normally |
+| 5 | Press Escape mid-target-selection | Returns to hull zone chooser (not full cancel) |
+
+**Pass criteria:** Full two-attack activation with interrupt test. No errors in log.
+
+**Result: PASS** (2026-04-12)
+
+### MT-F5d.03 — Squadron Attack Execution
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Squadron Phase → activate a squadron | Attack option available |
+| 2 | Click an enemy squadron/ship in range | Target locks; dice roll → resolve → damage |
+| 3 | If multi-target squadron, second target prompt appears | Second attack resolves correctly |
+
+**Pass criteria:** Squadron attack works identically to pre-F5d.
+
+**Result: PASS** (2026-04-12)

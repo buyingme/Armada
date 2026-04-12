@@ -1,14 +1,15 @@
 ## AttackExecutor
 ##
-## Manages all attack simulator and attack execution logic, extracted from
-## GameBoard to reduce file size and improve separation of concerns.
+## Manages the attack execution flow from ship/squadron activation
+## (Phases 6b/6c): dice rolling, defense tokens, damage resolution.
 ##
-## Handles both the free-form attack simulator (Phase 6a) and the attack
-## execution flow from ship activation (Phases 6b/6c). Owns the
-## AttackSimPanel, AttackSimOverlay, and associated visual aids.
+## Target selection (attacker, hull zone, target) is delegated to
+## [TargetSelector], which emits [signal TargetSelector.target_locked]
+## when a valid target is confirmed. AE connects to that signal and
+## begins the dice sequence.
 ##
-## Requirements: AS-*, AE-*, AT-001–007.
-## Rules Reference: "Attack", Steps 1–6, pp.2–3.
+## Requirements: AE-*, AT-001–007.
+## Rules Reference: "Attack", Steps 2–6, pp.2–3.
 class_name AttackExecutor
 extends Node
 
@@ -16,6 +17,13 @@ extends Node
 ## STATIC_CALLED_ON_INSTANCE warnings (Constants is an autoload instance).
 const ConstantsScript := preload("res://src/autoload/constants.gd")
 
+## Hull-zone index → display name mapping.
+const _ZONE_NAMES: Dictionary = {
+	Constants.HullZone.FRONT: "FRONT",
+	Constants.HullZone.LEFT: "LEFT",
+	Constants.HullZone.RIGHT: "RIGHT",
+	Constants.HullZone.REAR: "REAR",
+}
 
 ## Emitted when the attack execution step is fully complete.
 ## GameBoard should advance the activation state and reopen the modal.
@@ -25,68 +33,9 @@ signal attack_exec_completed
 ## GameBoard should reopen the activation modal without advancing.
 signal attack_exec_cancelled
 
-## Emitted when the executor needs GameBoard to dismiss other tools
-## (range overlay, targeting list, maneuver tool) before activating.
-signal dismiss_other_tools_requested
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-## Maps Constants.HullZone values to their firing-arc boundary key pairs.
-## Each entry has "inner_a"/"outer_a" (left boundary) and
-## "inner_b"/"outer_b" (right boundary).
-const _ATTACK_SIM_ARC_KEYS: Dictionary = {
-	Constants.HullZone.FRONT: {
-		"inner_a": "inner_point_front_left",
-		"outer_a": "outer_point_front_left",
-		"inner_b": "inner_point_front_right",
-		"outer_b": "outer_point_front_right",
-	},
-	Constants.HullZone.LEFT: {
-		"inner_a": "inner_point_front_left",
-		"outer_a": "outer_point_front_left",
-		"inner_b": "inner_point_rear_left",
-		"outer_b": "outer_point_rear_left",
-	},
-	Constants.HullZone.RIGHT: {
-		"inner_a": "inner_point_front_right",
-		"outer_a": "outer_point_front_right",
-		"inner_b": "inner_point_rear_right",
-		"outer_b": "outer_point_rear_right",
-	},
-	Constants.HullZone.REAR: {
-		"inner_a": "inner_point_rear_left",
-		"outer_a": "outer_point_rear_left",
-		"inner_b": "inner_point_rear_right",
-		"outer_b": "outer_point_rear_right",
-	},
-}
-
-## Human-readable zone names for logging and panel display.
-const _ZONE_NAMES: Dictionary = {
-	Constants.HullZone.FRONT: "FRONT",
-	Constants.HullZone.LEFT: "LEFT",
-	Constants.HullZone.RIGHT: "RIGHT",
-	Constants.HullZone.REAR: "REAR",
-}
-
-
 # ---------------------------------------------------------------------------
 # External references (set via initialize)
 # ---------------------------------------------------------------------------
-
-## Callable that returns Array[ShipToken] — injected by GameBoard.
-## Replaces the former _board: Node2D reference to avoid a circular
-## class_name dependency and allow isolated testing.
-var _get_ship_tokens: Callable
-
-## Callable that returns Array[SquadronToken] — injected by GameBoard.
-var _get_squadron_tokens: Callable
-
-## Container for all token nodes (for adding overlays).
-var _token_container: Node2D = null
 
 ## Camera node reference (for perspective rotation during defense step).
 var _camera: BoardCamera = null
@@ -112,32 +61,15 @@ var _pending_immediate_ship: ShipInstance = null
 ## Pending choice descriptor for the deferred immediate effect.
 var _pending_immediate_choice: Dictionary = {}
 
-## True when the DamageSummaryOverlay is visible and we are waiting for the
-## player to dismiss it before resolving immediate card effects.
-var _awaiting_damage_summary: bool = false
-
-## Faceup card whose immediate effect is deferred until the summary overlay
-## is dismissed.  At most one per attack (the first card dealt faceup).
-var _deferred_immediate_card: DamageCard = null
-
-## Ship instance associated with [member _deferred_immediate_card].
-var _deferred_immediate_ship: ShipInstance = null
-
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("AttackExecutor")
 
-## Pure-geometry resolver for targeting, LOS, range, and target availability.
-## Constructed in [method initialize] with scene-tree callables.
-var _target_resolver: AttackTargetResolver = null
-
 ## Pure-computation resolver for armament, dice pools, CF detection,
 ## obstruction removal, damage calculation, and damage-card blocking.
-## Constructed in [method initialize].
 var _dice_resolver: AttackDiceResolver = null
 
 ## Pure-computation resolver for defense token spending, token effects,
 ## canonical sorting, redirect checks, and faceup card determination.
-## Constructed in [method initialize].
 var _defense_resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 
 ## Pure-computation helper for damage resolution: shield absorption,
@@ -145,229 +77,75 @@ var _defense_resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 ## decisions.
 var _damage_dealer: DamageDealer = DamageDealer.new()
 
+## Shared mutable state for the current attack flow.
+## Holds attacker/defender identity, dice, defense, and tracking fields.
+## Defaults to a fresh instance (for tests); overwritten by [method initialize]
+## with the shared state from [TargetSelector].
+var _state: AttackState = AttackState.new()
+
+## Target selector — owns attacker/target selection, visual aids, and
+## the AttackSimPanel. Created and wired in [method initialize].
+var _target_selector: TargetSelector = null
 
 # ---------------------------------------------------------------------------
-# Attack Simulator state (Phase 6a / 6a-2)
+# Null-safe accessors for TargetSelector sub-objects
 # ---------------------------------------------------------------------------
 
-## Whether we are in "select attacker" mode.
-var _attack_sim_selecting: bool = false
-
-## Whether we are in "select target" mode (attacker already chosen).
-## Requirements: AS-TGT-001, AS-TGT-010.
-var _attack_sim_target_selecting: bool = false
-
-## Attack simulator info panel (null when not displayed).
-var _attack_sim_panel: AttackSimPanel = null
-
-## Attack simulator visual-aid overlay (null when not displayed).
-var _attack_sim_overlay: AttackSimOverlay = null
-
-## Range overlay shown as part of the attack simulator.
-var _attack_sim_range_overlay: RangeOverlayScene = null
+## Returns the shared attack panel, or null if TargetSelector is absent.
+func _get_panel() -> AttackSimPanel:
+	if _target_selector:
+		return _target_selector.get_panel()
+	return null
 
 
-# ---------------------------------------------------------------------------
-# Attacker state (stored after attacker selection)
-# ---------------------------------------------------------------------------
-
-## The attacking ship token (null if attacker is a squadron).
-var _attack_sim_atk_ship: ShipToken = null
-## The attacking hull zone (only valid when _attack_sim_atk_ship != null).
-var _attack_sim_atk_zone: int = -1
-## The attacking squadron token (null if attacker is a ship).
-var _attack_sim_atk_squad: SquadronToken = null
-## Attacker display name (cached for panel text).
-var _attack_sim_atk_name: String = ""
-## Attacker zone display name (empty for squadrons).
-var _attack_sim_atk_zone_name: String = ""
-
-
-# ---------------------------------------------------------------------------
-# Target state (stored after target selection)
-# ---------------------------------------------------------------------------
-
-## The defending ship token (null if target is a squadron).
-var _attack_sim_def_ship: ShipToken = null
-## The defending hull zone (only valid when _attack_sim_def_ship != null).
-var _attack_sim_def_zone: int = -1
-## The defending squadron token (null if target is a ship).
-var _attack_sim_def_squad: SquadronToken = null
-## Target display name (cached for panel text).
-var _attack_sim_def_name: String = ""
-## Target zone display name (empty for squadrons).
-var _attack_sim_def_zone_name: String = ""
-
-
-# ---------------------------------------------------------------------------
-# Attack execution state (Phase 6b-1)
-# ---------------------------------------------------------------------------
-
-## Whether the current attack sim session is an actual attack execution
-## (from the activation modal) rather than the free-form simulator.
-## Requirements: AE-FLOW-001.
-var _attack_exec_mode: bool = false
-
-## Whether the executor is in squadron attack execution mode (Squadron Phase).
-## When true, the attacker is a squadron (not a ship hull zone).
-## Requirements: SQA-ATK-001.
-var _attack_exec_squad_mode: bool = false
-
-## The SquadronToken being activated for attack (Squadron Phase only).
-var _attack_exec_squad_token: SquadronToken = null
-
-## The ShipToken being activated, whose hull zones are the only valid
-## attacker choices during attack execution.
-## Requirements: AE-FLOW-002.
-var _attack_exec_ship_token: ShipToken = null
-
-## Hull zones already attacked from during this activation.
-## Requirements: AE-2HZ-001.
-var _attack_exec_fired_zones: Array[int] = []
-
-## Which attack number we are on (0 = first, 1 = second).
-## Requirements: AE-2HZ-004.
-var _attack_exec_current_attack: int = 0
-
-## Dice roll results for the current attack.
-## Requirements: AE-DICE-003.
-var _attack_exec_dice_results: Array[Dictionary] = []
-
-## String-keyed dice pool for the current attack.
-## Requirements: AE-DICE-001.
-var _attack_exec_pool: Dictionary = {}
-
-## Range band of the current attack target.
-var _attack_exec_range_band: String = ""
-
-## Whether the CF dial has already been used during this activation's attacks.
-var _attack_exec_cf_dial_used: bool = false
-
-## Whether the CF token has already been used during this activation's attacks.
-var _attack_exec_cf_token_used: bool = false
-
-## Squadrons already targeted during the current hull zone's anti-squadron
-## attack loop (Rules Reference: "Attack", Step 6).
-## Requirements: AE-SQ-001.
-var _attack_exec_attacked_squads: Array[SquadronToken] = []
-
+## Returns the visual overlay, or null if TargetSelector is absent.
+func _get_overlay() -> AttackSimOverlay:
+	if _target_selector:
+		return _target_selector.get_overlay()
+	return null
 
 # ---------------------------------------------------------------------------
 # Phase 6c: Accuracy, Defense Tokens, Damage Resolution
 # ---------------------------------------------------------------------------
 
-## Indices of defender defense tokens locked by accuracy icons.
-## Requirements: AE-ACC-001–008.
-var _attack_exec_locked_tokens: Array[int] = []
-
-## Whether we are in the accuracy spending sub-step.
-var _attack_exec_accuracy_step: bool = false
-
-## Whether we are in the defense token spending sub-step.
-var _attack_exec_defense_step: bool = false
-
-## Defense tokens spent this attack, keyed by Constants.DefenseToken type.
-## Requirements: AE-DEF-001–016.
-var _attack_exec_spent_tokens: Dictionary = {}
-
-## Current damage total after defense modifications (brace etc.).
-var _attack_exec_modified_damage: int = 0
-
-## Whether Scatter was spent this attack (cancels all dice).
-var _attack_exec_scatter_used: bool = false
-
-## How many damage points must still be redirected (Redirect token).
-## Requirements: AE-DEF-011–013.
-var _attack_exec_redirect_remaining: int = 0
-
-## The hull zone selected for redirect (Constants.HullZone value or -1).
-var _attack_exec_redirect_zone: int = -1
-
-## Whether the Contain token was spent (prevents standard critical).
-## Requirements: AE-DEF-014.
-var _attack_exec_contain_used: bool = false
-
-## Whether the Brace token was spent this attack.
-## Requirements: AE-DEF-010.
-var _attack_exec_brace_used: bool = false
-
-## Whether we are in the redirect zone click sub-step.
-var _attack_exec_redirect_step: bool = false
-
-## Whether we are in the evade die-selection sub-step.
-var _attack_exec_evade_step: bool = false
-
-## Whether the current attack is obstructed (die must be removed before roll).
-## Rules Reference: "Obstructed", RRG v1.5.0, p.10 — "the attacker must
-## remove 1 die of his choice from the attack pool."
-## Requirements: AE-OBS-001.
-var _attack_exec_obstructed: bool = false
-
-## Whether we are in the obstruction die-removal sub-step.
-var _attack_exec_obstruction_step: bool = false
-
-## Queue of defense token indices being processed during commit.
-var _defense_commit_queue: Array[int] = []
-
 ## Reference to the game's [EffectRegistry] for hook resolution.
 ## Set via [method set_effect_registry] after game initialisation.
 var _effect_registry: EffectRegistry = null
-
 
 # ===========================================================================
 # Public Interface
 # ===========================================================================
 
-
 ## Initializes the executor with references to board infrastructure.
-## [param get_ship_tokens] — Callable returning Array[ShipToken].
-## [param get_squadron_tokens] — Callable returning Array[SquadronToken].
-func initialize(get_ship_tokens: Callable,
-		get_squadron_tokens: Callable,
-		token_container: Node2D,
+## [param target_selector] — TargetSelector (already added as child by GB).
+## [param camera] — BoardCamera reference for rotation during defense.
+func initialize(target_selector: TargetSelector,
 		camera: BoardCamera) -> void:
-	_get_ship_tokens = get_ship_tokens
-	_get_squadron_tokens = get_squadron_tokens
-	_token_container = token_container
+	_target_selector = target_selector
+	_state = target_selector.get_state()
 	_camera = camera
-	_target_resolver = AttackTargetResolver.new(
-			get_ship_tokens, get_squadron_tokens,
-			_build_obstruction_bodies)
 	_dice_resolver = AttackDiceResolver.new()
-
+	# Connect target_locked so the dice sequence starts automatically.
+	if not _target_selector.target_locked.is_connected(
+			_on_target_locked):
+		_target_selector.target_locked.connect(_on_target_locked)
 
 ## Sets the [EffectRegistry] for hook resolution during attacks.
 func set_effect_registry(registry: EffectRegistry) -> void:
 	_effect_registry = registry
 
-
 ## Sets the shared damage deck reference.
 func set_damage_deck(deck: DamageDeck) -> void:
 	_damage_deck = deck
-
 
 ## Sets the handoff overlay reference for hot-seat immediate-effect choices.
 func set_handoff_overlay(overlay: HandoffOverlay) -> void:
 	_handoff_overlay = overlay
 
-
-## Handles the "Attack Simulator" toolbar button/key press.
-## Toggle behaviour: if already active, dismiss. Otherwise activate
-## and dismiss any other active tool first.
-## Blocked during attack execution mode (use the activation modal instead).
-## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005, AE-FLOW-005.
-func on_simulator_requested() -> void:
-	# Block simulator toggle during attack execution.
-	if _attack_exec_mode:
-		return
-	if _attack_sim_selecting or _attack_sim_target_selecting \
-			or (_attack_sim_panel and _attack_sim_panel.visible):
-		dismiss()
-		return
-	# Dismiss other tools first (AS-ACT-005).
-	dismiss_other_tools_requested.emit()
-	_activate_attack_sim()
-
+## Called by TargetSelector when a valid target is confirmed in exec mode.
+## Begins the dice sequence.
+func _on_target_locked(range_band: String, _dice_text: String) -> void:
+	_attack_exec_begin_sequence(range_band)
 
 ## Starts the attack execution flow from the activation modal.
 ## Requirements: AE-FLOW-001, AE-ACT-001.
@@ -377,145 +155,89 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 		_log.info("Cannot start attack — no ship token.")
 		return
 	# Dismiss any other active tool first.
-	dismiss_other_tools_requested.emit()
-	dismiss()
+	_target_selector.dismiss_other_tools_requested.emit()
+	_target_selector.dismiss()
 	_init_ship_attack_state(ship_token)
-	_ensure_attack_sim_panel()
-	# Connect Done button if not already connected (sim mode compat).
-	if not _attack_sim_panel.attack_done_pressed.is_connected(
+	_target_selector.enter_attacker_selection(true, _get_ship_name())
+	var panel: AttackSimPanel = _get_panel()
+	# Connect Done button if not already connected.
+	if panel and not panel.attack_done_pressed.is_connected(
 			_finish_attack_execution):
-		_attack_sim_panel.attack_done_pressed.connect(
-				_finish_attack_execution)
+		panel.attack_done_pressed.connect(_finish_attack_execution)
 	_connect_attack_panel_signals()
-	var ship_name: String = ""
-	if _attack_exec_ship_token.get_ship_data():
-		ship_name = _attack_exec_ship_token.get_ship_data().ship_name
-	_attack_sim_panel.show_initial_attack_exec(ship_name)
-	_attack_sim_panel.show_skip_attack_button()
+	if panel:
+		panel.show_skip_attack_button()
 	# Auto-skip if no valid targets exist from any hull zone.
 	## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 	if not _attack_exec_has_any_valid_target():
 		_log.info("No valid targets from any hull zone — auto-skipping.")
-		if _attack_sim_panel:
-			_attack_sim_panel.hide_skip_attack_button()
+		if panel:
+			panel.hide_skip_attack_button()
 		_finish_attack_execution()
 		return
-	_show_ship_range_overlay()
+	_target_selector.show_ship_range_overlay(_state.exec_ship_token)
 	_log.info("Attack execution: range overlay shown, awaiting hull zone.")
-
 
 ## Initialises attack execution state for a ship attacker.
 func _init_ship_attack_state(ship_token: ShipToken) -> void:
-	_attack_exec_mode = true
-	_attack_exec_ship_token = ship_token
-	_attack_exec_fired_zones.clear()
-	_attack_exec_current_attack = 0
-	_attack_exec_dice_results.clear()
-	_attack_exec_pool.clear()
-	_attack_exec_range_band = ""
-	_attack_exec_cf_dial_used = false
-	_attack_exec_cf_token_used = false
-	_attack_exec_attacked_squads.clear()
-	_attack_sim_selecting = true
-
-
-## Creates the attack simulation panel on a CanvasLayer if absent.
-func _ensure_attack_sim_panel() -> void:
-	if _attack_sim_panel != null:
-		return
-	_attack_sim_panel = AttackSimPanel.new()
-	var layer: CanvasLayer = CanvasLayer.new()
-	layer.name = "AttackSimPanelLayer"
-	layer.layer = 90
-	add_child(layer)
-	layer.add_child(_attack_sim_panel)
-
-
-## Creates a range overlay centred on the attack execution ship.
-func _show_ship_range_overlay() -> void:
-	if _attack_sim_range_overlay:
-		_attack_sim_range_overlay.queue_free()
-		_attack_sim_range_overlay = null
-	_attack_sim_range_overlay = RangeOverlayScene.new()
-	_attack_sim_range_overlay.name = "AttackExecRangeOverlay"
-	_token_container.add_child(_attack_sim_range_overlay)
-	_token_container.move_child(_attack_sim_range_overlay, 0)
-	_attack_sim_range_overlay.setup(_attack_exec_ship_token)
-
+	_state.exec_mode = true
+	_state.exec_ship_token = ship_token
+	_state.fired_zones.clear()
+	_state.current_attack = 0
+	_state.dice_results.clear()
+	_state.dice_pool.clear()
+	_state.range_band = ""
+	_state.cf_dial_used = false
+	_state.cf_token_used = false
+	_state.attacked_squads.clear()
 
 ## Starts the squadron attack execution flow from the Squadron Activation
-## Modal.  Pre-selects the squadron as attacker; enters target selection.
+## Modal. Pre-selects the squadron as attacker; enters target selection.
 ## Requirements: SQA-ATK-001, SQA-ATK-002.
 func start_squadron_attack(squadron_token: SquadronToken) -> void:
 	_log.info("Squadron attack step entered.")
 	if squadron_token == null:
 		_log.info("Cannot start squadron attack — no token.")
 		return
-	dismiss_other_tools_requested.emit()
-	dismiss()
+	_target_selector.dismiss_other_tools_requested.emit()
+	_target_selector.dismiss()
 	_init_squadron_attack_state(squadron_token)
-	_ensure_attack_sim_panel()
-	if not _attack_sim_panel.attack_done_pressed.is_connected(
+	_target_selector.enter_squadron_target_selection(squadron_token)
+	var panel: AttackSimPanel = _get_panel()
+	if panel and not panel.attack_done_pressed.is_connected(
 			_finish_attack_execution):
-		_attack_sim_panel.attack_done_pressed.connect(
-				_finish_attack_execution)
+		panel.attack_done_pressed.connect(_finish_attack_execution)
 	_connect_attack_panel_signals()
-	_attack_sim_panel.show_initial_squadron_exec(_attack_sim_atk_name)
-	_attack_sim_panel.show_skip_attack_button()
-	_attack_sim_show_squadron_visuals(squadron_token)
+	if panel:
+		panel.show_initial_squadron_exec(_state.attacker_name)
+		panel.show_skip_attack_button()
 	_log.info("Squadron attack: target selection active for %s."
-			% _attack_sim_atk_name)
-
+			% _state.attacker_name)
 
 ## Initialises attack execution state for a squadron attacker.
 func _init_squadron_attack_state(
 		squadron_token: SquadronToken) -> void:
-	_attack_exec_mode = true
-	_attack_exec_squad_mode = true
-	_attack_exec_squad_token = squadron_token
-	_attack_exec_ship_token = null
-	_attack_exec_fired_zones.clear()
-	_attack_exec_current_attack = 0
-	_attack_exec_dice_results.clear()
-	_attack_exec_pool.clear()
-	_attack_exec_range_band = ""
-	_attack_exec_cf_dial_used = false
-	_attack_exec_cf_token_used = false
-	_attack_exec_attacked_squads.clear()
+	_state.exec_mode = true
+	_state.squad_exec_mode = true
+	_state.exec_squad_token = squadron_token
+	_state.exec_ship_token = null
+	_state.fired_zones.clear()
+	_state.current_attack = 0
+	_state.dice_results.clear()
+	_state.dice_pool.clear()
+	_state.range_band = ""
+	_state.cf_dial_used = false
+	_state.cf_token_used = false
+	_state.attacked_squads.clear()
 	var inst: SquadronInstance = squadron_token.get_squadron_instance()
 	var squad_name: String = "Squadron"
 	if inst and inst.squadron_data:
 		squad_name = inst.squadron_data.squadron_name
-	_attack_sim_atk_ship = null
-	_attack_sim_atk_zone = -1
-	_attack_sim_atk_squad = squadron_token
-	_attack_sim_atk_name = squad_name
-	_attack_sim_atk_zone_name = ""
-	_attack_sim_selecting = false
-	_attack_sim_target_selecting = true
-
-
-## Routes a ship token click. Returns true if handled.
-func handle_ship_click(token: ShipToken) -> bool:
-	if _attack_sim_target_selecting:
-		_attack_sim_handle_target_ship_click(token)
-		return true
-	if _attack_sim_selecting:
-		_attack_sim_handle_ship_click(token)
-		return true
-	return false
-
-
-## Routes a squadron token click. Returns true if handled.
-func handle_squadron_click(token: SquadronToken) -> bool:
-	if _attack_sim_target_selecting:
-		_attack_sim_handle_target_squadron_click(token)
-		return true
-	if _attack_sim_selecting:
-		_attack_sim_handle_squadron_click(token)
-		return true
-	return false
-
+	_state.attacker_ship = null
+	_state.attacker_zone = -1
+	_state.attacker_squadron = squadron_token
+	_state.attacker_name = squad_name
+	_state.attacker_zone_name = ""
 
 ## Handles Escape key press. Returns true if consumed.
 ## In attack execution mode, cancels back to the activation modal.
@@ -526,10 +248,9 @@ func handle_escape(event: InputEvent) -> bool:
 	var key_event: InputEventKey = event as InputEventKey
 	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
 		return false
-	if _attack_sim_selecting or _attack_sim_target_selecting \
-			or (_attack_sim_panel and _attack_sim_panel.visible):
-		var was_exec: bool = _attack_exec_mode
-		dismiss()
+	if _target_selector.is_active():
+		var was_exec: bool = _state.exec_mode
+		_target_selector.dismiss()
 		if was_exec:
 			_reset_exec_state()
 			attack_exec_cancelled.emit()
@@ -537,48 +258,27 @@ func handle_escape(event: InputEvent) -> bool:
 		return true
 	return false
 
-
-## Dismisses the attack simulator/executor, removing all visual aids.
+## Dismisses the attack executor, delegating visual cleanup to TargetSelector.
 ## Requirements: AS-ACT-003, AS-PNL-003, AS-TGT-022.
 func dismiss() -> void:
-	_attack_sim_selecting = false
-	_attack_sim_target_selecting = false
-	_attack_sim_clear_attacker_state()
-	_attack_sim_clear_target_state()
-	# Remove info panel.
-	if _attack_sim_panel:
-		_attack_sim_panel.close()
-	# Remove visual overlay.
-	if _attack_sim_overlay:
-		_attack_sim_overlay.queue_free()
-		_attack_sim_overlay = null
-	# Remove attack sim range overlay.
-	if _attack_sim_range_overlay:
-		_attack_sim_range_overlay.queue_free()
-		_attack_sim_range_overlay = null
-	_log.info("Attack simulator dismissed.")
-
+	_target_selector.dismiss()
+	_log.info("Attack executor dismissed.")
 
 ## Whether the executor has any active UI.
 func is_active() -> bool:
-	return _attack_sim_selecting or _attack_sim_target_selecting \
-			or (_attack_sim_panel != null and _attack_sim_panel.visible)
-
+	return _target_selector.is_active()
 
 ## Whether in attacker-selection mode.
 func is_selecting() -> bool:
-	return _attack_sim_selecting
-
+	return _target_selector.is_selecting()
 
 ## Whether in target-selection mode.
 func is_target_selecting() -> bool:
-	return _attack_sim_target_selecting
-
+	return _target_selector.is_target_selecting()
 
 ## Whether in attack execution mode (from activation modal).
 func is_in_exec_mode() -> bool:
-	return _attack_exec_mode
-
+	return _state.exec_mode
 
 ## Returns true if the given ship has at least one valid attack target
 ## from any of its four hull zones. Unlike [method _attack_exec_has_any_valid_target]
@@ -586,52 +286,19 @@ func is_in_exec_mode() -> bool:
 ## begins to decide whether the modal should auto-skip the Attack step.
 ## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 func has_any_attack_target(ship_token: ShipToken) -> bool:
-	return _target_resolver.has_any_attack_target(ship_token)
-
+	return _target_selector.has_any_attack_target(ship_token)
 
 # ===========================================================================
 # Internal Helpers
 # ===========================================================================
 
-
 ## Resets all attack execution state variables.
 func _reset_exec_state() -> void:
-	_attack_exec_mode = false
-	_attack_exec_squad_mode = false
-	_attack_exec_squad_token = null
-	_attack_exec_ship_token = null
-	_attack_exec_fired_zones.clear()
-	_attack_exec_current_attack = 0
-	_attack_exec_dice_results.clear()
-	_attack_exec_pool.clear()
-	_attack_exec_range_band = ""
-	_attack_exec_cf_dial_used = false
-	_attack_exec_cf_token_used = false
-	_attack_exec_attacked_squads.clear()
-	_attack_exec_locked_tokens.clear()
-	_attack_exec_accuracy_step = false
-	_attack_exec_defense_step = false
-	_attack_exec_spent_tokens.clear()
-	_defense_commit_queue.clear()
-	_attack_exec_modified_damage = 0
-	_attack_exec_scatter_used = false
-	_attack_exec_redirect_remaining = 0
-	_attack_exec_redirect_zone = -1
-	_attack_exec_contain_used = false
-	_attack_exec_brace_used = false
-	_attack_exec_redirect_step = false
-	_attack_exec_evade_step = false
-	_attack_exec_obstructed = false
-	_attack_exec_obstruction_step = false
-	_reset_deferred_damage_state()
-
+	_state.clear_all()
 
 ## Resets deferred damage card state.
 func _reset_deferred_damage_state() -> void:
-	_awaiting_damage_summary = false
-	_deferred_immediate_card = null
-	_deferred_immediate_ship = null
-
+	_state.reset_deferred_damage()
 
 ## Completes the attack execution step. Cleans up and signals GameBoard.
 ## Requirements: AE-FLOW-003, AE-CONF-002.
@@ -641,33 +308,9 @@ func _finish_attack_execution() -> void:
 	_reset_exec_state()
 	attack_exec_completed.emit()
 
-
-## Clears stored attacker state.
-func _attack_sim_clear_attacker_state() -> void:
-	_attack_sim_atk_ship = null
-	_attack_sim_atk_zone = -1
-	_attack_sim_atk_squad = null
-	_attack_sim_atk_name = ""
-	_attack_sim_atk_zone_name = ""
-
-
-## Clears stored target state.
-func _attack_sim_clear_target_state() -> void:
-	_attack_sim_def_ship = null
-	_attack_sim_def_zone = -1
-	_attack_sim_def_squad = null
-	_attack_sim_def_name = ""
-	_attack_sim_def_zone_name = ""
-
-
 ## Builds a [CombatParticipants] from the current attacker/target state.
 func _build_current_participants() -> CombatParticipants:
-	return CombatParticipants.create(
-			_attack_sim_atk_ship, _attack_sim_atk_zone,
-			_attack_sim_atk_squad,
-			_attack_sim_def_ship, _attack_sim_def_zone,
-			_attack_sim_def_squad)
-
+	return _target_selector.build_current_participants()
 
 ## Returns the damage total for the current dice pool, using the correct
 ## formula for the combatant types. Critical icons only count as damage when
@@ -681,617 +324,26 @@ func _calc_attack_damage(results: Array[Dictionary]) -> int:
 	var parts: CombatParticipants = _build_current_participants()
 	return _dice_resolver.calc_damage(results, parts, _effect_registry)
 
-
-# ===========================================================================
-# Attack Simulator — Activation & Attacker Selection (Phase 6a)
-# ===========================================================================
-
-
-## Enters attacker-selection mode and shows the info panel.
-## Requirements: AS-ACT-001, AS-PNL-001, AS-PNL-002.
-func _activate_attack_sim() -> void:
-	_attack_sim_selecting = true
-	# Create the info panel on a CanvasLayer for screen-space display.
-	if _attack_sim_panel == null:
-		_attack_sim_panel = AttackSimPanel.new()
-		var layer: CanvasLayer = CanvasLayer.new()
-		layer.name = "AttackSimPanelLayer"
-		layer.layer = 90
-		add_child(layer)
-		layer.add_child(_attack_sim_panel)
-	_attack_sim_panel.show_initial()
-	_log.info("Attack simulator activated.")
-
-
-## Handles a ship token click during attacker selection.
-## Determines the hull zone from the click position and sets up visual aids.
-## Requirements: AS-SEL-001, AS-SEL-002, AE-FLOW-002.
-func _attack_sim_handle_ship_click(token: ShipToken) -> void:
-	# Attack execution guard: only activated ship allowed as attacker.
-	if _attack_exec_mode and token != _attack_exec_ship_token:
-		_log.info("Attack exec: non-activated ship rejected as attacker.")
-		TooltipManager.show_text("Only the activated ship can attack.",
-				Vector2.INF, 2.0, true)
-		return
-	# Determine hull zone from click position.
-	var click_pos: Vector2 = token.get_global_mouse_position()
-	var zone: int = token.get_hull_zone_at(click_pos)
-	if zone < 0:
-		_log.debug("Click outside ship base — ignored.")
-		return
-	# Block hull zones already attacked from (two-HZ rule).
-	# Requirements: AE-2HZ-002.
-	if _attack_exec_mode and zone in _attack_exec_fired_zones:
-		var fired_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
-		_log.info("Attack exec: zone %s already used." % fired_name)
-		TooltipManager.show_text(
-				"%s arc already used this activation." % fired_name,
-				Vector2.INF, 2.0, true)
-		return
-	_select_attacker_ship_zone(token, zone)
-
-
-## Stores attacker state and enters target selection for the given ship
-## hull zone.
-func _select_attacker_ship_zone(token: ShipToken, zone: int) -> void:
-	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
-	var ship_name: String = ""
-	if token.get_ship_data():
-		ship_name = token.get_ship_data().ship_name
-	# During attack execution, reject zones that have no valid targets.
-	# Rules Reference: "Attack", Step 1, p.2 — a hull zone with no
-	# eligible targets cannot be used to declare an attack.
-	if _attack_exec_mode:
-		if not _target_resolver.zone_has_targets(
-				token, zone as Constants.HullZone):
-			_log.info("Attack exec: %s arc has no valid targets."
-					% zone_name)
-			TooltipManager.show_text(
-					"No valid targets in %s arc." % zone_name,
-					Vector2.INF, 2.0, true)
-			return
-	_log.info("Attacker selected: %s — %s arc." % [ship_name, zone_name])
-	_log.debug("Click at %s → %s hull zone." % [
-			token.get_global_mouse_position(), zone_name])
-	_attack_sim_atk_ship = token
-	_attack_sim_atk_zone = zone
-	_attack_sim_atk_squad = null
-	_attack_sim_atk_name = ship_name
-	_attack_sim_atk_zone_name = zone_name
-	_attack_sim_selecting = false
-	_attack_sim_target_selecting = true
-	if _attack_sim_panel:
-		_attack_sim_panel.show_hull_zone_selected(ship_name, zone_name)
-	_attack_sim_show_hull_zone_visuals(token, zone)
-
-
-## Creates the visual aids for a hull zone attacker: range overlay, arc
-## boundary lines, and LOS marker.
-## Requirements: AS-VIS-001, AS-VIS-002, AS-VIS-003.
-func _attack_sim_show_hull_zone_visuals(token: ShipToken,
-		zone: int) -> void:
-	# Clear any previous visuals.
-	_clear_attack_sim_overlays()
-	# Range overlay (reuse RangeOverlayScene).
-	_attack_sim_range_overlay = RangeOverlayScene.new()
-	_attack_sim_range_overlay.name = "AttackSimRangeOverlay"
-	_token_container.add_child(_attack_sim_range_overlay)
-	_token_container.move_child(_attack_sim_range_overlay, 0)
-	_attack_sim_range_overlay.setup(token)
-	# Firing arc boundary lines + LOS marker via AttackSimOverlay.
-	var arc_pts: Dictionary = token.get_firing_arc_world_points()
-	var los_pts: Dictionary = token.get_los_origins_world()
-	var keys: Dictionary = _ATTACK_SIM_ARC_KEYS.get(zone, {})
-	if keys.is_empty() or arc_pts.is_empty():
-		_log.warn("No arc boundary data for zone %s." % zone)
-		return
-	var inner_a: Vector2 = arc_pts.get(keys["inner_a"], Vector2.ZERO)
-	var outer_a: Vector2 = arc_pts.get(keys["outer_a"], Vector2.ZERO)
-	var inner_b: Vector2 = arc_pts.get(keys["inner_b"], Vector2.ZERO)
-	var outer_b: Vector2 = arc_pts.get(keys["outer_b"], Vector2.ZERO)
-	var zone_name: String = _ZONE_NAMES.get(zone, "FRONT")
-	var los_pos: Vector2 = los_pts.get(zone_name, Vector2.ZERO)
-	_attack_sim_overlay = AttackSimOverlay.new()
-	_attack_sim_overlay.name = "AttackSimOverlay"
-	_attack_sim_overlay.attack_execution_mode = _attack_exec_mode
-	_token_container.add_child(_attack_sim_overlay)
-	_attack_sim_overlay.setup_hull_zone(inner_a, outer_a, inner_b, outer_b,
-			los_pos)
-
-
-## Frees existing attack sim overlays.
-func _clear_attack_sim_overlays() -> void:
-	if _attack_sim_overlay:
-		_attack_sim_overlay.queue_free()
-		_attack_sim_overlay = null
-	if _attack_sim_range_overlay:
-		_attack_sim_range_overlay.queue_free()
-		_attack_sim_range_overlay = null
-
-
-## Handles a squadron token click during attacker selection.
-## Requirements: AS-SEL-010, AS-SEL-011, AE-FLOW-002.
-func _attack_sim_handle_squadron_click(token: SquadronToken) -> void:
-	# Attack execution guard: only the activated ship's hull zones may attack.
-	if _attack_exec_mode:
-		_log.info("Attack exec: squadron cannot be attacker.")
-		TooltipManager.show_text("Select a hull zone on the activated ship.",
-				Vector2.INF, 2.0, true)
-		return
-	var inst: SquadronInstance = token.get_squadron_instance()
-	var squad_name: String = "Squadron"
-	if inst and inst.squadron_data:
-		squad_name = inst.squadron_data.squadron_name
-	_log.info("Attacker selected: %s." % squad_name)
-	# Store attacker state.
-	_attack_sim_atk_ship = null
-	_attack_sim_atk_zone = -1
-	_attack_sim_atk_squad = token
-	_attack_sim_atk_name = squad_name
-	_attack_sim_atk_zone_name = ""
-	# End attacker selection, enter target selection.
-	_attack_sim_selecting = false
-	_attack_sim_target_selecting = true
-	# Update info panel.
-	if _attack_sim_panel:
-		_attack_sim_panel.show_squadron_selected(squad_name)
-	# Show visual aids.
-	_attack_sim_show_squadron_visuals(token)
-
-
-## Creates the visual aids for a squadron attacker: close-range circle.
-## Requirements: AS-VIS-010.
-func _attack_sim_show_squadron_visuals(token: SquadronToken) -> void:
-	# Clear any previous visuals.
-	if _attack_sim_overlay:
-		_attack_sim_overlay.queue_free()
-		_attack_sim_overlay = null
-	if _attack_sim_range_overlay:
-		_attack_sim_range_overlay.queue_free()
-		_attack_sim_range_overlay = null
-	_attack_sim_overlay = AttackSimOverlay.new()
-	_attack_sim_overlay.name = "AttackSimOverlay"
-	_token_container.add_child(_attack_sim_overlay)
-	_attack_sim_overlay.setup_squadron(
-			token.global_position, token.get_radius_px())
-
-
-# ===========================================================================
-# Attack Simulator — Target Selection (Phase 6a-2)
-# ===========================================================================
-
-
-## Handles a ship token click during target selection.
-## Checks for deselection (same attacker hull zone), same-ship guard,
-## arc containment, or sets the target.
-## Requirements: AS-TGT-001–003, AS-TGT-020–021, AS-TGT-030, AS-ARC-001,
-## AE-TGT-001.
-func _attack_sim_handle_target_ship_click(token: ShipToken) -> void:
-	var click_pos: Vector2 = token.get_global_mouse_position()
-	var zone: int = token.get_hull_zone_at(click_pos)
-	if zone < 0:
-		_log.debug("Target click outside ship base — ignored.")
-		return
-	# Dice-phase guard: once the dice sequence has started (pool computed),
-	# only allow deselecting the current target.
-	if _attack_exec_mode and _attack_exec_pool.size() > 0:
-		if _attack_sim_def_ship == token and _attack_sim_def_zone == zone:
-			_log.info("Target deselected during dice phase — resetting.")
-			_attack_exec_reset_dice_ui()
-			_attack_sim_deselect_target()
-		return
-	var reject: String = _validate_target_ship_click(token, zone)
-	if reject != "":
-		return
-	# New target selected.
-	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
-	var ship_name: String = ""
-	if token.get_ship_data():
-		ship_name = token.get_ship_data().ship_name
-	_log.info("Target selected: %s — %s arc." % [ship_name, zone_name])
-	_attack_sim_def_ship = token
-	_attack_sim_def_zone = zone
-	_attack_sim_def_squad = null
-	_attack_sim_def_name = ship_name
-	_attack_sim_def_zone_name = zone_name
-	_attack_sim_compute_and_show_los()
-
-
-## Validates a target ship click. Returns "" if valid, or a non-empty
-## string if the click was handled (deselect/reject). Handles deselect
-## of attacker, deselect of target, same-ship guard, faction guard,
-## and arc check.
-func _validate_target_ship_click(token: ShipToken,
-		zone: int) -> String:
-	# Destroyed guard — destroyed ships cannot be targeted.
-	var ship_inst: ShipInstance = token.get_ship_instance()
-	if ship_inst and ship_inst.is_destroyed():
-		return _reject_target("Target rejected: ship is destroyed.",
-				"That ship has been destroyed.", "destroyed")
-	# Attacker re-click → deselect both (AS-TGT-021).
-	if _attack_sim_atk_ship == token and _attack_sim_atk_zone == zone:
-		if _attack_exec_mode and _attack_exec_attacked_squads.size() > 0:
-			return _reject_target("Hull zone locked during squadron loop.",
-					"Hull zone is locked during anti-squadron attacks.",
-					"locked")
-		_log.info("Attacker re-clicked — both deselected.")
-		_attack_sim_deselect_both()
-		return "deselected"
-	# Current target re-click → deselect target (AS-TGT-020).
-	if _attack_sim_def_ship == token and _attack_sim_def_zone == zone:
-		_log.info("Target deselected.")
-		_attack_sim_deselect_target()
-		return "deselected"
-	# Same-ship guard (AS-TGT-030).
-	if _attack_sim_atk_ship == token:
-		return _reject_target("Target rejected: same ship as attacker.",
-				"Cannot target the same ship.", "same_ship")
-	# Faction guard (AE-TGT-001).
-	if _attack_exec_mode:
-		if token.get_faction() == _get_attacker_faction():
-			return _reject_target(
-					"Attack exec: same-faction target rejected.",
-					"Cannot target a friendly ship.", "friendly")
-	# Engagement guard (SM-012): engaged squadron must attack engaged enemy.
-	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
-	# cannot move and can only attack squadrons that it is engaged with."
-	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
-	if _attack_exec_mode and _attack_exec_squad_mode \
-			and _attack_exec_squad_token:
-		if _is_squad_attacker_engaged_fresh():
-			return _reject_target(
-					"Attack exec: engaged squadron cannot target ships.",
-					"Engaged — must attack an engaged enemy squadron.",
-					"must_attack_engaged")
-	# Squadron loop guard: cannot target ships during Step 6 loop.
-	# Rules Reference: "Attack", Step 6, p.2 — after attacking a squadron,
-	# the attacker may only choose a new *squadron* defender in the same arc.
-	if _attack_exec_mode and _attack_exec_attacked_squads.size() > 0:
-		return _reject_target(
-				"Attack exec: ship target rejected during squadron loop.",
-				"Can only target squadrons during anti-squadron attacks.",
-				"squadron_loop")
-	# Arc check (AS-ARC-001).
-	if _attack_sim_atk_ship:
-		var arc_parts: CombatParticipants = \
-				CombatParticipants.create_attacker_only(
-						_attack_sim_atk_ship, _attack_sim_atk_zone,
-						null)
-		if not _target_resolver.is_ship_target_in_arc(
-				arc_parts, token, zone):
-			return _reject_target("Target rejected: not in arc.",
-					"Defender is not in arc.", "not_in_arc")
+## Returns the ship display name for the exec ship.
+func _get_ship_name() -> String:
+	if _state.exec_ship_token and _state.exec_ship_token.get_ship_data():
+		return _state.exec_ship_token.get_ship_data().ship_name
 	return ""
-
-
-## Logs a rejection message, shows a tooltip, and returns a reason string.
-func _reject_target(log_msg: String, tooltip: String,
-		reason: String) -> String:
-	_log.info(log_msg)
-	TooltipManager.show_text(tooltip, Vector2.INF, 2.0, true)
-	return reason
-
-
-## Returns true if the current squadron attacker is freshly engaged.
-## Recomputes from live positions instead of using the cached
-## [member SquadronInstance.is_engaged] flag, which may be stale after
-## a mid-turn squadron destruction.
-## Rules Reference: RRG "Engagement" p.4.
-func _is_squad_attacker_engaged_fresh() -> bool:
-	if _attack_exec_squad_token == null:
-		return false
-	var sq_inst: SquadronInstance = \
-			_attack_exec_squad_token.get_squadron_instance()
-	if sq_inst == null:
-		return false
-	var all_squads: Array[Dictionary] = _build_squadron_positions()
-	return EngagementResolver.is_engaged(
-			sq_inst, _attack_exec_squad_token.global_position,
-			all_squads)
-
-
-## Builds an array of {"instance": …, "position": …} for all
-## non-destroyed squadrons on the board.  Used for fresh engagement
-## checks during target validation.
-func _build_squadron_positions() -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	for sq_token: SquadronToken in _get_squadron_tokens.call():
-		var inst: SquadronInstance = sq_token.get_squadron_instance()
-		if inst and not inst.is_destroyed():
-			result.append({
-				"instance": inst,
-				"position": sq_token.global_position,
-			})
-	return result
-
-
-## Returns the attacker faction for target validation guards.
-func _get_attacker_faction() -> Constants.Faction:
-	if _attack_exec_ship_token:
-		return _attack_exec_ship_token.get_faction()
-	if _attack_exec_squad_token:
-		return _attack_exec_squad_token.get_faction()
-	return Constants.Faction.REBEL_ALLIANCE
-
-
-## Handles a squadron token click during target selection.
-## Checks for deselection (same attacker squadron), arc containment,
-## or sets the target.
-## Requirements: AS-TGT-010–012, AS-TGT-020–021, AS-ARC-001–002.
-func _attack_sim_handle_target_squadron_click(
-		token: SquadronToken) -> void:
-	# Dice-phase guard: once the dice sequence has started (pool computed),
-	# only allow deselecting the current target.
-	if _attack_exec_mode and _attack_exec_pool.size() > 0:
-		if _attack_sim_def_squad == token:
-			_log.info("Target deselected during dice phase — resetting.")
-			_attack_exec_reset_dice_ui()
-			_attack_sim_deselect_target()
-		return
-	var reject: String = _validate_target_squadron_click(token)
-	if reject != "":
-		return
-	# New target selected.
-	var inst: SquadronInstance = token.get_squadron_instance()
-	var squad_name: String = "Squadron"
-	if inst and inst.squadron_data:
-		squad_name = inst.squadron_data.squadron_name
-	_log.info("Target selected: %s." % squad_name)
-	_attack_sim_def_ship = null
-	_attack_sim_def_zone = -1
-	_attack_sim_def_squad = token
-	_attack_sim_def_name = squad_name
-	_attack_sim_def_zone_name = ""
-	_attack_sim_compute_and_show_los()
-
-
-## Validates a target squadron click. Returns "" if valid, or a non-empty
-## string if the click was handled (deselect/reject).
-func _validate_target_squadron_click(
-		token: SquadronToken) -> String:
-	# Destroyed guard — destroyed squadrons cannot be targeted.
-	var sq_inst: SquadronInstance = token.get_squadron_instance()
-	if sq_inst and sq_inst.is_destroyed():
-		return _reject_target("Target rejected: squadron is destroyed.",
-				"That squadron has been destroyed.", "destroyed")
-	# Attacker re-click → deselect both (AS-TGT-021).
-	if _attack_sim_atk_squad == token:
-		if _attack_exec_squad_mode:
-			_log.info("Attacker re-clicked in squad exec — ignored.")
-			return "locked"
-		_log.info("Attacker re-clicked — both deselected.")
-		_attack_sim_deselect_both()
-		return "deselected"
-	# Current target re-click → deselect (AS-TGT-020).
-	if _attack_sim_def_squad == token:
-		_log.info("Target deselected.")
-		_attack_sim_deselect_target()
-		return "deselected"
-	# Arc check (AS-ARC-001, skipped for squadron attacker AS-ARC-002).
-	if _attack_sim_atk_ship:
-		var arc_parts: CombatParticipants = \
-				CombatParticipants.create_attacker_only(
-						_attack_sim_atk_ship, _attack_sim_atk_zone,
-						null)
-		if not _target_resolver.is_squadron_target_in_arc(
-				arc_parts, token):
-			return _reject_target("Target rejected: not in arc.",
-					"Defender is not in arc.", "not_in_arc")
-	# Faction guard.
-	if _attack_exec_mode:
-		if token.get_faction() == _get_attacker_faction():
-			return _reject_target(
-					"Attack exec: same-faction squadron rejected.",
-					"Cannot target a friendly squadron.", "friendly")
-	# Engagement guard (SM-012): if engaged, can only attack engaged enemies.
-	# Rules Reference: RRG "Engagement" p.4 — "A squadron that is engaged
-	# … can only attack squadrons that it is engaged with."
-	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
-	if _attack_exec_mode and _attack_exec_squad_mode \
-			and _attack_exec_squad_token:
-		if _is_squad_attacker_engaged_fresh():
-			var all_squads: Array[Dictionary] = \
-					_build_squadron_positions()
-			var def_inst: SquadronInstance = \
-					token.get_squadron_instance()
-			var def_engaged: bool = false
-			if def_inst:
-				def_engaged = EngagementResolver.is_engaged(
-						def_inst, token.global_position, all_squads)
-			if not def_engaged:
-				return _reject_target(
-						"Attack exec: engaged attacker cannot target "
-						+"non-engaged squadron.",
-						"Must attack an engaged enemy squadron.",
-						"must_attack_engaged")
-	# Already-attacked guard (Step 6, AE-SQ-002).
-	if _attack_exec_mode and token in _attack_exec_attacked_squads:
-		return _reject_already_attacked_squad(token)
-	return ""
-
-
-## Rejects a squadron that has already been attacked this activation.
-func _reject_already_attacked_squad(
-		token: SquadronToken) -> String:
-	var inst_name: String = "Squadron"
-	var sq_inst: SquadronInstance = token.get_squadron_instance()
-	if sq_inst and sq_inst.squadron_data:
-		inst_name = sq_inst.squadron_data.squadron_name
-	return _reject_target(
-			"Attack exec: %s already attacked this activation."
-			% inst_name,
-			"%s has already been attacked." % inst_name,
-			"already_attacked")
-
-
-## Resets all dice-sequence UI elements and internal dice state.
-## Called when deselecting a target during the dice phase so the
-## panel returns cleanly to target-selection mode.
-func _attack_exec_reset_dice_ui() -> void:
-	_attack_exec_pool.clear()
-	_attack_exec_dice_results.clear()
-	_attack_exec_range_band = ""
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_dice_count()
-		_attack_sim_panel.hide_dice_results()
-		_attack_sim_panel.hide_cf_dial_section()
-		_attack_sim_panel.hide_cf_token_section()
-		_attack_sim_panel.hide_roll_button()
-		_attack_sim_panel.hide_confirm_button()
-		_attack_sim_panel.hide_skip_attack_button()
-
-
-## Deselects the target only; returns to "Select a target" prompt.
-## Attacker visuals remain active.
-## Requirements: AS-TGT-020.
-func _attack_sim_deselect_target() -> void:
-	_attack_sim_clear_target_state()
-	# Remove target visuals from overlay (keep attacker visuals).
-	if _attack_sim_overlay:
-		_attack_sim_overlay.clear_target()
-	# Hide dice count when target is deselected.
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_dice_count()
-	# Restore "Select a target" prompt.
-	if _attack_sim_panel:
-		if _attack_sim_atk_zone_name != "":
-			_attack_sim_panel.show_hull_zone_selected(
-					_attack_sim_atk_name, _attack_sim_atk_zone_name)
-		else:
-			_attack_sim_panel.show_squadron_selected(_attack_sim_atk_name)
-
-
-## Deselects both attacker and target; returns to initial prompt.
-## Requirements: AS-TGT-021.
-func _attack_sim_deselect_both() -> void:
-	_attack_sim_clear_attacker_state()
-	_attack_sim_clear_target_state()
-	_attack_sim_target_selecting = false
-	_attack_sim_selecting = true
-	# Remove all visuals.
-	if _attack_sim_overlay:
-		_attack_sim_overlay.queue_free()
-		_attack_sim_overlay = null
-	if _attack_sim_range_overlay:
-		_attack_sim_range_overlay.queue_free()
-		_attack_sim_range_overlay = null
-	# Show initial prompt.
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_dice_count()
-		if _attack_exec_mode and _attack_exec_ship_token:
-			# Restore range overlay for activated ship.
-			_attack_sim_range_overlay = RangeOverlayScene.new()
-			_attack_sim_range_overlay.name = "AttackExecRangeOverlay"
-			_token_container.add_child(_attack_sim_range_overlay)
-			_token_container.move_child(_attack_sim_range_overlay, 0)
-			_attack_sim_range_overlay.setup(_attack_exec_ship_token)
-			var ship_name: String = ""
-			if _attack_exec_ship_token.get_ship_data():
-				ship_name = \
-						_attack_exec_ship_token.get_ship_data().ship_name
-			_attack_sim_panel.show_initial_attack_exec(ship_name)
-		else:
-			_attack_sim_panel.show_initial()
-
-
-## Computes LOS and range between attacker and target, then updates the
-## overlay and info panel with the results.
-## Requirements: AS-VIS-020–022, AS-PNL-011, AS-LOG-010, AS-RNG-010–014.
-func _attack_sim_compute_and_show_los() -> void:
-	var parts: CombatParticipants = _build_current_participants()
-	# Compute LOS via resolver.
-	var los_info: Dictionary = _target_resolver.compute_los(parts)
-	# Reset obstruction flag for this target evaluation.
-	_attack_exec_obstructed = los_info["obstructed"]
-	var status: int = los_info["status"]
-	var los_text: String = los_info["text"]
-	_log.info("LOS: %s." % los_text)
-	# Compute range measurement via resolver.
-	var range_data: Dictionary = _target_resolver.compute_range(parts)
-	var range_distance: float = range_data.get("distance", INF)
-	var range_band: String = Constants.RANGE_BAND_BEYOND
-	if range_distance < INF:
-		range_band = GameScale.get_range_band(range_distance)
-	_log.info("Range: %s (%.0f px)." % [range_band, range_distance])
-	_update_los_overlay_and_panel(
-			los_info["atk_pt"], los_info["def_pt"], status, los_text,
-			range_data, range_distance, range_band)
-
-
-## Updates overlay visuals and panel with LOS/range results, and begins
-## the attack sequence in execution mode.
-func _update_los_overlay_and_panel(atk_pt: Vector2, def_pt: Vector2,
-		status: int, los_text: String, range_data: Dictionary,
-		range_distance: float, range_band: String) -> void:
-	if _attack_sim_overlay:
-		if _attack_sim_def_ship:
-			_attack_sim_overlay.setup_target_hull_zone(def_pt)
-		else:
-			_attack_sim_overlay.setup_target_squadron(def_pt)
-		_attack_sim_overlay.setup_los_line(atk_pt, def_pt, status)
-		if range_distance < INF:
-			_attack_sim_overlay.setup_range_line(
-					range_data["atk_pt"], range_data["def_pt"],
-					range_band)
-	if _attack_sim_panel:
-		_attack_sim_panel.show_target_selected(
-				_attack_sim_atk_name, _attack_sim_atk_zone_name,
-				_attack_sim_def_name, _attack_sim_def_zone_name,
-				los_text, range_band)
-	if _attack_exec_mode and _attack_sim_panel:
-		_attack_exec_range_band = range_band
-		var dice_text: String = _compute_attack_dice_text(range_band)
-		_attack_sim_panel.show_dice_count(dice_text)
-		_log.info("Dice pool: %s." % dice_text)
-		_attack_exec_begin_sequence(range_band)
-
-
-## Computes the dice pool text for the current attacker/target pair at the
-## given [param range_band]. Uses the ship's battery armament for the
-## selected hull zone, or anti-squadron armament when targeting a squadron.
-## For squadron attackers, uses anti-squadron or battery armament from
-## SquadronData.
-## Requirements: AE-PNL-002.
-## Rules Reference: "Attack", Step 2, p.2; "Squadron Attacks", RRG p.19.
-func _compute_attack_dice_text(range_band: String) -> String:
-	var parts: CombatParticipants = _build_current_participants()
-	return _dice_resolver.compute_dice_text(parts, range_band)
-
-
-## Builds obstruction bodies from all ships excluding attacker/defender.
-func _build_obstruction_bodies() -> Array:
-	var bodies: Array = []
-	for child: Node in _token_container.get_children():
-		if child is ShipToken:
-			var st: ShipToken = child as ShipToken
-			if st == _attack_sim_atk_ship or st == _attack_sim_def_ship:
-				continue
-			var sd: ShipData = st.get_ship_data()
-			if sd:
-				bodies.append(
-						LineOfSightChecker.ObstructionBody.from_ship_base(
-								sd.ship_name, st.global_position,
-								st.rotation, st.get_half_width(),
-								st.get_half_length()))
-	return bodies
-
 
 # ===========================================================================
 # Phase 6b-2 — Attack Sequence Orchestration
 # ===========================================================================
 
-
 ## Connects the Phase 6b-2 panel signals to executor handlers.
 func _connect_attack_panel_signals() -> void:
-	if _attack_sim_panel == null:
+	if _get_panel() == null:
 		return
 	_connect_attack_sequence_signals()
 	_connect_defense_phase_signals()
 
-
 ## Connects Phase 6b-2 attack sequence signals.
 func _connect_attack_sequence_signals() -> void:
-	var p: AttackSimPanel = _attack_sim_panel
+	var p: AttackSimPanel = _get_panel()
 	if not p.cf_dial_colour_selected.is_connected(
 			_on_attack_cf_dial_colour):
 		p.cf_dial_colour_selected.connect(_on_attack_cf_dial_colour)
@@ -1313,10 +365,9 @@ func _connect_attack_sequence_signals() -> void:
 	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
 		p.skip_attack_pressed.connect(_on_attack_skip)
 
-
 ## Connects Phase 6c defense signals.
 func _connect_defense_phase_signals() -> void:
-	var p: AttackSimPanel = _attack_sim_panel
+	var p: AttackSimPanel = _get_panel()
 	if not p.accuracy_confirmed.is_connected(
 			_on_attack_accuracy_confirmed):
 		p.accuracy_confirmed.connect(_on_attack_accuracy_confirmed)
@@ -1337,7 +388,6 @@ func _connect_defense_phase_signals() -> void:
 			_on_redirect_done_early):
 		p.redirect_done_pressed.connect(_on_redirect_done_early)
 
-
 ## Begins the Phase 6b-2 attack sequence after target and range are known.
 ## Checks for a CF dial and starts the appropriate step.
 ## For squadron attackers, CF dials are not available — skip straight to roll.
@@ -1346,61 +396,59 @@ func _connect_defense_phase_signals() -> void:
 ## may add 1 die to its attack pool of a color that is already in its
 ## attack pool."
 func _attack_exec_begin_sequence(range_band: String) -> void:
-	if _attack_sim_panel == null:
+	if _get_panel() == null:
 		return
-	if _attack_exec_ship_token == null and _attack_exec_squad_token == null:
+	if _state.exec_ship_token == null and _state.exec_squad_token == null:
 		return
 	# --- ATTACK_VALIDATE_TARGET hook (Coolant Discharge, Depowered
 	# Armament, Disengaged Fire Control) — reject attack if cancelled.
 	# Rules Reference: RRG "Damage Cards", p.4; ET-001.
 	if _is_attack_blocked_by_damage(range_band):
 		return
-	_attack_exec_pool = _compute_attack_pool_dict(range_band)
+	_state.dice_pool = _compute_attack_pool_dict(range_band)
 	_apply_gather_dice_hook()
-	_attack_sim_panel.show_skip_attack_button()
+	_get_panel().show_skip_attack_button()
 	# Empty pool guard: if no dice remain after gather-dice hooks, the
 	# attack cannot be declared.
 	# Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
 	# able to add at least one die to the attack pool."
-	var _begin_total: int = DicePool.get_total_count(_attack_exec_pool)
+	var _begin_total: int = DicePool.get_total_count(_state.dice_pool)
 	if _begin_total <= 0:
 		_log.info("No dice in pool — cannot declare attack.")
 		# During Step 6 squadron loop: auto-skip this target and re-check.
 		# Rules Reference: "Attack", Step 1, p.2 — attacker must add at
 		# least one die.  A squadron that yields 0 dice at this range is
 		# not a legal target; skip it and look for the next one.
-		if _attack_exec_attacked_squads.size() > 0 \
-				and _attack_sim_def_squad:
+		if _state.attacked_squads.size() > 0 \
+				and _state.defender_squadron:
 			_auto_skip_zero_dice_squadron()
 			return
-		if _attack_sim_panel:
-			_attack_sim_panel.show_empty_pool_auto_skip()
+		if _get_panel():
+			_get_panel().show_empty_pool_auto_skip()
 		return
 	# Obstruction: attacker must remove 1 die before rolling.
 	# Rules Reference: "Obstructed", RRG v1.5.0, p.10.
 	# Requirements: AE-OBS-001, AE-OBS-002.
-	if _attack_exec_obstructed:
+	if _state.obstructed:
 		_handle_obstruction_step()
 		return
 	# Check CF dial availability (ship attackers only).
-	if _attack_exec_ship_token and not _attack_exec_cf_dial_used \
+	if _state.exec_ship_token and not _state.cf_dial_used \
 			and _attack_exec_has_cf_dial():
 		var available: Array[String] = _get_cf_dial_colours(
-				_attack_exec_pool)
+				_state.dice_pool)
 		if available.size() > 0:
-			_attack_sim_panel.show_cf_dial_section(available)
+			_get_panel().show_cf_dial_section(available)
 			_log.info("CF dial available — offering colours: %s." % [
 					str(available)])
 			return
 	_attack_exec_show_roll_button()
 
-
 ## Applies the ATTACK_GATHER_DICE effect hook to the pool.
 func _apply_gather_dice_hook() -> void:
 	var parts: CombatParticipants = _build_current_participants()
-	_attack_exec_pool = _dice_resolver.apply_gather_hook(
-			_attack_exec_pool, _effect_registry, parts)
-
+	_state.dice_pool = _dice_resolver.apply_gather_hook(
+			_state.dice_pool, _effect_registry, parts)
 
 ## Checks whether a persistent damage card effect blocks this attack.
 ## Builds an ATTACK_VALIDATE_TARGET context with range, obstruction,
@@ -1411,42 +459,39 @@ func _apply_gather_dice_hook() -> void:
 func _is_attack_blocked_by_damage(range_band: String) -> bool:
 	var parts: CombatParticipants = _build_current_participants()
 	var blocked: bool = _dice_resolver.is_blocked_by_damage_at_range(
-			_effect_registry, parts, _attack_exec_obstructed,
-			_attack_exec_current_attack, range_band)
+			_effect_registry, parts, _state.obstructed,
+			_state.current_attack, range_band)
 	if blocked:
 		_log.info("Attack blocked by damage card effect.")
-		if _attack_sim_panel:
-			_attack_sim_panel.show_empty_pool_auto_skip()
+		if _get_panel():
+			_get_panel().show_empty_pool_auto_skip()
 		TooltipManager.show_text(
 				"Attack blocked by damage card.", Vector2.INF, 2.0, true)
 	return blocked
 
-
 ## Handles obstruction die removal: auto-remove, auto-skip, or prompt.
 func _handle_obstruction_step() -> void:
 	var removable: Array[String] = []
-	for colour_key: String in _attack_exec_pool:
-		if int(_attack_exec_pool[colour_key]) > 0:
+	for colour_key: String in _state.dice_pool:
+		if int(_state.dice_pool[colour_key]) > 0:
 			removable.append(colour_key)
 	if removable.size() == 0:
 		_log.info("Obstruction: pool empty — skipping attack.")
-		_attack_sim_panel.show_obstruction_auto_skip()
+		_get_panel().show_obstruction_auto_skip()
 		return
 	if removable.size() == 1:
 		_attack_exec_remove_obstruction_die(removable[0])
 		return
-	_attack_exec_obstruction_step = true
-	_attack_sim_panel.show_obstruction_die_choice(removable)
+	_state.obstruction_step = true
+	_get_panel().show_obstruction_die_choice(removable)
 	_log.info(
 			"Obstruction: awaiting die removal choice from %s."
 			% [str(removable)])
 
-
 ## Checks whether the activated ship has a revealed CF dial.
 ## Requirements: AE-CF-001.
 func _attack_exec_has_cf_dial() -> bool:
-	return _dice_resolver.has_cf_dial(_attack_exec_ship_token)
-
+	return _dice_resolver.has_cf_dial(_state.exec_ship_token)
 
 ## Returns which colour keys are available for CF dial extra die.
 ## Only colours already in the pool may be chosen.
@@ -1455,13 +500,11 @@ func _attack_exec_has_cf_dial() -> bool:
 func _get_cf_dial_colours(pool: Dictionary) -> Array[String]:
 	return _dice_resolver.get_cf_dial_colours(pool)
 
-
 ## Computes the string-keyed dice pool for the current attacker/target.
 ## Same logic as _compute_attack_dice_text but returns the Dictionary.
 func _compute_attack_pool_dict(range_band: String) -> Dictionary:
 	var parts: CombatParticipants = _build_current_participants()
 	return _dice_resolver.compute_pool_for_parts(parts, range_band)
-
 
 ## Resolves the attacker's armament dictionary for the current
 ## attacker/target pair.  Handles ship (battery / anti-squadron) and
@@ -1471,86 +514,80 @@ func _resolve_attacker_armament() -> Dictionary:
 	var parts: CombatParticipants = _build_current_participants()
 	return _dice_resolver.resolve_armament(parts)
 
-
 ## Shows the Roll Dice button.
 func _attack_exec_show_roll_button() -> void:
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_cf_dial_section()
-		_attack_sim_panel.hide_obstruction_section()
-		_attack_sim_panel.show_roll_button()
+	if _get_panel():
+		_get_panel().hide_cf_dial_section()
+		_get_panel().hide_obstruction_section()
+		_get_panel().show_roll_button()
 	_log.info("Awaiting dice roll.")
-
 
 ## Removes 1 die of the given [param colour_key] from the pool due to
 ## obstruction, updates the dice count display, and continues the sequence.
 ## Requirements: AE-OBS-001, AE-OBS-002.
 ## Rules Reference: "Obstructed", RRG v1.5.0, p.10.
 func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
-	_attack_exec_pool = _dice_resolver.remove_obstruction_die(
-			_attack_exec_pool, colour_key)
+	_state.dice_pool = _dice_resolver.remove_obstruction_die(
+			_state.dice_pool, colour_key)
 	_log.info("Obstruction: removed 1 %s die. Pool: %s." % [
-			colour_key, DicePool.format_pool(_attack_exec_pool)])
+			colour_key, DicePool.format_pool(_state.dice_pool)])
 	# Update dice count display.
-	if _attack_sim_panel:
-		var dice_text: String = DicePool.format_pool(_attack_exec_pool)
-		_attack_sim_panel.show_dice_count(dice_text)
-		_attack_sim_panel.hide_obstruction_section()
+	if _get_panel():
+		var dice_text: String = DicePool.format_pool(_state.dice_pool)
+		_get_panel().show_dice_count(dice_text)
+		_get_panel().hide_obstruction_section()
 	# Check if pool is now empty — auto-skip.
-	var total: int = DicePool.get_total_count(_attack_exec_pool)
+	var total: int = DicePool.get_total_count(_state.dice_pool)
 	if total <= 0:
 		_log.info("Obstruction: pool empty after removal — skipping attack.")
-		if _attack_sim_panel:
-			_attack_sim_panel.show_obstruction_auto_skip()
+		if _get_panel():
+			_get_panel().show_obstruction_auto_skip()
 		return
 	# Continue to CF dial or Roll.
 	_attack_exec_continue_after_obstruction()
 
-
 ## Called when the attacker selects a die colour to remove for obstruction.
 ## Requirements: AE-OBS-002.
 func _on_obstruction_die_selected(colour_key: String) -> void:
-	if not _attack_exec_obstruction_step:
+	if not _state.obstruction_step:
 		return
-	_attack_exec_obstruction_step = false
+	_state.obstruction_step = false
 	_attack_exec_remove_obstruction_die(colour_key)
-
 
 ## Continues the attack sequence after the obstruction die has been removed.
 ## Checks CF dial availability and proceeds to roll if none.
 func _attack_exec_continue_after_obstruction() -> void:
-	if _attack_exec_ship_token and not _attack_exec_cf_dial_used \
+	if _state.exec_ship_token and not _state.cf_dial_used \
 			and _attack_exec_has_cf_dial():
 		var available: Array[String] = _get_cf_dial_colours(
-				_attack_exec_pool)
+				_state.dice_pool)
 		if available.size() > 0:
-			if _attack_sim_panel:
-				_attack_sim_panel.show_cf_dial_section(available)
+			if _get_panel():
+				_get_panel().show_cf_dial_section(available)
 			_log.info("CF dial available — offering colours: %s." % [
 					str(available)])
 			return
 	_attack_exec_show_roll_button()
-
 
 ## Called when the player selects a colour for the CF dial extra die.
 ## Requirements: AE-CF-003, AE-CF-004.
 func _on_attack_cf_dial_colour(colour_key: String) -> void:
 	_log.info("CF dial: adding 1 %s die." % colour_key)
 	# Add die to the pool.
-	var current: int = int(_attack_exec_pool.get(colour_key, 0))
-	_attack_exec_pool[colour_key] = current + 1
+	var current: int = int(_state.dice_pool.get(colour_key, 0))
+	_state.dice_pool[colour_key] = current + 1
 	# Spend the dial.
-	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
 	if inst and inst.command_dial_stack:
 		inst.command_dial_stack.spend_revealed()
 		EventBus.command_dials_changed.emit(inst)
-	_attack_exec_cf_dial_used = true
+	_state.cf_dial_used = true
 	# Update dice count display.
-	if _attack_sim_panel:
-		var dice_text: String = DicePool.format_pool(_attack_exec_pool)
-		_attack_sim_panel.show_dice_count(dice_text)
+	if _get_panel():
+		var dice_text: String = DicePool.format_pool(_state.dice_pool)
+		_get_panel().show_dice_count(dice_text)
 	# Proceed to roll.
 	_attack_exec_show_roll_button()
-
 
 ## Called when the player skips the CF dial.
 ## Requirements: AE-CF-005.
@@ -1558,44 +595,42 @@ func _on_attack_cf_dial_skipped() -> void:
 	_log.info("CF dial skipped.")
 	_attack_exec_show_roll_button()
 
-
 ## Called when the player presses "Roll Dice".
 ## Requirements: AE-DICE-001, AE-DICE-003, SFX-004, SFX-005, SFX-006.
 func _on_attack_roll_dice() -> void:
 	_log.info("Rolling dice: %s." % DicePool.format_pool(
-			_attack_exec_pool))
+			_state.dice_pool))
 	# Play dice-roll SFX based on attacker type and faction.
 	_play_dice_roll_sfx()
 	# Convert to engine pool and roll.
 	var engine_pool: Dictionary = DicePool.to_engine_pool(
-			_attack_exec_pool)
-	_attack_exec_dice_results = Dice.roll_pool(engine_pool)
+			_state.dice_pool)
+	_state.dice_results = Dice.roll_pool(engine_pool)
 	# Show results.
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_roll_button()
-		_attack_sim_panel.show_dice_results(_attack_exec_dice_results)
+	if _get_panel():
+		_get_panel().hide_roll_button()
+		_get_panel().show_dice_results(_state.dice_results)
 	# Log results.
-	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
+	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info("Dice rolled: %d dice, %d damage." % [
-			_attack_exec_dice_results.size(), damage])
+			_state.dice_results.size(), damage])
 	# Check CF token for reroll.
 	if _attack_exec_has_cf_token():
-		if _attack_sim_panel:
-			_attack_sim_panel.show_cf_token_section()
+		if _get_panel():
+			_get_panel().show_cf_token_section()
 		_log.info("CF token available — offering reroll.")
 		return
 	# No token — show confirm.
 	_attack_exec_show_confirm()
 
-
 ## Plays the appropriate SFX for a dice roll based on whether the attacker
 ## is a ship (turbolasers) or squadron (rhythmic burst, faction-dependent).
 ## Requirements: SFX-004, SFX-005, SFX-006.
 func _play_dice_roll_sfx() -> void:
-	if _attack_exec_squad_mode and _attack_exec_squad_token:
+	if _state.squad_exec_mode and _state.exec_squad_token:
 		# Squadron attack — rhythmic burst.
 		var inst: SquadronInstance = (
-				_attack_exec_squad_token.get_squadron_instance())
+				_state.exec_squad_token.get_squadron_instance())
 		if inst and inst.squadron_data:
 			var faction: Constants.Faction = inst.squadron_data.faction
 			match faction:
@@ -1613,58 +648,53 @@ func _play_dice_roll_sfx() -> void:
 		# Capital ship attack — turbolaser salvo.
 		SfxManager.play_sfx("turbolasers")
 
-
 ## Checks whether the activated ship has a CF command token.
 ## Requirements: AE-CF-010.
 func _attack_exec_has_cf_token() -> bool:
-	return _dice_resolver.has_cf_token(_attack_exec_ship_token)
-
+	return _dice_resolver.has_cf_token(_state.exec_ship_token)
 
 ## Called when the player selects a die and confirms reroll (CF token).
 ## Requirements: AE-CF-011, AE-CF-012, AE-CF-014.
 func _on_attack_cf_token_reroll(die_index: int) -> void:
-	if die_index < 0 or die_index >= _attack_exec_dice_results.size():
+	if die_index < 0 or die_index >= _state.dice_results.size():
 		return
-	var old_result: Dictionary = _attack_exec_dice_results[die_index]
+	var old_result: Dictionary = _state.dice_results[die_index]
 	var color: Constants.DiceColor = (
 			old_result["color"] as Constants.DiceColor)
 	# Reroll the die.
 	var new_face: Constants.DiceFace = Dice.roll_die(color)
 	var new_result: Dictionary = {"color": color, "face": new_face}
-	_attack_exec_dice_results[die_index] = new_result
+	_state.dice_results[die_index] = new_result
 	_log.info("CF token: rerolled die %d (%s) → %s." % [
 			die_index, str(old_result["face"]), str(new_face)])
 	# Spend the token.
-	var inst: ShipInstance = _attack_exec_ship_token.get_ship_instance()
+	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
 	if inst and inst.command_tokens:
 		inst.command_tokens.spend_token(
 				Constants.CommandType.CONCENTRATE_FIRE)
 		EventBus.command_tokens_changed.emit(inst)
 	# Update display.
-	if _attack_sim_panel:
-		_attack_sim_panel.update_die_result(die_index, new_result)
-		_attack_sim_panel.hide_cf_token_section()
+	if _get_panel():
+		_get_panel().update_die_result(die_index, new_result)
+		_get_panel().hide_cf_token_section()
 	# Show confirm.
 	_attack_exec_show_confirm()
-
 
 ## Called when the player skips the CF token reroll.
 ## Requirements: AE-CF-013.
 func _on_attack_cf_token_skipped() -> void:
 	_log.info("CF token reroll skipped.")
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_cf_token_section()
+	if _get_panel():
+		_get_panel().hide_cf_token_section()
 	_attack_exec_show_confirm()
-
 
 ## Shows the Confirm button after dice are finalised.
 ## Requirements: AE-CONF-001.
 func _attack_exec_show_confirm() -> void:
-	if _attack_sim_panel:
-		_attack_sim_panel.show_confirm_button()
-	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
+	if _get_panel():
+		_get_panel().show_confirm_button()
+	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info("Final dice: %d damage. Awaiting confirm." % damage)
-
 
 ## Called when the player presses "Confirm" to accept the dice results.
 ## Starts the accuracy spending step (Step 3), then defense (Step 4),
@@ -1672,40 +702,38 @@ func _attack_exec_show_confirm() -> void:
 ## Requirements: AE-CONF-002, AE-ACC-001, AE-DEF-001, AE-DMG-001.
 ## Rules Reference: "Attack", Steps 3–5.
 func _on_attack_confirm() -> void:
-	var damage: int = _calc_attack_damage(_attack_exec_dice_results)
+	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info(
 			"Attack confirmed: %d damage. Starting Step 3 (accuracy)."
 			% damage)
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_confirm_button()
+	if _get_panel():
+		_get_panel().hide_confirm_button()
 	# Reset Phase 6c state for this attack.
-	_attack_exec_locked_tokens.clear()
-	_attack_exec_spent_tokens.clear()
-	_defense_commit_queue.clear()
-	_attack_exec_modified_damage = damage
-	_attack_exec_scatter_used = false
-	_attack_exec_redirect_remaining = 0
-	_attack_exec_redirect_zone = -1
-	_attack_exec_contain_used = false
-	_attack_exec_brace_used = false
-	_attack_exec_redirect_step = false
-	_attack_exec_evade_step = false
+	_state.locked_tokens.clear()
+	_state.spent_tokens.clear()
+	_state.defense_commit_queue.clear()
+	_state.modified_damage = damage
+	_state.scatter_used = false
+	_state.redirect_remaining = 0
+	_state.redirect_zone = -1
+	_state.contain_used = false
+	_state.brace_used = false
+	_state.redirect_step = false
+	_state.evade_step = false
 	# Zero damage — skip accuracy and defense entirely since there is
 	# nothing to mitigate.  Go straight to damage resolution which will
 	# show "No damage dealt." and advance to the next attack.
 	if damage == 0:
 		_log.info("No damage in roll — skipping accuracy & defense.")
-		_attack_exec_accuracy_step = false
-		_attack_exec_defense_step = false
+		_state.accuracy_step = false
+		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
 	_attack_exec_start_accuracy()
 
-
 # ===========================================================================
 # Phase 6c-1 — Accuracy Spending (Step 3)
 # ===========================================================================
-
 
 ## Starts the accuracy spending step.
 ## If the defender is a ship and the attacker rolled accuracy icons,
@@ -1715,42 +743,41 @@ func _on_attack_confirm() -> void:
 ## of his accuracy icons to choose the same number of the defender's
 ## defense tokens. The chosen tokens cannot be spent during this attack."
 func _attack_exec_start_accuracy() -> void:
-	_attack_exec_accuracy_step = true
+	_state.accuracy_step = true
 	var acc_count: int = _resolve_accuracy_count()
 	# Only ships have defense tokens; squadrons skip accuracy step.
-	if _attack_sim_def_ship == null or acc_count == 0:
+	if _state.defender_ship == null or acc_count == 0:
 		_log.info("No accuracy icons or squadron defender — skipping "
 				+"accuracy step.")
-		_attack_exec_accuracy_step = false
+		_state.accuracy_step = false
 		_attack_exec_start_defense()
 		return
-	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
 	if def_inst == null:
-		_attack_exec_accuracy_step = false
+		_state.accuracy_step = false
 		_attack_exec_start_defense()
 		return
 	var lockable: int = _count_lockable_tokens(def_inst)
 	if lockable == 0:
 		_log.info("Defender has no lockable tokens — skipping accuracy.")
-		_attack_exec_accuracy_step = false
+		_state.accuracy_step = false
 		_attack_exec_start_defense()
 		return
 	_log.info("Accuracy step: %d icons, %d lockable tokens." % [
 			acc_count, lockable])
-	if _attack_sim_panel:
-		_attack_sim_panel.show_accuracy_section(
+	if _get_panel():
+		_get_panel().show_accuracy_section(
 				def_inst.defense_tokens, acc_count)
-		_attack_sim_panel.hide_confirm_button()
-
+		_get_panel().hide_confirm_button()
 
 ## Counts accuracy icons, applying the ATTACK_SPEND_ACCURACY hook.
 func _resolve_accuracy_count() -> int:
-	var acc_count: int = Dice.count_accuracy(_attack_exec_dice_results)
+	var acc_count: int = Dice.count_accuracy(_state.dice_results)
 	if acc_count > 0 and _effect_registry:
 		var acc_ctx: EffectContext = EffectContext.new()
-		if _attack_sim_atk_ship is ShipToken:
+		if _state.attacker_ship is ShipToken:
 			acc_ctx.attacker = (
-					_attack_sim_atk_ship as ShipToken).get_ship_instance()
+					_state.attacker_ship as ShipToken).get_ship_instance()
 		acc_ctx = _effect_registry.resolve_hook(
 				&"ATTACK_SPEND_ACCURACY", acc_ctx)
 		if acc_ctx.cancelled:
@@ -1758,30 +785,26 @@ func _resolve_accuracy_count() -> int:
 			return 0
 	return acc_count
 
-
 ## Counts non-discarded defense tokens on a ship instance.
 func _count_lockable_tokens(def_inst: ShipInstance) -> int:
 	return _defense_resolver.count_lockable_tokens(def_inst)
-
 
 ## Called when the player confirms accuracy spending.
 ## Stores the locked token indices and proceeds to defense step.
 ## Requirements: AE-ACC-006.
 func _on_attack_accuracy_confirmed() -> void:
-	if _attack_sim_panel:
-		_attack_exec_locked_tokens = (
-				_attack_sim_panel.get_accuracy_locked_indices())
-		_attack_sim_panel.hide_accuracy_section()
-	_attack_exec_accuracy_step = false
+	if _get_panel():
+		_state.locked_tokens = (
+				_get_panel().get_accuracy_locked_indices())
+		_get_panel().hide_accuracy_section()
+	_state.accuracy_step = false
 	_log.info("Accuracy confirmed: locked tokens %s." % [
-			str(_attack_exec_locked_tokens)])
+			str(_state.locked_tokens)])
 	_attack_exec_start_defense()
-
 
 # ===========================================================================
 # Phase 6c-2 — Defense Token Spending (Step 4)
 # ===========================================================================
-
 
 ## Starts the defense token spending step.
 ## If the defender is a ship with spendable tokens, show the defense UI.
@@ -1790,20 +813,20 @@ func _on_attack_accuracy_confirmed() -> void:
 ## Rules Reference: "Spend Defense Tokens", p.5 — "The defender can spend
 ## one or more of his defense tokens."
 func _attack_exec_start_defense() -> void:
-	_attack_exec_defense_step = true
-	_attack_exec_spent_tokens.clear()
-	_defense_commit_queue.clear()
-	if _attack_sim_def_ship == null:
-		_attack_exec_defense_step = false
+	_state.defense_step = true
+	_state.spent_tokens.clear()
+	_state.defense_commit_queue.clear()
+	if _state.defender_ship == null:
+		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
-	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
 	if def_inst == null:
-		_attack_exec_defense_step = false
+		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
 	if not _can_defender_spend_tokens(def_inst):
-		_attack_exec_defense_step = false
+		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
 	# Rotate camera to the defender's perspective (AE-DEF-011).
@@ -1811,20 +834,19 @@ func _attack_exec_start_defense() -> void:
 		_camera.rotate_to_player(def_inst.owner_player)
 	_log.info("Defense step: %d spendable tokens, %d damage." % [
 			_count_spendable_defense_tokens(def_inst),
-			_attack_exec_modified_damage])
-	if _attack_sim_panel:
-		_attack_sim_panel.show_defense_section(
+			_state.modified_damage])
+	if _get_panel():
+		_get_panel().show_defense_section(
 				def_inst.defense_tokens,
-				_attack_exec_locked_tokens,
-				_attack_exec_modified_damage,
+				_state.locked_tokens,
+				_state.modified_damage,
 				def_inst.current_speed)
-
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 	var result: bool = _defense_resolver.can_spend_tokens(
-			def_inst, _attack_exec_locked_tokens,
-			_effect_registry, _attack_sim_def_zone)
+			def_inst, _state.locked_tokens,
+			_effect_registry, _state.defender_zone)
 	if not result:
 		if def_inst.current_speed == 0:
 			_log.info("Defender speed 0 — cannot spend defense tokens.")
@@ -1832,15 +854,13 @@ func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 			_log.info("No spendable defense tokens — skipping defense step.")
 	return result
 
-
 ## Returns the number of spendable (non-discarded, non-locked, not
 ## blocked by persistent effects) tokens.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 	return _defense_resolver.count_spendable_tokens(
-			inst, _attack_exec_locked_tokens,
-			_effect_registry, _attack_sim_def_zone)
-
+			inst, _state.locked_tokens,
+			_effect_registry, _state.defender_zone)
 
 ## Called when the player spends a defense token.
 ## [param token_index] — index in the defender's defense_tokens array.
@@ -1849,9 +869,9 @@ func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 ## Rules Reference: "Defense Tokens", p.5 — each token type at most once.
 func _on_attack_defense_token_spent(token_index: int,
 		spend_method: String) -> void:
-	if _attack_sim_def_ship == null:
+	if _state.defender_ship == null:
 		return
-	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
 	if def_inst == null:
 		return
 	if token_index < 0 or token_index >= def_inst.defense_tokens.size():
@@ -1867,15 +887,14 @@ func _on_attack_defense_token_spent(token_index: int,
 			def_inst.discard_defense_token(token_index)
 		_:
 			def_inst.exhaust_defense_token(token_index)
-	_attack_exec_spent_tokens[token_type] = actual_method
+	_state.spent_tokens[token_type] = actual_method
 	EventBus.ship_defense_token_changed.emit(def_inst)
 	EventBus.defense_token_spent.emit(
-			_attack_sim_def_ship, token_type)
+			_state.defender_ship, token_type)
 	_log.info("Defense token spent: %s (%s)." % [
 			Constants.DEFENSE_TOKEN_NAMES.get(token_type, "?"),
 			actual_method])
 	_apply_defense_token_effect(token_type, def_inst)
-
 
 ## Returns true if the token at the given index can be spent.
 ## Checks discard state, one-per-type limit, accuracy locks, and
@@ -1884,26 +903,23 @@ func _on_attack_defense_token_spent(token_index: int,
 func _is_defense_token_spendable(token_index: int,
 		token: Dictionary) -> bool:
 	var result: bool = _defense_resolver.is_token_spendable(
-			token_index, token, _attack_exec_spent_tokens,
-			_attack_exec_locked_tokens, _get_defender_instance(),
-			_effect_registry, _attack_sim_def_zone)
+			token_index, token, _state.spent_tokens,
+			_state.locked_tokens, _get_defender_instance(),
+			_effect_registry, _state.defender_zone)
 	if not result:
 		_log.info("Token %d not spendable — ignoring." % token_index)
 	return result
-
 
 ## Resolves the actual spend method: exhausted tokens must be discarded.
 func _resolve_spend_method(spend_method: String,
 		token: Dictionary) -> String:
 	return _defense_resolver.resolve_spend_method(spend_method, token)
 
-
 ## Returns the current defender's ShipInstance, or null.
 func _get_defender_instance() -> ShipInstance:
-	if _attack_sim_def_ship == null:
+	if _state.defender_ship == null:
 		return null
-	return _attack_sim_def_ship.get_ship_instance()
-
+	return _state.defender_ship.get_ship_instance()
 
 ## Returns true if a persistent damage card effect blocks spending this
 ## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
@@ -1912,8 +928,7 @@ func _get_defender_instance() -> ShipInstance:
 func _is_token_blocked_by_effect(inst: ShipInstance,
 		token: Dictionary) -> bool:
 	return _defense_resolver.is_token_blocked_by_effect(
-			inst, token, _effect_registry, _attack_sim_def_zone)
-
+			inst, token, _effect_registry, _state.defender_zone)
 
 ## Applies the effect of a defense token to the current attack.
 ## Requirements: AE-DEF-006–016.
@@ -1932,53 +947,49 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 			_attack_exec_start_redirect(def_inst)
 			return # Redirect step handles button disable
 		Constants.DefenseToken.CONTAIN:
-			_attack_exec_contain_used = true
+			_state.contain_used = true
 			_log.info("Contain: standard critical effect prevented.")
 		_:
 			_log.info("Unhandled defense token type: %s" \
 					% str(token_type))
-	if _attack_sim_panel:
-		_attack_sim_panel.disable_defense_token_button(
+	if _get_panel():
+		_get_panel().disable_defense_token_button(
 				_get_token_button_index_for_type(token_type))
-
 
 ## Applies the Scatter defense token effect.
 ## Rules Reference: "Scatter", p.11.
 func _apply_scatter_effect() -> void:
-	_attack_exec_scatter_used = true
-	_attack_exec_modified_damage = _defense_resolver.apply_scatter(
-			_attack_exec_modified_damage)
+	_state.scatter_used = true
+	_state.modified_damage = _defense_resolver.apply_scatter(
+			_state.modified_damage)
 	_log.info("Scatter: all damage cancelled.")
-	if _attack_sim_panel:
-		_attack_sim_panel.update_defense_damage(0)
-		_attack_sim_panel.disable_defense_token_button(-1)
-
+	if _get_panel():
+		_get_panel().update_defense_damage(0)
+		_get_panel().disable_defense_token_button(-1)
 
 ## Applies the Brace defense token effect.
 ## Rules Reference: "Brace", RRG v1.5.0, p.3.
 func _apply_brace_effect() -> void:
-	_attack_exec_brace_used = true
-	_attack_exec_modified_damage = _defense_resolver.apply_brace(
-			_attack_exec_modified_damage)
+	_state.brace_used = true
+	_state.modified_damage = _defense_resolver.apply_brace(
+			_state.modified_damage)
 	_log.info("Brace: damage halved to %d." % [
-			_attack_exec_modified_damage])
-	if _attack_sim_panel:
-		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage)
-
+			_state.modified_damage])
+	if _get_panel():
+		_get_panel().update_defense_damage(
+				_state.modified_damage)
 
 ## Returns the button index for a given token type in the current attack.
 func _get_token_button_index_for_type(
 		token_type: Constants.DefenseToken) -> int:
-	if _attack_sim_def_ship == null:
+	if _state.defender_ship == null:
 		return -1
-	var def_inst: ShipInstance = _attack_sim_def_ship.get_ship_instance()
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
 	if def_inst == null:
 		return -1
 	return _defense_resolver.get_token_button_index(
 			token_type, def_inst.defense_tokens,
-			_attack_exec_spent_tokens)
-
+			_state.spent_tokens)
 
 ## Starts the Evade die-selection sub-step.
 ## The defender must click a die to remove (long) or reroll (med/close).
@@ -1987,76 +998,72 @@ func _get_token_button_index_for_type(
 ## defender cancels one attack die of its choice. At medium or close
 ## range, the defender chooses one attack die to be rerolled."
 func _attack_exec_start_evade() -> void:
-	if _attack_exec_dice_results.is_empty():
+	if _state.dice_results.is_empty():
 		_log.info("Evade: no dice to target — skipping.")
 		return
-	_attack_exec_evade_step = true
-	var range_band: String = _attack_exec_range_band
+	_state.evade_step = true
+	var range_band: String = _state.range_band
 	_log.info("Evade: awaiting die selection (%s range)." % range_band)
-	if _attack_sim_panel:
-		_attack_sim_panel.show_evade_die_selection(range_band)
-
+	if _get_panel():
+		_get_panel().show_evade_die_selection(range_band)
 
 ## Called when the defender selects a die during evade die-selection.
 ## At long range: remove the die. At medium/close: reroll it.
 ## Requirements: AE-DEF-007–009.
 func _on_evade_die_selected(die_index: int) -> void:
-	if not _attack_exec_evade_step:
+	if not _state.evade_step:
 		return
-	if die_index < 0 or die_index >= _attack_exec_dice_results.size():
+	if die_index < 0 or die_index >= _state.dice_results.size():
 		_log.info("Evade: invalid die index %d." % die_index)
 		return
-	_attack_exec_evade_step = false
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_evade_die_selection()
-	if _attack_exec_range_band == Constants.RANGE_BAND_LONG:
+	_state.evade_step = false
+	if _get_panel():
+		_get_panel().hide_evade_die_selection()
+	if _state.range_band == Constants.RANGE_BAND_LONG:
 		_apply_evade_remove(die_index)
 	else:
 		_apply_evade_reroll(die_index)
-	if _attack_sim_panel:
-		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage)
-		_attack_sim_panel.disable_defense_token_button(
+	if _get_panel():
+		_get_panel().update_defense_damage(
+				_state.modified_damage)
+		_get_panel().disable_defense_token_button(
 				_get_token_button_index_for_type(
 				Constants.DefenseToken.EVADE))
 	_process_next_defense_commit()
-
 
 ## Evade at long range: removes the selected die.
 func _apply_evade_remove(die_index: int) -> void:
 	var parts: CombatParticipants = _build_current_participants()
 	var result: Dictionary = _defense_resolver.apply_evade_remove(
-			die_index, _attack_exec_dice_results, parts,
+			die_index, _state.dice_results, parts,
 			_effect_registry)
-	_attack_exec_dice_results = result["dice_results"]
-	_attack_exec_modified_damage = result["damage"]
+	_state.dice_results = result["dice_results"]
+	_state.modified_damage = result["damage"]
 	_log.info("Evade (long): removed die %d. Damage now %d." % [
-			die_index, _attack_exec_modified_damage])
-	if _attack_sim_panel:
-		_attack_sim_panel.show_dice_results(
-				_attack_exec_dice_results)
-
+			die_index, _state.modified_damage])
+	if _get_panel():
+		_get_panel().show_dice_results(
+				_state.dice_results)
 
 ## Evade at medium/close range: rerolls the selected die.
 func _apply_evade_reroll(die_index: int) -> void:
 	var parts: CombatParticipants = _build_current_participants()
 	var result: Dictionary = _defense_resolver.apply_evade_reroll(
-			die_index, _attack_exec_dice_results, parts,
+			die_index, _state.dice_results, parts,
 			_effect_registry)
-	_attack_exec_dice_results = result["dice_results"]
-	_attack_exec_modified_damage = result["damage"]
+	_state.dice_results = result["dice_results"]
+	_state.modified_damage = result["damage"]
 	var new_face: Constants.DiceFace = (
 			result["new_face"] as Constants.DiceFace)
 	_log.info("Evade (%s): rerolled die %d → %s. Damage now %d."
-			% [_attack_exec_range_band, die_index, str(new_face),
-			_attack_exec_modified_damage])
-	if _attack_sim_panel:
+			% [_state.range_band, die_index, str(new_face),
+			_state.modified_damage])
+	if _get_panel():
 		var color: Constants.DiceColor = (
-				_attack_exec_dice_results[die_index]["color"]
+				_state.dice_results[die_index]["color"]
 				as Constants.DiceColor)
-		_attack_sim_panel.update_die_result(die_index, {
+		_get_panel().update_die_result(die_index, {
 			"color": color, "face": new_face})
-
 
 ## Starts the redirect sub-step: shows adjacent zone buttons.
 ## Requirements: AE-DEF-011–013.
@@ -2064,45 +1071,43 @@ func _apply_evade_reroll(die_index: int) -> void:
 ## adjacent to the defending hull zone and may suffer up to that adjacent
 ## zone's remaining shields in that zone instead."
 func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
-	_attack_exec_redirect_step = true
+	_state.redirect_step = true
 	# The redirect budget is all the current damage.
-	_attack_exec_redirect_remaining = _attack_exec_modified_damage
+	_state.redirect_remaining = _state.modified_damage
 	# Get adjacent zones to the defending hull zone.
 	var def_zone: Constants.HullZone = (
-			_attack_sim_def_zone as Constants.HullZone)
+			_state.defender_zone as Constants.HullZone)
 	var adjacent: Array = ConstantsScript.get_adjacent_hull_zones(def_zone)
 	_log.info(
 			"Redirect: %d damage to redirect from %s. Adjacent: %s"
-			% [_attack_exec_redirect_remaining,
+			% [_state.redirect_remaining,
 			ConstantsScript.hull_zone_to_string(def_zone),
 			str(adjacent)])
-	if _attack_sim_panel:
-		_attack_sim_panel.show_redirect_section(
-				adjacent, _attack_exec_redirect_remaining)
-
+	if _get_panel():
+		_get_panel().show_redirect_section(
+				adjacent, _state.redirect_remaining)
 
 ## Called when the player selects a hull zone for redirect.
 ## Each click redirects 1 damage to that zone (limited by zone shields).
 ## Requirements: AE-DEF-012, AE-DEF-013.
 func _on_attack_redirect_zone_selected(zone: int) -> void:
-	if not _attack_exec_redirect_step:
+	if not _state.redirect_step:
 		return
-	if _attack_sim_def_ship == null:
+	if _state.defender_ship == null:
 		return
 	var def_inst: ShipInstance = \
-			_attack_sim_def_ship.get_ship_instance()
+			_state.defender_ship.get_ship_instance()
 	if def_inst == null:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
 	if not _apply_single_redirect(zone_enum, def_inst):
 		return
-	if _attack_sim_panel:
-		_attack_sim_panel.update_defense_damage(
-				_attack_exec_modified_damage)
+	if _get_panel():
+		_get_panel().update_defense_damage(
+				_state.modified_damage)
 	if not _check_redirect_continuation(def_inst):
-		_attack_exec_redirect_step = false
+		_state.redirect_step = false
 		_process_next_defense_commit()
-
 
 ## Applies one point of redirect damage to the given hull zone.
 ## Returns false if the zone has no shields or no damage remains.
@@ -2110,37 +1115,35 @@ func _apply_single_redirect(zone_enum: Constants.HullZone,
 		def_inst: ShipInstance) -> bool:
 	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
 	if not _defense_resolver.can_redirect_to_zone(
-			zone_enum, def_inst, _attack_exec_redirect_remaining):
+			zone_enum, def_inst, _state.redirect_remaining):
 		_log.info("Redirect: cannot redirect to %s." % zone_str)
 		return false
 	def_inst.reduce_shields(zone_str, 1)
 	EventBus.ship_shields_changed.emit(
 			def_inst, zone_str,
 			int(def_inst.current_shields.get(zone_str, 0)))
-	_attack_exec_redirect_remaining -= 1
-	_attack_exec_modified_damage -= 1
+	_state.redirect_remaining -= 1
+	_state.modified_damage -= 1
 	_log.info("Redirect: 1 damage to %s shield. Remaining: %d/%d." % [
-			zone_str, _attack_exec_redirect_remaining,
-			_attack_exec_modified_damage])
+			zone_str, _state.redirect_remaining,
+			_state.modified_damage])
 	return true
-
 
 ## Checks if redirect can continue. Returns true if more redirect is
 ## possible and the UI was updated; false if redirect is done.
 func _check_redirect_continuation(
 		def_inst: ShipInstance) -> bool:
 	var def_zone: Constants.HullZone = (
-			_attack_sim_def_zone as Constants.HullZone)
+			_state.defender_zone as Constants.HullZone)
 	var can_continue: bool = _defense_resolver.can_redirect_continue(
-			_attack_exec_redirect_remaining, def_zone, def_inst)
-	if can_continue and _attack_sim_panel:
-		_attack_sim_panel.update_redirect_remaining(
-				_attack_exec_redirect_remaining)
+			_state.redirect_remaining, def_zone, def_inst)
+	if can_continue and _get_panel():
+		_get_panel().update_redirect_remaining(
+				_state.redirect_remaining)
 		return true
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_redirect_section()
+	if _get_panel():
+		_get_panel().hide_redirect_section()
 	return false
-
 
 ## Called when the player presses "Commit Defense".
 ## Reads selected token indices from the panel and processes them
@@ -2148,24 +1151,23 @@ func _check_redirect_continuation(
 ## Requirements: AE-DEF-003.
 func _on_attack_defense_done() -> void:
 	var selected: Array[int] = []
-	if _attack_sim_panel:
-		selected = _attack_sim_panel.get_defense_selected_indices()
-		_attack_sim_panel.disable_all_defense_buttons()
+	if _get_panel():
+		selected = _get_panel().get_defense_selected_indices()
+		_get_panel().disable_all_defense_buttons()
 	if selected.is_empty():
 		_log.info("No defense tokens selected — proceeding to damage.")
-		_attack_exec_defense_step = false
-		if _attack_sim_panel:
-			_attack_sim_panel.hide_defense_section()
+		_state.defense_step = false
+		if _get_panel():
+			_get_panel().hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
 	# Sort tokens into canonical resolution order (RRG "Defense Tokens"):
 	# Scatter → Evade → Brace → Redirect → Contain.
 	# This ensures Brace halves damage before Redirect distributes it.
-	_defense_commit_queue = _sort_defense_tokens_canonical(selected)
+	_state.defense_commit_queue = _sort_defense_tokens_canonical(selected)
 	_log.info("Defense commit: %d tokens queued." %
-			_defense_commit_queue.size())
+			_state.defense_commit_queue.size())
 	_process_next_defense_commit()
-
 
 ## Canonical defense token resolution order.
 ## Rules Reference: \"Defense Tokens\", p.5 — effects resolve in a
@@ -2181,32 +1183,30 @@ const _DEFENSE_RESOLVE_ORDER: Dictionary = {
 	Constants.DefenseToken.CONTAIN: 4,
 }
 
-
 ## Sorts token indices into canonical RRG resolution order.
 func _sort_defense_tokens_canonical(
 		indices: Array[int]) -> Array[int]:
-	if _attack_sim_def_ship == null:
+	if _state.defender_ship == null:
 		return indices
 	var def_inst: ShipInstance = \
-			_attack_sim_def_ship.get_ship_instance()
+			_state.defender_ship.get_ship_instance()
 	if def_inst == null:
 		return indices
 	return _defense_resolver.sort_tokens_canonical(
 			indices, def_inst.defense_tokens)
 
-
 ## Processes the next defense token in the commit queue.
 ## When the queue is empty, hides the defense UI and resolves damage.
 func _process_next_defense_commit() -> void:
-	if _defense_commit_queue.is_empty():
+	if _state.defense_commit_queue.is_empty():
 		_log.info("Defense commit complete. Modified damage: %d." % [
-				_attack_exec_modified_damage])
-		_attack_exec_defense_step = false
-		if _attack_sim_panel:
-			_attack_sim_panel.hide_defense_section()
+				_state.modified_damage])
+		_state.defense_step = false
+		if _get_panel():
+			_get_panel().hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
-	var token_index: int = _defense_commit_queue.pop_front()
+	var token_index: int = _state.defense_commit_queue.pop_front()
 	_log.info("Processing committed token index %d." % token_index)
 	# Reuse the existing spending logic (validates, applies, starts
 	# sub-steps for Evade/Redirect).
@@ -2214,26 +1214,23 @@ func _process_next_defense_commit() -> void:
 	# For simple tokens (Scatter, Brace, Contain) the method returns
 	# synchronously. For Evade/Redirect, sub-steps will call
 	# _process_next_defense_commit() when they finish.
-	if not _attack_exec_evade_step and not _attack_exec_redirect_step:
+	if not _state.evade_step and not _state.redirect_step:
 		_process_next_defense_commit()
-
 
 ## Called when the player presses "Done Redirecting" in the redirect
 ## section, ending the redirect sub-step early.
 func _on_redirect_done_early() -> void:
-	if not _attack_exec_redirect_step:
+	if not _state.redirect_step:
 		return
 	_log.info("Redirect ended early by player.")
-	_attack_exec_redirect_step = false
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_redirect_section()
+	_state.redirect_step = false
+	if _get_panel():
+		_get_panel().hide_redirect_section()
 	_process_next_defense_commit()
-
 
 # ===========================================================================
 # Phase 6c-3 — Damage Resolution (Step 5)
 # ===========================================================================
-
 
 ## Resolves damage against the defender.
 ## For ships: shields absorb damage first, then damage cards are dealt.
@@ -2244,28 +1241,28 @@ func _on_redirect_done_early() -> void:
 ## time."
 func _attack_exec_resolve_damage() -> void:
 	var final_damage: int = _damage_dealer.calculate_final_damage(
-			_attack_exec_modified_damage, _attack_exec_scatter_used)
+			_state.modified_damage, _state.scatter_used)
 	# Brace is already applied during Step 4 (canonical order before
-	# Redirect), so _attack_exec_modified_damage is already halved.
+	# Redirect), so _state.modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
 	if final_damage <= 0:
 		_log.info("No damage to resolve.")
-		if _attack_sim_panel:
-			_attack_sim_panel.show_damage_info(
+		if _get_panel():
+			_get_panel().show_damage_info(
 					_damage_dealer.build_no_damage_info())
 		_attack_exec_finalize_after_delay()
 		return
 	# --- Squadron defender ---
-	if _attack_sim_def_squad:
+	if _state.defender_squadron:
 		_resolve_squadron_damage(final_damage)
 		_attack_exec_finalize_after_delay()
 		return
 	# --- Ship defender ---
-	if _attack_sim_def_ship:
+	if _state.defender_ship:
 		_resolve_ship_damage(final_damage)
 		# If the damage summary overlay is being shown, wait for the player
 		# to dismiss it before resolving immediate effects and finalising.
-		if _awaiting_damage_summary:
+		if _state.awaiting_damage_summary:
 			EventBus.damage_summary_dismissed.connect(
 					_on_damage_summary_dismissed_continue,
 					CONNECT_ONE_SHOT)
@@ -2282,13 +1279,12 @@ func _attack_exec_resolve_damage() -> void:
 	_log.error("No defender found for damage resolution!")
 	_attack_exec_finalize_attack()
 
-
 ## Resolves damage against a squadron.
 ## Squadrons have no shields — damage goes directly to hull.
 ## Requirements: AE-DMG-002.
 func _resolve_squadron_damage(damage: int) -> void:
 	var sq_inst: SquadronInstance = (
-			_attack_sim_def_squad.get_squadron_instance())
+			_state.defender_squadron.get_squadron_instance())
 	if sq_inst == null:
 		_log.error("Squadron instance is null — cannot resolve damage.")
 		return
@@ -2297,17 +1293,16 @@ func _resolve_squadron_damage(damage: int) -> void:
 	_log.info("Squadron took %d damage. Hull: %d/%d." % [
 			actual, sq_inst.current_hull,
 			sq_inst.squadron_data.hull])
-	if _attack_sim_panel:
-		_attack_sim_panel.show_damage_info(
+	if _get_panel():
+		_get_panel().show_damage_info(
 				_damage_dealer.build_squadron_damage_info(
 						actual, sq_inst.current_hull,
 						sq_inst.squadron_data.hull))
 	if sq_inst.is_destroyed():
 		sq_inst.mark_destroyed()
 		_log.info("Squadron destroyed!")
-		EventBus.squadron_destroyed.emit(_attack_sim_def_squad)
-		_fade_out_token(_attack_sim_def_squad)
-
+		EventBus.squadron_destroyed.emit(_state.defender_squadron)
+		_fade_out_token(_state.defender_squadron)
 
 ## Resolves damage against a ship.
 ## Shields absorb damage first. Remaining damage becomes damage cards.
@@ -2317,12 +1312,12 @@ func _resolve_squadron_damage(damage: int) -> void:
 ## Rules Reference: "Damage", p.4.
 func _resolve_ship_damage(damage: int) -> void:
 	var def_inst: ShipInstance = (
-			_attack_sim_def_ship.get_ship_instance())
+			_state.defender_ship.get_ship_instance())
 	if def_inst == null:
 		_log.error("Ship instance is null — cannot resolve damage.")
 		return
 	var def_zone_str: String = ConstantsScript.hull_zone_to_string(
-			_attack_sim_def_zone as Constants.HullZone)
+			_state.defender_zone as Constants.HullZone)
 	var remaining: int = damage
 	# Step 1: Absorb damage with shields.
 	var shield_absorbed: int = _absorb_shields(
@@ -2340,16 +1335,15 @@ func _resolve_ship_damage(damage: int) -> void:
 	var summary: String = _build_damage_summary(
 			def_inst, def_zone_str, shield_absorbed,
 			cards_dealt, faceup_card_name)
-	if _attack_sim_panel:
-		_attack_sim_panel.show_damage_info(summary)
+	if _get_panel():
+		_get_panel().show_damage_info(summary)
 	_log.info("Damage resolved: %s" % summary)
-	EventBus.damage_resolved.emit(_attack_sim_def_ship, damage)
+	EventBus.damage_resolved.emit(_state.defender_ship, damage)
 	if def_inst.is_destroyed():
 		def_inst.mark_destroyed()
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
-		EventBus.ship_destroyed.emit(_attack_sim_def_ship)
-		_fade_out_token(_attack_sim_def_ship)
-
+		EventBus.ship_destroyed.emit(_state.defender_ship)
+		_fade_out_token(_state.defender_ship)
 
 ## Absorbs damage with shields and emits the shield change event.
 func _absorb_shields(def_inst: ShipInstance,
@@ -2365,20 +1359,18 @@ func _absorb_shields(def_inst: ShipInstance,
 				remaining - shield_absorbed])
 	return shield_absorbed
 
-
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:
 	var attacker: ShipInstance = null
-	if _attack_sim_atk_ship is ShipToken:
+	if _state.attacker_ship is ShipToken:
 		attacker = (
-				_attack_sim_atk_ship as ShipToken).get_ship_instance()
+				_state.attacker_ship as ShipToken).get_ship_instance()
 	var faceup: bool = _defense_resolver.determine_first_card_faceup(
-			_attack_exec_dice_results, _attack_exec_contain_used,
+			_state.dice_results, _state.contain_used,
 			_effect_registry, attacker)
 	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
-			faceup, _attack_exec_contain_used])
+			faceup, _state.contain_used])
 	return faceup
-
 
 ## Deals damage cards from the deck to the defender.
 ## Returns {"cards_dealt": int, "faceup_name": String}.
@@ -2405,12 +1397,11 @@ func _deal_damage_cards(def_inst: ShipInstance,
 		cards_dealt += 1
 	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
 	if cards_dealt > 0:
-		_awaiting_damage_summary = true
+		_state.awaiting_damage_summary = true
 		EventBus.damage_summary_requested.emit(
 				def_inst, dealt_faceup_cards, dealt_facedown_count,
 				def_inst.ship_data.ship_name)
 	return {"cards_dealt": cards_dealt, "faceup_name": faceup_card_name}
-
 
 ## Draws the next damage card from the deck, with logging.
 func _draw_next_damage_card(index: int,
@@ -2428,7 +1419,6 @@ func _draw_next_damage_card(index: int,
 			card.effect_id])
 	return card
 
-
 ## Deals a single faceup damage card (standard critical).
 func _deal_single_faceup_card(card: DamageCard,
 		def_inst: ShipInstance) -> void:
@@ -2445,11 +1435,10 @@ func _deal_single_faceup_card(card: DamageCard,
 			"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 			% [card.title, card.trait_type])
 	if _damage_dealer.has_immediate_effect(card):
-		_deferred_immediate_card = card
-		_deferred_immediate_ship = def_inst
+		_state.deferred_immediate_card = card
+		_state.deferred_immediate_ship = def_inst
 		_log.info("Immediate effect deferred for '%s' "
 				% card.title + "(awaiting summary dismiss).")
-
 
 ## Emits hull change and ship damaged events after cards are dealt.
 func _emit_ship_damage_events(def_inst: ShipInstance,
@@ -2460,12 +1449,11 @@ func _emit_ship_damage_events(def_inst: ShipInstance,
 			def_inst.ship_data.hull, def_inst.get_total_damage())
 	EventBus.ship_hull_changed.emit(def_inst, new_hull)
 	EventBus.ship_damaged.emit(
-			_attack_sim_def_ship, cards_dealt,
-			_attack_sim_def_zone as Constants.HullZone)
+			_state.defender_ship, cards_dealt,
+			_state.defender_zone as Constants.HullZone)
 	_log.info("Hull remaining: %d/%d after %d card(s) dealt to %s." % [
 			new_hull, def_inst.ship_data.hull, cards_dealt,
 			def_inst.ship_data.ship_name])
-
 
 ## Builds the damage summary string for the panel.
 func _build_damage_summary(def_inst: ShipInstance,
@@ -2476,7 +1464,6 @@ func _build_damage_summary(def_inst: ShipInstance,
 	return _damage_dealer.build_damage_summary(
 			def_zone_str, shield_absorbed, cards_dealt,
 			faceup_card_name, hull_remaining, def_inst.ship_data.hull)
-
 
 ## Resolves the immediate one-shot effect of a faceup damage card, if any.
 ## Auto-resolve cards (Structural Damage, Projector Misaligned, Life Support
@@ -2506,25 +1493,23 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	_log.info("Immediate effect deferred for modal: '%s' (chooser=%s)."
 			% [card.title, choice_info.get("chooser", "?")])
 
-
 ## Resolves the deferred immediate effect stored during the card loop.
 ## Called after the DamageSummaryOverlay is dismissed (or immediately if no
 ## summary was shown).  Clears the deferred state afterwards.
 func _resolve_deferred_immediate_effect() -> void:
-	if _deferred_immediate_card == null:
+	if _state.deferred_immediate_card == null:
 		return
-	var card: DamageCard = _deferred_immediate_card
-	var ship: ShipInstance = _deferred_immediate_ship
-	_deferred_immediate_card = null
-	_deferred_immediate_ship = null
+	var card: DamageCard = _state.deferred_immediate_card
+	var ship: ShipInstance = _state.deferred_immediate_ship
+	_state.deferred_immediate_card = null
+	_state.deferred_immediate_ship = null
 	_resolve_immediate_card_effect(card, ship)
-
 
 ## Callback when the player dismisses the [DamageSummaryOverlay].
 ## Resolves deferred immediate effects, then continues the attack flow
 ## (choice modal or finalize).
 func _on_damage_summary_dismissed_continue() -> void:
-	_awaiting_damage_summary = false
+	_state.awaiting_damage_summary = false
 	_log.info("Damage summary dismissed — resolving deferred effects.")
 	_resolve_deferred_immediate_effect()
 	if _pending_immediate_card != null:
@@ -2532,11 +1517,9 @@ func _on_damage_summary_dismissed_continue() -> void:
 		return
 	_attack_exec_finalize_after_delay()
 
-
 # ---------------------------------------------------------------------------
 # Phase 10a — Immediate Effect Choice Modal Flow (DM-011)
 # ---------------------------------------------------------------------------
-
 
 ## Starts the immediate-effect choice flow: handoff (if hot-seat) → modal.
 ## Called from [method _attack_exec_resolve_damage] when a pending choice
@@ -2566,12 +1549,10 @@ func _start_immediate_choice_flow() -> void:
 	# Non-hot-seat or no handoff overlay: show modal directly.
 	_show_immediate_choice_modal()
 
-
 ## Called when the handoff "Ready" button is pressed during the
 ## immediate-effect choice flow.
 func _on_immediate_handoff_accepted() -> void:
 	_show_immediate_choice_modal()
-
 
 ## Creates and shows the OpponentChoiceModal with the pending choice.
 func _show_immediate_choice_modal() -> void:
@@ -2581,7 +1562,6 @@ func _show_immediate_choice_modal() -> void:
 		_opponent_choice_modal.choice_confirmed.connect(
 				_on_immediate_choice_confirmed, CONNECT_ONE_SHOT)
 	_opponent_choice_modal.open(_pending_immediate_choice)
-
 
 ## Called when the player confirms their selection in the choice modal.
 func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
@@ -2608,18 +1588,16 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 	EventBus.ship_hull_changed.emit(ship, new_hull)
 	_attack_exec_finalize_after_delay()
 
-
 ## Returns the player index for the given chooser role relative to the
 ## current attack's defender.
 func _get_chooser_player_index(chooser: String) -> int:
-	if _attack_sim_def_ship:
+	if _state.defender_ship:
 		var def_inst: ShipInstance = (
-				_attack_sim_def_ship.get_ship_instance())
+				_state.defender_ship.get_ship_instance())
 		if def_inst:
 			return _damage_dealer.get_chooser_player_index(
 					chooser, def_inst.owner_player)
 	return 0
-
 
 ## Lazily creates the OpponentChoiceModal on a high CanvasLayer.
 func _ensure_choice_modal() -> void:
@@ -2633,13 +1611,11 @@ func _ensure_choice_modal() -> void:
 	add_child(layer)
 	layer.add_child(_opponent_choice_modal)
 
-
 ## Waits briefly to show the damage info, then proceeds to finalize.
 func _attack_exec_finalize_after_delay() -> void:
 	# Small delay so the player can see the damage info.
 	var timer: SceneTreeTimer = get_tree().create_timer(1.2)
 	timer.timeout.connect(_attack_exec_finalize_attack)
-
 
 ## Finalises the attack: records the zone as fired, checks for follow-up
 ## attacks (two-hull-zone rule, squadron Step 6 loop).
@@ -2647,54 +1623,51 @@ func _attack_exec_finalize_after_delay() -> void:
 ## AE-SQ-003, AE-SQ-004.
 ## Rules Reference: "Attack", Step 6, p.2.
 func _attack_exec_finalize_attack() -> void:
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_damage_info()
-		_attack_sim_panel.hide_defense_section()
-		_attack_sim_panel.hide_accuracy_section()
-		_attack_sim_panel.hide_redirect_section()
+	if _get_panel():
+		_get_panel().hide_damage_info()
+		_get_panel().hide_defense_section()
+		_get_panel().hide_accuracy_section()
+		_get_panel().hide_redirect_section()
 	_rotate_camera_to_attacker()
 	# --- Squadron defender: Step 6 loop ---
-	if _attack_sim_def_squad:
+	if _state.defender_squadron:
 		_finalize_squadron_attack()
 		return
 	# --- Ship defender: two-hull-zone logic ---
-	if _attack_sim_atk_zone >= 0:
-		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
+	if _state.attacker_zone >= 0:
+		_state.fired_zones.append(_state.attacker_zone)
 	_attack_exec_mark_spent_zone()
-	_attack_exec_current_attack += 1
-	if _attack_exec_current_attack < 2:
+	_state.current_attack += 1
+	if _state.current_attack < 2:
 		_attack_exec_prepare_next_attack()
 		return
 	_finish_attack_execution()
-
 
 ## Rotates the camera back to the attacker’s perspective (AE-DEF-011).
 func _rotate_camera_to_attacker() -> void:
 	if not _camera or not PlayMode.is_hot_seat():
 		return
-	if _attack_exec_ship_token:
+	if _state.exec_ship_token:
 		var atk_inst: ShipInstance = (
-				_attack_exec_ship_token.get_ship_instance())
+				_state.exec_ship_token.get_ship_instance())
 		if atk_inst:
 			_camera.rotate_to_player(atk_inst.owner_player)
-	elif _attack_exec_squad_token:
+	elif _state.exec_squad_token:
 		var sq_inst: SquadronInstance = (
-				_attack_exec_squad_token.get_squadron_instance())
+				_state.exec_squad_token.get_squadron_instance())
 		if sq_inst:
 			_camera.rotate_to_player(sq_inst.owner_player)
 
-
 ## Handles the Step 6 squadron loop finalisation.
 func _finalize_squadron_attack() -> void:
-	_attack_exec_attacked_squads.append(_attack_sim_def_squad)
-	if _attack_sim_overlay:
-		_attack_sim_overlay.add_spent_zone_marker(
-				_attack_sim_def_squad.global_position)
+	_state.attacked_squads.append(_state.defender_squadron)
+	if _get_overlay():
+		_get_overlay().add_spent_zone_marker(
+				_state.defender_squadron.global_position)
 	if _attack_exec_has_more_squad_targets():
 		_attack_exec_prepare_next_squadron()
 		return
 	_end_squadron_loop()
-
 
 ## Auto-skips a squadron target that yielded 0 dice (out of armament
 ## range).  Marks it as attacked so it won't be retried, then either
@@ -2704,39 +1677,36 @@ func _finalize_squadron_attack() -> void:
 ## able to add at least one die to the attack pool."
 func _auto_skip_zero_dice_squadron() -> void:
 	_log.info("Auto-skipping squadron (0 dice at this range).")
-	_attack_exec_attacked_squads.append(_attack_sim_def_squad)
-	_attack_sim_clear_target_state()
+	_state.attacked_squads.append(_state.defender_squadron)
+	_target_selector.clear_target_state()
 	if _attack_exec_has_more_squad_targets():
 		_attack_exec_prepare_next_squadron()
 		return
 	_end_squadron_loop()
 
-
 ## Ends the Step 6 squadron loop: marks the zone as fired and either
 ## prepares the next hull-zone attack or finishes the attack step.
 func _end_squadron_loop() -> void:
-	if _attack_sim_atk_zone >= 0:
-		_attack_exec_fired_zones.append(_attack_sim_atk_zone)
+	if _state.attacker_zone >= 0:
+		_state.fired_zones.append(_state.attacker_zone)
 	_attack_exec_mark_spent_zone()
-	_attack_exec_current_attack += 1
-	if _attack_exec_current_attack < 2:
-		_attack_exec_attacked_squads.clear()
+	_state.current_attack += 1
+	if _state.current_attack < 2:
+		_state.attacked_squads.clear()
 		_attack_exec_prepare_next_attack()
 		return
 	_finish_attack_execution()
 
-
 ## Draws a red dot on the spent hull zone's LOS marker position.
 ## Requirements: AE-2HZ-002.
 func _attack_exec_mark_spent_zone() -> void:
-	if _attack_sim_overlay and _attack_sim_atk_ship:
+	if _get_overlay() and _state.attacker_ship:
 		var los_pts: Dictionary = (
-				_attack_sim_atk_ship.get_los_origins_world())
+				_state.attacker_ship.get_los_origins_world())
 		var zone_key: String = _ZONE_NAMES.get(
-				_attack_sim_atk_zone, "FRONT")
+				_state.attacker_zone, "FRONT")
 		var los_pos: Vector2 = los_pts.get(zone_key, Vector2.ZERO)
-		_attack_sim_overlay.add_spent_zone_marker(los_pos)
-
+		_get_overlay().add_spent_zone_marker(los_pos)
 
 ## Checks whether there are more enemy squadrons in the current arc
 ## that have not yet been attacked during this hull zone's attack AND
@@ -2752,18 +1722,18 @@ func _attack_exec_has_more_squad_targets() -> bool:
 	if armament.is_empty():
 		return false
 	var attacker_faction: int = parts.get_atk_faction()
-	for sq_token: SquadronToken in _get_squadron_tokens.call():
+	for sq_token: SquadronToken in _target_selector.get_squadron_tokens_callable().call():
 		if sq_token.get_faction() == attacker_faction:
 			continue
 		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
 		if sq_inst and sq_inst.is_destroyed():
 			continue
-		if sq_token in _attack_exec_attacked_squads:
+		if sq_token in _state.attacked_squads:
 			continue
-		if not _target_resolver.is_squadron_target_in_arc(
+		if not _target_selector.get_target_resolver().is_squadron_target_in_arc(
 				parts, sq_token):
 			continue
-		if not _target_resolver.is_squadron_at_range(
+		if not _target_selector.get_target_resolver().is_squadron_at_range(
 				parts, sq_token):
 			continue
 		# Check that armament produces ≥1 die at this range.
@@ -2775,22 +1745,20 @@ func _attack_exec_has_more_squad_targets() -> bool:
 			return true
 	return false
 
-
 ## Returns the anti-squadron armament of the current ship attacker.
 func _get_anti_squadron_armament() -> Dictionary:
-	if _attack_sim_atk_ship == null:
+	if _state.attacker_ship == null:
 		return {}
-	var ship_data: ShipData = _attack_sim_atk_ship.get_ship_data()
+	var ship_data: ShipData = _state.attacker_ship.get_ship_data()
 	if ship_data == null:
 		return {}
 	return ship_data.anti_squadron_armament
-
 
 ## Computes the range band to a squadron target from the current
 ## attacker hull zone.
 func _get_squadron_range_band(parts: CombatParticipants,
 		sq_token: SquadronToken) -> String:
-	var atk_edge: Array[Vector2] = _target_resolver.get_ship_edge(
+	var atk_edge: Array[Vector2] = _target_selector.get_target_resolver().get_ship_edge(
 			parts.atk_ship,
 			parts.atk_zone as Constants.HullZone)
 	var atk_arc_pts: Dictionary = parts.atk_ship \
@@ -2808,14 +1776,12 @@ func _get_squadron_range_band(parts: CombatParticipants,
 		return Constants.RANGE_BAND_BEYOND
 	return GameScale.get_range_band(dist)
 
-
 ## Returns true if the attacker has valid targets from ANY unfired
 ## hull zone.
 ## Requirements: AE-SKIP-003.
 func _attack_exec_has_any_valid_target() -> bool:
-	return _target_resolver.has_any_valid_target(
-			_attack_exec_ship_token, _attack_exec_fired_zones)
-
+	return _target_selector.get_target_resolver().has_any_valid_target(
+			_state.exec_ship_token, _state.fired_zones)
 
 ## Prepares the board for attacking the next squadron in the same arc.
 ## Resets target and dice state but keeps the hull zone locked.
@@ -2826,41 +1792,35 @@ func _attack_exec_has_any_valid_target() -> bool:
 func _attack_exec_prepare_next_squadron() -> void:
 	_log.info("Preparing next squadron target (Step 6 loop). " \
 			+"Attacked so far: %d." \
-			% _attack_exec_attacked_squads.size())
+			% _state.attacked_squads.size())
 	# Reset target and dice state.
-	_attack_sim_clear_target_state()
-	_attack_exec_dice_results.clear()
-	_attack_exec_pool.clear()
-	_attack_exec_range_band = ""
+	_state.dice_results.clear()
+	_state.dice_pool.clear()
+	_state.range_band = ""
 	# Clean up target visuals, keep spent zone markers.
-	if _attack_sim_overlay:
-		_attack_sim_overlay.clear_target()
-	# Stay in target-selection mode with the hull zone locked.
-	_attack_sim_selecting = false
-	_attack_sim_target_selecting = true
+	_target_selector.prepare_next_squadron_target()
 	# Update panel with "Select next squadron" prompt.
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_dice_count()
-		_attack_sim_panel.hide_dice_results()
-		_attack_sim_panel.hide_confirm_button()
-		_attack_sim_panel.hide_cf_dial_section()
-		_attack_sim_panel.hide_cf_token_section()
-		_attack_sim_panel.hide_roll_button()
+	if _get_panel():
+		_get_panel().hide_dice_count()
+		_get_panel().hide_dice_results()
+		_get_panel().hide_confirm_button()
+		_get_panel().hide_cf_dial_section()
+		_get_panel().hide_cf_token_section()
+		_get_panel().hide_roll_button()
 		var ship_name: String = ""
-		if _attack_exec_ship_token.get_ship_data():
+		if _state.exec_ship_token.get_ship_data():
 			ship_name = \
-					_attack_exec_ship_token.get_ship_data().ship_name
-		_attack_sim_panel.show_select_next_squadron(
-				ship_name, _attack_sim_atk_zone_name)
-		_attack_sim_panel.show_skip_attack_button()
-
+					_state.exec_ship_token.get_ship_data().ship_name
+		_get_panel().show_select_next_squadron(
+				ship_name, _state.attacker_zone_name)
+		_get_panel().show_skip_attack_button()
 
 ## Prepares the board for a second hull zone attack.
 ## Resets target state and returns to hull zone selection.
 ## Requirements: AE-2HZ-004, AE-2HZ-005.
 func _attack_exec_prepare_next_attack() -> void:
 	_log.info("Preparing second attack (attack %d/2)." % [
-			_attack_exec_current_attack + 1])
+			_state.current_attack + 1])
 	if not _attack_exec_has_any_valid_target():
 		_log.info(
 				"No valid targets for second attack — auto-skipping.")
@@ -2868,33 +1828,23 @@ func _attack_exec_prepare_next_attack() -> void:
 		return
 	_reset_for_next_attack()
 	_show_next_attack_panel()
-	_show_ship_range_overlay()
-
+	_target_selector.show_ship_range_overlay(_state.exec_ship_token)
 
 ## Resets target and dice state for the next hull zone attack.
 func _reset_for_next_attack() -> void:
-	_attack_sim_clear_target_state()
-	_attack_exec_dice_results.clear()
-	_attack_exec_pool.clear()
-	_attack_exec_range_band = ""
-	_attack_exec_attacked_squads.clear()
-	if _attack_sim_overlay:
-		_attack_sim_overlay.clear_target()
-	_attack_sim_selecting = true
-	_attack_sim_target_selecting = false
-
+	_state.reset_for_next_attack()
+	_target_selector.prepare_next_hull_zone()
 
 ## Updates the panel for the next hull zone selection.
 func _show_next_attack_panel() -> void:
-	if _attack_sim_panel:
-		_attack_sim_panel.hide_dice_count()
+	if _get_panel():
+		_get_panel().hide_dice_count()
 		var ship_name: String = ""
-		if _attack_exec_ship_token.get_ship_data():
+		if _state.exec_ship_token.get_ship_data():
 			ship_name = \
-					_attack_exec_ship_token.get_ship_data().ship_name
-		_attack_sim_panel.show_initial_attack_exec(ship_name)
-		_attack_sim_panel.show_skip_attack_button()
-
+					_state.exec_ship_token.get_ship_data().ship_name
+		_get_panel().show_initial_attack_exec(ship_name)
+		_get_panel().show_skip_attack_button()
 
 ## Called when the player presses "Skip Attack".
 ## During hull zone selection: ends the attack step immediately.
@@ -2905,15 +1855,14 @@ func _on_attack_skip() -> void:
 	# If we're in the Step 6 squadron loop (attacked >=1 squadron and
 	# still target-selecting for the next one), treat as "done with
 	# this hull zone's anti-squadron attacks."
-	if _attack_exec_attacked_squads.size() > 0 and \
-			_attack_sim_target_selecting:
+	if _state.attacked_squads.size() > 0 and \
+			_target_selector.is_target_selecting():
 		_log.info(
 				"Squadron loop skipped — moving to next hull zone.")
 		_end_squadron_loop()
 		return
 	_log.info("Attack skipped by player.")
 	_finish_attack_execution()
-
 
 ## Fades out a destroyed token over 0.8 seconds, then hides it.
 ## Called when a ship or squadron is destroyed during an attack.

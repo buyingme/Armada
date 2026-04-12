@@ -171,6 +171,8 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 	## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 	if not _attack_exec_has_any_valid_target():
 		_log.info("No valid targets from any hull zone — auto-skipping.")
+		GameManager.submit_skip_attack(
+				_get_attacker_player(), "no_targets")
 		if panel:
 			panel.hide_skip_attack_button()
 		_finish_attack_execution()
@@ -582,10 +584,11 @@ func _on_attack_roll_dice() -> void:
 			_state.dice_pool))
 	# Play dice-roll SFX based on attacker type and faction.
 	_play_dice_roll_sfx()
-	# Convert to engine pool and roll.
-	var engine_pool: Dictionary = DicePool.to_engine_pool(
-			_state.dice_pool)
-	_state.dice_results = Dice.roll_pool(engine_pool)
+	# Submit dice roll via command for deterministic replay.
+	var atk_player: int = _get_attacker_player()
+	var roll_result: Dictionary = GameManager.submit_roll_dice(
+			atk_player, _state.dice_pool)
+	_state.dice_results = roll_result.get("dice_results", [])
 	# Show results.
 	if _get_panel():
 		_get_panel().hide_roll_button()
@@ -860,11 +863,9 @@ func _on_attack_defense_token_spent(token_index: int,
 	if not _is_defense_token_spendable(token_index, token):
 		return
 	var actual_method: String = _resolve_spend_method(spend_method, token)
-	match actual_method:
-		"discard":
-			def_inst.discard_defense_token(token_index)
-		_:
-			def_inst.exhaust_defense_token(token_index)
+	# Route through command system for replay determinism.
+	GameManager.submit_spend_defense_token(
+			def_inst, token_index, actual_method)
 	_state.spent_tokens[token_type] = actual_method
 	EventBus.ship_defense_token_changed.emit(def_inst)
 	EventBus.defense_token_spent.emit(
@@ -898,6 +899,22 @@ func _get_defender_instance() -> ShipInstance:
 	if _state.defender_ship == null:
 		return null
 	return _state.defender_ship.get_ship_instance()
+
+
+## Returns the attacker's owner_player index.
+## Works for both ship and squadron attack modes.
+func _get_attacker_player() -> int:
+	if _state.squad_exec_mode and _state.exec_squad_token:
+		var sq: SquadronInstance = \
+				_state.exec_squad_token.get_squadron_instance()
+		if sq:
+			return sq.owner_player
+	if _state.exec_ship_token:
+		var si: ShipInstance = \
+				_state.exec_ship_token.get_ship_instance()
+		if si:
+			return si.owner_player
+	return 0
 
 ## Returns true if a persistent damage card effect blocks spending this
 ## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
@@ -1096,7 +1113,8 @@ func _apply_single_redirect(zone_enum: Constants.HullZone,
 			zone_enum, def_inst, _state.redirect_remaining):
 		_log.info("Redirect: cannot redirect to %s." % zone_str)
 		return false
-	def_inst.reduce_shields(zone_str, 1)
+	# Route through command system for replay determinism.
+	GameManager.submit_select_redirect_zone(def_inst, int(zone_enum))
 	EventBus.ship_shields_changed.emit(
 			def_inst, zone_str,
 			int(def_inst.current_shields.get(zone_str, 0)))
@@ -1837,9 +1855,13 @@ func _on_attack_skip() -> void:
 			_target_selector.is_target_selecting():
 		_log.info(
 				"Squadron loop skipped — moving to next hull zone.")
+		GameManager.submit_skip_attack(
+				_get_attacker_player(), "squadron_done")
 		_end_squadron_loop()
 		return
 	_log.info("Attack skipped by player.")
+	GameManager.submit_skip_attack(
+			_get_attacker_player(), "voluntary")
 	_finish_attack_execution()
 
 ## Fades out a destroyed token over 0.8 seconds, then hides it.

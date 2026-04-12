@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-12
+> Last updated: 2026-04-13
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -11,11 +11,11 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 107 |
-| GUT tests | 2 195 |
-| GUT asserts | 3 923 |
+| GUT tests | 2 196 |
+| GUT asserts | 3 924 |
 | Autoloads | 12 |
 | Command classes | 14 (1 base + 13 concrete) |
-| Wired command call sites | 18 |
+| Wired command call sites | 24 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -83,8 +83,8 @@
 | G5: Deterministic RNG | ✅ | `GameRng` class, seeded Dice + DamageDeck |
 | G1+G3: GameCommand + CommandProcessor | ✅ | Base class with registry, autoload with submit/history/replay pipeline |
 | G2 Tier 1: 6 commands + wiring | ✅ | AssignDial, ActivateShip, EndActivation, ConvertDialToToken, ActivateSquadron, SpendToken |
-| G2 Tier 2: 4 attack commands | ✅ | RollDice, SpendDefenseToken, SelectRedirectZone, SkipAttack (infrastructure, not wired into AE) |
-| G2 Tier 3: 2 movement commands | ✅ | MoveSquadron, ExecuteManeuver (infrastructure, not wired into presentation) |
+| G2 Tier 2: 4 attack commands | ✅ | RollDice, SpendDefenseToken, SelectRedirectZone, SkipAttack — wired into AE |
+| G2 Tier 3: 2 movement commands | ✅ | MoveSquadron, ExecuteManeuver — wired into presentation |
 | G2 Wiring: SpendToken + SpendDial | ✅ | Return-value protocol: 7 token + 5 dial call sites wired |
 | G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save |
 | G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
@@ -100,7 +100,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 13 cmds, 18 sites |
+| GameCommand + CommandProcessor | G | ✅ 13 cmds, 24 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -146,7 +146,7 @@
 
 ## Manual Tests Passed
 
-23 tests formally passed with date stamps (out of ~233 total written).
+26 tests formally passed with date stamps (out of ~233 total written).
 All passing tests are from 2026-04-11 or 2026-04-12.
 
 | ID | Description | Date |
@@ -157,6 +157,7 @@ All passing tests are from 2026-04-11 or 2026-04-12.
 | MT-F5d.01–03 | TargetSelector (simulator + ship + squadron attacks) | 2026-04-12 |
 | MT-G.01–08 | Full game regression, token convert, squadron, RNG, wiring (4 tests) | 2026-04-12 |
 | MT-G.09–10 | CommandProcessor reset, replay file save | 2026-04-12 |
+| MT-G.13–15 | Command registration (13 types), repair token spend, squadron dial spend | 2026-04-12 |
 | MT-HF.01–02 | Pre-roll deselection, post-roll click block | 2026-04-12 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
@@ -174,3 +175,4 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `b7f37f7` | SpendTokenCommand wiring (7 call sites) |
 | `515413e` | SpendDialCommand creation + wiring (5 call sites) |
 | `8b720e7` | Docs: §4.6 violation roadmap + manual test plan |
+| `d0fde4f` | Docs: consolidate into progress_summary + open_topics |

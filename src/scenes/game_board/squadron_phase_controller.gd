@@ -331,6 +331,15 @@ func _on_squadron_move_commit(token: SquadronToken) -> void:
 	_remove_squadron_overlay()
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	EngagementResolver.update_engagement_flags(all_squads)
+
+	# Record the move via command for replay determinism.
+	var instance: SquadronInstance = token.get_squadron_instance()
+	var pa: Vector2 = GameScale.play_area_size_px
+	if instance and pa.x > 0.0 and pa.y > 0.0:
+		var norm_x: float = token.global_position.x / pa.x
+		var norm_y: float = token.global_position.y / pa.y
+		GameManager.submit_move_squadron(instance, norm_x, norm_y)
+
 	EventBus.squadron_moved.emit(token)
 	_log.info("Squadron move committed — engagement updated.")
 

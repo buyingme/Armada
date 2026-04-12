@@ -533,3 +533,11 @@ func test_has_any_repair_target_true_with_reduced_shields() -> void:
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	assert_true(resolver.has_any_repair_target(),
 			"Ship with reduced shields should have a repair target")
+
+
+func test_get_ship_returns_ship_instance() -> void:
+	var ship: ShipInstance = _make_ship()
+	var deck: DamageDeck = _make_deck()
+	var resolver: RepairResolver = RepairResolver.create(ship, deck)
+	assert_eq(resolver.get_ship(), ship,
+			"get_ship() should return the ship passed to create()")

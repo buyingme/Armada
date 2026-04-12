@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-12
-> Current baseline: 107 scripts, 2 195 tests, 3 923 asserts
+> Last updated: 2026-04-13
+> Current baseline: 107 scripts, 2 196 tests, 3 924 asserts
 
 ---
 
@@ -89,21 +89,18 @@ P1–P4 block multiplayer; P5–P7 are deferrable.
 
 ---
 
-## 2. Unwired Command Infrastructure
+## 2. ~~Unwired Command Infrastructure~~ ✅ RESOLVED
 
-Four Tier 2 and Tier 3 command classes exist but are **not yet wired** into
-their presentation-layer call sites:
+All six command classes are now wired into their presentation-layer call sites:
 
-| Command | Current State | Wiring Target |
-|---------|--------------|---------------|
-| `RollDiceCommand` | ✅ class + tests | `attack_executor.gd` dice rolling |
-| `SpendDefenseTokenCommand` | ✅ class + tests | `attack_executor.gd` defense token step |
-| `SelectRedirectZoneCommand` | ✅ class + tests | `attack_executor.gd` redirect zone selection |
-| `SkipAttackCommand` | ✅ class + tests | `attack_executor.gd` skip/done flows |
-| `MoveSquadronCommand` | ✅ class + tests | `squadron_activation_modal.gd` movement commit |
-| `ExecuteManeuverCommand` | ✅ class + tests | `game_board.gd` maneuver commit |
-
-These should be wired alongside or after the §4.6 violation work.
+| Command | Wired In |
+|---------|----------|
+| `RollDiceCommand` | `attack_executor.gd` — `_on_attack_roll_dice()` |
+| `SpendDefenseTokenCommand` | `attack_executor.gd` — `_on_attack_defense_token_spent()` |
+| `SelectRedirectZoneCommand` | `attack_executor.gd` — `_apply_single_redirect()` |
+| `SkipAttackCommand` | `attack_executor.gd` — `_on_attack_skip()` + auto-skip |
+| `MoveSquadronCommand` | `squadron_phase_controller.gd` — `_on_squadron_move_commit()` |
+| `ExecuteManeuverCommand` | `game_board.gd` — `_on_execute_maneuver()` |
 
 ---
 
@@ -118,18 +115,26 @@ All other implementation phases (0–12) are complete.
 
 ---
 
+## 3.5 Known Visual Bugs
+
+| Bug | Severity | Observed | Notes |
+|-----|----------|----------|-------|
+| Activated squadron loses ghosted appearance after debug repositioning | Minor (visual only) | 2026-04-12 | Squadrons that collide with a ship and are repositioned in debug mode lose their activated dim/ghost visual. Game logic is correct — they cannot be re-activated. |
+
+---
+
 ## 4. Open Manual Tests
 
-233 manual test cases were written. 23 formally passed (with date stamps).
+233 manual test cases were written. 26 formally passed (with date stamps).
 ~200 remain untested or lack formal result annotations.
 
 ### Awaiting First Test (highest priority — recent changes)
 
 | ID | Description |
 |----|-------------|
-| MT-G.13 | Command registration count is now 13 |
-| MT-G.14 | Repair flow: dial + token spend through commands |
-| MT-G.15 | Squadron command flow: dial + token spend through commands |
+| MT-G.13 | Command registration count is now 13 | ✅ passed 2026-04-12 |
+| MT-G.14 | Repair flow: dial + token spend through commands | ✅ passed 2026-04-12 (bug fixed) |
+| MT-G.15 | Squadron command flow: dial + token spend through commands | ✅ passed 2026-04-12 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

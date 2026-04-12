@@ -1372,6 +1372,20 @@ func _on_execute_maneuver() -> void:
 	var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
 	var maneuver_ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
 	_submit_resolver_spends(maneuver_ship, token_result)
+
+	# Record the maneuver via command for replay determinism.
+	var mt_scene_ref: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if mt_scene_ref:
+		var tool_st: ManeuverToolState = mt_scene_ref.get_state()
+		var pa: Vector2 = GameScale.play_area_size_px
+		if pa.x > 0.0 and pa.y > 0.0:
+			var norm_x: float = final_xform.origin.x / pa.x
+			var norm_y: float = final_xform.origin.y / pa.y
+			var rot_deg: float = rad_to_deg(final_xform.get_rotation())
+			GameManager.submit_execute_maneuver(maneuver_ship,
+					tool_st.get_speed(), tool_st.get_joint_clicks(),
+					norm_x, norm_y, rot_deg)
+
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
 	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)

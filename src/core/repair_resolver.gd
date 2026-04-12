@@ -78,6 +78,11 @@ func get_points_spent() -> int:
 	return _total_points - _remaining_points
 
 
+## Returns the ship being repaired.
+func get_ship() -> ShipInstance:
+	return _ship
+
+
 ## Returns true if a Repair dial contributes points.
 func has_repair_dial() -> bool:
 	return _has_repair_dial

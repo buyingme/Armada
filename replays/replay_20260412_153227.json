@@ -1,0 +1,214 @@
+{
+	"commands": [
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 3,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 5,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 6,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "activate_ship"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"squadron_index": 1
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 2
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 4
+			},
+			"player": 1,
+			"sequence": 11,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 3
+			},
+			"player": 1,
+			"sequence": 12,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 3
+			},
+			"player": 0,
+			"sequence": 13,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 0
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 5
+			},
+			"player": 1,
+			"sequence": 15,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 1
+			},
+			"player": 1,
+			"sequence": 16,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 0
+			},
+			"player": 1,
+			"sequence": 17,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"squadron_index": 2
+			},
+			"player": 1,
+			"sequence": 18,
+			"type": "activate_squadron"
+		},
+		{
+			"payload": {
+				"commands": [
+					0
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 19,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 20,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 21,
+			"type": "assign_dials"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": 3392020063904114639,
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-04-12T13:32:27"
+	}
+}

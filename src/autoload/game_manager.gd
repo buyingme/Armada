@@ -587,6 +587,92 @@ func submit_spend_dial(ship: ShipInstance, mode: String = "spend") -> void:
 		EventBus.command_dials_changed.emit(ship)
 
 
+## Submits a [MoveSquadronCommand] recording a squadron's new normalised position.
+## Called after the presentation layer commits a validated squadron move.
+## [param squadron] — the SquadronInstance that moved.
+## [param norm_x] — normalised X position (0.0–1.0).
+## [param norm_y] — normalised Y position (0.0–1.0).
+func submit_move_squadron(squadron: SquadronInstance,
+		norm_x: float, norm_y: float) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var sq_index: int = current_game_state.find_squadron_index(squadron)
+	var cmd := MoveSquadronCommand.new(squadron.owner_player,
+			{"squadron_index": sq_index, "pos_x": norm_x, "pos_y": norm_y})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits an [ExecuteManeuverCommand] recording a ship's final position.
+## Called after the presentation layer resolves overlaps and snaps the ship.
+## [param ship] — the ShipInstance that manoeuvred.
+## [param speed] — the speed used for this maneuver.
+## [param yaw_clicks] — signed yaw clicks per joint.
+## [param norm_x] — normalised X position (0.0–1.0).
+## [param norm_y] — normalised Y position (0.0–1.0).
+## [param rotation_deg] — final rotation in degrees.
+func submit_execute_maneuver(ship: ShipInstance, speed: int,
+		yaw_clicks: Array, norm_x: float, norm_y: float,
+		rotation_deg: float) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := ExecuteManeuverCommand.new(ship.owner_player, {
+		"ship_index": ship_index, "speed": speed,
+		"yaw_clicks": yaw_clicks, "pos_x": norm_x, "pos_y": norm_y,
+		"rotation_deg": rotation_deg})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [RollDiceCommand] for deterministic dice rolling.
+## Returns the command result containing [code]"dice_results"[/code].
+## [param player] — the attacking player index.
+## [param dice_pool] — Dictionary mapping colour string to count.
+func submit_roll_dice(player: int,
+		dice_pool: Dictionary) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var cmd := RollDiceCommand.new(player, {"dice_pool": dice_pool})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [SpendDefenseTokenCommand] for defense token spending.
+## [param ship] — the defending ShipInstance.
+## [param token_index] — index in defense_tokens array.
+## [param spend_method] — "exhaust" or "discard".
+func submit_spend_defense_token(ship: ShipInstance, token_index: int,
+		spend_method: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SpendDefenseTokenCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "token_index": token_index,
+			"spend_method": spend_method})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [SelectRedirectZoneCommand] for redirect damage allocation.
+## [param ship] — the defending ShipInstance.
+## [param zone] — [Constants.HullZone] int value of the target zone.
+func submit_select_redirect_zone(ship: ShipInstance,
+		zone: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SelectRedirectZoneCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "zone": zone})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [SkipAttackCommand] for replay recording.
+## [param player] — the active player index.
+## [param reason] — skip reason string.
+func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary:
+	if not current_game_state:
+		return {}
+	var cmd := SkipAttackCommand.new(player, {"reason": reason})
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

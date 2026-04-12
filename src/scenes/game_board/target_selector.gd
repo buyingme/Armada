@@ -790,7 +790,7 @@ func _validate_target_squadron_click(
 			if not def_engaged:
 				return _reject_target(
 						"Attack exec: engaged attacker cannot target "
-						+ "non-engaged squadron.",
+						+"non-engaged squadron.",
 						"Must attack an engaged enemy squadron.",
 						"must_attack_engaged")
 	# Already-attacked guard (Step 6, AE-SQ-002).

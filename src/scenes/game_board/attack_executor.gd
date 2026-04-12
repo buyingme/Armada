@@ -241,13 +241,24 @@ func _init_squadron_attack_state(
 
 ## Handles Escape key press. Returns true if consumed.
 ## In attack execution mode, cancels back to the activation modal.
-## Requirements: AS-ACT-003, AS-TGT-022, AE-FLOW-004.
+## Once the dice sequence has begun (pool gathered), Escape is blocked to
+## prevent free re-rolls.  Only target selection allows cancellation.
+## Rules Reference: "Attack", Step 2, p. 2 — once dice are gathered the
+## attacker has declared the attack and it cannot be withdrawn.
+## Requirements: AS-ACT-003, AS-TGT-022, AE-FLOW-004, AE-ESC-001.
 func handle_escape(event: InputEvent) -> bool:
 	if not event is InputEventKey:
 		return false
 	var key_event: InputEventKey = event as InputEventKey
 	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
 		return false
+	# Block escape once the dice sequence has started (pool computed).
+	# This prevents cancelling after dice are rolled, which would allow
+	# free re-rolls (cheating).
+	if _state.is_dice_sequence_started():
+		_log.info("Escape blocked — dice sequence in progress.")
+		get_viewport().set_input_as_handled()
+		return true
 	if _target_selector.is_active():
 		var was_exec: bool = _state.exec_mode
 		_target_selector.dismiss()

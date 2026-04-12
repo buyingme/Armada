@@ -1668,7 +1668,6 @@ func _on_range_overlay_requested() -> void:
 	_range_tool_controller.start_selection()
 
 
-
 # ---------------------------------------------------------------------------
 # Attack Executor — Setup & Delegation
 # ---------------------------------------------------------------------------
@@ -1717,7 +1716,7 @@ func _create_targeting_list_controller() -> void:
 	add_child(_targeting_list_controller)
 	_targeting_list_controller.initialize(
 			get_ship_tokens, get_squadron_tokens,
-			_maneuver_tool_controller, _panel_mgr, self)
+			_maneuver_tool_controller, _panel_mgr, self )
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:

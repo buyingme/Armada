@@ -277,7 +277,7 @@ func test_reset_for_next_attack_clears_dice() -> void:
 
 func test_reset_for_next_attack_clears_attacked_squads() -> void:
 	var s: AttackState = _dirty_state()
-	s.attacked_squads.append(null)  # placeholder
+	s.attacked_squads.append(null) # placeholder
 	s.reset_for_next_attack()
 	assert_eq(s.attacked_squads.size(), 0, "attacked_squads should be empty after reset_for_next_attack")
 
@@ -393,3 +393,56 @@ func test_queries_false_after_clear_all() -> void:
 	assert_false(s.is_squad_attack(), "is_squad_attack should be false after clear_all")
 	assert_false(s.has_attacker(), "has_attacker should be false after clear_all")
 	assert_false(s.has_defender(), "has_defender should be false after clear_all")
+	assert_false(s.is_dice_sequence_started(),
+			"is_dice_sequence_started should be false after clear_all")
+
+
+# ---------------------------------------------------------------------------
+# is_dice_sequence_started
+# ---------------------------------------------------------------------------
+
+func test_is_dice_sequence_started_false_by_default() -> void:
+	var s: AttackState = AttackState.new()
+	assert_false(s.is_dice_sequence_started(),
+			"New state should not be in dice sequence")
+
+
+func test_is_dice_sequence_started_false_when_pool_set_but_not_exec() -> void:
+	var s: AttackState = AttackState.new()
+	s.dice_pool = {"red": 2}
+	assert_false(s.is_dice_sequence_started(),
+			"Simulator mode with pool should not count as dice sequence")
+
+
+func test_is_dice_sequence_started_false_when_exec_but_pool_empty() -> void:
+	var s: AttackState = AttackState.new()
+	s.exec_mode = true
+	assert_false(s.is_dice_sequence_started(),
+			"Exec mode without pool should not be in dice sequence")
+
+
+func test_is_dice_sequence_started_true_when_exec_and_pool_set() -> void:
+	var s: AttackState = AttackState.new()
+	s.exec_mode = true
+	s.dice_pool = {"red": 2}
+	assert_true(s.is_dice_sequence_started(),
+			"Exec mode with non-empty pool should be in dice sequence")
+
+
+func test_is_dice_sequence_started_true_after_dice_rolled() -> void:
+	var s: AttackState = AttackState.new()
+	s.exec_mode = true
+	s.dice_pool = {"red": 2}
+	s.dice_results.append({"color": Constants.DiceColor.RED,
+			"face": Constants.DiceFace.HIT})
+	assert_true(s.is_dice_sequence_started(),
+			"Post-roll state should still be in dice sequence")
+
+
+func test_is_dice_sequence_started_false_after_reset_dice() -> void:
+	var s: AttackState = AttackState.new()
+	s.exec_mode = true
+	s.dice_pool = {"red": 2}
+	s.reset_dice()
+	assert_false(s.is_dice_sequence_started(),
+			"After reset_dice, dice sequence should be ended")

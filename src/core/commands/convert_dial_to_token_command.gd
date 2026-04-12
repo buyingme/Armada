@@ -50,8 +50,9 @@ func validate(game_state: GameState) -> String:
 
 
 ## Reveals the top dial, spends it, adds the matching token.
+## Checks for Life Support Failure (ON_COMMAND_TOKEN_GAIN hook).
 ## Returns {"command": int, "token_added": bool, "duplicate": bool,
-##          "overflow": bool}.
+##          "overflow": bool, "token_blocked": bool}.
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
@@ -61,10 +62,18 @@ func execute(game_state: GameState) -> Dictionary:
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
-		return {"command": -1, "token_added": false}
+		return {"command": -1, "token_added": false,
+				"token_blocked": false}
 	var cmd_type: int = int(dial.get("command", 0))
 	# Spend the dial.
 	ship.command_dial_stack.spend_revealed()
+	# Check Life Support Failure (damage card blocks token gain).
+	## Rules Reference: "Life Support Failure" card text.
+	if _is_token_gain_blocked(game_state, ship):
+		return {"command": cmd_type, "token_added": false,
+				"duplicate": false, "overflow": false,
+				"token_blocked": true,
+				"ship_index": payload.get("ship_index", -1)}
 	# Add the token.
 	var add_result: Dictionary = \
 			ship.command_tokens.force_add_token(cmd_type)
@@ -75,8 +84,21 @@ func execute(game_state: GameState) -> Dictionary:
 		ship.command_tokens.remove_token(cmd_type)
 	return {
 		"command": cmd_type,
-		"token_added": not duplicate,
+		"token_added": true,
 		"duplicate": duplicate,
 		"overflow": overflow,
+		"token_blocked": false,
 		"ship_index": payload.get("ship_index", -1),
 	}
+
+
+## Checks if a damage card effect (Life Support Failure) blocks token gain.
+func _is_token_gain_blocked(game_state: GameState,
+		ship: ShipInstance) -> bool:
+	if not game_state.effect_registry:
+		return false
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx = game_state.effect_registry.resolve_hook(
+			&"ON_COMMAND_TOKEN_GAIN", ctx)
+	return ctx.cancelled

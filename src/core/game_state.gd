@@ -89,6 +89,14 @@ func find_ship_index(ship: ShipInstance) -> int:
 	return ps.ships.find(ship)
 
 
+## Returns the index of [param squadron] in its owner's fleet, or -1.
+func find_squadron_index(squadron: SquadronInstance) -> int:
+	var ps: PlayerState = get_player_state(squadron.owner_player)
+	if ps == null:
+		return -1
+	return ps.squadrons.find(squadron)
+
+
 ## Serializes the game state to a dictionary for saving.
 func serialize() -> Dictionary:
 	var data := {

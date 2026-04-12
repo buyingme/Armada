@@ -358,8 +358,8 @@ func test_convert_dial_execute_duplicate_discards() -> void:
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(result.get("duplicate", false),
 			"Should flag as duplicate.")
-	assert_false(result.get("token_added", true),
-			"Token should not be added (duplicate discarded).")
+	assert_true(result.get("token_added", false),
+			"Token was force-added (then auto-discarded).")
 
 
 func test_convert_dial_serialize_roundtrip() -> void:

@@ -167,6 +167,7 @@ func apply_fixed_round1_commands(commands: Dictionary) -> void:
 
 
 ## Assigns fixed commands to a single ship from the commands dictionary.
+## Routes through [CommandProcessor] for history and replay tracking.
 ## Returns true if assignment succeeded.
 func _assign_fixed_commands_to_ship(ship: ShipInstance,
 		commands: Dictionary) -> bool:
@@ -179,15 +180,18 @@ func _assign_fixed_commands_to_ship(ship: ShipInstance,
 	var typed_cmds: Array[int] = []
 	for cmd: Variant in (cmds as Array):
 		typed_cmds.append(cmd as int)
-	var ok: bool = ship.command_dial_stack.assign_dials(
-			typed_cmds, 1)
-	if ok:
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := AssignDialCommand.new(ship.owner_player, {
+			"ship_index": ship_index,
+			"commands": typed_cmds})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if result.get("success", false):
 		_log.info("Auto-assigned round 1 commands: %s = %s" % [
 				ship.data_key, str(typed_cmds)])
 		EventBus.command_dials_changed.emit(ship)
-	else:
-		_log.warn("assign_dials failed for '%s' (fixed commands)." % ship.data_key)
-	return ok
+		return true
+	_log.warn("assign_dials failed for '%s' (fixed commands)." % ship.data_key)
+	return false
 
 
 ## Returns the current round number.
@@ -306,6 +310,7 @@ func _on_command_dials_submitted(player_index: int) -> void:
 
 
 ## Called when the picker confirms dials for a specific ship.
+## Routes through [CommandProcessor] for history and replay tracking.
 ## Assigns the selected commands into that ship's dial stack and checks
 ## whether all ships for the owning player have been assigned.
 func _on_command_picker_confirmed(ship: ShipInstance,
@@ -319,9 +324,12 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	for cmd: Variant in commands:
 		typed_commands.append(cmd as int)
 
-	var result: bool = ship.command_dial_stack.assign_dials(
-			typed_commands, current_game_state.current_round)
-	if not result:
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var assign_cmd := AssignDialCommand.new(ship.owner_player, {
+			"ship_index": ship_index,
+			"commands": typed_commands})
+	var result: Dictionary = CommandProcessor.submit(assign_cmd)
+	if not result.get("success", false):
 		_log.warn("assign_dials failed for '%s'" % [
 				ship.ship_data.ship_name if ship.ship_data else "?"])
 	EventBus.command_dials_changed.emit(ship)
@@ -413,23 +421,16 @@ func activate_ship(ship: ShipInstance) -> void:
 	if _activating_ship != null:
 		_log.warn("Cannot activate — already activating a ship.")
 		return
-	if ship.activated_this_round:
-		_log.warn("Cannot activate — ship already activated this round.")
-		return
-	if ship.command_dial_stack == null:
-		_log.warn("Cannot activate — ship has no command dial stack.")
-		return
-	# The dial may already be revealed (early reveal on drag start).
-	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	if dial.is_empty():
-		dial = ship.command_dial_stack.reveal_top()
-	if dial.is_empty():
-		_log.warn("Cannot activate — no dials to reveal.")
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := ActivateShipCommand.new(ship.owner_player,
+			{"ship_index": ship_index})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if result.is_empty():
 		return
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 	_log.info("Ship activated: %s (command: %d)" % [
-			ship.data_key, int(dial.get("command", -1))])
+			ship.data_key, result.get("command", -1)])
 
 
 ## Activates a ship without requiring a revealed dial.
@@ -468,37 +469,37 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 	if _activating_ship != null:
 		_log.warn("Cannot activate — already activating a ship.")
 		return {}
-	if ship.activated_this_round:
-		_log.warn("Cannot activate — ship already activated this round.")
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := ConvertDialToTokenCommand.new(ship.owner_player,
+			{"ship_index": ship_index})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if result.is_empty():
 		return {}
-	if ship.command_dial_stack == null:
-		_log.warn("Cannot activate — ship has no command dial stack.")
-		return {}
-
-	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	if dial.is_empty():
-		dial = ship.command_dial_stack.reveal_top()
-	if dial.is_empty():
-		_log.warn("Cannot activate — no dials to reveal.")
-		return {}
-
-	var cmd: int = int(dial.get("command", 0))
-	ship.command_dial_stack.spend_revealed()
-
-	var token_added: bool = false
-	var needs_discard: bool = false
-	if ship.command_tokens:
-		var add_result: Dictionary = _handle_token_add_result(
-				ship, cmd)
-		token_added = add_result.get("token_added", false)
-		needs_discard = add_result.get("needs_discard", false)
 
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 
-	_log.info("Ship activated (token convert): %s (command: %d, token_added: %s, needs_discard: %s)" % [
-			ship.data_key, cmd, str(token_added), str(needs_discard)])
-	return {"command": cmd, "token_added": token_added, "needs_discard": needs_discard}
+	# Emit token-related EventBus signals based on command result.
+	var cmd_type: int = result.get("command", -1)
+	var token_added: bool = result.get("token_added", false)
+	var needs_discard: bool = result.get("overflow", false)
+
+	if not result.get("token_blocked", false):
+		if result.get("duplicate", false):
+			EventBus.command_tokens_changed.emit(ship)
+			EventBus.duplicate_token_discarded.emit(ship, cmd_type)
+		elif needs_discard:
+			EventBus.command_tokens_changed.emit(ship)
+			EventBus.token_discard_required.emit(ship)
+		else:
+			EventBus.command_tokens_changed.emit(ship)
+
+	_log.info(("Ship activated (token convert): %s (command: %d, "
+			+ "token_added: %s, needs_discard: %s)") % [
+			ship.data_key, cmd_type, str(token_added),
+			str(needs_discard)])
+	return {"command": cmd_type, "token_added": token_added,
+			"needs_discard": needs_discard}
 
 
 ## Force-adds a command token and handles duplicate / overflow cases.
@@ -543,17 +544,19 @@ func _on_activation_ended() -> void:
 		return
 
 	# Ship Phase: spend revealed dial and mark ship as activated.
-	# The dial may already have been spent by activate_ship_as_token()
-	# (card-drop token conversion), so only spend if still revealed.
+	# Routes through EndActivationCommand for history tracking.
 	if current_game_state.current_phase == Constants.GamePhase.SHIP:
 		if _activating_ship != null:
-			var revealed: Dictionary = \
-					_activating_ship.command_dial_stack.get_revealed_dial()
-			if not revealed.is_empty():
-				_activating_ship.command_dial_stack.spend_revealed()
-			_activating_ship.activated_this_round = true
-			EventBus.command_dials_changed.emit(_activating_ship)
-			_log.info("Ship activation ended: %s" % _activating_ship.data_key)
+			var ship_index: int = current_game_state.find_ship_index(
+					_activating_ship)
+			var cmd := EndActivationCommand.new(
+					_activating_ship.owner_player,
+					{"ship_index": ship_index})
+			var result: Dictionary = CommandProcessor.submit(cmd)
+			if not result.is_empty():
+				EventBus.command_dials_changed.emit(_activating_ship)
+				_log.info("Ship activation ended: %s" \
+						% _activating_ship.data_key)
 			_activating_ship = null
 
 	match current_game_state.current_phase:
@@ -703,20 +706,18 @@ func _begin_squadron_phase() -> void:
 func activate_squadron(squadron: SquadronInstance) -> void:
 	if not is_game_active or not current_game_state:
 		return
-	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
-		_log.warn("activate_squadron: not in SQUADRON phase.")
-		return
-	if squadron.is_destroyed():
-		_log.warn("activate_squadron: squadron is destroyed.")
+	if _activating_squadron != null:
+		_log.warn("activate_squadron: already activating a squadron.")
 		return
 	if squadron.owner_player != active_player:
 		_log.warn("activate_squadron: squadron not owned by active player.")
 		return
-	if squadron.activated_this_round:
-		_log.warn("activate_squadron: already activated this round.")
-		return
-	if _activating_squadron != null:
-		_log.warn("activate_squadron: already activating a squadron.")
+	var sq_index: int = current_game_state.find_squadron_index(
+			squadron)
+	var cmd := ActivateSquadronCommand.new(squadron.owner_player,
+			{"squadron_index": sq_index})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if result.is_empty():
 		return
 	_activating_squadron = squadron
 	_log.info("Squadron activated: %s (player %d, turn count %d)" % [

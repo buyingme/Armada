@@ -2262,6 +2262,33 @@ All classes in `src/core/commands/`. Each has `validate()`, `execute()`,
 **Commit:** `158fa91`
 **Tests:** 104 scripts, 2 098 tests, 3 721 asserts — all passing.
 
+#### G2 Wiring: Adapter Pattern in GameManager ✅
+
+Routes all 6 Tier 1 command call sites through `CommandProcessor.submit()`
+using the adapter pattern: GameManager methods remain the public API but
+internally create commands and submit them through CommandProcessor.
+Commands handle pure state changes; GameManager adapters handle EventBus
+emissions and application-layer tracking (`_activating_ship`,
+`_activating_squadron`).
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | `GameState.find_squadron_index()` helper | ✅ |
+| 2 | `ConvertDialToTokenCommand` Life Support Failure check (`ON_COMMAND_TOKEN_GAIN` hook) | ✅ |
+| 3 | `ActivateShipCommand.validate()` + `execute()` support pre-revealed dials (two-click flow) | ✅ |
+| 4 | Command registration in `CommandProcessor._ready()` | ✅ |
+| 5 | Wire `_assign_fixed_commands_to_ship` → `AssignDialCommand` | ✅ |
+| 6 | Wire `_on_command_picker_confirmed` → `AssignDialCommand` | ✅ |
+| 7 | Wire `activate_ship` → `ActivateShipCommand` | ✅ |
+| 8 | Wire `activate_ship_as_token` → `ConvertDialToTokenCommand` | ✅ |
+| 9 | Wire `_on_activation_ended` → `EndActivationCommand` | ✅ |
+| 10 | Wire `activate_squadron` → `ActivateSquadronCommand` | ✅ |
+
+**SpendTokenCommand wiring:** Deferred — 3 call sites in RefCounted classes
+(`ship_activation_state.gd`, `repair_resolver.gd`, `squadron_command_resolver.gd`)
+cannot safely reference the `CommandProcessor` autoload. Requires an
+architectural decision (callback injection, signal relay, or similar).
+
 #### Remaining G2 Tiers (not yet started)
 
 | Tier | Commands | Blocked By |
@@ -2279,13 +2306,14 @@ Record/playback of serialized command sequences. Depends on G2 wiring + G5.
 
 #### Phase G Metrics
 
-| Metric | Before Phase G | After G5+G1+G3+G2T1 |
-|--------|---------------|----------------------|
-| Test scripts | 100 | 104 |
-| Tests | 2 032 | 2 098 |
-| Asserts | 3 552 | 3 721 |
-| Autoloads | 11 | 12 (+ CommandProcessor) |
-| Command classes | 0 | 7 (1 base + 6 concrete) |
+| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring |
+|--------|---------------|----------------------|-----------------|
+| Test scripts | 100 | 104 | 104 |
+| Tests | 2 032 | 2 098 | 2 098 |
+| Asserts | 3 552 | 3 721 | 3 721 |
+| Autoloads | 11 | 12 (+ CommandProcessor) | 12 |
+| Command classes | 0 | 7 (1 base + 6 concrete) | 7 |
+| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) |
 
 ---
 
@@ -2300,7 +2328,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Effect timing points in movement | Phase 5b | Upgrade card effects on movement |
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
-| GameCommand + CommandProcessor | Phase G (G1+G3) | Network multiplayer, replay | ✅ Base class + autoload + 6 Tier 1 commands |
+| GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 6 Tier 1 commands + wiring |
 | Deterministic RNG (GameRng) | Phase G (G5) | Replay determinism, network sync | ✅ Seeded RNG in Dice + DamageDeck |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |

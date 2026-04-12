@@ -50,7 +50,7 @@ func _init(p_player: int = 0, p_type: String = "",
 ## Subclasses **must** override this method.
 func execute(game_state: GameState) -> Dictionary:
 	push_warning("GameCommand.execute() called on base class — "
-			+ "override in subclass '%s'." % command_type)
+			+"override in subclass '%s'." % command_type)
 	return {}
 
 

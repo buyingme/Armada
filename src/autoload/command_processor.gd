@@ -37,6 +37,17 @@ var _history: Array[GameCommand] = []
 var _log: GameLogger = GameLogger.new("CommandProcessor")
 
 
+## Registers all concrete command types on startup.
+func _ready() -> void:
+	AssignDialCommand.register()
+	ActivateShipCommand.register()
+	EndActivationCommand.register()
+	ConvertDialToTokenCommand.register()
+	ActivateSquadronCommand.register()
+	SpendTokenCommand.register()
+	_log.info("Registered %d command types." % GameCommand._registry.size())
+
+
 ## Submits a command for validation and execution.
 ## Returns the result dictionary from [method GameCommand.execute],
 ## or an empty dictionary if validation fails.

@@ -38,18 +38,23 @@ func validate(game_state: GameState) -> String:
 		return "Ship already activated this round."
 	if ship.command_dial_stack == null:
 		return "Ship has no dial stack."
-	if ship.command_dial_stack.get_hidden_count() == 0:
-		return "Ship has no hidden dials to reveal."
+	if ship.command_dial_stack.get_hidden_count() == 0 \
+			and ship.command_dial_stack.get_revealed_dial().is_empty():
+		return "Ship has no dials to reveal."
 	return ""
 
 
 ## Reveals the top dial and marks the ship as activating.
+## If a dial is already revealed (two-click flow), uses that dial.
 ## Returns {"command": int} where command is the revealed dial's type,
 ## or {"command": -1} if reveal failed.
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
-	var dial: Dictionary = ship.command_dial_stack.reveal_top()
+	# Use already-revealed dial if present (two-click activation flow).
+	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	if dial.is_empty():
+		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		return {"command": -1}
 	return {"command": int(dial.get("command", -1)),

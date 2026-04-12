@@ -5176,11 +5176,10 @@ on their own, and do not interfere with gameplay clicks.
 ## Refactoring Phase G — Command Pattern (Multiplayer Foundation)
 
 > Phase G introduces the Command pattern: every player action becomes a
-> serializable, validatable, replayable object. This phase is **infrastructure-only** —
-> the existing game flow (direct method calls) is unchanged for now. The commands
-> are exercised via GUT unit tests (104 scripts, 2 098 tests). The manual tests
-> below verify that the game still works identically after adding the new autoload
-> and command classes (regression gate).
+> serializable, validatable, replayable object. G2 Wiring routes all Tier 1
+> command call sites through `CommandProcessor.submit()` using an adapter
+> pattern in GameManager. The manual tests below verify that the game still
+> works identically after wiring (regression gate).
 
 ### MT-G.01 — Full Game Round Regression After Command Infrastructure
 
@@ -5241,6 +5240,56 @@ resolves correctly. No console errors.
 **Pass criteria:** GameRng unit tests pass. Dice use seeded RNG via `GameState.rng`.
 
 **Result: PASS** (2026-04-12)
+
+### MT-G.05 — G2 Wiring: Ship Activation via CommandProcessor
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch Learning Scenario → assign all command dials | Command Phase completes; Ship Phase begins |
+| 2 | Click a ship dial to reveal it (step 1 of two-click flow) | Dial sprite appears face-up on the ship |
+| 3 | Drag the revealed dial to the ship token (step 2) | Ship activates; sidebar appears; no errors in Output |
+| 4 | Check Output panel for `[INFO] [CommandProcessor] Executed [activate_ship]` | Log entry present with correct sequence number |
+| 5 | Complete the ship's activation (attack + maneuver) | Normal flow; activation ends cleanly |
+| 6 | Check Output panel for `[INFO] [CommandProcessor] Executed [end_activation]` | Log entry present |
+
+**Pass criteria:** Two-click activation flow works identically. CommandProcessor
+log entries appear for `activate_ship` and `end_activation` commands.
+
+### MT-G.06 — G2 Wiring: Convert Dial to Token via CommandProcessor
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Ship Phase: activate a ship → choose **Convert** on the dial choice | Dial consumed; matching command token appears on ship |
+| 2 | Check Output panel for `[INFO] [CommandProcessor] Executed [convert_dial_to_token]` | Log entry present |
+| 3 | Repeat conversion for same token type until overflow | Overflow discard modal appears |
+| 4 | Discard a token | Token count at max; no errors |
+
+**Pass criteria:** Convert-to-token wired through CommandProcessor. Overflow
+discard still works correctly.
+
+### MT-G.07 — G2 Wiring: Command Dial Assignment via CommandProcessor
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start new game → Command Phase | Command dial picker appears |
+| 2 | Assign dials to a ship via the picker | Dials assigned; dial icons update |
+| 3 | Check Output panel for `[INFO] [CommandProcessor] Executed [assign_dials]` | Log entry present |
+| 4 | Assign all remaining dials → submit | Phase advances to Ship Phase |
+
+**Pass criteria:** Dial assignment routed through CommandProcessor. No regression
+in the command phase flow.
+
+### MT-G.08 — G2 Wiring: Squadron Activation via CommandProcessor
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance to Squadron Phase | Squadron activation modal appears |
+| 2 | Activate a squadron | Squadron highlights; move overlay or attack available |
+| 3 | Check Output panel for `[INFO] [CommandProcessor] Executed [activate_squadron]` | Log entry present |
+| 4 | Complete squadron activation | Flow completes normally |
+
+**Pass criteria:** Squadron activation wired through CommandProcessor. No
+regression in squadron phase flow.
 
 ---
 

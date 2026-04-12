@@ -631,7 +631,8 @@ func submit_roll_dice(player: int,
 		dice_pool: Dictionary) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var cmd := RollDiceCommand.new(player, {"dice_pool": dice_pool})
+	var cmd := RollDiceCommand.new(player,
+			{"dice_pool": dice_pool.duplicate()})
 	return CommandProcessor.submit(cmd)
 
 

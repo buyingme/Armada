@@ -30,6 +30,7 @@ TooltipManager="*res://src/autoload/tooltip_manager.gd"
 SfxManager="*res://src/autoload/sfx_manager.gd"
 MusicManager="*res://src/autoload/music_manager.gd"
 SaveGameManager="*res://src/autoload/save_game_manager.gd"
+CommandProcessor="*res://src/autoload/command_processor.gd"
 
 [display]
 

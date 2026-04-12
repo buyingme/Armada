@@ -1,0 +1,113 @@
+## CommandProcessor
+##
+## Central autoload that validates, executes, records, and distributes
+## all player-initiated game actions ([GameCommand] instances).
+##
+## Every game-mutating action flows through [method submit]:
+## [codeblock]
+## CommandProcessor.submit(my_command)
+## [/codeblock]
+##
+## The processor:
+## 1. Validates the command ([method GameCommand.validate]).
+## 2. Assigns a monotonically increasing sequence number.
+## 3. Executes the command ([method GameCommand.execute]).
+## 4. Records the command in the history for replay / undo.
+## 5. Emits [signal command_executed] so the presentation layer can
+##    react (UI updates, sound effects, network broadcast, etc.).
+##
+## In multiplayer (future), only the host runs [method execute];
+## clients receive authoritative results via [signal command_executed].
+extends Node
+
+
+## Emitted after a command has been successfully validated and executed.
+signal command_executed(command: GameCommand, result: Dictionary)
+
+## Emitted when a command fails validation.
+signal command_rejected(command: GameCommand, reason: String)
+
+## Monotonically increasing sequence counter.
+var _next_sequence: int = 0
+
+## Ordered history of all executed commands (for replay).
+var _history: Array[GameCommand] = []
+
+## Logger for this system.
+var _log: GameLogger = GameLogger.new("CommandProcessor")
+
+
+## Submits a command for validation and execution.
+## Returns the result dictionary from [method GameCommand.execute],
+## or an empty dictionary if validation fails.
+func submit(command: GameCommand) -> Dictionary:
+	var game_state: GameState = _get_game_state()
+	# --- Validate ---
+	var reason: String = command.validate(game_state)
+	if reason != "":
+		_log.warn("Command rejected [%s]: %s" % [
+				command.command_type, reason])
+		command_rejected.emit(command, reason)
+		return {}
+	# --- Sequence ---
+	command.sequence = _next_sequence
+	_next_sequence += 1
+	# --- Execute ---
+	var result: Dictionary = command.execute(game_state)
+	_log.info("Executed [%s] seq=%d player=%d." % [
+			command.command_type, command.sequence,
+			command.player_index])
+	# --- Record ---
+	_history.append(command)
+	# --- Notify ---
+	command_executed.emit(command, result)
+	return result
+
+
+## Returns the complete ordered history of executed commands.
+func get_history() -> Array[GameCommand]:
+	return _history
+
+
+## Returns the number of commands executed so far.
+func get_command_count() -> int:
+	return _history.size()
+
+
+## Clears history and resets the sequence counter.
+## Called at game start / new game.
+func reset() -> void:
+	_history.clear()
+	_next_sequence = 0
+	_log.info("Command history reset.")
+
+
+## Serializes the full command history for save / replay.
+func serialize_history() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for cmd: GameCommand in _history:
+		result.append(cmd.serialize())
+	return result
+
+
+## Replays a list of serialized commands against the given game state.
+## Used for save-game loading and deterministic replay.
+func replay_commands(commands: Array[Dictionary]) -> void:
+	for cmd_data: Dictionary in commands:
+		var cmd: GameCommand = GameCommand.deserialize(cmd_data)
+		if cmd == null:
+			_log.warn("Skipping unknown command: %s" %
+					cmd_data.get("type", "?"))
+			continue
+		submit(cmd)
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+## Returns the current [GameState] from [GameManager].
+func _get_game_state() -> GameState:
+	if GameManager and GameManager.current_game_state:
+		return GameManager.current_game_state
+	return null

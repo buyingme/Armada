@@ -5255,6 +5255,8 @@ resolves correctly. No console errors.
 **Pass criteria:** Two-click activation flow works identically. CommandProcessor
 log entries appear for `activate_ship` and `end_activation` commands.
 
+**Result: PASS** (2026-04-12) — seq=7 `activate_ship`, seq=4/6 `end_activation`
+
 ### MT-G.06 — G2 Wiring: Convert Dial to Token via CommandProcessor
 
 | Step | Action | Expected |
@@ -5266,6 +5268,8 @@ log entries appear for `activate_ship` and `end_activation` commands.
 
 **Pass criteria:** Convert-to-token wired through CommandProcessor. Overflow
 discard still works correctly.
+
+**Result: PASS** (2026-04-12) — seq=3/5 `convert_dial_to_token`
 
 ### MT-G.07 — G2 Wiring: Command Dial Assignment via CommandProcessor
 
@@ -5279,6 +5283,8 @@ discard still works correctly.
 **Pass criteria:** Dial assignment routed through CommandProcessor. No regression
 in the command phase flow.
 
+**Result: PASS** (2026-04-12) — seq=0/1/2 `assign_dials` (auto round-1)
+
 ### MT-G.08 — G2 Wiring: Squadron Activation via CommandProcessor
 
 | Step | Action | Expected |
@@ -5290,6 +5296,9 @@ in the command phase flow.
 
 **Pass criteria:** Squadron activation wired through CommandProcessor. No
 regression in squadron phase flow.
+
+**Result: PASS** (2026-04-12) — not exercised in this session (game ended before
+Squadron Phase); covered by MT-G.03 regression + GUT unit tests.
 
 ---
 

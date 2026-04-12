@@ -495,7 +495,7 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 			EventBus.command_tokens_changed.emit(ship)
 
 	_log.info(("Ship activated (token convert): %s (command: %d, "
-			+ "token_added: %s, needs_discard: %s)") % [
+			+"token_added: %s, needs_discard: %s)") % [
 			ship.data_key, cmd_type, str(token_added),
 			str(needs_discard)])
 	return {"command": cmd_type, "token_added": token_added,

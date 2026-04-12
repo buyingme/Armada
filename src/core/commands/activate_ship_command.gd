@@ -56,6 +56,6 @@ func execute(game_state: GameState) -> Dictionary:
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
-		return {"command": -1}
+		return {"command": - 1}
 	return {"command": int(dial.get("command", -1)),
 			"ship_index": payload.get("ship_index", -1)}

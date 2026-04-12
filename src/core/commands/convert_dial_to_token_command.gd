@@ -62,7 +62,7 @@ func execute(game_state: GameState) -> Dictionary:
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
-		return {"command": -1, "token_added": false,
+		return {"command": - 1, "token_added": false,
 				"token_blocked": false}
 	var cmd_type: int = int(dial.get("command", 0))
 	# Spend the dial.

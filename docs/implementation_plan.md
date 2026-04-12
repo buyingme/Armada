@@ -1503,10 +1503,12 @@ game logic was altered — pure structural refactoring.
 
 ---
 
-### Phase 10c: Network Foundation ⏳ (deferred)
+### Phase 10c: Network Foundation ⏳ (deferred — prerequisites in Phase G)
 **Goal:** Lay network multiplayer groundwork.
-**Prerequisites:** All prior phases
+**Prerequisites:** All prior phases + Refactoring Phase G (command pattern)
 **Duration estimate:** 2–3 sessions
+**Note:** Phase G provides the command pattern and deterministic RNG that
+this phase depends on. G5, G1, G3, and G2 Tier 1 are complete.
 
 | # | Task | Layer | Req IDs | Deliverables | Status |
 |---|------|-------|---------|--------------|--------|
@@ -2193,6 +2195,99 @@ Phase 0 (Scale & Assets)
 
 ---
 
+### Refactoring Phase G — Command Pattern (Multiplayer Foundation) 🔄
+
+**Goal:** Introduce the Command pattern so every player-initiated action is a
+serializable, validatable, replayable object. Enables: network multiplayer,
+deterministic replay, save/load mid-game, automated regression via full-game
+replay files.
+
+**Reference:** `docs/refactoring_plan.md` § Phase G
+
+#### G5: Deterministic RNG ✅
+
+Replaced `randi()` in `Dice.roll_die()`, `Dice.roll_pool()`, and
+`DamageDeck.shuffle()` with a seeded `RandomNumberGenerator` instance
+exposed through the new `GameRng` autoload. The seed is stored in
+`GameState.rng_seed` and propagated to saved games.
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | `GameRng` autoload (`src/autoload/game_rng.gd`) with `seed`, `randi_range()`, `generate_seed()` | ✅ |
+| 2 | Wire `Dice.roll_die()` + `Dice.roll_pool()` through `GameRng` | ✅ |
+| 3 | Wire `DamageDeck.shuffle()` through `GameRng` | ✅ |
+| 4 | Unit tests (sequence determinism, reseed, range checks) | ✅ |
+
+**Commit:** `621b8b2`
+**Tests:** 101 scripts, 2 033 tests, 3 553 asserts — all passing.
+
+#### G1 + G3: GameCommand Base + CommandProcessor Autoload ✅
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | `GameCommand` base class (`src/core/game_command.gd`) — `execute()`, `validate()`, `serialize()`, `describe()`, static registry with `register_type()` / `deserialize()` | ✅ |
+| 2 | `CommandProcessor` autoload (`src/autoload/command_processor.gd`) — `submit()` pipeline (validate → sequence → execute → record → emit), `get_history()`, `reset()`, `serialize_history()`, `replay_commands()` | ✅ |
+| 3 | Unit tests: 12 for GameCommand, 9 for CommandProcessor | ✅ |
+
+**Note:** Godot 4.5 limitation — `CommandProcessor` cannot declare `class_name`
+because it conflicts with autoload singleton registration. Tests use
+`const CmdProcessor := preload(...)` instead.
+
+**Commit:** `9d52bce`
+**Tests:** 103 scripts, 2 063 tests, 3 685 asserts — all passing.
+
+#### G2 Tier 1: Concrete Command Classes ✅
+
+Six command subclasses covering all non-attack state-modifying player actions:
+
+| Command Class | Replaces | Phase Guard |
+|---------------|----------|-------------|
+| `AssignDialCommand` | `CommandDialStack.assign_dials()` | COMMAND |
+| `ActivateShipCommand` | `GameManager.activate_ship()` | SHIP |
+| `EndActivationCommand` | `GameManager._on_activation_ended()` | SHIP |
+| `ConvertDialToTokenCommand` | `GameManager.activate_ship_as_token()` | SHIP |
+| `ActivateSquadronCommand` | `GameManager.activate_squadron()` | SQUADRON |
+| `SpendTokenCommand` | `CommandTokenManager.spend_token()` | — |
+
+All classes in `src/core/commands/`. Each has `validate()`, `execute()`,
+`serialize()`, and `describe()` with full static typing and doc comments.
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | `GameState.get_ship()` + `find_ship_index()` helpers | ✅ |
+| 2 | 6 command class files | ✅ |
+| 3 | 35 unit tests (validate/execute/serialize per command) | ✅ |
+
+**Commit:** `158fa91`
+**Tests:** 104 scripts, 2 098 tests, 3 721 asserts — all passing.
+
+#### Remaining G2 Tiers (not yet started)
+
+| Tier | Commands | Blocked By |
+|------|----------|------------|
+| Tier 2 | `RollDiceCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand`, `SkipAttackCommand` | Attack pipeline integration |
+| Tier 3 | `MoveSquadronCommand`, `ExecuteManeuverCommand` | Positional data serialization |
+
+#### G4: Network Transport Layer ⏳
+
+Uses Godot `MultiplayerPeer` API. Depends on G2 wiring completion.
+
+#### G6: GameReplay ⏳
+
+Record/playback of serialized command sequences. Depends on G2 wiring + G5.
+
+#### Phase G Metrics
+
+| Metric | Before Phase G | After G5+G1+G3+G2T1 |
+|--------|---------------|----------------------|
+| Test scripts | 100 | 104 |
+| Tests | 2 032 | 2 098 |
+| Asserts | 3 552 | 3 721 |
+| Autoloads | 11 | 12 (CommandProcessor) |
+| Command classes | 0 | 7 (1 base + 6 concrete) |
+
+---
+
 ## Architecture Hooks for Future Stages
 
 Per `docs/requirements/future_stages.md` Priority 1, these hooks are built during MVP even though not fully used:
@@ -2204,6 +2299,8 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Effect timing points in movement | Phase 5b | Upgrade card effects on movement |
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
+| GameCommand + CommandProcessor | Phase G (G1+G3) | Network multiplayer, replay | ✅ Base class + autoload + 6 Tier 1 commands |
+| Deterministic RNG (GameRng) | Phase G (G5) | Replay determinism, network sync | ✅ Seeded RNG in Dice + DamageDeck |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
 | Damage card effect pattern | Phase 9, 9.6 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 14/14 hooks wired |

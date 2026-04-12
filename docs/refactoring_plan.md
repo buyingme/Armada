@@ -823,6 +823,8 @@ two god objects were decomposed into focused, testable components:
 
 > **Risk: Medium** — Fundamental architectural addition. Do when multiplayer
 > is on the active roadmap.
+> **Status: In Progress** — G5 ✅, G1 ✅, G3 ✅, G2 Tier 1 ✅ (6/12 commands).
+> G2 Tier 2–3, G4, G6 remaining.
 
 Network multiplayer requires three capabilities the codebase currently lacks:
 
@@ -833,7 +835,12 @@ Network multiplayer requires three capabilities the codebase currently lacks:
 3. **Authority model** — one instance (host or server) is the source of
    truth; clients submit commands and receive authoritative state updates.
 
-#### G1: Define `GameCommand` Base Class
+#### G1: Define `GameCommand` Base Class ✅
+
+Implemented in `src/core/game_command.gd`. Includes static type registry
+with `register_type()` / `deserialize()`, `validate()`, `describe()`.
+12 unit tests in `tests/unit/test_game_command.gd`.
+**Commit:** `9d52bce`
 
 ```gdscript
 class_name GameCommand
@@ -858,41 +865,63 @@ static func deserialize(data: Dictionary) -> GameCommand:
 
 #### G2: Implement Concrete Commands
 
+**Tier 1 ✅** (non-attack, non-positional — committed `158fa91`):
+
+| Command | Replaces | Status |
+|---------|----------|--------|
+| `AssignDialCommand` | `CommandDialStack.assign_dials()` | ✅ |
+| `ActivateShipCommand` | `GameManager.activate_ship()` | ✅ |
+| `EndActivationCommand` | `GameManager._on_activation_ended()` | ✅ |
+| `ConvertDialToTokenCommand` | `GameManager.activate_ship_as_token()` | ✅ |
+| `ActivateSquadronCommand` | `GameManager.activate_squadron()` | ✅ |
+| `SpendTokenCommand` | `CommandTokenManager.spend_token()` | ✅ |
+
+35 unit tests in `tests/unit/test_concrete_commands.gd`.
+
+**Tier 2 ⏳** (attack pipeline — depends on wiring):
+
 | Command | Replaces |
 |---------|----------|
-| `AssignDialCommand` | Direct `CommandDialStack.push()` call |
-| `ActivateShipCommand` | `GameManager.activate_ship()` |
-| `ConvertDialToTokenCommand` | `GameManager.activate_ship_as_token()` |
 | `SelectAttackTargetCommand` | Click handler in AttackExecutor |
 | `RollDiceCommand` | `_on_attack_roll_dice()` |
 | `SpendDefenseTokenCommand` | `_on_attack_defense_token_spent()` |
 | `SelectRedirectZoneCommand` | `_on_attack_redirect_zone_selected()` |
+
+**Tier 3 ⏳** (positional — depends on serialization):
+
+| Command | Replaces |
+|---------|----------|
 | `MoveSquadronCommand` | `_commit_squadron_placement()` |
 | `SkipAttackCommand` | `_on_attack_skip()` |
-| `EndActivationCommand` | `_complete_ship_activation()` |
-| `RepairCommand` | Repair panel actions |
-| `SpendTokenCommand` | Token discard/spend |
+| `ExecuteManeuverCommand` | Maneuver commit |
 
-#### G3: `CommandProcessor` Autoload
+#### G3: `CommandProcessor` Autoload ✅
+
+Implemented in `src/autoload/command_processor.gd`. Registered as autoload
+(no `class_name` — Godot 4.5 limitation). Provides `submit()` pipeline,
+history tracking, serialization, and `replay_commands()`.
+9 unit tests in `tests/unit/test_command_processor.gd`.
+**Commit:** `9d52bce`
 
 ```gdscript
-class_name CommandProcessor
+# Note: no class_name — conflicts with autoload singleton in Godot 4.5
 extends Node
 
 signal command_executed(command: GameCommand)
 signal command_rejected(command: GameCommand, reason: String)
 
-func submit(command: GameCommand) -> void:
-    # Validate → execute → emit
-    var result: Dictionary = command.execute(GameManager.game_state)
-    command_executed.emit(command)
+func submit(command: GameCommand) -> Dictionary:
+    # Validate → sequence → execute → record → emit
+    var result: Dictionary = command.execute(GameManager.current_game_state)
+    command_executed.emit(command, result)
+    return result
 ```
 
 All signal handlers in game_board controllers and attack_executor create
 Commands and submit them to `CommandProcessor` instead of directly
 modifying state.
 
-#### G4: Network Transport Layer
+#### G4: Network Transport Layer ⏳
 
 ```gdscript
 class_name NetworkManager
@@ -914,14 +943,15 @@ func _receive_command(data: Dictionary) -> void:
 
 Uses Godot's built-in `MultiplayerPeer` API (ENet or WebSocket).
 
-#### G5: Deterministic RNG
+#### G5: Deterministic RNG ✅
 
-Replace all `randi()` / `randf()` calls (currently in `Dice.roll()` and
-`DamageDeck.shuffle()`) with a seeded `RandomNumberGenerator` instance
-owned by `GameState`. The seed is agreed upon at game start and included
-in saved games.
+Implemented in `src/autoload/game_rng.gd`. Seeded `RandomNumberGenerator`
+instance exposed as `GameRng` autoload. Wired into `Dice.roll_die()`,
+`Dice.roll_pool()`, and `DamageDeck.shuffle()`. Seed stored in
+`GameState.rng_seed`.
+**Commit:** `621b8b2`
 
-#### G6: `GameReplay`
+#### G6: `GameReplay` ⏳
 
 A sequence of serialized Commands that can reproduce an entire game:
 ```gdscript

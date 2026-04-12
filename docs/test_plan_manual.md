@@ -1,10 +1,10 @@
 # Manual Test Plan — Star Wars: Armada Digital Edition
 
-> **Scope:** Full Learning Scenario MVP — Phases 0–12, all post-phase bug fixes and features.
-> **Status:** **MVP COMPLETE** — all phases delivered and manually verified.
+> **Scope:** Full Learning Scenario MVP — Phases 0–12, all post-phase bug fixes, refactoring phases A–H, and Phase G (command pattern).
+> **Status:** **MVP COMPLETE** — all phases delivered and manually verified. Phase G (command infra) in progress.
 > **How to run a scene:** Godot Editor → double-click the `.tscn` → press **F6** (Run Current Scene).
 > **Automated gate:** Always run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -10` and confirm 0 failures **before** doing manual tests.
-> **Current baseline:** 88 scripts, 1 669 tests, all passing.
+> **Current baseline:** 104 scripts, 2 098 tests, all passing.
 
 ---
 
@@ -5170,6 +5170,65 @@ on their own, and do not interfere with gameplay clicks.
 **Pass criteria:** Squadron attack works identically to pre-F5d.
 
 **Result: PASS** (2026-04-12)
+
+---
+
+## Refactoring Phase G — Command Pattern (Multiplayer Foundation)
+
+> Phase G introduces the Command pattern: every player action becomes a
+> serializable, validatable, replayable object. This phase is **infrastructure-only** —
+> the existing game flow (direct method calls) is unchanged for now. The commands
+> are exercised via GUT unit tests (104 scripts, 2 098 tests). The manual tests
+> below verify that the game still works identically after adding the new autoload
+> and command classes (regression gate).
+
+### MT-G.01 — Full Game Round Regression After Command Infrastructure
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch Learning Scenario from main menu | Game board loads; both fleets deployed; Round 1 starts |
+| 2 | Command Phase: assign all 4 dials for player 1, then player 2 | All dials assigned; phase advances to Ship Phase |
+| 3 | Ship Phase: activate a ship → dial reveals → choose Keep | Ship activates normally; dial sprite shows; activation sidebar visible |
+| 4 | Perform an attack from the activated ship | Target selection → dice roll → defense tokens → damage all work |
+| 5 | Execute a maneuver | Speed dial + maneuver tool works; ship moves |
+| 6 | End activation | Ship shows activated visual; next ship's turn begins |
+| 7 | Complete the round through Status Phase | Tokens ready; round counter increments; new Command Phase begins |
+
+**Pass criteria:** Full round plays identically to pre-Phase-G. No new errors in
+the Output panel. CommandProcessor autoload loads without conflict.
+
+### MT-G.02 — Convert Dial to Token + Overflow Discard Regression
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Ship Phase: activate a ship → choose **Convert** on the dial choice | Dial consumed; matching command token appears on ship |
+| 2 | Repeat conversion for same token type until ship has max tokens | Overflow discard modal appears (choose which to discard) |
+| 3 | Discard the older token | Token count stays at max; discarded token removed |
+
+**Pass criteria:** Convert-to-token flow unchanged. Overflow modal appears and
+resolves correctly. No console errors.
+
+### MT-G.03 — Squadron Activation Regression
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Advance to Squadron Phase | Squadron activation modal appears |
+| 2 | Activate a squadron | Squadron highlights; move overlay shows if not engaged |
+| 3 | Move the squadron (if not engaged) | Squadron moves to valid position |
+| 4 | Attack with the squadron | Target selection → dice roll → damage resolves |
+| 5 | End squadron activation | Squadron shows activated ring; next squadron or phase advance |
+
+**Pass criteria:** Squadron phase flows identically to pre-Phase-G.
+
+### MT-G.04 — Deterministic RNG Verification
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Open project in Godot editor; open Remote debugger | GameRng autoload visible in singleton list |
+| 2 | Run GUT tests: `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 \| grep -i "rng\|game_rng"` | Test file `test_game_rng.gd` runs; 0 failures |
+| 3 | Play a full round; observe dice rolls | Dice produce visual results (not always the same — seed is random per game) |
+
+**Pass criteria:** GameRng autoload initialised. Dice use seeded RNG. Tests pass.
 
 ---
 

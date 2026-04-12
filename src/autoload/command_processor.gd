@@ -50,6 +50,9 @@ func _ready() -> void:
 	SpendDefenseTokenCommand.register()
 	SelectRedirectZoneCommand.register()
 	SkipAttackCommand.register()
+	# Tier 3 — movement commands.
+	MoveSquadronCommand.register()
+	ExecuteManeuverCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

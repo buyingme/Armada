@@ -97,6 +97,18 @@ func find_squadron_index(squadron: SquadronInstance) -> int:
 	return ps.squadrons.find(squadron)
 
 
+## Returns the squadron at [param squadron_index] in
+## [param player_index]'s fleet, or null if out of range.
+func get_squadron(player_index: int,
+		squadron_index: int) -> SquadronInstance:
+	var ps: PlayerState = get_player_state(player_index)
+	if ps == null:
+		return null
+	if squadron_index < 0 or squadron_index >= ps.squadrons.size():
+		return null
+	return ps.squadrons[squadron_index] as SquadronInstance
+
+
 ## Serializes the game state to a dictionary for saving.
 func serialize() -> Dictionary:
 	var data := {

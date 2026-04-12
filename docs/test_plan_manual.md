@@ -5378,6 +5378,29 @@ All 32 unit tests cover validate/execute/serialize roundtrip.
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Launch the Learning Scenario | Log shows "Registered 10 command types." (was 6 before Tier 2) |
+| 1 | Launch the Learning Scenario | Log shows "Registered 12 command types." (6 Tier 1 + 4 Tier 2 + 2 Tier 3) |
 
-**Pass criteria:** 10 command types registered; no errors.
+**Pass criteria:** 12 command types registered; no errors.
+
+---
+
+## Phase G — G2 Tier 3: Movement Commands
+
+**What this phase adds:** Two serializable command classes for movement:
+`MoveSquadronCommand` (squadron repositioning) and `ExecuteManeuverCommand`
+(ship maneuver with yaw validation). Plus `GameState.get_squadron()` helper.
+These are infrastructure-only (not yet wired into presentation layer).
+All 23 unit tests cover validate/execute/serialize roundtrip.
+
+**Positional data design:** Position lives at scene level only (Node2D).
+Commands carry coordinates in the payload for replay fidelity.
+No core model changes were needed — the "positional data serialization"
+blocker was resolved by putting positions in the command payload.
+
+### MT-G.12 — Movement Commands Registered at Startup
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the Learning Scenario | Log shows "Registered 12 command types." |
+
+**Pass criteria:** 12 command types registered; no errors.

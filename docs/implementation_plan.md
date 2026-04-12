@@ -2294,7 +2294,7 @@ architectural decision (callback injection, signal relay, or similar).
 | Tier | Commands | Status |
 |------|----------|--------|
 | Tier 2 | `RollDiceCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand`, `SkipAttackCommand` | ✅ |
-| Tier 3 | `MoveSquadronCommand`, `ExecuteManeuverCommand` | ⏳ Positional data serialization |
+| Tier 3 | `MoveSquadronCommand`, `ExecuteManeuverCommand` | ✅ |
 
 **Tier 2 details:**
 
@@ -2308,6 +2308,24 @@ architectural decision (callback injection, signal relay, or similar).
 | 6 | Unit tests — 32 tests covering validate/execute/serialize for all 4 commands | ✅ |
 
 Tests: 2156 (106 scripts, 3829 asserts).
+
+**Tier 3 details:**
+
+| # | Deliverable | Status |
+|---|-------------|--------|
+| 1 | `MoveSquadronCommand` — records squadron position; scene-level replay | ✅ |
+| 2 | `ExecuteManeuverCommand` — records maneuver inputs + final transform; validates yaw clicks via `ManeuverCalculator` | ✅ |
+| 3 | `GameState.get_squadron()` convenience helper | ✅ |
+| 4 | Registration in `CommandProcessor._ready()` (12 types total) | ✅ |
+| 5 | Unit tests — 23 tests covering validate/execute/serialize for both commands + get_squadron helper | ✅ |
+
+**Positional data serialization note:** Position/rotation live at the scene
+level (ShipToken/SquadronToken Node2D), not in core models. Movement commands
+carry coordinates in the **payload** rather than modifying ShipInstance/
+SquadronInstance. On replay, the presentation layer reads the result and
+applies position to the scene node. No core model changes were needed.
+
+Tests: 2179 (107 scripts, 3869 asserts).
 
 #### G4: Network Transport Layer ⏳
 

@@ -119,7 +119,7 @@ All other implementation phases (0–12) are complete.
 
 | Bug | Severity | Observed | Notes |
 |-----|----------|----------|-------|
-| Activated squadron loses ghosted appearance after debug repositioning | Minor (visual only) | 2026-04-12 | Squadrons that collide with a ship and are repositioned in debug mode lose their activated dim/ghost visual. Game logic is correct — they cannot be re-activated. |
+| Activated squadron loses ghosted appearance after ship-overlap displacement | Minor (visual only) | 2026-04-12 | When an activated squadron is displaced due to collision with a capital ship (e.g. VSD manoeuvring into it), the ghosted/dimmed activated visual state is lost. Game logic is correct — the squadron cannot be re-activated. |
 
 ---
 

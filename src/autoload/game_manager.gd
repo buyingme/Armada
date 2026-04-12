@@ -244,7 +244,11 @@ func advance_phase() -> void:
 		if is_game_active:
 			_start_round()
 	else:
-		current_game_state.current_phase = next_phase
+		# Route phase mutation through command for replay determinism.
+		var cmd := AdvancePhaseCommand.new(
+				active_player,
+				{"next_phase": int(next_phase)})
+		CommandProcessor.submit(cmd)
 		EventBus.phase_changed.emit(next_phase)
 		# Initialise per-phase state.
 		match next_phase:
@@ -259,16 +263,20 @@ func advance_phase() -> void:
 ## Starts a new round.
 ## Requirements: TF-002 — initiative player assigns dials first in hot-seat.
 func _start_round() -> void:
-	current_game_state.current_round += 1
-
-	if current_game_state.current_round > Constants.MAX_ROUNDS:
+	# Check whether all rounds have been played before attempting to start
+	# a new one.  The command's own validate() guards against this too, but
+	# we need the end_game() call here on the presentation side.
+	if current_game_state.current_round >= Constants.MAX_ROUNDS:
 		end_game("round_6")
 		return
 
+	# Route round/phase mutation through command for replay determinism.
+	var cmd := StartRoundCommand.new(
+			active_player, {})
+	CommandProcessor.submit(cmd)
+
 	# Reset submission tracking for the new round.
 	_command_submitted = [false, false]
-
-	current_game_state.current_phase = Constants.GamePhase.COMMAND
 
 	# In hot-seat, initiative player assigns dials first.
 	# Requirements: TF-002, BP-006.

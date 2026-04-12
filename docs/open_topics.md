@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-13
-> Current baseline: 107 scripts, 2 196 tests, 3 924 asserts
+> Current baseline: 108 scripts, 2 216 tests, 3 962 asserts
 
 ---
 
@@ -12,12 +12,16 @@
 must route through a `GameCommand.execute()` for replay/multiplayer safety.
 P1–P4 block multiplayer; P5–P7 are deferrable.
 
-### Priority 1 — Game Flow (3 violations → 2 commands)
+### Priority 1 — Game Flow (3 violations → 2 commands) ✅ RESOLVED
 
-| File | Method | Mutation | Command |
-|------|--------|----------|---------|
-| `game_manager.gd` | `advance_phase()` | `current_phase = next_phase` | `AdvancePhaseCommand` |
-| `game_manager.gd` | `_start_round()` | `current_round += 1`, `current_phase = COMMAND` | `StartRoundCommand` |
+Both commands implemented and wired:
+
+| Command | Wired In |
+|---------|----------|
+| `AdvancePhaseCommand` | `game_manager.gd` — `advance_phase()` |
+| `StartRoundCommand` | `game_manager.gd` — `_start_round()` |
+
+Tests: `test_game_flow_commands.gd` — validate, execute, serialize/deserialize for both.
 
 ### Priority 2 — Status Phase Cleanup (5 violations → 2 commands)
 
@@ -78,7 +82,7 @@ P1–P4 block multiplayer; P5–P7 are deferrable.
 
 | Priority | Violations | New Commands | Blocks Multiplayer |
 |----------|-----------|-------------|-------------------|
-| P1 | 3 | 2 | Yes |
+| P1 | 3 | 2 | ✅ Done |
 | P2 | 5 | 2 | Yes |
 | P3 | 7 | 2 | Yes |
 | P4 | 3 | 1 | Yes |
@@ -138,8 +142,8 @@ All other implementation phases (0–12) are complete.
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |
-| MT-G.11 | Attack commands registered at startup |
-| MT-G.12 | Movement commands registered at startup |
+| MT-G.11 | Attack commands registered at startup | passed
+| MT-G.12 | Movement commands registered at startup | passed
 
 ### Never Formally Stamped (bulk — by area)
 

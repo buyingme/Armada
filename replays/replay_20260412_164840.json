@@ -1,0 +1,215 @@
+{
+	"commands": [
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 3,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"dice_pool": {
+					"BLUE": 2
+				}
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "roll_dice"
+		},
+		{
+			"payload": {
+				"reason": "squadron_done"
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "skip_attack"
+		},
+		{
+			"payload": {
+				"dice_pool": {
+					"BLUE": 1,
+					"RED": 1
+				}
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "roll_dice"
+		},
+		{
+			"payload": {
+				"ship_index": 0,
+				"spend_method": "exhaust",
+				"token_index": 0
+			},
+			"player": 1,
+			"sequence": 7,
+			"type": "spend_defense_token"
+		},
+		{
+			"payload": {
+				"ship_index": 0,
+				"spend_method": "exhaust",
+				"token_index": 1
+			},
+			"player": 1,
+			"sequence": 8,
+			"type": "spend_defense_token"
+		},
+		{
+			"payload": {
+				"ship_index": 0,
+				"zone": 0
+			},
+			"player": 1,
+			"sequence": 9,
+			"type": "select_redirect_zone"
+		},
+		{
+			"payload": {
+				"pos_x": 0.328338510018808,
+				"pos_y": 0.139902821293584,
+				"rotation_deg": 0.0,
+				"ship_index": 1,
+				"speed": 2,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 11,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 12,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_index": 0,
+				"token_type": 3
+			},
+			"player": 1,
+			"sequence": 13,
+			"type": "spend_token"
+		},
+		{
+			"payload": {
+				"dice_pool": {
+					"BLUE": 1,
+					"RED": 2
+				}
+			},
+			"player": 1,
+			"sequence": 14,
+			"type": "roll_dice"
+		},
+		{
+			"payload": {
+				"ship_index": 1,
+				"spend_method": "exhaust",
+				"token_index": 0
+			},
+			"player": 0,
+			"sequence": 15,
+			"type": "spend_defense_token"
+		},
+		{
+			"payload": {
+				"ship_index": 1,
+				"spend_method": "exhaust",
+				"token_index": 1
+			},
+			"player": 0,
+			"sequence": 16,
+			"type": "spend_defense_token"
+		},
+		{
+			"payload": {
+				"pos_x": 0.480491920753762,
+				"pos_y": 0.274654134114583,
+				"rotation_deg": 157.500009505479,
+				"ship_index": 0,
+				"speed": 2,
+				"yaw_clicks": [
+					0,
+					-1
+				]
+			},
+			"player": 1,
+			"sequence": 17,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 18,
+			"type": "end_activation"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": -9091603330601752288,
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-04-12T14:48:40"
+	}
+}

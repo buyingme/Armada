@@ -54,6 +54,9 @@ func _ready() -> void:
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
 	ExecuteManeuverCommand.register()
+	# Tier 4 — game flow commands.
+	AdvancePhaseCommand.register()
+	StartRoundCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 107 |
-| GUT tests | 2 196 |
-| GUT asserts | 3 924 |
+| GUT test scripts | 108 |
+| GUT tests | 2 216 |
+| GUT asserts | 3 962 |
 | Autoloads | 12 |
-| Command classes | 14 (1 base + 13 concrete) |
-| Wired command call sites | 24 |
+| Command classes | 16 (1 base + 15 concrete) |
+| Wired command call sites | 26 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 13 concrete commands, 18 wired call sites, GameReplay |
+| G | Command Pattern | 🔄 | GameCommand base, 15 concrete commands, 26 wired call sites, GameReplay, §4.6 P1 resolved |
 
 ---
 
@@ -100,7 +100,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 13 cmds, 24 sites |
+| GameCommand + CommandProcessor | G | ✅ 15 cmds, 26 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |

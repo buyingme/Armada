@@ -5365,3 +5365,19 @@ Squadron Phase); covered by MT-G.03 regression + GUT unit tests.
 **Pass criteria:** Replay JSON file is well-formed and contains all executed commands.
 
 **Result: PASS** (2026-04-12)
+---
+
+## Phase G — G2 Tier 2: Attack Commands
+
+**What this phase adds:** Four serializable command classes for the attack pipeline:
+`RollDiceCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand`, `SkipAttackCommand`.
+These are infrastructure-only (not yet wired into AttackExecutor).
+All 32 unit tests cover validate/execute/serialize roundtrip.
+
+### MT-G.11 — Attack Commands Registered at Startup
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the Learning Scenario | Log shows "Registered 10 command types." (was 6 before Tier 2) |
+
+**Pass criteria:** 10 command types registered; no errors.

@@ -45,6 +45,11 @@ func _ready() -> void:
 	ConvertDialToTokenCommand.register()
 	ActivateSquadronCommand.register()
 	SpendTokenCommand.register()
+	# Tier 2 — attack commands.
+	RollDiceCommand.register()
+	SpendDefenseTokenCommand.register()
+	SelectRedirectZoneCommand.register()
+	SkipAttackCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

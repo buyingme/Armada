@@ -2289,12 +2289,25 @@ emissions and application-layer tracking (`_activating_ship`,
 cannot safely reference the `CommandProcessor` autoload. Requires an
 architectural decision (callback injection, signal relay, or similar).
 
-#### Remaining G2 Tiers (not yet started)
+#### Remaining G2 Tiers
 
-| Tier | Commands | Blocked By |
-|------|----------|------------|
-| Tier 2 | `RollDiceCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand`, `SkipAttackCommand` | Attack pipeline integration |
-| Tier 3 | `MoveSquadronCommand`, `ExecuteManeuverCommand` | Positional data serialization |
+| Tier | Commands | Status |
+|------|----------|--------|
+| Tier 2 | `RollDiceCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand`, `SkipAttackCommand` | ✅ |
+| Tier 3 | `MoveSquadronCommand`, `ExecuteManeuverCommand` | ⏳ Positional data serialization |
+
+**Tier 2 details:**
+
+| # | Deliverable | Status |
+|---|-------------|--------|
+| 1 | `RollDiceCommand` — deterministic dice rolling via `GameState.rng` | ✅ |
+| 2 | `SpendDefenseTokenCommand` — exhaust/discard on `ShipInstance` | ✅ |
+| 3 | `SelectRedirectZoneCommand` — reduce shields on redirect zone | ✅ |
+| 4 | `SkipAttackCommand` — flow-control, no state mutation | ✅ |
+| 5 | Registration in `CommandProcessor._ready()` (10 types total) | ✅ |
+| 6 | Unit tests — 32 tests covering validate/execute/serialize for all 4 commands | ✅ |
+
+Tests: 2156 (106 scripts, 3829 asserts).
 
 #### G4: Network Transport Layer ⏳
 

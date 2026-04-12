@@ -95,6 +95,7 @@ func _populate_shortcut_entries(vbox: VBoxContainer) -> void:
 	_add_line(vbox, "F5", "Quicksave game state")
 	_add_line(vbox, "F8", "Quickload game state")
 	_add_line(vbox, "Shift + A", "Annotate game state")
+	_add_line(vbox, "Shift + R", "Save replay file")
 
 
 ## Adds the main header label to the container.

@@ -1377,14 +1377,19 @@ func _on_execute_maneuver() -> void:
 	var mt_scene_ref: ManeuverToolScene = _maneuver_tool_controller.get_scene()
 	if mt_scene_ref:
 		var tool_st: ManeuverToolState = mt_scene_ref.get_state()
+		var spd: int = tool_st.get_speed()
+		var all_clicks: Array[int] = tool_st.get_joint_clicks()
+		# Slice to active joints only (joint_count == speed).
+		var active_clicks: Array = []
+		for i: int in range(mini(spd, all_clicks.size())):
+			active_clicks.append(all_clicks[i])
 		var pa: Vector2 = GameScale.play_area_size_px
 		if pa.x > 0.0 and pa.y > 0.0:
 			var norm_x: float = final_xform.origin.x / pa.x
 			var norm_y: float = final_xform.origin.y / pa.y
 			var rot_deg: float = rad_to_deg(final_xform.get_rotation())
 			GameManager.submit_execute_maneuver(maneuver_ship,
-					tool_st.get_speed(), tool_st.get_joint_clicks(),
-					norm_x, norm_y, rot_deg)
+					spd, active_clicks, norm_x, norm_y, rot_deg)
 
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.

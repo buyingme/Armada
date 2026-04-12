@@ -260,23 +260,6 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 	return false
 
 
-## Handles Escape key press. Returns true if consumed.
-## In attack execution mode, signals cancellation via the return value.
-## Requirements: AS-ACT-003, AS-TGT-022, AE-FLOW-004.
-func handle_escape(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
-		return false
-	if _selecting or _target_selecting \
-			or (_panel and _panel.visible):
-		dismiss()
-		get_viewport().set_input_as_handled()
-		return true
-	return false
-
-
 ## Dismisses the selector, removing all visual aids.
 ## Requirements: AS-ACT-003, AS-PNL-003, AS-TGT-022.
 func dismiss() -> void:
@@ -790,7 +773,7 @@ func _validate_target_squadron_click(
 			if not def_engaged:
 				return _reject_target(
 						"Attack exec: engaged attacker cannot target "
-						+"non-engaged squadron.",
+						+ "non-engaged squadron.",
 						"Must attack an engaged enemy squadron.",
 						"must_attack_engaged")
 	# Already-attacked guard (Step 6, AE-SQ-002).

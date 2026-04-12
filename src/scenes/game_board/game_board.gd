@@ -284,12 +284,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				_displacement_controller.handle_lock_click()
 				get_viewport().set_input_as_handled()
 				return
-	# Attack simulator: Escape dismisses.
-	if _attack_executor and _attack_executor.handle_escape(event):
-		return
-	# Targeting list: Escape dismisses.
-	if _targeting_list_controller.handle_escape(event):
-		return
 	# Range overlay: Escape dismisses or cancels selection.
 	if _range_tool_controller.handle_escape(event):
 		return
@@ -1668,6 +1662,7 @@ func _on_range_overlay_requested() -> void:
 	_range_tool_controller.start_selection()
 
 
+
 # ---------------------------------------------------------------------------
 # Attack Executor — Setup & Delegation
 # ---------------------------------------------------------------------------
@@ -1716,7 +1711,7 @@ func _create_targeting_list_controller() -> void:
 	add_child(_targeting_list_controller)
 	_targeting_list_controller.initialize(
 			get_ship_tokens, get_squadron_tokens,
-			_maneuver_tool_controller, _panel_mgr, self )
+			_maneuver_tool_controller, _panel_mgr, self)
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:

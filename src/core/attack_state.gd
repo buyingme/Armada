@@ -215,14 +215,6 @@ func has_defender() -> bool:
 	return defender_ship != null or defender_squadron != null
 
 
-## Returns [code]true[/code] once the dice sequence has begun (pool computed).
-## After this point the attack is committed and cannot be cancelled via Escape.
-## Rules Reference: "Attack", Step 2, p. 2 — once dice are gathered the
-## attacker has declared the attack.
-func is_dice_sequence_started() -> bool:
-	return exec_mode and not dice_pool.is_empty()
-
-
 # ===========================================================================
 # Lifecycle
 # ===========================================================================

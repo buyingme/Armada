@@ -71,21 +71,6 @@ func dismiss() -> void:
 	_log.info("Targeting list dismissed.")
 
 
-## Checks if an Escape key press should dismiss the targeting list.
-## Returns true if the event was consumed.
-func handle_escape(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
-		return false
-	if _panel_mgr.targeting_list_modal and _panel_mgr.targeting_list_modal.visible:
-		dismiss()
-		get_viewport().set_input_as_handled()
-		return true
-	return false
-
-
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------

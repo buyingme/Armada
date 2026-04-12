@@ -5352,12 +5352,12 @@ Squadron Phase); covered by MT-G.03 regression + GUT unit tests.
 
 **Pass criteria:** Log confirms reset + seq starts at 0.
 
-### MT-G.10 — Replay File Save via Console
+### MT-G.10 — Replay File Save via Shift+R
 
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | Play the Learning Scenario through at least 2 activations | Commands accumulate (check log for seq numbers) |
-| 2 | In Godot debugger console, run: `CommandProcessor.create_replay().save_to_file("res://replays/test.json")` | Returns `OK`; file appears at `res://replays/test.json` |
-| 3 | Open the saved JSON file | Contains `"header"` with `rng_seed`, `scenario_id`, `factions` and `"commands"` array matching the seq count from the log |
+| 2 | Press **Shift+R** (debug mode must be enabled — F12 if needed) | Toast shows "Replay saved (N cmds)"; log shows replay path |
+| 3 | Open the saved JSON file in `res://replays/` | Contains `"header"` with `rng_seed`, `scenario_id`, `factions` and `"commands"` array matching the seq count from the log |
 
 **Pass criteria:** Replay JSON file is well-formed and contains all executed commands.

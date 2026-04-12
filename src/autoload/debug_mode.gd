@@ -51,8 +51,8 @@ func _ready() -> void:
 
 
 ## Keyboard shortcut: F12 toggles debug mode, Ctrl+S saves positions,
-## F5 quicksaves, F8 quickloads, Shift+A opens annotation modal
-## (debug mode only).
+## F5 quicksaves, F8 quickloads, Shift+A opens annotation modal,
+## Shift+R saves a replay file (debug mode only).
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event: InputEventKey = event as InputEventKey
@@ -75,6 +75,30 @@ func _unhandled_key_input(event: InputEvent) -> void:
 					if key_event.shift_pressed:
 						_open_annotation_modal()
 						get_viewport().set_input_as_handled()
+				KEY_R:
+					if key_event.shift_pressed:
+						_save_replay()
+						get_viewport().set_input_as_handled()
+
+
+## Saves a replay file containing the full command history and session
+## header to [code]res://replays/[/code].
+## Triggered by Shift+R in debug mode.
+func _save_replay() -> void:
+	var replay: GameReplay = CommandProcessor.create_replay()
+	if replay == null:
+		_log.warn("No active game — cannot save replay.")
+		_show_toast("Replay save failed — no active game.")
+		return
+	var path: String = GameReplay.generate_file_path()
+	var err: Error = replay.save_to_file(path)
+	if err == OK:
+		_log.info("Replay saved: %s (%d commands)." % [
+				path, replay.get_command_count()])
+		_show_toast("Replay saved (%d cmds)." % replay.get_command_count())
+	else:
+		_log.error("Replay save failed: %s" % error_string(err))
+		_show_toast("Replay save FAILED.")
 
 
 ## Saves the current game state to [code]res://saves/quicksave.json[/code].

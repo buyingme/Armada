@@ -70,6 +70,25 @@ func get_non_initiative_player_state() -> PlayerState:
 	return get_player_state(1 - initiative_player)
 
 
+## Returns the ship at [param ship_index] in [param player_index]'s fleet,
+## or null if out of range.
+func get_ship(player_index: int, ship_index: int) -> ShipInstance:
+	var ps: PlayerState = get_player_state(player_index)
+	if ps == null:
+		return null
+	if ship_index < 0 or ship_index >= ps.ships.size():
+		return null
+	return ps.ships[ship_index] as ShipInstance
+
+
+## Returns the index of [param ship] in its owner's fleet, or -1.
+func find_ship_index(ship: ShipInstance) -> int:
+	var ps: PlayerState = get_player_state(ship.owner_player)
+	if ps == null:
+		return -1
+	return ps.ships.find(ship)
+
+
 ## Serializes the game state to a dictionary for saving.
 func serialize() -> Dictionary:
 	var data := {

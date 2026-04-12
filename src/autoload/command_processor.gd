@@ -101,6 +101,32 @@ func serialize_history() -> Array[Dictionary]:
 	return result
 
 
+## Creates a [GameReplay] capturing the current session's header and
+## command history.  The header is populated from [GameManager]'s
+## current game state (RNG seed, factions, scenario ID).
+## Returns [code]null[/code] if no game state is available.
+func create_replay() -> GameReplay:
+	var game_state: GameState = _get_game_state()
+	if game_state == null:
+		_log.warn("create_replay: no active game state.")
+		return null
+	var replay := GameReplay.new()
+	var rng_seed: int = 0
+	if game_state.rng:
+		rng_seed = game_state.rng.initial_seed
+	var factions: Array = []
+	for i: int in range(game_state.player_states.size()):
+		var ps: PlayerState = game_state.get_player_state(i)
+		factions.append(ps.faction if ps else Constants.Faction.REBEL_ALLIANCE)
+	replay.capture_header(
+			GameManager.get_scenario_id(),
+			rng_seed,
+			factions,
+			game_state.initiative_player)
+	replay.set_commands(serialize_history())
+	return replay
+
+
 ## Replays a list of serialized commands against the given game state.
 ## Used for save-game loading and deterministic replay.
 func replay_commands(commands: Array[Dictionary]) -> void:

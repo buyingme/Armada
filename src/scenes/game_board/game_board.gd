@@ -188,7 +188,7 @@ func _ready() -> void:
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"scenario_id": "learning_scenario"})
 	_spawn_learning_scenario_tokens()
 	_connect_signals()
 	_connect_panel_signals()

@@ -60,6 +60,11 @@ var _squadrons_activated_this_turn: int = 0
 ## Requirements: CP-009, CP-010.
 var fixed_commands_applied: bool = false
 
+## Scenario identifier for the current game (used in replay headers).
+## Set by [method start_new_game] from the [code]"scenario_id"[/code]
+## config key.
+var _scenario_id: String = ""
+
 
 func _ready() -> void:
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
@@ -84,8 +89,18 @@ func _notification(what: int) -> void:
 
 
 ## Starts a new game with the given configuration.
-func start_new_game(_config: Dictionary = {}) -> void:
+## [param config] — optional settings:
+##   [code]"rng_seed"[/code] (int) — deterministic RNG seed.  If 0 or
+##       absent a random seed is chosen.
+##   [code]"scenario_id"[/code] (String) — scenario identifier stored
+##       for replay headers (default: [code]""[/code]).
+func start_new_game(config: Dictionary = {}) -> void:
+	CommandProcessor.reset()
 	current_game_state = GameState.new()
+	# Inject a deterministic seed before initialize() if provided.
+	var seed_value: int = config.get("rng_seed", 0) as int
+	if seed_value != 0:
+		current_game_state.rng = GameRng.new(seed_value)
 	current_game_state.initialize()
 	is_game_active = true
 	active_player = current_game_state.initiative_player
@@ -93,6 +108,7 @@ func start_new_game(_config: Dictionary = {}) -> void:
 	_activating_squadron = null
 	_squadrons_activated_this_turn = 0
 	fixed_commands_applied = false
+	_scenario_id = config.get("scenario_id", "") as String
 	EventBus.game_started.emit()
 	_start_round()
 
@@ -126,6 +142,11 @@ func end_game(
 			"round": 0,
 		}
 	EventBus.game_ended.emit(details)
+
+
+## Returns the scenario identifier for the current game session.
+func get_scenario_id() -> String:
+	return _scenario_id
 
 
 ## Applies pre-assigned (fixed) command dials to all ships for round 1,

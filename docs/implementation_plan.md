@@ -2300,20 +2300,49 @@ architectural decision (callback injection, signal relay, or similar).
 
 Uses Godot `MultiplayerPeer` API. Depends on G2 wiring completion.
 
-#### G6: GameReplay ⏳
+#### G6: GameReplay ✅
 
-Record/playback of serialized command sequences. Depends on G2 wiring + G5.
+Record/playback of serialized command sequences.
+
+| # | Deliverable | Status |
+|---|-------------|--------|
+| 1 | `GameReplay` class (`src/core/game_replay.gd`) — header + commands, serialize/deserialize, file I/O | ✅ |
+| 2 | `CommandProcessor.create_replay()` — captures header from GameManager + serialized history | ✅ |
+| 3 | `CommandProcessor.reset()` called in `GameManager.start_new_game()` — clean history each game | ✅ |
+| 4 | `start_new_game()` accepts `config` dict with optional `rng_seed` and `scenario_id` | ✅ |
+| 5 | Unit tests — 26 tests covering header, serialize roundtrip, file I/O, validity, command integration | ✅ |
+
+**Replay file format (v1):**
+```json
+{
+  "header": {
+    "format_version": 1,
+    "scenario_id": "learning_scenario",
+    "rng_seed": 42,
+    "factions": [0, 1],
+    "initiative_player": 0,
+    "timestamp": "2026-04-12T09:55:00",
+    "app_version": "0.1.0",
+    "godot_version": "4.5.1-stable"
+  },
+  "commands": [
+    {"type": "assign_dials", "player": 0, "sequence": 0, "payload": {...}},
+    ...
+  ]
+}
+```
 
 #### Phase G Metrics
 
-| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring |
-|--------|---------------|----------------------|-----------------|
-| Test scripts | 100 | 104 | 104 |
-| Tests | 2 032 | 2 098 | 2 098 |
-| Asserts | 3 552 | 3 721 | 3 721 |
-| Autoloads | 11 | 12 (+ CommandProcessor) | 12 |
-| Command classes | 0 | 7 (1 base + 6 concrete) | 7 |
-| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) |
+| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring | After G6 |
+|--------|---------------|----------------------|-----------------|----------|
+| Test scripts | 100 | 104 | 104 | 105 |
+| Tests | 2 032 | 2 098 | 2 098 | 2 124 |
+| Asserts | 3 552 | 3 721 | 3 721 | 3 763 |
+| Autoloads | 11 | 12 (+ CommandProcessor) | 12 | 12 |
+| Command classes | 0 | 7 (1 base + 6 concrete) | 7 | 7 |
+| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) | 6 |
+| Core classes | — | — | — | 8 (+ GameReplay) |
 
 ---
 
@@ -2330,6 +2359,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
 | GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 6 Tier 1 commands + wiring |
 | Deterministic RNG (GameRng) | Phase G (G5) | Replay determinism, network sync | ✅ Seeded RNG in Dice + DamageDeck |
+| GameReplay file format | Phase G (G6) | Replay persistence, regression testing | ✅ v1 format, save/load, CommandProcessor integration |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |
 | Keyword resolution as pluggable system | Phase 7 | Extended squadron keywords | ✅ EffectRegistry + GameEffect pipeline |
 | Damage card effect pattern | Phase 9, 9.6 | Upgrade card effects (same pattern) | ✅ DamageCardEffect + DamageCardEffectFactory + 14/14 hooks wired |

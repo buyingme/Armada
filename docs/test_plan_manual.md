@@ -5197,6 +5197,8 @@ on their own, and do not interfere with gameplay clicks.
 **Pass criteria:** Full round plays identically to pre-Phase-G. No new errors in
 the Output panel. CommandProcessor autoload loads without conflict.
 
+**Result: PASS** (2026-04-12)
+
 ### MT-G.02 — Convert Dial to Token + Overflow Discard Regression
 
 | Step | Action | Expected |
@@ -5207,6 +5209,8 @@ the Output panel. CommandProcessor autoload loads without conflict.
 
 **Pass criteria:** Convert-to-token flow unchanged. Overflow modal appears and
 resolves correctly. No console errors.
+
+**Result: PASS** (2026-04-12)
 
 ### MT-G.03 — Squadron Activation Regression
 
@@ -5220,6 +5224,8 @@ resolves correctly. No console errors.
 
 **Pass criteria:** Squadron phase flows identically to pre-Phase-G.
 
+**Result: PASS** (2026-04-12)
+
 ### MT-G.04 — Deterministic RNG Verification
 
 | Step | Action | Expected |
@@ -5229,6 +5235,8 @@ resolves correctly. No console errors.
 | 3 | Play a full round; observe dice rolls | Dice produce visual results (not always the same — seed is random per game) |
 
 **Pass criteria:** GameRng autoload initialised. Dice use seeded RNG. Tests pass.
+
+**Result: PASS** (2026-04-12)
 
 ---
 

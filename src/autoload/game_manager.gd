@@ -569,6 +569,24 @@ func submit_spend_token(ship: ShipInstance, token_type: int) -> void:
 		EventBus.command_tokens_changed.emit(ship)
 
 
+## Submits a [SpendDialCommand] to spend (or discard) the top dial.
+## Called by Node-layer code after a resolver's [code]finalize()[/code]
+## returns a [code]{"dial_spent": true}[/code] result, or directly by
+## presentation code that used to call [code]spend_revealed()[/code].
+## Emits [signal EventBus.command_dials_changed] on success.
+## [param ship] — the ship whose dial should be spent.
+## [param mode] — [code]"spend"[/code] (default) or [code]"discard"[/code].
+func submit_spend_dial(ship: ShipInstance, mode: String = "spend") -> void:
+	if not current_game_state:
+		return
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SpendDialCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "mode": mode})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if not result.is_empty():
+		EventBus.command_dials_changed.emit(ship)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

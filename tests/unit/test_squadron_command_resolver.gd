@@ -230,10 +230,12 @@ func test_finalize_spends_dial() -> void:
 	assert_false(revealed.is_empty(),
 			"Dial should be revealed before finalize")
 	var result: Dictionary = resolver.finalize()
-	# After finalize, the revealed dial should be consumed.
+	# Dial is NOT spent directly — caller submits SpendDialCommand.
+	assert_true(result.get("dial_spent", false),
+			"finalize() should report dial_spent (CM-020)")
 	var after: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	assert_true(after.is_empty(),
-			"Revealed dial should be consumed after finalize (CM-020)")
+	assert_false(after.is_empty(),
+			"Dial still present — spending deferred to command system")
 	assert_false(result.has("token_type"),
 			"No token_type when only dial used")
 
@@ -282,9 +284,12 @@ func test_finalize_spends_both_dial_and_token() -> void:
 	# Use at least one activation so the token counts as spent.
 	resolver.use_activation()
 	var result: Dictionary = resolver.finalize()
+	# Dial is NOT spent directly — caller submits SpendDialCommand.
+	assert_true(result.get("dial_spent", false),
+			"finalize() should report dial_spent")
 	var after_dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	assert_true(after_dial.is_empty(),
-			"Dial should be consumed after finalize")
+	assert_false(after_dial.is_empty(),
+			"Dial still present — spending deferred to command system")
 	assert_true(result.has("token_type"),
 			"finalize() should report token spend")
 	assert_eq(int(result["token_type"]),

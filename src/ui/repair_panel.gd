@@ -352,8 +352,11 @@ func _on_done_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
 	if _resolver:
 		var result: Dictionary = _resolver.finalize()
+		var ship: ShipInstance = _resolver.get_ship()
+		if result.get("dial_spent", false):
+			GameManager.submit_spend_dial(ship)
 		if result.has("token_type"):
-			GameManager.submit_spend_token(_resolver.get_ship(), result["token_type"])
+			GameManager.submit_spend_token(ship, result["token_type"])
 	close()
 	repair_done.emit()
 

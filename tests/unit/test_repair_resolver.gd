@@ -393,10 +393,12 @@ func test_finalize_spends_dial() -> void:
 			Constants.CommandType.REPAIR,
 			"Revealed dial should be REPAIR before finalize")
 	var result: Dictionary = resolver.finalize()
-	# After finalize, the dial should be spent (no longer revealed).
+	# Dial is NOT spent directly — caller submits SpendDialCommand.
+	assert_true(result.get("dial_spent", false),
+			"finalize() should report dial_spent (CM-037)")
 	var after: Dictionary = ship.command_dial_stack.get_revealed_dial()
-	assert_true(after.is_empty(),
-			"Dial should be spent after finalize (CM-037)")
+	assert_false(after.is_empty(),
+			"Dial still present — spending deferred to command system")
 	assert_false(result.has("token_type"),
 			"No token_type when only dial used")
 
@@ -413,6 +415,8 @@ func test_finalize_spends_token_only_when_used() -> void:
 	resolver.move_shields("RIGHT", "FRONT")
 	# 4 spent = dial points exactly.
 	var result: Dictionary = resolver.finalize()
+	assert_true(result.get("dial_spent", false),
+			"Dial should still be reported as spent")
 	assert_false(result.has("token_type"),
 			"No token_type when only dial points used")
 	assert_true(ship.command_tokens.has_token(Constants.CommandType.REPAIR),

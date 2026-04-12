@@ -557,11 +557,10 @@ func _on_attack_cf_dial_colour(colour_key: String) -> void:
 	# Add die to the pool.
 	var current: int = int(_state.dice_pool.get(colour_key, 0))
 	_state.dice_pool[colour_key] = current + 1
-	# Spend the dial.
+	# Spend the dial via command system.
 	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
 	if inst and inst.command_dial_stack:
-		inst.command_dial_stack.spend_revealed()
-		EventBus.command_dials_changed.emit(inst)
+		GameManager.submit_spend_dial(inst)
 	_state.cf_dial_used = true
 	# Update dice count display.
 	if _get_panel():

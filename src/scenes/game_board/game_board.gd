@@ -877,10 +877,11 @@ func _finish_crew_panic_dial_discarded(
 		ship: ShipInstance, ship_key: String) -> void:
 	# Spend the already-revealed dial so it moves to the discarded pile.
 	if ship and ship.command_dial_stack:
-		var spent: Dictionary = ship.command_dial_stack.spend_revealed()
-		if spent.is_empty():
-			ship.command_dial_stack.discard_top()
-		EventBus.command_dials_changed.emit(ship)
+		var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
+		if not revealed.is_empty():
+			GameManager.submit_spend_dial(ship, "spend")
+		else:
+			GameManager.submit_spend_dial(ship, "discard")
 	GameManager.force_activate_ship(ship)
 	var act_token: ShipToken = _find_ship_token_for_instance(ship)
 	_activation_ctx.set_active(act_token, ShipActivationState.create(ship))
@@ -1120,7 +1121,7 @@ func _on_repair_step_entered() -> void:
 		_log.info("Ship at full strength — nothing to repair. "
 				+"Consuming dial/token and auto-advancing.")
 		var token_result: Dictionary = resolver.finalize()
-		_submit_token_spend_if_needed(ship, token_result)
+		_submit_resolver_spends(ship, token_result)
 		_on_repair_done()
 		return
 	if _panel_mgr.show_activation_button:
@@ -1154,7 +1155,7 @@ func _on_squadron_step_entered() -> void:
 		_log.info("No friendly squadrons in range — consuming resources "
 				+"and auto-advancing.")
 		var token_result: Dictionary = resolver.finalize()
-		_submit_token_spend_if_needed(ship, token_result)
+		_submit_resolver_spends(ship, token_result)
 		_on_squadron_command_done()
 		return
 	if _panel_mgr.show_activation_button:
@@ -1219,9 +1220,16 @@ func _on_squadron_command_done() -> void:
 		_panel_mgr.activation_modal.open(_activation_ctx.ship_activation_state)
 
 
-## Submits a [SpendTokenCommand] if a resolver returned token-spend info.\n## [param ship] — the ship that spent the token.\n## [param result] — the dictionary returned by [code]finalize()[/code] or\n## [code]mark_maneuver_executed()[/code]; may contain [code]\"token_type\"[/code].
-func _submit_token_spend_if_needed(ship: ShipInstance,
+## Submits [SpendDialCommand] and/or [SpendTokenCommand] based on a
+## resolver's return dictionary.
+## [param ship] — the ship that resolved the command.
+## [param result] — the dictionary returned by [code]finalize()[/code] or
+## [code]mark_maneuver_executed()[/code]; may contain [code]"dial_spent"[/code]
+## and/or [code]"token_type"[/code].
+func _submit_resolver_spends(ship: ShipInstance,
 		result: Dictionary) -> void:
+	if result.get("dial_spent", false):
+		GameManager.submit_spend_dial(ship)
 	if result.has("token_type"):
 		GameManager.submit_spend_token(ship, result["token_type"])
 
@@ -1328,7 +1336,7 @@ func _on_maneuver_step_entered() -> void:
 	if ship.current_speed == 0:
 		_log.info("Speed 0 — executing maneuver without tool.")
 		var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
-		_submit_token_spend_if_needed(ship, token_result)
+		_submit_resolver_spends(ship, token_result)
 		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 		_show_end_activation_after_maneuver()
 		return
@@ -1363,7 +1371,7 @@ func _on_execute_maneuver() -> void:
 			moved_ship_base)
 	var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
 	var maneuver_ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
-	_submit_token_spend_if_needed(maneuver_ship, token_result)
+	_submit_resolver_spends(maneuver_ship, token_result)
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
 	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)

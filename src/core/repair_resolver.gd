@@ -270,13 +270,12 @@ func repair_hull(card: DamageCard) -> bool:
 func finalize() -> Dictionary:
 	var spent: int = get_points_spent()
 	var result: Dictionary = {}
-	# Spend the dial (always consumed if available, even if 0 points used).
+	# Report the dial spend — caller must submit SpendDialCommand.
 	if _has_repair_dial and _ship.command_dial_stack:
-		_ship.command_dial_stack.spend_revealed()
-		EventBus.command_dials_changed.emit(_ship)
+		result["dial_spent"] = true
 	# Report the token spend — caller must submit SpendTokenCommand.
 	if _has_repair_token and spent > _dial_points:
-		result = {"token_type": int(Constants.CommandType.REPAIR)}
+		result["token_type"] = int(Constants.CommandType.REPAIR)
 	EventBus.repair_command_resolved.emit(_ship, spent)
 	_log.info("Repair finalized: %d/%d points spent." % [spent, _total_points])
 	return result

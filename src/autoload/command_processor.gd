@@ -45,6 +45,7 @@ func _ready() -> void:
 	ConvertDialToTokenCommand.register()
 	ActivateSquadronCommand.register()
 	SpendTokenCommand.register()
+	SpendDialCommand.register()
 	# Tier 2 — attack commands.
 	RollDiceCommand.register()
 	SpendDefenseTokenCommand.register()

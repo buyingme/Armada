@@ -204,14 +204,13 @@ func finalize() -> Dictionary:
 	# The player chose not to use the token.
 	var spent_anything: bool = _activations_used > 0
 	var result: Dictionary = {}
-	# Spend the dial (always consumed if present — it was revealed).
+	# Report the dial spend — caller must submit SpendDialCommand.
 	if _has_dial and _ship.command_dial_stack:
-		_ship.command_dial_stack.spend_revealed()
-		EventBus.command_dials_changed.emit(_ship)
+		result["dial_spent"] = true
 		spent_anything = true
 	# Report the token spend — caller must submit SpendTokenCommand.
 	if _has_token and spent_anything:
-		result = {"token_type": int(Constants.CommandType.SQUADRON)}
+		result["token_type"] = int(Constants.CommandType.SQUADRON)
 	_log.info(("Squadron command finalized: %d / %d activations used. "
 			+"Dial spent=%s, token spent=%s.") % [
 			_activations_used, _max_activations,

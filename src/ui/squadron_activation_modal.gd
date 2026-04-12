@@ -430,8 +430,11 @@ func _finish_activation() -> void:
 		if _command_resolver.is_done():
 			_log.info("All command activations used — emitting command_done.")
 			var token_result: Dictionary = _command_resolver.finalize()
+			var cmd_ship: ShipInstance = _command_resolver.get_ship()
+			if token_result.get("dial_spent", false):
+				GameManager.submit_spend_dial(cmd_ship)
 			if token_result.has("token_type"):
-				GameManager.submit_spend_token(_command_resolver.get_ship(), token_result["token_type"])
+				GameManager.submit_spend_token(cmd_ship, token_result["token_type"])
 			_is_command_mode = false
 			visible = false
 			command_done.emit()
@@ -451,8 +454,11 @@ func _finish_command_early() -> void:
 	_transition_to(State.DONE)
 	if _command_resolver != null:
 		var token_result: Dictionary = _command_resolver.finalize()
+		var cmd_ship: ShipInstance = _command_resolver.get_ship()
+		if token_result.get("dial_spent", false):
+			GameManager.submit_spend_dial(cmd_ship)
 		if token_result.has("token_type"):
-			GameManager.submit_spend_token(_command_resolver.get_ship(), token_result["token_type"])
+			GameManager.submit_spend_token(cmd_ship, token_result["token_type"])
 	_is_command_mode = false
 	visible = false
 	command_done.emit()

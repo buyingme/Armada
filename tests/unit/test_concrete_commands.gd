@@ -1,7 +1,8 @@
 ## Tests for concrete GameCommand subclasses (Tier 1).
 ##
 ## Covers: AssignDialCommand, ActivateShipCommand, EndActivationCommand,
-## ConvertDialToTokenCommand, ActivateSquadronCommand, SpendTokenCommand.
+## ConvertDialToTokenCommand, ActivateSquadronCommand, SpendTokenCommand,
+## SpendDialCommand.
 ## Each command is tested for validate (happy + rejection) and execute.
 extends GutTest
 
@@ -54,6 +55,7 @@ func before_each() -> void:
 	ConvertDialToTokenCommand.register()
 	ActivateSquadronCommand.register()
 	SpendTokenCommand.register()
+	SpendDialCommand.register()
 
 
 func after_each() -> void:
@@ -63,6 +65,7 @@ func after_each() -> void:
 	GameCommand._registry.erase("convert_dial_to_token")
 	GameCommand._registry.erase("activate_squadron")
 	GameCommand._registry.erase("spend_token")
+	GameCommand._registry.erase("spend_dial")
 
 
 # ======================================================================
@@ -499,4 +502,96 @@ func test_spend_token_serialize_roundtrip() -> void:
 	assert_not_null(restored,
 			"Deserialized command should not be null.")
 	assert_eq(restored.command_type, "spend_token",
+			"Restored type should match.")
+
+
+# ======================================================================
+# SpendDialCommand
+# ======================================================================
+
+func test_spend_dial_validate_ok() -> void:
+	var idx: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, idx)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.NAVIGATE,
+			Constants.CommandType.REPAIR], 1)
+	ship.command_dial_stack.reveal_top()
+	var cmd := SpendDialCommand.new(0, {"ship_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid dial spend.")
+
+
+func test_spend_dial_validate_no_revealed() -> void:
+	var idx: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, idx)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.NAVIGATE,
+			Constants.CommandType.REPAIR], 1)
+	# Dial is hidden, not revealed.
+	var cmd := SpendDialCommand.new(0, {"ship_index": idx})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject when no revealed dial.")
+
+
+func test_spend_dial_validate_bad_ship() -> void:
+	var cmd := SpendDialCommand.new(0, {"ship_index": 99})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject invalid ship index.")
+
+
+func test_spend_dial_execute_removes_dial() -> void:
+	var idx: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, idx)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.REPAIR,
+			Constants.CommandType.NAVIGATE], 1)
+	ship.command_dial_stack.reveal_top()
+	assert_false(ship.command_dial_stack.get_revealed_dial().is_empty(),
+			"Dial should be revealed before execute.")
+	var cmd := SpendDialCommand.new(0, {"ship_index": idx})
+	var result: Dictionary = cmd.execute(_state)
+	assert_true(result.get("spent", false),
+			"Execute should return spent=true.")
+	assert_eq(int(result.get("command", -1)),
+			int(Constants.CommandType.REPAIR),
+			"Result should contain the dial command type.")
+	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty(),
+			"Dial should be consumed after execute.")
+
+
+func test_spend_dial_discard_mode() -> void:
+	var idx: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, idx)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.NAVIGATE,
+			Constants.CommandType.REPAIR], 1)
+	# Dial is hidden — discard mode doesn't require revealed.
+	var cmd := SpendDialCommand.new(0, {"ship_index": idx, "mode": "discard"})
+	assert_eq(cmd.validate(_state), "",
+			"Discard mode should accept hidden dial.")
+	var result: Dictionary = cmd.execute(_state)
+	assert_true(result.get("spent", false),
+			"Execute should return spent=true.")
+	assert_eq(result.get("mode", ""), "discard",
+			"Result should report discard mode.")
+	assert_eq(ship.command_dial_stack.get_dial_count(), 1,
+			"Dial stack should have 1 remaining after discarding 1 of 2.")
+
+
+func test_spend_dial_discard_empty_stack() -> void:
+	var idx: int = _add_ship(0)
+	var cmd := SpendDialCommand.new(0, {
+		"ship_index": idx, "mode": "discard"})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject discard on empty stack.")
+
+
+func test_spend_dial_serialize_roundtrip() -> void:
+	var cmd := SpendDialCommand.new(0, {"ship_index": 0})
+	cmd.sequence = 5
+	var data: Dictionary = cmd.serialize()
+	var restored: GameCommand = GameCommand.deserialize(data)
+	assert_not_null(restored,
+			"Deserialized command should not be null.")
+	assert_eq(restored.command_type, "spend_dial",
 			"Restored type should match.")

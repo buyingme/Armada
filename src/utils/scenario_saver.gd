@@ -20,17 +20,17 @@ var _log: GameLogger = GameLogger.new("ScenarioSaver")
 ## [param filename] — e.g. "learning_scenario.json"
 ## [param ship_tokens] — Array of ShipToken nodes.
 ## [param squadron_tokens] — Array of SquadronToken nodes.
-## [param play_area_side] — play area side in pixels (for normalisation).
+## [param play_area_size] — play area dimensions in pixels (Vector2(width, height)).
 ## Returns true on success.
 func save_positions(
 		subfolder: String,
 		filename: String,
 		ship_tokens: Array,
 		squadron_tokens: Array,
-		play_area_side: float
+		play_area_size: Vector2
 ) -> bool:
-	if play_area_side <= 0.0:
-		_log.error("Cannot save: play_area_side is zero")
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
+		_log.error("Cannot save: play_area_size has zero component")
 		return false
 
 	# Load existing JSON to preserve metadata (_comment, _source, etc.).
@@ -43,13 +43,13 @@ func save_positions(
 		var ship: ShipToken = token as ShipToken
 		if ship == null:
 			continue
-		tokens_array.append(_ship_to_dict(ship, play_area_side))
+		tokens_array.append(_ship_to_dict(ship, play_area_size))
 
 	for token: Variant in squadron_tokens:
 		var squad: SquadronToken = token as SquadronToken
 		if squad == null:
 			continue
-		tokens_array.append(_squadron_to_dict(squad, play_area_side))
+		tokens_array.append(_squadron_to_dict(squad, play_area_size))
 
 	existing["tokens"] = tokens_array
 
@@ -58,9 +58,9 @@ func save_positions(
 
 
 ## Converts a ShipToken to a placement dictionary.
-func _ship_to_dict(token: ShipToken, side: float) -> Dictionary:
-	var norm_x: float = snapped(token.position.x / side, 0.001)
-	var norm_y: float = snapped(token.position.y / side, 0.001)
+func _ship_to_dict(token: ShipToken, size: Vector2) -> Dictionary:
+	var norm_x: float = snapped(token.position.x / size.x, 0.001)
+	var norm_y: float = snapped(token.position.y / size.y, 0.001)
 	var rot_deg: float = snapped(rad_to_deg(token.rotation), 0.1)
 	return {
 		"key": _get_data_key(token),
@@ -72,9 +72,9 @@ func _ship_to_dict(token: ShipToken, side: float) -> Dictionary:
 
 
 ## Converts a SquadronToken to a placement dictionary.
-func _squadron_to_dict(token: SquadronToken, side: float) -> Dictionary:
-	var norm_x: float = snapped(token.position.x / side, 0.001)
-	var norm_y: float = snapped(token.position.y / side, 0.001)
+func _squadron_to_dict(token: SquadronToken, size: Vector2) -> Dictionary:
+	var norm_x: float = snapped(token.position.x / size.x, 0.001)
+	var norm_y: float = snapped(token.position.y / size.y, 0.001)
 	var rot_deg: float = snapped(rad_to_deg(token.rotation), 0.1)
 	return {
 		"key": _get_data_key(token),

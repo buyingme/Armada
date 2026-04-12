@@ -131,13 +131,13 @@ func test_nebulon_b_in_rebel_deployment_zone() -> void:
 # --- Pixel position conversion ---
 
 func test_get_pixel_position_center_maps_to_half_side() -> void:
-	# A normalised position of (0.5, 0.5) should map to half the play area side.
-	var play_side: float = 2000.0
+	# A normalised position of (0.5, 0.5) should map to half the play area.
+	var play_size: Vector2 = Vector2(2000.0, 2000.0)
 	var p: TokenPlacement = \
 			TokenPlacement.new(
 					"test", true, Constants.Faction.REBEL_ALLIANCE,
 					0.5, 0.5, 0.0)
-	var px_pos: Vector2 = p.get_pixel_position(play_side)
+	var px_pos: Vector2 = p.get_pixel_position(play_size)
 	assert_almost_eq(px_pos.x, 1000.0, 0.001, "x = 0.5 × 2000 should be 1000")
 	assert_almost_eq(px_pos.y, 1000.0, 0.001, "y = 0.5 × 2000 should be 1000")
 

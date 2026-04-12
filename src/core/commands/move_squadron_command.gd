@@ -1,15 +1,16 @@
 ## MoveSquadronCommand
 ##
 ## Records a squadron's movement to a new board position during the
-## Squadron Phase. Because squadron position lives at the scene level
-## ([code]SquadronToken.global_position[/code]) rather than in the core
-## model, this command is primarily a **replay record**. The presentation
-## layer applies the position from the command result.
+## Squadron Phase. Position is stored as normalised coordinates matching
+## the [code]learning_scenario.json[/code] format ([code]pos_x[/code],
+## [code]pos_y[/code]: 0.0–1.0). The [method execute] method updates the
+## [SquadronInstance] model so the position is part of game-state
+## serialization.
 ##
 ## Payload:
 ##   "squadron_index" — index of the squadron in the player's fleet array.
-##   "target_x"       — final world-space X position (float).
-##   "target_y"       — final world-space Y position (float).
+##   "pos_x"          — normalised X (0.0 = left, 1.0 = right).
+##   "pos_y"          — normalised Y (0.0 = top,  1.0 = bottom).
 ##
 ## Rules Reference: "Squadron Phase", p.3 — "Each unactivated squadron
 ## the active player controls can be activated to move and/or attack."
@@ -45,16 +46,23 @@ func validate(game_state: GameState) -> String:
 		return "Squadron not found."
 	if sq.is_destroyed():
 		return "Squadron is destroyed."
-	if not payload.has("target_x") or not payload.has("target_y"):
+	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing target position."
 	return ""
 
 
-## No core-model mutation — position lives at scene level.
-## Returns the movement data for the presentation layer to apply.
-func execute(_game_state: GameState) -> Dictionary:
+## Updates the squadron's normalised position in [GameState] and returns
+## the movement data for the presentation layer to apply.
+func execute(game_state: GameState) -> Dictionary:
+	var sq: SquadronInstance = game_state.get_squadron(
+			player_index, payload.get("squadron_index", -1))
+	var new_x: float = float(payload.get("pos_x", 0.0))
+	var new_y: float = float(payload.get("pos_y", 0.0))
+	if sq != null:
+		sq.pos_x = new_x
+		sq.pos_y = new_y
 	return {
 		"squadron_index": payload.get("squadron_index", -1),
-		"target_x": float(payload.get("target_x", 0.0)),
-		"target_y": float(payload.get("target_y", 0.0)),
+		"pos_x": new_x,
+		"pos_y": new_y,
 	}

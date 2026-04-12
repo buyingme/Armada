@@ -121,6 +121,11 @@ func test_play_area_side_px() -> void:
 		"Play area should be 720 × 3 = 2160 px per side")
 
 
+func test_play_area_size_px() -> void:
+	assert_eq(_scale.play_area_size_px, Vector2(2160.0, 2160.0),
+		"Play area size should be (2160, 2160) for 3×3 board")
+
+
 # --- Base sizes ---
 
 func test_small_base_width() -> void:

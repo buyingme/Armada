@@ -405,7 +405,8 @@ func test_is_fully_healthy_true_after_shields_restored() -> void:
 func test_serialize_contains_expected_keys() -> void:
 	var data: Dictionary = _instance.serialize()
 	for key: String in ["data_key", "current_shields", "current_hull",
-			"current_speed", "defense_tokens", "facedown_damage",
+			"current_speed", "pos_x", "pos_y", "rotation_deg",
+			"defense_tokens", "facedown_damage",
 			"faceup_damage", "activated_this_round", "owner_player",
 			"destroyed", "command_dial_stack", "command_tokens"]:
 		assert_true(data.has(key),
@@ -441,6 +442,36 @@ func test_deserialize_round_trip_basic_fields() -> void:
 			"Round-trip should preserve activated_this_round")
 	assert_eq(restored.owner_player, 0,
 			"Round-trip should preserve owner_player")
+
+
+func test_deserialize_round_trip_position() -> void:
+	_instance.pos_x = 0.489
+	_instance.pos_y = 0.123
+	_instance.rotation_deg = 180.0
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	assert_almost_eq(restored.pos_x, 0.489, 0.001,
+			"Round-trip should preserve pos_x")
+	assert_almost_eq(restored.pos_y, 0.123, 0.001,
+			"Round-trip should preserve pos_y")
+	assert_almost_eq(restored.rotation_deg, 180.0, 0.01,
+			"Round-trip should preserve rotation_deg")
+
+
+func test_get_pixel_position() -> void:
+	_instance.pos_x = 0.5
+	_instance.pos_y = 0.25
+	var px: Vector2 = _instance.get_pixel_position(Vector2(1000.0, 800.0))
+	assert_almost_eq(px.x, 500.0, 0.01,
+			"Pixel X should be pos_x * width_px")
+	assert_almost_eq(px.y, 200.0, 0.01,
+			"Pixel Y should be pos_y * height_px")
+
+
+func test_get_rotation_rad() -> void:
+	_instance.rotation_deg = 180.0
+	assert_almost_eq(_instance.get_rotation_rad(), PI, 0.001,
+			"get_rotation_rad should convert degrees to radians")
 
 
 func test_deserialize_round_trip_shields() -> void:

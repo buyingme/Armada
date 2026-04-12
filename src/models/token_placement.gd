@@ -57,6 +57,7 @@ func get_normalised_position() -> Vector2:
 	return Vector2(pos_x, pos_y)
 
 
-## Returns the pixel position within a play area of the given side length.
-func get_pixel_position(play_area_side_px: float) -> Vector2:
-	return get_normalised_position() * play_area_side_px
+## Returns the pixel position within a play area of the given dimensions.
+## [param play_area_size] — Vector2(width_px, height_px).
+func get_pixel_position(play_area_size: Vector2) -> Vector2:
+	return get_normalised_position() * play_area_size

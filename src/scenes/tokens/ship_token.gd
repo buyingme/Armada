@@ -78,7 +78,7 @@ func setup(placement: TokenPlacement) -> void:
 	var base_size: Vector2 = GameScale.get_base_size(placement.ship_size)
 	_half_w = base_size.x * 0.5
 	_half_l = base_size.y * 0.5
-	position = placement.get_pixel_position(GameScale.play_area_side_px)
+	position = placement.get_pixel_position(GameScale.play_area_size_px)
 	rotation = placement.rotation_rad
 	_ship_data = AssetLoader.load_ship_data(placement.data_key)
 	_label_font = _create_bold_font()

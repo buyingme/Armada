@@ -31,6 +31,18 @@ var current_hull: int = 0
 ## Rules Reference: SU-021, "Speed", p.12.
 var current_speed: int = 0
 
+## Normalised X position on the play area (0.0 = left, 1.0 = right).
+## Matches the coordinate system of [code]learning_scenario.json[/code]
+## and [TokenPlacement]. Updated by [ExecuteManeuverCommand].
+var pos_x: float = 0.0
+
+## Normalised Y position on the play area (0.0 = top, 1.0 = bottom).
+var pos_y: float = 0.0
+
+## Rotation in degrees (0 = facing up / -Y, 180 = facing down / +Y).
+## Matches the [code]rotation_deg[/code] key in scenario JSON.
+var rotation_deg: float = 0.0
+
 ## Defense tokens with their current states.
 ## Array of dictionaries: {"type": Constants.DefenseToken, "state": Constants.DefenseTokenState}
 ## Rules Reference: SU-026 — all tokens start READY.
@@ -87,6 +99,24 @@ static func create_from_data(
 	inst.command_dial_stack = CommandDialStack.create(data.command_value)
 	inst.command_tokens = CommandTokenManager.create(data.command_value)
 	return inst
+
+
+## Returns the normalised position as a [Vector2].
+## Matches [method TokenPlacement.get_normalised_position].
+func get_normalised_position() -> Vector2:
+	return Vector2(pos_x, pos_y)
+
+
+## Returns the pixel position within a play area of the given dimensions.
+## [param play_area_size] — Vector2(width_px, height_px).
+## Matches [method TokenPlacement.get_pixel_position].
+func get_pixel_position(play_area_size: Vector2) -> Vector2:
+	return get_normalised_position() * play_area_size
+
+
+## Returns the rotation in radians (for Node2D.rotation).
+func get_rotation_rad() -> float:
+	return deg_to_rad(rotation_deg)
 
 
 ## Returns the total number of damage cards (facedown + faceup).
@@ -320,6 +350,9 @@ func serialize() -> Dictionary:
 		"current_shields": current_shields.duplicate(),
 		"current_hull": current_hull,
 		"current_speed": current_speed,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
+		"rotation_deg": rotation_deg,
 		"defense_tokens": tokens,
 		"facedown_damage": fd_cards,
 		"faceup_damage": fu_cards,
@@ -346,6 +379,9 @@ static func deserialize(
 			as Dictionary).duplicate()
 	inst.current_hull = int(data.get("current_hull", 0))
 	inst.current_speed = int(data.get("current_speed", 0))
+	inst.pos_x = float(data.get("pos_x", 0.0))
+	inst.pos_y = float(data.get("pos_y", 0.0))
+	inst.rotation_deg = float(data.get("rotation_deg", 0.0))
 	inst.activated_this_round = data.get(
 			"activated_this_round", false) as bool
 	inst.owner_player = int(data.get("owner_player", 0))

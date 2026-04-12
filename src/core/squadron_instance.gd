@@ -31,6 +31,18 @@ var is_engaged: bool = false
 ## The player index that controls this squadron (0 or 1).
 var owner_player: int = 0
 
+## Normalised X position on the play area (0.0 = left, 1.0 = right).
+## Matches the coordinate system of [code]learning_scenario.json[/code]
+## and [TokenPlacement]. Updated by [MoveSquadronCommand].
+var pos_x: float = 0.0
+
+## Normalised Y position on the play area (0.0 = top, 1.0 = bottom).
+var pos_y: float = 0.0
+
+## Rotation in degrees (0 = facing up / -Y, 180 = facing down / +Y).
+## Matches the [code]rotation_deg[/code] key in scenario JSON.
+var rotation_deg: float = 0.0
+
 ## Permanent destruction flag. Once set via [method mark_destroyed], the
 ## squadron remains destroyed even if hull is later manipulated.
 ## Rules Reference: "Squadrons", p.14.
@@ -57,6 +69,24 @@ static func create_from_data(
 	inst.owner_player = player
 	inst._init_defense_tokens(data)
 	return inst
+
+
+## Returns the normalised position as a [Vector2].
+## Matches [method TokenPlacement.get_normalised_position].
+func get_normalised_position() -> Vector2:
+	return Vector2(pos_x, pos_y)
+
+
+## Returns the pixel position within a play area of the given dimensions.
+## [param play_area_size] — Vector2(width_px, height_px).
+## Matches [method TokenPlacement.get_pixel_position].
+func get_pixel_position(play_area_size: Vector2) -> Vector2:
+	return get_normalised_position() * play_area_size
+
+
+## Returns the rotation in radians (for Node2D.rotation).
+func get_rotation_rad() -> float:
+	return deg_to_rad(rotation_deg)
 
 
 ## Returns true if this squadron is destroyed (hull <= 0 or
@@ -165,6 +195,9 @@ func serialize() -> Dictionary:
 		"activated_this_round": activated_this_round,
 		"is_engaged": is_engaged,
 		"owner_player": owner_player,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
+		"rotation_deg": rotation_deg,
 		"destroyed": _destroyed,
 		"defense_tokens": tokens,
 	}
@@ -185,6 +218,9 @@ static func deserialize(
 			"activated_this_round", false) as bool
 	inst.is_engaged = data.get("is_engaged", false) as bool
 	inst.owner_player = int(data.get("owner_player", 0))
+	inst.pos_x = float(data.get("pos_x", 0.0))
+	inst.pos_y = float(data.get("pos_y", 0.0))
+	inst.rotation_deg = float(data.get("rotation_deg", 0.0))
 	inst._destroyed = data.get("destroyed", false) as bool
 	for t: Variant in data.get("defense_tokens", []):
 		var td: Dictionary = t as Dictionary

@@ -173,7 +173,7 @@ func _on_save_positions() -> void:
 	var success: bool = _scenario_saver.save_positions(
 			"scenarios/", "learning_scenario.json",
 			_get_ship_tokens.call(), _get_squadron_tokens.call(),
-			GameScale.play_area_side_px)
+			GameScale.play_area_size_px)
 	if success:
 		_log.info("Token positions saved successfully.")
 	else:

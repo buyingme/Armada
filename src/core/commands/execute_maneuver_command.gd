@@ -2,22 +2,19 @@
 ##
 ## Records a ship's maneuver execution during the Ship Phase. The command
 ## carries both the deterministic inputs (speed, yaw clicks) for validation
-## and the final world-space transform for replay application.
+## and the final position/rotation as normalised coordinates matching the
+## [code]learning_scenario.json[/code] format.
 ##
-## Because ship position lives at the scene level
-## ([code]ShipToken.global_position[/code]) and overlap resolution depends
-## on pixel-precise scene-tree geometry, the presentation layer computes
-## and supplies [code]final_x[/code]/[code]final_y[/code]/
-## [code]final_rotation[/code]. This command validates the maneuver inputs
-## and records the result.
+## The [method execute] method updates the [ShipInstance] model so the
+## position is part of game-state serialization.
 ##
 ## Payload:
-##   "ship_index"      — index of the ship in the player's fleet array.
-##   "speed"           — int, the speed used for this maneuver.
-##   "yaw_clicks"      — Array[int], signed clicks per joint.
-##   "final_x"         — float, final world-space X after overlap resolution.
-##   "final_y"         — float, final world-space Y after overlap resolution.
-##   "final_rotation"  — float, final rotation in radians.
+##   "ship_index"    — index of the ship in the player's fleet array.
+##   "speed"         — int, the speed used for this maneuver.
+##   "yaw_clicks"    — Array[int], signed clicks per joint.
+##   "pos_x"         — normalised X (0.0 = left, 1.0 = right).
+##   "pos_y"         — normalised Y (0.0 = top,  1.0 = bottom).
+##   "rotation_deg"  — rotation in degrees (0 = facing up / -Y).
 ##
 ## Rules Reference: "Ship Phase", "Execute Maneuver", p.7; MV-001–005.
 class_name ExecuteManeuverCommand
@@ -59,21 +56,30 @@ func validate(game_state: GameState) -> String:
 		if not ManeuverCalculator.validate_yaw_clicks(
 				ship.ship_data.navigation_chart, speed, yaw_clicks):
 			return "Yaw clicks exceed navigation chart limits."
-	if not payload.has("final_x") or not payload.has("final_y"):
+	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing final position."
-	if not payload.has("final_rotation"):
+	if not payload.has("rotation_deg"):
 		return "Missing final rotation."
 	return ""
 
 
-## No core-model mutation — position lives at scene level.
-## Returns the maneuver data for the presentation layer to apply.
-func execute(_game_state: GameState) -> Dictionary:
+## Updates the ship's normalised position and rotation in [GameState]
+## and returns the maneuver data for the presentation layer to apply.
+func execute(game_state: GameState) -> Dictionary:
+	var ship: ShipInstance = game_state.get_ship(
+			player_index, payload.get("ship_index", -1))
+	var new_x: float = float(payload.get("pos_x", 0.0))
+	var new_y: float = float(payload.get("pos_y", 0.0))
+	var new_rot: float = float(payload.get("rotation_deg", 0.0))
+	if ship != null:
+		ship.pos_x = new_x
+		ship.pos_y = new_y
+		ship.rotation_deg = new_rot
 	return {
 		"ship_index": payload.get("ship_index", -1),
 		"speed": payload.get("speed", 0),
 		"yaw_clicks": payload.get("yaw_clicks", []),
-		"final_x": float(payload.get("final_x", 0.0)),
-		"final_y": float(payload.get("final_y", 0.0)),
-		"final_rotation": float(payload.get("final_rotation", 0.0)),
+		"pos_x": new_x,
+		"pos_y": new_y,
+		"rotation_deg": new_rot,
 	}

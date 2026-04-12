@@ -24,7 +24,12 @@ var _log: GameLogger = GameLogger.new("GameScale")
 ## Real-world ruler length in millimetres (1 foot).
 var _ruler_mm: float = 0.0
 ## Play area multiplier (Learning Scenario = 3 ruler lengths per side).
+## Kept for backward compatibility; prefer _play_area_width/height_rulers.
 var _play_area_ruler_multiplier: float = 0.0
+## Width of the play area in ruler-lengths (e.g. 3 for 3'×3', 6 for 6'×3').
+var _play_area_width_rulers: float = 0.0
+## Height of the play area in ruler-lengths.
+var _play_area_height_rulers: float = 0.0
 ## Number of maneuver tool segments.
 var _maneuver_segments: int = 0
 
@@ -42,7 +47,15 @@ var range_long_px: float = 0.0
 var distance_bands_px: Array[float] = []
 
 ## Play area side length in pixels (ruler × multiplier).
+## For square boards both axes are equal. Legacy alias — prefer
+## [member play_area_size_px] for rectangular board support.
 var play_area_side_px: float = 0.0
+
+## Play area dimensions in pixels (width × height).
+## Width = X-axis (left → right), Height = Y-axis (top → bottom).
+## For the 3'×3' Learning Scenario both components are equal.
+## For a 6'×3' standard board, width would be double the height.
+var play_area_size_px: Vector2 = Vector2.ZERO
 
 ## Ship base dimensions in pixels.
 var small_base_width_px: float = 0.0
@@ -188,8 +201,8 @@ func _load_scale_config() -> void:
 	_load_maneuver_tool(config)
 
 	is_initialised = true
-	_log.info("Scale initialised — ruler %s px, play area %s px" % [
-		ruler_length_px, play_area_side_px])
+	_log.info("Scale initialised — ruler %s px, play area %s px (size %s)" % [
+		ruler_length_px, play_area_side_px, play_area_size_px])
 
 
 ## Converts a real-world millimetre value to pixels using the ruler scale.
@@ -271,6 +284,12 @@ func _load_physical_dimensions(config: Dictionary) -> void:
 	var phys: Dictionary = config.get("physical_dimensions_mm", {})
 	_ruler_mm = float(phys.get("ruler_length", 0))
 	_play_area_ruler_multiplier = float(phys.get("play_area_ruler_multiplier", 0))
+	_play_area_width_rulers = float(
+			phys.get("play_area_width_rulers",
+			_play_area_ruler_multiplier))
+	_play_area_height_rulers = float(
+			phys.get("play_area_height_rulers",
+			_play_area_ruler_multiplier))
 	_maneuver_segments = int(phys.get("maneuver_segments", 0))
 	# Store mm values temporarily for _compute_derived_values.
 	set_meta("_small_base_width_mm", float(phys.get("small_base_width", 0)))
@@ -286,6 +305,9 @@ func _load_physical_dimensions(config: Dictionary) -> void:
 ## length. Must be called after [_load_physical_dimensions].
 func _compute_derived_values() -> void:
 	play_area_side_px = ruler_length_px * _play_area_ruler_multiplier
+	play_area_size_px = Vector2(
+			ruler_length_px * _play_area_width_rulers,
+			ruler_length_px * _play_area_height_rulers)
 	small_base_width_px = _mm_to_px(get_meta("_small_base_width_mm", 0.0))
 	small_base_length_px = _mm_to_px(get_meta("_small_base_length_mm", 0.0))
 	medium_base_width_px = _mm_to_px(get_meta("_medium_base_width_mm", 0.0))

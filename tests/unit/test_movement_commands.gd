@@ -86,8 +86,8 @@ func test_move_squadron_validate_ok_squadron_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
-		"target_x": 500.0,
-		"target_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid move in Squadron Phase.")
@@ -98,8 +98,8 @@ func test_move_squadron_validate_ok_ship_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
-		"target_x": 500.0,
-		"target_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept move in Ship Phase (squadron command).")
@@ -110,8 +110,8 @@ func test_move_squadron_validate_wrong_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
-		"target_x": 500.0,
-		"target_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject outside Squadron/Ship Phase.")
@@ -121,8 +121,8 @@ func test_move_squadron_validate_bad_index() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": 99,
-		"target_x": 500.0,
-		"target_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject invalid squadron index.")
@@ -135,8 +135,8 @@ func test_move_squadron_validate_destroyed() -> void:
 	sq.mark_destroyed()
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
-		"target_x": 500.0,
-		"target_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject destroyed squadron.")
@@ -157,23 +157,41 @@ func test_move_squadron_execute_returns_position() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
-		"target_x": 123.5,
-		"target_y": 456.7,
+		"pos_x": 0.421,
+		"pos_y": 0.913,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("squadron_index", -1), idx,
 			"Result should include squadron index.")
-	assert_almost_eq(result.get("target_x", 0.0), 123.5, 0.01,
-			"Result should include target X.")
-	assert_almost_eq(result.get("target_y", 0.0), 456.7, 0.01,
-			"Result should include target Y.")
+	assert_almost_eq(result.get("pos_x", 0.0), 0.421, 0.001,
+			"Result should include pos_x.")
+	assert_almost_eq(result.get("pos_y", 0.0), 0.913, 0.001,
+			"Result should include pos_y.")
+
+
+func test_move_squadron_execute_updates_instance() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_squadron(0)
+	var sq: SquadronInstance = _state.get_squadron(0, idx)
+	assert_almost_eq(sq.pos_x, 0.0, 0.001,
+			"pos_x should default to 0.")
+	var cmd := MoveSquadronCommand.new(0, {
+		"squadron_index": idx,
+		"pos_x": 0.6,
+		"pos_y": 0.85,
+	})
+	cmd.execute(_state)
+	assert_almost_eq(sq.pos_x, 0.6, 0.001,
+			"execute() should update squadron pos_x.")
+	assert_almost_eq(sq.pos_y, 0.85, 0.001,
+			"execute() should update squadron pos_y.")
 
 
 func test_move_squadron_serialize_roundtrip() -> void:
 	var cmd := MoveSquadronCommand.new(1, {
 		"squadron_index": 2,
-		"target_x": 800.0,
-		"target_y": 600.0,
+		"pos_x": 0.8,
+		"pos_y": 0.6,
 	})
 	cmd.sequence = 20
 	var data: Dictionary = cmd.serialize()
@@ -200,9 +218,9 @@ func test_execute_maneuver_validate_ok() -> void:
 		"ship_index": idx,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid maneuver.")
@@ -215,9 +233,9 @@ func test_execute_maneuver_validate_speed_zero() -> void:
 		"ship_index": idx,
 		"speed": 0,
 		"yaw_clicks": [],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 0.0,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept speed-0 maneuver (no movement).")
@@ -230,9 +248,9 @@ func test_execute_maneuver_validate_wrong_phase() -> void:
 		"ship_index": idx,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject outside Ship Phase.")
@@ -244,9 +262,9 @@ func test_execute_maneuver_validate_bad_ship() -> void:
 		"ship_index": 99,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject invalid ship index.")
@@ -259,9 +277,9 @@ func test_execute_maneuver_validate_invalid_speed() -> void:
 		"ship_index": idx,
 		"speed": -1,
 		"yaw_clicks": [0],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative speed.")
@@ -276,9 +294,9 @@ func test_execute_maneuver_validate_exceeds_yaw_limits() -> void:
 		"ship_index": idx,
 		"speed": 2,
 		"yaw_clicks": [0, 3],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject yaw clicks exceeding nav chart.")
@@ -292,9 +310,9 @@ func test_execute_maneuver_validate_wrong_joint_count() -> void:
 		"ship_index": idx,
 		"speed": 2,
 		"yaw_clicks": [0, 0, 1],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject wrong number of yaw click joints.")
@@ -319,8 +337,8 @@ func test_execute_maneuver_validate_missing_rotation() -> void:
 		"ship_index": idx,
 		"speed": 1,
 		"yaw_clicks": [0],
-		"final_x": 500.0,
-		"final_y": 300.0,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject missing final rotation.")
@@ -334,9 +352,9 @@ func test_execute_maneuver_validate_locked_joint_zero_yaw() -> void:
 		"ship_index": idx,
 		"speed": 3,
 		"yaw_clicks": [0, 0, 1],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept yaw=0 at locked joint.")
@@ -350,9 +368,9 @@ func test_execute_maneuver_validate_locked_joint_nonzero() -> void:
 		"ship_index": idx,
 		"speed": 3,
 		"yaw_clicks": [1, 0, 0],
-		"final_x": 500.0,
-		"final_y": 300.0,
-		"final_rotation": 0.5,
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject non-zero yaw at locked joint.")
@@ -365,24 +383,47 @@ func test_execute_maneuver_execute_returns_data() -> void:
 		"ship_index": idx,
 		"speed": 2,
 		"yaw_clicks": [0, -1],
-		"final_x": 750.0,
-		"final_y": 420.0,
-		"final_rotation": -0.3,
+		"pos_x": 0.75,
+		"pos_y": 0.42,
+		"rotation_deg": -17.2,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("ship_index", -1), idx,
 			"Result should include ship index.")
 	assert_eq(result.get("speed", -1), 2,
 			"Result should include speed.")
-	assert_almost_eq(result.get("final_x", 0.0), 750.0, 0.01,
-			"Result should include final X.")
-	assert_almost_eq(result.get("final_y", 0.0), 420.0, 0.01,
-			"Result should include final Y.")
-	assert_almost_eq(result.get("final_rotation", 0.0), -0.3, 0.001,
-			"Result should include final rotation.")
+	assert_almost_eq(result.get("pos_x", 0.0), 0.75, 0.001,
+			"Result should include pos_x.")
+	assert_almost_eq(result.get("pos_y", 0.0), 0.42, 0.001,
+			"Result should include pos_y.")
+	assert_almost_eq(result.get("rotation_deg", 0.0), -17.2, 0.01,
+			"Result should include rotation_deg.")
 	var yaw: Array = result.get("yaw_clicks", [])
 	assert_eq(yaw.size(), 2,
 			"Result should include yaw clicks array.")
+
+
+func test_execute_maneuver_execute_updates_instance() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, idx)
+	assert_almost_eq(ship.pos_x, 0.0, 0.001,
+			"pos_x should default to 0.")
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 2,
+		"yaw_clicks": [0, 1],
+		"pos_x": 0.489,
+		"pos_y": 0.35,
+		"rotation_deg": 180.0,
+	})
+	cmd.execute(_state)
+	assert_almost_eq(ship.pos_x, 0.489, 0.001,
+			"execute() should update ship pos_x.")
+	assert_almost_eq(ship.pos_y, 0.35, 0.001,
+			"execute() should update ship pos_y.")
+	assert_almost_eq(ship.rotation_deg, 180.0, 0.01,
+			"execute() should update ship rotation_deg.")
 
 
 func test_execute_maneuver_serialize_roundtrip() -> void:
@@ -390,9 +431,9 @@ func test_execute_maneuver_serialize_roundtrip() -> void:
 		"ship_index": 1,
 		"speed": 3,
 		"yaw_clicks": [0, 1, -1],
-		"final_x": 600.0,
-		"final_y": 350.0,
-		"final_rotation": 1.57,
+		"pos_x": 0.6,
+		"pos_y": 0.35,
+		"rotation_deg": 90.0,
 	})
 	cmd.sequence = 42
 	var data: Dictionary = cmd.serialize()

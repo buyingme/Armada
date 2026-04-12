@@ -73,10 +73,10 @@ func test_ship_to_dict_normalises_position() -> void:
 	add_child_autofree(token)
 	token.setup(placement)
 	# Move token to a known position.
-	var side: float = GameScale.play_area_side_px
-	token.position = Vector2(side * 0.25, side * 0.75)
+	var size: Vector2 = GameScale.play_area_size_px
+	token.position = Vector2(size.x * 0.25, size.y * 0.75)
 	# Act
-	var dict: Dictionary = _saver._ship_to_dict(token, side)
+	var dict: Dictionary = _saver._ship_to_dict(token, size)
 	# Assert — normalised coords should be 0.25, 0.75.
 	assert_almost_eq(float(dict["pos_x"]), 0.25, 0.01,
 			"Normalised X should be 0.25")
@@ -100,9 +100,9 @@ func test_squadron_to_dict_normalises_position() -> void:
 	var token: SquadronToken = SQUADRON_TOKEN_SCENE.instantiate() as SquadronToken
 	add_child_autofree(token)
 	token.setup(placement)
-	var side: float = GameScale.play_area_side_px
-	token.position = Vector2(side * 0.4, side * 0.6)
-	var dict: Dictionary = _saver._squadron_to_dict(token, side)
+	var size: Vector2 = GameScale.play_area_size_px
+	token.position = Vector2(size.x * 0.4, size.y * 0.6)
+	var dict: Dictionary = _saver._squadron_to_dict(token, size)
 	assert_almost_eq(float(dict["pos_x"]), 0.4, 0.01,
 			"Normalised X should be 0.4")
 	assert_almost_eq(float(dict["pos_y"]), 0.6, 0.01,
@@ -123,7 +123,7 @@ func test_ship_rotation_saved_as_degrees() -> void:
 	var token: ShipToken = SHIP_TOKEN_SCENE.instantiate() as ShipToken
 	add_child_autofree(token)
 	token.setup(placement)
-	var dict: Dictionary = _saver._ship_to_dict(token, GameScale.play_area_side_px)
+	var dict: Dictionary = _saver._ship_to_dict(token, GameScale.play_area_size_px)
 	assert_almost_eq(float(dict["rotation_deg"]), 45.0, 0.5,
 			"Rotation should be saved as degrees")
 
@@ -132,10 +132,10 @@ func test_ship_rotation_saved_as_degrees() -> void:
 # save_positions rejects zero play area
 # ---------------------------------------------------------------------------
 
-func test_save_positions_fails_with_zero_side() -> void:
+func test_save_positions_fails_with_zero_size() -> void:
 	var result: bool = _saver.save_positions(
-			"scenarios/", "test.json", [], [], 0.0)
+			"scenarios/", "test.json", [], [], Vector2.ZERO)
 	assert_false(result,
-			"save_positions should return false when play_area_side is 0")
+			"save_positions should return false when play_area_size is zero")
 	assert_push_error(1,
-			"Should produce exactly 1 push_error for zero side")
+			"Should produce exactly 1 push_error for zero size")

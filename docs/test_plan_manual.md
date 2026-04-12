@@ -5352,6 +5352,8 @@ Squadron Phase); covered by MT-G.03 regression + GUT unit tests.
 
 **Pass criteria:** Log confirms reset + seq starts at 0.
 
+**Result: PASS** (2026-04-12)
+
 ### MT-G.10 — Replay File Save via Shift+R
 
 | Step | Action | Expected |
@@ -5361,3 +5363,5 @@ Squadron Phase); covered by MT-G.03 regression + GUT unit tests.
 | 3 | Open the saved JSON file in `res://replays/` | Contains `"header"` with `rng_seed`, `scenario_id`, `factions` and `"commands"` array matching the seq count from the log |
 
 **Pass criteria:** Replay JSON file is well-formed and contains all executed commands.
+
+**Result: PASS** (2026-04-12)

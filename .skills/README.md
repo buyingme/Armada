@@ -11,6 +11,7 @@ These documents define the standards and patterns that **must** be followed when
 | [testing_standards.md](testing_standards.md) | Testing conventions, naming, and coverage requirements |
 | [file_organization.md](file_organization.md) | File and folder structure rules |
 | [copilot_instructions.md](copilot_instructions.md) | Instructions for AI code generation |
+| [serialization_and_commands.md](serialization_and_commands.md) | Serialization contract, command system, normalised positions, replay safety |
 
 ## Usage
 

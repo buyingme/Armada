@@ -22,6 +22,7 @@ You **must** read and follow these documents (in `.skills/`):
 5. **`.skills/copilot_instructions.md`** — Detailed templates and rules
 6. **`.skills/ui_styling.md`** — Modal panel styles, colours, positioning, dismissibility, **§10 anchor panel reset pattern**
 7. **`.skills/refactoring_guidelines.md`** — Function size limits, extraction patterns, serialization, god-object prevention, quantified targets
+8. **`.skills/serialization_and_commands.md`** — Serialization contract, command system, normalised positions, replay safety, banned patterns
 
 ## Non-Negotiable Rules
 
@@ -86,6 +87,11 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Mixing tabs and spaces in the same file
 - ❌ `if/elif` chains on enum values — use `match`
 - ❌ Rewriting a file > 300 lines in a single edit — use incremental delegation (see `.skills/refactoring_guidelines.md` §8)
+- ❌ Mutable game-state field without `serialize()`/`deserialize()` — see `.skills/serialization_and_commands.md` §1
+- ❌ Mutating `GameState` outside a `GameCommand.execute()` — see `.skills/serialization_and_commands.md` §4.6
+- ❌ Pixel values in command payloads or serialized state — use normalised `pos_x`/`pos_y`/`rotation_deg`
+- ❌ `Vector2`/`Color`/Godot types in serialized dictionaries — use plain floats/ints
+- ❌ `play_area_side_px` (float) in `get_pixel_position()` — use `play_area_size_px` (Vector2)
 
 ### 8. Game Rules Must Be Cited
 
@@ -134,16 +140,17 @@ When asked to implement a feature or fix a bug:
 1. **Search first** — Check `src/` for existing related code. Check `Resources/` rules docs for game rules.
 2. **Plan the change** — Identify which layer(s) are affected (Domain? Presentation? Both?)
 3. **Check refactoring constraints** — Read `.skills/refactoring_guidelines.md`. Ensure the change does not introduce functions > 30 lines, does not add responsibilities to god objects, and follows extraction patterns if applicable.
-4. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
-5. **Write the tests first or alongside** — Never submit untested logic
-6. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
-7. **Verify** — Run tests and confirm: 0 failures, expected script count, no parse errors:
+4. **Check serialization impact** — Read `.skills/serialization_and_commands.md`. If the change adds mutable state, add `serialize()`/`deserialize()`. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised coordinates.
+5. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
+6. **Write the tests first or alongside** — Never submit untested logic
+7. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
+8. **Verify** — Run tests and confirm: 0 failures, expected script count, no parse errors:
    ```bash
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
    ```
-8. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
-9. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
-10. **Update manual test plan** — Add phase section to `docs/test_plan_manual.md` (visual/interaction checks only — skip anything GUT already covers)
+9. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
+10. **Update progress** — Mark completed tasks in `docs/implementation_plan.md` and include in commit
+11. **Update manual test plan** — Add phase section to `docs/test_plan_manual.md` (visual/interaction checks only — skip anything GUT already covers)
 
 ## Architecture Quick Reference
 

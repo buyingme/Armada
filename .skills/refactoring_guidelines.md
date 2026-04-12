@@ -123,33 +123,24 @@ end of the file without grouping.
 
 ## 5. Serialization Requirement
 
+> **Full specification:** `.skills/serialization_and_commands.md`
+>
+> This section is a summary. The canonical rules, templates, banned patterns,
+> and command contract live in that document.
+
 **Every `RefCounted` class that holds mutable game state must implement
 `serialize() -> Dictionary` and `static deserialize(data: Dictionary) -> Self`.**
 
-This applies to:
-- `GameState`, `ShipInstance`, `SquadronInstance`
-- `DamageDeck`, `DamageCard`
-- `ShipActivationState`, `CommandDialStack`
-- Any new class added to `src/core/` or `src/models/` that stores game state
+When creating a new class, ask: *"Does this hold game state that would need
+saving/loading?"* If yes, add `serialize()`/`deserialize()` from the start
+and write a round-trip test.
 
-```gdscript
-func serialize() -> Dictionary:
-    return {
-        "position": {"x": position.x, "y": position.y},
-        "hull_points": hull_points,
-        "shields": shields.duplicate(),
-    }
+When adding a field to an existing serializable class, update both
+`serialize()` and `deserialize()` **in the same edit**. Use `.get(key, default)`
+in `deserialize()` for forward compatibility.
 
-static func deserialize(data: Dictionary) -> ShipInstance:
-    var instance := ShipInstance.new()
-    instance.position = Vector2(data["position"]["x"], data["position"]["y"])
-    instance.hull_points = data["hull_points"]
-    instance.shields = data["shields"]
-    return instance
-```
-
-When creating a new class, ask: "Does this hold game state that would need
-saving/loading?" If yes, add `serialize()`/`deserialize()` from the start.
+See `.skills/serialization_and_commands.md` §1–§2 for the full contract,
+class inventory, and templates.
 
 ---
 

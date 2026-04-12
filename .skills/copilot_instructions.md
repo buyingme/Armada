@@ -20,6 +20,7 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 2. **Check existing code** — Search `src/` for related classes and patterns.
 3. **Check existing tests** — See `tests/` for testing patterns used in this project.
 4. **Follow the architecture** — See `.skills/architecture_patterns.md`.
+5. **Check serialization impact** — See `.skills/serialization_and_commands.md`. If the change adds mutable state fields, update `serialize()`/`deserialize()` in the same edit. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised `pos_x`/`pos_y`/`rotation_deg`.
 
 ## Progress Tracking
 
@@ -227,6 +228,11 @@ var damage := _calculate_total_damage(dice_results)
 | Hardcoding named scalars/enums in game logic | Use `Constants` for game-wide values (`MAX_ROUNDS`, hull zone names, dice colours) |
 | Hardcoding card properties in GDScript (faction, ship size, cost, stats) | Read from card JSON via `AssetLoader.load_ship_data()` / `load_squadron_data()` — these come from `ships/<key>.json`, `squadrons/<key>.json` |
 | Hardcoding scenario placement data in GDScript (positions, rotations, token list) | Create `scenarios/<name>.json` and load via `AssetLoader.load_json("scenarios/", file)` |
+| Adding mutable state field without updating `serialize()`/`deserialize()` | Update both methods in the same edit — see `.skills/serialization_and_commands.md` §2 |
+| Mutating GameState outside a GameCommand `execute()` | Write a command — see `.skills/serialization_and_commands.md` §4.6 |
+| Storing pixel positions in command payloads or serialized state | Use normalised `pos_x`/`pos_y`/`rotation_deg` (0.0–1.0) — see `.skills/serialization_and_commands.md` §3 |
+| Using `Vector2`/`Color` in serialized dictionaries | Use separate float keys (`pos_x`, `pos_y`) for JSON safety |
+| Using `play_area_side_px` (float) in `get_pixel_position()` | Use `play_area_size_px` (Vector2) for rectangular board support |
 | Cross-system direct references | Use `EventBus` signals |
 | Writing tests without assertion messages | Always add description parameter |
 | Functions >30 lines | Split into smaller functions |

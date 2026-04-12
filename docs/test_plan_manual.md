@@ -5404,3 +5404,86 @@ blocker was resolved by putting positions in the command payload.
 | 1 | Launch the Learning Scenario | Log shows "Registered 12 command types." |
 
 **Pass criteria:** 12 command types registered; no errors.
+
+---
+
+## Phase G — SpendTokenCommand + SpendDialCommand Wiring
+
+> Wired `SpendTokenCommand` (7 call sites) and new `SpendDialCommand`
+> (5 call sites) through the return-value protocol: RefCounted resolvers
+> return `{"dial_spent": true, "token_type": int}` from `finalize()`;
+> Node-layer callers submit commands via `GameManager.submit_spend_dial()`
+> / `GameManager.submit_spend_token()` helpers.
+>
+> GUT coverage: 7 SpendDialCommand unit tests (validate, execute, serialize,
+> discard mode); existing SpendTokenCommand tests; resolver tests updated to
+> verify `dial_spent` flag. Manual tests below verify live wiring.
+
+### MT-G.13 — Updated Command Registration Count
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch the Learning Scenario | Log shows "Registered **13** command types." (was 12 before SpendDialCommand) |
+
+**Pass criteria:** 13 command types registered; no errors.
+
+### MT-G.14 — Repair Flow: Dial + Token Spend Commands
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a **Repair** dial to a ship during the Command Phase | Dial assigned normally |
+| 2 | Activate the ship → enter the Repair step | Repair panel appears; revealed dial shows Repair |
+| 3 | Spend repair points (move shields or recover) → click Done | Repair panel closes |
+| 4 | Check the game log | Log shows `Executed spend_dial (seq=N)` **and** `Executed spend_token (seq=M)` if a token was also spent, before the activation continues |
+| 5 | Verify ship state | Dial stack consumed; command token consumed (if applicable); repair effects applied |
+
+**Pass criteria:** Repair dial/token spending goes through commands (visible in log with sequence numbers). No direct mutation — observable via log timestamps + seq ordering.
+
+### MT-G.15 — Squadron Command Flow: Dial + Token Spend Commands
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a **Squadron** dial to a ship | Dial assigned |
+| 2 | Activate the ship → enter the Squadron step | Squadron activation modal appears |
+| 3 | Activate or move eligible squadrons → click Done | Modal closes |
+| 4 | Check the game log | Log shows `Executed spend_dial (seq=N)` and optionally `Executed spend_token (seq=M)` |
+| 5 | Verify ship state | Dial consumed; token consumed (if used); squadrons moved/activated |
+
+**Pass criteria:** Squadron dial/token spending routed through commands.
+
+### MT-G.16 — Concentrate Fire Attack: Dial + Token Spend Commands
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Assign a **Concentrate Fire** dial to a ship | Dial assigned |
+| 2 | Activate the ship → initiate an attack from any hull zone | Attack flow begins |
+| 3 | When prompted for CF die colour, select a colour | Extra die added to pool |
+| 4 | Check the game log | Log shows `Executed spend_dial (seq=N)` for the CF dial spend |
+| 5 | If a CF token was also available and spent (reroll) | Log shows `Executed spend_token (seq=M)` for the CF token spend |
+
+**Pass criteria:** CF dial spend (colour select) and CF token spend (reroll) both go through commands.
+
+### MT-G.17 — Crew Panic Faceup Crit: Dial Discard Command
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Use debug tools (F12 → deal faceup damage) to give a ship the **Crew Panic** crit | Crew Panic effect triggers on status phase or activation |
+| 2 | When Crew Panic fires, observe dial discard | A dial is discarded from the ship's stack |
+| 3 | Check the game log | Log shows `Executed spend_dial (seq=N)` with mode "discard" (or "spend" depending on whether dial was revealed) |
+
+**Pass criteria:** Crew Panic dial discard routed through SpendDialCommand. Log shows command execution with correct seq number.
+
+### MT-G.18 — SpendToken Wiring: Navigate Token on Speed-0 Maneuver
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up a ship at speed 0 (or reduce to 0 via Navigate) with a Navigate token | Ship at speed 0 with Nav token |
+| 2 | Activate the ship → enter the Maneuver step | Speed-0 maneuver auto-advances |
+| 3 | Check the game log | If a Navigate token was spent, log shows `Executed spend_token (seq=N)` |
+
+**Pass criteria:** Navigate token spend at speed-0 goes through SpendTokenCommand.
+
+### Current Test Baseline
+
+**107 scripts, 2 195 tests, 3 923 asserts — all passing.**
+**13 command types registered, 18 wired call sites.**

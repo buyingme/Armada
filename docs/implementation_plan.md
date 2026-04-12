@@ -2284,10 +2284,40 @@ emissions and application-layer tracking (`_activating_ship`,
 | 9 | Wire `_on_activation_ended` → `EndActivationCommand` | ✅ |
 | 10 | Wire `activate_squadron` → `ActivateSquadronCommand` | ✅ |
 
-**SpendTokenCommand wiring:** Deferred — 3 call sites in RefCounted classes
-(`ship_activation_state.gd`, `repair_resolver.gd`, `squadron_command_resolver.gd`)
-cannot safely reference the `CommandProcessor` autoload. Requires an
-architectural decision (callback injection, signal relay, or similar).
+#### G2 Wiring: SpendTokenCommand + SpendDialCommand ✅
+
+Solved the RefCounted→autoload routing problem via a **return-value protocol**:
+RefCounted resolvers (`RepairResolver`, `SquadronCommandResolver`) return a
+result dictionary from `finalize()` containing `{"dial_spent": true, "token_type": int}`.
+Node-layer callers (`GameBoard`, `RepairPanel`, `SquadronActivationModal`) read
+the result and submit `SpendDialCommand` / `SpendTokenCommand` through
+`GameManager.submit_spend_dial()` / `GameManager.submit_spend_token()` helpers.
+
+**SpendTokenCommand** call sites wired (7 total):
+
+| # | Call Site | File |
+|---|-----------|------|
+| 1 | Navigate token (maneuver speed-0 auto-advance) | `game_board.gd` |
+| 2 | Repair token (resolver finalize) | `game_board.gd`, `repair_panel.gd` |
+| 3 | Squadron token (resolver finalize) | `game_board.gd`, `squadron_activation_modal.gd` |
+| 4 | CF token on attack (reroll) | `attack_executor.gd` |
+
+**SpendDialCommand** — new command class (`src/core/commands/spend_dial_command.gd`).
+Payload: `{"ship_index": int, "mode": "spend"|"discard"}`.
+Supports both `spend_revealed()` and `discard_top()` modes.
+
+SpendDialCommand call sites wired (5 total):
+
+| # | Call Site | File |
+|---|-----------|------|
+| 1 | Repair dial (resolver finalize) | `game_board.gd`, `repair_panel.gd` |
+| 2 | Squadron dial (resolver finalize) | `game_board.gd`, `squadron_activation_modal.gd` |
+| 3 | CF dial on attack (colour-select) | `attack_executor.gd` |
+| 4 | Crew Panic faceup crit (discard mode) | `game_board.gd` |
+| 5 | End Activation (already wired via EndActivationCommand) | — |
+
+**Commits:** `b7f37f7` (SpendTokenCommand wiring), `515413e` (SpendDialCommand).
+**Tests:** 107 scripts, 2 195 tests, 3 923 asserts — all passing.
 
 #### Remaining G2 Tiers
 
@@ -2370,15 +2400,128 @@ Record/playback of serialized command sequences.
 
 #### Phase G Metrics
 
-| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring | After G6 | After G2 T2+T3+Pos |
-|--------|---------------|----------------------|-----------------|----------|---------------------|
-| Test scripts | 100 | 104 | 104 | 105 | 107 |
-| Tests | 2 032 | 2 098 | 2 098 | 2 124 | 2 188 |
-| Asserts | 3 552 | 3 721 | 3 721 | 3 763 | 3 895 |
-| Autoloads | 11 | 12 (+ CommandProcessor) | 12 | 12 | 12 |
-| Command classes | 0 | 7 (1 base + 6 concrete) | 7 | 7 | 13 (1 base + 12 concrete) |
-| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) | 6 | 6 |
-| Core classes | — | — | — | 8 (+ GameReplay) | 8 |
+| Metric | Before Phase G | After G5+G1+G3+G2T1 | After G2 Wiring | After G6 | After G2 T2+T3+Pos | After SpendToken+SpendDial |
+|--------|---------------|----------------------|-----------------|----------|---------------------|----------------------------|
+| Test scripts | 100 | 104 | 104 | 105 | 107 | 107 |
+| Tests | 2 032 | 2 098 | 2 098 | 2 124 | 2 188 | 2 195 |
+| Asserts | 3 552 | 3 721 | 3 721 | 3 763 | 3 895 | 3 923 |
+| Autoloads | 11 | 12 (+ CommandProcessor) | 12 | 12 | 12 | 12 |
+| Command classes | 0 | 7 (1 base + 6 concrete) | 7 | 7 | 13 (1 base + 12 concrete) | 14 (1 base + 13 concrete) |
+| Wired call sites | 0 | 0 | 6 (all Tier 1 except SpendToken) | 6 | 6 | 18 (6 T1 + 7 token + 5 dial) |
+| Core classes | — | — | — | 8 (+ GameReplay) | 8 | 8 |
+
+---
+
+### §4.6 Violation Roadmap — Mutations Outside GameCommand.execute()
+
+A full audit (commit `515413e`) found **34 violations** across 8 files where
+`GameState`-owned data is mutated outside a `GameCommand.execute()` call.
+These are addressable by ~11 new command classes in 7 priority tiers.
+
+#### Priority 1 — Game Flow Commands (3 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 8 | `game_manager.gd` | `advance_phase()` | `current_phase = next_phase` | `AdvancePhaseCommand` |
+| 9 | `game_manager.gd` | `_start_round()` | `current_round += 1` | `StartRoundCommand` |
+| 10 | `game_manager.gd` | `_start_round()` | `current_phase = COMMAND` | `StartRoundCommand` |
+
+#### Priority 2 — Status Phase Cleanup (5 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 11 | `game_manager.gd` | `_perform_status_phase_cleanup()` | `si.ready_defense_tokens()` | `StatusPhaseCleanupCommand` |
+| 12 | `game_manager.gd` | `_perform_status_phase_cleanup()` | `si.reset_activation()` | `StatusPhaseCleanupCommand` |
+| 13 | `game_manager.gd` | `_perform_status_phase_cleanup()` | `si.command_dial_stack.clear_spent_history()` | `StatusPhaseCleanupCommand` |
+| 14 | `game_manager.gd` | `_perform_status_phase_cleanup()` | `sqi.ready_defense_tokens()` + `reset_activation()` | `StatusPhaseCleanupCommand` |
+| 15 | `game_manager.gd` | `_on_ship_destroyed()` | `si.clear_all_damage_cards()` | `DestroyUnitCommand` |
+
+#### Priority 3 — Attack Damage Resolution (7 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 1 | `attack_executor.gd` | `_apply_single_redirect()` | `reduce_shields(zone, 1)` | `ResolveDamageCommand` |
+| 2 | `attack_executor.gd` | `_resolve_squadron_damage()` | `sq_inst.suffer_damage()` | `ResolveDamageCommand` |
+| 3 | `attack_executor.gd` | `_resolve_squadron_damage()` | `sq_inst.mark_destroyed()` | `DestroyUnitCommand` |
+| 4 | `attack_executor.gd` | `_absorb_shields()` | `reduce_shields(zone, n)` | `ResolveDamageCommand` |
+| 5 | `attack_executor.gd` | `_deal_damage_cards()` | `add_facedown_damage(card)` | `ResolveDamageCommand` |
+| 6 | `attack_executor.gd` | `_deal_single_faceup_card()` | `add_faceup_damage(card)` | `ResolveDamageCommand` |
+| 7 | `attack_executor.gd` | `_resolve_ship_damage()` | `mark_destroyed()` | `DestroyUnitCommand` |
+
+> Consolidation: all 7 can be a single **`ResolveDamageCommand`** carrying
+> the full damage allocation (shields absorbed, facedown count, faceup cards,
+> destruction flag), applied atomically.
+
+#### Priority 4 — Repair Actions (3 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 24 | `repair_resolver.gd` | `move_shields()` | `reduce_shields()` + `restore_shields()` | `RepairActionCommand` |
+| 25 | `repair_resolver.gd` | `recover_shields()` | `restore_shields(zone, 1)` | `RepairActionCommand` |
+| 26 | `repair_resolver.gd` | `repair_hull()` | `remove_damage_card(card)` | `RepairActionCommand` |
+
+> Consolidation: single **`RepairActionCommand`** with `action_type` discriminator
+> (`"move_shield"`, `"recover_shield"`, `"repair_hull"`).
+
+#### Priority 5 — Immediate Effects (8 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 16 | `immediate_effect_resolver.gd` | `_resolve_structural_damage()` | `add_facedown_damage()` | `ResolveImmediateEffectCommand` |
+| 17 | `immediate_effect_resolver.gd` | `_resolve_projector_misaligned()` | `reduce_shields(zone, all)` | `ResolveImmediateEffectCommand` |
+| 18 | `immediate_effect_resolver.gd` | `_resolve_life_support_failure()` | `command_tokens.clear()` | `ResolveImmediateEffectCommand` |
+| 19 | `immediate_effect_resolver.gd` | `_resolve_injured_crew()` | `discard_defense_token()` | `ResolveImmediateEffectCommand` |
+| 20 | `immediate_effect_resolver.gd` | `_resolve_shield_failure()` | `reduce_shields(zone, 1)` | `ResolveImmediateEffectCommand` |
+| 21 | `immediate_effect_resolver.gd` | `_resolve_comm_noise()` | `set_speed(speed - 1)` | `ResolveImmediateEffectCommand` |
+| 22 | `immediate_effect_resolver.gd` | `_resolve_comm_noise()` | `replace_top_command()` | `ResolveImmediateEffectCommand` |
+| 23 | `immediate_effect_resolver.gd` | `_move_to_facedown()` | faceup→facedown array move | `ResolveImmediateEffectCommand` |
+
+> Consolidation: single **`ResolveImmediateEffectCommand`** parameterised by
+> `effect_id` + player-choice dictionary.
+
+#### Priority 6 — Overlap, Speed, Persistent Effects (4 violations)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 27 | `game_board.gd` | `_deal_overlap_facedown()` | `add_facedown_damage()` | `OverlapDamageCommand` |
+| 28 | `game_board.gd` | `_deal_overlap_facedown()` | `mark_destroyed()` | `DestroyUnitCommand` |
+| 30 | `ship_activation_state.gd` | `apply_speed_change()` | `set_speed(new_speed)` | `SetSpeedCommand` |
+| 31 | `damage_card_effect.gd` | `_resolve_suffer_facedown()` | `add_facedown_damage()` | `PersistentEffectDamageCommand` |
+
+#### Priority 7 — UI State & Token Overflow (3 violations, lower severity)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 32 | `ship_card_panel.gd` | `_on_discard_token_click()` | `remove_token(cmd_type)` | `DiscardTokenCommand` |
+| 33 | `ship_card_panel.gd` | `_try_start_dial_interaction()` | `reveal_top()` | `RevealDialCommand` |
+| 34 | `ship_card_panel.gd` | `_unreveal_other_ships()` | `unreveal_top()` | `RevealDialCommand` |
+
+#### Debug-Only (not prioritised)
+
+| # | File | Method | Mutation | Command |
+|---|------|--------|----------|---------|
+| 29 | `game_board.gd` | `_apply_debug_damage_card()` | `add_faceup_damage()` | `DebugDealDamageCommand` |
+
+#### Summary — New Commands Needed
+
+| Command | Violations | Priority |
+|---------|-----------|----------|
+| `AdvancePhaseCommand` | 1 | P1 |
+| `StartRoundCommand` | 2 | P1 |
+| `StatusPhaseCleanupCommand` | 4 | P2 |
+| `DestroyUnitCommand` | 4 (across 3 files) | P2–P3 |
+| `ResolveDamageCommand` | 6 | P3 |
+| `RepairActionCommand` | 3 | P4 |
+| `ResolveImmediateEffectCommand` | 8 | P5 |
+| `OverlapDamageCommand` | 1 | P6 |
+| `SetSpeedCommand` | 1 | P6 |
+| `PersistentEffectDamageCommand` | 1 | P6 |
+| `DiscardTokenCommand` | 1 | P7 |
+| `RevealDialCommand` | 2 | P7 |
+| `DebugDealDamageCommand` | 1 | — |
+
+**Total: 34 violations → ~13 new commands → 0 remaining violations.**
+P1–P4 are blocking for multiplayer; P5–P7 can be deferred.
 
 ---
 
@@ -2393,7 +2536,7 @@ Per `docs/requirements/future_stages.md` Priority 1, these hooks are built durin
 | Effect timing points in movement | Phase 5b | Upgrade card effects on movement |
 | Geometry primitives (intersection, overlap) | Phase 1 | LOS system |
 | Complete state serialization | Phase 3 + 10 | Network multiplayer, save/load |
-| GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 12 concrete commands + wiring |
+| GameCommand + CommandProcessor | Phase G (G1+G3+G2) | Network multiplayer, replay | ✅ Base class + autoload + 13 concrete commands + 18 wired call sites |
 | Deterministic RNG (GameRng) | Phase G (G5) | Replay determinism, network sync | ✅ Seeded RNG in Dice + DamageDeck |
 | GameReplay file format | Phase G (G6) | Replay persistence, regression testing | ✅ v1 format, save/load, CommandProcessor integration |
 | Ship hull zone list as configurable | Phase 1 | Huge ships (6 hull zones) |

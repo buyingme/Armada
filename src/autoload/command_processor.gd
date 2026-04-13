@@ -57,6 +57,9 @@ func _ready() -> void:
 	# Tier 4 — game flow commands.
 	AdvancePhaseCommand.register()
 	StartRoundCommand.register()
+	# Tier 5 — status phase + destruction cleanup.
+	StatusPhaseCleanupCommand.register()
+	DestroyUnitCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

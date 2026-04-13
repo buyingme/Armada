@@ -916,12 +916,16 @@ func _begin_status_phase() -> void:
 	advance_phase()
 
 
-## Performs all end-of-round state changes.
+## Performs all end-of-round state changes via [StatusPhaseCleanupCommand].
 ## ST-001: Ready all exhausted defense tokens.
 ## ST-004: Reset activation flags on all ships and squadrons.
 ## Rules Reference: "Status Phase", p.6; "Initiative", p.8 — initiative
 ## does NOT change; the first player retains it for the entire game.
 func _perform_status_phase_cleanup() -> void:
+	var cmd := StatusPhaseCleanupCommand.new(active_player, {})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+
+	# Emit UI events so visuals stay in sync.
 	for i: int in range(Constants.PLAYER_COUNT):
 		var ps: PlayerState = current_game_state.get_player_state(i)
 		if ps == null:
@@ -931,44 +935,18 @@ func _perform_status_phase_cleanup() -> void:
 				var si: ShipInstance = s as ShipInstance
 				if si.is_destroyed():
 					continue
-				# STATUS_READY_TOKENS hook — Compartment Fire blocks readying.
-				# Rules Reference: "Compartment Fire" card text.
-				if not _is_token_ready_blocked(si):
-					si.ready_defense_tokens()
-					EventBus.ship_defense_token_changed.emit(si)
-				else:
-					_log.info("Token readying blocked for %s (damage effect)."
-							% si.data_key)
-				si.reset_activation()
-				# Clear spent dial marker so it doesn't persist into the
-				# next round's card panel display.
+				EventBus.ship_defense_token_changed.emit(si)
 				if si.command_dial_stack != null:
-					si.command_dial_stack.clear_spent_history()
 					EventBus.command_dials_changed.emit(si)
-		for sq: Variant in ps.squadrons:
-			if sq is SquadronInstance:
-				var sqi: SquadronInstance = sq as SquadronInstance
-				if sqi.is_destroyed():
-					continue
-				sqi.ready_defense_tokens()
-				sqi.reset_activation()
-	# Rules Reference: "Initiative", p.8 — "The first player retains
-	# initiative for the entire game." Initiative does NOT change.
+		# Squadrons have no UI events for token readying currently.
+
+	var blocked: Array = result.get("ships_blocked", [])
+	if blocked.size() > 0:
+		for key: Variant in blocked:
+			_log.info("Token readying blocked for %s (damage effect)." % str(key))
+
 	_log.info("Status Phase: cleanup complete. Initiative stays with player %d." % [
 			current_game_state.initiative_player])
-
-
-## Returns true if the STATUS_READY_TOKENS hook cancels readying
-## for [param ship] (e.g. Compartment Fire).
-## Rules Reference: RRG "Damage Cards", p.4; "Compartment Fire".
-func _is_token_ready_blocked(ship: ShipInstance) -> bool:
-	if not current_game_state or not current_game_state.effect_registry:
-		return false
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx = current_game_state.effect_registry.resolve_hook(
-			&"STATUS_READY_TOKENS", ctx)
-	return ctx.cancelled
 
 
 ## Returns true if the ON_COMMAND_TOKEN_GAIN hook cancels token gain
@@ -990,8 +968,8 @@ func _is_token_gain_blocked(ship: ShipInstance) -> bool:
 
 ## Called when any ship is destroyed during an attack.
 ## Checks if the owning player has lost all ships → immediate game end.
-## If both fleets lost their last ship in the same attack, that's mutual
-## destruction — scored by points (RRG p.21).
+## Routes destruction cleanup (damage card return, effect unregistration)
+## through [DestroyUnitCommand] for replay determinism.
 ## Rules Reference: "Winning and Losing", RRG p.21; GF-004, WN-001.
 func _on_ship_destroyed(ship: Node) -> void:
 	if not is_game_active or not current_game_state:
@@ -1007,16 +985,15 @@ func _on_ship_destroyed(ship: Node) -> void:
 		return
 	# Check elimination FIRST — before cleanup changes is_destroyed() result.
 	_check_elimination()
-	# --- Destruction cleanup (DM-030) ---
-	# 1. Unregister all persistent effects owned by this ship.
-	if current_game_state and current_game_state.effect_registry and si:
-		current_game_state.effect_registry.unregister_by_owner(si)
-	# 2. Return all damage cards to the discard pile.
-	if si:
-		var cards: Array = si.clear_all_damage_cards()
-		if current_game_state and current_game_state.damage_deck:
-			for card: Variant in cards:
-				current_game_state.damage_deck.discard(card)
+	# Route cleanup through command for replay determinism.
+	var idx: int = current_game_state.find_ship_index(si)
+	if idx < 0:
+		return
+	var cmd := DestroyUnitCommand.new(owner, {
+		"owner_player": owner,
+		"ship_index": idx,
+	})
+	CommandProcessor.submit(cmd)
 
 
 ## Called when any squadron is destroyed.  Squadrons alone never trigger

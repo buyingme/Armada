@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-13
-> Current baseline: 108 scripts, 2 216 tests, 3 962 asserts
+> Current baseline: 109 scripts, 2 241 tests, 4 004 asserts
 
 ---
 
@@ -23,12 +23,16 @@ Both commands implemented and wired:
 
 Tests: `test_game_flow_commands.gd` — validate, execute, serialize/deserialize for both.
 
-### Priority 2 — Status Phase Cleanup (5 violations → 2 commands)
+### Priority 2 — Status Phase Cleanup (5 violations → 2 commands) ✅ RESOLVED
 
-| File | Method | Mutation | Command |
-|------|--------|----------|---------|
-| `game_manager.gd` | `_perform_status_phase_cleanup()` | ready tokens, reset activation, clear spent history (ships + squadrons) | `StatusPhaseCleanupCommand` |
-| `game_manager.gd` | `_on_ship_destroyed()` | `clear_all_damage_cards()` | `DestroyUnitCommand` |
+Both commands implemented and wired:
+
+| Command | Wired In |
+|---------|----------|
+| `StatusPhaseCleanupCommand` | `game_manager.gd` — `_perform_status_phase_cleanup()` |
+| `DestroyUnitCommand` | `game_manager.gd` — `_on_ship_destroyed()` |
+
+Tests: `test_status_destroy_commands.gd` — validate, execute, serialize/deserialize for both.
 
 ### Priority 3 — Attack Damage (7 violations → 2 commands)
 
@@ -83,7 +87,7 @@ Tests: `test_game_flow_commands.gd` — validate, execute, serialize/deserialize
 | Priority | Violations | New Commands | Blocks Multiplayer |
 |----------|-----------|-------------|-------------------|
 | P1 | 3 | 2 | ✅ Done |
-| P2 | 5 | 2 | Yes |
+| P2 | 5 | 2 | ✅ Done |
 | P3 | 7 | 2 | Yes |
 | P4 | 3 | 1 | Yes |
 | P5 | 8 | 1 | No |

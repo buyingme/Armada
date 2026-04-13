@@ -60,6 +60,8 @@ func _ready() -> void:
 	# Tier 5 — status phase + destruction cleanup.
 	StatusPhaseCleanupCommand.register()
 	DestroyUnitCommand.register()
+	# Tier 6 — damage resolution.
+	ResolveDamageCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

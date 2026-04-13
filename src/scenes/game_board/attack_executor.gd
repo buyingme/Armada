@@ -1277,6 +1277,7 @@ func _attack_exec_resolve_damage() -> void:
 
 ## Resolves damage against a squadron.
 ## Squadrons have no shields — damage goes directly to hull.
+## Routes through [ResolveDamageCommand] for replay determinism.
 ## Requirements: AE-DMG-002.
 func _resolve_squadron_damage(damage: int) -> void:
 	var sq_inst: SquadronInstance = (
@@ -1284,7 +1285,12 @@ func _resolve_squadron_damage(damage: int) -> void:
 	if sq_inst == null:
 		_log.error("Squadron instance is null — cannot resolve damage.")
 		return
-	var actual: int = sq_inst.suffer_damage(damage)
+	var actual: int = mini(damage, sq_inst.current_hull)
+	var destroyed: bool = (sq_inst.current_hull - actual) <= 0
+	# All mutations happen inside the command.
+	GameManager.submit_resolve_squadron_damage(
+			sq_inst, damage, actual, destroyed)
+	# Post-command: emit UI events from post-mutation state.
 	EventBus.squadron_hull_changed.emit(sq_inst, sq_inst.current_hull)
 	_log.info("Squadron took %d damage. Hull: %d/%d." % [
 			actual, sq_inst.current_hull,
@@ -1294,8 +1300,7 @@ func _resolve_squadron_damage(damage: int) -> void:
 				_damage_dealer.build_squadron_damage_info(
 						actual, sq_inst.current_hull,
 						sq_inst.squadron_data.hull))
-	if sq_inst.is_destroyed():
-		sq_inst.mark_destroyed()
+	if destroyed:
 		_log.info("Squadron destroyed!")
 		EventBus.squadron_destroyed.emit(_state.defender_squadron)
 		_fade_out_token(_state.defender_squadron)
@@ -1304,6 +1309,7 @@ func _resolve_squadron_damage(damage: int) -> void:
 ## Shields absorb damage first. Remaining damage becomes damage cards.
 ## Standard critical: first card is faceup if any critical icon present
 ## and Contain was not spent.
+## Routes through [ResolveDamageCommand] for replay determinism.
 ## Requirements: AE-DMG-003–014.
 ## Rules Reference: "Damage", p.4.
 func _resolve_ship_damage(damage: int) -> void:
@@ -1314,46 +1320,119 @@ func _resolve_ship_damage(damage: int) -> void:
 		return
 	var def_zone_str: String = ConstantsScript.hull_zone_to_string(
 			_state.defender_zone as Constants.HullZone)
-	var remaining: int = damage
-	# Step 1: Absorb damage with shields.
-	var shield_absorbed: int = _absorb_shields(
-			def_inst, def_zone_str, remaining)
-	remaining -= shield_absorbed
-	# Step 2: Deal damage cards for remaining damage.
+	# Pre-compute shield absorption.
+	var shield_budget: int = int(
+			def_inst.current_shields.get(def_zone_str, 0))
+	var shield_damage: int = mini(shield_budget, damage)
+	var remaining: int = damage - shield_damage
+	# Pre-draw damage cards and serialize for the command payload.
 	var first_card_faceup: bool = _determine_first_card_faceup()
-	var deal_result: Dictionary = _deal_damage_cards(
-			def_inst, remaining, first_card_faceup)
-	var cards_dealt: int = deal_result["cards_dealt"] as int
-	var faceup_card_name: String = deal_result["faceup_name"] as String
-	# Emit hull/damage events.
+	var card_data: Array = _pre_draw_damage_cards(
+			remaining, first_card_faceup)
+	# Determine destruction.
+	var destroyed: bool = (
+			def_inst.get_total_damage() + card_data.size()
+			>= def_inst.ship_data.hull)
+	# Submit — all mutations happen inside the command.
+	GameManager.submit_resolve_ship_damage(
+			def_inst, def_zone_str, shield_damage, card_data, destroyed)
+	# Post-command: emit events from post-mutation state.
+	_emit_post_resolve_events(
+			def_inst, def_zone_str, shield_damage,
+			card_data, destroyed)
+
+## Pre-draws damage cards from the deck and returns serialized card data.
+## Cards are drawn but NOT added to the ship — the command does that.
+func _pre_draw_damage_cards(count: int,
+		first_card_faceup: bool) -> Array:
+	var card_data: Array = []
+	for i: int in range(count):
+		var card: DamageCard = _draw_next_damage_card(i, count)
+		if card == null:
+			break
+		if _damage_dealer.should_deal_faceup(i, first_card_faceup):
+			card.is_faceup = true
+		card_data.append(card.serialize())
+	return card_data
+
+
+## Emits all UI events after [ResolveDamageCommand] has executed.
+## Handles shield changes, card events, hull change, damage summary,
+## and destruction signalling.
+func _emit_post_resolve_events(def_inst: ShipInstance,
+		def_zone_str: String, shield_absorbed: int,
+		card_data: Array, destroyed: bool) -> void:
+	_emit_shield_events(def_inst, def_zone_str, shield_absorbed)
+	var cards_dealt: int = card_data.size()
+	var faceup_card_name: String = _emit_card_events(
+			def_inst, card_data)
 	_emit_ship_damage_events(def_inst, cards_dealt)
-	# Build and display damage summary.
 	var summary: String = _build_damage_summary(
 			def_inst, def_zone_str, shield_absorbed,
 			cards_dealt, faceup_card_name)
 	if _get_panel():
 		_get_panel().show_damage_info(summary)
 	_log.info("Damage resolved: %s" % summary)
-	EventBus.damage_resolved.emit(_state.defender_ship, damage)
-	if def_inst.is_destroyed():
-		def_inst.mark_destroyed()
+	EventBus.damage_resolved.emit(_state.defender_ship, 
+			shield_absorbed + cards_dealt)
+	if destroyed:
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
 		EventBus.ship_destroyed.emit(_state.defender_ship)
 		_fade_out_token(_state.defender_ship)
 
-## Absorbs damage with shields and emits the shield change event.
-func _absorb_shields(def_inst: ShipInstance,
-		def_zone_str: String, remaining: int) -> int:
-	var shield_absorbed: int = def_inst.reduce_shields(
-			def_zone_str, remaining)
+
+## Emits shield change events if shields were absorbed.
+func _emit_shield_events(def_inst: ShipInstance,
+		def_zone_str: String, shield_absorbed: int) -> void:
 	if shield_absorbed > 0:
 		EventBus.ship_shields_changed.emit(
 				def_inst, def_zone_str,
 				int(def_inst.current_shields.get(def_zone_str, 0)))
-		_log.info("Shields absorbed %d damage in %s. Remaining: %d." % [
-				shield_absorbed, def_zone_str,
-				remaining - shield_absorbed])
-	return shield_absorbed
+		_log.info("Shields absorbed %d damage in %s." % [
+				shield_absorbed, def_zone_str])
+
+
+## Emits card-dealt events and registers persistent effects.
+## Retrieves newly added cards from the ship's damage arrays.
+## Returns the faceup card name (empty if none).
+func _emit_card_events(def_inst: ShipInstance,
+		card_data: Array) -> String:
+	var faceup_card_name: String = ""
+	var faceup_count: int = _count_faceup(card_data)
+	var facedown_count: int = card_data.size() - faceup_count
+	var dealt_faceup_cards: Array = []
+	# Retrieve newly added faceup cards from the ship.
+	if faceup_count > 0:
+		var start: int = def_inst.faceup_damage.size() - faceup_count
+		for i: int in range(start, def_inst.faceup_damage.size()):
+			var card: DamageCard = def_inst.faceup_damage[i] as DamageCard
+			_post_process_faceup_card(card, def_inst)
+			faceup_card_name = card.title
+			dealt_faceup_cards.append(card)
+	# Retrieve newly added facedown cards from the ship.
+	if facedown_count > 0:
+		var start: int = def_inst.facedown_damage.size() - facedown_count
+		for i: int in range(start, def_inst.facedown_damage.size()):
+			var card: DamageCard = def_inst.facedown_damage[i] as DamageCard
+			EventBus.damage_card_dealt.emit(def_inst, card, false)
+			_log.info("Dealt facedown damage card to %s."
+					% def_inst.ship_data.ship_name)
+	_log.info("Card loop done: %d card(s) dealt." % card_data.size())
+	if card_data.size() > 0:
+		_state.awaiting_damage_summary = true
+		EventBus.damage_summary_requested.emit(
+				def_inst, dealt_faceup_cards, facedown_count,
+				def_inst.ship_data.ship_name)
+	return faceup_card_name
+
+
+## Counts faceup cards in a serialized card data array.
+func _count_faceup(card_data: Array) -> int:
+	var count: int = 0
+	for cd: Variant in card_data:
+		if (cd as Dictionary).get("is_faceup", false):
+			count += 1
+	return count
 
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:
@@ -1367,37 +1446,6 @@ func _determine_first_card_faceup() -> bool:
 	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
 			faceup, _state.contain_used])
 	return faceup
-
-## Deals damage cards from the deck to the defender.
-## Returns {"cards_dealt": int, "faceup_name": String}.
-func _deal_damage_cards(def_inst: ShipInstance,
-		remaining: int, first_card_faceup: bool) -> Dictionary:
-	var cards_dealt: int = 0
-	var faceup_card_name: String = ""
-	var dealt_faceup_cards: Array = []
-	var dealt_facedown_count: int = 0
-	for i: int in range(remaining):
-		var card: DamageCard = _draw_next_damage_card(i, remaining)
-		if card == null:
-			break
-		if _damage_dealer.should_deal_faceup(i, first_card_faceup):
-			_deal_single_faceup_card(card, def_inst)
-			faceup_card_name = card.title
-			dealt_faceup_cards.append(card)
-		else:
-			def_inst.add_facedown_damage(card)
-			dealt_facedown_count += 1
-			EventBus.damage_card_dealt.emit(def_inst, card, false)
-			_log.info("Dealt facedown damage card #%d to %s."
-					% [i + 1, def_inst.ship_data.ship_name])
-		cards_dealt += 1
-	_log.info("Card loop done: %d card(s) dealt." % cards_dealt)
-	if cards_dealt > 0:
-		_state.awaiting_damage_summary = true
-		EventBus.damage_summary_requested.emit(
-				def_inst, dealt_faceup_cards, dealt_facedown_count,
-				def_inst.ship_data.ship_name)
-	return {"cards_dealt": cards_dealt, "faceup_name": faceup_card_name}
 
 ## Draws the next damage card from the deck, with logging.
 func _draw_next_damage_card(index: int,
@@ -1415,12 +1463,11 @@ func _draw_next_damage_card(index: int,
 			card.effect_id])
 	return card
 
-## Deals a single faceup damage card (standard critical).
-func _deal_single_faceup_card(card: DamageCard,
+## Post-processes a faceup damage card after the command has added it.
+## Registers persistent effects, emits events, and defers immediates.
+## Does NOT mutate game state — the card is already on the ship.
+func _post_process_faceup_card(card: DamageCard,
 		def_inst: ShipInstance) -> void:
-	card.is_faceup = true
-	def_inst.add_faceup_damage(card)
-	_log.info("Faceup card added to ship damage list.")
 	if _effect_registry and _damage_dealer.should_register_persistent(card):
 		DamageCardEffectFactory.register_effect(
 				card, def_inst, _effect_registry)

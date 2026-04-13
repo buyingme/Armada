@@ -682,6 +682,52 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 	return CommandProcessor.submit(cmd)
 
 
+## Submits a [ResolveDamageCommand] for ship damage resolution.
+## [param ship] — the defending ShipInstance.
+## [param hull_zone] — zone string ("FRONT", "LEFT", "RIGHT", "REAR").
+## [param shield_damage] — shields absorbed (pre-computed).
+## [param damage_cards] — Array of serialized card dicts.
+## [param destroyed] — whether the ship is destroyed.
+func submit_resolve_ship_damage(ship: ShipInstance, hull_zone: String,
+		shield_damage: int, damage_cards: Array,
+		destroyed: bool) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := ResolveDamageCommand.new(ship.owner_player, {
+		"target_type": "ship",
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"hull_zone": hull_zone,
+		"shield_damage": shield_damage,
+		"damage_cards": damage_cards,
+		"target_destroyed": destroyed,
+	})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [ResolveDamageCommand] for squadron damage resolution.
+## [param squadron] — the defending SquadronInstance.
+## [param hull_damage] — total damage to apply.
+## [param actual_damage] — damage actually applied (capped by hull).
+## [param destroyed] — whether the squadron is destroyed.
+func submit_resolve_squadron_damage(squadron: SquadronInstance,
+		hull_damage: int, actual_damage: int,
+		destroyed: bool) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var sq_index: int = current_game_state.find_squadron_index(squadron)
+	var cmd := ResolveDamageCommand.new(squadron.owner_player, {
+		"target_type": "squadron",
+		"owner_player": squadron.owner_player,
+		"squadron_index": sq_index,
+		"hull_damage": hull_damage,
+		"actual_damage": actual_damage,
+		"target_destroyed": destroyed,
+	})
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-13
-> Current baseline: 109 scripts, 2 245 tests, 4 008 asserts
+> Current baseline: 110 scripts, 2 267 tests, 4 056 asserts
 
 ---
 
@@ -34,18 +34,21 @@ Both commands implemented and wired:
 
 Tests: `test_status_destroy_commands.gd` — validate, execute, serialize/deserialize for both.
 
-### Priority 3 — Attack Damage (7 violations → 2 commands)
+### Priority 3 — Attack Damage (7 violations → 1 command) ✅ RESOLVED
 
-| File | Method | Mutation | Command |
-|------|--------|----------|---------|
-| `attack_executor.gd` | `_apply_single_redirect()` | `reduce_shields(zone, 1)` | `ResolveDamageCommand` |
-| `attack_executor.gd` | `_absorb_shields()` | `reduce_shields(zone, n)` | `ResolveDamageCommand` |
-| `attack_executor.gd` | `_deal_damage_cards()` | `add_facedown_damage()` | `ResolveDamageCommand` |
-| `attack_executor.gd` | `_deal_single_faceup_card()` | `add_faceup_damage()` | `ResolveDamageCommand` |
-| `attack_executor.gd` | `_resolve_squadron_damage()` | `suffer_damage()`, `mark_destroyed()` | `ResolveDamageCommand` / `DestroyUnitCommand` |
-| `attack_executor.gd` | `_resolve_ship_damage()` | `mark_destroyed()` | `DestroyUnitCommand` |
+Single consolidated command implemented and wired:
 
-> Consolidation: single `ResolveDamageCommand` with full damage allocation + destruction flag.
+| Command | Wired In |
+|---------|----------|
+| `ResolveDamageCommand` | `attack_executor.gd` — `_resolve_ship_damage()`, `_resolve_squadron_damage()` |
+
+`_apply_single_redirect()` was already routed through `SelectRedirectZoneCommand`.
+`_resolve_ship_damage()` destruction (`mark_destroyed()`) is now inside the command.
+Shield absorption (`_absorb_shields`) replaced by pre-computation + command.
+Damage card dealing (`_deal_damage_cards`, `_deal_single_faceup_card`) split into
+pre-draw (deck stays in executor) and command-based mutation + post-process events.
+
+Tests: `test_resolve_damage_command.gd` — validate, execute, serialize/deserialize.
 
 ### Priority 4 — Repair Actions (3 violations → 1 command)
 
@@ -88,7 +91,7 @@ Tests: `test_status_destroy_commands.gd` — validate, execute, serialize/deseri
 |----------|-----------|-------------|-------------------|
 | P1 | 3 | 2 | ✅ Done |
 | P2 | 5 | 2 | ✅ Done |
-| P3 | 7 | 2 | Yes |
+| P3 | 7 | 1 | ✅ Done |
 | P4 | 3 | 1 | Yes |
 | P5 | 8 | 1 | No |
 | P6 | 3 | 3 | No |

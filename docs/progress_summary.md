@@ -11,8 +11,8 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 109 |
-| GUT tests | 2 241 |
-| GUT asserts | 4 004 |
+| GUT tests | 2 245 |
+| GUT asserts | 4 008 |
 | Autoloads | 12 |
 | Command classes | 18 (1 base + 17 concrete) |
 | Wired command call sites | 28 |

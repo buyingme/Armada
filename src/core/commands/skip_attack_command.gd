@@ -28,12 +28,14 @@ func _init(p_player: int = 0,
 
 
 ## Validates that skipping is legal.
+## Allowed in both Ship and Squadron phases (squadrons may skip attacks).
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	if game_state.current_phase != Constants.GamePhase.SHIP:
-		return "Not in Ship Phase."
+	var phase: Constants.GamePhase = game_state.current_phase
+	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
+		return "Not in Ship or Squadron Phase."
 	return ""
 
 

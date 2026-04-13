@@ -27,12 +27,14 @@ func _init(p_player: int = 0,
 ## Validates that rolling dice is legal.
 ## Attack-step-specific validation is handled by [AttackExecutor] before
 ## submitting; this only checks GameState-level preconditions.
+## Allowed in both Ship and Squadron phases (squadron attacks roll dice too).
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	if game_state.current_phase != Constants.GamePhase.SHIP:
-		return "Not in Ship Phase."
+	var phase: Constants.GamePhase = game_state.current_phase
+	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
+		return "Not in Ship or Squadron Phase."
 	var pool: Dictionary = payload.get("dice_pool", {})
 	if pool.is_empty():
 		return "Dice pool is empty."

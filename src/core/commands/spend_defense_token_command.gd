@@ -29,12 +29,14 @@ func _init(p_player: int = 0,
 ## Validates that spending this defense token is legal.
 ## Attack-step-specific validation (correct step, already spent this attack,
 ## etc.) is handled by [AttackExecutor] before submitting.
+## Allowed in both Ship and Squadron phases (defense tokens apply to all attacks).
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	if game_state.current_phase != Constants.GamePhase.SHIP:
-		return "Not in Ship Phase."
+	var phase: Constants.GamePhase = game_state.current_phase
+	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
+		return "Not in Ship or Squadron Phase."
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
 	if ship == null:

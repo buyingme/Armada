@@ -69,7 +69,16 @@ func test_roll_dice_validate_wrong_phase() -> void:
 		"dice_pool": {"red": 1},
 	})
 	assert_ne(cmd.validate(_state), "",
-			"Should reject outside Ship Phase.")
+			"Should reject outside Ship/Squadron Phase.")
+
+
+func test_roll_dice_validate_ok_squadron_phase() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var cmd := RollDiceCommand.new(0, {
+		"dice_pool": {"blue": 1},
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid dice pool in Squadron Phase.")
 
 
 func test_roll_dice_validate_empty_pool() -> void:
@@ -172,7 +181,19 @@ func test_spend_defense_token_validate_wrong_phase() -> void:
 		"spend_method": "exhaust",
 	})
 	assert_ne(cmd.validate(_state), "",
-			"Should reject outside Ship Phase.")
+			"Should reject outside Ship/Squadron Phase.")
+
+
+func test_spend_defense_token_validate_ok_squadron_phase() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_ship(1)
+	var cmd := SpendDefenseTokenCommand.new(1, {
+		"ship_index": idx,
+		"token_index": 0,
+		"spend_method": "exhaust",
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept spending defense token in Squadron Phase.")
 
 
 func test_spend_defense_token_validate_bad_ship() -> void:
@@ -317,7 +338,18 @@ func test_redirect_zone_validate_wrong_phase() -> void:
 		"zone": Constants.HullZone.FRONT,
 	})
 	assert_ne(cmd.validate(_state), "",
-			"Should reject outside Ship Phase.")
+			"Should reject outside Ship/Squadron Phase.")
+
+
+func test_redirect_zone_validate_ok_squadron_phase() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_ship(1)
+	var cmd := SelectRedirectZoneCommand.new(1, {
+		"ship_index": idx,
+		"zone": Constants.HullZone.LEFT,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept redirect zone in Squadron Phase.")
 
 
 func test_redirect_zone_validate_bad_ship() -> void:
@@ -430,7 +462,14 @@ func test_skip_attack_validate_wrong_phase() -> void:
 	_state.current_phase = Constants.GamePhase.COMMAND
 	var cmd := SkipAttackCommand.new(0, {"reason": "voluntary"})
 	assert_ne(cmd.validate(_state), "",
-			"Should reject outside Ship Phase.")
+			"Should reject outside Ship/Squadron Phase.")
+
+
+func test_skip_attack_validate_ok_squadron_phase() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var cmd := SkipAttackCommand.new(0, {"reason": "voluntary"})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept skip in Squadron Phase.")
 
 
 func test_skip_attack_execute_returns_skip() -> void:

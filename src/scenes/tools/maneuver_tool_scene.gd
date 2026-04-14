@@ -29,11 +29,6 @@ const LABEL_FONT_SIZE_PNG_PX: int = 13
 ## Logger.
 var _log: GameLogger = GameLogger.new("ManeuverTool")
 
-## Callable injected by game_board to handle persistent-effect damage.
-## Signature: func(ship: ShipInstance, eff_id: String) -> void
-## Keeps damage/destruction signalling in game_board (single responsibility).
-var _persistent_damage_handler: Callable
-
 ## Core model tracking joint angles and speed.
 var _state: ManeuverToolState = null
 
@@ -120,11 +115,9 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 ## gated by Navigate command availability via the activation state.
 ## [param activation_state] — the ShipActivationState for this activation.
 ## Requirements: NAV-008, FLOW-003, AC-5b-04.
-func set_activation_mode(activation_state: ShipActivationState,
-		persistent_damage_handler: Callable = Callable()) -> void:
+func set_activation_mode(activation_state: ShipActivationState) -> void:
 	_activation_mode = true
 	_activation_state = activation_state
-	_persistent_damage_handler = persistent_damage_handler
 	# Apply yaw bonus from activation state, if any.
 	var yaw_joint: int = activation_state.get_yaw_bonus_joint()
 	if yaw_joint >= 0:
@@ -170,33 +163,6 @@ func _apply_yaw_hooks(nav_chart: Array,
 		nav_chart[speed_idx] = ctx.get_meta_value("yaw_values", yaw_arr)
 	return nav_chart
 
-
-## Resolves the ON_SPEED_CHANGE hook after a Navigate speed change.
-## Thruster Fissure: suffer 1 facedown damage when speed changes.
-## Rules Reference: "Thruster Fissure" card text.
-func _resolve_speed_change_hook() -> void:
-	if not _activation_state:
-		return
-	var ship: ShipInstance = _activation_state.get_ship()
-	if ship == null:
-		return
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck",
-			GameManager.current_game_state.damage_deck
-			if GameManager.current_game_state else null)
-	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
-	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		var eff: String = str(ctx.get_meta_value("persistent_effect_id", ""))
-		if _persistent_damage_handler.is_valid():
-			_persistent_damage_handler.call(ship, eff)
-		else:
-			_log.info("No persistent_damage_handler — skipping %s." % eff)
 
 
 # ------------------------------------------------------------------
@@ -800,9 +766,6 @@ func _handle_speed_change(delta: int) -> void:
 			EventBus.navigate_token_spend_preview.emit(
 					ship,
 					_activation_state.is_using_token_for_speed())
-			# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
-			# Rules Reference: "Thruster Fissure" card text.
-			_resolve_speed_change_hook()
 	else:
 		var old_speed: int = _state.get_simulated_speed()
 		_state.set_simulated_speed(old_speed + delta)

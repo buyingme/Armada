@@ -1,0 +1,258 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+
+				},
+				"effect_id": "structural_damage",
+				"extra_card_data": {
+					"effect_id": "capacitor_failure",
+					"effect_text": "If a hull zone has no remaining shields, you cannot recover shields in it nor move shields to it. If that hull zone is defending, you cannot spend Redirect tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Capacitor Failure",
+					"trait_type": "Ship"
+				},
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"pos_x": 0.688999995478877,
+				"pos_y": 0.721175525806568,
+				"rotation_deg": 0.0,
+				"ship_index": 0,
+				"speed": 2,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "damaged_controls",
+					"effect_text": "When you overlap a ship or obstacle, deal 1 facedown damage card to your ship (in addition to all other obstacle effects).",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Damaged Controls",
+					"trait_type": "Crew"
+				},
+				"effect_id": "ruptured_engine",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "persistent_effect_damage"
+		},
+		{
+			"payload": {
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "destroy_unit"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 11,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"pos_x": 0.488999995478877,
+				"pos_y": 0.255824449327257,
+				"rotation_deg": -179.999991348578,
+				"ship_index": 0,
+				"speed": 2,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 1,
+			"sequence": 12,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 13,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"new_speed": 3,
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 15,
+			"type": "set_speed"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "blinded_gunners",
+					"effect_text": "While attacking, you cannot spend accuracy icons.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Blinded Gunners",
+					"trait_type": "Crew"
+				},
+				"effect_id": "thruster_fissure",
+				"owner_player": 0,
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 16,
+			"type": "persistent_effect_damage"
+		},
+		{
+			"payload": {
+				"ship_index": 1,
+				"token_type": 0
+			},
+			"player": 0,
+			"sequence": 17,
+			"type": "spend_token"
+		},
+		{
+			"payload": {
+				"pos_x": 0.305999981915509,
+				"pos_y": 0.654508859139902,
+				"rotation_deg": 0.0,
+				"ship_index": 1,
+				"speed": 2,
+				"yaw_clicks": [
+					0,
+					0
+				]
+			},
+			"player": 0,
+			"sequence": 18,
+			"type": "execute_maneuver"
+		},
+		{
+			"payload": {
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 19,
+			"type": "end_activation"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 20,
+			"type": "advance_phase"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": -8118988700272252989,
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-04-14T19:00:37"
+	}
+}

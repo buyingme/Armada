@@ -79,15 +79,14 @@ func show_tool(token: ShipToken) -> void:
 ## Called from the maneuver step of the ship activation sequence.
 ## Requirements: FLOW-003, AC-5b-03, EXE-004.
 func show_activation_tool(
-		token: ShipToken, activation_state: ShipActivationState,
-		persistent_damage_handler: Callable = Callable()
+		token: ShipToken, activation_state: ShipActivationState
 ) -> void:
 	dismiss(null)
 	_scene = ManeuverToolScene.new()
 	_scene.name = "ManeuverToolScene"
 	_token_container.add_child(_scene)
 	_scene.setup(token)
-	_scene.set_activation_mode(activation_state, persistent_damage_handler)
+	_scene.set_activation_mode(activation_state)
 
 
 ## Dismisses the maneuver tool and exits selection mode.

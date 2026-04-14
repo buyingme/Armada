@@ -1342,8 +1342,7 @@ func _on_maneuver_step_entered() -> void:
 	# Show the maneuver tool in activation mode.
 	_maneuver_tool_controller.show_activation_tool(
 			_activation_ctx.activating_ship_token,
-			_activation_ctx.ship_activation_state,
-			_submit_persistent_damage)
+			_activation_ctx.ship_activation_state)
 	# Disable the simulation maneuver button while activation tool is active.
 	if _panel_mgr.action_toolbar:
 		_panel_mgr.action_toolbar.set_tool_buttons_disabled(true)
@@ -1395,6 +1394,12 @@ func _on_execute_maneuver() -> void:
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
 	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)
+	# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
+	# Only fires if the player's final speed differs from the original.
+	# Deferred to commit time because speed changes are reversible during preview.
+	# Rules Reference: "Thruster Fissure" card text.
+	if _activation_ctx.ship_activation_state.get_total_speed_change() != 0:
+		_resolve_speed_change_hook()
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview()
 	if displaced.size() > 0:
@@ -1454,6 +1459,29 @@ func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
 	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
 		_submit_persistent_damage(ship,
 				str(ctx.get_meta_value("persistent_effect_id", "")))
+
+
+## Resolves the ON_SPEED_CHANGE hook after maneuver commit.
+## Thruster Fissure: suffer 1 facedown damage when speed changes.
+## Called only when total_speed_change != 0 (deferred from preview to commit).
+## Rules Reference: "Thruster Fissure" card text.
+func _resolve_speed_change_hook() -> void:
+	var registry: EffectRegistry = null
+	if GameManager.current_game_state:
+		registry = GameManager.current_game_state.effect_registry
+	if registry == null:
+		return
+	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
+	if ship == null:
+		return
+	var ctx: EffectContext = EffectContext.new()
+	ctx.set_meta_value("ship", ship)
+	ctx.set_meta_value("damage_deck", _damage_deck)
+	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
+	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
+		_submit_persistent_damage(ship,
+				str(ctx.get_meta_value("persistent_effect_id", "")))
+
 
 ## Shows the activation modal at the DONE step so the player can review
 ## all completed steps and deliberately end their activation.

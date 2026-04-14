@@ -182,4 +182,4 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `150e3f5` | P3: ResolveDamageCommand (7 violations → 1 command) |
 | `1da7df8` | Auto-save replay on game exit/game over |
 | `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
-| (pending) | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |
+| `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |

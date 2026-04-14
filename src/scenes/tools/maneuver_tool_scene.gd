@@ -29,6 +29,11 @@ const LABEL_FONT_SIZE_PNG_PX: int = 13
 ## Logger.
 var _log: GameLogger = GameLogger.new("ManeuverTool")
 
+## Callable injected by game_board to handle persistent-effect damage.
+## Signature: func(ship: ShipInstance, eff_id: String) -> void
+## Keeps damage/destruction signalling in game_board (single responsibility).
+var _persistent_damage_handler: Callable
+
 ## Core model tracking joint angles and speed.
 var _state: ManeuverToolState = null
 
@@ -115,9 +120,11 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 ## gated by Navigate command availability via the activation state.
 ## [param activation_state] — the ShipActivationState for this activation.
 ## Requirements: NAV-008, FLOW-003, AC-5b-04.
-func set_activation_mode(activation_state: ShipActivationState) -> void:
+func set_activation_mode(activation_state: ShipActivationState,
+		persistent_damage_handler: Callable = Callable()) -> void:
 	_activation_mode = true
 	_activation_state = activation_state
+	_persistent_damage_handler = persistent_damage_handler
 	# Apply yaw bonus from activation state, if any.
 	var yaw_joint: int = activation_state.get_yaw_bonus_joint()
 	if yaw_joint >= 0:
@@ -185,29 +192,11 @@ func _resolve_speed_change_hook() -> void:
 			if GameManager.current_game_state else null)
 	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
 	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		_submit_persistent_damage(ship,
-				str(ctx.get_meta_value("persistent_effect_id", "")))
-
-
-## Pre-draws a card from the damage deck and submits a
-## [PersistentEffectDamageCommand] for the given ship and effect.
-func _submit_persistent_damage(ship: ShipInstance,
-		eff_id: String) -> void:
-	var deck: DamageDeck = null
-	if GameManager.current_game_state:
-		deck = GameManager.current_game_state.damage_deck
-	if deck == null:
-		return
-	var card: DamageCard = deck.draw_card()
-	if card == null:
-		return
-	var result: Dictionary = GameManager.submit_persistent_effect_damage(
-			ship, eff_id, card.serialize())
-	if not result.is_empty():
-		var new_hull: int = int(result.get("new_hull", 0))
-		EventBus.ship_hull_changed.emit(ship, new_hull)
-		_log.info("Persistent damage (%s) dealt (hull now %d)." % [
-				eff_id, new_hull])
+		var eff: String = str(ctx.get_meta_value("persistent_effect_id", ""))
+		if _persistent_damage_handler.is_valid():
+			_persistent_damage_handler.call(ship, eff)
+		else:
+			_log.info("No persistent_damage_handler — skipping %s." % eff)
 
 
 # ------------------------------------------------------------------

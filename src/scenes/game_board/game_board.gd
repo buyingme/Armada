@@ -973,9 +973,8 @@ func _on_crew_panic_choice(selection: Dictionary) -> void:
 		dial_discarded = ctx.get_meta_value(
 				"crew_panic_dial_discarded", false) as bool
 		if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-			var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
-			EventBus.ship_hull_changed.emit(ship, new_hull)
-			_log.info("Crew Panic damage dealt (hull now %d)." % new_hull)
+			_submit_persistent_damage(ship,
+					str(ctx.get_meta_value("persistent_effect_id", "")))
 	if dial_discarded:
 		_finish_crew_panic_dial_discarded(ship, ship_key)
 	else:
@@ -1451,9 +1450,8 @@ func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
 	ctx.set_meta_value("damage_deck", _damage_deck)
 	ctx = registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
 	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
-		EventBus.ship_hull_changed.emit(ship, new_hull)
-		_log.info("After-maneuver damage dealt (hull now %d)." % new_hull)
+		_submit_persistent_damage(ship,
+				str(ctx.get_meta_value("persistent_effect_id", "")))
 
 ## Shows the activation modal at the DONE step so the player can review
 ## all completed steps and deliberately end their activation.
@@ -1521,42 +1519,56 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 		toast_parts.append(
 				"⚠ Collision detected! Speed temporarily reduced to %d (was %d)."
 				% [result.final_speed, result.original_speed])
-	# Deal one facedown damage to the moving ship.
-	_deal_overlap_facedown(moving_inst, _activation_ctx.activating_ship_token)
+	# Pre-draw cards from the damage deck.
+	if _damage_deck == null:
+		_log.error("No damage deck — cannot deal overlap damage.")
+		return
+	var m_card: DamageCard = _damage_deck.draw_card()
+	if m_card == null:
+		_log.error("Damage deck empty — cannot deal overlap damage.")
+		return
+	var other_inst: ShipInstance = null
+	var o_card: DamageCard = null
+	if other_token:
+		other_inst = other_token.get_ship_instance()
+	if other_inst:
+		o_card = _damage_deck.draw_card()
+	# Submit command with pre-drawn cards.
+	var cmd_result: Dictionary = GameManager.submit_overlap_damage(
+			moving_inst,
+			other_inst if other_inst else moving_inst,
+			m_card.serialize(),
+			o_card.serialize() if o_card else m_card.serialize())
+	if cmd_result.is_empty():
+		_log.error("OverlapDamageCommand rejected.")
+		return
+	# Emit signals for the moving ship.
+	_emit_overlap_signals(moving_inst,
+			_activation_ctx.activating_ship_token, cmd_result,
+			"moving_hull", "moving_destroyed")
 	toast_parts.append("%s takes 1 damage."
 			% moving_inst.ship_data.ship_name)
-	# Deal one facedown damage to the overlapped ship.
-	if other_token:
-		var other_inst: ShipInstance = other_token.get_ship_instance()
-		if other_inst:
-			_deal_overlap_facedown(other_inst, other_token)
-			toast_parts.append("%s takes 1 damage."
-					% other_inst.ship_data.ship_name)
+	# Emit signals for the overlapped ship.
+	if other_inst and other_token:
+		_emit_overlap_signals(other_inst, other_token, cmd_result,
+				"other_hull", "other_destroyed")
+		toast_parts.append("%s takes 1 damage."
+				% other_inst.ship_data.ship_name)
 	# Show collision info inside the activation modal so it's unmissable.
 	if _panel_mgr.activation_modal:
 		_panel_mgr.activation_modal.set_collision_message("\n".join(toast_parts))
 	_log.info("Overlap damage applied: %s" % " | ".join(toast_parts))
 
-## Deals a single facedown damage card to [param inst] and emits the
-## appropriate EventBus signals.  Checks for destruction afterwards.
-## Rules Reference: RRG "Overlapping", p.8 — OV-011.
-func _deal_overlap_facedown(inst: ShipInstance, token: ShipToken) -> void:
-	if _damage_deck == null:
-		_log.error("No damage deck — cannot deal overlap damage.")
-		return
-	var card: DamageCard = _damage_deck.draw_card()
-	if card == null:
-		_log.error("Damage deck empty — cannot deal overlap damage.")
-		return
-	inst.add_facedown_damage(card)
-	EventBus.damage_card_dealt.emit(inst, card, false)
-	var new_hull: int = inst.ship_data.hull - inst.get_total_damage()
+
+## Emits EventBus signals for one side of an overlap damage result.
+func _emit_overlap_signals(inst: ShipInstance, token: ShipToken,
+		cmd_result: Dictionary, hull_key: String,
+		destroyed_key: String) -> void:
+	EventBus.damage_card_dealt.emit(inst, null, false)
+	var new_hull: int = int(cmd_result.get(hull_key, 0))
 	EventBus.ship_hull_changed.emit(inst, new_hull)
 	EventBus.ship_damaged.emit(token, 1, Constants.HullZone.FRONT)
-	_log.info("Overlap facedown damage dealt to %s. Hull: %d/%d."
-			% [inst.ship_data.ship_name, new_hull, inst.ship_data.hull])
-	if inst.is_destroyed():
-		inst.mark_destroyed()
+	if cmd_result.get(destroyed_key, false) as bool:
 		_log.info("Ship destroyed by overlap: %s" % inst.data_key)
 		EventBus.ship_destroyed.emit(token)
 		_fade_out_destroyed_token(token)
@@ -1571,6 +1583,24 @@ func _fade_out_destroyed_token(token: Node2D) -> void:
 		token.visible = false
 		token.modulate.a = 1.0
 	)
+
+
+## Pre-draws a card from [member _damage_deck] and submits a
+## [PersistentEffectDamageCommand] for the given ship and effect.
+func _submit_persistent_damage(ship: ShipInstance,
+		eff_id: String) -> void:
+	if _damage_deck == null:
+		return
+	var card: DamageCard = _damage_deck.draw_card()
+	if card == null:
+		return
+	var result: Dictionary = GameManager.submit_persistent_effect_damage(
+			ship, eff_id, card.serialize())
+	if not result.is_empty():
+		var new_hull: int = int(result.get("new_hull", 0))
+		EventBus.ship_hull_changed.emit(ship, new_hull)
+		_log.info("Persistent damage (%s) dealt (hull now %d)." % [
+				eff_id, new_hull])
 
 ## Shows a brief toast when a damage card is dealt to a ship.
 ## Faceup cards show the card name in red; facedown cards show a generic message.

@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-15
-> Current baseline: 112 scripts, 2 312 tests, 4 150 asserts
+> Current baseline: 113 scripts, 2 338 tests, 4 204 asserts
 
 ---
 
@@ -85,13 +85,25 @@ Tests: `test_resolve_immediate_effect_command.gd` — validate (happy + rejectio
 for general, projector, injured_crew, shield_failure, comm_noise), execute for
 all 6 effects, serialize/deserialize roundtrip.
 
-### Priority 6 — Overlap, Speed, Persistent Effects (3 violations → 3 commands)
+### Priority 6 — Overlap, Speed, Persistent Effects (3 violations → 3 commands) ✅ RESOLVED
 
-| File | Mutation | Command |
-|------|----------|---------|
-| `game_board.gd` | overlap facedown + destruction | `OverlapDamageCommand` |
-| `ship_activation_state.gd` | `set_speed(new_speed)` | `SetSpeedCommand` |
-| `damage_card_effect.gd` | persistent effect facedown damage | `PersistentEffectDamageCommand` |
+Three commands implemented and wired:
+
+| Command | Wired In |
+|---------|----------|
+| `SetSpeedCommand` | `maneuver_tool_scene.gd` — `_handle_speed_change()` |
+| `OverlapDamageCommand` | `game_board.gd` — `_apply_overlap_damage()` |
+| `PersistentEffectDamageCommand` | `game_board.gd` — `_resolve_after_maneuver_hook()`, `_on_crew_panic_choice()` + `maneuver_tool_scene.gd` — `_resolve_speed_change_hook()` |
+
+`apply_speed_change()` in `ShipActivationState` is now budget-only; the actual
+`set_speed()` mutation is performed by `SetSpeedCommand`.
+`_resolve_suffer_facedown()` in `DamageCardEffect` now flags `extra_damage_dealt`;
+the caller pre-draws from `DamageDeck` and submits `PersistentEffectDamageCommand`.
+Overlap damage pre-draws 2 cards and submits `OverlapDamageCommand`.
+
+Tests: `test_p6_commands.gd` — validate (happy + rejection for all 3 commands),
+execute (speed change, overlap survive/destroy, persistent effects), serialize/
+deserialize roundtrip.
 
 ### Priority 7 — UI State & Tokens (3 violations → 2 commands)
 
@@ -113,7 +125,7 @@ all 6 effects, serialize/deserialize roundtrip.
 | P3 | 7 | 1 | ✅ Done |
 | P4 | 3 | 1 | ✅ Done |
 | P5 | 8 | 1 | ✅ Done |
-| P6 | 3 | 3 | No |
+| P6 | 3 | 3 | ✅ Done |
 | P7 | 3 | 2 | No |
 | **Total** | **34** | **~13** | **P1–P5 resolved — G4 unblocked** |
 

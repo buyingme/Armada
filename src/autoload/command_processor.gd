@@ -66,6 +66,10 @@ func _ready() -> void:
 	RepairActionCommand.register()
 	# Tier 8 — immediate damage card effects.
 	ResolveImmediateEffectCommand.register()
+	# Tier 9 — overlap, speed, persistent effects.
+	SetSpeedCommand.register()
+	OverlapDamageCommand.register()
+	PersistentEffectDamageCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

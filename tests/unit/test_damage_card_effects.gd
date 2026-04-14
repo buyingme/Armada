@@ -444,10 +444,9 @@ func test_ruptured_engine_deals_facedown() -> void:
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("ship_speed", 2)
 	ctx.set_meta_value("damage_deck", deck)
-	var dmg_before: int = ship.facedown_damage.size()
 	e.resolve(ctx)
-	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
-			"Should add 1 facedown damage card")
+	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
+			"Should flag extra_damage_dealt for command submission")
 
 
 # ---------------------------------------------------------------------------
@@ -502,10 +501,9 @@ func test_crew_panic_suffer_damage() -> void:
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("damage_deck", deck)
 	ctx.set_meta_value("dial_discarded", false)
-	var dmg_before: int = ship.facedown_damage.size()
 	e.resolve(ctx)
-	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
-			"Should suffer 1 facedown damage")
+	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
+			"Should flag extra_damage_dealt for command submission")
 
 
 func test_crew_panic_discard_dial_sets_flag() -> void:
@@ -858,7 +856,6 @@ func test_after_maneuver_pipeline_ruptured_engine_damage() -> void:
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("ruptured_engine")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
-	var dmg_before: int = ship.facedown_damage.size()
 	# Act — speed 2.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
@@ -867,8 +864,8 @@ func test_after_maneuver_pipeline_ruptured_engine_damage() -> void:
 	ctx.set_meta_value("did_overlap", false)
 	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
 	# Assert
-	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
-			"Ruptured Engine should deal 1 facedown at speed 2 via pipeline")
+	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
+			"Ruptured Engine should flag extra_damage_dealt at speed 2 via pipeline")
 
 
 func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
@@ -878,7 +875,6 @@ func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("damaged_controls")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
-	var dmg_before: int = ship.facedown_damage.size()
 	# Act — overlapped obstacle.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
@@ -887,8 +883,8 @@ func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
 	ctx.set_meta_value("did_overlap", true)
 	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
 	# Assert
-	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
-			"Damaged Controls should deal 1 facedown on overlap via pipeline")
+	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
+			"Damaged Controls should flag extra_damage_dealt on overlap via pipeline")
 
 
 # ---------------------------------------------------------------------------
@@ -903,12 +899,11 @@ func test_speed_change_pipeline_thruster_fissure_damage() -> void:
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("thruster_fissure")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
-	var dmg_before: int = ship.facedown_damage.size()
 	# Act
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("damage_deck", deck)
 	ctx = reg.resolve_hook(&"ON_SPEED_CHANGE", ctx)
 	# Assert
-	assert_eq(ship.facedown_damage.size(), dmg_before + 1,
-			"Thruster Fissure should deal 1 facedown on speed change")
+	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
+			"Thruster Fissure should flag extra_damage_dealt on speed change")

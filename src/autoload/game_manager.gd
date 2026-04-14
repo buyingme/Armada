@@ -840,6 +840,64 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 	return CommandProcessor.submit(cmd)
 
 
+## Submits a [SetSpeedCommand] when the player clicks +1/−1 during
+## the Navigate step of ship activation.
+## [param ship] — the activating ship.
+## [param new_speed] — desired speed (budget-validated by caller).
+func submit_set_speed(ship: ShipInstance,
+		new_speed: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SetSpeedCommand.new(ship.owner_player, {
+		"ship_index": ship_index,
+		"new_speed": new_speed,
+	})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits an [OverlapDamageCommand] after a ship–ship overlap.
+## [param moving] — the moving ship.
+## [param other] — the overlapped ship.
+## [param moving_card_data] — serialized pre-drawn DamageCard.
+## [param other_card_data] — serialized pre-drawn DamageCard.
+func submit_overlap_damage(moving: ShipInstance,
+		other: ShipInstance, moving_card_data: Dictionary,
+		other_card_data: Dictionary) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var m_idx: int = current_game_state.find_ship_index(moving)
+	var o_idx: int = current_game_state.find_ship_index(other)
+	var cmd := OverlapDamageCommand.new(moving.owner_player, {
+		"ship_index": m_idx,
+		"other_owner": other.owner_player,
+		"other_ship_index": o_idx,
+		"moving_card": moving_card_data,
+		"other_card": other_card_data,
+	})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [PersistentEffectDamageCommand] when a persistent damage
+## card effect deals facedown damage.
+## [param ship] — the affected ship.
+## [param effect_id] — which effect triggered (e.g. "ruptured_engine").
+## [param card_data] — serialized pre-drawn DamageCard.
+func submit_persistent_effect_damage(ship: ShipInstance,
+		effect_id: String,
+		card_data: Dictionary) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := PersistentEffectDamageCommand.new(ship.owner_player, {
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"effect_id": effect_id,
+		"card_data": card_data,
+	})
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

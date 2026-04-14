@@ -185,7 +185,8 @@ func test_apply_speed_increase_with_dial() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var state: ShipActivationState = ShipActivationState.create(ship)
 	assert_true(state.apply_speed_change(1), "Should apply +1")
-	assert_eq(ship.current_speed, 3, "Speed should be 3")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 3,
+			"Target speed should be 3")
 	assert_eq(state.get_dial_speed_budget(), 0,
 			"Dial budget consumed")
 
@@ -194,7 +195,8 @@ func test_apply_speed_decrease_with_dial() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var state: ShipActivationState = ShipActivationState.create(ship)
 	assert_true(state.apply_speed_change(-1), "Should apply -1")
-	assert_eq(ship.current_speed, 1, "Speed should be 1")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 1,
+			"Target speed should be 1")
 
 
 func test_speed_change_exceeds_max_rejected() -> void:
@@ -232,14 +234,17 @@ func test_speed_change_reversible_before_commit() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var state: ShipActivationState = ShipActivationState.create(ship)
 	assert_true(state.apply_speed_change(1), "+1 should succeed")
-	assert_eq(ship.current_speed, 3, "Speed should be 3")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 3,
+			"Target speed should be 3")
 	assert_true(state.apply_speed_change(-1), "-1 reversal should succeed")
-	assert_eq(ship.current_speed, 2, "Speed restored to 2")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 2,
+			"Target speed restored to 2")
 	assert_eq(state.get_total_speed_change(), 0,
 			"Net change should be 0")
 	# Budget fully restored — can change again.
 	assert_true(state.apply_speed_change(-1), "-1 should still work")
-	assert_eq(ship.current_speed, 1, "Speed should be 1")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 1,
+			"Target speed should be 1")
 
 
 func test_speed_change_swing_direction() -> void:
@@ -248,7 +253,8 @@ func test_speed_change_swing_direction() -> void:
 	assert_true(state.apply_speed_change(1), "+1 should succeed")
 	assert_true(state.apply_speed_change(-1), "-1 reversal should succeed")
 	assert_true(state.apply_speed_change(-1), "-1 should succeed")
-	assert_eq(ship.current_speed, 1, "Speed should be 1")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 1,
+			"Target speed should be 1")
 	assert_eq(state.get_total_speed_change(), -1, "Total change should be -1")
 
 
@@ -257,7 +263,8 @@ func test_combined_dial_token_allows_two_changes() -> void:
 	var state: ShipActivationState = ShipActivationState.create(ship)
 	assert_true(state.apply_speed_change(1), "First +1 from dial")
 	assert_true(state.apply_speed_change(1), "Second +1 from token")
-	assert_eq(ship.current_speed, 4, "Speed should be 4")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 4,
+			"Target speed should be 4")
 	assert_false(state.apply_speed_change(1),
 			"Third change should fail — budget exhausted")
 
@@ -283,7 +290,8 @@ func test_token_only_speed_change() -> void:
 	var ship: ShipInstance = _make_ship(2, false, true, 4)
 	var state: ShipActivationState = ShipActivationState.create(ship)
 	assert_true(state.apply_speed_change(1), "+1 from token")
-	assert_eq(ship.current_speed, 3, "Speed should be 3")
+	assert_eq(state.get_original_speed() + state.get_total_speed_change(), 3,
+			"Target speed should be 3")
 	assert_true(state.is_using_token_for_speed(),
 			"Should be using token for speed")
 

@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 112 |
-| GUT tests | 2 312 |
-| GUT asserts | 4 150 |
+| GUT test scripts | 113 |
+| GUT tests | 2 338 |
+| GUT asserts | 4 204 |
 | Autoloads | 12 |
-| Command classes | 21 (1 base + 20 concrete) |
-| Wired command call sites | 34 |
+| Command classes | 24 (1 base + 23 concrete) |
+| Wired command call sites | 37 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 20 concrete commands, 34 wired call sites, GameReplay, §4.6 P1–P5 resolved |
+| G | Command Pattern | 🔄 | GameCommand base, 23 concrete commands, 37 wired call sites, GameReplay, §4.6 P1–P6 resolved |
 
 ---
 
@@ -88,6 +88,7 @@
 | G2 Wiring: SpendToken + SpendDial | ✅ | Return-value protocol: 7 token + 5 dial call sites wired |
 | G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save, auto-save on exit |
 | §4.6 P5: Immediate Effects | ✅ | ResolveImmediateEffectCommand — 8 violations → 1 cmd, 4 call sites |
+| §4.6 P6: Overlap/Speed/Persistent | ✅ | SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand — 3 violations → 3 cmds |
 | G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
 
 ---
@@ -101,7 +102,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 20 cmds, 34 sites |
+| GameCommand + CommandProcessor | G | ✅ 23 cmds, 37 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -183,5 +184,4 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `150e3f5` | P3: ResolveDamageCommand (7 violations → 1 command) |
 | `1da7df8` | Auto-save replay on game exit/game over |
 | `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
-| `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |
 | `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |

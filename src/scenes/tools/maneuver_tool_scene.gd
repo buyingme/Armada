@@ -185,9 +185,29 @@ func _resolve_speed_change_hook() -> void:
 			if GameManager.current_game_state else null)
 	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
 	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+		_submit_persistent_damage(ship,
+				str(ctx.get_meta_value("persistent_effect_id", "")))
+
+
+## Pre-draws a card from the damage deck and submits a
+## [PersistentEffectDamageCommand] for the given ship and effect.
+func _submit_persistent_damage(ship: ShipInstance,
+		eff_id: String) -> void:
+	var deck: DamageDeck = null
+	if GameManager.current_game_state:
+		deck = GameManager.current_game_state.damage_deck
+	if deck == null:
+		return
+	var card: DamageCard = deck.draw_card()
+	if card == null:
+		return
+	var result: Dictionary = GameManager.submit_persistent_effect_damage(
+			ship, eff_id, card.serialize())
+	if not result.is_empty():
+		var new_hull: int = int(result.get("new_hull", 0))
 		EventBus.ship_hull_changed.emit(ship, new_hull)
-		_log.info("Speed change damage dealt (hull now %d)." % new_hull)
+		_log.info("Persistent damage (%s) dealt (hull now %d)." % [
+				eff_id, new_hull])
 
 
 # ------------------------------------------------------------------
@@ -773,16 +793,23 @@ func _handle_speed_change(delta: int) -> void:
 	if _activation_mode and _activation_state:
 		var applied: bool = _activation_state.apply_speed_change(delta)
 		if applied:
+			# Submit command to mutate ShipInstance.current_speed.
+			var ship: ShipInstance = _activation_state.get_ship()
+			var target_speed: int = ship.current_speed + delta
+			var result: Dictionary = GameManager.submit_set_speed(
+					ship, target_speed)
+			if result.is_empty():
+				_log.info("SetSpeedCommand rejected for speed %d." %
+						target_speed)
+				return
 			# Sync the tool state to the new actual speed.
-			_state.set_simulated_speed(_activation_state.get_ship().current_speed)
+			_state.set_simulated_speed(ship.current_speed)
 			_update_visual()
 			_log.info("Activation speed %+d → %d" % [
-					delta, _activation_state.get_ship().current_speed])
-			EventBus.ship_speed_changed.emit(
-					_activation_state.get_ship(),
-					_activation_state.get_ship().current_speed)
+					delta, ship.current_speed])
+			EventBus.ship_speed_changed.emit(ship, ship.current_speed)
 			EventBus.navigate_token_spend_preview.emit(
-					_activation_state.get_ship(),
+					ship,
 					_activation_state.is_using_token_for_speed())
 			# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
 			# Rules Reference: "Thruster Fissure" card text.

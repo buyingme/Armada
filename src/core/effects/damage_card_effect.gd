@@ -139,8 +139,10 @@ func _resolve_non_attack(context: EffectContext) -> void:
 		"thrust_control_malfunction":
 			_resolve_thrust_control(context)
 		"ruptured_engine", "damaged_controls", "thruster_fissure":
+			context.set_meta_value("persistent_effect_id", effect_id)
 			_resolve_suffer_facedown(context)
 		"crew_panic":
+			context.set_meta_value("persistent_effect_id", effect_id)
 			_resolve_crew_panic(context)
 		"power_failure":
 			_resolve_power_failure(context)
@@ -277,8 +279,10 @@ func _resolve_thrust_control(context: EffectContext) -> void:
 	context.set_meta_value("yaw_values", yaw_arr)
 
 
-## Deals 1 facedown damage card to the ship (used by Ruptured Engine,
-## Damaged Controls, Thruster Fissure, Crew Panic).
+## Flags that 1 facedown damage card should be dealt to the ship.
+## The actual draw + add_facedown_damage is performed by the caller via
+## [PersistentEffectDamageCommand] so the mutation is replay-safe.
+## Used by Ruptured Engine, Damaged Controls, Thruster Fissure, Crew Panic.
 func _resolve_suffer_facedown(context: EffectContext) -> void:
 	var ship: Variant = context.get_meta_value("ship", null)
 	var deck: Variant = context.get_meta_value("damage_deck", null)
@@ -286,12 +290,7 @@ func _resolve_suffer_facedown(context: EffectContext) -> void:
 		return
 	if not ship is ShipInstance or not deck is DamageDeck:
 		return
-	var si: ShipInstance = ship as ShipInstance
-	var dd: DamageDeck = deck as DamageDeck
-	var card: DamageCard = dd.draw_card()
-	if card:
-		si.add_facedown_damage(card)
-		context.set_meta_value("extra_damage_dealt", true)
+	context.set_meta_value("extra_damage_dealt", true)
 
 
 ## Crew Panic: suffer 1 facedown damage OR discard the top command dial.

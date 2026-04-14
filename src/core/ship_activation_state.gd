@@ -217,6 +217,9 @@ func is_token_only_spend() -> bool:
 ## returns to the original speed with full budget restored.
 ## Enforces speed bounds [0, max_speed] and total budget.
 ## Returns true if the change was applied.
+## The actual [code]ShipInstance.set_speed()[/code] mutation is performed
+## by [SetSpeedCommand] — the caller must submit the command after this
+## method returns true.
 ## Rules Reference: NAV-002, NAV-003, NAV-004, NAV-005, NAV-008.
 func apply_speed_change(delta: int) -> bool:
 	if delta == 0:
@@ -232,11 +235,10 @@ func apply_speed_change(delta: int) -> bool:
 		_log.info("Speed change %+d would exceed bounds [0, %d]." %
 				[delta, _ship.ship_data.max_speed])
 		return false
-	_ship.set_speed(new_speed)
 	_total_speed_change = new_total
 	_recompute_budgets()
-	_log.info("Speed changed by %+d → %d (total_change=%+d, dial_budget=%d, token_budget=%d)" %
-			[delta, _ship.current_speed, _total_speed_change,
+	_log.info("Speed change validated: %+d → target %d (total_change=%+d, dial_budget=%d, token_budget=%d)" %
+			[delta, new_speed, _total_speed_change,
 			_dial_speed_budget, _token_speed_budget])
 	return true
 

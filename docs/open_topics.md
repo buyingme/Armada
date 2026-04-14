@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-13
-> Current baseline: 110 scripts, 2 267 tests, 4 056 asserts
+> Last updated: 2026-04-14
+> Current baseline: 111 scripts, 2 289 tests, 4 099 asserts
 
 ---
 
@@ -50,13 +50,22 @@ pre-draw (deck stays in executor) and command-based mutation + post-process even
 
 Tests: `test_resolve_damage_command.gd` — validate, execute, serialize/deserialize.
 
-### Priority 4 — Repair Actions (3 violations → 1 command)
+### Priority 4 — Repair Actions (3 violations → 1 command) ✅ RESOLVED
 
-| File | Method | Mutation | Command |
-|------|--------|----------|---------|
-| `repair_resolver.gd` | `move_shields()` | `reduce_shields()` + `restore_shields()` | `RepairActionCommand` |
-| `repair_resolver.gd` | `recover_shields()` | `restore_shields(zone, 1)` | `RepairActionCommand` |
-| `repair_resolver.gd` | `repair_hull()` | `remove_damage_card()` | `RepairActionCommand` |
+Single parameterised command implemented and wired:
+
+| Command | Wired In |
+|---------|----------|
+| `RepairActionCommand` | `repair_resolver.gd` — `move_shields()`, `recover_shields()`, `repair_hull()` via `GameManager.submit_repair_*()` |
+
+Three action types dispatched by `action_type` discriminator: `move_shields`,
+`recover_shields`, `repair_hull`. Resolver pre-validates affordability and
+effect hooks, then delegates the actual `GameState` mutation to the command.
+Point tracking remains in the resolver (transient session state).
+
+Tests: `test_repair_action_command.gd` — validate (happy + rejection for all 3
+action types), execute (move, recover, hull facedown/faceup/discard),
+serialize/deserialize roundtrip.
 
 ### Priority 5 — Immediate Effects (8 violations → 1 command)
 
@@ -92,11 +101,11 @@ Tests: `test_resolve_damage_command.gd` — validate, execute, serialize/deseria
 | P1 | 3 | 2 | ✅ Done |
 | P2 | 5 | 2 | ✅ Done |
 | P3 | 7 | 1 | ✅ Done |
-| P4 | 3 | 1 | Yes |
+| P4 | 3 | 1 | ✅ Done |
 | P5 | 8 | 1 | No |
 | P6 | 3 | 3 | No |
 | P7 | 3 | 2 | No |
-| **Total** | **34** | **~13** | P1–P4 = 18 blocking |
+| **Total** | **34** | **~13** | **P1–P4 resolved — G4 unblocked** |
 
 ---
 
@@ -119,7 +128,7 @@ All six command classes are now wired into their presentation-layer call sites:
 
 | Phase | Name | Status | Blocker |
 |-------|------|--------|---------|
-| G4 | Network Transport Layer | ⏳ | §4.6 P1–P4 violations must be resolved first |
+| G4 | Network Transport Layer | ⏳ | §4.6 P1–P4 resolved — ready to start |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
 All other implementation phases (0–12) are complete.
@@ -137,6 +146,7 @@ All other implementation phases (0–12) are complete.
 | Bug | Severity | Observed | Fixed | Notes |
 |-----|----------|----------|-------|-------|
 | Squadron attacks fail during Squadron Phase — dice not rolled | **Blocker** | 2026-04-13 | 2026-04-13 | `RollDiceCommand`, `SkipAttackCommand`, `SpendDefenseTokenCommand`, `SelectRedirectZoneCommand` only accepted SHIP phase. Squadron-phase attacks were rejected. Fix: accept both SHIP and SQUADRON phases. |
+| No replay saved on game exit | Minor (DX) | 2026-04-14 | 2026-04-14 | `GameManager.auto_save_replay()` now saves to `res://replays/` on game over, ESC quit, victory quit, and window close. |
 
 ---
 

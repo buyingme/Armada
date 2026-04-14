@@ -147,6 +147,7 @@ func can_move_shields_between(from_zone: String, to_zone: String) -> bool:
 
 
 ## Moves 1 shield from [param from_zone] to [param to_zone].
+## Routes through [RepairActionCommand] for replay safety.
 ## Returns true if successful.
 ## Rules Reference: CM-033 — reduce one zone by 1, increase another by 1.
 func move_shields(from_zone: String, to_zone: String) -> bool:
@@ -155,15 +156,18 @@ func move_shields(from_zone: String, to_zone: String) -> bool:
 		return false
 	if not _is_shield_op_allowed(to_zone):
 		return false
-	_ship.reduce_shields(from_zone, 1)
-	_ship.restore_shields(to_zone, 1)
+	var result: Dictionary = GameManager.submit_repair_move_shields(
+			_ship, from_zone, to_zone)
+	if result.is_empty():
+		_log.error("RepairActionCommand (move_shields) rejected.")
+		return false
 	_remaining_points -= Constants.REPAIR_MOVE_SHIELDS_COST
 	EventBus.ship_shields_changed.emit(
 			_ship, from_zone,
-			int(_ship.current_shields.get(from_zone, 0)))
+			int(result.get("from_shields", 0)))
 	EventBus.ship_shields_changed.emit(
 			_ship, to_zone,
-			int(_ship.current_shields.get(to_zone, 0)))
+			int(result.get("to_shields", 0)))
 	EventBus.repair_shields_moved.emit(_ship, from_zone, to_zone)
 	_log.info("Moved 1 shield %s → %s (remaining pts: %d)" % [
 			from_zone, to_zone, _remaining_points])
@@ -194,6 +198,7 @@ func can_recover_shields_on(zone: String) -> bool:
 
 
 ## Recovers 1 shield on [param zone].
+## Routes through [RepairActionCommand] for replay safety.
 ## Returns true if successful.
 ## Rules Reference: CM-034 — recover 1 shield on any hull zone.
 func recover_shields(zone: String) -> bool:
@@ -202,11 +207,15 @@ func recover_shields(zone: String) -> bool:
 		return false
 	if not _is_shield_op_allowed(zone):
 		return false
-	_ship.restore_shields(zone, 1)
+	var result: Dictionary = GameManager.submit_repair_recover_shields(
+			_ship, zone)
+	if result.is_empty():
+		_log.error("RepairActionCommand (recover_shields) rejected.")
+		return false
 	_remaining_points -= Constants.REPAIR_RECOVER_SHIELDS_COST
 	EventBus.ship_shields_changed.emit(
 			_ship, zone,
-			int(_ship.current_shields.get(zone, 0)))
+			int(result.get("new_shields", 0)))
 	EventBus.repair_shields_recovered.emit(_ship, zone)
 	_log.info("Recovered 1 shield on %s (remaining pts: %d)" % [
 			zone, _remaining_points])
@@ -237,24 +246,20 @@ func can_repair_card(card: DamageCard) -> bool:
 
 
 ## Discards [param card] from the ship and returns it to the damage deck.
-## Unregisters any persistent effect tied to this card.
+## Routes through [RepairActionCommand] for replay safety.
+## Effect unregistration happens inside the command's execute().
 ## Returns true if successful.
 ## Rules Reference: CM-035 — choose and discard one faceup or facedown card.
 func repair_hull(card: DamageCard) -> bool:
 	if not can_repair_card(card):
 		_log.info("Cannot repair card '%s'." % card.title)
 		return false
-	# Unregister persistent effect before removing the card.
-	if card.is_faceup and _effect_registry:
-		DamageCardEffectFactory.unregister_effect(card, _effect_registry)
-	var removed: bool = _ship.remove_damage_card(card)
-	if not removed:
-		_log.error("Failed to remove card '%s' from ship." % card.title)
+	var result: Dictionary = GameManager.submit_repair_hull(_ship, card)
+	if result.is_empty():
+		_log.error("RepairActionCommand (repair_hull) rejected.")
 		return false
-	if _damage_deck:
-		_damage_deck.discard(card)
 	_remaining_points -= Constants.REPAIR_HULL_COST
-	var new_hull: int = _ship.ship_data.hull - _ship.get_total_damage()
+	var new_hull: int = int(result.get("new_hull", 0))
 	EventBus.ship_hull_changed.emit(_ship, new_hull)
 	EventBus.repair_card_discarded.emit(_ship, card)
 	_log.info("Repaired card '%s' (hull now %d, remaining pts: %d)" % [

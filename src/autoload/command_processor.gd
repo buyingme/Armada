@@ -62,6 +62,8 @@ func _ready() -> void:
 	DestroyUnitCommand.register()
 	# Tier 6 — damage resolution.
 	ResolveDamageCommand.register()
+	# Tier 7 — repair actions.
+	RepairActionCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

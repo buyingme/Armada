@@ -209,6 +209,15 @@ func test_repair_hull_emits_hull_changed_signal() -> void:
 	ship.add_facedown_damage(card)
 	var deck: DamageDeck = DamageDeck.new()
 	deck.initialize()
+	# Set up GameManager + command infrastructure so the resolver can submit.
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	gs.current_round = 1
+	gs.current_phase = Constants.GamePhase.SHIP
+	gs.damage_deck = deck
+	gs.get_player_state(0).ships.append(ship)
+	GameManager.current_game_state = gs
+	RepairActionCommand.register()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	var result: Array = [-1]
 	var on_hull: Callable = func(_s: RefCounted, h: int) -> void:
@@ -216,6 +225,9 @@ func test_repair_hull_emits_hull_changed_signal() -> void:
 	EventBus.ship_hull_changed.connect(on_hull)
 	resolver.repair_hull(card)
 	EventBus.ship_hull_changed.disconnect(on_hull)
+	# Clean up command infrastructure.
+	GameManager.current_game_state = null
+	GameCommand._registry.erase("repair_action")
 	assert_eq(result[0], 5,
 			"ship_hull_changed must emit hull=5 after card removed (Bug F)")
 

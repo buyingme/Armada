@@ -750,6 +750,66 @@ func submit_resolve_squadron_damage(squadron: SquadronInstance,
 	return CommandProcessor.submit(cmd)
 
 
+## Submits a [RepairActionCommand] to move 1 shield between hull zones.
+## [param ship] — the ShipInstance being repaired.
+## [param from_zone] — source hull zone key (e.g. "FRONT").
+## [param to_zone] — destination hull zone key.
+func submit_repair_move_shields(ship: ShipInstance,
+		from_zone: String, to_zone: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := RepairActionCommand.new(ship.owner_player, {
+		"action_type": "move_shields",
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"from_zone": from_zone,
+		"to_zone": to_zone,
+	})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [RepairActionCommand] to recover 1 shield on a hull zone.
+## [param ship] — the ShipInstance being repaired.
+## [param zone] — the hull zone to restore a shield on.
+func submit_repair_recover_shields(ship: ShipInstance,
+		zone: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := RepairActionCommand.new(ship.owner_player, {
+		"action_type": "recover_shields",
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"zone": zone,
+	})
+	return CommandProcessor.submit(cmd)
+
+
+## Submits a [RepairActionCommand] to discard a damage card.
+## [param ship] — the ShipInstance being repaired.
+## [param card] — the DamageCard to discard.
+func submit_repair_hull(ship: ShipInstance,
+		card: DamageCard) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var is_faceup: bool = ship.faceup_damage.has(card)
+	var card_idx: int = -1
+	if is_faceup:
+		card_idx = ship.faceup_damage.find(card)
+	else:
+		card_idx = ship.facedown_damage.find(card)
+	var cmd := RepairActionCommand.new(ship.owner_player, {
+		"action_type": "repair_hull",
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"card_is_faceup": is_faceup,
+		"card_index": card_idx,
+	})
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

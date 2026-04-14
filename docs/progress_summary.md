@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-13
+> Last updated: 2026-04-14
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 110 |
-| GUT tests | 2 267 |
-| GUT asserts | 4 056 |
+| GUT test scripts | 111 |
+| GUT tests | 2 289 |
+| GUT asserts | 4 099 |
 | Autoloads | 12 |
-| Command classes | 19 (1 base + 18 concrete) |
-| Wired command call sites | 30 |
+| Command classes | 20 (1 base + 19 concrete) |
+| Wired command call sites | 33 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 18 concrete commands, 30 wired call sites, GameReplay, §4.6 P1+P2+P3 resolved |
+| G | Command Pattern | 🔄 | GameCommand base, 19 concrete commands, 33 wired call sites, GameReplay, §4.6 P1–P4 resolved |
 
 ---
 
@@ -86,7 +86,7 @@
 | G2 Tier 2: 4 attack commands | ✅ | RollDice, SpendDefenseToken, SelectRedirectZone, SkipAttack — wired into AE |
 | G2 Tier 3: 2 movement commands | ✅ | MoveSquadron, ExecuteManeuver — wired into presentation |
 | G2 Wiring: SpendToken + SpendDial | ✅ | Return-value protocol: 7 token + 5 dial call sites wired |
-| G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save |
+| G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save, auto-save on exit |
 | G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
 
 ---
@@ -100,7 +100,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 18 cmds, 30 sites |
+| GameCommand + CommandProcessor | G | ✅ 19 cmds, 33 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -176,3 +176,7 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `515413e` | SpendDialCommand creation + wiring (5 call sites) |
 | `8b720e7` | Docs: §4.6 violation roadmap + manual test plan |
 | `d0fde4f` | Docs: consolidate into progress_summary + open_topics |
+| `dab13cf` | Bug fix: allow attack commands in Squadron Phase |
+| `150e3f5` | P3: ResolveDamageCommand (7 violations → 1 command) |
+| `1da7df8` | Auto-save replay on game exit/game over |
+| (pending) | P4: RepairActionCommand (3 violations → 1 command) |

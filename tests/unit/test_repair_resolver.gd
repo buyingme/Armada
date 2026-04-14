@@ -8,6 +8,26 @@
 extends GutTest
 
 
+## Shared GameState backing the GameManager singleton so commands can execute.
+var _game_state: GameState
+
+
+func before_each() -> void:
+	_game_state = GameState.new()
+	_game_state.initialize()
+	_game_state.current_round = 1
+	_game_state.current_phase = Constants.GamePhase.SHIP
+	_game_state.damage_deck = DamageDeck.new()
+	_game_state.damage_deck.initialize()
+	GameManager.current_game_state = _game_state
+	RepairActionCommand.register()
+
+
+func after_each() -> void:
+	GameManager.current_game_state = null
+	GameCommand._registry.erase("repair_action")
+
+
 # ---------------------------------------------------------------------------
 # Helper — build a ShipInstance with configurable Repair resources
 # ---------------------------------------------------------------------------
@@ -15,6 +35,8 @@ extends GutTest
 
 ## Creates a ShipInstance with given engineering value, optional Repair dial
 ## and/or token, and configurable shields.
+## Also registers the ship in [_game_state] player 0's fleet so that
+## [GameManager.submit_repair_*] can locate it via [find_ship_index].
 ## Shield layout: FRONT=3/3, LEFT=2/2, RIGHT=2/2, REAR=1/1 by default.
 func _make_ship(
 		eng_value: int = 4,
@@ -53,14 +75,15 @@ func _make_ship(
 	# Add Repair token if requested.
 	if has_repair_token:
 		ship.command_tokens.add_token(Constants.CommandType.REPAIR)
+	# Register in GameState so command submission can find it.
+	var ps: PlayerState = _game_state.get_player_state(0)
+	ps.ships.append(ship)
 	return ship
 
 
-## Creates a DamageDeck for testing.
+## Returns the shared DamageDeck from the GameState.
 func _make_deck() -> DamageDeck:
-	var deck: DamageDeck = DamageDeck.new()
-	deck.initialize()
-	return deck
+	return _game_state.damage_deck
 
 
 # ---------------------------------------------------------------------------

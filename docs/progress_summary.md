@@ -161,6 +161,7 @@ All passing tests are from 2026-04-11 or 2026-04-12.
 | MT-G.13–15 | Command registration (13 types), repair token spend, squadron dial spend | 2026-04-12 |
 | MT-HF.01–02 | Pre-roll deselection, post-roll click block | 2026-04-12 |
 | MT-P4.01–05 | Repair panel: move shields, recover shields, repair hull, replay save | 2026-04-14 |
+| MT-P5.01–07 | Immediate effects: all 6 card effects through commands, replay save | 2026-04-14 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 
@@ -182,4 +183,5 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `150e3f5` | P3: ResolveDamageCommand (7 violations → 1 command) |
 | `1da7df8` | Auto-save replay on game exit/game over |
 | `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
+| `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |
 | `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |

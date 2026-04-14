@@ -162,7 +162,7 @@ All other implementation phases (0–12) are complete.
 
 ## 4. Open Manual Tests
 
-233 manual test cases were written. 26 formally passed (with date stamps).
+233 manual test cases were written. 33 formally passed (with date stamps).
 ~200 remain untested or lack formal result annotations.
 
 ### Awaiting First Test (highest priority — recent changes)
@@ -173,6 +173,7 @@ All other implementation phases (0–12) are complete.
 | MT-G.14 | Repair flow: dial + token spend through commands | ✅ passed 2026-04-12 (bug fixed) |
 | MT-G.15 | Squadron command flow: dial + token spend through commands | ✅ passed 2026-04-12 |
 | MT-P4.01–05 | Repair panel: move/recover/hull through commands | ✅ passed 2026-04-14 |
+| MT-P5.01–07 | Immediate effects: all 6 card effects through commands | ✅ passed 2026-04-14 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

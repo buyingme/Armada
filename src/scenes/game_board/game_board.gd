@@ -2127,8 +2127,15 @@ func _resolve_debug_immediate_effect(card: DamageCard,
 	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
 	var choice_info: Dictionary = resolver.get_required_choice(card, ship)
 	if choice_info.is_empty():
-		var ok: bool = resolver.resolve(card, ship, _damage_deck)
-		if ok:
+		var extra_card_data: Dictionary = {}
+		if card.effect_id == "structural_damage" and _damage_deck:
+			var extra: DamageCard = _damage_deck.draw_card()
+			if extra:
+				extra_card_data = extra.serialize()
+		var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+				ship, card, {}, extra_card_data)
+		if not result.is_empty():
+			_emit_debug_immediate_signals(card, ship, result)
 			_log.info("Debug: immediate effect auto-resolved for '%s'." %
 					card.title)
 	else:
@@ -2155,12 +2162,55 @@ func _on_debug_immediate_choice_confirmed(selection: Dictionary) -> void:
 			_on_debug_damage_card_chosen)
 	if _debug_immediate_card == null or _debug_immediate_ship == null:
 		return
-	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
-	var ok: bool = resolver.resolve(
-			_debug_immediate_card, _debug_immediate_ship,
-			_damage_deck, selection)
-	if ok:
+	var extra_card_data: Dictionary = {}
+	if _debug_immediate_card.effect_id == "structural_damage" and _damage_deck:
+		var extra: DamageCard = _damage_deck.draw_card()
+		if extra:
+			extra_card_data = extra.serialize()
+	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+			_debug_immediate_ship, _debug_immediate_card,
+			selection, extra_card_data)
+	if not result.is_empty():
+		_emit_debug_immediate_signals(
+				_debug_immediate_card, _debug_immediate_ship, result)
 		_log.info("Debug: immediate effect resolved for '%s'." %
 				_debug_immediate_card.title)
 	_debug_immediate_card = null
 	_debug_immediate_ship = null
+
+
+## Emits EventBus signals after a debug immediate effect command executes.
+func _emit_debug_immediate_signals(card: DamageCard,
+		ship: ShipInstance, result: Dictionary) -> void:
+	var eid: String = result.get("effect_id", "") as String
+	match eid:
+		"structural_damage":
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"projector_misaligned":
+			var zone: String = result.get("zone", "") as String
+			if not zone.is_empty():
+				EventBus.ship_shields_changed.emit(
+						ship, zone,
+						int(result.get("new_shields", 0)))
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"life_support_failure":
+			EventBus.command_tokens_changed.emit(ship)
+		"injured_crew":
+			EventBus.ship_defense_token_changed.emit(ship)
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"shield_failure":
+			var changes: Array = result.get("shield_changes", [])
+			for sc: Variant in changes:
+				var d: Dictionary = sc as Dictionary
+				EventBus.ship_shields_changed.emit(
+						ship, d.get("zone", ""),
+						int(d.get("new_shields", 0)))
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"comm_noise":
+			var action: String = result.get("action", "") as String
+			if action == "reduce_speed":
+				EventBus.ship_speed_changed.emit(
+						ship, int(result.get("new_speed", 0)))
+			elif action == "change_dial":
+				EventBus.command_dials_changed.emit(ship)
+			EventBus.damage_card_flipped.emit(ship, card, false)

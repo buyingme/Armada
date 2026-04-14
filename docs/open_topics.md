@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-14
-> Current baseline: 111 scripts, 2 289 tests, 4 099 asserts
+> Last updated: 2026-04-15
+> Current baseline: 112 scripts, 2 312 tests, 4 150 asserts
 
 ---
 
@@ -67,13 +67,23 @@ Tests: `test_repair_action_command.gd` — validate (happy + rejection for all 3
 action types), execute (move, recover, hull facedown/faceup/discard),
 serialize/deserialize roundtrip.
 
-### Priority 5 — Immediate Effects (8 violations → 1 command)
+### Priority 5 — Immediate Effects (8 violations → 1 command) ✅ RESOLVED
 
-| File | Method | Mutation | Command |
-|------|--------|----------|---------|
-| `immediate_effect_resolver.gd` | 8 methods | shields, tokens, speed, dials, facedown damage, faceup→facedown flip | `ResolveImmediateEffectCommand` |
+Single parameterised command implemented and wired:
 
-> Single command parameterised by `effect_id` + player-choice dictionary.
+| Command | Wired In |
+|---------|----------|
+| `ResolveImmediateEffectCommand` | `attack_executor.gd` — `_resolve_immediate_card_effect()`, `_on_immediate_choice_confirmed()` + `game_board.gd` — debug immediate effect paths |
+
+Six damage card effects dispatched by `effect_id` discriminator:
+`structural_damage`, `projector_misaligned`, `life_support_failure`,
+`injured_crew`, `shield_failure`, `comm_noise`.  Presentation layer gathers
+choices (async UI), then submits the command.  EventBus signals emitted by
+callers after `execute()` returns.
+
+Tests: `test_resolve_immediate_effect_command.gd` — validate (happy + rejection
+for general, projector, injured_crew, shield_failure, comm_noise), execute for
+all 6 effects, serialize/deserialize roundtrip.
 
 ### Priority 6 — Overlap, Speed, Persistent Effects (3 violations → 3 commands)
 
@@ -102,10 +112,10 @@ serialize/deserialize roundtrip.
 | P2 | 5 | 2 | ✅ Done |
 | P3 | 7 | 1 | ✅ Done |
 | P4 | 3 | 1 | ✅ Done |
-| P5 | 8 | 1 | No |
+| P5 | 8 | 1 | ✅ Done |
 | P6 | 3 | 3 | No |
 | P7 | 3 | 2 | No |
-| **Total** | **34** | **~13** | **P1–P4 resolved — G4 unblocked** |
+| **Total** | **34** | **~13** | **P1–P5 resolved — G4 unblocked** |
 
 ---
 
@@ -162,6 +172,7 @@ All other implementation phases (0–12) are complete.
 | MT-G.13 | Command registration count is now 13 | ✅ passed 2026-04-12 |
 | MT-G.14 | Repair flow: dial + token spend through commands | ✅ passed 2026-04-12 (bug fixed) |
 | MT-G.15 | Squadron command flow: dial + token spend through commands | ✅ passed 2026-04-12 |
+| MT-P4.01–05 | Repair panel: move/recover/hull through commands | ✅ passed 2026-04-14 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

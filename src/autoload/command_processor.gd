@@ -64,6 +64,8 @@ func _ready() -> void:
 	ResolveDamageCommand.register()
 	# Tier 7 — repair actions.
 	RepairActionCommand.register()
+	# Tier 8 — immediate damage card effects.
+	ResolveImmediateEffectCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

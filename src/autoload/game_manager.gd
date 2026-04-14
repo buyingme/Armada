@@ -810,6 +810,36 @@ func submit_repair_hull(ship: ShipInstance,
 	return CommandProcessor.submit(cmd)
 
 
+## Submits a [ResolveImmediateEffectCommand] for a faceup damage card.
+## The caller must pre-draw any extra card (structural_damage) and pass
+## the serialized dict as [param extra_card_data].  Player choices are
+## passed in [param choice].
+## [param ship] — the ShipInstance that received the card.
+## [param card] — the faceup DamageCard to resolve.
+## [param choice] — player selection dictionary (may be empty).
+## [param extra_card_data] — serialized DamageCard dict for pre-drawn
+##   extra card (structural_damage only; empty otherwise).
+func submit_resolve_immediate_effect(ship: ShipInstance,
+		card: DamageCard, choice: Dictionary = {},
+		extra_card_data: Dictionary = {}) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var card_idx: int = ship.faceup_damage.find(card)
+	var pl: Dictionary = {
+		"effect_id": card.effect_id,
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"card_index": card_idx,
+		"choice": choice,
+	}
+	if not extra_card_data.is_empty():
+		pl["extra_card_data"] = extra_card_data
+	var cmd := ResolveImmediateEffectCommand.new(
+			ship.owner_player, pl)
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

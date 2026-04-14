@@ -71,7 +71,7 @@ func after_each() -> void:
 func test_validate_move_shields_ok() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
-	ps.ships[idx].current_shields["REAR"] = 0  # below max of 1
+	ps.ships[idx].current_shields["REAR"] = 0 # below max of 1
 	var cmd := RepairActionCommand.new(0, {
 		"action_type": "move_shields",
 		"owner_player": 0,
@@ -171,7 +171,7 @@ func test_validate_move_shields_invalid_zone() -> void:
 func test_validate_recover_shields_ok() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
-	ps.ships[idx].current_shields["FRONT"] = 1  # below max of 3
+	ps.ships[idx].current_shields["FRONT"] = 1 # below max of 3
 	var cmd := RepairActionCommand.new(0, {
 		"action_type": "recover_shields",
 		"owner_player": 0,
@@ -261,7 +261,7 @@ func test_validate_repair_hull_negative_index() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"card_is_faceup": false,
-		"card_index": -1,
+		"card_index": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative card index")
@@ -323,7 +323,7 @@ func test_execute_recover_shields() -> void:
 	var idx: int = _add_ship(0)
 	var ps: PlayerState = _state.get_player_state(0)
 	var ship: ShipInstance = ps.ships[idx]
-	ship.current_shields["LEFT"] = 0  # max is 2
+	ship.current_shields["LEFT"] = 0 # max is 2
 	var cmd := RepairActionCommand.new(0, {
 		"action_type": "recover_shields",
 		"owner_player": 0,

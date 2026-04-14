@@ -1373,7 +1373,7 @@ func _emit_post_resolve_events(def_inst: ShipInstance,
 	if _get_panel():
 		_get_panel().show_damage_info(summary)
 	_log.info("Damage resolved: %s" % summary)
-	EventBus.damage_resolved.emit(_state.defender_ship, 
+	EventBus.damage_resolved.emit(_state.defender_ship,
 			shield_absorbed + cards_dealt)
 	if destroyed:
 		_log.info("Ship destroyed! %s" % def_inst.data_key)
@@ -1522,9 +1522,16 @@ func _resolve_immediate_card_effect(card: DamageCard,
 			card, ship)
 	if choice_info.is_empty():
 		# Auto-resolve (no player choice needed).
-		var ok: bool = _immediate_resolver.resolve(
-				card, ship, _damage_deck)
-		if ok:
+		# Pre-draw extra card for structural_damage.
+		var extra_card_data: Dictionary = {}
+		if card.effect_id == "structural_damage" and _damage_deck:
+			var extra: DamageCard = _damage_deck.draw_card()
+			if extra:
+				extra_card_data = extra.serialize()
+		var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+				ship, card, {}, extra_card_data)
+		if not result.is_empty():
+			_emit_immediate_signals(card, ship, result)
 			_log.info("Immediate effect resolved: '%s'." % card.title)
 		else:
 			_log.warn("Immediate effect failed: '%s'." % card.title)
@@ -1618,9 +1625,17 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 		_log.error("Immediate choice confirmed but no pending card/ship!")
 		_attack_exec_finalize_after_delay()
 		return
-	var ok: bool = _immediate_resolver.resolve(
-			card, ship, _damage_deck, selection)
-	if ok:
+	var ok: bool = false
+	var extra_card_data: Dictionary = {}
+	if card.effect_id == "structural_damage" and _damage_deck:
+		var extra: DamageCard = _damage_deck.draw_card()
+		if extra:
+			extra_card_data = extra.serialize()
+	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+			ship, card, selection, extra_card_data)
+	if not result.is_empty():
+		ok = true
+		_emit_immediate_signals(card, ship, result)
 		_log.info("Immediate effect resolved: '%s' (choice=%s)." % [
 				card.title, str(selection)])
 	else:
@@ -1630,6 +1645,45 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	EventBus.ship_hull_changed.emit(ship, new_hull)
 	_attack_exec_finalize_after_delay()
+
+
+## Emits the appropriate EventBus signals after a
+## [ResolveImmediateEffectCommand] executes.
+func _emit_immediate_signals(card: DamageCard,
+		ship: ShipInstance, result: Dictionary) -> void:
+	var eid: String = result.get("effect_id", "") as String
+	match eid:
+		"structural_damage":
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"projector_misaligned":
+			var zone: String = result.get("zone", "") as String
+			if not zone.is_empty():
+				EventBus.ship_shields_changed.emit(
+						ship, zone,
+						int(result.get("new_shields", 0)))
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"life_support_failure":
+			EventBus.command_tokens_changed.emit(ship)
+		"injured_crew":
+			EventBus.ship_defense_token_changed.emit(ship)
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"shield_failure":
+			var changes: Array = result.get("shield_changes", [])
+			for sc: Variant in changes:
+				var d: Dictionary = sc as Dictionary
+				EventBus.ship_shields_changed.emit(
+						ship, d.get("zone", ""),
+						int(d.get("new_shields", 0)))
+			EventBus.damage_card_flipped.emit(ship, card, false)
+		"comm_noise":
+			var action: String = result.get("action", "") as String
+			if action == "reduce_speed":
+				EventBus.ship_speed_changed.emit(
+						ship, int(result.get("new_speed", 0)))
+			elif action == "change_dial":
+				EventBus.command_dials_changed.emit(ship)
+			EventBus.damage_card_flipped.emit(ship, card, false)
+
 
 ## Returns the player index for the given chooser role relative to the
 ## current attack's defender.

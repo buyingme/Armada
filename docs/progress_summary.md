@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-14
+> Last updated: 2026-04-15
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 111 |
-| GUT tests | 2 289 |
-| GUT asserts | 4 099 |
+| GUT test scripts | 112 |
+| GUT tests | 2 312 |
+| GUT asserts | 4 150 |
 | Autoloads | 12 |
-| Command classes | 20 (1 base + 19 concrete) |
-| Wired command call sites | 33 |
+| Command classes | 21 (1 base + 20 concrete) |
+| Wired command call sites | 34 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 19 concrete commands, 33 wired call sites, GameReplay, §4.6 P1–P4 resolved |
+| G | Command Pattern | 🔄 | GameCommand base, 20 concrete commands, 34 wired call sites, GameReplay, §4.6 P1–P5 resolved |
 
 ---
 
@@ -87,6 +87,7 @@
 | G2 Tier 3: 2 movement commands | ✅ | MoveSquadron, ExecuteManeuver — wired into presentation |
 | G2 Wiring: SpendToken + SpendDial | ✅ | Return-value protocol: 7 token + 5 dial call sites wired |
 | G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save, auto-save on exit |
+| §4.6 P5: Immediate Effects | ✅ | ResolveImmediateEffectCommand — 8 violations → 1 cmd, 4 call sites |
 | G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
 
 ---
@@ -100,7 +101,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 19 cmds, 33 sites |
+| GameCommand + CommandProcessor | G | ✅ 20 cmds, 34 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -159,6 +160,7 @@ All passing tests are from 2026-04-11 or 2026-04-12.
 | MT-G.09–10 | CommandProcessor reset, replay file save | 2026-04-12 |
 | MT-G.13–15 | Command registration (13 types), repair token spend, squadron dial spend | 2026-04-12 |
 | MT-HF.01–02 | Pre-roll deselection, post-roll click block | 2026-04-12 |
+| MT-P4.01–05 | Repair panel: move shields, recover shields, repair hull, replay save | 2026-04-14 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 
@@ -179,4 +181,5 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `dab13cf` | Bug fix: allow attack commands in Squadron Phase |
 | `150e3f5` | P3: ResolveDamageCommand (7 violations → 1 command) |
 | `1da7df8` | Auto-save replay on game exit/game over |
-| (pending) | P4: RepairActionCommand (3 violations → 1 command) |
+| `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
+| (pending) | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |

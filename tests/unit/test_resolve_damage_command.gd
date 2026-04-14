@@ -165,7 +165,7 @@ func test_validate_ship_negative_shield() -> void:
 		"owner_player": 0,
 		"ship_index": idx,
 		"hull_zone": "FRONT",
-		"shield_damage": -1,
+		"shield_damage": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative shield_damage.")
@@ -205,7 +205,7 @@ func test_validate_squadron_negative_hull() -> void:
 		"target_type": "squadron",
 		"owner_player": 0,
 		"squadron_index": idx,
-		"hull_damage": -1,
+		"hull_damage": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative hull_damage.")

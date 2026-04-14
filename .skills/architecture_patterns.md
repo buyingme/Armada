@@ -187,6 +187,7 @@ not a local helper.
 | Global mutable state | Hard to test, race conditions | Encapsulate state in GameState |
 | Inheritance for variation | Ship/squadron variants via deep hierarchies | Composition + Resources |
 | String-typed enums | Error-prone, no IDE support | Use `Constants` enums |
+| Duplicated signal dispatch | Same EventBus signals emitted in multiple scenes → risk of omission | Centralise in one scene, inject as `Callable` (see `.skills/serialization_and_commands.md` §4.9) |
 
 ## Dependency Direction
 

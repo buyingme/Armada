@@ -309,6 +309,67 @@ When a command produces a new position (movement, deployment, etc.):
 **Never store pixel positions in command payloads.** They are board-size
 dependent and would break replay on different display configurations.
 
+### 4.8 Post-Execute Signal Contract
+
+Commands only mutate `GameState` — they do **not** emit EventBus signals.
+The **presentation-layer caller** is responsible for emitting every signal
+that the UI needs after `execute()` returns.
+
+When a command deals damage, the caller must emit **all** of:
+
+| Signal | Purpose | Listener |
+|--------|---------|----------|
+| `damage_card_dealt` | Refresh ship card panel facedown/faceup indicators | `ShipCardPanel` |
+| `ship_hull_changed` | Update hull label on ship token | `ShipToken` |
+| `ship_damaged` | Trigger damage animation / SFX | `SfxManager` |
+| `ship_destroyed` + `_fade_out_destroyed_token()` | Remove token from board | `GameBoard` |
+
+Omitting any signal causes a presentation desync (e.g. facedown card not
+visible until the panel is manually re-opened, or ship staying on the board
+at 0 hull).
+
+**Checklist after writing a command caller:**
+
+1. Did I emit `damage_card_dealt` for each card added?
+2. Did I emit `ship_hull_changed` with the new hull value?
+3. Did I check `result.get("destroyed", false)` and emit `ship_destroyed`?
+4. Did I call the fade-out visual for destroyed tokens?
+
+If a command can be called from **multiple** presentation sites
+(e.g. `game_board.gd` and `maneuver_tool_scene.gd`), centralise the
+post-execute signal logic in **one** place (typically `game_board.gd`) and
+inject it as a `Callable` into the other site — see §4.9.
+
+### 4.9 Callable Injection for Cross-Scene Command Callers
+
+When a child scene (e.g. `ManeuverToolScene`) needs to trigger a command
+that requires signals only the parent (`GameBoard`) can emit properly
+(because it owns the token references, fade-out helpers, etc.), inject
+the parent's handler as a `Callable`:
+
+```gdscript
+# Parent (game_board.gd) — owns the canonical handler:
+func _submit_persistent_damage(ship: ShipInstance, eff_id: String) -> void:
+    # ... submit command, emit ALL signals, handle destruction ...
+
+# Pass it when creating the child:
+maneuver_tool.set_activation_mode(state, _submit_persistent_damage)
+
+# Child (maneuver_tool_scene.gd) — stores and calls:
+var _persistent_damage_handler: Callable
+
+func _on_speed_change_hook_triggered(ship: ShipInstance, eff_id: String) -> void:
+    if _persistent_damage_handler.is_valid():
+        _persistent_damage_handler.call(ship, eff_id)
+```
+
+This keeps the child focused on interaction logic while the parent retains
+single responsibility for damage/destruction signalling.
+
+❌ **Never** duplicate the signal-emitting helper in multiple scenes.
+❌ **Never** have a child scene emit `ship_destroyed` directly — it lacks
+   the `ShipToken` reference needed for the fade-out.
+
 ---
 
 ## 5. Replay System

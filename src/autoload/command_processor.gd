@@ -70,6 +70,9 @@ func _ready() -> void:
 	SetSpeedCommand.register()
 	OverlapDamageCommand.register()
 	PersistentEffectDamageCommand.register()
+	# Tier 10 — UI state: token discard, dial reveal/unreveal.
+	DiscardTokenCommand.register()
+	RevealDialCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

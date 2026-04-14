@@ -347,8 +347,7 @@ func _try_ship_phase_activation(instance: ShipInstance) -> bool:
 		_unreveal_other_ships(instance)
 		_log.info("Dial step 1 — revealing top for '%s'." \
 				% instance.data_key)
-		instance.command_dial_stack.reveal_top()
-		EventBus.command_dials_changed.emit(instance)
+		GameManager.submit_reveal_dial(instance)
 		return true
 	_log.info("Dial click on '%s' — eligible but no revealed/hidden dials." \
 			% instance.data_key)
@@ -398,9 +397,8 @@ func _unreveal_other_ships(current: ShipInstance) -> void:
 			continue
 		var rev: Dictionary = inst.command_dial_stack.get_revealed_dial()
 		if not rev.is_empty():
-			inst.command_dial_stack.unreveal_top()
+			GameManager.submit_unreveal_dial(inst)
 			_log.info("Unrevealed stale dial on '%s'." % inst.data_key)
-			EventBus.command_dials_changed.emit(inst)
 
 
 ## Returns true if a dial drag can be started for this ship.
@@ -786,15 +784,13 @@ func _on_discard_token_click(event: InputEvent,
 		return
 
 	var cmd_type: int = tokens[token_index]
-	_discard_mode_ship.command_tokens.remove_token(cmd_type)
 	_log.info("Player discarded token %d from %s" % [
 			cmd_type, _discard_mode_ship.data_key])
 
 	var ship_ref: ShipInstance = _discard_mode_ship
 	_exit_discard_mode()
 
-	EventBus.command_tokens_changed.emit(ship_ref)
-	EventBus.token_discarded.emit(ship_ref, cmd_type)
+	GameManager.submit_discard_token(ship_ref, cmd_type)
 
 
 ## Finds the zero-based token index of [param tex_rect] among the

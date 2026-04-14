@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 113 |
-| GUT tests | 2 338 |
-| GUT asserts | 4 204 |
+| GUT test scripts | 114 |
+| GUT tests | 2 357 |
+| GUT asserts | 4 247 |
 | Autoloads | 12 |
-| Command classes | 24 (1 base + 23 concrete) |
-| Wired command call sites | 37 |
+| Command classes | 26 (1 base + 25 concrete) |
+| Wired command call sites | 40 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 23 concrete commands, 37 wired call sites, GameReplay, §4.6 P1–P6 resolved |
+| G | Command Pattern | 🔄 | GameCommand base, 25 concrete commands, 40 wired call sites, GameReplay, §4.6 P1–P7 resolved |
 
 ---
 
@@ -89,6 +89,7 @@
 | G6: GameReplay | ✅ | Record/playback, v1 file format, Shift+R save, auto-save on exit |
 | §4.6 P5: Immediate Effects | ✅ | ResolveImmediateEffectCommand — 8 violations → 1 cmd, 4 call sites |
 | §4.6 P6: Overlap/Speed/Persistent | ✅ | SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand — 3 violations → 3 cmds |
+| §4.6 P7: UI State & Tokens | ✅ | DiscardTokenCommand + RevealDialCommand — 3 violations → 2 cmds |
 | G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
 
 ---
@@ -102,7 +103,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 23 cmds, 37 sites |
+| GameCommand + CommandProcessor | G | ✅ 25 cmds, 40 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -148,8 +149,7 @@
 
 ## Manual Tests Passed
 
-26 tests formally passed with date stamps (out of ~233 total written).
-All passing tests are from 2026-04-11 or 2026-04-12.
+34 tests formally passed with date stamps (out of ~233 total written).
 
 | ID | Description | Date |
 |----|-------------|------|
@@ -163,6 +163,7 @@ All passing tests are from 2026-04-11 or 2026-04-12.
 | MT-HF.01–02 | Pre-roll deselection, post-roll click block | 2026-04-12 |
 | MT-P4.01–05 | Repair panel: move shields, recover shields, repair hull, replay save | 2026-04-14 |
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands, replay save | 2026-04-14 |
+| MT-P6.01–08 | Overlap, speed, persistent: SetSpeed, OverlapDamage, PersistentEffectDamage, card panel refresh, destruction, deferred Thruster Fissure | 2026-04-15 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 
@@ -185,3 +186,4 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `1da7df8` | Auto-save replay on game exit/game over |
 | `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
 | `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |\n| `69511d4` | P6: SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand (3 violations → 3 commands) |
+| | P7: DiscardTokenCommand + RevealDialCommand (3 violations → 2 commands) |

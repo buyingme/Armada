@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-15
-> Current baseline: 113 scripts, 2 338 tests, 4 204 asserts
+> Current baseline: 114 scripts, 2 357 tests, 4 247 asserts
 
 ---
 
@@ -105,12 +105,21 @@ Tests: `test_p6_commands.gd` — validate (happy + rejection for all 3 commands)
 execute (speed change, overlap survive/destroy, persistent effects), serialize/
 deserialize roundtrip.
 
-### Priority 7 — UI State & Tokens (3 violations → 2 commands)
+### Priority 7 — UI State & Tokens (3 violations → 2 commands) ✅ RESOLVED
 
-| File | Mutation | Command |
-|------|----------|---------|
-| `ship_card_panel.gd` | token overflow discard | `DiscardTokenCommand` |
-| `ship_card_panel.gd` | `reveal_top()` / `unreveal_top()` | `RevealDialCommand` |
+Both commands implemented and wired:
+
+| Command | Wired In |
+|---------|----------|
+| `DiscardTokenCommand` | `ship_card_panel.gd` — `_on_discard_token_click()` via `GameManager.submit_discard_token()` |
+| `RevealDialCommand` | `ship_card_panel.gd` — `_try_ship_phase_activation()` / `_unreveal_other_ships()` + `dial_drag_controller.gd` — `_cancel_drag()` via `GameManager.submit_reveal_dial()` / `submit_unreveal_dial()` |
+
+Token overflow discard now routes through `DiscardTokenCommand` (validates
+overflow condition).  Dial reveal/unreveal now routes through `RevealDialCommand`
+with `"action": "reveal"` or `"unreveal"` discriminator.
+
+Tests: `test_p7_commands.gd` — validate (happy + rejection for both commands),
+execute (discard, reveal, unreveal), serialize/deserialize roundtrip.
 
 ### Debug-only (1 violation, not prioritised)
 
@@ -126,8 +135,8 @@ deserialize roundtrip.
 | P4 | 3 | 1 | ✅ Done |
 | P5 | 8 | 1 | ✅ Done |
 | P6 | 3 | 3 | ✅ Done |
-| P7 | 3 | 2 | No |
-| **Total** | **34** | **~13** | **P1–P5 resolved — G4 unblocked** |
+| P7 | 3 | 2 | ✅ Done |
+| **Total** | **34** | **~13** | **P1–P7 resolved — G4 unblocked** |
 
 ---
 
@@ -186,6 +195,7 @@ All other implementation phases (0–12) are complete.
 | MT-G.15 | Squadron command flow: dial + token spend through commands | ✅ passed 2026-04-12 |
 | MT-P4.01–05 | Repair panel: move/recover/hull through commands | ✅ passed 2026-04-14 |
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands | ✅ passed 2026-04-14 |
+| MT-P6.01–08 | Overlap, speed, persistent: all 3 commands + bug fixes | ✅ passed 2026-04-15 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

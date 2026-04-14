@@ -95,7 +95,7 @@ func test_set_speed_validate_negative() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := SetSpeedCommand.new(0, {
 		"ship_index": idx,
-		"new_speed": -1,
+		"new_speed": - 1,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject negative speed")

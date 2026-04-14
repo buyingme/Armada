@@ -287,8 +287,7 @@ func _cancel_drag() -> void:
 	_log.info("Dial drag cancelled.")
 	# Unreveal the dial before cleaning up (which clears _drag_ship_instance).
 	if _drag_ship_instance:
-		_drag_ship_instance.command_dial_stack.unreveal_top()
-		EventBus.command_dials_changed.emit(_drag_ship_instance)
+		GameManager.submit_unreveal_dial(_drag_ship_instance)
 	_clean_up_drag()
 	EventBus.dial_drag_cancelled.emit()
 

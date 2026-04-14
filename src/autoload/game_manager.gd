@@ -599,6 +599,58 @@ func submit_spend_token(ship: ShipInstance, token_type: int) -> void:
 		EventBus.command_tokens_changed.emit(ship)
 
 
+## Submits a [DiscardTokenCommand] to remove one token during overflow.
+## The UI (ShipCardPanel) enters discard mode and calls this when the
+## player clicks a token to discard.
+## Emits [signal EventBus.command_tokens_changed] and
+## [signal EventBus.token_discarded] on success.
+## [param ship] — the ship to discard the token from.
+## [param token_type] — [Constants.CommandType] int value.
+func submit_discard_token(ship: ShipInstance,
+		token_type: int) -> void:
+	if not current_game_state:
+		return
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := DiscardTokenCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "token_type": token_type})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if not result.is_empty():
+		EventBus.command_tokens_changed.emit(ship)
+		EventBus.token_discarded.emit(ship, token_type)
+
+
+## Submits a [RevealDialCommand] to reveal the top hidden dial.
+## Called by ShipCardPanel when the player clicks a ship card (step 1
+## of the two-click activation flow).
+## Emits [signal EventBus.command_dials_changed] on success.
+## [param ship] — the ship whose top dial should be revealed.
+func submit_reveal_dial(ship: ShipInstance) -> void:
+	if not current_game_state:
+		return
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := RevealDialCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "action": "reveal"})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if not result.is_empty():
+		EventBus.command_dials_changed.emit(ship)
+
+
+## Submits a [RevealDialCommand] to unreveal a previously revealed dial.
+## Called when the player changes their mind (clicks a different ship) or
+## when a dial drag is cancelled.
+## Emits [signal EventBus.command_dials_changed] on success.
+## [param ship] — the ship whose dial should be unrevealed.
+func submit_unreveal_dial(ship: ShipInstance) -> void:
+	if not current_game_state:
+		return
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := RevealDialCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "action": "unreveal"})
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if not result.is_empty():
+		EventBus.command_dials_changed.emit(ship)
+
+
 ## Submits a [SpendDialCommand] to spend (or discard) the top dial.
 ## Called by Node-layer code after a resolver's [code]finalize()[/code]
 ## returns a [code]{"dial_spent": true}[/code] result, or directly by

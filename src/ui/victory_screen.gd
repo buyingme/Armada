@@ -218,4 +218,5 @@ func _on_play_again_pressed() -> void:
 func _on_quit_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Quit pressed — exiting application.")
+	GameManager.auto_save_replay()
 	get_tree().quit()

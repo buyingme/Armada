@@ -79,6 +79,8 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		auto_save_replay()
 	if what == NOTIFICATION_WM_CLOSE_REQUEST \
 			or what == NOTIFICATION_PREDELETE:
 		# Release the GameState RefCounted chain so scripts are freed cleanly
@@ -127,6 +129,7 @@ func end_game(
 		reason: String = "round_6",
 		eliminated_player: int = -1) -> void:
 	is_game_active = false
+	auto_save_replay()
 	if _scoring == null:
 		_scoring = ScoringCalculator.new()
 	var details: Dictionary = {}
@@ -147,6 +150,25 @@ func end_game(
 ## Returns the scenario identifier for the current game session.
 func get_scenario_id() -> String:
 	return _scenario_id
+
+
+## Auto-saves a replay file when the game exits or ends.
+## Silently skips if no game is active or no commands have been recorded.
+## The replay is saved to [code]res://replays/[/code] with a timestamped
+## filename.
+func auto_save_replay() -> void:
+	if not is_instance_valid(CommandProcessor):
+		return
+	var replay: GameReplay = CommandProcessor.create_replay()
+	if replay == null or replay.get_command_count() == 0:
+		return
+	var path: String = GameReplay.generate_file_path()
+	var err: Error = replay.save_to_file(path)
+	if err == OK:
+		_log.info("Auto-saved replay: %s (%d commands)." % [
+				path, replay.get_command_count()])
+	else:
+		_log.error("Auto-save replay failed: %s" % error_string(err))
 
 
 ## Applies pre-assigned (fixed) command dials to all ships for round 1,

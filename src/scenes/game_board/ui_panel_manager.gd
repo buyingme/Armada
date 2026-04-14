@@ -502,6 +502,7 @@ func _on_score_changed(_token: Node) -> void:
 ## Handles the player confirming they want to quit. Transitions to the
 ## main menu scene. UI-034.
 func _on_quit_confirmed() -> void:
+	GameManager.auto_save_replay()
 	get_tree().change_scene_to_file(
 			"res://src/scenes/main_menu/main_menu.tscn")
 

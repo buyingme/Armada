@@ -113,13 +113,34 @@
 		},
 		{
 			"payload": {
+				"damage_cards": [
+					{
+						"effect_id": "point_defense_failure",
+						"effect_text": "When attacking a squadron, before you roll your attack pool, remove 1 die of your choice.",
+						"is_faceup": true,
+						"timing": "persistent",
+						"title": "Point-Defense Failure",
+						"trait_type": "Ship"
+					},
+					{
+						"effect_id": "projector_misaligned",
+						"effect_text": "Your hull zone with the most remaining shields loses all of its shields. If multiple hull zones are tied, choose between the tied hull zones. Then flip this card facedown.",
+						"is_faceup": false,
+						"timing": "immediate",
+						"title": "Projector Misaligned",
+						"trait_type": "Ship"
+					}
+				],
+				"hull_zone": "RIGHT",
+				"owner_player": 0,
+				"shield_damage": 1,
 				"ship_index": 1,
-				"spend_method": "exhaust",
-				"token_index": 0
+				"target_destroyed": false,
+				"target_type": "ship"
 			},
 			"player": 0,
 			"sequence": 11,
-			"type": "spend_defense_token"
+			"type": "resolve_damage"
 		},
 		{
 			"payload": {
@@ -134,13 +155,42 @@
 		},
 		{
 			"payload": {
+				"damage_cards": [
+					{
+						"effect_id": "coolant_discharge",
+						"effect_text": "Only one attack you perform each round can target a ship.",
+						"is_faceup": true,
+						"timing": "persistent",
+						"title": "Coolant Discharge",
+						"trait_type": "Ship"
+					},
+					{
+						"effect_id": "comm_noise",
+						"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+						"is_faceup": false,
+						"timing": "immediate",
+						"title": "Comm Noise",
+						"trait_type": "Crew"
+					},
+					{
+						"effect_id": "coolant_discharge",
+						"effect_text": "Only one attack you perform each round can target a ship.",
+						"is_faceup": false,
+						"timing": "persistent",
+						"title": "Coolant Discharge",
+						"trait_type": "Ship"
+					}
+				],
+				"hull_zone": "RIGHT",
+				"owner_player": 0,
+				"shield_damage": 0,
 				"ship_index": 1,
-				"spend_method": "exhaust",
-				"token_index": 1
+				"target_destroyed": true,
+				"target_type": "ship"
 			},
 			"player": 0,
 			"sequence": 13,
-			"type": "spend_defense_token"
+			"type": "resolve_damage"
 		},
 		{
 			"payload": {
@@ -153,8 +203,8 @@
 		},
 		{
 			"payload": {
-				"pos_x": 0.424267012984664,
-				"pos_y": 0.860097192834925,
+				"pos_x": 0.441938018798828,
+				"pos_y": 0.903026496039496,
 				"rotation_deg": -179.999991348578,
 				"ship_index": 0,
 				"speed": 2,
@@ -185,7 +235,7 @@
 		},
 		{
 			"payload": {
-				"squadron_index": 1
+				"squadron_index": 3
 			},
 			"player": 0,
 			"sequence": 18,
@@ -203,29 +253,24 @@
 		},
 		{
 			"payload": {
+				"damage_cards": [],
+				"hull_zone": "REAR",
+				"owner_player": 1,
+				"shield_damage": 1,
 				"ship_index": 0,
-				"spend_method": "exhaust",
-				"token_index": 1
+				"target_destroyed": false,
+				"target_type": "ship"
 			},
 			"player": 1,
 			"sequence": 20,
-			"type": "spend_defense_token"
+			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"ship_index": 0,
-				"zone": 2
-			},
-			"player": 1,
-			"sequence": 21,
-			"type": "select_redirect_zone"
-		},
-		{
-			"payload": {
-				"squadron_index": 0
+				"squadron_index": 2
 			},
 			"player": 0,
-			"sequence": 22,
+			"sequence": 21,
 			"type": "activate_squadron"
 		},
 		{
@@ -235,8 +280,39 @@
 				}
 			},
 			"player": 0,
-			"sequence": 23,
+			"sequence": 22,
 			"type": "roll_dice"
+		},
+		{
+			"payload": {
+				"damage_cards": [
+					{
+						"effect_id": "thruster_fissure",
+						"effect_text": "When you change your speed by 1 or more, suffer 1 damage.",
+						"is_faceup": false,
+						"timing": "persistent",
+						"title": "Thruster Fissure",
+						"trait_type": "Ship"
+					},
+					{
+						"effect_id": "targeter_disruption",
+						"effect_text": "While attacking, you cannot resolve critical effects.",
+						"is_faceup": false,
+						"timing": "persistent",
+						"title": "Targeter Disruption",
+						"trait_type": "Ship"
+					}
+				],
+				"hull_zone": "REAR",
+				"owner_player": 1,
+				"shield_damage": 0,
+				"ship_index": 0,
+				"target_destroyed": false,
+				"target_type": "ship"
+			},
+			"player": 1,
+			"sequence": 23,
+			"type": "resolve_damage"
 		}
 	],
 	"header": {
@@ -248,8 +324,8 @@
 		"format_version": 1,
 		"godot_version": "4.5.1-stable (official)",
 		"initiative_player": 0,
-		"rng_seed": -6088916975514057891,
+		"rng_seed": -2444128546925691293,
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-04-13T18:54:07"
+		"timestamp": "2026-04-14T04:33:10"
 	}
 }

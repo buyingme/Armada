@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-18
+> Last updated: 2026-04-18 (G4.1)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,10 +10,10 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 115 |
-| GUT tests | 2 369 |
-| GUT asserts | 4 277 |
-| Autoloads | 12 |
+| GUT test scripts | 119 |
+| GUT tests | 2 460 |
+| GUT asserts | 4 413 |
+| Autoloads | 15 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
 | Core RefCounted classes | 8 |
@@ -91,7 +91,10 @@
 | §4.6 P6: Overlap/Speed/Persistent | ✅ | SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand — 3 violations → 3 cmds |
 | §4.6 P7: UI State & Tokens | ✅ | DiscardTokenCommand + RevealDialCommand — 3 violations → 2 cmds |
 | §4.6 Debug: Faceup Damage | ✅ | DebugDealDamageCommand — 1 debug violation → 1 cmd |
-| G4: Network Transport | ⏳ | Godot MultiplayerPeer — all §4.6 violations resolved |
+| G4: Network Transport | 🔄 | Godot MultiplayerPeer — all §4.6 violations resolved |
+| G4.0: Directory Reorganisation | ✅ | 59 files reorganised into domain sub-folders, zero breakage |
+| G4.10: Dedicated Server Binary | ✅ | ServerMain autoload, export preset, HMAC replay signing, CI workflow |
+| G4.1: Network Transport Foundation | ✅ | PlayerProfile, NetworkManager autoloads, ENet host/connect/disconnect, state machine, heartbeat, TestNetworkHarness |
 
 ---
 
@@ -166,6 +169,8 @@
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands, replay save | 2026-04-14 |
 | MT-P6.01–08 | Overlap, speed, persistent: SetSpeed, OverlapDamage, PersistentEffectDamage, card panel refresh, destruction, deferred Thruster Fissure | 2026-04-15 |
 | MT-P7.01–03 | Discard token (overflow), reveal/unreveal dial, replay save after P7 ops | 2026-04-18 |
+| MT-G4.10.01–04 | Dedicated server: autoload, --server flag, HMAC, headless GUT | 2026-04-18 |
+| MT-G4.1.01–02 | Network transport: normal game unaffected, headless GUT 119/2460 | 2026-04-18 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 
@@ -190,3 +195,5 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |\n| `69511d4` | P6: SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand (3 violations → 3 commands) |
 | `f8012ed` | P7: DiscardTokenCommand + RevealDialCommand (3 violations → 2 commands) |
 | `91abf9e` | Debug: DebugDealDamageCommand + arc42 docs update |
+| — | G4.10: Dedicated Server Binary |
+| — | G4.1: Network Transport Foundation |

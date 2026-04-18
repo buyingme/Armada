@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-18
-> Current baseline: 115 scripts, 2 369 tests, 4 277 asserts
+> Current baseline: 119 scripts, 2 460 tests, 4 413 asserts
 
 ---
 
@@ -165,7 +165,10 @@ All six command classes are now wired into their presentation-layer call sites:
 
 | Phase | Name | Status | Blocker |
 |-------|------|--------|---------|
-| G4 | Network Transport Layer | ⏳ | All §4.6 violations resolved — ready to start |
+| G4.10 | Dedicated Server Binary | ✅ | ServerMain autoload, export preset, HMAC, CI |
+| G4.1 | Network Transport Foundation | ✅ | NetworkManager, PlayerProfile, TestNetworkHarness |
+| G4.2 | Server-Side Command Processing | ⏳ | Depends on G4.1 ✅ |
+| G4.3–G4.9 | Info Hiding, Lobby, Chat, etc. | ⏳ | Depends on G4.1/G4.2 |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
 All other implementation phases (0–12) are complete.
@@ -192,6 +195,64 @@ All other implementation phases (0–12) are complete.
 233 manual test cases were written. 33 formally passed (with date stamps).
 ~200 remain untested or lack formal result annotations.
 
+### Phase G4.10 — Dedicated Server Binary
+
+### MT-G4.10.1 — ServerMain autoload does not affect normal game ✅ passed 2026-04-18
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the game normally (no `--server` flag) | Main menu appears, game is fully playable |
+| 2 | Check console output | No "Dedicated server started" log message |
+| 3 | Play a full round (command → ship → squadron → status) | All phases work identically to pre-G4.10 |
+
+**Pass criteria:** Normal game flow is unaffected by the new ServerMain autoload.
+
+### MT-G4.10.2 — ServerMain detects --server flag ✅ passed 2026-04-18
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `./scripts/run_game.sh --server` from terminal | Log shows "Dedicated server started — port=7350, scenario=''" |
+| 2 | Check that PlayMode is NETWORK | Log shows "PlayMode=NETWORK, audio muted" |
+| 3 | Ctrl+C to stop | Process exits cleanly |
+
+**Pass criteria:** Server mode is correctly detected and configured.
+
+### MT-G4.10.3 — HMAC replay signing ✅ passed 2026-04-18
+
+Verified via 31 unit tests (`test_server_main.gd`): sign adds HMAC to header,
+verify accepts correct key, rejects wrong key, detects tampered commands/header/
+HMAC, survives file save/load roundtrip.
+
+**Pass criteria:** HMAC signing and verification work correctly; tampering is detected.
+
+### MT-G4.10.4 — Headless GUT validation ✅ passed 2026-04-18
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 119 scripts, 2460 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes in headless mode.
+
+### Phase G4.1 — Network Transport Foundation
+
+### MT-G4.1.1 — Normal game unaffected by NetworkManager + PlayerProfile ✅ passed 2026-04-18
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the game normally (no `--server` flag) | Main menu appears, game is fully playable |
+| 2 | Check console output | No "Server hosting" or "Connecting to" log messages |
+| 3 | Play a full round (command → ship → squadron → status) | All phases work identically to pre-G4.1 |
+
+**Pass criteria:** New autoloads (PlayerProfile, NetworkManager) do not affect normal local play.
+
+### MT-G4.1.2 — Headless GUT validation ✅ passed 2026-04-18
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 119 scripts, 2460 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes including new network tests.
+
 ### Awaiting First Test (highest priority — recent changes)
 
 | ID | Description |
@@ -203,6 +264,8 @@ All other implementation phases (0–12) are complete.
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands | ✅ passed 2026-04-14 |
 | MT-P6.01–08 | Overlap, speed, persistent: all 3 commands + bug fixes | ✅ passed 2026-04-15 |
 | MT-P7.01–03 | Discard token, reveal/unreveal dial, replay save | ✅ passed 2026-04-18 |
+| MT-G4.10.01–04 | Dedicated server binary: autoload, --server flag, HMAC, headless GUT | ✅ passed 2026-04-18 |
+| MT-G4.1.01–02 | Network transport: normal game unaffected, headless GUT 119/2460 | ✅ passed 2026-04-18 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

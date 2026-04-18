@@ -1,0 +1,69 @@
+name: Server Build
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'project.godot'
+      - 'export_presets.cfg'
+      - '.github/workflows/server_build.yml'
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.5.1
+          use-dotnet: false
+
+      - name: Install Linux export templates
+        run: |
+          GODOT_VERSION="4.5.1"
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATES_DIR"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux_release.x86_64" \
+            -O "$TEMPLATES_DIR/linux_release.x86_64"
+          chmod +x "$TEMPLATES_DIR/linux_release.x86_64"
+        timeout-minutes: 5
+
+      - name: Import project
+        run: godot --headless --import 2>&1 || true
+        timeout-minutes: 2
+
+      - name: Run tests (headless validation)
+        run: |
+          godot --headless -s addons/gut/gut_cmdln.gd \
+            -gdir=res://tests \
+            -ginclude_subdirs \
+            -gexit \
+            -glog=2
+        timeout-minutes: 10
+
+      - name: Export dedicated server binary
+        run: |
+          mkdir -p build/server
+          godot --headless --export-release "Dedicated Server (Linux)" \
+            build/server/armada_server 2>&1
+        timeout-minutes: 5
+
+      - name: Verify server binary exists
+        run: |
+          test -f build/server/armada_server && echo "Server binary built successfully" \
+            || (echo "ERROR: Server binary not found" && exit 1)
+
+      - name: Upload server binary
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: armada-server-linux
+          path: build/server/
+          retention-days: 30

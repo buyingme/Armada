@@ -31,11 +31,17 @@ extends RefCounted
 ## Current replay file format version. Increment when the schema changes.
 const FORMAT_VERSION: int = 1
 
+## Format version that introduced HMAC signing support.
+const SIGNED_FORMAT_VERSION: int = 2
+
 ## Default directory for replay files.
 const REPLAY_DIR: String = "res://replays"
 
 ## File extension for replay files.
 const REPLAY_EXT: String = ".json"
+
+## HMAC digest algorithm identifier (SHA-256).
+const HMAC_HASH_TYPE: int = HashingContext.HASH_SHA256
 
 ## Session metadata: scenario_id, rng_seed, factions, timestamp, etc.
 var header: Dictionary = {}
@@ -162,3 +168,97 @@ static func generate_file_path() -> String:
 			dt["year"], dt["month"], dt["day"],
 			dt["hour"], dt["minute"], dt["second"]]
 	return "%s/%s%s" % [REPLAY_DIR, name, REPLAY_EXT]
+
+
+# ---------------------------------------------------------------------------
+# HMAC Replay Signing (G4.10.5)
+# ---------------------------------------------------------------------------
+
+## Signs the replay data with an HMAC-SHA256 signature and embeds it
+## in the header.  The signature covers the canonical JSON of the
+## replay content (header without the hmac field + commands).
+## [param secret_key] — the server's signing key (raw bytes).
+## Returns [code]true[/code] on success.
+func sign_replay(secret_key: PackedByteArray) -> bool:
+	if secret_key.is_empty():
+		return false
+	# Update format version before signing so the payload matches on verify.
+	header["format_version"] = SIGNED_FORMAT_VERSION
+	var payload: String = _build_signing_payload()
+	var hmac_hex: String = _compute_hmac_sha256(secret_key, payload)
+	if hmac_hex.is_empty():
+		return false
+	header["hmac"] = hmac_hex
+	return true
+
+
+## Verifies the HMAC signature embedded in the header.
+## [param secret_key] — the same key used to sign the replay.
+## Returns [code]true[/code] if the signature is valid, [code]false[/code]
+## if missing, tampered, or the key is wrong.
+func verify_signature(secret_key: PackedByteArray) -> bool:
+	if secret_key.is_empty():
+		return false
+	var stored_hmac: String = header.get("hmac", "") as String
+	if stored_hmac.is_empty():
+		return false
+	var payload: String = _build_signing_payload()
+	var expected: String = _compute_hmac_sha256(secret_key, payload)
+	if expected.is_empty():
+		return false
+	return _constant_time_compare(stored_hmac, expected)
+
+
+## Returns [code]true[/code] if the replay has an HMAC signature in its
+## header (does not verify it — call [method verify_signature] for that).
+func is_signed() -> bool:
+	return header.has("hmac") and header.get("hmac", "") != ""
+
+
+## Builds the canonical string that is signed.  This is the JSON
+## representation of the replay data with the [code]hmac[/code] field
+## removed from the header (so the signature does not cover itself).
+## Uses sorted keys for deterministic output across save/load cycles.
+## Normalises via a JSON round-trip so that int/float representation
+## differences (Godot's JSON parser converts all numbers to float)
+## do not affect the digest.
+func _build_signing_payload() -> String:
+	var header_copy: Dictionary = header.duplicate()
+	header_copy.erase("hmac")
+	var payload: Dictionary = {
+		"header": header_copy,
+		"commands": commands,
+	}
+	# Round-trip through JSON to normalise number types (int → float).
+	var raw: String = JSON.stringify(payload, "", true)
+	var json := JSON.new()
+	json.parse(raw)
+	return JSON.stringify(json.data, "", true)
+
+
+## Computes HMAC-SHA256 over [param message] using [param key].
+## Returns the hex-encoded digest, or [code]""[/code] on failure.
+static func _compute_hmac_sha256(
+		key: PackedByteArray, message: String) -> String:
+	var hmac_ctx := HMACContext.new()
+	var err: Error = hmac_ctx.start(HMAC_HASH_TYPE, key)
+	if err != OK:
+		return ""
+	err = hmac_ctx.update(message.to_utf8_buffer())
+	if err != OK:
+		return ""
+	var digest: PackedByteArray = hmac_ctx.finish()
+	return digest.hex_encode()
+
+
+## Constant-time string comparison to prevent timing attacks on HMAC
+## verification.  Both strings must be the same length for a valid
+## comparison; mismatched lengths return [code]false[/code] immediately
+## (length is not secret).
+static func _constant_time_compare(a: String, b: String) -> bool:
+	if a.length() != b.length():
+		return false
+	var result: int = 0
+	for i: int in range(a.length()):
+		result |= a.unicode_at(i) ^ b.unicode_at(i)
+	return result == 0

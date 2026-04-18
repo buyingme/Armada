@@ -9,6 +9,7 @@
 #   ./scripts/run_game.sh
 #   ./scripts/run_game.sh --debug    Launch with remote debugger enabled
 #   ./scripts/run_game.sh --logging  Enable file logging to user://logs/
+#   ./scripts/run_game.sh --server   Launch as headless dedicated server
 #   ./scripts/run_game.sh --debug --logging  Both flags can be combined
 # ------------------------------------------------------------------------------
 set -euo pipefail
@@ -42,6 +43,11 @@ for arg in "$@"; do
         --logging)
             USER_ARGS+=(--logging)
             echo "File logging enabled — logs written to user://logs/"
+            ;;
+        --server)
+            EXTRA_ARGS+=(--headless)
+            USER_ARGS+=(--server)
+            echo "Dedicated server mode — headless, port=7350 (default)"
             ;;
     esac
 done

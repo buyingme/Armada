@@ -317,7 +317,7 @@ periodic JSON backup for crash recovery.
 
 | Task | Description | Files |
 |------|-------------|-------|
-| G4.2.1 | **`CommandSubmitter` strategy interface:** base class with `submit()` and `is_awaiting_response()`.  Two concrete implementations: `LocalCommandSubmitter` (calls `CommandProcessor.submit()` directly) and `NetworkCommandSubmitter` (serialize + RPC).  See §1.5 | `src/core/command_submitter.gd`, `src/core/local_command_submitter.gd`, `src/core/network_command_submitter.gd` |
+| G4.2.1 | **`CommandSubmitter` strategy interface:** base class with `submit()` and `is_awaiting_response()`.  Two concrete implementations: `LocalCommandSubmitter` (calls `CommandProcessor.submit()` directly) and `NetworkCommandSubmitter` (serialize + RPC).  See §1.5 | `src/core/commands/command_submitter.gd`, `src/core/commands/local_command_submitter.gd`, `src/core/commands/network_command_submitter.gd` |
 | G4.2.2 | `GameManager` delegates all `submit_*()` methods to the active `CommandSubmitter` — no per-method `if network:` branching | `game_manager.gd` |
 | G4.2.3 | Server-side `submit_command` RPC: deserialize → validate → execute → broadcast `command_result` (with sequence number) to all clients | `command_processor.gd` |
 | G4.2.4 | Client-side `command_result` RPC: receive result, apply to local state mirror, emit `command_executed` | `command_processor.gd` |
@@ -340,7 +340,7 @@ periodic JSON backup for crash recovery.
 
 | Task | Description | Files |
 |------|-------------|-------|
-| G4.3.1 | `StateFilter` utility — strips hidden information from `GameState.serialize()` based on requesting player index | `src/core/state_filter.gd` |
+| G4.3.1 | `StateFilter` utility — strips hidden information from `GameState.serialize()` based on requesting player index | `src/core/network/state_filter.gd` |
 | G4.3.2 | Facedown dial hiding: `CommandDialStack.serialize()` omits content of unrevealable dials for non-owner | `state_filter.gd` |
 | G4.3.3 | `private_state` RPC: after each command, server sends owner-specific private data (e.g. newly assigned dial content) | `command_processor.gd` |
 | G4.3.4 | Damage deck: never serialized to clients; drawn cards appear only in command results | `state_filter.gd` |
@@ -552,22 +552,17 @@ The current `src/` tree has two flat-file hotspots that make navigation difficul
 The `commands/` and `effects/` sub-folders inside `core/` are good examples of
 successful grouping.  G4 **must not repeat the flat-dump pattern.**
 
-### 5.1 Proposed Sub-Structure for Existing Code
+### 5.1 Directory Structure (Current)
 
-Before adding network code, reorganise existing files into domain sub-folders.
-This is a **prerequisite refactoring** (G4.0) — move files via `git mv`,
-re-run `godot --import` to re-index UIDs, re-run tests to confirm zero breakage.
-(No `preload()` paths to update — all cross-references use `class_name`.)
+All `src/core/` scripts live in domain sub-folders — **no files at the
+`core/` root**.  The prerequisite refactoring (G4.0) is complete.
 
 ```
 src/
-├── autoload/                          # ← 12 files, OK (singletons are flat by nature)
+├── autoload/                          # ← singletons (flat by nature)
 │
-├── core/
-│   ├── commands/                      # ← already exists (26 files) ✓
-│   ├── effects/                       # ← already exists (9 files) ✓
-│   │   └── keywords/                  # ← already exists ✓
-│   ├── combat/                        # NEW sub-folder
+├── core/                              # ← NO files at root — sub-folders only
+│   ├── combat/                        # Attack resolution, defense tokens, dice
 │   │   ├── attack_dice_resolver.gd
 │   │   ├── attack_state.gd
 │   │   ├── attack_target_resolver.gd
@@ -578,47 +573,58 @@ src/
 │   │   ├── engagement_resolver.gd
 │   │   ├── squadron_command_resolver.gd
 │   │   └── targeting_list_builder.gd
-│   ├── damage/                        # NEW sub-folder
+│   ├── commands/                      # GameCommand base + all command subclasses + submitters
+│   │   ├── game_command.gd
+│   │   ├── game_replay.gd
+│   │   ├── command_submitter.gd
+│   │   ├── local_command_submitter.gd
+│   │   ├── network_command_submitter.gd
+│   │   ├── activate_ship_command.gd
+│   │   └── ... (30+ command subclasses)
+│   ├── damage/                        # Damage cards, deck, dealing, repair
 │   │   ├── damage_card.gd
 │   │   ├── damage_dealer.gd
 │   │   ├── damage_deck.gd
 │   │   ├── immediate_effect_resolver.gd
 │   │   └── repair_resolver.gd
-│   ├── movement/                      # NEW sub-folder
+│   ├── effects/                       # Upgrade / ability effects
+│   │   ├── game_effect.gd
+│   │   ├── effect_registry.gd
+│   │   └── keywords/
+│   │       ├── bomber_effect.gd
+│   │       ├── escort_effect.gd
+│   │       └── swarm_effect.gd
+│   ├── geometry/                      # Ship bases, range, LOS, layout math
+│   │   ├── geometry_helper.gd
+│   │   ├── line_of_sight_checker.gd
+│   │   ├── range_finder.gd
+│   │   ├── ship_base.gd
+│   │   └── tooltip_layout.gd
+│   ├── movement/                      # Maneuver tool, overlap, squadron/token movement
 │   │   ├── maneuver_calculator.gd
 │   │   ├── maneuver_tool_state.gd
 │   │   ├── overlap_resolver.gd
 │   │   ├── squadron_mover.gd
 │   │   └── token_mover.gd
-│   ├── geometry/                      # NEW sub-folder
-│   │   ├── geometry_helper.gd
-│   │   ├── line_of_sight_checker.gd
-│   │   ├── range_finder.gd
-│   │   └── ship_base.gd
-│   ├── state/                         # NEW sub-folder
-│   │   ├── game_state.gd
-│   │   ├── player_state.gd
-│   │   ├── ship_instance.gd
-│   │   ├── squadron_base.gd
-│   │   ├── ship_activation_state.gd
-│   │   ├── activation_context.gd
-│   │   ├── command_dial_stack.gd
-│   │   ├── command_token_manager.gd
-│   │   └── squadron_instance.gd
-│   ├── network/                       # NEW — all G4 network core logic
-│   │   ├── command_submitter.gd
-│   │   ├── local_command_submitter.gd
-│   │   ├── network_command_submitter.gd
+│   ├── network/                       # G4 network core logic (future)
 │   │   ├── state_filter.gd
 │   │   ├── network_state_mirror.gd
+│   │   ├── network_game_flow.gd
 │   │   ├── turn_timer.gd
 │   │   └── server_main.gd
-│   ├── game_command.gd                # base class — stays at core root
-│   ├── game_replay.gd
-│   ├── game_rng.gd
-│   ├── learning_scenario_setup.gd
-│   ├── scoring_calculator.gd
-│   └── tooltip_layout.gd
+│   └── state/                         # GameState, activation, dials, RNG, scoring
+│       ├── game_state.gd
+│       ├── player_state.gd
+│       ├── ship_instance.gd
+│       ├── squadron_base.gd
+│       ├── squadron_instance.gd
+│       ├── ship_activation_state.gd
+│       ├── activation_context.gd
+│       ├── command_dial_stack.gd
+│       ├── command_token_manager.gd
+│       ├── game_rng.gd
+│       ├── scoring_calculator.gd
+│       └── learning_scenario_setup.gd
 │
 ├── models/                            # ← 4 files, OK
 │
@@ -682,11 +688,13 @@ src/
 | Sub-folder | What belongs here | Rule |
 |------------|-------------------|------|
 | `core/combat/` | Dice, attack resolution, defense tokens, engagement, squadron command, targeting | Files that implement Rules Ref "Attack", "Engagement", or targeting lists |
+| `core/commands/` | `GameCommand` base, all command subclasses, `CommandSubmitter` strategy + implementations, `GameReplay` | Command infrastructure and all concrete commands |
 | `core/damage/` | Damage cards, deck, dealing, repair | Files that implement Rules Ref "Damage" or "Repair" |
-| `core/movement/` | Maneuver tool, overlap, squadron/token movement | Files that implement Rules Ref "Movement" or debug movement |
-| `core/geometry/` | Range, LOS, ship base polygons | Pure geometry calculations |
-| `core/state/` | Game state, player state, ship/squadron instances | Data objects that hold mutable game state |
-| `core/network/` | CommandSubmitter, StateFilter, server entry point | **All G4 network core logic** |
+| `core/effects/` | Upgrade / ability effects, keyword sub-folder | Effect system and keyword implementations |
+| `core/geometry/` | Range, LOS, ship base polygons, tooltip layout | Pure geometry / positioning calculations |
+| `core/movement/` | Maneuver tool, overlap, squadron/token movement | Files that implement Rules Ref "Movement" |
+| `core/network/` | StateFilter, state mirror, game flow sync, turn timer, server entry point | **G4 network-specific core logic** (not command submitters — those are in `commands/`) |
+| `core/state/` | Game state, player state, ship/squadron instances, RNG, scoring, dials | Data objects that hold mutable game state |
 | `ui/combat/` | Activation, targeting, defense tokens | UI for combat interactions |
 | `ui/ship/` | Card panels, damage displays | UI for ship information display |
 | `ui/commands/` | Dial picker, repair panel | UI for command phase actions |
@@ -695,8 +703,9 @@ src/
 | `ui/network/` | Chat, wait indicator, reconnect overlay | **All G4 network UI widgets** |
 
 **Key principle:** a developer looking for network code finds it in exactly two
-places: `src/core/network/` (logic) and `src/ui/network/` (widgets).  They
-never need to hunt through 39 flat files.
+places: `src/core/network/` (logic) and `src/ui/network/` (widgets).  Command
+submitters live in `core/commands/` because they are command infrastructure
+first, network-specific second.  They never need to hunt through flat files.
 
 ### 5.3 New Files — Godot Project (G4 Network)
 
@@ -711,12 +720,14 @@ src/
 │   ├── player_profile.gd            # Display name, client_id UUID persistence
 │   └── save_manager.gd              # Auto-save at round start, load for restart
 ├── core/
+│   ├── commands/                     # (submitters already here from G4.2)
+│   │   ├── command_submitter.gd      # Strategy interface (base class) — DONE
+│   │   ├── local_command_submitter.gd  # In-process (hot-seat) — DONE
+│   │   └── network_command_submitter.gd # Serialize + RPC — DONE
 │   └── network/
-│       ├── command_submitter.gd      # Strategy interface (base class)
-│       ├── local_command_submitter.gd  # In-process (hot-seat, single-player)
-│       ├── network_command_submitter.gd # Serialize + RPC (network)
 │       ├── state_filter.gd           # Per-player information hiding
 │       ├── network_state_mirror.gd   # Client-side authoritative state
+│       ├── network_game_flow.gd      # Command phase sync gate
 │       ├── turn_timer.gd             # Server-enforced turn timer
 │       └── server_main.gd           # Server entry point, headless mode
 ├── scenes/
@@ -734,11 +745,12 @@ tests/
 ├── fixtures/
 │   └── test_network_harness.gd       # Reusable 2-peer test harness (G4.1.8)
 ├── unit/
-│   ├── network/                      # NEW sub-folder for network unit tests
+│   ├── test_command_submitter.gd     # Already exists (G4.2) — covers all submitter variants
+│   ├── test_network_manager.gd       # Already exists (G4.1/G4.2)
+│   ├── network/                      # NEW sub-folder for future network unit tests
 │   │   ├── test_state_filter.gd
 │   │   ├── test_turn_timer.gd
 │   │   ├── test_save_manager.gd
-│   │   ├── test_command_submitter.gd
 │   │   └── test_lobby_state.gd
 │   └── ... (existing unit tests)
 └── integration/
@@ -775,9 +787,11 @@ Reorganised existing flat directories before network implementation:
 | Step | Action | Validation | Status |
 |------|--------|------------|--------|
 | 1 | Create sub-folders: `core/{combat,damage,movement,geometry,state}`, `ui/{combat,ship,commands,hud,debug}` | Directory structure matches §5.1 | Done |
-| 2 | Move files + `.uid` sidecars into sub-folders per §5.1 mapping | `git mv` for each `.gd` + `.gd.uid` pair (59 files × 2 = 118 renames) | Done |
-| 3 | Run `godot --headless --import` to re-index UIDs | All `class_name` types resolve correctly | Done |
-| 4 | Run full GUT test suite — 0 failures, same script count | 115 scripts, 2369 tests, 4277 asserts — ALL PASSING | Done |
+| 2 | Move files + `.uid` sidecars into sub-folders per §5.1 mapping | `git mv` for each `.gd` + `.gd.uid` pair | Done |
+| 3 | Move remaining root files: `game_command`, `game_replay`, submitters → `commands/`; `game_rng`, `scoring_calculator`, `learning_scenario_setup` → `state/`; `tooltip_layout` → `geometry/` | No files at `core/` root | Done |
+| 4 | Delete 3 orphaned `.uid` files (`attack_dice_pool`, `damage_resolver`, `attack_sequence_state`) | Clean directory listing | Done |
+| 5 | Run `godot --headless --import` to re-index UIDs | All `class_name` types resolve correctly | Done |
+| 6 | Run full GUT test suite — 0 failures, same script count | 120 scripts, 2480 tests, 4447 asserts — ALL PASSING | Done |
 | 5 | Commit as `refactor(core): organise flat directories into domain sub-folders` | Clean commit before G4.1 | Done |
 
 **No `preload()` or `load()` path updates were needed** — all cross-references

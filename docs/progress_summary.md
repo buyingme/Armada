@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-18 (G4.1)
+> Last updated: 2026-04-18 (G4.2)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 119 |
-| GUT tests | 2 460 |
-| GUT asserts | 4 413 |
+| GUT test scripts | 120 |
+| GUT tests | 2 480 |
+| GUT asserts | 4 447 |
 | Autoloads | 15 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -95,6 +95,7 @@
 | G4.0: Directory Reorganisation | ✅ | 59 files reorganised into domain sub-folders, zero breakage |
 | G4.10: Dedicated Server Binary | ✅ | ServerMain autoload, export preset, HMAC replay signing, CI workflow |
 | G4.1: Network Transport Foundation | ✅ | PlayerProfile, NetworkManager autoloads, ENet host/connect/disconnect, state machine, heartbeat, TestNetworkHarness |
+| G4.2: Server-Side Command Processing | ✅ | CommandSubmitter strategy (Local/Network), GameManager wiring (31 sites), server-side RPCs, is_replaying flag |
 
 ---
 
@@ -197,3 +198,4 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `91abf9e` | Debug: DebugDealDamageCommand + arc42 docs update |
 | — | G4.10: Dedicated Server Binary |
 | — | G4.1: Network Transport Foundation |
+| — | G4.2: Server-Side Command Processing |

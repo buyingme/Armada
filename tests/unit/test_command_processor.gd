@@ -163,8 +163,8 @@ func test_replay_commands_populates_history() -> void:
 	_processor.replay_commands(serialized)
 	assert_eq(_processor.get_command_count(), 2,
 			"Replay should add 2 commands to history.")
-	assert_eq(_executed_cmds.size(), 2,
-			"Replay should emit command_executed for each.")
+	assert_eq(_executed_cmds.size(), 0,
+			"Replay should suppress command_executed signals.")
 
 
 func test_replay_skips_unknown_types() -> void:

@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-18
-> Current baseline: 119 scripts, 2 460 tests, 4 413 asserts
+> Current baseline: 120 scripts, 2 480 tests, 4 447 asserts
 
 ---
 
@@ -167,7 +167,7 @@ All six command classes are now wired into their presentation-layer call sites:
 |-------|------|--------|---------|
 | G4.10 | Dedicated Server Binary | ✅ | ServerMain autoload, export preset, HMAC, CI |
 | G4.1 | Network Transport Foundation | ✅ | NetworkManager, PlayerProfile, TestNetworkHarness |
-| G4.2 | Server-Side Command Processing | ⏳ | Depends on G4.1 ✅ |
+| G4.2 | Server-Side Command Processing | ✅ | CommandSubmitter strategy, GameManager wiring, server RPCs |
 | G4.3–G4.9 | Info Hiding, Lobby, Chat, etc. | ⏳ | Depends on G4.1/G4.2 |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
@@ -253,6 +253,26 @@ HMAC, survives file save/load roundtrip.
 
 **Pass criteria:** Full test suite passes including new network tests.
 
+### Phase G4.2 — Server-Side Command Processing
+
+### MT-G4.2.1 — Normal game unaffected by CommandSubmitter + is_replaying
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run the game normally (no `--server` flag) | Main menu appears, game is fully playable |
+| 2 | Play a full round (command → ship → squadron → status) | All phases work identically to pre-G4.2 |
+| 3 | Save replay with Shift+R | Replay file saved without errors |
+
+**Pass criteria:** CommandSubmitter strategy (LocalCommandSubmitter default) does not affect normal local play.
+
+### MT-G4.2.2 — Headless GUT validation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 120 scripts, 2480 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes including new G4.2 tests.
+
 ### Awaiting First Test (highest priority — recent changes)
 
 | ID | Description |
@@ -266,6 +286,7 @@ HMAC, survives file save/load roundtrip.
 | MT-P7.01–03 | Discard token, reveal/unreveal dial, replay save | ✅ passed 2026-04-18 |
 | MT-G4.10.01–04 | Dedicated server binary: autoload, --server flag, HMAC, headless GUT | ✅ passed 2026-04-18 |
 | MT-G4.1.01–02 | Network transport: normal game unaffected, headless GUT 119/2460 | ✅ passed 2026-04-18 |
+| MT-G4.2.01–02 | Server-side command processing: normal game unaffected, headless GUT 120/2480 | |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

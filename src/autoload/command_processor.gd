@@ -36,6 +36,12 @@ var _history: Array[GameCommand] = []
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("CommandProcessor")
 
+## True during [method replay_commands] or reconnection replay.
+## When set, [signal command_executed] is suppressed so the presentation
+## layer does not react to replayed commands.
+## G4 Network Plan: §3 — G4.2.6
+var is_replaying: bool = false
+
 
 ## Registers all concrete command types on startup.
 func _ready() -> void:
@@ -101,7 +107,8 @@ func submit(command: GameCommand) -> Dictionary:
 	# --- Record ---
 	_history.append(command)
 	# --- Notify ---
-	command_executed.emit(command, result)
+	if not is_replaying:
+		command_executed.emit(command, result)
 	return result
 
 
@@ -159,7 +166,9 @@ func create_replay() -> GameReplay:
 
 ## Replays a list of serialized commands against the given game state.
 ## Used for save-game loading and deterministic replay.
+## Suppresses [signal command_executed] during replay.
 func replay_commands(commands: Array[Dictionary]) -> void:
+	is_replaying = true
 	for cmd_data: Dictionary in commands:
 		var cmd: GameCommand = GameCommand.deserialize(cmd_data)
 		if cmd == null:
@@ -167,6 +176,7 @@ func replay_commands(commands: Array[Dictionary]) -> void:
 					cmd_data.get("type", "?"))
 			continue
 		submit(cmd)
+	is_replaying = false
 
 
 # ---------------------------------------------------------------------------

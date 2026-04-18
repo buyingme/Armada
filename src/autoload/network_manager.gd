@@ -48,19 +48,19 @@ const ENET_CHANNELS: int = 3
 ## Connection state machine.
 ## G4 Network Plan: §3 — G4.1.4
 enum ConnectionState {
-	DISCONNECTED,    ## Not connected to any network session.
-	CONNECTING,      ## TCP/ENet handshake in progress.
-	AUTHENTICATING,  ## Handshake sent, waiting for server acknowledgement.
-	LOBBY,           ## In lobby, waiting for game start.
-	IN_GAME,         ## Game is running.
+	DISCONNECTED, ## Not connected to any network session.
+	CONNECTING, ## TCP/ENet handshake in progress.
+	AUTHENTICATING, ## Handshake sent, waiting for server acknowledgement.
+	LOBBY, ## In lobby, waiting for game start.
+	IN_GAME, ## Game is running.
 }
 
 ## Network role for this instance.
 enum Role {
-	NONE,       ## Not in a network session.
-	SERVER,     ## Authoritative server (headless or host).
-	CLIENT,     ## Connected player.
-	SPECTATOR,  ## Read-only observer (future — G4.7).
+	NONE, ## Not in a network session.
+	SERVER, ## Authoritative server (headless or host).
+	CLIENT, ## Connected player.
+	SPECTATOR, ## Read-only observer (future — G4.7).
 }
 
 
@@ -86,6 +86,11 @@ signal handshake_rejected(reason: String)
 
 ## Emitted when a chat message is received (future — G4.6).
 signal chat_received(sender: String, text: String, timestamp: int)
+
+## Emitted when the server executes a command and broadcasts the result.
+## [param command_data] — serialized command dictionary.
+## [param result] — execution result dictionary.
+signal command_result_received(command_data: Dictionary, result: Dictionary)
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +241,20 @@ func _state_name(state: ConnectionState) -> String:
 			return "LOBBY"
 		ConnectionState.IN_GAME:
 			return "IN_GAME"
+	return "UNKNOWN"
+
+
+## Returns a human-readable name for a [enum Role].
+func _role_name(r: Role) -> String:
+	match r:
+		Role.NONE:
+			return "NONE"
+		Role.SERVER:
+			return "SERVER"
+		Role.CLIENT:
+			return "CLIENT"
+		Role.SPECTATOR:
+			return "SPECTATOR"
 	return "UNKNOWN"
 
 
@@ -417,6 +436,59 @@ func _check_heartbeat_timeouts() -> void:
 func _server_shutdown_notice() -> void:
 	_log.info("Server shutdown notice received.")
 	_cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Command Submission RPCs (G4.2.3 / G4.2.4)
+# ---------------------------------------------------------------------------
+
+## Client-side helper: sends a serialized command to the server.
+## Called by [NetworkCommandSubmitter.submit].
+func send_command_to_server(data: Dictionary) -> void:
+	if role != Role.CLIENT:
+		_log.warn("send_command_to_server() called but role is %s." %
+				_role_name(role))
+		return
+	_submit_command_to_server.rpc_id(1, data)
+
+
+## Client → Server: receives a command submission from a client.
+## The server deserializes, validates, executes via [CommandProcessor],
+## and broadcasts the result to all peers.
+@rpc("any_peer", "reliable")
+func _submit_command_to_server(data: Dictionary) -> void:
+	if role != Role.SERVER:
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if not peers.has(sender_id):
+		_log.warn("Command from unknown peer %d — ignoring." % sender_id)
+		return
+	var cmd: GameCommand = GameCommand.deserialize(data)
+	if cmd == null:
+		_log.warn("Failed to deserialize command from peer %d." % sender_id)
+		return
+	# Verify the command's player_index matches the peer's assigned slot.
+	var expected_player: int = peers[sender_id].get("player_index", -1)
+	if cmd.player_index != expected_player:
+		_log.warn("Peer %d claims player %d but is assigned %d — rejecting." % [
+				sender_id, cmd.player_index, expected_player])
+		return
+	var result: Dictionary = CommandProcessor.submit(cmd)
+	if result.is_empty():
+		_log.info("Command [%s] from peer %d rejected by validation." % [
+				cmd.command_type, sender_id])
+		return
+	# Broadcast result to all connected clients.
+	var cmd_data: Dictionary = cmd.serialize()
+	_broadcast_command_result.rpc(cmd_data, result)
+
+
+## Server → All: broadcasts an executed command and its result.
+## Clients apply the result to their local state mirror.
+@rpc("authority", "reliable")
+func _broadcast_command_result(command_data: Dictionary,
+		result: Dictionary) -> void:
+	command_result_received.emit(command_data, result)
 
 
 # ---------------------------------------------------------------------------

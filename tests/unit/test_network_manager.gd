@@ -256,3 +256,44 @@ func test_role_enum_has_four_values() -> void:
 	# NONE=0, SERVER=1, CLIENT=2, SPECTATOR=3
 	assert_eq(NetworkManager.Role.SPECTATOR, 3,
 			"SPECTATOR should be the fourth enum value (index 3).")
+
+
+# ---------------------------------------------------------------------------
+# Command RPC guards (G4.2)
+# ---------------------------------------------------------------------------
+
+func test_send_command_to_server_warns_if_not_client() -> void:
+	NetworkManager.role = NetworkManager.Role.NONE
+	NetworkManager.send_command_to_server({"type": "test"})
+	# _log.warn triggers push_warning — mark handled.
+	assert_engine_error(1,
+			"Should warn about calling send_command_to_server when not CLIENT.")
+
+
+func test_command_result_received_signal_exists() -> void:
+	# Verify the signal exists by checking it can be connected.
+	var received: Array = []
+	NetworkManager.command_result_received.connect(
+			func(cmd_data: Dictionary, result: Dictionary) -> void:
+				received.append({"cmd": cmd_data, "result": result}))
+	# Simulate server broadcasting a result.
+	NetworkManager.command_result_received.emit(
+			{"type": "test"}, {"status": "ok"})
+	assert_eq(received.size(), 1,
+			"command_result_received signal should be emittable.")
+	assert_eq(received[0]["result"]["status"], "ok",
+			"Result should propagate through signal.")
+	# Disconnect lambda.
+	for conn: Dictionary in NetworkManager.command_result_received.get_connections():
+		NetworkManager.command_result_received.disconnect(conn["callable"])
+
+
+func test_role_name_returns_valid_strings() -> void:
+	assert_eq(NetworkManager._role_name(NetworkManager.Role.NONE), "NONE",
+			"NONE role name should be 'NONE'.")
+	assert_eq(NetworkManager._role_name(NetworkManager.Role.SERVER), "SERVER",
+			"SERVER role name should be 'SERVER'.")
+	assert_eq(NetworkManager._role_name(NetworkManager.Role.CLIENT), "CLIENT",
+			"CLIENT role name should be 'CLIENT'.")
+	assert_eq(NetworkManager._role_name(NetworkManager.Role.SPECTATOR), "SPECTATOR",
+			"SPECTATOR role name should be 'SPECTATOR'.")

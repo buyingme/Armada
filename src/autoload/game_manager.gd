@@ -65,6 +65,11 @@ var fixed_commands_applied: bool = false
 ## config key.
 var _scenario_id: String = ""
 
+## Strategy for submitting commands — [LocalCommandSubmitter] for hot-seat
+## and single-player, [NetworkCommandSubmitter] for network multiplayer.
+## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
+var _submitter: CommandSubmitter = LocalCommandSubmitter.new()
+
 
 func _ready() -> void:
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
@@ -88,6 +93,19 @@ func _notification(what: int) -> void:
 		current_game_state = null
 		_activating_ship = null
 		_activating_squadron = null
+
+
+## Sets the active command submitter strategy.
+## Call before [method start_new_game] to switch between local and network.
+## [param submitter] — a [CommandSubmitter] instance.
+func set_command_submitter(submitter: CommandSubmitter) -> void:
+	_submitter = submitter
+	_log.info("Command submitter set to %s." % submitter.get_class())
+
+
+## Returns the active [CommandSubmitter].
+func get_command_submitter() -> CommandSubmitter:
+	return _submitter
 
 
 ## Starts a new game with the given configuration.
@@ -227,7 +245,7 @@ func _assign_fixed_commands_to_ship(ship: ShipInstance,
 	var cmd := AssignDialCommand.new(ship.owner_player, {
 			"ship_index": ship_index,
 			"commands": typed_cmds})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if result.get("success", false):
 		_log.info("Auto-assigned round 1 commands: %s = %s" % [
 				ship.data_key, str(typed_cmds)])
@@ -270,7 +288,7 @@ func advance_phase() -> void:
 		var cmd := AdvancePhaseCommand.new(
 				active_player,
 				{"next_phase": int(next_phase)})
-		CommandProcessor.submit(cmd)
+		_submitter.submit(cmd)
 		EventBus.phase_changed.emit(next_phase)
 		# Initialise per-phase state.
 		match next_phase:
@@ -295,7 +313,7 @@ func _start_round() -> void:
 	# Route round/phase mutation through command for replay determinism.
 	var cmd := StartRoundCommand.new(
 			active_player, {})
-	CommandProcessor.submit(cmd)
+	_submitter.submit(cmd)
 
 	# Reset submission tracking for the new round.
 	_command_submitted = [false, false]
@@ -379,7 +397,7 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	var assign_cmd := AssignDialCommand.new(ship.owner_player, {
 			"ship_index": ship_index,
 			"commands": typed_commands})
-	var result: Dictionary = CommandProcessor.submit(assign_cmd)
+	var result: Dictionary = _submitter.submit(assign_cmd)
 	if not result.get("success", false):
 		_log.warn("assign_dials failed for '%s'" % [
 				ship.ship_data.ship_name if ship.ship_data else "?"])
@@ -475,7 +493,7 @@ func activate_ship(ship: ShipInstance) -> void:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ActivateShipCommand.new(ship.owner_player,
 			{"ship_index": ship_index})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return
 	_activating_ship = ship
@@ -523,7 +541,7 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ConvertDialToTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return {}
 
@@ -594,7 +612,7 @@ func submit_spend_token(ship: ShipInstance, token_type: int) -> void:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := SpendTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "token_type": token_type})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if not result.is_empty():
 		EventBus.command_tokens_changed.emit(ship)
 
@@ -613,7 +631,7 @@ func submit_discard_token(ship: ShipInstance,
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := DiscardTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "token_type": token_type})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if not result.is_empty():
 		EventBus.command_tokens_changed.emit(ship)
 		EventBus.token_discarded.emit(ship, token_type)
@@ -630,7 +648,7 @@ func submit_reveal_dial(ship: ShipInstance) -> void:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := RevealDialCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "action": "reveal"})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if not result.is_empty():
 		EventBus.command_dials_changed.emit(ship)
 
@@ -646,7 +664,7 @@ func submit_unreveal_dial(ship: ShipInstance) -> void:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := RevealDialCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "action": "unreveal"})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if not result.is_empty():
 		EventBus.command_dials_changed.emit(ship)
 
@@ -664,7 +682,7 @@ func submit_spend_dial(ship: ShipInstance, mode: String = "spend") -> void:
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := SpendDialCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "mode": mode})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if not result.is_empty():
 		EventBus.command_dials_changed.emit(ship)
 
@@ -681,7 +699,7 @@ func submit_move_squadron(squadron: SquadronInstance,
 	var sq_index: int = current_game_state.find_squadron_index(squadron)
 	var cmd := MoveSquadronCommand.new(squadron.owner_player,
 			{"squadron_index": sq_index, "pos_x": norm_x, "pos_y": norm_y})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits an [ExecuteManeuverCommand] recording a ship's final position.
@@ -702,7 +720,7 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 		"ship_index": ship_index, "speed": speed,
 		"yaw_clicks": yaw_clicks, "pos_x": norm_x, "pos_y": norm_y,
 		"rotation_deg": rotation_deg})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [RollDiceCommand] for deterministic dice rolling.
@@ -715,7 +733,7 @@ func submit_roll_dice(player: int,
 		return {}
 	var cmd := RollDiceCommand.new(player,
 			{"dice_pool": dice_pool.duplicate()})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [SpendDefenseTokenCommand] for defense token spending.
@@ -730,7 +748,7 @@ func submit_spend_defense_token(ship: ShipInstance, token_index: int,
 	var cmd := SpendDefenseTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "token_index": token_index,
 			"spend_method": spend_method})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [SelectRedirectZoneCommand] for redirect damage allocation.
@@ -743,7 +761,7 @@ func submit_select_redirect_zone(ship: ShipInstance,
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := SelectRedirectZoneCommand.new(ship.owner_player,
 			{"ship_index": ship_index, "zone": zone})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [SkipAttackCommand] for replay recording.
@@ -753,7 +771,7 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 	if not current_game_state:
 		return {}
 	var cmd := SkipAttackCommand.new(player, {"reason": reason})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [ResolveDamageCommand] for ship damage resolution.
@@ -777,7 +795,7 @@ func submit_resolve_ship_damage(ship: ShipInstance, hull_zone: String,
 		"damage_cards": damage_cards,
 		"target_destroyed": destroyed,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [ResolveDamageCommand] for squadron damage resolution.
@@ -799,7 +817,7 @@ func submit_resolve_squadron_damage(squadron: SquadronInstance,
 		"actual_damage": actual_damage,
 		"target_destroyed": destroyed,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [RepairActionCommand] to move 1 shield between hull zones.
@@ -818,7 +836,7 @@ func submit_repair_move_shields(ship: ShipInstance,
 		"from_zone": from_zone,
 		"to_zone": to_zone,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [RepairActionCommand] to recover 1 shield on a hull zone.
@@ -835,7 +853,7 @@ func submit_repair_recover_shields(ship: ShipInstance,
 		"ship_index": ship_index,
 		"zone": zone,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [RepairActionCommand] to discard a damage card.
@@ -859,7 +877,7 @@ func submit_repair_hull(ship: ShipInstance,
 		"card_is_faceup": is_faceup,
 		"card_index": card_idx,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [ResolveImmediateEffectCommand] for a faceup damage card.
@@ -889,7 +907,7 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 		pl["extra_card_data"] = extra_card_data
 	var cmd := ResolveImmediateEffectCommand.new(
 			ship.owner_player, pl)
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [SetSpeedCommand] when the player clicks +1/−1 during
@@ -905,7 +923,7 @@ func submit_set_speed(ship: ShipInstance,
 		"ship_index": ship_index,
 		"new_speed": new_speed,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits an [OverlapDamageCommand] after a ship–ship overlap.
@@ -927,7 +945,7 @@ func submit_overlap_damage(moving: ShipInstance,
 		"moving_card": moving_card_data,
 		"other_card": other_card_data,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [PersistentEffectDamageCommand] when a persistent damage
@@ -947,7 +965,7 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 		"effect_id": effect_id,
 		"card_data": card_data,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 ## Submits a [DebugDealDamageCommand] when the debug damage tool deals
@@ -967,7 +985,7 @@ func submit_debug_deal_damage(ship: ShipInstance,
 		"effect_id": effect_id,
 		"card_data": card_data,
 	})
-	return CommandProcessor.submit(cmd)
+	return _submitter.submit(cmd)
 
 
 # ---------------------------------------------------------------------------
@@ -991,7 +1009,7 @@ func _on_activation_ended() -> void:
 			var cmd := EndActivationCommand.new(
 					_activating_ship.owner_player,
 					{"ship_index": ship_index})
-			var result: Dictionary = CommandProcessor.submit(cmd)
+			var result: Dictionary = _submitter.submit(cmd)
 			if not result.is_empty():
 				EventBus.command_dials_changed.emit(_activating_ship)
 				_log.info("Ship activation ended: %s" \
@@ -1155,7 +1173,7 @@ func activate_squadron(squadron: SquadronInstance) -> void:
 			squadron)
 	var cmd := ActivateSquadronCommand.new(squadron.owner_player,
 			{"squadron_index": sq_index})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return
 	_activating_squadron = squadron
@@ -1211,7 +1229,7 @@ func _begin_status_phase() -> void:
 ## does NOT change; the first player retains it for the entire game.
 func _perform_status_phase_cleanup() -> void:
 	var cmd := StatusPhaseCleanupCommand.new(active_player, {})
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
 
 	# Emit UI events so visuals stay in sync.
 	for i: int in range(Constants.PLAYER_COUNT):
@@ -1281,7 +1299,7 @@ func _on_ship_destroyed(ship: Node) -> void:
 		"owner_player": owner,
 		"ship_index": idx,
 	})
-	CommandProcessor.submit(cmd)
+	_submitter.submit(cmd)
 
 
 ## Called when any squadron is destroyed.  Squadrons alone never trigger

@@ -2167,24 +2167,26 @@ func _debug_deal_faceup_card(ship: ShipInstance,
 				card.effect_text = cdef.get("effect_text", "")
 				break
 	card.is_faceup = true
-	ship.add_faceup_damage(card)
+	# Submit through command for replay/multiplayer safety.
+	var result: Dictionary = GameManager.submit_debug_deal_damage(
+			ship, card.serialize(), effect_id)
+	if result.is_empty():
+		_log.warn("Debug damage: command rejected.")
+		return
+	# Retrieve the actual card object added to the ship.
+	var dealt_card: DamageCard = ship.faceup_damage.back()
 	_log.info("Debug: dealt faceup '%s' [%s] to %s." % [
 			title, effect_id, ship.ship_data.ship_name])
-	# Register persistent effect if applicable.
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry and DamageCardEffectFactory.is_persistent(card):
-		DamageCardEffectFactory.register_effect(card, ship, registry)
+	if result.get("persistent_registered", false):
 		_log.info("Debug: persistent effect registered for '%s'." % title)
 	# Emit standard signals so UI updates (card panel, hull display).
-	EventBus.damage_card_flipped.emit(ship, card, true)
-	EventBus.damage_card_dealt.emit(ship, card, true)
-	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
-	EventBus.ship_hull_changed.emit(ship, new_hull)
+	EventBus.damage_card_flipped.emit(ship, dealt_card, true)
+	EventBus.damage_card_dealt.emit(ship, dealt_card, true)
+	EventBus.ship_hull_changed.emit(
+			ship, int(result.get("new_hull", 0)))
 	# Resolve immediate effect if applicable.
-	if ImmediateEffectResolver.is_immediate(card):
-		_resolve_debug_immediate_effect(card, ship)
+	if ImmediateEffectResolver.is_immediate(dealt_card):
+		_resolve_debug_immediate_effect(dealt_card, ship)
 	TooltipManager.show_text(
 			"Dealt: %s" % title, Vector2.INF, 2.5)
 

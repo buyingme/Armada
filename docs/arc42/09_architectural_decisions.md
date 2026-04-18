@@ -164,6 +164,24 @@ Each decision follows this structure:
 
 ---
 
+## ADR-012: Command Pattern for All Game-State Mutations
+
+- **Status:** Accepted
+- **Date:** 2026-04-12
+- **Context:** The game requires multiplayer support (ADR-007) and replay functionality. Without a single mutation pathway, game state changes are scattered across 40+ call sites in presentation-layer code, making them impossible to serialize, replay, or transmit over the network. 34 violations of the mutation rule (§4.6) were identified across 8 files.
+- **Decision:** Introduce `GameCommand` (RefCounted base class) with `validate()`, `execute()`, and `serialize()`/`deserialize()`. All game-state mutations route through `CommandProcessor.submit()`, which validates, assigns a sequence number, executes, records in history, and emits `command_executed`. Presentation-layer code pre-computes parameters (dice pools, damage card data, positions) and submits commands; it never directly mutates `GameState`-owned objects. 26 concrete command classes cover all mutation paths. A deterministic `GameRng` and `GameReplay` complete the replay pipeline.
+- **Consequences:**
+  - (+) Full game history is serializable — enables replay, save/load, and network transport
+  - (+) Deterministic replay with seeded RNG — identical command sequences produce identical states
+  - (+) Clear separation: presentation gathers intent, command applies mutation
+  - (+) Validation layer catches illegal actions before state is modified
+  - (+) Incremental adoption — commands added in 7 priority phases (P1–P7) without breaking existing gameplay
+  - (-) More boilerplate per mutation (command class + submit method + test)
+  - (-) Presentation must pre-compute all parameters before submitting (e.g., pre-draw damage cards)
+  - (-) EventBus signals emitted by callers after `execute()` returns, not inside the command — requires discipline
+
+---
+
 ## ADR-011: Deferred Layout Reset for Reusable Anchor-Based Panels
 
 - **Status:** Accepted

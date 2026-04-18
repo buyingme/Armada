@@ -21,7 +21,7 @@
 | TD-4 | Functions exceeding 30-line guideline (95 functions across ~20 files) | Medium | Refactoring Phase A — extract private helpers within same file. |
 | TD-5 | `UpgradeData` resource class unused in production code | Low | Placeholder for upgrade card features. Keep as-is until needed. |
 | TD-6 | Reusable anchor-based panels may flash at inflated size for one frame before deferred layout correction | Low | Cosmetic only; `_request_deferred_layout()` pattern (ADR-011) corrects on next frame. |
-| TD-7 | `game_board.gd` was 3 390 lines — now 2 207 after Phases A–F. Still above 500-line target but remaining code is activation orchestration tightly coupled to its controllers. | **Medium** | Phase C: 7 controllers extracted. Phase F: ActivationContext (F1) + UIPanelManager (F3) extracted. Further reduction requires Command pattern (Phase G). |
+| TD-7 | `game_board.gd` was 3 390 lines — now ~2 290 after Phases A–F. Still above 500-line target but remaining code is activation orchestration tightly coupled to its controllers. | **Medium** | Phase C: 7 controllers extracted. Phase F: ActivationContext (F1) + UIPanelManager (F3) extracted. Phase G complete: 26 command classes route all mutations through CommandProcessor; debug damage tool refactored as final violation. |
 | TD-8 | ~~`attack_executor.gd` was 3 285 lines / 146 functions~~ | ~~High~~ | **Resolved** — Phase F4 extracted 4 RefCounted resolvers (AttackTargetResolver, AttackDiceResolver, DefenseTokenResolver, DamageDealer). Phase F5 extracted AttackState, TargetingListController, TargetSelector. AE reduced to 1 864 lines. |
 | TD-9 | `ship_card_panel.gd` is 1 407 lines — UI build + state sync + dial interaction + damage display | Medium | Refactoring Phase D3 — split into layout coordinator + entry builder + damage display. |
 | TD-10 | `attack_sim_panel.gd` is 1 455 lines — monolithic `_build_ui()` (218 lines) | Medium | Refactoring Phases A1 + D1 — extract 12 `_build_<section>()` helpers, then UIStyleHelper. |
@@ -29,5 +29,6 @@
 | TD-12 | ~~64 EventBus signals — risk of signal spaghetti as features grow~~ | ~~Medium~~ | **Resolved** — Phase E6 complete. 12 `#region` blocks group signals by domain. |
 | TD-13 | All UI is procedurally built in GDScript (only 4 `.tscn` files) | Low | Workable but slower iteration; consider `.tscn` for new complex UI. |
 
-> **Last audit:** Refactoring Phases A–F + H complete — 100 scripts, 2 032 tests, 3 552 asserts, all passing.
+> **Last audit:** Refactoring Phases A–H + G complete — 115 scripts, 2 369 tests, 4 277 asserts, all passing.
 > Architecture compliance, static typing, and doc comment coverage all PASS.
+> Phase G: 26 command classes, 40+ wired call sites, deterministic replay, all §4.6 violations resolved.

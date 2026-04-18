@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-15
-> Current baseline: 114 scripts, 2 357 tests, 4 247 asserts
+> Last updated: 2026-04-18
+> Current baseline: 115 scripts, 2 369 tests, 4 277 asserts
 
 ---
 
@@ -10,7 +10,7 @@
 
 34 violations found across 8 files. Every mutation of `GameState`-owned data
 must route through a `GameCommand.execute()` for replay/multiplayer safety.
-P1–P4 block multiplayer; P5–P7 are deferrable.
+P1–P7 + debug all resolved — G4 (network transport) unblocked.
 
 ### Priority 1 — Game Flow (3 violations → 2 commands) ✅ RESOLVED
 
@@ -121,9 +121,14 @@ with `"action": "reveal"` or `"unreveal"` discriminator.
 Tests: `test_p7_commands.gd` — validate (happy + rejection for both commands),
 execute (discard, reveal, unreveal), serialize/deserialize roundtrip.
 
-### Debug-only (1 violation, not prioritised)
+### Debug-only (1 violation → 1 command) ✅ RESOLVED
 
-`game_board.gd` → `_apply_debug_damage_card()` → `DebugDealDamageCommand`
+| Command | Wired In |
+|---------|----------|
+| `DebugDealDamageCommand` | `game_board.gd` — `_debug_deal_faceup_card()` via `GameManager.submit_debug_deal_damage()` |
+
+Tests: `test_debug_deal_damage_command.gd` — validate (happy + rejection),
+execute (persistent + immediate cards, hull math), serialize/deserialize roundtrip.
 
 ### Summary
 
@@ -136,7 +141,8 @@ execute (discard, reveal, unreveal), serialize/deserialize roundtrip.
 | P5 | 8 | 1 | ✅ Done |
 | P6 | 3 | 3 | ✅ Done |
 | P7 | 3 | 2 | ✅ Done |
-| **Total** | **34** | **~13** | **P1–P7 resolved — G4 unblocked** |
+| Debug | 1 | 1 | ✅ Done |
+| **Total** | **35** | **~14** | **All resolved — G4 unblocked** |
 
 ---
 
@@ -159,7 +165,7 @@ All six command classes are now wired into their presentation-layer call sites:
 
 | Phase | Name | Status | Blocker |
 |-------|------|--------|---------|
-| G4 | Network Transport Layer | ⏳ | §4.6 P1–P4 resolved — ready to start |
+| G4 | Network Transport Layer | ⏳ | All §4.6 violations resolved — ready to start |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
 All other implementation phases (0–12) are complete.
@@ -196,6 +202,7 @@ All other implementation phases (0–12) are complete.
 | MT-P4.01–05 | Repair panel: move/recover/hull through commands | ✅ passed 2026-04-14 |
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands | ✅ passed 2026-04-14 |
 | MT-P6.01–08 | Overlap, speed, persistent: all 3 commands + bug fixes | ✅ passed 2026-04-15 |
+| MT-P7.01–03 | Discard token, reveal/unreveal dial, replay save | ✅ passed 2026-04-18 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

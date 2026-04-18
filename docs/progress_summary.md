@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-15
+> Last updated: 2026-04-18
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,12 +10,12 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 114 |
-| GUT tests | 2 357 |
-| GUT asserts | 4 247 |
+| GUT test scripts | 115 |
+| GUT tests | 2 369 |
+| GUT asserts | 4 277 |
 | Autoloads | 12 |
-| Command classes | 26 (1 base + 25 concrete) |
-| Wired command call sites | 40 |
+| Command classes | 27 (1 base + 26 concrete) |
+| Wired command call sites | 41 |
 | Core RefCounted classes | 8 |
 
 ---
@@ -72,7 +72,7 @@
 | F | Backbone Extraction | ✅ | ActivationContext, UIPanelManager, 6 attack sub-resolvers |
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
-| G | Command Pattern | 🔄 | GameCommand base, 25 concrete commands, 40 wired call sites, GameReplay, §4.6 P1–P7 resolved |
+| G | Command Pattern | ✅ | GameCommand base, 26 concrete commands, 41 wired call sites, GameReplay, §4.6 P1–P7 + debug resolved |
 
 ---
 
@@ -90,7 +90,8 @@
 | §4.6 P5: Immediate Effects | ✅ | ResolveImmediateEffectCommand — 8 violations → 1 cmd, 4 call sites |
 | §4.6 P6: Overlap/Speed/Persistent | ✅ | SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand — 3 violations → 3 cmds |
 | §4.6 P7: UI State & Tokens | ✅ | DiscardTokenCommand + RevealDialCommand — 3 violations → 2 cmds |
-| G4: Network Transport | ⏳ | Godot MultiplayerPeer — depends on §4.6 violations resolved |
+| §4.6 Debug: Faceup Damage | ✅ | DebugDealDamageCommand — 1 debug violation → 1 cmd |
+| G4: Network Transport | ⏳ | Godot MultiplayerPeer — all §4.6 violations resolved |
 
 ---
 
@@ -103,7 +104,7 @@
 | Effect timing in movement | 5b | ✅ |
 | Geometry primitives | 1 | ✅ |
 | State serialization | 3 + E | ✅ |
-| GameCommand + CommandProcessor | G | ✅ 25 cmds, 40 sites |
+| GameCommand + CommandProcessor | G | ✅ 26 cmds, 41 sites |
 | Deterministic RNG | G5 | ✅ |
 | GameReplay | G6 | ✅ v1 format |
 | Configurable hull zones | 1 | ✅ (Huge ships ready) |
@@ -149,7 +150,7 @@
 
 ## Manual Tests Passed
 
-34 tests formally passed with date stamps (out of ~233 total written).
+37 tests formally passed with date stamps (out of ~233 total written).
 
 | ID | Description | Date |
 |----|-------------|------|
@@ -164,6 +165,7 @@
 | MT-P4.01–05 | Repair panel: move shields, recover shields, repair hull, replay save | 2026-04-14 |
 | MT-P5.01–07 | Immediate effects: all 6 card effects through commands, replay save | 2026-04-14 |
 | MT-P6.01–08 | Overlap, speed, persistent: SetSpeed, OverlapDamage, PersistentEffectDamage, card panel refresh, destruction, deferred Thruster Fissure | 2026-04-15 |
+| MT-P7.01–03 | Discard token (overflow), reveal/unreveal dial, replay save after P7 ops | 2026-04-18 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 
@@ -186,4 +188,5 @@ Phase 3 (9 tests) also passed but without formal date stamps.
 | `1da7df8` | Auto-save replay on game exit/game over |
 | `edd98b5` | P4: RepairActionCommand (3 violations → 1 command) |
 | `fe87813` | P5: ResolveImmediateEffectCommand (8 violations → 1 command) |\n| `69511d4` | P6: SetSpeedCommand + OverlapDamageCommand + PersistentEffectDamageCommand (3 violations → 3 commands) |
-| | P7: DiscardTokenCommand + RevealDialCommand (3 violations → 2 commands) |
+| `f8012ed` | P7: DiscardTokenCommand + RevealDialCommand (3 violations → 2 commands) |
+| `91abf9e` | Debug: DebugDealDamageCommand + arc42 docs update |

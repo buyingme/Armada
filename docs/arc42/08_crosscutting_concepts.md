@@ -65,7 +65,12 @@ All serializable classes implement `serialize() -> Dictionary` and
 
 Serialized classes: `GameState`, `PlayerState`, `ShipInstance`,
 `SquadronInstance`, `DamageDeck`, `DamageCard`, `ShipActivationState`,
-`CommandDialStack`, `CommandTokens`.
+`CommandDialStack`, `CommandTokens`, `GameCommand` (and all 26 subclasses).
+
+`GameCommand.serialize()` produces `{type, player, sequence, payload}`.
+`GameCommand.deserialize()` dispatches to the correct subclass via the
+command type registry.  Replay files (`GameReplay`) store the full
+command history as a JSON array of serialized commands.
 
 `SaveGameManager` saves to `res://saves/` (project directory) as
 pretty-printed JSON. Debug keybinds: **F5** quicksave, **F8** quickload
@@ -606,3 +611,94 @@ After maneuver commit:
 ### 8.11.4 End-of-Activation Flow
 
 After maneuver commit (with or without overlap), the activation modal stays open showing all 5 steps checked. An "End Activation ►" button appears at the bottom. The player must deliberately press it to emit `activation_ended`. This prevents accidental activation ending and gives the player a moment to review the collision result.
+
+## 8.12 Command Pattern & Replay System
+
+### 8.12.1 Purpose
+
+Every game-state mutation must route through a `GameCommand.execute()` call
+(§4.6 mutation rule).  This ensures:
+
+- **Replay safety:** the full game can be reconstructed from the command history.
+- **Multiplayer readiness:** commands are serializable and can be transmitted
+  over the network to an authoritative host.
+- **Determinism:** combined with `GameRng` (seeded RNG), identical command
+  sequences produce identical game states.
+
+### 8.12.2 Architecture Overview
+
+```
+Presentation Layer          Application Layer           Domain Layer
+┌─────────────────┐   submit()   ┌──────────────────┐   execute()   ┌──────────────┐
+│  GameBoard      │─────────────▶│ CommandProcessor  │─────────────▶│ GameCommand   │
+│  AttackExecutor │              │ (autoload)        │              │ (RefCounted)  │
+│  ShipCardPanel  │              │                   │              │               │
+│  ManeuverTool   │   result     │ validate → seq →  │   result     │ mutates       │
+│  ...            │◀─────────────│ execute → record  │◀─────────────│ GameState     │
+└─────────────────┘              └──────────────────┘              └──────────────┘
+                                        │
+                                        │ command_executed signal
+                                        ▼
+                                 ┌──────────────────┐
+                                 │ GameReplay        │
+                                 │ (record/playback) │
+                                 └──────────────────┘
+```
+
+### 8.12.3 Command Lifecycle
+
+1. **Presentation layer** gathers parameters (ship index, dice pool, card data, etc.)
+2. Calls a `GameManager.submit_*()` convenience method
+3. `GameManager` builds a `GameCommand` subclass with a serializable payload
+4. `CommandProcessor.submit()`:
+   - Calls `command.validate(game_state)` — returns error string or `""`
+   - Assigns monotonically increasing sequence number
+   - Calls `command.execute(game_state)` — mutates state, returns result dict
+   - Appends to history array
+   - Emits `command_executed(command, result)` signal
+5. Presentation layer receives result and emits `EventBus` signals for UI updates
+
+### 8.12.4 Command Tiers (26 classes)
+
+| Tier | Commands | Domain |
+|------|----------|--------|
+| 1 | AssignDial, ActivateShip, EndActivation, ConvertDialToToken, ActivateSquadron, SpendToken, SpendDial | Core actions |
+| 2 | RollDice, SpendDefenseToken, SelectRedirectZone, SkipAttack | Attack pipeline |
+| 3 | MoveSquadron, ExecuteManeuver | Movement |
+| 4 | AdvancePhase, StartRound | Game flow |
+| 5 | StatusPhaseCleanup, DestroyUnit | Status phase |
+| 6 | ResolveDamage | Damage resolution |
+| 7 | RepairAction | Repair actions |
+| 8 | ResolveImmediateEffect | Immediate damage card effects |
+| 9 | SetSpeed, OverlapDamage, PersistentEffectDamage | Movement side-effects |
+| 10 | DiscardToken, RevealDial | UI state |
+| 11 | DebugDealDamage | Debug-only |
+
+### 8.12.5 Deterministic RNG
+
+`GameRng` wraps Godot's `RandomNumberGenerator` with a captured initial seed.
+All random operations (dice rolls via `Dice`, deck shuffles via `DamageDeck`)
+use `GameRng` instead of global `randi()`.  The seed is stored in the replay
+header, enabling deterministic playback.
+
+### 8.12.6 Replay System
+
+`GameReplay` captures:
+- **Header:** scenario ID, RNG seed, factions, initiative player
+- **Commands:** ordered array of serialized `GameCommand` dictionaries
+
+File format: JSON v1, saved to `res://replays/`.  Debug keybind: **Shift+R**
+saves a replay; auto-save on game exit and game over.
+
+Playback: `CommandProcessor.replay_commands()` deserializes and re-submits
+each command in order, reconstructing the full game state.
+
+### 8.12.7 §4.6 Mutation Rule
+
+> All mutations of `GameState`-owned data must route through a
+> `GameCommand.execute()` call.
+
+This rule is enforced by code review (no automated linter yet).
+34 violations were identified across 8 files and resolved in 7 priority
+phases (P1–P7), producing 13 new command classes.  One debug-only
+violation was resolved with `DebugDealDamageCommand`.

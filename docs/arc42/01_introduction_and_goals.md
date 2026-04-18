@@ -6,8 +6,9 @@
 with command dials, ship movement (maneuver tool), ship/squadron combat with full
 attack pipeline (dice, defense tokens, damage cards), repair commands, squadron
 commands, scoring, victory screen, hot-seat multiplayer, SFX, and dynamic music.
-94 source files (30 491 lines), 88 test files (21 641 lines), 87 test scripts,
-1 645 tests, 1 644 passing.
+All game-state mutations route through the **Command Pattern** (26 command classes,
+40+ wired call sites) for replay/multiplayer safety.
+115 test scripts, 2 369 tests, 4 277 asserts — all passing.
 
 ## 1.1 Requirements Overview
 

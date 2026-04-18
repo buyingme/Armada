@@ -950,6 +950,26 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 	return CommandProcessor.submit(cmd)
 
 
+## Submits a [DebugDealDamageCommand] when the debug damage tool deals
+## a faceup damage card to a ship.
+## [param ship] — the target ship.
+## [param card_data] — serialized [DamageCard] with overridden identity.
+## [param effect_id] — chosen damage card effect ID.
+func submit_debug_deal_damage(ship: ShipInstance,
+		card_data: Dictionary,
+		effect_id: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := DebugDealDamageCommand.new(ship.owner_player, {
+		"owner_player": ship.owner_player,
+		"ship_index": ship_index,
+		"effect_id": effect_id,
+		"card_data": card_data,
+	})
+	return CommandProcessor.submit(cmd)
+
+
 # ---------------------------------------------------------------------------
 # Ship Phase turn management
 # ---------------------------------------------------------------------------

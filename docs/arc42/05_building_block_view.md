@@ -26,7 +26,7 @@
 | **UI / Scenes** | Visual scenes, HUD elements, menus, game board rendering | `src/scenes/`, `src/ui/` |
 | **Game Core** | Rules engine, game state, phase management, combat resolution | `src/core/` |
 | **Data Layer** | Data models as Godot Resources (ships, squadrons, upgrades) | `src/models/` |
-| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager, SfxManager, MusicManager, DebugMode, SaveGameManager) | `src/autoload/` |
+| **Autoload Services** | Singletons (GameManager, EventBus, Constants, TooltipManager, SfxManager, MusicManager, DebugMode, SaveGameManager, CommandProcessor) | `src/autoload/` |
 | **Assets** | Textures, audio, fonts, shaders | `assets/` |
 | **Tests** | Unit and integration tests | `tests/` |
 
@@ -62,6 +62,9 @@
 | `DamageCardEffectFactory` | RefCounted | `src/core/damage_card_effect_factory.gd` | Factory for damage card effects — creates `GameEffect` instances for each critical card type |
 | `ImmediateEffectResolver` | RefCounted | `src/core/immediate_effect_resolver.gd` | Resolves faceup damage card immediate effects (Structural Damage, Projector Misaligned, etc.) |
 | `ActivationContext` | RefCounted | `src/core/activation_context.gd` | Shared activation state (current ship, activation state, overlap flag) injected into all controllers |
+| `GameCommand` | RefCounted | `src/core/game_command.gd` | Abstract base for all player-initiated game actions — serialize, validate, execute |
+| `GameRng` | RefCounted | `src/core/game_rng.gd` | Deterministic seeded RNG wrapper for dice rolls and deck shuffles |
+| `GameReplay` | RefCounted | `src/core/game_replay.gd` | Replay recording/playback — v1 JSON file format, header + command array |
 
 ### Additional Core Components
 

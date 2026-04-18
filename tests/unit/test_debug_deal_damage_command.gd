@@ -112,7 +112,7 @@ func test_validate_missing_ship() -> void:
 
 func test_validate_invalid_owner() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
-		"owner_player": -1,
+		"owner_player": - 1,
 		"ship_index": 0,
 		"effect_id": "blinded_gunners",
 		"card_data": _make_persistent_card_data(),

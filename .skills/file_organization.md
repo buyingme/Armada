@@ -63,6 +63,27 @@ Armada/
 | `src/ui/` | Reusable UI widgets | `Control` |
 | `src/utils/` | Helpers, utilities | `RefCounted` |
 
+### Core Logic (`src/core/`)
+
+All core logic scripts **must** live in a domain sub-folder — no files at the
+`src/core/` root.  Every script extends `RefCounted` (no scene-tree dependency).
+
+```
+src/core/
+├── combat/          → Attack resolution, defense tokens, dice modification
+├── commands/        → GameCommand subclasses, submitters, replay
+├── damage/          → Damage cards, damage dealing, repair
+├── effects/         → Upgrade / ability effects
+│   └── keywords/    → Squadron keyword effects (Bomber, Escort, …)
+├── geometry/        → Ship bases, range finding, line of sight, layout math
+├── movement/        → Maneuver tool, overlap resolution, squadron/token movement
+└── state/           → GameState, activation context, dial/token management, RNG, scoring
+```
+
+**Choosing a sub-folder:** pick the folder whose domain best matches the class's
+primary responsibility.  If no existing folder fits, create a new one and add it
+to this table.  Never leave a `.gd` file at the `src/core/` root.
+
 ### Scenes (`src/scenes/`)
 
 Each scene folder contains its `.tscn` file and its `.gd` script:

@@ -158,7 +158,14 @@ When asked to implement a feature or fix a bug:
 ```
 src/
 ├── autoload/    → Singletons (GameManager, EventBus, Constants)  [extends Node]
-├── core/        → Pure game logic (GameState, Dice, AttackResolver)  [extends RefCounted]
+├── core/        → Pure game logic — NO files at root, use sub-folders  [extends RefCounted]
+│   ├── combat/      → Attack resolution, defense tokens, dice modification
+│   ├── commands/    → GameCommand subclasses, submitters, replay
+│   ├── damage/      → Damage cards, damage dealing, repair
+│   ├── effects/     → Upgrade / ability effects (keywords/ sub-folder)
+│   ├── geometry/    → Ship bases, range finding, line of sight, layout math
+│   ├── movement/    → Maneuver tool, overlap resolution, squadron movement
+│   └── state/       → GameState, activation context, dial/token mgmt, RNG
 ├── models/      → Data resources (ShipData, SquadronData)  [extends Resource]
 ├── scenes/      → Visual scenes + controllers  [extends Node/Control]
 ├── ui/          → Reusable UI widgets  [extends Control]

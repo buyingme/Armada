@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-18 (G4.2)
+> Last updated: 2026-04-18 (G4.3)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 120 |
-| GUT tests | 2 480 |
-| GUT asserts | 4 447 |
+| GUT test scripts | 121 |
+| GUT tests | 2 505 |
+| GUT asserts | 4 506 |
 | Autoloads | 15 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -96,6 +96,7 @@
 | G4.10: Dedicated Server Binary | ✅ | ServerMain autoload, export preset, HMAC replay signing, CI workflow |
 | G4.1: Network Transport Foundation | ✅ | PlayerProfile, NetworkManager autoloads, ENet host/connect/disconnect, state machine, heartbeat, TestNetworkHarness |
 | G4.2: Server-Side Command Processing | ✅ | CommandSubmitter strategy (Local/Network), GameManager wiring (31 sites), server-side RPCs, is_replaying flag |
+| G4.3: Information Hiding | ✅ | StateFilter utility, dial/damage/RNG filtering, 25 unit tests with secret canary |
 
 ---
 
@@ -154,7 +155,7 @@
 
 ## Manual Tests Passed
 
-37 tests formally passed with date stamps (out of ~233 total written).
+39 tests formally passed with date stamps (out of ~235 total written).
 
 | ID | Description | Date |
 |----|-------------|------|
@@ -172,6 +173,8 @@
 | MT-P7.01–03 | Discard token (overflow), reveal/unreveal dial, replay save after P7 ops | 2026-04-18 |
 | MT-G4.10.01–04 | Dedicated server: autoload, --server flag, HMAC, headless GUT | 2026-04-18 |
 | MT-G4.1.01–02 | Network transport: normal game unaffected, headless GUT 119/2460 | 2026-04-18 |
+| MT-G4.2.01–02 | Server-side command processing: normal game, headless GUT 120/2480 | 2026-04-18 |
+| MT-G4.3.01–02 | Information hiding: normal game, headless GUT 121/2505 | 2026-04-18 |
 
 Phase 3 (9 tests) also passed but without formal date stamps.
 

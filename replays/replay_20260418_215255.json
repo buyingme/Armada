@@ -10,19 +10,27 @@
 		},
 		{
 			"payload": {
-				"next_phase": 2
+				"next_phase": 4
 			},
-			"player": 1,
+			"player": 0,
 			"sequence": 1,
 			"type": "advance_phase"
 		},
 		{
 			"payload": {
-				"ship_index": 0
+
 			},
 			"player": 0,
 			"sequence": 2,
-			"type": "convert_dial_to_token"
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 3,
+			"type": "start_round"
 		}
 	],
 	"header": {
@@ -34,8 +42,8 @@
 		"format_version": 1,
 		"godot_version": "4.5.1-stable (official)",
 		"initiative_player": 0,
-		"rng_seed": -3590188043896473281,
+		"rng_seed": -2973544810323375809,
 		"scenario_id": "",
-		"timestamp": "2026-04-14T19:40:34"
+		"timestamp": "2026-04-18T19:52:55"
 	}
 }

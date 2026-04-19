@@ -61,6 +61,8 @@ var _ready_button: Button
 var _start_button: Button
 var _leave_button: Button
 var _status_label: Label
+var _scenario_option: OptionButton
+var _password_label: Label
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +142,8 @@ func _build_main_panel() -> PanelContainer:
 	vbox.add_child(HSeparator.new())
 	_build_player_list(vbox)
 	vbox.add_child(HSeparator.new())
+	_build_scenario_picker(vbox)
+	vbox.add_child(HSeparator.new())
 	_build_status_area(vbox)
 	_build_buttons(vbox)
 
@@ -156,6 +160,11 @@ func _build_header(parent: VBoxContainer) -> void:
 			"Code: ------", UIStyleHelper.FONT_BODY,
 			UIStyleHelper.BLUE_ACCENT)
 	parent.add_child(_code_label)
+
+	_password_label = UIStyleHelper.create_section_label(
+			"", UIStyleHelper.FONT_HINT,
+			UIStyleHelper.DIMMED_HINT)
+	parent.add_child(_password_label)
 
 
 ## Builds two player rows (one per slot).
@@ -215,6 +224,21 @@ func _build_player_row(index: int) -> PanelContainer:
 	return row_panel
 
 
+## Builds the scenario selection area (host-only dropdown).
+func _build_scenario_picker(parent: VBoxContainer) -> void:
+	var label: Label = UIStyleHelper.create_section_label(
+			"Scenario", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	parent.add_child(label)
+
+	_scenario_option = OptionButton.new()
+	_scenario_option.add_item("Learning Scenario", 0)
+	_scenario_option.custom_minimum_size.y = 32
+	_scenario_option.item_selected.connect(_on_scenario_selected)
+	parent.add_child(_scenario_option)
+
+
 ## Builds the status text area.
 func _build_status_area(parent: VBoxContainer) -> void:
 	_status_label = UIStyleHelper.create_section_label(
@@ -260,6 +284,7 @@ func _update_display() -> void:
 	if lobby == null:
 		_title_label.text = "Lobby"
 		_code_label.text = "Code: ------"
+		_password_label.text = ""
 		_update_empty_player_rows()
 		_status_label.text = "No lobby active."
 		return
@@ -267,7 +292,10 @@ func _update_display() -> void:
 	_title_label.text = lobby.lobby_name if lobby.lobby_name != "" \
 			else "Lobby"
 	_code_label.text = "Code: %s" % lobby.code
+	_password_label.text = "🔒 Password-protected" \
+			if lobby.has_password() else ""
 	_update_player_rows(lobby)
+	_update_scenario(lobby)
 	_update_status(lobby)
 	_update_buttons(lobby)
 
@@ -303,6 +331,18 @@ func _update_empty_player_rows() -> void:
 		_player_name_labels[i].add_theme_color_override(
 				"font_color", WAITING_COLOR)
 		_player_ready_labels[i].text = ""
+
+
+## Updates the scenario picker from lobby state.
+func _update_scenario(lobby: LobbyState) -> void:
+	_scenario_option.disabled = not LobbyManager.is_host()
+	var scenario: String = lobby.scenario
+	if scenario.is_empty():
+		scenario = "Learning Scenario"
+	for i: int in range(_scenario_option.item_count):
+		if _scenario_option.get_item_text(i) == scenario:
+			_scenario_option.selected = i
+			return
 
 
 ## Updates the status label.
@@ -342,6 +382,14 @@ func _on_ready_pressed() -> void:
 	_is_ready = not _is_ready
 	LobbyManager.set_ready(_is_ready)
 	_ready_button.text = "Not Ready" if _is_ready else "Ready"
+
+
+## Handles scenario selection change (host only).
+func _on_scenario_selected(index: int) -> void:
+	if not LobbyManager.is_host():
+		return
+	var scenario_name: String = _scenario_option.get_item_text(index)
+	LobbyManager.update_scenario(scenario_name)
 
 
 ## Requests the host to start the game.

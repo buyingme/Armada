@@ -327,3 +327,42 @@ func test_ready_state_reset_on_rejoin() -> void:
 	lobby.add_player(10, "Alice", 0)
 	assert_false(lobby.get_player(10)["ready"],
 			"Ready should be false after re-joining.")
+
+
+# ---------------------------------------------------------------------------
+# Scenario field
+# ---------------------------------------------------------------------------
+
+func test_scenario_defaults_to_learning() -> void:
+	var lobby: LobbyState = LobbyState.new()
+	assert_eq(lobby.scenario, "learning",
+			"Scenario should default to 'learning'.")
+
+
+func test_scenario_included_in_serialization() -> void:
+	var lobby: LobbyState = LobbyState.new()
+	lobby.scenario = "Learning Scenario"
+	var data: Dictionary = lobby.serialize()
+	assert_eq(data["scenario"], "Learning Scenario",
+			"Serialized data should contain scenario.")
+	var restored: LobbyState = LobbyState.deserialize(data)
+	assert_eq(restored.scenario, "Learning Scenario",
+			"Deserialized lobby should have scenario.")
+
+
+# ---------------------------------------------------------------------------
+# Password hash round-trip
+# ---------------------------------------------------------------------------
+
+func test_password_hash_sha256_round_trip() -> void:
+	var lobby: LobbyState = LobbyState.new()
+	var password: String = "secret123"
+	lobby.password_hash = password.sha256_text()
+	assert_true(lobby.has_password(),
+			"Lobby with hash should report has_password.")
+	# Verify same password produces same hash.
+	assert_eq(password.sha256_text(), lobby.password_hash,
+			"SHA-256 of same password should match.")
+	# Wrong password should not match.
+	assert_ne("wrong_password".sha256_text(), lobby.password_hash,
+			"SHA-256 of different password should not match.")

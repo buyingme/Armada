@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-19 (G4.5)
+> Last updated: 2026-04-19 (G4.5 complete)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -11,8 +11,8 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 123 |
-| GUT tests | 2 561 |
-| GUT asserts | 4 723 |
+| GUT tests | 2 564 |
+| GUT asserts | 4 729 |
 | Autoloads | 16 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -98,7 +98,7 @@
 | G4.2: Server-Side Command Processing | ✅ | CommandSubmitter strategy (Local/Network), GameManager wiring (31 sites), server-side RPCs, is_replaying flag |
 | G4.3: Information Hiding | ✅ | StateFilter utility, dial/damage/RNG filtering, 25 unit tests with secret canary |
 | G4.4: Command Phase Sync Gate | ✅ | CommandSyncGate, NetworkManager hold-and-release for dial assignments, 21 unit tests |
-| G4.5: Lobby System | ✅ | LobbyState, LobbyManager autoload, LobbyRoom UI, main menu Host/Join buttons, lobby code generation, 35 unit tests |
+| G4.5: Lobby System | ✅ | LobbyState, LobbyManager autoload, LobbyRoom UI, main menu Host/Join buttons, lobby code generation, password-protected lobbies, scenario picker, 38 unit tests |
 
 ---
 

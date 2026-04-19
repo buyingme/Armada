@@ -136,6 +136,18 @@ func is_host() -> bool:
 	return NetworkManager.is_server()
 
 
+## Updates the selected scenario (host only).
+## G4.5.4 — scenario picker.
+func update_scenario(scenario_name: String) -> void:
+	if not NetworkManager.is_server():
+		return
+	if current_lobby == null:
+		return
+	current_lobby.scenario = LobbyState.sanitize_name(scenario_name)
+	_log.info("Scenario changed to '%s'." % current_lobby.scenario)
+	_broadcast_lobby_state()
+
+
 # ---------------------------------------------------------------------------
 # Signal handlers
 # ---------------------------------------------------------------------------

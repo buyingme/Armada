@@ -24,7 +24,9 @@ var _toast_label: Label
 var _splash_timer: Timer
 var _toast_timer: Timer
 var _host_name_input: LineEdit
+var _host_password_input: LineEdit
 var _join_ip_input: LineEdit
+var _join_password_input: LineEdit
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
 
@@ -246,6 +248,7 @@ func _on_host_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_menu_panel.visible = false
 	_host_name_input.text = ""
+	_host_password_input.text = ""
 	_host_dialog.visible = true
 	_host_name_input.grab_focus()
 
@@ -255,6 +258,7 @@ func _on_join_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_menu_panel.visible = false
 	_join_ip_input.text = ""
+	_join_password_input.text = ""
 	_join_dialog.visible = true
 	_join_ip_input.grab_focus()
 
@@ -306,6 +310,16 @@ func _populate_host_dialog(vbox: VBoxContainer) -> void:
 	_host_name_input.max_length = LobbyState.MAX_NAME_LENGTH
 	_host_name_input.custom_minimum_size.y = 36
 	vbox.add_child(_host_name_input)
+	var pw_label: Label = UIStyleHelper.create_section_label(
+			"Password (optional):", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	pw_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(pw_label)
+	_host_password_input = LineEdit.new()
+	_host_password_input.placeholder_text = "Leave blank for open lobby"
+	_host_password_input.secret = true
+	_host_password_input.custom_minimum_size.y = 36
+	vbox.add_child(_host_password_input)
 	var btn_box: HBoxContainer = HBoxContainer.new()
 	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_box.add_theme_constant_override("separation", 12)
@@ -323,13 +337,14 @@ func _on_host_confirm_pressed() -> void:
 	var lobby_name: String = _host_name_input.text.strip_edges()
 	if lobby_name.is_empty():
 		lobby_name = PlayerProfile.get_display_name() + "'s Game"
+	var password: String = _host_password_input.text
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	if not NetworkManager.host():
 		_show_toast("Failed to host game.")
 		_host_dialog.visible = false
 		_menu_panel.visible = true
 		return
-	LobbyManager.create_lobby(lobby_name)
+	LobbyManager.create_lobby(lobby_name, password)
 	_host_dialog.visible = false
 	_show_lobby_room()
 
@@ -380,6 +395,16 @@ func _populate_join_dialog(vbox: VBoxContainer) -> void:
 	_join_ip_input.placeholder_text = "127.0.0.1"
 	_join_ip_input.custom_minimum_size.y = 36
 	vbox.add_child(_join_ip_input)
+	var pw_label: Label = UIStyleHelper.create_section_label(
+			"Password (if required):", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	pw_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(pw_label)
+	_join_password_input = LineEdit.new()
+	_join_password_input.placeholder_text = "Leave blank if none"
+	_join_password_input.secret = true
+	_join_password_input.custom_minimum_size.y = 36
+	vbox.add_child(_join_password_input)
 	var btn_box: HBoxContainer = HBoxContainer.new()
 	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_box.add_theme_constant_override("separation", 12)
@@ -398,7 +423,9 @@ func _on_join_confirm_pressed() -> void:
 	if ip.is_empty():
 		_show_toast("Please enter a server IP address.")
 		return
+	var password: String = _join_password_input.text
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.set_lobby_password(password)
 	NetworkManager.handshake_accepted.connect(
 			_on_join_accepted, CONNECT_ONE_SHOT)
 	NetworkManager.handshake_rejected.connect(

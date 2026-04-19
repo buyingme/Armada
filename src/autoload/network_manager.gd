@@ -128,6 +128,11 @@ var _last_heartbeat: Dictionary = {}
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("NetworkManager")
 
+## Client-side lobby password (plaintext).  Set before calling
+## [method connect_to_server].  Cleared after handshake.
+## Transient — not serialized.
+var _lobby_password: String = ""
+
 ## Server-side sync gate for the Command Phase.
 ## Holds [AssignDialCommand] results until both players have submitted all
 ## dials, then releases them in a single batch.
@@ -220,6 +225,13 @@ func disconnect_from_server() -> void:
 	_cleanup()
 
 
+## Sets the lobby password for the next [method connect_to_server] call.
+## The password is sent during the handshake and cleared afterwards.
+## G4.5.6 — password-protected lobbies.
+func set_lobby_password(password: String) -> void:
+	_lobby_password = password
+
+
 # ---------------------------------------------------------------------------
 # Public API — Queries
 # ---------------------------------------------------------------------------
@@ -295,7 +307,9 @@ func _on_connected_to_server() -> void:
 	_set_state(ConnectionState.AUTHENTICATING)
 	var client_id: String = PlayerProfile.get_client_id() if PlayerProfile else ""
 	var display_name: String = PlayerProfile.get_display_name() if PlayerProfile else "Player"
-	_send_handshake.rpc_id(1, PROTOCOL_VERSION, client_id, display_name)
+	_send_handshake.rpc_id(1, PROTOCOL_VERSION, client_id, display_name,
+			_lobby_password)
+	_lobby_password = ""
 
 
 ## Client-side: connection attempt failed.
@@ -314,11 +328,12 @@ func _on_server_disconnected() -> void:
 # Handshake RPCs
 # ---------------------------------------------------------------------------
 
-## Client → Server: send handshake with protocol version and identity.
-## G4 Network Plan: §1.3 — handshake message.
+## Client → Server: send handshake with protocol version, identity,
+## and optional lobby password.
+## G4 Network Plan: §1.3 — handshake message.  G4.5.6 — password.
 @rpc("any_peer", "reliable")
 func _send_handshake(protocol_version: int, client_id: String,
-		display_name: String) -> void:
+		display_name: String, password: String = "") -> void:
 	if role != Role.SERVER:
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -331,7 +346,13 @@ func _send_handshake(protocol_version: int, client_id: String,
 				[PROTOCOL_VERSION, protocol_version])
 		_log.warn("Rejecting peer %d: %s" % [sender_id, reason])
 		_handshake_response.rpc_id(sender_id, false, reason, -1)
-		# Disconnect after a short delay so the rejection message arrives.
+		_disconnect_peer_deferred(sender_id)
+		return
+	# --- Password check (G4.5.6) ---
+	if not _verify_lobby_password(password):
+		var reason: String = "Incorrect lobby password."
+		_log.warn("Rejecting peer %d: %s" % [sender_id, reason])
+		_handshake_response.rpc_id(sender_id, false, reason, -1)
 		_disconnect_peer_deferred(sender_id)
 		return
 	# --- Assign player slot ---
@@ -355,6 +376,20 @@ func _send_handshake(protocol_version: int, client_id: String,
 			sender_id, player_index, display_name])
 	_handshake_response.rpc_id(sender_id, true, "", player_index)
 	peer_authenticated.emit(sender_id, player_index, display_name)
+
+
+## Server-side: check if the supplied password matches the lobby password.
+## Returns [code]true[/code] if no password is set or the hash matches.
+## G4.5.6 — password-protected lobbies.
+func _verify_lobby_password(password: String) -> bool:
+	if not LobbyManager:
+		return true
+	var lobby: LobbyState = LobbyManager.current_lobby
+	if lobby == null or not lobby.has_password():
+		return true
+	# Compare SHA-256 hash of supplied password against stored hash.
+	var supplied_hash: String = password.sha256_text()
+	return supplied_hash == lobby.password_hash
 
 
 ## Server → Client: handshake response (accept or reject).

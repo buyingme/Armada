@@ -63,6 +63,7 @@ var _leave_button: Button
 var _status_label: Label
 var _scenario_option: OptionButton
 var _password_label: Label
+var _chat_panel: ChatPanel
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +147,8 @@ func _build_main_panel() -> PanelContainer:
 	vbox.add_child(HSeparator.new())
 	_build_status_area(vbox)
 	_build_buttons(vbox)
+	vbox.add_child(HSeparator.new())
+	_build_chat_area(vbox)
 
 	return panel
 
@@ -237,6 +240,19 @@ func _build_scenario_picker(parent: VBoxContainer) -> void:
 	_scenario_option.custom_minimum_size.y = 32
 	_scenario_option.item_selected.connect(_on_scenario_selected)
 	parent.add_child(_scenario_option)
+
+
+## Builds the embedded chat area for lobby chat (G4.6.6).
+func _build_chat_area(parent: VBoxContainer) -> void:
+	var label: Label = UIStyleHelper.create_section_label(
+			"Chat", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	parent.add_child(label)
+
+	_chat_panel = ChatPanel.new()
+	_chat_panel.custom_minimum_size = Vector2(0, 200)
+	parent.add_child(_chat_panel)
 
 
 ## Builds the status text area.

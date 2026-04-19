@@ -34,6 +34,7 @@ CommandProcessor="*res://src/autoload/command_processor.gd"
 PlayerProfile="*res://src/autoload/player_profile.gd"
 NetworkManager="*res://src/autoload/network_manager.gd"
 LobbyManager="*res://src/autoload/lobby_manager.gd"
+ChatManager="*res://src/autoload/chat_manager.gd"
 ServerMain="*res://src/autoload/server_main.gd"
 
 [display]

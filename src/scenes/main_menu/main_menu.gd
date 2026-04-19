@@ -17,9 +17,14 @@ const TOAST_DURATION: float = 2.0
 
 ## UI references built in [method _build_ui].
 var _menu_panel: PanelContainer
+var _host_dialog: PanelContainer
+var _join_dialog: PanelContainer
+var _lobby_room: LobbyRoom
 var _toast_label: Label
 var _splash_timer: Timer
 var _toast_timer: Timer
+var _host_name_input: LineEdit
+var _join_ip_input: LineEdit
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
 
@@ -31,13 +36,25 @@ func _ready() -> void:
 
 
 ## Builds the entire UI tree in code: splash background, title text,
-## menu modal (initially hidden), and toast label.
+## menu modal (initially hidden), host/join dialogs, lobby room, and
+## toast label.
 func _build_ui() -> void:
 	_build_splash_background()
 	_build_title_labels()
 	_menu_panel = _build_menu_modal()
 	_menu_panel.visible = false
 	add_child(_menu_panel)
+	_host_dialog = _build_host_dialog()
+	_host_dialog.visible = false
+	add_child(_host_dialog)
+	_join_dialog = _build_join_dialog()
+	_join_dialog.visible = false
+	add_child(_join_dialog)
+	_lobby_room = LobbyRoom.new()
+	_lobby_room.visible = false
+	_lobby_room.leave_requested.connect(_on_lobby_leave)
+	_lobby_room.game_start_requested.connect(_on_lobby_game_start)
+	add_child(_lobby_room)
 	_build_toast_label()
 
 
@@ -110,7 +127,8 @@ func _build_menu_modal() -> PanelContainer:
 	panel.custom_minimum_size = Vector2(320, 0)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.add_theme_stylebox_override("panel", _create_modal_style())
+	panel.add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style(0.0))
 
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 24)
@@ -125,16 +143,6 @@ func _build_menu_modal() -> PanelContainer:
 	margin.add_child(vbox)
 	_populate_menu_vbox(vbox)
 	return panel
-
-
-## Creates the modal panel StyleBoxFlat (ui_styling.md §1).
-func _create_modal_style() -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.18, 0.95)
-	style.border_color = Color(0.4, 0.5, 0.7, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	return style
 
 
 ## Adds title, separator, and game-mode buttons to [param vbox].
@@ -158,6 +166,14 @@ func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	var btn_learning: Button = _create_menu_button("Learning Scenario")
 	btn_learning.pressed.connect(_on_learning_scenario_pressed)
 	vbox.add_child(btn_learning)
+
+	var btn_host: Button = _create_menu_button("Host Game")
+	btn_host.pressed.connect(_on_host_game_pressed)
+	vbox.add_child(btn_host)
+
+	var btn_join: Button = _create_menu_button("Join Game")
+	btn_join.pressed.connect(_on_join_game_pressed)
+	vbox.add_child(btn_join)
 
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size.y = 8.0
@@ -225,10 +241,225 @@ func _on_learning_scenario_pressed() -> void:
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
+## Shows the host-game dialog. G4.5.5.
+func _on_host_game_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	_menu_panel.visible = false
+	_host_name_input.text = ""
+	_host_dialog.visible = true
+	_host_name_input.grab_focus()
+
+
+## Shows the join-game dialog. G4.5.5.
+func _on_join_game_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	_menu_panel.visible = false
+	_join_ip_input.text = ""
+	_join_dialog.visible = true
+	_join_ip_input.grab_focus()
+
+
 ## Quits the application. UI-033.
 func _on_quit_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	get_tree().quit()
+
+
+# ---------------------------------------------------------------------------
+# Host dialog (G4.5.5)
+# ---------------------------------------------------------------------------
+
+## Builds the host-game dialog panel.
+func _build_host_dialog() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.set_anchors_preset(PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(360, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style(0.0))
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+	_populate_host_dialog(vbox)
+	return panel
+
+
+## Populates the host-game dialog content.
+func _populate_host_dialog(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIStyleHelper.create_title_label(
+			"Host Game", UIStyleHelper.GOLD_TITLE))
+	vbox.add_child(HSeparator.new())
+	var name_label: Label = UIStyleHelper.create_section_label(
+			"Lobby Name:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(name_label)
+	_host_name_input = LineEdit.new()
+	_host_name_input.placeholder_text = "My Game"
+	_host_name_input.max_length = LobbyState.MAX_NAME_LENGTH
+	_host_name_input.custom_minimum_size.y = 36
+	vbox.add_child(_host_name_input)
+	var btn_box: HBoxContainer = HBoxContainer.new()
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_box)
+	var btn_confirm: Button = _create_menu_button("Host")
+	btn_confirm.pressed.connect(_on_host_confirm_pressed)
+	btn_box.add_child(btn_confirm)
+	var btn_cancel: Button = _create_menu_button("Cancel")
+	btn_cancel.pressed.connect(_on_host_cancel_pressed)
+	btn_box.add_child(btn_cancel)
+
+
+## Confirms hosting and transitions to the lobby room.
+func _on_host_confirm_pressed() -> void:
+	var lobby_name: String = _host_name_input.text.strip_edges()
+	if lobby_name.is_empty():
+		lobby_name = PlayerProfile.get_display_name() + "'s Game"
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	if not NetworkManager.host():
+		_show_toast("Failed to host game.")
+		_host_dialog.visible = false
+		_menu_panel.visible = true
+		return
+	LobbyManager.create_lobby(lobby_name)
+	_host_dialog.visible = false
+	_show_lobby_room()
+
+
+## Cancels host dialog and returns to the menu.
+func _on_host_cancel_pressed() -> void:
+	_host_dialog.visible = false
+	_menu_panel.visible = true
+
+
+# ---------------------------------------------------------------------------
+# Join dialog (G4.5.5)
+# ---------------------------------------------------------------------------
+
+## Builds the join-game dialog panel.
+func _build_join_dialog() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.set_anchors_preset(PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(360, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style(0.0))
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+	_populate_join_dialog(vbox)
+	return panel
+
+
+## Populates the join-game dialog content.
+func _populate_join_dialog(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIStyleHelper.create_title_label(
+			"Join Game", UIStyleHelper.GOLD_TITLE))
+	vbox.add_child(HSeparator.new())
+	var ip_label: Label = UIStyleHelper.create_section_label(
+			"Server IP Address:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	ip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(ip_label)
+	_join_ip_input = LineEdit.new()
+	_join_ip_input.placeholder_text = "127.0.0.1"
+	_join_ip_input.custom_minimum_size.y = 36
+	vbox.add_child(_join_ip_input)
+	var btn_box: HBoxContainer = HBoxContainer.new()
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_box)
+	var btn_confirm: Button = _create_menu_button("Connect")
+	btn_confirm.pressed.connect(_on_join_confirm_pressed)
+	btn_box.add_child(btn_confirm)
+	var btn_cancel: Button = _create_menu_button("Cancel")
+	btn_cancel.pressed.connect(_on_join_cancel_pressed)
+	btn_box.add_child(btn_cancel)
+
+
+## Confirms joining and initiates connection to the server.
+func _on_join_confirm_pressed() -> void:
+	var ip: String = _join_ip_input.text.strip_edges()
+	if ip.is_empty():
+		_show_toast("Please enter a server IP address.")
+		return
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.handshake_accepted.connect(
+			_on_join_accepted, CONNECT_ONE_SHOT)
+	NetworkManager.handshake_rejected.connect(
+			_on_join_rejected, CONNECT_ONE_SHOT)
+	if not NetworkManager.connect_to_server(ip):
+		_show_toast("Failed to connect.")
+		_disconnect_join_signals()
+		return
+	_show_toast("Connecting...")
+
+
+## Cancels join dialog and returns to the menu.
+func _on_join_cancel_pressed() -> void:
+	_join_dialog.visible = false
+	_menu_panel.visible = true
+
+
+## Handshake accepted — transition to lobby room.
+func _on_join_accepted(_player_index: int) -> void:
+	_disconnect_join_signals()
+	_join_dialog.visible = false
+	_show_lobby_room()
+
+
+## Handshake rejected — show error and return to menu.
+func _on_join_rejected(reason: String) -> void:
+	_disconnect_join_signals()
+	_join_dialog.visible = false
+	_menu_panel.visible = true
+	_show_toast("Join failed: " + reason)
+
+
+## Disconnects one-shot join signals if still connected.
+func _disconnect_join_signals() -> void:
+	if NetworkManager.handshake_accepted.is_connected(_on_join_accepted):
+		NetworkManager.handshake_accepted.disconnect(_on_join_accepted)
+	if NetworkManager.handshake_rejected.is_connected(_on_join_rejected):
+		NetworkManager.handshake_rejected.disconnect(_on_join_rejected)
+
+
+# ---------------------------------------------------------------------------
+# Lobby room transitions (G4.5.5)
+# ---------------------------------------------------------------------------
+
+## Shows the lobby room and hides other panels.
+func _show_lobby_room() -> void:
+	_menu_panel.visible = false
+	_host_dialog.visible = false
+	_join_dialog.visible = false
+	_lobby_room.visible = true
+
+
+## Called when the user leaves the lobby room.
+func _on_lobby_leave() -> void:
+	_lobby_room.visible = false
+	_menu_panel.visible = true
+
+
+## Called when the game is starting from the lobby.
+func _on_lobby_game_start() -> void:
+	get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
 ## Shows a brief toast message near the bottom of the screen.

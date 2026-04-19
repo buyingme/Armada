@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-18
-> Current baseline: 122 scripts, 2 526 tests, 4 545 asserts
+> Last updated: 2026-04-19 (G4.5)
+> Current baseline: 123 scripts, 2 561 tests, 4 723 asserts
 
 ---
 
@@ -306,6 +306,39 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 
 **Pass criteria:** Full test suite passes including 21 new CommandSyncGate tests.
 
+### MT-G4.5.1 — Main menu Host/Join buttons
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch game via `scripts/run_game.sh` | Splash screen appears, menu fades in after 2s |
+| 2 | Observe main menu buttons | "Host Game" and "Join Game" buttons visible between "Learning Scenario" and "Quit" |
+| 3 | Click "Host Game" | Host dialog appears with "Lobby Name:" input and Host/Cancel buttons |
+| 4 | Click "Cancel" | Returns to main menu |
+| 5 | Click "Join Game" | Join dialog appears with "Server IP Address:" input and Connect/Cancel buttons |
+| 6 | Click "Cancel" | Returns to main menu |
+
+**Pass criteria:** Both dialogs render correctly with UIStyleHelper modal styling (dark panel, blue border, gold title).
+
+### MT-G4.5.2 — Host game creates lobby room
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Click "Host Game", enter "Test Lobby" as name, click "Host" | Lobby room appears with "Test Lobby" title and 6-char lobby code |
+| 2 | Observe player list | P1 row shows host's display name, "Not Ready". P2 row shows "Waiting..." |
+| 3 | Click "Ready" | Button text changes to "Not Ready", P1 row shows "✓ Ready" in green |
+| 4 | Click "Not Ready" | Button text changes to "Ready", P1 row shows "Not Ready" |
+| 5 | Click "Leave" | Returns to main menu |
+
+**Pass criteria:** Lobby room displays correctly, ready toggle works, leave returns to menu.
+
+### MT-G4.5.3 — Headless GUT validation
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 123 scripts, 2561 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes including 35 new LobbyState tests.
+
 ### Awaiting First Test (highest priority — recent changes)
 
 | ID | Description |
@@ -322,6 +355,8 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 | MT-G4.2.01–02 | Server-side command processing: normal game unaffected, headless GUT 120/2480 | ✅ passed 2026-04-18 |
 | MT-G4.3.01–02 | Information hiding: normal game unaffected, headless GUT 121/2505 | ✅ passed 2026-04-18 |
 | MT-G4.4.01–02 | Sync gate: normal game unaffected, headless GUT 122/2526 | ✅ passed 2026-04-19 |
+| MT-G4.5.01 | Lobby system: main menu shows Host/Join buttons, host creates lobby room |
+| MT-G4.5.02 | Lobby system: headless GUT 123/2561 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

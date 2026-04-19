@@ -84,6 +84,11 @@ signal handshake_accepted(player_index: int)
 ## Emitted when the handshake is rejected (client-side).
 signal handshake_rejected(reason: String)
 
+## Emitted on the server when a peer completes the handshake and is
+## authenticated.  Used by [LobbyManager] to add the peer to the lobby.
+signal peer_authenticated(peer_id: int, player_index: int,
+		display_name: String)
+
 ## Emitted when a chat message is received (future — G4.6).
 signal chat_received(sender: String, text: String, timestamp: int)
 
@@ -349,6 +354,7 @@ func _send_handshake(protocol_version: int, client_id: String,
 	_log.info("Peer %d accepted as player %d ('%s')." % [
 			sender_id, player_index, display_name])
 	_handshake_response.rpc_id(sender_id, true, "", player_index)
+	peer_authenticated.emit(sender_id, player_index, display_name)
 
 
 ## Server → Client: handshake response (accept or reject).

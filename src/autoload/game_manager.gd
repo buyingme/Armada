@@ -318,6 +318,10 @@ func _start_round() -> void:
 	# Reset submission tracking for the new round.
 	_command_submitted = [false, false]
 
+	# Activate the sync gate for network play (G4.4).
+	if PlayMode.is_network():
+		NetworkManager.activate_sync_gate()
+
 	# In hot-seat, initiative player assigns dials first.
 	# Requirements: TF-002, BP-006.
 	var init_player: int = current_game_state.initiative_player

@@ -2,7 +2,7 @@
 
 > Star Wars: Armada — Digital Edition
 > Last updated: 2026-04-18
-> Current baseline: 121 scripts, 2 505 tests, 4 506 asserts
+> Current baseline: 122 scripts, 2 526 tests, 4 545 asserts
 
 ---
 
@@ -169,7 +169,8 @@ All six command classes are now wired into their presentation-layer call sites:
 | G4.1 | Network Transport Foundation | ✅ | NetworkManager, PlayerProfile, TestNetworkHarness |
 | G4.2 | Server-Side Command Processing | ✅ | CommandSubmitter strategy, GameManager wiring, server RPCs |
 | G4.3 | Information Hiding | ✅ | StateFilter utility, secret canary tests |
-| G4.4–G4.9 | Sync Gate, Lobby, Chat, etc. | ⏳ | Depends on G4.3 |
+| G4.4 | Command Phase Sync Gate | ✅ | CommandSyncGate, NetworkManager wiring |
+| G4.5–G4.9 | Lobby, Chat, etc. | ⏳ | Depends on G4.4 |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
 All other implementation phases (0–12) are complete.
@@ -289,6 +290,22 @@ Normal local play does not invoke it. Verified by MT-G4.2.1 (game still works).
 
 **Pass criteria:** Full test suite passes including 25 new StateFilter tests.
 
+### Phase G4.4 — Command Phase Sync Gate
+
+### MT-G4.4.1 — Normal game unaffected by CommandSyncGate ✅ passed 2026-04-19
+
+CommandSyncGate is only activated in network mode. The sync gate
+wiring in NetworkManager and GameManager does not affect hot-seat play
+because `PlayMode.is_network()` returns false and the gate stays inactive.
+
+### MT-G4.4.2 — Headless GUT validation ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 122 scripts, 2526 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes including 21 new CommandSyncGate tests.
+
 ### Awaiting First Test (highest priority — recent changes)
 
 | ID | Description |
@@ -304,6 +321,7 @@ Normal local play does not invoke it. Verified by MT-G4.2.1 (game still works).
 | MT-G4.1.01–02 | Network transport: normal game unaffected, headless GUT 119/2460 | ✅ passed 2026-04-18 |
 | MT-G4.2.01–02 | Server-side command processing: normal game unaffected, headless GUT 120/2480 | ✅ passed 2026-04-18 |
 | MT-G4.3.01–02 | Information hiding: normal game unaffected, headless GUT 121/2505 | ✅ passed 2026-04-18 |
+| MT-G4.4.01–02 | Sync gate: normal game unaffected, headless GUT 122/2526 | ✅ passed 2026-04-19 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

@@ -123,6 +123,12 @@ var _last_heartbeat: Dictionary = {}
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("NetworkManager")
 
+## Server-side sync gate for the Command Phase.
+## Holds [AssignDialCommand] results until both players have submitted all
+## dials, then releases them in a single batch.
+## Transient — not serialized.
+var _sync_gate: CommandSyncGate = CommandSyncGate.new()
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -455,6 +461,9 @@ func send_command_to_server(data: Dictionary) -> void:
 ## Client → Server: receives a command submission from a client.
 ## The server deserializes, validates, executes via [CommandProcessor],
 ## and broadcasts the result to all peers.
+## For [AssignDialCommand]s during the Command Phase, the result is held
+## in the [CommandSyncGate] until both players have submitted all dials
+## (G4.4 — Command Phase Sync Gate).
 @rpc("any_peer", "reliable")
 func _submit_command_to_server(data: Dictionary) -> void:
 	if role != Role.SERVER:
@@ -478,8 +487,22 @@ func _submit_command_to_server(data: Dictionary) -> void:
 		_log.info("Command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])
 		return
-	# Broadcast result to all connected clients.
 	var cmd_data: Dictionary = cmd.serialize()
+	# --- Sync gate: hold dial assignments until both players are done ---
+	if _sync_gate.is_active() and cmd.command_type == "assign_dials":
+		_sync_gate.hold(cmd_data, result)
+		if _all_dials_assigned(cmd.player_index):
+			_sync_gate.mark_ready(cmd.player_index)
+			_log.info("Player %d dials complete — held in sync gate." %
+					cmd.player_index)
+		if _sync_gate.is_open():
+			_log.info("Sync gate open — broadcasting %d held dial commands." %
+					_sync_gate.get_held_count())
+			for entry: Dictionary in _sync_gate.release():
+				_broadcast_command_result.rpc(
+						entry["command_data"], entry["result"])
+		return
+	# --- Normal path: broadcast immediately ---
 	_broadcast_command_result.rpc(cmd_data, result)
 
 
@@ -501,6 +524,44 @@ func start_game() -> void:
 	if connection_state == ConnectionState.LOBBY:
 		_set_state(ConnectionState.IN_GAME)
 		_log.info("Transitioned to IN_GAME.")
+
+
+# ---------------------------------------------------------------------------
+# Sync Gate helpers (G4.4)
+# ---------------------------------------------------------------------------
+
+## Activates the Command Phase sync gate.
+## Called by [GameManager] at the start of the Command Phase in network mode.
+func activate_sync_gate() -> void:
+	_sync_gate.activate()
+	_log.info("Sync gate activated for Command Phase.")
+
+
+## Deactivates the Command Phase sync gate.
+func deactivate_sync_gate() -> void:
+	_sync_gate.deactivate()
+
+
+## Returns [code]true[/code] if every non-destroyed ship of [param player_index]
+## has had its dials assigned (i.e. [code]get_dials_needed() == 0[/code]).
+## Queries the authoritative [GameState] via [GameManager].
+func _all_dials_assigned(player_index: int) -> bool:
+	var gs: GameState = GameManager.current_game_state if GameManager else null
+	if gs == null:
+		return false
+	var ps: PlayerState = gs.get_player_state(player_index)
+	if ps == null:
+		return false
+	for s: Variant in ps.ships:
+		if s is ShipInstance:
+			var si: ShipInstance = s as ShipInstance
+			if si.is_destroyed():
+				continue
+			if si.command_dial_stack == null:
+				continue
+			if si.command_dial_stack.get_dials_needed() > 0:
+				return false
+	return true
 
 
 # ---------------------------------------------------------------------------

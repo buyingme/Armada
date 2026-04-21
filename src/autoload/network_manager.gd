@@ -97,6 +97,12 @@ signal chat_received(sender: String, text: String, timestamp: int)
 ## [param result] — execution result dictionary.
 signal command_result_received(command_data: Dictionary, result: Dictionary)
 
+## Emitted when the server broadcasts an interaction-state update.
+## [param state_data] — Dictionary produced by [method NetworkInteractionState.serialize].
+## Consumed by [GameManager] to update the active interaction step.
+## G4.6.6 — T1a C2.
+signal interaction_state_received(state_data: Dictionary)
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -133,11 +139,28 @@ var _log: GameLogger = GameLogger.new("NetworkManager")
 ## Transient — not serialized.
 var _lobby_password: String = ""
 
+## The player index assigned to this instance during the handshake.
+## 0 for the host (set in [method host]), assigned by server for clients.
+## -1 when not connected.  G4.6.5.5.
+var _local_player_index: int = -1
+
+## Pending game configuration received from the server before scene transition.
+## Contains [code]rng_seed[/code] and [code]scenario_id[/code].
+## Set by [method broadcast_game_config] (server) or [method _receive_game_config]
+## (client).  Consumed by [GameBoard._ready].  G4.6.5.2/3.
+var _pending_game_config: Dictionary = {}
+
 ## Server-side sync gate for the Command Phase.
 ## Holds [AssignDialCommand] results until both players have submitted all
 ## dials, then releases them in a single batch.
 ## Transient — not serialized.
 var _sync_gate: CommandSyncGate = CommandSyncGate.new()
+
+## Latest interaction-state payload received from the server.
+## Keyed by the serialised [NetworkInteractionState] fields.
+## Updated atomically by [method _receive_interaction_state].
+## Clients use this to rehydrate on reconnect (G4.6.6 T1a C2).
+var _latest_interaction_state: Dictionary = {}
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +197,7 @@ func host(port: int = ServerMain.DEFAULT_PORT) -> bool:
 		return false
 	multiplayer.multiplayer_peer = _peer
 	role = Role.SERVER
+	_local_player_index = 0
 	_set_state(ConnectionState.LOBBY)
 	_start_heartbeat()
 	_log.info("Server hosting on port %d (protocol v%d)." % [
@@ -251,6 +275,19 @@ func get_peer_count() -> int:
 	return peers.size()
 
 
+## Returns the player index assigned to this instance (0 or 1).
+## Returns -1 if not connected.  G4.6.5.5.
+func get_local_player_index() -> int:
+	return _local_player_index
+
+
+## Returns the pending game configuration dictionary.
+## Contains [code]rng_seed[/code] and [code]scenario_id[/code].
+## Consumed by [GameBoard._ready] after scene transition.  G4.6.5.2/3.
+func get_pending_game_config() -> Dictionary:
+	return _pending_game_config
+
+
 ## Returns a human-readable name for a [enum ConnectionState].
 func _state_name(state: ConnectionState) -> String:
 	match state:
@@ -321,7 +358,12 @@ func _on_connection_failed() -> void:
 ## Client-side: server disconnected.
 func _on_server_disconnected() -> void:
 	_log.warn("Server disconnected.")
+	var was_authenticating: bool = (
+			connection_state == ConnectionState.AUTHENTICATING)
 	_cleanup()
+	if was_authenticating:
+		_log.warn("Disconnected during handshake — treating as rejection.")
+		handshake_rejected.emit("Connection rejected by server.")
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +443,7 @@ func _handshake_response(accepted: bool, reason: String,
 	if accepted:
 		_log.info("Handshake accepted — assigned player index %d." %
 				player_index)
+		_local_player_index = player_index
 		_set_state(ConnectionState.LOBBY)
 		_start_heartbeat()
 		handshake_accepted.emit(player_index)
@@ -549,7 +592,10 @@ func _submit_command_to_server(data: Dictionary) -> void:
 
 ## Server → All: broadcasts an executed command and its result.
 ## Clients apply the result to their local state mirror.
-@rpc("authority", "reliable")
+## [code]call_local[/code] ensures the server also receives the signal so
+## [GameManager._on_network_command_result] can process side effects for
+## commands submitted by the remote player.  G4.6.5 BF-2.
+@rpc("authority", "call_local", "reliable")
 func _broadcast_command_result(command_data: Dictionary,
 		result: Dictionary) -> void:
 	command_result_received.emit(command_data, result)
@@ -565,6 +611,105 @@ func start_game() -> void:
 	if connection_state == ConnectionState.LOBBY:
 		_set_state(ConnectionState.IN_GAME)
 		_log.info("Transitioned to IN_GAME.")
+
+
+## Server: generates and broadcasts game configuration (RNG seed + scenario)
+## to all clients, and stores it locally for the host.
+## Must be called BEFORE [method start_game] and scene transition so clients
+## receive the config before [GameBoard._ready] fires.
+## G4.6.5.2.
+func broadcast_game_config(rng_seed: int, scenario_id: String) -> void:
+	if role != Role.SERVER:
+		_log.warn("broadcast_game_config() called but not server.")
+		return
+	_pending_game_config = {
+		"rng_seed": rng_seed,
+		"scenario_id": scenario_id,
+	}
+	_receive_game_config.rpc(rng_seed, scenario_id)
+	_log.info("Broadcast game config: seed=%d, scenario='%s'." % [
+			rng_seed, scenario_id])
+
+
+## Server → All: delivers game configuration before scene transition.
+## G4.6.5.3.
+@rpc("authority", "reliable")
+func _receive_game_config(rng_seed: int, scenario_id: String) -> void:
+	_pending_game_config = {
+		"rng_seed": rng_seed,
+		"scenario_id": scenario_id,
+	}
+	_log.info("Received game config: seed=%d, scenario='%s'." % [
+			rng_seed, scenario_id])
+
+
+## Server-side: processes a command submitted by the host player.
+## Validates, executes via [CommandProcessor], broadcasts result to clients.
+## Called by [NetworkHostCommandSubmitter].
+## G4.6.5.1.
+func handle_host_command(command: GameCommand, result: Dictionary) -> void:
+	if role != Role.SERVER:
+		_log.warn("handle_host_command() called but not server.")
+		return
+	var cmd_data: Dictionary = command.serialize()
+	# --- Sync gate: hold dial assignments until both players are done ---
+	if _sync_gate.is_active() and command.command_type == "assign_dials":
+		_sync_gate.hold(cmd_data, result)
+		if _all_dials_assigned(command.player_index):
+			_sync_gate.mark_ready(command.player_index)
+			_log.info("Player %d dials complete (host) — held in sync gate." %
+					command.player_index)
+		if _sync_gate.is_open():
+			_log.info("Sync gate open — broadcasting %d held dial commands." %
+					_sync_gate.get_held_count())
+			for entry: Dictionary in _sync_gate.release():
+				_broadcast_command_result.rpc(
+						entry["command_data"], entry["result"])
+		return
+	# --- Normal path: broadcast immediately ---
+	_broadcast_command_result.rpc(cmd_data, result)
+
+
+# ---------------------------------------------------------------------------
+# Interaction State Broadcast (G4.6.6 — T1a C2)
+# ---------------------------------------------------------------------------
+
+## Server: serialises [param state] and broadcasts it to all peers (including
+## the server itself via [code]call_local[/code]).
+## Only callable on the server.  Clients receive updates via
+## [method _receive_interaction_state].
+func broadcast_interaction_state(state: NetworkInteractionState) -> void:
+	if role != Role.SERVER:
+		_log.warn("broadcast_interaction_state() called but role is %s." %
+				_role_name(role))
+		return
+	var data: Dictionary = state.serialize()
+	_receive_interaction_state.rpc(data)
+	_log.info("Broadcast interaction state: flow='%s' step='%s' v%d controller=%d." % [
+			state.flow_type, state.step_id, state.version, state.controller_player])
+
+
+## Returns a copy of the latest received interaction-state dictionary.
+## Empty dictionary if no state has been received yet.
+## G4.6.6 T1a C2 / C12 (reconnect restore).
+func get_latest_interaction_state() -> Dictionary:
+	return _latest_interaction_state.duplicate(true)
+
+
+## Server → All: delivers an interaction-state update to every peer.
+## [code]call_local[/code] ensures the server processes its own broadcast.
+## Clients cache the new state and emit [signal interaction_state_received].
+## Older versions are silently discarded (idempotency rule).
+@rpc("authority", "call_local", "reliable")
+func _receive_interaction_state(state_data: Dictionary) -> void:
+	var incoming_version: int = state_data.get("version", 0)
+	var cached_version: int = _latest_interaction_state.get("version", -1)
+	if incoming_version <= cached_version:
+		_log.info("Discarding stale interaction state v%d (have v%d)." % [
+				incoming_version, cached_version])
+		return
+	_latest_interaction_state = state_data.duplicate(true)
+	interaction_state_received.emit(state_data)
 
 
 # ---------------------------------------------------------------------------
@@ -610,11 +755,21 @@ func _all_dials_assigned(player_index: int) -> bool:
 # ---------------------------------------------------------------------------
 
 ## Assigns a player slot (0 or 1) to a connecting peer.
+## Checks both [member peers] (authenticated network peers) and
+## [member LobbyManager.current_lobby] players (includes the host).
 ## Returns -1 if both slots are taken.
-func _assign_player_slot(peer_id: int) -> int:
+func _assign_player_slot(_peer_id: int) -> int:
 	var taken: Array[int] = []
+	# Collect slots already claimed by authenticated peers.
 	for info: Dictionary in peers.values():
 		taken.append(info["player_index"] as int)
+	# Also collect slots occupied in the lobby (includes the host).
+	if LobbyManager and LobbyManager.current_lobby:
+		for p: Dictionary in LobbyManager.current_lobby.players:
+			var idx: int = p.get("player_index", -1)
+			if idx >= 0 and idx not in taken:
+				taken.append(idx)
+	_log.info("Slot assignment — taken slots: %s." % str(taken))
 	for slot: int in [0, 1]:
 		if slot not in taken:
 			return slot
@@ -629,11 +784,16 @@ func _set_state(new_state: ConnectionState) -> void:
 	state_changed.emit(old_state, new_state)
 
 
-## Schedules a peer disconnect after the current frame (so RPCs can flush).
+## Schedules a peer disconnect with a delay so the rejection RPC can arrive.
 func _disconnect_peer_deferred(peer_id: int) -> void:
-	if _peer:
-		# Use call_deferred so the rejection RPC has time to send.
-		(func() -> void: _peer.disconnect_peer(peer_id)).call_deferred()
+	if not _peer:
+		return
+	var peer_ref: ENetMultiplayerPeer = _peer
+	get_tree().create_timer(1.0).timeout.connect(
+			func() -> void:
+				if peer_ref and peer_ref.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+					peer_ref.disconnect_peer(peer_id)
+	)
 
 
 ## Tears down all network state and returns to DISCONNECTED.
@@ -644,6 +804,9 @@ func _cleanup() -> void:
 		_heartbeat_timer = null
 	peers.clear()
 	_last_heartbeat.clear()
+	_local_player_index = -1
+	_pending_game_config = {}
+	_latest_interaction_state = {}
 	if _peer:
 		multiplayer.multiplayer_peer = null
 		_peer = null

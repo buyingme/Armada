@@ -67,6 +67,11 @@ signal ship_defense_token_changed(ship_instance: RefCounted)
 ## Emitted when a ship completes movement.
 signal ship_moved(ship: Node)
 
+## Emitted when a remote maneuver command repositions a ship on the client.
+## GameBoard listens to snap the visual ShipToken to the updated position.
+## G4.6.5 BF-2.
+signal ship_repositioned_remotely(ship_instance: RefCounted)
+
 ## Emitted when a squadron's hull points change.
 signal squadron_hull_changed(squadron_instance: RefCounted, new_hull: int)
 
@@ -89,6 +94,10 @@ signal squadron_destroyed(squadron: Node)
 ## Emitted when a squadron moves.
 signal squadron_moved(squadron: Node)
 
+## Emitted when a remote move_squadron command repositions a squadron
+## on the client.  G4.6.5 BF-2.
+signal squadron_repositioned_remotely(squadron_instance: RefCounted)
+
 #endregion
 
 
@@ -99,6 +108,10 @@ signal attack_declared(attacker: Node, defender: Node)
 
 ## Emitted when dice are rolled for an attack.
 signal dice_rolled(attacker: Node, dice_results: Array)
+
+## Emitted when a network broadcast delivers a dice roll result
+## for the local player's attack.  G4.6.5 — async dice resolution.
+signal network_dice_result(result: Dictionary)
 
 ## Emitted when a defense token is spent.
 signal defense_token_spent(ship: Node, token_type: Constants.DefenseToken)

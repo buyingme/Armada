@@ -49,6 +49,22 @@ var ship_data: ShipData = load("res://data/ships/cr90_corvette.tres")
 # BAD — hardcoded
 var hull := 4
 var shields := {"front": 2, "left": 1}
+
+### 5. Network UI Authority Pattern (G4.6.6+)
+
+For multiplayer interaction windows, use this pattern:
+
+- **Visibility state**: what both peers can see.
+- **Authority state**: who can act (`controller_player`).
+
+These must be represented separately and updated from authoritative
+network state, never inferred from local modal state.
+
+Rules:
+- Common modal visibility may exist on both clients with disabled controls.
+- Non-controller input handlers must fail fast and return without side effects.
+- Step transitions are driven by network interaction state + command results,
+  not by local UI events alone.
 ```
 
 ## Required Patterns

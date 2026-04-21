@@ -149,6 +149,7 @@ func test_start_game_does_nothing_if_not_lobby() -> void:
 
 func test_assign_player_slot_first_peer_gets_zero() -> void:
 	NetworkManager.peers.clear()
+	LobbyManager.current_lobby = null
 	var slot: int = NetworkManager._assign_player_slot(100)
 	assert_eq(slot, 0, "First peer should get slot 0.")
 	NetworkManager.peers.clear()
@@ -156,6 +157,7 @@ func test_assign_player_slot_first_peer_gets_zero() -> void:
 
 func test_assign_player_slot_second_peer_gets_one() -> void:
 	NetworkManager.peers.clear()
+	LobbyManager.current_lobby = null
 	NetworkManager.peers[100] = {"player_index": 0}
 	var slot: int = NetworkManager._assign_player_slot(200)
 	assert_eq(slot, 1, "Second peer should get slot 1.")
@@ -164,11 +166,24 @@ func test_assign_player_slot_second_peer_gets_one() -> void:
 
 func test_assign_player_slot_full_returns_negative() -> void:
 	NetworkManager.peers.clear()
+	LobbyManager.current_lobby = null
 	NetworkManager.peers[100] = {"player_index": 0}
 	NetworkManager.peers[200] = {"player_index": 1}
 	var slot: int = NetworkManager._assign_player_slot(300)
 	assert_eq(slot, -1, "Third peer should get -1 (full).")
 	NetworkManager.peers.clear()
+
+
+func test_assign_player_slot_accounts_for_host_in_lobby() -> void:
+	NetworkManager.peers.clear()
+	var lobby: LobbyState = LobbyState.new()
+	lobby.add_player(1, "Host", 0)
+	LobbyManager.current_lobby = lobby
+	var slot: int = NetworkManager._assign_player_slot(200)
+	assert_eq(slot, 1,
+			"Peer should get slot 1 when host occupies slot 0 in lobby.")
+	NetworkManager.peers.clear()
+	LobbyManager.current_lobby = null
 
 
 # ---------------------------------------------------------------------------

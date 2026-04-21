@@ -49,6 +49,12 @@ var _squadron_move_max_dist: float = 0.0
 ## Reset in [method begin_activation_flow].
 var _squadron_activation_count: int = 0
 
+## Whether a [code]move_squadron[/code] command was submitted for the
+## current activation.  Reset when a new squadron is selected; set true
+## in [method _on_squadron_move_commit].  Used in network mode to submit
+## a zero-distance move on skip so the remote peer can track completion.
+var _move_submitted_this_activation: bool = false
+
 ## Token container — overlays are added here.
 var _token_container: Node2D = null
 
@@ -281,6 +287,7 @@ func process_squadron_movement() -> void:
 ## Requirements: SQM-001, SQM-002.
 func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	_remove_squadron_overlay()
+	_move_submitted_this_activation = false
 	var instance: SquadronInstance = token.get_squadron_instance()
 	if instance == null:
 		return
@@ -339,6 +346,7 @@ func _on_squadron_move_commit(token: SquadronToken) -> void:
 		var norm_x: float = token.global_position.x / pa.x
 		var norm_y: float = token.global_position.y / pa.y
 		GameManager.submit_move_squadron(instance, norm_x, norm_y)
+		_move_submitted_this_activation = true
 
 	EventBus.squadron_moved.emit(token)
 	_log.info("Squadron move committed — engagement updated.")
@@ -361,6 +369,10 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
 	if token:
 		token.set_activated_visual(true)
+	# Network: if the player skipped (no move_squadron submitted), send a
+	# zero-distance move so the remote peer can track activation completion.
+	if PlayMode.is_network() and not _move_submitted_this_activation:
+		_submit_skip_move(instance, token)
 	EventBus.squadron_activation_ended.emit(instance)
 	_remove_squadron_overlay()
 	if _squadron_modal and _squadron_modal.is_command_mode():
@@ -458,6 +470,21 @@ func _commit_squadron_placement(token: SquadronToken) -> void:
 	else:
 		_squadron_modal.notify_move_preview_failed(error)
 		_log.info("Squadron placement invalid: %s" % error)
+
+
+## Submits a zero-distance [code]move_squadron[/code] command for a
+## skipped activation so the remote peer can track completion.
+func _submit_skip_move(
+		instance: SquadronInstance, token: SquadronToken) -> void:
+	var pa: Vector2 = GameScale.play_area_size_px
+	if instance == null or pa.x <= 0.0 or pa.y <= 0.0:
+		return
+	var pos: Vector2 = token.global_position if token else Vector2.ZERO
+	var norm_x: float = pos.x / pa.x
+	var norm_y: float = pos.y / pa.y
+	GameManager.submit_move_squadron(instance, norm_x, norm_y)
+	_log.info("Skip: submitted zero-distance move_squadron for %s." %
+			instance.data_key)
 
 
 ## Removes the squadron movement overlay if present.

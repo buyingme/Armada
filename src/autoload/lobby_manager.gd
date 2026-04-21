@@ -84,7 +84,9 @@ func create_lobby(lobby_name: String, password: String = "") -> void:
 
 
 ## Starts the game (host only).
-## Validates that the lobby is ready, then notifies all peers.
+## Validates that the lobby is ready, generates the shared RNG seed,
+## broadcasts game configuration, then notifies all peers to transition.
+## G4.6.5.2 — server-side game initialisation.
 func request_start_game() -> void:
 	if not NetworkManager.is_server():
 		_log.warn("request_start_game() called but not server.")
@@ -94,6 +96,10 @@ func request_start_game() -> void:
 		lobby_error.emit("All players must be ready to start.")
 		return
 	_log.info("Starting game from lobby.")
+	# Generate shared RNG seed and broadcast config BEFORE scene transition.
+	var rng_seed: int = Time.get_ticks_usec()
+	var scenario_id: String = "learning_scenario"
+	NetworkManager.broadcast_game_config(rng_seed, scenario_id)
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
 	game_starting.emit()
@@ -158,11 +164,21 @@ func _on_peer_authenticated(peer_id: int, player_index: int,
 	if not NetworkManager.is_server():
 		return
 	if current_lobby == null:
+		_log.warn("Peer %d authenticated but no lobby exists." % peer_id)
 		return
+	_log.info("Lobby has %d player(s) before add: %s." % [
+			current_lobby.get_player_count(),
+			str(current_lobby.players)])
 	if current_lobby.add_player(peer_id, display_name, player_index):
 		_log.info("Player '%s' (peer %d) joined lobby as player %d." % [
 				display_name, peer_id, player_index])
+		_log.info("Lobby now has %d player(s): %s." % [
+				current_lobby.get_player_count(),
+				str(current_lobby.players)])
 		_broadcast_lobby_state()
+	else:
+		_log.warn("Failed to add player '%s' (peer %d, index %d) — lobby full or duplicate." % [
+				display_name, peer_id, player_index])
 
 
 ## Server-side: a peer disconnected — remove from lobby.

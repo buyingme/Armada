@@ -188,7 +188,17 @@ func _ready() -> void:
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
-	GameManager.start_new_game({"scenario_id": "learning_scenario"})
+	# In network mode, use the shared config (RNG seed + scenario) received
+	# from the server before scene transition.  G4.6.5.4.
+	if PlayMode.is_network():
+		var config: Dictionary = NetworkManager.get_pending_game_config()
+		# Client does not drive game flow — server broadcasts StartRoundCommand.
+		# G4.6.5 A2.
+		if not NetworkManager.is_server():
+			config["client_mode"] = true
+		GameManager.start_new_game(config)
+	else:
+		GameManager.start_new_game({"scenario_id": "learning_scenario"})
 	_spawn_learning_scenario_tokens()
 	_connect_signals()
 	_connect_panel_signals()
@@ -383,6 +393,13 @@ func _connect_signals() -> void:
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
 	#endregion
 
+	#region Network remote repositioning (BF-2)
+	EventBus.ship_repositioned_remotely.connect(
+			_on_ship_repositioned_remotely)
+	EventBus.squadron_repositioned_remotely.connect(
+			_on_squadron_repositioned_remotely)
+	#endregion
+
 
 ## Connects game-logic signals from UIPanelManager-created panels
 ## to game_board signal handlers.
@@ -427,7 +444,10 @@ func _spawn_learning_scenario_tokens() -> void:
 	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
 	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
 	_register_instances_in_game_state(ship_instances, squad_instances)
-	if setup.has_fixed_round1_commands():
+	# Network client: server auto-assigns fixed commands and broadcasts.
+	# Client receives via _handle_remote_command_effects().  G4.6.5 A3.
+	if setup.has_fixed_round1_commands() \
+			and (not PlayMode.is_network() or NetworkManager.is_server()):
 		var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
 		GameManager.apply_fixed_round1_commands(fixed_cmds)
 	_spawn_and_bind_tokens(setup, ship_instances, squad_instances)
@@ -730,8 +750,13 @@ func _on_round_started(_round_number: int) -> void:
 ## Called when the active player changes.
 ## In hot-seat mode, shows the handoff overlay (Command Phase) or "Your Turn"
 ## banner (Ship / Squadron Phase), rotates the camera, and swaps card panels.
-## Requirements: TF-001, BP-001, BP-003, HO-001, HO-004.
+## In network mode, locks camera to the local player's perspective and shows
+## "Waiting for opponent…" when it is not the local player's turn.
+## Requirements: TF-001, BP-001, BP-003, HO-001, HO-004.  G4.6.5.7/8.
 func _on_active_player_changed(player_index: int) -> void:
+	if PlayMode.is_network():
+		_handle_network_active_player(player_index)
+		return
 	if not PlayMode.is_hot_seat():
 		return
 
@@ -765,6 +790,12 @@ func _on_active_player_changed(player_index: int) -> void:
 ## Resumes the appropriate game flow for the current phase.
 ## Requirements: HO-002, HO-004.
 func _on_handoff_accepted() -> void:
+	# Network mode: only proceed when it is the local player's turn.
+	# Prevents opening SqActModal for the remote player's squadrons.
+	if PlayMode.is_network():
+		var local: int = NetworkManager.get_local_player_index()
+		if GameManager.active_player != local:
+			return
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
 
 	match phase:
@@ -787,6 +818,38 @@ func _swap_card_panels(player_index: int) -> void:
 	_panel_mgr.rebel_card_panel.set_side(rebel_left)
 	_panel_mgr.imperial_card_panel.set_side(not rebel_left)
 	_panel_mgr.update_card_panel_positions()
+
+
+## Network-mode active-player handler.
+## Locks camera to the local player's perspective (no rotation), updates
+## card panel viewer, and shows "Your Turn" banner or starts the Command
+## Phase dial flow.  During Ship/Squadron phases, the non-active player
+## sees the banner for the active player but cannot interact.
+## G4.6.5.7/8 — network active-player handling + input lockout.
+func _handle_network_active_player(_player_index: int) -> void:
+	var local: int = NetworkManager.get_local_player_index()
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+
+	# Always lock viewer to local player's perspective.
+	_panel_mgr.rebel_card_panel.set_viewer_player(local)
+	_panel_mgr.imperial_card_panel.set_viewer_player(local)
+	_camera.rotate_to_player(local)
+	_swap_card_panels(local)
+
+	# Command Phase: both players assign dials simultaneously — no lockout.
+	if phase == Constants.GamePhase.COMMAND:
+		_command_phase_controller.begin_command_dial_flow()
+		return
+
+	# Ship / Squadron Phase: only show "Your Turn" banner when it IS
+	# the local player's turn.  The non-active player just watches.
+	# G4.6.5 — prevents begin_activation_flow() from opening the
+	# SqActModal for the remote player's squadrons.
+	if _player_index != local:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_panel_mgr.your_turn_banner.show_banner(_player_index)
+	_panel_mgr.your_turn_banner.update_size(vp_size)
 
 ## Shows and positions the End Activation button.
 func _show_end_activation_button() -> void:
@@ -830,6 +893,16 @@ func _on_dial_token_converted(ship: ShipInstance) -> void:
 	if _panel_mgr.activation_sidebar:
 		_panel_mgr.activation_sidebar.highlight_active(ship)
 
+	# BF-4: On network client, NetworkCommandSubmitter returns {} — the real
+	# result arrives later via the server broadcast.  Skip result-dependent
+	# logic; the remote handler emits the correct signals.
+	if PlayMode.is_network() and result.is_empty():
+		_show_activation_sequence_button()
+		_log.info("Ship activated via card drop (token convert): '%s' " \
+				% [ship.data_key if ship else "?"] \
+				+"(awaiting server result).")
+		return
+
 	var needs_discard: bool = result.get("needs_discard", false)
 	if needs_discard:
 		# Delay activation sequence button until the discard is resolved.
@@ -864,6 +937,47 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 		if child is ShipToken:
 			var st: ShipToken = child as ShipToken
 			if st.get_ship_instance() == ship:
+				return st
+	return null
+
+
+## Snaps a ShipToken to the position stored in its ShipInstance model
+## after a remote execute_maneuver command.  G4.6.5 BF-2.
+func _on_ship_repositioned_remotely(ship: ShipInstance) -> void:
+	var token: ShipToken = _find_ship_token_for_instance(ship)
+	if token == null:
+		return
+	var pa: Vector2 = GameScale.play_area_size_px
+	if pa.x <= 0.0 or pa.y <= 0.0:
+		return
+	token.global_position = Vector2(
+			ship.pos_x * pa.x, ship.pos_y * pa.y)
+	token.global_rotation = deg_to_rad(ship.rotation_deg)
+	EventBus.ship_moved.emit(token)
+
+
+## Snaps a SquadronToken to the position stored in its SquadronInstance
+## model after a remote move_squadron command.  G4.6.5 BF-2.
+func _on_squadron_repositioned_remotely(sq: SquadronInstance) -> void:
+	var token: SquadronToken = _find_squadron_token_for_instance(sq)
+	if token == null:
+		return
+	var pa: Vector2 = GameScale.play_area_size_px
+	if pa.x <= 0.0 or pa.y <= 0.0:
+		return
+	token.global_position = Vector2(
+			sq.pos_x * pa.x, sq.pos_y * pa.y)
+	EventBus.squadron_moved.emit(token)
+
+
+## Finds the SquadronToken on the board bound to the given SquadronInstance.
+## Returns null if not found.
+func _find_squadron_token_for_instance(
+		sq: SquadronInstance) -> SquadronToken:
+	for child: Node in _token_container.get_children():
+		if child is SquadronToken:
+			var st: SquadronToken = child as SquadronToken
+			if st.get_squadron_instance() == sq:
 				return st
 	return null
 

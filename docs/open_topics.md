@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-19 (G4.5)
-> Current baseline: 123 scripts, 2 561 tests, 4 723 asserts
+> Last updated: 2026-04-19 (G4.6)
+> Current baseline: 124 scripts, 2 587 tests, 4 761 asserts
 
 ---
 
@@ -170,7 +170,12 @@ All six command classes are now wired into their presentation-layer call sites:
 | G4.2 | Server-Side Command Processing | ✅ | CommandSubmitter strategy, GameManager wiring, server RPCs |
 | G4.3 | Information Hiding | ✅ | StateFilter utility, secret canary tests |
 | G4.4 | Command Phase Sync Gate | ✅ | CommandSyncGate, NetworkManager wiring |
-| G4.5–G4.9 | Lobby, Chat, etc. | ⏳ | Depends on G4.4 |
+| G4.5 | Lobby System | ✅ | LobbyState, LobbyRoom, password, scenario picker |
+| G4.6 | Chat System | ✅ | ChatManager, ChatPanel, lobby chat, rate limiting |
+| G4.6.5 | Network Game Wiring | ⏳ | Submitter swap, game init RPC, command result handler, input lockout |
+| G4.7 | Spectator Mode | ⏳ | Depends on G4.6.5 |
+| G4.8 | Reconnection | ⏳ | Depends on G4.7 |
+| G4.9 | Turn Timers | ⏳ | Depends on G4.8 |
 | 10c | Network Foundation | ⏳ | Depends on G4 |
 
 All other implementation phases (0–12) are complete.
@@ -306,7 +311,7 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 
 **Pass criteria:** Full test suite passes including 21 new CommandSyncGate tests.
 
-### MT-G4.5.1 — Main menu Host/Join buttons
+### MT-G4.5.1 — Main menu Host/Join buttons ✅ passed 2026-04-19
 
 | Step | Action | Expected |
 |------|--------|----------|
@@ -319,7 +324,7 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 
 **Pass criteria:** Both dialogs render correctly with UIStyleHelper modal styling (dark panel, blue border, gold title).
 
-### MT-G4.5.2 — Host game creates lobby room
+### MT-G4.5.2 — Host game creates lobby room ✅ passed 2026-04-19
 
 | Step | Action | Expected |
 |------|--------|----------|
@@ -331,13 +336,176 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 
 **Pass criteria:** Lobby room displays correctly, ready toggle works, leave returns to menu.
 
-### MT-G4.5.3 — Headless GUT validation
+### MT-G4.5.3 — Headless GUT validation ✅ passed 2026-04-19
+
+### Phase G4.5/G4.6 — Network Features (localhost)
+
+> **Setup:** Use `./scripts/run_network_test.sh` to launch test sessions.
+> All tests below use localhost (127.0.0.1).
+
+### MT-G4.5.4 — Password-protected lobby (host dialog) ✅ passed 2026-04-19
 
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 123 scripts, 2561 tests, 0 failures |
+| 1 | Launch game, click "Host Game" | Host dialog shows "Lobby Name:" input AND "Password (optional):" input |
+| 2 | Verify password field is secret | Characters are masked (dots/bullets), not visible |
+| 3 | Enter a lobby name, leave password blank, click "Host" | Lobby room appears, no "🔒" lock indicator in header |
+| 4 | Leave lobby, click "Host Game" again | Both fields are cleared |
+| 5 | Enter a lobby name AND a password, click "Host" | Lobby room appears WITH "🔒 Password-protected" indicator |
 
-**Pass criteria:** Full test suite passes including 35 new LobbyState tests.
+**Pass criteria:** Password field is secret, optional, and lobby correctly shows lock status.
+
+### MT-G4.5.5 — Password-protected lobby (join flow) ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `./scripts/run_network_test.sh --gui-host` | Two game instances launch |
+| 2 | Instance 1: Host with password "secret" | Lobby room shows with 🔒 indicator |
+| 3 | Instance 2: Click "Join Game" | Join dialog shows IP field AND "Password (if required):" field |
+| 4 | Instance 2: Enter 127.0.0.1, leave password blank, click "Connect" | Toast: "Join failed: Incorrect lobby password." — returns to menu |
+| 5 | Instance 2: Click "Join Game" again, enter 127.0.0.1 + correct password "secret" | Lobby room appears, P2 slot shows Instance 2's name |
+
+**Pass criteria:** Wrong password is rejected; correct password allows join.
+
+### MT-G4.5.6 — Scenario picker (host only) ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `./scripts/run_network_test.sh --gui-host` | Two instances launch |
+| 2 | Instance 1: Host a game (no password) | Lobby room shows scenario dropdown set to "Learning Scenario" |
+| 3 | Instance 1: Verify dropdown is enabled | Host can interact with the dropdown |
+| 4 | Instance 2: Join the game via 127.0.0.1 | Lobby room shows scenario dropdown |
+| 5 | Instance 2: Try to change scenario | Dropdown is disabled (greyed out) — only host can change |
+
+**Pass criteria:** Scenario dropdown is host-only; clients see it but cannot interact.
+
+### MT-G4.5.7 — Two-player lobby ready flow ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `./scripts/run_network_test.sh --gui-host` | Two instances launch |
+| 2 | Instance 1: Host a game | Lobby room: P1 = host name, P2 = "Waiting..." |
+| 3 | Instance 2: Join via 127.0.0.1 | Both instances: P1 = host, P2 = joiner |
+| 4 | Instance 1: Click "Ready" | Both instances: P1 row shows "✓ Ready" in green |
+| 5 | Instance 2: Click "Ready" | Both instances: both rows show "✓ Ready", status = "All players ready!" |
+| 6 | Instance 1: Verify "Start Game" button | Button is enabled (was disabled before both ready) |
+| 7 | Instance 1: Click "Start Game" | Both instances transition to game board |
+
+**Pass criteria:** Ready state syncs between instances; game starts only when both ready.
+
+### MT-G4.5.8 — Lobby leave and disconnect ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up a two-player lobby (steps from MT-G4.5.7, 1–3) | Both in lobby |
+| 2 | Instance 2: Click "Leave" | Instance 2 returns to main menu |
+| 3 | Instance 1: Observe lobby | P2 slot reverts to "Waiting..." |
+| 4 | Instance 2: Re-join via "Join Game" → 127.0.0.1 | P2 slot shows joiner name again |
+| 5 | Instance 2: Close the window (force disconnect) | Instance 1: P2 slot reverts to "Waiting..." |
+
+**Pass criteria:** Leave and disconnect both correctly update the host's lobby state.
+
+### MT-G4.6.1 — Chat in lobby ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up a two-player lobby (steps from MT-G4.5.7, 1–3) | Both in lobby |
+| 2 | Instance 1: Find the chat area at the bottom of the lobby panel | Chat area visible with "Chat" header, text input, and "Send" button |
+| 3 | Instance 1: Type "Hello" and press Enter | Message appears: "[Host Name]: Hello" in the chat area |
+| 4 | Instance 2: Observe chat area | Same message "[Host Name]: Hello" appears |
+| 5 | Instance 2: Type "Hi back!" and press Enter | Both instances show "[Joiner Name]: Hi back!" |
+| 6 | Instance 1: Observe message colours | Own messages in blue tint, other player messages in light grey |
+
+**Pass criteria:** Chat messages sync bidirectionally; own messages are visually distinct.
+
+### MT-G4.6.2 — Chat rate limiting ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up a two-player lobby | Both in lobby |
+| 2 | Instance 2: Send 5 messages rapidly (type + Enter quickly) | All 5 messages appear in both instances |
+| 3 | Instance 2: Send a 6th message immediately | Rate limit warning appears in Instance 2's chat: "Rate limited — wait Xs" |
+| 4 | Wait 10 seconds, then send another message | Message goes through successfully |
+
+**Pass criteria:** Server enforces 5 messages per 10-second window.
+
+### MT-G4.6.3 — Chat message sanitization ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Set up a lobby with chat | Both in lobby |
+| 2 | Send a very long message (200+ characters) | Message is truncated to 200 characters |
+| 3 | Send a message with leading/trailing whitespace | Message appears without extra whitespace |
+| 4 | Send an empty message (just spaces) | Nothing happens — no message sent |
+
+**Pass criteria:** Messages are sanitized before display.
+
+### MT-G4.6.4 — Headless GUT validation (G4.6) ✅ passed 2026-04-19
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 124 scripts, 2586 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes including 22 ChatManager tests.
+
+### Phase G4.6.5 — Network Game Wiring
+
+### MT-G4.6.5.1 — Network game starts with synced state
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `./scripts/run_network_test.sh --gui-host` | Two instances launch |
+| 2 | Instance 1: Host a game (no password) | Lobby room appears |
+| 3 | Instance 2: Join via 127.0.0.1 | Both instances show two players |
+| 4 | Both instances: Click "Ready" | Both rows show "✓ Ready" |
+| 5 | Instance 1: Click "Start Game" | Both instances transition to game board |
+| 6 | Observe both game boards | Identical ship and squadron placement on both instances |
+| 7 | Observe phase | Command Phase begins on both instances |
+
+**Pass criteria:** Both instances show the same game board with identical token positions. Shared RNG seed produces identical initial GameState.
+
+### MT-G4.6.5.2 — Command Phase dial assignment over network
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Start a network game (steps from MT-G4.6.5.1, 1–5) | Both in Command Phase |
+| 2 | Instance 1 (Player 0 / Rebels): Assign dials to all Rebel ships | Dials assigned locally |
+| 3 | Instance 2 (Player 1 / Imperials): Assign dials to all Imperial ships | Dials assigned locally |
+| 4 | After both players submit all dials | Dials are revealed simultaneously on both instances |
+| 5 | Observe phase | Phase advances to Ship Phase on both instances |
+
+**Pass criteria:** Command Phase sync gate holds dials until both players submit, then releases and advances.
+
+### MT-G4.6.5.3 — Ship Phase activation over network
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Complete Command Phase (steps from MT-G4.6.5.2) | Ship Phase on both instances |
+| 2 | Initiative player: Drag dial to activate a ship | Ship activates, opponent sees activation |
+| 3 | Initiative player: Execute maneuver, end activation | Ship moves on both instances |
+| 4 | Second player: Activate their ship | Ship activates on both instances |
+
+**Pass criteria:** Ship activations round-trip through the server and appear on both clients.
+
+### MT-G4.6.5.4 — Hot-seat regression
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Launch game normally (single instance, no network) | Main menu appears |
+| 2 | Click "Learning Scenario" | Game board appears with handoff overlay |
+| 3 | Dismiss overlay, assign dials for Player 0 | Handoff overlay for Player 1 appears |
+| 4 | Dismiss overlay, assign dials for Player 1 | Phase advances to Ship Phase |
+| 5 | Play through Ship and Squadron phases | All phases work identically to pre-G4.6.5 |
+
+**Pass criteria:** Hot-seat mode is completely unaffected by the network wiring changes.
+
+### MT-G4.6.5.5 — Headless GUT validation (G4.6.5)
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Run `godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit` | 124 scripts, 2587 tests, 0 failures |
+
+**Pass criteria:** Full test suite passes with identical counts to pre-G4.6.5 baseline (124 scripts, 2587 tests, 4761 asserts).
 
 ### Awaiting First Test (highest priority — recent changes)
 
@@ -355,8 +523,22 @@ because `PlayMode.is_network()` returns false and the gate stays inactive.
 | MT-G4.2.01–02 | Server-side command processing: normal game unaffected, headless GUT 120/2480 | ✅ passed 2026-04-18 |
 | MT-G4.3.01–02 | Information hiding: normal game unaffected, headless GUT 121/2505 | ✅ passed 2026-04-18 |
 | MT-G4.4.01–02 | Sync gate: normal game unaffected, headless GUT 122/2526 | ✅ passed 2026-04-19 |
-| MT-G4.5.01 | Lobby system: main menu shows Host/Join buttons, host creates lobby room |
-| MT-G4.5.02 | Lobby system: headless GUT 123/2561 |
+| MT-G4.5.01 | Lobby system: main menu shows Host/Join buttons, host creates lobby room | ✅ passed 2026-04-19 |
+| MT-G4.5.02 | Lobby system: headless GUT 124/2587 | ✅ passed 2026-04-19 |
+| MT-G4.5.04 | Password-protected lobby (host dialog) | ✅ passed 2026-04-19 |
+| MT-G4.5.05 | Password-protected lobby (join flow — requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.5.06 | Scenario picker (host only — requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.5.07 | Two-player lobby ready flow (requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.5.08 | Lobby leave and disconnect (requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.6.01 | Chat in lobby — bidirectional sync (requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.6.02 | Chat rate limiting (requires 2 instances) | ✅ passed 2026-04-19 |
+| MT-G4.6.03 | Chat message sanitization | ✅ passed 2026-04-19 |
+| MT-G4.6.04 | Headless GUT 124/2587 | ✅ passed 2026-04-19 |
+| MT-G4.6.5.01 | Network game starts with synced state (requires 2 instances) |
+| MT-G4.6.5.02 | Command Phase dial assignment over network (requires 2 instances) |
+| MT-G4.6.5.03 | Ship Phase activation over network (requires 2 instances) |
+| MT-G4.6.5.04 | Hot-seat regression (single instance) |
+| MT-G4.6.5.05 | Headless GUT 124/2587 |
 | MT-G.16 | Concentrate Fire attack: dial + token spend through commands |
 | MT-G.17 | Crew Panic faceup crit: dial discard through command |
 | MT-G.18 | Navigate token on speed-0: token spend through command |

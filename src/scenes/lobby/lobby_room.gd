@@ -307,6 +307,9 @@ func _update_display() -> void:
 
 	_title_label.text = lobby.lobby_name if lobby.lobby_name != "" \
 			else "Lobby"
+	var role_hint: String = " (Host)" if LobbyManager.is_host() \
+			else " (Client)"
+	_title_label.text += role_hint
 	_code_label.text = "Code: %s" % lobby.code
 	_password_label.text = "🔒 Password-protected" \
 			if lobby.has_password() else ""
@@ -318,6 +321,9 @@ func _update_display() -> void:
 
 ## Updates player rows with current lobby data.
 func _update_player_rows(lobby: LobbyState) -> void:
+	GameLogger.new("LobbyRoom").info(
+			"Updating player rows — %d player(s): %s" % [
+			lobby.get_player_count(), str(lobby.players)])
 	for i: int in range(LobbyState.MAX_PLAYERS):
 		var player: Dictionary = _find_player_by_index(lobby, i)
 		if player.is_empty():

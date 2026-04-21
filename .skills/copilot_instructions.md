@@ -22,6 +22,21 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 4. **Follow the architecture** — See `.skills/architecture_patterns.md`.
 5. **Check serialization impact** — See `.skills/serialization_and_commands.md`. If the change adds mutable state fields, update `serialize()`/`deserialize()` in the same edit. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised `pos_x`/`pos_y`/`rotation_deg`.
 
+### Network Refactor Guardrail (G4.6.6+)
+
+When a task touches networked UI flow, authority handoff, or modal visibility:
+
+1. Read `docs/g4_network_plan.md` § "Ratified UX Contract", "T0", and
+    "Protocol Guarantees" before coding.
+2. Treat `controller_player` as the only source of interaction authority;
+    never infer authority from local UI state alone.
+3. Keep visibility and interactivity separate:
+    - common visibility does not imply local control.
+4. Enforce command-phase privacy invariants:
+    - no opponent dial content in snapshots/results/events.
+5. For reconnect-sensitive flows, restore interaction step before
+    enabling input.
+
 ## Progress Tracking
 
 Progress is tracked in two condensed documents:

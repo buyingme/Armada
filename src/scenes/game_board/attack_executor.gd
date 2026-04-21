@@ -129,6 +129,10 @@ func initialize(target_selector: TargetSelector,
 	if not _target_selector.target_locked.is_connected(
 			_on_target_locked):
 		_target_selector.target_locked.connect(_on_target_locked)
+	# Network: receive dice results from broadcast.  G4.6.5.
+	if not EventBus.network_dice_result.is_connected(
+			_on_network_dice_result):
+		EventBus.network_dice_result.connect(_on_network_dice_result)
 
 ## Sets the [EffectRegistry] for hook resolution during attacks.
 func set_effect_registry(registry: EffectRegistry) -> void:
@@ -588,7 +592,22 @@ func _on_attack_roll_dice() -> void:
 	var atk_player: int = _get_attacker_player()
 	var roll_result: Dictionary = GameManager.submit_roll_dice(
 			atk_player, _state.dice_pool)
-	_state.dice_results = roll_result.get("dice_results", [])
+	# Network client: result arrives asynchronously via broadcast.
+	# Wait for _apply_dice_roll_result() to be called from the
+	# network command handler.
+	if roll_result.is_empty():
+		return
+	_apply_dice_roll_result(roll_result)
+
+
+## Applies a dice roll result to the attack state and updates the UI.
+## Called inline for host/hot-seat or from the network broadcast handler.
+func _apply_dice_roll_result(roll_result: Dictionary) -> void:
+	var raw: Array = roll_result.get("dice_results", [])
+	_state.dice_results.clear()
+	for entry: Variant in raw:
+		if entry is Dictionary:
+			_state.dice_results.append(entry as Dictionary)
 	# Show results.
 	if _get_panel():
 		_get_panel().hide_roll_button()
@@ -605,6 +624,15 @@ func _on_attack_roll_dice() -> void:
 		return
 	# No token — show confirm.
 	_attack_exec_show_confirm()
+
+
+## Network callback: receives dice results from server broadcast.
+## G4.6.5 — async dice resolution for network clients.
+func _on_network_dice_result(result: Dictionary) -> void:
+	if _state == null or not _state.dice_results.is_empty():
+		return # Already have results or no active attack.
+	_apply_dice_roll_result(result)
+
 
 ## Plays the appropriate SFX for a dice roll based on whether the attacker
 ## is a ship (turbolasers) or squadron (rhythmic burst, faction-dependent).

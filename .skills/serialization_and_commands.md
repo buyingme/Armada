@@ -358,6 +358,45 @@ maneuver_tool.set_activation_mode(state, _submit_persistent_damage)
 # Child (maneuver_tool_scene.gd) — stores and calls:
 var _persistent_damage_handler: Callable
 
+### 4.10 Network Interaction State Contract (G4.6.6+)
+
+For networked step-by-step UI flows (activation, attack, displacement),
+`GameState` mutations and interaction progression must remain consistent.
+
+#### Required fields
+
+`NetworkInteractionState` payloads must include at least:
+- `flow_type: String`
+- `step_id: String`
+- `controller_player: int`
+- `visible_to: String`
+- `payload: Dictionary`
+- `version: int` (monotonic per match)
+
+#### Ordering and idempotency rules
+
+1. Apply `command_result` by sequence number (`seq`) order.
+2. Apply interaction updates by `version` order.
+3. Ignore duplicate `seq`/`version` values (idempotent no-op).
+4. If interaction step `version=N` depends on command `seq=M`, do not
+    render the step until `seq=M` has been applied.
+
+#### Reconnection rule
+
+A reconnect snapshot must restore both:
+- serialized `GameState`
+- current `NetworkInteractionState`
+
+Input remains disabled until both are applied.
+
+#### Privacy invariant (command phase)
+
+Hidden dial contents must never be present in opponent-facing payloads.
+Add negative tests for leakage in:
+- snapshot dictionaries
+- command result payloads
+- UI event payload dictionaries
+
 func _on_speed_change_hook_triggered(ship: ShipInstance, eff_id: String) -> void:
     if _persistent_damage_handler.is_valid():
         _persistent_damage_handler.call(ship, eff_id)

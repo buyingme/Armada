@@ -152,6 +152,9 @@ func _build_player_order(
 	var order: Array[int] = []
 	if PlayMode.is_hot_seat() and assigning >= 0:
 		order.append(assigning)
+	elif PlayMode.is_network():
+		# Network: each client only assigns dials for their own ships.
+		order.append(NetworkManager.get_local_player_index())
 	else:
 		order.append(gs.initiative_player)
 		order.append(1 - gs.initiative_player)

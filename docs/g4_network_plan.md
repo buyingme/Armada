@@ -414,6 +414,671 @@ periodic JSON backup for crash recovery.
 
 ---
 
+### G4.6.5 — Network Game Wiring (Lobby → Gameplay Bridge)
+
+**Goal:** Connect the existing lobby/transport infrastructure to the game board
+so that two players can actually play a game over the network.
+
+> **Planning note — why this was missed:** The original plan assumed that G4.2
+> ("Server-Side Command Processing") would deliver end-to-end network play.
+> In practice, G4.2 built the *plumbing* (CommandSubmitter classes, server-side
+> RPC handlers, command_result broadcast) while G4.5 built the *lobby UI*.
+> But the **integration glue** — swapping the submitter, syncing initial state,
+> handling command results on the client, and adapting the game board for
+> network mode — fell into the seam between G4.2 (which stopped at "Hot-seat
+> still works identically") and G4.5 (which stopped at "Start a networked
+> game", i.e. scene transition).  Neither phase owned the "game board works
+> in network mode" deliverable.
+>
+> The root cause is a **vertical-slice gap**: each phase was scoped
+> *horizontally* (transport, commands, lobby, chat) rather than delivering a
+> thin vertical slice of actual networked gameplay.  The lesson: after building
+> infrastructure layers, always add an explicit integration phase that proves
+> the layers work together end-to-end with a real user scenario.
+
+| Task | Description | Files |
+|------|-------------|-------|
+| G4.6.5.1 | **Submitter swap on game start:** `_on_lobby_game_start()` in main_menu or a new network boot handler calls `GameManager.set_command_submitter(NetworkCommandSubmitter.new())` when `PlayMode.is_network()` | `main_menu.gd`, `game_manager.gd` |
+| G4.6.5.2 | **Server-side game initialisation RPC:** host/server generates RNG seed, picks scenario from lobby settings, calls `start_new_game()` locally, then broadcasts `_game_start_config.rpc(seed, scenario_id, player_assignments)` to all clients | `network_manager.gd`, `game_manager.gd` |
+| G4.6.5.3 | **Client-side game initialisation handler:** on receiving `_game_start_config`, client calls `GameManager.start_new_game()` with the shared seed and scenario — ensuring both instances have identical initial `GameState` | `network_manager.gd`, `game_manager.gd` |
+| G4.6.5.4 | **GameBoard network-mode branch:** skip local `start_new_game()` when `PlayMode.is_network()` — game is already initialised by the RPC in G4.6.5.3 before the scene loads | `game_board.gd` |
+| G4.6.5.5 | **`local_player_index` tracking:** `NetworkManager` stores the player index assigned during handshake.  Expose `NetworkManager.get_local_player_index() -> int`.  Game board uses this to lock camera perspective and determine "my turn" vs "opponent's turn" | `network_manager.gd` |
+| G4.6.5.6 | **Client-side command result handler:** `GameManager` connects to `NetworkManager.command_result_received`.  On receive: deserialize the command, apply it to local `GameState` via `CommandProcessor.apply_remote_command()`, emit appropriate EventBus signals, call `NetworkCommandSubmitter.clear_awaiting()` | `game_manager.gd`, `command_processor.gd` |
+| G4.6.5.7 | **Network-mode active-player handling:** replace the `if not PlayMode.is_hot_seat(): return` guard in `_on_active_player_changed()` with network-aware logic — lock camera to own perspective, show "Opponent's turn" overlay when `active_player != local_player_index`, disable input for non-active player | `game_board.gd` |
+| G4.6.5.8 | **Input lockout for non-active player:** when it's the opponent's turn, disable ship/squadron interaction, toolbar buttons, and command phase UI.  Show a subtle "Waiting for opponent…" indicator | `game_board.gd`, `ui_panel_manager.gd` |
+| G4.6.5.9 | **State snapshot on connect:** server sends `GameState.serialize()` (filtered via `StateFilter`) to newly connected clients in IN_GAME state, for late-join and future reconnection support | `network_manager.gd` |
+| G4.6.5.10 | **Hot-seat regression guard:** verify that `PlayMode.HOT_SEAT` still uses `LocalCommandSubmitter` and all existing gameplay paths are unaffected | `game_manager.gd`, `game_board.gd` |
+
+**Tests:**
+- Unit test: `GameManager` submitter is `NetworkCommandSubmitter` when `PlayMode == NETWORK`
+- Unit test: `GameBoard._ready()` does not call `start_new_game()` in network mode
+- Integration test (2-instance): host creates game → client receives matching `GameState` → command phase dials → ship phase activation — commands round-trip through server
+- Regression test: hot-seat game plays identically to pre-G4.6.5
+
+**Deliverable:** Two players can play an actual game over the network using the Learning Scenario.  Commands route through the server, state stays synchronised, and each player only controls their own side.
+
+#### G4.6.5 Bug-Fix Implementation Plan
+
+> Added: 2026-04-19 after first network test (MT-G4.6.5.1 passed; MT-G4.6.5.2–3 failed).
+
+**Root cause:** Both instances (host + client) run `start_new_game()` →
+`_start_round()` → `apply_fixed_round1_commands()` → `advance_phase()`
+independently.  The client submits game-flow commands (`start_round`,
+`advance_phase`) with `player_index=0` — the server rejects them because the
+client is assigned `player_index=1`.  The client also submits `AssignDialCommand`
+for the opponent's ships, which the server also rejects.  Additionally,
+`_handle_remote_command_effects()` only handles `assign_dials` — all other
+command types fall through with no side effects, so the client UI never
+transitions phases or shows opponent activations.
+
+**Architecture principle:** In network mode, the **client is passive** for game
+flow.  It initialises `GameState` with the shared seed (identical starting
+state) but does NOT drive round/phase progression.  All game-flow mutations
+arrive from the server via `command_result` broadcasts.  Post-command effects
+(EventBus signals, tracking variables) are applied by the broadcast handler.
+
+##### Phase A — Client Passivity (core fix)
+
+Goal: prevent the client from submitting or executing game-flow commands.
+
+| # | Task | File(s) | Description |
+|---|------|---------|-------------|
+| A1 | `client_mode` flag in `start_new_game()` | `game_manager.gd` | When `config.get("client_mode", false)` is true, skip `_start_round()` at the end of `start_new_game()`. Client only initialises `GameState`, resets tracking, emits `game_started`. Round start arrives from server broadcast. |
+| A2 | Pass `client_mode` from GameBoard | `game_board.gd` | Network client adds `"client_mode": true` to config dict. Host passes config as-is (no flag). |
+| A3 | Skip `apply_fixed_round1_commands()` on client | `game_board.gd` | Guard: `if not PlayMode.is_network() or NetworkManager.is_server()`. Host auto-assigns and broadcasts; client receives via handler. |
+| A4 | Guard `advance_phase()` on client | `game_manager.gd` | Early return if `PlayMode.is_network() and not NetworkManager.is_server()`. Server drives phase advancement; client receives via broadcast. |
+| A5 | Guard `_start_round()` on client | `game_manager.gd` | Same guard. Client never submits `StartRoundCommand` itself. |
+| A6 | Guard `_check_command_phase_complete()` | `game_manager.gd` | Skip `advance_phase()` call on client. Server broadcasts `AdvancePhaseCommand` after sync gate releases. Client still tracks `_command_submitted` locally for UI ("waiting for opponent"). |
+| A7 | Guard `_begin_status_phase()` on client | `game_manager.gd` | Skip `_perform_status_phase_cleanup()` and `advance_phase()` calls. Server handles both and broadcasts results. |
+| A8 | Guard `_advance_ship_phase_turn()` on client | `game_manager.gd` | Skip `advance_phase()` and `_set_active_player()` calls on client. Turn changes arrive from the server's `_set_active_player()` being broadcast (indirectly via next activation or phase-advance commands). |
+| A9 | Guard `_advance_squadron_phase_turn()` on client | `game_manager.gd` | Same pattern as A8. |
+| A10 | Guard post-submit side effects | `game_manager.gd` | `_on_command_picker_confirmed()` L411–413: wrap `EventBus.command_dials_changed.emit()` and `_check_player_all_assigned()` inside `if not result.is_empty()`. `NetworkCommandSubmitter.submit()` returns `{}`, so these skip on client. |
+| A11 | Guard `_on_activation_ended()` on client | `game_manager.gd` | Client should not submit `EndActivationCommand` or call `_advance_ship_phase_turn()`. Server broadcasts both. |
+
+**Deliverable:** Client no longer submits game-flow commands. No more server
+rejection warnings. Client waits passively for broadcasts.
+
+##### Phase B — Complete Command Result Handler
+
+Goal: expand `_handle_remote_command_effects()` to handle all 26 command types
+so the client's GameManager state and UI stay synchronised with the server.
+
+The handler is called after `CommandProcessor.submit(cmd)` has already applied
+the command's `execute()` to the client's `GameState`.  The handler mirrors the
+post-submit side effects that the host runs inline (EventBus signals, tracking
+variables, phase-begin methods).
+
+| # | Command Type | Side Effects to Mirror on Client |
+|---|-------------|----------------------------------|
+| B1 | `start_round` | Reset `_command_submitted = [false, false]`, `_command_assigning_player` to initiative player, set `active_player` to initiative player, activate sync gate via `NetworkManager.activate_sync_gate()`, emit `EventBus.round_started`, emit `EventBus.phase_changed(COMMAND)`. |
+| B2 | `assign_dials` | ✅ Already done. Find ship → emit `command_dials_changed` → `_check_player_all_assigned()`. |
+| B3 | `advance_phase` | Read `next_phase` from `cmd.payload`. Reset `_command_assigning_player = -1`. If leaving COMMAND phase: emit `command_phase_complete`. Emit `phase_changed(next_phase)`. Call `_begin_ship_phase()` / `_begin_squadron_phase()` / (skip `_begin_status_phase()` — server handles cleanup). |
+| B4 | `activate_ship` | Find ship → set `_activating_ship` → emit `command_dials_changed`. |
+| B5 | `convert_dial_to_token` | Find ship → set `_activating_ship` → emit `command_dials_changed` + `command_tokens_changed`. If `result.get("duplicate")`: emit `duplicate_token_discarded`. If `result.get("overflow")`: emit `token_discard_required`. |
+| B6 | `reveal_dial` | Find ship → emit `command_dials_changed`. |
+| B7 | `set_speed` | No GM-level side effects (command mutates `GameState` directly). |
+| B8 | `spend_dial` | Find ship → emit `command_dials_changed`. |
+| B9 | `execute_maneuver` | No GM-level side effects. GameBoard handles token repositioning from the command payload's normalised position. |
+| B10 | `end_activation` | Find ship → clear `_activating_ship` → emit `command_dials_changed` → call `_advance_ship_phase_turn()` (which on client is guarded to only set local tracking, not re-submit). |
+| B11 | `activate_squadron` | Find squadron → set `_activating_squadron`. |
+| B12 | `move_squadron` | No GM-level side effects. GameBoard moves the squadron token. |
+| B13 | `spend_token` | Find ship → emit `command_tokens_changed`. |
+| B14 | `discard_token` | Find ship → emit `command_tokens_changed` + `token_discarded`. |
+| B15 | `roll_dice` | No GM-level side effects. Attack executor handles dice display from result. |
+| B16 | `spend_defense_token` | Find ship → emit `ship_defense_token_changed`. |
+| B17 | `select_redirect_zone` | No GM-level side effects. |
+| B18 | `skip_attack` | No GM-level side effects. |
+| B19 | `resolve_damage` | Find ship → emit `ship_damaged` + `ship_defense_token_changed`. If ship destroyed: emit `ship_destroyed`. |
+| B20 | `overlap_damage` | Find ship → emit damage signals. |
+| B21 | `persistent_effect_damage` | Find ship → emit damage signals. |
+| B22 | `repair_action` | Find ship → emit shield/token/hull change signals based on `action_type`. |
+| B23 | `resolve_immediate_effect` | Find ship → emit effect-specific signals. |
+| B24 | `status_phase_cleanup` | Emit `ship_defense_token_changed` + `command_dials_changed` for all ships (both players). |
+| B25 | `destroy_unit` | Emit `ship_destroyed` or `squadron_destroyed`. |
+| B26 | `debug_deal_damage` | No network side effects (debug only, `pass`). |
+
+Helper needed: `_find_squadron_from_command(cmd) -> SquadronInstance` (analog of
+existing `_find_ship_from_command()`).
+
+**Implementation note:** B1–B10 are the **critical path** — they cover game flow
+and ship activation. B11–B26 cover combat, squadrons, damage, and repairs.
+All are implemented in a single phase since the Learning Scenario is a full
+game that can use any command type.
+
+**Deliverable:** Client UI reacts to all server-broadcast commands. Phase
+transitions, ship/squadron activations, combat, and damage all display
+correctly on the passive client.
+
+##### Phase C — Per-Instance Logging
+
+Goal: each network instance writes to its own log file for debugging.
+
+| # | Task | File(s) | Description |
+|---|------|---------|-------------|
+| C1 | Enable file logging per role | `game_manager.gd` | In `start_new_game()`, if `PlayMode.is_network()`: determine role string (`"host"` / `"client"` / `"spectator"`), call `GameLogger.enable_file_logging("res://logs/<role>_<timestamp>.log")`. Create `logs/` dir via `DirAccess`. |
+| C2 | Log instance identity | `game_manager.gd` | Write a header line to the log file: role, player_index, RNG seed, scenario_id. |
+
+`GameLogger` already supports `enable_file_logging(path)` with file handle,
+`min_file_level`, and `write_raw_to_file()`. No framework changes needed.
+
+**Deliverable:** `logs/host_20260419_170000.log` and `logs/client_20260419_170002.log`
+with full debug output per instance. Terminal interleaving no longer a problem.
+
+##### Phase D — Replay Suppression on Client
+
+Goal: only the host writes replay files in network mode.
+
+| # | Task | File(s) | Description |
+|---|------|---------|-------------|
+| D1 | Guard `auto_save_replay()` | `game_manager.gd` | Early return when `PlayMode.is_network() and not NetworkManager.is_server()`. |
+
+**Deliverable:** No more duplicate replay files. Only the authoritative
+host/server saves replays.
+
+##### Phase F — Tests & Validation
+
+| # | Task | Description |
+|---|------|-------------|
+| F1 | Headless GUT | Run full suite — confirm 124 scripts, 2587 tests, 0 failures. |
+| F2 | Hot-seat regression (MT-G4.6.5.4) | Single-instance Learning Scenario plays identically to pre-fix. |
+| F3 | Network test (MT-G4.6.5.1–3) | Two-instance: game starts synced → Command Phase dials → Ship Phase activation → maneuver visible on both. |
+| F4 | Verify log files | `logs/` contains one file per instance with correct role and content. |
+| F5 | Verify replays | Only one replay file written (by host). |
+
+##### Execution Order
+
+```
+A (client passivity)
+ → B (command handler — all 26 types)
+   → C (per-instance logging)
+     → D (replay suppression)
+       → F1 (headless GUT)
+         → F2 (hot-seat regression)
+           → F3 (network manual test)
+             → F4–F5 (verify logging + replays)
+```
+
+Each phase is committed separately with a conventional commit message.
+
+##### Known Debt
+
+| Item | Description | When to Address |
+|------|-------------|-----------------|
+| Squadron activation end | `_on_squadron_activation_ended()` mutates `activated_this_round = true` outside a `GameCommand`. No `EndSquadronActivationCommand` exists. On client, the state is correct because `ActivateSquadronCommand.execute()` already marks it, but GM tracking (`_activating_squadron`, `_squadrons_activated_this_turn`) must be synced via the handler. | G4.7 or dedicated cleanup |
+| Attack flow on client | `AttackExecutor` drives multi-step dice/defense flows locally. In network mode, the passive client needs to see opponent's attack steps (dice roll results, defense token choices, damage resolution) in sequence. The commands are broadcast and applied to GameState, but the visual presentation (modal panels, animations) is not yet wired for the spectating player. | G4.7 (spectator mode shares this need) |
+| Input lockout | G4.6.5.8 (disable interactions for non-active player) is partially implemented via `_handle_network_active_player()`. Full lockout (toolbar, targeting, etc.) deferred. | After MT-G4.6.5.3 passes |
+
+#### G4.6.6 Shared Visibility + Split Authority Model (NEW)
+
+> Added: 2026-04-20 after network UX review and manual annotations.
+
+**Problem statement:** In network mode, some UI flows currently couple
+"what is visible" with "who can interact". This causes asymmetry:
+- activation sidebars diverge between peers,
+- activation/displacement modals can appear on the wrong screen,
+- planning tools and action tools are not cleanly separated by permission.
+
+**Target interaction model (authoritative server remains unchanged):**
+- **Shared visibility:** both peers see the same game progression state,
+  activation sequence state, and public combat timeline.
+- **Split authority:** only the currently entitled player may advance each
+  interaction step (active player for attack initiation and dice flow,
+  defending player for defense-token decisions, passive player for
+  displacement placement, etc.).
+- **Private tooling:** local-only planning tools (range ruler, attack
+  simulator, candidate previews) stay client-local and never mutate
+  authoritative state until converted into a command.
+
+**Architecture fit assessment:**
+- **Feasible with current architecture:** yes.
+- Why: existing command model, `CommandSubmitter` strategy, server
+  authority, and EventBus post-command hooks already support step-by-step
+  authority transfer.
+- Main gap: UI state is currently partially derived from local interaction
+  events instead of server-broadcast interaction state.
+
+**Critical design rule:**
+- Treat every interactive timing window as an explicit network-visible
+  interaction state with a single `controller_player`.
+- Visibility is broad; input permission is narrow.
+
+**Topology decision ("both players are hosts" assessment):**
+- **Do not move to dual-host authority now.**
+- Keeping one authoritative process (dedicated server or listen-server host)
+  is significantly lower risk and matches current command validation model.
+- A dual-host model requires deterministic lockstep or conflict resolution,
+  rollback/reconciliation, anti-cheat redesign, and protocol rewrite.
+- Estimated additional effort for dual-host authority: **3x-5x** this phase,
+  with higher desync risk and harder debugging.
+
+**Effort estimate for shared-visibility/split-authority refactor:**
+
+| Track | Scope | Effort | Risk |
+|------|-------|--------|------|
+| T1 | Network Interaction State layer (explicit step owner + visible state) | 4-6 days | Medium |
+| T2 | Activation sidebar parity from authoritative state only | 1-2 days | Low |
+| T3 | Activation modal mirroring with per-control lock/unlock | 3-5 days | Medium |
+| T4 | Planning tool split (local-only previews, command-only commits) | 2-4 days | Medium |
+| T5 | Attack timeline authority handoff (attacker/defender windows) | 4-7 days | High |
+| T6 | Displacement authority routing (passive player places, both observe) | 2-4 days | Medium |
+| T7 | Regression + network integration tests + MT scenarios | 3-5 days | Medium |
+
+**Total:** ~19-33 engineering days (single developer), incremental delivery
+possible after each track.
+
+**Implementation sketch (incremental, no rewrite):**
+
+1. Add a `NetworkInteractionState` domain object
+   - fields: `flow_type`, `step_id`, `controller_player`,
+     `visible_to`, `payload`, `version`.
+   - replicated from server via command results or dedicated interaction
+     state messages.
+
+2. Introduce interaction commands/events for step transitions
+   - examples: `begin_ship_activation_flow`, `enter_attack_step`,
+     `request_defense_token_choice`, `begin_displacement_for_player`,
+     `interaction_step_completed`.
+   - all progression runs through server validation.
+
+3. Refactor UI consumers to permission-check against interaction state
+   - modals and buttons render for both peers when visible,
+   - controls enabled only when `local_player == controller_player`.
+
+4. Convert activation sidebar to pure state projection
+   - remove reliance on local token-only activation callbacks,
+   - refresh from authoritative model changes + interaction state updates.
+
+5. Keep planning tools local-only
+   - range ruler / attack simulator never emit gameplay commands by default,
+   - only explicit confirm actions submit commands.
+
+6. Add deterministic interaction tests
+   - host/client symmetry assertions for sidebar content,
+   - "same visible sequence, different control owner" assertions,
+  - displacement-passive and defense-owner authority transfer scenarios.
+
+##### Ratified UX Contract (From modal_classification.md, 2026-04-21)
+
+These decisions are now authoritative inputs for implementation:
+
+1. Ship/squadron activation modals are **common** (visible on both peers)
+  with **disabled controls** on non-controller peers.
+2. Attack flow is **fully mirrored live** for both peers (targeting,
+  roll/reroll, defense, redirect, resolution).
+3. During defense windows, attacker and defender both see the **same modal**;
+  only the current controller may act.
+4. Displacement controller is the **non-active (passive) player** who did
+  not cause the overlap, not the squadron owner.
+5. Network mode removes blocking handoff overlay UX; replace with non-blocking
+  status text beneath the score header:
+  - active player: "make your choices"
+  - passive player: "waiting for opponent's choice"
+6. Command phase in network mode:
+  - each player sees only their own `CommandDialPicker` content,
+  - opponent is shown as generic planning state (no dial details).
+7. Public sequences use fully mirrored visuals (no additional fog-of-war
+  beyond existing hidden-information rules for dials/private state).
+
+Any implementation conflicting with this contract is out of scope.
+
+##### T0 — Contract Freeze (Mandatory Before T1)
+
+**Goal:** eliminate ambiguity before refactor starts.
+
+**Inputs:**
+- `docs/modal_classification.md` (annotated)
+- Ratified UX contract above.
+
+**Outputs (must exist before T1 coding):**
+- `InteractionStateStepMap` table in this plan:
+  - every step ID,
+  - visibility (`common`/`private`),
+  - controller role,
+  - allowed commands.
+- `ModalRenderPolicy` table:
+  - each modal/overlay,
+  - render mode (`common`, `private`, `hidden`),
+  - interactivity rule.
+- `StatusTextPolicy` for network mode score-header messages.
+
+**Frozen T0 tables (implementation baseline):**
+
+`InteractionStateStepMap`:
+
+| flow_type | step_id | visible_to | controller_role | allowed_commands | next_step_on_success |
+|---|---|---|---|---|---|
+| command_phase | select_dials | owner_only | owner | assign_dials | command_phase.wait_for_opponent |
+| command_phase | wait_for_opponent | all | none | none | command_phase.both_submitted |
+| command_phase | both_submitted | all | server | advance_phase | ship_activation.wait_for_ship_select |
+| ship_activation | wait_for_ship_select | all | active | activate_ship, convert_dial_to_token | ship_activation.activation_modal_open |
+| ship_activation | activation_modal_open | all | active | enter_squadron_step, enter_repair_step, enter_attack_step, enter_maneuver_step, end_activation | ship_activation.step_specific |
+| ship_activation | squadron_step | all | active | begin_squadron_command, skip_squadron_step | ship_activation.repair_step |
+| ship_activation | repair_step | all | active | begin_repair_step, skip_repair_step | ship_activation.attack_step |
+| ship_activation | attack_step | all | active | begin_attack_step, skip_attack | ship_activation.maneuver_step |
+| ship_activation | maneuver_step | all | active | execute_maneuver, end_activation | ship_activation.wait_for_ship_select or squadron_phase.wait_for_squad_select |
+| squadron_phase | wait_for_squad_select | all | active | activate_squadron | squadron_phase.action_choice |
+| squadron_phase | action_choice | all | active | begin_squadron_move, begin_squadron_attack, skip_squadron_action | squadron_phase.move_or_attack |
+| squadron_phase | move_preview | all | active | move_squadron, confirm_squadron_move, cancel_squadron_move | squadron_phase.attack_or_done |
+| squadron_phase | attack_window | all | active | begin_attack_step | squadron_phase.done_for_unit |
+| attack | declare_attacker | all | active | set_attacker_zone or set_attacker_squadron | attack.declare_target |
+| attack | declare_target | all | active | select_target | attack.roll_dice |
+| attack | roll_dice | all | active | roll_dice | attack.spend_accuracies |
+| attack | spend_accuracies | all | active | confirm_accuracies, skip_accuracies | attack.defense_tokens |
+| attack | defense_tokens | all | defender | spend_defense_token, discard_defense_token, done_defense_tokens | attack.redirect_choice or attack.resolve_damage |
+| attack | redirect_choice | all | defender | select_redirect_zone, done_redirect | attack.resolve_damage |
+| attack | resolve_damage | all | active | resolve_damage | attack.immediate_effect_choice or attack.finalize |
+| attack | immediate_effect_choice | all | owner_or_opponent_per_card | resolve_immediate_effect | attack.finalize |
+| attack | finalize | all | server | none | ship_activation.activation_modal_open or squadron_phase.action_choice |
+| displacement | place_displaced_squadrons | all | passive | move_squadron, commit_displacement | displacement.commit |
+| displacement | commit | all | passive | commit_displacement | ship_activation.maneuver_step or ship_activation.wait_for_ship_select |
+| status_phase | cleanup | all | server | status_phase_cleanup, advance_phase | command_phase.select_dials |
+
+`ModalRenderPolicy`:
+
+| surface | render_mode | controller_source | interactivity_rule | hidden_data_rule |
+|---|---|---|---|---|
+| ActivationModal | common | interaction_state.controller_player | enabled only when local player is controller | no hidden data |
+| SquadronActivationModal | common | interaction_state.controller_player | enabled only when local player is controller | no hidden data |
+| RepairPanel | common | interaction_state.controller_player | enabled only when local player is controller | no hidden data |
+| AttackSimPanel | common | interaction_state.controller_player | enabled only when local player is controller for current attack step | no hidden data |
+| OpponentChoiceModal | common | interaction_state.controller_player | enabled only when local player is controller chosen by card effect | no hidden data |
+| DisplacementModal | common | interaction_state.controller_player | enabled only when local player is passive controller | no hidden data |
+| CommandDialPicker | private | local ownership only | interactive only for owner | hide dial values from opponent always |
+| CommandDialOrderModal | private | local ownership only | interactive only for owner | hide dial values from opponent always |
+| TargetingListModal | private | local-only tool | always local-only | never replicated |
+| CardDetailOverlay | private | local-only tool | always local-only | never replicated |
+| RangeOverlayScene | private | local-only tool | always local-only | never replicated |
+| AttackSimOverlay | private_by_default | local-only tool unless explicitly mirrored by interaction step | local-only except mirrored attack windows | mirrored mode must still hide private command info |
+| HandoffOverlay (network mode) | hidden | n/a | never shown in network mode | replaced by status text |
+
+`StatusTextPolicy`:
+
+| condition | text | source | clear_condition |
+|---|---|---|---|
+| local player equals controller_player | make your choices | interaction_state.ui_status_text or fallback policy | on step change where local is no longer controller |
+| local player differs from controller_player | waiting for opponent's choice | interaction_state.ui_status_text or fallback policy | on step change where local becomes controller |
+| command_phase local submitted and remote pending | waiting for opponent's choice | command_phase gate state | when both submitted event received |
+| no active interaction window (server-controlled transition) | waiting for game update | transition guard | when next interaction_state arrives |
+
+**Exit criteria:**
+- No unresolved "open question" rows remain for T1-T6 surfaces.
+- T1-T6 tasks reference frozen step IDs only.
+
+##### Protocol Guarantees (Mandatory)
+
+The following transport/application guarantees apply to T1-T7:
+
+1. **Ordering rule**
+   - `command_result.seq` is the primary ordering source.
+   - `interaction_state.version` must be monotonic per match.
+   - Clients buffer out-of-order interaction updates until all prior
+     versions are applied.
+
+2. **Idempotency rule**
+   - Re-applying the same `command_result.seq` or
+     `interaction_state.version` is a no-op.
+   - UI transitions must be edge-triggered by unseen version/seq only.
+
+3. **Consistency rule between command and interaction state**
+   - A step transition that depends on command side-effects is only applied
+     after the corresponding `command_result.seq` has been applied locally.
+   - If interaction update arrives first, client stores it as pending.
+
+4. **Reconnection restore rule**
+   - Reconnect snapshot must include current `NetworkInteractionState`
+     alongside `GameState`.
+   - Client rehydrates to exact interaction step before input is re-enabled.
+
+5. **Privacy invariant rule (Command Phase)**
+   - Opponent payloads must never contain dial contents.
+   - Tests must include negative assertions for accidental dial leakage in:
+     snapshot payloads, command results, and UI event payloads.
+
+6. **Displacement timeout/disconnect rule**
+   - If passive controller disconnects during displacement:
+     - pause interaction and show waiting state,
+     - apply reconnection window from G4.8,
+     - if timeout expires, resolve by forfeit (no auto-placement).
+
+##### Detailed T1-T7 Execution Plan
+
+This section expands T1-T7 into implementation-ready work packages.
+
+###### T1 — Network Interaction State Layer
+
+**Goal:** Decouple visibility from interaction authority by introducing an
+authoritative interaction timeline.
+
+**Core addition:**
+- `NetworkInteractionState` (new domain object, serializable):
+  - `flow_type: String` (e.g. `ship_activation`, `attack`, `displacement`)
+  - `step_id: String` (e.g. `attack_roll_dice`, `defense_token_window`)
+  - `controller_player: int`
+  - `visible_to: String` (`all`, `owner_only`, `public_with_hidden_fields`)
+  - `payload: Dictionary`
+  - `version: int`
+  - `ui_status_text: String` (score-header helper text)
+
+**Code impact (expected):**
+- `src/autoload/game_manager.gd`
+- `src/autoload/network_manager.gd`
+- new file `src/core/network/network_interaction_state.gd`
+- optional `src/core/network/interaction_state_router.gd`
+
+**Design rules:**
+- Server is the only writer of interaction state.
+- Clients treat interaction state as read-only.
+- Every UI action checks `local_player == controller_player`.
+- Visibility and control are independent fields (never inferred from turn
+  ownership alone).
+
+**Deliverable:**
+- Both peers receive identical interaction snapshots; only designated
+  controller can send step-advancing commands.
+
+**Tests:**
+- State serialization/deserialization.
+- Version monotonicity and stale-state rejection.
+- Authority guard tests: non-controller commands rejected.
+- Network status text snapshot tests (active/passive strings).
+
+###### T1a — Function-Mapped Execution Checklist (Do Before T2)
+
+Use this checklist as the coding order for T1-T6. Each row maps a work item to
+concrete integration hooks so implementation does not drift from T0.
+
+| ID | Work item | Existing hook(s) | Add/Modify | Done when |
+|---|---|---|---|---|
+| C1 | Add interaction-state domain object | none | ✅ `src/core/network/network_interaction_state.gd` — `class_name NetworkInteractionState extends RefCounted`: fields `flow_type`, `step_id`, `controller_player`, `visible_to`, `payload`, `version`, `ui_status_text`; methods `serialize()`, `static deserialize()`, `is_newer_than()`, `same_version()`. Tests: `tests/unit/test_network_interaction_state.gd` (25 tests). | Unit tests pass for round-trip serialization and version comparisons |
+| C2 | Add network signal + cache for interaction updates | `NetworkManager.command_result_received`, `NetworkManager._pending_game_config` | ✅ `src/autoload/network_manager.gd`: signal `interaction_state_received(state_data)`, field `_latest_interaction_state: Dictionary`, public `broadcast_interaction_state(state: NetworkInteractionState)`, public `get_latest_interaction_state() -> Dictionary`, `@rpc("authority","call_local","reliable") _receive_interaction_state(state_data)` with idempotency version guard; `_cleanup()` resets cache. | Client receives state updates and keeps latest version cache |
+| C3 | Add ordered apply path (idempotent) | `GameManager._on_network_command_result(...)` | In `src/autoload/game_manager.gd`, add `_last_interaction_version: int`, `_pending_interaction_by_version: Dictionary`, and `_apply_interaction_state_if_ready(state: NetworkInteractionState)` | Duplicate/old versions are ignored; out-of-order versions are buffered then applied in order |
+| C4 | Tie command-result seq and interaction version consistency | `GameManager._on_network_command_result(...)`, `NetworkManager.command_result_received` | Track `last_applied_command_seq` in `GameManager`; only apply interaction step transitions that depend on command side-effects after required seq is applied | No premature step transitions when interaction update arrives before its command result |
+| C5 | Project active controller to score-header text | `UIPanelManager.update_phase_hud()`, `GameBoard._on_active_player_changed(...)` | Add `UIPanelManager.set_network_status_text(text: String)` and drive from `GameManager` interaction-state apply path per `StatusTextPolicy` | Text switches correctly between "make your choices" and "waiting for opponent's choice" |
+| C6 | Sidebar becomes authoritative projection | `ActivationSidebar.populate(...)`, `ActivationSidebar.refresh()`, `ActivationSidebar._on_ship_activated(...)`, `ActivationSidebar._on_squadron_activated(...)` | Refactor `src/ui/combat/activation_sidebar.gd` to rebuild from `GameManager.current_game_state` + interaction state; remove dependence on local-only activation events for correctness | Host/client sidebar parity snapshot tests are stable |
+| C7 | Activation modal permission gates | `ActivationModal.open(...)`, `ActivationModal._update_step_display()`, `_on_attack_pressed()`, `_on_repair_pressed()`, `_on_squadron_pressed()`, `_on_end_activation_pressed()` | Add `ActivationModal.set_interactable(is_enabled: bool)` and call from game-board/controller using `local_player == controller_player`; reject button handlers when disabled | Both peers see same step; passive peer cannot trigger state changes |
+| C8 | Squadron modal permission gates | `SquadronActivationModal._update_ui()`, `_on_move_pressed()`, `_on_attack_pressed()`, `_on_commit_move_pressed()`, `_on_done_pressed()` | Add `SquadronActivationModal.set_interactable(is_enabled: bool)` and gate all action handlers | Passive peer sees mirrored modal but cannot move/attack/commit |
+| C9 | Attack timeline mirrored and gated | `AttackExecutor._on_target_locked(...)`, `AttackExecutor._on_network_dice_result(...)`, `AttackSimPanel` action handlers (`_on_roll_pressed`, `_on_accuracy_confirm`, `_on_defense_done`, `_on_redirect_done_pressed`) | Add per-step controller checks in executor/panel; show full timeline to both peers, enable controls only for controller window | Attacker/defender handoff is visible and enforceable at each step |
+| C10 | Displacement routed to passive controller | `DisplacementController.start(...)`, `_on_committed()`, `_submit_displaced_positions()` | Derive interactivity from interaction state controller role (`passive`); keep modal visible to both, lock controls for active player | Passive player controls placement; active player observes read-only timeline |
+| C11 | Remove handoff overlay from network flow | `GameBoard._on_active_player_changed(...)`, `GameBoard._handle_network_active_player(...)`, `UIPanelManager.handoff_overlay` usage | In network mode, skip `HandoffOverlay.show_handoff(...)`; rely on status text policy only | No blocking ready gate appears in network mode |
+| C12 | Reconnect restores exact interaction step | `NetworkManager.get_pending_game_config()`, reconnect snapshot path in network manager | Include serialized interaction state + version in reconnect payload and rehydrate before enabling input | Reconnected client resumes same visible step with correct controller and disabled/enabled controls |
+
+**Execution note:** Implement C1-C5 first (state + protocol), then C6-C12
+UI consumers. Do not start T2/T3 visual tweaks before C3/C4 ordering rules are
+in place.
+
+###### T2 — Activation Sidebar Parity
+
+**Goal:** Sidebar content and active highlights match on both peers.
+
+**Current gap:**
+- Sidebar updates are partially event-driven from local token flows;
+  remote activations may not mirror identical event sequences.
+
+**Implementation:**
+- Make sidebar a pure projection of authoritative model + interaction state.
+- Refresh triggers:
+  - command_result application,
+  - phase transitions,
+  - interaction-state changes.
+- Avoid local-only shortcuts (`ship_activated` UI signal dependence).
+
+**Code impact (expected):**
+- `src/ui/combat/activation_sidebar.gd`
+- `src/scenes/game_board/game_board.gd`
+- `src/autoload/game_manager.gd`
+
+**Deliverable:**
+- Ship/squadron activation, active highlight, destroyed status, and
+  initiative order are identical across host/client.
+
+**Tests:**
+- Two-instance parity snapshot test for sidebar text/colors/states.
+
+###### T3 — Activation Modal Mirroring + Permission Locks
+
+**Goal:** Modal visibility is shared while controls are authority-gated.
+
+**Implementation:**
+- Split modal API into:
+  - `render_state(view_model)`
+  - `set_interactable(bool)`
+- For each step in `ActivationModal` / `SquadronActivationModal`:
+  - both peers render same step,
+  - only controller has enabled step buttons.
+- Ensure button handlers fail fast if local player is not controller.
+- Remove `HandoffOverlay` as network flow gate for command/ship/squadron
+  transitions; use score-header status text instead.
+
+**Code impact (expected):**
+- `src/ui/combat/activation_modal.gd`
+- `src/ui/combat/squadron_activation_modal.gd`
+- `src/scenes/game_board/squadron_phase_controller.gd`
+- `src/scenes/game_board/game_board.gd`
+
+**Deliverable:**
+- Shared modal timeline with deterministic enable/disable behavior.
+- Network transitions are non-blocking (no "Ready" gate), with explicit
+  passive/active status text.
+
+**Tests:**
+- UI interaction tests: passive peer cannot trigger button signals.
+- Visibility tests: both peers open/close same modal steps.
+
+###### T4 — Planning Tools Separation
+
+**Goal:** Keep planning tools private and independent per peer.
+
+**Scope:**
+- `RangeOverlayScene`, targeting list, local attack preview overlays,
+  card zoom and local inspectors.
+
+**Implementation:**
+- Explicitly classify tools as `local_only`.
+- Prevent planning-tool opens/closes from entering network command stream.
+- Ensure no gameplay state mutation from planning tool callbacks.
+
+**Code impact (expected):**
+- `src/scenes/game_board/range_tool_controller.gd`
+- `src/scenes/game_board/target_selector.gd`
+- `src/ui/combat/targeting_list_modal.gd`
+- `src/scenes/tools/attack_sim_overlay.gd`
+
+**Deliverable:**
+- Both peers can use planning tools independently without desync or lockout.
+
+**Tests:**
+- Tool usage on one client does not alter remote state/UI.
+
+###### T5 — Attack Timeline Authority Handoff
+
+**Goal:** Encode attacker/defender authority windows explicitly.
+
+**Expected windows:**
+- attacker: declare attacker, choose target, roll/reroll attacker dice,
+  spend accuracies.
+- defender: spend defense tokens, select redirect zone, defense completion.
+- attacker: finalize damage / continue sequence.
+
+**Mirroring rule (ratified):**
+- All sub-steps are rendered on both peers in real time.
+- Both peers keep the same `AttackSimPanel` progression; only the controller
+  can click at each step.
+
+**Implementation:**
+- Add step IDs for all attack sub-phases.
+- Update `AttackExecutor` to:
+  - render all steps on both peers,
+  - gate controls by `controller_player`,
+  - avoid local speculative branching in network mode.
+- Convert implicit handoff points into explicit server-declared state changes.
+
+**Code impact (expected):**
+- `src/scenes/game_board/attack_executor.gd`
+- `src/ui/combat/attack_sim_panel.gd`
+- `src/autoload/game_manager.gd`
+
+**Deliverable:**
+- Both peers observe identical attack progression; only entitled side can act.
+
+**Tests:**
+- End-to-end attack integration scenarios (ship vs ship, ship vs squadron,
+  evade/redirect, skip attack).
+
+###### T6 — Displacement Ownership Routing
+
+**Goal:** Displacement is controlled by the passive (non-active) player.
+
+**Implementation:**
+- Server emits displacement interaction state with passive-player controller.
+- Passive peer enters `DisplacementModal` interactive mode.
+- Active peer sees mirrored read-only displacement timeline.
+- On commit, authoritative `move_squadron` commands are applied and broadcast.
+
+**Code impact (expected):**
+- `src/scenes/game_board/displacement_controller.gd`
+- `src/ui/commands/displacement_modal.gd`
+- `src/autoload/game_manager.gd`
+
+**Deliverable:**
+- Passive player's screen owns placement in all overlap scenarios.
+
+**Tests:**
+- Overlap scenarios verify controller = non-active player regardless of
+  displaced squadron ownership.
+
+###### T7 — Test Matrix + Manual Validation Pack
+
+**Goal:** Lock behavior with deterministic automated and manual tests.
+
+**Automated additions:**
+- Symmetry assertions for shared modals and sidebar state.
+- Authority assertions for every controller window.
+- Regression tests for command phase, ship phase, squadron phase,
+  attack flow, displacement flow.
+
+**Manual validation pack:**
+- MT-T1: command phase simultaneous assignment + private dial visibility.
+- MT-T2: shared activation modal, passive disabled controls.
+- MT-T3: attack attacker/defender handoff windows.
+- MT-T4: displacement passive-player-control routing.
+- MT-T5: independent planning tools on both peers.
+- MT-T6: network status text policy ("make your choices" / "waiting for
+  opponent's choice") with no blocking handoff overlay.
+
+**Deliverable:**
+- Repeatable validation checklist for every refactor increment.
+
+**Immediate bug relevance from current annotations:**
+- Sidebar mismatch indicates authoritative activation state is not consistently
+  projected in both clients' sidebar update paths.
+- Displacement modal ownership indicates flow ownership is still inferred from
+  local trigger source rather than explicit `controller_player`.
+
+**Decision:** Proceed with incremental refactor on top of current
+authoritative-server architecture. No rewrite required.
+
+---
+
 ### G4.7 — Spectator Mode
 
 **Goal:** Third-party observers can watch live games.
@@ -855,3 +1520,98 @@ use `class_name`.  The `.uid` sidecar files maintain Godot's type index.
 | 4 | Turn timer auto-action? | **Forfeit** — timed-out player forfeits; both players may restart from last auto-save (see G4.9.4–6) |
 | 5 | Saved replays? | **Server saves replays** — authoritative command log, HMAC-signed for integrity |
 | 6 | Single-player mode? | **`LocalCommandSubmitter`** — single-player and hot-seat stay on existing in-process path.  No embedded server child process.  See §1.5 |
+
+---
+
+## 9. Bug Fix Plan — G4.6.5 First Network Test (2026-04-19)
+
+Discovered during manual test MT-G4.6.5.2/3 after Phases A–D implementation.
+
+### BF-1: `_on_activation_ended()` guard blocks client command submission (BLOCKER)
+
+**Symptom:** Client presses "End Activation" → nothing happens. Host cannot
+activate its second ship because `active_player` stays at 1.
+
+**Root cause:** The Phase A guard `if _is_network_client(): return` at the
+top of `_on_activation_ended()` suppresses the *entire* function, including
+the `_submitter.submit(cmd)` call.  The client's `NetworkCommandSubmitter`
+needs to send the command to the server, but the guard prevents it.
+
+**Fix:** Remove the blanket early return.  The function is already safe for
+the client because:
+- `_submitter.submit(cmd)` on a `NetworkCommandSubmitter` sends via RPC
+  (returns `{}`), so the `if not result.is_empty()` guard prevents duplicate
+  local signal emissions.
+- `_advance_ship_phase_turn()` / `_advance_squadron_phase_turn()` already
+  have their own `_is_network_client()` guards.
+
+**File:** `src/autoload/game_manager.gd` — `_on_activation_ended()`
+
+### BF-2: No visual token repositioning for remote `execute_maneuver` (VISUAL)
+
+**Symptom:** When the host moves a ship, the client sees the ship remain at
+its original position.
+
+**Root cause:** The Phase B handler has `"execute_maneuver": pass`.  The
+command's `execute()` updates `ShipInstance.pos_x/pos_y/rotation_deg` in
+GameState, but no code moves the visual `ShipToken` Node2D on the client.
+
+**Fix (two parts):**
+1. In `_handle_remote_command_effects()`, replace `pass` with a call to
+   `_handle_remote_execute_maneuver(cmd)` that emits
+   `EventBus.ship_repositioned_remotely` with the ShipInstance.
+2. In `game_board.gd`, connect to `ship_repositioned_remotely`, look up the
+   ShipToken via `_find_ship_token_for_instance()`, convert normalised
+   `pos_x`/`pos_y` to pixels via `GameScale.play_area_size_px`, and set
+   `token.global_position` + `token.global_rotation`.
+3. Same approach for `"move_squadron"` — emit `squadron_repositioned_remotely`.
+
+**New signal:** `EventBus.ship_repositioned_remotely(ship: RefCounted)`
+**New signal:** `EventBus.squadron_repositioned_remotely(squadron: RefCounted)`
+**Files:** `event_bus.gd`, `game_manager.gd`, `game_board.gd`
+
+### BF-3: Duplicate `command_phase_complete` signal on client (MINOR)
+
+**Symptom:** Client log shows "Command Phase complete — advancing to Ship
+Phase." twice.
+
+**Root cause:** When the client receives the server's `assign_dials` commands,
+`_handle_remote_assign_dials()` → `_check_player_all_assigned()` →
+`_check_command_phase_complete()` emits `command_phase_complete`.  Then the
+server's `advance_phase` command arrives and `_handle_remote_advance_phase()`
+emits `command_phase_complete` again.
+
+**Fix:** In `_handle_remote_advance_phase()`, only emit `command_phase_complete`
+if `_check_command_phase_complete()` hasn't already fired — i.e. skip the
+emit when transitioning from COMMAND to SHIP, since the assign_dials handler
+already triggered it.
+
+**File:** `src/autoload/game_manager.gd` — `_handle_remote_advance_phase()`
+
+### BF-4: Client `convert_dial_to_token` processes stale empty result (COSMETIC)
+
+**Symptom:** Client shows `added=false, discard=false` in log for its own
+convert_dial_to_token, then the real result arrives from the server.
+
+**Root cause:** On the client, `GameManager.activate_ship_as_token(ship)`
+submits via `NetworkCommandSubmitter` which returns `{}`.  The caller in
+`game_board.gd` (`_on_dial_token_converted`) immediately reads keys from
+the empty result dict (e.g. `result.get("needs_discard", false)`).  The
+real result arrives later in `_on_network_command_result`.
+
+**Fix:** In `_on_dial_token_converted()`, when `PlayMode.is_network()` and
+the result is empty (client), defer the activation UI setup.  Store the
+ship reference and set up the activation context, but skip the result-
+dependent log and discard logic.  The `_handle_remote_convert_dial_to_token()`
+handler already emits the correct signals when the server result arrives.
+
+**File:** `src/scenes/game_board/game_board.gd` — `_on_dial_token_converted()`
+
+### BF Summary
+
+| # | Severity | File(s) | Status |
+|---|----------|---------|--------|
+| BF-1 | BLOCKER | game_manager.gd | ☐ |
+| BF-2 | VISUAL | event_bus.gd, game_manager.gd, game_board.gd | ☐ |
+| BF-3 | MINOR | game_manager.gd | ☐ |
+| BF-4 | COSMETIC | game_board.gd | ☐ |

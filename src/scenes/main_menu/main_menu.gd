@@ -19,14 +19,19 @@ const TOAST_DURATION: float = 2.0
 var _menu_panel: PanelContainer
 var _host_dialog: PanelContainer
 var _join_dialog: PanelContainer
+var _prefs_dialog: PanelContainer
 var _lobby_room: LobbyRoom
 var _toast_label: Label
 var _splash_timer: Timer
 var _toast_timer: Timer
 var _host_name_input: LineEdit
+var _host_lobby_name_input: LineEdit
 var _host_password_input: LineEdit
 var _join_ip_input: LineEdit
+var _join_name_input: LineEdit
 var _join_password_input: LineEdit
+var _join_error_label: Label
+var _prefs_name_input: LineEdit
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
 
@@ -52,6 +57,9 @@ func _build_ui() -> void:
 	_join_dialog = _build_join_dialog()
 	_join_dialog.visible = false
 	add_child(_join_dialog)
+	_prefs_dialog = _build_prefs_dialog()
+	_prefs_dialog.visible = false
+	add_child(_prefs_dialog)
 	_lobby_room = LobbyRoom.new()
 	_lobby_room.visible = false
 	_lobby_room.leave_requested.connect(_on_lobby_leave)
@@ -177,6 +185,12 @@ func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	btn_join.pressed.connect(_on_join_game_pressed)
 	vbox.add_child(btn_join)
 
+	vbox.add_child(HSeparator.new())
+
+	var btn_prefs: Button = _create_menu_button("Preferences")
+	btn_prefs.pressed.connect(_on_prefs_pressed)
+	vbox.add_child(btn_prefs)
+
 	var spacer: Control = Control.new()
 	spacer.custom_minimum_size.y = 8.0
 	vbox.add_child(spacer)
@@ -247,7 +261,8 @@ func _on_learning_scenario_pressed() -> void:
 func _on_host_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_menu_panel.visible = false
-	_host_name_input.text = ""
+	_host_name_input.text = PlayerProfile.get_display_name()
+	_host_lobby_name_input.text = ""
 	_host_password_input.text = ""
 	_host_dialog.visible = true
 	_host_name_input.grab_focus()
@@ -257,16 +272,99 @@ func _on_host_game_pressed() -> void:
 func _on_join_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_menu_panel.visible = false
+	_join_name_input.text = PlayerProfile.get_display_name()
 	_join_ip_input.text = ""
 	_join_password_input.text = ""
+	_join_error_label.text = ""
+	_join_error_label.visible = false
 	_join_dialog.visible = true
-	_join_ip_input.grab_focus()
+	_join_name_input.grab_focus()
 
 
 ## Quits the application. UI-033.
 func _on_quit_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	get_tree().quit()
+
+
+## Shows the preferences dialog.
+func _on_prefs_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	_menu_panel.visible = false
+	_prefs_name_input.text = PlayerProfile.get_display_name()
+	_prefs_dialog.visible = true
+	_prefs_name_input.grab_focus()
+
+
+# ---------------------------------------------------------------------------
+# Preferences dialog
+# ---------------------------------------------------------------------------
+
+## Builds the preferences dialog panel.
+func _build_prefs_dialog() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.set_anchors_preset(PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(360, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style(0.0))
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+	_populate_prefs_dialog(vbox)
+	return panel
+
+
+## Populates the preferences dialog content.
+func _populate_prefs_dialog(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIStyleHelper.create_title_label(
+			"Preferences", UIStyleHelper.GOLD_TITLE))
+	vbox.add_child(HSeparator.new())
+	var name_label: Label = UIStyleHelper.create_section_label(
+			"Player Name:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(name_label)
+	_prefs_name_input = LineEdit.new()
+	_prefs_name_input.placeholder_text = "Enter your name"
+	_prefs_name_input.max_length = LobbyState.MAX_NAME_LENGTH
+	_prefs_name_input.custom_minimum_size.y = 36
+	vbox.add_child(_prefs_name_input)
+	var btn_box: HBoxContainer = HBoxContainer.new()
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_box)
+	var btn_save: Button = _create_menu_button("Save")
+	btn_save.pressed.connect(_on_prefs_save_pressed)
+	btn_box.add_child(btn_save)
+	var btn_cancel: Button = _create_menu_button("Cancel")
+	btn_cancel.pressed.connect(_on_prefs_cancel_pressed)
+	btn_box.add_child(btn_cancel)
+
+
+## Saves preferences and returns to menu.
+func _on_prefs_save_pressed() -> void:
+	var new_name: String = _prefs_name_input.text.strip_edges()
+	if new_name.is_empty():
+		_show_toast("Please enter a name.")
+		return
+	PlayerProfile.set_display_name(new_name)
+	_prefs_dialog.visible = false
+	_menu_panel.visible = true
+	_show_toast("Name saved: %s" % PlayerProfile.get_display_name())
+
+
+## Cancels preferences dialog and returns to menu.
+func _on_prefs_cancel_pressed() -> void:
+	_prefs_dialog.visible = false
+	_menu_panel.visible = true
 
 
 # ---------------------------------------------------------------------------
@@ -300,16 +398,26 @@ func _populate_host_dialog(vbox: VBoxContainer) -> void:
 	vbox.add_child(UIStyleHelper.create_title_label(
 			"Host Game", UIStyleHelper.GOLD_TITLE))
 	vbox.add_child(HSeparator.new())
-	var name_label: Label = UIStyleHelper.create_section_label(
-			"Lobby Name:", UIStyleHelper.FONT_BODY,
+	var pname_label: Label = UIStyleHelper.create_section_label(
+			"Your Name:", UIStyleHelper.FONT_BODY,
 			UIStyleHelper.BODY_TEXT)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	vbox.add_child(name_label)
+	pname_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(pname_label)
 	_host_name_input = LineEdit.new()
-	_host_name_input.placeholder_text = "My Game"
+	_host_name_input.placeholder_text = "Enter your name"
 	_host_name_input.max_length = LobbyState.MAX_NAME_LENGTH
 	_host_name_input.custom_minimum_size.y = 36
 	vbox.add_child(_host_name_input)
+	var lobby_label: Label = UIStyleHelper.create_section_label(
+			"Lobby Name:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	lobby_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(lobby_label)
+	_host_lobby_name_input = LineEdit.new()
+	_host_lobby_name_input.placeholder_text = "My Game"
+	_host_lobby_name_input.max_length = LobbyState.MAX_NAME_LENGTH
+	_host_lobby_name_input.custom_minimum_size.y = 36
+	vbox.add_child(_host_lobby_name_input)
 	var pw_label: Label = UIStyleHelper.create_section_label(
 			"Password (optional):", UIStyleHelper.FONT_BODY,
 			UIStyleHelper.BODY_TEXT)
@@ -334,7 +442,12 @@ func _populate_host_dialog(vbox: VBoxContainer) -> void:
 
 ## Confirms hosting and transitions to the lobby room.
 func _on_host_confirm_pressed() -> void:
-	var lobby_name: String = _host_name_input.text.strip_edges()
+	var player_name: String = _host_name_input.text.strip_edges()
+	if player_name.is_empty():
+		_show_toast("Please enter your name.")
+		return
+	PlayerProfile.set_display_name(player_name)
+	var lobby_name: String = _host_lobby_name_input.text.strip_edges()
 	if lobby_name.is_empty():
 		lobby_name = PlayerProfile.get_display_name() + "'s Game"
 	var password: String = _host_password_input.text
@@ -386,12 +499,23 @@ func _populate_join_dialog(vbox: VBoxContainer) -> void:
 	vbox.add_child(UIStyleHelper.create_title_label(
 			"Join Game", UIStyleHelper.GOLD_TITLE))
 	vbox.add_child(HSeparator.new())
+	var pname_label: Label = UIStyleHelper.create_section_label(
+			"Your Name:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	pname_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(pname_label)
+	_join_name_input = LineEdit.new()
+	_join_name_input.placeholder_text = "Enter your name"
+	_join_name_input.max_length = LobbyState.MAX_NAME_LENGTH
+	_join_name_input.custom_minimum_size.y = 36
+	vbox.add_child(_join_name_input)
 	var ip_label: Label = UIStyleHelper.create_section_label(
 			"Server IP Address:", UIStyleHelper.FONT_BODY,
 			UIStyleHelper.BODY_TEXT)
 	ip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	vbox.add_child(ip_label)
 	_join_ip_input = LineEdit.new()
+	_join_ip_input.text = "127.0.0.1"
 	_join_ip_input.placeholder_text = "127.0.0.1"
 	_join_ip_input.custom_minimum_size.y = 36
 	vbox.add_child(_join_ip_input)
@@ -405,6 +529,16 @@ func _populate_join_dialog(vbox: VBoxContainer) -> void:
 	_join_password_input.secret = true
 	_join_password_input.custom_minimum_size.y = 36
 	vbox.add_child(_join_password_input)
+	_join_error_label = Label.new()
+	_join_error_label.text = ""
+	_join_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_join_error_label.add_theme_font_size_override("font_size",
+			UIStyleHelper.FONT_BODY)
+	_join_error_label.add_theme_color_override("font_color",
+			UIStyleHelper.ERROR_RED)
+	_join_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_join_error_label.visible = false
+	vbox.add_child(_join_error_label)
 	var btn_box: HBoxContainer = HBoxContainer.new()
 	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_box.add_theme_constant_override("separation", 12)
@@ -419,10 +553,14 @@ func _populate_join_dialog(vbox: VBoxContainer) -> void:
 
 ## Confirms joining and initiates connection to the server.
 func _on_join_confirm_pressed() -> void:
+	var player_name: String = _join_name_input.text.strip_edges()
+	if player_name.is_empty():
+		_show_toast("Please enter your name.")
+		return
+	PlayerProfile.set_display_name(player_name)
 	var ip: String = _join_ip_input.text.strip_edges()
 	if ip.is_empty():
-		_show_toast("Please enter a server IP address.")
-		return
+		ip = "127.0.0.1"
 	var password: String = _join_password_input.text
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.set_lobby_password(password)
@@ -450,12 +588,11 @@ func _on_join_accepted(_player_index: int) -> void:
 	_show_lobby_room()
 
 
-## Handshake rejected — show error and return to menu.
+## Handshake rejected — show error inside the join dialog.
 func _on_join_rejected(reason: String) -> void:
 	_disconnect_join_signals()
-	_join_dialog.visible = false
-	_menu_panel.visible = true
-	_show_toast("Join failed: " + reason)
+	_join_error_label.text = reason
+	_join_error_label.visible = true
 
 
 ## Disconnects one-shot join signals if still connected.
@@ -485,7 +622,15 @@ func _on_lobby_leave() -> void:
 
 
 ## Called when the game is starting from the lobby.
+## Sets the play mode to NETWORK and swaps the command submitter before
+## transitioning to the game board scene.
+## G4.6.5.1 — submitter swap on game start.
 func _on_lobby_game_start() -> void:
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	if NetworkManager.is_server():
+		GameManager.set_command_submitter(NetworkHostCommandSubmitter.new())
+	else:
+		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
@@ -493,6 +638,7 @@ func _on_lobby_game_start() -> void:
 func _show_toast(message: String) -> void:
 	_toast_label.text = message
 	_toast_label.visible = true
+	move_child(_toast_label, get_child_count() - 1)
 	if _toast_timer:
 		_toast_timer.stop()
 		_toast_timer.queue_free()

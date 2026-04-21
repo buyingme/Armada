@@ -71,6 +71,12 @@ var _scenario_id: String = ""
 var _submitter: CommandSubmitter = LocalCommandSubmitter.new()
 
 
+## Returns true when this instance is a network client (not the server/host).
+## Used to suppress game-flow commands that the server drives.  G4.6.5 fix.
+func _is_network_client() -> bool:
+	return PlayMode.is_network() and not NetworkManager.is_server()
+
+
 func _ready() -> void:
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
@@ -81,6 +87,9 @@ func _ready() -> void:
 	# Phase 8 — continuous elimination check (GF-004, WN-001).
 	EventBus.ship_destroyed.connect(_on_ship_destroyed)
 	EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
+	# G4.6.5.6 — client-side command result handler.
+	NetworkManager.command_result_received.connect(
+			_on_network_command_result)
 
 
 func _notification(what: int) -> void:
@@ -130,7 +139,17 @@ func start_new_game(config: Dictionary = {}) -> void:
 	fixed_commands_applied = false
 	_scenario_id = config.get("scenario_id", "") as String
 	EventBus.game_started.emit()
-	_start_round()
+	# Per-instance file logging for network games.  G4.6.5 C1.
+	if PlayMode.is_network():
+		var role: String = "host" if NetworkManager.is_server() else "client"
+		var ts: String = Time.get_datetime_string_from_system() \
+				.replace(":", "").replace("-", "").replace("T", "_")
+		var log_path: String = "res://logs/%s_%s.log" % [role, ts]
+		GameLogger.enable_file_logging(log_path)
+	# In network client mode, skip _start_round() — the server broadcasts
+	# StartRoundCommand and the client applies it via the handler.  G4.6.5 A1.
+	if not config.get("client_mode", false):
+		_start_round()
 
 
 ## Scoring calculator (created lazily, reused across end-game checks).
@@ -175,6 +194,9 @@ func get_scenario_id() -> String:
 ## The replay is saved to [code]res://replays/[/code] with a timestamped
 ## filename.
 func auto_save_replay() -> void:
+	# Network client: only the host/server saves replays.  G4.6.5 D1.
+	if _is_network_client():
+		return
 	if not is_instance_valid(CommandProcessor):
 		return
 	var replay: GameReplay = CommandProcessor.create_replay()
@@ -275,6 +297,9 @@ func get_current_phase() -> Constants.GamePhase:
 func advance_phase() -> void:
 	if not is_game_active or not current_game_state:
 		return
+	# Network client: server drives phase advancement.  G4.6.5 A4.
+	if _is_network_client():
+		return
 
 	var next_phase := _get_next_phase(current_game_state.current_phase)
 
@@ -303,6 +328,9 @@ func advance_phase() -> void:
 ## Starts a new round.
 ## Requirements: TF-002 — initiative player assigns dials first in hot-seat.
 func _start_round() -> void:
+	# Network client: server drives round start.  G4.6.5 A5.
+	if _is_network_client():
+		return
 	# Check whether all rounds have been played before attempting to start
 	# a new one.  The command's own validate() guards against this too, but
 	# we need the end_game() call here on the presentation side.
@@ -405,6 +433,7 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 	if not result.get("success", false):
 		_log.warn("assign_dials failed for '%s'" % [
 				ship.ship_data.ship_name if ship.ship_data else "?"])
+		return
 	EventBus.command_dials_changed.emit(ship)
 
 	_check_player_all_assigned(ship.owner_player)
@@ -450,7 +479,9 @@ func _check_command_phase_complete() -> void:
 
 	_command_assigning_player = -1
 	EventBus.command_phase_complete.emit()
-	advance_phase()
+	# Network client: server broadcasts AdvancePhaseCommand.  G4.6.5 A6.
+	if not _is_network_client():
+		advance_phase()
 
 
 # ---------------------------------------------------------------------------
@@ -1031,6 +1062,9 @@ func _on_activation_ended() -> void:
 ## Auto-passes for players with no unactivated ships.
 ## Requirements: TF-003, TF-006, TF-007.
 func _advance_ship_phase_turn() -> void:
+	# Network client: server drives turn changes.  G4.6.5 A8.
+	if _is_network_client():
+		return
 	var next: int = 1 - active_player
 	var next_has: bool = _has_unactivated_ships(next)
 	var curr_has: bool = _has_unactivated_ships(active_player)
@@ -1058,6 +1092,9 @@ func _advance_ship_phase_turn() -> void:
 ## Resets the per-turn squadron activation counter for the new player.
 ## Requirements: TF-008, TF-009, TF-012.
 func _advance_squadron_phase_turn() -> void:
+	# Network client: server drives turn changes.  G4.6.5 A9.
+	if _is_network_client():
+		return
 	var next: int = 1 - active_player
 	var next_has: bool = _has_unactivated_squadrons(next)
 	var curr_has: bool = _has_unactivated_squadrons(active_player)
@@ -1177,8 +1214,12 @@ func activate_squadron(squadron: SquadronInstance) -> void:
 			squadron)
 	var cmd := ActivateSquadronCommand.new(squadron.owner_player,
 			{"squadron_index": sq_index})
+	# Network client: set optimistically before submit so the modal
+	# sees the correct state immediately.  The broadcast will confirm.
+	if _is_network_client():
+		_activating_squadron = squadron
 	var result: Dictionary = _submitter.submit(cmd)
-	if result.is_empty():
+	if result.is_empty() and not _is_network_client():
 		return
 	_activating_squadron = squadron
 	_log.info("Squadron activated: %s (player %d, turn count %d)" % [
@@ -1204,6 +1245,10 @@ func _on_squadron_activation_ended(squadron: RefCounted) -> void:
 		var sq: SquadronInstance = squadron as SquadronInstance
 		sq.activated_this_round = true
 		_log.info("Squadron activation ended: %s" % sq.data_key)
+	# Network client: activation counting is handled by
+	# _handle_remote_move/activate_squadron when the broadcast arrives.
+	if _is_network_client():
+		return
 	_activating_squadron = null
 	_squadrons_activated_this_turn += 1
 	# SQ-002: each player activates up to 2 squadrons per turn.
@@ -1221,6 +1266,9 @@ func _on_squadron_activation_ended(squadron: RefCounted) -> void:
 ## Rules Reference: "Status Phase", p.6; ST-001–004.
 func _begin_status_phase() -> void:
 	if not current_game_state:
+		return
+	# Network client: server broadcasts cleanup + advance.  G4.6.5 A7.
+	if _is_network_client():
 		return
 	_perform_status_phase_cleanup()
 	advance_phase()
@@ -1328,3 +1376,423 @@ func _check_elimination() -> void:
 		end_game("elimination", 0)
 	elif p1_elim:
 		end_game("elimination", 1)
+
+
+# ---------------------------------------------------------------------------
+# Network command result handler (G4.6.5.6)
+# ---------------------------------------------------------------------------
+
+## Called when the server broadcasts a command result to all clients.
+## On the client, deserializes and executes the command locally so state stays
+## in sync, then triggers post-execution effects (EventBus signals, phase
+## progression).  The host ignores this — it already processed the command
+## inline via [NetworkHostCommandSubmitter].
+func _on_network_command_result(
+		command_data: Dictionary, result: Dictionary) -> void:
+	if not PlayMode.is_network():
+		return
+	var cmd: GameCommand = GameCommand.deserialize(command_data)
+	if cmd == null:
+		_log.warn("Failed to deserialize remote command.")
+		return
+	if NetworkManager.is_server():
+		# Host: command already executed by NetworkManager.
+		# Only process side effects for the remote player's commands.
+		if cmd.player_index != NetworkManager.get_local_player_index():
+			_handle_remote_command_effects(cmd, result)
+		return
+	CommandProcessor.submit(cmd)
+	_handle_remote_command_effects(cmd, result)
+	if _submitter is NetworkCommandSubmitter:
+		(_submitter as NetworkCommandSubmitter).clear_awaiting()
+
+
+## Emits the appropriate EventBus signals after a remotely-received command
+## has been applied to local [GameState].  Mirrors the post-submit logic
+## that runs inline on the host / in hot-seat mode.
+## G4.6.5 Phase B — handles all 26 command types.
+func _handle_remote_command_effects(
+		cmd: GameCommand, result: Dictionary) -> void:
+	match cmd.command_type:
+		"start_round":
+			_handle_remote_start_round()
+		"assign_dials":
+			_handle_remote_assign_dials(cmd)
+		"advance_phase":
+			_handle_remote_advance_phase(cmd)
+		"activate_ship":
+			_handle_remote_activate_ship(cmd, result)
+		"convert_dial_to_token":
+			_handle_remote_convert_dial_to_token(cmd, result)
+		"reveal_dial", "spend_dial":
+			_handle_remote_dial_change(cmd)
+		"set_speed":
+			pass # GameState mutated by execute(); no GM side effects.
+		"execute_maneuver":
+			_handle_remote_execute_maneuver(cmd)
+		"end_activation":
+			_handle_remote_end_activation(cmd)
+		"activate_squadron":
+			_handle_remote_activate_squadron(cmd)
+		"move_squadron":
+			_handle_remote_move_squadron(cmd)
+		"spend_token":
+			_handle_remote_spend_token(cmd)
+		"discard_token":
+			_handle_remote_discard_token(cmd)
+		"roll_dice":
+			# Network client: forward dice results to attack executor.
+			if not NetworkManager.is_server():
+				EventBus.network_dice_result.emit(result)
+		"select_redirect_zone", "skip_attack":
+			pass # Attack executor handles display from result.
+		"spend_defense_token":
+			_handle_remote_spend_defense_token(cmd)
+		"resolve_damage":
+			_handle_remote_resolve_damage(cmd, result)
+		"overlap_damage", "persistent_effect_damage":
+			_handle_remote_damage_event(cmd, result)
+		"repair_action":
+			_handle_remote_repair_action(cmd)
+		"resolve_immediate_effect":
+			_handle_remote_immediate_effect(cmd)
+		"status_phase_cleanup":
+			_handle_remote_status_cleanup()
+		"destroy_unit":
+			_handle_remote_destroy_unit(cmd, result)
+		"debug_deal_damage":
+			pass # Debug only — no network side effects.
+		_:
+			_log.warn("Unhandled remote command type: %s" \
+					% cmd.command_type)
+
+
+## B1: Mirror start_round side effects on client.
+func _handle_remote_start_round() -> void:
+	_command_submitted = [false, false]
+	var init: int = current_game_state.initiative_player
+	_command_assigning_player = init
+	active_player = init
+	if PlayMode.is_network():
+		NetworkManager.activate_sync_gate()
+	EventBus.round_started.emit(current_game_state.current_round)
+	EventBus.phase_changed.emit(Constants.GamePhase.COMMAND)
+
+
+## B2: Mirror assign_dials side effects on client.
+func _handle_remote_assign_dials(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.command_dials_changed.emit(ship)
+	_check_player_all_assigned(cmd.player_index)
+
+
+## B3: Mirror advance_phase side effects on client.
+func _handle_remote_advance_phase(cmd: GameCommand) -> void:
+	var next_phase: Constants.GamePhase = cmd.payload.get(
+			"next_phase", 0) as Constants.GamePhase
+	_command_assigning_player = -1
+	# Only emit command_phase_complete if it hasn't already been emitted
+	# by _check_command_phase_complete() via the assign_dials handler.
+	# BF-3: avoids duplicate emission.
+	var from_command: bool = current_game_state.current_phase \
+			== Constants.GamePhase.COMMAND
+	if not from_command and next_phase == Constants.GamePhase.SHIP:
+		EventBus.command_phase_complete.emit()
+	EventBus.phase_changed.emit(next_phase)
+	match next_phase:
+		Constants.GamePhase.SHIP:
+			_begin_ship_phase()
+		Constants.GamePhase.SQUADRON:
+			_begin_squadron_phase_client()
+		Constants.GamePhase.STATUS:
+			pass # Server handles cleanup + advance.
+
+
+## B4: Mirror activate_ship side effects on client.
+func _handle_remote_activate_ship(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		_activating_ship = ship
+		EventBus.command_dials_changed.emit(ship)
+
+
+## B5: Mirror convert_dial_to_token side effects on client.
+func _handle_remote_convert_dial_to_token(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship == null:
+		return
+	_activating_ship = ship
+	EventBus.command_dials_changed.emit(ship)
+	if result.get("token_blocked", false):
+		return
+	EventBus.command_tokens_changed.emit(ship)
+	var cmd_type: int = result.get("command", -1)
+	if result.get("duplicate", false):
+		EventBus.duplicate_token_discarded.emit(ship, cmd_type)
+	elif result.get("overflow", false):
+		EventBus.token_discard_required.emit(ship)
+
+
+## B6: Mirror reveal_dial / spend_dial side effects on client.
+func _handle_remote_dial_change(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.command_dials_changed.emit(ship)
+
+
+## BF-2: Mirror execute_maneuver — snap visual token on client.
+func _handle_remote_execute_maneuver(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.ship_repositioned_remotely.emit(ship)
+
+
+## BF-2: Mirror move_squadron — snap visual token on client.
+## BF-2: Mirror move_squadron — snap visual token and finish activation
+## on remote peer.  Displacement moves (Ship Phase) only reposition
+## the token without touching activation state.  G4.6.5.
+func _handle_remote_move_squadron(cmd: GameCommand) -> void:
+	var is_local: bool = not NetworkManager.is_server() \
+			and cmd.player_index == NetworkManager.get_local_player_index()
+	var sq: SquadronInstance = _find_squadron_from_command(cmd)
+	# Displacement move during Ship Phase — only reposition, skip
+	# activation tracking and turn advancement.
+	if current_game_state \
+			and current_game_state.current_phase == Constants.GamePhase.SHIP:
+		if sq and not is_local:
+			EventBus.squadron_repositioned_remotely.emit(sq)
+		return
+	if sq:
+		sq.activated_this_round = true
+		if not is_local:
+			EventBus.squadron_repositioned_remotely.emit(sq)
+	_activating_squadron = null
+	_finish_remote_squadron_activation()
+
+
+## B10: Mirror end_activation side effects on remote peer.
+func _handle_remote_end_activation(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.command_dials_changed.emit(ship)
+		_log.info("Ship activation ended: %s" % ship.data_key)
+	_activating_ship = null
+	if NetworkManager.is_server():
+		_advance_ship_phase_turn()
+	else:
+		_advance_ship_phase_turn_client()
+
+
+## B11: Mirror activate_squadron side effects on remote peer.
+## If a previous squadron was being activated (i.e. skip — no move_squadron
+## was sent), finish that activation first.  Only applies to the REMOTE
+## player's commands; the local player's activations are tracked via
+## the optimistic set in [method activate_squadron].
+func _handle_remote_activate_squadron(cmd: GameCommand) -> void:
+	var is_local: bool = not NetworkManager.is_server() \
+			and cmd.player_index == NetworkManager.get_local_player_index()
+	# Remote player: a new activate_squadron means the previous one
+	# finished (skip path — no move_squadron was sent).
+	if not is_local and _activating_squadron != null:
+		_activating_squadron.activated_this_round = true
+		_activating_squadron = null
+		_finish_remote_squadron_activation()
+	var sq: SquadronInstance = _find_squadron_from_command(cmd)
+	if sq:
+		_activating_squadron = sq
+
+
+## Shared helper: increments remote squadron activation counter and
+## advances the squadron-phase turn when the per-turn limit is reached.
+func _finish_remote_squadron_activation() -> void:
+	if current_game_state == null:
+		return
+	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
+		return
+	_squadrons_activated_this_turn += 1
+	if _squadrons_activated_this_turn >= Constants.SQUADRONS_PER_ACTIVATION \
+			or not _has_unactivated_squadrons(active_player):
+		if NetworkManager.is_server():
+			_advance_squadron_phase_turn()
+		else:
+			_advance_squadron_phase_turn_client()
+
+
+## B13: Mirror spend_token side effects on client.
+func _handle_remote_spend_token(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.command_tokens_changed.emit(ship)
+
+
+## B14: Mirror discard_token side effects on client.
+func _handle_remote_discard_token(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		var token_type: int = cmd.payload.get("token_type", -1)
+		EventBus.command_tokens_changed.emit(ship)
+		EventBus.token_discarded.emit(ship, token_type)
+
+
+## B16: Mirror spend_defense_token side effects on client.
+func _handle_remote_spend_defense_token(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.ship_defense_token_changed.emit(ship)
+
+
+## B19: Mirror resolve_damage side effects on client.
+func _handle_remote_resolve_damage(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var target_type: String = result.get("target_type", "ship")
+	if target_type == "squadron":
+		var sq: SquadronInstance = _find_squadron_from_command(cmd)
+		if sq and result.get("destroyed", false):
+			EventBus.squadron_destroyed.emit(sq)
+		return
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship == null:
+		return
+	EventBus.ship_defense_token_changed.emit(ship)
+	if result.get("destroyed", false):
+		EventBus.ship_destroyed.emit(ship)
+	_check_elimination()
+
+
+## B20–B21: Mirror overlap/persistent damage side effects on client.
+func _handle_remote_damage_event(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship == null:
+		return
+	if result.get("destroyed", false):
+		EventBus.ship_destroyed.emit(ship)
+	_check_elimination()
+
+
+## B22: Mirror repair_action side effects on client.
+func _handle_remote_repair_action(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship == null:
+		return
+	var action: String = cmd.payload.get("action_type", "")
+	match action:
+		"move_shields", "recover_shields":
+			EventBus.ship_defense_token_changed.emit(ship)
+		"repair_hull":
+			EventBus.command_dials_changed.emit(ship)
+
+
+## B23: Mirror resolve_immediate_effect side effects on client.
+func _handle_remote_immediate_effect(cmd: GameCommand) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.command_dials_changed.emit(ship)
+		EventBus.ship_defense_token_changed.emit(ship)
+
+
+## B24: Mirror status_phase_cleanup side effects on client.
+func _handle_remote_status_cleanup() -> void:
+	for i: int in range(Constants.PLAYER_COUNT):
+		var ps: PlayerState = current_game_state.get_player_state(i)
+		if ps == null:
+			continue
+		for s: Variant in ps.ships:
+			if s is ShipInstance:
+				var si: ShipInstance = s as ShipInstance
+				if si.is_destroyed():
+					continue
+				EventBus.ship_defense_token_changed.emit(si)
+				if si.command_dial_stack != null:
+					EventBus.command_dials_changed.emit(si)
+
+
+## B25: Mirror destroy_unit side effects on client.
+func _handle_remote_destroy_unit(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var unit_type: String = cmd.payload.get("unit_type", "ship")
+	if unit_type == "squadron":
+		var sq: SquadronInstance = _find_squadron_from_command(cmd)
+		if sq:
+			EventBus.squadron_destroyed.emit(sq)
+	else:
+		var ship: ShipInstance = _find_ship_from_command(cmd)
+		if ship:
+			EventBus.ship_destroyed.emit(ship)
+	_check_elimination()
+
+
+## Client-side ship-phase turn advancement.
+## Determines the next active player locally (same logic as host) and sets
+## the tracking variable.  Does NOT call advance_phase — that comes from
+## the server's AdvancePhaseCommand broadcast.
+func _advance_ship_phase_turn_client() -> void:
+	var next: int = 1 - active_player
+	var next_has: bool = _has_unactivated_ships(next)
+	var curr_has: bool = _has_unactivated_ships(active_player)
+	if not next_has and not curr_has:
+		return # Server will broadcast advance_phase.
+	if next_has:
+		_set_active_player(next)
+	elif curr_has:
+		_set_active_player(active_player)
+
+
+## Client-side squadron-phase turn advance.
+## Same as _advance_squadron_phase_turn but without calling advance_phase
+## (server handles that).
+func _advance_squadron_phase_turn_client() -> void:
+	var next: int = 1 - active_player
+	var next_has: bool = _has_unactivated_squadrons(next)
+	var curr_has: bool = _has_unactivated_squadrons(active_player)
+	if not next_has and not curr_has:
+		return # Server will broadcast advance_phase.
+	if next_has:
+		_squadrons_activated_this_turn = 0
+		_set_active_player(next)
+	elif curr_has:
+		_squadrons_activated_this_turn = 0
+		_set_active_player(active_player)
+
+
+## Client-side squadron-phase begin.
+## Same as _begin_squadron_phase but without auto-skip advance_phase
+## (server handles that).
+func _begin_squadron_phase_client() -> void:
+	if not current_game_state:
+		return
+	if current_game_state.effect_registry.get_effect_count() == 0:
+		EffectFactory.register_squadron_keywords(
+				current_game_state,
+				current_game_state.initiative_player)
+	_squadrons_activated_this_turn = 0
+	_activating_squadron = null
+	var init: int = current_game_state.initiative_player
+	_set_active_player(init)
+
+
+## Looks up the [ShipInstance] referenced by a command's payload.
+func _find_ship_from_command(cmd: GameCommand) -> ShipInstance:
+	if not current_game_state:
+		return null
+	var ship_index: int = cmd.payload.get("ship_index", -1)
+	var ps: PlayerState = current_game_state.get_player_state(
+			cmd.player_index)
+	if ps == null or ship_index < 0 or ship_index >= ps.ships.size():
+		return null
+	return ps.ships[ship_index] as ShipInstance
+
+
+## Looks up the [SquadronInstance] referenced by a command's payload.
+func _find_squadron_from_command(cmd: GameCommand) -> SquadronInstance:
+	if not current_game_state:
+		return null
+	var sq_index: int = cmd.payload.get("squadron_index", -1)
+	var ps: PlayerState = current_game_state.get_player_state(
+			cmd.player_index)
+	if ps == null or sq_index < 0 or sq_index >= ps.squadrons.size():
+		return null
+	return ps.squadrons[sq_index] as SquadronInstance

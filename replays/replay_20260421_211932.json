@@ -1,0 +1,257 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 1,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 2,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 3,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 6,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 11,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 12,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 13,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 14,
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 15,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 16,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 17,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 18,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 19,
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 20,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 21,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 22,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 23,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 24,
+			"type": "status_phase_cleanup"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 25,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 26,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 3
+			},
+			"player": 0,
+			"sequence": 27,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"next_phase": 4
+			},
+			"player": 0,
+			"sequence": 28,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 29,
+			"type": "status_phase_cleanup"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			0
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": 2104776208204709813,
+		"scenario_id": "",
+		"timestamp": "2026-04-21T19:19:32"
+	}
+}

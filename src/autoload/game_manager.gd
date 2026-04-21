@@ -70,6 +70,26 @@ var _scenario_id: String = ""
 ## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
 var _submitter: CommandSubmitter = LocalCommandSubmitter.new()
 
+## Sequence number of the last applied command_result broadcast.
+## Used by the interaction-state ordering buffer (C3/C4) to ensure step
+## transitions that depend on command side-effects are not applied before
+## the required command_result has been processed.
+## -1 when no command has been applied yet.
+## G4.6.6 T1a C3/C4.
+var _last_applied_command_seq: int = -1
+
+## Buffer for interaction-state updates that arrived before their required
+## command_result sequence number was applied.
+## Key = version (int), value = serialised state Dictionary.
+## G4.6.6 T1a C3.
+var _pending_interaction_by_version: Dictionary = {}
+
+## The highest interaction-state version that has been fully applied locally.
+## Ensures idempotent application — re-broadcasting the same version is a
+## no-op.
+## G4.6.6 T1a C3.
+var _last_interaction_version: int = -1
+
 
 ## Returns true when this instance is a network client (not the server/host).
 ## Used to suppress game-flow commands that the server drives.  G4.6.5 fix.
@@ -90,6 +110,9 @@ func _ready() -> void:
 	# G4.6.5.6 — client-side command result handler.
 	NetworkManager.command_result_received.connect(
 			_on_network_command_result)
+	# G4.6.6 T1a C2/C3 — interaction-state ordered apply path.
+	NetworkManager.interaction_state_received.connect(
+			_on_interaction_state_received)
 
 
 func _notification(what: int) -> void:
@@ -138,6 +161,10 @@ func start_new_game(config: Dictionary = {}) -> void:
 	_squadrons_activated_this_turn = 0
 	fixed_commands_applied = false
 	_scenario_id = config.get("scenario_id", "") as String
+	# C3/C4: reset interaction-state ordering counters for new game.
+	_last_applied_command_seq = -1
+	_last_interaction_version = -1
+	_pending_interaction_by_version.clear()
 	EventBus.game_started.emit()
 	# Per-instance file logging for network games.  G4.6.5 C1.
 	if PlayMode.is_network():
@@ -1395,16 +1422,97 @@ func _on_network_command_result(
 	if cmd == null:
 		_log.warn("Failed to deserialize remote command.")
 		return
+	# C4: track the sequence number of every applied command_result.
+	var seq: int = result.get("seq", -1)
+	if seq >= 0:
+		_last_applied_command_seq = seq
 	if NetworkManager.is_server():
 		# Host: command already executed by NetworkManager.
 		# Only process side effects for the remote player's commands.
 		if cmd.player_index != NetworkManager.get_local_player_index():
 			_handle_remote_command_effects(cmd, result)
+		# C3: flush any pending interaction updates now that seq advanced.
+		_flush_pending_interaction_states()
 		return
 	CommandProcessor.submit(cmd)
 	_handle_remote_command_effects(cmd, result)
+	# C3: flush any pending interaction updates now that seq advanced.
+	_flush_pending_interaction_states()
 	if _submitter is NetworkCommandSubmitter:
 		(_submitter as NetworkCommandSubmitter).clear_awaiting()
+
+
+# ---------------------------------------------------------------------------
+# Interaction State Ordered Apply Path (G4.6.6 T1a C3/C4)
+# ---------------------------------------------------------------------------
+
+## Called when [NetworkManager] receives and validates a new interaction-state
+## broadcast from the server.  Buffers the state and attempts to apply it
+## immediately; defers if the required command_result has not yet arrived.
+## G4.6.6 T1a C3.
+func _on_interaction_state_received(state_data: Dictionary) -> void:
+	if not PlayMode.is_network():
+		return
+	var state: NetworkInteractionState = NetworkInteractionState.deserialize(
+			state_data)
+	# Discard outdated versions (idempotency rule).
+	if state.version <= _last_interaction_version:
+		_log.info("Discarding stale interaction state v%d (applied up to v%d)." % [
+				state.version, _last_interaction_version])
+		return
+	# C4: if the state requires a specific command seq to have been applied
+	# first (carried in payload["requires_seq"]), buffer it.
+	var requires_seq: int = state_data.get("payload", {}).get(
+			"requires_seq", -1)
+	if requires_seq > _last_applied_command_seq:
+		_log.info(
+				"Buffering interaction state v%d (needs seq %d, have %d)." % [
+				state.version, requires_seq, _last_applied_command_seq])
+		_pending_interaction_by_version[state.version] = state_data
+		return
+	_apply_interaction_state_if_ready(state)
+
+
+## Applies a [NetworkInteractionState] that has passed all ordering checks.
+## Updates [member _last_interaction_version] and emits the
+## [signal EventBus.interaction_state_changed] so UI consumers can react.
+## G4.6.6 T1a C3.
+func _apply_interaction_state_if_ready(
+		state: NetworkInteractionState) -> void:
+	# Final idempotency guard (may be called from flush path).
+	if state.version <= _last_interaction_version:
+		return
+	_last_interaction_version = state.version
+	_log.info("Applied interaction state v%d: flow='%s' step='%s' controller=%d." % [
+			state.version, state.flow_type, state.step_id,
+			state.controller_player])
+	EventBus.interaction_state_changed.emit(state)
+
+
+## Attempts to flush any buffered interaction states whose required
+## command_result seq has now been applied.
+## Called after every [method _on_network_command_result] (C4 flush hook).
+## G4.6.6 T1a C3.
+func _flush_pending_interaction_states() -> void:
+	if _pending_interaction_by_version.is_empty():
+		return
+	# Collect keys sorted ascending so we apply in version order.
+	var versions: Array = _pending_interaction_by_version.keys()
+	versions.sort()
+	var applied: Array[int] = []
+	for ver: Variant in versions:
+		var data: Dictionary = _pending_interaction_by_version[ver] as Dictionary
+		var requires_seq: int = data.get("payload", {}).get("requires_seq", -1)
+		if requires_seq > _last_applied_command_seq:
+			# Still waiting for the required command — stop here (versions
+			# are ordered so later ones will also be waiting).
+			break
+		var state: NetworkInteractionState = NetworkInteractionState.deserialize(
+				data)
+		_apply_interaction_state_if_ready(state)
+		applied.append(ver as int)
+	for ver: int in applied:
+		_pending_interaction_by_version.erase(ver)
 
 
 ## Emits the appropriate EventBus signals after a remotely-received command

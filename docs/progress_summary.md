@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-21 (G4.6.6 T1a C1/C2)
+> Last updated: 2026-04-21 (G4.6.6 T1a C1–C4)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 125 |
-| GUT tests | 2 612 |
-| GUT asserts | 4 801 |
+| GUT test scripts | 126 |
+| GUT tests | 2 622 |
+| GUT asserts | 4 826 |
 | Autoloads | 17 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -103,6 +103,8 @@
 | G4.6.5: Network Game Wiring | ⏳ | Submitter swap, game init RPC, command result handler, GameBoard network mode, input lockout, state snapshot |
 | G4.6.6 T1a C1: NetworkInteractionState | ✅ | `src/core/network/network_interaction_state.gd` — domain object with serialize/deserialize/is_newer_than/same_version; 25 unit tests |
 | G4.6.6 T1a C2: Interaction state RPC | ✅ | `NetworkManager`: signal `interaction_state_received`, field `_latest_interaction_state`, `broadcast_interaction_state()`, `get_latest_interaction_state()`, `_receive_interaction_state` RPC with idempotency guard |
+| G4.6.6 T1a C3: Ordered apply path | ✅ | `GameManager`: fields `_last_interaction_version`, `_pending_interaction_by_version`; `_on_interaction_state_received()`, `_apply_interaction_state_if_ready()`, `_flush_pending_interaction_states()`; `EventBus.interaction_state_changed` signal; 13 unit tests |
+| G4.6.6 T1a C4: Command-seq consistency | ✅ | `GameManager`: field `_last_applied_command_seq`; tracked per command_result; flush called after every apply; `payload["requires_seq"]` gate; reset on new game |
 
 ---
 

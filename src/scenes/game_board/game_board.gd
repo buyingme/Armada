@@ -359,6 +359,7 @@ func _connect_signals() -> void:
 	#region Turn management signals
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
+	EventBus.interaction_state_changed.connect(_on_interaction_state_changed)
 	#endregion
 
 	#region Ship activation signals (dial drag controller, activation end)
@@ -829,6 +830,14 @@ func _swap_card_panels(player_index: int) -> void:
 func _handle_network_active_player(_player_index: int) -> void:
 	var local: int = NetworkManager.get_local_player_index()
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
+	if _panel_mgr != null:
+		# Fallback while server-side interaction-state publishing is still
+		# being rolled out: keep score-header guidance visible from the
+		# active-player signal path.
+		var status_text: String = "waiting for opponent's choice"
+		if phase == Constants.GamePhase.COMMAND or _player_index == local:
+			status_text = "make your choices"
+		_panel_mgr.set_network_status_text(status_text)
 
 	# Always lock viewer to local player's perspective.
 	_panel_mgr.rebel_card_panel.set_viewer_player(local)
@@ -850,6 +859,22 @@ func _handle_network_active_player(_player_index: int) -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_panel_mgr.your_turn_banner.show_banner(_player_index)
 	_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+## Applies score-header helper text from authoritative interaction-state
+## updates. Uses ui_status_text when provided, otherwise falls back to
+## controller-based wording from StatusTextPolicy.
+func _on_interaction_state_changed(state: NetworkInteractionState) -> void:
+	if not PlayMode.is_network() or _panel_mgr == null:
+		return
+	var status_text: String = state.ui_status_text.strip_edges()
+	if status_text.is_empty():
+		var local: int = NetworkManager.get_local_player_index()
+		if state.controller_player == local:
+			status_text = "make your choices"
+		else:
+			status_text = "waiting for opponent's choice"
+	_panel_mgr.set_network_status_text(status_text)
 
 ## Shows and positions the End Activation button.
 func _show_end_activation_button() -> void:

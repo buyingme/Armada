@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-21 (G4.6.6 T1a C1–C4)
+> Last updated: 2026-04-22 (G4.6.6 T1a C1–C5)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -11,8 +11,8 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 126 |
-| GUT tests | 2 622 |
-| GUT asserts | 4 826 |
+| GUT tests | 2 624 |
+| GUT asserts | 4 828 |
 | Autoloads | 17 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -105,6 +105,12 @@
 | G4.6.6 T1a C2: Interaction state RPC | ✅ | `NetworkManager`: signal `interaction_state_received`, field `_latest_interaction_state`, `broadcast_interaction_state()`, `get_latest_interaction_state()`, `_receive_interaction_state` RPC with idempotency guard |
 | G4.6.6 T1a C3: Ordered apply path | ✅ | `GameManager`: fields `_last_interaction_version`, `_pending_interaction_by_version`; `_on_interaction_state_received()`, `_apply_interaction_state_if_ready()`, `_flush_pending_interaction_states()`; `EventBus.interaction_state_changed` signal; 13 unit tests |
 | G4.6.6 T1a C4: Command-seq consistency | ✅ | `GameManager`: field `_last_applied_command_seq`; tracked per command_result; flush called after every apply; `payload["requires_seq"]` gate; reset on new game |
+| G4.6.6 T1a C5: Score-header status text | ✅ | `UIPanelManager.set_network_status_text()` + HUD suffix in network mode; `GameBoard` consumes `EventBus.interaction_state_changed` and also applies active-player fallback in `_handle_network_active_player()` so status text is visible before full interaction-state broadcast rollout; 2 unit tests |
+
+### C5 Bug-Fix Learnings
+
+- HUD status visibility must be driven by explicit UI state (`_network_status_text`) rather than `PlayMode` timing, because scene-transition order can temporarily lag mode updates.
+- Interaction-state broadcasting still has no producer call sites; C5 therefore keeps an active-player fallback path to ensure the UX contract remains visible until C6+ wiring is complete.
 
 ---
 

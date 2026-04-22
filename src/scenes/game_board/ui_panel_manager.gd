@@ -80,6 +80,10 @@ var _scoring: ScoringCalculator = ScoringCalculator.new()
 ## Each entry: { "node": Control, "method": StringName, "only_visible": bool }.
 var _resizable_widgets: Array[Dictionary] = []
 
+## Current network-mode status text displayed below the score header context.
+## Empty string means no extra status suffix is shown.
+var _network_status_text: String = ""
+
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("UIPanelManager")
 
@@ -159,6 +163,8 @@ func update_phase_hud() -> void:
 		var imperial_score: int = _scoring.calculate_score(1, state)
 		base_text += "  |  Rebel: %d  |  Imperial: %d" % [
 				rebel_score, imperial_score]
+	if not _network_status_text.is_empty():
+		base_text += "  |  %s" % _network_status_text
 	phase_hud_label.text = base_text
 	# Centre the label by spanning the full viewport width.
 	var vp_size: Vector2 = Vector2(1280, 720)
@@ -173,6 +179,15 @@ func update_phase_hud() -> void:
 func set_phase_hud_visible(show: bool) -> void:
 	if phase_hud_label != null:
 		phase_hud_label.visible = show
+
+
+## Sets the network-mode score-header helper text.
+## Rendering is driven by this value directly so the suffix remains visible
+## even if PlayMode has not been switched yet on a scene-transition edge.
+## [param text] New helper text; empty clears the suffix.
+func set_network_status_text(text: String) -> void:
+	_network_status_text = text.strip_edges()
+	update_phase_hud()
 
 
 ## Adds a ship instance to the correct faction's card panel.

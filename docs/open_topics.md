@@ -1,8 +1,8 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-19 (G4.6)
-> Current baseline: 124 scripts, 2 587 tests, 4 761 asserts
+> Last updated: 2026-04-22 (G4.6.6 T1a C1–C5)
+> Current baseline: 126 scripts, 2 624 tests, 4 828 asserts
 
 ---
 

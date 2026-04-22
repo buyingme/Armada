@@ -98,6 +98,33 @@ func test_set_phase_hud_visible_toggles_label() -> void:
 
 
 # -----------------------------------------------------------------------
+# set_network_status_text
+# -----------------------------------------------------------------------
+
+func test_set_network_status_text_stores_trimmed_value() -> void:
+	# Arrange
+	_mgr._network_status_text = ""
+	# Act
+	_mgr.set_network_status_text("  waiting for opponent's choice  ")
+	# Assert
+	assert_eq(_mgr._network_status_text, "waiting for opponent's choice",
+			"Network status text should be stored trimmed.")
+
+
+func test_set_network_status_text_triggers_hud_refresh_when_label_exists() -> void:
+	# Arrange
+	var label: Label = Label.new()
+	add_child(label)
+	_mgr.phase_hud_label = label
+	# Act
+	_mgr.set_network_status_text("make your choices")
+	# Assert
+	assert_true(label.text.contains("make your choices"),
+			"HUD text should include the status suffix whenever it is set.")
+	label.queue_free()
+
+
+# -----------------------------------------------------------------------
 # add_ship_to_card_panel — null safety only (no full panel in unit test)
 # -----------------------------------------------------------------------
 

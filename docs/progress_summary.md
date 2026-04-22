@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-22 (G4.6.6 T1a C1–C5)
+> Last updated: 2026-04-22 (G4.6.6 T1a C1–C6)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 126 |
-| GUT tests | 2 624 |
-| GUT asserts | 4 828 |
+| GUT test scripts | 127 |
+| GUT tests | 2 627 |
+| GUT asserts | 4 831 |
 | Autoloads | 17 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -106,6 +106,7 @@
 | G4.6.6 T1a C3: Ordered apply path | ✅ | `GameManager`: fields `_last_interaction_version`, `_pending_interaction_by_version`; `_on_interaction_state_received()`, `_apply_interaction_state_if_ready()`, `_flush_pending_interaction_states()`; `EventBus.interaction_state_changed` signal; 13 unit tests |
 | G4.6.6 T1a C4: Command-seq consistency | ✅ | `GameManager`: field `_last_applied_command_seq`; tracked per command_result; flush called after every apply; `payload["requires_seq"]` gate; reset on new game |
 | G4.6.6 T1a C5: Score-header status text | ✅ | `UIPanelManager.set_network_status_text()` + HUD suffix in network mode; `GameBoard` consumes `EventBus.interaction_state_changed` and also applies active-player fallback in `_handle_network_active_player()` so status text is visible before full interaction-state broadcast rollout; 2 unit tests |
+| G4.6.6 T1a C6: Sidebar authoritative projection | 🔄 | `ActivationSidebar` now refreshes from `GameManager.current_game_state`, unit count changes trigger rebuild, active highlight syncs from `GameManager.get_activating_ship()/get_activating_squadron()`, and refresh is driven by phase/round/active-player/interaction-state + command-side-effect signals; 3 unit tests added |
 
 ### C5 Bug-Fix Learnings
 

@@ -153,6 +153,25 @@ func _gui_input(event: InputEvent) -> void:
 func refresh() -> void:
 	for inst: Variant in _entries.keys():
 		_update_entry(inst)
+	_sync_active_highlight_from_game_manager()
+
+
+## Reprojects sidebar state from the authoritative [GameState].
+## Rebuilds entries when unit counts changed, then refreshes colours/
+## activation highlights from current runtime state.
+func refresh_from_authoritative_state(game_state: Variant) -> void:
+	if game_state == null:
+		return
+	var expected_count: int = _count_units_in_state(game_state)
+	if _entries.size() != expected_count:
+		var was_expanded: bool = _expanded
+		populate(game_state)
+		_expanded = was_expanded
+		position = _expanded_pos() if _expanded else _collapsed_pos()
+		return
+	_initiative_player = game_state.initiative_player
+	_update_initiative_headers()
+	refresh()
 
 
 ## Connects to EventBus signals for live updates.
@@ -171,6 +190,23 @@ func connect_signals() -> void:
 		EventBus.squadron_destroyed.connect(_on_squadron_destroyed)
 	if not EventBus.phase_changed.is_connected(_on_phase_changed):
 		EventBus.phase_changed.connect(_on_phase_changed)
+	if not EventBus.round_started.is_connected(_on_round_started):
+		EventBus.round_started.connect(_on_round_started)
+	if not EventBus.active_player_changed.is_connected(_on_active_player_changed):
+		EventBus.active_player_changed.connect(_on_active_player_changed)
+	if not EventBus.command_dials_changed.is_connected(_on_command_dials_changed):
+		EventBus.command_dials_changed.connect(_on_command_dials_changed)
+	if not EventBus.command_tokens_changed.is_connected(
+			_on_command_tokens_changed):
+		EventBus.command_tokens_changed.connect(_on_command_tokens_changed)
+	if not EventBus.ship_defense_token_changed.is_connected(
+			_on_ship_defense_token_changed):
+		EventBus.ship_defense_token_changed.connect(
+				_on_ship_defense_token_changed)
+	if not EventBus.interaction_state_changed.is_connected(
+			_on_interaction_state_changed):
+		EventBus.interaction_state_changed.connect(
+				_on_interaction_state_changed)
 
 
 ## Disconnects EventBus signals.
@@ -189,6 +225,22 @@ func disconnect_signals() -> void:
 		EventBus.squadron_destroyed.disconnect(_on_squadron_destroyed)
 	if EventBus.phase_changed.is_connected(_on_phase_changed):
 		EventBus.phase_changed.disconnect(_on_phase_changed)
+	if EventBus.round_started.is_connected(_on_round_started):
+		EventBus.round_started.disconnect(_on_round_started)
+	if EventBus.active_player_changed.is_connected(_on_active_player_changed):
+		EventBus.active_player_changed.disconnect(_on_active_player_changed)
+	if EventBus.command_dials_changed.is_connected(_on_command_dials_changed):
+		EventBus.command_dials_changed.disconnect(_on_command_dials_changed)
+	if EventBus.command_tokens_changed.is_connected(_on_command_tokens_changed):
+		EventBus.command_tokens_changed.disconnect(_on_command_tokens_changed)
+	if EventBus.ship_defense_token_changed.is_connected(
+			_on_ship_defense_token_changed):
+		EventBus.ship_defense_token_changed.disconnect(
+				_on_ship_defense_token_changed)
+	if EventBus.interaction_state_changed.is_connected(
+			_on_interaction_state_changed):
+		EventBus.interaction_state_changed.disconnect(
+				_on_interaction_state_changed)
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +371,50 @@ func _clear() -> void:
 	_imperial_header = null
 
 
+## Returns total tracked units in the given [GameState].
+func _count_units_in_state(game_state: Variant) -> int:
+	var total: int = 0
+	for idx: int in range(Constants.PLAYER_COUNT):
+		var ps: Variant = game_state.get_player_state(idx)
+		if ps == null:
+			continue
+		total += ps.ships.size()
+		total += ps.squadrons.size()
+	return total
+
+
+## Updates faction headers with the current initiative marker.
+func _update_initiative_headers() -> void:
+	if _rebel_header != null:
+		_rebel_header.text = "Rebel Alliance%s" % [
+				INITIATIVE_MARKER if _initiative_player == 0 else ""]
+	if _imperial_header != null:
+		_imperial_header.text = "Galactic Empire%s" % [
+				INITIATIVE_MARKER if _initiative_player == 1 else ""]
+
+
+## Keeps the active highlight aligned with authoritative GameManager state.
+func _sync_active_highlight_from_game_manager() -> void:
+	var active_instance: Variant = null
+	if GameManager.get_activating_ship() != null:
+		active_instance = GameManager.get_activating_ship()
+	elif GameManager.get_activating_squadron() != null:
+		active_instance = GameManager.get_activating_squadron()
+	if active_instance == null:
+		clear_active()
+		return
+	if active_instance != _active_instance:
+		highlight_active(active_instance)
+		return
+	if _entries.has(active_instance):
+		var entry: Dictionary = _entries[active_instance]
+		var lbl: Label = entry["label"]
+		if not lbl.text.begins_with(ACTIVE_PREFIX):
+			_active_original_text = lbl.text
+			lbl.text = ACTIVE_PREFIX + _active_original_text
+		lbl.add_theme_color_override("font_color", ACTIVE_HIGHLIGHT_COLOR)
+
+
 ## Returns the faction display name.
 func _faction_name(faction: Constants.Faction) -> String:
 	match faction:
@@ -378,40 +474,27 @@ func _toggle_expanded() -> void:
 
 ## Called when a ship node is activated (token).
 func _on_ship_activated(ship_node: Node) -> void:
-	# Find the ShipInstance from the token.
-	if ship_node.has_method("get_ship_instance"):
-		var inst: Variant = ship_node.get_ship_instance()
-		if inst:
-			_update_entry(inst)
+	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Called when an activation ends (any unit).
 func _on_activation_ended() -> void:
-	refresh()
+	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Called when a ship is destroyed.
 func _on_ship_destroyed(ship_node: Node) -> void:
-	if ship_node.has_method("get_ship_instance"):
-		var inst: Variant = ship_node.get_ship_instance()
-		if inst:
-			_update_entry(inst)
+	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Called when a squadron is activated.
 func _on_squadron_activated(sq_node: Node) -> void:
-	if sq_node.has_method("get_squadron_instance"):
-		var inst: Variant = sq_node.get_squadron_instance()
-		if inst:
-			_update_entry(inst)
+	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Called when a squadron is destroyed.
 func _on_squadron_destroyed(sq_node: Node) -> void:
-	if sq_node.has_method("get_squadron_instance"):
-		var inst: Variant = sq_node.get_squadron_instance()
-		if inst:
-			_update_entry(inst)
+	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Recalculates position when the panel size changes after layout.
@@ -428,6 +511,30 @@ func _on_phase_changed(new_phase: Constants.GamePhase) -> void:
 		Constants.GamePhase.SHIP, \
 		Constants.GamePhase.SQUADRON:
 			visible = true
-			refresh()
+			refresh_from_authoritative_state(GameManager.current_game_state)
 		_:
 			visible = false
+
+
+func _on_round_started(_round_number: int) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_active_player_changed(_player_index: int) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_command_dials_changed(_ship_instance: RefCounted) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_command_tokens_changed(_ship_instance: RefCounted) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_ship_defense_token_changed(_ship_instance: RefCounted) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_interaction_state_changed(_state: NetworkInteractionState) -> void:
+	refresh_from_authoritative_state(GameManager.current_game_state)

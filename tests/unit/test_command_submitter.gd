@@ -147,17 +147,39 @@ func test_network_clear_awaiting() -> void:
 			"Should warn about send_command_to_server with wrong role.")
 
 
-func test_network_rejects_while_awaiting() -> void:
+func test_network_queues_while_awaiting() -> void:
 	var submitter := NetworkCommandSubmitter.new()
 	var cmd1 := _TestNoopCmd.new(0, {})
 	var cmd2 := _TestNoopCmd.new(0, {})
 	submitter.submit(cmd1)
 	var result: Dictionary = submitter.submit(cmd2)
 	assert_true(result.is_empty(),
-			"Second submit while awaiting should return empty dict.")
-	# First submit warns about role, second warns about awaiting.
+			"Queued submit while awaiting should return empty dict.")
+	assert_eq(submitter._pending_payloads.size(), 1,
+			"Second submit should be queued while waiting for server response.")
+	# First submit warns about role; second submit is queued (info-level).
+	assert_engine_error(1,
+			"Only initial send should warn about role in this test setup.")
+
+
+func test_network_clear_awaiting_flushes_next_queued_command() -> void:
+	var submitter := NetworkCommandSubmitter.new()
+	var cmd1 := _TestNoopCmd.new(0, {})
+	var cmd2 := _TestNoopCmd.new(0, {})
+	submitter.submit(cmd1)
+	submitter.submit(cmd2)
+	assert_true(submitter.is_awaiting_response(),
+			"Submitter should be awaiting after first send.")
+	assert_eq(submitter._pending_payloads.size(), 1,
+			"Second command should be queued.")
+	submitter.clear_awaiting()
+	assert_true(submitter.is_awaiting_response(),
+			"Clearing should flush queued command and re-enter awaiting state.")
+	assert_eq(submitter._pending_payloads.size(), 0,
+			"Queued command should be flushed after clear_awaiting.")
+	# Two sends attempted in non-client role (initial + flushed).
 	assert_engine_error(2,
-			"Should warn about role + awaiting response.")
+			"Both sends should warn about role in this test setup.")
 
 
 # ---------------------------------------------------------------------------

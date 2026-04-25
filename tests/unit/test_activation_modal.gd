@@ -108,6 +108,48 @@ func test_attack_row_shows_button_when_not_skippable() -> void:
 
 
 # ---------------------------------------------------------------------------
+# C7 — Activation modal permission gates
+# ---------------------------------------------------------------------------
+
+
+func test_set_interactable_false_disables_current_attack_button() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.ATTACK)
+	_modal.set_attack_skippable(false)
+	_modal.open(state)
+	_modal.set_interactable(false)
+	assert_true(_modal._attack_button.visible,
+			"Attack button should remain visible for mirrored UI state.")
+	assert_true(_modal._attack_button.disabled,
+			"Attack button should be disabled when modal is not interactable.")
+
+
+func test_attack_handler_blocked_when_not_interactable() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.ATTACK)
+	watch_signals(_modal)
+	_modal.set_attack_skippable(false)
+	_modal.open(state)
+	_modal.set_interactable(false)
+	_modal._on_attack_pressed()
+	assert_signal_not_emitted(_modal, "attack_step_entered",
+			"attack_step_entered should not emit when modal is non-interactable.")
+
+
+func test_end_activation_handler_blocked_when_not_interactable() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.DONE)
+	watch_signals(_modal)
+	_modal.open(state)
+	_modal.set_interactable(false)
+	assert_true(_modal._end_activation_button.disabled,
+			"End Activation button should be disabled for passive peers.")
+	_modal._on_end_activation_pressed()
+	assert_signal_not_emitted(_modal, "end_activation_requested",
+			"end_activation_requested should not emit when modal is non-interactable.")
+
+
+# ---------------------------------------------------------------------------
 # Auto-skip integration — verify step advances past ATTACK
 # ---------------------------------------------------------------------------
 

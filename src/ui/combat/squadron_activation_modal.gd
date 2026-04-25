@@ -126,6 +126,10 @@ var _can_move: bool = true
 ## Set by [method set_action_availability] from the game board.
 var _has_targets: bool = true
 
+## Whether local controls are enabled for this modal instance.
+## In network mode, non-controller peers keep visibility but lose interactivity.
+var _is_interactable: bool = true
+
 
 # ---------------------------------------------------------------------------
 # UI elements
@@ -216,6 +220,8 @@ func open_for_command(resolver: SquadronCommandResolver,
 func handle_squadron_click(token: SquadronToken) -> bool:
 	if not visible:
 		return false
+	if not _is_interactable:
+		return false
 	match _state:
 		State.WAITING_FOR_SELECTION:
 			return _try_select_squadron(token)
@@ -232,6 +238,8 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 ## game-world coordinates.
 func handle_board_click(world_pos: Vector2) -> bool:
 	if not visible:
+		return false
+	if not _is_interactable:
 		return false
 	if _state != State.MOVING:
 		return false
@@ -317,6 +325,13 @@ func set_action_availability(can_move: bool, has_targets: bool) -> void:
 	_has_targets = has_targets
 	if _state == State.ACTION_CHOICE:
 		_update_action_buttons()
+
+
+## Enables/disables interactive controls while keeping the modal visible.
+## Used by network authority gates (controller player vs passive peer).
+func set_interactable(is_enabled: bool) -> void:
+	_is_interactable = is_enabled
+	_apply_interactable_state()
 
 
 ## Returns the currently selected squadron token (or null).
@@ -625,6 +640,7 @@ func _update_ui() -> void:
 			_update_ui_attacking()
 		State.DONE:
 			_update_ui_done()
+	_apply_interactable_state()
 
 
 ## Updates UI for the WAITING_FOR_SELECTION state.
@@ -640,6 +656,7 @@ func _update_ui_waiting() -> void:
 	_attack_button.visible = false
 	_skip_button.visible = false
 	_done_button.visible = _is_command_mode
+	_done_button.disabled = not _is_interactable
 	_commit_move_button.visible = false
 
 
@@ -692,7 +709,7 @@ func _update_action_buttons() -> void:
 	if _allow_move_and_attack and _has_moved:
 		can_move = false
 	_move_button.visible = can_move
-	_move_button.disabled = false
+	_move_button.disabled = not _is_interactable
 	_move_button.tooltip_text = ""
 
 	# Attack button — hidden if no valid targets in range.
@@ -700,7 +717,7 @@ func _update_action_buttons() -> void:
 	if _allow_move_and_attack and _has_attacked:
 		can_attack = false
 	_attack_button.visible = can_attack
-	_attack_button.disabled = false
+	_attack_button.disabled = not _is_interactable
 	if not can_attack and _allow_move_and_attack and _has_attacked:
 		_attack_button.tooltip_text = "Already attacked"
 	else:
@@ -713,7 +730,7 @@ func _update_action_buttons() -> void:
 		if _has_attacked or not _is_engaged:
 			can_skip = true
 	_skip_button.visible = true
-	_skip_button.disabled = not can_skip
+	_skip_button.disabled = (not can_skip) or (not _is_interactable)
 	if not can_skip:
 		_skip_button.tooltip_text = "Engaged — must attack an engaged enemy"
 	else:
@@ -727,7 +744,32 @@ func _update_action_buttons() -> void:
 	if not can_move and not can_attack and not can_skip:
 		_prompt_label.text = "No actions available — skip to end."
 		_skip_button.visible = true
-		_skip_button.disabled = false
+		_skip_button.disabled = not _is_interactable
+
+
+## Applies the current interactable state to visible action controls.
+func _apply_interactable_state() -> void:
+	_apply_button_interactable(_move_button)
+	_apply_button_interactable(_attack_button)
+	_apply_button_interactable(_done_button)
+	_apply_button_interactable(_commit_move_button)
+	if _close_button:
+		_close_button.disabled = not _is_interactable
+
+
+## Applies button disabled state if the button exists and is visible.
+func _apply_button_interactable(btn: Button) -> void:
+	if btn == null or not btn.visible:
+		return
+	btn.disabled = not _is_interactable
+
+
+## Returns true when action handlers should early-return for passive peers.
+func _is_action_blocked(action_name: String) -> bool:
+	if _is_interactable:
+		return false
+	_log.info("%s ignored: modal not interactable for local peer." % action_name)
+	return true
 
 
 func _get_active_faction_name() -> String:
@@ -775,6 +817,8 @@ func _show_error(msg: String) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_move_pressed() -> void:
+	if _is_action_blocked("Move"):
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Move pressed for %s" % _get_squadron_name())
 	_transition_to(State.MOVING)
@@ -782,6 +826,8 @@ func _on_move_pressed() -> void:
 
 
 func _on_attack_pressed() -> void:
+	if _is_action_blocked("Attack"):
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Attack pressed for %s" % _get_squadron_name())
 	_transition_to(State.ATTACKING)
@@ -789,12 +835,16 @@ func _on_attack_pressed() -> void:
 
 
 func _on_skip_pressed() -> void:
+	if _is_action_blocked("Skip"):
+		return
 	SfxManager.play_sfx("skip_beep")
 	_log.info("Skip pressed for %s" % _get_squadron_name())
 	_finish_activation()
 
 
 func _on_commit_move_pressed() -> void:
+	if _is_action_blocked("Commit Move"):
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Commit Move pressed for %s" % _get_squadron_name())
 	move_commit_requested.emit(_selected_token)
@@ -810,12 +860,16 @@ func _on_commit_move_pressed() -> void:
 
 
 func _on_done_pressed() -> void:
+	if _is_action_blocked("Done"):
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Done pressed — ending squadron command early.")
 	_finish_command_early()
 
 
 func _on_close_pressed() -> void:
+	if _is_action_blocked("Close"):
+		return
 	SfxManager.play_sfx("skip_beep")
 	_log.info("Modal dismissed.")
 	visible = false

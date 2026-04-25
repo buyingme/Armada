@@ -79,6 +79,9 @@ var _highlight_active: Callable
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("SquadronPhaseController")
 
+## Whether local controls are enabled for the squadron modal.
+var _modal_interactable: bool = true
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -119,6 +122,7 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 	_squadron_modal.modal_closed.connect(
 			_on_squadron_modal_closed)
 	layer.add_child(_squadron_modal)
+	_squadron_modal.set_interactable(_modal_interactable)
 
 	_show_squadron_modal_button = ShowSquadronModalButton.new()
 	_show_squadron_modal_button.name = "ShowSquadronModalButton"
@@ -173,6 +177,7 @@ func begin_activation_flow() -> void:
 	EngagementResolver.update_engagement_flags(all_squads)
 	if _squadron_modal:
 		_squadron_modal.open_for_turn(1, Constants.SQUADRONS_PER_ACTIVATION)
+		_squadron_modal.set_interactable(_modal_interactable)
 	_log.info("Squadron activation flow started for player %d." %
 			GameManager.active_player)
 
@@ -187,6 +192,14 @@ func open_for_command(
 	_show_squad_cmd_range_overlay(ship_token)
 	if _squadron_modal:
 		_squadron_modal.open_for_command(resolver, ship_token)
+		_squadron_modal.set_interactable(_modal_interactable)
+
+
+## Enables/disables squadron modal controls while keeping visibility.
+func set_modal_interactable(is_enabled: bool) -> void:
+	_modal_interactable = is_enabled
+	if _squadron_modal:
+		_squadron_modal.set_interactable(is_enabled)
 
 
 ## Hides all Squadron Phase UI (modal, reopen button, overlay).
@@ -373,11 +386,11 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	# zero-distance move so the remote peer can track activation completion.
 	if PlayMode.is_network() and not _move_submitted_this_activation:
 		_submit_skip_move(instance, token)
-	EventBus.squadron_activation_ended.emit(instance)
 	_remove_squadron_overlay()
 	if _squadron_modal and _squadron_modal.is_command_mode():
 		instance.activated_this_round = true
 		_log.info("Command-mode activation done: %s" % instance.data_key)
+		EventBus.squadron_activation_ended.emit(instance)
 		return
 	_squadron_activation_count += 1
 	_log.info("Squadron activation done: %s (%d of %d)" % [
@@ -385,6 +398,7 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 			Constants.SQUADRONS_PER_ACTIVATION])
 	if GameManager.get_current_phase() != Constants.GamePhase.SQUADRON:
 		_log.info("Phase already advanced past SQUADRON — skip re-open.")
+		EventBus.squadron_activation_ended.emit(instance)
 		return
 	if _squadron_activation_count < Constants.SQUADRONS_PER_ACTIVATION:
 		var next_num: int = _squadron_activation_count + 1
@@ -395,6 +409,7 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 		_log.info("All squadron activations done for player %d." %
 				GameManager.active_player)
 		hide_ui()
+	EventBus.squadron_activation_ended.emit(instance)
 
 
 ## Called when the squadron modal is dismissed by the player.

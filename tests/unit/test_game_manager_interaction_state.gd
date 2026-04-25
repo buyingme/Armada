@@ -132,9 +132,9 @@ func test_flush_applies_buffered_state_when_seq_met() -> void:
 	# Arrange
 	_reset_gm_interaction_state()
 	var state: NetworkInteractionState = _make_state(1, "attack", "roll_dice",
-			0, 3)  # requires_seq = 3
+			0, 3) # requires_seq = 3
 	GameManager._pending_interaction_by_version[1] = state.serialize()
-	GameManager._last_applied_command_seq = 3  # requirement now met
+	GameManager._last_applied_command_seq = 3 # requirement now met
 	var received: Array[NetworkInteractionState] = []
 	EventBus.interaction_state_changed.connect(
 			func(s: NetworkInteractionState) -> void:
@@ -154,9 +154,9 @@ func test_flush_does_not_apply_when_seq_not_yet_met() -> void:
 	# Arrange
 	_reset_gm_interaction_state()
 	var state: NetworkInteractionState = _make_state(2, "attack",
-			"defense_tokens", 1, 10)  # requires_seq = 10
+			"defense_tokens", 1, 10) # requires_seq = 10
 	GameManager._pending_interaction_by_version[2] = state.serialize()
-	GameManager._last_applied_command_seq = 5  # not yet at 10
+	GameManager._last_applied_command_seq = 5 # not yet at 10
 	var fire_count: int = 0
 	var conn: Callable = func(_s: NetworkInteractionState) -> void:
 			fire_count += 1

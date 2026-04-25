@@ -79,6 +79,7 @@ func _ready() -> void:
 	# Tier 10 — UI state: token discard, dial reveal/unreveal.
 	DiscardTokenCommand.register()
 	RevealDialCommand.register()
+	AdvanceActivationStepCommand.register()
 	# Tier 11 — debug-only commands.
 	DebugDealDamageCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())

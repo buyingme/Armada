@@ -836,6 +836,20 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 	return _submitter.submit(cmd)
 
 
+## Submits an [AdvanceActivationStepCommand] to record a ship-activation
+## modal step transition in network/replay flow.
+## [param ship] - the currently activating ship.
+## [param step_id] - canonical step identifier (e.g. "repair_step").
+func submit_advance_activation_step(ship: ShipInstance,
+		step_id: String) -> Dictionary:
+	if not current_game_state or ship == null:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := AdvanceActivationStepCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "step_id": step_id})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [ResolveDamageCommand] for ship damage resolution.
 ## [param ship] — the defending ShipInstance.
 ## [param hull_zone] — zone string ("FRONT", "LEFT", "RIGHT", "REAR").
@@ -1431,6 +1445,7 @@ func _on_network_command_result(
 		# Only process side effects for the remote player's commands.
 		if cmd.player_index != NetworkManager.get_local_player_index():
 			_handle_remote_command_effects(cmd, result)
+		_publish_interaction_state_for_command(cmd, seq)
 		# C3: flush any pending interaction updates now that seq advanced.
 		_flush_pending_interaction_states()
 		return
@@ -1440,6 +1455,93 @@ func _on_network_command_result(
 	_flush_pending_interaction_states()
 	if _submitter is NetworkCommandSubmitter:
 		(_submitter as NetworkCommandSubmitter).clear_awaiting()
+
+
+## Server-side producer for interaction-state timeline updates.
+## Publishes versioned interaction steps for command results that change
+## the public flow state. Clients consume these via the existing C3/C4
+## ordered apply path.
+func _publish_interaction_state_for_command(
+		cmd: GameCommand, seq: int) -> void:
+	if not PlayMode.is_network() or not NetworkManager.is_server():
+		return
+	match cmd.command_type:
+		"advance_phase":
+			var next_phase: int = cmd.payload.get("next_phase", -1)
+			if next_phase == Constants.GamePhase.SHIP:
+				_broadcast_interaction_step(
+						"ship_activation",
+						"wait_for_ship_select",
+						active_player,
+						seq)
+			elif next_phase == Constants.GamePhase.SQUADRON:
+				_broadcast_interaction_step(
+						"squadron_phase",
+						"wait_for_squad_select",
+						active_player,
+						seq)
+		"activate_ship", "convert_dial_to_token":
+			_broadcast_interaction_step(
+					"ship_activation",
+					"activation_modal_open",
+					cmd.player_index,
+					seq,
+					{"ship_index": cmd.payload.get("ship_index", -1)})
+		"execute_maneuver":
+			_broadcast_interaction_step(
+					"ship_activation",
+					"maneuver_step",
+					cmd.player_index,
+					seq)
+		"end_activation":
+			if current_game_state \
+					and current_game_state.current_phase == Constants.GamePhase.SHIP:
+				_broadcast_interaction_step(
+						"ship_activation",
+						"wait_for_ship_select",
+						active_player,
+						seq)
+			elif current_game_state \
+					and current_game_state.current_phase == Constants.GamePhase.SQUADRON:
+				_broadcast_interaction_step(
+						"squadron_phase",
+						"wait_for_squad_select",
+						active_player,
+						seq)
+		"activate_squadron":
+			_broadcast_interaction_step(
+					"squadron_phase",
+					"action_choice",
+					cmd.player_index,
+					seq,
+					{"squadron_index": cmd.payload.get("squadron_index", -1)})
+		"advance_activation_step":
+			_broadcast_interaction_step(
+					"ship_activation",
+					cmd.payload.get("step_id", ""),
+					cmd.player_index,
+					seq,
+					{"ship_index": cmd.payload.get("ship_index", -1)})
+
+
+## Creates and broadcasts one authoritative interaction-state step update.
+## [param requires_seq] keeps C4 consistency between command application and
+## step transition visibility on clients.
+func _broadcast_interaction_step(flow_type: String, step_id: String,
+		controller_player: int, requires_seq: int,
+		extra_payload: Dictionary = {}) -> void:
+	if not PlayMode.is_network() or not NetworkManager.is_server():
+		return
+	var state: NetworkInteractionState = NetworkInteractionState.new()
+	state.flow_type = flow_type
+	state.step_id = step_id
+	state.controller_player = controller_player
+	state.visible_to = "all"
+	state.version = _last_interaction_version + 1
+	state.payload = extra_payload.duplicate(true)
+	if requires_seq >= 0:
+		state.payload["requires_seq"] = requires_seq
+	NetworkManager.broadcast_interaction_state(state)
 
 
 # ---------------------------------------------------------------------------
@@ -1552,6 +1654,8 @@ func _handle_remote_command_effects(
 			# Network client: forward dice results to attack executor.
 			if not NetworkManager.is_server():
 				EventBus.network_dice_result.emit(result)
+		"advance_activation_step":
+			pass # UI consumes authoritative interaction-state broadcast.
 		"select_redirect_zone", "skip_attack":
 			pass # Attack executor handles display from result.
 		"spend_defense_token":
@@ -1621,9 +1725,15 @@ func _handle_remote_advance_phase(cmd: GameCommand) -> void:
 func _handle_remote_activate_ship(
 		cmd: GameCommand, result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
-	if ship:
-		_activating_ship = ship
-		EventBus.command_dials_changed.emit(ship)
+	if ship == null:
+		return
+	_activating_ship = ship
+	EventBus.command_dials_changed.emit(ship)
+	# Notify the passive peer (host or client) so it can open the activation
+	# modal as a read-only observer. Skip for the local player's own activation,
+	# because that modal is opened from local dial-drag UI flow.
+	if cmd.player_index != NetworkManager.get_local_player_index():
+		EventBus.ship_activated_remotely.emit(ship)
 
 
 ## B5: Mirror convert_dial_to_token side effects on client.
@@ -1634,6 +1744,11 @@ func _handle_remote_convert_dial_to_token(
 		return
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
+	# Dial-to-card-drop also activates the ship — notify the passive peer
+	# (host or client) so it opens the mirrored activation modal.
+	# Same guard as _handle_remote_activate_ship: skip only local activations.
+	if cmd.player_index != NetworkManager.get_local_player_index():
+		EventBus.ship_activated_remotely.emit(ship)
 	if result.get("token_blocked", false):
 		return
 	EventBus.command_tokens_changed.emit(ship)

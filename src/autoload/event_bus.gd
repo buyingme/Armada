@@ -34,6 +34,12 @@ signal phase_changed(new_phase: Constants.GamePhase)
 ## Emitted when a ship is activated.
 signal ship_activated(ship: Node)
 
+## Emitted on all peers when the opponent activates a ship in network mode.
+## Passive peer listens to set up [ActivationContext] and open the modal as
+## a read-only observer.  Not emitted for the local player's own activations.
+## G4.6.6 T1a C7.
+signal ship_activated_remotely(ship: ShipInstance)
+
 ## Emitted when a ship finishes activation.
 signal ship_activation_finished(ship: Node)
 

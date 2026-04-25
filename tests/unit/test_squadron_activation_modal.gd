@@ -412,6 +412,68 @@ func test_set_action_availability_hides_attack() -> void:
 
 
 # ===========================================================================
+# C8 — Squadron modal permission gates
+# ===========================================================================
+
+func test_set_interactable_false_disables_action_buttons() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0, false)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	_modal.set_interactable(false)
+	assert_true(_modal._move_button.visible,
+			"Move button should remain visible for mirrored UI state.")
+	assert_true(_modal._move_button.disabled,
+			"Move button should be disabled when modal is non-interactable.")
+	assert_true(_modal._attack_button.disabled,
+			"Attack button should be disabled when modal is non-interactable.")
+	assert_true(_modal._close_button.disabled,
+			"Close button should be disabled when modal is non-interactable.")
+
+
+func test_attack_handler_blocked_when_not_interactable() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0, false)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	watch_signals(_modal)
+	_modal.set_interactable(false)
+	_modal._on_attack_pressed()
+	assert_signal_not_emitted(_modal, "attack_requested",
+			"attack_requested should not emit when modal is non-interactable.")
+
+
+func test_skip_handler_blocked_when_not_interactable() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	var inst: SquadronInstance = _make_instance(0, false)
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	ps.squadrons.append(inst)
+	_modal.open_for_turn(1, 2)
+	var token: SquadronToken = _make_token(inst)
+	_modal.handle_squadron_click(token)
+	watch_signals(_modal)
+	_modal.set_interactable(false)
+	_modal._on_skip_pressed()
+	assert_signal_not_emitted(_modal, "activation_done",
+			"activation_done should not emit when modal is non-interactable.")
+
+
+# ===========================================================================
 # notify_move_completed and cancel_move
 # ===========================================================================
 

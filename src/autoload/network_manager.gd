@@ -198,9 +198,10 @@ func host(port: int = ServerMain.DEFAULT_PORT) -> bool:
 	multiplayer.multiplayer_peer = _peer
 	role = Role.SERVER
 	_local_player_index = 0
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	_set_state(ConnectionState.LOBBY)
 	_start_heartbeat()
-	_log.info("Server hosting on port %d (protocol v%d)." % [
+	_log.info("Server hosting on port %d (protocol v%d) — PlayMode=NETWORK." % [
 			port, PROTOCOL_VERSION])
 	return true
 
@@ -444,6 +445,8 @@ func _handshake_response(accepted: bool, reason: String,
 		_log.info("Handshake accepted — assigned player index %d." %
 				player_index)
 		_local_player_index = player_index
+		PlayMode.set_mode(PlayMode.Mode.NETWORK)
+		_log.info("PlayMode set to NETWORK (client, player_index=%d)." % player_index)
 		_set_state(ConnectionState.LOBBY)
 		_start_heartbeat()
 		handshake_accepted.emit(player_index)

@@ -102,6 +102,13 @@ func is_done() -> bool:
 	return _current_step == Step.DONE
 
 
+## Sets the current activation step explicitly.
+## Used by network interaction-state consumers to keep mirrored modal
+## checkmarks in sync with authoritative server timeline updates.
+func set_current_step(step: Step) -> void:
+	_current_step = step
+
+
 ## Returns true if the maneuver has been committed.
 func is_maneuver_executed() -> bool:
 	return _maneuver_executed

@@ -13,6 +13,10 @@ extends CommandSubmitter
 ## True while waiting for the server's [code]command_result[/code] response.
 var _awaiting: bool = false
 
+## FIFO queue of serialized commands waiting for send while a response is
+## in-flight. Prevents loss of rapid follow-up commands in network mode.
+var _pending_payloads: Array[Dictionary] = []
+
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("NetworkCommandSubmitter")
 
@@ -20,13 +24,13 @@ var _log: GameLogger = GameLogger.new("NetworkCommandSubmitter")
 ## Serializes and sends the command to the server.
 ## Always returns [code]{}[/code] — result arrives asynchronously via RPC.
 func submit(command: GameCommand) -> Dictionary:
-	if _awaiting:
-		_log.warn("Already awaiting server response — dropping command [%s]." %
-				command.command_type)
-		return {}
 	var data: Dictionary = command.serialize()
-	NetworkManager.send_command_to_server(data)
-	_awaiting = true
+	if _awaiting:
+		_pending_payloads.append(data)
+		_log.info("Awaiting response — queued command [%s] (%d pending)." %
+				[command.command_type, _pending_payloads.size()])
+		return {}
+	_send_payload(data)
 	return {}
 
 
@@ -39,3 +43,18 @@ func is_awaiting_response() -> bool:
 ## [code]command_result[/code] RPC is received.
 func clear_awaiting() -> void:
 	_awaiting = false
+	_flush_next_pending()
+
+
+## Sends one serialized command and marks this submitter as awaiting.
+func _send_payload(payload: Dictionary) -> void:
+	NetworkManager.send_command_to_server(payload)
+	_awaiting = true
+
+
+## Sends the next queued command, if any.
+func _flush_next_pending() -> void:
+	if _pending_payloads.is_empty():
+		return
+	var next_payload: Dictionary = _pending_payloads.pop_front()
+	_send_payload(next_payload)

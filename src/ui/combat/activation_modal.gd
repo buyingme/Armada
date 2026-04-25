@@ -135,6 +135,10 @@ var _squadron_token_only: bool = false
 ## Second press commits the maneuver.
 var _maneuver_tool_shown: bool = false
 
+## Whether local controls are enabled for this modal instance.
+## In network mode, non-controller peers keep visibility but lose interactivity.
+var _is_interactable: bool = true
+
 
 func _init() -> void:
 	visible = false
@@ -203,6 +207,23 @@ func open(state: ShipActivationState) -> void:
 		_start_auto_skip()
 
 
+## Opens the modal for the passive (non-controller) peer in network mode.
+## Identical to [method open] but never runs auto-skip: the passive peer
+## must not advance steps locally; the authoritative step arrives via the
+## interaction-state stream immediately after this call.
+func open_mirror(state: ShipActivationState) -> void:
+	_activation_state = state
+	_log_offsets("open_mirror:before_build")
+	_build_ui()
+	_log_offsets("open_mirror:after_build")
+	_update_step_display()
+	_log_offsets("open_mirror:after_step_display")
+	visible = true
+	_request_deferred_layout()
+	set_process_unhandled_input(true)
+	_log.info("Activation modal opened (mirror — no auto-skip).")
+
+
 ## Closes and hides the modal. Does NOT cancel the activation.
 func close() -> void:
 	visible = false
@@ -223,6 +244,13 @@ func close_and_clear() -> void:
 ## Returns true if the modal is currently open.
 func is_open() -> bool:
 	return visible and _activation_state != null
+
+
+## Enables/disables interactive controls while keeping the modal visible.
+## Used by network authority gates (controller player vs passive peer).
+func set_interactable(is_enabled: bool) -> void:
+	_is_interactable = is_enabled
+	_apply_interactable_state()
 
 
 ## Updates the visual display to match current step.
@@ -533,6 +561,7 @@ func _update_step_display() -> void:
 		else:
 			_style_future_step(i, row, status_label)
 	_update_end_activation_visibility(current)
+	_apply_interactable_state()
 
 
 ## Applies completed-step styling (green checkmark, muted background).
@@ -585,10 +614,10 @@ func _style_current_squadron_step(status_label: Label) -> void:
 		status_label.text = ""
 		if _squadron_button:
 			_squadron_button.visible = true
-			_squadron_button.disabled = false
+			_squadron_button.disabled = not _is_interactable
 		if _squadron_skip_button:
 			_squadron_skip_button.visible = _squadron_token_only
-			_squadron_skip_button.disabled = false
+			_squadron_skip_button.disabled = not _is_interactable
 
 
 ## Configures the Repair step when it is the current step.
@@ -600,7 +629,7 @@ func _style_current_repair_step(status_label: Label) -> void:
 		status_label.text = ""
 		if _repair_button:
 			_repair_button.visible = true
-			_repair_button.disabled = false
+			_repair_button.disabled = not _is_interactable
 
 
 ## Configures the Attack step when it is the current step.
@@ -612,7 +641,7 @@ func _style_current_attack_step(status_label: Label) -> void:
 		status_label.text = ""
 		if _attack_button:
 			_attack_button.visible = true
-			_attack_button.disabled = false
+			_attack_button.disabled = not _is_interactable
 
 
 ## Configures the Maneuver step when it is the current step.
@@ -620,7 +649,7 @@ func _style_current_maneuver_step(status_label: Label) -> void:
 	status_label.text = ""
 	if _execute_button:
 		_execute_button.visible = true
-		_execute_button.disabled = false
+		_execute_button.disabled = not _is_interactable
 		if _maneuver_tool_shown:
 			_execute_button.text = "Commit Maneuver ►"
 		else:
@@ -665,7 +694,33 @@ func _update_end_activation_visibility(current: int) -> void:
 	if _end_activation_button:
 		var is_done: bool = (current >= int(ShipActivationState.Step.DONE))
 		_end_activation_button.visible = is_done
-		_end_activation_button.disabled = false
+		_end_activation_button.disabled = not _is_interactable
+
+
+## Applies the current interactable state to all action buttons.
+func _apply_interactable_state() -> void:
+	_apply_button_interactable(_execute_button)
+	_apply_button_interactable(_attack_button)
+	_apply_button_interactable(_repair_button)
+	_apply_button_interactable(_squadron_button)
+	_apply_button_interactable(_squadron_skip_button)
+	if _end_activation_button and _end_activation_button.visible:
+		_end_activation_button.disabled = not _is_interactable
+
+
+## Applies button disabled state if the button exists and is visible.
+func _apply_button_interactable(btn: Button) -> void:
+	if btn == null or not btn.visible:
+		return
+	btn.disabled = not _is_interactable
+
+
+## Returns true when action handlers should early-return for passive peers.
+func _is_action_blocked(action_name: String) -> bool:
+	if _is_interactable:
+		return false
+	_log.info("%s ignored: modal not interactable for local peer." % action_name)
+	return true
 
 
 ## Finds the StatusLabel in a step row by name.
@@ -718,6 +773,8 @@ func _update_command_info() -> void:
 ## First click: emits [signal maneuver_step_entered] to show the tool.
 ## Second click: emits [signal maneuver_commit_requested] to snap the ship.
 func _on_execute_pressed() -> void:
+	if _is_action_blocked("Execute/Commit Maneuver"):
+		return
 	if not _maneuver_tool_shown:
 		# Phase 1 — show the maneuver tool.  The modal stays open so the
 		# player can see "Commit Maneuver ►" while setting the course.
@@ -743,6 +800,8 @@ func _on_execute_pressed() -> void:
 ## can interact with the board.
 ## Requirements: AE-ACT-001.
 func _on_attack_pressed() -> void:
+	if _is_action_blocked("Execute Attack"):
+		return
 	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Attack pressed — starting attack flow.")
 	attack_step_entered.emit()
@@ -753,6 +812,8 @@ func _on_attack_pressed() -> void:
 ## Called when the "Execute Squadron ►" button is pressed.
 ## Emits [signal squadron_step_entered] and closes the modal.
 func _on_squadron_pressed() -> void:
+	if _is_action_blocked("Execute Squadron"):
+		return
 	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Squadron pressed — starting squadron command flow.")
 	squadron_step_entered.emit()
@@ -765,6 +826,8 @@ func _on_squadron_pressed() -> void:
 ## The modal stays open — the game board will re-open it at the next step.
 ## Rules Reference: "Commands" p.4 — command tokens are optional.
 func _on_squadron_skip_pressed() -> void:
+	if _is_action_blocked("Skip Squadron"):
+		return
 	SfxManager.play_sfx("skip_beep")
 	_log.info("Squadron step skipped by player (token only).")
 	squadron_step_skipped.emit()
@@ -773,6 +836,8 @@ func _on_squadron_skip_pressed() -> void:
 ## Called when the "Execute Repair ►" button is pressed.
 ## Emits [signal repair_step_entered] and closes the modal.
 func _on_repair_pressed() -> void:
+	if _is_action_blocked("Execute Repair"):
+		return
 	SfxManager.play_sfx("droid_sound_long")
 	_log.info("Execute Repair pressed — starting repair flow.")
 	repair_step_entered.emit()
@@ -793,6 +858,8 @@ func _on_close_pressed() -> void:
 ## Rules Reference: RRG "Ship Activation" p.16 — activation ends after
 ## all five steps are complete.
 func _on_end_activation_pressed() -> void:
+	if _is_action_blocked("End Activation"):
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("End Activation pressed — requesting activation end.")
 	end_activation_requested.emit()

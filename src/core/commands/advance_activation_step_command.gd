@@ -58,8 +58,18 @@ func validate(game_state: GameState) -> String:
 
 
 ## Flow-control no-op execution.
-func execute(_game_state: GameState) -> Dictionary:
+func execute(game_state: GameState) -> Dictionary:
+	var step_id_str: String = payload.get("step_id", "")
+	# Phase I2: mirror legacy interaction-state.
+	var step_enum: int = int(Constants.LEGACY_STEP_ID_MAP.get(
+			step_id_str, Constants.InteractionStep.NONE))
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			step_enum as Constants.InteractionStep,
+			player_index,
+			Constants.Visibility.ALL,
+			{"ship_index": payload.get("ship_index", -1)})
 	return {
 		"ship_index": payload.get("ship_index", -1),
-		"step_id": payload.get("step_id", ""),
+		"step_id": step_id_str,
 	}

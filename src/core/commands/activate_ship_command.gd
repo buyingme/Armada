@@ -57,5 +57,12 @@ func execute(game_state: GameState) -> Dictionary:
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		return {"command": - 1}
+	# Phase I2: mirror legacy interaction-state into game state.
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			player_index,
+			Constants.Visibility.ALL,
+			{"ship_index": payload.get("ship_index", -1)})
 	return {"command": int(dial.get("command", -1)),
 			"ship_index": payload.get("ship_index", -1)}

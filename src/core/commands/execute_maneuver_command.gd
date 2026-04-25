@@ -75,6 +75,12 @@ func execute(game_state: GameState) -> Dictionary:
 		ship.pos_x = new_x
 		ship.pos_y = new_y
 		ship.rotation_deg = new_rot
+	# Phase I2: mirror legacy interaction-state.
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP,
+			player_index,
+			Constants.Visibility.ALL)
 	return {
 		"ship_index": payload.get("ship_index", -1),
 		"speed": payload.get("speed", 0),

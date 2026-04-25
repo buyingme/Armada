@@ -55,5 +55,14 @@ func execute(game_state: GameState) -> Dictionary:
 		if not spent.is_empty():
 			spent_command = int(spent.get("command", -1))
 	ship.activated_this_round = true
+	# Phase I2: mirror legacy interaction-state.  The next activator under
+	# the alternation rule is the opposing player; the legacy producer
+	# emits this transition unconditionally.
+	var next_controller: int = 1 - player_index
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			next_controller,
+			Constants.Visibility.ALL)
 	return {"spent_command": spent_command,
 			"ship_index": payload.get("ship_index", -1)}

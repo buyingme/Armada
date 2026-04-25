@@ -45,6 +45,13 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	# The command only validates and records — the presentation layer
 	# sets GameManager._activating_squadron when the signal fires.
+	# Phase I2: mirror legacy interaction-state.
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SQUADRON_ACTIVATION,
+			Constants.InteractionStep.ACTION_CHOICE,
+			player_index,
+			Constants.Visibility.ALL,
+			{"squadron_index": payload.get("squadron_index", -1)})
 	return {"squadron_index": payload.get("squadron_index", -1)}
 
 

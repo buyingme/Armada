@@ -56,6 +56,14 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
+	# Phase I2: mirror legacy interaction-state — the legacy producer
+	# emits unconditionally for this command type.
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			player_index,
+			Constants.Visibility.ALL,
+			{"ship_index": payload.get("ship_index", -1)})
 	# Reveal if not already revealed.
 	var dial: Dictionary = \
 			ship.command_dial_stack.get_revealed_dial()

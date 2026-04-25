@@ -92,6 +92,10 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Pixel values in command payloads or serialized state — use normalised `pos_x`/`pos_y`/`rotation_deg`
 - ❌ `Vector2`/`Color`/Godot types in serialized dictionaries — use plain floats/ints
 - ❌ `play_area_side_px` (float) in `get_pixel_position()` — use `play_area_size_px` (Vector2)
+- ❌ (Phase I) New `NetworkInteractionState` producer call sites or `broadcast_interaction_state(` calls — UI flow state lives in `GameState.interaction_flow`, mutated only by `GameCommand.execute()`. See `docs/refactoring_phase_i_plan.md`.
+- ❌ (Phase I) `if PlayMode.is_network():` branches inside `src/scenes/` or `src/ui/` for modal/authority decisions — use `UIProjector.project(state, local_player_index)`.
+- ❌ (Phase I) Subscribing to `EventBus.interaction_state_changed` (signal removed in Phase I6) — subscribe to `EventBus.command_executed` and call `UIProjector.project()`.
+- ❌ (Phase I) Inferring activation/attack sub-step from local UI events — always read `state.interaction_flow.step_id`.
 
 ### 8. Game Rules Must Be Cited
 

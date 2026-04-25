@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-22 (G4.6.6 T1a C1–C6)
+> Last updated: 2026-04-23 (G4.6.6 T1a C1–C8)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -11,8 +11,8 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 127 |
-| GUT tests | 2 627 |
-| GUT asserts | 4 831 |
+| GUT tests | 2 633 |
+| GUT asserts | 4 842 |
 | Autoloads | 17 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -73,6 +73,7 @@
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
 | G | Command Pattern | ✅ | GameCommand base, 26 concrete commands, 41 wired call sites, GameReplay, §4.6 P1–P7 + debug resolved |
+| **I** | **Interaction-Flow as Domain State** | **⏳ proposed** | `InteractionFlow` field on `GameState`; `AttackFlowFSM` extracted; `UIProjector` replaces `is_network()` branches; deletes `NetworkInteractionState` RPC. Plan: `docs/refactoring_phase_i_plan.md`. ~14 days, 7 sub-steps. Unblocks NW-006/007/008 cross-client UI parity and reconnection. |
 
 ---
 
@@ -107,6 +108,8 @@
 | G4.6.6 T1a C4: Command-seq consistency | ✅ | `GameManager`: field `_last_applied_command_seq`; tracked per command_result; flush called after every apply; `payload["requires_seq"]` gate; reset on new game |
 | G4.6.6 T1a C5: Score-header status text | ✅ | `UIPanelManager.set_network_status_text()` + HUD suffix in network mode; `GameBoard` consumes `EventBus.interaction_state_changed` and also applies active-player fallback in `_handle_network_active_player()` so status text is visible before full interaction-state broadcast rollout; 2 unit tests |
 | G4.6.6 T1a C6: Sidebar authoritative projection | 🔄 | `ActivationSidebar` now refreshes from `GameManager.current_game_state`, unit count changes trigger rebuild, active highlight syncs from `GameManager.get_activating_ship()/get_activating_squadron()`, and refresh is driven by phase/round/active-player/interaction-state + command-side-effect signals; 3 unit tests added |
+| G4.6.6 T1a C7: Activation modal permission gates | ✅ | `ActivationModal.set_interactable()` added with control disable + handler guards for passive peers; `GameBoard` now applies controller-aware modal interactivity on interaction-state updates and all modal open/reopen paths via centralized `_configure_and_open_activation_modal()`; 3 unit tests added |
+| G4.6.6 T1a C8: Squadron modal permission gates | ✅ | `SquadronActivationModal.set_interactable()` added with UI disable + handler guards for passive peers and click/input lockout; `SquadronPhaseController.set_modal_interactable()` applies gate at create/open; `GameBoard` authority helper now drives both activation and squadron modal interactivity from interaction controller ownership; 3 unit tests added |
 
 ### C5 Bug-Fix Learnings
 

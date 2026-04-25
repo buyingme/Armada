@@ -36,6 +36,7 @@ If you are extending an existing class with a new field, update its
 | `CommandDialStack` | `src/core/command_dial_stack.gd` | ✅ |
 | `CommandTokenManager` | `src/core/command_token_manager.gd` | ✅ |
 | `GameRng` | `src/core/game_rng.gd` | ✅ |
+| `InteractionFlow` (Phase I) | `src/core/state/interaction_flow.gd` | ⏳ planned — see `docs/refactoring_phase_i_plan.md` |
 
 Any **new** class added to `src/core/` or `src/models/` that holds mutable
 state must be added to this table.

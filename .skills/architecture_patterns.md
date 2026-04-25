@@ -50,21 +50,46 @@ var ship_data: ShipData = load("res://data/ships/cr90_corvette.tres")
 var hull := 4
 var shields := {"front": 2, "left": 1}
 
-### 5. Network UI Authority Pattern (G4.6.6+)
+### 5. Interaction-Flow as Domain State (Phase I, supersedes Network UI Authority Pattern)
 
-For multiplayer interaction windows, use this pattern:
+The active interactive UI step is a **serializable field of `GameState`**,
+not a transient client variable and not a separate RPC channel.
 
-- **Visibility state**: what both peers can see.
-- **Authority state**: who can act (`controller_player`).
-
-These must be represented separately and updated from authoritative
-network state, never inferred from local modal state.
+```gdscript
+# GameState owns the truth about the current interactive step
+state.interaction_flow.flow_type        = Constants.InteractionFlow.ATTACK
+state.interaction_flow.step_id          = Constants.InteractionStep.ATTACK_DEFENSE_TOKENS
+state.interaction_flow.controller_player = 1     # whose action we await
+state.interaction_flow.visible_to       = Constants.Visibility.ALL
+state.interaction_flow.payload          = {"attack_id": 42, "defender_id": 7}
+```
 
 Rules:
-- Common modal visibility may exist on both clients with disabled controls.
-- Non-controller input handlers must fail fast and return without side effects.
-- Step transitions are driven by network interaction state + command results,
-  not by local UI events alone.
+
+- `InteractionFlow` is mutated **only inside `GameCommand.execute()`**.
+- The state is broadcast for free via `command_result` (no second RPC).
+- Presentation reads it via `UIProjector.project(state, local_player_index)`,
+  which returns a pure `UIIntent` (modal kind, payload, interactivity, HUD
+  text). UI never decides modal/authority logic itself.
+- Hot-seat and network mode use the **same** projection path — no
+  `if PlayMode.is_network()` branching in presentation code.
+- `interaction_flow.payload` is filtered by `StateFilter` for the
+  requesting player.
+- Reconnection: a single filtered `state_snapshot` is sufficient to
+  rebuild the UI; no replay of UI events required.
+
+Banned patterns (enforced by lint after Phase I6):
+
+- ❌ Subscribing to `EventBus.interaction_state_changed` (signal removed).
+- ❌ `NetworkInteractionState` class (deleted).
+- ❌ `NetworkManager.broadcast_interaction_state()` calls (deleted).
+- ❌ `if PlayMode.is_network():` branches in `src/scenes/` outside
+  camera/perspective lock (max 3 occurrences in `game_board.gd`).
+- ❌ Active-player fallback paths that compute "who controls UI" locally —
+  always read `interaction_flow.controller_player`.
+- ❌ Inferring sub-step from local UI events (e.g. modal opened/closed) —
+  always read `interaction_flow.step_id`.
+
 ```
 
 ## Required Patterns

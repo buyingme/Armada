@@ -1,8 +1,37 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-22 (G4.6.6 T1a C1–C6)
-> Current baseline: 127 scripts, 2 627 tests, 4 831 asserts
+> Last updated: 2026-04-25 (Phase I proposed)
+> Current baseline: 127 scripts, 2 633 tests, 4 842 asserts
+
+---
+
+## 0. Phase I — Interaction-Flow as Domain State (PROPOSED)
+
+Network integration is stuck because UI-flow state lives outside `GameState`
+and is synchronised over a parallel RPC channel (`NetworkInteractionState`).
+Phase I promotes interaction-flow state to a serializable field of
+`GameState`, extracts `AttackFlowFSM`, introduces `UIProjector`, and deletes
+the parallel channel.
+
+**Plan:** [docs/refactoring_phase_i_plan.md](refactoring_phase_i_plan.md)
+
+| Sub-step | Goal | Status |
+|----------|------|--------|
+| I0 | Inventory + freeze + CI lint | ⏳ |
+| I1 | Add `InteractionFlow` + enums + `StateFilter` rule | ⏳ |
+| I2 | Mirror flow into 9 commands (invariant test) | ⏳ |
+| I3 | Extract `AttackFlowFSM` (deferred Phase F4) | ⏳ |
+| I4 | `UIProjector` pilot — HUD | ⏳ |
+| I5 | Migrate sidebar + activation modal + squadron modal | ⏳ |
+| I6 | Migrate attack UI; **delete** `NetworkInteractionState` RPC | ⏳ |
+| I7 | Reconnection acceptance test + cleanup | ⏳ |
+
+Acceptance gate: a client disconnected mid-attack must rebuild its UI from
+a single filtered `state_snapshot`.
+
+While Phase I is in flight: **no new `NetworkInteractionState` producer
+wiring lands in master**. Existing G4.6.6 T1a producers stay until I5/I6.
 
 ---
 

@@ -48,6 +48,9 @@
 | `EffectContext` | RefCounted | `src/core/effects/effect_context.gd` | Mutable data bag passed through effect hook pipeline |
 | `GameEffect` | RefCounted | `src/core/effects/game_effect.gd` | Base class for all rule-modifying effects (keywords, upgrades, damage cards) |
 | `EffectRegistry` | RefCounted | `src/core/effects/effect_registry.gd` | Central registry: collects effects, resolves hook points in priority order |
+| `InteractionFlow` (Phase I) | RefCounted | `src/core/state/interaction_flow.gd` | Serializable description of the active interactive UI step (`flow_type`, `step_id`, `controller_player`, `visible_to`, `payload`). Held inside `GameState`. Mutated only by `GameCommand.execute()`. |
+| `AttackFlowFSM` (Phase I) | RefCounted | `src/core/combat/attack_flow_fsm.gd` | Pure state machine for attack sub-steps (declare → roll → modify → defense → resolve → critical). Reads/writes `InteractionFlow.step_id` via commands. Replaces the implicit ~40-variable FSM in `attack_executor.gd`. |
+| `UIProjector` (Phase I) | RefCounted | `src/core/network/ui_projector.gd` | Pure function `project(state, local_player_index) -> UIIntent`. Single source of truth for which modal is open, who can act, what HUD text shows. Replaces `is_network()` branching across presentation code. |
 | `EffectFactory` | RefCounted | `src/core/effects/effect_factory.gd` | Creates and registers squadron keyword effects at game start |
 | `BomberEffect` | GameEffect | `src/core/effects/keywords/bomber_effect.gd` | Bomber keyword: crits count as damage vs ships |
 | `EscortEffect` | GameEffect | `src/core/effects/keywords/escort_effect.gd` | Escort keyword: engaged squadrons must target Escort first |

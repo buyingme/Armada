@@ -73,7 +73,7 @@
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
 | G | Command Pattern | ✅ | GameCommand base, 26 concrete commands, 41 wired call sites, GameReplay, §4.6 P1–P7 + debug resolved |
-| **I** | **Interaction-Flow as Domain State** | **⏳ proposed** | `InteractionFlow` field on `GameState`; `AttackFlowFSM` extracted; `UIProjector` replaces `is_network()` branches; deletes `NetworkInteractionState` RPC. Plan: `docs/refactoring_phase_i_plan.md`. ~14 days, 7 sub-steps. Unblocks NW-006/007/008 cross-client UI parity and reconnection. |
+| **I** | **Interaction-Flow as Domain State** | **🔄 in progress** | `InteractionFlow` field on `GameState`; `AttackFlowFSM` extracted; `UIProjector` replaces `is_network()` branches; deletes legacy interaction-state RPC. Plan: `docs/refactoring_phase_i_plan.md`. ~14 days, 7 sub-steps. **I0 ✅** inventory + freeze lint. **I1 ✅** `InteractionFlow` type + `GameState.interaction_flow` + `StateFilter` rule (2 666 tests). Unblocks NW-006/007/008 cross-client UI parity and reconnection. |
 
 ---
 

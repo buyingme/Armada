@@ -36,6 +36,11 @@ var damage_deck: DamageDeck = null
 ## Ensures deterministic replay when the same seed is used.
 var rng: GameRng = null
 
+## Active interactive UI flow (Phase I).
+## Mutated only inside [GameCommand.execute()].  Always non-null after
+## [method initialize].  See [code]docs/refactoring_phase_i_plan.md[/code].
+var interaction_flow: InteractionFlow = InteractionFlow.new()
+
 
 ## Initializes a new game state with default values.
 func initialize() -> void:
@@ -45,6 +50,7 @@ func initialize() -> void:
 	effect_registry = EffectRegistry.new()
 	if rng == null:
 		rng = GameRng.new()
+	interaction_flow = InteractionFlow.new()
 	player_states.clear()
 	for i in range(Constants.PLAYER_COUNT):
 		var ps := PlayerState.new()
@@ -118,6 +124,7 @@ func serialize() -> Dictionary:
 		"player_states": [],
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
 		"rng": rng.serialize() if rng else {},
+		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
 	}
 	for ps in player_states:
 		data["player_states"].append(ps.serialize())
@@ -140,4 +147,9 @@ static func deserialize(data: Dictionary) -> GameState:
 	var rng_data: Dictionary = data.get("rng", {})
 	if not rng_data.is_empty():
 		state.rng = GameRng.deserialize(rng_data)
+	var flow_data: Dictionary = data.get("interaction_flow", {})
+	if not flow_data.is_empty():
+		state.interaction_flow = InteractionFlow.deserialize(flow_data)
+	else:
+		state.interaction_flow = InteractionFlow.new()
 	return state

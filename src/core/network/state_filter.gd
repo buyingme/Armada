@@ -35,6 +35,12 @@ static func filter_for_player(state_data: Dictionary, player_index: int) -> Dict
 		var is_owner: bool = (ps.get("player_index", -1) == player_index)
 		player_states[i] = _filter_player_state(ps, is_owner)
 
+	# 4. Filter interaction_flow — strip payload when not visible to viewer
+	var flow_data: Dictionary = filtered.get("interaction_flow", {})
+	if not flow_data.is_empty():
+		filtered["interaction_flow"] = _filter_interaction_flow(
+				flow_data, player_index)
+
 	return filtered
 
 
@@ -84,4 +90,19 @@ static func _filter_opponent_dials(dial_data: Dictionary) -> Dictionary:
 		var dial: Dictionary = dials[i]
 		if dial.get("state", "") == CommandDialStack.STATE_HIDDEN:
 			dials[i] = {"round": dial.get("round", 0), "state": CommandDialStack.STATE_HIDDEN}
+	return filtered
+
+
+## Filters [member InteractionFlow] for [param player_index].
+##
+## Strips [code]payload[/code] when [code]visible_to == OWNER[/code] and the
+## viewer is not the controller.  Public flows (visible_to == ALL) pass through.
+## See [code].skills/architecture_patterns.md[/code] §5.
+static func _filter_interaction_flow(flow_data: Dictionary,
+		player_index: int) -> Dictionary:
+	var filtered: Dictionary = flow_data.duplicate(true)
+	var visible_to: int = int(filtered.get("visible_to", 0))
+	var controller: int = int(filtered.get("controller_player", -1))
+	if visible_to == int(Constants.Visibility.OWNER) and controller != player_index:
+		filtered["payload"] = {}
 	return filtered

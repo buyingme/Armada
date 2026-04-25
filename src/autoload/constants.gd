@@ -129,6 +129,97 @@ enum GamePhase {
 	STATUS,
 }
 
+## --- Interaction Flow (Phase I) ---
+##
+## Identifies the high-level interactive UI flow currently active.
+## Held inside [GameState.interaction_flow]; mutated only by [GameCommand].
+## See docs/refactoring_phase_i_plan.md.
+enum InteractionFlow {
+	NONE,
+	COMMAND_PHASE,
+	SHIP_ACTIVATION,
+	SQUADRON_ACTIVATION,
+	ATTACK,
+	STATUS_CLEANUP,
+	GAME_OVER,
+}
+
+## Identifies the specific step within the active [enum InteractionFlow].
+## Names mirror the legacy interaction-state string ids one-to-one so the
+## I2 invariant test can compare the two paths key-by-key.
+enum InteractionStep {
+	NONE,
+	# Command Phase
+	SELECT_DIALS,
+	WAIT_FOR_OPPONENT_DIALS,
+	# Ship Activation
+	WAIT_FOR_SHIP_SELECT,
+	ACTIVATION_MODAL_OPEN,
+	REVEAL_DIAL,
+	SPEND_DIAL,
+	MANEUVER_STEP,
+	# Squadron Phase
+	WAIT_FOR_SQUAD_SELECT,
+	ACTION_CHOICE,
+	SQUAD_MOVE,
+	SQUAD_ATTACK,
+	# Attack (Phase I3 — populated by AttackFlowFSM)
+	ATTACK_DECLARE,
+	ATTACK_ROLL,
+	ATTACK_MODIFY,
+	ATTACK_DEFENSE_TOKENS,
+	ATTACK_RESOLVE_DAMAGE,
+	ATTACK_CRITICAL_CHOICE,
+	# Status / Game Over
+	STATUS_CLEANUP_STEP,
+	GAME_OVER_STEP,
+}
+
+## Visibility scope of an [InteractionFlow] payload.
+enum Visibility {
+	ALL,
+	OWNER,
+	SPECTATOR,
+}
+
+## Mapping from legacy interaction-state flow-type strings to
+## [enum InteractionFlow] values.  Used by the I2 invariant test to assert
+## that the new path matches the old one one-to-one.  Removed in Phase I6.
+const LEGACY_FLOW_TYPE_MAP: Dictionary = {
+	"": InteractionFlow.NONE,
+	"command_phase": InteractionFlow.COMMAND_PHASE,
+	"ship_activation": InteractionFlow.SHIP_ACTIVATION,
+	"squadron_phase": InteractionFlow.SQUADRON_ACTIVATION,
+	"attack": InteractionFlow.ATTACK,
+	"status_cleanup": InteractionFlow.STATUS_CLEANUP,
+	"game_over": InteractionFlow.GAME_OVER,
+}
+
+## Mapping from legacy step-id strings to [enum InteractionStep] values.
+## See [const LEGACY_FLOW_TYPE_MAP].
+const LEGACY_STEP_ID_MAP: Dictionary = {
+	"": InteractionStep.NONE,
+	"select_dials": InteractionStep.SELECT_DIALS,
+	"wait_for_opponent_dials": InteractionStep.WAIT_FOR_OPPONENT_DIALS,
+	"wait_for_ship_select": InteractionStep.WAIT_FOR_SHIP_SELECT,
+	"activation_modal_open": InteractionStep.ACTIVATION_MODAL_OPEN,
+	"reveal_dial": InteractionStep.REVEAL_DIAL,
+	"spend_dial": InteractionStep.SPEND_DIAL,
+	"maneuver_step": InteractionStep.MANEUVER_STEP,
+	"wait_for_squad_select": InteractionStep.WAIT_FOR_SQUAD_SELECT,
+	"action_choice": InteractionStep.ACTION_CHOICE,
+	"squad_move": InteractionStep.SQUAD_MOVE,
+	"squad_attack": InteractionStep.SQUAD_ATTACK,
+	"attack_declare": InteractionStep.ATTACK_DECLARE,
+	"attack_roll": InteractionStep.ATTACK_ROLL,
+	"attack_modify": InteractionStep.ATTACK_MODIFY,
+	"attack_defense_tokens": InteractionStep.ATTACK_DEFENSE_TOKENS,
+	"attack_resolve_damage": InteractionStep.ATTACK_RESOLVE_DAMAGE,
+	"attack_critical_choice": InteractionStep.ATTACK_CRITICAL_CHOICE,
+	"status_cleanup": InteractionStep.STATUS_CLEANUP_STEP,
+	"game_over": InteractionStep.GAME_OVER_STEP,
+}
+
 ## --- Speed Limits ---
 
 const MAX_SPEED_SMALL: int = 4

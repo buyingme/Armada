@@ -21,8 +21,8 @@ the parallel channel.
 | I0 | Inventory + freeze + CI lint | ✅ `d1769a8` |
 | I1 | Add `InteractionFlow` + enums + `StateFilter` rule | ✅ `cd81086` (+27 tests) |
 | I2 | Mirror flow into 7 commands (invariant test) | ✅ `7db873a` (+11 tests, MT passed 2026-04-26) |
-| I3 | Extract `AttackFlowFSM` (deferred Phase F4) | 🔄 I3a ✅ skeleton + wiring (+33 tests); I3b–c migrate logic |
-| I4 | `UIProjector` pilot — HUD | ⏳ |
+| I3 | Extract `AttackFlowFSM` (deferred Phase F4) | ✅ `5647edf`/`6fcc9f1`/`a89e9a8` (+39 tests) — LOC target deferred |
+| I4 | `UIProjector` pilot — HUD | 🔄 in progress |
 | I5 | Migrate sidebar + activation modal + squadron modal | ⏳ |
 | I6 | Migrate attack UI; **delete** `NetworkInteractionState` RPC | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
@@ -41,6 +41,42 @@ legacy `NetworkInteractionState` channel is still active.
 | 4 | Replay an existing file under `replays/` | Plays back without "InteractionFlow not found" errors. |
 
 **Result:** All steps green on 2026-04-26. Continuing with I3.
+
+### MT-PHI.04 — I4 `UIProjector` HUD pilot does not regress hot-seat or network HUD 🔄 pending
+
+**Purpose:** Verify the new `UIProjector`-driven HUD status path produces
+the same score-header text as the legacy parallel channel, in both
+hot-seat and networked modes.  The projector runs in parallel with the
+legacy handler in I4; this MT confirms there is no flicker, no stale text,
+and no missing prompts.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Hot-seat: full Command Phase round | Score header shows "make your choices" while a player picks dials; identical to before. |
+| 2 | Hot-seat: ship activation (dial reveal → maneuver → end) | Score header reads "make your choices" for the active player throughout; no flicker between commands. |
+| 3 | Networked (`./scripts/run_network_test.sh --gui-host --logging`): each seat activates one ship | On controller's screen: "make your choices". On opponent's screen: "waiting for opponent's choice". Both update consistently after every command. |
+| 4 | Networked: trigger one attack between two ships | HUD remains correct on both clients across declare → roll → defense → resolve. (Defense-token UI sync is still pending I5/I6 — only HUD text is in scope.) |
+| 5 | Replay an existing `replays/*.json` | Plays back without errors; HUD status updates as commands stream in. |
+
+**Acceptance:** No regression vs. baseline; HUD on both clients matches
+controller/opponent expectation. Defense-token UI sync remains broken
+(in-scope for I5/I6).
+
+**MT-PHI.04 result (2026-04-26):** ✅ HUD path approved by user. Squadron
+modal lifecycle bug discovered on client side — see known issue below;
+to be fixed in I5.
+
+### Known network-UI bugs to be closed by I5/I6
+
+These are **pre-existing gaps** in the parallel `NetworkInteractionState`
+channel, not regressions. Each must be a green MT step before its
+sub-phase is complete.
+
+| Bug | Repro | Closing step | MT |
+|-----|-------|--------------|----|
+| **Defender cannot spend defense tokens on client screen** | Networked attack: client is defender; dice roll arrives but no defense-token modal opens. | I6 (project attack UI from `interaction_flow.payload`). | MT-PHI.06 |
+| **Client cannot activate Imperial squadrons** | Networked Squadron Phase: after handoff to player 1, `SqActModal` opens but `Selected squadron` / overlay events never fire on the client; second click yields `already activating a squadron`. Host log shows full lifecycle; client log shows only the bare `activate_squadron` command + `step='action_choice'`. | I5 (project squadron-modal lifecycle from `interaction_flow.payload` so `SqActModal` reacts identically on both peers). | MT-PHI.05 |
+| **Activation modal sub-step inferred from local UI events** | (Inventory item) | I5 | MT-PHI.05 |
 
 Acceptance gate: a client disconnected mid-attack must rebuild its UI from
 a single filtered `state_snapshot`.

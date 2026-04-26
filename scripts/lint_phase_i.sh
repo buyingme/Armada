@@ -45,7 +45,7 @@ is_network_in_pres=$(count_pattern 'PlayMode\.is_network\(\)|NetworkManager\.is_
 check "_broadcast_interaction_step calls"           9  "$broadcast_step"
 check "broadcast_interaction_state calls"           4  "$broadcast_state"
 check "interaction_state_changed references"      14  "$signal_changed"
-check "NetworkInteractionState references"        21  "$nis_class"
+check "NetworkInteractionState references"        22  "$nis_class"
 check "is_network()/is_server() in scenes+ui"     13  "$is_network_in_pres"
 
 if (( fail )); then

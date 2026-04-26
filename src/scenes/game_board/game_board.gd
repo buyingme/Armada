@@ -366,6 +366,11 @@ func _connect_signals() -> void:
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 	EventBus.interaction_state_changed.connect(_on_interaction_state_changed)
+	# Phase I4: UIProjector-driven HUD status.  Recomputes after every
+	# applied command using the authoritative [GameState.interaction_flow]
+	# domain field.  Runs in parallel with the legacy interaction-state
+	# path during I4; legacy paths are removed in I5/I6.
+	CommandProcessor.command_executed.connect(_on_command_executed_project_ui)
 	#endregion
 
 	#region Ship activation signals (dial drag controller, activation end)
@@ -875,6 +880,40 @@ func _handle_network_active_player(_player_index: int) -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_panel_mgr.your_turn_banner.show_banner(_player_index)
 	_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+## Phase I4: HUD status text from [UIProjector].
+##
+## Re-runs after every applied command (and after snapshot apply) so the
+## HUD status text reflects the current authoritative interaction-flow
+## domain field on [GameState].
+##
+## Networked + hot-seat: uses [code]NetworkManager.get_local_player_index()[/code]
+## as the viewer.  In hot-seat, the active player is also the local
+## viewer (camera handles handoff), so the projection produces the same
+## "make your choices" wording the active player would see in network mode.
+##
+## Runs in parallel with the legacy parallel-channel handler during
+## Phase I4.  When I5/I6 delete the legacy path, this becomes the sole
+## HUD status producer.
+func _on_command_executed_project_ui(_command: GameCommand,
+		_result: Dictionary) -> void:
+	if _panel_mgr == null:
+		return
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var local: int = NetworkManager.get_local_player_index()
+	if local < 0:
+		# Hot-seat: viewer is the active player.
+		local = gs.active_player
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, local)
+	# I4 pilot scope: only overwrite when projector has a non-empty
+	# value, so we do not stomp on the legacy active-player fallback in
+	# phases that have no interaction flow yet.  I5/I6 expand coverage.
+	if intent.hud_status_text.is_empty():
+		return
+	_panel_mgr.set_network_status_text(intent.hud_status_text)
 
 
 ## Applies score-header helper text from authoritative interaction-state

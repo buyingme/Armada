@@ -255,6 +255,26 @@ coverage gap in §3 of the analysis.
 **Exit criteria:** all attack tests green; `attack_executor.gd` ≤ 1 800 LOC;
 manual MT-F5b.01–03 green.
 
+**Status (2026-04-26): logically complete — LOC target deferred.**
+- `5647edf` I3a: `AttackFlowFSM` (RefCounted) created with full transition
+  table; wired into `attack_executor.gd` at 8 sites (`begin`, 6 `advance`,
+  `end`).  +33 unit tests covering happy path, illegal transitions,
+  controller resolution incl. squadron-vs-squadron, end+restart.
+- `6fcc9f1` I3b: `patch_payload()` publishes per-step data into
+  `interaction_flow.payload` at DECLARE (range_band, dice_pool), MODIFY
+  (dice_results), DEFENSE_TOKENS (locked_tokens, modified_damage,
+  defender_player).  +6 unit tests.
+- `a89e9a8` I3c: payload at RESOLVE_DAMAGE (final_damage) and
+  CRITICAL_CHOICE (chooser, card_title).
+- LOC target (≤ 1 800 LOC for `attack_executor.gd`) **deferred**: no game
+  logic was moved out of the executor.  Moving combat logic mid-Phase-I
+  is a higher-risk change than the rest of Phase I and is not required
+  for the acceptance gate (reconnection mid-attack).  The FSM publishes
+  the data UIProjector (I4) and the projected attack UI (I6) need; that
+  is what I3 was for.  A future refactor pass can shrink
+  `attack_executor.gd` once the parallel RPC channel is gone.
+- Tests: 2 716 (was 2 677 baseline). Lint OK.
+
 ### I4 — `UIProjector` Pilot — HUD (1 day)
 
 - Add `src/core/network/ui_projector.gd` (despite the name, pure: no

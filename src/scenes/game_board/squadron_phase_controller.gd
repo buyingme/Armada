@@ -132,6 +132,16 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 	register_resizable.call(
 			_show_squadron_modal_button, &"update_position", false)
 
+	# Phase I5b: subscribe to authoritative command stream so the
+	# squadron-modal lifecycle progresses identically on both peers
+	# (controller and observer/passive client).  Closes the network bug
+	# where the passive client's modal stayed in WAITING_FOR_SELECTION
+	# after the active player's `activate_squadron` command applied.
+	if not CommandProcessor.command_executed.is_connected(
+			_on_command_executed_select_squadron):
+		CommandProcessor.command_executed.connect(
+				_on_command_executed_select_squadron)
+
 
 ## Returns the [SquadronActivationModal] instance (for external signal
 ## connections, e.g. activation modal's squadron_selected).
@@ -295,6 +305,44 @@ func process_squadron_movement() -> void:
 # ---------------------------------------------------------------------------
 # Internal callbacks
 # ---------------------------------------------------------------------------
+
+## Phase I5b: drives the squadron-modal lifecycle from authoritative
+## [signal CommandProcessor.command_executed] so both peers stay in sync.
+##
+## Reacts only to [code]activate_squadron[/code] commands during the
+## Squadron Phase.  Idempotent: skips when the modal is already showing
+## the target squadron (the local-click path on the controlling peer
+## already advanced the modal).
+func _on_command_executed_select_squadron(command: GameCommand,
+		_result: Dictionary) -> void:
+	if command == null or command.command_type != "activate_squadron":
+		return
+	if _squadron_modal == null or not _squadron_modal.visible:
+		return
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	if gs.current_phase != Constants.GamePhase.SQUADRON:
+		return
+	var sq_index: int = int(command.payload.get("squadron_index", -1))
+	if sq_index < 0:
+		return
+	var ps: PlayerState = gs.get_player_state(command.player_index)
+	if ps == null or sq_index >= ps.squadrons.size():
+		return
+	var instance: SquadronInstance = ps.squadrons[sq_index] as SquadronInstance
+	if instance == null:
+		return
+	# Already selected by the local-click path — nothing to do.
+	var current: SquadronToken = _squadron_modal.get_selected_token()
+	if current and current.get_squadron_instance() == instance:
+		return
+	var token: SquadronToken = _find_squadron_token_for_instance(instance)
+	if token == null:
+		return
+	if _squadron_modal.select_squadron_remote(token, instance):
+		_on_squadron_selected_in_modal(token)
+
 
 ## Called after the squadron modal accepts a squadron click.
 ## Requirements: SQM-001, SQM-002.

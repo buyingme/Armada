@@ -339,6 +339,30 @@ func get_selected_token() -> SquadronToken:
 	return _selected_token
 
 
+## Phase I5b: applies a squadron selection driven by an authoritative
+## [code]activate_squadron[/code] command (instead of by a local click).
+##
+## Used to keep both peers' modals in sync — the local-click path on the
+## controlling peer calls [method GameManager.activate_squadron]; the
+## passive peer (or any observer) reaches this method via
+## [SquadronPhaseController._on_command_executed_select_squadron].
+##
+## Idempotent: returns false (no-op) when the modal is not in
+## [code]WAITING_FOR_SELECTION[/code], when already showing the same
+## squadron, or when the modal is hidden.
+func select_squadron_remote(token: SquadronToken,
+		instance: SquadronInstance) -> bool:
+	if not visible:
+		return false
+	if _state != State.WAITING_FOR_SELECTION:
+		# Already past selection (e.g. local click already advanced us).
+		return false
+	if instance == null:
+		return false
+	_apply_squadron_selection(token, instance)
+	return true
+
+
 ## Returns the current state (for testing).
 func get_state() -> State:
 	return _state

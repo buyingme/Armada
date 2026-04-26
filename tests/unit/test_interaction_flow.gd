@@ -111,7 +111,7 @@ func test_round_trip_preserves_nested_payload() -> void:
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 			1,
 			Constants.Visibility.OWNER,
-			{"tokens": [{"type": "evade", "state": "ready"}]})
+			{"tokens": [ {"type": "evade", "state": "ready"}]})
 	var clone: InteractionFlow = InteractionFlow.deserialize(
 			original.serialize())
 	var tokens: Array = clone.payload.get("tokens", [])
@@ -247,7 +247,7 @@ func test_state_filter_strips_owner_payload_from_non_controller() -> void:
 			Constants.Visibility.OWNER,
 			{"secret_canary": "hidden_data"})
 	var filtered: Dictionary = StateFilter.filter_for_player(
-			state.serialize(), 0)  # Player 0 is NOT the controller
+			state.serialize(), 0) # Player 0 is NOT the controller
 	var flow_data: Dictionary = filtered.get("interaction_flow", {})
 	var payload: Dictionary = flow_data.get("payload", {})
 	assert_false(payload.has("secret_canary"),
@@ -268,7 +268,7 @@ func test_state_filter_keeps_owner_payload_for_controller() -> void:
 			Constants.Visibility.OWNER,
 			{"secret_canary": "hidden_data"})
 	var filtered: Dictionary = StateFilter.filter_for_player(
-			state.serialize(), 1)  # Player 1 IS the controller
+			state.serialize(), 1) # Player 1 IS the controller
 	var payload: Dictionary = (filtered["interaction_flow"]
 			as Dictionary)["payload"]
 	assert_eq(payload.get("secret_canary", ""), "hidden_data",

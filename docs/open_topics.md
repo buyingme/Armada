@@ -1,12 +1,12 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-25 (Phase I proposed)
-> Current baseline: 127 scripts, 2 633 tests, 4 842 asserts
+> Last updated: 2026-04-26 (Phase I in progress — I0/I1/I2 ✅)
+> Current baseline: 130 scripts, 2 677 tests, 4 961 asserts
 
 ---
 
-## 0. Phase I — Interaction-Flow as Domain State (PROPOSED)
+## 0. Phase I — Interaction-Flow as Domain State (IN PROGRESS)
 
 Network integration is stuck because UI-flow state lives outside `GameState`
 and is synchronised over a parallel RPC channel (`NetworkInteractionState`).
@@ -18,14 +18,29 @@ the parallel channel.
 
 | Sub-step | Goal | Status |
 |----------|------|--------|
-| I0 | Inventory + freeze + CI lint | ⏳ |
-| I1 | Add `InteractionFlow` + enums + `StateFilter` rule | ⏳ |
-| I2 | Mirror flow into 9 commands (invariant test) | ⏳ |
-| I3 | Extract `AttackFlowFSM` (deferred Phase F4) | ⏳ |
+| I0 | Inventory + freeze + CI lint | ✅ `d1769a8` |
+| I1 | Add `InteractionFlow` + enums + `StateFilter` rule | ✅ `cd81086` (+27 tests) |
+| I2 | Mirror flow into 7 commands (invariant test) | ✅ `7db873a` (+11 tests, MT passed 2026-04-26) |
+| I3 | Extract `AttackFlowFSM` (deferred Phase F4) | 🔄 I3a ✅ skeleton + wiring (+33 tests); I3b–c migrate logic |
 | I4 | `UIProjector` pilot — HUD | ⏳ |
 | I5 | Migrate sidebar + activation modal + squadron modal | ⏳ |
 | I6 | Migrate attack UI; **delete** `NetworkInteractionState` RPC | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
+
+### MT-PHI.01 — I1+I2 dormant flow does not regress live game ✅ passed 2026-04-26
+
+**Purpose:** Verify that adding `GameState.interaction_flow` and mirroring
+it into 7 commands does not change observable in-game behaviour while the
+legacy `NetworkInteractionState` channel is still active.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Hot-seat: full round (Command → Ship → Squadron → Status) | Identical UI; no errors. |
+| 2 | Networked: each seat activates one ship (`run_network_test.sh --gui-host --logging`) | Activation modal opens correctly on both clients; no double-modals or stuck waits. |
+| 3 | F5 quicksave mid-Ship-Phase, then F8 quickload | Quickload toast logs round/phase; no crashes. (Quickload restore not yet implemented.) |
+| 4 | Replay an existing file under `replays/` | Plays back without "InteractionFlow not found" errors. |
+
+**Result:** All steps green on 2026-04-26. Continuing with I3.
 
 Acceptance gate: a client disconnected mid-attack must rebuild its UI from
 a single filtered `state_snapshot`.

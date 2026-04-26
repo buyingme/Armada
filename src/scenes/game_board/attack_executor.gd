@@ -83,6 +83,11 @@ var _damage_dealer: DamageDealer = DamageDealer.new()
 ## with the shared state from [TargetSelector].
 var _state: AttackState = AttackState.new()
 
+## Authoritative attack-flow FSM (Phase I3).  Tracks the current attack
+## step and writes it into [GameState.interaction_flow] so reconnecting
+## clients can rebuild attack UI from a single state snapshot.
+var _flow_fsm: AttackFlowFSM = AttackFlowFSM.new()
+
 ## Target selector — owns attacker/target selection, visual aids, and
 ## the AttackSimPanel. Created and wired in [method initialize].
 var _target_selector: TargetSelector = null
@@ -162,6 +167,8 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 	_target_selector.dismiss_other_tools_requested.emit()
 	_target_selector.dismiss()
 	_init_ship_attack_state(ship_token)
+	_flow_fsm.begin(GameManager.current_game_state,
+			_get_attacker_player(), -1, {})
 	_target_selector.enter_attacker_selection(true, _get_ship_name())
 	var panel: AttackSimPanel = _get_panel()
 	# Connect Done button if not already connected.
@@ -208,6 +215,8 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 	_target_selector.dismiss_other_tools_requested.emit()
 	_target_selector.dismiss()
 	_init_squadron_attack_state(squadron_token)
+	_flow_fsm.begin(GameManager.current_game_state,
+			_get_attacker_player(), -1, {})
 	_target_selector.enter_squadron_target_selection(squadron_token)
 	var panel: AttackSimPanel = _get_panel()
 	if panel and not panel.attack_done_pressed.is_connected(
@@ -293,6 +302,9 @@ func _finish_attack_execution() -> void:
 	_log.info("Attack execution done — completing attack step.")
 	dismiss()
 	_reset_exec_state()
+	# Phase I3: end the attack flow and clear interaction_flow.
+	_flow_fsm.end(GameManager.current_game_state)
+	_flow_fsm.reset()
 	attack_exec_completed.emit()
 
 ## Builds a [CombatParticipants] from the current attacker/target state.
@@ -584,6 +596,8 @@ func _on_attack_cf_dial_skipped() -> void:
 ## Called when the player presses "Roll Dice".
 ## Requirements: AE-DICE-001, AE-DICE-003, SFX-004, SFX-005, SFX-006.
 func _on_attack_roll_dice() -> void:
+	_flow_fsm.advance(GameManager.current_game_state,
+			AttackFlowFSM.Step.ROLL)
 	_log.info("Rolling dice: %s." % DicePool.format_pool(
 			_state.dice_pool))
 	# Play dice-roll SFX based on attacker type and faction.
@@ -603,6 +617,8 @@ func _on_attack_roll_dice() -> void:
 ## Applies a dice roll result to the attack state and updates the UI.
 ## Called inline for host/hot-seat or from the network broadcast handler.
 func _apply_dice_roll_result(roll_result: Dictionary) -> void:
+	_flow_fsm.advance(GameManager.current_game_state,
+			AttackFlowFSM.Step.MODIFY)
 	var raw: Array = roll_result.get("dice_results", [])
 	_state.dice_results.clear()
 	for entry: Variant in raw:
@@ -838,6 +854,10 @@ func _attack_exec_start_defense() -> void:
 		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
+	# Phase I3: record defender so FSM knows who controls DEFENSE_TOKENS.
+	_flow_fsm.defender_player = def_inst.owner_player
+	_flow_fsm.advance(GameManager.current_game_state,
+			AttackFlowFSM.Step.DEFENSE_TOKENS)
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	if _camera and PlayMode.is_hot_seat():
 		_camera.rotate_to_player(def_inst.owner_player)
@@ -1264,6 +1284,10 @@ func _on_redirect_done_early() -> void:
 ## Rules Reference: "Damage", p.4 — "Damage is applied one point at a
 ## time."
 func _attack_exec_resolve_damage() -> void:
+	# Phase I3: MODIFY/DEFENSE_TOKENS -> RESOLVE_DAMAGE is always legal.
+	if _flow_fsm.current_step != AttackFlowFSM.Step.RESOLVE_DAMAGE:
+		_flow_fsm.advance(GameManager.current_game_state,
+				AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	var final_damage: int = _damage_dealer.calculate_final_damage(
 			_state.modified_damage, _state.scatter_used)
 	# Brace is already applied during Step 4 (canonical order before
@@ -1606,6 +1630,10 @@ func _start_immediate_choice_flow() -> void:
 	_ensure_choice_modal()
 	var chooser: String = _pending_immediate_choice.get("chooser", "opponent")
 	var chooser_player: int = _get_chooser_player_index(chooser)
+	# Phase I3: chooser controls the CRITICAL_CHOICE step.
+	_flow_fsm.defender_player = chooser_player
+	_flow_fsm.advance(GameManager.current_game_state,
+			AttackFlowFSM.Step.CRITICAL_CHOICE)
 	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
 			% [chooser, chooser_player,
 			_pending_immediate_choice.get("card_title", "?")])

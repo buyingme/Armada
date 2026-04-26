@@ -393,3 +393,64 @@ func test_step_to_interaction_attack_steps_are_attack_prefixed() -> void:
 		var mapped: int = int(AttackFlowFSM.STEP_TO_INTERACTION[s])
 		assert_ne(mapped, int(Constants.InteractionStep.NONE),
 				"Active step must not map to NONE.")
+
+
+# ---------------------------------------------------------------------------
+# patch_payload (Phase I3b)
+# ---------------------------------------------------------------------------
+
+func test_patch_payload_merges_keys() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {"range_band": "long"})
+	fsm.patch_payload(gs, {"dice_pool": {"red": 2}})
+	assert_eq(fsm.payload.get("range_band", ""), "long",
+			"patch must preserve unrelated keys.")
+	assert_eq((fsm.payload.get("dice_pool", {}) as Dictionary).get(
+			"red", 0), 2)
+
+
+func test_patch_payload_overwrites_existing_keys() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {"range_band": "long"})
+	fsm.patch_payload(gs, {"range_band": "medium"})
+	assert_eq(fsm.payload.get("range_band", ""), "medium")
+
+
+func test_patch_payload_publishes_to_interaction_flow() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {})
+	fsm.patch_payload(gs, {"modified_damage": 3})
+	assert_eq(gs.interaction_flow.payload.get("modified_damage", 0), 3,
+			"interaction_flow must reflect patched payload.")
+
+
+func test_patch_payload_preserves_step_id() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {})
+	fsm.advance(gs, AttackFlowFSM.Step.ROLL)
+	fsm.patch_payload(gs, {"x": 1})
+	assert_eq(gs.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_ROLL,
+			"patch_payload must not change step_id.")
+
+
+func test_patch_payload_deep_copies_nested_dict() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {})
+	var nested: Dictionary = {"red": 2, "blue": 1}
+	fsm.patch_payload(gs, {"dice_pool": nested})
+	nested["red"] = 99
+	assert_eq((fsm.payload["dice_pool"] as Dictionary).get("red", 0), 2,
+			"patch must deep-copy nested dictionaries.")
+
+
+func test_patch_payload_with_null_state_is_safe() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	fsm.patch_payload(null, {"k": 1})
+	assert_eq(fsm.payload.get("k", 0), 1,
+			"patch_payload still mutates payload when state is null.")

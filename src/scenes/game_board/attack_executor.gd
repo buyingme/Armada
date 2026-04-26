@@ -406,6 +406,12 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		return
 	_state.dice_pool = _compute_attack_pool_dict(range_band)
 	_apply_gather_dice_hook()
+	# Phase I3b: publish range_band + dice pool snapshot to interaction_flow
+	# so reconnecting clients can render the attack panel.
+	_flow_fsm.patch_payload(GameManager.current_game_state, {
+		"range_band": range_band,
+		"dice_pool": _state.dice_pool.duplicate(true),
+	})
 	_get_panel().show_skip_attack_button()
 	# Empty pool guard: if no dice remain after gather-dice hooks, the
 	# attack cannot be declared.
@@ -624,6 +630,10 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 	for entry: Variant in raw:
 		if entry is Dictionary:
 			_state.dice_results.append(entry as Dictionary)
+	# Phase I3b: publish dice results to interaction_flow.
+	_flow_fsm.patch_payload(GameManager.current_game_state, {
+		"dice_results": _state.dice_results.duplicate(true),
+	})
 	# Show results.
 	if _get_panel():
 		_get_panel().hide_roll_button()
@@ -858,6 +868,13 @@ func _attack_exec_start_defense() -> void:
 	_flow_fsm.defender_player = def_inst.owner_player
 	_flow_fsm.advance(GameManager.current_game_state,
 			AttackFlowFSM.Step.DEFENSE_TOKENS)
+	# Phase I3b: publish locked tokens + modified damage so the defender
+	# client can render the defense UI from interaction_flow alone.
+	_flow_fsm.patch_payload(GameManager.current_game_state, {
+		"locked_tokens": _state.locked_tokens.duplicate(true),
+		"modified_damage": _state.modified_damage,
+		"defender_player": def_inst.owner_player,
+	})
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	if _camera and PlayMode.is_hot_seat():
 		_camera.rotate_to_player(def_inst.owner_player)

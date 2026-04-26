@@ -1,0 +1,69 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "advance_phase"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": 4606098275563030812,
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-04-26T05:27:41"
+	}
+}

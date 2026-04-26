@@ -128,6 +128,31 @@ func begin(game_state: GameState, p_attacker: int, p_defender: int,
 	_transition(game_state, Step.DECLARE)
 
 
+## Updates the [member payload] with [param patch] entries (deep-merged
+## at the top level).  Re-publishes [GameState.interaction_flow] so
+## clients see the latest snapshot.  Used between transitions to record
+## attacker zone, range band, dice pool, modified damage, etc.
+func patch_payload(game_state: GameState, patch: Dictionary) -> void:
+	for key: Variant in patch.keys():
+		payload[key] = _deep_copy_value(patch[key])
+	if game_state == null:
+		return
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			get_interaction_step(),
+			get_controller_player(),
+			Constants.Visibility.ALL,
+			payload)
+
+
+static func _deep_copy_value(v: Variant) -> Variant:
+	if v is Dictionary:
+		return (v as Dictionary).duplicate(true)
+	if v is Array:
+		return (v as Array).duplicate(true)
+	return v
+
+
 ## Advances to [param next_step].  Rejects illegal transitions by
 ## returning [code]false[/code] and leaving state unchanged.  Callers are
 ## expected to honour the [enum Step] transition table; the FSM stays

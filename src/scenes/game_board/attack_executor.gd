@@ -1307,6 +1307,11 @@ func _attack_exec_resolve_damage() -> void:
 				AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	var final_damage: int = _damage_dealer.calculate_final_damage(
 			_state.modified_damage, _state.scatter_used)
+	# Phase I3c: publish final damage so UIProjector can render the
+	# damage summary on the defender's screen.
+	_flow_fsm.patch_payload(GameManager.current_game_state, {
+		"final_damage": final_damage,
+	})
 	# Brace is already applied during Step 4 (canonical order before
 	# Redirect), so _state.modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
@@ -1651,6 +1656,12 @@ func _start_immediate_choice_flow() -> void:
 	_flow_fsm.defender_player = chooser_player
 	_flow_fsm.advance(GameManager.current_game_state,
 			AttackFlowFSM.Step.CRITICAL_CHOICE)
+	# Phase I3c: publish choice info so UIProjector can render the
+	# critical-choice modal on the chooser's screen.
+	_flow_fsm.patch_payload(GameManager.current_game_state, {
+		"chooser": chooser,
+		"card_title": _pending_immediate_choice.get("card_title", ""),
+	})
 	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
 			% [chooser, chooser_player,
 			_pending_immediate_choice.get("card_title", "?")])

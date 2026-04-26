@@ -203,10 +203,15 @@ func connect_signals() -> void:
 			_on_ship_defense_token_changed):
 		EventBus.ship_defense_token_changed.connect(
 				_on_ship_defense_token_changed)
-	if not EventBus.interaction_state_changed.is_connected(
-			_on_interaction_state_changed):
-		EventBus.interaction_state_changed.connect(
-				_on_interaction_state_changed)
+	# Phase I5: subscribe to CommandProcessor.command_executed instead of
+	# the legacy parallel-channel signal.  The sidebar refreshes from
+	# authoritative GameState after every applied command — which is
+	# strictly more correct than the previous behaviour (refreshes only
+	# on interaction-state RPCs).
+	if not CommandProcessor.command_executed.is_connected(
+			_on_command_executed_refresh):
+		CommandProcessor.command_executed.connect(
+				_on_command_executed_refresh)
 
 
 ## Disconnects EventBus signals.
@@ -237,10 +242,10 @@ func disconnect_signals() -> void:
 			_on_ship_defense_token_changed):
 		EventBus.ship_defense_token_changed.disconnect(
 				_on_ship_defense_token_changed)
-	if EventBus.interaction_state_changed.is_connected(
-			_on_interaction_state_changed):
-		EventBus.interaction_state_changed.disconnect(
-				_on_interaction_state_changed)
+	if CommandProcessor.command_executed.is_connected(
+			_on_command_executed_refresh):
+		CommandProcessor.command_executed.disconnect(
+				_on_command_executed_refresh)
 
 
 # ---------------------------------------------------------------------------
@@ -536,5 +541,11 @@ func _on_ship_defense_token_changed(_ship_instance: RefCounted) -> void:
 	refresh_from_authoritative_state(GameManager.current_game_state)
 
 
-func _on_interaction_state_changed(_state: NetworkInteractionState) -> void:
+## Phase I5: refreshes the sidebar after every applied command.
+##
+## Replaces the legacy parallel-channel handler.  Idempotent: extra
+## refreshes are cheap (the sidebar reads authoritative state and
+## rebuilds its rows in one pass).
+func _on_command_executed_refresh(_command: GameCommand,
+		_result: Dictionary) -> void:
 	refresh_from_authoritative_state(GameManager.current_game_state)

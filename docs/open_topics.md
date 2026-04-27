@@ -1,7 +1,7 @@
 # Open Topics
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-26 (Phase I in progress — I0/I1/I2 ✅)
+> Last updated: 2026-04-27 (Phase I in progress — I0/I1/I2/I3/I4/I5 ✅)
 > Current baseline: 130 scripts, 2 677 tests, 4 961 asserts
 
 ---
@@ -22,8 +22,8 @@ the parallel channel.
 | I1 | Add `InteractionFlow` + enums + `StateFilter` rule | ✅ `cd81086` (+27 tests) |
 | I2 | Mirror flow into 7 commands (invariant test) | ✅ `7db873a` (+11 tests, MT passed 2026-04-26) |
 | I3 | Extract `AttackFlowFSM` (deferred Phase F4) | ✅ `5647edf`/`6fcc9f1`/`a89e9a8` (+39 tests) — LOC target deferred |
-| I4 | `UIProjector` pilot — HUD | 🔄 in progress |
-| I5 | Migrate sidebar + activation modal + squadron modal | ⏳ |
+| I4 | `UIProjector` pilot — HUD | ✅ MT-PHI.04 passed 2026-04-26 |
+| I5 | Migrate sidebar + activation modal + squadron modal | ✅ MT-PHI.05 / 05b passed 2026-04-27 (fix log I5b-1…5 in `docs/modal_timing_diagrams.md`) |
 | I6 | Migrate attack UI; **delete** `NetworkInteractionState` RPC | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
 
@@ -75,8 +75,8 @@ sub-phase is complete.
 | Bug | Repro | Closing step | MT |
 |-----|-------|--------------|----|
 | **Defender cannot spend defense tokens on client screen** | Networked attack: client is defender; dice roll arrives but no defense-token modal opens. | I6 (project attack UI from `interaction_flow.payload`). | MT-PHI.06 |
-| **Client cannot activate Imperial squadrons** | Networked Squadron Phase: after handoff to player 1, `SqActModal` opens but `Selected squadron` / overlay events never fire on the client; second click yields `already activating a squadron`. Host log shows full lifecycle; client log shows only the bare `activate_squadron` command + `step='action_choice'`. | I5 (project squadron-modal lifecycle from `interaction_flow.payload` so `SqActModal` reacts identically on both peers). | MT-PHI.05 |
-| **Activation modal sub-step inferred from local UI events** | (Inventory item) | I5 | MT-PHI.05 |
+| **Client cannot activate Imperial squadrons** | _resolved I5 (2026-04-27)_ — `SqActModal` lifecycle now driven by `command_executed` + `UIProjector`; passive peer mirrors selection / move / handoff. Fix log I5b-1…5 in `docs/modal_timing_diagrams.md`. | I5 ✅ | MT-PHI.05 ✅ |
+| **Activation modal sub-step inferred from local UI events** | _resolved I5 (2026-04-27)_ — modal sub-step now read from `state.interaction_flow.step_id`. | I5 ✅ | MT-PHI.05 ✅ |
 
 Acceptance gate: a client disconnected mid-attack must rebuild its UI from
 a single filtered `state_snapshot`.

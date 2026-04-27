@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-23 (G4.6.6 T1a C1–C8)
+> Last updated: 2026-04-27 (Phase I5 complete — sidebar / activation modal / squadron modal projected from `interaction_flow`)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 127 |
-| GUT tests | 2 633 |
-| GUT asserts | 4 842 |
+| GUT test scripts | 132 |
+| GUT tests | 2 726 |
+| GUT asserts | 5 066 |
 | Autoloads | 17 |
 | Command classes | 27 (1 base + 26 concrete) |
 | Wired command call sites | 41 |
@@ -73,7 +73,7 @@
 | F5 | AttackExecutor Split | ✅ | AttackState, TargetSelector, TargetingListController (AE 3 008 → 1 883) |
 | H | Geometry Centralisation | ✅ | 6 inline approximations → centralised, −195 lines dead code |
 | G | Command Pattern | ✅ | GameCommand base, 26 concrete commands, 41 wired call sites, GameReplay, §4.6 P1–P7 + debug resolved |
-| **I** | **Interaction-Flow as Domain State** | **🔄 in progress** | `InteractionFlow` field on `GameState`; `AttackFlowFSM` extracted; `UIProjector` replaces `is_network()` branches; deletes legacy interaction-state RPC. Plan: `docs/refactoring_phase_i_plan.md`. ~14 days, 7 sub-steps. **I0 ✅** inventory + freeze lint. **I1 ✅** `InteractionFlow` type + `GameState.interaction_flow` + `StateFilter` rule (2 666 tests). **I2 ✅** mirrored flow into 7 commands (advance_phase, activate_ship, convert_dial_to_token, execute_maneuver, end_activation, activate_squadron, advance_activation_step) + invariant test (2 677 tests, MT-PHI.01 passed 2026-04-26). **I3 ✅** `AttackFlowFSM` + interaction_flow.payload publishing at 5 transition sites (range_band, dice_pool, dice_results, locked_tokens, modified_damage, defender_player, final_damage, chooser, card_title); +39 unit tests; LOC target for `attack_executor.gd` deferred (no game logic moved — moving combat mid-Phase-I is higher-risk than acceptable; data is exposed for I4/I6). **I4 🔄** `UIProjector` HUD pilot landed (parallel to legacy channel) — `src/core/network/ui_projector.gd` + `UIIntent`; wired to `CommandProcessor.command_executed` in `game_board.gd`; +10 unit tests; MT-PHI.04 pending. Unblocks NW-006/007/008 cross-client UI parity and reconnection. |
+| **I** | **Interaction-Flow as Domain State** | **🔄 in progress** | `InteractionFlow` field on `GameState`; `AttackFlowFSM` extracted; `UIProjector` replaces `is_network()` branches; deletes legacy interaction-state RPC. Plan: `docs/refactoring_phase_i_plan.md`. ~14 days, 7 sub-steps. **I0 ✅** inventory + freeze lint. **I1 ✅** `InteractionFlow` type + `GameState.interaction_flow` + `StateFilter` rule (2 666 tests). **I2 ✅** mirrored flow into 7 commands (advance_phase, activate_ship, convert_dial_to_token, execute_maneuver, end_activation, activate_squadron, advance_activation_step) + invariant test (2 677 tests, MT-PHI.01 passed 2026-04-26). **I3 ✅** `AttackFlowFSM` + interaction_flow.payload publishing at 5 transition sites (range_band, dice_pool, dice_results, locked_tokens, modified_damage, defender_player, final_damage, chooser, card_title); +39 unit tests; LOC target for `attack_executor.gd` deferred (no game logic moved — moving combat mid-Phase-I is higher-risk than acceptable; data is exposed for I4/I6). **I4 ✅** `UIProjector` HUD pilot — `src/core/network/ui_projector.gd` + `UIIntent`; wired to `CommandProcessor.command_executed` in `game_board.gd`; +10 unit tests; MT-PHI.04 passed 2026-04-26. **I5 ✅** sidebar / activation modal / squadron modal projected from `interaction_flow` via `UIProjector`; passive-peer modal lifecycle (open/select/move/handoff) mirrored on remote clients; round-2+ Command Phase opens dial picker on client; speculative round-1 picker closed on `command_phase_complete` (no out-of-phase `assign_dials`). Fix log I5b-1…5: see `docs/modal_timing_diagrams.md`. 132 scripts / 2 726 tests / 5 066 asserts; MT-PHI.05/05b passed 2026-04-27. Unblocks NW-006/007/008 cross-client UI parity. |
 
 ---
 

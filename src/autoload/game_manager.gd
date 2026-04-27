@@ -1684,7 +1684,11 @@ func _handle_remote_start_round() -> void:
 	_command_submitted = [false, false]
 	var init: int = current_game_state.initiative_player
 	_command_assigning_player = init
-	active_player = init
+	# I5b-4: must use _set_active_player so active_player_changed
+	# fires on the client.  Without it, GameBoard never sees the
+	# round-2 transition and CmdPhase.begin_command_dial_flow() is
+	# never called, leaving the Imperial dial panel closed.
+	_set_active_player(init)
 	if PlayMode.is_network():
 		NetworkManager.activate_sync_gate()
 	EventBus.round_started.emit(current_game_state.current_round)

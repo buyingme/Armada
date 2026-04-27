@@ -141,6 +141,13 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_command_executed_select_squadron):
 		CommandProcessor.command_executed.connect(
 				_on_command_executed_select_squadron)
+	# Phase I5b-1: passive peer needs to reset its modal back to
+	# WAITING_FOR_SELECTION after each opponent move so the next
+	# `activate_squadron` command's `select_squadron_remote` is accepted.
+	if not CommandProcessor.command_executed.is_connected(
+			_on_command_executed_advance_after_move):
+		CommandProcessor.command_executed.connect(
+				_on_command_executed_advance_after_move)
 
 
 ## Returns the [SquadronActivationModal] instance (for external signal
@@ -183,6 +190,10 @@ func try_handle_squadron_click(token: SquadronToken) -> bool:
 ## Requirements: SQA-001, SQA-TM-001.
 func begin_activation_flow() -> void:
 	_squadron_activation_count = 0
+	# I5b-3: drop any lingering range/move overlay from the previous
+	# active player's last activation (passive peer never gets a
+	# move_commit signal locally to clear it).
+	_remove_squadron_overlay()
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	EngagementResolver.update_engagement_flags(all_squads)
 	if _squadron_modal:
@@ -342,6 +353,55 @@ func _on_command_executed_select_squadron(command: GameCommand,
 		return
 	if _squadron_modal.select_squadron_remote(token, instance):
 		_on_squadron_selected_in_modal(token)
+
+
+## Phase I5b-1: on the passive (observer) peer, advances the modal back
+## to [code]WAITING_FOR_SELECTION[/code] after the active player commits
+## a [code]move_squadron[/code] during the Squadron Phase.
+##
+## On the controlling peer the modal already advances via the local
+## [method _on_squadron_activation_done] callback after move commit; this
+## handler is a no-op there (guarded by player-index check).  Without
+## this reset, the next [code]activate_squadron[/code] command's
+## [method SquadronActivationModal.select_squadron_remote] returns false
+## (state guard) and the passive peer's modal stays stuck on the
+## previous squadron's [code]ACTION_CHOICE[/code].
+##
+## When the move was the last of the active player's turn, the turn
+## handoff (via [signal EventBus.active_player_changed] →
+## [method begin_activation_flow]) will reset the modal anyway; this
+## handler skips the reset in that case to avoid a double open.
+func _on_command_executed_advance_after_move(command: GameCommand,
+		_result: Dictionary) -> void:
+	if command == null or command.command_type != "move_squadron":
+		return
+	if not PlayMode.is_network():
+		return
+	var local: int = NetworkManager.get_local_player_index()
+	# Active peer drives modal lifecycle through its local-click flow.
+	if command.player_index == local:
+		return
+	if _squadron_modal == null or not _squadron_modal.visible:
+		return
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or gs.current_phase != Constants.GamePhase.SQUADRON:
+		return
+	# Ship-phase displacement moves are filtered out above (phase guard).
+	# Mirror the activation counter so open_for_turn shows the right "X of Y".
+	_squadron_activation_count += 1
+	# I5b-3: passive peer needs to drop the previous activation's
+	# range/move overlay; only the active peer gets the local
+	# move_commit / activation_done callbacks that clear it.
+	_remove_squadron_overlay()
+	if _squadron_activation_count >= Constants.SQUADRONS_PER_ACTIVATION:
+		# Last activation of this player's turn — handoff to opposing
+		# player via active_player_changed will reopen the modal.
+		return
+	# Same player still has activations left — reset modal.
+	var next_num: int = _squadron_activation_count + 1
+	_squadron_modal.open_for_turn(
+			next_num, Constants.SQUADRONS_PER_ACTIVATION)
+	_squadron_modal.set_interactable(_modal_interactable)
 
 
 ## Called after the squadron modal accepts a squadron click.

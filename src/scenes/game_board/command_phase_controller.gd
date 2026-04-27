@@ -123,9 +123,21 @@ func _on_command_dial_order_requested(ship_ref: RefCounted) -> void:
 
 
 ## Called when the Command Phase completes (both players submitted).
-## Clears the queue and notifies GameBoard.
+## Clears the queue, hides any still-open picker, and notifies GameBoard.
+##
+## I5b-5: in network mode, [CommandDialPicker] may have been opened
+## speculatively by [method GameBoard._handle_network_active_player]
+## right before the host broadcasts pre-assigned (fixed) round-1 dials
+## via [code]apply_fixed_round1_commands[/code].  The remote-mirror
+## handlers complete the dial assignment without ever calling
+## [signal command_picker_confirmed], leaving the picker visible into
+## Ship Phase — where pressing Confirm submits an out-of-phase
+## [AssignDialCommand] that the server rejects with "Not in Command
+## Phase."  Closing the picker on phase complete prevents that.
 func _on_command_phase_complete() -> void:
 	_ships_needing_dials.clear()
+	if _command_dial_picker != null and _command_dial_picker.is_open():
+		_command_dial_picker.close()
 	_log.info("Command Phase complete — advancing to Ship Phase.")
 	phase_complete.emit()
 

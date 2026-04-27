@@ -1037,13 +1037,29 @@ func _is_local_activation_modal_controller() -> bool:
 	return GameManager.get_active_player() == local
 
 
+## Returns whether the local player may interact with SqActModal controls.
+##
+## In the Squadron Phase the controller is always the active player —
+## there is no sub-step where the non-active player needs interactivity.
+## The legacy [code]_interaction_controller_player[/code] cache is not
+## refreshed on the implicit between-turn handoff inside
+## [code]GameManager._advance_squadron_phase_turn[/code] (no broadcast),
+## so reading it here would gate on stale data.  G4 Phase I5c.
+func _is_local_squadron_modal_controller() -> bool:
+	if not PlayMode.is_network():
+		return true
+	var local: int = NetworkManager.get_local_player_index()
+	return GameManager.get_active_player() == local
+
+
 ## Applies current controller authority to activation and squadron modals.
 func _update_activation_modal_interactivity() -> void:
-	var is_controller: bool = _is_local_activation_modal_controller()
+	var ship_is_controller: bool = _is_local_activation_modal_controller()
 	if _panel_mgr != null and _panel_mgr.activation_modal != null:
-		_panel_mgr.activation_modal.set_interactable(is_controller)
+		_panel_mgr.activation_modal.set_interactable(ship_is_controller)
 	if _squadron_phase_controller != null:
-		_squadron_phase_controller.set_modal_interactable(is_controller)
+		var sq_is_controller: bool = _is_local_squadron_modal_controller()
+		_squadron_phase_controller.set_modal_interactable(sq_is_controller)
 
 
 ## Applies dynamic skip/interactable flags and opens the activation modal.

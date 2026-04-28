@@ -166,12 +166,6 @@ var _squadron_phase_controller: SquadronPhaseController = null
 ## Created in [method _create_displacement_controller].
 var _displacement_controller: DisplacementController = null
 
-## Latest known interaction-state controller player for network authority gates.
-var _interaction_controller_player: int = -1
-
-## True once at least one interaction-state update has been received.
-var _has_interaction_controller: bool = false
-
 func _ready() -> void:
 	_create_camera()
 	_create_token_container()
@@ -905,20 +899,18 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
 		# Hot-seat: viewer is the active player.
-		local = gs.active_player
+		local = GameManager.get_active_player()
 	var intent: UIProjector.UIIntent = UIProjector.project(gs, local)
 	if not intent.hud_status_text.is_empty():
 		_panel_mgr.set_network_status_text(intent.hud_status_text)
-	# Network-only modal lifecycle / authority cache.  Hot-seat opens the
-	# activation modal via the local activation flow itself; running the
-	# I6a path there would double-open.
+	# Network-only modal lifecycle.  Hot-seat opens the activation modal
+	# via the local activation flow itself; running this path there would
+	# double-open.
 	if not PlayMode.is_network():
 		return
 	var flow: InteractionFlow = gs.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return
-	_has_interaction_controller = true
-	_interaction_controller_player = flow.controller_player
 	_sync_activation_step_from_flow(flow)
 	# Modal lifecycle: open when activation starts, close when it ends.
 	if flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
@@ -1016,23 +1008,35 @@ func _submit_network_activation_step(step_id: String) -> void:
 
 
 ## Returns whether the local player may interact with ActivationModal controls.
+##
+## Phase I6d: routes through [UIProjector] so hot-seat and network share the
+## same authority projection.  In hot-seat the local viewer is always the
+## active player, so [member UIIntent.is_interactive] is [code]true[/code]
+## whenever a flow is active.  Pre-flow (game start, between rounds), falls
+## back to [code]active_player == local[/code] which preserves the prior
+## permissive behaviour.
 func _is_local_activation_modal_controller() -> bool:
-	if not PlayMode.is_network():
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
 		return true
 	var local: int = NetworkManager.get_local_player_index()
-	if _has_interaction_controller:
-		return _interaction_controller_player == local
-	return GameManager.get_active_player() == local
+	if local < 0:
+		# Hot-seat: viewer is the active player.
+		local = GameManager.get_active_player()
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
+		return GameManager.get_active_player() == local
+	return flow.controller_player == local
 
 
 ## Returns whether the local player may interact with SqActModal controls.
 ##
 ## In the Squadron Phase the controller is always the active player —
 ## there is no sub-step where the non-active player needs interactivity.
-## The legacy [code]_interaction_controller_player[/code] cache is not
-## refreshed on the implicit between-turn handoff inside
-## [code]GameManager._advance_squadron_phase_turn[/code] (no broadcast),
-## so reading it here would gate on stale data.  G4 Phase I5c.
+## [code]GameManager._advance_squadron_phase_turn[/code] does not update
+## [member InteractionFlow.controller_player] on the implicit between-turn
+## handoff, so reading [code]flow.controller_player[/code] would gate on
+## stale data.  Always trust [code]active_player[/code] here.  G4 Phase I5c.
 func _is_local_squadron_modal_controller() -> bool:
 	if not PlayMode.is_network():
 		return true

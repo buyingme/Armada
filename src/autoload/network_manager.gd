@@ -97,12 +97,6 @@ signal chat_received(sender: String, text: String, timestamp: int)
 ## [param result] — execution result dictionary.
 signal command_result_received(command_data: Dictionary, result: Dictionary)
 
-## Emitted when the server broadcasts an interaction-state update.
-## [param state_data] — Dictionary produced by [method NetworkInteractionState.serialize].
-## Consumed by [GameManager] to update the active interaction step.
-## G4.6.6 — T1a C2.
-signal interaction_state_received(state_data: Dictionary)
-
 
 # ---------------------------------------------------------------------------
 # State
@@ -155,12 +149,6 @@ var _pending_game_config: Dictionary = {}
 ## dials, then releases them in a single batch.
 ## Transient — not serialized.
 var _sync_gate: CommandSyncGate = CommandSyncGate.new()
-
-## Latest interaction-state payload received from the server.
-## Keyed by the serialised [NetworkInteractionState] fields.
-## Updated atomically by [method _receive_interaction_state].
-## Clients use this to rehydrate on reconnect (G4.6.6 T1a C2).
-var _latest_interaction_state: Dictionary = {}
 
 
 # ---------------------------------------------------------------------------
@@ -674,48 +662,6 @@ func handle_host_command(command: GameCommand, result: Dictionary) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Interaction State Broadcast (G4.6.6 — T1a C2)
-# ---------------------------------------------------------------------------
-
-## Server: serialises [param state] and broadcasts it to all peers (including
-## the server itself via [code]call_local[/code]).
-## Only callable on the server.  Clients receive updates via
-## [method _receive_interaction_state].
-func broadcast_interaction_state(state: NetworkInteractionState) -> void:
-	if role != Role.SERVER:
-		_log.warn("broadcast_interaction_state() called but role is %s." %
-				_role_name(role))
-		return
-	var data: Dictionary = state.serialize()
-	_receive_interaction_state.rpc(data)
-	_log.info("Broadcast interaction state: flow='%s' step='%s' v%d controller=%d." % [
-			state.flow_type, state.step_id, state.version, state.controller_player])
-
-
-## Returns a copy of the latest received interaction-state dictionary.
-## Empty dictionary if no state has been received yet.
-## G4.6.6 T1a C2 / C12 (reconnect restore).
-func get_latest_interaction_state() -> Dictionary:
-	return _latest_interaction_state.duplicate(true)
-
-
-## Server → All: delivers an interaction-state update to every peer.
-## [code]call_local[/code] ensures the server processes its own broadcast.
-## Clients cache the new state and emit [signal interaction_state_received].
-## Older versions are silently discarded (idempotency rule).
-@rpc("authority", "call_local", "reliable")
-func _receive_interaction_state(state_data: Dictionary) -> void:
-	var incoming_version: int = state_data.get("version", 0)
-	var cached_version: int = _latest_interaction_state.get("version", -1)
-	if incoming_version <= cached_version:
-		_log.info("Discarding stale interaction state v%d (have v%d)." % [
-				incoming_version, cached_version])
-		return
-	_latest_interaction_state = state_data.duplicate(true)
-	interaction_state_received.emit(state_data)
-
-
-# ---------------------------------------------------------------------------
 # Sync Gate helpers (G4.4)
 # ---------------------------------------------------------------------------
 
@@ -809,7 +755,6 @@ func _cleanup() -> void:
 	_last_heartbeat.clear()
 	_local_player_index = -1
 	_pending_game_config = {}
-	_latest_interaction_state = {}
 	if _peer:
 		multiplayer.multiplayer_peer = null
 		_peer = null

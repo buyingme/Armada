@@ -93,9 +93,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 ##
 ## Phase I4 keeps the wording identical to the legacy
 ## [code]StatusTextPolicy[/code] / fallback path so the UI is byte-for-byte
-## indistinguishable from before.  I5 will introduce richer per-step
-## strings as the projection takes over from
-## [code]NetworkInteractionState[/code].
+## indistinguishable from before.
 static func _hud_status_for(flow: InteractionFlow,
 		viewer_player: int) -> String:
 	# Command-phase: both players choose dials simultaneously.  Both see

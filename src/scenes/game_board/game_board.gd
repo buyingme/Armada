@@ -367,9 +367,7 @@ func _connect_signals() -> void:
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 	# Phase I6a: HUD status, activation-step sync and modal lifecycle on
 	# remote clients are projected from [GameState.interaction_flow] every
-	# time a command is applied.  The legacy parallel-channel listener
-	# [signal EventBus.interaction_state_changed] is gone; producers and
-	# the [NetworkInteractionState] type are deleted in I6c.
+	# time a command is applied.
 	CommandProcessor.command_executed.connect(_on_command_executed_project_ui)
 	#endregion
 
@@ -896,8 +894,7 @@ func _handle_network_active_player(_player_index: int) -> void:
 ## Phase I6a — sole driver of HUD status, activation-step sync, modal
 ## lifecycle and modal interactivity in network mode.  Reads the
 ## authoritative [GameState.interaction_flow] domain field after every
-## applied command.  Replaces the legacy [signal
-## EventBus.interaction_state_changed] handler.
+## applied command.
 func _on_command_executed_project_ui(_command: GameCommand,
 		_result: Dictionary) -> void:
 	if _panel_mgr == null:
@@ -1173,13 +1170,10 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 ## opens the mirror modal so the passive peer sees the same activation
 ## sequence.  G4.6.6 T1a C7.
 ##
-## Phase I6a: also opens the mirror modal here.  In the parallel-channel
-## era this was deferred to a follow-up `interaction_state_changed`
-## broadcast to avoid auto-skip flashing past steps before the
-## authoritative step arrived.  With the I2 mirror in place,
+## Phase I6a: also opens the mirror modal here.  Because
 ## [code]gs.interaction_flow.step_id[/code] already equals
 ## [code]ACTIVATION_MODAL_OPEN[/code] at this point (set inside the
-## command's [code]execute()[/code]) and [code]open_mirror[/code] does
+## command's [code]execute()[/code]) [code]open_mirror[/code] does
 ## not auto-skip, so no flashing occurs.
 func _on_remote_ship_activated(ship: ShipInstance) -> void:
 	if ship == null:

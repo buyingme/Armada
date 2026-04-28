@@ -119,13 +119,6 @@ signal dice_rolled(attacker: Node, dice_results: Array)
 ## for the local player's attack.  G4.6.5 — async dice resolution.
 signal network_dice_result(result: Dictionary)
 
-## Emitted when a new [NetworkInteractionState] has been applied locally.
-## Consumed by UI controllers (modals, sidebar, score header) to update
-## visibility and permission gates.
-## [param state] — the fully applied [NetworkInteractionState] object.
-## G4.6.6 T1a C3.
-signal interaction_state_changed(state: NetworkInteractionState)
-
 ## Emitted when a defense token is spent.
 signal defense_token_spent(ship: Node, token_type: Constants.DefenseToken)
 

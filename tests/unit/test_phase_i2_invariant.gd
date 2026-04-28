@@ -1,12 +1,12 @@
 ## Invariant test for Phase I2: each command's [code]execute()[/code] must
-## populate [code]GameState.interaction_flow[/code] with the same flow_type /
-## step_id / controller / payload that the legacy
-## [code]_publish_interaction_state_for_command()[/code] producer in
-## [GameManager] would have emitted.
+## populate [code]GameState.interaction_flow[/code] with the correct
+## flow_type / step_id / controller / payload values.
 ##
-## Once Phase I6 lands and the legacy producer is deleted, this test deletes
-## with it.  Until then it is the safety net guaranteeing the new path
-## stays in lock-step with the old.
+## Originally this mirrored the legacy
+## [code]_publish_interaction_state_for_command()[/code] producer in
+## [GameManager].  That producer was deleted in Phase I6c; these tests
+## remain as the canonical assertion that commands populate the
+## authoritative domain field.
 ##
 ## See [code]docs/refactoring_phase_i_plan.md[/code] §I2.
 extends GutTest

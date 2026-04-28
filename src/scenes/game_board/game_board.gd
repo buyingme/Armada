@@ -365,11 +365,11 @@ func _connect_signals() -> void:
 	#region Turn management signals
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
-	EventBus.interaction_state_changed.connect(_on_interaction_state_changed)
-	# Phase I4: UIProjector-driven HUD status.  Recomputes after every
-	# applied command using the authoritative [GameState.interaction_flow]
-	# domain field.  Runs in parallel with the legacy interaction-state
-	# path during I4; legacy paths are removed in I5/I6.
+	# Phase I6a: HUD status, activation-step sync and modal lifecycle on
+	# remote clients are projected from [GameState.interaction_flow] every
+	# time a command is applied.  The legacy parallel-channel listener
+	# [signal EventBus.interaction_state_changed] is gone; producers and
+	# the [NetworkInteractionState] type are deleted in I6c.
 	CommandProcessor.command_executed.connect(_on_command_executed_project_ui)
 	#endregion
 
@@ -893,9 +893,11 @@ func _handle_network_active_player(_player_index: int) -> void:
 ## viewer (camera handles handoff), so the projection produces the same
 ## "make your choices" wording the active player would see in network mode.
 ##
-## Runs in parallel with the legacy parallel-channel handler during
-## Phase I4.  When I5/I6 delete the legacy path, this becomes the sole
-## HUD status producer.
+## Phase I6a — sole driver of HUD status, activation-step sync, modal
+## lifecycle and modal interactivity in network mode.  Reads the
+## authoritative [GameState.interaction_flow] domain field after every
+## applied command.  Replaces the legacy [signal
+## EventBus.interaction_state_changed] handler.
 func _on_command_executed_project_ui(_command: GameCommand,
 		_result: Dictionary) -> void:
 	if _panel_mgr == null:
@@ -908,36 +910,26 @@ func _on_command_executed_project_ui(_command: GameCommand,
 		# Hot-seat: viewer is the active player.
 		local = gs.active_player
 	var intent: UIProjector.UIIntent = UIProjector.project(gs, local)
-	# I4 pilot scope: only overwrite when projector has a non-empty
-	# value, so we do not stomp on the legacy active-player fallback in
-	# phases that have no interaction flow yet.  I5/I6 expand coverage.
-	if intent.hud_status_text.is_empty():
+	if not intent.hud_status_text.is_empty():
+		_panel_mgr.set_network_status_text(intent.hud_status_text)
+	# Network-only modal lifecycle / authority cache.  Hot-seat opens the
+	# activation modal via the local activation flow itself; running the
+	# I6a path there would double-open.
+	if not PlayMode.is_network():
 		return
-	_panel_mgr.set_network_status_text(intent.hud_status_text)
-
-
-## Applies score-header helper text from authoritative interaction-state
-## updates. Uses ui_status_text when provided, otherwise falls back to
-## controller-based wording from StatusTextPolicy.
-func _on_interaction_state_changed(state: NetworkInteractionState) -> void:
-	if not PlayMode.is_network() or _panel_mgr == null:
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return
 	_has_interaction_controller = true
-	_interaction_controller_player = state.controller_player
-	_sync_activation_step_from_interaction_state(state)
+	_interaction_controller_player = flow.controller_player
+	_sync_activation_step_from_flow(flow)
 	# Modal lifecycle: open when activation starts, close when it ends.
-	if state.step_id == "activation_modal_open":
-		_open_modal_from_interaction_state()
-	elif state.step_id == "wait_for_ship_select":
-		_close_modal_from_interaction_state()
-	var status_text: String = state.ui_status_text.strip_edges()
-	if status_text.is_empty():
-		var local: int = NetworkManager.get_local_player_index()
-		if state.controller_player == local:
-			status_text = "make your choices"
-		else:
-			status_text = "waiting for opponent's choice"
-	_panel_mgr.set_network_status_text(status_text)
+	if flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
+		match flow.step_id:
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN:
+				_open_modal_from_interaction_state()
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
+				_close_modal_from_interaction_state()
 	_update_activation_modal_interactivity()
 
 
@@ -987,27 +979,26 @@ func _close_modal_from_interaction_state() -> void:
 	_on_board_activation_ended()
 
 
-## Applies authoritative ship-activation step snapshots from interaction state.
+## Applies authoritative ship-activation step snapshots from the
+## [GameState.interaction_flow] domain field.
 ## This keeps modal checkmarks synchronized across peers even when local UI
 ## flows differ.
-func _sync_activation_step_from_interaction_state(
-		state: NetworkInteractionState) -> void:
-	if state.flow_type != "ship_activation":
+func _sync_activation_step_from_flow(flow: InteractionFlow) -> void:
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
-	var step_id: String = state.step_id
 	var target_step: int = -1
-	match step_id:
-		"squadron_step":
+	match flow.step_id:
+		Constants.InteractionStep.SQUADRON_STEP:
 			target_step = ShipActivationState.Step.SQUADRON
-		"repair_step":
+		Constants.InteractionStep.REPAIR_STEP:
 			target_step = ShipActivationState.Step.REPAIR
-		"attack_step":
+		Constants.InteractionStep.ATTACK_STEP:
 			target_step = ShipActivationState.Step.ATTACK
-		"maneuver_step":
+		Constants.InteractionStep.MANEUVER_STEP:
 			target_step = ShipActivationState.Step.MANEUVER
-		"activation_done":
+		Constants.InteractionStep.ACTIVATION_DONE:
 			target_step = ShipActivationState.Step.DONE
 		_:
 			return
@@ -1179,8 +1170,17 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 ## Called when the opponent activates a ship in network mode (either via
 ## dial-to-ship-token [ActivateShipCommand] or dial-to-card-panel
 ## [ConvertDialToTokenCommand]).  Sets up [member _activation_ctx] and
-## opens the modal so the passive peer sees the same activation sequence.
-## G4.6.6 T1a C7.
+## opens the mirror modal so the passive peer sees the same activation
+## sequence.  G4.6.6 T1a C7.
+##
+## Phase I6a: also opens the mirror modal here.  In the parallel-channel
+## era this was deferred to a follow-up `interaction_state_changed`
+## broadcast to avoid auto-skip flashing past steps before the
+## authoritative step arrived.  With the I2 mirror in place,
+## [code]gs.interaction_flow.step_id[/code] already equals
+## [code]ACTIVATION_MODAL_OPEN[/code] at this point (set inside the
+## command's [code]execute()[/code]) and [code]open_mirror[/code] does
+## not auto-skip, so no flashing occurs.
 func _on_remote_ship_activated(ship: ShipInstance) -> void:
 	if ship == null:
 		return
@@ -1191,11 +1191,7 @@ func _on_remote_ship_activated(ship: ShipInstance) -> void:
 	_activation_ctx.set_active(token, ShipActivationState.create(ship))
 	if _panel_mgr.activation_sidebar and ship:
 		_panel_mgr.activation_sidebar.highlight_active(ship)
-	# Do NOT open modal here. In network mode the modal lifecycle is driven by
-	# interaction-state updates (activation_modal_open / wait_for_ship_select)
-	# which arrive immediately after this handler via _flush_pending_interaction_states().
-	# Opening here would run auto-skip on a fresh state before the authoritative
-	# step arrives, causing all checkmarks to flash past on the passive peer.
+	_open_modal_from_interaction_state()
 
 
 ## Snaps a ShipToken to the position stored in its ShipInstance model

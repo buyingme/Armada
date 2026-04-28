@@ -227,8 +227,9 @@ Status: ✅
 
 | ID | Fix | Files | Commit |
 |---|---|---|---|
-| I5b-1 | Passive peer modal reset after `move_squadron` | `src/scenes/game_board/squadron_phase_controller.gd` | _pending MT_ |
-| I5b-2 | Squadron-modal interactivity gate uses `active_player == local` (was stale `_interaction_controller_player`) | `src/scenes/game_board/game_board.gd` | _pending MT_ |
-| I5b-3 | Drop lingering range/move overlay on observer between activations and on turn handoff | `src/scenes/game_board/squadron_phase_controller.gd` | _pending MT_ |
-| I5b-4 | Client `_handle_remote_start_round` uses `_set_active_player` so `active_player_changed` fires → Command Phase round 2+ opens dial panel on client | `src/autoload/game_manager.gd` | _pending MT_ |
-| I5b-5 | Close [CommandDialPicker] on `command_phase_complete` so the speculative round-1 picker (opened by I5b-4 right before the host broadcasts fixed-dial mirrors) cannot be confirmed during Ship Phase. Server was rejecting these as "Not in Command Phase." | `src/scenes/game_board/command_phase_controller.gd` | _pending MT_ |
+| I5b-1 | Passive peer modal reset after `move_squadron` | `src/scenes/game_board/squadron_phase_controller.gd` | `735de7f` |
+| I5b-2 | Squadron-modal interactivity gate uses `active_player == local` (was stale `_interaction_controller_player`) | `src/scenes/game_board/game_board.gd` | `735de7f` |
+| I5b-3 | Drop lingering range/move overlay on observer between activations and on turn handoff | `src/scenes/game_board/squadron_phase_controller.gd` | `735de7f` |
+| I5b-4 | Client `_handle_remote_start_round` uses `_set_active_player` so `active_player_changed` fires → Command Phase round 2+ opens dial panel on client | `src/autoload/game_manager.gd` | `735de7f` |
+| I5b-5 | Close [CommandDialPicker] on `command_phase_complete` so the speculative round-1 picker (opened by I5b-4 right before the host broadcasts fixed-dial mirrors) cannot be confirmed during Ship Phase. Server was rejecting these as "Not in Command Phase." | `src/scenes/game_board/command_phase_controller.gd` | `735de7f` |
+| I6a | `game_board.gd` no longer subscribes to `EventBus.interaction_state_changed`; HUD status, activation-step sync and modal lifecycle all read from `GameState.interaction_flow` after `CommandProcessor.command_executed`. Adds 4 missing ship-activation sub-step ids to `Constants.InteractionStep` (SQUADRON_STEP, REPAIR_STEP, ATTACK_STEP, ACTIVATION_DONE) so the I2 mirror is complete. Legacy parallel-channel producer + RPC stay alive (deleted in I6c). | `src/scenes/game_board/game_board.gd`, `src/autoload/constants.gd` | _pending MT_ |

@@ -24,6 +24,7 @@ the parallel channel.
 | I3 | Extract `AttackFlowFSM` (deferred Phase F4) | ✅ `5647edf`/`6fcc9f1`/`a89e9a8` (+39 tests) — LOC target deferred |
 | I4 | `UIProjector` pilot — HUD | ✅ MT-PHI.04 passed 2026-04-26 |
 | I5 | Migrate sidebar + activation modal + squadron modal | ✅ MT-PHI.05 / 05b passed 2026-04-27 (fix log I5b-1…5 in `docs/modal_timing_diagrams.md`) |
+| I6a | Migrate `game_board.gd` `interaction_state_changed` consumer to `UIProjector` + `command_executed` | 🔄 MT-PHI.06a pending |
 | I6 | Migrate attack UI; **delete** `NetworkInteractionState` RPC | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
 

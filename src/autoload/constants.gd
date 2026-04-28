@@ -158,6 +158,11 @@ enum InteractionStep {
 	REVEAL_DIAL,
 	SPEND_DIAL,
 	MANEUVER_STEP,
+	# Ship-activation sub-step markers (set by AdvanceActivationStepCommand).
+	SQUADRON_STEP,
+	REPAIR_STEP,
+	ATTACK_STEP,
+	ACTIVATION_DONE,
 	# Squadron Phase
 	WAIT_FOR_SQUAD_SELECT,
 	ACTION_CHOICE,
@@ -206,6 +211,10 @@ const LEGACY_STEP_ID_MAP: Dictionary = {
 	"reveal_dial": InteractionStep.REVEAL_DIAL,
 	"spend_dial": InteractionStep.SPEND_DIAL,
 	"maneuver_step": InteractionStep.MANEUVER_STEP,
+	"squadron_step": InteractionStep.SQUADRON_STEP,
+	"repair_step": InteractionStep.REPAIR_STEP,
+	"attack_step": InteractionStep.ATTACK_STEP,
+	"activation_done": InteractionStep.ACTIVATION_DONE,
 	"wait_for_squad_select": InteractionStep.WAIT_FOR_SQUAD_SELECT,
 	"action_choice": InteractionStep.ACTION_CHOICE,
 	"squad_move": InteractionStep.SQUAD_MOVE,

@@ -25,7 +25,7 @@ the parallel channel.
 | I4 | `UIProjector` pilot — HUD | ✅ MT-PHI.04 passed 2026-04-26 |
 | I5 | Migrate sidebar + activation modal + squadron modal | ✅ MT-PHI.05 / 05b passed 2026-04-27 (fix log I5b-1…5 in `docs/modal_timing_diagrams.md`) |
 | I6a | Migrate `game_board.gd` `interaction_state_changed` consumer to `UIProjector` + `command_executed` | ✅ `e288fa9` MT-PHI.06a passed 2026-04-28 |
-| I6b | Project attack UI from `interaction_flow.payload` (extends `UIIntent` with `modal_kind` + `payload`; consumer wiring in slice 2) | 🔄 data extension complete |
+| I6b | Project attack UI from `interaction_flow.payload` — slice 1: `UIIntent` extension; slice 2: AE payload extension (`defender_ship_index`/`speed`/`zone`); slice 3 (TBD): defender-side panel mirror, requires defense-step refactor — see `docs/refactoring_phase_i_plan.md` §I6b followups | 🔄 slices 1+2 complete |
 | I6c | Delete `NetworkInteractionState` RPC + `EventBus.interaction_state_changed` + `GameManager._publish_interaction_state_for_command` | ⏳ |
 | I6d | Trim remaining `is_network()` branches in `game_board.gd` to ≤ 3 (camera/perspective only) | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |

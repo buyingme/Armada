@@ -870,10 +870,19 @@ func _attack_exec_start_defense() -> void:
 			AttackFlowFSM.Step.DEFENSE_TOKENS)
 	# Phase I3b: publish locked tokens + modified damage so the defender
 	# client can render the defense UI from interaction_flow alone.
-	_flow_fsm.patch_payload(GameManager.current_game_state, {
+	# Phase I6b slice 2: also publish defender_ship_index +
+	# defender_speed + defender_zone so the passive client can identify
+	# which local ShipInstance is being attacked and render the panel
+	# without needing a host-side AttackState.
+	var gs: GameState = GameManager.current_game_state
+	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
+	_flow_fsm.patch_payload(gs, {
 		"locked_tokens": _state.locked_tokens.duplicate(true),
 		"modified_damage": _state.modified_damage,
 		"defender_player": def_inst.owner_player,
+		"defender_ship_index": defender_ship_index,
+		"defender_speed": def_inst.current_speed,
+		"defender_zone": _state.defender_zone,
 	})
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	if _camera and PlayMode.is_hot_seat():

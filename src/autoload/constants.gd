@@ -187,6 +187,27 @@ enum Visibility {
 	SPECTATOR,
 }
 
+## Identifies which modal/panel the local viewer's UI should currently
+## display.  Computed by [UIProjector] from
+## [member GameState.interaction_flow] so the presentation layer can render
+## the correct modal without branching on [code]PlayMode.is_network()[/code].
+##
+## Phase I6b — added with attack-flow projection.
+enum ModalKind {
+	NONE,
+	COMMAND_DIALS,
+	ACTIVATION,
+	SQUADRON,
+	ATTACK_DECLARE,
+	ATTACK_ROLL,
+	ATTACK_MODIFY,
+	ATTACK_DEFENSE_TOKENS,
+	ATTACK_RESOLVE_DAMAGE,
+	ATTACK_CRITICAL_CHOICE,
+	STATUS_CLEANUP,
+	GAME_OVER,
+}
+
 ## Mapping from legacy interaction-state flow-type strings to
 ## [enum InteractionFlow] values.  Used by the I2 invariant test to assert
 ## that the new path matches the old one one-to-one.  Removed in Phase I6.

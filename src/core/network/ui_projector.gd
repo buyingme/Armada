@@ -38,6 +38,25 @@ class UIIntent extends RefCounted:
 	## interaction flow (-1 when there is no flow).
 	var controller_player: int = -1
 
+	## Active flow type (mirrors [member InteractionFlow.flow_type]).
+	## Phase I6b — exposed so consumers can switch on flow without
+	## reaching back into [GameState].
+	var flow_type: Constants.InteractionFlow = Constants.InteractionFlow.NONE
+
+	## Active step within the flow (mirrors [member InteractionFlow.step_id]).
+	## Phase I6b.
+	var step_id: Constants.InteractionStep = Constants.InteractionStep.NONE
+
+	## Which modal the presentation layer should currently display
+	## (or [code]NONE[/code] when no modal applies).  Computed from
+	## [member flow_type] + [member step_id].  Phase I6b.
+	var modal_kind: Constants.ModalKind = Constants.ModalKind.NONE
+
+	## Deep-copied snapshot of [member InteractionFlow.payload] for the
+	## current step (e.g. dice pool, locked tokens, modified damage during
+	## an attack).  Empty dictionary when there is no flow.  Phase I6b.
+	var payload: Dictionary = {}
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -58,6 +77,11 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	intent.controller_player = flow.controller_player
 	intent.is_interactive = (flow.controller_player == viewer_player)
 	intent.hud_status_text = _hud_status_for(flow, viewer_player)
+	intent.flow_type = flow.flow_type
+	intent.step_id = flow.step_id
+	intent.modal_kind = _modal_kind_for(flow)
+	intent.payload = flow.payload.duplicate(true) if flow.payload != null \
+			else {}
 	return intent
 
 
@@ -84,3 +108,55 @@ static func _hud_status_for(flow: InteractionFlow,
 	if flow.controller_player == -1:
 		return ""
 	return "waiting for opponent's choice"
+
+
+## Maps [member InteractionFlow.flow_type]+[member InteractionFlow.step_id]
+## to the [enum Constants.ModalKind] the presentation layer should display.
+##
+## Phase I6b — added so attack-step UI consumers can switch on a single
+## enum instead of reading the legacy step-id strings.  All ship-activation
+## sub-steps map to [code]ACTIVATION[/code] because the activation modal
+## remains the dominant UI throughout the activation; the WAIT_FOR_*_SELECT
+## steps return [code]NONE[/code] because no modal is open while a target
+## is being chosen.
+static func _modal_kind_for(flow: InteractionFlow) -> Constants.ModalKind:
+	match flow.flow_type:
+		Constants.InteractionFlow.NONE:
+			return Constants.ModalKind.NONE
+		Constants.InteractionFlow.COMMAND_PHASE:
+			return Constants.ModalKind.COMMAND_DIALS
+		Constants.InteractionFlow.SHIP_ACTIVATION:
+			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
+				return Constants.ModalKind.NONE
+			return Constants.ModalKind.ACTIVATION
+		Constants.InteractionFlow.SQUADRON_ACTIVATION:
+			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT:
+				return Constants.ModalKind.NONE
+			return Constants.ModalKind.SQUADRON
+		Constants.InteractionFlow.ATTACK:
+			return _attack_modal_kind_for_step(flow.step_id)
+		Constants.InteractionFlow.STATUS_CLEANUP:
+			return Constants.ModalKind.STATUS_CLEANUP
+		Constants.InteractionFlow.GAME_OVER:
+			return Constants.ModalKind.GAME_OVER
+	return Constants.ModalKind.NONE
+
+
+## Sub-helper for the attack flow — keeps [method _modal_kind_for] under
+## the 30-line ceiling.  Phase I6b.
+static func _attack_modal_kind_for_step(
+		step_id: Constants.InteractionStep) -> Constants.ModalKind:
+	match step_id:
+		Constants.InteractionStep.ATTACK_DECLARE:
+			return Constants.ModalKind.ATTACK_DECLARE
+		Constants.InteractionStep.ATTACK_ROLL:
+			return Constants.ModalKind.ATTACK_ROLL
+		Constants.InteractionStep.ATTACK_MODIFY:
+			return Constants.ModalKind.ATTACK_MODIFY
+		Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+			return Constants.ModalKind.ATTACK_DEFENSE_TOKENS
+		Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE:
+			return Constants.ModalKind.ATTACK_RESOLVE_DAMAGE
+		Constants.InteractionStep.ATTACK_CRITICAL_CHOICE:
+			return Constants.ModalKind.ATTACK_CRITICAL_CHOICE
+	return Constants.ModalKind.NONE

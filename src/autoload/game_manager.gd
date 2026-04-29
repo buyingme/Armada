@@ -809,6 +809,41 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 	return _submitter.submit(cmd)
 
 
+## Submits a [PublishAttackFlowCommand] that broadcasts the current
+## attack [InteractionFlow] snapshot to all peers.  Phase I6b-3 fix:
+## restores the attack-flow replication that was previously carried by
+## the legacy [code]NetworkInteractionState[/code] channel (deleted in
+## I6c) so the defender's [UIProjector] can detect
+## [constant Constants.InteractionStep.ATTACK_DEFENSE_TOKENS].
+##
+## In hot-seat mode this is a no-op:  the local FSM has already mutated
+## [member GameState.interaction_flow], the command would be redundant,
+## and skipping it keeps replays free of synthetic snapshot entries.
+##
+## [param flow] — the freshly-mutated [InteractionFlow] (typically
+##     [code]GameManager.current_game_state.interaction_flow[/code]).
+## [param submitting_player] — the player attribute on the command
+##     (defaults to the active player).
+func submit_publish_attack_flow(flow: InteractionFlow,
+		submitting_player: int = -1) -> Dictionary:
+	if not current_game_state or flow == null:
+		return {}
+	if not PlayMode.is_network():
+		return {}
+	var player: int = submitting_player
+	if player < 0:
+		player = get_active_player()
+	var is_final: bool = (flow.flow_type
+			== Constants.InteractionFlow.NONE)
+	var cmd := PublishAttackFlowCommand.new(player, {
+		"step_id": int(flow.step_id),
+		"controller_player": flow.controller_player,
+		"flow_payload": flow.payload.duplicate(true),
+		"final": is_final,
+	})
+	return _submitter.submit(cmd)
+
+
 ## Submits an [AdvanceActivationStepCommand] to record a ship-activation
 ## modal step transition in network/replay flow.
 ## [param ship] - the currently activating ship.

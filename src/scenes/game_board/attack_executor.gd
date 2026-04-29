@@ -109,6 +109,46 @@ func _get_overlay() -> AttackSimOverlay:
 		return _target_selector.get_overlay()
 	return null
 
+
+# ---------------------------------------------------------------------------
+# Phase I6b-3 — InteractionFlow publication helpers
+# ---------------------------------------------------------------------------
+
+## Advances the attack FSM and broadcasts the resulting
+## [InteractionFlow] snapshot to all peers.
+##
+## The FSM mutates [member GameState.interaction_flow] locally; in
+## network mode the helper additionally submits a
+## [PublishAttackFlowCommand] so the defender peer's projector sees
+## the new step (notably
+## [constant Constants.InteractionStep.ATTACK_DEFENSE_TOKENS]).  In
+## hot-seat the broadcast is a no-op.
+func _fsm_advance(next_step: AttackFlowFSM.Step) -> void:
+	var gs: GameState = GameManager.current_game_state
+	_flow_fsm.advance(gs, next_step)
+	if gs:
+		GameManager.submit_publish_attack_flow(gs.interaction_flow)
+
+
+## Patches the attack FSM payload and broadcasts the updated
+## [InteractionFlow] snapshot to all peers.  Network-only broadcast
+## (see [method _fsm_advance]).
+func _fsm_patch_payload(patch: Dictionary) -> void:
+	var gs: GameState = GameManager.current_game_state
+	_flow_fsm.patch_payload(gs, patch)
+	if gs:
+		GameManager.submit_publish_attack_flow(gs.interaction_flow)
+
+
+## Broadcasts the current [InteractionFlow] snapshot to all peers
+## without mutating the FSM.  Used after [method AttackFlowFSM.begin]
+## and [method AttackFlowFSM.end] which are not routed through
+## [method _fsm_advance].  Network-only.
+func _publish_flow_snapshot() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs:
+		GameManager.submit_publish_attack_flow(gs.interaction_flow)
+
 # ---------------------------------------------------------------------------
 # Phase 6c: Accuracy, Defense Tokens, Damage Resolution
 # ---------------------------------------------------------------------------
@@ -169,6 +209,7 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 	_init_ship_attack_state(ship_token)
 	_flow_fsm.begin(GameManager.current_game_state,
 			_get_attacker_player(), -1, {})
+	_publish_flow_snapshot()
 	_target_selector.enter_attacker_selection(true, _get_ship_name())
 	var panel: AttackSimPanel = _get_panel()
 	# Connect Done button if not already connected.
@@ -217,6 +258,7 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 	_init_squadron_attack_state(squadron_token)
 	_flow_fsm.begin(GameManager.current_game_state,
 			_get_attacker_player(), -1, {})
+	_publish_flow_snapshot()
 	_target_selector.enter_squadron_target_selection(squadron_token)
 	var panel: AttackSimPanel = _get_panel()
 	if panel and not panel.attack_done_pressed.is_connected(
@@ -305,6 +347,7 @@ func _finish_attack_execution() -> void:
 	# Phase I3: end the attack flow and clear interaction_flow.
 	_flow_fsm.end(GameManager.current_game_state)
 	_flow_fsm.reset()
+	_publish_flow_snapshot()
 	attack_exec_completed.emit()
 
 ## Builds a [CombatParticipants] from the current attacker/target state.
@@ -408,7 +451,7 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	_apply_gather_dice_hook()
 	# Phase I3b: publish range_band + dice pool snapshot to interaction_flow
 	# so reconnecting clients can render the attack panel.
-	_flow_fsm.patch_payload(GameManager.current_game_state, {
+	_fsm_patch_payload({
 		"range_band": range_band,
 		"dice_pool": _state.dice_pool.duplicate(true),
 	})
@@ -602,8 +645,7 @@ func _on_attack_cf_dial_skipped() -> void:
 ## Called when the player presses "Roll Dice".
 ## Requirements: AE-DICE-001, AE-DICE-003, SFX-004, SFX-005, SFX-006.
 func _on_attack_roll_dice() -> void:
-	_flow_fsm.advance(GameManager.current_game_state,
-			AttackFlowFSM.Step.ROLL)
+	_fsm_advance(AttackFlowFSM.Step.ROLL)
 	_log.info("Rolling dice: %s." % DicePool.format_pool(
 			_state.dice_pool))
 	# Play dice-roll SFX based on attacker type and faction.
@@ -623,15 +665,14 @@ func _on_attack_roll_dice() -> void:
 ## Applies a dice roll result to the attack state and updates the UI.
 ## Called inline for host/hot-seat or from the network broadcast handler.
 func _apply_dice_roll_result(roll_result: Dictionary) -> void:
-	_flow_fsm.advance(GameManager.current_game_state,
-			AttackFlowFSM.Step.MODIFY)
+	_fsm_advance(AttackFlowFSM.Step.MODIFY)
 	var raw: Array = roll_result.get("dice_results", [])
 	_state.dice_results.clear()
 	for entry: Variant in raw:
 		if entry is Dictionary:
 			_state.dice_results.append(entry as Dictionary)
 	# Phase I3b: publish dice results to interaction_flow.
-	_flow_fsm.patch_payload(GameManager.current_game_state, {
+	_fsm_patch_payload({
 		"dice_results": _state.dice_results.duplicate(true),
 	})
 	# Show results.
@@ -866,8 +907,7 @@ func _attack_exec_start_defense() -> void:
 		return
 	# Phase I3: record defender so FSM knows who controls DEFENSE_TOKENS.
 	_flow_fsm.defender_player = def_inst.owner_player
-	_flow_fsm.advance(GameManager.current_game_state,
-			AttackFlowFSM.Step.DEFENSE_TOKENS)
+	_fsm_advance(AttackFlowFSM.Step.DEFENSE_TOKENS)
 	# Phase I3b: publish locked tokens + modified damage so the defender
 	# client can render the defense UI from interaction_flow alone.
 	# Phase I6b slice 2: also publish defender_ship_index +
@@ -876,7 +916,7 @@ func _attack_exec_start_defense() -> void:
 	# without needing a host-side AttackState.
 	var gs: GameState = GameManager.current_game_state
 	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
-	_flow_fsm.patch_payload(gs, {
+	_fsm_patch_payload({
 		"locked_tokens": _state.locked_tokens.duplicate(true),
 		"modified_damage": _state.modified_damage,
 		"defender_player": def_inst.owner_player,
@@ -1312,13 +1352,12 @@ func _on_redirect_done_early() -> void:
 func _attack_exec_resolve_damage() -> void:
 	# Phase I3: MODIFY/DEFENSE_TOKENS -> RESOLVE_DAMAGE is always legal.
 	if _flow_fsm.current_step != AttackFlowFSM.Step.RESOLVE_DAMAGE:
-		_flow_fsm.advance(GameManager.current_game_state,
-				AttackFlowFSM.Step.RESOLVE_DAMAGE)
+		_fsm_advance(AttackFlowFSM.Step.RESOLVE_DAMAGE)
 	var final_damage: int = _damage_dealer.calculate_final_damage(
 			_state.modified_damage, _state.scatter_used)
 	# Phase I3c: publish final damage so UIProjector can render the
 	# damage summary on the defender's screen.
-	_flow_fsm.patch_payload(GameManager.current_game_state, {
+	_fsm_patch_payload({
 		"final_damage": final_damage,
 	})
 	# Brace is already applied during Step 4 (canonical order before
@@ -1663,11 +1702,10 @@ func _start_immediate_choice_flow() -> void:
 	var chooser_player: int = _get_chooser_player_index(chooser)
 	# Phase I3: chooser controls the CRITICAL_CHOICE step.
 	_flow_fsm.defender_player = chooser_player
-	_flow_fsm.advance(GameManager.current_game_state,
-			AttackFlowFSM.Step.CRITICAL_CHOICE)
+	_fsm_advance(AttackFlowFSM.Step.CRITICAL_CHOICE)
 	# Phase I3c: publish choice info so UIProjector can render the
 	# critical-choice modal on the chooser's screen.
-	_flow_fsm.patch_payload(GameManager.current_game_state, {
+	_fsm_patch_payload({
 		"chooser": chooser,
 		"card_title": _pending_immediate_choice.get("card_title", ""),
 	})

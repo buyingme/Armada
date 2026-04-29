@@ -82,6 +82,8 @@ func _ready() -> void:
 	AdvanceActivationStepCommand.register()
 	# Tier 11 — debug-only commands.
 	DebugDealDamageCommand.register()
+	# Tier 12 — interaction-flow synchronisation (Phase I6b-3).
+	PublishAttackFlowCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

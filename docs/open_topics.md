@@ -25,7 +25,8 @@ the parallel channel.
 | I4 | `UIProjector` pilot — HUD | ✅ MT-PHI.04 passed 2026-04-26 |
 | I5 | Migrate sidebar + activation modal + squadron modal | ✅ MT-PHI.05 / 05b passed 2026-04-27 (fix log I5b-1…5 in `docs/modal_timing_diagrams.md`) |
 | I6a | Migrate `game_board.gd` `interaction_state_changed` consumer to `UIProjector` + `command_executed` | ✅ `e288fa9` MT-PHI.06a passed 2026-04-28 |
-| I6b | Project attack UI from `interaction_flow.payload` — slice 1: `UIIntent` extension; slice 2: AE payload extension (`defender_ship_index`/`speed`/`zone`); slice 3 (TBD): defender-side panel mirror, requires defense-step refactor — see `docs/refactoring_phase_i_plan.md` §I6b followups | 🔄 slices 1+2 complete |
+| I6b | Project attack UI from `interaction_flow.payload` — slice 1: `UIIntent` extension; slice 2: AE payload extension (`defender_ship_index`/`speed`/`zone`); slice 3: defender-side panel mirror — see `docs/refactoring_phase_i_plan.md` §I6b followups | 🔄 slices 1+2+3-A complete |
+| I6b-3 | **Mirrored attack modals (NW-006).** Render the *same* `AttackSimPanel` (and downstream damage-card / critical-choice / evade target / redirect-zone modals) on **both** peers, populated from `interaction_flow.payload`. Interactivity is gated per sub-step by `controller_player` (attacker for declare/roll/modify; defender for defense-tokens, evade target, redirect zone; chooser for critical-choice). Defender-peer inputs travel as commands (`SpendDefenseTokenCommand`, `CommitDefenseCommand`, `SelectRedirectZoneCommand`, evade-target command). Slices: **R1** read-only mirror of full `AttackSimPanel` on non-controller peer (population only); **R2** defender-controlled defense-token toggles + Commit-Defense routed via commands; **R3** defender-controlled evade target picker; **R4** defender-controlled redirect-zone picker; **R5** chooser-controlled critical-choice; **R6** attacker-side panel becomes read-only during defender-controlled sub-steps; **R7** delete `DefenseMirrorPanel`, dead branches, residual `is_network()`. | 🔄 design re-architected 2026-04-29 (see §I6b-3 redesign below). Slice A `DefenseMirrorPanel` superseded; old approach (read-only side panel) was wrong abstraction. Follow-up `PublishAttackFlowCommand` (132 / 2 716 / 5 067) is retained — it is exactly the replication channel the new plan needs. |
 | I6c | Delete `NetworkInteractionState` RPC + `EventBus.interaction_state_changed` + `GameManager._publish_interaction_state_for_command` | ✅ MT-PHI.06c passed 2026-04-28 (130 / 2 701 / 5 039) |
 | I6d | Trim remaining `is_network()` branches in `game_board.gd` to ≤ 3 (camera/perspective only) | 🔄 partial — activation-modal authority migrated; 10 → 9 branches; remaining 9 require relocating host-only / divergent-timing logic out of `game_board.gd` (planned as I6e) |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
@@ -77,7 +78,8 @@ sub-phase is complete.
 
 | Bug | Repro | Closing step | MT |
 |-----|-------|--------------|----|
-| **Defender cannot spend defense tokens on client screen** | Networked attack: client is defender; dice roll arrives but no defense-token modal opens. | I6 (project attack UI from `interaction_flow.payload`). | MT-PHI.06 |
+| **Defender cannot spend defense tokens on client screen** | Networked attack: client is defender; dice roll arrives but no defense-token modal opens. | I6b-3 R2 — defender peer mirrors `AttackSimPanel`, defense-token toggle and Commit-Defense submit commands from defender peer. | MT-PHI.06b3-R2 |
+| **Squadron-overlap displacement runs on wrong peer** | Networked move: when a ship overlaps an enemy squadron, the placement modal appears on the **active player** (the one who moved) instead of the **opposing player** (owner of the displaced squadron). Per OV-002 + `docs/modal_classification.md`, controller must be the displaced squadron's owner. Pre-existing; not introduced by I6b-3. | New sub-slice (I6b-4 squadron-overlap controller authority) — project the overlap-placement modal via `UIProjector` so `controller_player = squadron.owner_player`. | MT-PHI.06b4 |
 | **Client cannot activate Imperial squadrons** | _resolved I5 (2026-04-27)_ — `SqActModal` lifecycle now driven by `command_executed` + `UIProjector`; passive peer mirrors selection / move / handoff. Fix log I5b-1…5 in `docs/modal_timing_diagrams.md`. | I5 ✅ | MT-PHI.05 ✅ |
 | **Activation modal sub-step inferred from local UI events** | _resolved I5 (2026-04-27)_ — modal sub-step now read from `state.interaction_flow.step_id`. | I5 ✅ | MT-PHI.05 ✅ |
 
@@ -86,6 +88,56 @@ a single filtered `state_snapshot`.
 
 While Phase I is in flight: **no new `NetworkInteractionState` producer
 wiring lands in master**. Existing G4.6.6 T1a producers stay until I5/I6.
+
+### §I6b-3 redesign (2026-04-29)
+
+The first attempt at I6b-3 introduced a separate read-only
+`DefenseMirrorPanel` on the defender peer. Manual testing showed two
+problems with that approach:
+
+1. The defender still had to *click defense tokens on the attacker's
+   screen* — the mirror was informational only and did not move
+   authority.
+2. The two peers showed two visually different panels for the same
+   game state, which is confusing and does not match other
+   already-mirrored modals (activation, squadron) where both peers see
+   the identical UI.
+
+**Revised requirement (locked 2026-04-29):**
+
+- The **same `AttackSimPanel`** is rendered on both peers, populated
+  from `interaction_flow.payload`.
+- Active control is decided per sub-step by the game rule, not by the
+  active player:
+  - Attacker peer is interactive during attacker-driven sub-steps
+    (declare, gather dice, roll, attacker-side modify).
+  - Defender peer is interactive during defender-driven sub-steps
+    (spend defense tokens, commit defense, evade target choice,
+    redirect zone choice).
+  - Chooser peer (per the chosen damage card) is interactive during
+    `CRITICAL_CHOICE`.
+- The non-controlling peer renders the same panel in read-only mode
+  (buttons disabled / signals not connected, fields populated).
+- Defender (and chooser) input travels back to the host as **commands**
+  via the canonical command channel (`SpendDefenseTokenCommand`,
+  `CommitDefenseCommand`, `SelectRedirectZoneCommand`, evade-target
+  command, `ResolveCriticalChoiceCommand`).
+
+**Slice plan** (replaces old A–F; tracked in `docs/refactoring_phase_i_plan.md` §I6b-3):
+
+| Slice | Scope | MT |
+|------:|-------|----|
+| R1 | Open `AttackSimPanel` on the non-attacker peer at attack flow start; population follows `interaction_flow.payload` (target, zone, dice pool, dice results, modified damage, defense-token states); panel is fully read-only on the non-controller peer; signals not connected. | MT-PHI.06b3-R1 |
+| R2 | Defender peer's panel becomes interactive at `ATTACK_DEFENSE_TOKENS`: defense-token toggle and Commit-Defense submit commands from the defender peer; host re-applies via `command_executed`. | MT-PHI.06b3-R2 |
+| R3 | Defender-controlled evade target picker. | MT-PHI.06b3-R3 |
+| R4 | Defender-controlled redirect zone picker. | MT-PHI.06b3-R4 |
+| R5 | Chooser-controlled critical-choice modal. | MT-PHI.06b3-R5 |
+| R6 | Attacker-side panel becomes read-only when defender controls a sub-step (mirror image of R1, on the other peer). | MT-PHI.06b3-R6 |
+| R7 | Delete `DefenseMirrorPanel` + tests; remove dead branches; assert no `if PlayMode.is_network():` inside `attack_sim_panel.gd` / `attack_executor.gd`. | MT-PHI.06b3-R7 |
+
+The follow-up `PublishAttackFlowCommand` (commit pending) is **retained**
+— it is the replication channel R1–R6 read from. No further changes to
+that command are anticipated for this redesign.
 
 ---
 

@@ -56,6 +56,11 @@ var activation_modal: ActivationModal = null
 ## Repair panel modal (CM-030–CM-037).
 var repair_panel: RepairPanel = null
 
+## Read-only mirror shown to the defender's peer in network mode while
+## the authoritative attack flow is at
+## [code]InteractionStep.ATTACK_DEFENSE_TOKENS[/code].  Phase I6b-3 slice A.
+var defense_mirror_panel: DefenseMirrorPanel = null
+
 ## ActionToolbar in the lower-right corner (MT-U-001, AC-13).
 var action_toolbar: ActionToolbar = null
 
@@ -333,6 +338,7 @@ func _create_turn_management_ui() -> void:
 	_create_core_turn_ui(turn_management_layer)
 	_create_activation_modal_ui(turn_management_layer)
 	_create_repair_panel(turn_management_layer)
+	_create_defense_mirror_panel(turn_management_layer)
 
 
 ## Creates the handoff overlay, "Your Turn" banner, end-activation button,
@@ -375,6 +381,15 @@ func _create_repair_panel(layer: CanvasLayer) -> void:
 	repair_panel.name = "RepairPanel"
 	layer.add_child(repair_panel)
 	register_resizable(repair_panel, &"centre_on_screen", true)
+
+
+## Creates the defender-side read-only defense-mirror panel on the given
+## layer.  Phase I6b-3 slice A.
+func _create_defense_mirror_panel(layer: CanvasLayer) -> void:
+	defense_mirror_panel = DefenseMirrorPanel.new()
+	defense_mirror_panel.name = "DefenseMirrorPanel"
+	layer.add_child(defense_mirror_panel)
+	register_resizable(defense_mirror_panel, &"centre_on_screen", true)
 
 
 ## Creates a phase / round HUD label at the top-centre of the screen.

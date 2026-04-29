@@ -330,6 +330,64 @@ manual MT-F5b.01–03 green.
 `game_board.gd` ≤ 2 200 LOC; the lint added in I0 catches regressions; all
 2 633 tests green; manual MT-net full attack round green on two clients.
 
+#### I6b sub-slices (in flight)
+
+I6 was decomposed into six attack-UI slices A–F (see `docs/open_topics.md`
+row I6b-3). Notes:
+
+- **Slice A follow-up (`PublishAttackFlowCommand`).** I6c deleted the
+  legacy `NetworkInteractionState` channel that was implicitly carrying
+  every `AttackFlowFSM.advance` / `patch_payload` / `begin` / `end`
+  transition to the client. Because the FSM is driven from
+  `attack_executor.gd` (host-only presentation code) and writes
+  `GameState.interaction_flow` directly, the client peer's flow froze at
+  the last command-driven step — breaking the Slice A defender mirror.
+  Fix: a flow-snapshot command (`publish_attack_flow`, no game-logic side
+  effects) submitted by the host after every FSM mutation, applied on
+  every peer through the canonical command-broadcast channel. Hot-seat
+  early-returns (`PlayMode.is_network()` guard in
+  `GameManager.submit_publish_attack_flow`).
+- **Slice I6b-4 (new).** Squadron-overlap displacement modal must
+  project to the **owner of the displaced squadron** (per OV-002 + the
+  classification in `docs/modal_classification.md`), not the active
+  player who initiated the move. Today the modal opens on the active
+  player on both peers, replicating hot-seat semantics into the network
+  path. Closing step: project `controller_player =
+  squadron.owner_player` for the overlap-placement modal. MT: `MT-PHI.06b4`.
+
+#### I6b-3 redesign (2026-04-29)
+
+The original Slice A approach (separate read-only `DefenseMirrorPanel`
+on the defender peer alongside the attacker's `AttackSimPanel`) was
+abandoned after MT showed two issues:
+
+1. The defender still had to click defense tokens on the **attacker's**
+   screen — the mirror was informational only.
+2. The two peers showed two visually different panels for the same
+   game state, inconsistent with the activation / squadron modals
+   which already mirror the same UI on both peers.
+
+Re-architected requirement: render the **same `AttackSimPanel`** on
+both peers, populated from `interaction_flow.payload`; gate
+interactivity per sub-step by `controller_player`. Defender input
+travels back via commands.
+
+The slice plan replacing A–F is:
+
+| Slice | Scope |
+|------:|-------|
+| **R1** | Mirror full `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload` (target/zone, dice pool, dice results, modified damage, defense-token states). All input signals on the non-controller peer are **not** connected. Drives population purely from `command_executed → UIProjector.project()`. No authority moved in this slice. |
+| **R2** | Defender peer becomes interactive at `ATTACK_DEFENSE_TOKENS`. Defense-token toggle and Commit-Defense submit `SpendDefenseTokenCommand` / `CommitDefenseCommand` from the defender peer; host's `AttackExecutor` reacts on `command_executed`. Closes NW-006. |
+| **R3** | Defender-controlled evade target picker. |
+| **R4** | Defender-controlled redirect zone picker. |
+| **R5** | Chooser-controlled `CRITICAL_CHOICE` modal (chooser is the player nominated by the damage card; tracked via `_flow_fsm.defender_player` already). |
+| **R6** | Mirror reverse direction: attacker-side panel becomes read-only during defender-controlled sub-steps. |
+| **R7** | Cleanup: delete `DefenseMirrorPanel` + tests; remove dead `is_network()` branches from `attack_sim_panel.gd` / `attack_executor.gd`. |
+
+Each slice ships behind its own MT (`MT-PHI.06b3-R{n}`) gate. The
+follow-up `PublishAttackFlowCommand` (Slice A follow-up) remains the
+flow-replication channel — no further changes anticipated.
+
 ### I7 — Reconnection Acceptance + Cleanup (1 day)
 
 - Add integration test using `TestNetworkHarness`: client disconnects

@@ -150,6 +150,28 @@ func _publish_flow_snapshot() -> void:
 		GameManager.submit_publish_attack_flow(gs.interaction_flow)
 
 
+## Clears defender / target identity fields in
+## [member InteractionFlow.payload] so the read-only attack panel
+## mirror on the non-attacker peer drops the stale "→ <old target>"
+## title between consecutive attacks (2-hull-zone rule and Step 6
+## squadron loop).  The next DECLARE patch will repopulate the
+## payload for the new target.  Phase I6b-3 R1b follow-up.
+func _publish_clear_target_patch() -> void:
+	_fsm_patch_payload({
+		"defender_name": "",
+		"defender_zone": -1,
+		"defender_player": -1,
+		"defender_ship_index": -1,
+		"target_kind": "",
+		"target_ship_index": -1,
+		"target_squadron_index": -1,
+		"range_band": "",
+		"modified_damage": 0,
+		"final_damage": 0,
+		"locked_tokens": [],
+	})
+
+
 ## Builds an attacker / target identity patch for
 ## [member GameState.interaction_flow.payload].  Called once when the
 ## attack sequence begins so the defender peer's mirror panel can
@@ -177,12 +199,16 @@ func _compute_attack_identity_patch() -> Dictionary:
 				= _state.attacker_ship.get_ship_instance()
 		patch["attacker_kind"] = "ship"
 		patch["attacker_ship_index"] = gs.find_ship_index(atk_inst)
+		if atk_inst != null:
+			patch["attacker_player"] = atk_inst.owner_player
 	elif _state.attacker_squadron != null:
 		var atk_sq: SquadronInstance \
 				= _state.attacker_squadron.get_squadron_instance()
 		patch["attacker_kind"] = "squadron"
 		patch["attacker_squadron_index"] = \
 				gs.find_squadron_index(atk_sq)
+		if atk_sq != null:
+			patch["attacker_player"] = atk_sq.owner_player
 	# Defender identity (ship vs. squadron target).
 	if _state.defender_ship != null:
 		var def_inst: ShipInstance \
@@ -2076,6 +2102,10 @@ func _attack_exec_prepare_next_squadron() -> void:
 	_state.dice_results.clear()
 	_state.dice_pool.clear()
 	_state.range_band = ""
+	# Phase I6b-3 R1b: clear target identity in the published payload
+	# so the non-attacker peer's mirror drops the previous squadron's
+	# title until the next target is locked in.
+	_publish_clear_target_patch()
 	# Clean up target visuals, keep spent zone markers.
 	_target_selector.prepare_next_squadron_target()
 	# Update panel with "Select next squadron" prompt.
@@ -2105,6 +2135,10 @@ func _attack_exec_prepare_next_attack() -> void:
 				"No valid targets for second attack — auto-skipping.")
 		_finish_attack_execution()
 		return
+	# Phase I6b-3 R1b: clear target identity in the published payload
+	# so the non-attacker peer's mirror drops the first attack's title
+	# until the second attack's DECLARE patch repopulates it.
+	_publish_clear_target_patch()
 	_reset_for_next_attack()
 	_show_next_attack_panel()
 	_target_selector.show_ship_range_overlay(_state.exec_ship_token)

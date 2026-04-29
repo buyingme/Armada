@@ -909,10 +909,15 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	if not PlayMode.is_network():
 		return
 	var flow: InteractionFlow = gs.interaction_flow
+	# Read-only mirrors must close when the flow ends, so call their
+	# sync helpers BEFORE the no-flow early-return below.  Each helper
+	# handles its own "should close" logic and is a no-op when the panel
+	# is already in the right state.
+	_sync_defense_mirror_from_intent(intent, gs, local)
+	_sync_attack_panel_mirror_from_flow(flow, local)
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return
 	_sync_activation_step_from_flow(flow)
-	_sync_defense_mirror_from_intent(intent, gs, local)
 	# Modal lifecycle: open when activation starts, close when it ends.
 	if flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
 		match flow.step_id:
@@ -958,6 +963,51 @@ func _sync_defense_mirror_from_intent(intent: UIProjector.UIIntent,
 	var locked: Array = intent.payload.get("locked_tokens", []) as Array
 	_panel_mgr.defense_mirror_panel.open(ship_name, zone,
 			modified_damage, locked.size())
+
+
+## Opens or closes the read-only [AttackPanelMirror] on the non-attacker
+## peer based on the authoritative [InteractionFlow].
+##
+## Phase I6b-3 R1b: the same [AttackSimPanel] UI is rendered on the
+## passive peer, populated entirely from
+## [member InteractionFlow.payload].  Input signals are NEVER connected
+## on the mirror — the panel is informational at this slice.  Defender-
+## driven input (defense-token toggle, evade target, redirect zone) is
+## migrated to commands in subsequent slices (R2–R5).
+##
+## The mirror is shown when:
+##   * [code]flow.flow_type == Constants.InteractionFlow.ATTACK[/code]
+##   * the local viewer is **not** the attacker
+##     (either the published [code]attacker_player[/code] differs from
+##     [param local], or — defensively — the local executor is not in
+##     exec mode).
+##
+## Hot-seat is filtered out by the [code]is_network()[/code] guard at
+## the call site.
+func _sync_attack_panel_mirror_from_flow(flow: InteractionFlow,
+		local: int) -> void:
+	if _panel_mgr.attack_panel_mirror == null:
+		return
+	var is_attack: bool = (flow != null
+			and flow.flow_type == Constants.InteractionFlow.ATTACK)
+	if not is_attack:
+		_panel_mgr.attack_panel_mirror.close()
+		return
+	var attacker_player: int = int(
+			flow.payload.get("attacker_player", -1))
+	var local_is_attacker: bool = (
+			attacker_player >= 0 and attacker_player == local)
+	# Defensive fall-back when the identity patch hasn't been applied yet
+	# (very early in the flow): treat the local executor's exec-mode as
+	# the source of truth.
+	if attacker_player < 0 and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode():
+		local_is_attacker = true
+	if local_is_attacker:
+		_panel_mgr.attack_panel_mirror.close()
+		return
+	_panel_mgr.attack_panel_mirror.apply_flow(
+			flow.payload, int(flow.step_id))
 
 
 ## Opens the activation modal in response to an authoritative interaction-state

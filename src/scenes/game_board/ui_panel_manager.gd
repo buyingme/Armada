@@ -61,6 +61,12 @@ var repair_panel: RepairPanel = null
 ## [code]InteractionStep.ATTACK_DEFENSE_TOKENS[/code].  Phase I6b-3 slice A.
 var defense_mirror_panel: DefenseMirrorPanel = null
 
+## Read-only mirror of the attacker's [AttackSimPanel] shown on the
+## non-attacker peer for the duration of the attack flow.  Phase I6b-3
+## R1b.  Owns its own [AttackSimPanel] instance; signals are NOT
+## connected — the mirror is informational at R1b.
+var attack_panel_mirror: AttackPanelMirror = null
+
 ## ActionToolbar in the lower-right corner (MT-U-001, AC-13).
 var action_toolbar: ActionToolbar = null
 
@@ -339,6 +345,7 @@ func _create_turn_management_ui() -> void:
 	_create_activation_modal_ui(turn_management_layer)
 	_create_repair_panel(turn_management_layer)
 	_create_defense_mirror_panel(turn_management_layer)
+	_create_attack_panel_mirror(turn_management_layer)
 
 
 ## Creates the handoff overlay, "Your Turn" banner, end-activation button,
@@ -390,6 +397,16 @@ func _create_defense_mirror_panel(layer: CanvasLayer) -> void:
 	defense_mirror_panel.name = "DefenseMirrorPanel"
 	layer.add_child(defense_mirror_panel)
 	register_resizable(defense_mirror_panel, &"centre_on_screen", true)
+
+
+## Creates the non-attacker peer's read-only attack-panel mirror.
+## Phase I6b-3 R1b: owns an [AttackSimPanel] instance whose input
+## signals are NEVER connected; population is driven by
+## [member InteractionFlow.payload] on the
+## [signal CommandProcessor.command_executed] projection.
+func _create_attack_panel_mirror(layer: CanvasLayer) -> void:
+	attack_panel_mirror = AttackPanelMirror.new()
+	attack_panel_mirror.setup(layer)
 
 
 ## Creates a phase / round HUD label at the top-centre of the screen.

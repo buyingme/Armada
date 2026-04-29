@@ -127,7 +127,7 @@ problems with that approach:
 
 | Slice | Scope | MT |
 |------:|-------|----|
-| R1 | Mirror `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload`. All input signals on the non-controller peer are **not** connected. **R1a** (in flight): publish identity payload (`attacker_kind`, `attacker_ship_index`/`attacker_squadron_index`, `attacker_name`, `attacker_zone`, `attacker_zone_name`, `target_kind`, `target_ship_index`/`target_squadron_index`, `defender_name`, `defender_zone` early at the declare patch site) — pure additive, no UI work. **R1b**: add `AttackPanelMirror` that opens the panel from payload, no signals connected. | MT-PHI.06b3-R1a, MT-PHI.06b3-R1b |
+| R1 | Mirror `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload`. All input signals on the non-controller peer are **not** connected. **R1a** ✅ commit `203ff59` (identity payload published at the declare patch site, MT-PHI.06b3-R1a green). **R1b** 🔄 in flight: `AttackPanelMirror` (RefCounted) owns its own `AttackSimPanel`; opens / populates / closes from `command_executed → flow.payload`; `attacker_player` added to identity patch so the projection knows which peer is the attacker; no signals connected. | MT-PHI.06b3-R1a ✅, MT-PHI.06b3-R1b 🔄 |
 | R2 | Defender peer's panel becomes interactive at `ATTACK_DEFENSE_TOKENS`: defense-token toggle and Commit-Defense submit commands from the defender peer; host re-applies via `command_executed`. | MT-PHI.06b3-R2 |
 | R3 | Defender-controlled evade target picker. | MT-PHI.06b3-R3 |
 | R4 | Defender-controlled redirect zone picker. | MT-PHI.06b3-R4 |
@@ -138,6 +138,22 @@ problems with that approach:
 The follow-up `PublishAttackFlowCommand` (commit pending) is **retained**
 — it is the replication channel R1–R6 read from. No further changes to
 that command are anticipated for this redesign.
+
+**Out-of-scope sync gaps observed during MT-PHI.06b3-R1a (2026-04-29)**
+— deferred until they actually block R1b–R7:
+
+- *Activation modal stays open on the passive peer.* When the active
+  player closes / advances the activation modal, the mirror on the
+  passive peer does not close. Likely root cause: activation-step
+  flow is not yet routed through `interaction_flow` snapshots — only
+  attack flow is. Track under I6b-5 once R1b lands.
+- *Auto-passed activation steps (e.g. repair when there is nothing to
+  repair) do not advance on the passive peer.* Same root cause —
+  passive peer does not see the activation FSM step transitions
+  because they bypass the new `publish_attack_flow` channel.
+
+Neither gap intersects R1b's payload-driven attack panel mirror, so
+they are explicitly deferred. Re-evaluate before R7.
 
 ---
 

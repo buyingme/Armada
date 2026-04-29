@@ -1,7 +1,7 @@
 # Progress Summary
 
 > Star Wars: Armada — Digital Edition
-> Last updated: 2026-04-29 (Phase I6b-3 R1a — publish attacker / target identity in `interaction_flow.payload` so the mirrored `AttackSimPanel` on the non-attacker peer can render from payload alone)
+> Last updated: 2026-04-29 (Phase I6b-3 R1b — `AttackPanelMirror` opens the same `AttackSimPanel` UI on the non-attacker peer in network mode, populated from `interaction_flow.payload`; no input signals connected, ready for defender-authority slices R2–R5)
 > Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
 
 ---

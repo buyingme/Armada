@@ -1497,6 +1497,13 @@ func _handle_remote_command_effects(
 			pass # UI consumes authoritative interaction-state broadcast.
 		"select_redirect_zone", "skip_attack":
 			pass # Attack executor handles display from result.
+		"publish_attack_flow":
+			# Phase I6b-3 follow-up: pure flow-snapshot command.
+			# CommandProcessor.execute() has already written the
+			# authoritative interaction_flow into GameState; the UI
+			# projection runs from the command_executed signal.  No
+			# additional GameManager-side handling required.
+			pass
 		"spend_defense_token":
 			_handle_remote_spend_defense_token(cmd)
 		"resolve_damage":

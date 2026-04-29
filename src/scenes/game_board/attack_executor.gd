@@ -149,6 +149,54 @@ func _publish_flow_snapshot() -> void:
 	if gs:
 		GameManager.submit_publish_attack_flow(gs.interaction_flow)
 
+
+## Builds an attacker / target identity patch for
+## [member GameState.interaction_flow.payload].  Called once when the
+## attack sequence begins so the defender peer's mirror panel can
+## render attacker ship/zone, target ship-or-squadron, and human-
+## readable display names from `interaction_flow.payload` alone.
+##
+## Phase I6b-3 R1a — pure payload addition; no game-logic side
+## effects.  All fields are plain ints/strings (serialisation safe).
+##
+## Returns a dictionary suitable for [method _fsm_patch_payload].
+func _compute_attack_identity_patch() -> Dictionary:
+	var patch: Dictionary = {
+		"attacker_name": _state.attacker_name,
+		"attacker_zone": int(_state.attacker_zone),
+		"attacker_zone_name": _state.attacker_zone_name,
+		"defender_name": _state.defender_name,
+		"defender_zone": int(_state.defender_zone),
+	}
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return patch
+	# Attacker identity (ship hull-zone vs. squadron).
+	if _state.attacker_ship != null:
+		var atk_inst: ShipInstance \
+				= _state.attacker_ship.get_ship_instance()
+		patch["attacker_kind"] = "ship"
+		patch["attacker_ship_index"] = gs.find_ship_index(atk_inst)
+	elif _state.attacker_squadron != null:
+		var atk_sq: SquadronInstance \
+				= _state.attacker_squadron.get_squadron_instance()
+		patch["attacker_kind"] = "squadron"
+		patch["attacker_squadron_index"] = \
+				gs.find_squadron_index(atk_sq)
+	# Defender identity (ship vs. squadron target).
+	if _state.defender_ship != null:
+		var def_inst: ShipInstance \
+				= _state.defender_ship.get_ship_instance()
+		patch["target_kind"] = "ship"
+		patch["target_ship_index"] = gs.find_ship_index(def_inst)
+	elif _state.defender_squadron != null:
+		var def_sq: SquadronInstance \
+				= _state.defender_squadron.get_squadron_instance()
+		patch["target_kind"] = "squadron"
+		patch["target_squadron_index"] = \
+				gs.find_squadron_index(def_sq)
+	return patch
+
 # ---------------------------------------------------------------------------
 # Phase 6c: Accuracy, Defense Tokens, Damage Resolution
 # ---------------------------------------------------------------------------
@@ -451,10 +499,13 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	_apply_gather_dice_hook()
 	# Phase I3b: publish range_band + dice pool snapshot to interaction_flow
 	# so reconnecting clients can render the attack panel.
-	_fsm_patch_payload({
-		"range_band": range_band,
-		"dice_pool": _state.dice_pool.duplicate(true),
-	})
+	# Phase I6b-3 R1a: also publish attacker / target identity so the
+	# defender peer's mirror panel can resolve names + indices from
+	# `interaction_flow.payload` alone.
+	var declare_patch: Dictionary = _compute_attack_identity_patch()
+	declare_patch["range_band"] = range_band
+	declare_patch["dice_pool"] = _state.dice_pool.duplicate(true)
+	_fsm_patch_payload(declare_patch)
 	_get_panel().show_skip_attack_button()
 	# Empty pool guard: if no dice remain after gather-dice hooks, the
 	# attack cannot be declared.

@@ -376,7 +376,7 @@ The slice plan replacing A–F is:
 
 | Slice | Scope |
 |------:|-------|
-| **R1** | Mirror full `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload` (target/zone, dice pool, dice results, modified damage, defense-token states). All input signals on the non-controller peer are **not** connected. Drives population purely from `command_executed → UIProjector.project()`. No authority moved in this slice. |
+| **R1** | Mirror full `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload` (target/zone, dice pool, dice results, modified damage, defense-token states). All input signals on the non-controller peer are **not** connected. Drives population purely from `command_executed → UIProjector.project()`. No authority moved in this slice. Split into **R1a** (publish missing identity payload — `attacker_kind`, `attacker_ship_index`/`attacker_squadron_index`, `attacker_name`, `attacker_zone`, `attacker_zone_name`, `target_kind`, `target_ship_index`/`target_squadron_index`, `defender_name`, `defender_zone` early; pure additive, no UI work, MT-PHI.06b3-R1a) and **R1b** (add `AttackPanelMirror` controller that opens / populates / closes the panel on the non-attacker peer, no signals connected; MT-PHI.06b3-R1b). |
 | **R2** | Defender peer becomes interactive at `ATTACK_DEFENSE_TOKENS`. Defense-token toggle and Commit-Defense submit `SpendDefenseTokenCommand` / `CommitDefenseCommand` from the defender peer; host's `AttackExecutor` reacts on `command_executed`. Closes NW-006. |
 | **R3** | Defender-controlled evade target picker. |
 | **R4** | Defender-controlled redirect zone picker. |

@@ -948,8 +948,9 @@ func _sync_defense_mirror_from_intent(intent: UIProjector.UIIntent,
 		return
 	var ship_name: String = ""
 	var ship_index: int = int(intent.payload.get("defender_ship_index", -1))
-	if ship_index >= 0 and ship_index < gs.ships.size():
-		var inst: ShipInstance = gs.ships[ship_index]
+	var def_player: int = int(intent.payload.get("defender_player", -1))
+	if ship_index >= 0 and def_player >= 0:
+		var inst: ShipInstance = gs.get_ship(def_player, ship_index)
 		if inst and inst.ship_data:
 			ship_name = inst.ship_data.ship_name
 	var zone: int = int(intent.payload.get("defender_zone", -1))

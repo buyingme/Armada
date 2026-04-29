@@ -127,7 +127,7 @@ problems with that approach:
 
 | Slice | Scope | MT |
 |------:|-------|----|
-| R1 | Open `AttackSimPanel` on the non-attacker peer at attack flow start; population follows `interaction_flow.payload` (target, zone, dice pool, dice results, modified damage, defense-token states); panel is fully read-only on the non-controller peer; signals not connected. | MT-PHI.06b3-R1 |
+| R1 | Mirror `AttackSimPanel` on the non-attacker peer, read-only, populated from `interaction_flow.payload`. All input signals on the non-controller peer are **not** connected. **R1a** (in flight): publish identity payload (`attacker_kind`, `attacker_ship_index`/`attacker_squadron_index`, `attacker_name`, `attacker_zone`, `attacker_zone_name`, `target_kind`, `target_ship_index`/`target_squadron_index`, `defender_name`, `defender_zone` early at the declare patch site) — pure additive, no UI work. **R1b**: add `AttackPanelMirror` that opens the panel from payload, no signals connected. | MT-PHI.06b3-R1a, MT-PHI.06b3-R1b |
 | R2 | Defender peer's panel becomes interactive at `ATTACK_DEFENSE_TOKENS`: defense-token toggle and Commit-Defense submit commands from the defender peer; host re-applies via `command_executed`. | MT-PHI.06b3-R2 |
 | R3 | Defender-controlled evade target picker. | MT-PHI.06b3-R3 |
 | R4 | Defender-controlled redirect zone picker. | MT-PHI.06b3-R4 |

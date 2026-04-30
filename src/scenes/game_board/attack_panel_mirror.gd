@@ -54,6 +54,17 @@ var _defense_section_active: bool = false
 ## independently so [method close] can disconnect cleanly.
 var _defense_signal_connected: bool = false
 
+## Phase I6b-3 R1b follow-up: cache of the last `dice_pool` we rendered
+## via [code]show_dice_count[/code] so we only refresh on change.
+## Reset on [method close] and on the next-attack transition.
+var _last_dice_pool_text: String = ""
+
+## Phase I6b-3 R1b follow-up: cache of the last rendered `dice_results`
+## size — tracks the rolled-dice array length so we only call
+## [code]show_dice_results[/code] when it changes (e.g. on initial
+## roll, then again after attacker dice modifications).
+var _last_dice_results_size: int = -1
+
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
 
@@ -150,6 +161,11 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			# the signal is safe to defer to [method close]; we just
 			# reset the flag so [_apply_defense_section] re-runs.
 			_defense_section_active = false
+			# Phase I6b-3 R1b follow-up: drop the dice caches so the
+			# next attack's pool / roll snapshot triggers a fresh
+			# render even if the formatted text happens to match.
+			_last_dice_pool_text = ""
+			_last_dice_results_size = -1
 	_last_defender_name = def_name
 	# Phase I6b-3 R2 follow-up: when we leave the DEFENSE_TOKENS step,
 	# tear down the interactive section and clear the active flag so
@@ -161,10 +177,50 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			_panel.hide_defense_section()
 		_defense_section_active = false
 	_last_modal_kind = step_id
+	# Phase I6b-3 R1b follow-up: render dice pool / dice results from
+	# the published payload so the passive peer's mirror shows the
+	# attacker's dice and roll outcome.
+	_apply_dice_sections(payload)
 	# Phase I6b-3 R2: render the interactive defense section once we
 	# enter the DEFENSE_TOKENS sub-step.  Idempotent — only populated
 	# on the transition edge.
 	_apply_defense_section(payload, step_id)
+
+
+## Renders the dice-pool count label and the rolled-dice strip from
+## the published [param payload].  Idempotent: only refreshes when the
+## formatted pool text or the rolled-dice array length changes, so it
+## is safe to call on every [signal CommandProcessor.command_executed].
+##
+## Reads:
+##   * [code]dice_pool[/code] — Dictionary[colour_key → int] published
+##     by [code]AttackExecutor._compute_attack_identity_patch[/code]
+##     during DECLARE.
+##   * [code]dice_results[/code] — Array[Dictionary] published by
+##     [code]AttackExecutor[/code] right after the roll.
+##
+## Phase I6b-3 R1b follow-up.
+func _apply_dice_sections(payload: Dictionary) -> void:
+	if _panel == null:
+		return
+	var pool_raw: Variant = payload.get("dice_pool", null)
+	if pool_raw is Dictionary and not (pool_raw as Dictionary).is_empty():
+		var dice_text: String = DicePool.format_pool(pool_raw as Dictionary)
+		if dice_text != _last_dice_pool_text:
+			_panel.show_dice_count(dice_text)
+			_last_dice_pool_text = dice_text
+	var results_raw: Variant = payload.get("dice_results", null)
+	if results_raw is Array:
+		var results_arr: Array = results_raw as Array
+		if results_arr.size() != _last_dice_results_size:
+			var typed: Array[Dictionary] = []
+			for entry: Variant in results_arr:
+				typed.append(entry as Dictionary)
+			if typed.is_empty():
+				_panel.hide_dice_results()
+			else:
+				_panel.show_dice_results(typed)
+			_last_dice_results_size = results_arr.size()
 
 
 ## Populates the interactive defense-token section on the defender
@@ -258,6 +314,8 @@ func close() -> void:
 	_last_modal_kind = -1
 	_last_defender_name = ""
 	_defense_section_active = false
+	_last_dice_pool_text = ""
+	_last_dice_results_size = -1
 
 
 ## Returns a display string for the given [enum Constants.HullZone]

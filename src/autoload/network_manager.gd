@@ -554,9 +554,21 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	# Verify the command's player_index matches the peer's assigned slot.
 	var expected_player: int = peers[sender_id].get("player_index", -1)
 	if cmd.player_index != expected_player:
-		_log.warn("Peer %d claims player %d but is assigned %d — rejecting." % [
-				sender_id, cmd.player_index, expected_player])
-		return
+		# Phase I6b-3 R2 follow-up: during an active attack flow the
+		# attacker peer is the de-facto controller for defense-side
+		# follow-ups (token spending, redirect, damage resolution).
+		# Allow these commands when the sender is the attacker
+		# (the [code]controller_player[/code] of the attack flow) and
+		# the command's [code]player_index[/code] is the defender's
+		# slot.  Without this exception, any client-as-attacker /
+		# host-as-defender attack stalls when the client tries to
+		# submit a [SpendDefenseTokenCommand] / [ResolveDamageCommand]
+		# for the host-owned defender.
+		if not _is_attacker_authored_defense_command(cmd, expected_player):
+			_log.warn("Peer %d claims player %d but is assigned %d — rejecting [%s]." % [
+					sender_id, cmd.player_index, expected_player,
+					cmd.command_type])
+			return
 	var result: Dictionary = CommandProcessor.submit(cmd)
 	if result.is_empty():
 		_log.info("Command [%s] from peer %d rejected by validation." % [
@@ -697,6 +709,48 @@ func _all_dials_assigned(player_index: int) -> bool:
 			if si.command_dial_stack.get_dials_needed() > 0:
 				return false
 	return true
+
+
+## Phase I6b-3 R2 follow-up: command-types the attacker peer may
+## author against the defender's [code]player_index[/code] during an
+## active attack flow.  These are the post-hand-off submissions the
+## [AttackExecutor] makes after the defender's
+## [CommitDefenseCommand] has been broadcast — the attacker peer
+## still drives [code]_state.modified_damage[/code] / sub-step UI
+## (Evade / Redirect) and resolves damage at the end.
+const _ATTACKER_DEFENSE_COMMANDS: PackedStringArray = [
+	"spend_defense_token",
+	"select_redirect_zone",
+	"resolve_damage",
+]
+
+
+## Returns [code]true[/code] when [param cmd] is a defense-side
+## follow-up authored by the current attack flow's attacker peer
+## against the defender's [code]player_index[/code].
+## Used to relax the strict peer/player check in
+## [method _submit_command_to_server].
+func _is_attacker_authored_defense_command(cmd: GameCommand,
+		sender_player: int) -> bool:
+	if not _ATTACKER_DEFENSE_COMMANDS.has(cmd.command_type):
+		return false
+	var gs: GameState = GameManager.current_game_state if GameManager else null
+	if gs == null or gs.interaction_flow == null:
+		return false
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow.flow_type != Constants.InteractionFlow.ATTACK:
+		return false
+	# The flow's [code]controller_player[/code] is the attacker only
+	# during DECLARE/ROLL/MODIFY/RESOLVE_DAMAGE; during DEFENSE_TOKENS
+	# and CRITICAL_CHOICE it is the [b]defender[/b].  Read the attacker
+	# from the flow payload, which is populated by [AttackExecutor]
+	# when the target is locked in.
+	var attacker_player: int = int(flow.payload.get("attacker_player", -1))
+	if attacker_player < 0:
+		return false
+	# The sender must be the attacker peer (the one driving the
+	# [AttackExecutor] sub-step pipeline).
+	return attacker_player == sender_player
 
 
 # ---------------------------------------------------------------------------

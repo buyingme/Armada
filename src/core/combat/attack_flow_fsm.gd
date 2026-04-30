@@ -172,6 +172,26 @@ func end(game_state: GameState) -> void:
 		game_state.interaction_flow = InteractionFlow.empty()
 
 
+## Restarts the flow for the next attack of the same activation
+## (Step 6 squadron loop or two-hull-zone rule).  Resets
+## [member current_step] to [constant Step.IDLE] without touching
+## [member attacker_player], [member defender_player] or
+## [member payload], then transitions IDLE → DECLARE so the new
+## attack's DECLARE snapshot is published.
+##
+## Without this helper the FSM remains at [constant Step.RESOLVE_DAMAGE]
+## after the first attack ends, which silently rejects every
+## subsequent advance (DECLARE / ROLL / MODIFY / DEFENSE_TOKENS) —
+## leaving the published [InteractionFlow] stuck at
+## [constant Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE] for the
+## whole second attack and breaking the defender peer's mirror UI.
+##
+## Phase I6b-3 R2 follow-up.
+func restart_for_next_attack(game_state: GameState) -> void:
+	current_step = Step.IDLE
+	_transition(game_state, Step.DECLARE)
+
+
 # ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------

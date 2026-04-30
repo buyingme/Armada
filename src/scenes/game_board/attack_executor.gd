@@ -169,6 +169,11 @@ func _publish_clear_target_patch() -> void:
 		"modified_damage": 0,
 		"final_damage": 0,
 		"locked_tokens": [],
+		# Phase I6b-3 R2 follow-up: also drop the previous attack's
+		# defense-token snapshot so the next attack's [AttackPanelMirror]
+		# can detect "first DEFENSE_TOKENS snapshot for this attack" by
+		# the empty-tokens guard in [code]_apply_defense_section[/code].
+		"defense_tokens": [],
 	})
 
 
@@ -1000,6 +1005,10 @@ func _attack_exec_start_defense() -> void:
 		"defender_ship_index": defender_ship_index,
 		"defender_speed": def_inst.current_speed,
 		"defender_zone": _state.defender_zone,
+		# Phase I6b-3 R2: publish the defender's defense-token snapshot
+		# so the [AttackPanelMirror] can render the interactive section
+		# on the defender peer without consulting GameState.
+		"defense_tokens": def_inst.defense_tokens.duplicate(true),
 	})
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	if _camera and PlayMode.is_hot_seat():
@@ -1008,11 +1017,17 @@ func _attack_exec_start_defense() -> void:
 			_count_spendable_defense_tokens(def_inst),
 			_state.modified_damage])
 	if _get_panel():
-		_get_panel().show_defense_section(
-				def_inst.defense_tokens,
-				_state.locked_tokens,
-				_state.modified_damage,
-				def_inst.current_speed)
+		# Phase I6b-3 R2: in network mode the defender peer drives the
+		# decision via [AttackPanelMirror].  The attacker's local panel
+		# stays informational — skip the interactive defense section
+		# entirely so the user can't accidentally double-submit a
+		# commit.  Hot-seat keeps the existing interactive flow.
+		if not PlayMode.is_network():
+			_get_panel().show_defense_section(
+					def_inst.defense_tokens,
+					_state.locked_tokens,
+					_state.modified_damage,
+					def_inst.current_speed)
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
@@ -1333,14 +1348,54 @@ func _check_redirect_continuation(
 	return false
 
 ## Called when the player presses "Commit Defense".
-## Reads selected token indices from the panel and processes them
-## sequentially via [method _process_next_defense_commit].
+## Reads selected token indices from the panel and submits a
+## [CommitDefenseCommand] so the spend pipeline runs identically in
+## hot-seat and network play.  In network mode this handler runs on
+## the defender peer's [AttackPanelMirror], not on the attacker's
+## [AttackSimPanel].
 ## Requirements: AE-DEF-003.
+## Phase I6b-3 R2 — closes NW-006.
 func _on_attack_defense_done() -> void:
 	var selected: Array[int] = []
 	if _get_panel():
 		selected = _get_panel().get_defense_selected_indices()
 		_get_panel().disable_all_defense_buttons()
+	_submit_commit_defense(selected)
+
+
+## Builds and submits the [CommitDefenseCommand] for the current
+## defender.  Side effects (queueing, spend submissions, FSM advance)
+## happen on the attacker peer when [method apply_defender_commit] is
+## triggered from the [signal CommandProcessor.command_executed]
+## broadcast.
+func _submit_commit_defense(selected: Array[int]) -> void:
+	if _state.defender_ship == null:
+		_log.warn("Commit defense with no defender — ignoring.")
+		return
+	var def_inst: ShipInstance = \
+			_state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	# Sort into canonical resolution order before sending so all peers
+	# process tokens deterministically.
+	var canonical: Array[int] = _sort_defense_tokens_canonical(selected)
+	GameManager.submit_commit_defense(def_inst, canonical)
+
+
+## Applies a defender's commit on the attacker peer.  Called from
+## [GameBoard] when the [signal CommandProcessor.command_executed]
+## signal fires for a [CommitDefenseCommand].  The indices are already
+## in canonical resolution order.
+##
+## In hot-seat the attacker peer is also the submitter, so this runs
+## right after submission completes (single-step).  In network play
+## the defender peer submitted the command and the attacker peer's
+## executor reacts here.
+func apply_defender_commit(selected: Array[int]) -> void:
+	if not is_in_exec_mode():
+		return
+	if not _state.defense_step:
+		return
 	if selected.is_empty():
 		_log.info("No defense tokens selected — proceeding to damage.")
 		_state.defense_step = false
@@ -1348,10 +1403,7 @@ func _on_attack_defense_done() -> void:
 			_get_panel().hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
-	# Sort tokens into canonical resolution order (RRG "Defense Tokens"):
-	# Scatter → Evade → Brace → Redirect → Contain.
-	# This ensures Brace halves damage before Redirect distributes it.
-	_state.defense_commit_queue = _sort_defense_tokens_canonical(selected)
+	_state.defense_commit_queue = selected.duplicate()
 	_log.info("Defense commit: %d tokens queued." %
 			_state.defense_commit_queue.size())
 	_process_next_defense_commit()
@@ -2106,6 +2158,16 @@ func _attack_exec_prepare_next_squadron() -> void:
 	# so the non-attacker peer's mirror drops the previous squadron's
 	# title until the next target is locked in.
 	_publish_clear_target_patch()
+	# Phase I6b-3 R2 follow-up: restart the FSM so it leaves
+	# RESOLVE_DAMAGE and re-enters DECLARE.  Without this every
+	# subsequent _fsm_advance() silently fails (illegal transition)
+	# and the published InteractionFlow stays stuck at
+	# ATTACK_RESOLVE_DAMAGE for the next attack, breaking the
+	# defender mirror.
+	var gs_restart: GameState = GameManager.current_game_state
+	_flow_fsm.restart_for_next_attack(gs_restart)
+	if gs_restart:
+		GameManager.submit_publish_attack_flow(gs_restart.interaction_flow)
 	# Clean up target visuals, keep spent zone markers.
 	_target_selector.prepare_next_squadron_target()
 	# Update panel with "Select next squadron" prompt.
@@ -2139,6 +2201,13 @@ func _attack_exec_prepare_next_attack() -> void:
 	# so the non-attacker peer's mirror drops the first attack's title
 	# until the second attack's DECLARE patch repopulates it.
 	_publish_clear_target_patch()
+	# Phase I6b-3 R2 follow-up: restart the FSM so it leaves
+	# RESOLVE_DAMAGE and re-enters DECLARE for the second attack
+	# (see _attack_exec_prepare_next_squadron for full rationale).
+	var gs_restart: GameState = GameManager.current_game_state
+	_flow_fsm.restart_for_next_attack(gs_restart)
+	if gs_restart:
+		GameManager.submit_publish_attack_flow(gs_restart.interaction_flow)
 	_reset_for_next_attack()
 	_show_next_attack_panel()
 	_target_selector.show_ship_range_overlay(_state.exec_ship_token)

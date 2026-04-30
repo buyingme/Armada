@@ -502,3 +502,111 @@ func test_skip_attack_serialize_roundtrip() -> void:
 			"Restored sequence should match.")
 	assert_eq(restored.payload.get("reason", ""), "squadron_done",
 			"Restored reason should match.")
+
+
+# ======================================================================
+# CommitDefenseCommand (Phase I6b-3 R2)
+# ======================================================================
+
+func test_commit_defense_validate_ok_empty() -> void:
+	var idx: int = _add_ship(1)
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": idx,
+		"selected_indices": [],
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept empty selection (= spend nothing).")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_validate_ok_with_indices() -> void:
+	var idx: int = _add_ship(1)
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": idx,
+		"selected_indices": [0, 2],
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid token indices.")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_validate_wrong_phase() -> void:
+	_state.current_phase = Constants.GamePhase.STATUS
+	var idx: int = _add_ship(1)
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": idx,
+		"selected_indices": [],
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject outside Ship/Squadron Phase.")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_validate_bad_ship() -> void:
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": 99,
+		"selected_indices": [],
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject invalid ship index.")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_validate_bad_token_index() -> void:
+	var idx: int = _add_ship(1)
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": idx,
+		"selected_indices": [0, 99],
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject out-of-range token index.")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_execute_echoes_indices() -> void:
+	var idx: int = _add_ship(1)
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": idx,
+		"selected_indices": [0, 2],
+	})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(result.get("ship_index", -1), idx,
+			"Result should echo ship_index.")
+	var echoed: Array = result.get("selected_indices", []) as Array
+	assert_eq(echoed.size(), 2,
+			"Result should echo two selected indices.")
+	assert_eq(int(echoed[0]), 0,
+			"Result should preserve order of indices.")
+	assert_eq(int(echoed[1]), 2,
+			"Result should preserve order of indices.")
+	GameCommand._registry.erase("commit_defense")
+
+
+func test_commit_defense_serialize_roundtrip() -> void:
+	CommitDefenseCommand.register()
+	var cmd := CommitDefenseCommand.new(1, {
+		"ship_index": 0,
+		"selected_indices": [1, 0, 2],
+	})
+	cmd.sequence = 42
+	var data: Dictionary = cmd.serialize()
+	var restored: GameCommand = GameCommand.deserialize(data)
+	assert_not_null(restored,
+			"Deserialized command should not be null.")
+	assert_eq(restored.command_type, "commit_defense",
+			"Restored type should match.")
+	assert_eq(restored.player_index, 1,
+			"Restored player should match defender.")
+	assert_eq(restored.sequence, 42,
+			"Restored sequence should match.")
+	var indices: Array = restored.payload.get(
+			"selected_indices", []) as Array
+	assert_eq(indices.size(), 3,
+			"Restored selected_indices should preserve length.")
+	GameCommand._registry.erase("commit_defense")

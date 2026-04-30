@@ -896,6 +896,21 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
+	# Phase I6b-3 R2: when a [CommitDefenseCommand] is broadcast, drive
+	# the attacker peer's [AttackExecutor] through the spend pipeline.
+	# In hot-seat the attacker peer is also the submitter, so this runs
+	# right after submission completes.  In network play the defender
+	# peer submitted the command and the attacker peer's executor
+	# reacts here.
+	if _command != null and _command.command_type == "commit_defense" \
+			and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode():
+		var indices_raw: Array = _result.get(
+				"selected_indices", []) as Array
+		var indices: Array[int] = []
+		for raw_idx: Variant in indices_raw:
+			indices.append(int(raw_idx))
+		_attack_executor.apply_defender_commit(indices)
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
 		# Hot-seat: viewer is the active player.

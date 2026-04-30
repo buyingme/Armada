@@ -130,9 +130,10 @@ func test_apply_flow_after_close_reopens() -> void:
 
 
 func test_no_signal_connections_on_panel() -> void:
-	# R1b invariant: the mirror panel must NEVER have its input signals
-	# connected.  We sample a few signals that AttackExecutor would
-	# connect on the real panel.
+	# R1b invariant: at modal_kind=NONE (informational) the mirror
+	# panel must NOT have any input signals connected.  Defender-driven
+	# signals are wired at DEFENSE_TOKENS in R2 only — see
+	# test_defense_done_connected_at_defense_tokens.
 	var panel: AttackSimPanel = _mirror.get_panel()
 	assert_eq(panel.roll_dice_pressed.get_connections().size(), 0,
 			"roll_dice_pressed must not be connected on the mirror.")
@@ -142,6 +143,47 @@ func test_no_signal_connections_on_panel() -> void:
 			"confirm_pressed must not be connected on the mirror.")
 	assert_eq(panel.skip_attack_pressed.get_connections().size(), 0,
 			"skip_attack_pressed must not be connected on the mirror.")
+	assert_eq(panel.defense_tokens_done.get_connections().size(), 0,
+			"defense_tokens_done must not be connected before "
+			+ "DEFENSE_TOKENS step.")
+
+
+func test_defense_done_connected_at_defense_tokens() -> void:
+	# Phase I6b-3 R2: when step_id transitions to
+	# ATTACK_DEFENSE_TOKENS, the mirror connects the
+	# defense_tokens_done signal so pressing Commit submits a
+	# CommitDefenseCommand from the defender peer.  Other input
+	# signals (roll_dice, confirm, skip_attack, defense_token_selected)
+	# remain disconnected — those still belong to the attacker peer.
+	var payload: Dictionary = {
+		"attacker_kind": "ship",
+		"attacker_name": "Demolisher",
+		"defender_name": "CR90",
+		"defender_player": 1,
+		"defender_ship_index": 0,
+		"defender_speed": 2,
+		"defender_zone": Constants.HullZone.FRONT,
+		"modified_damage": 3,
+		"locked_tokens": [],
+		"defense_tokens": [
+			{"type": Constants.DefenseToken.BRACE,
+			"state": Constants.DefenseTokenState.READY},
+		],
+	}
+	_mirror.apply_flow(payload,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	var panel: AttackSimPanel = _mirror.get_panel()
+	assert_eq(panel.defense_tokens_done.get_connections().size(), 1,
+			"defense_tokens_done must be connected during "
+			+ "DEFENSE_TOKENS sub-step.")
+	assert_eq(panel.roll_dice_pressed.get_connections().size(), 0,
+			"roll_dice_pressed must remain disconnected on the mirror.")
+	assert_eq(panel.confirm_pressed.get_connections().size(), 0,
+			"confirm_pressed must remain disconnected on the mirror.")
+	# After close(), the connection is dropped.
+	_mirror.close()
+	assert_eq(panel.defense_tokens_done.get_connections().size(), 0,
+			"defense_tokens_done must be disconnected after close().")
 
 
 func test_clearing_defender_drops_target_title() -> void:

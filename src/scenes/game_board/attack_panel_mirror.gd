@@ -43,6 +43,17 @@ var _last_modal_kind: int = -1
 ## without rebuilding the panel on every snapshot.
 var _last_defender_name: String = ""
 
+## Phase I6b-3 R2: true once the interactive defense section has been
+## populated for the current attack and the panel signals are
+## connected.  Reset on [method close] and on the next
+## attack identity (handled by the cleared-target transition).
+var _defense_section_active: bool = false
+
+## Phase I6b-3 R2: true once the panel's `defense_tokens_done` signal
+## has been wired up to [method _on_defense_tokens_done].  Tracked
+## independently so [method close] can disconnect cleanly.
+var _defense_signal_connected: bool = false
+
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
 
@@ -86,9 +97,10 @@ func is_open() -> bool:
 ## [member InteractionFlow.payload], populated by
 ## [AttackExecutor._compute_attack_identity_patch] and the per-step
 ## patches.
-## [param modal_kind] — current [enum Constants.ModalKind] value;
-## reserved for sub-step-specific population in later slices (R2+).
-func apply_flow(payload: Dictionary, modal_kind: int) -> void:
+## [param step_id] — current [enum Constants.InteractionStep] value
+## (passed verbatim from [member InteractionFlow.step_id]); used to
+## decide when to render the interactive defense section in R2.
+func apply_flow(payload: Dictionary, step_id: int) -> void:
 	if _panel == null:
 		return
 	# First call for this attack flow — open the panel with the
@@ -131,19 +143,121 @@ func apply_flow(payload: Dictionary, modal_kind: int) -> void:
 				_panel.show_initial_squadron_exec(attacker_name)
 			else:
 				_panel.show_initial_attack_exec(attacker_name)
+			# Phase I6b-3 R2: between consecutive attacks, the previous
+			# attack's defense section is no longer relevant — drop the
+			# "section active" flag so the next attack's DEFENSE_TOKENS
+			# step opens a fresh interactive section.  Disconnecting
+			# the signal is safe to defer to [method close]; we just
+			# reset the flag so [_apply_defense_section] re-runs.
+			_defense_section_active = false
 	_last_defender_name = def_name
-	_last_modal_kind = modal_kind
+	# Phase I6b-3 R2 follow-up: when we leave the DEFENSE_TOKENS step,
+	# tear down the interactive section and clear the active flag so
+	# the next attack's DEFENSE_TOKENS snapshot triggers a fresh
+	# [code]show_defense_section[/code] rather than reusing stale UI.
+	if _defense_section_active \
+			and step_id != Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		if _panel.has_method("hide_defense_section"):
+			_panel.hide_defense_section()
+		_defense_section_active = false
+	_last_modal_kind = step_id
+	# Phase I6b-3 R2: render the interactive defense section once we
+	# enter the DEFENSE_TOKENS sub-step.  Idempotent — only populated
+	# on the transition edge.
+	_apply_defense_section(payload, step_id)
+
+
+## Populates the interactive defense-token section on the defender
+## peer's mirror panel.  Idempotent — only runs once per attack flow
+## (when [param step_id] first equals
+## [constant Constants.InteractionStep.ATTACK_DEFENSE_TOKENS]).
+##
+## Reads the defender's defense-token snapshot, locked-token list,
+## modified damage and current speed from [param payload] (published
+## by [AttackExecutor._attack_exec_start_defense]).  Connects the
+## panel's [code]defense_tokens_done[/code] signal to this mirror's
+## handler so that pressing [i]Commit Defense[/i] submits a
+## [CommitDefenseCommand] from the defender peer.
+##
+## Phase I6b-3 R2 — closes NW-006.
+func _apply_defense_section(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null:
+		return
+	if step_id != Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		return
+	if _defense_section_active:
+		return
+	var tokens_raw: Array = payload.get("defense_tokens", []) as Array
+	# Bug-fix: the host emits two snapshots when entering DEFENSE_TOKENS
+	# — first the FSM-advance with the previous payload (no tokens),
+	# then the patch carrying `defense_tokens`.  Defer population until
+	# the tokens actually arrive; otherwise we'd render a panel with no
+	# buttons and lock it via `_defense_section_active`.
+	if tokens_raw.is_empty():
+		return
+	var tokens: Array[Dictionary] = []
+	for entry: Variant in tokens_raw:
+		tokens.append(entry as Dictionary)
+	var locked_raw: Array = payload.get("locked_tokens", []) as Array
+	var locked: Array[int] = []
+	for raw_idx: Variant in locked_raw:
+		locked.append(int(raw_idx))
+	var modified_damage: int = int(payload.get("modified_damage", 0))
+	var defender_speed: int = int(payload.get("defender_speed", 1))
+	_panel.show_defense_section(
+			tokens, locked, modified_damage, defender_speed)
+	if not _defense_signal_connected:
+		_panel.defense_tokens_done.connect(_on_defense_tokens_done)
+		_defense_signal_connected = true
+	_defense_section_active = true
+
+
+## Submits a [CommitDefenseCommand] from the defender peer.
+## Reads the selected token indices off the panel and routes them
+## through [GameManager.submit_commit_defense].  The attacker peer's
+## [AttackExecutor] reacts to the broadcast via
+## [signal CommandProcessor.command_executed] and runs the spend
+## pipeline.
+func _on_defense_tokens_done() -> void:
+	if _panel == null:
+		return
+	var selected: Array[int] = _panel.get_defense_selected_indices()
+	_panel.disable_all_defense_buttons()
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var def_player: int = -1
+	var def_index: int = -1
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow:
+		def_player = int(flow.payload.get("defender_player", -1))
+		def_index = int(flow.payload.get("defender_ship_index", -1))
+	if def_player < 0 or def_index < 0:
+		_log.warn("Defense commit with no defender identity — ignoring.")
+		return
+	var def_inst: ShipInstance = gs.get_ship(def_player, def_index)
+	if def_inst == null:
+		_log.warn("Defense commit: ship %d/%d not found." %
+				[def_player, def_index])
+		return
+	GameManager.submit_commit_defense(def_inst, selected)
 
 
 ## Hides the mirror panel.  Idempotent.
 func close() -> void:
 	if _panel == null:
 		return
+	if _defense_signal_connected:
+		if _panel.defense_tokens_done.is_connected(_on_defense_tokens_done):
+			_panel.defense_tokens_done.disconnect(_on_defense_tokens_done)
+		_defense_signal_connected = false
 	if _panel.visible:
 		_panel.close()
 	_is_open = false
 	_last_modal_kind = -1
 	_last_defender_name = ""
+	_defense_section_active = false
 
 
 ## Returns a display string for the given [enum Constants.HullZone]

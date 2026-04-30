@@ -786,6 +786,26 @@ func submit_spend_defense_token(ship: ShipInstance, token_index: int,
 	return _submitter.submit(cmd)
 
 
+## Submits a [CommitDefenseCommand] from the defender peer when the
+## player presses [i]Commit Defense[/i] on the [AttackPanelMirror].
+## Phase I6b-3 R2 — closes NW-006.
+## [param ship] — the defending ShipInstance.
+## [param selected_indices] — token indices in canonical resolution
+##                            order; may be empty.
+func submit_commit_defense(ship: ShipInstance,
+		selected_indices: Array[int]) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var indices_payload: Array = []
+	for idx: int in selected_indices:
+		indices_payload.append(idx)
+	var cmd := CommitDefenseCommand.new(ship.owner_player,
+			{"ship_index": ship_index,
+			"selected_indices": indices_payload})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [SelectRedirectZoneCommand] for redirect damage allocation.
 ## [param ship] — the defending ShipInstance.
 ## [param zone] — [Constants.HullZone] int value of the target zone.
@@ -1506,6 +1526,11 @@ func _handle_remote_command_effects(
 			pass
 		"spend_defense_token":
 			_handle_remote_spend_defense_token(cmd)
+		"commit_defense":
+			# Phase I6b-3 R2: marker command — attacker peer's
+			# AttackExecutor reacts via command_executed.  No
+			# additional GameManager-side handling required.
+			pass
 		"resolve_damage":
 			_handle_remote_resolve_damage(cmd, result)
 		"overlap_damage", "persistent_effect_damage":
@@ -1730,6 +1755,21 @@ func _handle_remote_resolve_damage(
 	if ship == null:
 		return
 	EventBus.ship_defense_token_changed.emit(ship)
+	# Phase I6b-3 R2 follow-up: refresh shield/hull visuals on the
+	# client peer.  ResolveDamageCommand.execute() mutated the
+	# authoritative GameState on both peers, but only the host's
+	# AttackExecutor emits the ship_shields_changed / ship_hull_changed
+	# signals that ship_token listens to.  Mirror those signals here so
+	# the defender's shield pips and hull readout update on the client.
+	if int(result.get("shield_absorbed", 0)) > 0:
+		var hull_zone: String = String(result.get("hull_zone", ""))
+		if hull_zone != "":
+			EventBus.ship_shields_changed.emit(ship, hull_zone,
+					int(result.get("new_shields", 0)))
+	if int(result.get("cards_added", 0)) > 0 and ship.ship_data:
+		var new_hull: int = ship.ship_data.hull \
+				- ship.get_total_damage()
+		EventBus.ship_hull_changed.emit(ship, new_hull)
 	if result.get("destroyed", false):
 		EventBus.ship_destroyed.emit(ship)
 	_check_elimination()

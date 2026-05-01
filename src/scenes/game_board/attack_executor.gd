@@ -1036,17 +1036,18 @@ func _attack_exec_start_defense() -> void:
 			_count_spendable_defense_tokens(def_inst),
 			_state.modified_damage])
 	if _get_panel():
-		# Phase I6b-3 R2: in network mode the defender peer drives the
+		# Phase I6b-3 R6: in network mode the defender peer drives the
 		# decision via [AttackPanelMirror].  The attacker's local panel
-		# stays informational — skip the interactive defense section
-		# entirely so the user can't accidentally double-submit a
-		# commit.  Hot-seat keeps the existing interactive flow.
-		if not PlayMode.is_network():
-			_get_panel().show_defense_section(
-					def_inst.defense_tokens,
-					_state.locked_tokens,
-					_state.modified_damage,
-					def_inst.current_speed)
+		# now renders the same defense section in [b]read-only[/b] mode
+		# so the attacker can watch the defender's token toggles and
+		# the eventual Commit Defense, but cannot author input.
+		# Hot-seat keeps the existing interactive flow.
+		_get_panel().show_defense_section(
+				def_inst.defense_tokens,
+				_state.locked_tokens,
+				_state.modified_damage,
+				def_inst.current_speed,
+				not PlayMode.is_network())
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
@@ -1233,13 +1234,14 @@ func _attack_exec_start_evade() -> void:
 		"evade_active": true,
 		"evade_range_band": range_band,
 	})
-	# Phase I6b-3 R3: in network mode the defender peer drives die
+	# Phase I6b-3 R6: in network mode the defender peer drives die
 	# selection via [AttackPanelMirror].  The attacker's local panel
-	# stays informational — skip the interactive die-selection section
-	# entirely so the user can't accidentally double-submit a
-	# selection.  Hot-seat keeps the existing interactive flow.
-	if _get_panel() and not PlayMode.is_network():
-		_get_panel().show_evade_die_selection(range_band)
+	# now renders the same evade prompt in [b]read-only[/b] mode
+	# (dice tinted but not clickable) so the attacker can watch.
+	# Hot-seat keeps the existing interactive flow.
+	if _get_panel():
+		_get_panel().show_evade_die_selection(
+				range_band, not PlayMode.is_network())
 
 ## Called when the defender selects a die during evade die-selection.
 ## Submits a [SelectEvadeDieCommand] so the remove-die / reroll-die
@@ -1382,12 +1384,14 @@ func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 		"redirect_adjacent_zones": adjacent_ints,
 		"redirect_remaining": _state.redirect_remaining,
 	})
-	# Phase I6b-3 R4: in network mode the attacker peer renders a
-	# read-only mirror; the interactive zone buttons live on the
-	# defender peer's [AttackPanelMirror].
-	if _get_panel() and not PlayMode.is_network():
+	# Phase I6b-3 R6: in network mode the attacker peer renders the
+	# same redirect zone-selection section in [b]read-only[/b] mode
+	# (zone buttons disabled, Done button hidden).  The interactive
+	# zone buttons live on the defender peer's [AttackPanelMirror].
+	if _get_panel():
 		_get_panel().show_redirect_section(
-				adjacent, _state.redirect_remaining)
+				adjacent, _state.redirect_remaining,
+				not PlayMode.is_network())
 
 ## Called when the player selects a hull zone for redirect on the
 ## attacker peer's local panel (hot-seat) or when the defender peer's

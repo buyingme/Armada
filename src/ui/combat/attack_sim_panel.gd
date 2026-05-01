@@ -1223,9 +1223,15 @@ func _update_accuracy_button_visuals() -> void:
 ## [param defender_speed] — defender's speed (0 blocks spending).
 ## Requirements: AE-DEF-001–005.
 ## Rules Reference: "Defense Tokens", bullet 4, p.5 — speed 0 blocks all.
+## [param interactive] — when [code]false[/code] the section renders
+## as read-only (Phase I6b-3 R6: attacker peer's panel during the
+## defender-controlled DEFENSE_TOKENS sub-step).  Token buttons stay
+## visible but disabled, the Commit Defense button is hidden, and no
+## input signals are wired up.
 func show_defense_section(tokens: Array[Dictionary],
 		locked_indices: Array[int], damage: int,
-		defender_speed: int) -> void:
+		defender_speed: int,
+		interactive: bool = true) -> void:
 	if _defense_container == null or _defense_token_buttons == null:
 		return
 	# Reset selection state.
@@ -1243,17 +1249,23 @@ func show_defense_section(tokens: Array[Dictionary],
 					"Damage: %d — Speed 0: cannot spend tokens." % damage)
 		_defense_container.visible = true
 		return
-	_populate_defense_token_buttons(tokens, locked_indices)
+	_populate_defense_token_buttons(tokens, locked_indices, interactive)
 	# Re-show Commit button (may have been hidden during a previous commit).
+	# In read-only mode the local peer is the attacker watching the
+	# defender choose, so the Commit button is hidden — the eventual
+	# [CommitDefenseCommand] arrives via the network broadcast.
 	if _defense_done_button:
-		_defense_done_button.visible = true
+		_defense_done_button.visible = interactive
 		_defense_done_button.text = "Commit Defense"
 	_defense_container.visible = true
 
 
 ## Populates _defense_token_buttons with one button per non-discarded token.
+## When [param interactive] is false, every button is disabled and no
+## [code]pressed[/code] signal is connected (read-only attacker view).
 func _populate_defense_token_buttons(tokens: Array[Dictionary],
-		locked_indices: Array[int]) -> void:
+		locked_indices: Array[int],
+		interactive: bool = true) -> void:
 	for i: int in range(tokens.size()):
 		var token: Dictionary = tokens[i]
 		var state: Constants.DefenseTokenState = (
@@ -1269,7 +1281,11 @@ func _populate_defense_token_buttons(tokens: Array[Dictionary],
 			_defense_token_buttons.add_child(btn)
 			continue
 		var btn: Button = _create_token_button(token, i)
-		btn.pressed.connect(_on_defense_token_pressed.bind(i))
+		if interactive:
+			btn.pressed.connect(_on_defense_token_pressed.bind(i))
+		else:
+			btn.disabled = true
+			btn.modulate = Color(0.6, 0.6, 0.6, 1.0)
 		_defense_token_buttons.add_child(btn)
 
 
@@ -1376,19 +1392,29 @@ func disable_all_defense_buttons() -> void:
 ## instructs the defender to pick a die to remove (long) or reroll (med/close).
 ## Requirements: AE-DEF-007–009.
 ## Rules Reference: "Evade", RRG v1.5.0, p.5.
-func show_evade_die_selection(range_band: String) -> void:
+## [param interactive] — when [code]false[/code] the dice are tinted
+## but not clickable (Phase I6b-3 R6: attacker peer's panel during
+## the defender-controlled evade die-selection sub-step).
+func show_evade_die_selection(range_band: String,
+		interactive: bool = true) -> void:
 	_evade_mode = true
-	_set_dice_clickable(true)
+	_set_dice_clickable(interactive)
 	_clear_die_selection_highlights()
 	# Tint dice cyan to show they are selectable.
 	for tex_rect: TextureRect in _dice_textures:
 		if tex_rect:
 			tex_rect.modulate = Color(0.7, 1.0, 1.0, 1.0)
 	if _defense_info_label:
-		if range_band == Constants.RANGE_BAND_LONG:
-			_defense_info_label.text += "\nEvade: click a die to remove."
+		var action_word: String = (
+				"remove" if range_band == Constants.RANGE_BAND_LONG
+				else "reroll")
+		if interactive:
+			_defense_info_label.text += (
+					"\nEvade: click a die to %s." % action_word)
 		else:
-			_defense_info_label.text += "\nEvade: click a die to reroll."
+			_defense_info_label.text += (
+					"\nEvade: opponent is choosing a die to %s."
+					% action_word)
 
 
 ## Exits evade die-selection mode — dice return to non-clickable.
@@ -1416,23 +1442,39 @@ func _on_redirect_done_pressed() -> void:
 ## [param zones] — Array of Constants.HullZone values that are adjacent.
 ## [param remaining] — damage points still to redirect.
 ## Requirements: AE-DEF-011–013.
-func show_redirect_section(zones: Array, remaining: int) -> void:
+## [param interactive] — when [code]false[/code] the zone buttons are
+## visible but disabled, and the [b]Done Redirecting[/b] button is
+## hidden (Phase I6b-3 R6: attacker peer's panel during the
+## defender-controlled redirect-zone sub-step).
+func show_redirect_section(zones: Array, remaining: int,
+		interactive: bool = true) -> void:
 	if _redirect_container == null or _redirect_zone_buttons == null:
 		return
 	for child: Node in _redirect_zone_buttons.get_children():
 		child.queue_free()
 	if _redirect_info_label:
-		_redirect_info_label.text = (
-				"Redirect %d damage — select zone:" % remaining)
+		if interactive:
+			_redirect_info_label.text = (
+					"Redirect %d damage — select zone:" % remaining)
+		else:
+			_redirect_info_label.text = (
+					"Redirect %d damage — opponent is selecting zone…"
+					% remaining)
 	for zone: Variant in zones:
 		var zone_enum: Constants.HullZone = zone as Constants.HullZone
 		var zone_name: String = Constants.hull_zone_to_string(zone_enum)
 		var btn: Button = Button.new()
 		btn.text = zone_name
 		btn.custom_minimum_size = Vector2(70.0, 28.0)
-		btn.pressed.connect(_on_redirect_zone_pressed.bind(
-				zone_enum as int))
+		if interactive:
+			btn.pressed.connect(_on_redirect_zone_pressed.bind(
+					zone_enum as int))
+		else:
+			btn.disabled = true
+			btn.modulate = Color(0.6, 0.6, 0.6, 1.0)
 		_redirect_zone_buttons.add_child(btn)
+	if _redirect_done_button:
+		_redirect_done_button.visible = interactive
 	_redirect_container.visible = true
 
 

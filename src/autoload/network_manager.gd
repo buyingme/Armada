@@ -574,6 +574,14 @@ func _submit_command_to_server(data: Dictionary) -> void:
 		_log.info("Command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])
 		return
+	# Phase I6b-3 R2 follow-up: tag remote-authored commands so the host's
+	# [_on_network_command_result] runs side effects even when
+	# [code]cmd.player_index[/code] equals the host's local slot (e.g. the
+	# attacker peer authored a [code]resolve_damage[/code] for the
+	# host-owned defender).  Without this flag the host's existing
+	# [code]player_index != local[/code] gate silently drops the
+	# damage-summary / damage-card-dealt re-emits.
+	result["__remote_authored"] = true
 	var cmd_data: Dictionary = cmd.serialize()
 	# --- Sync gate: hold dial assignments until both players are done ---
 	if _sync_gate.is_active() and cmd.command_type == "assign_dials":

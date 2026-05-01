@@ -1466,8 +1466,13 @@ func _on_network_command_result(
 		return
 	if NetworkManager.is_server():
 		# Host: command already executed by NetworkManager.
-		# Only process side effects for the remote player's commands.
-		if cmd.player_index != NetworkManager.get_local_player_index():
+		# Process side effects for the remote player's commands AND for
+		# host-owned commands authored by the remote peer (e.g. attacker
+		# peer authored [code]resolve_damage[/code] / [code]spend_defense_token[/code]
+		# for the host-owned defender — see I6b-3 R2 follow-up).
+		var remote_authored: bool = bool(result.get("__remote_authored", false))
+		if cmd.player_index != NetworkManager.get_local_player_index() \
+				or remote_authored:
 			_handle_remote_command_effects(cmd, result)
 		return
 	CommandProcessor.submit(cmd)
@@ -1770,6 +1775,37 @@ func _handle_remote_resolve_damage(
 		var new_hull: int = ship.ship_data.hull \
 				- ship.get_total_damage()
 		EventBus.ship_hull_changed.emit(ship, new_hull)
+		# Phase I6b-3 R2 follow-up: refresh the defender's damage-card
+		# column on the passive peer.  ResolveDamageCommand.execute()
+		# already added the cards to the ship's faceup/facedown stacks
+		# on this peer (commands are replicated and executed on both
+		# sides), but only the attacker's AttackExecutor emits
+		# `damage_card_dealt` per card.  A single null-card emit is
+		# enough to trigger ShipCardPanel._refresh_damage_for_ship()
+		# which reads the full stacks off the ShipInstance.
+		EventBus.damage_card_dealt.emit(ship, null, false)
+		# Phase I6b-3 R2 follow-up: also surface the
+		# DamageSummaryOverlay close-up on the passive peer.  Walk the
+		# command's payload to figure out which dealt cards were
+		# faceup, deserialize them (so the overlay can pull
+		# effect_id / title), and emit
+		# [signal EventBus.damage_summary_requested] with the same
+		# shape the attacker peer's AttackExecutor uses.
+		var faceup_cards: Array[DamageCard] = []
+		var facedown_count: int = 0
+		var cards_payload: Array = cmd.payload.get(
+				"damage_cards", []) as Array
+		for entry: Variant in cards_payload:
+			if not (entry is Dictionary):
+				continue
+			var card_dict: Dictionary = entry as Dictionary
+			if bool(card_dict.get("is_faceup", false)):
+				faceup_cards.append(DamageCard.deserialize(card_dict))
+			else:
+				facedown_count += 1
+		EventBus.damage_summary_requested.emit(
+				ship, faceup_cards, facedown_count,
+				ship.ship_data.ship_name)
 	if result.get("destroyed", false):
 		EventBus.ship_destroyed.emit(ship)
 	_check_elimination()
@@ -1892,8 +1928,16 @@ func _find_ship_from_command(cmd: GameCommand) -> ShipInstance:
 	if not current_game_state:
 		return null
 	var ship_index: int = cmd.payload.get("ship_index", -1)
-	var ps: PlayerState = current_game_state.get_player_state(
-			cmd.player_index)
+	# Damage / repair commands carry the ship's owner in the payload
+	# (`owner_player`) because the author may be a different player —
+	# e.g. ResolveDamageCommand is authored by the attacker but mutates
+	# the defender's ship.  Prefer the payload owner when present so
+	# the canonical ShipInstance reference matches the one bound to
+	# the on-board ship_token (which is required for
+	# ship_token._on_state_changed equality checks to fire).
+	var owner_index: int = int(
+			cmd.payload.get("owner_player", cmd.player_index))
+	var ps: PlayerState = current_game_state.get_player_state(owner_index)
 	if ps == null or ship_index < 0 or ship_index >= ps.ships.size():
 		return null
 	return ps.ships[ship_index] as ShipInstance

@@ -164,8 +164,13 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			# Phase I6b-3 R1b follow-up: drop the dice caches so the
 			# next attack's pool / roll snapshot triggers a fresh
 			# render even if the formatted text happens to match.
+			# Also hide the previous attack's dice strip + count so
+			# they don't linger between attacks (squadron loop or
+			# two-hull-zone rule).
 			_last_dice_pool_text = ""
 			_last_dice_results_size = -1
+			if _panel.has_method("hide_dice_count"):
+				_panel.hide_dice_count()
 	_last_defender_name = def_name
 	# Phase I6b-3 R2 follow-up: when we leave the DEFENSE_TOKENS step,
 	# tear down the interactive section and clear the active flag so

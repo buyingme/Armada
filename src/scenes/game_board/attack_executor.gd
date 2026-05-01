@@ -159,12 +159,12 @@ func _publish_flow_snapshot() -> void:
 func _publish_clear_target_patch() -> void:
 	_fsm_patch_payload({
 		"defender_name": "",
-		"defender_zone": -1,
-		"defender_player": -1,
-		"defender_ship_index": -1,
+		"defender_zone": - 1,
+		"defender_player": - 1,
+		"defender_ship_index": - 1,
 		"target_kind": "",
-		"target_ship_index": -1,
-		"target_squadron_index": -1,
+		"target_ship_index": - 1,
+		"target_squadron_index": - 1,
 		"range_band": "",
 		"modified_damage": 0,
 		"final_damage": 0,
@@ -174,6 +174,14 @@ func _publish_clear_target_patch() -> void:
 		# can detect "first DEFENSE_TOKENS snapshot for this attack" by
 		# the empty-tokens guard in [code]_apply_defense_section[/code].
 		"defense_tokens": [],
+		# Phase I6b-3 R2 follow-up: drop the previous attack's dice
+		# pool / roll snapshot so the passive peer's mirror hides the
+		# dice strip + count between attacks.  Without this, the
+		# mirror's [code]_apply_dice_sections[/code] re-renders the
+		# stale dice on every [signal CommandProcessor.command_executed]
+		# until the next attack rolls its own dice.
+		"dice_pool": {},
+		"dice_results": [],
 	})
 
 

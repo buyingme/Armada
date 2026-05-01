@@ -121,8 +121,7 @@ var _choice_modal_active: bool = false
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
 
 
-## Maps [enum Constants.HullZone] to display strings.  Mirrors the
-## table inside [DefenseMirrorPanel].
+## Maps [enum Constants.HullZone] to display strings.
 const _ZONE_NAMES: Dictionary = {
 	Constants.HullZone.FRONT: "FRONT",
 	Constants.HullZone.LEFT: "LEFT",

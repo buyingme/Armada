@@ -972,7 +972,6 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	# sync helpers BEFORE the no-flow early-return below.  Each helper
 	# handles its own "should close" logic and is a no-op when the panel
 	# is already in the right state.
-	_sync_defense_mirror_from_intent(intent, gs, local)
 	_sync_attack_panel_mirror_from_flow(flow, local)
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return
@@ -985,43 +984,6 @@ func _on_command_executed_project_ui(_command: GameCommand,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 				_close_modal_from_interaction_state()
 	_update_activation_modal_interactivity()
-
-
-## Opens or closes the read-only defense-mirror panel for the local
-## viewer based on the projected [UIProjector.UIIntent].
-##
-## Phase I6b-3 slice A: shown only on the **defender's** peer in network
-## mode while the attack flow is at
-## [constant Constants.InteractionStep.ATTACK_DEFENSE_TOKENS].  The
-## attacker's peer continues to drive the existing [AttackSimPanel]
-## defense section; in hot-seat this whole path is skipped by the
-## [code]is_network()[/code] guard above the call site.
-##
-## NW-006 progress — visibility only; interactivity arrives in slices C–E.
-func _sync_defense_mirror_from_intent(intent: UIProjector.UIIntent,
-		gs: GameState, local: int) -> void:
-	if _panel_mgr.defense_mirror_panel == null:
-		return
-	var should_open: bool = (
-			intent.modal_kind == Constants.ModalKind.ATTACK_DEFENSE_TOKENS
-			and intent.controller_player == local
-			and (_attack_executor == null
-				or not _attack_executor.is_in_exec_mode()))
-	if not should_open:
-		_panel_mgr.defense_mirror_panel.close()
-		return
-	var ship_name: String = ""
-	var ship_index: int = int(intent.payload.get("defender_ship_index", -1))
-	var def_player: int = int(intent.payload.get("defender_player", -1))
-	if ship_index >= 0 and def_player >= 0:
-		var inst: ShipInstance = gs.get_ship(def_player, ship_index)
-		if inst and inst.ship_data:
-			ship_name = inst.ship_data.ship_name
-	var zone: int = int(intent.payload.get("defender_zone", -1))
-	var modified_damage: int = int(intent.payload.get("modified_damage", 0))
-	var locked: Array = intent.payload.get("locked_tokens", []) as Array
-	_panel_mgr.defense_mirror_panel.open(ship_name, zone,
-			modified_damage, locked.size())
 
 
 ## Opens or closes the read-only [AttackPanelMirror] on the non-attacker

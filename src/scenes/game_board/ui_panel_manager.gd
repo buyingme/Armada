@@ -404,9 +404,20 @@ func _create_defense_mirror_panel(layer: CanvasLayer) -> void:
 ## signals are NEVER connected; population is driven by
 ## [member InteractionFlow.payload] on the
 ## [signal CommandProcessor.command_executed] projection.
-func _create_attack_panel_mirror(layer: CanvasLayer) -> void:
+##
+## Phase I6b-3 R3 follow-up: hosted on its own [CanvasLayer] at layer
+## [code]90[/code] (matching [TargetSelector]'s real attack panel) so
+## the mirror's dice strip + damage readout render [b]on top of[/b] the
+## [DamageSummaryOverlay] (layer 85) for the 1.2 s damage-info window.
+## This mirrors the hot-seat behaviour where the attacker sees the
+## final modified attack result over the close-up.
+func _create_attack_panel_mirror(_layer: CanvasLayer) -> void:
+	var mirror_layer: CanvasLayer = CanvasLayer.new()
+	mirror_layer.name = "AttackPanelMirrorLayer"
+	mirror_layer.layer = 90
+	add_child(mirror_layer)
 	attack_panel_mirror = AttackPanelMirror.new()
-	attack_panel_mirror.setup(layer)
+	attack_panel_mirror.setup(mirror_layer)
 
 
 ## Creates a phase / round HUD label at the top-centre of the screen.

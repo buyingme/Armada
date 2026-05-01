@@ -610,3 +610,92 @@ func test_commit_defense_serialize_roundtrip() -> void:
 	assert_eq(indices.size(), 3,
 			"Restored selected_indices should preserve length.")
 	GameCommand._registry.erase("commit_defense")
+
+
+# ======================================================================
+# SelectEvadeDieCommand (Phase I6b-3 R3)
+# ======================================================================
+
+func test_select_evade_die_validate_ok() -> void:
+	var idx: int = _add_ship(1)
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": idx,
+		"die_index": 2,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid ship + die index.")
+	GameCommand._registry.erase("select_evade_die")
+
+
+func test_select_evade_die_validate_wrong_phase() -> void:
+	_state.current_phase = Constants.GamePhase.STATUS
+	var idx: int = _add_ship(1)
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": idx,
+		"die_index": 0,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject outside Ship/Squadron Phase.")
+	GameCommand._registry.erase("select_evade_die")
+
+
+func test_select_evade_die_validate_bad_ship() -> void:
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": 99,
+		"die_index": 0,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject invalid ship index.")
+	GameCommand._registry.erase("select_evade_die")
+
+
+func test_select_evade_die_validate_bad_die_index() -> void:
+	var idx: int = _add_ship(1)
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": idx,
+		"die_index": - 1,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject negative die index.")
+	GameCommand._registry.erase("select_evade_die")
+
+
+func test_select_evade_die_execute_echoes_index() -> void:
+	var idx: int = _add_ship(1)
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": idx,
+		"die_index": 3,
+	})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(int(result.get("ship_index", -1)), idx,
+			"Result should echo ship_index.")
+	assert_eq(int(result.get("die_index", -1)), 3,
+			"Result should echo die_index.")
+	GameCommand._registry.erase("select_evade_die")
+
+
+func test_select_evade_die_serialize_roundtrip() -> void:
+	SelectEvadeDieCommand.register()
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": 0,
+		"die_index": 4,
+	})
+	cmd.sequence = 99
+	var data: Dictionary = cmd.serialize()
+	var restored: GameCommand = GameCommand.deserialize(data)
+	assert_not_null(restored,
+			"Deserialized command should not be null.")
+	assert_eq(restored.command_type, "select_evade_die",
+			"Restored type should match.")
+	assert_eq(restored.player_index, 1,
+			"Restored player should match defender.")
+	assert_eq(restored.sequence, 99,
+			"Restored sequence should match.")
+	assert_eq(int(restored.payload.get("die_index", -1)), 4,
+			"Restored die_index should match.")
+	GameCommand._registry.erase("select_evade_die")

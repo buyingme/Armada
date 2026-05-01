@@ -59,11 +59,29 @@ var _defense_signal_connected: bool = false
 ## Reset on [method close] and on the next-attack transition.
 var _last_dice_pool_text: String = ""
 
-## Phase I6b-3 R1b follow-up: cache of the last rendered `dice_results`
-## size — tracks the rolled-dice array length so we only call
-## [code]show_dice_results[/code] when it changes (e.g. on initial
-## roll, then again after attacker dice modifications).
-var _last_dice_results_size: int = -1
+## Phase I6b-3 R1b follow-up / R3 follow-up: cache of the last
+## rendered `dice_results` payload so we re-render the dice strip
+## whenever its contents change (size **or** any die's face).  The
+## R3 evade reroll mutates a single die in place — keeping a size-
+## only cache would skip the redraw and the defender peer would not
+## see the rerolled face.
+var _last_dice_results_payload: Array = []
+
+## Phase I6b-3 R3: true once the interactive evade die-selection
+## section has been opened for the current attack and the
+## [code]evade_die_confirmed[/code] signal has been wired up.  Reset
+## on [method close] and when the host clears the
+## [code]evade_active[/code] payload flag.
+var _evade_section_active: bool = false
+
+## Phase I6b-3 R3 follow-up: cache of the last [code]modified_damage[/code]
+## value rendered in the defense section so we can refresh the panel's
+## damage readout when an evade reroll / remove updates it mid-flight.
+var _last_modified_damage: int = -1
+
+## Phase I6b-3 R3: true once the panel's [code]evade_die_confirmed[/code]
+## signal has been connected to [method _on_evade_die_confirmed].
+var _evade_signal_connected: bool = false
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
@@ -161,6 +179,10 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			# the signal is safe to defer to [method close]; we just
 			# reset the flag so [_apply_defense_section] re-runs.
 			_defense_section_active = false
+			# Phase I6b-3 R3: also reset the evade-section flag so the
+			# next attack's [code]evade_active[/code] payload edge
+			# re-opens [code]show_evade_die_selection[/code] cleanly.
+			_evade_section_active = false
 			# Phase I6b-3 R1b follow-up: drop the dice caches so the
 			# next attack's pool / roll snapshot triggers a fresh
 			# render even if the formatted text happens to match.
@@ -168,7 +190,8 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			# they don't linger between attacks (squadron loop or
 			# two-hull-zone rule).
 			_last_dice_pool_text = ""
-			_last_dice_results_size = -1
+			_last_dice_results_payload = []
+			_last_modified_damage = -1
 			if _panel.has_method("hide_dice_count"):
 				_panel.hide_dice_count()
 	_last_defender_name = def_name
@@ -190,6 +213,12 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 	# enter the DEFENSE_TOKENS sub-step.  Idempotent — only populated
 	# on the transition edge.
 	_apply_defense_section(payload, step_id)
+	# Phase I6b-3 R3: render the interactive evade die-selection
+	# section when the attacker peer flips `evade_active` to true.
+	_apply_evade_section(payload)
+	# Phase I6b-3 R3 follow-up: refresh the defense-section damage
+	# readout when an evade-die selection mutates `modified_damage`.
+	_apply_modified_damage_update(payload)
 
 
 ## Renders the dice-pool count label and the rolled-dice strip from
@@ -217,7 +246,7 @@ func _apply_dice_sections(payload: Dictionary) -> void:
 	var results_raw: Variant = payload.get("dice_results", null)
 	if results_raw is Array:
 		var results_arr: Array = results_raw as Array
-		if results_arr.size() != _last_dice_results_size:
+		if results_arr != _last_dice_results_payload:
 			var typed: Array[Dictionary] = []
 			for entry: Variant in results_arr:
 				typed.append(entry as Dictionary)
@@ -225,7 +254,7 @@ func _apply_dice_sections(payload: Dictionary) -> void:
 				_panel.hide_dice_results()
 			else:
 				_panel.show_dice_results(typed)
-			_last_dice_results_size = results_arr.size()
+			_last_dice_results_payload = results_arr.duplicate(true)
 
 
 ## Populates the interactive defense-token section on the defender
@@ -268,10 +297,86 @@ func _apply_defense_section(payload: Dictionary,
 	var defender_speed: int = int(payload.get("defender_speed", 1))
 	_panel.show_defense_section(
 			tokens, locked, modified_damage, defender_speed)
+	_last_modified_damage = modified_damage
 	if not _defense_signal_connected:
 		_panel.defense_tokens_done.connect(_on_defense_tokens_done)
 		_defense_signal_connected = true
 	_defense_section_active = true
+
+
+## Renders the interactive evade die-selection section when the
+## attacker peer flips [code]evade_active[/code] to true in
+## [member InteractionFlow.payload].  Idempotent: only opens once per
+## evade sub-step (edge-triggered by [member _evade_section_active])
+## and tears down when the attacker clears the flag.
+##
+## Phase I6b-3 R3 — defender-controlled evade die selection.
+func _apply_evade_section(payload: Dictionary) -> void:
+	if _panel == null:
+		return
+	var active: bool = bool(payload.get("evade_active", false))
+	if active and not _evade_section_active:
+		var range_band: String = String(
+				payload.get("evade_range_band", ""))
+		if range_band.is_empty():
+			return
+		_panel.show_evade_die_selection(range_band)
+		if not _evade_signal_connected:
+			_panel.evade_die_confirmed.connect(_on_evade_die_confirmed)
+			_evade_signal_connected = true
+		_evade_section_active = true
+	elif not active and _evade_section_active:
+		if _panel.has_method("hide_evade_die_selection"):
+			_panel.hide_evade_die_selection()
+		_evade_section_active = false
+
+
+## Refreshes the defense-section damage readout from the published
+## [param payload].  Called every [method apply_flow] so an evade-die
+## selection that mutates [code]modified_damage[/code] (Phase I6b-3 R3)
+## is reflected on the defender peer's mirror.  Idempotent — only
+## redraws when the value changes.
+func _apply_modified_damage_update(payload: Dictionary) -> void:
+	if _panel == null:
+		return
+	if not _defense_section_active:
+		return
+	if not payload.has("modified_damage"):
+		return
+	var damage: int = int(payload.get("modified_damage", 0))
+	if damage == _last_modified_damage:
+		return
+	_last_modified_damage = damage
+	if _panel.has_method("update_defense_damage"):
+		_panel.update_defense_damage(damage)
+
+
+## Submits a [SelectEvadeDieCommand] from the defender peer when the
+## player clicks a die in the evade die-selection section.  The
+## attacker peer's [AttackExecutor] reacts to the broadcast via
+## [signal CommandProcessor.command_executed] and runs the
+## remove-die / reroll-die pipeline.
+##
+## Phase I6b-3 R3.
+func _on_evade_die_confirmed(die_index: int) -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var def_player: int = -1
+	var def_index: int = -1
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow:
+		def_player = int(flow.payload.get("defender_player", -1))
+		def_index = int(flow.payload.get("defender_ship_index", -1))
+	if def_player < 0 or def_index < 0:
+		_log.warn("Evade-die submit with no defender identity — ignoring.")
+		return
+	var def_inst: ShipInstance = gs.get_ship(def_player, def_index)
+	if def_inst == null:
+		_log.warn("Evade-die submit: ship %d/%d not found." %
+				[def_player, def_index])
+		return
+	GameManager.submit_select_evade_die(def_inst, die_index)
 
 
 ## Submits a [CommitDefenseCommand] from the defender peer.
@@ -313,14 +418,20 @@ func close() -> void:
 		if _panel.defense_tokens_done.is_connected(_on_defense_tokens_done):
 			_panel.defense_tokens_done.disconnect(_on_defense_tokens_done)
 		_defense_signal_connected = false
+	if _evade_signal_connected:
+		if _panel.evade_die_confirmed.is_connected(_on_evade_die_confirmed):
+			_panel.evade_die_confirmed.disconnect(_on_evade_die_confirmed)
+		_evade_signal_connected = false
 	if _panel.visible:
 		_panel.close()
 	_is_open = false
 	_last_modal_kind = -1
 	_last_defender_name = ""
 	_defense_section_active = false
+	_evade_section_active = false
 	_last_dice_pool_text = ""
-	_last_dice_results_size = -1
+	_last_dice_results_payload = []
+	_last_modified_damage = -1
 
 
 ## Returns a display string for the given [enum Constants.HullZone]

@@ -84,8 +84,9 @@ func _ready() -> void:
 	DebugDealDamageCommand.register()
 	# Tier 12 — interaction-flow synchronisation (Phase I6b-3).
 	PublishAttackFlowCommand.register()
-	# Tier 13 — defender authority (Phase I6b-3 R2).
+	# Tier 13 — defender authority (Phase I6b-3 R2/R3).
 	CommitDefenseCommand.register()
+	SelectEvadeDieCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

@@ -182,6 +182,11 @@ func _publish_clear_target_patch() -> void:
 		# until the next attack rolls its own dice.
 		"dice_pool": {},
 		"dice_results": [],
+		# Phase I6b-3 R3: drop the previous attack's evade sub-step
+		# flags so a new attack does not re-open a stale die-selection
+		# section on the defender peer's mirror.
+		"evade_active": false,
+		"evade_range_band": "",
 	})
 
 
@@ -1213,17 +1218,73 @@ func _attack_exec_start_evade() -> void:
 	_state.evade_step = true
 	var range_band: String = _state.range_band
 	_log.info("Evade: awaiting die selection (%s range)." % range_band)
-	if _get_panel():
+	# Phase I6b-3 R3: publish the evade sub-step into
+	# [member InteractionFlow.payload] so the defender peer's
+	# [AttackPanelMirror] can render the interactive die-selection
+	# section.  Cleared in [method apply_defender_evade_die] once the
+	# defender has chosen a die.
+	_fsm_patch_payload({
+		"evade_active": true,
+		"evade_range_band": range_band,
+	})
+	# Phase I6b-3 R3: in network mode the defender peer drives die
+	# selection via [AttackPanelMirror].  The attacker's local panel
+	# stays informational — skip the interactive die-selection section
+	# entirely so the user can't accidentally double-submit a
+	# selection.  Hot-seat keeps the existing interactive flow.
+	if _get_panel() and not PlayMode.is_network():
 		_get_panel().show_evade_die_selection(range_band)
 
 ## Called when the defender selects a die during evade die-selection.
-## At long range: remove the die. At medium/close: reroll it.
+## Submits a [SelectEvadeDieCommand] so the remove-die / reroll-die
+## pipeline runs identically in hot-seat and network play.  In network
+## mode this handler runs on the defender peer's [AttackPanelMirror],
+## not on the attacker's [AttackSimPanel].
 ## Requirements: AE-DEF-007–009.
+## Phase I6b-3 R3.
 func _on_evade_die_selected(die_index: int) -> void:
 	if not _state.evade_step:
 		return
 	if die_index < 0 or die_index >= _state.dice_results.size():
 		_log.info("Evade: invalid die index %d." % die_index)
+		return
+	_submit_select_evade_die(die_index)
+
+
+## Builds and submits the [SelectEvadeDieCommand] for the current
+## defender.  Side effects (remove or reroll, damage update, FSM
+## continuation) happen on the attacker peer when
+## [method apply_defender_evade_die] is triggered from the
+## [signal CommandProcessor.command_executed] broadcast.
+func _submit_select_evade_die(die_index: int) -> void:
+	if _state.defender_ship == null:
+		_log.warn("Evade-die submit with no defender — ignoring.")
+		return
+	var def_inst: ShipInstance = \
+			_state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	GameManager.submit_select_evade_die(def_inst, die_index)
+
+
+## Applies a defender's evade-die selection on the attacker peer.
+## Called from [GameBoard] when the
+## [signal CommandProcessor.command_executed] signal fires for a
+## [SelectEvadeDieCommand].  Performs the actual remove (long range)
+## or reroll (medium / close range), updates the damage readout, and
+## proceeds with the next defense-token in the commit queue.
+##
+## In hot-seat the attacker peer is also the submitter, so this runs
+## right after submission completes (single-step).  In network play
+## the defender peer submitted the command and the attacker peer's
+## executor reacts here.
+func apply_defender_evade_die(die_index: int) -> void:
+	if not is_in_exec_mode():
+		return
+	if not _state.evade_step:
+		return
+	if die_index < 0 or die_index >= _state.dice_results.size():
+		_log.info("Evade: invalid die index %d on apply." % die_index)
 		return
 	_state.evade_step = false
 	if _get_panel():
@@ -1232,6 +1293,17 @@ func _on_evade_die_selected(die_index: int) -> void:
 		_apply_evade_remove(die_index)
 	else:
 		_apply_evade_reroll(die_index)
+	# Phase I6b-3 R3 follow-up: clear the evade-sub-step flags AND
+	# publish the post-modification dice strip + modified damage so
+	# the defender peer's [AttackPanelMirror] both hides the die-
+	# selection section and re-renders the rerolled / removed die
+	# (and the updated damage readout) in a single broadcast.
+	_fsm_patch_payload({
+		"evade_active": false,
+		"evade_range_band": "",
+		"dice_results": _state.dice_results.duplicate(true),
+		"modified_damage": _state.modified_damage,
+	})
 	if _get_panel():
 		_get_panel().update_defense_damage(
 				_state.modified_damage)

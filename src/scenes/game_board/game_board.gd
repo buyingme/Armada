@@ -911,6 +911,15 @@ func _on_command_executed_project_ui(_command: GameCommand,
 		for raw_idx: Variant in indices_raw:
 			indices.append(int(raw_idx))
 		_attack_executor.apply_defender_commit(indices)
+	# Phase I6b-3 R3: when a [SelectEvadeDieCommand] is broadcast,
+	# drive the attacker peer's [AttackExecutor] through the
+	# remove-die / reroll-die pipeline.  Hot-seat: same code path.
+	if _command != null and _command.command_type == "select_evade_die" \
+			and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode():
+		var die_index: int = int(_result.get("die_index", -1))
+		if die_index >= 0:
+			_attack_executor.apply_defender_evade_die(die_index)
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
 		# Hot-seat: viewer is the active player.

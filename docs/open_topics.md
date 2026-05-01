@@ -340,6 +340,8 @@ All other implementation phases (0–12) are complete.
 | Bug | Severity | Observed | Notes |
 |-----|----------|----------|-------|
 | Activated squadron loses ghosted appearance after ship-overlap displacement | Minor (visual only) | 2026-04-12 | When an activated squadron is displaced due to collision with a capital ship (e.g. VSD manoeuvring into it), the ghosted/dimmed activated visual state is lost. Game logic is correct — the squadron cannot be re-activated. |
+| Repair effect not visible on ship token | Minor (visual only) | 2026-05-01 | After a repair action (shields restored / damage card discarded / damage moved to hull), the on-board ship token does not refresh — the underlying [ShipInstance] is mutated correctly and the ShipCardPanel updates, but the token's hull/shield pip overlay is stale until another visual refresh. Likely missing `ship_shields_changed` / `ship_hull_changed` emit on the repair path. |
+| Network: redirect hull zone chosen by attacker instead of defender | Major (gameplay correctness) | 2026-05-01 | In network play the redirect sub-step's adjacent-zone buttons are interactive on the **attacker** peer rather than on the defender's [AttackPanelMirror]. Mirrors the pre-R2 defense / pre-R3 evade situation. Will be closed by Phase I6b-3 R4 — `SelectRedirectZoneCommand` already exists; needs the same defender-peer interactive-section gate as R2/R3. |
 
 ## 3.6 Resolved Bugs
 

@@ -806,6 +806,21 @@ func submit_commit_defense(ship: ShipInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits a [SelectEvadeDieCommand] from the defender peer when the
+## player picks an attack die for the Evade defense effect on the
+## [AttackPanelMirror].  Phase I6b-3 R3.
+## [param ship] — the defending ShipInstance.
+## [param die_index] — index into the attacker's dice-results buffer.
+func submit_select_evade_die(ship: ShipInstance,
+		die_index: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := SelectEvadeDieCommand.new(ship.owner_player,
+			{"ship_index": ship_index, "die_index": die_index})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [SelectRedirectZoneCommand] for redirect damage allocation.
 ## [param ship] — the defending ShipInstance.
 ## [param zone] — [Constants.HullZone] int value of the target zone.

@@ -187,6 +187,12 @@ func _publish_clear_target_patch() -> void:
 		# section on the defender peer's mirror.
 		"evade_active": false,
 		"evade_range_band": "",
+		# Phase I6b-3 R4: drop the previous attack's redirect sub-step
+		# flags so a new attack does not re-open a stale redirect
+		# section on the defender peer's mirror.
+		"redirect_active": false,
+		"redirect_adjacent_zones": [],
+		"redirect_remaining": 0,
 	})
 
 
@@ -1364,12 +1370,31 @@ func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 			% [_state.redirect_remaining,
 			ConstantsScript.hull_zone_to_string(def_zone),
 			str(adjacent)])
-	if _get_panel():
+	# Phase I6b-3 R4: publish the redirect sub-step into the
+	# interaction flow so the defender peer's [AttackPanelMirror] can
+	# render the interactive zone buttons.  Adjacent zones are stored
+	# as plain ints for serialisation safety.
+	var adjacent_ints: Array = []
+	for zn: Variant in adjacent:
+		adjacent_ints.append(int(zn))
+	_fsm_patch_payload({
+		"redirect_active": true,
+		"redirect_adjacent_zones": adjacent_ints,
+		"redirect_remaining": _state.redirect_remaining,
+	})
+	# Phase I6b-3 R4: in network mode the attacker peer renders a
+	# read-only mirror; the interactive zone buttons live on the
+	# defender peer's [AttackPanelMirror].
+	if _get_panel() and not PlayMode.is_network():
 		_get_panel().show_redirect_section(
 				adjacent, _state.redirect_remaining)
 
-## Called when the player selects a hull zone for redirect.
-## Each click redirects 1 damage to that zone (limited by zone shields).
+## Called when the player selects a hull zone for redirect on the
+## attacker peer's local panel (hot-seat) or when the defender peer's
+## mirror submits a [SelectRedirectZoneCommand] (network).  In both
+## modes the click reduces to a single command submission so the
+## bookkeeping path is unified via [method apply_defender_redirect_zone].
+##
 ## Requirements: AE-DEF-012, AE-DEF-013.
 func _on_attack_redirect_zone_selected(zone: int) -> void:
 	if not _state.redirect_step:
@@ -1381,26 +1406,41 @@ func _on_attack_redirect_zone_selected(zone: int) -> void:
 	if def_inst == null:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
-	if not _apply_single_redirect(zone_enum, def_inst):
-		return
-	if _get_panel():
-		_get_panel().update_defense_damage(
-				_state.modified_damage)
-	if not _check_redirect_continuation(def_inst):
-		_state.redirect_step = false
-		_process_next_defense_commit()
-
-## Applies one point of redirect damage to the given hull zone.
-## Returns false if the zone has no shields or no damage remains.
-func _apply_single_redirect(zone_enum: Constants.HullZone,
-		def_inst: ShipInstance) -> bool:
-	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
 	if not _defense_resolver.can_redirect_to_zone(
 			zone_enum, def_inst, _state.redirect_remaining):
+		var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
 		_log.info("Redirect: cannot redirect to %s." % zone_str)
-		return false
-	# Route through command system for replay determinism.
+		return
+	# Submit; the bookkeeping (decrement, continuation, next-commit)
+	# happens on the attacker peer in [method apply_defender_redirect_zone]
+	# triggered from [signal CommandProcessor.command_executed].
 	GameManager.submit_select_redirect_zone(def_inst, int(zone_enum))
+
+
+## Applies the redirect bookkeeping on the attacker peer after a
+## [SelectRedirectZoneCommand] has been broadcast.  Called by
+## [GameBoard._on_command_executed_project_ui].  In hot-seat the local
+## peer is also the attacker, so this runs immediately after the
+## submission completes.  In network play the defender peer submitted
+## the command and the attacker peer's executor reacts here.
+##
+## Phase I6b-3 R4.
+func apply_defender_redirect_zone(zone: int) -> void:
+	if not is_in_exec_mode():
+		return
+	if not _state.redirect_step:
+		return
+	if _state.defender_ship == null:
+		return
+	var def_inst: ShipInstance = \
+			_state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	var zone_enum: Constants.HullZone = zone as Constants.HullZone
+	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
+	# The shield mutation is in [SelectRedirectZoneCommand.execute] and
+	# is replicated to both peers; emit the UI signal here on the
+	# attacker peer so its on-board ship visuals refresh.
 	EventBus.ship_shields_changed.emit(
 			def_inst, zone_str,
 			int(def_inst.current_shields.get(zone_str, 0)))
@@ -1409,7 +1449,47 @@ func _apply_single_redirect(zone_enum: Constants.HullZone,
 	_log.info("Redirect: 1 damage to %s shield. Remaining: %d/%d." % [
 			zone_str, _state.redirect_remaining,
 			_state.modified_damage])
-	return true
+	if _get_panel():
+		_get_panel().update_defense_damage(
+				_state.modified_damage)
+	# Phase I6b-3 R4: re-publish the updated remaining-budget and the
+	# (post-mutation) modified damage so the defender peer's mirror
+	# can refresh both readouts.
+	_fsm_patch_payload({
+		"redirect_remaining": _state.redirect_remaining,
+		"modified_damage": _state.modified_damage,
+	})
+	if not _check_redirect_continuation(def_inst):
+		_state.redirect_step = false
+		# Phase I6b-3 R4: clear the redirect sub-step flag in the
+		# payload so the defender peer's mirror hides its interactive
+		# section.
+		_fsm_patch_payload({
+			"redirect_active": false,
+			"redirect_adjacent_zones": [],
+			"redirect_remaining": 0,
+		})
+		_process_next_defense_commit()
+
+
+## Applies the [i]Done Redirecting[/i] cleanup on the attacker peer
+## after a [RedirectDoneCommand] has been broadcast.  Called by
+## [GameBoard._on_command_executed_project_ui].  Phase I6b-3 R4.
+func apply_defender_redirect_done() -> void:
+	if not is_in_exec_mode():
+		return
+	if not _state.redirect_step:
+		return
+	_log.info("Redirect ended early by player.")
+	_state.redirect_step = false
+	_fsm_patch_payload({
+		"redirect_active": false,
+		"redirect_adjacent_zones": [],
+		"redirect_remaining": 0,
+	})
+	if _get_panel():
+		_get_panel().hide_redirect_section()
+	_process_next_defense_commit()
 
 ## Checks if redirect can continue. Returns true if more redirect is
 ## possible and the UI was updated; false if redirect is done.
@@ -1537,15 +1617,20 @@ func _process_next_defense_commit() -> void:
 		_process_next_defense_commit()
 
 ## Called when the player presses "Done Redirecting" in the redirect
-## section, ending the redirect sub-step early.
+## section, ending the redirect sub-step early.  Submits a
+## [RedirectDoneCommand]; the bookkeeping happens on the attacker peer
+## in [method apply_defender_redirect_done] triggered from
+## [signal CommandProcessor.command_executed].  Phase I6b-3 R4.
 func _on_redirect_done_early() -> void:
 	if not _state.redirect_step:
 		return
-	_log.info("Redirect ended early by player.")
-	_state.redirect_step = false
-	if _get_panel():
-		_get_panel().hide_redirect_section()
-	_process_next_defense_commit()
+	if _state.defender_ship == null:
+		return
+	var def_inst: ShipInstance = \
+			_state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return
+	GameManager.submit_redirect_done(def_inst)
 
 # ===========================================================================
 # Phase 6c-3 — Damage Resolution (Step 5)

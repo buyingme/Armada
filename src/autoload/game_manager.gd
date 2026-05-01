@@ -834,6 +834,19 @@ func submit_select_redirect_zone(ship: ShipInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits a [RedirectDoneCommand] when the defender ends the redirect
+## sub-step early via the [i]Done Redirecting[/i] button on the
+## [AttackPanelMirror].  Phase I6b-3 R4.
+## [param ship] — the defending ShipInstance.
+func submit_redirect_done(ship: ShipInstance) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := RedirectDoneCommand.new(ship.owner_player,
+			{"ship_index": ship_index})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [SkipAttackCommand] for replay recording.
 ## [param player] — the active player index.
 ## [param reason] — skip reason string.
@@ -1535,7 +1548,9 @@ func _handle_remote_command_effects(
 				EventBus.network_dice_result.emit(result)
 		"advance_activation_step":
 			pass # UI consumes authoritative interaction-state broadcast.
-		"select_redirect_zone", "skip_attack":
+		"select_redirect_zone":
+			_handle_remote_select_redirect_zone(cmd, result)
+		"skip_attack":
 			pass # Attack executor handles display from result.
 		"publish_attack_flow":
 			# Phase I6b-3 follow-up: pure flow-snapshot command.
@@ -1760,6 +1775,25 @@ func _handle_remote_spend_defense_token(cmd: GameCommand) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship:
 		EventBus.ship_defense_token_changed.emit(ship)
+
+
+## Phase I6b-3 R4 follow-up: refresh the defender's shield pip overlay
+## on the passive peer when a redirect zone is committed.
+## [SelectRedirectZoneCommand.execute] reduces shields on both peers
+## (commands are replicated), but only the attacker peer's
+## [AttackExecutor.apply_defender_redirect_zone] emits the
+## [signal EventBus.ship_shields_changed] that the ship token listens
+## to.  Mirror the emit here so the defender peer's VSD pip updates.
+func _handle_remote_select_redirect_zone(
+		cmd: GameCommand, result: Dictionary) -> void:
+	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship == null:
+		return
+	var zone_name: String = String(result.get("zone_name", ""))
+	if zone_name == "":
+		return
+	EventBus.ship_shields_changed.emit(
+			ship, zone_name, int(result.get("new_shields", 0)))
 
 
 ## B19: Mirror resolve_damage side effects on client.

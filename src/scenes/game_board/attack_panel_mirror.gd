@@ -83,6 +83,23 @@ var _last_modified_damage: int = -1
 ## signal has been connected to [method _on_evade_die_confirmed].
 var _evade_signal_connected: bool = false
 
+## Phase I6b-3 R4: true once the interactive redirect zone-selection
+## section has been opened for the current attack and the
+## [code]redirect_zone_selected[/code] / [code]redirect_done_pressed[/code]
+## signals have been wired up.  Reset on [method close] and when the
+## host clears the [code]redirect_active[/code] payload flag.
+var _redirect_section_active: bool = false
+
+## Phase I6b-3 R4: cache of the last published [code]redirect_remaining[/code]
+## value so the mirror only refreshes the panel's remaining-budget
+## label when it actually changes.
+var _last_redirect_remaining: int = -1
+
+## Phase I6b-3 R4: true once the panel's redirect signals have been
+## connected.  Tracked independently so [method close] can disconnect
+## cleanly.
+var _redirect_signal_connected: bool = false
+
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
 
@@ -183,6 +200,11 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 			# next attack's [code]evade_active[/code] payload edge
 			# re-opens [code]show_evade_die_selection[/code] cleanly.
 			_evade_section_active = false
+			# Phase I6b-3 R4: also reset the redirect-section flag and
+			# its cached budget so the next attack's `redirect_active`
+			# edge re-opens [code]show_redirect_section[/code] cleanly.
+			_redirect_section_active = false
+			_last_redirect_remaining = -1
 			# Phase I6b-3 R1b follow-up: drop the dice caches so the
 			# next attack's pool / roll snapshot triggers a fresh
 			# render even if the formatted text happens to match.
@@ -216,6 +238,9 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 	# Phase I6b-3 R3: render the interactive evade die-selection
 	# section when the attacker peer flips `evade_active` to true.
 	_apply_evade_section(payload)
+	# Phase I6b-3 R4: render the interactive redirect zone-selection
+	# section when the attacker peer flips `redirect_active` to true.
+	_apply_redirect_section(payload)
 	# Phase I6b-3 R3 follow-up: refresh the defense-section damage
 	# readout when an evade-die selection mutates `modified_damage`.
 	_apply_modified_damage_update(payload)
@@ -379,6 +404,99 @@ func _on_evade_die_confirmed(die_index: int) -> void:
 	GameManager.submit_select_evade_die(def_inst, die_index)
 
 
+## Renders the interactive redirect zone-selection section when the
+## attacker peer flips [code]redirect_active[/code] to true in
+## [member InteractionFlow.payload].  Idempotent: only opens once per
+## redirect sub-step (edge-triggered by
+## [member _redirect_section_active]) and tears down when the attacker
+## clears the flag.  Refreshes the remaining-budget label whenever
+## [code]redirect_remaining[/code] changes.
+##
+## Phase I6b-3 R4 — defender-controlled redirect zone selection.
+func _apply_redirect_section(payload: Dictionary) -> void:
+	if _panel == null:
+		return
+	var active: bool = bool(payload.get("redirect_active", false))
+	if active and not _redirect_section_active:
+		var zones_raw: Array = payload.get(
+				"redirect_adjacent_zones", []) as Array
+		var zones: Array = []
+		for zn: Variant in zones_raw:
+			zones.append(int(zn))
+		var remaining: int = int(payload.get("redirect_remaining", 0))
+		_panel.show_redirect_section(zones, remaining)
+		_last_redirect_remaining = remaining
+		if not _redirect_signal_connected:
+			_panel.redirect_zone_selected.connect(
+					_on_redirect_zone_confirmed)
+			_panel.redirect_done_pressed.connect(
+					_on_redirect_done_confirmed)
+			_redirect_signal_connected = true
+		_redirect_section_active = true
+	elif active and _redirect_section_active:
+		# Remaining budget changed mid-flight — refresh the label only.
+		var remaining: int = int(payload.get("redirect_remaining", 0))
+		if remaining != _last_redirect_remaining:
+			if _panel.has_method("update_redirect_remaining"):
+				_panel.update_redirect_remaining(remaining)
+			_last_redirect_remaining = remaining
+	elif not active and _redirect_section_active:
+		if _panel.has_method("hide_redirect_section"):
+			_panel.hide_redirect_section()
+		_redirect_section_active = false
+		_last_redirect_remaining = -1
+
+
+## Submits a [SelectRedirectZoneCommand] from the defender peer when
+## the player picks an adjacent hull zone in the redirect section.
+## The attacker peer's [AttackExecutor] reacts to the broadcast via
+## [signal CommandProcessor.command_executed] and runs the redirect
+## bookkeeping pipeline.
+##
+## Phase I6b-3 R4.
+func _on_redirect_zone_confirmed(zone: int) -> void:
+	var def_inst: ShipInstance = _resolve_defender_for_submit(
+			"Redirect zone")
+	if def_inst == null:
+		return
+	GameManager.submit_select_redirect_zone(def_inst, zone)
+
+
+## Submits a [RedirectDoneCommand] from the defender peer when the
+## player presses [i]Done Redirecting[/i].  Phase I6b-3 R4.
+func _on_redirect_done_confirmed() -> void:
+	var def_inst: ShipInstance = _resolve_defender_for_submit(
+			"Redirect done")
+	if def_inst == null:
+		return
+	GameManager.submit_redirect_done(def_inst)
+
+
+## Reads the defender [ShipInstance] off the published interaction
+## flow.  Returns null and logs a warning if the identity is missing
+## or the ship cannot be resolved.  Used by R3/R4 mirror submitters.
+func _resolve_defender_for_submit(label: String) -> ShipInstance:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return null
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow == null:
+		return null
+	var def_player: int = int(flow.payload.get("defender_player", -1))
+	var def_index: int = int(flow.payload.get(
+			"defender_ship_index", -1))
+	if def_player < 0 or def_index < 0:
+		_log.warn("%s submit with no defender identity — ignoring."
+				% label)
+		return null
+	var def_inst: ShipInstance = gs.get_ship(def_player, def_index)
+	if def_inst == null:
+		_log.warn("%s submit: ship %d/%d not found." %
+				[label, def_player, def_index])
+		return null
+	return def_inst
+
+
 ## Submits a [CommitDefenseCommand] from the defender peer.
 ## Reads the selected token indices off the panel and routes them
 ## through [GameManager.submit_commit_defense].  The attacker peer's
@@ -422,6 +540,16 @@ func close() -> void:
 		if _panel.evade_die_confirmed.is_connected(_on_evade_die_confirmed):
 			_panel.evade_die_confirmed.disconnect(_on_evade_die_confirmed)
 		_evade_signal_connected = false
+	if _redirect_signal_connected:
+		if _panel.redirect_zone_selected.is_connected(
+				_on_redirect_zone_confirmed):
+			_panel.redirect_zone_selected.disconnect(
+					_on_redirect_zone_confirmed)
+		if _panel.redirect_done_pressed.is_connected(
+				_on_redirect_done_confirmed):
+			_panel.redirect_done_pressed.disconnect(
+					_on_redirect_done_confirmed)
+		_redirect_signal_connected = false
 	if _panel.visible:
 		_panel.close()
 	_is_open = false
@@ -429,6 +557,8 @@ func close() -> void:
 	_last_defender_name = ""
 	_defense_section_active = false
 	_evade_section_active = false
+	_redirect_section_active = false
+	_last_redirect_remaining = -1
 	_last_dice_pool_text = ""
 	_last_dice_results_payload = []
 	_last_modified_damage = -1

@@ -699,3 +699,61 @@ func test_select_evade_die_serialize_roundtrip() -> void:
 	assert_eq(int(restored.payload.get("die_index", -1)), 4,
 			"Restored die_index should match.")
 	GameCommand._registry.erase("select_evade_die")
+
+
+# ======================================================================
+# RedirectDoneCommand (Phase I6b-3 R4)
+# ======================================================================
+
+func test_redirect_done_validate_ok() -> void:
+	var idx: int = _add_ship(1)
+	RedirectDoneCommand.register()
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid ship in Ship Phase.")
+	GameCommand._registry.erase("redirect_done")
+
+
+func test_redirect_done_validate_wrong_phase() -> void:
+	_state.current_phase = Constants.GamePhase.STATUS
+	var idx: int = _add_ship(1)
+	RedirectDoneCommand.register()
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject outside Ship/Squadron Phase.")
+	GameCommand._registry.erase("redirect_done")
+
+
+func test_redirect_done_validate_bad_ship() -> void:
+	RedirectDoneCommand.register()
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": 99})
+	assert_ne(cmd.validate(_state), "",
+			"Should reject invalid ship index.")
+	GameCommand._registry.erase("redirect_done")
+
+
+func test_redirect_done_execute_echoes_ship_index() -> void:
+	var idx: int = _add_ship(1)
+	RedirectDoneCommand.register()
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(int(result.get("ship_index", -1)), idx,
+			"Result should echo ship_index.")
+	GameCommand._registry.erase("redirect_done")
+
+
+func test_redirect_done_serialize_roundtrip() -> void:
+	RedirectDoneCommand.register()
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": 0})
+	cmd.sequence = 77
+	var data: Dictionary = cmd.serialize()
+	var restored: GameCommand = GameCommand.deserialize(data)
+	assert_not_null(restored,
+			"Deserialized command should not be null.")
+	assert_eq(restored.command_type, "redirect_done",
+			"Restored type should match.")
+	assert_eq(restored.player_index, 1,
+			"Restored player should match defender.")
+	assert_eq(restored.sequence, 77,
+			"Restored sequence should match.")
+	GameCommand._registry.erase("redirect_done")

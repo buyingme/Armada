@@ -920,6 +920,24 @@ func _on_command_executed_project_ui(_command: GameCommand,
 		var die_index: int = int(_result.get("die_index", -1))
 		if die_index >= 0:
 			_attack_executor.apply_defender_evade_die(die_index)
+	# Phase I6b-3 R4: when a [SelectRedirectZoneCommand] is broadcast,
+	# drive the attacker peer's [AttackExecutor] through the redirect
+	# bookkeeping (decrement remaining + modified_damage, continuation,
+	# next-commit).  Hot-seat: same code path.
+	if _command != null \
+			and _command.command_type == "select_redirect_zone" \
+			and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode():
+		var redirect_zone: int = int(_result.get("zone", -1))
+		if redirect_zone >= 0:
+			_attack_executor.apply_defender_redirect_zone(redirect_zone)
+	# Phase I6b-3 R4: when a [RedirectDoneCommand] is broadcast, end
+	# the redirect sub-step early on the attacker peer.  Hot-seat: same
+	# code path.
+	if _command != null and _command.command_type == "redirect_done" \
+			and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode():
+		_attack_executor.apply_defender_redirect_done()
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
 		# Hot-seat: viewer is the active player.

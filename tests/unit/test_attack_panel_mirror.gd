@@ -151,6 +151,14 @@ func test_no_signal_connections_on_panel() -> void:
 	assert_eq(panel.evade_die_confirmed.get_connections().size(), 0,
 			"evade_die_confirmed must not be connected before "
 			+"evade_active flag is set.")
+	# Phase I6b-3 R4: redirect_zone_selected and redirect_done_pressed
+	# are wired only when the attacker peer flips redirect_active.
+	assert_eq(panel.redirect_zone_selected.get_connections().size(), 0,
+			"redirect_zone_selected must not be connected before "
+			+"redirect_active flag is set.")
+	assert_eq(panel.redirect_done_pressed.get_connections().size(), 0,
+			"redirect_done_pressed must not be connected before "
+			+"redirect_active flag is set.")
 
 
 func test_defense_done_connected_at_defense_tokens() -> void:
@@ -229,6 +237,56 @@ func test_evade_section_opens_when_evade_active_flag_set() -> void:
 	_mirror.close()
 	assert_eq(panel.evade_die_confirmed.get_connections().size(), 0,
 			"evade_die_confirmed must be disconnected after close().")
+
+
+func test_redirect_section_opens_when_redirect_active_flag_set() -> void:
+	# Phase I6b-3 R4: when the attacker peer publishes
+	# `redirect_active=true` (with a non-empty `redirect_adjacent_zones`
+	# array and a positive `redirect_remaining`) into the payload, the
+	# mirror opens the interactive zone-selection section and connects
+	# `redirect_zone_selected` + `redirect_done_pressed` so clicks
+	# submit a SelectRedirectZoneCommand / RedirectDoneCommand from
+	# the defender peer.  Lowering `redirect_active` resets the flag
+	# so future re-activation triggers a fresh open; close() drops the
+	# signal connections.
+	var payload: Dictionary = {
+		"attacker_kind": "ship",
+		"attacker_name": "Demolisher",
+		"defender_name": "CR90",
+		"defender_player": 1,
+		"defender_ship_index": 0,
+		"defender_zone": Constants.HullZone.FRONT,
+		"redirect_active": true,
+		"redirect_adjacent_zones": [
+			Constants.HullZone.LEFT, Constants.HullZone.RIGHT],
+		"redirect_remaining": 2,
+	}
+	_mirror.apply_flow(payload,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	var panel: AttackSimPanel = _mirror.get_panel()
+	assert_eq(panel.redirect_zone_selected.get_connections().size(), 1,
+			"redirect_zone_selected must be connected while "
+			+"redirect_active is true.")
+	assert_eq(panel.redirect_done_pressed.get_connections().size(), 1,
+			"redirect_done_pressed must be connected while "
+			+"redirect_active is true.")
+	# Lowering the flag hides the section but leaves the signal
+	# connections (they're cleared in close()).  The section flag is
+	# reset so a future re-activation triggers a fresh open.
+	var off_payload: Dictionary = payload.duplicate(true)
+	off_payload["redirect_active"] = false
+	off_payload["redirect_adjacent_zones"] = []
+	off_payload["redirect_remaining"] = 0
+	_mirror.apply_flow(off_payload,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	assert_false(_mirror._redirect_section_active,
+			"Redirect-section flag must reset when "
+			+"redirect_active is false.")
+	_mirror.close()
+	assert_eq(panel.redirect_zone_selected.get_connections().size(), 0,
+			"redirect_zone_selected must be disconnected after close().")
+	assert_eq(panel.redirect_done_pressed.get_connections().size(), 0,
+			"redirect_done_pressed must be disconnected after close().")
 
 
 func test_clearing_defender_drops_target_title() -> void:

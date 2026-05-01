@@ -1037,8 +1037,17 @@ func submit_resolve_immediate_effect(ship: ShipInstance,
 	}
 	if not extra_card_data.is_empty():
 		pl["extra_card_data"] = extra_card_data
+	# Network: route authority through the **submitting peer** so the
+	# server's peer/player check accepts the command regardless of who
+	# is the chooser (attacker vs defender, debug tool, etc.).  The
+	# payload's [code]owner_player[/code] still identifies the ship.
+	var submitter_player: int = ship.owner_player
+	if PlayMode.is_network():
+		var local_idx: int = NetworkManager.get_local_player_index()
+		if local_idx >= 0:
+			submitter_player = local_idx
 	var cmd := ResolveImmediateEffectCommand.new(
-			ship.owner_player, pl)
+			submitter_player, pl)
 	return _submitter.submit(cmd)
 
 
@@ -1105,13 +1114,23 @@ func submit_persistent_effect_damage(ship: ShipInstance,
 ## [param ship] — the target ship.
 ## [param card_data] — serialized [DamageCard] with overridden identity.
 ## [param effect_id] — chosen damage card effect ID.
+##
+## In network mode the command's [code]player_index[/code] is set to the
+## **submitting peer**'s slot (not the ship's owner) so the server's
+## peer-authority check accepts the command regardless of who Shift+D'd.
+## The payload's [code]owner_player[/code] still points at the ship owner.
 func submit_debug_deal_damage(ship: ShipInstance,
 		card_data: Dictionary,
 		effect_id: String) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := DebugDealDamageCommand.new(ship.owner_player, {
+	var submitter_player: int = ship.owner_player
+	if PlayMode.is_network():
+		var local_idx: int = NetworkManager.get_local_player_index()
+		if local_idx >= 0:
+			submitter_player = local_idx
+	var cmd := DebugDealDamageCommand.new(submitter_player, {
 		"owner_player": ship.owner_player,
 		"ship_index": ship_index,
 		"effect_id": effect_id,
@@ -1573,7 +1592,7 @@ func _handle_remote_command_effects(
 		"repair_action":
 			_handle_remote_repair_action(cmd)
 		"resolve_immediate_effect":
-			_handle_remote_immediate_effect(cmd)
+			_handle_remote_immediate_effect(cmd, result)
 		"status_phase_cleanup":
 			_handle_remote_status_cleanup()
 		"destroy_unit":
@@ -1885,11 +1904,36 @@ func _handle_remote_repair_action(cmd: GameCommand) -> void:
 
 
 ## B23: Mirror resolve_immediate_effect side effects on client.
-func _handle_remote_immediate_effect(cmd: GameCommand) -> void:
+func _handle_remote_immediate_effect(cmd: GameCommand,
+		result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
-	if ship:
-		EventBus.command_dials_changed.emit(ship)
-		EventBus.ship_defense_token_changed.emit(ship)
+	if ship == null:
+		return
+	# After [ResolveImmediateEffectCommand.execute] the card has been
+	# flipped and moved into [code]ship.facedown_damage[/code].  Locate
+	# it (most-recently-added match) so [ImmediateEffectSignals] can
+	# fire the correct [code]damage_card_flipped[/code] visual on the
+	# passive peer — closing the gap that left auto-resolve cards
+	# (Structural Damage, Projector Misaligned, Comm Noise, …) without
+	# a card-column refresh on the non-originating peer.
+	var effect_id: String = cmd.payload.get("effect_id", "") as String
+	var card: DamageCard = null
+	for i: int in range(ship.facedown_damage.size() - 1, -1, -1):
+		var c: DamageCard = ship.facedown_damage[i]
+		if c != null and c.effect_id == effect_id:
+			card = c
+			break
+	# Use the **broadcast result** verbatim — it is the authoritative
+	# return value of [ResolveImmediateEffectCommand.execute] from the
+	# server, so [code]action[/code] / [code]new_speed[/code] /
+	# [code]shield_changes[/code] / [code]zone[/code] etc. are exactly
+	# the values the originator's [_emit_immediate_signals] uses.
+	if card != null:
+		ImmediateEffectSignals.emit(card, ship, result)
+	# Always refresh dial / token state — covers life_support_failure
+	# and any other side-channel mutations.
+	EventBus.command_dials_changed.emit(ship)
+	EventBus.ship_defense_token_changed.emit(ship)
 
 
 ## B24: Mirror status_phase_cleanup side effects on client.

@@ -245,7 +245,7 @@ func test_payload_is_deep_copied_into_intent() -> void:
 			"locked_tokens": [Constants.DefenseToken.BRACE],
 			"modified_damage": 4,
 			"defender_player": 1,
-			"dice_pool": [{"color": "red", "face": "hit"}]}
+			"dice_pool": [ {"color": "red", "face": "hit"}]}
 	var gs: GameState = _make_state_with_flow_step(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS, 1, payload)

@@ -81,7 +81,7 @@ const _LEGAL_TRANSITIONS: Dictionary = {
 	Step.DEFENSE_TOKENS: [Step.RESOLVE_DAMAGE, Step.END],
 	Step.RESOLVE_DAMAGE: [Step.CRITICAL_CHOICE, Step.END],
 	Step.CRITICAL_CHOICE: [Step.END],
-	Step.END: [Step.IDLE, Step.DECLARE],  # End may restart for a new attack.
+	Step.END: [Step.IDLE, Step.DECLARE], # End may restart for a new attack.
 }
 
 

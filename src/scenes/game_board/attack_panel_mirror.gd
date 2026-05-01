@@ -100,6 +100,23 @@ var _last_redirect_remaining: int = -1
 ## cleanly.
 var _redirect_signal_connected: bool = false
 
+## Phase I6b-3 R5: lazily-created modal shown on the chooser peer when
+## a damage card with a player choice is dealt.  Owned and parented to
+## [member _modal_layer] (created in [method setup]).
+var _choice_modal: OpponentChoiceModal = null
+
+## Phase I6b-3 R5: dedicated [CanvasLayer] for the chooser modal.
+## Layer 95 so it renders above the mirror's panel (layer 90) and the
+## damage-summary overlay (layer 85), matching the attacker-peer
+## modal's z-order.
+var _modal_layer: CanvasLayer = null
+
+## Phase I6b-3 R5: true once the chooser modal has been opened for
+## the current critical-choice sub-step and its
+## [code]choice_confirmed[/code] signal has been wired up.  Reset on
+## confirm and on [method close].
+var _choice_modal_active: bool = false
+
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackPanelMirror")
 
@@ -123,6 +140,14 @@ func setup(layer: CanvasLayer) -> void:
 	_panel.name = "AttackPanelMirror"
 	layer.add_child(_panel)
 	_panel.visible = false
+	# Phase I6b-3 R5: dedicated CanvasLayer for the chooser modal at
+	# layer 95 (above the mirror's panel at 90 and the damage-summary
+	# overlay at 85).  Modal itself is lazily created on first use.
+	if _modal_layer == null and layer.get_parent() != null:
+		_modal_layer = CanvasLayer.new()
+		_modal_layer.name = "AttackPanelMirrorChoiceModalLayer"
+		_modal_layer.layer = 95
+		layer.get_parent().add_child(_modal_layer)
 
 
 ## Returns the underlying panel — for tests only.  Production code
@@ -241,6 +266,9 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 	# Phase I6b-3 R4: render the interactive redirect zone-selection
 	# section when the attacker peer flips `redirect_active` to true.
 	_apply_redirect_section(payload)
+	# Phase I6b-3 R5: open the chooser modal when the critical-choice
+	# sub-step is entered and the local peer is the chooser.
+	_apply_critical_choice_modal(payload, step_id)
 	# Phase I6b-3 R3 follow-up: refresh the defense-section damage
 	# readout when an evade-die selection mutates `modified_damage`.
 	_apply_modified_damage_update(payload)
@@ -497,6 +525,118 @@ func _resolve_defender_for_submit(label: String) -> ShipInstance:
 	return def_inst
 
 
+## Phase I6b-3 R5 — opens the [OpponentChoiceModal] on the chooser's
+## peer when the attacker peer publishes a critical-choice sub-step
+## with [code]chooser_player == local[/code].  The chooser interacts
+## locally; on confirm a [ResolveImmediateEffectCommand] is submitted
+## with the ship and card reconstructed from the published payload.
+##
+## Idempotent: the modal is only opened once per critical-choice
+## sub-step; transitioning out of [code]ATTACK_CRITICAL_CHOICE[/code]
+## or closing the mirror tears it down.
+func _apply_critical_choice_modal(payload: Dictionary,
+		step_id: int) -> void:
+	var entering: bool = (
+			step_id == Constants.InteractionStep.ATTACK_CRITICAL_CHOICE)
+	if not entering:
+		if _choice_modal_active and _choice_modal != null:
+			_choice_modal.close_and_clear()
+			_choice_modal_active = false
+		return
+	if _choice_modal_active:
+		return
+	var local: int = NetworkManager.get_local_player_index()
+	var chooser_player: int = int(
+			payload.get("chooser_player", -1))
+	if chooser_player < 0 or chooser_player != local:
+		return
+	# Defensive: don't open the modal if this peer is also the
+	# attacker (the local AttackExecutor handles that path).
+	if _attacker_is_local(payload, local):
+		return
+	var choice_info_raw: Variant = payload.get("choice_info", {})
+	if not (choice_info_raw is Dictionary):
+		_log.warn("Critical-choice modal: missing choice_info; "
+				+"skipping open.")
+		return
+	_ensure_choice_modal()
+	if _choice_modal == null:
+		_log.warn("Critical-choice modal: failed to instantiate.")
+		return
+	if not _choice_modal.choice_confirmed.is_connected(
+			_on_choice_confirmed):
+		_choice_modal.choice_confirmed.connect(
+				_on_choice_confirmed, CONNECT_ONE_SHOT)
+	_choice_modal.open(choice_info_raw as Dictionary)
+	_choice_modal_active = true
+	_log.info("Critical-choice modal opened on chooser peer "
+			+"(player %d, card='%s')."
+			% [local, String(payload.get("card_title", "?"))])
+
+
+## Returns true when the local peer is the attacker for the published
+## attack flow — i.e. the local [AttackExecutor] owns the
+## critical-choice modal and the mirror should stay out of the way.
+func _attacker_is_local(payload: Dictionary, local: int) -> bool:
+	var attacker_player: int = int(
+			payload.get("attacker_player", -1))
+	return attacker_player >= 0 and attacker_player == local
+
+
+## Lazily creates the [OpponentChoiceModal] on the dedicated
+## [member _modal_layer].  No-op if already created.
+func _ensure_choice_modal() -> void:
+	if _choice_modal != null or _modal_layer == null:
+		return
+	_choice_modal = OpponentChoiceModal.new()
+	_choice_modal.name = "AttackPanelMirrorChoiceModal"
+	_modal_layer.add_child(_choice_modal)
+
+
+## Submits a [ResolveImmediateEffectCommand] from the chooser peer
+## when the player confirms a selection in the chooser modal.  The
+## attacker peer's [AttackExecutor] reacts to the broadcast via
+## [signal CommandProcessor.command_executed] and finalises the attack.
+func _on_choice_confirmed(selection: Dictionary) -> void:
+	_choice_modal_active = false
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow == null:
+		return
+	var owner_player: int = int(
+			flow.payload.get("pending_ship_owner_player", -1))
+	var ship_index: int = int(
+			flow.payload.get("pending_ship_index", -1))
+	var card_index: int = int(
+			flow.payload.get("pending_card_index", -1))
+	if owner_player < 0 or ship_index < 0 or card_index < 0:
+		_log.warn("Choice confirmed with incomplete payload — "
+				+"owner=%d ship=%d card=%d."
+				% [owner_player, ship_index, card_index])
+		return
+	var ship: ShipInstance = gs.get_ship(owner_player, ship_index)
+	if ship == null:
+		_log.warn("Choice confirmed: ship %d/%d not found."
+				% [owner_player, ship_index])
+		return
+	if card_index < 0 or card_index >= ship.faceup_damage.size():
+		_log.warn("Choice confirmed: card_index %d out of range "
+				+"(faceup=%d)."
+				% [card_index, ship.faceup_damage.size()])
+		return
+	var card: DamageCard = ship.faceup_damage[card_index]
+	if card == null:
+		_log.warn("Choice confirmed: card at index %d is null."
+				% card_index)
+		return
+	GameManager.submit_resolve_immediate_effect(
+			ship, card, selection, {})
+	_log.info("Choice submitted: card='%s' selection=%s."
+			% [card.title, str(selection)])
+
+
 ## Submits a [CommitDefenseCommand] from the defender peer.
 ## Reads the selected token indices off the panel and routes them
 ## through [GameManager.submit_commit_defense].  The attacker peer's
@@ -550,6 +690,14 @@ func close() -> void:
 			_panel.redirect_done_pressed.disconnect(
 					_on_redirect_done_confirmed)
 		_redirect_signal_connected = false
+	# Phase I6b-3 R5: tear down the chooser modal if still active.
+	if _choice_modal != null and _choice_modal_active:
+		if _choice_modal.choice_confirmed.is_connected(
+				_on_choice_confirmed):
+			_choice_modal.choice_confirmed.disconnect(
+					_on_choice_confirmed)
+		_choice_modal.close_and_clear()
+	_choice_modal_active = false
 	if _panel.visible:
 		_panel.close()
 	_is_open = false

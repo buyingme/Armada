@@ -1,0 +1,197 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					3
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1
+				],
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					3,
+					0,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 0,
+			"sequence": 4,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": true,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+					"id": "reduce_speed"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 6,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": true,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 0,
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+					"id": "reduce_speed"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 0,
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": true,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 9,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+					"id": "reduce_speed"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 0,
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 10,
+			"type": "resolve_immediate_effect"
+		},
+		{
+			"payload": {
+				"card_data": {
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": true,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 11,
+			"type": "debug_deal_damage"
+		},
+		{
+			"payload": {
+				"card_index": 0,
+				"choice": {
+					"id": "change_dial_0"
+				},
+				"effect_id": "comm_noise",
+				"owner_player": 1,
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 12,
+			"type": "resolve_immediate_effect"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 1,
+		"godot_version": "4.5.1-stable (official)",
+		"initiative_player": 0,
+		"rng_seed": 22419673,
+		"scenario_id": "learning_scenario",
+		"timestamp": "2026-05-01T14:08:31"
+	}
+}

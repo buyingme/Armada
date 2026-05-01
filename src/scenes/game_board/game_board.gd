@@ -938,6 +938,23 @@ func _on_command_executed_project_ui(_command: GameCommand,
 			and _attack_executor != null \
 			and _attack_executor.is_in_exec_mode():
 		_attack_executor.apply_defender_redirect_done()
+	# Phase I6b-3 R5: when a [ResolveImmediateEffectCommand] is
+	# broadcast and the chooser was the remote peer, the local
+	# (attacker) executor still owns the post-modal cleanup + finalize.
+	# Hot-seat skips this branch (chooser modal runs in-process).
+	if _command != null \
+			and _command.command_type == "resolve_immediate_effect" \
+			and _attack_executor != null \
+			and _attack_executor.is_in_exec_mode() \
+			and PlayMode.is_network():
+		_attack_executor.apply_remote_immediate_choice(_result)
+	# DBG-050: when a [DebugDealDamageCommand] is broadcast / executed,
+	# emit the visual signals on every peer (so hot-seat, host, and
+	# client all refresh the [ShipCardPanel] / hull display) and chain
+	# the immediate-effect resolution on the originating peer only.
+	if _command != null \
+			and _command.command_type == "debug_deal_damage":
+		_react_debug_deal_damage(_command, _result)
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
 		# Hot-seat: viewer is the active player.
@@ -2608,28 +2625,90 @@ func _debug_deal_faceup_card(ship: ShipInstance,
 				card.effect_text = cdef.get("effect_text", "")
 				break
 	card.is_faceup = true
-	# Submit through command for replay/multiplayer safety.
+	# Submit through command for replay / multiplayer safety.  All
+	# post-submit work (visual emit, immediate-effect chain, tooltip,
+	# success log) runs from [_on_command_executed_project_ui]'s
+	# [code]debug_deal_damage[/code] reactor branch so hot-seat, host,
+	# and client peers share a single visual-update path.
 	var result: Dictionary = GameManager.submit_debug_deal_damage(
 			ship, card.serialize(), effect_id)
-	if result.is_empty():
+	if result.is_empty() and not PlayMode.is_network():
+		# Hot-seat: empty == validation rejection.  In network mode
+		# [NetworkCommandSubmitter] always returns [code]{}[/code] and
+		# the result arrives via the broadcast.
 		_log.warn("Debug damage: command rejected.")
+
+## Reactor for the [DebugDealDamageCommand] broadcast / execution.
+## Emits visual signals on every peer (so the [ShipCardPanel] / hull
+## display refresh on host, client, and hot-seat) and — only on the
+## originating peer — chains the immediate-effect resolution and shows
+## the floating tooltip.
+##
+## In network mode the command's [code]player_index[/code] is the
+## **submitting peer**'s slot (set by [GameManager.submit_debug_deal_damage]),
+## so [code]cmd.player_index == NetworkManager.get_local_player_index()[/code]
+## reliably identifies the peer that pressed Shift+D.
+##
+## DBG-050.
+func _react_debug_deal_damage(cmd: GameCommand,
+		result: Dictionary) -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
 		return
-	# Retrieve the actual card object added to the ship.
+	var owner_player: int = int(cmd.payload.get("owner_player", -1))
+	var ship_index: int = int(cmd.payload.get("ship_index", -1))
+	var ship: ShipInstance = gs.get_ship(owner_player, ship_index)
+	if ship == null or ship.faceup_damage.is_empty():
+		return
 	var dealt_card: DamageCard = ship.faceup_damage.back()
+	var title: String = str(result.get("card_title", dealt_card.title))
+	var effect_id: String = str(cmd.payload.get("effect_id", ""))
 	_log.info("Debug: dealt faceup '%s' [%s] to %s." % [
 			title, effect_id, ship.ship_data.ship_name])
 	if result.get("persistent_registered", false):
 		_log.info("Debug: persistent effect registered for '%s'." % title)
-	# Emit standard signals so UI updates (card panel, hull display).
+	# Visual signals — fire on every peer so card panel and hull readout
+	# refresh consistently.
 	EventBus.damage_card_flipped.emit(ship, dealt_card, true)
 	EventBus.damage_card_dealt.emit(ship, dealt_card, true)
-	EventBus.ship_hull_changed.emit(
-			ship, int(result.get("new_hull", 0)))
-	# Resolve immediate effect if applicable.
+	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+	EventBus.ship_hull_changed.emit(ship, new_hull)
+	# Tooltip on the originator (operator who pressed Shift+D) so they
+	# get visible feedback regardless of which ship they targeted.
+	var local_idx: int = -1
+	if PlayMode.is_network():
+		local_idx = NetworkManager.get_local_player_index()
+	if not PlayMode.is_network() or cmd.player_index == local_idx:
+		TooltipManager.show_text(
+				"Dealt: %s" % title, Vector2.INF, 2.5)
+	# Immediate-effect chain runs on the **chooser** peer.  The chooser
+	# is determined by the card text:
+	#   - "owner"    → ship.owner_player        (Injured Crew,
+	#                                           Projector Misaligned tie)
+	#   - "opponent" → 1 - ship.owner_player    (Comm Noise,
+	#                                           Shield Failure)
+	# Auto-resolve cards (no choice required) run on the ship-owner
+	# peer so dial / shield / hull mutations route through the
+	# authoritative submitter once.  Hot-seat: both peers are local
+	# so the chain always runs.
 	if ImmediateEffectResolver.is_immediate(dealt_card):
-		_resolve_debug_immediate_effect(dealt_card, ship)
-	TooltipManager.show_text(
-			"Dealt: %s" % title, Vector2.INF, 2.5)
+		var chooser_player: int = _resolve_debug_chooser_player(
+				dealt_card, ship)
+		if not PlayMode.is_network() or chooser_player == local_idx:
+			_resolve_debug_immediate_effect(dealt_card, ship)
+
+## Returns the player index that should drive the immediate-effect
+## modal for [param card] dealt via the debug tool.  Reads
+## [code]choice_info.chooser[/code] from [ImmediateEffectResolver];
+## auto-resolve cards default to the ship owner.
+func _resolve_debug_chooser_player(card: DamageCard,
+		ship: ShipInstance) -> int:
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var choice_info: Dictionary = resolver.get_required_choice(card, ship)
+	var chooser: String = str(choice_info.get("chooser", "owner"))
+	if chooser == "opponent":
+		return 1 - ship.owner_player
+	return ship.owner_player
 
 ## Resolves an immediate damage card effect dealt via the debug tool.
 ## Auto-resolve cards resolve instantly; choice cards open a second
@@ -2692,37 +2771,8 @@ func _on_debug_immediate_choice_confirmed(selection: Dictionary) -> void:
 
 
 ## Emits EventBus signals after a debug immediate effect command executes.
+## Thin wrapper around [ImmediateEffectSignals.emit] so the debug route
+## and the regular attack route share one visual emit path.
 func _emit_debug_immediate_signals(card: DamageCard,
 		ship: ShipInstance, result: Dictionary) -> void:
-	var eid: String = result.get("effect_id", "") as String
-	match eid:
-		"structural_damage":
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"projector_misaligned":
-			var zone: String = result.get("zone", "") as String
-			if not zone.is_empty():
-				EventBus.ship_shields_changed.emit(
-						ship, zone,
-						int(result.get("new_shields", 0)))
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"life_support_failure":
-			EventBus.command_tokens_changed.emit(ship)
-		"injured_crew":
-			EventBus.ship_defense_token_changed.emit(ship)
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"shield_failure":
-			var changes: Array = result.get("shield_changes", [])
-			for sc: Variant in changes:
-				var d: Dictionary = sc as Dictionary
-				EventBus.ship_shields_changed.emit(
-						ship, d.get("zone", ""),
-						int(d.get("new_shields", 0)))
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"comm_noise":
-			var action: String = result.get("action", "") as String
-			if action == "reduce_speed":
-				EventBus.ship_speed_changed.emit(
-						ship, int(result.get("new_speed", 0)))
-			elif action == "change_dial":
-				EventBus.command_dials_changed.emit(ship)
-			EventBus.damage_card_flipped.emit(ship, card, false)
+	ImmediateEffectSignals.emit(card, ship, result)

@@ -1990,6 +1990,14 @@ func _on_damage_summary_dismissed_continue() -> void:
 ## Starts the immediate-effect choice flow: handoff (if hot-seat) → modal.
 ## Called from [method _attack_exec_resolve_damage] when a pending choice
 ## exists. On completion, resolves the effect and finalises the attack.
+##
+## Phase I6b-3 R5 — chooser-controlled critical-choice modal.  In
+## network mode the modal is opened by [AttackPanelMirror] on the
+## chooser's peer when the chooser is not the local (attacker) peer;
+## the published payload carries the full [code]choice_info[/code] +
+## the [code]pending_card_data[/code] / ship indices needed to
+## reconstruct the [DamageCard] / [ShipInstance] on the remote peer
+## and submit a [ResolveImmediateEffectCommand].
 func _start_immediate_choice_flow() -> void:
 	_ensure_choice_modal()
 	var chooser: String = _pending_immediate_choice.get("chooser", "opponent")
@@ -1997,15 +2005,48 @@ func _start_immediate_choice_flow() -> void:
 	# Phase I3: chooser controls the CRITICAL_CHOICE step.
 	_flow_fsm.defender_player = chooser_player
 	_fsm_advance(AttackFlowFSM.Step.CRITICAL_CHOICE)
-	# Phase I3c: publish choice info so UIProjector can render the
-	# critical-choice modal on the chooser's screen.
+	# Phase I3c / I6b-3 R5: publish choice info so the chooser peer
+	# can render the critical-choice modal locally and submit a
+	# ResolveImmediateEffectCommand directly.
+	var card_index: int = -1
+	var ship_owner: int = -1
+	var ship_index: int = -1
+	var card_data: Dictionary = {}
+	if _pending_immediate_card != null and _pending_immediate_ship != null:
+		card_index = _pending_immediate_ship.faceup_damage.find(
+				_pending_immediate_card)
+		ship_owner = _pending_immediate_ship.owner_player
+		var gs: GameState = GameManager.current_game_state
+		if gs:
+			ship_index = gs.find_ship_index(_pending_immediate_ship)
+		card_data = _pending_immediate_card.serialize()
 	_fsm_patch_payload({
 		"chooser": chooser,
+		"chooser_player": chooser_player,
 		"card_title": _pending_immediate_choice.get("card_title", ""),
+		"choice_info": _pending_immediate_choice.duplicate(true),
+		"pending_card_data": card_data,
+		"pending_card_index": card_index,
+		"pending_ship_owner_player": ship_owner,
+		"pending_ship_index": ship_index,
 	})
 	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
 			% [chooser, chooser_player,
 			_pending_immediate_choice.get("card_title", "?")])
+	# Phase I6b-3 R5: in network mode, open the modal locally only when
+	# the chooser is the local (attacker) peer.  When the chooser is
+	# the remote peer, the [AttackPanelMirror] on that peer opens the
+	# modal from the published payload; the local executor waits for
+	# [signal CommandProcessor.command_executed] to clean up.
+	if PlayMode.is_network():
+		var local: int = NetworkManager.get_local_player_index()
+		if chooser_player == local:
+			_show_immediate_choice_modal()
+		else:
+			_log.info("Immediate choice deferred to remote chooser peer "
+					+"(chooser_player=%d local=%d)."
+					% [chooser_player, local])
+		return
 	if PlayMode.is_hot_seat() and _camera:
 		_camera.rotate_to_player(chooser_player)
 		if _handoff_overlay:
@@ -2072,42 +2113,39 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 	_attack_exec_finalize_after_delay()
 
 
+## Phase I6b-3 R5 — runs on the attacker peer when the chooser peer's
+## [ResolveImmediateEffectCommand] is broadcast back via
+## [signal CommandProcessor.command_executed].  The command's
+## [code]execute()[/code] already mutated state on both peers; this
+## helper emits the visual signals (mirroring the local-mode
+## [method _on_immediate_choice_confirmed] tail) and finalises the
+## attack.  Idempotent — early-returns when no immediate choice is
+## pending (e.g. attacker peer was the chooser and ran the local
+## handler).
+func apply_remote_immediate_choice(result: Dictionary) -> void:
+	if _pending_immediate_card == null or _pending_immediate_ship == null:
+		return
+	var card: DamageCard = _pending_immediate_card
+	var ship: ShipInstance = _pending_immediate_ship
+	_pending_immediate_card = null
+	_pending_immediate_ship = null
+	_pending_immediate_choice = {}
+	_emit_immediate_signals(card, ship, result)
+	if ship.ship_data:
+		var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
+		EventBus.ship_hull_changed.emit(ship, new_hull)
+	_log.info("Immediate effect resolved (remote chooser): '%s'."
+			% card.title)
+	_attack_exec_finalize_after_delay()
+
+
 ## Emits the appropriate EventBus signals after a
-## [ResolveImmediateEffectCommand] executes.
+## [ResolveImmediateEffectCommand] executes.  Delegates to the shared
+## [ImmediateEffectSignals] helper so the attacker peer, the passive
+## peer mirror, and the debug-damage tool all fire identical visuals.
 func _emit_immediate_signals(card: DamageCard,
 		ship: ShipInstance, result: Dictionary) -> void:
-	var eid: String = result.get("effect_id", "") as String
-	match eid:
-		"structural_damage":
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"projector_misaligned":
-			var zone: String = result.get("zone", "") as String
-			if not zone.is_empty():
-				EventBus.ship_shields_changed.emit(
-						ship, zone,
-						int(result.get("new_shields", 0)))
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"life_support_failure":
-			EventBus.command_tokens_changed.emit(ship)
-		"injured_crew":
-			EventBus.ship_defense_token_changed.emit(ship)
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"shield_failure":
-			var changes: Array = result.get("shield_changes", [])
-			for sc: Variant in changes:
-				var d: Dictionary = sc as Dictionary
-				EventBus.ship_shields_changed.emit(
-						ship, d.get("zone", ""),
-						int(d.get("new_shields", 0)))
-			EventBus.damage_card_flipped.emit(ship, card, false)
-		"comm_noise":
-			var action: String = result.get("action", "") as String
-			if action == "reduce_speed":
-				EventBus.ship_speed_changed.emit(
-						ship, int(result.get("new_speed", 0)))
-			elif action == "change_dial":
-				EventBus.command_dials_changed.emit(ship)
-			EventBus.damage_card_flipped.emit(ship, card, false)
+	ImmediateEffectSignals.emit(card, ship, result)
 
 
 ## Returns the player index for the given chooser role relative to the

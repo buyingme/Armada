@@ -53,7 +53,7 @@ func test_execute_final_clears_flow() -> void:
 			{"x": 1})
 	var cmd := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.NONE),
-		"controller_player": -1,
+		"controller_player": - 1,
 		"flow_payload": {},
 		"final": true,
 	})
@@ -68,7 +68,7 @@ func test_serialize_roundtrip_preserves_payload() -> void:
 	var cmd := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.ATTACK_MODIFY),
 		"controller_player": 0,
-		"flow_payload": {"dice_results": [{"face": "hit"}]},
+		"flow_payload": {"dice_results": [ {"face": "hit"}]},
 		"final": false,
 	})
 	var dict: Dictionary = cmd.serialize()
@@ -88,7 +88,7 @@ func test_serialize_roundtrip_preserves_payload() -> void:
 func test_validate_always_returns_empty() -> void:
 	var cmd := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.NONE),
-		"controller_player": -1,
+		"controller_player": - 1,
 		"flow_payload": {},
 		"final": true,
 	})

@@ -1,6 +1,6 @@
 # Refactoring Guidelines — Armada Project
 
-> **Master plan:** `docs/progress_summary.md` + `docs/open_topics.md` (archived detail: `docs/old/refactoring_plan.md`)
+> **Master plan:** `docs/implementation_plan.md` (archived detail: `docs/old/refactoring_plan.md`, `docs/old/progress_summary.md`, `docs/old/open_topics.md`)
 > These rules apply to ALL generated code — not just explicit refactoring tasks.
 
 ## Purpose
@@ -306,8 +306,8 @@ These are the project-wide goals. Every code change should move toward them:
 
 ## 11. Refactoring Phase Reference
 
-When working on a specific refactoring phase, consult `docs/progress_summary.md`
-for completed phases and `docs/open_topics.md` for remaining work.
+When working on a specific refactoring phase, consult `docs/implementation_plan.md`
+for completed phases and remaining work.
 Archived detail: `docs/old/refactoring_plan.md`.
 
 | Phase | Focus | Risk |

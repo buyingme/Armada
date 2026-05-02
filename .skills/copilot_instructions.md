@@ -26,7 +26,7 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 
 When a task touches networked UI flow, authority handoff, or modal visibility:
 
-1. Read `docs/g4_network_plan.md` § "Ratified UX Contract", "T0", and
+1. Read `docs/old/g4_network_plan.md` § "Ratified UX Contract", "T0", and
     "Protocol Guarantees" before coding.
 2. Treat `controller_player` as the only source of interaction authority;
     never infer authority from local UI state alone.
@@ -39,11 +39,10 @@ When a task touches networked UI flow, authority handoff, or modal visibility:
 
 ## Progress Tracking
 
-Progress is tracked in two condensed documents:
-- `docs/progress_summary.md` — what has been achieved (phases, metrics, commits)
-- `docs/open_topics.md` — what remains (violations, unwired commands, manual tests)
+Progress is tracked in a single consolidated document:
+- `docs/implementation_plan.md` — baseline metrics, phase status, open topics, planned extensions
 
-Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/test_plan_manual.md`
+Archived originals (historical detail only): `docs/old/progress_summary.md`, `docs/old/open_topics.md`, `docs/old/implementation_plan.md`, `docs/old/refactoring_plan.md`, `docs/old/refactoring_phase_i_plan.md`, `docs/old/refactoring_test_strategy.md`, `docs/old/g4_network_plan.md`, `docs/old/architecture_assessment.md`, `docs/old/test_plan_manual.md`
 
 ### Status Markers
 
@@ -55,13 +54,13 @@ Archived originals: `docs/old/implementation_plan.md`, `docs/old/refactoring_pla
 
 ### When Completing a Phase
 
-1. Update `docs/progress_summary.md` with the new phase row and test counts
-2. Update `docs/open_topics.md` — remove resolved items, add new manual tests
-3. Include both docs in the phase commit
+1. Update `docs/implementation_plan.md` — §1 baseline (test counts, commit hash), §2 phase status, §4 open topics (move resolved items out, add new pending items)
+2. Update `docs/arc42/11_risks_and_technical_debt.md` if technical debt changes
+3. Include doc updates in the phase commit
 
 ### Manual Test Plan — What to Add After Each Phase
 
-`docs/open_topics.md` §4 tracks open manual tests. After completing a phase, add new manual test entries following these rules:
+`docs/implementation_plan.md` §4.4 tracks open manual tests at a summary level; per-phase MT logs live in commit messages and the archived `docs/old/open_topics.md`. After completing a phase, draft new manual test entries following these rules:
 
 - **Format:** `## Phase N — <Name>` header, then one `### MT-N.X` block per test scenario.
 - **One table per scenario:** columns = Step | Action | Expected.

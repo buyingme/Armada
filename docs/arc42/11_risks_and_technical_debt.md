@@ -9,7 +9,8 @@
 | R-3 | Scope creep (too many features too early) | Medium | High | Clear prioritization, iterative development |
 | R-4 | Performance issues with complex game states | Low | Medium | Profile early, optimize data structures |
 | R-5 | UI/UX complexity for tabletop mechanics | Medium | Medium | Prototype UI early, iterate based on playtesting |
-| R-6 | God-object files resist extension | High | High | Refactoring plan Phases A–F ✅. See `docs/refactoring_plan.md`. |
+| R-6 | God-object files resist extension | High | High | Refactoring plan Phases A–I ✅. See `docs/implementation_plan.md`. |
+| R-7 | Network-UI sync fragility (parallel RPC channel) | High | High | **Resolved** — Phase I promoted UI flow state into `GameState.interaction_flow`; legacy `NetworkInteractionState` channel deleted. |
 
 ## 11.2 Technical Debt
 
@@ -28,7 +29,17 @@
 | TD-11 | ~~Missing `serialize()`/`deserialize()` on ShipInstance, SquadronInstance, DamageDeck, DamageCard, ShipActivationState~~ | ~~Medium~~ | **Resolved** — Phase E complete. All classes serializable. `SaveGameManager` autoload with F5/F8 debug keybinds. |
 | TD-12 | ~~64 EventBus signals — risk of signal spaghetti as features grow~~ | ~~Medium~~ | **Resolved** — Phase E6 complete. 12 `#region` blocks group signals by domain. |
 | TD-13 | All UI is procedurally built in GDScript (only 4 `.tscn` files) | Low | Workable but slower iteration; consider `.tscn` for new complex UI. |
+| TD-14 | ~~UI flow state lives outside `GameState`; reconnection cannot reconstruct in-flight modals~~ | ~~High~~ | **Resolved** — Phase I (closed 2026-05-02). `GameState.interaction_flow` is serializable and replicates over `command_result`; `UIProjector` projects modal authority from filtered state. Reconnection acceptance gate at [tests/integration/test_reconnection_mid_attack.gd](../../tests/integration/test_reconnection_mid_attack.gd). |
 
-> **Last audit:** Refactoring Phases A–H + G complete — 115 scripts, 2 369 tests, 4 277 asserts, all passing.
+## 11.3 Remaining Network Work (Phase G4.7+)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| G4.7 Spectator Mode | ⏳ pending | Both-players consent gate, omniscient view |
+| G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
+| G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
+
+> **Last audit:** Refactoring Phases A–I complete — 134 scripts, 2 761 tests, 5 175 asserts, 0 failures.
 > Architecture compliance, static typing, and doc comment coverage all PASS.
-> Phase G: 26 command classes, 40+ wired call sites, deterministic replay, all §4.6 violations resolved.
+> Phase G: 27 command classes, 41+ wired call sites, deterministic replay, all §4.6 violations resolved.
+> Phase I (closed 2026-05-02): `InteractionFlow` on `GameState`, `AttackFlowFSM`, `UIProjector`, mirrored attack panels.

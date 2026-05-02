@@ -92,7 +92,7 @@ if round > Constants.MAX_ROUNDS:
 - ❌ Pixel values in command payloads or serialized state — use normalised `pos_x`/`pos_y`/`rotation_deg`
 - ❌ `Vector2`/`Color`/Godot types in serialized dictionaries — use plain floats/ints
 - ❌ `play_area_side_px` (float) in `get_pixel_position()` — use `play_area_size_px` (Vector2)
-- ❌ (Phase I) New `NetworkInteractionState` producer call sites or `broadcast_interaction_state(` calls — UI flow state lives in `GameState.interaction_flow`, mutated only by `GameCommand.execute()`. See `docs/refactoring_phase_i_plan.md`.
+- ❌ (Phase I) New `NetworkInteractionState` producer call sites or `broadcast_interaction_state(` calls — UI flow state lives in `GameState.interaction_flow`, mutated only by `GameCommand.execute()`. See `docs/implementation_plan.md` §3.
 - ❌ (Phase I) `if PlayMode.is_network():` branches inside `src/scenes/` or `src/ui/` for modal/authority decisions — use `UIProjector.project(state, local_player_index)`.
 - ❌ (Phase I) Subscribing to `EventBus.interaction_state_changed` (signal removed in Phase I6) — subscribe to `EventBus.command_executed` and call `UIProjector.project()`.
 - ❌ (Phase I) Inferring activation/attack sub-step from local UI events — always read `state.interaction_flow.step_id`.
@@ -132,11 +132,11 @@ Then **commit the resulting `.gd.uid`** alongside the `.gd`. Without it, other s
 ### 11. Update Progress Tracking Per Phase
 
 When completing a phase task or full phase:
-- Update `docs/progress_summary.md` — add row or update status, commit hash and test count
-- Update `docs/open_topics.md` — add new manual tests, update violation counts, remove resolved items
-- Include both docs files in the phase commit
+- Update `docs/implementation_plan.md` — refresh §1 baseline (test counts, commit hash), update phase status in §2, move resolved items out of §4 and add new pending items
+- Update `docs/arc42/11_risks_and_technical_debt.md` if technical debt changes
+- Include doc updates in the phase commit
 - See `.skills/copilot_instructions.md` for the exact update procedure and the MT scenario template
-- Archived originals in `docs/old/` for historical reference
+- Archived originals in `docs/old/` for historical reference (per-slice narratives, MT logs, fix follow-ups)
 
 ## Code Generation Workflow
 
@@ -154,8 +154,7 @@ When asked to implement a feature or fix a bug:
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
    ```
 9. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
-10. **Update progress** — Update `docs/progress_summary.md` and include in commit
-11. **Update open topics** — Add manual tests or remove resolved items in `docs/open_topics.md`
+10. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
 
 ## Architecture Quick Reference
 

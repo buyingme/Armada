@@ -117,6 +117,27 @@ func get_command_submitter() -> CommandSubmitter:
 	return _submitter
 
 
+## Starts a new game in a play-mode-aware way.  Hot-seat passes
+## [code]{"scenario_id": default_scenario_id}[/code] straight through.
+## Network mode pulls the shared RNG seed + scenario from
+## [code]NetworkManager.get_pending_game_config()[/code] (set by the host
+## via the lobby G4.6.5.2/3 RPC) and tags the dictionary with
+## [code]"client_mode": true[/code] when this peer is a non-server client
+## so [method start_new_game] skips the local [code]_start_round[/code]
+## (the server broadcasts [StartRoundCommand]).  Phase I6e-2 — replaces
+## the [code]if PlayMode.is_network()[/code] branch in [code]_ready[/code]
+## of [GameBoard].
+func bootstrap_game(default_scenario_id: String) -> void:
+	var config: Dictionary
+	if PlayMode.is_network():
+		config = NetworkManager.get_pending_game_config()
+		if not NetworkManager.is_server():
+			config["client_mode"] = true
+	else:
+		config = {"scenario_id": default_scenario_id}
+	start_new_game(config)
+
+
 ## Starts a new game with the given configuration.
 ## [param config] — optional settings:
 ##   [code]"rng_seed"[/code] (int) — deterministic RNG seed.  If 0 or
@@ -219,6 +240,14 @@ func auto_save_replay() -> void:
 ## ship instances have been registered in the game state.
 ## Rules Reference: LTP p.10 — "suggested commands"; CP-009, CP-010.
 func apply_fixed_round1_commands(commands: Dictionary) -> void:
+	# Phase I6e-2: network clients must not author fixed round-1
+	# command-dial assignments.  The host runs the auto-assignment and
+	# broadcasts each [AssignDialCommand]; the client receives them via
+	# [_handle_remote_command_effects].  Centralising the guard here
+	# (instead of at every call site) removes one more
+	# [code]is_network()[/code] branch from [GameBoard].
+	if _is_network_client():
+		return
 	if not is_game_active or not current_game_state:
 		_log.warn("apply_fixed_round1_commands: no active game.")
 		return

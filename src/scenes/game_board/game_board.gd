@@ -188,17 +188,9 @@ func _ready() -> void:
 	_create_displacement_controller()
 	_create_dial_drag_controller()
 	# Start game so GameState exists BEFORE tokens are spawned.
-	# In network mode, use the shared config (RNG seed + scenario) received
-	# from the server before scene transition.  G4.6.5.4.
-	if PlayMode.is_network():
-		var config: Dictionary = NetworkManager.get_pending_game_config()
-		# Client does not drive game flow — server broadcasts StartRoundCommand.
-		# G4.6.5 A2.
-		if not NetworkManager.is_server():
-			config["client_mode"] = true
-		GameManager.start_new_game(config)
-	else:
-		GameManager.start_new_game({"scenario_id": "learning_scenario"})
+	# [GameManager.bootstrap_game] handles the network-vs-hot-seat
+	# config split internally (Phase I6e-2).
+	GameManager.bootstrap_game("learning_scenario")
 	_spawn_learning_scenario_tokens()
 	_connect_signals()
 	_connect_panel_signals()
@@ -465,8 +457,10 @@ func _spawn_learning_scenario_tokens() -> void:
 	_register_instances_in_game_state(ship_instances, squad_instances)
 	# Network client: server auto-assigns fixed commands and broadcasts.
 	# Client receives via _handle_remote_command_effects().  G4.6.5 A3.
-	if setup.has_fixed_round1_commands() \
-			and (not PlayMode.is_network() or NetworkManager.is_server()):
+	# Phase I6e-2: the network-client gate now lives inside
+	# [GameManager.apply_fixed_round1_commands] so this call is
+	# unconditional.
+	if setup.has_fixed_round1_commands():
 		var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
 		GameManager.apply_fixed_round1_commands(fixed_cmds)
 	_spawn_and_bind_tokens(setup, ship_instances, squad_instances)

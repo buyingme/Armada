@@ -30,7 +30,7 @@ the parallel channel.
 | I6c | Delete `NetworkInteractionState` RPC + `EventBus.interaction_state_changed` + `GameManager._publish_interaction_state_for_command` | ✅ MT-PHI.06c passed 2026-04-28 (130 / 2 701 / 5 039) |
 | I6d | Trim remaining `is_network()` branches in `game_board.gd` to ≤ 3 (camera/perspective only) | 🔄 partial — activation-modal authority migrated; 10 → 9 branches; remaining 9 require relocating host-only / divergent-timing logic out of `game_board.gd` (planned as I6e) |
 | I6e-1 | Mechanical branch reduction in `game_board.gd` via new helpers `_local_viewer()` + `_can_act_as()` | ✅ committed pending — collapsed 5 `is_network()` sites (handoff, squadron-modal controller, activation-modal controller inline-pattern, debug-damage tooltip gate, debug-damage chooser dispatch). 14 → 9 real branches. 132 / 2 737 / 5 120. MT-PHI.06e-1 pending. |
-| I6e-2 | Relocate boot config source (L193) + host-only fixed round-1 (L459) out of `game_board.gd` into `GameManager.start_new_game` / `apply_fixed_round1_commands` | ⏳ |
+| I6e-2 | Relocate boot config source (L193) + host-only fixed round-1 (L459) out of `game_board.gd` into `GameManager.start_new_game` / `apply_fixed_round1_commands` | ✅ commit pending — added `GameManager.bootstrap_game(default_scenario_id)` (handles network/hot-seat config split internally); moved network-client gate into `apply_fixed_round1_commands`. 9 → 7 real branches in `game_board.gd`. 132 / 2 737 / 5 120. MT-PHI.06e-2 pending. |
 | I6e-3 | Collapse asymmetric activation result-handling (L1257/L1270) + debug-damage rejection log (L2620) by introducing an `awaiting_remote: bool` sentinel on result dicts | ⏳ |
 | I7 | Reconnection acceptance test + cleanup | ⏳ |
 

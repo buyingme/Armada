@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-02 (Phase I closed; Phase G4.7+ pending)
+> Last updated: 2026-05-02 (Phase J1 complete; Phase G4.7+ pending)
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 134 |
-| GUT tests | 2 761 |
-| GUT asserts | 5 175 |
-| Failing tests | 0 (2 pre-existing scenario-WIP failures from unrelated user edits to `learning_scenario.json`) |
-| Last commit | `1c2b32c` (I7 reconnection acceptance gate, 2026-05-02) |
+| GUT test scripts | 136 |
+| GUT tests | 2 796 |
+| GUT asserts | 5 252 |
+| Failing tests | 0 |
+| Last commit | `<J1>` (Phase J1 — save metadata + HMAC + safe-point gate, 2026-05-02) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -161,11 +161,164 @@ release milestone — full table preserved in
 
 ---
 
-## 5. Planned Extensions (Post-MVP)
+## 5. Phase J — Save Games (Proposed)
+
+Status: **PROPOSED** — awaiting approval before implementation.
+
+### 5.1 Goal
+
+End-to-end working save/load: write the full game state at safe points,
+restart it later from the main menu (or from in-game), with a named
+saves list. Hot-seat and network modes both supported; in network only
+the host can save. Replaces the existing F5/F8 quicksave that only
+serialises (load is logged but not applied).
+
+### 5.2 Functional Requirements
+
+| ID | Requirement |
+|----|-------------|
+| SG-1 | The full `GameState` (round, phase, fleets, ships, squadrons, dials, tokens, damage deck, RNG seed, `interaction_flow`) is serialised to a single JSON file under `user://saves/`. |
+| SG-2 | A save's metadata header records: `scenario_id`, `scenario_name`, `game_mode` (`hot_seat` / `network`), `round`, `phase` (label), `created_at` (ISO timestamp), `app_version`, `display_name`. |
+| SG-3 | Default save name template: `{scenario_name}_{game_mode}_R{round}_{phase}` (e.g. `Learning_HotSeat_R2_Ship`). The user can edit the name in a text field (with that template pre-filled) before confirming. |
+| SG-4 | Save list groups saves by game mode; each row shows `display_name`, scenario name, round/phase, timestamp, and (in network) whether it is a host snapshot. |
+| SG-5 | Save is only allowed at **safe points** (see §5.3). At unsafe points the Save button is disabled with an explanatory tooltip. |
+| SG-6 | In network mode, only the host may save; clients see "Save Game" disabled / hidden. Hot-seat: always allowed (at safe points). |
+| SG-7 | Loading a save restores the game such that play continues exactly from the saved point: same active player, same dials, same tokens, same damage cards, same RNG sequence; `interaction_flow` is `NONE` after load (we do not resume mid-attack — see §5.7 / Q5). |
+| SG-8 | Loading is offered from (a) the main menu ("Load Game" button), and (b) the in-game ESC menu ("Load Game"). In both cases the active game is torn down before the saved state is installed. |
+| SG-9 | In network mode, "Load Game" from the in-game menu is host-only; clients see Quit / Resume only. Loading from the main menu is offered to any user but only for hot-seat slot (see Q1 for network-load policy). |
+| SG-10 | ESC on the main game board with no modal open opens the new in-game menu (see §5.4). On a second ESC press the menu closes ("Resume"). |
+| SG-11 | Existing F5 quicksave keybind: removed (or aliased to "save with default name", see Q3). Existing F8 quickload removed in favour of the menu flow. |
+
+### 5.3 Safe Points
+
+A save is allowed iff **all** of the following hold:
+
+1. `GameState.interaction_flow.flow_type == NONE` — no attack / displacement /
+   immediate-choice / dial-picker flow is open.
+2. `CommandProcessor` history is consistent: no command is currently mid-execute.
+3. No drag operation is in progress (dial drag, maneuver tool committed,
+   squadron move overlay closed).
+4. The current phase is one of:
+   - **Command Phase** — only between dial assignments (no picker open) and at
+     the round-1 fixed-commands gate.
+   - **Ship Phase** — between ship activations (no `ShipActivationState` active).
+   - **Squadron Phase** — between squadron activations (no squadron selected /
+     no move overlay open).
+   - **Status Phase** — at the very start or end of cleanup (between commands).
+
+Implementation: `SaveGameManager.can_save_now()` reads
+`GameState` + `GameManager` flags and returns `(bool, reason: String)`.
+The reason populates the disabled-button tooltip.
+
+### 5.4 In-Game ESC Menu (replaces `QuitConfirmationModal`)
+
+New `GameMenuModal` (renames `QuitConfirmationModal` / extends it):
+
+| Mode | Visible Buttons |
+|------|-----------------|
+| Hot-seat | Resume · Save Game · Load Game · Quit Game |
+| Network host | Resume · Save Game · Load Game · Quit Game |
+| Network client | Resume · Quit Game |
+
+Behaviour:
+- Resume / second ESC press closes the modal.
+- Save Game opens `SaveGameDialog` (name field + Save / Cancel). Disabled at
+  unsafe points with reason tooltip.
+- Load Game opens `LoadGameDialog` (filtered list + Load / Cancel). On Load,
+  the current game is torn down (back to main menu briefly, then re-enter
+  game board with loaded state) — see §5.6.
+- Quit Game returns to the main menu (current behaviour); separate
+  confirmation step kept only if a save is unsaved (see Q4).
+
+### 5.5 Main Menu Integration
+
+- New "Load Game" button on the main menu (between "Learning Scenario" and
+  "Host Game"). Opens `LoadGameDialog`. Selecting a save bypasses scenario
+  picking and goes straight to the game board with the loaded state.
+- Hot-seat / network filtering: the dialog tabs split saves by mode (Q1
+  decides network-load policy).
+
+### 5.6 Architecture Sketch
+
+```
+src/
+├── autoload/
+│   └── save_game_manager.gd     [extended: metadata header, list_with_meta(),
+│                                  can_save_now(), load_and_restore()]
+├── core/
+│   └── state/
+│       └── save_game_metadata.gd  [new RefCounted, validates header]
+├── ui/
+│   └── save/
+│       ├── game_menu_modal.gd     [renamed from QuitConfirmationModal]
+│       ├── save_game_dialog.gd    [new — name field, Save/Cancel]
+│       └── load_game_dialog.gd    [new — list, filter, Load/Cancel]
+```
+
+- `GameManager.start_new_game_from_state(state, scenario_id)` — reuses the
+  existing scenario loader for **fleet template re-association** (ship/
+  squadron `Resource` templates can't be in JSON), then installs the
+  deserialised `GameState`. Re-emits the post-`start_new_game` signals so
+  the board rebuilds.
+- The save file's `scenario_id` is required to reconstruct templates —
+  otherwise `ShipInstance.template` and `SquadronInstance.template` are
+  null. `AssetLoader.load_ship_data()` / `load_squadron_data()` are
+  re-resolved by ship/squadron key recorded in the serialised
+  `ShipInstance` / `SquadronInstance`.
+
+### 5.7 Sub-Phase Breakdown
+
+| Slice | Scope | Tests | MT |
+|------:|-------|-------|----|
+| J1 ✅ | `SaveGameMetadata` (header schema with `save_format_version=1`) + extend `SaveGameManager`: header read/write, HMAC sign/verify (shared with replay), `can_save_now()`, `list_with_meta()`. Add `display_name` to scenario JSONs. Remove F5/F8 debug bindings. | Unit tests: header round-trip, version rejection, HMAC tamper rejection, can_save_now matrix (all phases × flow states), list_with_meta. | — |
+| J2 | `GameManager.start_new_game_from_state(state, scenario_id)` — install deserialised state, re-resolve templates, emit `game_started` so board rebuilds. Hot-seat only. | Unit / integration: round-trip serialize → deserialize → install → all ships present, dials match, damage deck matches. | MT-J.2 — F8 from debug now actually restores the game. |
+| J3 | `GameMenuModal` replaces `QuitConfirmationModal`: 4 buttons (hot-seat/host) / 2 buttons (client), ESC-toggle, centred with main-menu button styling. Quit triggers "Save first?" sub-modal when game is dirty. Save / Load buttons stub-disabled. | Unit: button visibility per mode; ESC open/close; dirty-on-quit prompt. | MT-J.3 — ESC menu shows correct buttons in each mode; second ESC resumes; quit-when-dirty prompts. |
+| J4 | `SaveGameDialog` — name field with default template, Save/Cancel, validation (non-empty, no path separators, max 64 chars), overwrite confirmation. Wired into `GameMenuModal` (hot-seat + host only). | Unit: name validation; default template builder. | MT-J.4 — save in hot-seat with default name and with edited name; verify file on disk. |
+| J5 | `LoadGameDialog` — list with metadata, filter by game mode tab, Load/Cancel. Network-mode saves greyed out when no host session. Wired into both main menu and `GameMenuModal`. On load, tear down active game (if any), call `start_new_game_from_state`. | Unit: list rendering, filter; greyed-out network rows; round-trip from list selection. | MT-J.5 — load from main menu and from ESC menu; resume play; verify counts match. |
+| J6 | Network-host save: `NetworkManager.is_server()` guard in dialog; "Save" submits a server-side save (host's authoritative `GameState`); broadcast result toast to client. | Unit: client cannot trigger save (host-only RPC guard). | MT-J.6 — host saves mid-network-game; verify file; client sees confirmation toast. |
+| J7 | Network load (Q1-dependent): host loads a save → re-host with loaded state, clients are kicked with "Game reloaded — please rejoin" message. | Integration: host re-host flow. | MT-J.7 — host re-loads; client gets disconnect message; rejoin lands in correct state. |
+| J8 | Cleanup: remove old `QuitConfirmationModal` references; update arc42 §05 to add `SaveGameMetadata` + `GameMenuModal`. | — | MT-J.8 — full hot-seat + network regression. |
+
+### 5.8 Out of Scope (this phase)
+
+- Resuming mid-attack / mid-displacement (`interaction_flow != NONE`). The
+  user's stated requirement says "safe points only", so loaded state always
+  has `interaction_flow = NONE`. Mid-flow resume is technically possible
+  (Phase I made it serializable) but is deferred — see Q5.
+- Auto-save (covered by G4.9.6 turn-timer flow).
+- Replay-file integration with saves (saves are independent of replay logs).
+- Cloud / cross-device save sync.
+
+### 5.9 Resolved Decisions (Approved 2026-05-02)
+
+| ID | Decision |
+|----|----------|
+| Q1 | **Grey out** network saves when no network session is hosted. Tooltip: "Host a game to load this save". Loading a network save is only possible from the host-game flow (slice J7). |
+| Q2 | Keep `res://saves/` for now (project-scoped, dev convenience). Migrate to `user://saves/` at publish time as a separate task. |
+| Q3 | **Remove** F5 / F8 debug keybinds entirely. All save/load goes through the menu UI. |
+| Q4 | **Prompt "Save first?"** on Quit when the game has advanced past the last save. Three-button modal: Save & Quit · Quit Without Saving · Cancel. (If `can_save_now()` is false, the Save & Quit option is disabled with the same tooltip reason as the Save button.) |
+| Q5 | **Defer** mid-flow saves. Saves only allowed when `interaction_flow.flow_type == NONE`. Field remains serialisable for future use; loaded state always has flow=NONE. |
+| Q6 | Add `save_format_version: 1` to metadata header. Loader rejects unknown versions with a clear error. |
+| Q7 | **HMAC-signed**, same scheme as replay (`G4.10.5`). Reuse `ReplayWriter`'s signing helper or extract to a shared `IntegritySigner` utility — decide during J1 implementation. Tampered saves are rejected with a clear error toast. |
+| Q8 | Read scenario human-readable name from the scenario JSON (`display_name` field). Fall back to ID title-case if the field is missing. Add the field to existing scenario JSONs as part of J1. |
+| Q9 | Phase label in default name uses `Constants.GamePhase` enum name: `Command` / `Ship` / `Squadron` / `Status`. |
+| Q10 | ESC menu stays centred, uses the standard main-menu button styling (`MainMenu`'s button theme). Reuse existing modal panel styling per `.skills/ui_styling.md`. |
+
+#### Implications for slice plan
+
+- **J1 scope expands:** add `save_format_version` field, HMAC signing/verification (extract or reuse from `ReplayWriter`), and `display_name` field in `learning_scenario.json` (and any other scenario JSONs).
+- **J3 scope expands:** Quit button triggers an "unsaved changes" check; if dirty, opens the three-option Save/Quit/Cancel sub-modal.
+- **J3/J4 styling:** match `MainMenu` button theme; centred panel using standard modal style.
+- **J5/J7 grey-out:** `LoadGameDialog` shows network saves but disables them when `NetworkManager.is_server() == false`.
+- **F5/F8 removal** moves from J8 to J1 (single small edit in `debug_mode.gd`).
+
+---
+
+## 6. Planned Extensions (Post-MVP)
 
 Ordered by dependency:
 
-1. **Saved Games** — depends on serialization (✅ done) + replay (✅ done)
+1. **Saved Games** — Phase J (proposed in §5); depends on serialization (✅ done) + replay (✅ done)
 2. **Squadron Cards** — full data loading from JSON (already partially loaded)
 3. **Fleet Builder** — point-based fleet construction UI
 4. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
@@ -175,7 +328,7 @@ Ordered by dependency:
 
 ---
 
-## 6. Document Map
+## 7. Document Map
 
 ### Active Architecture Docs
 
@@ -203,7 +356,7 @@ Ordered by dependency:
 
 ---
 
-## 7. Update Procedure
+## 8. Update Procedure
 
 When completing a phase or sub-phase task:
 

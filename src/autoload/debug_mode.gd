@@ -51,7 +51,7 @@ func _ready() -> void:
 
 
 ## Keyboard shortcut: F12 toggles debug mode, Ctrl+S saves positions,
-## F5 quicksaves, F8 quickloads, Shift+A opens annotation modal,
+## Shift+A opens annotation modal,
 ## Shift+R saves a replay file (debug mode only).
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -65,12 +65,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 					if key_event.ctrl_pressed:
 						save_positions_requested.emit()
 						get_viewport().set_input_as_handled()
-				KEY_F5:
-					_quicksave()
-					get_viewport().set_input_as_handled()
-				KEY_F8:
-					_quickload()
-					get_viewport().set_input_as_handled()
 				KEY_A:
 					if key_event.shift_pressed:
 						_open_annotation_modal()
@@ -99,40 +93,6 @@ func _save_replay() -> void:
 	else:
 		_log.error("Replay save failed: %s" % error_string(err))
 		_show_toast("Replay save FAILED.")
-
-
-## Saves the current game state to [code]res://saves/quicksave.json[/code].
-func _quicksave() -> void:
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		_log.warn("No active game state to save.")
-		_show_toast("Quicksave failed — no active game.")
-		return
-	var ok: bool = SaveGameManager.save_game(gs)
-	if ok:
-		_log.info("Quicksave complete.")
-		_show_toast("Quicksave complete.")
-	else:
-		_log.error("Quicksave failed.")
-		_show_toast("Quicksave FAILED.")
-
-
-## Loads a game state from [code]res://saves/quicksave.json[/code] and logs it.
-## Full state restoration is not yet implemented — this logs the loaded data
-## so you can verify the JSON round-trip in the console.
-func _quickload() -> void:
-	var loaded: GameState = SaveGameManager.load_game()
-	if loaded == null:
-		_log.warn("Quickload failed — no save file found.")
-		_show_toast("Quickload failed — no save file.")
-		return
-	_log.info("Quickload OK — round %d, phase %d, p0 score %d, p1 score %d" % [
-		loaded.current_round,
-		loaded.current_phase,
-		loaded.player_states[0].score,
-		loaded.player_states[1].score,
-	])
-	_show_toast("Quickload OK — round %d." % loaded.current_round)
 
 
 # ---------------------------------------------------------------------------

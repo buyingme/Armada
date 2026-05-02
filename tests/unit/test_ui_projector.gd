@@ -319,4 +319,3 @@ func test_squadron_displacement_payload_round_trip() -> void:
 			intent.payload.get("displaced_squadrons", []) as Array)
 	assert_eq(sq_list.size(), 2,
 			"displaced_squadrons should be projected.")
-

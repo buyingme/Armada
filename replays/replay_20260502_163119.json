@@ -104,11 +104,33 @@
 		},
 		{
 			"payload": {
+				"controller_player": 1,
+				"displaced_squadrons": [
+					{
+						"owner": 1,
+						"squadron_index": 1
+					}
+				],
 				"ship_index": 1
 			},
 			"player": 0,
 			"sequence": 10,
-			"type": "end_activation"
+			"type": "start_displacement"
+		},
+		{
+			"payload": {
+				"placements": [
+					{
+						"owner": 1,
+						"pos_x": 0.379685522008825,
+						"pos_y": 0.215503862169054,
+						"squadron_index": 1
+					}
+				]
+			},
+			"player": 1,
+			"sequence": 11,
+			"type": "commit_displacement"
 		}
 	],
 	"header": {
@@ -120,8 +142,8 @@
 		"format_version": 1,
 		"godot_version": "4.5.1-stable (official)",
 		"initiative_player": 0,
-		"rng_seed": -5052348355782763013,
+		"rng_seed": 2096171468350849001,
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-05-02T08:02:32"
+		"timestamp": "2026-05-02T14:31:19"
 	}
 }

@@ -115,13 +115,15 @@ func start(displaced: Array[SquadronToken],
 		_activation_modal.close()
 	_log.info("Starting squadron displacement: %d squadron(s)."
 			% displaced.size())
-	# Flip camera to the opposing player.  Connect BEFORE the rotate
-	# call: when the camera is already at the target rotation
-	# [BoardCamera.rotate_to_player] emits
-	# [signal EventBus.perspective_change_complete] synchronously, so a
-	# post-rotate connect would miss it.  This happens in network mode
-	# on the controller peer (camera is pinned to local viewer = squadron
-	# owner = opposing the active maneuvering peer).  Phase I6b-4c-2.
+	# Phase I6b-4d: in network mode the controller peer (squadron owner)
+	# is *already* viewing its own perspective (camera pinned to local
+	# viewer in [GameBoard]).  Rotating would needlessly flip the
+	# controller to the opposing player's perspective — skip it and run
+	# the post-rotate handler directly.  Hot-seat keeps the rotate so
+	# both players see the squadron-owner perspective during placement.
+	if PlayMode.is_network():
+		_on_camera_ready()
+		return
 	var opponent: int = 1 - GameManager.get_active_player()
 	if not EventBus.perspective_change_complete.is_connected(
 			_on_camera_ready):
@@ -279,11 +281,13 @@ func _on_committed() -> void:
 ## network clients.  G4.6.5 — network displacement sync.
 ##
 ## Phase I6b-4c-1: also submits a [CommitDisplacementCommand] that
-## clears [member GameState.interaction_flow] back to NONE.  The
-## per-squadron position writes are still authored by
-## [code]move_squadron[/code]; [code]commit_displacement[/code]'s
-## [method execute] re-applies the same values harmlessly while
-## clearing the flow.
+## clears [member GameState.interaction_flow] back to NONE.
+##
+## Phase I6b-4d: the per-squadron [code]move_squadron[/code] submits
+## have been removed.  [CommitDisplacementCommand.execute] now writes
+## the authoritative [code]pos_x[/code]/[code]pos_y[/code] for every
+## entry, and [GameManager._handle_remote_commit_displacement] mirrors
+## the visual token positions on the maneuvering peer in network mode.
 func _submit_displaced_positions() -> void:
 	var pa: Vector2 = GameScale.play_area_size_px
 	if pa.x <= 0.0 or pa.y <= 0.0:
@@ -298,9 +302,8 @@ func _submit_displaced_positions() -> void:
 		var norm_x: float = pos.x / pa.x
 		var norm_y: float = pos.y / pa.y
 		var sq_name: String = _get_squadron_display_name(sq_token)
-		_log.info("Displacement: submitting position for %s (%.3f, %.3f)."
+		_log.info("Displacement: queueing placement for %s (%.3f, %.3f)."
 				% [sq_name, norm_x, norm_y])
-		GameManager.submit_move_squadron(sq_inst, norm_x, norm_y)
 		placements.append({
 			"owner": sq_inst.owner_player,
 			"squadron_index":
@@ -325,10 +328,19 @@ func _finish_displacement() -> void:
 	_displacement_ship_base = null
 	_remove_displacement_modal()
 	TooltipManager.hide_tooltip()
-	_log.info("All displaced squadrons placed — flipping camera back.")
-	# Flip camera back to the active player.  Connect BEFORE rotate for
-	# the same reason as in [method start] — synchronous emit when camera
-	# is already at target.  Phase I6b-4c-2.
+	_log.info("All displaced squadrons placed.")
+	# Phase I6b-4d: in network mode the controller peer never rotated to
+	# the opponent in [method start], so there is nothing to rotate back.
+	# Also DO NOT emit [signal displacement_completed] — the legacy
+	# connection [code]displacement_completed -> _show_end_activation_after_maneuver[/code]
+	# would submit an [code]advance_activation_step[/code] for the
+	# *active maneuvering* player from the *controller* peer, which the
+	# server correctly rejects (peer mismatch).  In network mode the
+	# maneuvering peer's [code]_resume_after_remote_displacement[/code]
+	# (driven by the [code]commit_displacement[/code] broadcast) handles
+	# the End-Activation resume.
+	if PlayMode.is_network():
+		return
 	var active: int = GameManager.get_active_player()
 	if not EventBus.perspective_change_complete.is_connected(
 			_on_camera_returned):

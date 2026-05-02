@@ -67,7 +67,7 @@ func test_start_validate_accepts_legal_displacement() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": ship_idx,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": sq_idx}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": sq_idx}],
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Legal displacement should validate.")
@@ -80,7 +80,7 @@ func test_start_validate_rejects_non_ship_phase() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 0}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject outside Ship Phase.")
@@ -91,7 +91,7 @@ func test_start_validate_rejects_missing_ship() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 99,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 0}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject missing maneuvering ship.")
@@ -102,7 +102,7 @@ func test_start_validate_rejects_missing_squadron() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 99}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 99}],
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject missing displaced squadron.")
@@ -114,7 +114,7 @@ func test_start_validate_rejects_invalid_controller() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 5,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 0}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject controller_player outside [0,1].")
@@ -141,7 +141,7 @@ func test_start_validate_rejects_double_open() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 0}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject opening when displacement already active.")
@@ -153,7 +153,7 @@ func test_start_execute_sets_interaction_flow() -> void:
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 1,
-		"displaced_squadrons": [{"owner": 1, "squadron_index": 0}],
+		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	cmd.execute(_state)
 	var f: InteractionFlow = _state.interaction_flow
@@ -174,7 +174,7 @@ func test_start_execute_sets_interaction_flow() -> void:
 func test_start_execute_payload_is_independent_copy() -> void:
 	_add_ship(0)
 	_add_squadron(1)
-	var list: Array = [{"owner": 1, "squadron_index": 0}]
+	var list: Array = [ {"owner": 1, "squadron_index": 0}]
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
 		"controller_player": 1,

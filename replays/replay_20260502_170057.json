@@ -55,7 +55,7 @@
 		{
 			"payload": {
 				"action": "reveal",
-				"ship_index": 0
+				"ship_index": 1
 			},
 			"player": 0,
 			"sequence": 5,
@@ -63,7 +63,7 @@
 		},
 		{
 			"payload": {
-				"ship_index": 0
+				"ship_index": 1
 			},
 			"player": 0,
 			"sequence": 6,
@@ -79,44 +79,58 @@
 		},
 		{
 			"payload": {
-				"pos_x": 0.688999995478877,
-				"pos_y": 0.221175582320602,
-				"rotation_deg": 0.0,
-				"ship_index": 0,
+				"new_speed": 1,
+				"ship_index": 1
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "set_speed"
+		},
+		{
+			"payload": {
+				"pos_x": 0.408857359709563,
+				"pos_y": 0.174484337700738,
+				"rotation_deg": -22.5000023336668,
+				"ship_index": 1,
 				"speed": 2,
 				"yaw_clicks": [
-					0,
+					-1,
 					0
 				]
 			},
 			"player": 0,
-			"sequence": 8,
+			"sequence": 9,
 			"type": "execute_maneuver"
 		},
 		{
 			"payload": {
-				"ship_index": 0
+				"controller_player": 1,
+				"displaced_squadrons": [
+					{
+						"owner": 1,
+						"squadron_index": 1
+					}
+				],
+				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 9,
-			"type": "end_activation"
-		},
-		{
-			"payload": {
-				"action": "reveal",
-				"ship_index": 0
-			},
-			"player": 1,
 			"sequence": 10,
-			"type": "reveal_dial"
+			"type": "start_displacement"
 		},
 		{
 			"payload": {
-				"ship_index": 0
+				"placements": [
+					{
+						"owner": 1,
+						"pos_x": 0.371650187174479,
+						"pos_y": 0.196104855007595,
+						"squadron_index": 1
+					}
+				]
 			},
 			"player": 1,
 			"sequence": 11,
-			"type": "convert_dial_to_token"
+			"type": "commit_displacement"
 		}
 	],
 	"header": {
@@ -128,8 +142,8 @@
 		"format_version": 1,
 		"godot_version": "4.5.1-stable (official)",
 		"initiative_player": 0,
-		"rng_seed": -9078773627245800289,
+		"rng_seed": -6872579243237192507,
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-05-02T06:18:14"
+		"timestamp": "2026-05-02T15:00:57"
 	}
 }

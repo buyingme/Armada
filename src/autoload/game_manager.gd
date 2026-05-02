@@ -1635,6 +1635,14 @@ func _handle_remote_command_effects(
 			_handle_remote_activate_squadron(cmd)
 		"move_squadron":
 			_handle_remote_move_squadron(cmd)
+		"start_displacement":
+			# Phase I6b-4d: modal lifecycle is driven by the
+			# [signal EventBus.command_executed] projection in
+			# [GameBoard._on_command_executed_project_ui]; no
+			# additional GameManager-side handling required.
+			pass
+		"commit_displacement":
+			_handle_remote_commit_displacement(cmd)
 		"spend_token":
 			_handle_remote_spend_token(cmd)
 		"discard_token":
@@ -1801,6 +1809,30 @@ func _handle_remote_move_squadron(cmd: GameCommand) -> void:
 			EventBus.squadron_repositioned_remotely.emit(sq)
 	_activating_squadron = null
 	_finish_remote_squadron_activation()
+
+
+## Phase I6b-4d: Mirror commit_displacement — snap each repositioned
+## squadron token to the authoritative position written by
+## [CommitDisplacementCommand.execute].  Replaces the per-squadron
+## [code]move_squadron[/code] mirror that the displacement modal used
+## to submit one-by-one.  Idempotent on the controller peer (tokens
+## are already at their final position from the modal drag).
+func _handle_remote_commit_displacement(cmd: GameCommand) -> void:
+	var raw: Variant = cmd.payload.get("placements", [])
+	if not (raw is Array):
+		return
+	for entry: Variant in raw as Array:
+		if not (entry is Dictionary):
+			continue
+		var d: Dictionary = entry as Dictionary
+		var sq_owner: int = int(d.get("owner", -1))
+		var sq_idx: int = int(d.get("squadron_index", -1))
+		if not current_game_state:
+			return
+		var sq: SquadronInstance = current_game_state.get_squadron(
+				sq_owner, sq_idx)
+		if sq:
+			EventBus.squadron_repositioned_remotely.emit(sq)
 
 
 ## B10: Mirror end_activation side effects on remote peer.

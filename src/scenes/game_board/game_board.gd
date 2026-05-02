@@ -979,7 +979,21 @@ func _on_command_executed_project_ui(_command: GameCommand,
 		_open_displacement_modal_from_command(_command)
 	if _command != null \
 			and _command.command_type == "commit_displacement":
-		_resume_after_remote_displacement()
+		# Phase I6b-4d: deferred so the host's follow-up
+		# [code]advance_activation_step[/code] submitted inside
+		# [_show_end_activation_after_maneuver] broadcasts *after* the
+		# outer [code]commit_displacement[/code] broadcast.  Without
+		# the defer, the follow-up command is processed inside the
+		# [signal CommandProcessor.command_executed] of
+		# [code]commit_displacement[/code] (before the host has a
+		# chance to broadcast it), so the client receives
+		# [code]advance_activation_step[/code] first \u2014 which
+		# overwrites [member GameState.interaction_flow] with
+		# [code]SHIP_ACTIVATION[/code] and causes the subsequent
+		# [code]commit_displacement[/code] broadcast to fail validation
+		# ("No active displacement flow"), leaving squadron positions
+		# unwritten on the client.
+		call_deferred("_resume_after_remote_displacement")
 	var flow: InteractionFlow = gs.interaction_flow
 	# Read-only mirrors must close when the flow ends, so call their
 	# sync helpers BEFORE the no-flow early-return below.  Each helper

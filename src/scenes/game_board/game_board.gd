@@ -1148,6 +1148,29 @@ func _can_act_as(player_index: int) -> bool:
 	return idx < 0 or idx == player_index
 
 
+## Returns whether [param result] indicates the command was submitted to
+## the server and is now awaiting the authoritative broadcast.
+##
+## Network submitters ([NetworkHostCommandSubmitter] /
+## [NetworkCommandSubmitter]) return [code]{}[/code] on submit; the real
+## result arrives via [signal EventBus.command_executed] when the server
+## broadcasts.  In hot-seat [LocalCommandSubmitter] returns the validated
+## result synchronously, so an empty dict instead means the command was
+## rejected.  Phase I6e-3 helper — names the submitter-contract that the
+## old [code]PlayMode.is_network() and result.is_empty()[/code] branches
+## encoded inline.
+func _is_pending_remote_result(result: Dictionary) -> bool:
+	return result.is_empty() and PlayMode.is_network()
+
+
+## Returns whether [param result] is the synchronous [code]{}[/code] that
+## [LocalCommandSubmitter] returns when a hot-seat command is rejected.
+## Inverse of [method _is_pending_remote_result] for the empty-result
+## case.  Phase I6e-3 helper.
+func _is_local_command_rejection(result: Dictionary) -> bool:
+	return result.is_empty() and not PlayMode.is_network()
+
+
 ## Returns whether the local player may interact with ActivationModal controls.
 ##
 ## Phase I6d: routes through [UIProjector] so hot-seat and network share the
@@ -1258,7 +1281,7 @@ func _on_dial_token_converted(ship: ShipInstance) -> void:
 	# activation_modal_open  → _open_modal_from_interaction_state()
 	# wait_for_ship_select   → _close_modal_from_interaction_state()
 	# No need to show the sequence button or open the modal here.
-	if PlayMode.is_network() and result.is_empty():
+	if _is_pending_remote_result(result):
 		_log.info("Ship activated via card drop (token convert): '%s' " \
 				% [ship.data_key if ship else "?"] \
 				+"(awaiting server result).")
@@ -2648,7 +2671,7 @@ func _debug_deal_faceup_card(ship: ShipInstance,
 	# and client peers share a single visual-update path.
 	var result: Dictionary = GameManager.submit_debug_deal_damage(
 			ship, card.serialize(), effect_id)
-	if result.is_empty() and not PlayMode.is_network():
+	if _is_local_command_rejection(result):
 		# Hot-seat: empty == validation rejection.  In network mode
 		# [NetworkCommandSubmitter] always returns [code]{}[/code] and
 		# the result arrives via the broadcast.

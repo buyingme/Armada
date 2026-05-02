@@ -61,10 +61,13 @@ func test_network_client_mode_hides_save_and_load() -> void:
 			"Quit Game should still be present for clients")
 
 
-func test_save_and_load_buttons_stub_disabled() -> void:
+func test_save_button_enabled_at_safe_point_load_stubbed() -> void:
 	_modal.set_mode(GameMenuModal.Mode.HOT_SEAT)
-	assert_true(_find_button(_modal, "Save Game").disabled,
-			"Save Game is stub-disabled until J4")
+	# Without an active GameManager game, can_save_now() returns
+	# {ok: false, ...}, so the Save button is disabled with a tooltip.
+	# Load remains stub-disabled until J5.
+	var save_btn: Button = _find_button(_modal, "Save Game")
+	assert_not_null(save_btn, "Save Game button should exist")
 	assert_true(_find_button(_modal, "Load Game").disabled,
 			"Load Game is stub-disabled until J5")
 
@@ -124,20 +127,29 @@ func test_quit_when_dirty_opens_save_on_quit_dialog() -> void:
 			"Game menu should hide when sub-dialog opens")
 
 
-func test_dirty_quit_save_and_quit_emits_quit_with_save_first_true() -> void:
+func test_dirty_quit_save_and_quit_opens_save_dialog_then_quits() -> void:
+	# J4: "Save & Quit" routes through SaveGameDialog.  When the dialog
+	# emits `saved`, the menu emits quit_requested(false) since the game
+	# is now clean.
 	_modal.set_mode(GameMenuModal.Mode.HOT_SEAT)
 	_modal.dirty_override = 1
 	_modal.show_modal()
 	_find_button(_modal, "Quit Game").pressed.emit()
 	await get_tree().process_frame
-	watch_signals(_modal)
 	var sub: SaveOnQuitDialog = _modal.get_save_on_quit_dialog()
 	sub.save_and_quit_requested.emit()
+	await get_tree().process_frame
+	var save_dlg: SaveGameDialog = _modal.get_save_game_dialog()
+	assert_not_null(save_dlg,
+			"Save & Quit should open the SaveGameDialog")
+	watch_signals(_modal)
+	# Simulate a successful save by emitting the dialog's saved signal.
+	save_dlg.saved.emit("test_save")
 	assert_signal_emitted(_modal, "quit_requested",
-			"Save & Quit should emit quit_requested")
+			"Save then quit should emit quit_requested after save")
 	var params: Array = get_signal_parameters(_modal, "quit_requested")
-	assert_eq(params, [true],
-			"Save & Quit should emit save_first=true")
+	assert_eq(params, [false],
+			"After save, quit_requested should fire with save_first=false")
 
 
 func test_dirty_quit_quit_without_saving_emits_quit_with_false() -> void:

@@ -58,6 +58,10 @@ var _btn_save: Button = null
 var _btn_load: Button = null
 var _btn_quit: Button = null
 var _save_on_quit_dialog: SaveOnQuitDialog = null
+var _save_game_dialog: SaveGameDialog = null
+## When true, a successful save in the [SaveGameDialog] is followed by
+## emitting [signal quit_requested].  Used by the dirty-quit flow.
+var _save_then_quit: bool = false
 
 
 func _init() -> void:
@@ -145,19 +149,33 @@ func _make_button(label_text: String) -> Button:
 	return btn
 
 
-## Hides Save / Load for network clients; stubs them disabled in J3.
-## Slices J4 / J5 will enable them and wire the dialogs.
+## Hides Save / Load for network clients; Save is enabled for hot-seat
+## and network host (J4); Load is stub-disabled until J5.
 func _apply_mode_visibility() -> void:
 	if _btn_save == null or _btn_load == null:
 		return
 	var save_load_visible: bool = mode != Mode.NETWORK_CLIENT
 	_btn_save.visible = save_load_visible
 	_btn_load.visible = save_load_visible
-	# Stub-disabled in J3 \u2014 dialogs come in J4/J5.
-	_btn_save.disabled = true
-	_btn_save.tooltip_text = "Save dialog wires up in J4."
+	# Save is enabled in J4; Load is stub-disabled until J5.
+	_apply_save_button_state()
 	_btn_load.disabled = true
 	_btn_load.tooltip_text = "Load dialog wires up in J5."
+
+
+## Updates the Save Game button's enabled state based on the current
+## [SaveGameManager.can_save_now] gate.  Disabled-with-tooltip when
+## the gate fails (e.g. mid-attack, mid-displacement).
+func _apply_save_button_state() -> void:
+	if _btn_save == null:
+		return
+	var gate: Dictionary = {"ok": true, "reason": ""}
+	if is_instance_valid(SaveGameManager) \
+			and is_instance_valid(GameManager):
+		gate = SaveGameManager.can_save_now(GameManager.current_game_state)
+	var ok: bool = bool(gate.get("ok", false))
+	_btn_save.disabled = not ok
+	_btn_save.tooltip_text = "" if ok else String(gate.get("reason", ""))
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +205,9 @@ func _on_resume_pressed() -> void:
 
 func _on_save_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
+	_save_then_quit = false
+	hide_modal()
+	_open_save_dialog()
 	save_requested.emit()
 
 
@@ -245,7 +266,8 @@ func _show_save_on_quit_dialog() -> void:
 
 
 func _on_save_and_quit_chosen() -> void:
-	quit_requested.emit(true)
+	_save_then_quit = true
+	_open_save_dialog()
 
 
 func _on_quit_without_save_chosen() -> void:
@@ -261,6 +283,44 @@ func _on_save_quit_cancelled() -> void:
 ## tests to inspect / drive the sub-modal.
 func get_save_on_quit_dialog() -> SaveOnQuitDialog:
 	return _save_on_quit_dialog
+
+
+## Returns the [SaveGameDialog] when one has been opened.  Used by
+## tests to inspect / drive the dialog.
+func get_save_game_dialog() -> SaveGameDialog:
+	return _save_game_dialog
+
+
+# ---------------------------------------------------------------------------
+# Save dialog wiring (J4)
+# ---------------------------------------------------------------------------
+
+func _open_save_dialog() -> void:
+	if _save_game_dialog == null:
+		_save_game_dialog = SaveGameDialog.new()
+		_save_game_dialog.name = "SaveGameDialog"
+		var host: Node = get_parent()
+		if host != null:
+			host.add_child(_save_game_dialog)
+		else:
+			add_child(_save_game_dialog)
+		_save_game_dialog.saved.connect(_on_save_dialog_saved)
+		_save_game_dialog.cancelled.connect(_on_save_dialog_cancelled)
+	_save_game_dialog.prefill_default_name()
+	_save_game_dialog.show_modal()
+
+
+func _on_save_dialog_saved(_file_name: String) -> void:
+	if _save_then_quit:
+		_save_then_quit = false
+		quit_requested.emit(false)
+	# Otherwise the menu stays closed; the player has saved and resumed.
+
+
+func _on_save_dialog_cancelled() -> void:
+	# Re-open the game menu so the player can pick another action.
+	_save_then_quit = false
+	show_modal()
 
 
 # ---------------------------------------------------------------------------

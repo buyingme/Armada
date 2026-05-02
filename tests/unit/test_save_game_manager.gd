@@ -201,9 +201,22 @@ func test_can_save_now_rejects_setup_phase() -> void:
 func test_can_save_now_rejects_active_interaction_flow() -> void:
 	var gs: GameState = _make_game_state()
 	gs.interaction_flow.flow_type = Constants.InteractionFlow.ATTACK
+	gs.interaction_flow.step_id = Constants.InteractionStep.ATTACK_ROLL
 	var result: Dictionary = _manager.can_save_now(gs)
 	assert_false(result["ok"],
 			"Mid-attack interaction_flow blocks save")
+
+
+func test_can_save_now_accepts_wait_for_ship_select() -> void:
+	# Between activations — InteractionFlow is SHIP_ACTIVATION but
+	# step_id is WAIT_FOR_SHIP_SELECT — should be a safe save point.
+	var gs: GameState = _make_game_state()
+	gs.interaction_flow.flow_type = Constants.InteractionFlow.SHIP_ACTIVATION
+	gs.interaction_flow.step_id = Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
+	var result: Dictionary = _manager.can_save_now(gs)
+	assert_true(result["ok"],
+			"Between-activations idle state is a safe save point: %s" %
+			result.get("reason", ""))
 
 
 func test_can_save_now_accepts_idle_state() -> void:

@@ -208,14 +208,38 @@ func default_save_name(game_state: GameState) -> String:
 ## Result: [code]{"ok": bool, "reason": String}[/code].  When [code]ok[/code]
 ## is false, [code]reason[/code] is a short human-readable explanation
 ## suitable for a tooltip.
+## Steps at which it is safe to save — the player is choosing a
+## top-level action that hasn't started yet, so any local UI state
+## can be reconstructed from [GameState] after a load.
+const _SAFE_STEPS: Array[Constants.InteractionStep] = [
+	Constants.InteractionStep.NONE,
+	Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+	Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+	Constants.InteractionStep.WAIT_FOR_OPPONENT_DIALS,
+	Constants.InteractionStep.ACTIVATION_DONE,
+	Constants.InteractionStep.STATUS_CLEANUP_STEP,
+	Constants.InteractionStep.GAME_OVER_STEP,
+]
+
+
+## Returns whether the current [param game_state] is at a safe save point.
+## Result: [code]{"ok": bool, "reason": String}[/code].  When [code]ok[/code]
+## is false, [code]reason[/code] is a short human-readable explanation
+## suitable for a tooltip.
+##
+## Safe points are determined by [member InteractionFlow.step_id]: the
+## player must be at a top-level choice (waiting to pick a ship,
+## squadron, etc.) rather than mid-step (rolling dice, executing a
+## maneuver, picking defense tokens).  See [constant _SAFE_STEPS].
 func can_save_now(game_state: GameState) -> Dictionary:
 	if game_state == null:
 		return {"ok": false, "reason": "No active game."}
 	if game_state.current_phase == Constants.GamePhase.SETUP:
 		return {"ok": false, "reason": "Cannot save during setup."}
 	if game_state.interaction_flow != null:
-		var flow: int = int(game_state.interaction_flow.flow_type)
-		if flow != int(Constants.InteractionFlow.NONE):
+		var step: Constants.InteractionStep = \
+				game_state.interaction_flow.step_id
+		if not _SAFE_STEPS.has(step):
 			return {
 				"ok": false,
 				"reason": "Finish the current step before saving.",

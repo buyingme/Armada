@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 139 |
-| GUT tests | 2 818 |
-| GUT asserts | 5 329 |
+| GUT test scripts | 140 |
+| GUT tests | 2 829 |
+| GUT asserts | 5 343 |
 | Failing tests | 0 |
-| Last commit | `ce09933` (Phase J3 — GameMenuModal + dirty-quit prompt, 2026-05-02) |
+| Last commit | `df5b62a` (Phase J3 hash record, 2026-05-02) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -273,7 +273,7 @@ src/
 | J1 ✅ | `SaveGameMetadata` (header schema with `save_format_version=1`) + extend `SaveGameManager`: header read/write, HMAC sign/verify (shared with replay), `can_save_now()`, `list_with_meta()`. Add `display_name` to scenario JSONs. Remove F5/F8 debug bindings. | Unit tests: header round-trip, version rejection, HMAC tamper rejection, can_save_now matrix (all phases × flow states), list_with_meta. | — |
 | J2 ✅ | `GameManager.start_new_game_from_state(state, scenario_id)` — install deserialised state, re-resolve templates, emit `game_started` so board rebuilds. Hot-seat only. | Unit / integration: round-trip serialize → deserialize → install → all ships present, dials match, damage deck matches. | Deferred to MT-J.5 (no user-facing surface in J2; F8 binding removed in J1 per Q3). |
 | J3 ✅ | `GameMenuModal` replaces `QuitConfirmationModal`: 4 buttons (hot-seat/host) / 2 buttons (client), ESC-toggle, centred with main-menu button styling. Quit triggers "Save first?" sub-modal when game is dirty. Save / Load buttons stub-disabled. | Unit: button visibility per mode; ESC open/close; dirty-on-quit prompt. | MT-J.3 — ESC menu shows correct buttons in each mode; second ESC resumes; quit-when-dirty prompts. |
-| J4 | `SaveGameDialog` — name field with default template, Save/Cancel, validation (non-empty, no path separators, max 64 chars), overwrite confirmation. Wired into `GameMenuModal` (hot-seat + host only). | Unit: name validation; default template builder. | MT-J.4 — save in hot-seat with default name and with edited name; verify file on disk. |
+| J4 ✅ | `SaveGameDialog` — name field with default template, Save/Cancel, validation (non-empty, no path separators, max 64 chars), overwrite confirmation. Wired into `GameMenuModal` (hot-seat + host only). | Unit: name validation; default template builder. | MT-J.4 — save in hot-seat with default name and with edited name; verify file on disk. |
 | J5 | `LoadGameDialog` — list with metadata, filter by game mode tab, Load/Cancel. Network-mode saves greyed out when no host session. Wired into both main menu and `GameMenuModal`. On load, tear down active game (if any), call `start_new_game_from_state`. | Unit: list rendering, filter; greyed-out network rows; round-trip from list selection. | MT-J.5 — load from main menu and from ESC menu; resume play; verify counts match. |
 | J6 | Network-host save: `NetworkManager.is_server()` guard in dialog; "Save" submits a server-side save (host's authoritative `GameState`); broadcast result toast to client. | Unit: client cannot trigger save (host-only RPC guard). | MT-J.6 — host saves mid-network-game; verify file; client sees confirmation toast. |
 | J7 | Network load (Q1-dependent): host loads a save → re-host with loaded state, clients are kicked with "Game reloaded — please rejoin" message. | Integration: host re-host flow. | MT-J.7 — host re-loads; client gets disconnect message; rejoin lands in correct state. |

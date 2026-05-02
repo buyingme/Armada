@@ -27,7 +27,7 @@ var card_detail_overlay: CardDetailOverlay = null
 var damage_summary_overlay: DamageSummaryOverlay = null
 
 ## Confirmation modal for quitting the game (UI-034).
-var quit_modal: QuitConfirmationModal = null
+var quit_modal: GameMenuModal = null
 
 ## Activation sidebar showing ship/squadron activation status (UI-014).
 var activation_sidebar: ActivationSidebar = null
@@ -224,18 +224,19 @@ func show_game_end(details: Dictionary) -> void:
 	victory_screen.show_results(details)
 
 
-## Shows the quit confirmation modal when Escape is pressed and no other
-## handler consumed the event. Returns true if handled.
-## Requirements: UI-034.
+## Shows or toggles the in-game menu modal when Escape is pressed and no
+## other handler consumed the event. Returns true if handled.
+## Phase J3 — ESC toggles open/close. Requirements: UI-034.
 func handle_quit_escape(event: InputEvent) -> bool:
 	if not event is InputEventKey:
 		return false
 	var key_event: InputEventKey = event as InputEventKey
 	if not key_event.pressed or key_event.keycode != KEY_ESCAPE:
 		return false
-	if quit_modal == null or quit_modal.visible:
+	if quit_modal == null:
 		return false
-	quit_modal.show_modal()
+	quit_modal.set_mode(GameMenuModal.resolve_current_mode())
+	quit_modal.toggle()
 	get_viewport().set_input_as_handled()
 	return true
 
@@ -305,16 +306,17 @@ func _create_card_detail_layer() -> void:
 	register_resizable(damage_summary_overlay, &"update_size", true)
 
 
-## Creates the quit confirmation modal on a top-level layer (UI-034).
+## Creates the in-game menu modal on a top-level layer (UI-034 / Phase J3).
 func _create_quit_modal_layer() -> void:
 	var quit_layer: CanvasLayer = CanvasLayer.new()
-	quit_layer.name = "QuitConfirmationLayer"
+	quit_layer.name = "GameMenuLayer"
 	quit_layer.layer = 95
 	add_child(quit_layer)
-	quit_modal = QuitConfirmationModal.new()
-	quit_modal.name = "QuitConfirmationModal"
+	quit_modal = GameMenuModal.new()
+	quit_modal.name = "GameMenuModal"
+	quit_modal.set_mode(GameMenuModal.resolve_current_mode())
 	quit_layer.add_child(quit_modal)
-	quit_modal.confirmed.connect(_on_quit_confirmed)
+	quit_modal.quit_requested.connect(_on_quit_confirmed)
 
 
 ## Creates the activation sidebar on its own layer (UI-014).
@@ -543,8 +545,10 @@ func _on_score_changed(_token: Node) -> void:
 
 
 ## Handles the player confirming they want to quit. Transitions to the
-## main menu scene. UI-034.
-func _on_quit_confirmed() -> void:
+## main menu scene. Phase J3 — [param save_first] arrives from
+## [GameMenuModal.quit_requested] but is currently ignored (Save dialog
+## ships in J4). UI-034.
+func _on_quit_confirmed(_save_first: bool = false) -> void:
 	GameManager.auto_save_replay()
 	get_tree().change_scene_to_file(
 			"res://src/scenes/main_menu/main_menu.tscn")

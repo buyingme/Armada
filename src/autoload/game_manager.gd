@@ -171,6 +171,7 @@ func start_new_game(config: Dictionary = {}) -> void:
 	# StartRoundCommand and the client applies it via the handler.  G4.6.5 A1.
 	if not config.get("client_mode", false):
 		_start_round()
+	SaveGameManager.mark_clean()
 
 
 ## Installs a previously-serialised [param state] as the live game state
@@ -214,6 +215,7 @@ func start_new_game_from_state(
 			current_game_state.current_round,
 			current_game_state.current_phase])
 	EventBus.game_started.emit()
+	SaveGameManager.mark_clean()
 
 
 ## Scoring calculator (created lazily, reused across end-game checks).

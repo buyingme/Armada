@@ -56,7 +56,7 @@ func _make_populated_state() -> GameState:
 	# Player 0: CR90 + Nebulon-B
 	gs.player_states[0].faction = Constants.Faction.REBEL_ALLIANCE
 	var cr90: ShipInstance = _make_ship(SHIP_KEY_CR90, 0)
-	cr90.current_hull = 2  # damaged
+	cr90.current_hull = 2 # damaged
 	cr90.pos_x = 0.42
 	cr90.pos_y = 0.55
 	cr90.rotation_deg = 90.0
@@ -181,7 +181,7 @@ func test_start_new_game_from_state_emits_game_started() -> void:
 
 func test_start_new_game_from_state_initialises_effect_registry() -> void:
 	var gs: GameState = _make_populated_state()
-	gs.effect_registry = null  # simulate a freshly-deserialised state
+	gs.effect_registry = null # simulate a freshly-deserialised state
 	var prev_state: GameState = GameManager.current_game_state
 	var prev_active: bool = GameManager.is_game_active
 	GameManager.start_new_game_from_state(gs, "x")

@@ -43,6 +43,12 @@ var _log: GameLogger = GameLogger.new("SaveGameManager")
 ## Cached signing key (loaded once per process).
 var _signing_key: PackedByteArray = PackedByteArray()
 
+## Command count at the last successful save.  Used by [method is_dirty]
+## to detect whether the game has advanced since the last save (so the
+## ESC menu can prompt before quit).  Reset to 0 on
+## [method CommandProcessor.reset].
+var _command_count_at_last_save: int = 0
+
 
 # ---------------------------------------------------------------------------
 # Save / Load
@@ -88,6 +94,7 @@ func save_game(
 		return false
 	file.store_string(json_string)
 	file.close()
+	_command_count_at_last_save = _current_command_count()
 	_log.info("Game saved to %s (%s)" % [file_path, meta.display_name])
 	return true
 
@@ -216,6 +223,22 @@ func can_save_now(game_state: GameState) -> Dictionary:
 	return {"ok": true, "reason": ""}
 
 
+## Returns whether the current game has advanced since the last save.
+## Used by the ESC menu to prompt "Save first?" before quit (Phase J Q4).
+## Returns [code]false[/code] when no game is active.  Reset by
+## [method mark_clean] (e.g. on new game / load) and by a successful save.
+func is_dirty() -> bool:
+	if not is_instance_valid(GameManager) or not GameManager.is_game_active:
+		return false
+	return _current_command_count() > _command_count_at_last_save
+
+
+## Resets the dirty-tracking counter.  Call when starting a new game or
+## loading a save so the freshly-installed state is considered clean.
+func mark_clean() -> void:
+	_command_count_at_last_save = _current_command_count()
+
+
 # ---------------------------------------------------------------------------
 # Listing / deletion
 # ---------------------------------------------------------------------------
@@ -318,6 +341,14 @@ func _current_scenario_id() -> String:
 	if GameManager.has_method("get_scenario_id"):
 		return String(GameManager.get_scenario_id())
 	return ""
+
+
+## Returns [CommandProcessor.get_command_count] safely (guards against
+## the autoload being unavailable in unit-test contexts).
+func _current_command_count() -> int:
+	if not is_instance_valid(CommandProcessor):
+		return 0
+	return CommandProcessor.get_command_count()
 
 
 ## Reads the current game mode from [PlayMode].  Defaults to hot-seat.

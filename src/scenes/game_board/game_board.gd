@@ -404,6 +404,16 @@ func _connect_signals() -> void:
 			_on_squadron_repositioned_remotely)
 	#endregion
 
+	#region Network passive-peer destroy visuals
+	# In hot-seat / on the attacker peer, [AttackExecutor._fade_out_token]
+	# hides the destroyed token directly.  On the passive peer the
+	# attack-executor is not in exec mode, so the token stays visible.
+	# Subscribe to [signal EventBus.squadron_destroyed] here so the
+	# passive peer also fades the token.  Idempotent: re-firing on a
+	# token that is already invisible is a no-op (the handler early-returns).
+	EventBus.squadron_destroyed.connect(_on_squadron_destroyed_fade_token)
+	#endregion
+
 	#region Network passive-peer modal mirroring (C7/C8)
 	if not EventBus.ship_activated_remotely.is_connected(_on_remote_ship_activated):
 		EventBus.ship_activated_remotely.connect(_on_remote_ship_activated)
@@ -799,12 +809,12 @@ func _on_active_player_changed(player_index: int) -> void:
 ## Resumes the appropriate game flow for the current phase.
 ## Requirements: HO-002, HO-004.
 func _on_handoff_accepted() -> void:
-	# Network mode: only proceed when it is the local player's turn.
-	# Prevents opening SqActModal for the remote player's squadrons.
-	if PlayMode.is_network():
-		var local: int = NetworkManager.get_local_player_index()
-		if GameManager.active_player != local:
-			return
+	# Only proceed when the local viewer is the active player.  In hot-seat
+	# this is always true (handoff overlay swaps active_player to the
+	# dismisser).  In network mode this prevents opening SqActModal for the
+	# remote player's squadrons.  Phase I6e.
+	if GameManager.active_player != _local_viewer():
+		return
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
 
 	match phase:
@@ -1116,6 +1126,34 @@ func _submit_network_activation_step(step_id: String) -> void:
 	GameManager.submit_advance_activation_step(ship, step_id)
 
 
+## Returns the player index whose perspective is shown locally on this peer.
+##
+## In network mode this is [code]NetworkManager.get_local_player_index()[/code].
+## In hot-seat both players share one screen, so the local viewer follows
+## [code]GameManager.get_active_player()[/code] (which the handoff overlay
+## swaps between activations).  Phase I6e helper — replaces the
+## [code]if PlayMode.is_network(): ... else: active_player[/code] pattern.
+func _local_viewer() -> int:
+	var idx: int = NetworkManager.get_local_player_index()
+	if idx < 0:
+		return GameManager.get_active_player()
+	return idx
+
+
+## Returns whether this peer is responsible for executing the actions of
+## [param player_index].
+##
+## In network mode only the matching peer acts.  In hot-seat both players
+## share one process, so this peer always acts on behalf of either player.
+## Phase I6e helper — distinct from [method _local_viewer] because the
+## chooser/controller of a sub-flow may be the **opposite** of the local
+## viewer (e.g. defender during attack), but the hot-seat process must
+## still run the logic for them.
+func _can_act_as(player_index: int) -> bool:
+	var idx: int = NetworkManager.get_local_player_index()
+	return idx < 0 or idx == player_index
+
+
 ## Returns whether the local player may interact with ActivationModal controls.
 ##
 ## Phase I6d: routes through [UIProjector] so hot-seat and network share the
@@ -1128,10 +1166,7 @@ func _is_local_activation_modal_controller() -> bool:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return true
-	var local: int = NetworkManager.get_local_player_index()
-	if local < 0:
-		# Hot-seat: viewer is the active player.
-		local = GameManager.get_active_player()
+	var local: int = _local_viewer()
 	var flow: InteractionFlow = gs.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return GameManager.get_active_player() == local
@@ -1146,11 +1181,9 @@ func _is_local_activation_modal_controller() -> bool:
 ## [member InteractionFlow.controller_player] on the implicit between-turn
 ## handoff, so reading [code]flow.controller_player[/code] would gate on
 ## stale data.  Always trust [code]active_player[/code] here.  G4 Phase I5c.
+## Phase I6e: hot-seat and network unified via [method _local_viewer].
 func _is_local_squadron_modal_controller() -> bool:
-	if not PlayMode.is_network():
-		return true
-	var local: int = NetworkManager.get_local_player_index()
-	return GameManager.get_active_player() == local
+	return GameManager.get_active_player() == _local_viewer()
 
 
 ## Applies current controller authority to activation and squadron modals.
@@ -1327,7 +1360,34 @@ func _on_squadron_repositioned_remotely(sq: SquadronInstance) -> void:
 		return
 	token.global_position = Vector2(
 			sq.pos_x * pa.x, sq.pos_y * pa.y)
-	EventBus.squadron_moved.emit(token)
+	# Note: do NOT emit [signal EventBus.squadron_moved] here.  The only
+	# listener is [SfxManager], and replaying the flyby SFX on the passive
+	# peer plays an unwanted sound when the opponent moves a squadron.
+	# The active peer's [SquadronPhaseController._on_squadron_move_commit]
+	# already emits the signal locally for the player who made the move.
+
+
+## Fades and hides the SquadronToken matching a destroyed
+## [SquadronInstance].  Idempotent: skips tokens that are already
+## invisible (e.g. attacker peer where [AttackExecutor._fade_out_token]
+## already ran).  Closes the passive-peer-destroy gap where the network
+## client kept showing the token after a kill.
+func _on_squadron_destroyed_fade_token(sq_or_token: Variant) -> void:
+	var token: SquadronToken = null
+	if sq_or_token is SquadronToken:
+		token = sq_or_token as SquadronToken
+	elif sq_or_token is SquadronInstance:
+		token = _find_squadron_token_for_instance(
+				sq_or_token as SquadronInstance)
+	if token == null or not token.visible:
+		return
+	token.set_process_unhandled_input(false)
+	var tween: Tween = token.create_tween()
+	tween.tween_property(token, "modulate:a", 0.0, 0.8)
+	tween.tween_callback(func() -> void:
+		token.visible = false
+		token.modulate.a = 1.0
+	)
 
 
 ## Finds the SquadronToken on the board bound to the given SquadronInstance.
@@ -2637,10 +2697,10 @@ func _react_debug_deal_damage(cmd: GameCommand,
 	EventBus.ship_hull_changed.emit(ship, new_hull)
 	# Tooltip on the originator (operator who pressed Shift+D) so they
 	# get visible feedback regardless of which ship they targeted.
-	var local_idx: int = -1
-	if PlayMode.is_network():
-		local_idx = NetworkManager.get_local_player_index()
-	if not PlayMode.is_network() or cmd.player_index == local_idx:
+	# Phase I6e: [method _local_viewer] resolves to the active player in
+	# hot-seat (matching [code]cmd.player_index[/code] for self-submitted
+	# debug commands) and to the network local index in network mode.
+	if cmd.player_index == _local_viewer():
 		TooltipManager.show_text(
 				"Dealt: %s" % title, Vector2.INF, 2.5)
 	# Immediate-effect chain runs on the **chooser** peer.  The chooser
@@ -2652,11 +2712,11 @@ func _react_debug_deal_damage(cmd: GameCommand,
 	# Auto-resolve cards (no choice required) run on the ship-owner
 	# peer so dial / shield / hull mutations route through the
 	# authoritative submitter once.  Hot-seat: both peers are local
-	# so the chain always runs.
+	# so the chain always runs (via [method _can_act_as]).
 	if ImmediateEffectResolver.is_immediate(dealt_card):
 		var chooser_player: int = _resolve_debug_chooser_player(
 				dealt_card, ship)
-		if not PlayMode.is_network() or chooser_player == local_idx:
+		if _can_act_as(chooser_player):
 			_resolve_debug_immediate_effect(dealt_card, ship)
 
 ## Returns the player index that should drive the immediate-effect

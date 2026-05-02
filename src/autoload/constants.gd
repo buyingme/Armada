@@ -142,6 +142,10 @@ enum InteractionFlow {
 	ATTACK,
 	STATUS_CLEANUP,
 	GAME_OVER,
+	# Phase I6b-4 — squadron displacement after ship maneuver overlap.
+	# Controller is the squadron-owner peer (opposing the maneuvering ship).
+	# Rules Reference: RRG "Overlapping", p.8 — OV-002.
+	SQUADRON_DISPLACEMENT,
 }
 
 ## Identifies the specific step within the active [enum InteractionFlow].
@@ -178,6 +182,8 @@ enum InteractionStep {
 	# Status / Game Over
 	STATUS_CLEANUP_STEP,
 	GAME_OVER_STEP,
+	# Phase I6b-4 — Squadron Displacement.
+	DISPLACEMENT_PLACE,
 }
 
 ## Visibility scope of an [InteractionFlow] payload.

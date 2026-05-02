@@ -88,6 +88,9 @@ func _ready() -> void:
 	CommitDefenseCommand.register()
 	SelectEvadeDieCommand.register()
 	RedirectDoneCommand.register()
+	# Tier 14 — squadron-displacement authority (Phase I6b-4).
+	StartDisplacementCommand.register()
+	CommitDisplacementCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

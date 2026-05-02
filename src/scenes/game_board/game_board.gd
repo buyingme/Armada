@@ -1898,6 +1898,22 @@ func _on_execute_maneuver() -> void:
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview()
 	if displaced.size() > 0:
+		# Phase I6b-4c-1: submit the displacement-start command alongside
+		# the legacy direct call so [member GameState.interaction_flow]
+		# reflects the placement state on both peers.  Behaviour is
+		# unchanged — the modal is still driven by the legacy path; I6b-4c-2
+		# will replace the direct call with a projection-driven open.
+		var displaced_instances: Array = []
+		var displaced_owner: int = -1
+		for sq_token: SquadronToken in displaced:
+			var inst: SquadronInstance = sq_token.get_squadron_instance()
+			if inst == null:
+				continue
+			displaced_instances.append(inst)
+			if displaced_owner < 0:
+				displaced_owner = inst.owner_player
+		GameManager.submit_start_displacement(maneuver_ship,
+				displaced_owner, displaced_instances)
 		_displacement_controller.start(displaced, moved_ship_base)
 	else:
 		_show_end_activation_after_maneuver()

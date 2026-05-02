@@ -272,11 +272,19 @@ func _on_committed() -> void:
 ## Submits [code]move_squadron[/code] commands for every displaced
 ## squadron so the model is updated and positions are broadcast to
 ## network clients.  G4.6.5 — network displacement sync.
+##
+## Phase I6b-4c-1: also submits a [CommitDisplacementCommand] that
+## clears [member GameState.interaction_flow] back to NONE.  The
+## per-squadron position writes are still authored by
+## [code]move_squadron[/code]; [code]commit_displacement[/code]'s
+## [method execute] re-applies the same values harmlessly while
+## clearing the flow.
 func _submit_displaced_positions() -> void:
 	var pa: Vector2 = GameScale.play_area_size_px
 	if pa.x <= 0.0 or pa.y <= 0.0:
 		_log.warn("Cannot normalise displaced positions — play area is 0.")
 		return
+	var placements: Array = []
 	for sq_token: SquadronToken in _displacement_queue:
 		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
 		if sq_inst == null:
@@ -284,9 +292,20 @@ func _submit_displaced_positions() -> void:
 		var pos: Vector2 = sq_token.global_position
 		var norm_x: float = pos.x / pa.x
 		var norm_y: float = pos.y / pa.y
+		var sq_name: String = _get_squadron_display_name(sq_token)
 		_log.info("Displacement: submitting position for %s (%.3f, %.3f)."
-				% [sq_inst.display_name, norm_x, norm_y])
+				% [sq_name, norm_x, norm_y])
 		GameManager.submit_move_squadron(sq_inst, norm_x, norm_y)
+		placements.append({
+			"owner": sq_inst.owner_player,
+			"squadron_index":
+					GameManager.current_game_state.find_squadron_index(
+							sq_inst),
+			"pos_x": norm_x,
+			"pos_y": norm_y,
+		})
+	if not placements.is_empty():
+		GameManager.submit_commit_displacement(placements)
 
 
 ## Finishes the displacement flow: removes modal, flips camera back,

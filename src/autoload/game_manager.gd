@@ -766,6 +766,55 @@ func submit_move_squadron(squadron: SquadronInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits a [StartDisplacementCommand] opening the squadron-displacement
+## flow on the squadron-owner peer.  Phase I6b-4.
+##
+## [param ship] — the maneuvering ship that triggered the overlap.
+## [param controller_player] — the peer that must drive the placement
+##     modal (always the squadron owner; in mixed-owner edge cases the
+##     caller picks one).
+## [param displaced_squadrons] — Array of [SquadronInstance] that must
+##     be re-placed.
+func submit_start_displacement(ship: ShipInstance,
+		controller_player: int,
+		displaced_squadrons: Array) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var entries: Array = []
+	for sq: SquadronInstance in displaced_squadrons:
+		entries.append({
+			"owner": sq.owner_player,
+			"squadron_index":
+					current_game_state.find_squadron_index(sq),
+		})
+	var cmd := StartDisplacementCommand.new(ship.owner_player, {
+		"ship_index": ship_index,
+		"controller_player": controller_player,
+		"displaced_squadrons": entries,
+	})
+	return _submitter.submit(cmd)
+
+
+## Submits a [CommitDisplacementCommand] closing the squadron-displacement
+## flow.  Submitted by the controller peer once they confirm placements.
+## Phase I6b-4.
+##
+## [param placements] — Array[Dictionary] of
+##     [code]{ owner, squadron_index, pos_x, pos_y }[/code] entries.
+func submit_commit_displacement(placements: Array) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var flow: InteractionFlow = current_game_state.interaction_flow
+	var controller: int = flow.controller_player if flow != null else -1
+	if controller < 0:
+		_log.warn("submit_commit_displacement: no displacement flow active.")
+		return {}
+	var cmd := CommitDisplacementCommand.new(controller,
+			{"placements": placements})
+	return _submitter.submit(cmd)
+
+
 ## Submits an [ExecuteManeuverCommand] recording a ship's final position.
 ## Called after the presentation layer resolves overlaps and snaps the ship.
 ## [param ship] — the ShipInstance that manoeuvred.

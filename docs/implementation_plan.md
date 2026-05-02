@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 140 |
-| GUT tests | 2 829 |
-| GUT asserts | 5 343 |
+| GUT tests | 2 830 |
+| GUT asserts | 5 344 |
 | Failing tests | 0 |
-| Last commit | `df5b62a` (Phase J3 hash record, 2026-05-02) |
+| Last commit | `86977b2` (Phase J4 — SaveGameDialog + can_save_now safe-step fix, 2026-05-02) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

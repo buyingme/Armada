@@ -971,6 +971,15 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	# double-open.
 	if not PlayMode.is_network():
 		return
+	# Phase I6b-4c-2: squadron-displacement modal lifecycle.
+	# Fixes OV-002: in network mode the modal must open on the
+	# squadron-owner peer (controller), not the maneuvering peer.
+	if _command != null \
+			and _command.command_type == "start_displacement":
+		_open_displacement_modal_from_command(_command)
+	if _command != null \
+			and _command.command_type == "commit_displacement":
+		_resume_after_remote_displacement()
 	var flow: InteractionFlow = gs.interaction_flow
 	# Read-only mirrors must close when the flow ends, so call their
 	# sync helpers BEFORE the no-flow early-return below.  Each helper
@@ -1079,6 +1088,74 @@ func _open_activation_modal_mirror() -> void:
 ## Safe to call even if the modal is already closed (idempotent).
 func _close_modal_from_interaction_state() -> void:
 	_on_board_activation_ended()
+
+
+## Phase I6b-4c-2 — OV-002 fix.  Network-only.
+##
+## Opens the squadron-displacement modal on the squadron-owner peer
+## (controller) when [StartDisplacementCommand] broadcasts.  The
+## maneuvering peer skips this branch (its [code]_can_act_as[/code]
+## check fails because the controller is the opposing player).
+##
+## Resolves the [SquadronToken]s and [ShipBase] from the command's
+## payload + current scene state, then drives the existing
+## [DisplacementController.start] entry point unchanged.
+func _open_displacement_modal_from_command(cmd: GameCommand) -> void:
+	var payload: Dictionary = cmd.payload
+	var controller: int = int(payload.get("controller_player", -1))
+	if controller < 0:
+		return
+	if not _can_act_as(controller):
+		return
+	var ship_index: int = int(payload.get("ship_index", -1))
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	var ship: ShipInstance = gs.get_ship(cmd.player_index, ship_index)
+	if ship == null:
+		_log.warn("Displacement modal: ship not found.")
+		return
+	var ship_token: ShipToken = _find_ship_token_for_instance(ship)
+	if ship_token == null:
+		_log.warn("Displacement modal: ship token not found.")
+		return
+	var ship_base: ShipBase = ShipBase.new(
+			ship_token.get_ship_size(),
+			Transform2D(ship_token.global_rotation,
+					ship_token.global_position))
+	var entries: Array = payload.get("displaced_squadrons", []) as Array
+	var displaced_tokens: Array[SquadronToken] = []
+	for raw: Variant in entries:
+		var entry: Dictionary = raw as Dictionary
+		var sq_owner: int = int(entry.get("owner", -1))
+		var sq_idx: int = int(entry.get("squadron_index", -1))
+		var inst: SquadronInstance = gs.get_squadron(sq_owner, sq_idx)
+		if inst == null:
+			continue
+		var token: SquadronToken = _find_squadron_token_for_instance(inst)
+		if token != null:
+			displaced_tokens.append(token)
+	if displaced_tokens.is_empty():
+		_log.warn("Displacement modal: no squadron tokens resolved.")
+		return
+	_displacement_controller.start(displaced_tokens, ship_base)
+
+
+## Phase I6b-4c-2 — OV-002 fix.  Network-only.
+##
+## Triggered on every peer when [CommitDisplacementCommand] broadcasts.
+## On the maneuvering peer (active player), runs the post-maneuver
+## resume logic that the legacy [signal displacement_completed]
+## connection used to fire — but only after the controller peer has
+## finished placement.  On the controller peer this is a no-op because
+## the legacy [code]_finish_displacement[/code] path runs there via
+## the modal's own commit handler.
+func _resume_after_remote_displacement() -> void:
+	if _local_viewer() != GameManager.get_active_player():
+		return
+	if _activation_ctx.ship_activation_state == null:
+		return
+	_show_end_activation_after_maneuver()
 
 
 ## Applies authoritative ship-activation step snapshots from the
@@ -1898,11 +1975,13 @@ func _on_execute_maneuver() -> void:
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview()
 	if displaced.size() > 0:
-		# Phase I6b-4c-1: submit the displacement-start command alongside
-		# the legacy direct call so [member GameState.interaction_flow]
-		# reflects the placement state on both peers.  Behaviour is
-		# unchanged — the modal is still driven by the legacy path; I6b-4c-2
-		# will replace the direct call with a projection-driven open.
+		# Phase I6b-4c: submit the start_displacement command on every
+		# peer so [member GameState.interaction_flow] reflects the
+		# placement state.  In hot-seat the modal is still driven by the
+		# direct [code]_displacement_controller.start()[/code] call below.
+		# In network the modal opens on the squadron-owner peer via the
+		# projection handler in [method _on_command_executed_project_ui]
+		# (OV-002 fix) — the maneuvering peer here just submits and waits.
 		var displaced_instances: Array = []
 		var displaced_owner: int = -1
 		for sq_token: SquadronToken in displaced:
@@ -1914,7 +1993,8 @@ func _on_execute_maneuver() -> void:
 				displaced_owner = inst.owner_player
 		GameManager.submit_start_displacement(maneuver_ship,
 				displaced_owner, displaced_instances)
-		_displacement_controller.start(displaced, moved_ship_base)
+		if not PlayMode.is_network():
+			_displacement_controller.start(displaced, moved_ship_base)
 	else:
 		_show_end_activation_after_maneuver()
 	_log.info("Ship snapped to final position.")

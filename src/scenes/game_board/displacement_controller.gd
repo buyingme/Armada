@@ -115,14 +115,19 @@ func start(displaced: Array[SquadronToken],
 		_activation_modal.close()
 	_log.info("Starting squadron displacement: %d squadron(s)."
 			% displaced.size())
-	# Flip camera to the opposing player.
+	# Flip camera to the opposing player.  Connect BEFORE the rotate
+	# call: when the camera is already at the target rotation
+	# [BoardCamera.rotate_to_player] emits
+	# [signal EventBus.perspective_change_complete] synchronously, so a
+	# post-rotate connect would miss it.  This happens in network mode
+	# on the controller peer (camera is pinned to local viewer = squadron
+	# owner = opposing the active maneuvering peer).  Phase I6b-4c-2.
 	var opponent: int = 1 - GameManager.get_active_player()
-	_camera.rotate_to_player(opponent)
-	# Wait for the rotation to finish before prompting.
 	if not EventBus.perspective_change_complete.is_connected(
 			_on_camera_ready):
 		EventBus.perspective_change_complete.connect(
 				_on_camera_ready, CONNECT_ONE_SHOT)
+	_camera.rotate_to_player(opponent)
 
 
 ## Called by [GameBoard._unhandled_input] when left-click occurs during
@@ -321,13 +326,15 @@ func _finish_displacement() -> void:
 	_remove_displacement_modal()
 	TooltipManager.hide_tooltip()
 	_log.info("All displaced squadrons placed — flipping camera back.")
-	# Flip camera back to the active player.
+	# Flip camera back to the active player.  Connect BEFORE rotate for
+	# the same reason as in [method start] — synchronous emit when camera
+	# is already at target.  Phase I6b-4c-2.
 	var active: int = GameManager.get_active_player()
-	_camera.rotate_to_player(active)
 	if not EventBus.perspective_change_complete.is_connected(
 			_on_camera_returned):
 		EventBus.perspective_change_complete.connect(
 				_on_camera_returned, CONNECT_ONE_SHOT)
+	_camera.rotate_to_player(active)
 
 
 # ---------------------------------------------------------------------------

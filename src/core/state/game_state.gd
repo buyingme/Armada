@@ -152,4 +152,6 @@ static func deserialize(data: Dictionary) -> GameState:
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
 	else:
 		state.interaction_flow = InteractionFlow.new()
+	# Transient runtime cache — rebuilt on load (Phase J2).
+	state.effect_registry = EffectRegistry.new()
 	return state

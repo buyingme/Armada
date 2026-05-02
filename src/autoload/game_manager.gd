@@ -173,6 +173,49 @@ func start_new_game(config: Dictionary = {}) -> void:
 		_start_round()
 
 
+## Installs a previously-serialised [param state] as the live game state
+## (Phase J2).  Called by the load-game flow once a save has been read
+## and validated by [SaveGameManager].  Hot-seat only in J2; network
+## load is deferred to J7.
+##
+## [param state] — the deserialised [GameState], with ship/squadron
+##     templates already re-resolved by [PlayerState.deserialize].
+## [param scenario_id] — the saved scenario identifier, used by replay
+##     headers and for any scene rebuild that needs the JSON definition.
+##
+## Side effects: resets [CommandProcessor], assigns
+## [member current_game_state], restores [member is_game_active] and
+## [member active_player], clears per-round trackers, and emits
+## [signal EventBus.game_started] so the board can rebuild.
+func start_new_game_from_state(
+		state: GameState, scenario_id: String) -> void:
+	if state == null:
+		_log.error("start_new_game_from_state called with null state.")
+		return
+	CommandProcessor.reset()
+	current_game_state = state
+	if current_game_state.effect_registry == null:
+		current_game_state.effect_registry = EffectRegistry.new()
+	if current_game_state.interaction_flow == null:
+		current_game_state.interaction_flow = InteractionFlow.new()
+	is_game_active = true
+	active_player = current_game_state.initiative_player
+	_activating_ship = null
+	_activating_squadron = null
+	_squadrons_activated_this_turn = 0
+	_command_submitted = [false, false]
+	_command_assigning_player = -1
+	# Loaded saves always have interaction_flow == NONE (Phase J Q5),
+	# so fixed_commands_applied is set true to suppress the round-1 toast.
+	fixed_commands_applied = true
+	_scenario_id = scenario_id
+	_log.info("Loaded game from save: scenario='%s' round=%d phase=%d." % [
+			scenario_id,
+			current_game_state.current_round,
+			current_game_state.current_phase])
+	EventBus.game_started.emit()
+
+
 ## Scoring calculator (created lazily, reused across end-game checks).
 var _scoring: ScoringCalculator = null
 

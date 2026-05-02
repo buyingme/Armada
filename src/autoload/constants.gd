@@ -212,6 +212,8 @@ enum ModalKind {
 	ATTACK_CRITICAL_CHOICE,
 	STATUS_CLEANUP,
 	GAME_OVER,
+	# Phase I6b-4 — squadron displacement after ship-squadron overlap.
+	DISPLACEMENT,
 }
 
 ## Mapping from legacy interaction-state flow-type strings to

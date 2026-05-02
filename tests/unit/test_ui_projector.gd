@@ -261,3 +261,62 @@ func test_payload_is_deep_copied_into_intent() -> void:
 	intent.payload["dice_pool"].append({"color": "black"})
 	assert_eq(gs.interaction_flow.payload["dice_pool"].size(), 1,
 			"Projector must deep-copy nested arrays.")
+
+
+# ---------------------------------------------------------------------------
+# Squadron displacement (Phase I6b-4b)
+# ---------------------------------------------------------------------------
+
+func test_squadron_displacement_maps_to_displacement_modal() -> void:
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			Constants.InteractionStep.DISPLACEMENT_PLACE,
+			1,
+			{"ship_index": 0, "displaced_squadrons": [
+					{"owner": 1, "squadron_index": 0}]})
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 1)
+	assert_eq(intent.modal_kind, Constants.ModalKind.DISPLACEMENT,
+			"SQUADRON_DISPLACEMENT should project to ModalKind.DISPLACEMENT.")
+	assert_eq(intent.flow_type,
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			"flow_type should be exposed on the intent.")
+	assert_true(intent.is_interactive,
+			"Controller (squadron owner) is interactive.")
+
+
+func test_squadron_displacement_non_controller_is_not_interactive() -> void:
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			Constants.InteractionStep.DISPLACEMENT_PLACE,
+			1,
+			{"ship_index": 0, "displaced_squadrons": [
+					{"owner": 1, "squadron_index": 0}]})
+	# Maneuvering peer (player 0) should still see the modal kind so it
+	# can render a "waiting" mirror, but is_interactive is false.
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+	assert_eq(intent.modal_kind, Constants.ModalKind.DISPLACEMENT,
+			"Modal kind is independent of viewer.")
+	assert_false(intent.is_interactive,
+			"Maneuvering peer is not interactive during displacement.")
+	assert_eq(intent.hud_status_text, "waiting for opponent's choice",
+			"Maneuvering peer waits for opponent during displacement.")
+
+
+func test_squadron_displacement_payload_round_trip() -> void:
+	var payload: Dictionary = {
+			"ship_index": 2,
+			"displaced_squadrons": [
+					{"owner": 1, "squadron_index": 0},
+					{"owner": 1, "squadron_index": 1}]}
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			Constants.InteractionStep.DISPLACEMENT_PLACE,
+			1, payload)
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 1)
+	assert_eq(int(intent.payload.get("ship_index", -1)), 2,
+			"ship_index should be carried through the projection.")
+	var sq_list: Array = (
+			intent.payload.get("displaced_squadrons", []) as Array)
+	assert_eq(sq_list.size(), 2,
+			"displaced_squadrons should be projected.")
+

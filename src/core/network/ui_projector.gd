@@ -133,6 +133,8 @@ static func _modal_kind_for(flow: InteractionFlow) -> Constants.ModalKind:
 			return Constants.ModalKind.SQUADRON
 		Constants.InteractionFlow.ATTACK:
 			return _attack_modal_kind_for_step(flow.step_id)
+		Constants.InteractionFlow.SQUADRON_DISPLACEMENT:
+			return Constants.ModalKind.DISPLACEMENT
 		Constants.InteractionFlow.STATUS_CLEANUP:
 			return Constants.ModalKind.STATUS_CLEANUP
 		Constants.InteractionFlow.GAME_OVER:

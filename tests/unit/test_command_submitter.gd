@@ -107,14 +107,15 @@ func test_local_submit_invalid_returns_empty() -> void:
 # NetworkCommandSubmitter
 # ---------------------------------------------------------------------------
 
-func test_network_submit_returns_empty() -> void:
+func test_network_submit_returns_awaiting_sentinel() -> void:
 	var submitter := NetworkCommandSubmitter.new()
 	var cmd := _TestNoopCmd.new(0, {})
 	# NetworkCommandSubmitter calls NetworkManager.send_command_to_server(),
-	# which will warn because role is not CLIENT — but the return is {}.
+	# which will warn because role is not CLIENT — but the return is the
+	# AWAITING_REMOTE_RESULT sentinel ({"awaiting_remote": true}).
 	var result: Dictionary = submitter.submit(cmd)
-	assert_true(result.is_empty(),
-			"NetworkCommandSubmitter.submit() should always return empty dict.")
+	assert_true(result.get("awaiting_remote", false),
+			"NetworkCommandSubmitter.submit() should return the awaiting-remote sentinel.")
 	# _log.warn triggers push_warning — mark handled.
 	assert_engine_error(1,
 			"Should warn about send_command_to_server with wrong role.")
@@ -153,8 +154,8 @@ func test_network_queues_while_awaiting() -> void:
 	var cmd2 := _TestNoopCmd.new(0, {})
 	submitter.submit(cmd1)
 	var result: Dictionary = submitter.submit(cmd2)
-	assert_true(result.is_empty(),
-			"Queued submit while awaiting should return empty dict.")
+	assert_true(result.get("awaiting_remote", false),
+			"Queued submit while awaiting should still return the awaiting-remote sentinel.")
 	assert_eq(submitter._pending_payloads.size(), 1,
 			"Second submit should be queued while waiting for server response.")
 	# First submit warns about role; second submit is queued (info-level).

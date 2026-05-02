@@ -1242,24 +1242,25 @@ func _can_act_as(player_index: int) -> bool:
 ## Returns whether [param result] indicates the command was submitted to
 ## the server and is now awaiting the authoritative broadcast.
 ##
-## Network submitters ([NetworkHostCommandSubmitter] /
-## [NetworkCommandSubmitter]) return [code]{}[/code] on submit; the real
-## result arrives via [signal EventBus.command_executed] when the server
-## broadcasts.  In hot-seat [LocalCommandSubmitter] returns the validated
-## result synchronously, so an empty dict instead means the command was
-## rejected.  Phase I6e-3 helper — names the submitter-contract that the
-## old [code]PlayMode.is_network() and result.is_empty()[/code] branches
-## encoded inline.
+## Phase I6e-3 (sentinel slice): [NetworkCommandSubmitter] now returns
+## [constant NetworkCommandSubmitter.AWAITING_REMOTE_RESULT] (which
+## carries [code]awaiting_remote: true[/code]) on submit, distinct from
+## the truly-empty [code]{}[/code] that local /
+## [NetworkHostCommandSubmitter] return on validation rejection.  This
+## helper now reads the sentinel directly — no [method PlayMode.is_network]
+## branch required.
 func _is_pending_remote_result(result: Dictionary) -> bool:
-	return result.is_empty() and PlayMode.is_network()
+	return result.get("awaiting_remote", false)
 
 
 ## Returns whether [param result] is the synchronous [code]{}[/code] that
-## [LocalCommandSubmitter] returns when a hot-seat command is rejected.
-## Inverse of [method _is_pending_remote_result] for the empty-result
-## case.  Phase I6e-3 helper.
+## a local submitter ([LocalCommandSubmitter] /
+## [NetworkHostCommandSubmitter]) returns when a command is rejected by
+## validation.  Phase I6e-3 helper — distinct from
+## [method _is_pending_remote_result] thanks to the
+## [code]awaiting_remote[/code] sentinel.
 func _is_local_command_rejection(result: Dictionary) -> bool:
-	return result.is_empty() and not PlayMode.is_network()
+	return result.is_empty()
 
 
 ## Returns whether the local player may interact with ActivationModal controls.

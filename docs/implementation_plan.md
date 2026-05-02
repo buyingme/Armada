@@ -18,7 +18,7 @@
 | GUT tests | 2 802 |
 | GUT asserts | 5 294 |
 | Failing tests | 0 |
-| Last commit | `<J2>` (Phase J2 — fleet rebuild + start_new_game_from_state, 2026-05-02) |
+| Last commit | `380588e` (Phase J2 — fleet rebuild + start_new_game_from_state, 2026-05-02) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

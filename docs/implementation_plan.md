@@ -18,7 +18,7 @@
 | GUT tests | 2 818 |
 | GUT asserts | 5 329 |
 | Failing tests | 0 |
-| Last commit | `60206e8` (Phase J2 hash record, 2026-05-02) |
+| Last commit | `ce09933` (Phase J3 — GameMenuModal + dirty-quit prompt, 2026-05-02) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

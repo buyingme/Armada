@@ -18,7 +18,7 @@
 | GUT tests | 2 860 |
 | GUT asserts | 5 391 |
 | Failing tests | 0 |
-| Last commit | `6dd78d6` (Phase J8 — cleanup + arc42 §5 + in-session hot-seat grey-out) |
+| Last commit | `78067e3` (network: port fields, lobby endpoint, diagnostics row) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

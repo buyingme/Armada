@@ -18,7 +18,7 @@
 | GUT tests | 2 854 |
 | GUT asserts | 5 383 |
 | Failing tests | 0 |
-| Last commit | _to be filled in after the J7 commit lands_ |
+| Last commit | `c392510` (Phase J7 — network load from lobby and in-session) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

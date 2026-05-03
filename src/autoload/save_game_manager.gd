@@ -73,6 +73,19 @@ func _ready() -> void:
 				_on_command_executed_refresh)
 	if is_instance_valid(EventBus):
 		EventBus.game_started.connect(_on_game_started_initial)
+	# Phase J6: client-side toast when host saves.
+	if is_instance_valid(NetworkManager):
+		NetworkManager.save_notification_received.connect(
+				_on_remote_save_notification)
+
+
+## Shows a toast on the client when the host has saved the game.
+## Phase J6.
+func _on_remote_save_notification(display_name: String) -> void:
+	if not is_instance_valid(TooltipManager):
+		return
+	var msg: String = "Host saved the game as \"%s\"." % display_name
+	TooltipManager.show_text(msg, Vector2.INF, 3.0, true)
 
 
 func _init_checkpoints() -> void:
@@ -148,6 +161,14 @@ func save_game(
 	if file_name.begins_with(SYSTEM_PREFIX):
 		_log.error("save_game refused: '%s' uses reserved prefix '%s'."
 				% [file_name, SYSTEM_PREFIX])
+		return false
+	# Phase J6: only the host may write authoritative network saves.
+	# Defense in depth — the UI already hides the Save button on the
+	# client (GameMenuModal.NETWORK_CLIENT branch).
+	if PlayMode != null and PlayMode.is_network() \
+			and is_instance_valid(NetworkManager) \
+			and not NetworkManager.is_server():
+		_log.warn("save_game refused on network client (host-only).")
 		return false
 	if not _ensure_save_dir():
 		return false

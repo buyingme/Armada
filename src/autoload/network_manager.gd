@@ -97,6 +97,10 @@ signal chat_received(sender: String, text: String, timestamp: int)
 ## [param result] — execution result dictionary.
 signal command_result_received(command_data: Dictionary, result: Dictionary)
 
+## Emitted on the client after the host has saved the game.  The UI
+## listens for this and shows a toast.  Phase J6.
+signal save_notification_received(display_name: String)
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -652,6 +656,28 @@ func _receive_game_config(rng_seed: int, scenario_id: String) -> void:
 	}
 	_log.info("Received game config: seed=%d, scenario='%s'." % [
 			rng_seed, scenario_id])
+
+
+## Server: notifies all peers that the host has saved the game.  The
+## host sees no toast (it already saw the dialog close); clients show a
+## brief "Host saved the game as ..." toast.  Phase J6.
+##
+## [param display_name] — the user-facing save name.
+func broadcast_save_notification(display_name: String) -> void:
+	if role != Role.SERVER:
+		_log.warn("broadcast_save_notification() called but not server.")
+		return
+	_receive_save_notification.rpc(display_name)
+	_log.info("Broadcast save notification: '%s'." % display_name)
+
+
+## Server → Clients: delivers the post-save notification.  The host
+## skips its own emission since [code]call_local[/code] is omitted.
+## Phase J6.
+@rpc("authority", "reliable")
+func _receive_save_notification(display_name: String) -> void:
+	save_notification_received.emit(display_name)
+	_log.info("Received save notification from host: '%s'." % display_name)
 
 
 ## Server-side: processes a command submitted by the host player.

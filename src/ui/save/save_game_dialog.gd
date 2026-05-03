@@ -265,6 +265,12 @@ func _perform_save(name: String) -> void:
 	if not ok:
 		_show_error("Save failed. See log for details.")
 		return
+	# Phase J6: in network mode, the host notifies the client so they
+	# see a confirmation toast.
+	if PlayMode != null and PlayMode.is_network() \
+			and is_instance_valid(NetworkManager) \
+			and NetworkManager.is_server():
+		NetworkManager.broadcast_save_notification(name)
 	SfxManager.play_sfx("droid_sound")
 	hide_modal()
 	saved.emit(name)

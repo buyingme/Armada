@@ -312,3 +312,39 @@ func test_role_name_returns_valid_strings() -> void:
 			"CLIENT role name should be 'CLIENT'.")
 	assert_eq(NetworkManager._role_name(NetworkManager.Role.SPECTATOR), "SPECTATOR",
 			"SPECTATOR role name should be 'SPECTATOR'.")
+
+
+# ---------------------------------------------------------------------------
+# Phase J6 — save notification broadcast
+# ---------------------------------------------------------------------------
+
+func test_save_notification_signal_emittable() -> void:
+	var received: Array[String] = []
+	var lam: Callable = func(name: String) -> void:
+		received.append(name)
+	NetworkManager.save_notification_received.connect(lam)
+	NetworkManager._receive_save_notification("Mid-Game R3")
+	assert_eq(received.size(), 1,
+			"save_notification_received should be emittable.")
+	assert_eq(received[0], "Mid-Game R3",
+			"Display name should propagate through the signal.")
+	NetworkManager.save_notification_received.disconnect(lam)
+
+
+func test_broadcast_save_notification_warns_when_not_server() -> void:
+	# Not server → no-op (and warn).  Ensures clients can never trigger
+	# the broadcast even if they call the helper directly.
+	var prev_role: int = NetworkManager.role
+	var prev_log_level: int = GameLogger.min_level
+	GameLogger.min_level = GameLogger.Level.ERROR + 1
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	var received: Array[String] = []
+	var lam: Callable = func(name: String) -> void:
+		received.append(name)
+	NetworkManager.save_notification_received.connect(lam)
+	NetworkManager.broadcast_save_notification("Should-Not-Send")
+	assert_eq(received.size(), 0,
+			"Client must not trigger save_notification_received.")
+	NetworkManager.save_notification_received.disconnect(lam)
+	NetworkManager.role = prev_role
+	GameLogger.min_level = prev_log_level

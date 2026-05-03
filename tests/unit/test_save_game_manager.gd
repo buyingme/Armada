@@ -319,3 +319,36 @@ func test_delete_nonexistent_returns_false() -> void:
 	var deleted: bool = _manager.delete_save("_nonexistent_12345")
 	assert_false(deleted,
 			"delete_save should return false for missing file")
+
+
+# ---------------------------------------------------------------------------
+# Phase J6 — network host/client save guard
+# ---------------------------------------------------------------------------
+
+func test_save_game_refused_on_network_client() -> void:
+	# Force PlayMode = network and NetworkManager role = client.
+	var prev_mode: int = PlayMode.current_mode
+	var prev_role: int = NetworkManager.role
+	var prev_log_level: int = GameLogger.min_level
+	GameLogger.min_level = GameLogger.Level.ERROR + 1
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	var gs: GameState = _make_game_state()
+	var ok: bool = _manager.save_game(gs, TEST_SAVE)
+	assert_false(ok,
+			"save_game should refuse on network client (host-only)")
+	PlayMode.set_mode(prev_mode)
+	NetworkManager.role = prev_role
+	GameLogger.min_level = prev_log_level
+
+
+func test_save_game_allowed_on_network_host() -> void:
+	var prev_mode: int = PlayMode.current_mode
+	var prev_role: int = NetworkManager.role
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	var gs: GameState = _make_game_state()
+	var ok: bool = _manager.save_game(gs, TEST_SAVE)
+	assert_true(ok, "save_game should succeed on network host")
+	PlayMode.set_mode(prev_mode)
+	NetworkManager.role = prev_role

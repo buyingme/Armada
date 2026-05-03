@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-03 (Phase J5.6 complete — hot-seat load works; J6 next)
+> Last updated: 2026-05-03 (Phase J6 complete — network-host save with client toast; J7 next)
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 141 |
-| GUT tests | 2 844 |
-| GUT asserts | 5 369 |
+| GUT tests | 2 848 |
+| GUT asserts | 5 374 |
 | Failing tests | 0 |
-| Last commit | `2dc3fcf` (Phase J5.6 — hot-seat load wired end-to-end, 2026-05-03) |
+| Last commit | _to be filled in after the J6 commit lands_ |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -284,7 +284,7 @@ src/
 | J5 ✅ | `LoadGameDialog` (J5 design superseded by J5.5 two-section layout). | — | Folded into MT-J.5.5. |
 | **J5.5 ✅** | **Per-mode checkpoint refresh** — `SaveGameManager` maintains a `Dictionary[mode -> {payload, signature, last_named}]` keyed by `PlayMode` (`hot_seat`, `network`). Refreshed on `CommandProcessor.command_executed` when `can_save_now()` is true, scoped to the active mode. Persisted as `_checkpoint_<mode>.json`. Initial checkpoint written on `EventBus.game_started`. `save_game()` copies the active mode's checkpoint payload under the new name. Save button enabled when current mode's checkpoint exists. SaveOnQuitDialog's Save & Quit enabled when checkpoint exists. SaveGameDialog title shows checkpoint round/phase. `is_dirty()` is per-mode. `LoadGameDialog` rewritten: two stacked mode sections; each starts with a synthetic "Resume Last Checkpoint" row (greyed when empty or network-without-host). | Unit: 2 839 tests pass; LoadGameDialog two-section layout, resume-row grey-out, network grey-out covered. | MT-J.5.5 — user-confirmed: mid-flow save captures last safe point; crash-resume preserves checkpoints; both mode sections render independently. |
 | **J5.6 ✅** | **Hot-seat load actually works** — fix the two defects that currently break load: (a) `GameBoard._ready` unconditionally calls `bootstrap_game("learning_scenario")` which overwrites a state freshly installed by `start_new_game_from_state`; (b) `_spawn_learning_scenario_tokens()` reads positions from scenario JSON instead of from the loaded `GameState`. Add a `GameManager.is_state_preloaded` flag set by `start_new_game_from_state` and cleared after the board consumes it; gate `bootstrap_game` and the token spawner on this flag. Token spawning when preloaded reads `pos_x` / `pos_y` / `rotation_deg` / hull damage / token state / dial assignments from `ShipInstance` + `SquadronInstance`. Main-menu Load flow + ESC-menu Load flow both use the same path; ESC-menu load tears the board scene down and reloads it (cleaner than mutating in place). Network section in main-menu `LoadGameDialog` shown but **greyed** with tooltip "Load network saves from the lobby once both players are connected". | Unit: `GameManager` preload flag round-trip; token spawner branch; main-menu LoadGameDialog shows greyed network rows with tooltip. Integration: serialize → deserialize → install → board rebuild → all ship positions, dials, damage cards, RNG match. | MT-J.5.6 — user-confirmed: hot-seat load works from main menu and ESC menu. |
-| J6 | Network-host save: `NetworkManager.is_server()` guard in dialog; "Save" submits a server-side save (host's authoritative `GameState`); broadcast result toast to client. | Unit: client cannot trigger save (host-only RPC guard). | MT-J.6 — host saves mid-network-game; verify file; client sees confirmation toast. |
+| **J6 ✅** | **Network-host save:** `SaveGameManager.save_game()` refuses on the network client (defense in depth — UI already hides the Save button for `Mode.NETWORK_CLIENT`). Host writes the file from its authoritative `GameState`; `NetworkManager.broadcast_save_notification(name)` (`@rpc("authority", "reliable")`) emits `save_notification_received` on the client; `SaveGameManager._on_remote_save_notification` shows a 3-second toast `Host saved the game as "<name>".` Tests: `test_save_game_refused_on_network_client`, `test_save_game_allowed_on_network_host`, `test_save_notification_signal_emittable`, `test_broadcast_save_notification_warns_when_not_server`. MT-J.6 confirmed by user 2026-05-03. **Note:** loading a network save from an in-session ESC menu is intentionally unsupported until J7 — the user-visible Load button is still shown but the load path is not RPC-backed; we did not add an interim grey-out because J7 will replace this UX entirely. |
 | **J7 (reshape)** | **Network load from the lobby** — add a "Load Game" button to `LobbyRoom`, host-only, enabled iff both peers are connected **and** both have pressed Ready. Pressing it opens `LoadGameDialog` configured for lobby context: Hot-Seat section shown but greyed, Network section active, resume row enabled when network checkpoint exists. On Load, host installs state via `start_new_game_from_state`, then broadcasts the serialised state + scenario_id to the client via a new `RPC_LOAD_STATE` (extends G4.6.5 lobby protocol). Client installs the state on receipt, shows a brief "Host is loading…" toast, and both transition to the game board. The previous "host re-hosts → client kicked" design is dropped. | Integration: host triggers lobby load → client receives state → both boards rebuild from identical `GameState` (deterministic checksum match). | MT-J.7 — connect two peers, both Ready, host loads a network save; client transitions automatically; positions and turn order match on both screens. |
 | J8 | Cleanup: remove old `QuitConfirmationModal` references; update arc42 §05 to add `SaveGameMetadata` + `GameMenuModal`. | — | MT-J.8 — full hot-seat + network regression. |
 

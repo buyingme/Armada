@@ -1,8 +1,8 @@
 ## Game Menu Modal (Phase J3)
 ##
 ## In-game ESC menu shown when the player presses Escape on the main
-## game board with no other modal open.  Replaces the legacy
-## [code]QuitConfirmationModal[/code] (Phase J3 / Q10).
+## game board with no other modal open.  Replaced the legacy
+## quit-confirmation modal in Phase J3 / Q10.
 ##
 ## Buttons:
 ## | Mode           | Visible                                    |

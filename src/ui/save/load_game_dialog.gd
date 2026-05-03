@@ -355,18 +355,29 @@ func _is_network_blocked() -> bool:
 func _network_blocked_tooltip() -> String:
 	if context == "main_menu":
 		return ("Load network saves from the lobby once both players "
-				+ "are connected.")
+				+"are connected.")
 	return "Host a game to load this save."
 
 
 ## True when hot-seat rows must be greyed out.  Phase J7: hot-seat
-## saves cannot be loaded from inside a network lobby.
+## saves cannot be loaded from inside a network lobby.  Phase J8 fix:
+## also greyed when the dialog is opened from the in-game ESC menu of
+## an active network session — loading a hot-seat save there would
+## tear down the network game without including the connected client.
 func _is_hot_seat_blocked() -> bool:
-	return context == "lobby"
+	if context == "lobby":
+		return true
+	if context == "in_game" and is_instance_valid(PlayMode) \
+			and PlayMode.is_network():
+		return true
+	return false
 
 
 ## Tooltip shown on greyed hot-seat rows in lobby context.  Phase J7.
 func _hot_seat_blocked_tooltip() -> String:
+	if context == "in_game":
+		return ("Hot-seat saves cannot be loaded during a network "
+				+"session.  Quit to the main menu first.")
 	return "Hot-seat saves can only be loaded from the main menu."
 
 

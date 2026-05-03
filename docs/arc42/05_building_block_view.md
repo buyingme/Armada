@@ -135,6 +135,19 @@
 | `YourTurnBanner` | Control | `src/ui/your_turn_banner.gd` | Animated "Your Turn" banner at start of player's activation |
 | `VictoryScreen` | Control | `src/ui/victory_screen.gd` | End-of-game victory/defeat screen with scoring breakdown |
 | `DebugHelpPanel` | Control | `src/ui/debug_help_panel.gd` | Debug keybinding help overlay |
+
+### Save / Load Subsystem (Phase J)
+
+| Component | Extends | File | Purpose |
+|-----------|---------|------|---------|
+| `SaveGameManager` | Node (autoload) | `src/autoload/save_game_manager.gd` | Save/load orchestration: per-mode checkpoints, named saves, HMAC sign/verify, dirty tracking, network-client refusal, network-host save broadcast |
+| `SaveGameMetadata` | RefCounted | `src/core/state/save_game_metadata.gd` | Save header schema (`save_format_version`, `display_name`, `scenario_id`, `round`, `phase`, `game_mode`, `created_at`, `app_version`, `hmac`); `to_dict` / `from_dict` round-trip |
+| `IntegritySigner` | RefCounted | `src/utils/integrity_signer.gd` | Shared HMAC sign/verify used by saves and replays |
+| `GameMenuModal` | Control | `src/ui/save/game_menu_modal.gd` | In-game ESC menu (Resume / Save / Load / Quit) — mode-aware visibility (hot-seat · network-host · network-client); replaced the legacy quit-confirmation modal in Phase J3 |
+| `SaveGameDialog` | Control | `src/ui/save/save_game_dialog.gd` | Name + validate + overwrite-confirm + write to disk; broadcasts host save notification on network |
+| `LoadGameDialog` | Control | `src/ui/save/load_game_dialog.gd` | Two-section list (Hot-seat / Network) + per-mode "Resume Last Checkpoint" rows; context-aware (`main_menu` / `lobby` / `in_game`) gating; routes host network loads through `LobbyManager.host_load_save` for RPC broadcast |
+| `SaveOnQuitDialog` | Control | `src/ui/save/save_on_quit_dialog.gd` | "Save first?" prompt shown when quitting with a dirty checkpoint |
+
 ### Data Layer
 
 | Component | Extends | File | Purpose |

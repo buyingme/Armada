@@ -281,3 +281,53 @@ func test_network_named_row_enabled_in_lobby_context() -> void:
 					"Network row should be enabled in lobby context")
 			return
 	fail_test("Network fixture row not found")
+
+
+# ---------------------------------------------------------------------------
+# Phase J8 fix — in-session network ESC menu must also grey hot-seat saves
+# ---------------------------------------------------------------------------
+
+func test_hot_seat_named_row_disabled_in_game_when_network_active() -> void:
+	# Phase J8 bug fix: when the Load dialog is opened from the in-game
+	# ESC menu of an active network session, hot-seat saves must be
+	# greyed out — loading one would tear down the network game.
+	_reseed_fixtures()
+	var prev_mode: int = PlayMode.current_mode
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	_dialog.context = "in_game"
+	_dialog.show_modal()
+	var rows: Array[Button] = _list_rows(_dialog)
+	var found: bool = false
+	for row: Button in rows:
+		if row.text.find(SAVE_HOTSEAT) != -1:
+			assert_true(row.disabled,
+					"Hot-seat row should be disabled in in_game context "
+					+"during a network session")
+			assert_true(row.tooltip_text.find("network session") != -1,
+					"Tooltip should explain the network-session block")
+			found = true
+			break
+	PlayMode.current_mode = prev_mode
+	if not found:
+		fail_test("Hot-seat fixture row not found")
+
+
+func test_hot_seat_named_row_enabled_in_game_when_hot_seat_mode() -> void:
+	# Sanity: in pure hot-seat mode the in_game ESC dialog still allows
+	# loading hot-seat saves.
+	_reseed_fixtures()
+	var prev_mode: int = PlayMode.current_mode
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+	_dialog.context = "in_game"
+	_dialog.show_modal()
+	var rows: Array[Button] = _list_rows(_dialog)
+	var found: bool = false
+	for row: Button in rows:
+		if row.text.find(SAVE_HOTSEAT) != -1:
+			assert_false(row.disabled,
+					"Hot-seat row should be enabled in in_game hot-seat mode")
+			found = true
+			break
+	PlayMode.current_mode = prev_mode
+	if not found:
+		fail_test("Hot-seat fixture row not found")

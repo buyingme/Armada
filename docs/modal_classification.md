@@ -29,7 +29,7 @@ How to annotate:
 |---|---|---|---|---|---|---|---|
 | Handoff gate | HandoffOverlay | src/ui/handoff_overlay.gd | active-player transitions, immediate choice flow | Full-screen blocker with Ready. | Common | Active | In pure network, replace with explicit waiting state? Keep only for hot-seat parity? in network game put a small "waiting for opponents choice" below the score headline if player is in passive state|
 | Your turn banner | YourTurnBanner | src/ui/hud/your_turn_banner.gd | active-player transitions | Brief transition banner. | Common | None (read-only) | Informational only; no control. if player is active put "make your choices" below the score headline|
-| Quit confirmation | QuitConfirmationModal | src/ui/quit_confirmation_modal.gd | escape handling | Local quit confirmation. | Private | Local player | Pure local UX; no multiplayer authority impact. OK|
+| Quit confirmation | GameMenuModal | src/ui/save/game_menu_modal.gd | escape handling | In-game ESC menu (Resume / Save / Load / Quit). Replaced QuitConfirmationModal in Phase J3. | Private | Local player | Pure local UX; no multiplayer authority impact. OK|
 
 ## C. Information And Inspection Overlays
 

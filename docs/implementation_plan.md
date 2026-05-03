@@ -18,7 +18,7 @@
 | GUT tests | 2 848 |
 | GUT asserts | 5 374 |
 | Failing tests | 0 |
-| Last commit | _to be filled in after the J6 commit lands_ |
+| Last commit | `620677f` (Phase J6 — network-host save with client toast, 2026-05-03) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

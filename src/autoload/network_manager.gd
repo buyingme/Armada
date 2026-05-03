@@ -154,6 +154,10 @@ var _pending_game_config: Dictionary = {}
 ## Transient — not serialized.
 var _sync_gate: CommandSyncGate = CommandSyncGate.new()
 
+## ENet port the local instance is currently listening on (server) or
+## connected to (client).  0 when disconnected.  Transient.
+var _active_port: int = 0
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -190,6 +194,7 @@ func host(port: int = ServerMain.DEFAULT_PORT) -> bool:
 	multiplayer.multiplayer_peer = _peer
 	role = Role.SERVER
 	_local_player_index = 0
+	_active_port = port
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	_set_state(ConnectionState.LOBBY)
 	_start_heartbeat()
@@ -229,6 +234,7 @@ func connect_to_server(address: String, port: int = ServerMain.DEFAULT_PORT) -> 
 		return false
 	multiplayer.multiplayer_peer = _peer
 	role = Role.CLIENT
+	_active_port = port
 	_set_state(ConnectionState.CONNECTING)
 	_log.info("Connecting to %s:%d…" % [address, port])
 	return true
@@ -274,11 +280,44 @@ func get_local_player_index() -> int:
 	return _local_player_index
 
 
+## Returns the ENet port the local instance is hosting on (server) or
+## connected to (client).  Returns 0 when disconnected.
+func get_active_port() -> int:
+	return _active_port
+
+
+## Returns the first non-loopback IPv4 address bound to a local interface,
+## suitable for showing as the LAN address other players can connect to.
+## Returns an empty string when no LAN interface is found.
+func get_local_lan_ip() -> String:
+	for ip: String in IP.get_local_addresses():
+		if ip.is_empty():
+			continue
+		if ip.begins_with("127."):
+			continue
+		if ip.find(":") != -1:
+			continue  # skip IPv6
+		if ip.begins_with("169.254."):
+			continue  # skip link-local fallback
+		return ip
+	return ""
+
+
 ## Returns the pending game configuration dictionary.
 ## Contains [code]rng_seed[/code] and [code]scenario_id[/code].
 ## Consumed by [GameBoard._ready] after scene transition.  G4.6.5.2/3.
 func get_pending_game_config() -> Dictionary:
 	return _pending_game_config
+
+
+## Returns the current connection state as a human-readable name.
+func get_connection_state_name() -> String:
+	return _state_name(connection_state)
+
+
+## Returns the current role as a human-readable name.
+func get_role_name() -> String:
+	return _role_name(role)
 
 
 ## Returns a human-readable name for a [enum ConnectionState].
@@ -843,6 +882,7 @@ func _cleanup() -> void:
 	_last_heartbeat.clear()
 	_local_player_index = -1
 	_pending_game_config = {}
+	_active_port = 0
 	if _peer:
 		multiplayer.multiplayer_peer = null
 		_peer = null

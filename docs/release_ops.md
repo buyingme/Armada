@@ -3,22 +3,29 @@
 This runbook describes how to prepare, package, and validate a playable
 network release on two Macs connected to the same router.
 
-## 0. Five-Minute Internal Quickstart
+## 0. Quickstart (5-minute internal build)
 
-Use this path for a fast sanity pass before full release validation.
+For an internal LAN test on a Mac you trust (no DMG, no signing):
 
-1. Export a macOS release app from the target commit.
-2. Package DMG:
+1. From repository root:
 
 ```bash
-hdiutil create -volname Armada -srcfolder build/macos/Armada.app -ov -format UDZO build/macos/Armada.dmg
+godot --headless --import
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit | tail -10
 ```
 
-3. Install on Mac A (host) and Mac B (client).
-4. Host on Mac A, join from Mac B with host LAN IP and port.
-5. Validate lobby ready/start and one in-game command on both peers.
+   Confirm zero failures.
 
-If any step fails, continue with the full runbook below.
+2. Export the macOS preset to `build/macos/Armada.app` from the Godot editor (Project → Export → macOS → Export Project).
+3. Copy `Armada.app` to the second Mac (AirDrop or shared folder).
+4. On the host Mac:
+   - Allow the app in System Settings → Network → Firewall.
+   - Find LAN IP: `ipconfig getifaddr en0` (or `en1`).
+   - Launch app → Host Game → create lobby.
+5. On the client Mac: launch app → Join Game → enter host IP and port.
+6. Both Ready → host starts → confirm board appears on both machines.
+
+For a packaged DMG release follow §3 onwards.
 
 ## 1. Scope
 
@@ -82,9 +89,8 @@ Validation:
 
 ## 7. Two-Machine LAN Smoke Test
 
-### 7.1 Host and Client Setup
+### Host machine
 
-**Host machine:**
 1. Start app.
 2. Click Host Game.
 3. Create lobby and optional password.
@@ -100,72 +106,14 @@ If empty, try:
 ipconfig getifaddr en1
 ```
 
-**Client machine:**
+### Client machine
+
 1. Start app.
 2. Click Join Game.
 3. Enter host LAN IP and password (if set).
 4. Confirm lobby join succeeds.
 
-### 7.2 Port Input Fields & Network Diagnostics
-
-After successful host/join and lobby entry, verify the new port input fields
-and network diagnostics display work as expected. These features aid in
-troubleshooting LAN connectivity issues.
-
-#### Port Input Validation (Host and Client)
-
-**Host machine:**
-1. Click Host Game.
-2. Enter a game name, password (optional).
-3. Verify the default port (7350) is pre-populated in the "Server Port:" field.
-4. Try entering invalid ports:
-   - `0` → should reject or show error toast "Invalid server port (1-65535)."
-   - `65536` → should reject or show error toast.
-   - `abc` → should reject or show error toast.
-5. Enter a valid port in range 1–65535 (e.g., 8000) and confirm.
-6. **Expected outcome:** Connection starts with the entered port.
-
-**Client machine:**
-1. Click Join Game.
-2. Verify the default port (7350) is pre-populated in the "Server Port:" field.
-3. Enter host LAN IP in "Server IP Address:" field.
-4. Try entering invalid ports (same as above).
-5. Enter a valid port matching the host's chosen port and confirm.
-6. **Expected outcome:** Client successfully connects to the host.
-
-#### Network Diagnostics Display (In-Lobby)
-
-**In lobby (both machines):**
-1. After successful host/join, observe the header area below the lobby code.
-2. Verify **Endpoint line** displays:
-   - **Host side:** `Host: <LAN_IP>:<port>` (e.g., `Host: 192.168.1.42:8000`)
-   - **Client side:** `Host: <remote_IP>:<port>` (e.g., `Host: 192.168.1.99:8000`)
-   - If remote IP cannot be determined, shows `Host: (unknown):<port>`
-3. Verify **Diagnostics line** displays:
-   - Format: `Diagnostics — state: <STATE> | role: <ROLE> | peers: <N> | protocol: v<VERSION>`
-   - Example: `Diagnostics — state: LOBBY | role: SERVER | peers: 2 | protocol: v1`
-   - Possible states: `CONNECTING`, `AUTHENTICATING`, `LOBBY`, `IN_GAME`
-   - Possible roles: `SERVER`, `CLIENT`
-   - Peer count should reflect connected players (e.g., 2 for a full lobby)
-
-4. **State transitions during in-game play:**
-   - After clicking "Start Game," state should change to `IN_GAME`.
-   - Both host and client should reflect the same peer count.
-
-#### Unit Test Coverage for Network UI
-
-Port input validation and network diagnostics text building are covered by:
-- `tests/unit/test_network_ui_endpoints.gd` (33 unit tests)
-- Test coverage includes: port range validation, LAN IP detection, endpoint text formatting, diagnostics formatting, state/role name mapping.
-
-Run unit tests with:
-```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
-```
-
-All network UI tests should pass (look for test names matching `test_network_ui_endpoints`).
-
-### 7.3 In-Lobby and In-Game Checks
+### In-lobby and in-game checks
 
 1. Both players click Ready.
 2. Host starts game.

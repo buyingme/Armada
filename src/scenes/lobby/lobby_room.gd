@@ -64,6 +64,9 @@ var _leave_button: Button
 var _status_label: Label
 var _scenario_option: OptionButton
 var _password_label: Label
+var _endpoint_label: Label
+var _diagnostics_label: Label
+var _diagnostics_timer: Timer
 var _chat_panel: ChatPanel
 
 
@@ -75,7 +78,17 @@ func _ready() -> void:
 	_build_ui()
 	_connect_signals()
 	_update_display()
+	_setup_diagnostics_timer()
 	visibility_changed.connect(_on_visibility_changed)
+
+
+## Sets up a 1-second timer that refreshes the network diagnostics row.
+func _setup_diagnostics_timer() -> void:
+	_diagnostics_timer = Timer.new()
+	_diagnostics_timer.wait_time = 1.0
+	_diagnostics_timer.autostart = true
+	_diagnostics_timer.timeout.connect(_update_network_info)
+	add_child(_diagnostics_timer)
 
 
 func _connect_signals() -> void:
@@ -169,6 +182,18 @@ func _build_header(parent: VBoxContainer) -> void:
 			"", UIStyleHelper.FONT_HINT,
 			UIStyleHelper.DIMMED_HINT)
 	parent.add_child(_password_label)
+
+	_endpoint_label = UIStyleHelper.create_section_label(
+			"", UIStyleHelper.FONT_HINT,
+			UIStyleHelper.DIMMED_HINT)
+	_endpoint_label.visible = false
+	parent.add_child(_endpoint_label)
+
+	_diagnostics_label = UIStyleHelper.create_section_label(
+			"", UIStyleHelper.FONT_HINT,
+			UIStyleHelper.DIMMED_HINT)
+	_diagnostics_label.visible = false
+	parent.add_child(_diagnostics_label)
 
 
 ## Builds two player rows (one per slot).
@@ -328,6 +353,36 @@ func _update_display() -> void:
 	_update_scenario(lobby)
 	_update_status(lobby)
 	_update_buttons(lobby)
+	_update_network_info()
+
+
+## Refreshes the host endpoint and diagnostics rows from
+## [NetworkManager] state.  Called every second by the diagnostics
+## timer and immediately on lobby state changes.
+func _update_network_info() -> void:
+	if _endpoint_label == null or _diagnostics_label == null:
+		return
+	if not PlayMode.is_network():
+		_endpoint_label.visible = false
+		_diagnostics_label.visible = false
+		return
+
+	var port: int = NetworkManager.get_active_port()
+	if NetworkManager.is_server():
+		var ip: String = NetworkManager.get_local_lan_ip()
+		var ip_text: String = ip if ip != "" else "(no LAN IP)"
+		_endpoint_label.text = "Hosting on %s:%d" % [ip_text, port]
+		_endpoint_label.visible = true
+	else:
+		_endpoint_label.visible = false
+
+	_diagnostics_label.text = (
+			"State: %s | Role: %s | Peers: %d | Protocol v%d") % [
+					NetworkManager.get_connection_state_name(),
+					NetworkManager.get_role_name(),
+					NetworkManager.get_peer_count(),
+					NetworkManager.PROTOCOL_VERSION]
+	_diagnostics_label.visible = true
 
 
 ## Updates player rows with current lobby data.

@@ -348,3 +348,34 @@ func test_broadcast_save_notification_warns_when_not_server() -> void:
 	NetworkManager.save_notification_received.disconnect(lam)
 	NetworkManager.role = prev_role
 	GameLogger.min_level = prev_log_level
+
+
+# ---------------------------------------------------------------------------
+# Network Diagnostics getters (port + LAN IP + name accessors)
+# ---------------------------------------------------------------------------
+
+func test_get_active_port_zero_when_disconnected() -> void:
+	assert_eq(NetworkManager.get_active_port(), 0,
+			"Active port should be 0 while disconnected.")
+
+
+func test_get_connection_state_name_returns_disconnected() -> void:
+	assert_eq(NetworkManager.get_connection_state_name(),
+			"DISCONNECTED",
+			"State name should be DISCONNECTED on init.")
+
+
+func test_get_role_name_returns_none() -> void:
+	assert_eq(NetworkManager.get_role_name(), "NONE",
+			"Role name should be NONE on init.")
+
+
+func test_get_local_lan_ip_returns_string() -> void:
+	# Cannot assume a specific IP on test hosts.  Verify the API
+	# returns a String (possibly empty when no LAN interface exists)
+	# and never returns a loopback address.
+	var ip: String = NetworkManager.get_local_lan_ip()
+	assert_typeof(ip, TYPE_STRING,
+			"get_local_lan_ip() should return a String.")
+	assert_false(ip.begins_with("127."),
+			"get_local_lan_ip() should never return a loopback IP.")

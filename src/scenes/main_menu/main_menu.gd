@@ -27,9 +27,11 @@ var _toast_timer: Timer
 var _host_name_input: LineEdit
 var _host_lobby_name_input: LineEdit
 var _host_password_input: LineEdit
+var _host_port_input: LineEdit
 var _join_ip_input: LineEdit
 var _join_name_input: LineEdit
 var _join_password_input: LineEdit
+var _join_port_input: LineEdit
 var _join_error_label: Label
 var _prefs_name_input: LineEdit
 var _load_dialog: LoadGameDialog
@@ -276,6 +278,7 @@ func _on_host_game_pressed() -> void:
 	_host_name_input.text = PlayerProfile.get_display_name()
 	_host_lobby_name_input.text = ""
 	_host_password_input.text = ""
+	_host_port_input.text = str(ServerMain.DEFAULT_PORT)
 	_host_dialog.visible = true
 	_host_name_input.grab_focus()
 
@@ -287,6 +290,7 @@ func _on_join_game_pressed() -> void:
 	_join_name_input.text = PlayerProfile.get_display_name()
 	_join_ip_input.text = ""
 	_join_password_input.text = ""
+	_join_port_input.text = str(ServerMain.DEFAULT_PORT)
 	_join_error_label.text = ""
 	_join_error_label.visible = false
 	_join_dialog.visible = true
@@ -440,6 +444,16 @@ func _populate_host_dialog(vbox: VBoxContainer) -> void:
 	_host_password_input.secret = true
 	_host_password_input.custom_minimum_size.y = 36
 	vbox.add_child(_host_password_input)
+	var port_label: Label = UIStyleHelper.create_section_label(
+			"Port:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	port_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(port_label)
+	_host_port_input = LineEdit.new()
+	_host_port_input.text = str(ServerMain.DEFAULT_PORT)
+	_host_port_input.placeholder_text = str(ServerMain.DEFAULT_PORT)
+	_host_port_input.custom_minimum_size.y = 36
+	vbox.add_child(_host_port_input)
 	var btn_box: HBoxContainer = HBoxContainer.new()
 	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_box.add_theme_constant_override("separation", 12)
@@ -463,8 +477,12 @@ func _on_host_confirm_pressed() -> void:
 	if lobby_name.is_empty():
 		lobby_name = PlayerProfile.get_display_name() + "'s Game"
 	var password: String = _host_password_input.text
+	var port: int = _parse_port(_host_port_input.text)
+	if port <= 0:
+		_show_toast("Invalid port (1–65535).")
+		return
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
-	if not NetworkManager.host():
+	if not NetworkManager.host(port):
 		_show_toast("Failed to host game.")
 		_host_dialog.visible = false
 		_menu_panel.visible = true
@@ -541,6 +559,16 @@ func _populate_join_dialog(vbox: VBoxContainer) -> void:
 	_join_password_input.secret = true
 	_join_password_input.custom_minimum_size.y = 36
 	vbox.add_child(_join_password_input)
+	var port_label: Label = UIStyleHelper.create_section_label(
+			"Port:", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	port_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	vbox.add_child(port_label)
+	_join_port_input = LineEdit.new()
+	_join_port_input.text = str(ServerMain.DEFAULT_PORT)
+	_join_port_input.placeholder_text = str(ServerMain.DEFAULT_PORT)
+	_join_port_input.custom_minimum_size.y = 36
+	vbox.add_child(_join_port_input)
 	_join_error_label = Label.new()
 	_join_error_label.text = ""
 	_join_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -574,13 +602,18 @@ func _on_join_confirm_pressed() -> void:
 	if ip.is_empty():
 		ip = "127.0.0.1"
 	var password: String = _join_password_input.text
+	var port: int = _parse_port(_join_port_input.text)
+	if port <= 0:
+		_join_error_label.text = "Invalid port (1–65535)."
+		_join_error_label.visible = true
+		return
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.set_lobby_password(password)
 	NetworkManager.handshake_accepted.connect(
 			_on_join_accepted, CONNECT_ONE_SHOT)
 	NetworkManager.handshake_rejected.connect(
 			_on_join_rejected, CONNECT_ONE_SHOT)
-	if not NetworkManager.connect_to_server(ip):
+	if not NetworkManager.connect_to_server(ip, port):
 		_show_toast("Failed to connect.")
 		_disconnect_join_signals()
 		return
@@ -644,6 +677,18 @@ func _on_lobby_game_start() -> void:
 	else:
 		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
+
+
+## Parses a port string and returns the port if valid (1..65535),
+## otherwise returns 0.  Whitespace is trimmed; empty input is invalid.
+func _parse_port(text: String) -> int:
+	var trimmed: String = text.strip_edges()
+	if trimmed.is_empty() or not trimmed.is_valid_int():
+		return 0
+	var port: int = trimmed.to_int()
+	if port < 1 or port > 65535:
+		return 0
+	return port
 
 
 ## Shows a brief toast message near the bottom of the screen.

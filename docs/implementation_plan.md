@@ -15,8 +15,8 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 142 |
-| GUT tests | 2 856 |
-| GUT asserts | 5 386 |
+| GUT tests | 2 860 |
+| GUT asserts | 5 391 |
 | Failing tests | 0 |
 | Last commit | `6dd78d6` (Phase J8 — cleanup + arc42 §5 + in-session hot-seat grey-out) |
 
@@ -473,6 +473,7 @@ Ordered by dependency:
 - [docs/modal_timing_diagrams.md](modal_timing_diagrams.md) — modal lifecycle timing in network mode
 - [docs/dial_activation_flow.md](dial_activation_flow.md) — dial reveal/spend sequence
 - [docs/attack_target_resolver_call_site_map.md](attack_target_resolver_call_site_map.md) — attack target resolution call sites
+- [docs/release_ops.md](release_ops.md) — release runbook for macOS export, DMG packaging, and two-machine LAN validation
 
 ### Archived (historical reference only — see [docs/old/](old/))
 

@@ -189,3 +189,41 @@ func test_start_new_game_from_state_initialises_effect_registry() -> void:
 			"start_new_game_from_state should ensure effect_registry exists")
 	GameManager.current_game_state = prev_state
 	GameManager.is_game_active = prev_active
+
+
+# ---------------------------------------------------------------------------
+# Phase J5.6 — preloaded-state flag
+# ---------------------------------------------------------------------------
+
+func test_start_new_game_from_state_sets_preloaded_flag() -> void:
+	var gs: GameState = _make_populated_state()
+	var prev_state: GameState = GameManager.current_game_state
+	var prev_active: bool = GameManager.is_game_active
+	var prev_flag: bool = GameManager.is_state_preloaded
+	GameManager.is_state_preloaded = false
+	GameManager.start_new_game_from_state(gs, "x")
+	assert_true(GameManager.is_state_preloaded,
+			"start_new_game_from_state should mark state as preloaded")
+	GameManager.current_game_state = prev_state
+	GameManager.is_game_active = prev_active
+	GameManager.is_state_preloaded = prev_flag
+
+
+func test_consume_preloaded_flag_returns_true_then_clears() -> void:
+	var prev_flag: bool = GameManager.is_state_preloaded
+	GameManager.is_state_preloaded = true
+	var first: bool = GameManager.consume_preloaded_flag()
+	var second: bool = GameManager.consume_preloaded_flag()
+	assert_true(first,
+			"first consume_preloaded_flag() should return true")
+	assert_false(second,
+			"second consume_preloaded_flag() should return false (cleared)")
+	GameManager.is_state_preloaded = prev_flag
+
+
+func test_consume_preloaded_flag_returns_false_when_not_set() -> void:
+	var prev_flag: bool = GameManager.is_state_preloaded
+	GameManager.is_state_preloaded = false
+	assert_false(GameManager.consume_preloaded_flag(),
+			"consume_preloaded_flag() should return false when not set")
+	GameManager.is_state_preloaded = prev_flag

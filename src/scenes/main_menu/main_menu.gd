@@ -252,6 +252,7 @@ func _on_load_game_pressed() -> void:
 	if _load_dialog == null:
 		_load_dialog = LoadGameDialog.new()
 		_load_dialog.transition_to_board_on_load = true
+		_load_dialog.context = "main_menu"
 		_load_dialog.cancelled.connect(_on_load_dialog_cancelled)
 		add_child(_load_dialog)
 	_menu_panel.visible = false

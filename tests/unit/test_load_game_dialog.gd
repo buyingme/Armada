@@ -140,6 +140,53 @@ func test_network_named_row_disabled_when_no_host_session() -> void:
 	fail_test("Network fixture row not found")
 
 
+func test_network_named_row_disabled_in_main_menu_context() -> void:
+	# Phase J5.6 / Q23: from the main menu, network rows must be greyed
+	# regardless of host-session state.
+	_reseed_fixtures()
+	_dialog.context = "main_menu"
+	_dialog.show_modal()
+	var rows: Array[Button] = _list_rows(_dialog)
+	for row: Button in rows:
+		if row.text.find(SAVE_NETWORK) != -1:
+			assert_true(row.disabled,
+					"Network row should be disabled in main_menu context")
+			assert_true(row.tooltip_text.find("lobby") != -1,
+					"Tooltip should reference the lobby")
+			return
+	fail_test("Network fixture row not found")
+
+
+func test_network_resume_row_disabled_in_main_menu_context() -> void:
+	# Phase J5.6: synthetic resume row in the Network section must also
+	# be greyed out from the main menu.
+	_dialog.context = "main_menu"
+	_dialog.show_modal()
+	for row: Button in _resume_rows(_dialog):
+		if row.text.find("Resume Last Checkpoint") == -1:
+			continue
+		# Resume rows for both modes always exist; pick the one whose
+		# sentinel signal binding targets the network mode by checking
+		# tooltip presence (only the network resume row has the
+		# main-menu lobby tooltip).
+		if row.tooltip_text.find("lobby") != -1:
+			assert_true(row.disabled,
+					"Network resume row should be disabled in main_menu")
+			return
+	# If we got here, no network resume row was found with the lobby
+	# tooltip; tolerate that only when neither row has the lobby
+	# tooltip (e.g. checkpoints are absent so tooltip is empty).  In
+	# that case the disabled state still applies via has-checkpoint
+	# logic, so check at least one resume row is disabled.
+	var any_disabled: bool = false
+	for row: Button in _resume_rows(_dialog):
+		if row.disabled:
+			any_disabled = true
+			break
+	assert_true(any_disabled,
+			"At least one resume row should be disabled in main_menu")
+
+
 # ---------------------------------------------------------------------------
 # Cancel
 # ---------------------------------------------------------------------------

@@ -373,9 +373,12 @@ func _open_load_dialog() -> void:
 			add_child(_load_game_dialog)
 		_load_game_dialog.loaded.connect(_on_load_dialog_loaded)
 		_load_game_dialog.cancelled.connect(_on_load_dialog_cancelled)
-	# In-game load: stay on the board; GameManager.start_new_game_from_state
-	# will rebuild via game_started.
-	_load_game_dialog.transition_to_board_on_load = false
+	# In-game load (Phase J5.6): tear down the current board scene and
+	# reload it.  GameBoard._ready will detect the preloaded flag set by
+	# GameManager.start_new_game_from_state and rebuild from the loaded
+	# state instead of bootstrapping a fresh game.
+	_load_game_dialog.transition_to_board_on_load = true
+	_load_game_dialog.context = "in_game"
 	_load_game_dialog.show_modal()
 
 

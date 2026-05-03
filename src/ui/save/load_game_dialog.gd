@@ -44,6 +44,18 @@ signal cancelled
 var transition_to_board_on_load: bool = false
 
 
+## The UI context the dialog was opened from.  Affects the network
+## grey-out rule (Phase J5.6 / Q23):
+## [br]- [code]"in_game"[/code] (default): network rows enabled iff a
+##   host session is active.
+## [br]- [code]"main_menu"[/code]: network rows are always disabled
+##   with tooltip *"Load network saves from the lobby once both players
+##   are connected"*.
+## [br]- [code]"lobby"[/code] (J7): hot-seat rows are greyed; network
+##   rows are enabled iff both peers are connected and Ready.
+var context: String = "in_game"
+
+
 ## Path of the game-board scene used by the post-load transition.
 const GAME_BOARD_PATH: String = "res://src/scenes/game_board/game_board.tscn"
 
@@ -215,13 +227,11 @@ func _build_resume_row(mode: String) -> Button:
 	var has: bool = is_instance_valid(SaveGameManager) \
 			and SaveGameManager.has_checkpoint(mode)
 	var network_blocked: bool = mode == SaveGameMetadata.MODE_NETWORK \
-			and not _has_host_session()
+			and _is_network_blocked()
 	row.disabled = not has or network_blocked
 	row.text = _resume_row_label(mode, has)
-	if not has:
-		row.tooltip_text = ""
-	elif network_blocked:
-		row.tooltip_text = "Host a game to load this save."
+	if network_blocked:
+		row.tooltip_text = _network_blocked_tooltip()
 	else:
 		row.tooltip_text = ""
 	# Encode "this is a resume row for mode X" via a sentinel name.
@@ -295,7 +305,7 @@ func _row_is_disabled(entry: Dictionary) -> bool:
 	if meta == null:
 		return true
 	if meta.game_mode == SaveGameMetadata.MODE_NETWORK \
-			and not _has_host_session():
+			and _is_network_blocked():
 		return true
 	return false
 
@@ -306,8 +316,8 @@ func _row_disabled_reason(entry: Dictionary) -> String:
 	var meta: SaveGameMetadata = entry.get("meta") as SaveGameMetadata
 	if meta != null \
 			and meta.game_mode == SaveGameMetadata.MODE_NETWORK \
-			and not _has_host_session():
-		return "Host a game to load this save."
+			and _is_network_blocked():
+		return _network_blocked_tooltip()
 	return ""
 
 
@@ -315,6 +325,24 @@ func _has_host_session() -> bool:
 	if not is_instance_valid(NetworkManager):
 		return false
 	return NetworkManager.is_server()
+
+
+## True when network rows must be greyed out in the current context.
+## Phase J5.6: in [code]"main_menu"[/code] context, network loads are
+## always blocked (must use the lobby).  Otherwise we fall back to the
+## existing host-session rule.
+func _is_network_blocked() -> bool:
+	if context == "main_menu":
+		return true
+	return not _has_host_session()
+
+
+## Tooltip shown on greyed network rows.  Phase J5.6.
+func _network_blocked_tooltip() -> String:
+	if context == "main_menu":
+		return ("Load network saves from the lobby once both players "
+				+ "are connected.")
+	return "Host a game to load this save."
 
 
 func _update_action_button_states() -> void:

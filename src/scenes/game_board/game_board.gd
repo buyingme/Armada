@@ -190,8 +190,16 @@ func _ready() -> void:
 	# Start game so GameState exists BEFORE tokens are spawned.
 	# [GameManager.bootstrap_game] handles the network-vs-hot-seat
 	# config split internally (Phase I6e-2).
-	GameManager.bootstrap_game("learning_scenario")
-	_spawn_learning_scenario_tokens()
+	# Phase J5.6: when a saved state was just installed by
+	# [GameManager.start_new_game_from_state], skip the bootstrap (which
+	# would overwrite the loaded state) and spawn tokens from the
+	# loaded GameState instead of the scenario JSON.
+	var preloaded: bool = GameManager.consume_preloaded_flag()
+	if preloaded:
+		_spawn_tokens_from_loaded_state()
+	else:
+		GameManager.bootstrap_game("learning_scenario")
+		_spawn_learning_scenario_tokens()
 	_connect_signals()
 	_connect_panel_signals()
 	queue_redraw()
@@ -472,6 +480,87 @@ func _spawn_learning_scenario_tokens() -> void:
 		_panel_mgr.activation_sidebar.connect_signals()
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
 		_panel_mgr.activation_sidebar.update_position(vp_size)
+
+## Spawns ship and squadron tokens from the already-installed loaded
+## [GameState] (positions, hull damage, defense tokens, command dials,
+## etc. already populated by [GameManager.start_new_game_from_state]).
+## Used in place of [method _spawn_learning_scenario_tokens] when the
+## board scene is entered after a save was loaded.  Phase J5.6.
+##
+## Differences from the scenario-JSON path:
+## [br]- Skips [method _register_instances_in_game_state] (instances
+##   are already in [member GameState.player_states]).
+## [br]- Skips [code]apply_fixed_round1_commands[/code] (command-dial
+##   stacks were serialised with the save).
+## [br]- Reuses the loaded [member GameState.damage_deck] instead of
+##   building a fresh one.
+## [br]- Constructs [TokenPlacement] objects from each instance's
+##   [code]pos_x[/code] / [code]pos_y[/code] / [code]rotation_deg[/code].
+func _spawn_tokens_from_loaded_state() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
+	_load_map_texture(setup.get_map_image_filename())
+	_init_scenario_systems_for_loaded_state()
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		_log.error("_spawn_tokens_from_loaded_state: no GameState.")
+		return
+	for player_index: int in [0, 1]:
+		var ps: PlayerState = gs.get_player_state(player_index)
+		if ps == null:
+			continue
+		for ship: ShipInstance in ps.ships:
+			var placement: TokenPlacement = _placement_from_ship(ship)
+			var token: ShipToken = _spawn_ship_token(placement)
+			token.bind_instance(ship)
+			_panel_mgr.add_ship_to_card_panel(ship)
+		for squad: SquadronInstance in ps.squadrons:
+			var sq_placement: TokenPlacement = _placement_from_squadron(squad)
+			var sq_token: SquadronToken = _spawn_squadron_token(sq_placement)
+			sq_token.bind_instance(squad)
+	_log.info("Spawned %d tokens from loaded state." %
+			_token_container.get_child_count())
+	_panel_mgr.update_card_panel_positions()
+	if _panel_mgr.activation_sidebar and GameManager.current_game_state:
+		_panel_mgr.activation_sidebar.populate(GameManager.current_game_state)
+		_panel_mgr.activation_sidebar.connect_signals()
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		_panel_mgr.activation_sidebar.update_position(vp_size)
+
+## Wires [member _attack_executor] / damage deck / effect registry from
+## the loaded [GameState] (no fresh deck construction).  Phase J5.6.
+func _init_scenario_systems_for_loaded_state() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return
+	_damage_deck = gs.damage_deck
+	if _attack_executor and _damage_deck:
+		_attack_executor.set_damage_deck(_damage_deck)
+	if _attack_executor and _panel_mgr.handoff_overlay:
+		_attack_executor.set_handoff_overlay(_panel_mgr.handoff_overlay)
+	if _attack_executor and gs.effect_registry:
+		_attack_executor.set_effect_registry(gs.effect_registry)
+
+## Builds a [TokenPlacement] from a [ShipInstance]'s position fields.
+func _placement_from_ship(ship: ShipInstance) -> TokenPlacement:
+	return TokenPlacement.new(
+			ship.data_key,
+			true,
+			ship.ship_data.faction,
+			ship.pos_x,
+			ship.pos_y,
+			ship.get_rotation_rad(),
+			ship.ship_data.ship_size)
+
+## Builds a [TokenPlacement] from a [SquadronInstance]'s position fields.
+func _placement_from_squadron(squad: SquadronInstance) -> TokenPlacement:
+	return TokenPlacement.new(
+			squad.data_key,
+			false,
+			squad.squadron_data.faction,
+			squad.pos_x,
+			squad.pos_y,
+			squad.get_rotation_rad(),
+			Constants.ShipSize.SMALL)
 
 ## Initialises the damage deck, attack executor references, and effect
 ## registry from the given scenario setup.

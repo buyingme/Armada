@@ -60,6 +60,14 @@ var _squadrons_activated_this_turn: int = 0
 ## Requirements: CP-009, CP-010.
 var fixed_commands_applied: bool = false
 
+## Whether [member current_game_state] was just installed by
+## [method start_new_game_from_state] (i.e. the upcoming
+## [code]GameBoard._ready[/code] should not call [method bootstrap_game]
+## and should spawn tokens from the loaded state instead of the scenario
+## JSON).  Cleared by [method consume_preloaded_flag] after the board
+## has consumed it.  Phase J5.6.
+var is_state_preloaded: bool = false
+
 ## Scenario identifier for the current game (used in replay headers).
 ## Set by [method start_new_game] from the [code]"scenario_id"[/code]
 ## config key.
@@ -210,12 +218,22 @@ func start_new_game_from_state(
 	# so fixed_commands_applied is set true to suppress the round-1 toast.
 	fixed_commands_applied = true
 	_scenario_id = scenario_id
+	is_state_preloaded = true
 	_log.info("Loaded game from save: scenario='%s' round=%d phase=%d." % [
 			scenario_id,
 			current_game_state.current_round,
 			current_game_state.current_phase])
 	EventBus.game_started.emit()
 	SaveGameManager.mark_clean()
+
+
+## Returns the current value of [member is_state_preloaded] and clears it.
+## Called by [code]GameBoard._ready[/code] to take ownership of the
+## "skip bootstrap, spawn from state" path exactly once.  Phase J5.6.
+func consume_preloaded_flag() -> bool:
+	var v: bool = is_state_preloaded
+	is_state_preloaded = false
+	return v
 
 
 ## Scoring calculator (created lazily, reused across end-game checks).

@@ -32,6 +32,7 @@ var _join_name_input: LineEdit
 var _join_password_input: LineEdit
 var _join_error_label: Label
 var _prefs_name_input: LineEdit
+var _load_dialog: LoadGameDialog
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
 
@@ -245,10 +246,20 @@ func _on_new_game_pressed() -> void:
 	_show_toast("Coming Soon")
 
 
-## Placeholder — shows "Coming Soon" toast. UI-032.
+## Placeholder — opens the LoadGameDialog (Phase J5).
 func _on_load_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
-	_show_toast("Coming Soon")
+	if _load_dialog == null:
+		_load_dialog = LoadGameDialog.new()
+		_load_dialog.transition_to_board_on_load = true
+		_load_dialog.cancelled.connect(_on_load_dialog_cancelled)
+		add_child(_load_dialog)
+	_menu_panel.visible = false
+	_load_dialog.show_modal()
+
+
+func _on_load_dialog_cancelled() -> void:
+	_menu_panel.visible = true
 
 
 ## Transitions to the learning scenario game board. UI-031.

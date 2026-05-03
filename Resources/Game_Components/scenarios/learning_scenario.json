@@ -29,14 +29,14 @@
         {
             "key": "cr90_corvette_a",
             "pos_x": 0.689,
-            "pos_y": 0.354,
+            "pos_y": 0.854,
             "rotation_deg": 0.0,
             "type": "ship"
         },
         {
             "key": "nebulon_b_escort_frigate",
-            "pos_x": 0.406,
-            "pos_y": 0.254,
+            "pos_x": 0.306,
+            "pos_y": 0.854,
             "rotation_deg": 0.0,
             "type": "ship"
         },

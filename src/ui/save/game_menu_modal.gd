@@ -59,6 +59,7 @@ var _btn_load: Button = null
 var _btn_quit: Button = null
 var _save_on_quit_dialog: SaveOnQuitDialog = null
 var _save_game_dialog: SaveGameDialog = null
+var _load_game_dialog: LoadGameDialog = null
 ## When true, a successful save in the [SaveGameDialog] is followed by
 ## emitting [signal quit_requested].  Used by the dirty-quit flow.
 var _save_then_quit: bool = false
@@ -150,28 +151,44 @@ func _make_button(label_text: String) -> Button:
 
 
 ## Hides Save / Load for network clients; Save is enabled for hot-seat
-## and network host (J4); Load is stub-disabled until J5.
+## and network host (J4); Load is enabled in J5.
 func _apply_mode_visibility() -> void:
 	if _btn_save == null or _btn_load == null:
 		return
 	var save_load_visible: bool = mode != Mode.NETWORK_CLIENT
 	_btn_save.visible = save_load_visible
 	_btn_load.visible = save_load_visible
-	# Save is enabled in J4; Load is stub-disabled until J5.
 	_apply_save_button_state()
-	_btn_load.disabled = true
-	_btn_load.tooltip_text = "Load dialog wires up in J5."
+	_btn_load.disabled = false
+	_btn_load.tooltip_text = ""
 
 
-## Updates the Save Game button's enabled state based on the current
-## [SaveGameManager.can_save_now] gate.  Disabled-with-tooltip when
-## the gate fails (e.g. mid-attack, mid-displacement).
+## Updates the Save Game button's enabled state.  Phase J5.5: enabled
+## whenever a checkpoint exists for the current mode (the named save is
+## written from the checkpoint payload, not the live state).  Tooltip
+## reports the checkpoint's round/phase so the player knows which moment
+## will be saved.  Falls back to the legacy [SaveGameManager.can_save_now]
+## gate only when no checkpoint has been written yet.
 func _apply_save_button_state() -> void:
 	if _btn_save == null:
 		return
-	var gate: Dictionary = {"ok": true, "reason": ""}
-	if is_instance_valid(SaveGameManager) \
-			and is_instance_valid(GameManager):
+	if not is_instance_valid(SaveGameManager):
+		_btn_save.disabled = true
+		_btn_save.tooltip_text = ""
+		return
+	if SaveGameManager.has_checkpoint():
+		var meta: SaveGameMetadata = SaveGameManager.checkpoint_metadata()
+		_btn_save.disabled = false
+		if meta != null:
+			_btn_save.tooltip_text = "Saves last safe point: Round %d, %s" \
+					% [meta.current_round, meta.phase]
+		else:
+			_btn_save.tooltip_text = ""
+		return
+	# No checkpoint yet \u2014 fall back to legacy gate (e.g. before the
+	# first command_executed has fired).
+	var gate: Dictionary = {"ok": false, "reason": "No checkpoint yet."}
+	if is_instance_valid(GameManager):
 		gate = SaveGameManager.can_save_now(GameManager.current_game_state)
 	var ok: bool = bool(gate.get("ok", false))
 	_btn_save.disabled = not ok
@@ -213,6 +230,8 @@ func _on_save_pressed() -> void:
 
 func _on_load_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
+	hide_modal()
+	_open_load_dialog()
 	load_requested.emit()
 
 
@@ -257,10 +276,20 @@ func _show_save_on_quit_dialog() -> void:
 	var reason: String = ""
 	if is_instance_valid(SaveGameManager) \
 			and is_instance_valid(GameManager):
-		var gate: Dictionary = SaveGameManager.can_save_now(
-				GameManager.current_game_state)
-		allowed = bool(gate.get("ok", false))
-		reason = String(gate.get("reason", ""))
+		# Phase J5.5: Save & Quit is allowed whenever a checkpoint
+		# exists for the current mode.  The dialog tooltip reports
+		# which round/phase will be saved.
+		if SaveGameManager.has_checkpoint():
+			allowed = true
+			var meta: SaveGameMetadata = SaveGameManager.checkpoint_metadata()
+			if meta != null:
+				reason = "Saves last safe point: Round %d, %s" \
+						% [meta.current_round, meta.phase]
+		else:
+			var gate: Dictionary = SaveGameManager.can_save_now(
+					GameManager.current_game_state)
+			allowed = bool(gate.get("ok", false))
+			reason = String(gate.get("reason", ""))
 	_save_on_quit_dialog.configure(allowed, reason)
 	_save_on_quit_dialog.show_modal()
 
@@ -289,6 +318,12 @@ func get_save_on_quit_dialog() -> SaveOnQuitDialog:
 ## tests to inspect / drive the dialog.
 func get_save_game_dialog() -> SaveGameDialog:
 	return _save_game_dialog
+
+
+## Returns the [LoadGameDialog] when one has been opened.  Used by
+## tests to inspect / drive the dialog.
+func get_load_game_dialog() -> LoadGameDialog:
+	return _load_game_dialog
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +355,36 @@ func _on_save_dialog_saved(_file_name: String) -> void:
 func _on_save_dialog_cancelled() -> void:
 	# Re-open the game menu so the player can pick another action.
 	_save_then_quit = false
+	show_modal()
+
+
+# ---------------------------------------------------------------------------
+# Load dialog wiring (J5)
+# ---------------------------------------------------------------------------
+
+func _open_load_dialog() -> void:
+	if _load_game_dialog == null:
+		_load_game_dialog = LoadGameDialog.new()
+		_load_game_dialog.name = "LoadGameDialog"
+		var host: Node = get_parent()
+		if host != null:
+			host.add_child(_load_game_dialog)
+		else:
+			add_child(_load_game_dialog)
+		_load_game_dialog.loaded.connect(_on_load_dialog_loaded)
+		_load_game_dialog.cancelled.connect(_on_load_dialog_cancelled)
+	# In-game load: stay on the board; GameManager.start_new_game_from_state
+	# will rebuild via game_started.
+	_load_game_dialog.transition_to_board_on_load = false
+	_load_game_dialog.show_modal()
+
+
+func _on_load_dialog_loaded(_meta: SaveGameMetadata) -> void:
+	# Game has been replaced; menu state is stale, so do nothing further.
+	pass
+
+
+func _on_load_dialog_cancelled() -> void:
 	show_modal()
 
 

@@ -36,6 +36,7 @@ var _name_edit: LineEdit = null
 var _save_button: Button = null
 var _cancel_button: Button = null
 var _error_label: Label = null
+var _title_label: Label = null
 var _confirm_overwrite: ConfirmationDialog = null
 
 
@@ -61,6 +62,7 @@ func prefill_default_name() -> void:
 
 ## Shows the dialog centred on the viewport and focuses the name field.
 func show_modal() -> void:
+	_refresh_title()
 	visible = true
 	await get_tree().process_frame
 	var vp_size: Vector2 = get_viewport_rect().size
@@ -73,6 +75,19 @@ func show_modal() -> void:
 ## Hides the dialog.
 func hide_modal() -> void:
 	visible = false
+
+
+func _refresh_title() -> void:
+	if _title_label == null:
+		return
+	var suffix: String = ""
+	if is_instance_valid(SaveGameManager) \
+			and SaveGameManager.has_checkpoint():
+		var meta: SaveGameMetadata = SaveGameManager.checkpoint_metadata()
+		if meta != null:
+			suffix = " (last safe point: Round %d, %s)" \
+					% [meta.current_round, meta.phase]
+	_title_label.text = "Save Game" + suffix
 
 
 # ---------------------------------------------------------------------------
@@ -116,8 +131,20 @@ func _build_ui() -> void:
 
 func _build_title_label() -> Label:
 	var label: Label = Label.new()
-	label.text = "Save Game"
+	# Phase J5.5: title reports the round/phase that will actually be
+	# saved (the most recent safe-point checkpoint), not the live
+	# state.  Pressing Save mid-flow always captures the last safe
+	# point.
+	var suffix: String = ""
+	if is_instance_valid(SaveGameManager) \
+			and SaveGameManager.has_checkpoint():
+		var meta: SaveGameMetadata = SaveGameManager.checkpoint_metadata()
+		if meta != null:
+			suffix = " (last safe point: Round %d, %s)" \
+					% [meta.current_round, meta.phase]
+	label.text = "Save Game" + suffix
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label = label
 	label.add_theme_font_size_override("font_size", 20)
 	label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	return label

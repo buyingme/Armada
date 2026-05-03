@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-02 (Phase J2 complete; Phase G4.7+ pending)
+> Last updated: 2026-05-03 (Phase J5.5 complete — per-mode checkpoint refresh)
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 140 |
-| GUT tests | 2 830 |
-| GUT asserts | 5 344 |
+| GUT test scripts | 141 |
+| GUT tests | 2 839 |
+| GUT asserts | 5 359 |
 | Failing tests | 0 |
-| Last commit | `86977b2` (Phase J4 — SaveGameDialog + can_save_now safe-step fix, 2026-05-02) |
+| Last commit | `<pending>` (Phase J5 + J5.5 — LoadGameDialog + checkpoint refresh, 2026-05-03) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -181,13 +181,20 @@ serialises (load is logged but not applied).
 | SG-2 | A save's metadata header records: `scenario_id`, `scenario_name`, `game_mode` (`hot_seat` / `network`), `round`, `phase` (label), `created_at` (ISO timestamp), `app_version`, `display_name`. |
 | SG-3 | Default save name template: `{scenario_name}_{game_mode}_R{round}_{phase}` (e.g. `Learning_HotSeat_R2_Ship`). The user can edit the name in a text field (with that template pre-filled) before confirming. |
 | SG-4 | Save list groups saves by game mode; each row shows `display_name`, scenario name, round/phase, timestamp, and (in network) whether it is a host snapshot. |
-| SG-5 | Save is only allowed at **safe points** (see §5.3). At unsafe points the Save button is disabled with an explanatory tooltip. |
+| SG-5 | Save is only allowed at **safe points** (see §5.3). At unsafe points the Save button is disabled with an explanatory tooltip. **Superseded by SG-12 in J5.5: Save is enabled whenever a checkpoint exists.** |
 | SG-6 | In network mode, only the host may save; clients see "Save Game" disabled / hidden. Hot-seat: always allowed (at safe points). |
 | SG-7 | Loading a save restores the game such that play continues exactly from the saved point: same active player, same dials, same tokens, same damage cards, same RNG sequence; `interaction_flow` is `NONE` after load (we do not resume mid-attack — see §5.7 / Q5). |
 | SG-8 | Loading is offered from (a) the main menu ("Load Game" button), and (b) the in-game ESC menu ("Load Game"). In both cases the active game is torn down before the saved state is installed. |
 | SG-9 | In network mode, "Load Game" from the in-game menu is host-only; clients see Quit / Resume only. Loading from the main menu is offered to any user but only for hot-seat slot (see Q1 for network-load policy). |
 | SG-10 | ESC on the main game board with no modal open opens the new in-game menu (see §5.4). On a second ESC press the menu closes ("Resume"). |
 | SG-11 | Existing F5 quicksave keybind: removed (or aliased to "save with default name", see Q3). Existing F8 quickload removed in favour of the menu flow. |
+| SG-12 | (J5.5) `SaveGameManager` maintains **two** internal checkpoint snapshots — one per game mode (`hot_seat`, `network`). Each is refreshed automatically every time `command_executed` fires while `can_save_now()` is true **and** `PlayMode` matches that checkpoint's mode. Each is persisted to disk at `res://saves/_checkpoint_hot_seat.json` and `res://saves/_checkpoint_network.json` so they survive crashes / app restarts. |
+| SG-13 | (J5.5) Pressing **Save Game** writes a copy of the **current mode's** checkpoint (not the live state) under the user-chosen filename. The Save button is enabled whenever a checkpoint exists for the current mode — even when the live state is mid-flow. The dialog header shows the checkpoint's round/phase. |
+| SG-14 | (J5.5) An **initial checkpoint** is written for the active mode when a new game starts (or a save is loaded), so Save is available from turn one. Loading a save in mode X only resets mode X's checkpoint; the other mode's checkpoint is untouched. |
+| SG-15 | (J5.5) On Quit, the SaveOnQuitDialog's *Save & Quit* option is enabled whenever the **current mode's** checkpoint exists; it never greys out for safe-point reasons. |
+| SG-16 | (J5.5) The internal checkpoint files are **hidden** from the named-saves portion of the LoadGameDialog list. Instead, each mode-section in the dialog renders a synthetic top row labelled "Resume Last Checkpoint" (see SG-18). |
+| SG-17 | (J5.5) `is_dirty()` is **per-mode**: `true` iff the current mode's checkpoint signature differs from the value recorded at the last named save **of that mode**. Quitting hot-seat ignores the network checkpoint's dirtiness, and vice versa. |
+| SG-18 | (J5.5) `LoadGameDialog` drops the All/Hot-Seat/Network filter tabs and renders two stacked sections with headers "Hot-Seat" and "Network". Each section starts with a synthetic **"Resume Last Checkpoint"** row (always shown; greyed when no checkpoint exists for that mode, secondary line shows scenario / round / phase / timestamp), followed by the named saves of that mode. Network rows (checkpoint + named) remain greyed when no host session is active. |
 
 ### 5.3 Safe Points
 
@@ -274,7 +281,8 @@ src/
 | J2 ✅ | `GameManager.start_new_game_from_state(state, scenario_id)` — install deserialised state, re-resolve templates, emit `game_started` so board rebuilds. Hot-seat only. | Unit / integration: round-trip serialize → deserialize → install → all ships present, dials match, damage deck matches. | Deferred to MT-J.5 (no user-facing surface in J2; F8 binding removed in J1 per Q3). |
 | J3 ✅ | `GameMenuModal` replaces `QuitConfirmationModal`: 4 buttons (hot-seat/host) / 2 buttons (client), ESC-toggle, centred with main-menu button styling. Quit triggers "Save first?" sub-modal when game is dirty. Save / Load buttons stub-disabled. | Unit: button visibility per mode; ESC open/close; dirty-on-quit prompt. | MT-J.3 — ESC menu shows correct buttons in each mode; second ESC resumes; quit-when-dirty prompts. |
 | J4 ✅ | `SaveGameDialog` — name field with default template, Save/Cancel, validation (non-empty, no path separators, max 64 chars), overwrite confirmation. Wired into `GameMenuModal` (hot-seat + host only). | Unit: name validation; default template builder. | MT-J.4 — save in hot-seat with default name and with edited name; verify file on disk. |
-| J5 | `LoadGameDialog` — list with metadata, filter by game mode tab, Load/Cancel. Network-mode saves greyed out when no host session. Wired into both main menu and `GameMenuModal`. On load, tear down active game (if any), call `start_new_game_from_state`. | Unit: list rendering, filter; greyed-out network rows; round-trip from list selection. | MT-J.5 — load from main menu and from ESC menu; resume play; verify counts match. |
+| J5 ✅ | `LoadGameDialog` (J5 design superseded by J5.5 two-section layout). | — | Folded into MT-J.5.5. |
+| **J5.5 ✅** | **Per-mode checkpoint refresh** — `SaveGameManager` maintains a `Dictionary[mode -> {payload, signature, last_named}]` keyed by `PlayMode` (`hot_seat`, `network`). Refreshed on `CommandProcessor.command_executed` when `can_save_now()` is true, scoped to the active mode. Persisted as `_checkpoint_<mode>.json`. Initial checkpoint written on `EventBus.game_started`. `save_game()` copies the active mode's checkpoint payload under the new name. Save button enabled when current mode's checkpoint exists. SaveOnQuitDialog's Save & Quit enabled when checkpoint exists. SaveGameDialog title shows checkpoint round/phase. `is_dirty()` is per-mode. `LoadGameDialog` rewritten: two stacked mode sections; each starts with a synthetic "Resume Last Checkpoint" row (greyed when empty or network-without-host). | Unit: 2 839 tests pass; LoadGameDialog two-section layout, resume-row grey-out, network grey-out covered. | MT-J.5.5 — user-confirmed: mid-flow save captures last safe point; crash-resume preserves checkpoints; both mode sections render independently. |
 | J6 | Network-host save: `NetworkManager.is_server()` guard in dialog; "Save" submits a server-side save (host's authoritative `GameState`); broadcast result toast to client. | Unit: client cannot trigger save (host-only RPC guard). | MT-J.6 — host saves mid-network-game; verify file; client sees confirmation toast. |
 | J7 | Network load (Q1-dependent): host loads a save → re-host with loaded state, clients are kicked with "Game reloaded — please rejoin" message. | Integration: host re-host flow. | MT-J.7 — host re-loads; client gets disconnect message; rejoin lands in correct state. |
 | J8 | Cleanup: remove old `QuitConfirmationModal` references; update arc42 §05 to add `SaveGameMetadata` + `GameMenuModal`. | — | MT-J.8 — full hot-seat + network regression. |
@@ -303,6 +311,17 @@ src/
 | Q8 | Read scenario human-readable name from the scenario JSON (`display_name` field). Fall back to ID title-case if the field is missing. Add the field to existing scenario JSONs as part of J1. |
 | Q9 | Phase label in default name uses `Constants.GamePhase` enum name: `Command` / `Ship` / `Squadron` / `Status`. |
 | Q10 | ESC menu stays centred, uses the standard main-menu button styling (`MainMenu`'s button theme). Reuse existing modal panel styling per `.skills/ui_styling.md`. |
+| Q11 (J5.5) | **Checkpoint refresh trigger:** after every `command_executed` if `can_save_now()` is true. Unsafe-point commands do not refresh. Refresh writes to the **current mode's** slot only. |
+| Q12 (J5.5) | **Save button enable rule:** enabled whenever a checkpoint exists **for the current mode** (even mid-flow). Disabled only when the current mode has no checkpoint yet (pre-`game_started` / corrupt). |
+| Q13 (J5.5) | **Initial checkpoint:** written on `game_started` and after `start_new_game_from_state`, scoped to the active mode. Source: the freshly built `GameState`. |
+| Q14 (J5.5) | **Quit dialog:** Save & Quit always enabled if **current mode's** checkpoint exists; tooltip "Saves last safe point: Round N, <Phase>". |
+| Q15 (J5.5) | **Wording:** Save Game button label unchanged. Save dialog title: `Save Game (last safe point: Round N, <Phase>)`. SaveOnQuitDialog primary button: `Save & Quit (last safe point: Round N, <Phase>)`. |
+| Q16 (J5.5) | **List visibility:** `_checkpoint_hot_seat` and `_checkpoint_network` are hidden from `list_saves()` / `list_with_meta()`. The filename prefix `_` is reserved for system saves. They surface only as the synthetic "Resume Last Checkpoint" row at the top of each mode section in `LoadGameDialog`. |
+| Q17 (J5.5) | **Lifecycle:** persisted on disk; survives app exits. Each checkpoint is independent: loading a save in mode X replaces only mode X's checkpoint and clears mode X's `_last_named_signature`; the other mode's slot is untouched. Starting a new game in mode X likewise only replaces mode X's checkpoint. |
+| Q18 (J5.5) | **display_name on save:** the user-typed name. The header's `current_round` / `phase` / `created_at` / `game_mode` are taken from the **checkpoint header** of the active mode, not the live state. |
+| Q19 (J5.5) | **Dirty semantics:** per-mode. `is_dirty()` defaults to the active mode and returns `true` iff that mode's checkpoint signature differs from its `_last_named_signature`. SaveOnQuitDialog uses this; if false, Quit returns to the main menu silently without prompting. |
+| Q20 (J5.5) | **LoadGameDialog layout:** two stacked sections (Hot-Seat / Network), each headed by a section label. Each section's first row is the synthetic "Resume Last Checkpoint" row (always present; greyed when empty or when network grey-out applies). Filter tabs are removed. |
+| Q21 (J5.5) | **Resume row label:** fixed "Resume Last Checkpoint" main line; secondary line `"<scenario_name> · Round N · <Phase> · <created_at>"`. When empty: `"Empty — play a turn to create one."`. |
 
 #### Implications for slice plan
 
@@ -311,6 +330,113 @@ src/
 - **J3/J4 styling:** match `MainMenu` button theme; centred panel using standard modal style.
 - **J5/J7 grey-out:** `LoadGameDialog` shows network saves but disables them when `NetworkManager.is_server() == false`.
 - **F5/F8 removal** moves from J8 to J1 (single small edit in `debug_mode.gd`).
+- **J5.5 (new):** introduces the checkpoint subsystem inside `SaveGameManager`. Touches: J1 (save_game accepts checkpoint payload), J3 (SaveOnQuitDialog stops greying out + new tooltip), J4 (SaveGameDialog title shows checkpoint metadata), J5 (LoadGameDialog skips `_checkpoint`).
+
+### 5.10 Checkpoint Subsystem (J5.5 design)
+
+**Goal.** Decouple "what gets written when the player presses Save"
+from "is the live game right now at a safe point". The player can press
+ESC at any moment, even mid-attack, and still be able to save — the file
+will contain the most recent safe-point snapshot. Per-mode slots keep
+hot-seat and network campaigns independent.
+
+**Storage.** Two system files, both excluded from the user-visible list
+per Q16:
+- `res://saves/_checkpoint_hot_seat.json`
+- `res://saves/_checkpoint_network.json`
+
+Format identical to a normal save: `{header, state}` with HMAC
+signature in the header. The filename prefix `_` is reserved for
+system saves.
+
+**State held in `SaveGameManager`:**
+
+```gdscript
+# One slot per game mode.
+var _checkpoints: Dictionary = {
+    SaveGameMetadata.MODE_HOT_SEAT: _empty_slot(),
+    SaveGameMetadata.MODE_NETWORK: _empty_slot(),
+}
+# _empty_slot() == {
+#     "payload": {},        # last serialized {header, state}
+#     "signature": "",      # short id used for dirty comparison
+#     "last_named": "",     # signature recorded at last named save
+# }
+```
+
+**Refresh trigger.** `EventBus.command_executed` → `_on_command_executed`:
+1. Determine `mode = _current_game_mode()` (the slot to refresh).
+2. If `can_save_now(current_game_state)` is false, return.
+3. Build header via `build_metadata_for(current_game_state, "")`.
+4. Serialize state, sign payload, store in `_checkpoints[mode].payload`.
+5. Update `_checkpoints[mode].signature` (e.g. `created_at + command_count`).
+6. Write atomically to `_checkpoint_<mode>.json`.
+
+**Initial checkpoint.** `EventBus.game_started` → same logic for the
+active mode, but skips the `can_save_now` gate. The other mode's slot
+is left untouched.
+
+**Save flow change.** `save_game(state, name, meta=null)`:
+- Look up the current mode's slot. If `payload` is non-empty, copy its
+  body and write under `name`, replacing only `display_name` in the
+  header (and re-signing).
+- If empty, fall back to live serialization (current behaviour).
+- On success, set `_checkpoints[mode].last_named = signature`.
+
+**Public API additions:**
+- `has_checkpoint(mode: String = "") -> bool` (default = current mode)
+- `checkpoint_metadata(mode: String = "") -> SaveGameMetadata`
+- `checkpoint_payload(mode: String) -> Dictionary` (used by `LoadGameDialog`'s synthetic resume row to call `load_game_from_payload`)
+- `load_game_from_checkpoint(mode: String) -> Dictionary` (returns same shape as `load_game`)
+
+**Public API changes:**
+- `is_dirty(mode: String = "") -> bool` — returns
+  `slot.signature != slot.last_named` for the given mode
+  (default = current mode).
+- `can_save_now()` keeps existing semantics (used by the checkpoint
+  refresh trigger), but is no longer consulted by the Save button.
+- `list_with_meta()` skips any filename starting with `_`.
+
+**UI changes:**
+- `GameMenuModal._apply_save_button_state()`:
+  enabled iff `SaveGameManager.has_checkpoint()` (current mode).
+  Tooltip: `"Saves last safe point: Round N, <Phase>"`.
+- `SaveGameDialog` title shows the same hint.
+- `SaveOnQuitDialog` primary button: enabled iff `has_checkpoint()`
+  for the current mode; label:
+  `Save & Quit (last safe point: Round N, <Phase>)`.
+- `LoadGameDialog` (rewritten layout):
+  - Removes filter tabs.
+  - Two stacked sections with headers "Hot-Seat" and "Network".
+  - Each section starts with a synthetic **Resume Last Checkpoint** row
+    (always present). When empty: greyed, secondary line
+    `"Empty — play a turn to create one."`. When populated: secondary
+    line `"<scenario_name> · Round N · <Phase> · <created_at>"`.
+  - Followed by the named saves of that mode (sorted by `created_at`
+    desc). Empty named-saves list under a section is fine — the
+    resume row alone is shown.
+  - Network section rows (resume + named) follow the existing
+    grey-out rule: disabled when no host session is active.
+  - Selecting the resume row → Load button calls
+    `load_game_from_checkpoint("hot_seat" | "network")`.
+
+**Persistence on app start.** `SaveGameManager._init` (or first call to
+`has_checkpoint()`) reads both `_checkpoint_<mode>.json` files if they
+exist, validates signature, populates `_checkpoints`. Invalid file →
+ignored (treated as no-checkpoint for that mode).
+
+**Edge cases handled:**
+- Game ends (victory) → leave checkpoint in place; player can still save
+  the final state via ESC menu before returning to main menu.
+- Load a save in mode X → the loaded state's initial checkpoint
+  replaces mode X's slot; `_checkpoints[X].last_named` is set to the
+  new signature (so quit-without-saving doesn't prompt immediately
+  after load). Mode ¬X's slot is untouched.
+- Crash mid-game → next launch, the appropriate checkpoint exists; if
+  user starts a new game in that mode, it is replaced. (Crash recovery
+  UI surfaces via the resume row in `LoadGameDialog`.)
+- Mode mismatch on resume row click: the row's metadata determines
+  which slot to load; current `PlayMode` does not affect this.
 
 ---
 

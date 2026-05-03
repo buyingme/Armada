@@ -42,14 +42,17 @@ func _init() -> void:
 
 
 ## Configures the Save & Quit button before showing the dialog.
-## [param allowed] — whether [code]can_save_now()[/code] is currently true.
-## [param reason] — human-readable reason shown as tooltip when disabled.
+## [param allowed] — whether saving is currently possible (Phase J5.5:
+## [SaveGameManager.has_checkpoint] for the active mode).
+## [param reason] — when [param allowed] is false, the human-readable
+## block reason; when [param allowed] is true, an informational
+## tooltip such as "Saves last safe point: Round N, <Phase>".
 func configure(allowed: bool, reason: String) -> void:
 	save_allowed = allowed
 	save_disabled_reason = reason
 	if _btn_save_and_quit:
 		_btn_save_and_quit.disabled = not allowed
-		_btn_save_and_quit.tooltip_text = "" if allowed else reason
+		_btn_save_and_quit.tooltip_text = reason
 
 
 ## Shows the dialog centred on the viewport.

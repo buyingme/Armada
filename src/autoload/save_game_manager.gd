@@ -44,10 +44,83 @@ var _log: GameLogger = GameLogger.new("SaveGameManager")
 var _signing_key: PackedByteArray = PackedByteArray()
 
 ## Command count at the last successful save.  Used by [method is_dirty]
-## to detect whether the game has advanced since the last save (so the
-## ESC menu can prompt before quit).  Reset to 0 on
-## [method CommandProcessor.reset].
+## (legacy hot-seat semantics, only consulted when no checkpoint exists
+## yet).  Reset to 0 on [method CommandProcessor.reset].
 var _command_count_at_last_save: int = 0
+
+## Phase J5.5 — per-mode checkpoint slots.  Each slot holds:
+## [code]{"payload": Dictionary, "signature": String,
+##   "last_named": String}[/code].  The keys are
+## [constant SaveGameMetadata.MODE_HOT_SEAT] /
+## [constant SaveGameMetadata.MODE_NETWORK].
+var _checkpoints: Dictionary = {}
+
+## Filename prefix reserved for system saves (checkpoints).
+## Excluded from [method list_saves] / [method list_with_meta] when it
+## matches one of the known checkpoint filenames.
+const SYSTEM_PREFIX: String = "_checkpoint_"
+
+## Save filenames for the per-mode checkpoints.
+const CHECKPOINT_HOT_SEAT_NAME: String = "_checkpoint_hot_seat"
+const CHECKPOINT_NETWORK_NAME: String = "_checkpoint_network"
+
+
+func _ready() -> void:
+	_init_checkpoints()
+	_load_checkpoints_from_disk()
+	if is_instance_valid(CommandProcessor):
+		CommandProcessor.command_executed.connect(
+				_on_command_executed_refresh)
+	if is_instance_valid(EventBus):
+		EventBus.game_started.connect(_on_game_started_initial)
+
+
+func _init_checkpoints() -> void:
+	_checkpoints = {
+		SaveGameMetadata.MODE_HOT_SEAT: _empty_slot(),
+		SaveGameMetadata.MODE_NETWORK: _empty_slot(),
+	}
+
+
+func _empty_slot() -> Dictionary:
+	return {
+		"payload": {},
+		"signature": "",
+		"last_named": "",
+	}
+
+
+func _checkpoint_filename(mode: String) -> String:
+	if mode == SaveGameMetadata.MODE_NETWORK:
+		return CHECKPOINT_NETWORK_NAME
+	return CHECKPOINT_HOT_SEAT_NAME
+
+
+func _load_checkpoints_from_disk() -> void:
+	for mode: String in [
+			SaveGameMetadata.MODE_HOT_SEAT,
+			SaveGameMetadata.MODE_NETWORK]:
+		var name: String = _checkpoint_filename(mode)
+		if not save_exists(name):
+			continue
+		var payload: Dictionary = _read_payload(name)
+		if payload.is_empty():
+			continue
+		var header: Dictionary = payload.get("header", {}) as Dictionary
+		var body: Dictionary = payload.get("state", {}) as Dictionary
+		if header.is_empty() or body.is_empty():
+			continue
+		# Verify signature.  Invalid → ignore.
+		if not IntegritySigner.is_signed(header):
+			continue
+		if not IntegritySigner.verify(
+				header, body, _get_or_create_signing_key()):
+			continue
+		var slot: Dictionary = _checkpoints[mode]
+		slot["payload"] = payload
+		slot["signature"] = _signature_from_header(header)
+		slot["last_named"] = slot["signature"]
+		_log.info("Restored %s checkpoint from disk." % mode)
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +132,12 @@ var _command_count_at_last_save: int = 0
 ## [code]display_name[/code] if [param meta] is not provided.
 ## [param meta] — optional pre-built header.  If null, one is built from
 ## [param game_state] using the current scenario id and play mode.
-## Returns [code]true[/code] on success.
+##
+## Phase J5.5: when a checkpoint exists for the current mode, the file
+## is written from the checkpoint payload (not the live state) and only
+## [code]display_name[/code] in the header is replaced.  This guarantees
+## that named saves always reflect the most recent safe point even when
+## the player presses Save mid-flow.
 func save_game(
 		game_state: GameState,
 		file_name: String = "quicksave",
@@ -67,8 +145,34 @@ func save_game(
 	if game_state == null:
 		_log.error("save_game called with null game_state.")
 		return false
+	if file_name.begins_with(SYSTEM_PREFIX):
+		_log.error("save_game refused: '%s' uses reserved prefix '%s'."
+				% [file_name, SYSTEM_PREFIX])
+		return false
 	if not _ensure_save_dir():
 		return false
+	# Phase J5.5: prefer the active mode's checkpoint payload over the
+	# live state, so saves taken mid-flow capture the last safe point.
+	var mode: String = _current_game_mode()
+	var slot: Dictionary = _slot_for(mode)
+	var use_checkpoint: bool = not slot.get("payload", {}).is_empty() \
+			and meta == null
+	if use_checkpoint:
+		var source: Dictionary = (slot["payload"] as Dictionary).duplicate(true)
+		var header: Dictionary = source.get("header", {}) as Dictionary
+		var body: Dictionary = source.get("state", {}) as Dictionary
+		header["display_name"] = file_name
+		if not IntegritySigner.sign(
+				header, body, _get_or_create_signing_key()):
+			_log.error("save_game failed to re-sign checkpoint payload.")
+			return false
+		if not _write_payload(file_name, header, body):
+			return false
+		slot["last_named"] = slot["signature"]
+		_command_count_at_last_save = _current_command_count()
+		_log.info("Game saved to %s (from %s checkpoint)."
+				% [_path_for(file_name), mode])
+		return true
 	if meta == null:
 		meta = build_metadata_for(game_state, file_name)
 	var validation: Dictionary = meta.validate()
@@ -76,26 +180,18 @@ func save_game(
 		_log.error("save_game header invalid: %s" %
 				validation.get("reason", "unknown"))
 		return false
-	var header: Dictionary = meta.to_dict()
-	var body: Dictionary = game_state.serialize()
-	# Sign the {header, state} payload.  The signature lives inside header.
-	if not IntegritySigner.sign(header, body, _get_or_create_signing_key()):
+	var header_dict: Dictionary = meta.to_dict()
+	var body_dict: Dictionary = game_state.serialize()
+	if not IntegritySigner.sign(
+			header_dict, body_dict, _get_or_create_signing_key()):
 		_log.error("save_game failed to sign payload.")
 		return false
-	var data: Dictionary = {
-		"header": header,
-		"state": body,
-	}
-	var file_path: String = _path_for(file_name)
-	var json_string: String = JSON.stringify(data, "\t")
-	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
-	if file == null:
-		_log.error("Failed to open save file for writing: %s" % file_path)
+	if not _write_payload(file_name, header_dict, body_dict):
 		return false
-	file.store_string(json_string)
-	file.close()
+	slot["last_named"] = slot.get("signature", "")
 	_command_count_at_last_save = _current_command_count()
-	_log.info("Game saved to %s (%s)" % [file_path, meta.display_name])
+	_log.info("Game saved to %s (%s)" %
+			[_path_for(file_name), meta.display_name])
 	return true
 
 
@@ -249,18 +345,199 @@ func can_save_now(game_state: GameState) -> Dictionary:
 
 ## Returns whether the current game has advanced since the last save.
 ## Used by the ESC menu to prompt "Save first?" before quit (Phase J Q4).
-## Returns [code]false[/code] when no game is active.  Reset by
-## [method mark_clean] (e.g. on new game / load) and by a successful save.
-func is_dirty() -> bool:
+##
+## Phase J5.5: per-mode semantics.  Returns [code]true[/code] iff the
+## given mode's checkpoint signature differs from the signature recorded
+## at the last named save of that mode.  When [param mode] is empty,
+## defaults to the current active mode.  Falls back to the legacy
+## command-count comparison when no checkpoint has been written yet
+## (e.g. very first command after game_started).
+func is_dirty(mode: String = "") -> bool:
 	if not is_instance_valid(GameManager) or not GameManager.is_game_active:
 		return false
-	return _current_command_count() > _command_count_at_last_save
+	var resolved_mode: String = mode
+	if resolved_mode.is_empty():
+		resolved_mode = _current_game_mode()
+	var slot: Dictionary = _slot_for(resolved_mode)
+	var sig: String = String(slot.get("signature", ""))
+	var last: String = String(slot.get("last_named", ""))
+	if sig.is_empty() and last.is_empty():
+		# No checkpoint yet — use legacy counter.
+		return _current_command_count() > _command_count_at_last_save
+	return sig != last
 
 
-## Resets the dirty-tracking counter.  Call when starting a new game or
-## loading a save so the freshly-installed state is considered clean.
+## Resets the dirty-tracking counter and per-mode last-named
+## signatures.  Call when starting a new game or loading a save so the
+## freshly-installed state is considered clean.
 func mark_clean() -> void:
 	_command_count_at_last_save = _current_command_count()
+	for mode: String in _checkpoints.keys():
+		var slot: Dictionary = _checkpoints[mode]
+		slot["last_named"] = slot.get("signature", "")
+
+
+# ---------------------------------------------------------------------------
+# Phase J5.5 — Checkpoint refresh + public checkpoint API
+# ---------------------------------------------------------------------------
+
+## Returns [code]true[/code] iff a checkpoint payload exists for the
+## given mode.  Defaults to the current active mode.
+func has_checkpoint(mode: String = "") -> bool:
+	var resolved: String = mode if not mode.is_empty() else _current_game_mode()
+	var slot: Dictionary = _slot_for(resolved)
+	return not (slot.get("payload", {}) as Dictionary).is_empty()
+
+
+## Returns the [SaveGameMetadata] of the given mode's checkpoint, or
+## [code]null[/code] when none exists.
+func checkpoint_metadata(mode: String = "") -> SaveGameMetadata:
+	var resolved: String = mode if not mode.is_empty() else _current_game_mode()
+	var slot: Dictionary = _slot_for(resolved)
+	var payload: Dictionary = slot.get("payload", {}) as Dictionary
+	if payload.is_empty():
+		return null
+	var header: Dictionary = payload.get("header", {}) as Dictionary
+	if header.is_empty():
+		return null
+	return SaveGameMetadata.from_dict(header)
+
+
+## Loads the given mode's checkpoint as if it were a regular save file.
+## Returns the same shape as [method load_game]; result is
+## [code]{"ok": false, "reason": "missing"}[/code] when no checkpoint
+## exists for that mode.
+func load_game_from_checkpoint(mode: String) -> Dictionary:
+	var slot: Dictionary = _slot_for(mode)
+	var payload: Dictionary = slot.get("payload", {}) as Dictionary
+	if payload.is_empty():
+		return _load_failure("missing")
+	var header: Dictionary = payload.get("header", {}) as Dictionary
+	var body: Dictionary = payload.get("state", {}) as Dictionary
+	if header.is_empty() or body.is_empty():
+		return _load_failure("schema_invalid")
+	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(header)
+	if not IntegritySigner.is_signed(header):
+		return _load_failure("signature_invalid", null, meta)
+	if not IntegritySigner.verify(
+			header, body, _get_or_create_signing_key()):
+		return _load_failure("signature_invalid", null, meta)
+	var state: GameState = GameState.deserialize(body)
+	if state == null:
+		return _load_failure("schema_invalid", null, meta)
+	return {
+		"ok": true,
+		"state": state,
+		"meta": meta,
+		"reason": "",
+	}
+
+
+func _slot_for(mode: String) -> Dictionary:
+	if _checkpoints.is_empty():
+		_init_checkpoints()
+	if not _checkpoints.has(mode):
+		_checkpoints[mode] = _empty_slot()
+	return _checkpoints[mode]
+
+
+## Clears in-memory checkpoint state and removes both checkpoint files.
+## Intended for tests and "clear data" UX.
+func clear_checkpoints() -> void:
+	_init_checkpoints()
+	delete_save(CHECKPOINT_HOT_SEAT_NAME)
+	delete_save(CHECKPOINT_NETWORK_NAME)
+
+
+## Refreshes the active mode's checkpoint when [param command] resolves
+## at a safe point.  Wired to [signal CommandProcessor.command_executed]
+## in [method _ready].  No-op when [method can_save_now] returns false.
+func _on_command_executed_refresh(
+		_command: GameCommand, _result: Dictionary) -> void:
+	if not is_instance_valid(GameManager) \
+			or not GameManager.is_game_active \
+			or GameManager.current_game_state == null:
+		return
+	var gate: Dictionary = can_save_now(GameManager.current_game_state)
+	if not bool(gate.get("ok", false)):
+		return
+	_capture_checkpoint(GameManager.current_game_state)
+
+
+## Writes the initial checkpoint when a game starts (or is loaded).
+## Bypasses the safe-point gate — a freshly built [GameState] is by
+## construction at a safe point.
+func _on_game_started_initial() -> void:
+	if not is_instance_valid(GameManager) \
+			or not GameManager.is_game_active \
+			or GameManager.current_game_state == null:
+		return
+	_capture_checkpoint(GameManager.current_game_state)
+	# Fresh state is considered clean for the active mode.
+	var slot: Dictionary = _slot_for(_current_game_mode())
+	slot["last_named"] = slot.get("signature", "")
+
+
+func _capture_checkpoint(state: GameState) -> void:
+	var mode: String = _current_game_mode()
+	var slot: Dictionary = _slot_for(mode)
+	var meta: SaveGameMetadata = build_metadata_for(state, "")
+	# Skip auto-capture when there is no real scenario context (test
+	# fixtures that build a GameState directly).  These can have
+	# partially-populated ship/squadron lists that would crash
+	# state.serialize().
+	if meta.scenario_id == "unknown" or meta.scenario_id.is_empty():
+		return
+	var header: Dictionary = meta.to_dict()
+	var body: Dictionary = state.serialize()
+	if not IntegritySigner.sign(
+			header, body, _get_or_create_signing_key()):
+		_log.warn("Could not sign checkpoint payload.")
+		return
+	var payload: Dictionary = {"header": header, "state": body}
+	slot["payload"] = payload
+	slot["signature"] = _signature_from_header(header)
+	# Persist to disk so we survive crashes.
+	if _ensure_save_dir():
+		_write_payload(_checkpoint_filename(mode), header, body)
+
+
+func _signature_from_header(header: Dictionary) -> String:
+	return "%s|%s|%d" % [
+			String(header.get("created_at", "")),
+			String(header.get("signature", "")),
+			int(header.get("current_round", 0))]
+
+
+func _write_payload(
+		file_name: String,
+		header: Dictionary,
+		body: Dictionary) -> bool:
+	var data: Dictionary = {"header": header, "state": body}
+	var path: String = _path_for(file_name)
+	var f: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		_log.error("Failed to open save file for writing: %s" % path)
+		return false
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	return true
+
+
+func _read_payload(file_name: String) -> Dictionary:
+	var path: String = _path_for(file_name)
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var text: String = f.get_as_text()
+	f.close()
+	var json: JSON = JSON.new()
+	if json.parse(text) != OK:
+		return {}
+	var data: Dictionary = json.data as Dictionary
+	if data == null:
+		return {}
+	return data
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +545,9 @@ func mark_clean() -> void:
 # ---------------------------------------------------------------------------
 
 ## Returns an array of available save file names (without extension).
+## Phase J5.5: filenames starting with [constant SYSTEM_PREFIX] (the
+## [code]_[/code] prefix) are excluded — these are reserved for
+## checkpoints and other internal artefacts.
 func list_saves() -> Array[String]:
 	var saves: Array[String] = []
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
@@ -278,7 +558,8 @@ func list_saves() -> Array[String]:
 	dir.list_dir_begin()
 	var entry: String = dir.get_next()
 	while entry != "":
-		if not dir.current_is_dir() and entry.ends_with(SAVE_EXT):
+		if not dir.current_is_dir() and entry.ends_with(SAVE_EXT) \
+				and not entry.begins_with(SYSTEM_PREFIX):
 			saves.append(entry.trim_suffix(SAVE_EXT))
 		entry = dir.get_next()
 	dir.list_dir_end()

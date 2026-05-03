@@ -61,15 +61,15 @@ func test_network_client_mode_hides_save_and_load() -> void:
 			"Quit Game should still be present for clients")
 
 
-func test_save_button_enabled_at_safe_point_load_stubbed() -> void:
+func test_save_button_disabled_without_active_game_load_enabled() -> void:
 	_modal.set_mode(GameMenuModal.Mode.HOT_SEAT)
 	# Without an active GameManager game, can_save_now() returns
 	# {ok: false, ...}, so the Save button is disabled with a tooltip.
-	# Load remains stub-disabled until J5.
+	# Load Game is enabled in J5 (independent of safe-point gating).
 	var save_btn: Button = _find_button(_modal, "Save Game")
 	assert_not_null(save_btn, "Save Game button should exist")
-	assert_true(_find_button(_modal, "Load Game").disabled,
-			"Load Game is stub-disabled until J5")
+	assert_false(_find_button(_modal, "Load Game").disabled,
+			"Load Game should be enabled in J5")
 
 
 # ---------------------------------------------------------------------------

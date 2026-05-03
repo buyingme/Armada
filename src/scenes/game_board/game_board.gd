@@ -589,11 +589,25 @@ func _spawn_and_bind_tokens(setup: LearningScenarioSetup,
 	for i: int in range(ship_placements.size()):
 		var token: ShipToken = _spawn_ship_token(ship_placements[i])
 		if i < ship_instances.size():
+			# Phase J7 fix: seed the instance's normalised position +
+			# rotation from the placement.  Without this, ShipInstance.
+			# pos_x/pos_y/rotation_deg stay at 0 until a maneuver runs,
+			# so a save taken before any movement reloads with every
+			# un-activated token at the map origin.
+			ship_instances[i].pos_x = ship_placements[i].pos_x
+			ship_instances[i].pos_y = ship_placements[i].pos_y
+			ship_instances[i].rotation_deg = rad_to_deg(
+					ship_placements[i].rotation_rad)
 			token.bind_instance(ship_instances[i])
 			_panel_mgr.add_ship_to_card_panel(ship_instances[i])
 	for i: int in range(squad_placements.size()):
 		var token: SquadronToken = _spawn_squadron_token(squad_placements[i])
 		if i < squad_instances.size():
+			# Same Phase J7 fix for squadrons.
+			squad_instances[i].pos_x = squad_placements[i].pos_x
+			squad_instances[i].pos_y = squad_placements[i].pos_y
+			squad_instances[i].rotation_deg = rad_to_deg(
+					squad_placements[i].rotation_rad)
 			token.bind_instance(squad_instances[i])
 
 ## Instantiates and configures a ShipToken for the given placement.

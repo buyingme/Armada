@@ -208,7 +208,7 @@ func start_new_game_from_state(
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
 	is_game_active = true
-	active_player = current_game_state.initiative_player
+	active_player = _derive_active_player_from_state(current_game_state)
 	_activating_ship = null
 	_activating_squadron = null
 	_squadrons_activated_this_turn = 0
@@ -1389,6 +1389,26 @@ func _has_unactivated_ships(player_index: int) -> bool:
 			if not si.activated_this_round:
 				return true
 	return false
+
+
+## Derives the active player after loading a [GameState] from a save.
+## Phase J7+: a save taken mid-round must restore the correct turn —
+## simply resetting to [member GameState.initiative_player] would let
+## the wrong peer act when the initiative player has already activated.
+##
+## Trusts [member InteractionFlow.controller_player] when valid (0 or 1),
+## otherwise falls back to [member GameState.initiative_player].  The
+## interaction-flow field is the canonical source of "whose turn /
+## sub-step is this" — every command that mutates state writes it, so
+## any save taken mid-game records the correct controller.
+func _derive_active_player_from_state(state: GameState) -> int:
+	if state == null:
+		return 0
+	if state.interaction_flow != null:
+		var ctrl: int = state.interaction_flow.controller_player
+		if ctrl == 0 or ctrl == 1:
+			return ctrl
+	return state.initiative_player
 
 
 ## Returns true if the given player has at least one unactivated squadron.

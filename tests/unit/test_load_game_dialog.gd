@@ -246,3 +246,38 @@ func _collect_rows(node: Node, out: Array[Button]) -> void:
 					and btn.custom_minimum_size.y >= 56.0:
 				out.append(btn)
 		_collect_rows(child, out)
+
+
+# ---------------------------------------------------------------------------
+# Phase J7 — lobby context
+# ---------------------------------------------------------------------------
+
+func test_hot_seat_named_row_disabled_in_lobby_context() -> void:
+	# Phase J7 / Q25: from the lobby, hot-seat rows are greyed.
+	_reseed_fixtures()
+	_dialog.context = "lobby"
+	_dialog.show_modal()
+	var rows: Array[Button] = _list_rows(_dialog)
+	for row: Button in rows:
+		if row.text.find(SAVE_HOTSEAT) != -1:
+			assert_true(row.disabled,
+					"Hot-seat row should be disabled in lobby context")
+			assert_true(row.tooltip_text.find("main menu") != -1,
+					"Tooltip should reference the main menu")
+			return
+	fail_test("Hot-seat fixture row not found")
+
+
+func test_network_named_row_enabled_in_lobby_context() -> void:
+	# Phase J7: from the lobby, network rows are enabled regardless of
+	# the local NetworkManager.is_server() state.
+	_reseed_fixtures()
+	_dialog.context = "lobby"
+	_dialog.show_modal()
+	var rows: Array[Button] = _list_rows(_dialog)
+	for row: Button in rows:
+		if row.text.find(SAVE_NETWORK) != -1:
+			assert_false(row.disabled,
+					"Network row should be enabled in lobby context")
+			return
+	fail_test("Network fixture row not found")

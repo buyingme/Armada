@@ -59,6 +59,7 @@ var _player_name_labels: Array[Label] = []
 var _player_ready_labels: Array[Label] = []
 var _ready_button: Button
 var _start_button: Button
+var _load_button: Button
 var _leave_button: Button
 var _status_label: Label
 var _scenario_option: OptionButton
@@ -283,6 +284,16 @@ func _build_buttons(parent: VBoxContainer) -> void:
 	_start_button.disabled = true
 	btn_box.add_child(_start_button)
 
+	# Phase J7: host-only “Load Game”.  Enabled iff the lobby is in a
+	# startable state (both connected + both Ready).
+	_load_button = Button.new()
+	_load_button.text = "Load Game"
+	_load_button.custom_minimum_size = Vector2(120, 36)
+	_load_button.pressed.connect(_on_load_pressed)
+	_load_button.visible = LobbyManager.is_host()
+	_load_button.disabled = true
+	btn_box.add_child(_load_button)
+
 	_leave_button = Button.new()
 	_leave_button.text = "Leave"
 	_leave_button.custom_minimum_size = Vector2(120, 36)
@@ -384,6 +395,11 @@ func _update_buttons(lobby: LobbyState) -> void:
 	_ready_button.text = "Not Ready" if _is_ready else "Ready"
 	_start_button.visible = LobbyManager.is_host()
 	_start_button.disabled = not lobby.can_start()
+	# Phase J7: same gate as Start Game — both connected + both Ready.
+	_load_button.visible = LobbyManager.is_host()
+	_load_button.disabled = not lobby.can_start()
+	_load_button.tooltip_text = "" if lobby.can_start() \
+			else "Both players must be connected and Ready."
 
 
 ## Finds a player entry by player_index.
@@ -417,6 +433,20 @@ func _on_scenario_selected(index: int) -> void:
 ## Requests the host to start the game.
 func _on_start_pressed() -> void:
 	LobbyManager.request_start_game()
+
+
+## Opens the Load Game dialog (host-only).  Phase J7.
+func _on_load_pressed() -> void:
+	if not LobbyManager.is_host():
+		return
+	var dialog: LoadGameDialog = LoadGameDialog.new()
+	dialog.context = "lobby"
+	dialog.transition_to_board_on_load = false
+	dialog.cancelled.connect(func() -> void: dialog.queue_free())
+	dialog.loaded.connect(
+			func(_meta: SaveGameMetadata) -> void: dialog.queue_free())
+	add_child(dialog)
+	dialog.show_modal()
 
 
 ## Leaves the lobby and returns to the main menu.

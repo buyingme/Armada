@@ -228,10 +228,14 @@ func _build_resume_row(mode: String) -> Button:
 			and SaveGameManager.has_checkpoint(mode)
 	var network_blocked: bool = mode == SaveGameMetadata.MODE_NETWORK \
 			and _is_network_blocked()
-	row.disabled = not has or network_blocked
+	var hot_seat_blocked: bool = mode == SaveGameMetadata.MODE_HOT_SEAT \
+			and _is_hot_seat_blocked()
+	row.disabled = not has or network_blocked or hot_seat_blocked
 	row.text = _resume_row_label(mode, has)
 	if network_blocked:
 		row.tooltip_text = _network_blocked_tooltip()
+	elif hot_seat_blocked:
+		row.tooltip_text = _hot_seat_blocked_tooltip()
 	else:
 		row.tooltip_text = ""
 	# Encode "this is a resume row for mode X" via a sentinel name.
@@ -307,6 +311,9 @@ func _row_is_disabled(entry: Dictionary) -> bool:
 	if meta.game_mode == SaveGameMetadata.MODE_NETWORK \
 			and _is_network_blocked():
 		return true
+	if meta.game_mode == SaveGameMetadata.MODE_HOT_SEAT \
+			and _is_hot_seat_blocked():
+		return true
 	return false
 
 
@@ -318,6 +325,10 @@ func _row_disabled_reason(entry: Dictionary) -> String:
 			and meta.game_mode == SaveGameMetadata.MODE_NETWORK \
 			and _is_network_blocked():
 		return _network_blocked_tooltip()
+	if meta != null \
+			and meta.game_mode == SaveGameMetadata.MODE_HOT_SEAT \
+			and _is_hot_seat_blocked():
+		return _hot_seat_blocked_tooltip()
 	return ""
 
 
@@ -329,11 +340,14 @@ func _has_host_session() -> bool:
 
 ## True when network rows must be greyed out in the current context.
 ## Phase J5.6: in [code]"main_menu"[/code] context, network loads are
-## always blocked (must use the lobby).  Otherwise we fall back to the
-## existing host-session rule.
+## always blocked (must use the lobby).  Phase J7: in [code]"lobby"[/code]
+## context, network loads are always allowed (host has authority).
+## Otherwise we fall back to the existing host-session rule.
 func _is_network_blocked() -> bool:
 	if context == "main_menu":
 		return true
+	if context == "lobby":
+		return false
 	return not _has_host_session()
 
 
@@ -343,6 +357,17 @@ func _network_blocked_tooltip() -> String:
 		return ("Load network saves from the lobby once both players "
 				+ "are connected.")
 	return "Host a game to load this save."
+
+
+## True when hot-seat rows must be greyed out.  Phase J7: hot-seat
+## saves cannot be loaded from inside a network lobby.
+func _is_hot_seat_blocked() -> bool:
+	return context == "lobby"
+
+
+## Tooltip shown on greyed hot-seat rows in lobby context.  Phase J7.
+func _hot_seat_blocked_tooltip() -> String:
+	return "Hot-seat saves can only be loaded from the main menu."
 
 
 func _update_action_button_states() -> void:
@@ -447,6 +472,24 @@ func _on_load_pressed() -> void:
 	var meta: SaveGameMetadata = result.get("meta") as SaveGameMetadata
 	if loaded_state == null or meta == null:
 		push_warning("LoadGameDialog: load returned no state/meta.")
+		return
+	# Phase J7: in lobby context, delegate to LobbyManager which
+	# installs locally, broadcasts the state to the client, and
+	# triggers the same scene transition as a fresh lobby start.
+	# Phase J7+: any host-side network load (lobby OR in-session)
+	# routes through the same broadcast path so the client always
+	# learns about the load and reloads its board scene.  The
+	# in-session host's own scene reload happens inside
+	# LobbyManager.host_load_save → _maybe_force_board_reload.
+	var host_network_load: bool = (
+			is_instance_valid(PlayMode) and PlayMode.is_network()
+			and is_instance_valid(NetworkManager)
+			and NetworkManager.is_server())
+	if context == "lobby" or host_network_load:
+		SfxManager.play_sfx("droid_sound")
+		hide_modal()
+		LobbyManager.host_load_save(loaded_state, meta)
+		loaded.emit(meta)
 		return
 	SfxManager.play_sfx("droid_sound")
 	hide_modal()

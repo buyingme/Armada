@@ -34,6 +34,11 @@ signal lobby_error(message: String)
 ## Emitted when the game is about to start.
 signal game_starting()
 
+## Emitted on the client immediately after a load broadcast arrives,
+## before the scene transition.  The board reacts indirectly because
+## [signal game_starting] is emitted right after.  Phase J7.
+signal load_state_received()
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -103,6 +108,52 @@ func request_start_game() -> void:
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
 	game_starting.emit()
+
+
+## Loads a saved game and starts it for both peers (host only).
+## Validates the lobby is in a startable state, installs the loaded
+## state on the host, broadcasts it to the client, then triggers the
+## same scene transition as [method request_start_game].  The board
+## scene picks up the loaded state via [code]GameManager.is_state_preloaded[/code]
+## (Phase J5.6).  Phase J7.
+##
+## [param state] — the deserialised [GameState] to install (host-side).
+## [param meta] — the loaded save metadata (used for [code]scenario_id[/code]
+##   and the broadcast payload).
+func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
+	if not NetworkManager.is_server():
+		_log.warn("host_load_save() called but not server.")
+		return
+	if state == null or meta == null:
+		_log.error("host_load_save() called with null state/meta.")
+		return
+	# Two valid call sites: from the lobby (current_lobby exists and is
+	# Ready) or mid-session (no/stale lobby, but a peer is connected).
+	# In both cases at least one peer must be reachable to receive the
+	# broadcast.
+	var lobby_ready: bool = (
+			current_lobby != null and current_lobby.can_start())
+	var in_session: bool = NetworkManager.get_peer_count() >= 1
+	if not lobby_ready and not in_session:
+		_log.warn("Cannot load game — lobby not ready and no peers.")
+		lobby_error.emit("All players must be connected and Ready.")
+		return
+	_log.info("Host loading save '%s'." % meta.display_name)
+	# Broadcast the serialised state to the client BEFORE installing on
+	# the host, so both peers see the toast at roughly the same moment.
+	var state_dict: Dictionary = state.serialize()
+	_receive_loaded_state.rpc(
+			state_dict, meta.scenario_id, meta.to_dict())
+	# Install on host.  GameManager.start_new_game_from_state sets
+	# is_state_preloaded so the GameBoard skips its bootstrap path.
+	GameManager.start_new_game_from_state(state, meta.scenario_id)
+	NetworkManager.start_game()
+	game_starting.emit()
+	# Phase J7 in-session: when called mid-game the host is already on
+	# game_board, so the lobby_room → main_menu scene-transition chain
+	# never runs.  Force a board-scene reload here so the host picks up
+	# the preloaded state via the same code path as a lobby start.
+	_maybe_force_board_reload()
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +273,55 @@ func _sync_lobby_state(data: Dictionary) -> void:
 func _notify_game_start() -> void:
 	_log.info("Game starting notification received.")
 	game_starting.emit()
+
+
+## Server → Client: delivers a serialised [GameState] for a host-driven
+## load.  The client deserialises, installs via
+## [code]GameManager.start_new_game_from_state[/code], shows a brief
+## "Host is loading…" toast, then emits [signal game_starting] so the
+## same scene-transition path runs as for a fresh lobby start.  Phase J7.
+@rpc("authority", "reliable")
+func _receive_loaded_state(
+		state_dict: Dictionary,
+		scenario_id: String,
+		_meta_dict: Dictionary) -> void:
+	_log.info("Received loaded state from host (scenario='%s')." %
+			scenario_id)
+	if is_instance_valid(TooltipManager):
+		TooltipManager.show_text(
+				"Host is loading the game…", Vector2.INF, 2.0, true)
+	var state: GameState = GameState.deserialize(state_dict)
+	if state == null:
+		_log.error("Failed to deserialise host's loaded state.")
+		lobby_error.emit("Failed to deserialise loaded game from host.")
+		return
+	GameManager.start_new_game_from_state(state, scenario_id)
+	load_state_received.emit()
+	game_starting.emit()
+	# Phase J7 in-session: same reasoning as host_load_save — when the
+	# client receives this RPC mid-session it is already on the board,
+	# so the lobby_room transition chain never fires.  Force a reload.
+	_maybe_force_board_reload()
+
+
+## When the receiver is currently on the game-board scene, force a
+## scene reload so the new preloaded [GameState] is consumed via the
+## standard [GameBoard._ready] path.  When the receiver is still on
+## the lobby/main-menu scene the existing
+## [signal game_starting] → [code]_on_lobby_game_start[/code] chain
+## handles the transition, so this is a no-op there.  Phase J7.
+func _maybe_force_board_reload() -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var current: Node = tree.current_scene
+	if current == null:
+		return
+	var path: String = current.scene_file_path
+	if path.find("game_board") == -1:
+		return
+	tree.change_scene_to_file(
+			"res://src/scenes/game_board/game_board.tscn")
 
 
 # ---------------------------------------------------------------------------

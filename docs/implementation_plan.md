@@ -18,7 +18,7 @@
 | GUT tests | 2 839 |
 | GUT asserts | 5 359 |
 | Failing tests | 0 |
-| Last commit | `<pending>` (Phase J5 + J5.5 — LoadGameDialog + checkpoint refresh, 2026-05-03) |
+| Last commit | `6c18897` (Phase J5 + J5.5 — LoadGameDialog + checkpoint refresh, 2026-05-03) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

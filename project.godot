@@ -15,7 +15,10 @@ config/description="A digital adaptation of the Star Wars: Armada tabletop minia
 config/version="0.1.0"
 run/main_scene="res://src/scenes/main_menu/main_menu.tscn"
 config/features=PackedStringArray("4.5")
-config/icon="res://icon.svg"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Armada"
+boot_splash/image="uid://bjp010e7a2jm3"
+config/icon="uid://c0jm304rltjbd"
 
 [autoload]
 
@@ -64,4 +67,5 @@ camera_pan={
 
 [rendering]
 
+textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_2d=2

@@ -37,7 +37,9 @@ var _annotation_counter: int = 0
 var _annotation_modal: DebugAnnotationModal = null
 
 ## Directory for annotation save files.
-const ANNOTATION_DIR: String = "res://saves/annotations"
+## Resolved via [PathConfig] (project folder in editor, user folder
+## in exported builds).
+static var ANNOTATION_DIR: String = PathConfig.ANNOTATIONS_DIR
 
 ## Logger instance.
 var _log: GameLogger = GameLogger.new("DebugMode")

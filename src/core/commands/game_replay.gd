@@ -35,7 +35,10 @@ const FORMAT_VERSION: int = 1
 const SIGNED_FORMAT_VERSION: int = 2
 
 ## Default directory for replay files.
-const REPLAY_DIR: String = "res://replays"
+## Resolved via [PathConfig]: in the editor it points at
+## [code]res://replays[/code]; in exported builds it points at
+## [code]user://replays[/code].
+static var REPLAY_DIR: String = PathConfig.REPLAYS_DIR
 
 ## File extension for replay files.
 const REPLAY_EXT: String = ".json"

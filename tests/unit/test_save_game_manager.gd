@@ -213,19 +213,63 @@ func test_can_save_now_accepts_wait_for_ship_select() -> void:
 	var gs: GameState = _make_game_state()
 	gs.interaction_flow.flow_type = Constants.InteractionFlow.SHIP_ACTIVATION
 	gs.interaction_flow.step_id = Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
+	# At least one ship must still be eligible to activate, otherwise
+	# the phase-progression invariant correctly rejects the save.
+	var ship: ShipInstance = ShipInstance.new()
+	ship.activated_this_round = false
+	gs.player_states[0].ships = [ship]
 	var result: Dictionary = _manager.can_save_now(gs)
 	assert_true(result["ok"],
 			"Between-activations idle state is a safe save point: %s" %
 			result.get("reason", ""))
 
 
-func test_can_save_now_accepts_idle_state() -> void:
+func test_can_save_now_rejects_ship_phase_with_no_unactivated_ships() -> void:
+	# Last ship just activated; phase-advance command has not yet
+	# fired so step_id still reads WAIT_FOR_SHIP_SELECT.  Saving here
+	# strands the game in SHIP phase with nothing to do on resume.
 	var gs: GameState = _make_game_state()
-	# default: phase = SHIP, interaction_flow = NONE
+	gs.interaction_flow.flow_type = Constants.InteractionFlow.SHIP_ACTIVATION
+	gs.interaction_flow.step_id = Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
+	var ship: ShipInstance = ShipInstance.new()
+	ship.activated_this_round = true
+	gs.player_states[0].ships = [ship]
 	var result: Dictionary = _manager.can_save_now(gs)
-	assert_true(result["ok"],
-			"Idle SHIP phase with no flow is a safe save point: %s" %
-			result.get("reason", ""))
+	assert_false(result["ok"],
+			"Pending phase transition (no activatable ship) blocks save")
+
+
+func test_can_save_now_rejects_idle_none_step() -> void:
+	# step_id == NONE is a transient gap left by commands that don't
+	# update the interaction flow (e.g. squadron-command sub-steps).
+	# The save gate must reject it: a checkpoint captured here can sit
+	# mid-activation.
+	var gs: GameState = _make_game_state()
+	# default: phase = SHIP, interaction_flow.step_id = NONE
+	var result: Dictionary = _manager.can_save_now(gs)
+	assert_false(result["ok"],
+			"NONE step is not a safe save point (mid-activation risk)")
+
+
+func test_can_save_now_rejects_ship_with_revealed_dial() -> void:
+	# Structural invariant: even at WAIT_FOR_SHIP_SELECT, if any ship
+	# has a revealed (popped) command dial, that ship's activation has
+	# begun and has not yet finalised — saving now would resume into
+	# an inconsistent UI state.
+	var gs: GameState = _make_game_state()
+	gs.interaction_flow.flow_type = Constants.InteractionFlow.SHIP_ACTIVATION
+	gs.interaction_flow.step_id = Constants.InteractionStep.WAIT_FOR_SHIP_SELECT
+	var ship: ShipInstance = ShipInstance.new()
+	ship.command_dial_stack = CommandDialStack.create(2)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.NAVIGATE,
+			Constants.CommandType.SQUADRON],
+			gs.current_round)
+	ship.command_dial_stack.reveal_top()
+	gs.player_states[0].ships = [ship]
+	var result: Dictionary = _manager.can_save_now(gs)
+	assert_false(result["ok"],
+			"Ship with revealed dial blocks save (mid-activation)")
 
 
 # ---------------------------------------------------------------------------

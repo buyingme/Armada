@@ -19,16 +19,16 @@ extends Node
 
 
 ## Directory under the project root where save files are stored.
-## Uses [code]res://[/code] so saves land in the project folder for easy
-## debugging.  Migrate to [code]user://saves/[/code] at release time
-## (see Phase J Q2).
-const SAVE_DIR: String = "res://saves"
+## Resolved via [PathConfig]: in the editor it stays inside the
+## project as [code]res://saves[/code]; in exported builds it points
+## at [code]user://saves[/code] (a writeable per-user folder).
+static var SAVE_DIR: String = PathConfig.SAVES_DIR
 
 ## File extension for save files.
 const SAVE_EXT: String = ".json"
 
 ## Filename of the per-install signing key (auto-generated on first save).
-const SIGNING_KEY_FILE: String = "res://saves/.signing_key"
+static var SIGNING_KEY_FILE: String = PathConfig.SIGNING_KEY_FILE
 
 ## Length of the signing key in bytes.
 const SIGNING_KEY_LEN: int = 32
@@ -63,6 +63,16 @@ const SYSTEM_PREFIX: String = "_checkpoint_"
 ## Save filenames for the per-mode checkpoints.
 const CHECKPOINT_HOT_SEAT_NAME: String = "_checkpoint_hot_seat"
 const CHECKPOINT_NETWORK_NAME: String = "_checkpoint_network"
+
+## Debug — when [LoggingMode] is enabled, every successful checkpoint
+## capture is also written to a numbered snapshot file
+## ([code]_checkpoint_<mode>_NNN.json[/code]) so the full sequence can
+## be inspected after the fact.  Counter is reset on each
+## [signal EventBus.game_started].
+var _debug_checkpoint_seq: Dictionary = {
+	SaveGameMetadata.MODE_HOT_SEAT: 0,
+	SaveGameMetadata.MODE_NETWORK: 0,
+}
 
 
 func _ready() -> void:
@@ -325,15 +335,23 @@ func default_save_name(game_state: GameState) -> String:
 ## Result: [code]{"ok": bool, "reason": String}[/code].  When [code]ok[/code]
 ## is false, [code]reason[/code] is a short human-readable explanation
 ## suitable for a tooltip.
-## Steps at which it is safe to save — the player is choosing a
-## top-level action that hasn't started yet, so any local UI state
+## Steps at which it is safe to save — the player is between top-level
+## actions, no ship/squadron is mid-activation, and any local UI state
 ## can be reconstructed from [GameState] after a load.
+##
+## Intentionally excludes [code]NONE[/code] (a transient gap left by
+## commands that don't update the flow) and
+## [code]ACTIVATION_DONE[/code] (a momentary marker before the flow
+## resets to [code]WAIT_FOR_SHIP_SELECT[/code]).  Captures during those
+## steps were observed mid-squadron-command and mid-displacement.
 const _SAFE_STEPS: Array[Constants.InteractionStep] = [
-	Constants.InteractionStep.NONE,
+	# Ship phase — between activations, no dial revealed yet.
 	Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+	# Squadron phase — between squadron activations.
 	Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+	# Command phase — between dial submissions by the two players.
 	Constants.InteractionStep.WAIT_FOR_OPPONENT_DIALS,
-	Constants.InteractionStep.ACTIVATION_DONE,
+	# Status / Game Over — terminal phases, no per-ship flow.
 	Constants.InteractionStep.STATUS_CLEANUP_STEP,
 	Constants.InteractionStep.GAME_OVER_STEP,
 ]
@@ -344,10 +362,12 @@ const _SAFE_STEPS: Array[Constants.InteractionStep] = [
 ## is false, [code]reason[/code] is a short human-readable explanation
 ## suitable for a tooltip.
 ##
-## Safe points are determined by [member InteractionFlow.step_id]: the
-## player must be at a top-level choice (waiting to pick a ship,
-## squadron, etc.) rather than mid-step (rolling dice, executing a
-## maneuver, picking defense tokens).  See [constant _SAFE_STEPS].
+## Safe points are determined by [member InteractionFlow.step_id] AND a
+## structural invariant: no ship has a revealed (popped) command dial.
+## A revealed dial means the active ship's activation has begun
+## (squadron command, repair, attack, maneuver) but is not yet
+## finalised, so the engine state is mid-transition and saving here
+## would resume in an inconsistent UI state.
 func can_save_now(game_state: GameState) -> Dictionary:
 	if game_state == null:
 		return {"ok": false, "reason": "No active game."}
@@ -361,7 +381,86 @@ func can_save_now(game_state: GameState) -> Dictionary:
 				"ok": false,
 				"reason": "Finish the current step before saving.",
 			}
+	# Structural invariant: in the SHIP phase, no ship may have a
+	# revealed dial — that means an activation is already mid-flight
+	# (e.g. a squadron command was just issued and we are between its
+	# move/attack steps).
+	if _any_ship_mid_activation(game_state):
+		return {
+			"ok": false,
+			"reason": "Finish the current ship's activation before saving.",
+		}
+	# Phase-progression invariant: between activations, the
+	# interaction_flow can briefly read WAIT_FOR_SHIP_SELECT /
+	# WAIT_FOR_SQUAD_SELECT after the last activation finished but
+	# before the AdvancePhase command fires.  Saving in that window
+	# strands the game in the current phase with nothing to activate.
+	if game_state.current_phase == Constants.GamePhase.SHIP \
+			and not _any_player_has_unactivated_ships(game_state):
+		return {
+			"ok": false,
+			"reason": "Phase transition pending — wait for next phase.",
+		}
+	if game_state.current_phase == Constants.GamePhase.SQUADRON \
+			and not _any_player_has_unactivated_squadrons(game_state):
+		return {
+			"ok": false,
+			"reason": "Phase transition pending — wait for next phase.",
+		}
 	return {"ok": true, "reason": ""}
+
+
+## Returns true if any ship in [param game_state] has a revealed command
+## dial — i.e. it has begun activation but has not yet spent its dial.
+func _any_ship_mid_activation(game_state: GameState) -> bool:
+	if game_state == null:
+		return false
+	for player_state: PlayerState in game_state.player_states:
+		for ship: Variant in player_state.ships:
+			if ship == null:
+				continue
+			if not ("command_dial_stack" in ship):
+				continue
+			var stack: Variant = ship.command_dial_stack
+			if stack == null:
+				continue
+			if not stack.get_revealed_dial().is_empty():
+				return true
+	return false
+
+
+## Returns true if at least one player has at least one ship still
+## eligible to activate this round (alive and not yet activated).
+func _any_player_has_unactivated_ships(game_state: GameState) -> bool:
+	if game_state == null:
+		return false
+	for player_state: PlayerState in game_state.player_states:
+		for ship: Variant in player_state.ships:
+			if ship == null:
+				continue
+			if "is_destroyed" in ship and ship.is_destroyed():
+				continue
+			if "activated_this_round" in ship \
+					and not ship.activated_this_round:
+				return true
+	return false
+
+
+## Returns true if at least one player has at least one squadron still
+## eligible to activate this round (alive and not yet activated).
+func _any_player_has_unactivated_squadrons(game_state: GameState) -> bool:
+	if game_state == null:
+		return false
+	for player_state: PlayerState in game_state.player_states:
+		for sq: Variant in player_state.squadrons:
+			if sq == null:
+				continue
+			if "is_destroyed" in sq and sq.is_destroyed():
+				continue
+			if "activated_this_round" in sq \
+					and not sq.activated_this_round:
+				return true
+	return false
 
 
 ## Returns whether the current game has advanced since the last save.
@@ -479,27 +578,52 @@ func _on_command_executed_refresh(
 			or not GameManager.is_game_active \
 			or GameManager.current_game_state == null:
 		return
-	var gate: Dictionary = can_save_now(GameManager.current_game_state)
+	var state: GameState = GameManager.current_game_state
+	var gate: Dictionary = can_save_now(state)
 	if not bool(gate.get("ok", false)):
+		if is_instance_valid(LoggingMode) and LoggingMode.enabled:
+			_log.info("Checkpoint skipped — %s (%s)" % [
+					gate.get("reason", "unsafe"),
+					_checkpoint_context_string(state)])
 		return
-	_capture_checkpoint(GameManager.current_game_state)
+	_capture_checkpoint(state)
 
 
 ## Writes the initial checkpoint when a game starts (or is loaded).
 ## Bypasses the safe-point gate — a freshly built [GameState] is by
-## construction at a safe point.
+## construction at a safe point.  No numbered debug snapshot is written
+## here: the game-start state is not interesting for diagnosis (use the
+## first command's checkpoint as the diagnostic baseline).
 func _on_game_started_initial() -> void:
 	if not is_instance_valid(GameManager) \
 			or not GameManager.is_game_active \
 			or GameManager.current_game_state == null:
 		return
-	_capture_checkpoint(GameManager.current_game_state)
+	# Reset numbered debug snapshots so each session starts from 001.
+	_reset_debug_checkpoint_snapshots()
+	_capture_checkpoint(GameManager.current_game_state, true, false)
 	# Fresh state is considered clean for the active mode.
 	var slot: Dictionary = _slot_for(_current_game_mode())
 	slot["last_named"] = slot.get("signature", "")
 
 
-func _capture_checkpoint(state: GameState) -> void:
+func _capture_checkpoint(
+		state: GameState,
+		bypass_gate: bool = false,
+		write_debug_snapshot: bool = true) -> void:
+	# Belt-and-braces re-check: any caller of this method must have
+	# verified [method can_save_now], but reaffirm here so a future
+	# caller cannot accidentally write an unsafe checkpoint.  The
+	# initial game-start path passes [code]bypass_gate=true[/code]
+	# because a freshly built [GameState] is safe by construction.
+	if not bypass_gate:
+		var gate: Dictionary = can_save_now(state)
+		if not gate.get("ok", false):
+			if is_instance_valid(LoggingMode) and LoggingMode.enabled:
+				_log.info("Checkpoint capture refused — %s (%s)" % [
+						gate.get("reason", "unsafe"),
+						_checkpoint_context_string(state)])
+			return
 	var mode: String = _current_game_mode()
 	var slot: Dictionary = _slot_for(mode)
 	var meta: SaveGameMetadata = build_metadata_for(state, "")
@@ -521,6 +645,109 @@ func _capture_checkpoint(state: GameState) -> void:
 	# Persist to disk so we survive crashes.
 	if _ensure_save_dir():
 		_write_payload(_checkpoint_filename(mode), header, body)
+		if write_debug_snapshot:
+			_maybe_write_debug_snapshot(mode, header, body, state)
+
+
+## Returns a short human-readable summary of [param state]'s position in
+## the game flow.  Used for INFO-level checkpoint logging.
+func _checkpoint_context_string(state: GameState) -> String:
+	var step: int = -1
+	if state != null and state.interaction_flow != null:
+		step = int(state.interaction_flow.step_id)
+	var step_name: String = Constants.InteractionStep.keys()[step] \
+			if step >= 0 and step < Constants.InteractionStep.size() \
+			else "?"
+	var phase: int = -1
+	if state != null:
+		phase = int(state.current_phase)
+	var phase_name: String = Constants.GamePhase.keys()[phase] \
+			if phase >= 0 and phase < Constants.GamePhase.size() \
+			else "?"
+	var round_n: int = state.current_round if state != null else -1
+	var seq: int = _current_command_count()
+	return "round=%d phase=%s step=%s cmd_seq=%d" % [
+			round_n, phase_name, step_name, seq]
+
+
+## Writes a numbered debug copy of the checkpoint when [LoggingMode] is
+## enabled.  Files are named [code]_checkpoint_<mode>_NNN.json[/code]
+## (NNN = 3-digit zero-padded sequence) and live alongside the canonical
+## checkpoint.  Counter increments per capture; reset on game_started.
+func _maybe_write_debug_snapshot(
+		mode: String,
+		header: Dictionary,
+		body: Dictionary,
+		state: GameState) -> void:
+	if not is_instance_valid(LoggingMode) or not LoggingMode.enabled:
+		return
+	var seq: int = int(_debug_checkpoint_seq.get(mode, 0)) + 1
+	_debug_checkpoint_seq[mode] = seq
+	var debug_name: String = "%s_%03d" % [_checkpoint_filename(mode), seq]
+	_write_payload(debug_name, header, body)
+	_log.info("Checkpoint captured #%03d (%s) — %s → %s" % [
+			seq, mode, _checkpoint_context_string(state),
+			_path_for(debug_name)])
+
+
+## Seeds the per-mode debug-snapshot counter from any numbered files
+## already on disk, so subsequent captures append (e.g. _006, _007)
+## rather than overwriting an existing series.  Called from
+## [method _on_game_started_initial].
+##
+## Existing numbered snapshots are intentionally NOT deleted: when the
+## user loads a checkpoint to diagnose a bad capture, the rest of the
+## series must remain available for inspection.
+func _reset_debug_checkpoint_snapshots() -> void:
+	_debug_checkpoint_seq[SaveGameMetadata.MODE_HOT_SEAT] = \
+			_max_debug_snapshot_seq(SaveGameMetadata.MODE_HOT_SEAT)
+	_debug_checkpoint_seq[SaveGameMetadata.MODE_NETWORK] = \
+			_max_debug_snapshot_seq(SaveGameMetadata.MODE_NETWORK)
+
+
+## Scans [SAVE_DIR] for numbered debug snapshots belonging to
+## [param mode] and returns the highest sequence number found, or 0 if
+## none exist.
+func _max_debug_snapshot_seq(mode: String) -> int:
+	var highest: int = 0
+	if not DirAccess.dir_exists_absolute(SAVE_DIR):
+		return highest
+	var dir: DirAccess = DirAccess.open(SAVE_DIR)
+	if dir == null:
+		return highest
+	var prefix: String = _checkpoint_filename(mode) + "_"
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not dir.current_is_dir() \
+				and entry.ends_with(SAVE_EXT) \
+				and entry.begins_with(prefix) \
+				and _is_numbered_debug_snapshot(entry):
+			var stem: String = entry.substr(
+					0, entry.length() - SAVE_EXT.length())
+			var us: int = stem.rfind("_")
+			var tail: String = stem.substr(us + 1)
+			if tail.is_valid_int():
+				highest = max(highest, int(tail))
+		entry = dir.get_next()
+	dir.list_dir_end()
+	return highest
+
+
+## Returns true if [param file_name] matches the numbered debug snapshot
+## pattern [code]_checkpoint_<mode>_NNN.json[/code].
+func _is_numbered_debug_snapshot(file_name: String) -> bool:
+	# Form: _checkpoint_<mode>_<digits>.json
+	if not file_name.ends_with(SAVE_EXT):
+		return false
+	var stem: String = file_name.substr(0, file_name.length() - SAVE_EXT.length())
+	var us: int = stem.rfind("_")
+	if us < 0:
+		return false
+	var tail: String = stem.substr(us + 1)
+	if tail.is_empty():
+		return false
+	return tail.is_valid_int()
 
 
 func _signature_from_header(header: Dictionary) -> String:
@@ -573,15 +800,20 @@ func list_saves() -> Array[String]:
 	var saves: Array[String] = []
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
 		return saves
+	var include_debug: bool = is_instance_valid(LoggingMode) \
+			and LoggingMode.enabled
 	var dir: DirAccess = DirAccess.open(SAVE_DIR)
 	if dir == null:
 		return saves
 	dir.list_dir_begin()
 	var entry: String = dir.get_next()
 	while entry != "":
-		if not dir.current_is_dir() and entry.ends_with(SAVE_EXT) \
-				and not entry.begins_with(SYSTEM_PREFIX):
-			saves.append(entry.trim_suffix(SAVE_EXT))
+		if not dir.current_is_dir() and entry.ends_with(SAVE_EXT):
+			var is_system: bool = entry.begins_with(SYSTEM_PREFIX)
+			var is_numbered_debug: bool = is_system \
+					and _is_numbered_debug_snapshot(entry)
+			if not is_system or (include_debug and is_numbered_debug):
+				saves.append(entry.trim_suffix(SAVE_EXT))
 		entry = dir.get_next()
 	dir.list_dir_end()
 	return saves

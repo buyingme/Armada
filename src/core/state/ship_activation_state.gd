@@ -327,6 +327,25 @@ func mark_maneuver_executed() -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
+## Re-evaluates Navigate dial / token availability from the ship's current
+## state.  Safe to call any time before the player has clicked a speed
+## button or applied a yaw bonus (i.e. before the maneuver tool enters
+## activation mode).  Used to correct the cached availability after the
+## dial→token conversion command runs, since [method create] is invoked
+## before the convert command's [code]execute()[/code] in
+## [method GameBoard._on_dial_token_converted].
+##
+## Rules Reference: NAV-002, NAV-003, NAV-006 — yaw bonus is a dial-only
+## effect; spending only a token allows speed change but no yaw click.
+func refresh_navigate_availability() -> void:
+	if _ship == null:
+		return
+	if _total_speed_change != 0 or _yaw_bonus_joint >= 0:
+		# Already spent — refreshing would clobber the budget bookkeeping.
+		return
+	_resolve_navigate_availability(_ship)
+
+
 ## Determines Navigate resource availability from the ship's state.
 ## Called once at creation time.
 func _resolve_navigate_availability(ship: ShipInstance) -> void:

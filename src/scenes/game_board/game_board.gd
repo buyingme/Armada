@@ -2036,6 +2036,14 @@ func _on_maneuver_step_entered() -> void:
 				str(_activation_ctx.ship_activation_state != null),
 				str(_activation_ctx.activating_ship_token != null)])
 		return
+	# Re-resolve Navigate availability now that any dial→token conversion
+	# command has fully executed.  Without this, a ship activated via the
+	# token-convert path keeps the stale "dial revealed" snapshot taken in
+	# `_on_dial_token_converted` (which set up the activation context
+	# before the convert command ran), incorrectly granting the +1 yaw
+	# bonus to a token-only spend.
+	# Rules Reference: NAV-002, NAV-006 — yaw bonus is a dial-only effect.
+	_activation_ctx.ship_activation_state.refresh_navigate_availability()
 	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
 	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
 	if ship.current_speed == 0:

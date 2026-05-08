@@ -355,6 +355,30 @@ func test_remove_yaw_bonus_re_enables() -> void:
 			"Yaw bonus joint should be -1 after remove")
 
 
+func test_refresh_navigate_availability_after_dial_to_token_convert() -> void:
+	# Repro: ship activated via dial→token convert.  The activation state
+	# is created before the convert command runs, so the revealed Navigate
+	# dial is still on the stack at create() time and `_yaw_bonus_available`
+	# is wrongly cached as true.  After the convert command pops the dial
+	# and adds a token, calling refresh must clear the dial bookkeeping.
+	# Rules Reference: NAV-002, NAV-006 — yaw bonus is a dial-only effect;
+	# spending only a token allows speed change but no yaw click.
+	var ship: ShipInstance = _make_ship(2, true, false)
+	var state: ShipActivationState = ShipActivationState.create(ship)
+	assert_true(state.has_yaw_bonus(),
+			"Pre-convert: dial is revealed → yaw bonus available")
+	# Simulate the convert command running: spend the revealed dial and
+	# add a Navigate token in its place.
+	ship.command_dial_stack.spend_revealed()
+	ship.command_tokens.add_token(Constants.CommandType.NAVIGATE)
+	state.refresh_navigate_availability()
+	assert_false(state.has_yaw_bonus(),
+			"Post-convert: token-only ship must NOT grant the yaw bonus")
+	# Speed change must still work via the token.
+	assert_true(state.apply_speed_change(1),
+			"Token spend should still allow ±1 speed change")
+
+
 # ---------------------------------------------------------------------------
 # Maneuver execution
 # ---------------------------------------------------------------------------

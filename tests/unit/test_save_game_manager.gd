@@ -396,3 +396,54 @@ func test_save_game_allowed_on_network_host() -> void:
 	assert_true(ok, "save_game should succeed on network host")
 	PlayMode.set_mode(prev_mode)
 	NetworkManager.role = prev_role
+
+
+# ---------------------------------------------------------------------------
+# Phase J9 — application-launch cleanup
+# ---------------------------------------------------------------------------
+
+func test_cleanup_session_artifacts_removes_numbered_checkpoints() -> void:
+	var dir_path: String = SaveManagerScript.SAVE_DIR
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var numbered_path: String = "%s/_checkpoint_hot_seat_001.json" % dir_path
+	var canonical_path: String = "%s/_checkpoint_hot_seat.json" % dir_path
+	var canonical_pre_existed: bool = FileAccess.file_exists(canonical_path)
+	var canonical_backup: String = ""
+	if canonical_pre_existed:
+		canonical_backup = FileAccess.get_file_as_string(canonical_path)
+	var numbered_file: FileAccess = FileAccess.open(
+			numbered_path, FileAccess.WRITE)
+	numbered_file.store_string("{}")
+	numbered_file.close()
+	var canonical_file: FileAccess = FileAccess.open(
+			canonical_path, FileAccess.WRITE)
+	canonical_file.store_string("{}")
+	canonical_file.close()
+	_manager._cleanup_session_artifacts()
+	assert_false(FileAccess.file_exists(numbered_path),
+			"Numbered checkpoint should be deleted on launch")
+	assert_true(FileAccess.file_exists(canonical_path),
+			"Canonical checkpoint should be preserved on launch")
+	# Restore prior canonical file (or remove the one we created).
+	if canonical_pre_existed:
+		var f: FileAccess = FileAccess.open(canonical_path, FileAccess.WRITE)
+		f.store_string(canonical_backup)
+		f.close()
+	else:
+		DirAccess.remove_absolute(canonical_path)
+
+
+func test_cleanup_session_artifacts_removes_replays() -> void:
+	var dir_path: String = PathConfig.REPLAYS_DIR
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var seeded: String = "%s/_gut_test_replay.json" % dir_path
+	var f: FileAccess = FileAccess.open(seeded, FileAccess.WRITE)
+	f.store_string("{}")
+	f.close()
+	assert_true(FileAccess.file_exists(seeded),
+			"Seeded replay must exist before cleanup")
+	_manager._cleanup_session_artifacts()
+	assert_false(FileAccess.file_exists(seeded),
+			"Replay file should be deleted on launch")

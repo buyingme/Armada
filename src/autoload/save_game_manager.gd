@@ -76,6 +76,12 @@ var _debug_checkpoint_seq: Dictionary = {
 
 
 func _ready() -> void:
+	# Application-launch cleanup: remove transient artefacts from the
+	# previous session before installing the current checkpoints.  The
+	# canonical [code]_checkpoint_<mode>.json[/code] files are preserved
+	# (they are how crash recovery works); only numbered debug snapshots
+	# and stale replays are wiped.
+	_cleanup_session_artifacts()
 	_init_checkpoints()
 	_load_checkpoints_from_disk()
 	if is_instance_valid(CommandProcessor):
@@ -748,6 +754,58 @@ func _is_numbered_debug_snapshot(file_name: String) -> bool:
 	if tail.is_empty():
 		return false
 	return tail.is_valid_int()
+
+
+## Application-launch cleanup.  Removes numbered debug checkpoint
+## snapshots from [SAVE_DIR] and all replay files from
+## [PathConfig.REPLAYS_DIR].  Canonical
+## [code]_checkpoint_<mode>.json[/code] files are preserved so a
+## crashed session can still be resumed.
+##
+## Called from [method _ready] when the autoload is added to the scene
+## tree at boot.  Tests instantiate the manager via [code].new()[/code]
+## without adding it to the tree, so this method does not run during
+## the test suite.
+func _cleanup_session_artifacts() -> void:
+	_delete_numbered_debug_snapshots()
+	_delete_files_in_dir(PathConfig.REPLAYS_DIR, ".json")
+
+
+## Removes every [code]_checkpoint_<mode>_NNN.json[/code] file from
+## [SAVE_DIR].  Canonical checkpoints (no numeric tail) are preserved.
+func _delete_numbered_debug_snapshots() -> void:
+	if not DirAccess.dir_exists_absolute(SAVE_DIR):
+		return
+	var dir: DirAccess = DirAccess.open(SAVE_DIR)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not dir.current_is_dir() \
+				and entry.begins_with(SYSTEM_PREFIX) \
+				and _is_numbered_debug_snapshot(entry):
+			dir.remove(entry)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+
+## Removes every regular file in [param dir_path] whose name ends with
+## [param extension] (case-sensitive).  No-op if the directory does
+## not exist.
+func _delete_files_in_dir(dir_path: String, extension: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir_path):
+		return
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not dir.current_is_dir() and entry.ends_with(extension):
+			dir.remove(entry)
+		entry = dir.get_next()
+	dir.list_dir_end()
 
 
 func _signature_from_header(header: Dictionary) -> String:

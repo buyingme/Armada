@@ -189,3 +189,22 @@ func test_get_play_mode_name_network() -> void:
 			"Network mode name")
 	# Reset
 	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+
+
+# ---------------------------------------------------------------------------
+# Phase J9 — application-launch cleanup
+# ---------------------------------------------------------------------------
+
+func test_cleanup_old_logs_removes_log_files() -> void:
+	var dir_path: String = PathConfig.LOGS_DIR
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var seeded: String = "%s/_gut_test_old.log" % dir_path
+	var f: FileAccess = FileAccess.open(seeded, FileAccess.WRITE)
+	f.store_string("old log content")
+	f.close()
+	assert_true(FileAccess.file_exists(seeded),
+			"Seeded log must exist before cleanup")
+	LoggingMode._cleanup_old_logs()
+	assert_false(FileAccess.file_exists(seeded),
+			"Old .log file should be deleted on launch")

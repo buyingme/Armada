@@ -39,9 +39,32 @@ const FACTION_NAMES: Dictionary = {
 
 
 func _ready() -> void:
+	# Application-launch cleanup: wipe log files from previous sessions
+	# before we open today's file.  Runs unconditionally so old logs
+	# don't accumulate even when the user launches without --logging.
+	_cleanup_old_logs()
 	var user_args: PackedStringArray = OS.get_cmdline_user_args()
 	if user_args.has("--logging"):
 		_enable_file_logging()
+
+
+## Removes every [code]*.log[/code] file in [PathConfig.LOGS_DIR].
+## Called from [method _ready] before the current session's log file
+## is opened.  No-op if the directory does not exist.
+func _cleanup_old_logs() -> void:
+	var dir_path: String = PathConfig.LOGS_DIR
+	if not DirAccess.dir_exists_absolute(dir_path):
+		return
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not dir.current_is_dir() and entry.ends_with(".log"):
+			dir.remove(entry)
+		entry = dir.get_next()
+	dir.list_dir_end()
 
 
 ## Enables file logging, creates the log directory and file, writes the

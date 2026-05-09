@@ -1191,8 +1191,22 @@ func _sync_attack_panel_mirror_from_flow(flow: InteractionFlow,
 ## The controller peer runs the full flow with auto-skip; the passive peer
 ## gets a mirror view with no auto-skip so the first step is held until the
 ## next interaction-state update advances it.
+##
+## If the activating ship has overflow command tokens (more tokens than its
+## command value), the modal open is deferred until [signal
+## EventBus.token_discarded] fires.  Mirrors the hot-seat gating in
+## [method _on_dial_token_converted].
+## Rules Reference: "Command Tokens", p.4 — overflow discard.
 func _open_modal_from_interaction_state() -> void:
 	if _activation_ctx.ship_activation_state == null:
+		return
+	if _has_pending_token_overflow_discard():
+		if not EventBus.token_discarded.is_connected(
+				_on_overflow_discard_open_modal):
+			EventBus.token_discarded.connect(
+					_on_overflow_discard_open_modal, CONNECT_ONE_SHOT)
+		_log.info("Activation modal open deferred — pending command-token " \
+				+"overflow discard.")
 		return
 	var is_controller: bool = _is_local_activation_modal_controller()
 	if is_controller:
@@ -1202,6 +1216,26 @@ func _open_modal_from_interaction_state() -> void:
 	# Always show the "Show Activation Sequence" button so both peers can
 	# re-open the modal if they close it manually.
 	_show_activation_sequence_button()
+
+
+## Returns true if the activating ship currently holds more command tokens
+## than its command value, requiring a discard before the activation modal
+## may open.
+func _has_pending_token_overflow_discard() -> bool:
+	if _activation_ctx.ship_activation_state == null:
+		return false
+	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
+	if ship == null or ship.command_tokens == null:
+		return false
+	return ship.command_tokens.get_token_count() \
+			> ship.command_tokens.max_tokens
+
+
+## One-shot listener: re-runs the modal open after an overflow discard.
+func _on_overflow_discard_open_modal(_ship: RefCounted,
+		_discarded: int) -> void:
+	_open_modal_from_interaction_state()
+	_log.info("Overflow discard resolved — opening activation modal.")
 
 
 ## Opens the activation modal without running auto-skip.

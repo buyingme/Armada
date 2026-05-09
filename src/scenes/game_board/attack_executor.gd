@@ -1486,15 +1486,15 @@ func _sort_defense_tokens_canonical(
 ## Processes the next defense token in the commit queue.
 ## When the queue is empty, hides the defense UI and resolves damage.
 func _process_next_defense_commit() -> void:
-	if _state.defense_commit_queue.is_empty():
+	var poll: Dictionary = _flow_executor.poll_next_defense_commit(_state)
+	if not bool(poll.get("has_token", false)):
 		_log.info("Defense commit complete. Modified damage: %d." % [
 				_state.modified_damage])
-		_state.defense_step = false
 		if _get_panel():
 			_get_panel().hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
-	var token_index: int = _state.defense_commit_queue.pop_front()
+	var token_index: int = int(poll.get("token_index", -1))
 	_log.info("Processing committed token index %d." % token_index)
 	# Reuse the existing spending logic (validates, applies, starts
 	# sub-steps for Evade/Redirect).
@@ -1703,7 +1703,7 @@ func _emit_shield_events(def_inst: ShipInstance,
 func _emit_card_events(def_inst: ShipInstance,
 		card_data: Array) -> String:
 	var faceup_card_name: String = ""
-	var faceup_count: int = _count_faceup(card_data)
+	var faceup_count: int = _flow_executor.count_faceup_cards(card_data)
 	var facedown_count: int = card_data.size() - faceup_count
 	var dealt_faceup_cards: Array = []
 	# Retrieve newly added faceup cards from the ship.
@@ -1729,15 +1729,6 @@ func _emit_card_events(def_inst: ShipInstance,
 				def_inst, dealt_faceup_cards, facedown_count,
 				def_inst.ship_data.ship_name)
 	return faceup_card_name
-
-
-## Counts faceup cards in a serialized card data array.
-func _count_faceup(card_data: Array) -> int:
-	var count: int = 0
-	for cd: Variant in card_data:
-		if (cd as Dictionary).get("is_faceup", false):
-			count += 1
-	return count
 
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:

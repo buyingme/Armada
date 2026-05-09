@@ -122,6 +122,31 @@ func begin_defense_commit(state: AttackState,
 	return true
 
 
+## Polls the next queued defense-token index.
+## Returns has_token=false when the queue is empty and ends defense step.
+func poll_next_defense_commit(state: AttackState) -> Dictionary:
+	if state.defense_commit_queue.is_empty():
+		state.defense_step = false
+		return {
+			"has_token": false,
+			"token_index": -1,
+		}
+	var token_index: int = int(state.defense_commit_queue.pop_front())
+	return {
+		"has_token": true,
+		"token_index": token_index,
+	}
+
+
+## Counts faceup cards in serialized damage-card data.
+func count_faceup_cards(card_data: Array) -> int:
+	var count: int = 0
+	for cd: Variant in card_data:
+		if (cd as Dictionary).get("is_faceup", false):
+			count += 1
+	return count
+
+
 func _token_sort_key(token_index: int,
 		defense_tokens: Array[Dictionary]) -> int:
 	if token_index < 0 or token_index >= defense_tokens.size():

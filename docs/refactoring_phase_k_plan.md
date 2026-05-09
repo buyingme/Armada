@@ -1,6 +1,6 @@
 # Refactoring Phase K — Presentation-Layer Hardening
 
-> **Status:** IN PROGRESS — K0 through K13 complete; K14a committed (`454fd0e`), K14b implemented in working tree.
+> **Status:** IN PROGRESS — K0 through K13 complete; K14a (`454fd0e`), K14b (`c6b4b67`), K14c (`1559fc4`) committed; K14d implemented in working tree.
 > **Drafted:** 2026-05-08
 > **Refined:** 2026-05-09 (deeper audit; UIIntent extension dropped — see §3.1c).
 > **Predecessors:** Phases A–I (closed); Phase J (save subsystem, closed at J11).
@@ -29,7 +29,7 @@ a new helper through the controller. The next feature in the same area (e.g.
 turn timers triggering forced-pass) will have the same exposure.
 
 This plan is bounded, mechanical, and **fully covered by the existing test
-suite (144 scripts / 2 897 tests / 5 484 asserts / 0 failures)**. It introduces
+suite (144 scripts / 2 903 tests / 5 497 asserts / 0 failures)**. It introduces
 no new gameplay behaviour.
 
 ---
@@ -282,7 +282,7 @@ observable. Numbering matches the eventual phase-status table row.
 | **K11** | Extract `ToolOverlayController` from game_board.gd (maneuver/range/targeting overlay). Move ~200 LOC. New controller owns the three sub-controllers, the M / R / T / A keyboard shortcuts, the toolbar request handlers, Escape routing, and the dismiss-other-tools coordination. game_board.gd: 1714 → 1598 LOC; tool_overlay_controller.gd: 0 → 244 LOC. Committed `ef2c84e`. | high | +287 / −158 | yes |
 | **K12** | Introduce `CommandRouterAdapter` — single subscription to `EventBus.command_executed` that calls `UIProjector.project()` and routes to controllers. Removes the giant `_on_command_executed_project_ui` switch. | high | +180 / −100 | yes |
 | **K13** | Function-size cleanup pass on what remains in game_board.gd. Landed as helper extraction + dispatch simplification in-place (no new controller/class extraction); all game_board functions now <= 30 LOC. Committed `cf29d8f`. | medium | +276 / -289 | no |
-| **K14** | Extract `AttackFlowExecutor` (RefCounted) into `src/core/combat/`. K14a committed `454fd0e`: moved attack-flow payload builders (`compute_attack_identity_patch`, clear-target patch) into core helper, routed `attack_executor.gd` to delegate these builders, and added `test_attack_flow_executor.gd` with singleton-state isolation hooks. K14b is implemented in working tree: moved attack-state init/reset/roll parsing/defense payload builders into the core helper and delegated corresponding `attack_executor.gd` call sites; tests expanded and green. | high | +900 / −800 | yes |
+| **K14** | Extract `AttackFlowExecutor` (RefCounted) into `src/core/combat/`. K14a committed `454fd0e`: moved attack-flow payload builders (`compute_attack_identity_patch`, clear-target patch) into core helper, routed `attack_executor.gd` to delegate these builders, and added `test_attack_flow_executor.gd` with singleton-state isolation hooks. K14b committed `c6b4b67`: moved attack-state init/reset/roll parsing/defense payload builders into core helper and delegated corresponding call sites. K14c committed `1559fc4`: moved defense-commit canonical ordering + queue initialization helpers into core helper. K14d is implemented in working tree: moved defense-queue polling + faceup-card counting into core helper, delegated corresponding `attack_executor.gd` paths, and expanded tests (green). | high | +900 / −800 | yes |
 | **K15** | Function-size + nesting cleanup pass on attack_executor.gd remainder. | medium | +0 / 0 | no |
 | **K16** | Extract `NetworkPhaseSync` from game_manager.gd. | medium | +350 / −300 | yes |
 | **K17** | Extract `GameCommandSubmitterRouter` from game_manager.gd. | medium | +250 / −200 | yes |

@@ -276,6 +276,47 @@ func test_begin_defense_commit_with_selection_sets_queue() -> void:
 			"selected indices should be copied into commit queue")
 
 
+func test_poll_next_defense_commit_empty_queue_ends_step() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+
+	var poll: Dictionary = _executor.poll_next_defense_commit(state)
+
+	assert_false(bool(poll.get("has_token", true)),
+			"empty queue should return has_token=false")
+	assert_eq(int(poll.get("token_index", 0)), -1,
+			"empty queue should return token index -1")
+	assert_false(state.defense_step,
+			"empty queue should end defense step")
+
+
+func test_poll_next_defense_commit_pops_first_token() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	state.defense_commit_queue = [6, 2]
+
+	var poll: Dictionary = _executor.poll_next_defense_commit(state)
+
+	assert_true(bool(poll.get("has_token", false)),
+			"non-empty queue should return has_token=true")
+	assert_eq(int(poll.get("token_index", -1)), 6,
+			"poll should return first queued index")
+	assert_eq(state.defense_commit_queue, [2],
+			"poll should remove the returned index")
+
+
+func test_count_faceup_cards_counts_true_flags_only() -> void:
+	var card_data: Array = [
+		{"is_faceup": true},
+		{"is_faceup": false},
+		{"id": "missing_flag"},
+		{"is_faceup": true},
+	]
+	var count: int = _executor.count_faceup_cards(card_data)
+	assert_eq(count, 2,
+			"count_faceup_cards should count only true is_faceup flags")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

@@ -361,6 +361,30 @@ func test_build_damage_summary_uses_damage_dealer_format() -> void:
 			"summary should include faceup crit card text")
 
 
+func test_can_continue_redirect_true_with_remaining_and_adjacent_shields() -> void:
+	var state: AttackState = AttackState.new()
+	state.defender_zone = int(Constants.HullZone.FRONT)
+	state.redirect_remaining = 1
+	var ship: ShipInstance = _make_ship_instance(1)
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+	var can_continue: bool = _executor.can_continue_redirect(
+			state, ship, resolver)
+	assert_true(can_continue,
+			"redirect should continue with remaining budget and adjacent shields")
+
+
+func test_can_continue_redirect_false_when_no_budget() -> void:
+	var state: AttackState = AttackState.new()
+	state.defender_zone = int(Constants.HullZone.FRONT)
+	state.redirect_remaining = 0
+	var ship: ShipInstance = _make_ship_instance(1)
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+	var can_continue: bool = _executor.can_continue_redirect(
+			state, ship, resolver)
+	assert_false(can_continue,
+			"redirect should stop when remaining budget is zero")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

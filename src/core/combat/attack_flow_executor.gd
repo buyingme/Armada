@@ -174,6 +174,16 @@ func build_damage_summary(damage_dealer: DamageDealer,
 			faceup_card_name, hull_remaining, def_inst.ship_data.hull)
 
 
+## Returns true if redirect can continue from current attack state.
+func can_continue_redirect(state: AttackState,
+		def_inst: ShipInstance,
+		defense_resolver: DefenseTokenResolver) -> bool:
+	var def_zone: Constants.HullZone = (
+			state.defender_zone as Constants.HullZone)
+	return defense_resolver.can_redirect_continue(
+			state.redirect_remaining, def_zone, def_inst)
+
+
 func _token_sort_key(token_index: int,
 		defense_tokens: Array[Dictionary]) -> int:
 	if token_index < 0 or token_index >= defense_tokens.size():

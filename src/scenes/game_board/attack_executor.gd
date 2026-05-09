@@ -1383,10 +1383,8 @@ func apply_defender_redirect_done() -> void:
 ## possible and the UI was updated; false if redirect is done.
 func _check_redirect_continuation(
 		def_inst: ShipInstance) -> bool:
-	var def_zone: Constants.HullZone = (
-			_state.defender_zone as Constants.HullZone)
-	var can_continue: bool = _defense_resolver.can_redirect_continue(
-			_state.redirect_remaining, def_zone, def_inst)
+	var can_continue: bool = _flow_executor.can_continue_redirect(
+			_state, def_inst, _defense_resolver)
 	if can_continue and _get_panel():
 		_get_panel().update_redirect_remaining(
 				_state.redirect_remaining)

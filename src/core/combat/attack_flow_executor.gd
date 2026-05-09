@@ -255,3 +255,54 @@ func compute_attack_identity_patch(state: AttackState,
 		patch["target_kind"] = "squadron"
 		patch["target_squadron_index"] = gs.find_squadron_index(def_sq)
 	return patch
+
+
+## Prepares a faceup damage card for post-processing.
+## Returns a descriptor indicating what needs to happen: persistent effect
+## registration and immediate effect deferral.
+## Does NOT mutate any state — callers decide what to do with the result.
+##
+## Returns Dictionary:
+##   "should_register_persistent": bool — card needs persistent effect registered
+##   "has_immediate": bool — card has immediate effect (may need deferral)
+##   "card_title": String — card name for logging/deferred tracking
+func prepare_faceup_card(card: DamageCard,
+		damage_dealer: DamageDealer) -> Dictionary:
+	var should_register: bool = damage_dealer.should_register_persistent(card)
+	var has_immediate: bool = damage_dealer.has_immediate_effect(card)
+	return {
+		"should_register_persistent": should_register,
+		"has_immediate": has_immediate,
+		"card_title": card.title,
+	}
+
+
+## Determines the immediate-effect resolution path for a faceup card.
+## Returns a descriptor indicating whether to auto-resolve, defer, or skip.
+##
+## Returns Dictionary:
+##   "should_process": bool — card has an immediate effect
+##   "should_defer": bool — requires player choice (defer for modal)
+##   "choice_info": Dictionary — choice descriptor (empty if auto-resolve)
+##   "card_id": String — effect_id for auto-resolve routing
+func decide_immediate_effect_flow(card: DamageCard,
+		ship: ShipInstance,
+		immediate_resolver: ImmediateEffectResolver) -> Dictionary:
+	# Quick check: not an immediate effect card.
+	if not ImmediateEffectResolver.is_immediate(card):
+		return {
+			"should_process": false,
+			"should_defer": false,
+			"choice_info": {},
+			"card_id": "",
+		}
+	# Get choice info; if empty, auto-resolve; if non-empty, defer.
+	var choice_info: Dictionary = immediate_resolver.get_required_choice(
+			card, ship)
+	var should_defer: bool = not choice_info.is_empty()
+	return {
+		"should_process": true,
+		"should_defer": should_defer,
+		"choice_info": choice_info,
+		"card_id": card.effect_id,
+	}

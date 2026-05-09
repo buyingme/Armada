@@ -385,6 +385,81 @@ func test_can_continue_redirect_false_when_no_budget() -> void:
 			"redirect should stop when remaining budget is zero")
 
 
+func test_prepare_faceup_card_returns_registration_and_immediate_flags() -> void:
+	var card: DamageCard = DamageCard.new()
+	card.title = "Structural Damage"
+	card.timing = "immediate"
+	card.effect_id = "structural_damage"
+	var dealer: DamageDealer = DamageDealer.new()
+	var result: Dictionary = _executor.prepare_faceup_card(card, dealer)
+	assert_true(result.has("should_register_persistent"),
+			"result should have should_register_persistent key")
+	assert_true(result.has("has_immediate"),
+			"result should have has_immediate key")
+	assert_eq(result.get("card_title", ""), "Structural Damage",
+			"result should include card title")
+
+
+func test_prepare_faceup_card_identifies_immediate_effects() -> void:
+	var card: DamageCard = DamageCard.new()
+	card.title = "Injured Crew"
+	card.timing = "immediate"
+	card.effect_id = "injured_crew"
+	var dealer: DamageDealer = DamageDealer.new()
+	var result: Dictionary = _executor.prepare_faceup_card(card, dealer)
+	assert_true(bool(result.get("has_immediate", false)),
+			"Injured Crew should be marked as immediate")
+
+
+func test_decide_immediate_effect_flow_returns_decision_structure() -> void:
+	var card: DamageCard = DamageCard.new()
+	card.title = "Structural Damage"
+	card.timing = "immediate"
+	card.effect_id = "structural_damage"
+	var ship: ShipInstance = _make_ship_instance(0)
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var result: Dictionary = _executor.decide_immediate_effect_flow(
+			card, ship, resolver)
+	assert_true(result.has("should_process"),
+			"result should have should_process key")
+	assert_true(result.has("should_defer"),
+			"result should have should_defer key")
+	assert_true(result.has("choice_info"),
+			"result should have choice_info key")
+	assert_true(result.has("card_id"),
+			"result should have card_id key")
+
+
+func test_decide_immediate_effect_flow_marks_auto_resolve_cards() -> void:
+	var card: DamageCard = DamageCard.new()
+	card.title = "Structural Damage"
+	card.timing = "immediate"
+	card.effect_id = "structural_damage"
+	var ship: ShipInstance = _make_ship_instance(0)
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var result: Dictionary = _executor.decide_immediate_effect_flow(
+			card, ship, resolver)
+	assert_true(bool(result.get("should_process", false)),
+			"should_process should be true for immediate card")
+	assert_false(bool(result.get("should_defer", true)),
+			"should_defer should be false for auto-resolve card")
+	assert_true((result.get("choice_info", null) as Dictionary).is_empty(),
+			"choice_info should be empty for auto-resolve")
+
+
+func test_decide_immediate_effect_flow_skips_non_immediate_cards() -> void:
+	var card: DamageCard = DamageCard.new()
+	card.title = "Deck Failure"
+	card.timing = "persistent"
+	card.effect_id = "deck_failure"
+	var ship: ShipInstance = _make_ship_instance(0)
+	var resolver: ImmediateEffectResolver = ImmediateEffectResolver.new()
+	var result: Dictionary = _executor.decide_immediate_effect_flow(
+			card, ship, resolver)
+	assert_false(bool(result.get("should_process", true)),
+			"should_process should be false for non-immediate card")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

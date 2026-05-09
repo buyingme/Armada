@@ -1754,19 +1754,29 @@ func _draw_next_damage_card(index: int,
 
 ## Post-processes a faceup damage card after the command has added it.
 ## Registers persistent effects, emits events, and defers immediates.
+## Uses AttackFlowExecutor pure helper to determine card properties.
 ## Does NOT mutate game state — the card is already on the ship.
 func _post_process_faceup_card(card: DamageCard,
 		def_inst: ShipInstance) -> void:
-	if _effect_registry and _damage_dealer.should_register_persistent(card):
+	# Use pure helper to determine card properties.
+	var card_info: Dictionary = _flow_executor.prepare_faceup_card(
+			card, _damage_dealer)
+	
+	# Register persistent effect if needed.
+	if _effect_registry and card_info.get("should_register_persistent", false):
 		DamageCardEffectFactory.register_effect(
 				card, def_inst, _effect_registry)
 		_log.info("Persistent effect registered for '%s'." % card.title)
+	
+	# Always emit card events.
 	EventBus.damage_card_flipped.emit(def_inst, card, true)
 	EventBus.damage_card_dealt.emit(def_inst, card, true)
 	_log.info(
 			"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 			% [card.title, card.trait_type])
-	if _damage_dealer.has_immediate_effect(card):
+	
+	# Defer immediate effect if present.
+	if card_info.get("has_immediate", false):
 		_state.deferred_immediate_card = card
 		_state.deferred_immediate_ship = def_inst
 		_log.info("Immediate effect deferred for '%s' "
@@ -1800,18 +1810,23 @@ func _build_damage_summary(def_inst: ShipInstance,
 ## Failure) are handled immediately. Choice cards (Injured Crew, Shield
 ## Failure, Comm Noise) are deferred — the pending state is stored and the
 ## choice modal is shown after the damage summary.
+## Uses AttackFlowExecutor pure helper to decide flow: auto-resolve or defer.
 ## Rules Reference: RRG "Damage Cards", p.4; DM-005, DM-011.
 func _resolve_immediate_card_effect(card: DamageCard,
 		ship: ShipInstance) -> void:
-	if not ImmediateEffectResolver.is_immediate(card):
+	# Use pure helper to decide whether to auto-resolve or defer.
+	var flow_decision: Dictionary = _flow_executor.decide_immediate_effect_flow(
+			card, ship, _immediate_resolver)
+	
+	# If not an immediate card, skip processing.
+	if not flow_decision.get("should_process", false):
 		return
-	var choice_info: Dictionary = _immediate_resolver.get_required_choice(
-			card, ship)
-	if choice_info.is_empty():
-		# Auto-resolve (no player choice needed).
+	
+	# Auto-resolve path: no player choice needed.
+	if not flow_decision.get("should_defer", true):
 		# Pre-draw extra card for structural_damage.
 		var extra_card_data: Dictionary = {}
-		if card.effect_id == "structural_damage" and _damage_deck:
+		if flow_decision.get("card_id", "") == "structural_damage" and _damage_deck:
 			var extra: DamageCard = _damage_deck.draw_card()
 			if extra:
 				extra_card_data = extra.serialize()
@@ -1823,7 +1838,9 @@ func _resolve_immediate_card_effect(card: DamageCard,
 		else:
 			_log.warn("Immediate effect failed: '%s'." % card.title)
 		return
+	
 	# Choice-based card — store pending state for the modal flow.
+	var choice_info: Dictionary = flow_decision.get("choice_info", {})
 	_pending_immediate_card = card
 	_pending_immediate_ship = ship
 	_pending_immediate_choice = choice_info

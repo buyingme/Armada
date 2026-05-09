@@ -225,6 +225,25 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 	match _state:
 		State.WAITING_FOR_SELECTION:
 			return _try_select_squadron(token)
+		State.ACTION_CHOICE:
+			# UX (Phase K12-bugfix): clicking a DIFFERENT squadron while
+			# the current one is still on ACTION_CHOICE auto-finishes the
+			# current activation (as if Skip was pressed) and selects the
+			# new squadron.  Without this the modal is trapped on the
+			# previous squadron and the player has no obvious way to
+			# pick a different one.  Restricted to command mode because
+			# in turn mode [SquadronPhaseController] re-opens the modal
+			# via [signal activation_done] (controller re-opens for the
+			# next turn-pick), and we must let that signal-driven path
+			# run rather than synchronously selecting the next squadron.
+			if not _is_command_mode:
+				return false
+			if token == _selected_token:
+				return false
+			_finish_activation()
+			if _state == State.WAITING_FOR_SELECTION:
+				return _try_select_squadron(token)
+			return false
 		State.MOVING:
 			# During movement, clicks on other squadrons are ignored
 			# (board click handler is used for placement).
@@ -488,6 +507,14 @@ func _finish_activation() -> void:
 ## Emits command_done even if activations remain.
 func _finish_command_early() -> void:
 	_log.info("Squadron command ended early by player.")
+	# Phase K12-bugfix: if the in-progress squadron already took an
+	# action (moved or attacked), commit it as a completed activation
+	# so its activated_this_round flag is set (via the controller's
+	# activation_done handler).  Without this, dismissing the modal
+	# after the squadron attacked leaves it eligible for re-activation
+	# in the Squadron Phase.
+	if _selected_instance != null and (_has_moved or _has_attacked):
+		activation_done.emit(_selected_instance)
 	_selected_token = null
 	_selected_instance = null
 	_transition_to(State.DONE)

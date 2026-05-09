@@ -342,6 +342,9 @@ func configure_and_open_activation_modal() -> void:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
+	if is_command_squadron_modal_active():
+		ensure_activation_modal_hidden_for_squadron_command()
+		return
 	_panel_mgr.activation_modal.set_squadron_skippable(
 			not bool(_has_squadron_resources.call(
 					_activation_ctx.activating_ship_token)))
@@ -442,6 +445,27 @@ func open_modal_from_interaction_state() -> void:
 	# Always show the "Show Activation Sequence" button so both peers can
 	# re-open the modal if they close it manually.
 	show_activation_sequence_button()
+
+
+## Returns true when the command-mode squadron modal is currently visible.
+## While this is true, the ship activation modal must remain hidden to
+## avoid overlapping stacked modals.
+func is_command_squadron_modal_active() -> bool:
+	if _squadron_phase_controller == null:
+		return false
+	return _squadron_phase_controller.is_modal_visible() \
+			and _squadron_phase_controller.is_command_mode()
+
+
+## Hides the ship activation modal while command-mode squadron flow is active.
+## Safe to call repeatedly; no-op when already hidden.
+func ensure_activation_modal_hidden_for_squadron_command() -> void:
+	if not is_command_squadron_modal_active():
+		return
+	if _panel_mgr == null or _panel_mgr.activation_modal == null:
+		return
+	if _panel_mgr.activation_modal.visible:
+		_panel_mgr.activation_modal.close()
 
 
 ## Closes the activation modal and cleans up activation state in response to
@@ -793,6 +817,10 @@ func _on_squadron_step_entered() -> void:
 		return
 	if _panel_mgr.show_activation_button:
 		_panel_mgr.show_activation_button.hide_button()
+	# Phase K12-bugfix: hide the ship activation modal when opening the
+	# squadron command modal so they don't visually overlap.
+	if _panel_mgr.activation_modal:
+		_panel_mgr.activation_modal.close()
 	_squadron_phase_controller.open_for_command(resolver, _activation_ctx.activating_ship_token)
 
 

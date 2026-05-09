@@ -90,7 +90,7 @@ Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [do
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 (`664d368`), K1 (`0e0b3c9`), K2 (`cba7a11`), K3 (`ae774d5`), K4 (`827f75c`), K5 (`4b20607`), K6 (`67885b1`), K7 (`9df414f`) complete. K8 split into K8a/K8b/K8c sub-slices: K8a (`ShipActivationController` extraction — dial drop, activation modal lifecycle, Crew Panic, projection sync) committed `f37ec18`. K8b (maneuver execute + overlap resolution + step handlers) committed `27bfdaf`; game_board.gd 2678 → 2134 LOC, ship_activation_controller.gd 658 → 1282 LOC. K9 (`AttackPanelController` — attack-panel mirror sync, attacker-side defender-response routing, Attack Simulator toggle) committed `108305f`; game_board.gd 2134 → 2054 LOC, attack_panel_controller.gd 0 → 159 LOC. K10 (`DebugBoardController`) is next.
+Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` — single subscription to `EventBus.command_executed`, route to controllers, HUD projection) partially implemented with uncommmitted changes: command_router_adapter.gd created, game_board.gd modified, K12 bugfixes to squadron_activation_modal.gd queued for visual flaw fix. K12 has 2 test failures in new test cases (type coercion issues to debug). K13-K19 pending.
 
 ---
 
@@ -155,6 +155,7 @@ Phase I R2.
 | Activated squadron loses ghosted appearance after ship-overlap displacement | Minor (visual only) | 2026-04-12 | Squadron cannot be re-activated (logic correct); only the dimmed visual state is lost. |
 | Repair effect not visible on ship token | Minor (visual only) | 2026-05-01 | Token's hull/shield pip overlay stale after repair until next refresh. Likely missing `ship_shields_changed` / `ship_hull_changed` emit on repair path. |
 | Network: passive-peer auto-resolve damage cards don't refresh visuals | Minor (visual only) | 2026-05-01 | `GameManager._handle_remote_immediate_effect` emits only `command_dials_changed` + `ship_defense_token_changed`; missing `damage_card_flipped` + shield/hull deltas on passive peer. Closed by extracting `_emit_immediate_signals` into a shared helper. |
+| **Ship activation modal visible behind squadron command modal** | **Minor (visual only)** | **2026-05-09** | **FIXED (K12-bugfix, pending commit)** — When opening squadron command during ship activation, the ship activation modal now closes before opening the squadron modal so they don't overlap. Fix in `ShipActivationController._on_squadron_step_entered()`. |
 
 ### 4.4 Manual Tests Pending
 

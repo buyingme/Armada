@@ -65,6 +65,31 @@ func before_each() -> void:
 	add_child_autofree(_modal)
 
 
+## Helper: builds a minimal real [SquadronCommandResolver] for tests
+## that need command mode (max_activations=2, none used).
+func _make_resolver() -> SquadronCommandResolver:
+	var data: ShipData = ShipData.new()
+	data.hull = 5
+	data.max_speed = 2
+	data.engineering_value = 3
+	data.command_value = 2
+	data.squadron_value = 2
+	data.ship_size = Constants.ShipSize.SMALL
+	data.shields = {"FRONT": 3, "LEFT": 2, "RIGHT": 2, "REAR": 1}
+	data.defense_tokens = []
+	data.navigation_chart = [[1], [0, 1]]
+	var ship: ShipInstance = ShipInstance.create_from_data(
+			"test_ship", data, 2, 0)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON,
+			Constants.CommandType.NAVIGATE], 1)
+	ship.command_dial_stack.reveal_top()
+	var hw: float = GameScale.small_base_width_px * 0.5
+	var hl: float = GameScale.small_base_length_px * 0.5
+	return SquadronCommandResolver.create(
+			ship, Vector2.ZERO, 0.0, hw, hl)
+
+
 # ===========================================================================
 # Initial state
 # ===========================================================================
@@ -511,3 +536,166 @@ func test_cancel_move_returns_to_action_choice() -> void:
 	assert_eq(int(_modal.get_state()),
 			int(SquadronActivationModal.State.ACTION_CHOICE),
 			"cancel_move should return to ACTION_CHOICE")
+
+
+# ===========================================================================
+# Phase K12-bugfix — auto-finish on click of different squadron
+# ===========================================================================
+
+## When the modal is in ACTION_CHOICE (command mode) and the player
+## clicks a *different* squadron, the previous activation should
+## auto-finish (emitting activation_done) and the new squadron should
+## be selected.  Restricted to command mode because turn mode is
+## driven by the controller re-opening via signal.
+func test_click_different_squadron_in_action_choice_auto_finishes() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	var inst_a: SquadronInstance = _make_instance(0)
+	var inst_b: SquadronInstance = _make_instance(0)
+	ps.squadrons.append(inst_a)
+	ps.squadrons.append(inst_b)
+	var token_a: SquadronToken = _make_token(inst_a)
+	var token_b: SquadronToken = _make_token(inst_b)
+	# Position both tokens at the ship origin so the range check passes.
+	token_a.position = Vector2.ZERO
+	token_b.position = Vector2.ZERO
+	# Manually configure the modal as if we're mid-command-mode after
+	# squadron A has been selected (this avoids needing a real
+	# SquadronCommandResolver in a unit test).
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._command_resolver = _make_resolver()
+	_modal._selected_token = token_a
+	_modal._selected_instance = inst_a
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
+	# Mark inst_a activated externally so the click-validator
+	# accepts inst_b (and so the auto-finish doesn't get rejected
+	# by re-selecting inst_a).
+	inst_a.activated_this_round = true
+	var emitted: Dictionary = {"instance": null}
+	_modal.activation_done.connect(
+			func(sq: SquadronInstance) -> void:
+				emitted["instance"] = sq,
+			CONNECT_ONE_SHOT)
+	watch_signals(_modal)
+	var consumed: bool = _modal.handle_squadron_click(token_b)
+	assert_true(consumed,
+			"Click on different squadron in ACTION_CHOICE should be consumed")
+	assert_eq(emitted["instance"], inst_a,
+			"activation_done should fire for the previously selected"
+			+ " squadron before the new one is selected")
+	assert_eq(_modal.get_selected_token(), token_b,
+			"Selected token should now be the second squadron")
+
+
+## Clicking the SAME squadron in ACTION_CHOICE (command mode) is ignored.
+func test_click_same_squadron_in_action_choice_returns_false() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	var inst_a: SquadronInstance = _make_instance(0)
+	ps.squadrons.append(inst_a)
+	var token_a: SquadronToken = _make_token(inst_a)
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._selected_token = token_a
+	_modal._selected_instance = inst_a
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
+	watch_signals(_modal)
+	var consumed: bool = _modal.handle_squadron_click(token_a)
+	assert_false(consumed,
+			"Click on same squadron in ACTION_CHOICE should be ignored")
+	assert_signal_not_emitted(_modal, "activation_done",
+			"activation_done should NOT fire for same-squadron re-click")
+
+
+## In turn mode, click in ACTION_CHOICE on a different squadron is NOT
+## consumed (controller-driven flow re-opens the modal via signal).
+func test_click_different_squadron_turn_mode_returns_false() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	var inst_a: SquadronInstance = _make_instance(0)
+	var inst_b: SquadronInstance = _make_instance(0)
+	ps.squadrons.append(inst_a)
+	ps.squadrons.append(inst_b)
+	_modal.open_for_turn(1, 2)
+	var token_a: SquadronToken = _make_token(inst_a)
+	var token_b: SquadronToken = _make_token(inst_b)
+	_modal.handle_squadron_click(token_a)
+	var consumed: bool = _modal.handle_squadron_click(token_b)
+	assert_false(consumed,
+			"Turn-mode ACTION_CHOICE click on different squadron"
+			+ " should be ignored (controller drives next pick)")
+
+
+# ===========================================================================
+# Phase K12-bugfix — early close commits in-progress activation
+# ===========================================================================
+
+## When the player closes the modal during a command-mode activation
+## that has already taken an action (move or attack), the in-progress
+## squadron must be committed as a completed activation so that its
+## activated_this_round flag is set and it cannot be re-activated in the
+## Squadron Phase.  Reproduces the bug from annotation_20260509_182355.
+func test_close_after_attack_emits_activation_done() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	var inst: SquadronInstance = _make_instance(0)
+	ps.squadrons.append(inst)
+	# Manually configure the modal as if we're mid-command-mode after
+	# the squadron has attacked (this avoids needing a real
+	# SquadronCommandResolver and AttackExecutor in a unit test).
+	_modal.visible = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._selected_token = _make_token(inst)
+	_modal._selected_instance = inst
+	_modal._has_attacked = true
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
+	var emitted: Dictionary = {"instance": null}
+	_modal.activation_done.connect(
+			func(sq: SquadronInstance) -> void:
+				emitted["instance"] = sq,
+			CONNECT_ONE_SHOT)
+	watch_signals(_modal)
+	_modal._finish_command_early()
+	assert_eq(emitted["instance"], inst,
+			"_finish_command_early should emit activation_done for"
+			+ " the in-progress squadron when it has already"
+			+ " attacked, so the controller can mark it activated")
+
+
+## When the player closes the modal in command mode WITHOUT any action
+## taken, no activation_done should fire (nothing to commit).
+func test_close_with_no_action_does_not_emit_activation_done() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	_modal.visible = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._selected_token = null
+	_modal._selected_instance = null
+	_modal._has_attacked = false
+	_modal._has_moved = false
+	_modal._state = SquadronActivationModal.State.WAITING_FOR_SELECTION
+	watch_signals(_modal)
+	_modal._finish_command_early()
+	assert_signal_not_emitted(_modal, "activation_done",
+			"No squadron in progress — activation_done must not fire")

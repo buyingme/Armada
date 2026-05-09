@@ -98,6 +98,15 @@ var _activation_ctx: ActivationContext = ActivationContext.new()
 ## [method _create_tool_overlay_controller].
 var _tool_overlay_controller: ToolOverlayController = null
 
+## --- Command Router Adapter (Phase K12) ---
+
+## Owns the single subscription to [signal CommandProcessor.command_executed]
+## and routes each applied command + result into the appropriate controllers
+## (attack panel, debug, ship activation, displacement) and projects the
+## resulting [UIProjector.UIIntent] onto the HUD.  Created in
+## [method _create_command_router_adapter].
+var _command_router_adapter: CommandRouterAdapter = null
+
 ## Target selector — owns attacker/target selection, visual aids, and the
 ## attack sim panel. Used by both the free-form simulator and the attack
 ## executor. Created in [method _create_target_selector].
@@ -179,6 +188,12 @@ func _ready() -> void:
 	# Initialize the ship activation controller now that the damage deck
 	# exists (set during scenario / loaded-state spawn).
 	_initialize_ship_activation_controller()
+	# Phase K12: command-executed routing adapter.  Created after every
+	# controller it depends on (attack panel, debug, ship activation,
+	# displacement) and before [_connect_signals] so the adapter's own
+	# subscription to [signal CommandProcessor.command_executed] is the
+	# single source of post-command UI projection.
+	_create_command_router_adapter()
 	_connect_signals()
 	_connect_panel_signals()
 	queue_redraw()
@@ -334,8 +349,9 @@ func _connect_signals() -> void:
 	EventBus.handoff_accepted.connect(_on_handoff_accepted)
 	# Phase I6a: HUD status, activation-step sync and modal lifecycle on
 	# remote clients are projected from [GameState.interaction_flow] every
-	# time a command is applied.
-	CommandProcessor.command_executed.connect(_on_command_executed_project_ui)
+	# time a command is applied.  The single subscription lives on
+	# [CommandRouterAdapter] (Phase K12) and routes the command into the
+	# appropriate controllers.
 	#endregion
 
 	#region Ship activation signals (dial drag controller, activation end)
@@ -940,167 +956,13 @@ func _handle_network_active_player(_player_index: int) -> void:
 	_panel_mgr.your_turn_banner.update_size(vp_size)
 
 
-## Phase I4: HUD status text from [UIProjector].
-##
-## Re-runs after every applied command (and after snapshot apply) so the
-## HUD status text reflects the current authoritative interaction-flow
-## domain field on [GameState].
-##
-## Networked + hot-seat: uses [code]NetworkManager.get_local_player_index()[/code]
-## as the viewer.  In hot-seat, the active player is also the local
-## viewer (camera handles handoff), so the projection produces the same
-## "make your choices" wording the active player would see in network mode.
-##
-## Phase I6a — sole driver of HUD status, activation-step sync, modal
-## lifecycle and modal interactivity in network mode.  Reads the
-## authoritative [GameState.interaction_flow] domain field after every
-## applied command.
-func _on_command_executed_project_ui(_command: GameCommand,
-		_result: Dictionary) -> void:
-	if _panel_mgr == null:
-		return
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		return
-	# Phase K9: attacker-side defender-response routing
-	# (commit_defense / select_evade_die / select_redirect_zone /
-	# redirect_done / resolve_immediate_effect) lives on
-	# [AttackPanelController].
-	if _attack_panel_controller != null:
-		_attack_panel_controller.react_to_command(_command, _result)
-	# DBG-050: when a [DebugDealDamageCommand] is broadcast / executed,
-	# emit the visual signals on every peer (so hot-seat, host, and
-	# client all refresh the [ShipCardPanel] / hull display) and chain
-	# the immediate-effect resolution on the originating peer only.
-	# Owned by [DebugController] since Phase K10.
-	if _command != null and _debug_controller != null \
-			and _command.command_type == "debug_deal_damage":
-		_debug_controller.react_to_command(_command, _result)
-	var local: int = NetworkManager.get_local_player_index()
-	if local < 0:
-		# Hot-seat: viewer is the active player.
-		local = GameManager.get_active_player()
-	var intent: UIProjector.UIIntent = UIProjector.project(gs, local)
-	if not intent.hud_status_text.is_empty():
-		_panel_mgr.set_network_status_text(intent.hud_status_text)
-	# Network-only modal lifecycle.  Hot-seat opens the activation modal
-	# via the local activation flow itself; running this path there would
-	# double-open.
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
-	# Phase I migrated network to projection-driven modal lifecycle but
-	# left hot-seat on direct callbacks; converging the two is a Phase L
-	# candidate.
-	if not PlayMode.is_network():
-		return
-	# Phase I6b-4c-2: squadron-displacement modal lifecycle.
-	# Fixes OV-002: in network mode the modal must open on the
-	# squadron-owner peer (controller), not the maneuvering peer.
-	if _command != null \
-			and _command.command_type == "start_displacement":
-		_open_displacement_modal_from_command(_command)
-	if _command != null \
-			and _command.command_type == "commit_displacement":
-		# Phase I6b-4d: deferred so the host's follow-up
-		# [code]advance_activation_step[/code] submitted inside
-		# [_show_end_activation_after_maneuver] broadcasts *after* the
-		# outer [code]commit_displacement[/code] broadcast.  Without
-		# the defer, the follow-up command is processed inside the
-		# [signal CommandProcessor.command_executed] of
-		# [code]commit_displacement[/code] (before the host has a
-		# chance to broadcast it), so the client receives
-		# [code]advance_activation_step[/code] first \u2014 which
-		# overwrites [member GameState.interaction_flow] with
-		# [code]SHIP_ACTIVATION[/code] and causes the subsequent
-		# [code]commit_displacement[/code] broadcast to fail validation
-		# ("No active displacement flow"), leaving squadron positions
-		# unwritten on the client.
-		call_deferred("_resume_after_remote_displacement")
-	var flow: InteractionFlow = gs.interaction_flow
-	# Read-only mirrors must close when the flow ends, so call their
-	# sync helpers BEFORE the no-flow early-return below.  Each helper
-	# handles its own "should close" logic and is a no-op when the panel
-	# is already in the right state.
-	if _attack_panel_controller != null:
-		_attack_panel_controller.sync_mirror_from_flow(flow, local)
-	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
-		return
-	_ship_activation_controller.sync_activation_step_from_flow(flow)
-	# Modal lifecycle: open when activation starts, close when it ends.
-	if flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
-		match flow.step_id:
-			Constants.InteractionStep.ACTIVATION_MODAL_OPEN:
-				_ship_activation_controller.open_modal_from_interaction_state()
-			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
-				_ship_activation_controller.close_modal_from_interaction_state()
-	_ship_activation_controller.update_activation_modal_interactivity()
-
-
-## Phase I6b-4c-2 — OV-002 fix.  Network-only.
-##
-## Opens the squadron-displacement modal on the squadron-owner peer
-## (controller) when [StartDisplacementCommand] broadcasts.  The
-## maneuvering peer skips this branch (its [code]_can_act_as[/code]
-## check fails because the controller is the opposing player).
-##
-## Resolves the [SquadronToken]s and [ShipBase] from the command's
-## payload + current scene state, then drives the existing
-## [DisplacementController.start] entry point unchanged.
-func _open_displacement_modal_from_command(cmd: GameCommand) -> void:
-	var payload: Dictionary = cmd.payload
-	var controller: int = int(payload.get("controller_player", -1))
-	if controller < 0:
-		return
-	if not _can_act_as(controller):
-		return
-	var ship_index: int = int(payload.get("ship_index", -1))
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		return
-	var ship: ShipInstance = gs.get_ship(cmd.player_index, ship_index)
-	if ship == null:
-		_log.warn("Displacement modal: ship not found.")
-		return
-	var ship_token: ShipToken = _find_ship_token_for_instance(ship)
-	if ship_token == null:
-		_log.warn("Displacement modal: ship token not found.")
-		return
-	var ship_base: ShipBase = ShipBase.new(
-			ship_token.get_ship_size(),
-			Transform2D(ship_token.global_rotation,
-					ship_token.global_position))
-	var entries: Array = payload.get("displaced_squadrons", []) as Array
-	var displaced_tokens: Array[SquadronToken] = []
-	for raw: Variant in entries:
-		var entry: Dictionary = raw as Dictionary
-		var sq_owner: int = int(entry.get("owner", -1))
-		var sq_idx: int = int(entry.get("squadron_index", -1))
-		var inst: SquadronInstance = gs.get_squadron(sq_owner, sq_idx)
-		if inst == null:
-			continue
-		var token: SquadronToken = _find_squadron_token_for_instance(inst)
-		if token != null:
-			displaced_tokens.append(token)
-	if displaced_tokens.is_empty():
-		_log.warn("Displacement modal: no squadron tokens resolved.")
-		return
-	_displacement_controller.start(displaced_tokens, ship_base)
-
-
-## Phase I6b-4c-2 — OV-002 fix.  Network-only.
-##
-## Triggered on every peer when [CommitDisplacementCommand] broadcasts.
-## On the maneuvering peer (active player), runs the post-maneuver
-## resume logic that the legacy [signal displacement_completed]
-## connection used to fire — but only after the controller peer has
-## finished placement.  On the controller peer this is a no-op because
-## the legacy [code]_finish_displacement[/code] path runs there via
-## the modal's own commit handler.
-func _resume_after_remote_displacement() -> void:
-	if _local_viewer() != GameManager.get_active_player():
-		return
-	if _activation_ctx.ship_activation_state == null:
-		return
-	_ship_activation_controller.show_end_activation_after_maneuver()
+# ---------------------------------------------------------------------------
+# Command-executed routing
+# ---------------------------------------------------------------------------
+# The single subscription to [signal CommandProcessor.command_executed]
+# and all per-command-type routing (attack panel, debug damage, ship
+# activation modal lifecycle, network displacement modal lifecycle)
+# lives on [CommandRouterAdapter] (Phase K12).
 
 
 ## Returns the player index whose perspective is shown locally on this peer.
@@ -1397,6 +1259,23 @@ func _create_tool_overlay_controller() -> void:
 			get_ship_tokens,
 			get_squadron_tokens,
 			self )
+
+## Creates the [CommandRouterAdapter] child node which owns the single
+## subscription to [signal CommandProcessor.command_executed] and routes
+## per-command-type effects to the appropriate controllers (Phase K12).
+func _create_command_router_adapter() -> void:
+	_command_router_adapter = CommandRouterAdapter.new()
+	_command_router_adapter.name = "CommandRouterAdapter"
+	add_child(_command_router_adapter)
+	_command_router_adapter.initialize(
+			_panel_mgr,
+			_attack_panel_controller,
+			_debug_controller,
+			_ship_activation_controller,
+			_displacement_controller,
+			_activation_ctx,
+			_find_ship_token_for_instance,
+			_find_squadron_token_for_instance)
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:

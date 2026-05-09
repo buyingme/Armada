@@ -18,7 +18,7 @@
 | GUT tests | 2 882 |
 | GUT asserts | 5 432 |
 | Failing tests | 0 |
-| Last commit | `d6511e0` (fix — squadron keyword effects on load + Navigate yaw bonus validation) |
+| Last commit | `9a1f763` (Phase K10 — extract debug damage dealing into `DebugController`) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

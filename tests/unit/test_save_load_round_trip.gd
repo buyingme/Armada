@@ -208,7 +208,7 @@ func test_start_new_game_from_state_registers_squadron_keywords() -> void:
 	var registry: EffectRegistry = GameManager.current_game_state.effect_registry
 	assert_gt(registry.get_effect_count(), 0,
 			"squadron keyword effects should be registered after load "
-			+ "so Bomber crits resolve outside the Squadron Phase")
+			+"so Bomber crits resolve outside the Squadron Phase")
 	# X-wing has Bomber + Escort — both should be present.
 	var hooks: Array[GameEffect] = registry.get_effects_for_hook(
 			&"ATTACK_CALC_DAMAGE")

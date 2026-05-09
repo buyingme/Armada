@@ -886,10 +886,13 @@ func _on_round_started(_round_number: int) -> void:
 ## "Waiting for opponent…" when it is not the local player's turn.
 ## Requirements: TF-001, BP-001, BP-003, HO-001, HO-004.  G4.6.5.7/8.
 func _on_active_player_changed(player_index: int) -> void:
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  The
+	# hot-seat path builds a handoff overlay + rotates the camera; the
+	# network path locks camera to the local seat + shows "waiting".
+	# These flows differ in *content*, not in "who is allowed to
+	# interact" — that question is already answered by `UIIntent.is_interactive`.
 	if PlayMode.is_network():
 		_handle_network_active_player(player_index)
-		return
-	if not PlayMode.is_hot_seat():
 		return
 
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
@@ -1065,6 +1068,8 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	# broadcast and the chooser was the remote peer, the local
 	# (attacker) executor still owns the post-modal cleanup + finalize.
 	# Hot-seat skips this branch (chooser modal runs in-process).
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a) — there
+	# is no "remote peer" concept in hot-seat by definition.
 	if _command != null \
 			and _command.command_type == "resolve_immediate_effect" \
 			and _attack_executor != null \
@@ -1088,6 +1093,10 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	# Network-only modal lifecycle.  Hot-seat opens the activation modal
 	# via the local activation flow itself; running this path there would
 	# double-open.
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
+	# Phase I migrated network to projection-driven modal lifecycle but
+	# left hot-seat on direct callbacks; converging the two is a Phase L
+	# candidate.
 	if not PlayMode.is_network():
 		return
 	# Phase I6b-4c-2: squadron-displacement modal lifecycle.
@@ -1322,6 +1331,10 @@ func _sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 
 ## Submits an authoritative activation-step transition marker in network mode.
 func _submit_network_activation_step(step_id: String) -> void:
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  This
+	# helper is network-only by name and purpose — it submits an
+	# `advance_activation_step` command so the remote peer can sync
+	# its `ShipActivationState`.  Hot-seat has no remote peer.
 	if not PlayMode.is_network() or _activation_ctx.ship_activation_state == null:
 		return
 	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
@@ -1507,6 +1520,10 @@ func _on_dial_token_converted(ship: ShipInstance) -> void:
 					_on_token_discard_resolved, CONNECT_ONE_SHOT)
 	elif not PlayMode.is_network():
 		# Hot-seat: show the sequence button; network uses interaction state.
+		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
+		# Hot-seat opens the sequence button locally; network drives it
+		# via the projected interaction flow.  Converging is a Phase L
+		# candidate.
 		_show_activation_sequence_button()
 
 	var cmd_name: String = ""
@@ -2135,6 +2152,11 @@ func _on_execute_maneuver() -> void:
 				displaced_owner = inst.owner_player
 		GameManager.submit_start_displacement(maneuver_ship,
 				displaced_owner, displaced_instances)
+		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
+		# Hot-seat opens the displacement modal directly; network opens
+		# it via projection (Phase I6b-4c OV-002 fix — modal must open on
+		# the squadron-owner peer, not the maneuvering peer).  Converging
+		# is a Phase L candidate.
 		if not PlayMode.is_network():
 			_displacement_controller.start(displaced, moved_ship_base)
 	else:

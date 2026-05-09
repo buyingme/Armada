@@ -18,7 +18,7 @@ will block or destabilise the next feature wave (G4.7+):
 | Symptom | Concrete evidence |
 |---|---|
 | God-object scenes | [src/scenes/game_board/game_board.gd](../src/scenes/game_board/game_board.gd) **3 055 LOC**; [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) **2 475 LOC**; [game_manager.gd](../src/autoload/game_manager.gd) **2 241 LOC** |
-| Phase I rule violations | **18** modal-authority `if PlayMode.is_network()` / `is_hot_seat()` branches across 5 files in `src/scenes/game_board/` (rule §7 of `.github/copilot-instructions.md`); a further 5 session-mode discriminators are allow-listed — see §3.1 |
+| Phase I rule violations | **13** modal-authority `if PlayMode.is_network()` / `is_hot_seat()` branches across 5 files in `src/scenes/game_board/` (rule §7 of `.github/copilot-instructions.md`); a further 10 session-mode discriminators are allow-listed — see §3.1 |
 | Function-size / nesting drift | ~15 functions > 30 LOC, ~8 with > 3-level nesting (worst: `_attack_exec_begin_sequence` ~75 LOC / 5 levels) |
 | Test gaps on Phase-I primitives | No dedicated `test_interaction_flow.gd`; `UIProjector` projection paths under-asserted |
 
@@ -71,10 +71,10 @@ categories:
 #### 3.1a Allow-listed: session-mode discriminators (NOT removed by K)
 
 These check whether the running process is in a network session at all
-(e.g. "is this a host?", "should the lobby button appear?"). They are
-*not* interaction-flow / modal-authority decisions and are intrinsic to
-the deployment mode. The lint script treats these files as
-allow-listed:
+(e.g. "is this a host?", "is this a peer with a remote?"). They are
+*not* "who can act" / modal-authority decisions and are intrinsic to
+the deployment topology. The lint script treats these files (or
+specific marked sites) as allow-listed:
 
 | File | Line | Purpose |
 |------|-----:|---|
@@ -82,24 +82,49 @@ allow-listed:
 | [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd) | 371, 496 | Network-row enable/disable based on host session presence. |
 | [game_menu_modal.gd](../src/ui/save/game_menu_modal.gd) | 401 | ESC menu button visibility (host vs client). |
 | [lobby_room.gd](../src/scenes/lobby/lobby_room.gd) | 365 | Lobby is network-only by definition. |
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1325 | `_handle_command_dial_dropped` uses sentinel `-1` only in network mode (see Phase I doc-comment line 1339). May be revisited in K12 but not as part of K-G1. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 889 | `_on_active_player_changed` dispatcher — hot-seat path builds handoff overlay + rotates camera; network path builds "waiting" UI + locks camera. The two flows are fundamentally different *content*, not "who is allowed to interact". |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1072 | `apply_remote_immediate_choice` is by definition a network-only concept (there is no "remote peer" in hot-seat). |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1091 | Modal-lifecycle dispatcher — Phase I migrated network to projection-driven modal lifecycle but **left hot-seat on direct callbacks**. Removing this branch would require migrating hot-seat to projection-driven modals (Phase L candidate — see §3.1d). |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1325 | `_handle_command_dial_dropped` uses sentinel `-1` only in network mode. May be revisited in K12 but not as part of K-G1. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1334 | `_submit_network_activation_step` is network-only by name and purpose (submits an `advance_activation_step` command for remote-peer sync). Hot-seat has no remote peer. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1508 | Sequence-button origin — hot-seat opens locally, network drives via interaction state. Same architectural reason as line 1091. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 2138 | Displacement-modal origin — hot-seat opens directly, network opens via projection (Phase I6b-4c OV-002 fix). Same architectural reason as line 1091. |
 
 #### 3.1b Targeted for removal in K (interaction-flow / modal-authority)
 
 | File | Line(s) | Slice | Resolution |
 |------|---------|:-----:|---|
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 889, 892 | K2 | `_on_active_player_changed` — converge hot-seat + network handoff via shared `_apply_seat_handoff()` helper that branches on `state.active_player == local_player`. |
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1072, 1091 | K2 | `_on_command_executed_project_ui` — replace with `UIIntent.is_interactive` reads. |
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1508 | K2 | Activation-modal lifecycle — gate on `intent.modal_kind`. |
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 2138 | K2 | Maneuver overlap auto-resolve flag — set via `intent.is_interactive`. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 892 | K2 | Dead defensive guard (`if not PlayMode.is_hot_seat(): return` after the `is_network()` early-return at 891 — unreachable given the 2-mode enum). Delete. |
 | [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) | 165, 167 | K3 | Dial picker authority — `intent.modal_kind == COMMAND_DIALS` + `intent.is_interactive`. |
-| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 1033, 1050, 1244, 1394, 2045, 2054, 2212 | K4 | Panel read-only / camera focus / "is local actor" checks — `intent.is_interactive` + `intent.controller_player == viewer_player`. The two `_camera and is_hot_seat` patterns become `_camera and PlayMode.seat_controls_camera(active, local)` (helper added in K1). |
+| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 1033, 1050, 1244, 1394, 2045, 2054, 2212 | K4 | Panel read-only / camera focus / "is local actor" checks — `intent.is_interactive` + `intent.controller_player == viewer_player`. The two `_camera and is_hot_seat` patterns become `_camera and PlayMode.seat_controls_camera(active, local)` (helper added in K1). Sites where the branch is genuinely a session-mode dispatcher (not a "who can act" decision) are reclassified to §3.1a during the slice if the audit reveals them. |
 | [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) | 378, 495 | K6 | Squadron move-submit gating — `intent.is_interactive` + flow-step read. |
 | [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) | 124, 342 | K5 | Displacement modal authority + validation — `intent.modal_kind == DISPLACEMENT` + `intent.is_interactive`. |
 
-**Total to remove in K: 18 branches across 5 files.** (Down from the
-original 9-branch over-estimate; the audit was both too low at the
-file-fan-out level and too aggressive at including session-mode sites.)
+**Total to remove in K: 13 branches across 5 files.** (Down from 18 after the
+K2 audit reclassified 5 game_board sites to §3.1a as session-mode
+dispatchers — see §3.1d.)
+
+#### 3.1d Out of scope for K — Phase L candidate
+
+The Phase I migration of UI-flow state to `GameState.interaction_flow`
+deliberately stopped short of converting **hot-seat** modal lifecycle to
+the same projection-driven model used by network. In hot-seat, modals
+are still opened by direct callbacks (e.g. `_show_activation_sequence_button`
+at line 1508, `_displacement_controller.start()` at line 2138). Network
+opens the same modals via `_on_command_executed_project_ui` reading the
+flow.
+
+Migrating hot-seat to also use projection-driven modal lifecycle would
+collapse 4 of the 5 reclassified branches (1091, 1508, 2138, and parts
+of 889) into a single uniform code path. This is non-trivial — the
+`SHIP_ACTIVATION` / `SQUADRON_ACTIVATION` / `DISPLACEMENT` flows would
+all need their hot-seat call sites refactored, and the activation-modal
+"sequence button" semantic (which is hot-seat-specific UI affordance)
+would need a network-side equivalent or an explicit suppression in the
+projection.
+
+**Recommended as Phase L** (post-K, post-G4.7-9). Out of scope for the
+bounded mechanical Phase K.
 
 ### 3.1c New `UIIntent` field needed (K1)
 
@@ -240,7 +265,7 @@ observable. Numbering matches the eventual phase-status table row.
 |------:|---|---|---:|:---:|
 | **K0** | Audit snapshot frozen — copy this plan into the repo, append §J11 row to implementation_plan §5.7. **No code changes.** Committed `664d368`. Refined 2026-05-09 with deeper audit (28 → 18 sites; one new UIIntent field instead of three). | trivial | 0 | no |
 | **K1** | Add `PlayMode.seat_controls_camera(active_player, local_player) -> bool` static helper in [play_mode.gd](../src/autoload/play_mode.gd). Add unit tests for it (≥ 4 asserts: network always true; hot-seat active-seat true; hot-seat non-active false; hot-seat invalid params). **No UIProjector changes** (`src/core/` cannot read PlayMode). | low | +30 / 0 | no |
-| **K2** | Replace 6 game_board branches (lines 889, 892, 1072, 1091, 1508, 2138) with `UIIntent` reads. Extract `_apply_seat_handoff(player_index, intent)` helper to remove the if/else split in `_on_active_player_changed`. | medium | +50 / −60 | yes |
+| **K2** | Delete dead defensive guard at game_board.gd:892 (unreachable given 2-mode enum). Add `# Phase K allow-list: session-mode dispatcher — see plan §3.1a` markers to lines 889, 1072, 1091, 1325, 1508, 2138 with brief rationale comments. **No converge of `_on_active_player_changed` paths** — see §3.1d (deferred to Phase L). | low | +30 / -3 | yes |
 | **K3** | Replace 2 branches in [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) (lines 165 / 167). | medium | +10 / −20 | yes |
 | **K4** | Replace 7 branches in [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) (lines 1033, 1050, 1244, 1394, 2045, 2054, 2212). | medium | +25 / −40 | yes |
 | **K5** | Replace 2 branches in [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) (lines 124, 342). | medium | +10 / −20 | yes |

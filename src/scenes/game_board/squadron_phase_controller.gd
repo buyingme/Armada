@@ -375,9 +375,14 @@ func _on_command_executed_advance_after_move(command: GameCommand,
 		_result: Dictionary) -> void:
 	if command == null or command.command_type != "move_squadron":
 		return
-	if not PlayMode.is_network():
-		return
+	# Phase K6: hot-seat has no passive peer to advance; the active
+	# player drives the modal locally.  Discriminated on the
+	# [code]NetworkManager.get_local_player_index()[/code] axis (hot-seat
+	# returns -1) instead of [code]PlayMode.is_network()[/code] per
+	# [docs/refactoring_phase_k_plan.md] §3.1b.
 	var local: int = NetworkManager.get_local_player_index()
+	if local < 0:
+		return
 	# Active peer drives modal lifecycle through its local-click flow.
 	if command.player_index == local:
 		return
@@ -490,9 +495,15 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
 	if token:
 		token.set_activated_visual(true)
-	# Network: if the player skipped (no move_squadron submitted), send a
-	# zero-distance move so the remote peer can track activation completion.
-	if PlayMode.is_network() and not _move_submitted_this_activation:
+	# Phase K6: in network play, if the player skipped (no
+	# [code]move_squadron[/code] submitted), send a zero-distance move so
+	# the remote peer can track activation completion.  Hot-seat has no
+	# remote peer to notify.  Discriminated on the
+	# [code]NetworkManager.get_local_player_index()[/code] axis (hot-seat
+	# returns -1) instead of [code]PlayMode.is_network()[/code] per
+	# [docs/refactoring_phase_k_plan.md] §3.1b.
+	if NetworkManager.get_local_player_index() >= 0 \
+			and not _move_submitted_this_activation:
 		_submit_skip_move(instance, token)
 	_remove_squadron_overlay()
 	if _squadron_modal and _squadron_modal.is_command_mode():

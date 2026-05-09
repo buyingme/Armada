@@ -115,13 +115,16 @@ func start(displaced: Array[SquadronToken],
 		_activation_modal.close()
 	_log.info("Starting squadron displacement: %d squadron(s)."
 			% displaced.size())
-	# Phase I6b-4d: in network mode the controller peer (squadron owner)
-	# is *already* viewing its own perspective (camera pinned to local
-	# viewer in [GameBoard]).  Rotating would needlessly flip the
-	# controller to the opposing player's perspective — skip it and run
-	# the post-rotate handler directly.  Hot-seat keeps the rotate so
-	# both players see the squadron-owner perspective during placement.
-	if PlayMode.is_network():
+	# Phase I6b-4d / Phase K5: only hot-seat (single shared camera per
+	# seat) needs to rotate to the squadron-owner's perspective.  In
+	# network play each peer's camera is already pinned to its own
+	# viewer, so rotating would needlessly flip the controller to the
+	# opposing player's perspective — skip it and run the post-rotate
+	# handler directly.  Discriminated on the
+	# [code]NetworkManager.get_local_player_index()[/code] axis (hot-seat
+	# returns -1) instead of [code]PlayMode.is_network()[/code] per
+	# [docs/refactoring_phase_k_plan.md] §3.1b.
+	if NetworkManager.get_local_player_index() >= 0:
 		_on_camera_ready()
 		return
 	var opponent: int = 1 - GameManager.get_active_player()
@@ -329,17 +332,20 @@ func _finish_displacement() -> void:
 	_remove_displacement_modal()
 	TooltipManager.hide_tooltip()
 	_log.info("All displaced squadrons placed.")
-	# Phase I6b-4d: in network mode the controller peer never rotated to
-	# the opponent in [method start], so there is nothing to rotate back.
-	# Also DO NOT emit [signal displacement_completed] — the legacy
-	# connection [code]displacement_completed -> _show_end_activation_after_maneuver[/code]
+	# Phase I6b-4d / Phase K5: in network play the controller peer never
+	# rotated to the opponent in [method start], so there is nothing to
+	# rotate back.  Also DO NOT emit [signal displacement_completed] —
+	# the legacy connection
+	# [code]displacement_completed -> _show_end_activation_after_maneuver[/code]
 	# would submit an [code]advance_activation_step[/code] for the
 	# *active maneuvering* player from the *controller* peer, which the
 	# server correctly rejects (peer mismatch).  In network mode the
 	# maneuvering peer's [code]_resume_after_remote_displacement[/code]
 	# (driven by the [code]commit_displacement[/code] broadcast) handles
-	# the End-Activation resume.
-	if PlayMode.is_network():
+	# the End-Activation resume.  Discriminated on the
+	# [code]NetworkManager.get_local_player_index()[/code] axis per
+	# [docs/refactoring_phase_k_plan.md] §3.1b.
+	if NetworkManager.get_local_player_index() >= 0:
 		return
 	var active: int = GameManager.get_active_player()
 	if not EventBus.perspective_change_complete.is_connected(

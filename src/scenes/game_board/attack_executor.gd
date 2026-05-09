@@ -264,16 +264,7 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 
 ## Initialises attack execution state for a ship attacker.
 func _init_ship_attack_state(ship_token: ShipToken) -> void:
-	_state.exec_mode = true
-	_state.exec_ship_token = ship_token
-	_state.fired_zones.clear()
-	_state.current_attack = 0
-	_state.dice_results.clear()
-	_state.dice_pool.clear()
-	_state.range_band = ""
-	_state.cf_dial_used = false
-	_state.cf_token_used = false
-	_state.attacked_squads.clear()
+	_flow_executor.init_ship_exec_state(_state, ship_token)
 
 ## Starts the squadron attack execution flow from the Squadron Activation
 ## Modal. Pre-selects the squadron as attacker; enters target selection.
@@ -304,27 +295,7 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 ## Initialises attack execution state for a squadron attacker.
 func _init_squadron_attack_state(
 		squadron_token: SquadronToken) -> void:
-	_state.exec_mode = true
-	_state.squad_exec_mode = true
-	_state.exec_squad_token = squadron_token
-	_state.exec_ship_token = null
-	_state.fired_zones.clear()
-	_state.current_attack = 0
-	_state.dice_results.clear()
-	_state.dice_pool.clear()
-	_state.range_band = ""
-	_state.cf_dial_used = false
-	_state.cf_token_used = false
-	_state.attacked_squads.clear()
-	var inst: SquadronInstance = squadron_token.get_squadron_instance()
-	var squad_name: String = "Squadron"
-	if inst and inst.squadron_data:
-		squad_name = inst.squadron_data.squadron_name
-	_state.attacker_ship = null
-	_state.attacker_zone = -1
-	_state.attacker_squadron = squadron_token
-	_state.attacker_name = squad_name
-	_state.attacker_zone_name = ""
+	_flow_executor.init_squadron_exec_state(_state, squadron_token)
 
 ## Dismisses the attack executor, delegating visual cleanup to TargetSelector.
 ## Requirements: AS-ACT-003, AS-PNL-003, AS-TGT-022.
@@ -699,11 +670,7 @@ func _on_attack_roll_dice() -> void:
 ## Called inline for host/hot-seat or from the network broadcast handler.
 func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 	_fsm_advance(AttackFlowFSM.Step.MODIFY)
-	var raw: Array = roll_result.get("dice_results", [])
-	_state.dice_results.clear()
-	for entry: Variant in raw:
-		if entry is Dictionary:
-			_state.dice_results.append(entry as Dictionary)
+	_state.dice_results = _flow_executor.extract_roll_results(roll_result)
 	# Phase I3b: publish dice results to interaction_flow.
 	_fsm_patch_payload({
 		"dice_results": _state.dice_results.duplicate(true),
@@ -817,18 +784,7 @@ func _on_attack_confirm() -> void:
 			% damage)
 	if _get_panel():
 		_get_panel().hide_confirm_button()
-	# Reset Phase 6c state for this attack.
-	_state.locked_tokens.clear()
-	_state.spent_tokens.clear()
-	_state.defense_commit_queue.clear()
-	_state.modified_damage = damage
-	_state.scatter_used = false
-	_state.redirect_remaining = 0
-	_state.redirect_zone = -1
-	_state.contain_used = false
-	_state.brace_used = false
-	_state.redirect_step = false
-	_state.evade_step = false
+	_flow_executor.reset_for_confirm(_state, damage)
 	# Zero damage — skip accuracy and defense entirely since there is
 	# nothing to mitigate.  Go straight to damage resolution which will
 	# show "No damage dealt." and advance to the next attack.
@@ -947,20 +903,8 @@ func _attack_exec_start_defense() -> void:
 	# defender_speed + defender_zone so the passive client can identify
 	# which local ShipInstance is being attacked and render the panel
 	# without needing a host-side AttackState.
-	var gs: GameState = GameManager.current_game_state
-	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
-	_fsm_patch_payload({
-		"locked_tokens": _state.locked_tokens.duplicate(true),
-		"modified_damage": _state.modified_damage,
-		"defender_player": def_inst.owner_player,
-		"defender_ship_index": defender_ship_index,
-		"defender_speed": def_inst.current_speed,
-		"defender_zone": _state.defender_zone,
-		# Phase I6b-3 R2: publish the defender's defense-token snapshot
-		# so the [AttackPanelMirror] can render the interactive section
-		# on the defender peer without consulting GameState.
-		"defense_tokens": def_inst.defense_tokens.duplicate(true),
-	})
+	_fsm_patch_payload(_flow_executor.build_defense_payload(
+			_state, def_inst, GameManager.current_game_state))
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	# Phase K4: hot-seat detected via `local_player_index < 0` (no
 	# network session).  In network each peer's camera is locked to

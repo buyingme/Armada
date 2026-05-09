@@ -9,6 +9,86 @@ class_name AttackFlowExecutor
 extends RefCounted
 
 
+## Initializes ship-attack execution state on the shared AttackState.
+func init_ship_exec_state(state: AttackState,
+		ship_token: ShipToken) -> void:
+	state.exec_mode = true
+	state.squad_exec_mode = false
+	state.exec_ship_token = ship_token
+	state.exec_squad_token = null
+	state.fired_zones.clear()
+	state.current_attack = 0
+	state.reset_dice()
+	state.cf_dial_used = false
+	state.cf_token_used = false
+	state.attacked_squads.clear()
+
+
+## Initializes squadron-attack execution state on the shared AttackState.
+func init_squadron_exec_state(state: AttackState,
+		squadron_token: SquadronToken) -> void:
+	state.exec_mode = true
+	state.squad_exec_mode = true
+	state.exec_squad_token = squadron_token
+	state.exec_ship_token = null
+	state.fired_zones.clear()
+	state.current_attack = 0
+	state.reset_dice()
+	state.cf_dial_used = false
+	state.cf_token_used = false
+	state.attacked_squads.clear()
+	var inst: SquadronInstance = squadron_token.get_squadron_instance()
+	var squad_name: String = "Squadron"
+	if inst and inst.squadron_data:
+		squad_name = inst.squadron_data.squadron_name
+	state.attacker_ship = null
+	state.attacker_zone = -1
+	state.attacker_squadron = squadron_token
+	state.attacker_name = squad_name
+	state.attacker_zone_name = ""
+
+
+## Extracts typed dice-result dictionaries from a roll payload.
+func extract_roll_results(roll_result: Dictionary) -> Array[Dictionary]:
+	var parsed: Array[Dictionary] = []
+	var raw: Array = roll_result.get("dice_results", [])
+	for entry: Variant in raw:
+		if entry is Dictionary:
+			parsed.append(entry as Dictionary)
+	return parsed
+
+
+## Resets per-attack defense sub-state at the confirm boundary.
+func reset_for_confirm(state: AttackState, damage: int) -> void:
+	state.locked_tokens.clear()
+	state.spent_tokens.clear()
+	state.defense_commit_queue.clear()
+	state.modified_damage = damage
+	state.scatter_used = false
+	state.redirect_remaining = 0
+	state.redirect_zone = -1
+	state.contain_used = false
+	state.brace_used = false
+	state.redirect_step = false
+	state.evade_step = false
+
+
+## Builds the DEFENSE_TOKENS payload patch for interaction flow.
+func build_defense_payload(state: AttackState,
+		def_inst: ShipInstance,
+		gs: GameState) -> Dictionary:
+	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
+	return {
+		"locked_tokens": state.locked_tokens.duplicate(true),
+		"modified_damage": state.modified_damage,
+		"defender_player": def_inst.owner_player,
+		"defender_ship_index": defender_ship_index,
+		"defender_speed": def_inst.current_speed,
+		"defender_zone": state.defender_zone,
+		"defense_tokens": def_inst.defense_tokens.duplicate(true),
+	}
+
+
 ## Returns a payload patch that clears target/defense/dice fields between
 ## consecutive attacks so mirror UI panels do not retain stale state.
 func build_clear_target_patch() -> Dictionary:

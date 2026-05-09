@@ -117,6 +117,123 @@ func test_compute_attack_identity_patch_squadron_target_sets_target_kind() -> vo
 			"target_squadron_index should resolve in GameState")
 
 
+func test_init_ship_exec_state_resets_attack_tracking() -> void:
+	var state: AttackState = AttackState.new()
+	state.squad_exec_mode = true
+	state.current_attack = 2
+	state.dice_pool = {"red": 2}
+	state.attacked_squads.append(null)
+	var ship: ShipInstance = _make_ship_instance(0)
+	var ship_token: ShipToken = _make_ship_token(ship)
+
+	_executor.init_ship_exec_state(state, ship_token)
+
+	assert_true(state.exec_mode,
+			"ship init should enable exec_mode")
+	assert_false(state.squad_exec_mode,
+			"ship init should disable squad_exec_mode")
+	assert_same(state.exec_ship_token, ship_token,
+			"ship token should be installed")
+	assert_null(state.exec_squad_token,
+			"squad token should be cleared")
+	assert_eq(state.current_attack, 0,
+			"attack counter should reset")
+	assert_true(state.dice_pool.is_empty(),
+			"dice pool should be reset")
+	assert_true(state.attacked_squads.is_empty(),
+			"attacked squad list should be reset")
+
+
+func test_init_squadron_exec_state_sets_attacker_identity() -> void:
+	var state: AttackState = AttackState.new()
+	state.exec_ship_token = _make_ship_token(_make_ship_instance(0))
+	var sq: SquadronInstance = _make_squadron_instance(1)
+	var sq_token: SquadronToken = _make_squadron_token(sq)
+
+	_executor.init_squadron_exec_state(state, sq_token)
+
+	assert_true(state.exec_mode,
+			"squad init should enable exec mode")
+	assert_true(state.squad_exec_mode,
+			"squad init should set squad exec mode")
+	assert_same(state.exec_squad_token, sq_token,
+			"squad token should be installed")
+	assert_null(state.exec_ship_token,
+			"ship token should be cleared")
+	assert_eq(state.attacker_name, "Test Squadron",
+			"attacker_name should use squadron display name")
+	assert_same(state.attacker_squadron, sq_token,
+			"attacker_squadron should point at selected token")
+
+
+func test_extract_roll_results_filters_non_dictionary_entries() -> void:
+	var parsed: Array[Dictionary] = _executor.extract_roll_results({
+		"dice_results": [
+			{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
+			"junk",
+			12,
+		],
+	})
+	assert_eq(parsed.size(), 1,
+			"extract_roll_results should keep only dictionaries")
+
+
+func test_reset_for_confirm_sets_defense_defaults() -> void:
+	var state: AttackState = AttackState.new()
+	state.locked_tokens = [1, 2]
+	state.spent_tokens = {Constants.DefenseToken.BRACE: true}
+	state.defense_commit_queue = [0]
+	state.redirect_remaining = 2
+	state.redirect_zone = int(Constants.HullZone.LEFT)
+	state.contain_used = true
+	state.brace_used = true
+	state.redirect_step = true
+	state.evade_step = true
+
+	_executor.reset_for_confirm(state, 4)
+
+	assert_true(state.locked_tokens.is_empty(),
+			"locked tokens should be cleared")
+	assert_true(state.spent_tokens.is_empty(),
+			"spent tokens should be cleared")
+	assert_true(state.defense_commit_queue.is_empty(),
+			"defense queue should be cleared")
+	assert_eq(state.modified_damage, 4,
+			"modified damage should mirror confirm damage")
+	assert_eq(state.redirect_zone, -1,
+			"redirect_zone should reset")
+	assert_false(state.contain_used,
+			"contain flag should reset")
+
+
+func test_build_defense_payload_contains_expected_keys() -> void:
+	GameManager.start_new_game()
+	var gs: GameState = GameManager.current_game_state
+	var ps: PlayerState = gs.get_player_state(1)
+	var ship: ShipInstance = _make_ship_instance(1)
+	ship.current_speed = 2
+	ps.ships.append(ship)
+
+	var state: AttackState = AttackState.new()
+	state.locked_tokens = [1]
+	state.modified_damage = 3
+	state.defender_zone = int(Constants.HullZone.FRONT)
+
+	var payload: Dictionary = _executor.build_defense_payload(state, ship, gs)
+
+	assert_eq(int(payload.get("defender_player", -1)), ship.owner_player,
+			"payload should carry defender player")
+	assert_eq(int(payload.get("defender_ship_index", -1)),
+			gs.find_ship_index(ship),
+			"payload should carry defender ship index")
+	assert_eq(int(payload.get("defender_speed", -1)), 2,
+			"payload should carry defender speed")
+	assert_eq(int(payload.get("modified_damage", -1)), 3,
+			"payload should carry modified damage")
+	assert_eq((payload.get("locked_tokens", []) as Array).size(), 1,
+			"payload should carry locked tokens")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

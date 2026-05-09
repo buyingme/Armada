@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-09 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **in progress**, K0 + K1 complete — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
+> Last updated: 2026-05-09 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **in progress**, K14b implemented in working tree — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 144 |
-| GUT tests | 2 892 |
-| GUT asserts | 5 459 |
+| GUT tests | 2 897 |
+| GUT asserts | 5 484 |
 | Failing tests | 0 |
-| Last commit | `ef2c84e` (Phase K11 — extract `ToolOverlayController`) |
+| Last commit | `454fd0e` (Phase K14a — start `AttackFlowExecutor` extraction) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -90,7 +90,7 @@ Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [do
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a started: extracted core `AttackFlowExecutor` payload builders, routed `AttackExecutor` through the new helper, and added `test_attack_flow_executor.gd` (current baseline 144 / 2892 / 5459, lint 0 violations).
+Status: **IN PROGRESS** — K0 through K13 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a committed `454fd0e`: extracted core `AttackFlowExecutor` payload builders and added `test_attack_flow_executor.gd`. K14b is implemented in the working tree: extracted attack-state init/reset/roll/defense-payload helpers into `AttackFlowExecutor`, delegated corresponding `AttackExecutor` call sites, and expanded `test_attack_flow_executor.gd` (current baseline 144 / 2897 / 5484, lint 0 violations).
 
 ---
 

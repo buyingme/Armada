@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 143 |
-| GUT tests | 2 877 |
-| GUT asserts | 5 420 |
+| GUT tests | 2 878 |
+| GUT asserts | 5 424 |
 | Failing tests | 0 |
-| Last commit | `0e0b3c9` (Phase K1 — `PlayMode.seat_controls_camera()` helper) |
+| Last commit | `<pending>` (Phase K8a — extract `ShipActivationController` from game_board.gd) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -90,7 +90,7 @@ Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [do
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 (`664d368`) + K1 (`0e0b3c9`) complete. K2 (game_board.gd PlayMode-branch removal) is next.
+Status: **IN PROGRESS** — K0 (`664d368`), K1 (`0e0b3c9`), K2 (`cba7a11`), K3 (`ae774d5`), K4 (`827f75c`), K5 (`4b20607`), K6 (`67885b1`), K7 (`9df414f`) complete. K8 split into K8a/K8b/K8c sub-slices: K8a (`ShipActivationController` extraction — dial drop, activation modal lifecycle, Crew Panic, projection sync) committed `<pending>`. K8b (maneuver execute + overlap resolution) is next.
 
 ---
 

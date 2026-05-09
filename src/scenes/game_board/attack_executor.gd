@@ -1426,7 +1426,8 @@ func _submit_commit_defense(selected: Array[int]) -> void:
 		return
 	# Sort into canonical resolution order before sending so all peers
 	# process tokens deterministically.
-	var canonical: Array[int] = _sort_defense_tokens_canonical(selected)
+	var canonical: Array[int] = _flow_executor.sort_defense_tokens_canonical(
+			selected, def_inst.defense_tokens)
 	GameManager.submit_commit_defense(def_inst, canonical)
 
 
@@ -1444,14 +1445,12 @@ func apply_defender_commit(selected: Array[int]) -> void:
 		return
 	if not _state.defense_step:
 		return
-	if selected.is_empty():
+	if not _flow_executor.begin_defense_commit(_state, selected):
 		_log.info("No defense tokens selected — proceeding to damage.")
-		_state.defense_step = false
 		if _get_panel():
 			_get_panel().hide_defense_section()
 		_attack_exec_resolve_damage()
 		return
-	_state.defense_commit_queue = selected.duplicate()
 	_log.info("Defense commit: %d tokens queued." %
 			_state.defense_commit_queue.size())
 	_process_next_defense_commit()
@@ -1471,6 +1470,8 @@ const _DEFENSE_RESOLVE_ORDER: Dictionary = {
 }
 
 ## Sorts token indices into canonical RRG resolution order.
+## Compatibility shim kept for existing tests that call this method
+## directly; production code delegates through AttackFlowExecutor.
 func _sort_defense_tokens_canonical(
 		indices: Array[int]) -> Array[int]:
 	if _state.defender_ship == null:
@@ -1479,7 +1480,7 @@ func _sort_defense_tokens_canonical(
 			_state.defender_ship.get_ship_instance()
 	if def_inst == null:
 		return indices
-	return _defense_resolver.sort_tokens_canonical(
+	return _flow_executor.sort_defense_tokens_canonical(
 			indices, def_inst.defense_tokens)
 
 ## Processes the next defense token in the commit queue.

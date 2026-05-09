@@ -234,6 +234,48 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 			"payload should carry locked tokens")
 
 
+func test_sort_defense_tokens_canonical_orders_by_rrg_sequence() -> void:
+	var defense_tokens: Array[Dictionary] = [
+		{"type": int(Constants.DefenseToken.REDIRECT)},
+		{"type": int(Constants.DefenseToken.SCATTER)},
+		{"type": int(Constants.DefenseToken.BRACE)},
+	]
+	var selected: Array[int] = [0, 2, 1]
+	var sorted: Array[int] = _executor.sort_defense_tokens_canonical(
+			selected, defense_tokens)
+	assert_eq(sorted, [1, 2, 0],
+			"token indices should be sorted Scatter -> Brace -> Redirect")
+
+
+func test_begin_defense_commit_with_empty_selection_clears_step() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	state.defense_commit_queue = [3, 4]
+	var selected: Array[int] = []
+
+	var has_queue: bool = _executor.begin_defense_commit(state, selected)
+
+	assert_false(has_queue,
+			"empty selection should not start queue processing")
+	assert_false(state.defense_step,
+			"defense step should end on empty commit")
+	assert_true(state.defense_commit_queue.is_empty(),
+			"commit queue should be cleared")
+
+
+func test_begin_defense_commit_with_selection_sets_queue() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	var selected: Array[int] = [5, 1]
+
+	var has_queue: bool = _executor.begin_defense_commit(state, selected)
+
+	assert_true(has_queue,
+			"non-empty selection should start queue processing")
+	assert_eq(state.defense_commit_queue, [5, 1],
+			"selected indices should be copied into commit queue")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

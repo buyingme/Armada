@@ -9,6 +9,15 @@ class_name AttackFlowExecutor
 extends RefCounted
 
 
+const _DEFENSE_RESOLVE_ORDER: Dictionary = {
+	Constants.DefenseToken.SCATTER: 0,
+	Constants.DefenseToken.EVADE: 1,
+	Constants.DefenseToken.BRACE: 2,
+	Constants.DefenseToken.REDIRECT: 3,
+	Constants.DefenseToken.CONTAIN: 4,
+}
+
+
 ## Initializes ship-attack execution state on the shared AttackState.
 func init_ship_exec_state(state: AttackState,
 		ship_token: ShipToken) -> void:
@@ -87,6 +96,39 @@ func build_defense_payload(state: AttackState,
 		"defender_zone": state.defender_zone,
 		"defense_tokens": def_inst.defense_tokens.duplicate(true),
 	}
+
+
+## Sorts selected defense token indices into canonical RRG resolve order.
+func sort_defense_tokens_canonical(selected: Array[int],
+		defense_tokens: Array[Dictionary]) -> Array[int]:
+	var sorted: Array[int] = selected.duplicate()
+	sorted.sort_custom(func(a: int, b: int) -> bool:
+		var key_a: int = _token_sort_key(a, defense_tokens)
+		var key_b: int = _token_sort_key(b, defense_tokens)
+		return key_a < key_b
+	)
+	return sorted
+
+
+## Initializes state for defense commit processing.
+## Returns true when there are queued tokens to process.
+func begin_defense_commit(state: AttackState,
+		selected: Array[int]) -> bool:
+	if selected.is_empty():
+		state.defense_step = false
+		state.defense_commit_queue.clear()
+		return false
+	state.defense_commit_queue = selected.duplicate()
+	return true
+
+
+func _token_sort_key(token_index: int,
+		defense_tokens: Array[Dictionary]) -> int:
+	if token_index < 0 or token_index >= defense_tokens.size():
+		return 999
+	var token: Dictionary = defense_tokens[token_index]
+	var token_type: int = int(token.get("type", -1))
+	return int(_DEFENSE_RESOLVE_ORDER.get(token_type, 999))
 
 
 ## Returns a payload patch that clears target/defense/dice fields between

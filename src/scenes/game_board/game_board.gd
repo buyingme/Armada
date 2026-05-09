@@ -90,23 +90,13 @@ var _dial_drag_controller: DialDragController = null
 ## Held in [ActivationContext] — controllers access via injected reference.
 var _activation_ctx: ActivationContext = ActivationContext.new()
 
-## --- Maneuver Tool state (Phase 5a) ---
+## --- Tool Overlay Controller (Phase K11) ---
 
-## Maneuver tool controller — owns selection flag and ManeuverToolScene.
-## Created in [method _create_maneuver_tool_controller].
-var _maneuver_tool_controller: ManeuverToolController = null
-
-## --- Range Overlay state ---
-
-## Range tool controller — owns selection flag and RangeOverlayScene.
-## Created in [method _create_range_tool_controller].
-var _range_tool_controller: RangeToolController = null
-
-## --- Targeting List state (Phase F5c) ---
-
-## Targeting list controller — owns modal lifecycle and data collection.
-## Created in [method _create_targeting_list_controller].
-var _targeting_list_controller: TargetingListController = null
+## Owns the maneuver tool, range overlay, and targeting list sub-controllers,
+## the M / R / T / A keyboard shortcuts, the toolbar request handlers, and
+## the dismiss-other-tools coordination.  Created in
+## [method _create_tool_overlay_controller].
+var _tool_overlay_controller: ToolOverlayController = null
 
 ## Target selector — owns attacker/target selection, visual aids, and the
 ## attack sim panel. Used by both the free-form simulator and the attack
@@ -169,9 +159,7 @@ func _ready() -> void:
 	_create_target_selector()
 	_create_attack_executor()
 	_create_attack_panel_controller()
-	_create_maneuver_tool_controller()
-	_create_range_tool_controller()
-	_create_targeting_list_controller()
+	_create_tool_overlay_controller()
 	_create_displacement_controller()
 	_create_ship_activation_controller()
 	_create_dial_drag_controller()
@@ -285,17 +273,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				_displacement_controller.handle_lock_click()
 				get_viewport().set_input_as_handled()
 				return
-	# Range overlay: Escape dismisses or cancels selection.
-	if _range_tool_controller.handle_escape(event):
-		return
-	# Maneuver tool: Escape dismisses or cancels selection.
-	if _maneuver_tool_controller.handle_escape(event):
+	# Range overlay / Maneuver tool: Escape dismisses or cancels selection.
+	if _tool_overlay_controller.try_handle_escape(event):
 		return
 
-	# Keyboard shortcuts for tool buttons (M / R / T).
+	# Keyboard shortcuts for tool buttons (M / R / T / A).
 	# Available in all modes; guarded by the same disabled flag as toolbar buttons.
 	# Requirements: MT-U-007, RO-008, TL-UI-003a.
-	if _handle_tool_shortcut(event):
+	if _tool_overlay_controller.try_handle_tool_shortcut(event):
 		return
 
 	# Debug damage targeting (Shift+D enter, Escape cancel) — DBG-050.
@@ -359,22 +344,9 @@ func _connect_signals() -> void:
 	# ShipActivationController._connect_signals().
 	#endregion
 
-	#region Maneuver tool signals
-	EventBus.maneuver_tool_requested.connect(_on_maneuver_tool_requested)
-	EventBus.maneuver_tool_dismissed.connect(
-			func() -> void: _maneuver_tool_controller.dismiss(null))
-	#endregion
-
-	#region Range overlay signals
-	EventBus.range_overlay_requested.connect(_on_range_overlay_requested)
-	EventBus.range_overlay_dismissed.connect(
-			func() -> void: _range_tool_controller.dismiss())
-	#endregion
-
-	#region Targeting & attack signals
-	EventBus.targeting_list_requested.connect(
-			_targeting_list_controller.on_targeting_list_requested)
-	# attack_simulator_requested is connected by AttackPanelController (K9).
+	#region Maneuver tool / Range overlay / Targeting list signals
+	# All three are owned by [ToolOverlayController] (Phase K11), which
+	# wires the EventBus signals internally during initialize().
 	#endregion
 
 	#region Game end & scoring signals
@@ -634,11 +606,7 @@ func _spawn_squadron_token(
 func _on_token_clicked(token: ShipToken) -> void:
 	if _target_selector and _target_selector.handle_ship_click(token):
 		return
-	if _range_tool_controller.is_selecting():
-		_range_tool_controller.show_overlay(token)
-		return
-	if _maneuver_tool_controller.is_selecting():
-		_maneuver_tool_controller.show_tool(token)
+	if _tool_overlay_controller.try_handle_token_click(token):
 		return
 	if _debug_controller and _debug_controller.is_damage_targeting():
 		_debug_controller.open_damage_modal_for_token(token)
@@ -1373,86 +1341,11 @@ func _on_damage_card_dealt(ship_instance: RefCounted, card: RefCounted,
 	TooltipManager.show_text(msg, Vector2.INF, 2.0, true)
 
 # ---------------------------------------------------------------------------
-# Maneuver Tool (Phase 5a)
+# Maneuver Tool / Range Overlay / Targeting List
 # ---------------------------------------------------------------------------
-## Handles the "Display Maneuver Tool" button press.
-## Requirements: MT-U-002, MT-U-003.
-func _on_maneuver_tool_requested() -> void:
-	# Block simulation requests while the activation-mode maneuver tool
-	# is active — the player must use the modal's Commit button instead.
-	if _activation_ctx.ship_activation_state != null \
-			and _maneuver_tool_controller.get_scene() != null:
-		_log.info("Simulation maneuver blocked — activation maneuver in progress.")
-		return
-	if _maneuver_tool_controller.get_scene():
-		_dismiss_maneuver_tool_with_preview()
-		return
-	if _maneuver_tool_controller.is_selecting():
-		_maneuver_tool_controller.cancel_selection()
-		return
-	_maneuver_tool_controller.start_selection()
-
-## Handles keyboard shortcuts for the tool buttons (M / R / T).
-## Returns true if the event was consumed.
-## Requirements: MT-U-007, RO-008, TL-UI-003a.
-func _handle_tool_shortcut(event: InputEvent) -> bool:
-	if not event is InputEventKey:
-		return false
-	var key_event: InputEventKey = event as InputEventKey
-	if not key_event.pressed or key_event.echo:
-		return false
-	if not _are_tool_buttons_enabled():
-		return false
-	match key_event.keycode:
-		KEY_M:
-			_log.info("Keyboard shortcut: M (Maneuver Tool).")
-			EventBus.maneuver_tool_requested.emit()
-			get_viewport().set_input_as_handled()
-			return true
-		KEY_R:
-			_log.info("Keyboard shortcut: R (Range Overlay).")
-			EventBus.range_overlay_requested.emit()
-			get_viewport().set_input_as_handled()
-			return true
-		KEY_T:
-			_log.info("Keyboard shortcut: T (Targeting List).")
-			EventBus.targeting_list_requested.emit()
-			get_viewport().set_input_as_handled()
-			return true
-		KEY_A:
-			_log.info("Keyboard shortcut: A (Attack Simulator).")
-			EventBus.attack_simulator_requested.emit()
-			get_viewport().set_input_as_handled()
-			return true
-	return false
-
-## Returns true when the toolbar action buttons are interactable.
-## Mirrors the disabled state applied by [method ActionToolbar.set_tool_buttons_disabled].
-func _are_tool_buttons_enabled() -> bool:
-	if _panel_mgr.action_toolbar == null:
-		return false
-	if _panel_mgr.action_toolbar._maneuver_tool_btn and _panel_mgr.action_toolbar._maneuver_tool_btn.disabled:
-		return false
-	return true
-## Handles the "Range Overlay" button press.
-## Toggle behaviour: if an overlay is already visible, dismiss it.
-## If selecting, cancel selection. Otherwise enter selection mode.
-## When a maneuver tool is active, toggles the overlay on the ghost
-## preview instead of requiring ship selection.
-## Requirements: RO-001, RO-002.
-func _on_range_overlay_requested() -> void:
-	# If a maneuver tool is active, toggle the overlay on the ghost.
-	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	if mt_scene:
-		mt_scene.toggle_ghost_range_overlay()
-		return
-	if _range_tool_controller.get_scene():
-		_range_tool_controller.dismiss()
-		return
-	if _range_tool_controller.is_selecting():
-		_range_tool_controller.cancel_selection()
-		return
-	_range_tool_controller.start_selection()
+# All toolbar request handlers, keyboard shortcuts (M / R / T / A), the
+# Escape → dismiss / cancel routing and the dismiss-other-tools coordination
+# now live on [ToolOverlayController] (Phase K11).
 
 
 # ---------------------------------------------------------------------------
@@ -1469,7 +1362,7 @@ func _create_target_selector() -> void:
 			_token_container, _camera, AttackState.new(),
 			AttackDiceResolver.new())
 	_target_selector.dismiss_other_tools_requested.connect(
-			_on_dismiss_other_tools_requested)
+			_tool_overlay_controller.dismiss_other_tools)
 
 ## Creates the [AttackExecutor] child node.  Its
 ## attack_exec_completed / attack_exec_cancelled signals are connected
@@ -1491,28 +1384,19 @@ func _create_attack_panel_controller() -> void:
 	_attack_panel_controller.initialize(
 			_attack_executor, _panel_mgr, _target_selector)
 
-## Creates the [ManeuverToolController] child node.
-func _create_maneuver_tool_controller() -> void:
-	_maneuver_tool_controller = ManeuverToolController.new()
-	_maneuver_tool_controller.name = "ManeuverToolController"
-	add_child(_maneuver_tool_controller)
-	_maneuver_tool_controller.initialize(_token_container)
-
-## Creates the [RangeToolController] child node.
-func _create_range_tool_controller() -> void:
-	_range_tool_controller = RangeToolController.new()
-	_range_tool_controller.name = "RangeToolController"
-	add_child(_range_tool_controller)
-	_range_tool_controller.initialize(_token_container)
-
-## Creates the [TargetingListController] child node.
-func _create_targeting_list_controller() -> void:
-	_targeting_list_controller = TargetingListController.new()
-	_targeting_list_controller.name = "TargetingListController"
-	add_child(_targeting_list_controller)
-	_targeting_list_controller.initialize(
-			get_ship_tokens, get_squadron_tokens,
-			_maneuver_tool_controller, _panel_mgr, self )
+## Creates the [ToolOverlayController] child node which owns the
+## maneuver / range / targeting sub-controllers (Phase K11).
+func _create_tool_overlay_controller() -> void:
+	_tool_overlay_controller = ToolOverlayController.new()
+	_tool_overlay_controller.name = "ToolOverlayController"
+	add_child(_tool_overlay_controller)
+	_tool_overlay_controller.initialize(
+			_token_container,
+			_panel_mgr,
+			_activation_ctx,
+			get_ship_tokens,
+			get_squadron_tokens,
+			self )
 
 ## Creates the [SquadronPhaseController] child node and wires its signals.
 func _create_squadron_phase_controller() -> void:
@@ -1542,11 +1426,10 @@ func _create_squadron_phase_controller() -> void:
 
 ## Dismisses the maneuver tool, passing the current activation ship so the
 ## Navigate-token spend preview overlay is cleared when appropriate.
+## Thin wrapper around [method ToolOverlayController.dismiss_maneuver_tool_with_preview]
+## kept because [ShipActivationController] receives this Callable on init.
 func _dismiss_maneuver_tool_with_preview() -> void:
-	var ship: ShipInstance = null
-	if _activation_ctx.ship_activation_state:
-		ship = _activation_ctx.ship_activation_state.get_ship()
-	_maneuver_tool_controller.dismiss(ship)
+	_tool_overlay_controller.dismiss_maneuver_tool_with_preview()
 
 ## Creates the [DebugController] child node with overlay, HUD, and saver.
 func _create_debug_controller() -> void:
@@ -1603,7 +1486,7 @@ func _initialize_ship_activation_controller() -> void:
 			_squadron_phase_controller,
 			_damage_deck,
 			_dial_drag_controller,
-			_maneuver_tool_controller,
+			_tool_overlay_controller.get_maneuver_tool_controller(),
 			_displacement_controller,
 			_find_ship_token_for_instance,
 			_has_repair_resources,
@@ -1624,11 +1507,12 @@ func _create_command_phase_controller() -> void:
 	_command_phase_controller.initialize()
 
 ## Called by [signal AttackExecutor.dismiss_other_tools_requested].
-## Dismisses range overlay, targeting list, and maneuver tool.
+## Dismisses range overlay, targeting list, and maneuver tool via the
+## [ToolOverlayController].  Phase K11: thin delegation wrapper kept for
+## any direct callers — the actual signal connection points at
+## [method ToolOverlayController.dismiss_other_tools].
 func _on_dismiss_other_tools_requested() -> void:
-	_range_tool_controller.dismiss()
-	_targeting_list_controller.dismiss()
-	_dismiss_maneuver_tool_with_preview()
+	_tool_overlay_controller.dismiss_other_tools()
 
 ## Returns true if the given ship token has a revealed Repair dial
 ## or a Repair command token **and** the ship actually has something

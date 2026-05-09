@@ -185,31 +185,38 @@ func _on_save_positions() -> void:
 # Extracted from game_board.gd as part of refactoring phase K10.
 # ---------------------------------------------------------------------------
 
-## All 22 damage card types: [effect_id, title, trait].
-const DEBUG_DAMAGE_CARDS: Array[Array] = [
-	["blinded_gunners", "Blinded Gunners", "Crew"],
-	["comm_noise", "Comm Noise", "Crew"],
-	["compartment_fire", "Compartment Fire", "Crew"],
-	["crew_panic", "Crew Panic", "Crew"],
-	["damaged_controls", "Damaged Controls", "Crew"],
-	["injured_crew", "Injured Crew", "Crew"],
-	["life_support_failure", "Life Support Failure", "Crew"],
-	["capacitor_failure", "Capacitor Failure", "Ship"],
-	["coolant_discharge", "Coolant Discharge", "Ship"],
-	["damaged_munitions", "Damaged Munitions", "Ship"],
-	["depowered_armament", "Depowered Armament", "Ship"],
-	["disengaged_fire_control", "Disengaged Fire Control", "Ship"],
-	["faulty_countermeasures", "Faulty Countermeasures", "Ship"],
-	["point_defense_failure", "Point-Defense Failure", "Ship"],
-	["power_failure", "Power Failure", "Ship"],
-	["projector_misaligned", "Projector Misaligned", "Ship"],
-	["ruptured_engine", "Ruptured Engine", "Ship"],
-	["shield_failure", "Shield Failure", "Ship"],
-	["structural_damage", "Structural Damage", "Ship"],
-	["targeter_disruption", "Targeter Disruption", "Ship"],
-	["thrust_control_malfunction", "Thrust Control Malfunction", "Ship"],
-	["thruster_fissure", "Thruster Fissure", "Ship"],
-]
+## Path to the authoritative damage-card data JSON.
+const DEBUG_DAMAGE_CARDS_FILE: String = "damage_cards.json"
+
+## Lazily populated catalogue of unique damage-card definitions loaded from
+## [member DEBUG_DAMAGE_CARDS_FILE].  Each entry has the keys
+## `effect_id`, `title`, `trait`, `timing`, and `effect_text` — exactly the
+## schema produced by `Resources/Game_Components/damage_cards.json`, which
+## is the single source of truth for damage-card metadata.
+var _debug_damage_cards: Array[Dictionary] = []
+
+
+## Returns the cached damage-card catalogue, loading it lazily on first
+## access.  The catalogue contains one entry per unique `effect_id` from
+## `damage_cards.json` (count is ignored — the debug picker shows each
+## card type once).
+func _get_debug_damage_cards() -> Array[Dictionary]:
+	if not _debug_damage_cards.is_empty():
+		return _debug_damage_cards
+	var data: Dictionary = AssetLoader.load_json("", DEBUG_DAMAGE_CARDS_FILE)
+	if data.is_empty() or not data.has("cards"):
+		_log.error("Failed to load debug damage card data from %s" %
+				DEBUG_DAMAGE_CARDS_FILE)
+		return _debug_damage_cards
+	for entry: Dictionary in data["cards"] as Array:
+		_debug_damage_cards.append({
+			"effect_id": str(entry.get("effect_id", "")),
+			"title": str(entry.get("title", "")),
+			"trait": str(entry.get("trait", "Ship")),
+			"timing": str(entry.get("timing", "persistent")),
+			"effect_text": str(entry.get("effect_text", "")),
+		})
+	return _debug_damage_cards
 
 ## Tracks "click a ship to deal faceup damage" mode (Shift+D).
 var _debug_damage_targeting: bool = false
@@ -321,10 +328,10 @@ func _open_debug_damage_modal(token: ShipToken) -> void:
 	TooltipManager.hide_tooltip()
 	_ensure_debug_damage_modal()
 	var options: Array[Dictionary] = []
-	for entry: Array in DEBUG_DAMAGE_CARDS:
+	for entry: Dictionary in _get_debug_damage_cards():
 		options.append({
-			"id": entry[0] as String,
-			"label": "%s (%s)" % [entry[1], entry[2]],
+			"id": entry["effect_id"] as String,
+			"label": "%s (%s)" % [entry["title"], entry["trait"]],
 			"available": true,
 		})
 	var choice_info: Dictionary = {
@@ -386,39 +393,23 @@ func _debug_deal_faceup_card(ship: ShipInstance,
 		TooltipManager.show_text("Damage deck empty", Vector2.INF, 3.0)
 		_log.warn("Debug damage: deck empty.")
 		return
-	# Find the title for this effect_id.
-	var title: String = effect_id
-	var timing: String = "persistent"
-	for entry: Array in DEBUG_DAMAGE_CARDS:
-		if entry[0] as String == effect_id:
-			title = entry[1] as String
+	# Look up the card definition from the single source of truth
+	# (damage_cards.json).  All identity fields — title, trait, timing,
+	# effect_text — come from the data file rather than being hardcoded.
+	var def: Dictionary = {}
+	for entry: Dictionary in _get_debug_damage_cards():
+		if entry["effect_id"] as String == effect_id:
+			def = entry
 			break
-	# Determine timing from data.
-	match effect_id:
-		"comm_noise", "injured_crew", "projector_misaligned", \
-				"shield_failure", "structural_damage":
-			timing = "immediate"
-		"life_support_failure":
-			timing = "immediate_persistent"
-		_:
-			timing = "persistent"
-	# Override card identity.
+	if def.is_empty():
+		_log.warn("Debug damage: unknown effect_id '%s'." % effect_id)
+		return
+	# Override card identity from the data definition.
 	card.effect_id = effect_id
-	card.title = title
-	card.timing = timing
-	card.trait_type = "Ship"
-	for entry: Array in DEBUG_DAMAGE_CARDS:
-		if entry[0] as String == effect_id:
-			card.trait_type = entry[2] as String
-			break
-	# Look up the correct effect_text from damage_cards.json so the
-	# immediate-choice modal shows the right description.
-	var json_data: Dictionary = AssetLoader.load_json("", "damage_cards.json")
-	if json_data.has("cards"):
-		for cdef: Dictionary in json_data["cards"]:
-			if cdef.get("effect_id", "") == effect_id:
-				card.effect_text = cdef.get("effect_text", "")
-				break
+	card.title = def["title"] as String
+	card.timing = def["timing"] as String
+	card.trait_type = def["trait"] as String
+	card.effect_text = def["effect_text"] as String
 	card.is_faceup = true
 	# Submit through command for replay / multiplayer safety.  All
 	# post-submit work (visual emit, immediate-effect chain, tooltip,

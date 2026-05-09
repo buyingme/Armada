@@ -1712,4 +1712,3 @@ func _is_squadron_token_only(ship_token: Variant) -> bool:
 	var has_token: bool = inst.command_tokens != null and \
 			inst.command_tokens.has_token(Constants.CommandType.SQUADRON)
 	return has_token and not has_dial
-

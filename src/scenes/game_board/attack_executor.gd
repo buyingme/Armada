@@ -1030,7 +1030,11 @@ func _attack_exec_start_defense() -> void:
 		"defense_tokens": def_inst.defense_tokens.duplicate(true),
 	})
 	# Rotate camera to the defender's perspective (AE-DEF-011).
-	if _camera and PlayMode.is_hot_seat():
+	# Phase K4: hot-seat detected via `local_player_index < 0` (no
+	# network session).  In network each peer's camera is locked to
+	# its own seat, so the rotate-to-defender behaviour is hot-seat-
+	# only.
+	if _camera and NetworkManager.get_local_player_index() < 0:
 		_camera.rotate_to_player(def_inst.owner_player)
 	_log.info("Defense step: %d spendable tokens, %d damage." % [
 			_count_spendable_defense_tokens(def_inst),
@@ -1042,12 +1046,14 @@ func _attack_exec_start_defense() -> void:
 		# so the attacker can watch the defender's token toggles and
 		# the eventual Commit Defense, but cannot author input.
 		# Hot-seat keeps the existing interactive flow.
+		# Phase K4: discriminator is `local_player_index < 0` (no
+		# network session => hot-seat => attacker panel interactive).
 		_get_panel().show_defense_section(
 				def_inst.defense_tokens,
 				_state.locked_tokens,
 				_state.modified_damage,
 				def_inst.current_speed,
-				not PlayMode.is_network())
+				NetworkManager.get_local_player_index() < 0)
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
@@ -1239,9 +1245,10 @@ func _attack_exec_start_evade() -> void:
 	# now renders the same evade prompt in [b]read-only[/b] mode
 	# (dice tinted but not clickable) so the attacker can watch.
 	# Hot-seat keeps the existing interactive flow.
+	# Phase K4: discriminator is `local_player_index < 0` (hot-seat).
 	if _get_panel():
 		_get_panel().show_evade_die_selection(
-				range_band, not PlayMode.is_network())
+				range_band, NetworkManager.get_local_player_index() < 0)
 
 ## Called when the defender selects a die during evade die-selection.
 ## Submits a [SelectEvadeDieCommand] so the remove-die / reroll-die
@@ -1388,10 +1395,11 @@ func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 	# same redirect zone-selection section in [b]read-only[/b] mode
 	# (zone buttons disabled, Done button hidden).  The interactive
 	# zone buttons live on the defender peer's [AttackPanelMirror].
+	# Phase K4: discriminator is `local_player_index < 0` (hot-seat).
 	if _get_panel():
 		_get_panel().show_redirect_section(
 				adjacent, _state.redirect_remaining,
-				not PlayMode.is_network())
+				NetworkManager.get_local_player_index() < 0)
 
 ## Called when the player selects a hull zone for redirect on the
 ## attacker peer's local panel (hot-seat) or when the defender peer's
@@ -2042,16 +2050,21 @@ func _start_immediate_choice_flow() -> void:
 	# the remote peer, the [AttackPanelMirror] on that peer opens the
 	# modal from the published payload; the local executor waits for
 	# [signal CommandProcessor.command_executed] to clean up.
-	if PlayMode.is_network():
-		var local: int = NetworkManager.get_local_player_index()
-		if chooser_player == local:
+	# Phase K4: discriminator is `local_player_index >= 0` (network
+	# session active).
+	var local_pi: int = NetworkManager.get_local_player_index()
+	if local_pi >= 0:
+		if chooser_player == local_pi:
 			_show_immediate_choice_modal()
 		else:
 			_log.info("Immediate choice deferred to remote chooser peer "
 					+"(chooser_player=%d local=%d)."
-					% [chooser_player, local])
+					% [chooser_player, local_pi])
 		return
-	if PlayMode.is_hot_seat() and _camera:
+	# Hot-seat: handoff overlay rotates camera + waits for the chooser
+	# to dismiss before opening the modal.  Phase K4: PlayMode.is_hot_seat()
+	# guard removed (dead after the network early-return above).
+	if _camera:
 		_camera.rotate_to_player(chooser_player)
 		if _handoff_overlay:
 			_handoff_overlay.show_handoff(
@@ -2208,8 +2221,11 @@ func _attack_exec_finalize_attack() -> void:
 	_finish_attack_execution()
 
 ## Rotates the camera back to the attacker’s perspective (AE-DEF-011).
+## Phase K4: hot-seat detected via `local_player_index < 0`.  In
+## network each peer's camera is locked to its own seat, so the
+## rotate-back behaviour is hot-seat-only.
 func _rotate_camera_to_attacker() -> void:
-	if not _camera or not PlayMode.is_hot_seat():
+	if not _camera or NetworkManager.get_local_player_index() >= 0:
 		return
 	if _state.exec_ship_token:
 		var atk_inst: ShipInstance = (

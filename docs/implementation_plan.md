@@ -18,7 +18,7 @@
 | GUT tests | 2 882 |
 | GUT asserts | 5 432 |
 | Failing tests | 0 |
-| Last commit | `9a1f763` (Phase K10 — extract debug damage dealing into `DebugController`) |
+| Last commit | `ef2c84e` (Phase K11 — extract `ToolOverlayController`) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

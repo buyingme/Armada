@@ -278,14 +278,21 @@ This two-step approach keeps each commit green and testable.
 Refactoring commits touch **one source file** (+ its test file). Never refactor
 multiple source files in the same commit — it makes bisecting failures easier.
 
-### Test count must not drop
+### Test count must not drop, lint must stay clean
 
 After every refactoring change:
 ```bash
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+bash scripts/lint_phase_k.sh
 ```
 If the script count or test count drops, **stop and find the parse error**
 before continuing. The most common cause is mixed tabs/spaces.
+
+`lint_phase_k.sh` must report `0 violations`. Refactors must not introduce
+new `if PlayMode.is_network()` / `is_hot_seat()` branches in `src/scenes/`
+or `src/ui/` — route through `UIProjector.project()` instead. **Never**
+silence the lint by editing the allow-list count without explicit user
+approval.
 
 ---
 

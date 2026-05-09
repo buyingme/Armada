@@ -111,15 +111,18 @@ func can_spend_defense_token(defender_speed: int) -> bool:
     return defender_speed > 0
 ```
 
-### 9. Verify Test Count After Every Change
+### 9. Verify Test Count and Lint After Every Change
 
-After editing source or test files, always run the full suite and confirm both the script count and the pass count:
+After editing source or test files, always run the full suite **and** the Phase K lint, and confirm both the script count and the pass count, plus zero lint violations:
 
 ```bash
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+bash scripts/lint_phase_k.sh
 ```
 
 GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
+
+`scripts/lint_phase_k.sh` must exit `0` and report `0 violations`. New `if PlayMode.is_network()` / `is_hot_seat()` branches in `src/scenes/` or `src/ui/` are forbidden — route through `UIProjector.project()` instead. Never silence the lint by bumping the allow-list count without explicit approval.
 
 ### 10. Generate `.uid` Files for New Scripts
 
@@ -151,10 +154,12 @@ When asked to implement a feature or fix a bug:
 5. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
 6. **Write the tests first or alongside** — Never submit untested logic
 7. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
-8. **Verify** — Run tests and confirm: 0 failures, expected script count, no parse errors:
+8. **Verify** — Run tests **and** the Phase K lint and confirm: 0 failures, expected script count, no parse errors, lint exit 0:
    ```bash
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+   bash scripts/lint_phase_k.sh
    ```
+   The lint must report `0 violations` (allow-listed branches are fine). If it fails, fix before continuing — never silence it by editing the allow-list count without explicit approval.
 9. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
 10. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
 

@@ -218,16 +218,18 @@ Symptom: Test total drops unexpectedly (e.g. 274 → 260 with "0 failed").
 
 ## Before Committing
 
-Run the full test suite and check the tail output:
+Run the full test suite **and** the Phase K lint, and check both outputs:
 
 ```bash
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+bash scripts/lint_phase_k.sh
 ```
 
 Requirements before any commit:
 - ✅ 0 failures
 - ✅ Total test count matches expectation (no silent drops)
 - ✅ No `Parse Error:` in output
+- ✅ `lint_phase_k.sh` exits 0 and reports `0 violations` (allow-listed branches are fine; **never** silence the lint by editing the allow-list count without explicit user approval)
 - ✅ Implementation plan updated if a phase task was completed
 
 ### Manual Test Gate (Mandatory)

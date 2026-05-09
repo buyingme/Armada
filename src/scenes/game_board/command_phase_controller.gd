@@ -159,15 +159,24 @@ func _advance_picker_queue() -> void:
 
 
 ## Builds the player order array based on hot-seat vs. network mode.
+## Phase K3: branches on [code]NetworkManager.get_local_player_index()[/code]
+## (which returns [code]-1[/code] outside a network session) instead of
+## reading [code]PlayMode[/code] directly.  This is the same conceptual
+## axis — "am I in a network session?" — but expressed in terms of the
+## value that actually determines the queue contents.
 func _build_player_order(
 		gs: GameState, assigning: int) -> Array[int]:
 	var order: Array[int] = []
-	if PlayMode.is_hot_seat() and assigning >= 0:
+	var local: int = NetworkManager.get_local_player_index()
+	if local >= 0:
+		# Network: each peer only assigns dials for their own ships.
+		order.append(local)
+	elif assigning >= 0:
+		# Hot-seat: only the currently-assigning player's ships.
 		order.append(assigning)
-	elif PlayMode.is_network():
-		# Network: each client only assigns dials for their own ships.
-		order.append(NetworkManager.get_local_player_index())
 	else:
+		# Fallback (e.g. test setup with no active session): both
+		# players, initiative first.
 		order.append(gs.initiative_player)
 		order.append(1 - gs.initiative_player)
 	return order

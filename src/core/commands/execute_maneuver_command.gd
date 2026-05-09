@@ -15,6 +15,10 @@
 ##   "pos_x"         — normalised X (0.0 = left, 1.0 = right).
 ##   "pos_y"         — normalised Y (0.0 = top,  1.0 = bottom).
 ##   "rotation_deg"  — rotation in degrees (0 = facing up / -Y).
+##   "yaw_bonus_joint" — int, joint index granted +1 yaw via the
+##                       Navigate command's yaw bonus, or -1 if none.
+##                       Rules Reference: "Navigate" — increase 1 yaw
+##                       value by 1 at any joint.
 ##
 ## Rules Reference: "Ship Phase", "Execute Maneuver", p.7; MV-001–005.
 class_name ExecuteManeuverCommand
@@ -53,8 +57,10 @@ func validate(game_state: GameState) -> String:
 	if speed > 0 and yaw_clicks.is_empty():
 		return "Missing yaw clicks for non-zero speed."
 	if speed > 0 and ship.ship_data != null:
-		if not ManeuverCalculator.validate_yaw_clicks(
-				ship.ship_data.navigation_chart, speed, yaw_clicks):
+		var bonus_joint: int = int(payload.get("yaw_bonus_joint", -1))
+		if not _validate_yaw_clicks_with_bonus(
+				ship.ship_data.navigation_chart, speed,
+				yaw_clicks, bonus_joint):
 			return "Yaw clicks exceed navigation chart limits."
 	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing final position."
@@ -88,4 +94,26 @@ func execute(game_state: GameState) -> Dictionary:
 		"pos_x": new_x,
 		"pos_y": new_y,
 		"rotation_deg": new_rot,
+		"yaw_bonus_joint": int(payload.get("yaw_bonus_joint", -1)),
 	}
+
+
+## Validates yaw clicks, allowing one joint (when [param bonus_joint] >= 0)
+## to exceed its navigation-chart limit by 1 due to the Navigate command's
+## yaw bonus.
+## Rules Reference: "Navigate" — increase 1 yaw value by 1 at any joint.
+static func _validate_yaw_clicks_with_bonus(
+		nav_chart: Array, speed: int,
+		yaw_clicks_per_joint: Array, bonus_joint: int) -> bool:
+	var joint_count: int = ManeuverCalculator.get_joint_count(speed)
+	if yaw_clicks_per_joint.size() != joint_count:
+		return false
+	for idx: int in range(joint_count):
+		var clicks: int = abs(int(yaw_clicks_per_joint[idx]))
+		var max_clicks: int = ManeuverCalculator.get_max_yaw(
+				nav_chart, speed, idx)
+		if idx == bonus_joint:
+			max_clicks += 1
+		if clicks > max_clicks:
+			return false
+	return true

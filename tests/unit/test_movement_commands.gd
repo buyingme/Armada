@@ -302,6 +302,59 @@ func test_execute_maneuver_validate_exceeds_yaw_limits() -> void:
 			"Should reject yaw clicks exceeding nav chart.")
 
 
+func test_execute_maneuver_yaw_bonus_joint_allows_one_extra_click() -> void:
+	# Nebulon-style desync regression: speed 3, joint 0 max=0 in nav chart.
+	# With Navigate token's yaw bonus on joint 0, max becomes 1.
+	# Rules Reference: "Navigate" — increase 1 yaw value by 1 at any joint.
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 3,
+		"yaw_clicks": [1, 1, 0],
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
+		"yaw_bonus_joint": 0,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Yaw bonus on joint 0 should allow one click over nav chart limit.")
+
+
+func test_execute_maneuver_yaw_bonus_does_not_grant_two_extra() -> void:
+	# Bonus only adds +1 to the targeted joint's limit.
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 3,
+		"yaw_clicks": [2, 1, 0],
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
+		"yaw_bonus_joint": 0,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Yaw bonus should not allow exceeding limit by 2.")
+
+
+func test_execute_maneuver_yaw_bonus_only_helps_targeted_joint() -> void:
+	# Bonus on joint 2 must not let joint 0 exceed its limit.
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 3,
+		"yaw_clicks": [1, 1, 0],
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
+		"yaw_bonus_joint": 2,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Bonus on joint 2 must not legalise joint 0 click.")
+
+
 func test_execute_maneuver_validate_wrong_joint_count() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)

@@ -205,6 +205,18 @@ func start_new_game_from_state(
 	current_game_state = state
 	if current_game_state.effect_registry == null:
 		current_game_state.effect_registry = EffectRegistry.new()
+	# Squadron keyword effects (Bomber, Escort, Swarm, …) are NOT
+	# serialized — `GameState.deserialize` rebuilds the registry empty.
+	# Re-register them now so loaded saves work even when the load lands
+	# outside the Squadron Phase (e.g. mid–Ship Phase, where
+	# `_begin_squadron_phase` won't run until the next round).
+	# Without this, e.g. an X-wing's Bomber crit deals 0 damage on
+	# squadron-vs-ship attacks issued under a Squadron command in the
+	# very first activation after the load.
+	if current_game_state.effect_registry.get_effect_count() == 0:
+		EffectFactory.register_squadron_keywords(
+				current_game_state,
+				current_game_state.initiative_player)
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
 	is_game_active = true
@@ -886,16 +898,20 @@ func submit_commit_displacement(placements: Array) -> Dictionary:
 ## [param norm_x] — normalised X position (0.0–1.0).
 ## [param norm_y] — normalised Y position (0.0–1.0).
 ## [param rotation_deg] — final rotation in degrees.
+## [param yaw_bonus_joint] — joint index granted +1 yaw via the
+##   Navigate command's yaw bonus, or -1 if none.  Rules Reference:
+##   "Navigate" — increase 1 yaw value by 1 at any joint.
 func submit_execute_maneuver(ship: ShipInstance, speed: int,
 		yaw_clicks: Array, norm_x: float, norm_y: float,
-		rotation_deg: float) -> Dictionary:
+		rotation_deg: float, yaw_bonus_joint: int = -1) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ExecuteManeuverCommand.new(ship.owner_player, {
 		"ship_index": ship_index, "speed": speed,
 		"yaw_clicks": yaw_clicks, "pos_x": norm_x, "pos_y": norm_y,
-		"rotation_deg": rotation_deg})
+		"rotation_deg": rotation_deg,
+		"yaw_bonus_joint": yaw_bonus_joint})
 	return _submitter.submit(cmd)
 
 

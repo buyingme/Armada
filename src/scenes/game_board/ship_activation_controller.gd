@@ -959,6 +959,13 @@ func _on_execute_maneuver() -> void:
 		return
 	if _maneuver_tool_controller.get_scene() == null:
 		return
+	# Capture the pre-move transform so we can revert on command rejection.
+	# Without this, a host-side validation failure (e.g. yaw clicks exceeding
+	# the nav chart) would leave the host's visuals advanced while the
+	# authoritative GameState and any remote peer stayed at the old position.
+	var pre_move_xform: Transform2D = Transform2D(
+			_activation_ctx.activating_ship_token.global_rotation,
+			_activation_ctx.activating_ship_token.global_position)
 	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex()
 	_activation_ctx.activating_ship_token.global_position = final_xform.origin
 	_activation_ctx.activating_ship_token.global_rotation = final_xform.get_rotation()
@@ -973,6 +980,8 @@ func _on_execute_maneuver() -> void:
 
 	# Record the maneuver via command for replay determinism.
 	var mt_scene_ref: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	var maneuver_submitted: bool = false
+	var maneuver_result: Dictionary = {}
 	if mt_scene_ref:
 		var tool_st: ManeuverToolState = mt_scene_ref.get_state()
 		var spd: int = tool_st.get_speed()
@@ -981,13 +990,25 @@ func _on_execute_maneuver() -> void:
 		var active_clicks: Array = []
 		for i: int in range(mini(spd, all_clicks.size())):
 			active_clicks.append(all_clicks[i])
+		var bonus_joint: int = tool_st.get_yaw_bonus_joint()
 		var pa: Vector2 = GameScale.play_area_size_px
 		if pa.x > 0.0 and pa.y > 0.0:
 			var norm_x: float = final_xform.origin.x / pa.x
 			var norm_y: float = final_xform.origin.y / pa.y
 			var rot_deg: float = rad_to_deg(final_xform.get_rotation())
-			GameManager.submit_execute_maneuver(maneuver_ship,
-					spd, active_clicks, norm_x, norm_y, rot_deg)
+			maneuver_submitted = true
+			maneuver_result = GameManager.submit_execute_maneuver(
+					maneuver_ship, spd, active_clicks,
+					norm_x, norm_y, rot_deg, bonus_joint)
+	# If the command was rejected (empty Dictionary), revert the local
+	# visual snap so the host stays consistent with the authoritative
+	# GameState (and with any remote peer, which never received a
+	# broadcast).  Abort the rest of the post-maneuver flow.
+	if maneuver_submitted and maneuver_result.is_empty():
+		_log.error("ExecuteManeuverCommand rejected — reverting local snap.")
+		_activation_ctx.activating_ship_token.global_position = pre_move_xform.origin
+		_activation_ctx.activating_ship_token.global_rotation = pre_move_xform.get_rotation()
+		return
 
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.

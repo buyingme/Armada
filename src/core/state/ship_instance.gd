@@ -375,8 +375,13 @@ static func deserialize(
 	var inst: ShipInstance = ShipInstance.new()
 	inst.data_key = data.get("data_key", "") as String
 	inst.ship_data = ship_data_ref
-	inst.current_shields = (data.get("current_shields", {})
-			as Dictionary).duplicate()
+	# JSON round-trips coerce ints to floats; force int back so the
+	# UI ([ShipToken] hull/shield labels) renders "1" rather than "1.0".
+	inst.current_shields = {}
+	var shields_raw: Dictionary = data.get(
+			"current_shields", {}) as Dictionary
+	for zone: Variant in shields_raw:
+		inst.current_shields[zone] = int(shields_raw[zone])
 	inst.current_hull = int(data.get("current_hull", 0))
 	inst.current_speed = int(data.get("current_speed", 0))
 	inst.pos_x = float(data.get("pos_x", 0.0))

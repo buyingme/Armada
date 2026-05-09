@@ -484,6 +484,20 @@ func test_deserialize_round_trip_shields() -> void:
 			"Round-trip should preserve untouched shields")
 
 
+## Bug guard: JSON round-trips coerce ints to floats; deserialize must
+## return them as ints so UI labels render "1" rather than "1.0".
+func test_deserialize_coerces_shield_floats_to_ints() -> void:
+	var data: Dictionary = _instance.serialize()
+	# Simulate a JSON-stringify+parse round-trip where ints become floats.
+	var data_via_json: Dictionary = JSON.parse_string(
+			JSON.stringify(data)) as Dictionary
+	var restored: ShipInstance = ShipInstance.deserialize(
+			data_via_json, _ship_data)
+	for zone: Variant in restored.current_shields:
+		assert_eq(typeof(restored.current_shields[zone]), TYPE_INT,
+				"Shield zone '%s' must be int after JSON round-trip" % zone)
+
+
 func test_deserialize_round_trip_defense_tokens() -> void:
 	_instance.exhaust_defense_token(0)
 	_instance.discard_defense_token(2)

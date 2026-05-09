@@ -398,6 +398,8 @@ func _on_load_dialog_cancelled() -> void:
 ## Resolves the current play mode from the autoloads.
 ## Returns [enum Mode].
 static func resolve_current_mode() -> Mode:
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  Mode
+	# resolution is by definition a deployment-topology query.
 	if is_instance_valid(PlayMode) and PlayMode.is_network():
 		if is_instance_valid(NetworkManager) and NetworkManager.is_server():
 			return Mode.NETWORK_HOST

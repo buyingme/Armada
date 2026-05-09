@@ -367,6 +367,9 @@ func _network_blocked_tooltip() -> String:
 func _is_hot_seat_blocked() -> bool:
 	if context == "lobby":
 		return true
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  Loading
+	# a hot-seat save into an active network session would tear it down
+	# without including the connected client — deployment-topology guard.
 	if context == "in_game" and is_instance_valid(PlayMode) \
 			and PlayMode.is_network():
 		return true
@@ -492,6 +495,8 @@ func _on_load_pressed() -> void:
 	# learns about the load and reloads its board scene.  The
 	# in-session host's own scene reload happens inside
 	# LobbyManager.host_load_save → _maybe_force_board_reload.
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a) —
+	# "is this a network host?" is intrinsically a deployment query.
 	var host_network_load: bool = (
 			is_instance_valid(PlayMode) and PlayMode.is_network()
 			and is_instance_valid(NetworkManager)

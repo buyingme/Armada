@@ -362,6 +362,9 @@ func _update_display() -> void:
 func _update_network_info() -> void:
 	if _endpoint_label == null or _diagnostics_label == null:
 		return
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  The
+	# lobby diagnostics rows are network-only by definition; hot-seat has
+	# no endpoint or peer to display.
 	if not PlayMode.is_network():
 		_endpoint_label.visible = false
 		_diagnostics_label.visible = false

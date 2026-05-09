@@ -267,6 +267,8 @@ func _perform_save(name: String) -> void:
 		return
 	# Phase J6: in network mode, the host notifies the client so they
 	# see a confirmation toast.
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a) —
+	# host-only broadcast is intrinsically a network-deployment concern.
 	if PlayMode != null and PlayMode.is_network() \
 			and is_instance_valid(NetworkManager) \
 			and NetworkManager.is_server():

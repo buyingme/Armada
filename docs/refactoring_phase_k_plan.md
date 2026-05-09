@@ -233,25 +233,27 @@ artefact cleanup, signal emission.
 | `tests/unit/test_attack_flow_executor.gd` | (after K2b) FSM transitions for ship-attack and squadron-attack |
 | `tests/unit/test_network_phase_sync.gd` | (after K2c) `_handle_remote_*` payloads emit correct EventBus signals |
 
-### 3.5 Lint guards (K5)
+### 3.5 Lint guards (K7)
 
-New `scripts/lint_phase_k.sh`:
+New [scripts/lint_phase_k.sh](../scripts/lint_phase_k.sh): scans
+`src/scenes/` and `src/ui/` for `if PlayMode.is_network()` / `is_hot_seat()`
+branches and fails unless every hit is within ±8 lines of a
+`# Phase K allow-list:` marker comment.  Pure comment lines are skipped.
+The ±8-line window accommodates multi-line `if`-conditions where the
+marker block sits above the boolean chain.
+
+Run manually before every presentation-layer commit:
+
+```bash
+./scripts/lint_phase_k.sh
+```
+
+Non-zero exit on any un-marked branch.  Recommended pre-commit hook:
 
 ```bash
 #!/usr/bin/env bash
-set -e
-fail=0
-echo "→ checking PlayMode branches in presentation layer"
-if git grep -nE 'if[[:space:]]+PlayMode\.is_(network|hot_seat)' -- src/scenes src/ui ; then
-  echo "FAIL: PlayMode branches must be replaced with UIProjector.project()"; fail=1
-fi
-echo "→ checking function length (>30 LOC) in src/core and src/scenes"
-# (awk pass over .gd files; reuse existing helper if present)
-exit $fail
+exec ./scripts/lint_phase_k.sh
 ```
-
-Wired into `.git/hooks/pre-commit` (instructions added to
-`docs/setup_network_game.md` developer-setup section).
 
 ---
 
@@ -268,9 +270,9 @@ observable. Numbering matches the eventual phase-status table row.
 | **K2** | Delete dead defensive guard at game_board.gd:892 (unreachable given 2-mode enum). Add `# Phase K allow-list: session-mode dispatcher — see plan §3.1a` markers to lines 889, 1072, 1091, 1325, 1508, 2138 with brief rationale comments. **No converge of `_on_active_player_changed` paths** — see §3.1d (deferred to Phase L). | low | +30 / -3 | yes |
 | **K3** | Replace 2 branches in [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) (lines 165 / 167). `_build_player_order` rewritten to branch on `NetworkManager.get_local_player_index() >= 0` (returns -1 in hot-seat). | low | +12 / -8 | yes |
 | **K4** | Replace 7 branches in [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) (lines 1033, 1050, 1244, 1394, 2045, 2054, 2212). All seven became `NetworkManager.get_local_player_index()` comparisons; site `:2054` was a dead `is_hot_seat()` guard reduced to `if _camera:`. | medium | +30 / -10 | yes |
-| **K5** | Replace 2 branches in [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) (lines 124, 342). Both became `NetworkManager.get_local_player_index() >= 0` comparisons (same axis as K3/K4) — the branches gate camera rotation around squadron displacement, not modal authority. Committed `<pending>`. | low | +18 / -10 | yes |
-| **K6** | Replace 2 branches in [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) (lines 378, 495). Both became `NetworkManager.get_local_player_index()` comparisons — same axis as K3/K4/K5; the branches gate network-only side effects (passive-peer modal advance, skip-move broadcast), not modal authority. Committed `<pending>`. | low | +18 / -10 | yes |
-| **K7** | Land lint script `scripts/lint_phase_k.sh` (with allow-list per §3.1a). Add pre-commit hook documentation. (No new tests — InteractionFlow + UIProjector tests already exist.) | low | +60 / 0 | no |
+| **K5** | Replace 2 branches in [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) (lines 124, 342). Both became `NetworkManager.get_local_player_index() >= 0` comparisons (same axis as K3/K4) — the branches gate camera rotation around squadron displacement, not modal authority. Committed `4b20607`. | low | +18 / -10 | yes |
+| **K6** | Replace 2 branches in [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) (lines 378, 495). Both became `NetworkManager.get_local_player_index()` comparisons — same axis as K3/K4/K5; the branches gate network-only side effects (passive-peer modal advance, skip-move broadcast), not modal authority. Committed `67885b1`. | low | +18 / -10 | yes |
+| **K7** | Land lint script [scripts/lint_phase_k.sh](../scripts/lint_phase_k.sh). Forbids `if PlayMode.is_network()` / `is_hot_seat()` in `src/scenes/` and `src/ui/` unless a `# Phase K allow-list:` marker appears within ±8 lines. Allow-list inventory matches §3.1a exactly (11 sites: 6 in game_board, 1 lobby_room, 1 game_menu_modal, 1 save_game_dialog, 2 load_game_dialog). Markers added to the 5 sites that did not already carry one. Committed `<pending>`. | low | +90 / -5 | no |
 | **K8** | Extract `ShipActivationController` from game_board.gd (dial drag + activation modal + maneuver entry). Move ~400 LOC. | high | +450 / −400 | yes |
 | **K9** | Extract `AttackPanelController` from game_board.gd. Move ~250 LOC. | high | +290 / −250 | yes |
 | **K10** | Extract `DebugBoardController` from game_board.gd (F-key debug damage, replay save trigger). Move ~150 LOC. | medium | +180 / −150 | yes |

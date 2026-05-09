@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-03 (Phase J8 complete — cleanup + arc42 §5 update + in-session hot-seat grey-out fix)
+> Last updated: 2026-05-08 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **proposed** — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 143 |
-| GUT tests | 2 872 |
-| GUT asserts | 5 407 |
+| GUT tests | 2 873 |
+| GUT asserts | 5 410 |
 | Failing tests | 0 |
-| Last commit | `d6a1aeb` (saves: PathConfig + checkpoint safety hardening, Phase J9) |
+| Last commit | `86d329e` (Phase J11 — navigate-token yaw bonus cleared after dial→token convert) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -77,10 +77,20 @@ Runtime invariants:
 | G4.5 Lobby System | ✅ |
 | G4.6 Chat System | ✅ |
 | G4.6.5 Network Game Wiring | ✅ (largely subsumed by Phase I) |
-| **G4.7 Spectator Mode** | ⏳ pending |
-| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented |
-| **G4.9 Turn Timers** | ⏳ pending |
+| **G4.7 Spectator Mode** | ⏳ pending — gated on Phase K |
+| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented; gated on Phase K |
+| **G4.9 Turn Timers** | ⏳ pending — gated on Phase K |
 | G4.10 Dedicated Server Binary | ✅ |
+
+### Refactoring — Phase K (Presentation-Layer Hardening)
+
+Proposed 2026-05-08. Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
+- Eliminate the remaining 9 `if PlayMode.is_*` branches in `src/scenes/` (Phase I rule §7).
+- Decompose `game_board.gd` (3 055 LOC), `attack_executor.gd` (2 475 LOC), `game_manager.gd` (2 241 LOC), `save_game_manager.gd` (1 061 LOC) into focused controllers / RefCounted helpers.
+- Add dedicated tests for `InteractionFlow` and `UIProjector`.
+- Land `scripts/lint_phase_k.sh` + pre-commit hook.
+
+Status: **PROPOSED — awaiting approval.**
 
 ---
 
@@ -289,6 +299,7 @@ src/
 | **J8 ✅** | **Cleanup + arc42 §5 update + in-session hot-seat grey-out fix.** Deleted dead `src/ui/quit_confirmation_modal.gd` (+ `.uid`); removed last stale `QuitConfirmationModal` references in `game_menu_modal.gd` doc-comment and `docs/modal_classification.md`. Added a new "Save / Load Subsystem (Phase J)" subsection to `docs/arc42/05_building_block_view.md` covering `SaveGameManager`, `SaveGameMetadata`, `IntegritySigner`, `GameMenuModal`, `SaveGameDialog`, `LoadGameDialog`, `SaveOnQuitDialog`. **Bug fix found during MT-J.8:** in network mode the in-session ESC → Load dialog left hot-seat saves enabled — loading one would have torn down the network game without the connected client. `LoadGameDialog._is_hot_seat_blocked()` now also returns `true` when `context == "in_game"` and `PlayMode.is_network()`; `_hot_seat_blocked_tooltip()` returns *"Hot-seat saves cannot be loaded during a network session. Quit to the main menu first."* in that case. Lobby and pure hot-seat behaviour unchanged. Tests: `test_hot_seat_named_row_disabled_in_game_when_network_active`, `test_hot_seat_named_row_enabled_in_game_when_hot_seat_mode`. MT-J.8 confirmed by user 2026-05-03. |
 | **J9 ✅** | **Path layout + checkpoint safety hardening.** **Paths:** new `PathConfig` static helper centralises `SAVES_DIR` / `REPLAYS_DIR` / `LOGS_DIR` / `ANNOTATIONS_DIR` / `SIGNING_KEY_FILE`. Editor and source builds keep using `res://saves/`, `res://replays/`, `res://logs/`; packaged exports use `user://` (which `project.godot` now pins to `~/Library/Application Support/Armada/` via `config/use_custom_user_dir = true` + `config/custom_user_dir_name = "Armada"`). `SaveGameManager`, `DebugMode`, `GameReplay`, `LoggingMode` all read paths from `PathConfig`. New `tests/unit/test_path_config.gd` (7 tests). New user guide subsection §11 in `docs/setup_network_game.md` documents where saves, replays, and logs land for editor vs. packaged builds. **Checkpoint safety:** narrowed `_SAFE_STEPS` to drop `NONE` and `ACTIVATION_DONE` (transient gaps that observed mid-squadron-command and mid-displacement captures); added structural invariant — refuse save if any ship has a revealed (popped) command dial; added phase-progression invariant — refuse save in SHIP/SQUADRON phase when no eligible activation remains (covers the brief window after the last activation but before `AdvancePhaseCommand` fires). `_capture_checkpoint` re-checks `can_save_now` itself as belt-and-braces. Initial checkpoint at `game_started` still writes the canonical `_checkpoint_<mode>.json` for crash recovery but no longer emits a numbered debug snapshot. Numbered debug snapshots (`_checkpoint_<mode>_NNN.json`) are written on every safe capture when `LoggingMode.enabled`, are surfaced in `LoadGameDialog` (gated on `LoggingMode.enabled`), and are no longer wiped at `game_started` — instead the per-mode counter seeds from the highest existing index, so loading `_001` to inspect a bad capture preserves `_002…_NNN`. **Side-fix:** moved `ShipInstance` / `SquadronInstance` position seeding earlier in `GameBoard._spawn_learning_scenario_tokens` (extracted to `_seed_instance_positions`) so the round-1 fixed-command auto-checkpoints record real deployment positions instead of (0, 0). Tests: 2 869 pass / 5 401 asserts; new tests `test_can_save_now_rejects_idle_none_step`, `test_can_save_now_rejects_ship_with_revealed_dial`, `test_can_save_now_rejects_ship_phase_with_no_unactivated_ships`. **MT-J.9** confirmed by user 2026-05-07: numbered checkpoints `_001…_NNN` are listable, loadable, and replay correctly; old broken captures are gone. |
 | **J10 ✅** | **Application-launch artefact cleanup.** On every app start (autoload `_ready`), three categories of transient files from previous sessions are wiped before the new session begins: (i) numbered debug checkpoints `_checkpoint_<mode>_NNN.json` in `PathConfig.SAVES_DIR` — canonical `_checkpoint_<mode>.json` files are preserved so crash recovery still works; (ii) all `*.json` files in `PathConfig.REPLAYS_DIR`; (iii) all `*.log` files in `PathConfig.LOGS_DIR` (runs unconditionally, even when launched without `--logging`, so old logs don't accumulate on no-logging launches). New `SaveGameManager._cleanup_session_artifacts()` / `_delete_numbered_debug_snapshots()` / `_delete_files_in_dir()`; new `LoggingMode._cleanup_old_logs()` runs before today's log file is opened. Tests: `test_cleanup_session_artifacts_removes_numbered_checkpoints` (also verifies canonical preservation), `test_cleanup_session_artifacts_removes_replays`, `test_cleanup_old_logs_removes_log_files`. Tests instantiate the autoload via `.new()` without `add_child`, so `_ready` does not fire automatically and the cleanup methods are exercised directly. Total: 2 872 tests / 5 407 asserts. |
+| **J11 ✅** | **Navigate-token yaw-bonus rules-violation fix.** Bug: spending a Navigate token (via dial→token convert + drop on card) granted the +1 yaw click that is reserved for the dial spend (RRG p.3, "Commands → Navigate"). Root cause: `GameBoard._on_dial_token_converted` constructs `ShipActivationState` **before** `ConvertDialToTokenCommand.execute()` runs (the synchronous `activation_modal_open` interaction-state callback in `NetworkHostCommandSubmitter` requires the context); at that moment the Navigate dial is still revealed on the stack, so `_resolve_navigate_availability` caches `_has_navigate_dial = true` and `_yaw_bonus_available = true`. The convert command then pops the dial, but the cached flags persist. Fix: new `ShipActivationState.refresh_navigate_availability()` re-reads the ship's dial / token state, guarded against running after any spend (`_total_speed_change == 0` and `_yaw_bonus_joint < 0`). Called from `GameBoard._on_maneuver_step_entered()` immediately before the maneuver tool opens — by which point the convert command has fully executed on every peer. Symmetric across hot-seat and network. New regression test `test_refresh_navigate_availability_after_dial_to_token_convert`. Total: 143 scripts / 2 873 tests / 5 410 asserts. **MT-J.11** confirmed by user 2026-05-08 in hot-seat and network mode. Commit `86d329e`. |
 
 ### 5.8 Out of Scope (this phase)
 
@@ -452,13 +463,14 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Saved Games** — Phase J (proposed in §5); depends on serialization (✅ done) + replay (✅ done)
-2. **Squadron Cards** — full data loading from JSON (already partially loaded)
-3. **Fleet Builder** — point-based fleet construction UI
-4. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
-5. **Terrain / Obstacles** — geometry system extension
-6. **Objectives** — scenario-variant scoring
-7. **Multiplayer (full release)** — depends on G4.7–G4.9 + auto-save
+1. **Phase K — Presentation-Layer Hardening** *(proposed 2026-05-08)* — see [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Decomposes `game_board.gd` / `attack_executor.gd` / `game_manager.gd` / `save_game_manager.gd`, eliminates the remaining 9 `if PlayMode.is_*` branches in `src/scenes/`, adds `UIProjector` + `InteractionFlow` unit tests, lands `scripts/lint_phase_k.sh`. **Recommended before resuming feature work.**
+2. **Saved Games** — Phase J ✅ done (J1–J11)
+3. **Squadron Cards** — full data loading from JSON (already partially loaded)
+4. **Fleet Builder** — point-based fleet construction UI
+5. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
+6. **Terrain / Obstacles** — geometry system extension
+7. **Objectives** — scenario-variant scoring
+8. **Multiplayer (full release)** — depends on G4.7–G4.9 + auto-save (post-K)
 
 ---
 

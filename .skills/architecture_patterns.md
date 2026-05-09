@@ -78,13 +78,12 @@ Rules:
 - Reconnection: a single filtered `state_snapshot` is sufficient to
   rebuild the UI; no replay of UI events required.
 
-Banned patterns (enforced by lint after Phase I6):
+Banned patterns (enforced by lint after Phase I6; tightened in Phase K):
 
 - ❌ Subscribing to `EventBus.interaction_state_changed` (signal removed).
 - ❌ `NetworkInteractionState` class (deleted).
 - ❌ `NetworkManager.broadcast_interaction_state()` calls (deleted).
-- ❌ `if PlayMode.is_network():` branches in `src/scenes/` outside
-  camera/perspective lock (max 3 occurrences in `game_board.gd`).
+- ❌ **`if PlayMode.is_network()` / `if PlayMode.is_hot_seat()` anywhere under `src/scenes/` or `src/ui/`.** `UIProjector.project(state, local_player_index)` is the **only** PlayMode-aware code path outside `src/autoload/`. Enforced by `scripts/lint_phase_k.sh`.
 - ❌ Active-player fallback paths that compute "who controls UI" locally —
   always read `interaction_flow.controller_player`.
 - ❌ Inferring sub-step from local UI events (e.g. modal opened/closed) —

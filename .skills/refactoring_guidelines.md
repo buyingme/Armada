@@ -319,8 +319,39 @@ Archived detail: `docs/old/refactoring_plan.md`.
 | **E** | Serialization + EventBus cleanup | Low |
 | **F** | Extract backbone (ActivationContext, SquadronPhaseController, UIPanelManager) | Medium |
 | **G** | Command pattern for multiplayer | Medium |
+| **I** | Interaction-flow as domain state (closed 2026-05-02) | High |
+| **K** | Presentation-layer hardening (proposed 2026-05-08) — see [docs/refactoring_phase_k_plan.md](../docs/refactoring_phase_k_plan.md) | Medium–High |
 
 Always work phases in order. Never start phase N+1 until N is committed and green.
+
+---
+
+## 12. Phase K Quantified Targets (proposed 2026-05-08)
+
+When generating code while Phase K is active or pending, treat these as
+hard ceilings — do not regress them and prefer changes that move the
+metric toward target.
+
+| Target | Limit |
+|---|---|
+| `src/scenes/game_board/game_board.gd` LOC | ≤ 2 000 |
+| `src/scenes/game_board/attack_executor.gd` LOC | ≤ 1 500 |
+| `src/autoload/game_manager.gd` LOC | ≤ 1 500 |
+| `src/autoload/save_game_manager.gd` LOC | ≤ 700 |
+| `if PlayMode.is_network()` / `is_hot_seat()` occurrences in `src/scenes/` and `src/ui/` | **0** (lint-enforced) |
+| Functions > 30 LOC across `src/core/`, `src/scenes/`, `src/autoload/` | **0** |
+| Functions with > 3 nesting levels | **0** |
+| Dedicated unit test for `InteractionFlow` | exists |
+| Dedicated unit test for `UIProjector` | exists |
+
+**Composition-root rule:** A scene controller that delegates to ≥ 3
+sub-controllers should itself contain ≤ 600 LOC of **glue** (signal wiring +
+node references). Game-flow logic belongs in the sub-controllers or in
+`src/core/`.
+
+**Lint guard:** `scripts/lint_phase_k.sh` (added in K7) is run as part of
+the Phase K manual-test gate and as a pre-commit hook. New code must keep
+the script green.
 
 ---
 

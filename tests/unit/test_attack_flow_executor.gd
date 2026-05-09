@@ -317,6 +317,50 @@ func test_count_faceup_cards_counts_true_flags_only() -> void:
 			"count_faceup_cards should count only true is_faceup flags")
 
 
+func test_determine_first_card_faceup_true_for_critical_without_contain() -> void:
+	var state: AttackState = AttackState.new()
+	state.contain_used = false
+	state.dice_results = [
+		{
+			"color": Constants.DiceColor.RED,
+			"face": Constants.DiceFace.CRITICAL,
+		}
+	]
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+	var first_faceup: bool = _executor.determine_first_card_faceup(
+			state, resolver, null)
+	assert_true(first_faceup,
+			"critical result without contain should set first card faceup")
+
+
+func test_determine_first_card_faceup_false_when_contain_used() -> void:
+	var state: AttackState = AttackState.new()
+	state.contain_used = true
+	state.dice_results = [
+		{
+			"color": Constants.DiceColor.RED,
+			"face": Constants.DiceFace.CRITICAL,
+		}
+	]
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+	var first_faceup: bool = _executor.determine_first_card_faceup(
+			state, resolver, null)
+	assert_false(first_faceup,
+			"contain should prevent first card from being faceup")
+
+
+func test_build_damage_summary_uses_damage_dealer_format() -> void:
+	var dealer: DamageDealer = DamageDealer.new()
+	var ship: ShipInstance = _make_ship_instance(1)
+	ship.facedown_damage.append(DamageCard.new())
+	var summary: String = _executor.build_damage_summary(
+			dealer, ship, "FRONT", 2, 1, "Structural Damage")
+	assert_true(summary.find("FRONT: 2 shield, 1 card(s)") >= 0,
+			"summary should include zone and shield/card values")
+	assert_true(summary.find("CRIT: Structural Damage") >= 0,
+			"summary should include faceup crit card text")
+
+
 func _make_ship_instance(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.ship_name = "Test Ship"

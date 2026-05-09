@@ -1732,13 +1732,8 @@ func _emit_card_events(def_inst: ShipInstance,
 
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:
-	var attacker: ShipInstance = null
-	if _state.attacker_ship is ShipToken:
-		attacker = (
-				_state.attacker_ship as ShipToken).get_ship_instance()
-	var faceup: bool = _defense_resolver.determine_first_card_faceup(
-			_state.dice_results, _state.contain_used,
-			_effect_registry, attacker)
+	var faceup: bool = _flow_executor.determine_first_card_faceup(
+			_state, _defense_resolver, _effect_registry)
 	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
 			faceup, _state.contain_used])
 	return faceup
@@ -1798,11 +1793,9 @@ func _emit_ship_damage_events(def_inst: ShipInstance,
 func _build_damage_summary(def_inst: ShipInstance,
 		def_zone_str: String, shield_absorbed: int,
 		cards_dealt: int, faceup_card_name: String) -> String:
-	var hull_remaining: int = _damage_dealer.calculate_hull_remaining(
-			def_inst.ship_data.hull, def_inst.get_total_damage())
-	return _damage_dealer.build_damage_summary(
-			def_zone_str, shield_absorbed, cards_dealt,
-			faceup_card_name, hull_remaining, def_inst.ship_data.hull)
+	return _flow_executor.build_damage_summary(
+			_damage_dealer, def_inst, def_zone_str,
+			shield_absorbed, cards_dealt, faceup_card_name)
 
 ## Resolves the immediate one-shot effect of a faceup damage card, if any.
 ## Auto-resolve cards (Structural Damage, Projector Misaligned, Life Support

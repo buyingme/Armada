@@ -147,6 +147,33 @@ func count_faceup_cards(card_data: Array) -> int:
 	return count
 
 
+## Determines if the first dealt damage card should be faceup.
+func determine_first_card_faceup(state: AttackState,
+		defense_resolver: DefenseTokenResolver,
+		effect_registry: EffectRegistry) -> bool:
+	var attacker: ShipInstance = null
+	if state.attacker_ship is ShipToken:
+		attacker = (
+				state.attacker_ship as ShipToken).get_ship_instance()
+	return defense_resolver.determine_first_card_faceup(
+			state.dice_results, state.contain_used,
+			effect_registry, attacker)
+
+
+## Builds the ship-damage summary string for UI display.
+func build_damage_summary(damage_dealer: DamageDealer,
+		def_inst: ShipInstance,
+		def_zone_str: String,
+		shield_absorbed: int,
+		cards_dealt: int,
+		faceup_card_name: String) -> String:
+	var hull_remaining: int = damage_dealer.calculate_hull_remaining(
+			def_inst.ship_data.hull, def_inst.get_total_damage())
+	return damage_dealer.build_damage_summary(
+			def_zone_str, shield_absorbed, cards_dealt,
+			faceup_card_name, hull_remaining, def_inst.ship_data.hull)
+
+
 func _token_sort_key(token_index: int,
 		defense_tokens: Array[Dictionary]) -> int:
 	if token_index < 0 or token_index >= defense_tokens.size():

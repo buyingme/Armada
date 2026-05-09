@@ -120,6 +120,12 @@ var _target_selector: TargetSelector = null
 ## Write: _create_attack_executor() only. Already extracted as child Node.
 var _attack_executor: AttackExecutor = null
 
+## Attack panel controller — owns the attack-panel mirror sync, the
+## attacker-side defender-response routing into [AttackExecutor], and
+## the Attack Simulator toolbar / keyboard toggle.  Created in
+## [method _create_attack_panel_controller] (Phase K9).
+var _attack_panel_controller: AttackPanelController = null
+
 ## Shared damage deck for the game. Initialised during scenario setup.
 ## SHARED — Created: _spawn_learning_scenario_tokens(). Read: attack
 ## executor (set_damage_deck), debug damage dealing, immediate effect
@@ -179,6 +185,7 @@ func _ready() -> void:
 			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)
 	_create_target_selector()
 	_create_attack_executor()
+	_create_attack_panel_controller()
 	_create_maneuver_tool_controller()
 	_create_range_tool_controller()
 	_create_targeting_list_controller()
@@ -387,7 +394,7 @@ func _connect_signals() -> void:
 	#region Targeting & attack signals
 	EventBus.targeting_list_requested.connect(
 			_targeting_list_controller.on_targeting_list_requested)
-	EventBus.attack_simulator_requested.connect(_on_attack_simulator_requested)
+	# attack_simulator_requested is connected by AttackPanelController (K9).
 	#endregion
 
 	#region Game end & scoring signals
@@ -1003,60 +1010,12 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
-	# Phase I6b-3 R2: when a [CommitDefenseCommand] is broadcast, drive
-	# the attacker peer's [AttackExecutor] through the spend pipeline.
-	# In hot-seat the attacker peer is also the submitter, so this runs
-	# right after submission completes.  In network play the defender
-	# peer submitted the command and the attacker peer's executor
-	# reacts here.
-	if _command != null and _command.command_type == "commit_defense" \
-			and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		var indices_raw: Array = _result.get(
-				"selected_indices", []) as Array
-		var indices: Array[int] = []
-		for raw_idx: Variant in indices_raw:
-			indices.append(int(raw_idx))
-		_attack_executor.apply_defender_commit(indices)
-	# Phase I6b-3 R3: when a [SelectEvadeDieCommand] is broadcast,
-	# drive the attacker peer's [AttackExecutor] through the
-	# remove-die / reroll-die pipeline.  Hot-seat: same code path.
-	if _command != null and _command.command_type == "select_evade_die" \
-			and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		var die_index: int = int(_result.get("die_index", -1))
-		if die_index >= 0:
-			_attack_executor.apply_defender_evade_die(die_index)
-	# Phase I6b-3 R4: when a [SelectRedirectZoneCommand] is broadcast,
-	# drive the attacker peer's [AttackExecutor] through the redirect
-	# bookkeeping (decrement remaining + modified_damage, continuation,
-	# next-commit).  Hot-seat: same code path.
-	if _command != null \
-			and _command.command_type == "select_redirect_zone" \
-			and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		var redirect_zone: int = int(_result.get("zone", -1))
-		if redirect_zone >= 0:
-			_attack_executor.apply_defender_redirect_zone(redirect_zone)
-	# Phase I6b-3 R4: when a [RedirectDoneCommand] is broadcast, end
-	# the redirect sub-step early on the attacker peer.  Hot-seat: same
-	# code path.
-	if _command != null and _command.command_type == "redirect_done" \
-			and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		_attack_executor.apply_defender_redirect_done()
-	# Phase I6b-3 R5: when a [ResolveImmediateEffectCommand] is
-	# broadcast and the chooser was the remote peer, the local
-	# (attacker) executor still owns the post-modal cleanup + finalize.
-	# Hot-seat skips this branch (chooser modal runs in-process).
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a) — there
-	# is no "remote peer" concept in hot-seat by definition.
-	if _command != null \
-			and _command.command_type == "resolve_immediate_effect" \
-			and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode() \
-			and PlayMode.is_network():
-		_attack_executor.apply_remote_immediate_choice(_result)
+	# Phase K9: attacker-side defender-response routing
+	# (commit_defense / select_evade_die / select_redirect_zone /
+	# redirect_done / resolve_immediate_effect) lives on
+	# [AttackPanelController].
+	if _attack_panel_controller != null:
+		_attack_panel_controller.react_to_command(_command, _result)
 	# DBG-050: when a [DebugDealDamageCommand] is broadcast / executed,
 	# emit the visual signals on every peer (so hot-seat, host, and
 	# client all refresh the [ShipCardPanel] / hull display) and chain
@@ -1108,7 +1067,8 @@ func _on_command_executed_project_ui(_command: GameCommand,
 	# sync helpers BEFORE the no-flow early-return below.  Each helper
 	# handles its own "should close" logic and is a no-op when the panel
 	# is already in the right state.
-	_sync_attack_panel_mirror_from_flow(flow, local)
+	if _attack_panel_controller != null:
+		_attack_panel_controller.sync_mirror_from_flow(flow, local)
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return
 	_ship_activation_controller.sync_activation_step_from_flow(flow)
@@ -1120,51 +1080,6 @@ func _on_command_executed_project_ui(_command: GameCommand,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 				_ship_activation_controller.close_modal_from_interaction_state()
 	_ship_activation_controller.update_activation_modal_interactivity()
-
-
-## Opens or closes the read-only [AttackPanelMirror] on the non-attacker
-## peer based on the authoritative [InteractionFlow].
-##
-## Phase I6b-3 R1b: the same [AttackSimPanel] UI is rendered on the
-## passive peer, populated entirely from
-## [member InteractionFlow.payload].  Input signals are NEVER connected
-## on the mirror — the panel is informational at this slice.  Defender-
-## driven input (defense-token toggle, evade target, redirect zone) is
-## migrated to commands in subsequent slices (R2–R5).
-##
-## The mirror is shown when:
-##   * [code]flow.flow_type == Constants.InteractionFlow.ATTACK[/code]
-##   * the local viewer is **not** the attacker
-##     (either the published [code]attacker_player[/code] differs from
-##     [param local], or — defensively — the local executor is not in
-##     exec mode).
-##
-## Hot-seat is filtered out by the [code]is_network()[/code] guard at
-## the call site.
-func _sync_attack_panel_mirror_from_flow(flow: InteractionFlow,
-		local: int) -> void:
-	if _panel_mgr.attack_panel_mirror == null:
-		return
-	var is_attack: bool = (flow != null
-			and flow.flow_type == Constants.InteractionFlow.ATTACK)
-	if not is_attack:
-		_panel_mgr.attack_panel_mirror.close()
-		return
-	var attacker_player: int = int(
-			flow.payload.get("attacker_player", -1))
-	var local_is_attacker: bool = (
-			attacker_player >= 0 and attacker_player == local)
-	# Defensive fall-back when the identity patch hasn't been applied yet
-	# (very early in the flow): treat the local executor's exec-mode as
-	# the source of truth.
-	if attacker_player < 0 and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		local_is_attacker = true
-	if local_is_attacker:
-		_panel_mgr.attack_panel_mirror.close()
-		return
-	_panel_mgr.attack_panel_mirror.apply_flow(
-			flow.payload, int(flow.step_id))
 
 
 ## Phase I6b-4c-2 — OV-002 fix.  Network-only.
@@ -1580,6 +1495,17 @@ func _create_attack_executor() -> void:
 	add_child(_attack_executor)
 	_attack_executor.initialize(_target_selector, _camera)
 
+## Creates and initialises the [AttackPanelController] child node
+## (Phase K9).  Owns the attack-panel mirror sync, the attacker-side
+## defender-response routing into [AttackExecutor], and the Attack
+## Simulator toolbar / keyboard toggle.
+func _create_attack_panel_controller() -> void:
+	_attack_panel_controller = AttackPanelController.new()
+	_attack_panel_controller.name = "AttackPanelController"
+	add_child(_attack_panel_controller)
+	_attack_panel_controller.initialize(
+			_attack_executor, _panel_mgr, _target_selector)
+
 ## Creates the [ManeuverToolController] child node.
 func _create_maneuver_tool_controller() -> void:
 	_maneuver_tool_controller = ManeuverToolController.new()
@@ -1711,12 +1637,6 @@ func _create_command_phase_controller() -> void:
 	_command_phase_controller.name = "CommandPhaseController"
 	add_child(_command_phase_controller)
 	_command_phase_controller.initialize()
-
-## Delegates the Attack Simulator toolbar / keyboard toggle to the executor.
-## Requirements: AS-ACT-001, AS-ACT-004, AS-ACT-005.
-func _on_attack_simulator_requested() -> void:
-	if _target_selector:
-		_target_selector.on_simulator_requested()
 
 ## Called by [signal AttackExecutor.dismiss_other_tools_requested].
 ## Dismisses range overlay, targeting list, and maneuver tool.

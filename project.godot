@@ -14,9 +14,9 @@ config/name="Star Wars Armada"
 config/description="A digital adaptation of the Star Wars: Armada tabletop miniatures game."
 config/version="0.1.0"
 run/main_scene="res://src/scenes/main_menu/main_menu.tscn"
-config/features=PackedStringArray("4.5")
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Armada"
+config/features=PackedStringArray("4.5")
 boot_splash/image="uid://bjp010e7a2jm3"
 config/icon="uid://c0jm304rltjbd"
 

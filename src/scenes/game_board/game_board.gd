@@ -423,31 +423,10 @@ func _connect_signals() -> void:
 
 
 ## Connects game-logic signals from UIPanelManager-created panels
-## to game_board signal handlers.
+## to game_board signal handlers.  Activation-modal, repair-panel, and
+## show-activation-button signals are owned by [ShipActivationController]
+## (Phase K8b) and connected from inside its [code]initialize()[/code].
 func _connect_panel_signals() -> void:
-	# Activation modal — 8 game-logic signals.
-	_panel_mgr.activation_modal.maneuver_step_entered.connect(
-			_on_maneuver_step_entered)
-	_panel_mgr.activation_modal.maneuver_commit_requested.connect(
-			_on_execute_maneuver)
-	_panel_mgr.activation_modal.attack_step_entered.connect(
-			_on_attack_step_entered)
-	_panel_mgr.activation_modal.repair_step_entered.connect(
-			_on_repair_step_entered)
-	_panel_mgr.activation_modal.squadron_step_entered.connect(
-			_on_squadron_step_entered)
-	_panel_mgr.activation_modal.squadron_step_skipped.connect(
-			_on_squadron_step_skipped)
-	# Activation modal `modal_closed` is connected inside
-	# ShipActivationController.initialize().
-	_panel_mgr.activation_modal.end_activation_requested.connect(
-			_on_activation_end_requested)
-	# Repair panel — done/skipped signals.
-	_panel_mgr.repair_panel.repair_done.connect(_on_repair_done)
-	_panel_mgr.repair_panel.repair_skipped.connect(_on_repair_done)
-	# Show Activation Sequence button.
-	_panel_mgr.show_activation_button.activation_sequence_requested.connect(
-			_on_activation_sequence_requested)
 	# Command phase controller — phase_complete updates HUD.
 	_command_phase_controller.phase_complete.connect(
 			_panel_mgr.update_phase_hud)
@@ -1253,7 +1232,7 @@ func _resume_after_remote_displacement() -> void:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
-	_show_end_activation_after_maneuver()
+	_ship_activation_controller.show_end_activation_after_maneuver()
 
 
 ## Returns the player index whose perspective is shown locally on this peer.
@@ -1429,507 +1408,13 @@ func _find_card_panel_hit(screen_pos: Vector2) -> ShipInstance:
 			return hit
 	return null
 
-
-## Called when the player presses "Execute Attack ►" in the activation modal.
-## Sets up the attack execution flow: shows the range overlay for the
-## activated ship, opens the info panel, and enters hull-zone selection mode.
-## Requirements: AE-FLOW-001, AE-ACT-001.
-func _on_attack_step_entered() -> void:
-	_log.info("Attack step entered — delegating to AttackExecutor.")
-	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
-		_log.info("Cannot start attack — no activation state or token.")
-		return
-	# Hide the "Show Activation Sequence" button while the attack panel
-	# is on-screen — both occupy the same bottom-centre position.
-	if _panel_mgr.show_activation_button:
-		_panel_mgr.show_activation_button.hide_button()
-	if _attack_executor:
-		_attack_executor.start_ship_attack(_activation_ctx.activating_ship_token)
-
-## Called when the player presses "Execute Repair ►" in the activation modal.
-## Creates a RepairResolver and opens the RepairPanel.
-## Rules Reference: RRG "Engineering", p.4; CM-030–CM-037.
-func _on_repair_step_entered() -> void:
-	_log.info("Repair step entered — opening RepairPanel.")
-	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
-		_log.info("Cannot start repair — no activation state or token.")
-		return
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	var resolver: RepairResolver = RepairResolver.create(
-			ship, _damage_deck, registry)
-	if resolver.is_empty():
-		_log.info("No engineering points — auto-advancing repair step.")
-		_on_repair_done()
-		return
-	if not resolver.has_any_repair_target():
-		_log.info("Ship at full strength — nothing to repair. "
-				+"Consuming dial/token and auto-advancing.")
-		var token_result: Dictionary = resolver.finalize()
-		_submit_resolver_spends(ship, token_result)
-		_on_repair_done()
-		return
-	if _panel_mgr.show_activation_button:
-		_panel_mgr.show_activation_button.hide_button()
-	if _panel_mgr.repair_panel:
-		_panel_mgr.repair_panel.open(resolver, ship)
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_panel_mgr.repair_panel.centre_on_screen(vp_size)
-
-## Called when the player presses "Execute Squadron ►" in the activation modal.
-## Creates a SquadronCommandResolver and opens the SquadronActivationModal
-## in command mode.
-## Rules Reference: RRG "Commands" p.4 — Squadron; CM-020–CM-022.
-func _on_squadron_step_entered() -> void:
-	_log.info("Squadron step entered — starting squadron command flow.")
-	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
-		_log.info("Cannot start squadron command — no activation state.")
-		return
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var ship_token: ShipToken = _activation_ctx.activating_ship_token
-	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
-			ship, ship_token.global_position, ship_token.global_rotation,
-			ship_token.get_half_width(), ship_token.get_half_length())
-	if resolver.is_empty():
-		_log.info("No squadron activations available — auto-advancing.")
-		_on_squadron_command_done()
-		return
-	if not _has_eligible_squadron_in_range(ship, resolver):
-		_log.info("No friendly squadrons in range — consuming resources "
-				+"and auto-advancing.")
-		var token_result: Dictionary = resolver.finalize()
-		_submit_resolver_spends(ship, token_result)
-		_on_squadron_command_done()
-		return
-	if _panel_mgr.show_activation_button:
-		_panel_mgr.show_activation_button.hide_button()
-	_squadron_phase_controller.open_for_command(resolver, _activation_ctx.activating_ship_token)
-
-## Returns true if at least one friendly non-activated squadron is within
-## range of the ship's squadron command resolver.
-func _has_eligible_squadron_in_range(ship: ShipInstance,
-		resolver: SquadronCommandResolver) -> bool:
-	var tokens: Array[SquadronToken] = get_squadron_tokens()
-	for sq_token: SquadronToken in tokens:
-		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and not sq_inst.is_destroyed() \
-				and sq_inst.owner_player == ship.owner_player \
-				and resolver.is_squadron_in_range(sq_token.global_position):
-			return true
-	return false
-
-## Called when the player presses "Skip" on the squadron step (token only).
-## Advances the activation step without entering the squadron command flow.
-## Rules Reference: "Commands" p.4 — spending a command token is optional.
-func _on_squadron_step_skipped() -> void:
-	_log.info("Squadron step skipped by player (token not spent).")
-	if _activation_ctx.ship_activation_state:
-		_activation_ctx.ship_activation_state.advance_step()
-	_ship_activation_controller.submit_network_activation_step("repair_step")
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-## Called when the squadron command flow is complete (all activations used
-## or the player finishes early).
-## Finalizes the resolver (spends dial/token), advances the activation
-## step, and re-opens the activation modal.
-## Rules Reference: CM-020.
-func _on_squadron_command_done() -> void:
-	_log.info("Squadron command done — advancing activation step.")
-	_squadron_phase_controller.dismiss_cmd_range_overlay()
-	if _activation_ctx.ship_activation_state:
-		_activation_ctx.ship_activation_state.advance_step()
-	_ship_activation_controller.submit_network_activation_step("repair_step")
-	# Show the activation button again.
-	if _panel_mgr.show_activation_button and _activation_ctx.activating_ship_token:
-		_panel_mgr.show_activation_button.show_button()
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-
-## Submits [SpendDialCommand] and/or [SpendTokenCommand] based on a
-## resolver's return dictionary.
-## [param ship] — the ship that resolved the command.
-## [param result] — the dictionary returned by [code]finalize()[/code] or
-## [code]mark_maneuver_executed()[/code]; may contain [code]"dial_spent"[/code]
-## and/or [code]"token_type"[/code].
-func _submit_resolver_spends(ship: ShipInstance,
-		result: Dictionary) -> void:
-	if result.get("dial_spent", false):
-		GameManager.submit_spend_dial(ship)
-	if result.has("token_type"):
-		GameManager.submit_spend_token(ship, result["token_type"])
-
-
-## Called when the repair panel finishes (Done or Skip pressed).
-## Advances activation state and re-opens the activation modal.
-func _on_repair_done() -> void:
-	_log.info("Repair done — advancing activation step.")
-	if _activation_ctx.ship_activation_state:
-		_activation_ctx.ship_activation_state.advance_step()
-	_ship_activation_controller.submit_network_activation_step("attack_step")
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-## Called when the attack execution step is fully complete.
-## Advances activation state and re-opens the modal.
-## Routes to the squadron modal when a squadron attack just completed.
-## Requirements: AE-FLOW-003, AE-CONF-002, SQA-ATK-003.
-func _on_attack_exec_completed() -> void:
-	_log.info("Attack exec completed — advancing activation step.")
-	# Phase 7b: squadron attack completed — route to squadron modal.
-	if _squadron_phase_controller \
-			and _squadron_phase_controller.is_in_attacking_state():
-		_squadron_phase_controller.notify_attack_completed()
-		return
-	if _activation_ctx.ship_activation_state:
-		_activation_ctx.ship_activation_state.advance_step()
-	_ship_activation_controller.submit_network_activation_step("maneuver_step")
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-## Called when the player cancels attack execution (Escape).
-## Re-opens the activation modal without advancing.
-## Routes to the squadron modal when a squadron attack was cancelled.
-## Requirements: AE-FLOW-004, SQA-ATK-005.
-func _on_attack_exec_cancelled() -> void:
-	_log.info("Attack exec cancelled — returning to activation modal.")
-	# Phase 7b: squadron attack cancelled — route to squadron modal.
-	if _squadron_phase_controller \
-			and _squadron_phase_controller.is_in_attacking_state():
-		_squadron_phase_controller.notify_attack_cancelled()
-		return
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-## Called when the player presses "Show Activation Sequence".
-## Opens the activation modal and starts the step sequence.
-## Requirements: ACT-001, ACT-007.
-func _on_activation_sequence_requested() -> void:
-	_log.info("Activation sequence requested.")
-	if _activation_ctx.ship_activation_state == null:
-		_log.info("No activation state — cannot open modal.")
-		return
-	_ship_activation_controller.configure_and_open_activation_modal()
-
-## Called when the activation modal reaches the Execute Maneuver step.
-## Shows the maneuver tool on the activating ship and the Execute Maneuver
-## button. For speed 0, skips the tool and executes immediately.
-## Requirements: FLOW-003, AC-5b-03, EXE-004.
-func _on_maneuver_step_entered() -> void:
-	_log.info("Maneuver step entered.")
-	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
-		_log.info("Cannot show maneuver tool — state=%s, token=%s." % [
-				str(_activation_ctx.ship_activation_state != null),
-				str(_activation_ctx.activating_ship_token != null)])
-		return
-	# Re-resolve Navigate availability now that any dial→token conversion
-	# command has fully executed.  Without this, a ship activated via the
-	# token-convert path keeps the stale "dial revealed" snapshot taken in
-	# `_on_dial_token_converted` (which set up the activation context
-	# before the convert command ran), incorrectly granting the +1 yaw
-	# bonus to a token-only spend.
-	# Rules Reference: NAV-002, NAV-006 — yaw bonus is a dial-only effect.
-	_activation_ctx.ship_activation_state.refresh_navigate_availability()
-	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
-	# Speed 0: no tool, ship stays in place, maneuver counts as executed.
-	if ship.current_speed == 0:
-		_log.info("Speed 0 — executing maneuver without tool.")
-		var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
-		_submit_resolver_spends(ship, token_result)
-		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
-		_show_end_activation_after_maneuver()
-		return
-	# Show the maneuver tool in activation mode.
-	_maneuver_tool_controller.show_activation_tool(
-			_activation_ctx.activating_ship_token,
-			_activation_ctx.ship_activation_state)
-	# Disable the simulation maneuver button while activation tool is active.
-	if _panel_mgr.action_toolbar:
-		_panel_mgr.action_toolbar.set_tool_buttons_disabled(true)
-	# Yaw bonus (Navigate dial) is applied interactively when the player
-	# clicks a joint beyond its base limit — not auto-assigned to joint 0.
-	# Modal's embedded Execute button is already visible — no extra button needed.
-
-## Called when the player commits the maneuver (modal "Commit ►" button).
-## Snaps the ship to the final transform, resolves ship–ship and
-## ship–squadron overlaps, then ends the activation.
-## Requirements: EXE-001, EXE-002, AC-5b-08, AC-5b-09, AC-5b-12, AC-5b-13,
-##     OV-001–004, OV-010–013.
-func _on_execute_maneuver() -> void:
-	_log.info("Execute maneuver requested.")
-	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
-		return
-	if _maneuver_tool_controller.get_scene() == null:
-		return
-	var final_xform: Transform2D = _resolve_maneuver_overlaps_ex()
-	_activation_ctx.activating_ship_token.global_position = final_xform.origin
-	_activation_ctx.activating_ship_token.global_rotation = final_xform.get_rotation()
-	# Ship–squadron overlap resolution (OV-001–004).
-	var ship_size: Constants.ShipSize = _activation_ctx.activating_ship_token.get_ship_size()
-	var moved_ship_base: ShipBase = ShipBase.new(ship_size, final_xform)
-	var displaced: Array[SquadronToken] = _find_displaced_squadrons(
-			moved_ship_base)
-	var token_result: Dictionary = _activation_ctx.ship_activation_state.mark_maneuver_executed()
-	var maneuver_ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
-	_submit_resolver_spends(maneuver_ship, token_result)
-
-	# Record the maneuver via command for replay determinism.
-	var mt_scene_ref: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	if mt_scene_ref:
-		var tool_st: ManeuverToolState = mt_scene_ref.get_state()
-		var spd: int = tool_st.get_speed()
-		var all_clicks: Array[int] = tool_st.get_joint_clicks()
-		# Slice to active joints only (joint_count == speed).
-		var active_clicks: Array = []
-		for i: int in range(mini(spd, all_clicks.size())):
-			active_clicks.append(all_clicks[i])
-		var pa: Vector2 = GameScale.play_area_size_px
-		if pa.x > 0.0 and pa.y > 0.0:
-			var norm_x: float = final_xform.origin.x / pa.x
-			var norm_y: float = final_xform.origin.y / pa.y
-			var rot_deg: float = rad_to_deg(final_xform.get_rotation())
-			GameManager.submit_execute_maneuver(maneuver_ship,
-					spd, active_clicks, norm_x, norm_y, rot_deg)
-
-	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
-	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
-	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)
-	# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
-	# Only fires if the player's final speed differs from the original.
-	# Deferred to commit time because speed changes are reversible during preview.
-	# Rules Reference: "Thruster Fissure" card text.
-	if _activation_ctx.ship_activation_state.get_total_speed_change() != 0:
-		_resolve_speed_change_hook()
-	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
-	_dismiss_maneuver_tool_with_preview()
-	if displaced.size() > 0:
-		# Phase I6b-4c: submit the start_displacement command on every
-		# peer so [member GameState.interaction_flow] reflects the
-		# placement state.  In hot-seat the modal is still driven by the
-		# direct [code]_displacement_controller.start()[/code] call below.
-		# In network the modal opens on the squadron-owner peer via the
-		# projection handler in [method _on_command_executed_project_ui]
-		# (OV-002 fix) — the maneuvering peer here just submits and waits.
-		var displaced_instances: Array = []
-		var displaced_owner: int = -1
-		for sq_token: SquadronToken in displaced:
-			var inst: SquadronInstance = sq_token.get_squadron_instance()
-			if inst == null:
-				continue
-			displaced_instances.append(inst)
-			if displaced_owner < 0:
-				displaced_owner = inst.owner_player
-		GameManager.submit_start_displacement(maneuver_ship,
-				displaced_owner, displaced_instances)
-		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
-		# Hot-seat opens the displacement modal directly; network opens
-		# it via projection (Phase I6b-4c OV-002 fix — modal must open on
-		# the squadron-owner peer, not the maneuvering peer).  Converging
-		# is a Phase L candidate.
-		if not PlayMode.is_network():
-			_displacement_controller.start(displaced, moved_ship_base)
-	else:
-		_show_end_activation_after_maneuver()
-	_log.info("Ship snapped to final position.")
-
-## Computes the final transform after ship–ship overlap resolution.
-## Applies overlap damage if a collision occurred.
-## Sets [member _activation_ctx].last_maneuver_overlapped for the AFTER_MANEUVER_EXECUTE hook.
-## Requirements: OV-010–013.
-func _resolve_maneuver_overlaps_ex() -> Transform2D:
-	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
-	var tool_state: ManeuverToolState = mt_scene.get_state()
-	var attach: Dictionary = mt_scene._compute_attachment()
-	var start_pos: Vector2 = attach["position"]
-	var start_rot: float = attach["rotation"]
-	var ghost_side: String = tool_state.compute_ghost_side()
-	var original_xform: Transform2D = Transform2D(
-			_activation_ctx.activating_ship_token.global_rotation,
-			_activation_ctx.activating_ship_token.global_position)
-	var ship_size: Constants.ShipSize = _activation_ctx.activating_ship_token.get_ship_size()
-	var other_bases: Array = _build_other_ship_bases(_activation_ctx.activating_ship_token)
-	var resolver: OverlapResolver = OverlapResolver.new()
-	var result: OverlapResolver.ShipShipResult = (
-			resolver.check_ship_ship_overlap(
-					tool_state, start_pos, start_rot, ghost_side,
-					ship_size, other_bases, original_xform))
-	_activation_ctx.last_maneuver_overlapped = result.overlaps or result.stayed_in_place
-	if _activation_ctx.last_maneuver_overlapped:
-		_apply_overlap_damage(result)
-	else:
-		if _panel_mgr.activation_modal:
-			_panel_mgr.activation_modal.set_collision_message("")
-	return result.final_transform
-
-## Resolves the AFTER_MANEUVER_EXECUTE hook for persistent damage cards.
-## Ruptured Engine: suffer 1 facedown if speed > 1.
-## Damaged Controls: suffer 1 facedown if overlapping a ship or obstacle.
-## Rules Reference: "Ruptured Engine", "Damaged Controls" card texts.
-func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("ship_speed", ship.current_speed)
-	ctx.set_meta_value("did_overlap", did_overlap)
-	ctx.set_meta_value("damage_deck", _damage_deck)
-	ctx = registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
-	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		_submit_persistent_damage(ship,
-				str(ctx.get_meta_value("persistent_effect_id", "")))
-
-
-## Resolves the ON_SPEED_CHANGE hook after maneuver commit.
-## Thruster Fissure: suffer 1 facedown damage when speed changes.
-## Called only when total_speed_change != 0 (deferred from preview to commit).
-## Rules Reference: "Thruster Fissure" card text.
-func _resolve_speed_change_hook() -> void:
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", _damage_deck)
-	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
-	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		_submit_persistent_damage(ship,
-				str(ctx.get_meta_value("persistent_effect_id", "")))
-
-
-## Shows the activation modal at the DONE step so the player can review
-## all completed steps and deliberately end their activation.
-## Replaces the previous auto-end behaviour (activation_ended was emitted
-## immediately after maneuver).
-## Requirements: AC-5b-11, FLOW-002.
-func _show_end_activation_after_maneuver() -> void:
-	# Update state to reflect completion.
-	if _activation_ctx.ship_activation_state:
-		_activation_ctx.ship_activation_state.advance_step() ## MANEUVER → DONE
-	_ship_activation_controller.submit_network_activation_step("activation_done")
-	# If the modal is still open (normal commit path), just refresh it
-	# so it shows all steps checked + "End Activation ►".  If it was
-	# closed (displacement path closes it), re-open it.
-	if _panel_mgr.activation_modal and _activation_ctx.ship_activation_state:
-		_ship_activation_controller.update_activation_modal_interactivity()
-		if _panel_mgr.activation_modal.is_open():
-			_panel_mgr.activation_modal.refresh()
-		else:
-			_ship_activation_controller.configure_and_open_activation_modal()
-	# Re-show the "Show Activation Sequence" button so the player
-	# can close and reopen the modal before pressing End Activation.
-	_ship_activation_controller.show_activation_sequence_button()
-
-## Called when the player presses "End Activation ►" in the modal.
-## Emits activation_ended so GameManager spends the dial, marks the ship
-## activated, and advances the turn.
-## Rules Reference: RRG "Ship Activation" p.16 — activation ends.
-func _on_activation_end_requested() -> void:
-	_log.info("Player ended activation via End Activation button.")
-	EventBus.activation_ended.emit()
+# Activation step routing, maneuver execute, and overlap resolution
+# moved to ShipActivationController in Phase K8b.
 
 # ---------------------------------------------------------------------------
-# Overlap Resolution (Phase 5b-2) — OV-001–013
+# Persistent damage helper (used by ShipActivationController via Callable)
 # ---------------------------------------------------------------------------
 
-## Builds an Array of [ShipBase] for every ship on the board except
-## [param exclude].  Used for ship–ship overlap checks.
-func _build_other_ship_bases(exclude: ShipToken) -> Array:
-	var bases: Array = []
-	for token: ShipToken in get_ship_tokens():
-		if token == exclude:
-			continue
-		var inst: ShipInstance = token.get_ship_instance()
-		if inst and inst.is_destroyed():
-			continue
-		var xform: Transform2D = Transform2D(
-				token.global_rotation, token.global_position)
-		bases.append(ShipBase.new(token.get_ship_size(), xform))
-	return bases
-
-## Deals one facedown damage card to both the moving ship and the
-## closest overlapping ship after an overlap resolution.
-## Rules Reference: RRG "Overlapping", p.8 — OV-011.
-func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
-	var moving_inst: ShipInstance = (
-			_activation_ctx.activating_ship_token.get_ship_instance())
-	# Identify the overlapped ship token.
-	var other_token: ShipToken = _get_other_ship_token(
-			result.overlapped_ship_index)
-	# Build toast text.
-	var toast_parts: Array[String] = []
-	if result.stayed_in_place:
-		toast_parts.append(
-				"⚠ Collision detected! Ship stays in place (speed 0).")
-	else:
-		toast_parts.append(
-				"⚠ Collision detected! Speed temporarily reduced to %d (was %d)."
-				% [result.final_speed, result.original_speed])
-	# Pre-draw cards from the damage deck.
-	if _damage_deck == null:
-		_log.error("No damage deck — cannot deal overlap damage.")
-		return
-	var m_card: DamageCard = _damage_deck.draw_card()
-	if m_card == null:
-		_log.error("Damage deck empty — cannot deal overlap damage.")
-		return
-	var other_inst: ShipInstance = null
-	var o_card: DamageCard = null
-	if other_token:
-		other_inst = other_token.get_ship_instance()
-	if other_inst:
-		o_card = _damage_deck.draw_card()
-	# Submit command with pre-drawn cards.
-	var cmd_result: Dictionary = GameManager.submit_overlap_damage(
-			moving_inst,
-			other_inst if other_inst else moving_inst,
-			m_card.serialize(),
-			o_card.serialize() if o_card else m_card.serialize())
-	if cmd_result.is_empty():
-		_log.error("OverlapDamageCommand rejected.")
-		return
-	# Emit signals for the moving ship.
-	_emit_overlap_signals(moving_inst,
-			_activation_ctx.activating_ship_token, cmd_result,
-			"moving_hull", "moving_destroyed")
-	toast_parts.append("%s takes 1 damage."
-			% moving_inst.ship_data.ship_name)
-	# Emit signals for the overlapped ship.
-	if other_inst and other_token:
-		_emit_overlap_signals(other_inst, other_token, cmd_result,
-				"other_hull", "other_destroyed")
-		toast_parts.append("%s takes 1 damage."
-				% other_inst.ship_data.ship_name)
-	# Show collision info inside the activation modal so it's unmissable.
-	if _panel_mgr.activation_modal:
-		_panel_mgr.activation_modal.set_collision_message("\n".join(toast_parts))
-	_log.info("Overlap damage applied: %s" % " | ".join(toast_parts))
-
-
-## Emits EventBus signals for one side of an overlap damage result.
-func _emit_overlap_signals(inst: ShipInstance, token: ShipToken,
-		cmd_result: Dictionary, hull_key: String,
-		destroyed_key: String) -> void:
-	EventBus.damage_card_dealt.emit(inst, null, false)
-	var new_hull: int = int(cmd_result.get(hull_key, 0))
-	EventBus.ship_hull_changed.emit(inst, new_hull)
-	EventBus.ship_damaged.emit(token, 1, Constants.HullZone.FRONT)
-	if cmd_result.get(destroyed_key, false) as bool:
-		_log.info("Ship destroyed by overlap: %s" % inst.data_key)
-		EventBus.ship_destroyed.emit(token)
-		_fade_out_destroyed_token(token)
 
 ## Fades out a destroyed ship token (visual only).
 func _fade_out_destroyed_token(token: Node2D) -> void:
@@ -1986,38 +1471,6 @@ func _on_damage_card_dealt(ship_instance: RefCounted, card: RefCounted,
 	else:
 		msg = "%s — damage card dealt" % ship_name
 	TooltipManager.show_text(msg, Vector2.INF, 2.0, true)
-
-## Returns the [ShipToken] corresponding to an index among the "other"
-## ships (excluding the active ship, matching _build_other_ship_bases order).
-func _get_other_ship_token(index: int) -> ShipToken:
-	if index < 0:
-		return null
-	var idx: int = 0
-	for token: ShipToken in get_ship_tokens():
-		if token == _activation_ctx.activating_ship_token:
-			continue
-		var inst: ShipInstance = token.get_ship_instance()
-		if inst and inst.is_destroyed():
-			continue
-		if idx == index:
-			return token
-		idx += 1
-	return null
-
-## Finds all squadron tokens whose bases overlap the given ship base.
-## Returns the list of displaced [SquadronToken] nodes.
-## Rules Reference: RRG "Overlapping", p.8 — OV-001.
-func _find_displaced_squadrons(ship_base: ShipBase) -> Array[SquadronToken]:
-	var displaced: Array[SquadronToken] = []
-	for sq_token: SquadronToken in get_squadron_tokens():
-		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and sq_inst.is_destroyed():
-			continue
-		var sq_base: SquadronBase = SquadronBase.new(
-				sq_token.global_position, sq_token.get_radius_px())
-		if sq_base.overlaps_ship(ship_base):
-			displaced.append(sq_token)
-	return displaced
 
 # ---------------------------------------------------------------------------
 # Maneuver Tool (Phase 5a)
@@ -2118,16 +1571,14 @@ func _create_target_selector() -> void:
 	_target_selector.dismiss_other_tools_requested.connect(
 			_on_dismiss_other_tools_requested)
 
-## Creates the [AttackExecutor] child node and wires its signals.
+## Creates the [AttackExecutor] child node.  Its
+## attack_exec_completed / attack_exec_cancelled signals are connected
+## by [ShipActivationController] (Phase K8b).
 func _create_attack_executor() -> void:
 	_attack_executor = AttackExecutor.new()
 	_attack_executor.name = "AttackExecutor"
 	add_child(_attack_executor)
 	_attack_executor.initialize(_target_selector, _camera)
-	_attack_executor.attack_exec_completed.connect(
-			_on_attack_exec_completed)
-	_attack_executor.attack_exec_cancelled.connect(
-			_on_attack_exec_cancelled)
 
 ## Creates the [ManeuverToolController] child node.
 func _create_maneuver_tool_controller() -> void:
@@ -2175,8 +1626,8 @@ func _create_squadron_phase_controller() -> void:
 			_move_squadron_token,
 			highlight_sq,
 	)
-	_squadron_phase_controller.squadron_command_done.connect(
-			_on_squadron_command_done)
+	# squadron_command_done is connected by ShipActivationController
+	# (Phase K8b).
 
 ## Dismisses the maneuver tool, passing the current activation ship so the
 ## Navigate-token spend preview overlay is cleared when appropriate.
@@ -2193,7 +1644,9 @@ func _create_debug_controller() -> void:
 	add_child(_debug_controller)
 	_debug_controller.initialize(self , get_ship_tokens, get_squadron_tokens)
 
-## Creates the [DisplacementController] child node and wires its signals.
+## Creates the [DisplacementController] child node.  The
+## displacement_completed signal is connected by
+## [ShipActivationController] (Phase K8b).
 func _create_displacement_controller() -> void:
 	_displacement_controller = DisplacementController.new()
 	_displacement_controller.name = "DisplacementController"
@@ -2202,8 +1655,6 @@ func _create_displacement_controller() -> void:
 			_camera, get_squadron_tokens, get_ship_tokens,
 			_panel_mgr.show_activation_button,
 			_panel_mgr.activation_modal)
-	_displacement_controller.displacement_completed.connect(
-			_show_end_activation_after_maneuver)
 
 ## Creates the [DialDragController] child node and wires its signals.
 func _create_dial_drag_controller() -> void:
@@ -2241,13 +1692,18 @@ func _initialize_ship_activation_controller() -> void:
 			_squadron_phase_controller,
 			_damage_deck,
 			_dial_drag_controller,
+			_maneuver_tool_controller,
+			_displacement_controller,
 			_find_ship_token_for_instance,
 			_has_repair_resources,
 			_has_squadron_resources,
 			_is_squadron_token_only,
 			_submit_persistent_damage,
 			_is_pending_remote_result,
-			_is_local_squadron_modal_controller)
+			_is_local_squadron_modal_controller,
+			get_ship_tokens,
+			get_squadron_tokens,
+			_dismiss_maneuver_tool_with_preview)
 
 ## Creates the [CommandPhaseController] child node and wires its signal.
 func _create_command_phase_controller() -> void:

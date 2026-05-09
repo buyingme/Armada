@@ -296,9 +296,9 @@ func get_local_lan_ip() -> String:
 		if ip.begins_with("127."):
 			continue
 		if ip.find(":") != -1:
-			continue  # skip IPv6
+			continue # skip IPv6
 		if ip.begins_with("169.254."):
-			continue  # skip link-local fallback
+			continue # skip link-local fallback
 		return ip
 	return ""
 

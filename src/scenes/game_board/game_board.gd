@@ -152,63 +152,10 @@ var _squadron_phase_controller: SquadronPhaseController = null
 var _displacement_controller: DisplacementController = null
 
 func _ready() -> void:
-	_create_camera()
-	_create_token_container()
-	_create_debug_controller()
-	_create_command_phase_controller()
-	_create_squadron_phase_controller()
-	# UI panels, resize infrastructure, and isolated UI callbacks.
-	_panel_mgr = UIPanelManager.new()
-	_panel_mgr.name = "UIPanelManager"
-	add_child(_panel_mgr)
-	_panel_mgr.initialize(self )
-	# Wire squadron UI (needs TurnManagementLayer from UIPanelManager).
-	_squadron_phase_controller.create_ui(
-			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)
-	_create_target_selector()
-	_create_attack_executor()
-	_create_attack_panel_controller()
-	_create_tool_overlay_controller()
-	_create_displacement_controller()
-	_create_ship_activation_controller()
-	_create_dial_drag_controller()
-	# Start game so GameState exists BEFORE tokens are spawned.
-	# [GameManager.bootstrap_game] handles the network-vs-hot-seat
-	# config split internally (Phase I6e-2).
-	# Phase J5.6: when a saved state was just installed by
-	# [GameManager.start_new_game_from_state], skip the bootstrap (which
-	# would overwrite the loaded state) and spawn tokens from the
-	# loaded GameState instead of the scenario JSON.
-	var preloaded: bool = GameManager.consume_preloaded_flag()
-	if preloaded:
-		_spawn_tokens_from_loaded_state()
-	else:
-		GameManager.bootstrap_game("learning_scenario")
-		_spawn_learning_scenario_tokens()
-	# Initialize the ship activation controller now that the damage deck
-	# exists (set during scenario / loaded-state spawn).
-	_initialize_ship_activation_controller()
-	# Phase K12: command-executed routing adapter.  Created after every
-	# controller it depends on (attack panel, debug, ship activation,
-	# displacement) and before [_connect_signals] so the adapter's own
-	# subscription to [signal CommandProcessor.command_executed] is the
-	# single source of post-command UI projection.
-	_create_command_router_adapter()
-	_connect_signals()
-	_connect_panel_signals()
-	queue_redraw()
-	# The phase_changed and active_player_changed signals fired inside
-	# start_new_game() before _connect_signals(), so trigger the initial
-	# phase UI and handoff overlay manually.
-	_on_phase_changed(GameManager.get_current_phase())
-	# Show the initial handoff overlay so the first player must click
-	# "Ready" before dials appear — same UX as every subsequent handoff.
-	_on_active_player_changed(GameManager.get_active_player())
-	# Show a brief toast if fixed round-1 commands were auto-assigned.
-	# Requirements: CP-009, CP-010.
-	if GameManager.fixed_commands_applied:
-		TooltipManager.show_text(
-				"Round 1 commands pre-assigned", Vector2.INF, 3.0)
+	_create_board_components()
+	_bootstrap_or_load_board_state()
+	_finalize_ready_sequence()
+	_show_fixed_round1_toast_if_needed()
 
 ## Returns all current ship tokens on the board.
 func get_ship_tokens() -> Array[ShipToken]:
@@ -280,37 +227,17 @@ func _input(event: InputEvent) -> void:
 ## Handles input for debug-mode interactions.
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
-	# Squadron displacement: left-click locks the currently moving squadron.
-	if _displacement_controller and _displacement_controller.is_displacement_active():
-		if event is InputEventMouseButton:
-			var mb: InputEventMouseButton = event as InputEventMouseButton
-			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-				_displacement_controller.handle_lock_click()
-				get_viewport().set_input_as_handled()
-				return
-	# Range overlay / Maneuver tool: Escape dismisses or cancels selection.
+	if _try_handle_displacement_lock_click(event):
+		return
 	if _tool_overlay_controller.try_handle_escape(event):
 		return
-
-	# Keyboard shortcuts for tool buttons (M / R / T / A).
-	# Available in all modes; guarded by the same disabled flag as toolbar buttons.
-	# Requirements: MT-U-007, RO-008, TL-UI-003a.
 	if _tool_overlay_controller.try_handle_tool_shortcut(event):
 		return
-
-	# Debug damage targeting (Shift+D enter, Escape cancel) — DBG-050.
-	# Owned by [DebugController] since Phase K10.
 	if _debug_controller and _debug_controller.try_handle_input(event):
 		return
-
-	# Quit confirmation: ESC when no other handler consumed it. UI-034.
 	if _panel_mgr.handle_quit_escape(event):
 		return
-
-	if not DebugMode.enabled:
-		return
-
-	if event is InputEventMouseButton:
+	if DebugMode.enabled and event is InputEventMouseButton:
 		_debug_controller.handle_debug_click(event as InputEventMouseButton)
 
 # ---------------------------------------------------------------------------
@@ -330,71 +257,9 @@ func _create_token_container() -> void:
 	add_child(_token_container)
 ## Connects EventBus and DebugMode signals relevant to the board.
 func _connect_signals() -> void:
-	#region Debug & viewport signals
-	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
-	# debug_mode_changed / save_positions_requested are connected inside
-	# DebugController.initialize().
-	# Viewport resize is handled by UIPanelManager._connect_ui_signals().
-	#endregion
-
-	#region Command Phase signals
-	EventBus.phase_changed.connect(_on_phase_changed)
-	EventBus.round_started.connect(_on_round_started)
-	# command_picker_requested / confirmed / dial_order_requested / command_phase_complete
-	# are connected inside CommandPhaseController.initialize().
-	#endregion
-
-	#region Turn management signals
-	EventBus.active_player_changed.connect(_on_active_player_changed)
-	EventBus.handoff_accepted.connect(_on_handoff_accepted)
-	# Phase I6a: HUD status, activation-step sync and modal lifecycle on
-	# remote clients are projected from [GameState.interaction_flow] every
-	# time a command is applied.  The single subscription lives on
-	# [CommandRouterAdapter] (Phase K12) and routes the command into the
-	# appropriate controllers.
-	#endregion
-
-	#region Ship activation signals (dial drag controller, activation end)
-	# EventBus.dial_drag_started is connected inside DialDragController.initialize().
-	# EventBus.activation_ended is connected inside
-	# ShipActivationController._connect_signals().
-	#endregion
-
-	#region Maneuver tool / Range overlay / Targeting list signals
-	# All three are owned by [ToolOverlayController] (Phase K11), which
-	# wires the EventBus signals internally during initialize().
-	#endregion
-
-	#region Game end & scoring signals
-	# game_ended / ship_destroyed / squadron_destroyed / damage_summary_requested
-	# are connected inside UIPanelManager._connect_ui_signals().
-	#endregion
-
-	#region Damage card signals
-	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
-	#endregion
-
-	#region Network remote repositioning (BF-2)
-	EventBus.ship_repositioned_remotely.connect(
-			_on_ship_repositioned_remotely)
-	EventBus.squadron_repositioned_remotely.connect(
-			_on_squadron_repositioned_remotely)
-	#endregion
-
-	#region Network passive-peer destroy visuals
-	# In hot-seat / on the attacker peer, [AttackExecutor._fade_out_token]
-	# hides the destroyed token directly.  On the passive peer the
-	# attack-executor is not in exec mode, so the token stays visible.
-	# Subscribe to [signal EventBus.squadron_destroyed] here so the
-	# passive peer also fades the token.  Idempotent: re-firing on a
-	# token that is already invisible is a no-op (the handler early-returns).
-	EventBus.squadron_destroyed.connect(_on_squadron_destroyed_fade_token)
-	#endregion
-
-	#region Network passive-peer modal mirroring (C7/C8)
-	# EventBus.ship_activated_remotely is connected inside
-	# ShipActivationController._connect_signals().
-	#endregion
+	_connect_board_core_signals()
+	_connect_board_damage_and_remote_signals()
+	_connect_board_passive_peer_visual_signals()
 
 
 ## Connects game-logic signals from UIPanelManager-created panels
@@ -414,33 +279,12 @@ func _connect_panel_signals() -> void:
 ## Rules Reference: "Learning Scenario Setup", step 9, p.5; SU-010–030.
 func _spawn_learning_scenario_tokens() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
-	_load_map_texture(setup.get_map_image_filename())
-	_init_scenario_systems(setup)
-	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
-	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
-	# Seed normalised positions / rotations from the scenario placements
-	# BEFORE registering instances or running fixed-round-1 commands.
-	# Otherwise auto-checkpoints captured during command application
-	# would record every token at the map origin (Phase J7 fix).
-	_seed_instance_positions(setup, ship_instances, squad_instances)
-	_register_instances_in_game_state(ship_instances, squad_instances)
-	# Network client: server auto-assigns fixed commands and broadcasts.
-	# Client receives via _handle_remote_command_effects().  G4.6.5 A3.
-	# Phase I6e-2: the network-client gate now lives inside
-	# [GameManager.apply_fixed_round1_commands] so this call is
-	# unconditional.
-	if setup.has_fixed_round1_commands():
-		var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
-		GameManager.apply_fixed_round1_commands(fixed_cmds)
+	var prepared: Dictionary = _prepare_learning_scenario_instances(setup)
+	var ship_instances: Array[ShipInstance] = prepared["ships"] as Array[ShipInstance]
+	var squad_instances: Array[SquadronInstance] = prepared["squadrons"] as Array[SquadronInstance]
+	_apply_fixed_round1_commands_if_configured(setup)
 	_spawn_and_bind_tokens(setup, ship_instances, squad_instances)
-	_log.info("Spawned %d tokens for the Learning Scenario." %
-			_token_container.get_child_count())
-	_panel_mgr.update_card_panel_positions()
-	if _panel_mgr.activation_sidebar and GameManager.current_game_state:
-		_panel_mgr.activation_sidebar.populate(GameManager.current_game_state)
-		_panel_mgr.activation_sidebar.connect_signals()
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_panel_mgr.activation_sidebar.update_position(vp_size)
+	_finalize_learning_scenario_spawn_ui()
 
 ## Spawns ship and squadron tokens from the already-installed loaded
 ## [GameState] (positions, hull damage, defense tokens, command dials,
@@ -469,23 +313,11 @@ func _spawn_tokens_from_loaded_state() -> void:
 		var ps: PlayerState = gs.get_player_state(player_index)
 		if ps == null:
 			continue
-		for ship: ShipInstance in ps.ships:
-			var placement: TokenPlacement = _placement_from_ship(ship)
-			var token: ShipToken = _spawn_ship_token(placement)
-			token.bind_instance(ship)
-			_panel_mgr.add_ship_to_card_panel(ship)
-		for squad: SquadronInstance in ps.squadrons:
-			var sq_placement: TokenPlacement = _placement_from_squadron(squad)
-			var sq_token: SquadronToken = _spawn_squadron_token(sq_placement)
-			sq_token.bind_instance(squad)
+		_spawn_loaded_tokens_for_player(ps)
 	_log.info("Spawned %d tokens from loaded state." %
 			_token_container.get_child_count())
 	_panel_mgr.update_card_panel_positions()
-	if _panel_mgr.activation_sidebar and GameManager.current_game_state:
-		_panel_mgr.activation_sidebar.populate(GameManager.current_game_state)
-		_panel_mgr.activation_sidebar.connect_signals()
-		var vp_size: Vector2 = get_viewport().get_visible_rect().size
-		_panel_mgr.activation_sidebar.update_position(vp_size)
+	_refresh_activation_sidebar_ui()
 
 ## Wires [member _attack_executor] / damage deck / effect registry from
 ## the loaded [GameState] (no fresh deck construction).  Phase J5.6.
@@ -766,25 +598,13 @@ func _register_instances_in_game_state(
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
-	gs.initiative_player = 0 # Rebel has initiative (SU-020).
-	var rebel_ps: PlayerState = gs.get_player_state(0)
-	var imperial_ps: PlayerState = gs.get_player_state(1)
-	rebel_ps.faction = Constants.Faction.REBEL_ALLIANCE
-	imperial_ps.faction = Constants.Faction.GALACTIC_EMPIRE
+	var player_states: Dictionary = _prepare_learning_scenario_player_states(gs)
+	var rebel_ps: PlayerState = player_states["rebel"] as PlayerState
+	var imperial_ps: PlayerState = player_states["imperial"] as PlayerState
 	for ship: ShipInstance in ships:
-		if ship.ship_data == null:
-			continue
-		if ship.ship_data.faction == Constants.Faction.GALACTIC_EMPIRE:
-			imperial_ps.ships.append(ship)
-		else:
-			rebel_ps.ships.append(ship)
+		_append_ship_to_owner_state(ship, rebel_ps, imperial_ps)
 	for squad: SquadronInstance in squads:
-		if squad.squadron_data == null:
-			continue
-		if squad.squadron_data.faction == Constants.Faction.GALACTIC_EMPIRE:
-			imperial_ps.squadrons.append(squad)
-		else:
-			rebel_ps.squadrons.append(squad)
+		_append_squadron_to_owner_state(squad, rebel_ps, imperial_ps)
 
 # ---------------------------------------------------------------------------
 # Turn-management UI creation
@@ -850,32 +670,8 @@ func _on_active_player_changed(player_index: int) -> void:
 	if PlayMode.is_network():
 		_handle_network_active_player(player_index)
 		return
-
-	var phase: Constants.GamePhase = GameManager.get_current_phase()
-
-	# Update viewer on both card panels so the active player can only
-	# inspect their own dial stacks.
-	# Requirements: UI-023 — cannot view opponent's unrevealed dials.
-	_panel_mgr.rebel_card_panel.set_viewer_player(player_index)
-	_panel_mgr.imperial_card_panel.set_viewer_player(player_index)
-
-	# Rotate camera to the new player's perspective.
-	# Requirements: BP-001 — camera rotates 180°.
-	_camera.rotate_to_player(player_index)
-
-	# Swap card panels so the active player's cards are on the left.
-	_swap_card_panels(player_index)
-
-	# Show appropriate overlay / banner.
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	match phase:
-		Constants.GamePhase.COMMAND:
-			var phase_name: String = UIPanelManager.PHASE_NAMES.get(phase, "Command Phase")
-			_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name)
-			_panel_mgr.handoff_overlay.update_size(vp_size)
-		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
-			_panel_mgr.your_turn_banner.show_banner(player_index)
-			_panel_mgr.your_turn_banner.update_size(vp_size)
+	_apply_hotseat_view_for_active_player(player_index)
+	_show_hotseat_turn_prompt(player_index)
 
 ## Called when the handoff overlay or banner is dismissed by the player.
 ## Resumes the appropriate game flow for the current phase.
@@ -920,40 +716,15 @@ func _swap_card_panels(player_index: int) -> void:
 func _handle_network_active_player(_player_index: int) -> void:
 	var local: int = NetworkManager.get_local_player_index()
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
-	if _panel_mgr != null:
-		# Fallback while server-side interaction-state publishing is still
-		# being rolled out: keep score-header guidance visible from the
-		# active-player signal path.
-		var status_text: String = "waiting for opponent's choice"
-		if phase == Constants.GamePhase.COMMAND or _player_index == local:
-			status_text = "make your choices"
-		_panel_mgr.set_network_status_text(status_text)
-		_ship_activation_controller.update_activation_modal_interactivity()
-
-	# Always lock viewer to local player's perspective.
-	_panel_mgr.rebel_card_panel.set_viewer_player(local)
-	_panel_mgr.imperial_card_panel.set_viewer_player(local)
-	_camera.rotate_to_player(local)
-	_swap_card_panels(local)
-
-	# Command Phase: both players assign dials simultaneously — no lockout.
+	_update_network_status_and_interactivity(_player_index, local, phase)
+	_apply_network_local_view(local)
 	if phase == Constants.GamePhase.COMMAND:
 		_command_phase_controller.begin_command_dial_flow()
 		return
-
-	# Ship / Squadron Phase: only show "Your Turn" banner when it IS
-	# the local player's turn.  The non-active player just watches.
-	# G4.6.5 — prevents begin_activation_flow() from opening the
-	# SqActModal for the remote player's squadrons.
 	if _player_index != local:
-		# Passive peer: start the squadron flow as a read-only observer so
-		# the modal mirrors the opponent's activation.  G4.6.6 T1a C8.
-		if phase == Constants.GamePhase.SQUADRON:
-			_squadron_phase_controller.begin_activation_flow()
+		_start_network_passive_squadron_observer_if_needed(phase)
 		return
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_panel_mgr.your_turn_banner.show_banner(_player_index)
-	_panel_mgr.your_turn_banner.update_size(vp_size)
+	_show_network_turn_banner(_player_index)
 
 
 # ---------------------------------------------------------------------------
@@ -1406,18 +1177,7 @@ func _has_repair_resources(ship_token: Variant) -> bool:
 	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
 	if inst == null:
 		return false
-	var has_resource: bool = false
-	# Check revealed dial.
-	if inst.command_dial_stack:
-		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
-		if not revealed.is_empty() and \
-				int(revealed.get("command", -1)) == Constants.CommandType.REPAIR:
-			has_resource = true
-	# Check command token.
-	if not has_resource and inst.command_tokens and \
-			inst.command_tokens.has_token(Constants.CommandType.REPAIR):
-		has_resource = true
-	if not has_resource:
+	if not _has_command_resource(inst, Constants.CommandType.REPAIR):
 		return false
 	# Even with resources, skip if the ship is at full health.
 	return not inst.is_fully_healthy()
@@ -1433,27 +1193,9 @@ func _has_squadron_resources(ship_token: Variant) -> bool:
 	var inst: ShipInstance = (ship_token as ShipToken).get_ship_instance()
 	if inst == null:
 		return false
-	var has_resource: bool = false
-	# Check revealed dial.
-	if inst.command_dial_stack:
-		var revealed: Dictionary = inst.command_dial_stack.get_revealed_dial()
-		if not revealed.is_empty() and \
-				int(revealed.get("command", -1)) == \
-				Constants.CommandType.SQUADRON:
-			has_resource = true
-	# Check command token.
-	if not has_resource and inst.command_tokens and \
-			inst.command_tokens.has_token(Constants.CommandType.SQUADRON):
-		has_resource = true
-	if not has_resource:
+	if not _has_command_resource(inst, Constants.CommandType.SQUADRON):
 		return false
-	# Even with resources, skip if no friendly squadrons exist.
-	var tokens: Array[SquadronToken] = get_squadron_tokens()
-	for sq_token: SquadronToken in tokens:
-		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
-		if sq_inst and sq_inst.owner_player == inst.owner_player:
-			return true
-	return false
+	return _has_friendly_squadron_token_for_owner(inst.owner_player)
 
 ## Returns true if the ship has a Squadron token but no matching dial.
 ## In that case spending the token is optional and the player should be
@@ -1475,3 +1217,248 @@ func _is_squadron_token_only(ship_token: Variant) -> bool:
 	var has_token: bool = inst.command_tokens != null and \
 			inst.command_tokens.has_token(Constants.CommandType.SQUADRON)
 	return has_token and not has_dial
+
+
+func _create_board_components() -> void:
+	_create_camera()
+	_create_token_container()
+	_create_debug_controller()
+	_create_command_phase_controller()
+	_create_squadron_phase_controller()
+	# UI panels, resize infrastructure, and isolated UI callbacks.
+	_panel_mgr = UIPanelManager.new()
+	_panel_mgr.name = "UIPanelManager"
+	add_child(_panel_mgr)
+	_panel_mgr.initialize(self )
+	_squadron_phase_controller.create_ui(
+			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)
+	_create_target_selector()
+	_create_attack_executor()
+	_create_attack_panel_controller()
+	_create_tool_overlay_controller()
+	_create_displacement_controller()
+	_create_ship_activation_controller()
+	_create_dial_drag_controller()
+
+
+func _bootstrap_or_load_board_state() -> void:
+	# Phase J5.6: when a save was loaded just before entering the board,
+	# skip bootstrap and spawn directly from the preloaded GameState.
+	if GameManager.consume_preloaded_flag():
+		_spawn_tokens_from_loaded_state()
+		return
+	GameManager.bootstrap_game("learning_scenario")
+	_spawn_learning_scenario_tokens()
+
+
+func _finalize_ready_sequence() -> void:
+	_initialize_ship_activation_controller()
+	_create_command_router_adapter()
+	_connect_signals()
+	_connect_panel_signals()
+	queue_redraw()
+	_on_phase_changed(GameManager.get_current_phase())
+	_on_active_player_changed(GameManager.get_active_player())
+
+
+func _show_fixed_round1_toast_if_needed() -> void:
+	if GameManager.fixed_commands_applied:
+		TooltipManager.show_text(
+				"Round 1 commands pre-assigned", Vector2.INF, 3.0)
+
+
+func _try_handle_displacement_lock_click(event: InputEvent) -> bool:
+	if not _displacement_controller \
+			or not _displacement_controller.is_displacement_active():
+		return false
+	if not event is InputEventMouseButton:
+		return false
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return false
+	_displacement_controller.handle_lock_click()
+	get_viewport().set_input_as_handled()
+	return true
+
+
+func _connect_board_core_signals() -> void:
+	EventBus.firing_arc_toggled.connect(_on_firing_arc_toggled)
+	EventBus.phase_changed.connect(_on_phase_changed)
+	EventBus.round_started.connect(_on_round_started)
+	EventBus.active_player_changed.connect(_on_active_player_changed)
+	EventBus.handoff_accepted.connect(_on_handoff_accepted)
+
+
+func _connect_board_damage_and_remote_signals() -> void:
+	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
+	EventBus.ship_repositioned_remotely.connect(
+			_on_ship_repositioned_remotely)
+	EventBus.squadron_repositioned_remotely.connect(
+			_on_squadron_repositioned_remotely)
+
+
+func _connect_board_passive_peer_visual_signals() -> void:
+	# Passive peer still needs destroy fade visuals when not executing attacks.
+	EventBus.squadron_destroyed.connect(_on_squadron_destroyed_fade_token)
+
+
+func _apply_fixed_round1_commands_if_configured(
+		setup: LearningScenarioSetup) -> void:
+	if not setup.has_fixed_round1_commands():
+		return
+	var fixed_cmds: Dictionary = setup.get_fixed_round1_commands()
+	GameManager.apply_fixed_round1_commands(fixed_cmds)
+
+
+func _prepare_learning_scenario_instances(
+		setup: LearningScenarioSetup) -> Dictionary:
+	_load_map_texture(setup.get_map_image_filename())
+	_init_scenario_systems(setup)
+	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
+	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
+	_seed_instance_positions(setup, ship_instances, squad_instances)
+	_register_instances_in_game_state(ship_instances, squad_instances)
+	return {
+		"ships": ship_instances,
+		"squadrons": squad_instances,
+	}
+
+
+func _finalize_learning_scenario_spawn_ui() -> void:
+	_log.info("Spawned %d tokens for the Learning Scenario." %
+			_token_container.get_child_count())
+	_panel_mgr.update_card_panel_positions()
+	_refresh_activation_sidebar_ui()
+
+
+func _refresh_activation_sidebar_ui() -> void:
+	if not _panel_mgr.activation_sidebar or not GameManager.current_game_state:
+		return
+	_panel_mgr.activation_sidebar.populate(GameManager.current_game_state)
+	_panel_mgr.activation_sidebar.connect_signals()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_panel_mgr.activation_sidebar.update_position(vp_size)
+
+
+func _spawn_loaded_tokens_for_player(ps: PlayerState) -> void:
+	for ship: ShipInstance in ps.ships:
+		var placement: TokenPlacement = _placement_from_ship(ship)
+		var token: ShipToken = _spawn_ship_token(placement)
+		token.bind_instance(ship)
+		_panel_mgr.add_ship_to_card_panel(ship)
+	for squad: SquadronInstance in ps.squadrons:
+		var sq_placement: TokenPlacement = _placement_from_squadron(squad)
+		var sq_token: SquadronToken = _spawn_squadron_token(sq_placement)
+		sq_token.bind_instance(squad)
+
+
+func _prepare_learning_scenario_player_states(gs: GameState) -> Dictionary:
+	gs.initiative_player = 0 # Rebel has initiative (SU-020).
+	var rebel_ps: PlayerState = gs.get_player_state(0)
+	var imperial_ps: PlayerState = gs.get_player_state(1)
+	rebel_ps.faction = Constants.Faction.REBEL_ALLIANCE
+	imperial_ps.faction = Constants.Faction.GALACTIC_EMPIRE
+	return {
+		"rebel": rebel_ps,
+		"imperial": imperial_ps,
+	}
+
+
+func _append_ship_to_owner_state(ship: ShipInstance,
+		rebel_ps: PlayerState,
+		imperial_ps: PlayerState) -> void:
+	if ship.ship_data == null:
+		return
+	if ship.ship_data.faction == Constants.Faction.GALACTIC_EMPIRE:
+		imperial_ps.ships.append(ship)
+	else:
+		rebel_ps.ships.append(ship)
+
+
+func _append_squadron_to_owner_state(squad: SquadronInstance,
+		rebel_ps: PlayerState,
+		imperial_ps: PlayerState) -> void:
+	if squad.squadron_data == null:
+		return
+	if squad.squadron_data.faction == Constants.Faction.GALACTIC_EMPIRE:
+		imperial_ps.squadrons.append(squad)
+	else:
+		rebel_ps.squadrons.append(squad)
+
+
+func _apply_hotseat_view_for_active_player(player_index: int) -> void:
+	_panel_mgr.rebel_card_panel.set_viewer_player(player_index)
+	_panel_mgr.imperial_card_panel.set_viewer_player(player_index)
+	_camera.rotate_to_player(player_index)
+	_swap_card_panels(player_index)
+
+
+func _show_hotseat_turn_prompt(player_index: int) -> void:
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	match phase:
+		Constants.GamePhase.COMMAND:
+			var phase_name: String = UIPanelManager.PHASE_NAMES.get(
+					phase, "Command Phase")
+			_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name)
+			_panel_mgr.handoff_overlay.update_size(vp_size)
+		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
+			_panel_mgr.your_turn_banner.show_banner(player_index)
+			_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+func _update_network_status_and_interactivity(
+		player_index: int,
+		local: int,
+		phase: Constants.GamePhase) -> void:
+	if _panel_mgr == null:
+		return
+	var status_text: String = "waiting for opponent's choice"
+	if phase == Constants.GamePhase.COMMAND or player_index == local:
+		status_text = "make your choices"
+	_panel_mgr.set_network_status_text(status_text)
+	_ship_activation_controller.update_activation_modal_interactivity()
+
+
+func _apply_network_local_view(local: int) -> void:
+	_panel_mgr.rebel_card_panel.set_viewer_player(local)
+	_panel_mgr.imperial_card_panel.set_viewer_player(local)
+	_camera.rotate_to_player(local)
+	_swap_card_panels(local)
+
+
+func _start_network_passive_squadron_observer_if_needed(
+		phase: Constants.GamePhase) -> void:
+	if phase == Constants.GamePhase.SQUADRON:
+		_squadron_phase_controller.begin_activation_flow()
+
+
+func _show_network_turn_banner(player_index: int) -> void:
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_panel_mgr.your_turn_banner.show_banner(player_index)
+	_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+func _has_command_resource(ship: ShipInstance,
+		command_type: Constants.CommandType) -> bool:
+	return _has_revealed_command(ship, command_type) \
+			or (ship.command_tokens != null
+			and ship.command_tokens.has_token(command_type))
+
+
+func _has_revealed_command(ship: ShipInstance,
+		command_type: Constants.CommandType) -> bool:
+	if ship.command_dial_stack == null:
+		return false
+	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
+	if revealed.is_empty():
+		return false
+	return int(revealed.get("command", -1)) == int(command_type)
+
+
+func _has_friendly_squadron_token_for_owner(owner_player: int) -> bool:
+	for sq_token: SquadronToken in get_squadron_tokens():
+		var sq_inst: SquadronInstance = sq_token.get_squadron_instance()
+		if sq_inst and sq_inst.owner_player == owner_player:
+			return true
+	return false

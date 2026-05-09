@@ -90,7 +90,7 @@ Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [do
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` — single subscription to `EventBus.command_executed`, route to controllers, HUD projection) partially implemented with uncommmitted changes: command_router_adapter.gd created, game_board.gd modified, K12 bugfixes to squadron_activation_modal.gd queued for visual flaw fix. K12 has 2 test failures in new test cases (type coercion issues to debug). K13-K19 pending.
+Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 function-size cleanup pass on `game_board.gd` is in progress with helper extractions landed and validation green (143 / 2887 / 5440, lint 0 violations).
 
 ---
 

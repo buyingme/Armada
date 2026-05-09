@@ -49,3 +49,44 @@ func test_set_mode_changes_to_hot_seat() -> void:
 	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
 	assert_eq(PlayMode.current_mode, PlayMode.Mode.HOT_SEAT,
 			"set_mode should change to HOT_SEAT")
+
+
+# ---------------------------------------------------------------------------
+# Phase K1 — seat_controls_camera()
+# ---------------------------------------------------------------------------
+
+
+func test_seat_controls_camera_network_always_true() -> void:
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	assert_true(PlayMode.seat_controls_camera(0, 0),
+			"network: local seat controls its own camera")
+	assert_true(PlayMode.seat_controls_camera(0, 1),
+			"network: each peer controls its camera regardless of active player")
+	assert_true(PlayMode.seat_controls_camera(1, 0),
+			"network: each peer controls its camera regardless of active player")
+	assert_true(PlayMode.seat_controls_camera(-1, 0),
+			"network: each peer controls its camera even with no active turn")
+
+
+func test_seat_controls_camera_hot_seat_active_seat_only() -> void:
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+	assert_true(PlayMode.seat_controls_camera(0, 0),
+			"hot-seat: active seat controls camera")
+	assert_true(PlayMode.seat_controls_camera(1, 1),
+			"hot-seat: active seat controls camera (player 1)")
+
+
+func test_seat_controls_camera_hot_seat_non_active_false() -> void:
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+	assert_false(PlayMode.seat_controls_camera(0, 1),
+			"hot-seat: non-active seat does not control camera")
+	assert_false(PlayMode.seat_controls_camera(1, 0),
+			"hot-seat: non-active seat does not control camera")
+
+
+func test_seat_controls_camera_hot_seat_no_active_turn() -> void:
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+	assert_false(PlayMode.seat_controls_camera(-1, 0),
+			"hot-seat: no active turn means no seat controls the camera")
+	assert_false(PlayMode.seat_controls_camera(-1, 1),
+			"hot-seat: no active turn means no seat controls the camera")

@@ -36,3 +36,26 @@ func is_network() -> bool:
 ## [param mode] — the desired play mode.
 func set_mode(mode: Mode) -> void:
 	current_mode = mode
+
+
+## Returns true when the local seat physically controls a dedicated
+## camera and may rotate it to follow the active player.
+##
+## In network mode every peer has its own camera, so this returns true
+## for any local player.  In hot-seat mode both players share one camera
+## that follows the active player, so this returns true only for the
+## active seat.
+##
+## Used by scenes (Phase K) so they can decide between "rotate camera"
+## and "lock camera" behaviour without branching on
+## [method is_network] directly.  Centralising the deployment-mode
+## branch here keeps scenes free of [code]if PlayMode.is_*[/code]
+## scattering.
+##
+## [param active_player] — the player_index whose turn it currently is
+## (or [code]-1[/code] when there is no active turn).
+## [param local_player] — the local viewer's player_index.
+func seat_controls_camera(active_player: int, local_player: int) -> bool:
+	if is_network():
+		return true
+	return active_player >= 0 and active_player == local_player

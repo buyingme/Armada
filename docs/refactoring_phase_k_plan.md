@@ -39,12 +39,12 @@ no new gameplay behaviour.
 
 | ID | Target |
 |----|--------|
-| K-G1 | Zero `if PlayMode.is_network()` / `is_hot_seat()` occurrences anywhere under `src/scenes/` and `src/ui/` (enforce via lint script + pre-commit guard). |
+| K-G1 | Zero `if PlayMode.is_network()` / `is_hot_seat()` occurrences in **interaction-flow / modal-authority code** under `src/scenes/game_board/`. (Lint script categorises sites — see §3.1a for the allow-list of session-mode discriminators in save/load dialogs and lobby flow.) |
 | K-G2 | [game_board.gd](../src/scenes/game_board/game_board.gd) ≤ **2 000 LOC** (down from 3 055). Composition root only — no game-flow branches. |
 | K-G3 | [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) ≤ **1 500 LOC** (down from 2 475) by extracting an `AttackFlowExecutor` (RefCounted) into `src/core/combat/`. |
 | K-G4 | [game_manager.gd](../src/autoload/game_manager.gd) ≤ **1 500 LOC** (down from 2 241) by extracting `NetworkPhaseSync` and `GameCommandSubmitterRouter` helpers. |
 | K-G5 | Zero functions > 30 LOC and zero functions with > 3-level nesting in `src/core/` and `src/scenes/`. |
-| K-G6 | Dedicated unit tests for `InteractionFlow` and `UIProjector` (≥ 20 new asserts). |
+| K-G6 | `tests/unit/test_interaction_flow.gd` (already 27 tests) and `tests/unit/test_ui_projector.gd` (already 23 tests) extended to cover any new `UIIntent` fields introduced in K1. **Existing files retained.** |
 | K-G7 | Test baseline maintained: 0 failing tests at every commit; `godot --headless --import` clean. |
 | K-G8 | All sliced commits keep manual-test gate (per `.skills/copilot_instructions.md`). |
 
@@ -59,22 +59,81 @@ no new gameplay behaviour.
 
 ---
 
-## 3. Scope Inventory (audited 2026-05-08)
+## 3. Scope Inventory (audited 2026-05-09)
 
-### 3.1 PlayMode-branch sites to remove (K1)
+### 3.1 PlayMode-branch sites — full inventory
 
-| File | Line | Current pattern | Resolution |
-|------|-----:|---|---|
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 889 | `if PlayMode.is_network():` (active-player camera lock) | Read `UIProjector.project(state, local).is_interactive` |
-| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1015 | `if not PlayMode.is_network():` (activation-modal lifecycle) | Replace with `UIIntent.modal_lifecycle` |
-| [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) | 165, 167 | `if PlayMode.is_hot_seat() … elif PlayMode.is_network()` (dial picker) | Single path via `UIIntent.modal_lifecycle.command_picker` |
-| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 2045 | `if PlayMode.is_network():` (panel read-only) | `UIIntent.is_interactive` |
-| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 2054 | `if PlayMode.is_hot_seat() and _camera:` (camera focus) | `UIIntent.camera_focus` (new field) |
-| [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) | 124, 342 | `if PlayMode.is_network():` (modal authority + validation) | `UIIntent.is_interactive` |
-| [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) | 495 | `if PlayMode.is_network() and not _move_submitted_this_activation:` | Route through command — defer move-submit to a `SubmitSquadronMoveCommand` reflection of `interaction_flow` |
+A deeper grep on 2026-05-09 found **28** real branches under `src/scenes/`
+and `src/ui/` (the original audit undercounted at 9). They split into two
+categories:
 
-> The doc-comment on game_board.gd:1339 is **prose** describing the legacy
-> pattern; rewrite once the code branches are gone.
+#### 3.1a Allow-listed: session-mode discriminators (NOT removed by K)
+
+These check whether the running process is in a network session at all
+(e.g. "is this a host?", "should the lobby button appear?"). They are
+*not* interaction-flow / modal-authority decisions and are intrinsic to
+the deployment mode. The lint script treats these files as
+allow-listed:
+
+| File | Line | Purpose |
+|------|-----:|---|
+| [save_game_dialog.gd](../src/ui/save/save_game_dialog.gd) | 270 | Network-client cannot save (defense in depth UI). |
+| [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd) | 371, 496 | Network-row enable/disable based on host session presence. |
+| [game_menu_modal.gd](../src/ui/save/game_menu_modal.gd) | 401 | ESC menu button visibility (host vs client). |
+| [lobby_room.gd](../src/scenes/lobby/lobby_room.gd) | 365 | Lobby is network-only by definition. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1325 | `_handle_command_dial_dropped` uses sentinel `-1` only in network mode (see Phase I doc-comment line 1339). May be revisited in K12 but not as part of K-G1. |
+
+#### 3.1b Targeted for removal in K (interaction-flow / modal-authority)
+
+| File | Line(s) | Slice | Resolution |
+|------|---------|:-----:|---|
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 889, 892 | K2 | `_on_active_player_changed` — converge hot-seat + network handoff via shared `_apply_seat_handoff()` helper that branches on `state.active_player == local_player`. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1072, 1091 | K2 | `_on_command_executed_project_ui` — replace with `UIIntent.is_interactive` reads. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 1508 | K2 | Activation-modal lifecycle — gate on `intent.modal_kind`. |
+| [game_board.gd](../src/scenes/game_board/game_board.gd) | 2138 | K2 | Maneuver overlap auto-resolve flag — set via `intent.is_interactive`. |
+| [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) | 165, 167 | K3 | Dial picker authority — `intent.modal_kind == COMMAND_DIALS` + `intent.is_interactive`. |
+| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 1033, 1050, 1244, 1394, 2045, 2054, 2212 | K4 | Panel read-only / camera focus / "is local actor" checks — `intent.is_interactive` + new `intent.is_active_seat()` helper. The two `_camera and is_hot_seat` patterns become `_camera and intent.allows_camera_rotation()` (new field — see K1). |
+| [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) | 378, 495 | K6 | Squadron move-submit gating — `intent.is_interactive` + flow-step read. |
+| [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) | 124, 342 | K5 | Displacement modal authority + validation — `intent.modal_kind == DISPLACEMENT` + `intent.is_interactive`. |
+
+**Total to remove in K: 18 branches across 5 files.** (Down from the
+original 9-branch over-estimate; the audit was both too low at the
+file-fan-out level and too aggressive at including session-mode sites.)
+
+### 3.1c New `UIIntent` field needed (K1)
+
+After re-checking the layer rules, **no new UIIntent field is added in K1**.
+
+`UIProjector.project()` lives in `src/core/network/` and extends
+`RefCounted` — it cannot read autoload state (PlayMode) without violating
+the downward-only dependency rule. The "is the local seat the camera
+seat?" question is a deployment-mode property, not an interaction-flow
+property, and therefore does not belong in `UIIntent`.
+
+Instead, K1 introduces a tiny encapsulation helper as an autoload-side
+addition (in `src/autoload/play_mode.gd`):
+
+```gdscript
+## True when this seat physically controls a dedicated camera.  In
+## network mode every peer has its own camera (always true).  In
+## hot-seat the camera follows the active player, so only the active
+## seat returns true.  Used by scenes to choose between "rotate" and
+## "lock" camera behaviour without branching on `is_network()` directly.
+static func seat_controls_camera(active_player: int,
+        local_player: int) -> bool:
+    if PlayMode.is_network():
+        return true
+    return active_player == local_player
+```
+
+This keeps the deployment-mode branch in **one place** (PlayMode), and
+scenes call `PlayMode.seat_controls_camera(...)` instead of branching
+themselves. The autoload location is allowed by the layer rule.
+
+The original plan's `modal_lifecycle` and `camera_focus` UIIntent fields
+are **dropped** as unnecessary — every other audited site can use an
+existing UIIntent field (`is_interactive`, `modal_kind`,
+`controller_player`, `flow_type`, `step_id`, `payload`).
 
 ### 3.2 Functions exceeding 30 LOC / 3-level nesting (K3)
 
@@ -178,14 +237,14 @@ observable. Numbering matches the eventual phase-status table row.
 
 | Slice | Scope | Risk | LOC delta | MT? |
 |------:|---|---|---:|:---:|
-| **K0** | Audit snapshot frozen — copy this plan into the repo, append §J11 row to implementation_plan §5.7. **No code changes.** | trivial | 0 | no |
-| **K1** | Expand `UIProjector.UIIntent`: add `modal_lifecycle` (string), `camera_focus` (Vector2 / null), `is_interactive_for(role)`. Add unit tests for projector (test_ui_projector.gd, ≥ 20 asserts). | low | +200 / 0 | no |
-| **K2** | Replace `if PlayMode.is_*` in [game_board.gd:889](../src/scenes/game_board/game_board.gd#L889) and [game_board.gd:1015](../src/scenes/game_board/game_board.gd#L1015) with projector reads. | medium | +20 / −40 | yes |
-| **K3** | Replace branches in [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) (lines 165 / 167). | medium | +10 / −20 | yes |
-| **K4** | Replace branches in [attack_executor.gd:2045/2054](../src/scenes/game_board/attack_executor.gd#L2045) using `UIIntent.is_interactive` + `camera_focus`. | medium | +15 / −25 | yes |
-| **K5** | Replace branches in [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) (lines 124 / 342). | medium | +10 / −20 | yes |
-| **K6** | Replace branch in [squadron_phase_controller.gd:495](../src/scenes/game_board/squadron_phase_controller.gd#L495). Introduce `SubmitSquadronMoveCommand` reflection if needed. | medium | +30 / −15 | yes |
-| **K7** | Add `tests/unit/test_interaction_flow.gd`. Land lint script `scripts/lint_phase_k.sh`. Add pre-commit hook documentation. | low | +200 / 0 | no |
+| **K0** | Audit snapshot frozen — copy this plan into the repo, append §J11 row to implementation_plan §5.7. **No code changes.** Committed `664d368`. Refined 2026-05-09 with deeper audit (28 → 18 sites; one new UIIntent field instead of three). | trivial | 0 | no |
+| **K1** | Add `PlayMode.seat_controls_camera(active_player, local_player) -> bool` static helper in [play_mode.gd](../src/autoload/play_mode.gd). Add unit tests for it (≥ 4 asserts: network always true; hot-seat active-seat true; hot-seat non-active false; hot-seat invalid params). **No UIProjector changes** (`src/core/` cannot read PlayMode). | low | +30 / 0 | no |
+| **K2** | Replace 6 game_board branches (lines 889, 892, 1072, 1091, 1508, 2138) with `UIIntent` reads. Extract `_apply_seat_handoff(player_index, intent)` helper to remove the if/else split in `_on_active_player_changed`. | medium | +50 / −60 | yes |
+| **K3** | Replace 2 branches in [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) (lines 165 / 167). | medium | +10 / −20 | yes |
+| **K4** | Replace 7 branches in [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) (lines 1033, 1050, 1244, 1394, 2045, 2054, 2212). | medium | +25 / −40 | yes |
+| **K5** | Replace 2 branches in [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) (lines 124, 342). | medium | +10 / −20 | yes |
+| **K6** | Replace 2 branches in [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) (lines 378, 495). | medium | +10 / −15 | yes |
+| **K7** | Land lint script `scripts/lint_phase_k.sh` (with allow-list per §3.1a). Add pre-commit hook documentation. (No new tests — InteractionFlow + UIProjector tests already exist.) | low | +60 / 0 | no |
 | **K8** | Extract `ShipActivationController` from game_board.gd (dial drag + activation modal + maneuver entry). Move ~400 LOC. | high | +450 / −400 | yes |
 | **K9** | Extract `AttackPanelController` from game_board.gd. Move ~250 LOC. | high | +290 / −250 | yes |
 | **K10** | Extract `DebugBoardController` from game_board.gd (F-key debug damage, replay save trigger). Move ~150 LOC. | medium | +180 / −150 | yes |

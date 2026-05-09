@@ -1,7 +1,8 @@
 # Refactoring Phase K — Presentation-Layer Hardening
 
-> **Status:** PROPOSED — awaiting approval before implementation.
+> **Status:** IN PROGRESS — K0 + K1 complete (commits `664d368`, `0e0b3c9`).
 > **Drafted:** 2026-05-08
+> **Refined:** 2026-05-09 (deeper audit; UIIntent extension dropped — see §3.1c).
 > **Predecessors:** Phases A–I (closed); Phase J (save subsystem, closed at J11).
 > **Successor:** Resumes G4.7 (Spectator), G4.8 (Reconnection), G4.9 (Turn Timers), then Phase 10c.
 
@@ -17,7 +18,7 @@ will block or destabilise the next feature wave (G4.7+):
 | Symptom | Concrete evidence |
 |---|---|
 | God-object scenes | [src/scenes/game_board/game_board.gd](../src/scenes/game_board/game_board.gd) **3 055 LOC**; [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) **2 475 LOC**; [game_manager.gd](../src/autoload/game_manager.gd) **2 241 LOC** |
-| Phase I rule violations | **9** `if PlayMode.is_network()` / `is_hot_seat()` branches in scenes (rule §7 of `.github/copilot-instructions.md`) |
+| Phase I rule violations | **18** modal-authority `if PlayMode.is_network()` / `is_hot_seat()` branches across 5 files in `src/scenes/game_board/` (rule §7 of `.github/copilot-instructions.md`); a further 5 session-mode discriminators are allow-listed — see §3.1 |
 | Function-size / nesting drift | ~15 functions > 30 LOC, ~8 with > 3-level nesting (worst: `_attack_exec_begin_sequence` ~75 LOC / 5 levels) |
 | Test gaps on Phase-I primitives | No dedicated `test_interaction_flow.gd`; `UIProjector` projection paths under-asserted |
 
@@ -92,7 +93,7 @@ allow-listed:
 | [game_board.gd](../src/scenes/game_board/game_board.gd) | 1508 | K2 | Activation-modal lifecycle — gate on `intent.modal_kind`. |
 | [game_board.gd](../src/scenes/game_board/game_board.gd) | 2138 | K2 | Maneuver overlap auto-resolve flag — set via `intent.is_interactive`. |
 | [command_phase_controller.gd](../src/scenes/game_board/command_phase_controller.gd) | 165, 167 | K3 | Dial picker authority — `intent.modal_kind == COMMAND_DIALS` + `intent.is_interactive`. |
-| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 1033, 1050, 1244, 1394, 2045, 2054, 2212 | K4 | Panel read-only / camera focus / "is local actor" checks — `intent.is_interactive` + new `intent.is_active_seat()` helper. The two `_camera and is_hot_seat` patterns become `_camera and intent.allows_camera_rotation()` (new field — see K1). |
+| [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) | 1033, 1050, 1244, 1394, 2045, 2054, 2212 | K4 | Panel read-only / camera focus / "is local actor" checks — `intent.is_interactive` + `intent.controller_player == viewer_player`. The two `_camera and is_hot_seat` patterns become `_camera and PlayMode.seat_controls_camera(active, local)` (helper added in K1). |
 | [squadron_phase_controller.gd](../src/scenes/game_board/squadron_phase_controller.gd) | 378, 495 | K6 | Squadron move-submit gating — `intent.is_interactive` + flow-step read. |
 | [displacement_controller.gd](../src/scenes/game_board/displacement_controller.gd) | 124, 342 | K5 | Displacement modal authority + validation — `intent.modal_kind == DISPLACEMENT` + `intent.is_interactive`. |
 

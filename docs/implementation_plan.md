@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-08 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **proposed** — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
+> Last updated: 2026-05-09 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **in progress**, K0 + K1 complete — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 143 |
-| GUT tests | 2 873 |
-| GUT asserts | 5 410 |
+| GUT tests | 2 877 |
+| GUT asserts | 5 420 |
 | Failing tests | 0 |
-| Last commit | `86d329e` (Phase J11 — navigate-token yaw bonus cleared after dial→token convert) |
+| Last commit | `0e0b3c9` (Phase K1 — `PlayMode.seat_controls_camera()` helper) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -84,13 +84,13 @@ Runtime invariants:
 
 ### Refactoring — Phase K (Presentation-Layer Hardening)
 
-Proposed 2026-05-08. Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
-- Eliminate the remaining 9 `if PlayMode.is_*` branches in `src/scenes/` (Phase I rule §7).
+Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
+- Eliminate the **18** modal-authority `if PlayMode.is_*` branches across 5 files in `src/scenes/game_board/` (Phase I rule §7). 5 further session-mode discriminators in save/load + lobby flow are allow-listed.
 - Decompose `game_board.gd` (3 055 LOC), `attack_executor.gd` (2 475 LOC), `game_manager.gd` (2 241 LOC), `save_game_manager.gd` (1 061 LOC) into focused controllers / RefCounted helpers.
-- Add dedicated tests for `InteractionFlow` and `UIProjector`.
-- Land `scripts/lint_phase_k.sh` + pre-commit hook.
+- Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
+- Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **PROPOSED — awaiting approval.**
+Status: **IN PROGRESS** — K0 (`664d368`) + K1 (`0e0b3c9`) complete. K2 (game_board.gd PlayMode-branch removal) is next.
 
 ---
 
@@ -463,7 +463,7 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase K — Presentation-Layer Hardening** *(proposed 2026-05-08)* — see [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Decomposes `game_board.gd` / `attack_executor.gd` / `game_manager.gd` / `save_game_manager.gd`, eliminates the remaining 9 `if PlayMode.is_*` branches in `src/scenes/`, adds `UIProjector` + `InteractionFlow` unit tests, lands `scripts/lint_phase_k.sh`. **Recommended before resuming feature work.**
+1. **Phase K — Presentation-Layer Hardening** *(in progress; K0 + K1 done — commits `664d368`, `0e0b3c9`)* — see [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Decomposes `game_board.gd` / `attack_executor.gd` / `game_manager.gd` / `save_game_manager.gd`, eliminates the **18** modal-authority `if PlayMode.is_*` branches in `src/scenes/game_board/` (5 session-mode sites allow-listed), extends `UIProjector` + `InteractionFlow` tests, lands `scripts/lint_phase_k.sh`. **In progress before resuming feature work.**
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI

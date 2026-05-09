@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 143 |
-| GUT tests | 2 878 |
-| GUT asserts | 5 424 |
+| GUT tests | 2 882 |
+| GUT asserts | 5 432 |
 | Failing tests | 0 |
-| Last commit | `108305f` (Phase K9 — extract `AttackPanelController` from game_board) |
+| Last commit | `d6511e0` (fix — squadron keyword effects on load + Navigate yaw bonus validation) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

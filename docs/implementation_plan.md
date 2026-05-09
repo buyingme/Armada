@@ -14,9 +14,9 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 143 |
-| GUT tests | 2 882 |
-| GUT asserts | 5 432 |
+| GUT test scripts | 144 |
+| GUT tests | 2 892 |
+| GUT asserts | 5 459 |
 | Failing tests | 0 |
 | Last commit | `ef2c84e` (Phase K11 — extract `ToolOverlayController`) |
 
@@ -90,7 +90,7 @@ Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [do
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations).
+Status: **IN PROGRESS** — K0 through K11 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a started: extracted core `AttackFlowExecutor` payload builders, routed `AttackExecutor` through the new helper, and added `test_attack_flow_executor.gd` (current baseline 144 / 2892 / 5459, lint 0 violations).
 
 ---
 

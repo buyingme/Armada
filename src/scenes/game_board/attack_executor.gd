@@ -16,6 +16,8 @@ extends Node
 ## Preloaded script reference for calling static functions without triggering
 ## STATIC_CALLED_ON_INSTANCE warnings (Constants is an autoload instance).
 const ConstantsScript := preload("res://src/autoload/constants.gd")
+const AttackFlowExecutorScript := preload(
+		"res://src/core/combat/attack_flow_executor.gd")
 
 ## Hull-zone index → display name mapping.
 const _ZONE_NAMES: Dictionary = {
@@ -88,6 +90,9 @@ var _state: AttackState = AttackState.new()
 ## clients can rebuild attack UI from a single state snapshot.
 var _flow_fsm: AttackFlowFSM = AttackFlowFSM.new()
 
+## Pure payload-construction helper extracted to core/combat in K14a.
+var _flow_executor: RefCounted = AttackFlowExecutorScript.new()
+
 ## Target selector — owns attacker/target selection, visual aids, and
 ## the AttackSimPanel. Created and wired in [method initialize].
 var _target_selector: TargetSelector = null
@@ -157,43 +162,7 @@ func _publish_flow_snapshot() -> void:
 ## squadron loop).  The next DECLARE patch will repopulate the
 ## payload for the new target.  Phase I6b-3 R1b follow-up.
 func _publish_clear_target_patch() -> void:
-	_fsm_patch_payload({
-		"defender_name": "",
-		"defender_zone": - 1,
-		"defender_player": - 1,
-		"defender_ship_index": - 1,
-		"target_kind": "",
-		"target_ship_index": - 1,
-		"target_squadron_index": - 1,
-		"range_band": "",
-		"modified_damage": 0,
-		"final_damage": 0,
-		"locked_tokens": [],
-		# Phase I6b-3 R2 follow-up: also drop the previous attack's
-		# defense-token snapshot so the next attack's [AttackPanelMirror]
-		# can detect "first DEFENSE_TOKENS snapshot for this attack" by
-		# the empty-tokens guard in [code]_apply_defense_section[/code].
-		"defense_tokens": [],
-		# Phase I6b-3 R2 follow-up: drop the previous attack's dice
-		# pool / roll snapshot so the passive peer's mirror hides the
-		# dice strip + count between attacks.  Without this, the
-		# mirror's [code]_apply_dice_sections[/code] re-renders the
-		# stale dice on every [signal CommandProcessor.command_executed]
-		# until the next attack rolls its own dice.
-		"dice_pool": {},
-		"dice_results": [],
-		# Phase I6b-3 R3: drop the previous attack's evade sub-step
-		# flags so a new attack does not re-open a stale die-selection
-		# section on the defender peer's mirror.
-		"evade_active": false,
-		"evade_range_band": "",
-		# Phase I6b-3 R4: drop the previous attack's redirect sub-step
-		# flags so a new attack does not re-open a stale redirect
-		# section on the defender peer's mirror.
-		"redirect_active": false,
-		"redirect_adjacent_zones": [],
-		"redirect_remaining": 0,
-	})
+	_fsm_patch_payload(_flow_executor.build_clear_target_patch())
 
 
 ## Builds an attacker / target identity patch for
@@ -207,45 +176,8 @@ func _publish_clear_target_patch() -> void:
 ##
 ## Returns a dictionary suitable for [method _fsm_patch_payload].
 func _compute_attack_identity_patch() -> Dictionary:
-	var patch: Dictionary = {
-		"attacker_name": _state.attacker_name,
-		"attacker_zone": int(_state.attacker_zone),
-		"attacker_zone_name": _state.attacker_zone_name,
-		"defender_name": _state.defender_name,
-		"defender_zone": int(_state.defender_zone),
-	}
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		return patch
-	# Attacker identity (ship hull-zone vs. squadron).
-	if _state.attacker_ship != null:
-		var atk_inst: ShipInstance \
-				= _state.attacker_ship.get_ship_instance()
-		patch["attacker_kind"] = "ship"
-		patch["attacker_ship_index"] = gs.find_ship_index(atk_inst)
-		if atk_inst != null:
-			patch["attacker_player"] = atk_inst.owner_player
-	elif _state.attacker_squadron != null:
-		var atk_sq: SquadronInstance \
-				= _state.attacker_squadron.get_squadron_instance()
-		patch["attacker_kind"] = "squadron"
-		patch["attacker_squadron_index"] = \
-				gs.find_squadron_index(atk_sq)
-		if atk_sq != null:
-			patch["attacker_player"] = atk_sq.owner_player
-	# Defender identity (ship vs. squadron target).
-	if _state.defender_ship != null:
-		var def_inst: ShipInstance \
-				= _state.defender_ship.get_ship_instance()
-		patch["target_kind"] = "ship"
-		patch["target_ship_index"] = gs.find_ship_index(def_inst)
-	elif _state.defender_squadron != null:
-		var def_sq: SquadronInstance \
-				= _state.defender_squadron.get_squadron_instance()
-		patch["target_kind"] = "squadron"
-		patch["target_squadron_index"] = \
-				gs.find_squadron_index(def_sq)
-	return patch
+	return _flow_executor.compute_attack_identity_patch(
+			_state, GameManager.current_game_state)
 
 # ---------------------------------------------------------------------------
 # Phase 6c: Accuracy, Defense Tokens, Damage Resolution

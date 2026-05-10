@@ -89,13 +89,15 @@ func test_attack_row_shows_no_targets_badge_when_skippable() -> void:
 			"Attack row should display 'No targets' badge.")
 
 
-func test_attack_button_hidden_when_skippable() -> void:
+func test_attack_button_shown_as_skip_when_skippable() -> void:
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.ATTACK)
 	_modal.set_attack_skippable(true)
 	_modal.open(state)
-	assert_false(_modal._attack_button.visible,
-			"Execute Attack button should stay hidden when skippable.")
+	assert_true(_modal._attack_button.visible,
+			"Attack button should stay visible when skippable.")
+	assert_eq(_modal._attack_button.text, "Skip Attack ►",
+			"Attack button should show Skip Attack text when skippable.")
 
 
 func test_attack_row_shows_button_when_not_skippable() -> void:
@@ -196,6 +198,19 @@ func test_attack_step_checkmarked_after_skip() -> void:
 	var status: Label = _modal._find_status_label(attack_row)
 	assert_eq(status.text, "No targets",
 			"Attack row should show 'No targets' (not checkmark) — requires player action.")
+
+
+func test_attack_step_shows_skip_button_when_no_targets() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.ATTACK)
+	_modal.set_attack_skippable(true)
+	_modal.open(state)
+	assert_true(_modal._attack_button.visible,
+			"Attack button should stay visible when no targets exist.")
+	assert_eq(_modal._attack_button.text, "Skip Attack ►",
+			"Attack button should show Skip Attack text when no targets exist.")
+	assert_false(_modal._attack_button.disabled,
+			"Attack button should be enabled for the controller peer.")
 
 
 # ---------------------------------------------------------------------------

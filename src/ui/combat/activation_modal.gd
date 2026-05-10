@@ -639,10 +639,15 @@ func _style_current_attack_step(status_label: Label) -> void:
 	if _skip_attack:
 		status_label.text = "No targets"
 		status_label.modulate = Color(0.9, 0.7, 0.3)
+		if _attack_button:
+			_attack_button.visible = true
+			_attack_button.text = "Skip Attack ►"
+			_attack_button.disabled = not _is_interactable
 	else:
 		status_label.text = ""
 		if _attack_button:
 			_attack_button.visible = true
+			_attack_button.text = "Execute Attack ►"
 			_attack_button.disabled = not _is_interactable
 
 

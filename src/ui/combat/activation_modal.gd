@@ -207,6 +207,10 @@ func open(state: ShipActivationState) -> void:
 	elif (_skip_repair
 			and state.get_current_step() == ShipActivationState.Step.REPAIR):
 		_start_auto_skip()
+	# Re-opened at Attack with no valid targets — auto-skip the step.
+	elif (_skip_attack
+			and state.get_current_step() == ShipActivationState.Step.ATTACK):
+		_start_auto_skip()
 
 
 ## Opens the modal for the passive (non-controller) peer in network mode.
@@ -640,8 +644,7 @@ func _style_current_attack_step(status_label: Label) -> void:
 		status_label.text = "No targets"
 		status_label.modulate = Color(0.9, 0.7, 0.3)
 		if _attack_button:
-			_attack_button.visible = true
-			_attack_button.text = "Skip Attack ►"
+			_attack_button.visible = false
 			_attack_button.disabled = not _is_interactable
 	else:
 		status_label.text = ""
@@ -898,16 +901,19 @@ func _try_auto_skip_next() -> void:
 	var current: int = int(_activation_state.get_current_step())
 	# Step 1 (SQUADRON) is skipped when _skip_squadron is true.
 	# Step 2 (REPAIR) is skipped when _skip_repair is true.
-	# Step 3 (ATTACK) requires explicit player action and is NOT auto-skipped,
-	#   even when no targets are available. Rules Reference: "Attack", p.2 —
-	#   the player chooses whether to attack or skip. Bug K14: prevent premature
-	#   UI advancement that showed Attack checkmark before user action.
+	# Step 3 (ATTACK) is skipped when _skip_attack is true (no valid targets).
+	# Rules Reference: "Attack", p.2 — a ship is not required to attack.
 	if _skip_squadron and current == ShipActivationState.Step.SQUADRON:
 		_update_step_display()
 		var gen: int = _auto_skip_generation
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
 		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
 	elif _skip_repair and current == ShipActivationState.Step.REPAIR:
+		_update_step_display()
+		var gen: int = _auto_skip_generation
+		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
+		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
+	elif _skip_attack and current == ShipActivationState.Step.ATTACK:
 		_update_step_display()
 		var gen: int = _auto_skip_generation
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)

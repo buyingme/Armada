@@ -89,15 +89,13 @@ func test_attack_row_shows_no_targets_badge_when_skippable() -> void:
 			"Attack row should display 'No targets' badge.")
 
 
-func test_attack_button_shown_as_skip_when_skippable() -> void:
+func test_attack_button_hidden_when_skippable() -> void:
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.ATTACK)
 	_modal.set_attack_skippable(true)
 	_modal.open(state)
-	assert_true(_modal._attack_button.visible,
-			"Attack button should stay visible when skippable.")
-	assert_eq(_modal._attack_button.text, "Skip Attack ►",
-			"Attack button should show Skip Attack text when skippable.")
+	assert_false(_modal._attack_button.visible,
+			"Attack button should stay hidden when skippable.")
 
 
 func test_attack_row_shows_button_when_not_skippable() -> void:
@@ -157,21 +155,17 @@ func test_end_activation_handler_blocked_when_not_interactable() -> void:
 
 
 func test_auto_skip_advances_past_attack_when_skippable() -> void:
-	# Phase K14 — Attack step no longer auto-skips.
-	# Rules Reference: "Attack", p.2 — player chooses whether to attack.
-	# Bug fix: prevent premature UI advancement that showed Attack checkmark
-	# before user action. Open modal at ATTACK with skip flag.
-	# The state should NOT auto-advance; it requires player action
-	# (Execute Attack button press or similar).
+	# Rules Reference: "Attack", p.2 — a ship is not required to attack.
+	# When there are no valid targets, ATTACK should auto-skip to MANEUVER.
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.ATTACK)
 	_modal.set_attack_skippable(true)
 	_modal.open(state)
-	# Wait to verify no auto-advance occurs.
+	# Wait for ATTACK auto-skip timer (0.3s) with margin.
 	await get_tree().create_timer(0.5).timeout
 	assert_eq(state.get_current_step(),
-			ShipActivationState.Step.ATTACK,
-			"State should stay at ATTACK; no auto-skip for Attack step.")
+			ShipActivationState.Step.MANEUVER,
+			"State should auto-advance to MANEUVER when ATTACK is skippable.")
 
 
 func test_auto_skip_does_not_skip_attack_when_not_skippable() -> void:
@@ -186,31 +180,25 @@ func test_auto_skip_does_not_skip_attack_when_not_skippable() -> void:
 
 
 func test_attack_step_checkmarked_after_skip() -> void:
-	# Phase K14 — Attack step no longer auto-skips.
-	# Since there is no auto-skip, the Attack row should display "No targets"
-	# and stay in the current (highlighted) state, not show a checkmark.
+	# After ATTACK auto-skip, the attack row should show a completed checkmark.
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.ATTACK)
 	_modal.set_attack_skippable(true)
 	_modal.open(state)
-	# Verify the display shows "No targets" (current step indicator).
+	await get_tree().create_timer(0.5).timeout
 	var attack_row: PanelContainer = _modal._step_rows[3]
 	var status: Label = _modal._find_status_label(attack_row)
-	assert_eq(status.text, "No targets",
-			"Attack row should show 'No targets' (not checkmark) — requires player action.")
+	assert_eq(status.text, "✓",
+			"Attack row should show checkmark after auto-skip.")
 
 
-func test_attack_step_shows_skip_button_when_no_targets() -> void:
+func test_attack_step_hides_button_when_no_targets() -> void:
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.ATTACK)
 	_modal.set_attack_skippable(true)
 	_modal.open(state)
-	assert_true(_modal._attack_button.visible,
-			"Attack button should stay visible when no targets exist.")
-	assert_eq(_modal._attack_button.text, "Skip Attack ►",
-			"Attack button should show Skip Attack text when no targets exist.")
-	assert_false(_modal._attack_button.disabled,
-			"Attack button should be enabled for the controller peer.")
+	assert_false(_modal._attack_button.visible,
+			"Attack button should stay hidden when no targets exist.")
 
 
 # ---------------------------------------------------------------------------
@@ -219,22 +207,19 @@ func test_attack_step_shows_skip_button_when_no_targets() -> void:
 
 
 func test_full_auto_skip_chain_skips_attack_step() -> void:
-	# Phase K14 — Attack step no longer auto-skips.
 	# Open from REVEAL with skip squadron, skip repair, and skip attack —
-	# should auto-skip SQUADRON and REPAIR, but STOP at ATTACK
-	# (requires player action).
+	# should auto-skip all three and land on MANEUVER.
 	var state: ShipActivationState = _make_state_at(
 			ShipActivationState.Step.REVEAL)
 	_modal.set_squadron_skippable(true)
 	_modal.set_attack_skippable(true)
 	_modal.set_repair_skippable(true)
 	_modal.open(state)
-	# 2 steps × 0.3s (SQUADRON, REPAIR); no skip for ATTACK.
-	# Give 1.0s margin to let those auto-skips complete.
-	await get_tree().create_timer(1.0).timeout
+	# 3 steps × 0.3s (SQUADRON, REPAIR, ATTACK); give 1.2s margin.
+	await get_tree().create_timer(1.2).timeout
 	assert_eq(state.get_current_step(),
-			ShipActivationState.Step.ATTACK,
-			"Full chain should stop at ATTACK (no auto-skip for Attack step).")
+			ShipActivationState.Step.MANEUVER,
+			"Full chain should land on MANEUVER when ATTACK is skippable.")
 
 
 func test_full_auto_skip_chain_stops_at_attack_when_not_skippable() -> void:

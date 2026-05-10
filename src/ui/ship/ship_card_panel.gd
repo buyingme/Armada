@@ -517,6 +517,8 @@ func _connect_eventbus_signals() -> void:
 			_on_duplicate_token_discarded)
 	_safe_connect(EventBus.navigate_token_spend_preview,
 			_on_navigate_token_spend_preview)
+	_safe_connect(EventBus.ship_shields_changed,
+			_on_shields_changed)
 	_safe_connect(EventBus.damage_card_dealt,
 			_on_damage_cards_changed)
 	_safe_connect(EventBus.damage_card_flipped,
@@ -643,6 +645,17 @@ func _on_navigate_token_spend_preview(inst: RefCounted, would_spend: bool) -> vo
 		else:
 			rect.modulate = Color.WHITE
 		break
+
+
+## EventBus callback: a ship's shields changed.
+## Currently shields are displayed on the board token (ShipToken), not in the
+## card panel. This handler ensures the signal is properly subscribed for
+## consistency and future use if shield display is added to the card panel.
+## Rules Reference: "Damage", p.4 — shields absorb incoming damage.
+func _on_shields_changed(_ship: RefCounted, _zone: String, _new_value: int) -> void:
+	# No visual update needed in the card panel at this time.
+	# ShipToken on the board handles shield display updates.
+	pass
 
 
 ## Re-computes panel position after a content change.

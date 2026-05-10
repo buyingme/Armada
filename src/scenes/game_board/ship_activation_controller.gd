@@ -1012,7 +1012,9 @@ func _on_execute_maneuver() -> void:
 	var maneuver_result: Dictionary = {}
 	if mt_scene_ref:
 		var tool_st: ManeuverToolState = mt_scene_ref.get_state()
-		var spd: int = tool_st.get_speed()
+		# Use the current simulated speed (after +/- changes), not the
+		# setup speed captured when the tool was first opened.
+		var spd: int = tool_st.get_simulated_speed()
 		var all_clicks: Array[int] = tool_st.get_joint_clicks()
 		# Slice to active joints only (joint_count == speed).
 		var active_clicks: Array = []
@@ -1031,11 +1033,23 @@ func _on_execute_maneuver() -> void:
 	# If the command was rejected (empty Dictionary), revert the local
 	# visual snap so the host stays consistent with the authoritative
 	# GameState (and with any remote peer, which never received a
-	# broadcast).  Abort the rest of the post-maneuver flow.
+	# broadcast).  Allow player to retry by re-showing the maneuver tool.
+	# Rules Reference: MV-001–015.
 	if maneuver_submitted and maneuver_result.is_empty():
-		_log.error("ExecuteManeuverCommand rejected — reverting local snap.")
+		_log.error("ExecuteManeuverCommand rejected — maneuver invalid.")
 		_activation_ctx.activating_ship_token.global_position = pre_move_xform.origin
 		_activation_ctx.activating_ship_token.global_rotation = pre_move_xform.get_rotation()
+		# Re-show the maneuver tool so the player can adjust and retry.
+		# This prevents the activation from becoming stuck.
+		_maneuver_tool_controller.dismiss(null)
+		if _activation_ctx.activating_ship_token and _activation_ctx.ship_activation_state:
+			_maneuver_tool_controller.show_activation_tool(
+					_activation_ctx.activating_ship_token,
+					_activation_ctx.ship_activation_state)
+			TooltipManager.show_text(
+					"Maneuver validation failed. Adjust and try again.",
+					Vector2.INF, 3.0, true)
+			_log.info("Maneuver tool re-shown for retry after validation failure.")
 		return
 
 	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.

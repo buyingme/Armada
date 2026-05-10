@@ -114,6 +114,12 @@ var _collision_label: Label = null
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
+## Incremented each time a new auto-skip chain starts (via [method _start_auto_skip]).
+## Timer callbacks compare their captured generation against this value so that
+## timers from a superseded chain (double modal.open() from command_router_adapter)
+## become no-ops and cannot advance the step after the chain has been replaced.
+var _auto_skip_generation: int = 0
+
 ## When true the Attack step is auto-skipped (no valid targets).
 ## Set by the game board via [method set_attack_skippable] before opening.
 var _skip_attack: bool = false
@@ -870,7 +876,10 @@ func _on_end_activation_pressed() -> void:
 
 ## Starts auto-skipping placeholder steps (Squadron, Repair, Attack).
 ## Uses a short timer between each skip so the player can see the progression.
+## Increments [member _auto_skip_generation] so any pending timers from a
+## previous chain become no-ops (prevents double-advance from double open()).
 func _start_auto_skip() -> void:
+	_auto_skip_generation += 1
 	_auto_skipping = true
 	_try_auto_skip_next()
 
@@ -890,12 +899,14 @@ func _try_auto_skip_next() -> void:
 	#   UI advancement that showed Attack checkmark before user action.
 	if _skip_squadron and current == ShipActivationState.Step.SQUADRON:
 		_update_step_display()
+		var gen: int = _auto_skip_generation
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
-		timer.timeout.connect(_auto_skip_current)
+		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
 	elif _skip_repair and current == ShipActivationState.Step.REPAIR:
 		_update_step_display()
+		var gen: int = _auto_skip_generation
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
-		timer.timeout.connect(_auto_skip_current)
+		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
 	else:
 		_auto_skipping = false
 		_update_step_display()
@@ -911,8 +922,9 @@ func _try_auto_skip_next() -> void:
 
 
 ## Auto-skips the current placeholder step.
-func _auto_skip_current() -> void:
-	if _activation_state == null:
+## Guards against stale timers via [member _auto_skip_generation].
+func _auto_skip_current_if_gen(gen: int) -> void:
+	if gen != _auto_skip_generation or _activation_state == null:
 		return
 	_activation_state.skip_step()
 	_try_auto_skip_next()

@@ -319,6 +319,138 @@ mutation.
 | **L6** | Lint tightening: update `scripts/lint_phase_k.sh` allow-list from the current **11** sites to the post-L floor of **≤ 4** (save dialog, load dialog ×2, lobby room). Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7 Phase K bullet to document the new floor and reword the (Phase I) negative rules as enduring constraints. | low | +10 / −30 | no |
 | **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Compare logs side-by-side: every modal open/close should be triggered by the *same* `command_executed` sequence with the *same* projector intent on both peers and both modes. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
 
+### 4.1a L0.5 trace-regeneration automation (proposal — REVISED)
+
+**Status:** proposal — awaiting approval. Lands as commits on the L0.5
+slice before L1 starts.
+
+**Goal.** Make the `tests/fixtures/baseline_traces/` oracle regenerable
+without a 20-minute manual playthrough per L slice. Manual MT for
+L1–L7 still happens (per `.skills/copilot_instructions.md`); this is
+the **fast pre-MT check** that catches obvious regressions in seconds.
+
+**Honest scope: traces are mode-dependent.** Empirical confirmation
+from the committed hot-seat fixture: during dial assignment
+(seq 1–3) `flow_step_id = NONE` because hot-seat players take turns.
+In network mode the same `assign_dials` commands would post-execute
+with `flow_step_id = WAIT_FOR_OPPONENT_DIALS` because peers genuinely
+wait on each other. The `interaction_flow` projection therefore
+differs by mode, and a single-process replay with a `PlayMode` flag
+flip cannot reproduce the network trace faithfully.
+
+This forces a two-tier design.
+
+#### Tier 1 — hot-seat replay automation (this slice, ~150 LOC)
+
+Implementable today, deterministic, runs in a GUT integration test.
+
+**Pieces:**
+
+1. **`CommandProcessor.replay_commands(commands, emit_signals: bool =
+   false)`** — new optional parameter. When `true` the existing
+   `if not is_replaying` guard around `command_executed.emit` is
+   bypassed (only the *replay* path opts in; the *save-load* path
+   continues to suppress). Default `false` keeps every existing call
+   site unchanged.
+
+2. **`scripts/replay_to_trace.gd`** — headless Godot CLI. Flags:
+   `--replay <path> --output <trace.jsonl>`. Always runs in
+   `PlayMode.HOT_SEAT`. Sequence:
+     1. Boot the scenario named in the replay header.
+     2. Force `LoggingMode.enabled = true`; call
+        `BaselineTrace._maybe_enable()` so the trace file opens at
+        `<output>`.
+     3. `CommandProcessor.replay_commands(replay.commands,
+        emit_signals=true)`.
+     4. Flush, exit 0.
+
+3. **`tests/integration/test_baseline_trace_regression.gd`** — GUT
+   integration test. Loads
+   [`replay_hot_seat_solo.json`](../tests/fixtures/baseline_traces/replay_hot_seat_solo.json),
+   runs the same mechanism in-process against a temp trace file,
+   diffs against
+   [`baseline_trace_hot_seat_solo.jsonl`](../tests/fixtures/baseline_traces/baseline_trace_hot_seat_solo.jsonl).
+   Failure message includes the offending `(seq, step_id)` row.
+
+**What Tier 1 actually catches.** Most L-phase regressions are
+modal-lifecycle bugs that surface identically in both modes (e.g.
+wrong `controller_player`, missing `flow_type` transition, modal
+opened twice). These all show up in the hot-seat trace. So Tier 1 is
+a high-signal cheap regression gate even though it does not exercise
+the network path.
+
+**What Tier 1 does NOT catch.**
+
+  - WAIT-state divergences specific to network mode.
+  - Authority-check bugs that only fire when `NetworkManager.is_host()`
+    returns true.
+  - Replication-timing bugs (e.g. `commit_displacement` arriving after
+    a follow-up `advance_activation_step`, like the I6b-4d fix in
+    commit `2935336`).
+
+These remain covered by manual MT during L1–L7, which is already
+required by the slice plan.
+
+#### Tier 2 — network replay automation (deferred, ~300 LOC if needed)
+
+Not part of this proposal. Sketched here so its absence is explicit.
+
+A real network regression check requires either:
+
+  (a) Two headless Godot processes wired together via the existing
+      ENet transport, both with `--logging`, driven by a shared
+      shell script that ensures deterministic input timing. Each
+      process produces its own trace; both are diffed.
+
+  (b) An in-process two-`SceneTree` harness using
+      `MultiplayerAPI.multiplayer_peer = OfflineMultiplayerPeer.new()`
+      style fakes that capture the RPC send/receive boundary. Same
+      output: two trace streams, two diffs.
+
+Either is substantial (process orchestration, port management, flake
+mitigation) and not justified until a network-only regression
+escapes Tier 1 + manual MT. **Deferred to Phase M or beyond.**
+
+#### Network coverage during Phase L
+
+  - **Tier 1 runs on every L slice** as a pre-MT gate.
+  - **Manual MT continues to be required** for L1, L2, L4, L5, L7
+    (the slices flagged `MT? yes` in §4.1). Each MT explicitly
+    includes a hot-seat run AND a network host+client run.
+  - **L7 final sweep** captures fresh `replay_network_host.json` +
+    `baseline_trace_network_host.jsonl` (and the client counterparts)
+    and commits them as evidence-only fixtures alongside the
+    automated hot-seat oracle. These four files document the
+    post-Phase-L network behaviour as a regression baseline for
+    Phase M, even though no automated diff runs against them yet.
+
+#### Cost summary
+
+| Item | LOC delta | MT? |
+|---|---:|:---:|
+| `CommandProcessor` parameter | +5 / 0 | no |
+| `scripts/replay_to_trace.gd` | +80 / 0 | no |
+| `tests/integration/test_baseline_trace_regression.gd` | +60 / 0 | no |
+| Subscriber-safety audit (verify no production subscriber misbehaves when `command_executed` emits during replay) | +0 / 0 (analysis) | no |
+| **Tier 1 total** | **+145 / 0** | **no** |
+
+Lands as commit `feat(observability): L0.5b replay-to-trace
+automation (hot-seat tier)`.
+
+#### Decision points for approval
+
+1. **Two-tier scope is acceptable** — automating only hot-seat now,
+   keeping network as manual MT until/unless escapes happen.
+2. **Tier 1 mechanism is acceptable** — adding the `emit_signals`
+   parameter to `replay_commands` rather than (a) bypassing
+   validation or (b) building a separate replay path.
+3. **L7 produces evidence-only network fixtures** — committed but
+   not diffed automatically.
+
+If 1 is rejected (you want network automation now), the slice
+expands to Tier 2 (~+450 LOC total, MT yes, defer L1 by one slice).
+If 2 or 3 is rejected, name the variant and I revise.
+
 ### 4.2 Acceptance criteria for closing Phase L
 
 1. `bash scripts/lint_phase_k.sh` shows ≤ 4 allow-listed sites, none of them in `src/scenes/game_board/` for modal lifecycle (down from the current 11).

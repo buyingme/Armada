@@ -241,26 +241,42 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 			_get_attacker_player(), -1, {})
 	_publish_flow_snapshot()
 	_target_selector.enter_attacker_selection(true, _get_ship_name())
+	_wire_attack_done_and_panel_signals()
 	var panel: AttackSimPanel = _get_panel()
-	# Connect Done button if not already connected.
-	if panel and not panel.attack_done_pressed.is_connected(
-			_finish_attack_execution):
-		panel.attack_done_pressed.connect(_finish_attack_execution)
-	_connect_attack_panel_signals()
 	if panel:
 		panel.show_skip_attack_button()
 	# Auto-skip if no valid targets exist from any hull zone.
 	## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 	if not _attack_exec_has_any_valid_target():
-		_log.info("No valid targets from any hull zone — auto-skipping.")
-		GameManager.submit_skip_attack(
-				_get_attacker_player(), "no_targets")
-		if panel:
-			panel.hide_skip_attack_button()
-		_finish_attack_execution()
+		_auto_skip_ship_attack(panel)
 		return
 	_target_selector.show_ship_range_overlay(_state.exec_ship_token)
 	_log.info("Attack execution: range overlay shown, awaiting hull zone.")
+
+
+## Connects the attack-panel "Done" button to
+## [method _finish_attack_execution] (idempotent) and wires every
+## attack-panel signal in one place.  Shared between ship and
+## squadron entry points.
+func _wire_attack_done_and_panel_signals() -> void:
+	var panel: AttackSimPanel = _get_panel()
+	if panel and not panel.attack_done_pressed.is_connected(
+			_finish_attack_execution):
+		panel.attack_done_pressed.connect(_finish_attack_execution)
+	_connect_attack_panel_signals()
+
+
+## Auto-skip branch of [method start_ship_attack]: submits a
+## [SkipAttackCommand] with reason `"no_targets"` and tears down the
+## panel.  Rules Reference: "Attack", p.2 — a ship is not required to
+## attack.
+func _auto_skip_ship_attack(panel: AttackSimPanel) -> void:
+	_log.info("No valid targets from any hull zone — auto-skipping.")
+	GameManager.submit_skip_attack(
+			_get_attacker_player(), "no_targets")
+	if panel:
+		panel.hide_skip_attack_button()
+	_finish_attack_execution()
 
 ## Initialises attack execution state for a ship attacker.
 func _init_ship_attack_state(ship_token: ShipToken) -> void:
@@ -281,11 +297,8 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 			_get_attacker_player(), -1, {})
 	_publish_flow_snapshot()
 	_target_selector.enter_squadron_target_selection(squadron_token)
+	_wire_attack_done_and_panel_signals()
 	var panel: AttackSimPanel = _get_panel()
-	if panel and not panel.attack_done_pressed.is_connected(
-			_finish_attack_execution):
-		panel.attack_done_pressed.connect(_finish_attack_execution)
-	_connect_attack_panel_signals()
 	if panel:
 		panel.show_initial_squadron_exec(_state.attacker_name)
 		panel.show_skip_attack_button()
@@ -450,33 +463,14 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		return
 	_state.dice_pool = _compute_attack_pool_dict(range_band)
 	_apply_gather_dice_hook()
-	# Phase I3b: publish range_band + dice pool snapshot to interaction_flow
-	# so reconnecting clients can render the attack panel.
-	# Phase I6b-3 R1a: also publish attacker / target identity so the
-	# defender peer's mirror panel can resolve names + indices from
-	# `interaction_flow.payload` alone.
-	var declare_patch: Dictionary = _compute_attack_identity_patch()
-	declare_patch["range_band"] = range_band
-	declare_patch["dice_pool"] = _state.dice_pool.duplicate(true)
-	_fsm_patch_payload(declare_patch)
+	_publish_attack_declare_patch(range_band)
 	_get_panel().show_skip_attack_button()
 	# Empty pool guard: if no dice remain after gather-dice hooks, the
 	# attack cannot be declared.
 	# Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
 	# able to add at least one die to the attack pool."
-	var _begin_total: int = DicePool.get_total_count(_state.dice_pool)
-	if _begin_total <= 0:
-		_log.info("No dice in pool — cannot declare attack.")
-		# During Step 6 squadron loop: auto-skip this target and re-check.
-		# Rules Reference: "Attack", Step 1, p.2 — attacker must add at
-		# least one die.  A squadron that yields 0 dice at this range is
-		# not a legal target; skip it and look for the next one.
-		if _state.attacked_squads.size() > 0 \
-				and _state.defender_squadron:
-			_auto_skip_zero_dice_squadron()
-			return
-		if _get_panel():
-			_get_panel().show_empty_pool_auto_skip()
+	if DicePool.get_total_count(_state.dice_pool) <= 0:
+		_handle_empty_attack_pool()
 		return
 	# Obstruction: attacker must remove 1 die before rolling.
 	# Rules Reference: "Obstructed", RRG v1.5.0, p.10.
@@ -484,17 +478,51 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	if _state.obstructed:
 		_handle_obstruction_step()
 		return
-	# Check CF dial availability (ship attackers only).
-	if _state.exec_ship_token and not _state.cf_dial_used \
-			and _attack_exec_has_cf_dial():
-		var available: Array[String] = _get_cf_dial_colours(
-				_state.dice_pool)
-		if available.size() > 0:
-			_get_panel().show_cf_dial_section(available)
-			_log.info("CF dial available — offering colours: %s." % [
-					str(available)])
-			return
+	if _try_offer_cf_dial():
+		return
 	_attack_exec_show_roll_button()
+
+
+## Builds and publishes the DECLARE-step patch (range band + dice pool +
+## attacker/target identity) to [member InteractionFlow.payload] so the
+## defender peer's mirror panel can resolve names + indices from the
+## flow snapshot alone.  Phase I3b / I6b-3 R1a.
+func _publish_attack_declare_patch(range_band: String) -> void:
+	var declare_patch: Dictionary = _compute_attack_identity_patch()
+	declare_patch["range_band"] = range_band
+	declare_patch["dice_pool"] = _state.dice_pool.duplicate(true)
+	_fsm_patch_payload(declare_patch)
+
+
+## Handles the empty-pool branch of [method _attack_exec_begin_sequence].
+## During the Step 6 squadron loop the current target is auto-skipped;
+## otherwise the panel shows the empty-pool auto-skip affordance.
+## Rules Reference: "Attack", Step 1, p.2 — attacker must add at least
+## one die.
+func _handle_empty_attack_pool() -> void:
+	_log.info("No dice in pool — cannot declare attack.")
+	if _state.attacked_squads.size() > 0 and _state.defender_squadron:
+		_auto_skip_zero_dice_squadron()
+		return
+	if _get_panel():
+		_get_panel().show_empty_pool_auto_skip()
+
+
+## Offers the CF dial colour selection when the attacker has an
+## unspent CF command dial and at least one matching die colour in
+## the pool.  Returns [code]true[/code] when the CF dial section was
+## shown (caller must not advance to the roll step).
+func _try_offer_cf_dial() -> bool:
+	if _state.exec_ship_token == null or _state.cf_dial_used:
+		return false
+	if not _attack_exec_has_cf_dial():
+		return false
+	var available: Array[String] = _get_cf_dial_colours(_state.dice_pool)
+	if available.is_empty():
+		return false
+	_get_panel().show_cf_dial_section(available)
+	_log.info("CF dial available — offering colours: %s." % [str(available)])
+	return true
 
 ## Applies the ATTACK_GATHER_DICE effect hook to the pool.
 func _apply_gather_dice_hook() -> void:
@@ -881,28 +909,17 @@ func _attack_exec_start_defense() -> void:
 	_state.defense_step = true
 	_state.spent_tokens.clear()
 	_state.defense_commit_queue.clear()
-	if _state.defender_ship == null:
-		_state.defense_step = false
-		_attack_exec_resolve_damage()
-		return
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	var def_inst: ShipInstance = _resolve_defense_step_defender()
 	if def_inst == null:
-		_state.defense_step = false
-		_attack_exec_resolve_damage()
-		return
-	if not _can_defender_spend_tokens(def_inst):
 		_state.defense_step = false
 		_attack_exec_resolve_damage()
 		return
 	# Phase I3: record defender so FSM knows who controls DEFENSE_TOKENS.
 	_flow_fsm.defender_player = def_inst.owner_player
 	_fsm_advance(AttackFlowFSM.Step.DEFENSE_TOKENS)
-	# Phase I3b: publish locked tokens + modified damage so the defender
-	# client can render the defense UI from interaction_flow alone.
-	# Phase I6b slice 2: also publish defender_ship_index +
-	# defender_speed + defender_zone so the passive client can identify
-	# which local ShipInstance is being attacked and render the panel
-	# without needing a host-side AttackState.
+	# Phase I3b / I6b slice 2: publish defender identity + locked tokens
+	# + modified damage so the defender client can render the defense UI
+	# from interaction_flow alone.
 	_fsm_patch_payload(_flow_executor.build_defense_payload(
 			_state, def_inst, GameManager.current_game_state))
 	# Rotate camera to the defender's perspective (AE-DEF-011).
@@ -915,21 +932,37 @@ func _attack_exec_start_defense() -> void:
 	_log.info("Defense step: %d spendable tokens, %d damage." % [
 			_count_spendable_defense_tokens(def_inst),
 			_state.modified_damage])
-	if _get_panel():
-		# Phase I6b-3 R6: in network mode the defender peer drives the
-		# decision via [AttackPanelMirror].  The attacker's local panel
-		# now renders the same defense section in [b]read-only[/b] mode
-		# so the attacker can watch the defender's token toggles and
-		# the eventual Commit Defense, but cannot author input.
-		# Hot-seat keeps the existing interactive flow.
-		# Phase K4: discriminator is `local_player_index < 0` (no
-		# network session => hot-seat => attacker panel interactive).
-		_get_panel().show_defense_section(
-				def_inst.defense_tokens,
-				_state.locked_tokens,
-				_state.modified_damage,
-				def_inst.current_speed,
-				NetworkManager.get_local_player_index() < 0)
+	_show_defense_section(def_inst)
+
+
+## Resolves the defender [ShipInstance] for the defense step or returns
+## [code]null[/code] when the defense step cannot run (no defender ship,
+## missing instance, or no spendable tokens).  Pure lookup — callers
+## handle the null-branch and fall through to damage resolution.
+func _resolve_defense_step_defender() -> ShipInstance:
+	if _state.defender_ship == null:
+		return null
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return null
+	if not _can_defender_spend_tokens(def_inst):
+		return null
+	return def_inst
+
+
+## Opens the defense section on the local attack panel.  In network mode
+## the attacker peer renders the section in read-only mode so it can
+## watch the defender's input without authoring it; in hot-seat the
+## attacker panel is interactive.  Phase I6b-3 R6 / Phase K4.
+func _show_defense_section(def_inst: ShipInstance) -> void:
+	if _get_panel() == null:
+		return
+	_get_panel().show_defense_section(
+			def_inst.defense_tokens,
+			_state.locked_tokens,
+			_state.modified_damage,
+			def_inst.current_speed,
+			NetworkManager.get_local_player_index() < 0)
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
@@ -1107,21 +1140,16 @@ func _attack_exec_start_evade() -> void:
 	_state.evade_step = true
 	var range_band: String = _state.range_band
 	_log.info("Evade: awaiting die selection (%s range)." % range_band)
-	# Phase I6b-3 R3: publish the evade sub-step into
-	# [member InteractionFlow.payload] so the defender peer's
-	# [AttackPanelMirror] can render the interactive die-selection
-	# section.  Cleared in [method apply_defender_evade_die] once the
-	# defender has chosen a die.
+	# Phase I6b-3 R3: publish the evade sub-step so the defender peer's
+	# mirror can render the die-selection section.  Cleared in
+	# [method apply_defender_evade_die].
 	_fsm_patch_payload({
 		"evade_active": true,
 		"evade_range_band": range_band,
 	})
-	# Phase I6b-3 R6: in network mode the defender peer drives die
-	# selection via [AttackPanelMirror].  The attacker's local panel
-	# now renders the same evade prompt in [b]read-only[/b] mode
-	# (dice tinted but not clickable) so the attacker can watch.
-	# Hot-seat keeps the existing interactive flow.
-	# Phase K4: discriminator is `local_player_index < 0` (hot-seat).
+	# Phase I6b-3 R6 / K4: in network mode the attacker panel renders
+	# the same evade prompt read-only (`local_player_index < 0` =>
+	# hot-seat => interactive).
 	if _get_panel():
 		_get_panel().show_evade_die_selection(
 				range_band, NetworkManager.get_local_player_index() < 0)
@@ -1184,24 +1212,31 @@ func apply_defender_evade_die(die_index: int) -> void:
 		_apply_evade_remove(die_index)
 	else:
 		_apply_evade_reroll(die_index)
-	# Phase I6b-3 R3 follow-up: clear the evade-sub-step flags AND
-	# publish the post-modification dice strip + modified damage so
-	# the defender peer's [AttackPanelMirror] both hides the die-
-	# selection section and re-renders the rerolled / removed die
-	# (and the updated damage readout) in a single broadcast.
+	# Phase I6b-3 R3 follow-up: clear evade sub-step flags + publish
+	# the post-modification dice strip + modified damage in one
+	# broadcast so the defender mirror hides the section and
+	# re-renders the rerolled / removed die together.
 	_fsm_patch_payload({
 		"evade_active": false,
 		"evade_range_band": "",
 		"dice_results": _state.dice_results.duplicate(true),
 		"modified_damage": _state.modified_damage,
 	})
-	if _get_panel():
-		_get_panel().update_defense_damage(
-				_state.modified_damage)
-		_get_panel().disable_defense_token_button(
-				_get_token_button_index_for_type(
-				Constants.DefenseToken.EVADE))
+	_refresh_post_evade_panel()
 	_process_next_defense_commit()
+
+
+## Refreshes the local attack panel after an evade die-modification:
+## updates the damage readout and disables the Evade token button.
+## Extracted from [method apply_defender_evade_die] to keep that
+## handler under the 30-line cap.
+func _refresh_post_evade_panel() -> void:
+	if _get_panel() == null:
+		return
+	_get_panel().update_defense_damage(_state.modified_damage)
+	_get_panel().disable_defense_token_button(
+			_get_token_button_index_for_type(
+					Constants.DefenseToken.EVADE))
 
 ## Evade at long range: removes the selected die.
 func _apply_evade_remove(die_index: int) -> void:
@@ -1255,18 +1290,7 @@ func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 			% [_state.redirect_remaining,
 			ConstantsScript.hull_zone_to_string(def_zone),
 			str(adjacent)])
-	# Phase I6b-3 R4: publish the redirect sub-step into the
-	# interaction flow so the defender peer's [AttackPanelMirror] can
-	# render the interactive zone buttons.  Adjacent zones are stored
-	# as plain ints for serialisation safety.
-	var adjacent_ints: Array = []
-	for zn: Variant in adjacent:
-		adjacent_ints.append(int(zn))
-	_fsm_patch_payload({
-		"redirect_active": true,
-		"redirect_adjacent_zones": adjacent_ints,
-		"redirect_remaining": _state.redirect_remaining,
-	})
+	_publish_redirect_substep_patch(adjacent)
 	# Phase I6b-3 R6: in network mode the attacker peer renders the
 	# same redirect zone-selection section in [b]read-only[/b] mode
 	# (zone buttons disabled, Done button hidden).  The interactive
@@ -1276,6 +1300,21 @@ func _attack_exec_start_redirect(_def_inst: ShipInstance) -> void:
 		_get_panel().show_redirect_section(
 				adjacent, _state.redirect_remaining,
 				NetworkManager.get_local_player_index() < 0)
+
+
+## Publishes the redirect sub-step into [InteractionFlow.payload] so
+## the defender peer's [AttackPanelMirror] can render the interactive
+## zone buttons.  Adjacent zones are stored as plain ints for
+## serialisation safety.  Phase I6b-3 R4.
+func _publish_redirect_substep_patch(adjacent: Array) -> void:
+	var adjacent_ints: Array = []
+	for zn: Variant in adjacent:
+		adjacent_ints.append(int(zn))
+	_fsm_patch_payload({
+		"redirect_active": true,
+		"redirect_adjacent_zones": adjacent_ints,
+		"redirect_remaining": _state.redirect_remaining,
+	})
 
 ## Called when the player selects a hull zone for redirect on the
 ## attacker peer's local panel (hot-seat) or when the defender peer's
@@ -1326,38 +1365,48 @@ func apply_defender_redirect_zone(zone: int) -> void:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
 	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
-	# The shield mutation is in [SelectRedirectZoneCommand.execute] and
-	# is replicated to both peers; emit the UI signal here on the
-	# attacker peer so its on-board ship visuals refresh.
-	EventBus.ship_shields_changed.emit(
-			def_inst, zone_str,
-			int(def_inst.current_shields.get(zone_str, 0)))
+	_emit_redirect_shield_refresh(def_inst, zone_str)
 	_state.redirect_remaining -= 1
 	_state.modified_damage -= 1
 	_log.info("Redirect: 1 damage to %s shield. Remaining: %d/%d." % [
 			zone_str, _state.redirect_remaining,
 			_state.modified_damage])
 	if _get_panel():
-		_get_panel().update_defense_damage(
-				_state.modified_damage)
-	# Phase I6b-3 R4: re-publish the updated remaining-budget and the
-	# (post-mutation) modified damage so the defender peer's mirror
-	# can refresh both readouts.
+		_get_panel().update_defense_damage(_state.modified_damage)
+	# Phase I6b-3 R4: re-publish the updated remaining-budget and
+	# modified damage so the defender peer's mirror can refresh both.
 	_fsm_patch_payload({
 		"redirect_remaining": _state.redirect_remaining,
 		"modified_damage": _state.modified_damage,
 	})
 	if not _check_redirect_continuation(def_inst):
-		_state.redirect_step = false
-		# Phase I6b-3 R4: clear the redirect sub-step flag in the
-		# payload so the defender peer's mirror hides its interactive
-		# section.
-		_fsm_patch_payload({
-			"redirect_active": false,
-			"redirect_adjacent_zones": [],
-			"redirect_remaining": 0,
-		})
-		_process_next_defense_commit()
+		_finish_redirect_substep()
+
+
+## Emits the on-board ship visual refresh for a redirect's shield
+## mutation.  The shield mutation itself happens inside
+## [SelectRedirectZoneCommand.execute] (replicated to both peers); the
+## attacker-peer signal emit lives here so the redirect sub-step in
+## [method apply_defender_redirect_zone] stays under the 30-line cap.
+func _emit_redirect_shield_refresh(def_inst: ShipInstance,
+		zone_str: String) -> void:
+	EventBus.ship_shields_changed.emit(
+			def_inst, zone_str,
+			int(def_inst.current_shields.get(zone_str, 0)))
+
+
+## Tears down the redirect sub-step on the attacker peer when no more
+## redirect is possible, clears the payload flags so the defender
+## peer's mirror hides its interactive section, and advances to the
+## next defense commit.  Phase I6b-3 R4.
+func _finish_redirect_substep() -> void:
+	_state.redirect_step = false
+	_fsm_patch_payload({
+		"redirect_active": false,
+		"redirect_adjacent_zones": [],
+		"redirect_remaining": 0,
+	})
+	_process_next_defense_commit()
 
 
 ## Applies the [i]Done Redirecting[/i] cleanup on the attacker peer
@@ -1443,23 +1492,8 @@ func apply_defender_commit(selected: Array[int]) -> void:
 		return
 	if not _state.defense_step:
 		return
-	# Defensively re-sort into canonical RRG resolve order before
-	# queueing.  The hot-seat producer ([method _submit_commit_defense])
-	# sorts before submitting, but the network defender peer
-	# ([method AttackPanelMirror._on_defense_tokens_done]) submits in
-	# click order.  Without this re-sort, a [Brace, Evade] click order
-	# halves damage with Brace first and then Evade overwrites
-	# `_state.modified_damage` from raw dice, undoing the brace.
-	## Rules Reference: "Defense Tokens", p.5 — fixed sequence
-	## Scatter → Evade → Brace → Redirect → Contain.
-	var canonical_selected: Array[int] = selected
-	if _state.defender_ship != null:
-		var def_inst: ShipInstance = (
-				_state.defender_ship.get_ship_instance())
-		if def_inst != null:
-			canonical_selected = (
-					_flow_executor.sort_defense_tokens_canonical(
-							selected, def_inst.defense_tokens))
+	var canonical_selected: Array[int] = _canonicalise_committed_tokens(
+			selected)
 	if not _flow_executor.begin_defense_commit(
 			_state, canonical_selected):
 		_log.info("No defense tokens selected — proceeding to damage.")
@@ -1470,6 +1504,27 @@ func apply_defender_commit(selected: Array[int]) -> void:
 	_log.info("Defense commit: %d tokens queued." %
 			_state.defense_commit_queue.size())
 	_process_next_defense_commit()
+
+
+## Re-sorts the committed token indices into canonical RRG resolve
+## order (Scatter → Evade → Brace → Redirect → Contain) before
+## queueing.  The hot-seat producer
+## ([method _submit_commit_defense]) sorts before submitting, but the
+## network defender peer
+## ([method AttackPanelMirror._on_defense_tokens_done]) submits in
+## click order; without this re-sort a `[Brace, Evade]` click order
+## halves damage with Brace first and then Evade overwrites
+## `_state.modified_damage` from raw dice, undoing the brace.
+## Rules Reference: "Defense Tokens", p.5.
+func _canonicalise_committed_tokens(
+		selected: Array[int]) -> Array[int]:
+	if _state.defender_ship == null:
+		return selected
+	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	if def_inst == null:
+		return selected
+	return _flow_executor.sort_defense_tokens_canonical(
+			selected, def_inst.defense_tokens)
 
 ## Canonical defense token resolution order.
 ## Rules Reference: \"Defense Tokens\", p.5 — effects resolve in a
@@ -1556,45 +1611,54 @@ func _attack_exec_resolve_damage() -> void:
 			_state.modified_damage, _state.scatter_used)
 	# Phase I3c: publish final damage so UIProjector can render the
 	# damage summary on the defender's screen.
-	_fsm_patch_payload({
-		"final_damage": final_damage,
-	})
+	_fsm_patch_payload({"final_damage": final_damage})
 	# Brace is already applied during Step 4 (canonical order before
 	# Redirect), so _state.modified_damage is already halved.
 	_log.info("Resolving damage: %d total." % final_damage)
 	if final_damage <= 0:
-		_log.info("No damage to resolve.")
-		if _get_panel():
-			_get_panel().show_damage_info(
-					_damage_dealer.build_no_damage_info())
-		_attack_exec_finalize_after_delay()
+		_resolve_zero_damage()
 		return
-	# --- Squadron defender ---
 	if _state.defender_squadron:
 		_resolve_squadron_damage(final_damage)
 		_attack_exec_finalize_after_delay()
 		return
-	# --- Ship defender ---
 	if _state.defender_ship:
-		_resolve_ship_damage(final_damage)
-		# If the damage summary overlay is being shown, wait for the player
-		# to dismiss it before resolving immediate effects and finalising.
-		if _state.awaiting_damage_summary:
-			EventBus.damage_summary_dismissed.connect(
-					_on_damage_summary_dismissed_continue,
-					CONNECT_ONE_SHOT)
-			return
-		# No summary overlay — resolve deferred immediate effects now.
-		_resolve_deferred_immediate_effect()
-		# If a choice-based immediate effect is pending, show the modal
-		# flow instead of finalising immediately (DM-011).
-		if _pending_immediate_card != null:
-			_start_immediate_choice_flow()
-			return
-		_attack_exec_finalize_after_delay()
+		_continue_ship_damage_resolution(final_damage)
 		return
 	_log.error("No defender found for damage resolution!")
 	_attack_exec_finalize_attack()
+
+
+## Zero-damage resolution path: show the "no damage" panel and
+## finalise after the standard delay.
+func _resolve_zero_damage() -> void:
+	_log.info("No damage to resolve.")
+	if _get_panel():
+		_get_panel().show_damage_info(
+				_damage_dealer.build_no_damage_info())
+	_attack_exec_finalize_after_delay()
+
+
+## Ship-defender damage resolution: deals damage cards then either
+## defers finalisation (waiting on the damage summary overlay) or
+## proceeds into the immediate-effect choice flow / standard delay.
+func _continue_ship_damage_resolution(final_damage: int) -> void:
+	_resolve_ship_damage(final_damage)
+	# If the damage summary overlay is being shown, wait for the player
+	# to dismiss it before resolving immediate effects and finalising.
+	if _state.awaiting_damage_summary:
+		EventBus.damage_summary_dismissed.connect(
+				_on_damage_summary_dismissed_continue,
+				CONNECT_ONE_SHOT)
+		return
+	# No summary overlay — resolve deferred immediate effects now.
+	_resolve_deferred_immediate_effect()
+	# If a choice-based immediate effect is pending, show the modal
+	# flow instead of finalising immediately (DM-011).
+	if _pending_immediate_card != null:
+		_start_immediate_choice_flow()
+		return
+	_attack_exec_finalize_after_delay()
 
 ## Resolves damage against a squadron.
 ## Squadrons have no shields — damage goes directly to hull.
@@ -1835,28 +1899,11 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	# Use pure helper to decide whether to auto-resolve or defer.
 	var flow_decision: Dictionary = _flow_executor.decide_immediate_effect_flow(
 			card, ship, _immediate_resolver)
-
-	# If not an immediate card, skip processing.
 	if not flow_decision.get("should_process", false):
 		return
-
-	# Auto-resolve path: no player choice needed.
 	if not flow_decision.get("should_defer", true):
-		# Pre-draw extra card for structural_damage.
-		var extra_card_data: Dictionary = {}
-		if flow_decision.get("card_id", "") == "structural_damage" and _damage_deck:
-			var extra: DamageCard = _damage_deck.draw_card()
-			if extra:
-				extra_card_data = extra.serialize()
-		var result: Dictionary = GameManager.submit_resolve_immediate_effect(
-				ship, card, {}, extra_card_data)
-		if not result.is_empty():
-			_emit_immediate_signals(card, ship, result)
-			_log.info("Immediate effect resolved: '%s'." % card.title)
-		else:
-			_log.warn("Immediate effect failed: '%s'." % card.title)
+		_auto_resolve_immediate_effect(card, ship, flow_decision)
 		return
-
 	# Choice-based card — store pending state for the modal flow.
 	var choice_info: Dictionary = flow_decision.get("choice_info", {})
 	_pending_immediate_card = card
@@ -1864,6 +1911,24 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	_pending_immediate_choice = choice_info
 	_log.info("Immediate effect deferred for modal: '%s' (chooser=%s)."
 			% [card.title, choice_info.get("chooser", "?")])
+
+
+## Submits a choice-less immediate-effect resolution (auto path) and
+## emits the resulting visual signals.  Used when
+## [method AttackFlowExecutor.decide_immediate_effect_flow] reports
+## [code]should_defer = false[/code] (e.g. `structural_damage`).
+func _auto_resolve_immediate_effect(card: DamageCard,
+		ship: ShipInstance, flow_decision: Dictionary) -> void:
+	var extra_card_data: Dictionary = {}
+	if flow_decision.get("card_id", "") == "structural_damage":
+		extra_card_data = _draw_structural_damage_extra(card)
+	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
+			ship, card, {}, extra_card_data)
+	if not result.is_empty():
+		_emit_immediate_signals(card, ship, result)
+		_log.info("Immediate effect resolved: '%s'." % card.title)
+	else:
+		_log.warn("Immediate effect failed: '%s'." % card.title)
 
 ## Resolves the deferred immediate effect stored during the card loop.
 ## Called after the DamageSummaryOverlay is dismissed (or immediately if no
@@ -1911,9 +1976,30 @@ func _start_immediate_choice_flow() -> void:
 	# Phase I3: chooser controls the CRITICAL_CHOICE step.
 	_flow_fsm.defender_player = chooser_player
 	_fsm_advance(AttackFlowFSM.Step.CRITICAL_CHOICE)
-	# Phase I3c / I6b-3 R5: publish choice info so the chooser peer
-	# can render the critical-choice modal locally and submit a
-	# ResolveImmediateEffectCommand directly.
+	_fsm_patch_payload(_build_immediate_choice_payload(chooser, chooser_player))
+	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
+			% [chooser, chooser_player,
+			_pending_immediate_choice.get("card_title", "?")])
+	# Phase I6b-3 R5 / Phase K4: in a network session the modal is
+	# opened by the chooser peer's [AttackPanelMirror] from the
+	# payload; only the local-attacker case opens here.
+	var local_pi: int = NetworkManager.get_local_player_index()
+	if local_pi >= 0:
+		_dispatch_immediate_choice_network(chooser_player, local_pi)
+		return
+	# Hot-seat: handoff overlay rotates camera + waits for chooser to
+	# dismiss before opening the modal.
+	if _try_open_immediate_choice_handoff(chooser_player):
+		return
+	# Non-hot-seat or no handoff overlay: show modal directly.
+	_show_immediate_choice_modal()
+
+
+## Builds the FSM payload patch describing the pending immediate-effect
+## choice so the chooser peer can render the modal from
+## [member InteractionFlow.payload] alone.  Pure dictionary construction.
+func _build_immediate_choice_payload(chooser: String,
+		chooser_player: int) -> Dictionary:
 	var card_index: int = -1
 	var ship_owner: int = -1
 	var ship_index: int = -1
@@ -1926,7 +2012,7 @@ func _start_immediate_choice_flow() -> void:
 		if gs:
 			ship_index = gs.find_ship_index(_pending_immediate_ship)
 		card_data = _pending_immediate_card.serialize()
-	_fsm_patch_payload({
+	return {
 		"chooser": chooser,
 		"chooser_player": chooser_player,
 		"card_title": _pending_immediate_choice.get("card_title", ""),
@@ -1935,46 +2021,45 @@ func _start_immediate_choice_flow() -> void:
 		"pending_card_index": card_index,
 		"pending_ship_owner_player": ship_owner,
 		"pending_ship_index": ship_index,
-	})
-	_log.info("Immediate choice flow: chooser='%s' (player %d), card='%s'."
-			% [chooser, chooser_player,
-			_pending_immediate_choice.get("card_title", "?")])
-	# Phase I6b-3 R5: in network mode, open the modal locally only when
-	# the chooser is the local (attacker) peer.  When the chooser is
-	# the remote peer, the [AttackPanelMirror] on that peer opens the
-	# modal from the published payload; the local executor waits for
-	# [signal CommandProcessor.command_executed] to clean up.
-	# Phase K4: discriminator is `local_player_index >= 0` (network
-	# session active).
-	var local_pi: int = NetworkManager.get_local_player_index()
-	if local_pi >= 0:
-		if chooser_player == local_pi:
-			_show_immediate_choice_modal()
-		else:
-			_log.info("Immediate choice deferred to remote chooser peer "
-					+"(chooser_player=%d local=%d)."
-					% [chooser_player, local_pi])
+	}
+
+
+## Network-mode dispatch for the immediate-effect choice modal.
+## Opens locally iff the local peer is the chooser; otherwise logs and
+## waits for the remote chooser to submit
+## [ResolveImmediateEffectCommand].
+func _dispatch_immediate_choice_network(chooser_player: int,
+		local_pi: int) -> void:
+	if chooser_player == local_pi:
+		_show_immediate_choice_modal()
 		return
-	# Hot-seat: handoff overlay rotates camera + waits for the chooser
-	# to dismiss before opening the modal.  Phase K4: PlayMode.is_hot_seat()
-	# guard removed (dead after the network early-return above).
-	if _camera:
-		_camera.rotate_to_player(chooser_player)
-		if _handoff_overlay:
-			_handoff_overlay.show_handoff(
-					chooser_player, "Damage Card Choice")
-			var vp_size: Vector2 = Vector2(1280, 720)
-			if get_viewport():
-				vp_size = get_viewport().get_visible_rect().size
-			_handoff_overlay.update_size(vp_size)
-			if not EventBus.handoff_accepted.is_connected(
-					_on_immediate_handoff_accepted):
-				EventBus.handoff_accepted.connect(
-						_on_immediate_handoff_accepted,
-						CONNECT_ONE_SHOT)
-			return
-	# Non-hot-seat or no handoff overlay: show modal directly.
-	_show_immediate_choice_modal()
+	_log.info("Immediate choice deferred to remote chooser peer "
+			+"(chooser_player=%d local=%d)."
+			% [chooser_player, local_pi])
+
+
+## Hot-seat handoff path for the immediate-effect choice modal.  Rotates
+## the camera, shows the handoff overlay, and arms a one-shot listener
+## that opens the modal once the chooser presses "Ready".  Returns
+## [code]true[/code] when the handoff was armed (caller must not open
+## the modal directly), [code]false[/code] when no camera/overlay is
+## available and the caller should fall back to opening the modal now.
+func _try_open_immediate_choice_handoff(chooser_player: int) -> bool:
+	if _camera == null:
+		return false
+	_camera.rotate_to_player(chooser_player)
+	if _handoff_overlay == null:
+		return false
+	_handoff_overlay.show_handoff(chooser_player, "Damage Card Choice")
+	var vp_size: Vector2 = Vector2(1280, 720)
+	if get_viewport():
+		vp_size = get_viewport().get_visible_rect().size
+	_handoff_overlay.update_size(vp_size)
+	if not EventBus.handoff_accepted.is_connected(
+			_on_immediate_handoff_accepted):
+		EventBus.handoff_accepted.connect(
+				_on_immediate_handoff_accepted, CONNECT_ONE_SHOT)
+	return true
 
 ## Called when the handoff "Ready" button is pressed during the
 ## immediate-effect choice flow.
@@ -2002,16 +2087,10 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 		_log.error("Immediate choice confirmed but no pending card/ship!")
 		_attack_exec_finalize_after_delay()
 		return
-	var ok: bool = false
-	var extra_card_data: Dictionary = {}
-	if card.effect_id == "structural_damage" and _damage_deck:
-		var extra: DamageCard = _damage_deck.draw_card()
-		if extra:
-			extra_card_data = extra.serialize()
+	var extra_card_data: Dictionary = _draw_structural_damage_extra(card)
 	var result: Dictionary = GameManager.submit_resolve_immediate_effect(
 			ship, card, selection, extra_card_data)
 	if not result.is_empty():
-		ok = true
 		_emit_immediate_signals(card, ship, result)
 		_log.info("Immediate effect resolved: '%s' (choice=%s)." % [
 				card.title, str(selection)])
@@ -2022,6 +2101,18 @@ func _on_immediate_choice_confirmed(selection: Dictionary) -> void:
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	EventBus.ship_hull_changed.emit(ship, new_hull)
 	_attack_exec_finalize_after_delay()
+
+
+## Draws the extra damage card required by the `structural_damage`
+## immediate effect and returns its serialised payload, or an empty
+## dictionary for other effect IDs / when no damage deck is wired.
+func _draw_structural_damage_extra(card: DamageCard) -> Dictionary:
+	if card.effect_id != "structural_damage" or _damage_deck == null:
+		return {}
+	var extra: DamageCard = _damage_deck.draw_card()
+	if extra == null:
+		return {}
+	return extra.serialize()
 
 
 ## Phase I6b-3 R5 — runs on the attacker peer when the chooser peer's
@@ -2288,20 +2379,28 @@ func _attack_exec_prepare_next_squadron() -> void:
 	# Clean up target visuals, keep spent zone markers.
 	_target_selector.prepare_next_squadron_target()
 	# Update panel with "Select next squadron" prompt.
-	if _get_panel():
-		_get_panel().hide_dice_count()
-		_get_panel().hide_dice_results()
-		_get_panel().hide_confirm_button()
-		_get_panel().hide_cf_dial_section()
-		_get_panel().hide_cf_token_section()
-		_get_panel().hide_roll_button()
-		var ship_name: String = ""
-		if _state.exec_ship_token.get_ship_data():
-			ship_name = \
-					_state.exec_ship_token.get_ship_data().ship_name
-		_get_panel().show_select_next_squadron(
-				ship_name, _state.attacker_zone_name)
-		_get_panel().show_skip_attack_button()
+	_show_next_squadron_panel_prompt()
+
+
+## Resets the attack panel widgets for the next squadron-target loop
+## iteration and shows the "Select next squadron" prompt with the
+## skip-attack affordance.  Pure panel choreography — no flow-state
+## mutation.
+func _show_next_squadron_panel_prompt() -> void:
+	if _get_panel() == null:
+		return
+	_get_panel().hide_dice_count()
+	_get_panel().hide_dice_results()
+	_get_panel().hide_confirm_button()
+	_get_panel().hide_cf_dial_section()
+	_get_panel().hide_cf_token_section()
+	_get_panel().hide_roll_button()
+	var ship_name: String = ""
+	if _state.exec_ship_token.get_ship_data():
+		ship_name = _state.exec_ship_token.get_ship_data().ship_name
+	_get_panel().show_select_next_squadron(
+			ship_name, _state.attacker_zone_name)
+	_get_panel().show_skip_attack_button()
 
 ## Prepares the board for a second hull zone attack.
 ## Resets target state and returns to hull zone selection.

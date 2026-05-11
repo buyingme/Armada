@@ -319,137 +319,232 @@ mutation.
 | **L6** | Lint tightening: update `scripts/lint_phase_k.sh` allow-list from the current **11** sites to the post-L floor of **≤ 4** (save dialog, load dialog ×2, lobby room). Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7 Phase K bullet to document the new floor and reword the (Phase I) negative rules as enduring constraints. | low | +10 / −30 | no |
 | **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Compare logs side-by-side: every modal open/close should be triggered by the *same* `command_executed` sequence with the *same* projector intent on both peers and both modes. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
 
-### 4.1a L0.5 trace-regeneration automation (proposal — REVISED)
+### 4.1a L0.5 trace-regeneration automation (proposal — REVISED v2)
 
-**Status:** proposal — awaiting approval. Lands as commits on the L0.5
-slice before L1 starts.
+**Status:** proposal — awaiting approval. Implements real two-process
+network replay because debugging network behaviour has been the
+single biggest cost source so far; the regression gate must cover
+network mode end-to-end.
 
-**Goal.** Make the `tests/fixtures/baseline_traces/` oracle regenerable
-without a 20-minute manual playthrough per L slice. Manual MT for
-L1–L7 still happens (per `.skills/copilot_instructions.md`); this is
-the **fast pre-MT check** that catches obvious regressions in seconds.
+**Goal.** A single shell command that:
+  1. Boots Learning Scenario rounds 1–2 deterministically in
+     hot-seat **and** in network (host + client),
+  2. Drives every command through the real production pipeline
+     (validation, networking, broadcast, command-executed signal),
+  3. Writes one `baseline_trace_<mode>_<role>.jsonl` per peer,
+  4. Diffs each trace against the committed fixture and reports
+     non-trivial divergence with the offending `(seq, step_id)` row.
 
-**Honest scope: traces are mode-dependent.** Empirical confirmation
-from the committed hot-seat fixture: during dial assignment
-(seq 1–3) `flow_step_id = NONE` because hot-seat players take turns.
-In network mode the same `assign_dials` commands would post-execute
-with `flow_step_id = WAIT_FOR_OPPONENT_DIALS` because peers genuinely
-wait on each other. The `interaction_flow` projection therefore
-differs by mode, and a single-process replay with a `PlayMode` flag
-flip cannot reproduce the network trace faithfully.
+**Why this is feasible.** Investigation of the existing
+infrastructure shows the network plumbing is already complete:
 
-This forces a two-tier design.
+  - [`scripts/run_network_test.sh`](../scripts/run_network_test.sh)
+    already orchestrates a localhost server + 1 or 2 clients with
+    `--logging` and `--port` flags. Process lifecycle, port
+    management, and cleanup are solved.
+  - [`server_main.gd`](../src/autoload/server_main.gd) already
+    accepts `--server --port <n> --scenario <id>` and auto-hosts via
+    `NetworkManager.host()` at boot. The headless server path is a
+    production code path, not test scaffolding.
+  - `TestNetworkHarness` already exists for in-process peer fakes,
+    used by `test_network_transport.gd`.
+  - `GameReplay` serialises every command with its authoring
+    `player_index` already, so a peer can self-filter to "play only
+    my own commands" without extra metadata.
 
-#### Tier 1 — hot-seat replay automation (this slice, ~150 LOC)
+The missing piece is a deterministic *input driver* that consumes a
+replay file and submits each command at the right moment from the
+right peer. That is the only new production-adjacent code this
+slice adds.
 
-Implementable today, deterministic, runs in a GUT integration test.
+#### 4.1a.1 Design
 
-**Pieces:**
+##### CLI surface
 
-1. **`CommandProcessor.replay_commands(commands, emit_signals: bool =
-   false)`** — new optional parameter. When `true` the existing
-   `if not is_replaying` guard around `command_executed.emit` is
-   bypassed (only the *replay* path opts in; the *save-load* path
-   continues to suppress). Default `false` keeps every existing call
-   site unchanged.
+```
+# Hot-seat (single process):
+godot --headless --replay <path> --baseline-output <jsonl>
 
-2. **`scripts/replay_to_trace.gd`** — headless Godot CLI. Flags:
-   `--replay <path> --output <trace.jsonl>`. Always runs in
-   `PlayMode.HOT_SEAT`. Sequence:
-     1. Boot the scenario named in the replay header.
-     2. Force `LoggingMode.enabled = true`; call
-        `BaselineTrace._maybe_enable()` so the trace file opens at
-        `<output>`.
-     3. `CommandProcessor.replay_commands(replay.commands,
-        emit_signals=true)`.
-     4. Flush, exit 0.
+# Network (orchestrated by run_baseline_traces.sh):
+godot --headless --server --port 7350 --replay <path> \
+      --baseline-output <jsonl>
+godot --headless --connect 127.0.0.1:7350 --replay <path> \
+      --baseline-output <jsonl>  # client peer
+```
 
-3. **`tests/integration/test_baseline_trace_regression.gd`** — GUT
-   integration test. Loads
-   [`replay_hot_seat_solo.json`](../tests/fixtures/baseline_traces/replay_hot_seat_solo.json),
-   runs the same mechanism in-process against a temp trace file,
-   diffs against
-   [`baseline_trace_hot_seat_solo.jsonl`](../tests/fixtures/baseline_traces/baseline_trace_hot_seat_solo.jsonl).
-   Failure message includes the offending `(seq, step_id)` row.
+`--replay`, `--connect`, and `--baseline-output` are new flags
+parsed in a small `ReplayDriver` autoload (new file:
+[`src/autoload/replay_driver.gd`](../src/autoload/replay_driver.gd)).
 
-**What Tier 1 actually catches.** Most L-phase regressions are
-modal-lifecycle bugs that surface identically in both modes (e.g.
-wrong `controller_player`, missing `flow_type` transition, modal
-opened twice). These all show up in the hot-seat trace. So Tier 1 is
-a high-signal cheap regression gate even though it does not exercise
-the network path.
+##### `ReplayDriver` autoload — production code, opt-in
 
-**What Tier 1 does NOT catch.**
+  - Inert when `--replay` is absent (every non-driver session,
+    including all hand-played games, sees zero behaviour change).
+  - When present:
+      1. Loads + verifies the replay file (`GameReplay.load_from_file`
+         already exists; HMAC check reused).
+      2. Forces `LoggingMode.enabled = true` and calls
+         `BaselineTrace._maybe_enable()`.
+      3. Subscribes to `EventBus.game_started`. On signal, kicks the
+         step loop.
+      4. **Step loop** (one tick per `process_frame`):
+         - Look at the next replay command not yet applied.
+         - Decide whether to submit it from this peer:
+            - **Hot-seat**: always submit (every command is local).
+            - **Network**: submit iff
+              `command.player_index ==
+               NetworkManager.get_local_player_index()`. The other
+              peer's commands arrive via the real broadcast pipeline
+              and are observed by the same loop (driver waits for
+              `command_executed` with the expected `sequence` before
+              advancing).
+         - After submit, wait for `CommandProcessor.command_executed`
+           to fire with the expected `sequence`. This is the natural
+           sync barrier — both peers reach the same flow state
+           before either submits its next command.
+         - Hard timeout per command (5 s default, configurable via
+           `--replay-step-timeout`): if no `command_executed` arrives,
+           emit a structured error and exit non-zero.
+      5. On last command applied, flush `BaselineTrace`, exit 0.
 
-  - WAIT-state divergences specific to network mode.
-  - Authority-check bugs that only fire when `NetworkManager.is_host()`
-    returns true.
-  - Replication-timing bugs (e.g. `commit_displacement` arriving after
-    a follow-up `advance_activation_step`, like the I6b-4d fix in
-    commit `2935336`).
+  - Defensive: refuses to submit any command whose
+    `player_index` does not match the local peer in network mode
+    (the broadcast pipeline would reject it anyway, but failing fast
+    in the driver gives a clear error).
 
-These remain covered by manual MT during L1–L7, which is already
-required by the slice plan.
+##### `BaselineTrace` — already in place
 
-#### Tier 2 — network replay automation (deferred, ~300 LOC if needed)
+Already writes per-peer `baseline_trace_<mode>_<role>.jsonl` to
+`PathConfig.LOGS_DIR`. No changes needed.
 
-Not part of this proposal. Sketched here so its absence is explicit.
+##### Orchestration script
 
-A real network regression check requires either:
+`scripts/run_baseline_traces.sh` — new shell script. Modelled on
+[`run_network_test.sh`](../scripts/run_network_test.sh). For each
+fixture:
+  1. Hot-seat: launch one Godot process with `--replay
+     hot_seat_solo.json --baseline-output <tmp>/hot_seat_solo.jsonl`.
+     Wait for exit. `diff` against fixture.
+  2. Network: launch headless server (`--server --replay
+     network_host.json --baseline-output <tmp>/network_host.jsonl`)
+     and headless client (`--connect 127.0.0.1:7350 --replay
+     network_client.json --baseline-output
+     <tmp>/network_client.jsonl`). Wait for both to exit. `diff`
+     each against its fixture.
+  3. Exit 0 if all diffs are empty; print unified diff and exit 1
+     otherwise.
 
-  (a) Two headless Godot processes wired together via the existing
-      ENet transport, both with `--logging`, driven by a shared
-      shell script that ensures deterministic input timing. Each
-      process produces its own trace; both are diffed.
+##### GUT integration test
 
-  (b) An in-process two-`SceneTree` harness using
-      `MultiplayerAPI.multiplayer_peer = OfflineMultiplayerPeer.new()`
-      style fakes that capture the RPC send/receive boundary. Same
-      output: two trace streams, two diffs.
+`tests/integration/test_baseline_trace_regression.gd` — runs the
+**hot-seat** path in-process (single GUT process can't spawn ENet
+sessions reliably). Network path stays a shell-script gate run
+locally and (later) in CI.
 
-Either is substantial (process orchestration, port management, flake
-mitigation) and not justified until a network-only regression
-escapes Tier 1 + manual MT. **Deferred to Phase M or beyond.**
+#### 4.1a.2 The two fundamental network challenges, addressed
 
-#### Network coverage during Phase L
+**Challenge A — separate replay file per peer.**
 
-  - **Tier 1 runs on every L slice** as a pre-MT gate.
-  - **Manual MT continues to be required** for L1, L2, L4, L5, L7
-    (the slices flagged `MT? yes` in §4.1). Each MT explicitly
-    includes a hot-seat run AND a network host+client run.
-  - **L7 final sweep** captures fresh `replay_network_host.json` +
-    `baseline_trace_network_host.jsonl` (and the client counterparts)
-    and commits them as evidence-only fixtures alongside the
-    automated hot-seat oracle. These four files document the
-    post-Phase-L network behaviour as a regression baseline for
-    Phase M, even though no automated diff runs against them yet.
+In hot-seat one process originates every command, so one replay
+file covers it. In network, the host originates only its own
+commands; the client originates its own. *But* the existing
+`GameReplay.serialize()` records the full sequence from the
+**server**'s history (commands are funnelled through the server in
+G4 design — see
+[`src/utils/path_config.gd`](../src/utils/path_config.gd) and the
+G4 plan in `docs/old/g4_network_plan.md`). So the same replay file
+works for both peers: each one filters by `player_index` to decide
+what to submit.
 
-#### Cost summary
+This is verified empirically by the already-captured hot-seat
+replay (`tests/fixtures/baseline_traces/replay_hot_seat_solo.json`)
+which has `"player": 0|1` on every command — the filter key is
+already there.
+
+**Challenge B — ordering and WAIT-state divergence.**
+
+Network mode's `WAIT_FOR_OPPONENT_DIALS` (and analogous waits)
+genuinely change the post-execute flow state on each peer. That is
+captured by writing **separate** fixtures per role:
+`baseline_trace_network_host.jsonl` and
+`baseline_trace_network_client.jsonl`. The diff is per-peer. A
+host-side bug where the WAIT step is missed shows up as a diff
+against the host fixture even if the client fixture is unchanged.
+
+The sync barrier (waiting for `command_executed` with the expected
+`sequence` before submitting the next own-command) ensures
+deterministic ordering across peers. Without this barrier, two
+client `assign_dials` could race a host `assign_dials` and produce
+inconsistent traces. With it, each peer advances only after the
+previous command has been globally committed.
+
+#### 4.1a.3 Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| `--replay` flag accidentally activated in a production user session | Flag is parsed only if explicitly passed; absent from every export preset; documented in `docs/setup_network_game.md`. `ReplayDriver._ready` early-returns when the flag is absent. |
+| Network process startup race (client connects before server is listening) | Mirror `run_network_test.sh`'s existing `sleep 1` between server-spawn and client-spawn. Client retries connect for up to 5 s; if it fails, exit non-zero with a clear message. Both are already proven patterns in the existing script. |
+| ENet localhost flakiness on CI | Run the shell-script gate locally before every L slice. Skip it in CI initially (only the GUT in-process hot-seat test runs in CI). Promote to CI in L7 once stability is established. |
+| Per-command 5 s timeout too aggressive for some commands (e.g. squadron move animations) | The timeout measures *engine* sync, not *animation* completion — `command_executed` fires synchronously inside `CommandProcessor.submit`. Animations finish later but are not observed by the trace. 5 s is generous for engine sync. Bumpable per-test via `--replay-step-timeout`. |
+| Two peers reach `game_started` at different physics frames → step loop reads stale `interaction_flow` | The sync barrier (`command_executed` with expected `sequence`) makes the loop strictly synchronous. The driver never advances on its own clock; it advances only on observed broadcast. |
+| Capturing the initial network replay pair requires manual interaction (hands on keyboard for two windows) | Yes — one-time cost. From there on, all regression checks are headless. Capturing the hot-seat replay was already a one-time cost (already paid). |
+| Adding a new autoload (`ReplayDriver`) violates the §6 enforcement rule? | Autoload count goes from N to N+1. The rule is "minimise autoloads"; this one is justified because `BaselineTrace` is also already an autoload and the driver must run before `EventBus.game_started`. Documented in §11 risks register. |
+
+#### 4.1a.4 Cost summary
 
 | Item | LOC delta | MT? |
 |---|---:|:---:|
-| `CommandProcessor` parameter | +5 / 0 | no |
-| `scripts/replay_to_trace.gd` | +80 / 0 | no |
-| `tests/integration/test_baseline_trace_regression.gd` | +60 / 0 | no |
-| Subscriber-safety audit (verify no production subscriber misbehaves when `command_executed` emits during replay) | +0 / 0 (analysis) | no |
-| **Tier 1 total** | **+145 / 0** | **no** |
+| `src/autoload/replay_driver.gd` (production opt-in driver) | +220 / 0 | no |
+| Register `ReplayDriver` in `project.godot` | +1 / 0 | no |
+| CLI flags `--replay`, `--connect`, `--baseline-output`, `--replay-step-timeout` | +30 / 0 | no |
+| `scripts/run_baseline_traces.sh` orchestration | +120 / 0 | no |
+| `tests/integration/test_baseline_trace_regression.gd` (in-process hot-seat path) | +80 / 0 | no |
+| `tests/unit/test_replay_driver.gd` (filter logic, sync-barrier semantics) | +60 / 0 | no |
+| **Total** | **+511 / 0** | **no** |
 
-Lands as commit `feat(observability): L0.5b replay-to-trace
-automation (hot-seat tier)`.
+Lands as three commits on the L0.5 branch:
 
-#### Decision points for approval
+  1. `feat(observability): L0.5b ReplayDriver autoload (hot-seat
+     execution)` — driver + unit tests + integration test. Hot-seat
+     fully automated.
+  2. `feat(observability): L0.5c network replay path` — `--connect`
+     flag + `run_baseline_traces.sh` + capture initial network
+     fixture pairs.
+  3. `docs(plan): L0.5 automation outcome` — update §1 baseline,
+     promote the GUT integration test to the post-slice
+     regression-gate description in §4.1.
 
-1. **Two-tier scope is acceptable** — automating only hot-seat now,
-   keeping network as manual MT until/unless escapes happen.
-2. **Tier 1 mechanism is acceptable** — adding the `emit_signals`
-   parameter to `replay_commands` rather than (a) bypassing
-   validation or (b) building a separate replay path.
-3. **L7 produces evidence-only network fixtures** — committed but
-   not diffed automatically.
+**Sequencing requirement: capture network fixtures once, manually,
+before commit 2.** The user runs `./scripts/run_network_test.sh
+--logging`, plays Learning Scenario rounds 1–2 once. The resulting
+`replays/replay_*.json` is committed as `replay_network_host.json`
+(the server's view contains both peers' commands), and the
+two `logs/baseline_trace_network_{host,client}.jsonl` files are
+committed as the per-peer fixtures. From that point on,
+`run_baseline_traces.sh` regenerates them headlessly.
 
-If 1 is rejected (you want network automation now), the slice
-expands to Tier 2 (~+450 LOC total, MT yes, defer L1 by one slice).
-If 2 or 3 is rejected, name the variant and I revise.
+#### 4.1a.5 Decision points for approval
+
+1. **Real two-process network automation is required.** (User
+   indicated this is non-negotiable: "make sure it works in network
+   and hot seat" / "network debugging was the biggest effort up to
+   now".)
+2. **`ReplayDriver` is a production autoload, opt-in via `--replay`
+   CLI flag.** Inert in every non-driver session. Alternative would
+   be a separate test-only entry point, which means duplicating the
+   boot sequence — rejected as more fragile.
+3. **Sync barrier is `command_executed` per expected `sequence`.**
+   Alternative would be wall-clock pacing, which would be flaky on
+   loaded CI. Rejected.
+4. **Network fixtures captured manually once.** Alternative is a
+   bootstrap mode that records as it goes, which is more code for
+   a one-time event. Rejected.
+5. **Shell-script gate runs locally; CI runs the hot-seat GUT
+   integration test only.** Promote network to CI in L7 once
+   stability is observed.
+
+If any of 1–5 is rejected, name the variant and I revise. Otherwise
+I implement in the three commits above.
 
 ### 4.2 Acceptance criteria for closing Phase L
 

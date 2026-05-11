@@ -18,7 +18,7 @@
 | GUT tests | 2 917 |
 | GUT asserts | 5 521 |
 | Failing tests | 0 |
-| Last commit | `c673ef0` (combined gameplay bugfix batch; K14 remains complete through `33e697f`) |
+| Last commit | `9a43860` (K15 function-size cleanup pass on attack_executor.gd; K14 remains complete through `33e697f`) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

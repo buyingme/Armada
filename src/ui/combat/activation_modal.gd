@@ -124,6 +124,14 @@ var _auto_skip_generation: int = 0
 ## Set by the game board via [method set_attack_skippable] before opening.
 var _skip_attack: bool = false
 
+## Optional re-check callable installed by the game board.  When set,
+## the modal calls this just before auto-skipping the ATTACK step so a
+## stale snapshot (modal configured at REVEAL time, ship state mutated
+## by upstream events) cannot wrongly skip an attack with valid targets.
+## The callable must take no arguments and return [code]bool[/code]
+## ([code]true[/code] = no targets, safe to skip).
+var _skip_attack_check: Callable = Callable()
+
 ## When true the Repair step is auto-skipped (no dial or token).
 ## Set by the game board via [method set_repair_skippable] before opening.
 var _skip_repair: bool = false
@@ -157,6 +165,17 @@ func _init() -> void:
 ## Rules Reference: "Attack", p.2 — a ship is not required to attack.
 func set_attack_skippable(skip: bool) -> void:
 	_skip_attack = skip
+
+
+## Installs an optional re-check callable used to confirm "no targets"
+## immediately before the modal auto-skips the ATTACK step.  The callable
+## takes no arguments and must return [code]true[/code] when the attack
+## should still be skipped (no valid targets remain).  Set this to an
+## invalid [Callable] (the default) to disable the re-check.
+## Rules Reference: "Attack", p.2 — a ship is not required to attack;
+## conversely it [i]should[/i] still get the chance when targets exist.
+func set_attack_skippable_check(check: Callable) -> void:
+	_skip_attack_check = check
 
 
 ## Marks the Repair step as skippable (no repair dial or token).
@@ -210,7 +229,9 @@ func open(state: ShipActivationState) -> void:
 	# Re-opened at Attack with no valid targets — auto-skip the step.
 	elif (_skip_attack
 			and state.get_current_step() == ShipActivationState.Step.ATTACK):
-		_start_auto_skip()
+		_refresh_skip_attack_from_check()
+		if _skip_attack:
+			_start_auto_skip()
 
 
 ## Opens the modal for the passive (non-controller) peer in network mode.
@@ -914,6 +935,14 @@ func _try_auto_skip_next() -> void:
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
 		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
 	elif _skip_attack and current == ShipActivationState.Step.ATTACK:
+		_refresh_skip_attack_from_check()
+		if not _skip_attack:
+			# Targets appeared between modal-open and auto-skip firing.
+			# Fall through to "auto-skip complete — attack step active".
+			_auto_skipping = false
+			_update_step_display()
+			_log.info("Attack auto-skip cancelled — targets are now available.")
+			return
 		_update_step_display()
 		var gen: int = _auto_skip_generation
 		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
@@ -939,6 +968,20 @@ func _auto_skip_current_if_gen(gen: int) -> void:
 		return
 	_activation_state.skip_step()
 	_try_auto_skip_next()
+
+
+## Re-evaluates [member _skip_attack] using the optional callable installed
+## via [method set_attack_skippable_check].  Called immediately before the
+## ATTACK step is auto-skipped so a stale snapshot cannot wrongly skip an
+## attack with valid targets.
+func _refresh_skip_attack_from_check() -> void:
+	if not _skip_attack_check.is_valid():
+		return
+	var fresh: bool = bool(_skip_attack_check.call())
+	if fresh != _skip_attack:
+		_log.info("Attack skippable re-check: %s -> %s." %
+				[str(_skip_attack), str(fresh)])
+	_skip_attack = fresh
 
 
 # ---------------------------------------------------------------------------

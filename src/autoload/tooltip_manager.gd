@@ -196,7 +196,14 @@ func toggle_tooltips() -> void:
 
 ## Returns the toggle button node so it can be reparented into the
 ## ActionToolbar. Requirements: MT-U-001.
+##
+## Lazily recreates the button if a previous owner (e.g. an
+## [ActionToolbar] freed on scene reload / save-load) freed it along
+## with its children, so callers always receive a live node.
 func get_toggle_button() -> Button:
+	if not is_instance_valid(_toggle_button):
+		_toggle_button = null
+		_create_toggle_button()
 	return _toggle_button
 
 

@@ -1443,7 +1443,25 @@ func apply_defender_commit(selected: Array[int]) -> void:
 		return
 	if not _state.defense_step:
 		return
-	if not _flow_executor.begin_defense_commit(_state, selected):
+	# Defensively re-sort into canonical RRG resolve order before
+	# queueing.  The hot-seat producer ([method _submit_commit_defense])
+	# sorts before submitting, but the network defender peer
+	# ([method AttackPanelMirror._on_defense_tokens_done]) submits in
+	# click order.  Without this re-sort, a [Brace, Evade] click order
+	# halves damage with Brace first and then Evade overwrites
+	# `_state.modified_damage` from raw dice, undoing the brace.
+	## Rules Reference: "Defense Tokens", p.5 — fixed sequence
+	## Scatter → Evade → Brace → Redirect → Contain.
+	var canonical_selected: Array[int] = selected
+	if _state.defender_ship != null:
+		var def_inst: ShipInstance = (
+				_state.defender_ship.get_ship_instance())
+		if def_inst != null:
+			canonical_selected = (
+					_flow_executor.sort_defense_tokens_canonical(
+							selected, def_inst.defense_tokens))
+	if not _flow_executor.begin_defense_commit(
+			_state, canonical_selected):
 		_log.info("No defense tokens selected — proceeding to damage.")
 		if _get_panel():
 			_get_panel().hide_defense_section()
@@ -1761,20 +1779,20 @@ func _post_process_faceup_card(card: DamageCard,
 	# Use pure helper to determine card properties.
 	var card_info: Dictionary = _flow_executor.prepare_faceup_card(
 			card, _damage_dealer)
-	
+
 	# Register persistent effect if needed.
 	if _effect_registry and card_info.get("should_register_persistent", false):
 		DamageCardEffectFactory.register_effect(
 				card, def_inst, _effect_registry)
 		_log.info("Persistent effect registered for '%s'." % card.title)
-	
+
 	# Always emit card events.
 	EventBus.damage_card_flipped.emit(def_inst, card, true)
 	EventBus.damage_card_dealt.emit(def_inst, card, true)
 	_log.info(
 			"Dealt FACEUP damage card: '%s' [%s] (standard critical)."
 			% [card.title, card.trait_type])
-	
+
 	# Defer immediate effect if present.
 	if card_info.get("has_immediate", false):
 		_state.deferred_immediate_card = card
@@ -1817,11 +1835,11 @@ func _resolve_immediate_card_effect(card: DamageCard,
 	# Use pure helper to decide whether to auto-resolve or defer.
 	var flow_decision: Dictionary = _flow_executor.decide_immediate_effect_flow(
 			card, ship, _immediate_resolver)
-	
+
 	# If not an immediate card, skip processing.
 	if not flow_decision.get("should_process", false):
 		return
-	
+
 	# Auto-resolve path: no player choice needed.
 	if not flow_decision.get("should_defer", true):
 		# Pre-draw extra card for structural_damage.
@@ -1838,7 +1856,7 @@ func _resolve_immediate_card_effect(card: DamageCard,
 		else:
 			_log.warn("Immediate effect failed: '%s'." % card.title)
 		return
-	
+
 	# Choice-based card — store pending state for the modal flow.
 	var choice_info: Dictionary = flow_decision.get("choice_info", {})
 	_pending_immediate_card = card

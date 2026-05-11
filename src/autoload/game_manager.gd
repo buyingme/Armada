@@ -842,12 +842,13 @@ func submit_move_squadron(squadron: SquadronInstance,
 
 
 ## Submits a [StartDisplacementCommand] opening the squadron-displacement
-## flow on the squadron-owner peer.  Phase I6b-4.
+## flow on the opposing (non-moving) peer.  Phase I6b-4.
 ##
 ## [param ship] — the maneuvering ship that triggered the overlap.
 ## [param controller_player] — the peer that must drive the placement
-##     modal (always the squadron owner; in mixed-owner edge cases the
-##     caller picks one).
+##     modal.  Per RRG "Overlapping", p.8 this is always the player
+##     who is NOT moving the ship (the opponent of [code]ship.owner_player[/code]),
+##     regardless of who owns the displaced squadrons.
 ## [param displaced_squadrons] — Array of [SquadronInstance] that must
 ##     be re-placed.
 func submit_start_displacement(ship: ShipInstance,
@@ -1889,25 +1890,31 @@ func _handle_remote_execute_maneuver(cmd: GameCommand) -> void:
 
 ## BF-2: Mirror move_squadron — snap visual token on client.
 ## BF-2: Mirror move_squadron — snap visual token and finish activation
-## on remote peer.  Displacement moves (Ship Phase) only reposition
-## the token without touching activation state.  G4.6.5.
+## on remote peer.  During Ship Phase (squadron-command step), the
+## command also marks the squadron activated so both peers agree on
+## Squadron-Phase eligibility; only turn-advance bookkeeping is skipped.
+## G4.6.5.
 func _handle_remote_move_squadron(cmd: GameCommand) -> void:
 	var is_local: bool = not NetworkManager.is_server() \
 			and cmd.player_index == NetworkManager.get_local_player_index()
 	var sq: SquadronInstance = _find_squadron_from_command(cmd)
-	# Displacement move during Ship Phase — only reposition, skip
-	# activation tracking and turn advancement.
+	# Ship Phase move_squadron commands come from the squadron-command
+	# step. Mirror activated_this_round on passive peers so both sides
+	# compute identical Squadron-Phase auto-pass decisions. Skip only
+	# squadron-phase turn-advance bookkeeping while still in Ship Phase.
 	if current_game_state \
 			and current_game_state.current_phase == Constants.GamePhase.SHIP:
-		if sq and not is_local:
-			EventBus.squadron_repositioned_remotely.emit(sq)
+		if sq:
+			sq.activated_this_round = true
+			if not is_local:
+				EventBus.squadron_repositioned_remotely.emit(sq)
 		return
 	if sq:
 		sq.activated_this_round = true
 		if not is_local:
 			EventBus.squadron_repositioned_remotely.emit(sq)
 	_activating_squadron = null
-	_finish_remote_squadron_activation()
+	_finish_remote_squadron_activation(cmd.player_index)
 
 
 ## Phase I6b-4d: Mirror commit_displacement — snap each repositioned
@@ -1960,7 +1967,7 @@ func _handle_remote_activate_squadron(cmd: GameCommand) -> void:
 	if not is_local and _activating_squadron != null:
 		_activating_squadron.activated_this_round = true
 		_activating_squadron = null
-		_finish_remote_squadron_activation()
+		_finish_remote_squadron_activation(cmd.player_index)
 	var sq: SquadronInstance = _find_squadron_from_command(cmd)
 	if sq:
 		_activating_squadron = sq
@@ -1968,11 +1975,19 @@ func _handle_remote_activate_squadron(cmd: GameCommand) -> void:
 
 ## Shared helper: increments remote squadron activation counter and
 ## advances the squadron-phase turn when the per-turn limit is reached.
-func _finish_remote_squadron_activation() -> void:
+func _finish_remote_squadron_activation(remote_player: int) -> void:
 	if current_game_state == null:
 		return
 	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return
+	if remote_player < 0 or remote_player >= Constants.PLAYER_COUNT:
+		return
+	# Recover from rare turn-tracker drift: remote squadron lifecycle
+	# must always advance from the command author's turn.
+	if active_player != remote_player:
+		_log.warn("Remote squadron turn mismatch (active=%d, remote=%d) — resync." % [
+				active_player, remote_player])
+		_set_active_player(remote_player)
 	_squadrons_activated_this_turn += 1
 	if _squadrons_activated_this_turn >= Constants.SQUADRONS_PER_ACTIVATION \
 			or not _has_unactivated_squadrons(active_player):

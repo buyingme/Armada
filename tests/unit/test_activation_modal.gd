@@ -249,6 +249,45 @@ func test_attack_step_entered_signal_not_emitted_when_skippable() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Regression — set_attack_skippable_check re-evaluates before auto-skip
+# ---------------------------------------------------------------------------
+
+## Regression for annotation 001: the modal cached `_skip_attack=true`
+## from a stale [code]has_any_attack_target[/code] snapshot at modal-open
+## and auto-skipped the ATTACK step even though valid targets existed.
+## A re-check callable installed via [method set_attack_skippable_check]
+## now confirms freshness immediately before auto-skipping.
+## Rules Reference: "Attack", p.2 — a ship is not required to attack;
+## conversely it [i]should[/i] still get the chance when targets exist.
+func test_skip_attack_check_cancels_auto_skip_when_targets_appear() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.ATTACK)
+	_modal.set_attack_skippable(true)
+	# The re-check now reports "targets exist" → don't skip.
+	_modal.set_attack_skippable_check(func() -> bool: return false)
+	_modal.open(state)
+	await get_tree().create_timer(0.5).timeout
+	assert_eq(state.get_current_step(),
+			ShipActivationState.Step.ATTACK,
+			"Auto-skip should be cancelled when re-check returns false.")
+	assert_false(_modal._skip_attack,
+			"_skip_attack should be refreshed to false by re-check.")
+
+
+func test_skip_attack_check_still_skips_when_no_targets() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.ATTACK)
+	_modal.set_attack_skippable(true)
+	# The re-check confirms "still no targets" → proceed with skip.
+	_modal.set_attack_skippable_check(func() -> bool: return true)
+	_modal.open(state)
+	await get_tree().create_timer(0.5).timeout
+	assert_eq(state.get_current_step(),
+			ShipActivationState.Step.MANEUVER,
+			"Auto-skip should still fire when re-check confirms.")
+
+
+# ---------------------------------------------------------------------------
 # End Activation button (DONE step)
 # ---------------------------------------------------------------------------
 

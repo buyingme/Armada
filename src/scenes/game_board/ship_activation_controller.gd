@@ -357,8 +357,28 @@ func configure_and_open_activation_modal() -> void:
 	_panel_mgr.activation_modal.set_attack_skippable(
 			not _attack_executor.has_any_attack_target(
 					_activation_ctx.activating_ship_token))
+	_panel_mgr.activation_modal.set_attack_skippable_check(
+			_compute_attack_skippable_now)
 	update_activation_modal_interactivity()
 	_panel_mgr.activation_modal.open(_activation_ctx.ship_activation_state)
+
+
+## Re-evaluates "no valid attack targets" using fresh state.
+## Bound to [method ActivationModal.set_attack_skippable_check] so the
+## modal can confirm immediately before auto-skipping the ATTACK step
+## that no targets exist — guards against the snapshot taken at modal-
+## open being stale by the time the auto-skip fires.
+## Returns [code]true[/code] when the attack should still be skipped.
+## Rules Reference: "Attack", p.2 — a ship is not required to attack.
+func _compute_attack_skippable_now() -> bool:
+	if _attack_executor == null:
+		return false
+	if _activation_ctx == null:
+		return false
+	var token: ShipToken = _activation_ctx.activating_ship_token
+	if token == null:
+		return false
+	return not _attack_executor.has_any_attack_target(token)
 
 
 ## Applies current controller authority to activation and squadron modals.
@@ -519,6 +539,8 @@ func _open_activation_modal_mirror() -> void:
 	_panel_mgr.activation_modal.set_attack_skippable(
 			not _attack_executor.has_any_attack_target(
 					_activation_ctx.activating_ship_token))
+	_panel_mgr.activation_modal.set_attack_skippable_check(
+			_compute_attack_skippable_now)
 	update_activation_modal_interactivity()
 	_panel_mgr.activation_modal.open_mirror(
 			_activation_ctx.ship_activation_state)
@@ -1068,25 +1090,29 @@ func _on_execute_maneuver() -> void:
 		# peer so [member GameState.interaction_flow] reflects the
 		# placement state.  In hot-seat the modal is still driven by the
 		# direct [code]_displacement_controller.start()[/code] call below.
-		# In network the modal opens on the squadron-owner peer via the
-		# projection handler in [method _on_command_executed_project_ui]
-		# (OV-002 fix) — the maneuvering peer here just submits and waits.
+		# In network the modal opens on the non-moving (opposing) peer
+		# via the projection handler in
+		# [method _on_command_executed_project_ui] — the maneuvering peer
+		# here just submits and waits.
+		##
+		## Rules Reference: RRG "Overlapping", p.8 — "the player who is
+		## NOT moving the ship places the overlapped squadrons,
+		## regardless of who owns them".  The controller is therefore the
+		## opponent of the maneuvering ship's owner — never the squadron
+		## owner.
 		var displaced_instances: Array = []
-		var displaced_owner: int = -1
 		for sq_token: SquadronToken in displaced:
 			var inst: SquadronInstance = sq_token.get_squadron_instance()
 			if inst == null:
 				continue
 			displaced_instances.append(inst)
-			if displaced_owner < 0:
-				displaced_owner = inst.owner_player
+		var placing_player: int = 1 - maneuver_ship.owner_player
 		GameManager.submit_start_displacement(maneuver_ship,
-				displaced_owner, displaced_instances)
+				placing_player, displaced_instances)
 		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
 		# Hot-seat opens the displacement modal directly; network opens
-		# it via projection (Phase I6b-4c OV-002 fix — modal must open on
-		# the squadron-owner peer, not the maneuvering peer).  Converging
-		# is a Phase L candidate.
+		# it via projection (modal must open on the opposing — non-moving
+		# — peer).  Converging is a Phase L candidate.
 		if not PlayMode.is_network():
 			_displacement_controller.start(displaced, moved_ship_base)
 	else:
@@ -1232,9 +1258,28 @@ func _build_other_ship_bases(exclude: ShipToken) -> Array:
 func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 	var moving_inst: ShipInstance = (
 			_activation_ctx.activating_ship_token.get_ship_instance())
-	# Identify the overlapped ship token.
+	# Identify the overlapped ship token.  Index references the
+	# "other ships" list built by [method _build_other_ship_bases]
+	# (skips the activating ship and any destroyed ships in iteration
+	# order).  A null lookup here is a logic bug — never silently fall
+	# back to the moving ship, which would alias the command and deal
+	# 2 damage to the moving ship instead of 1+1 across both.
 	var other_token: ShipToken = _get_other_ship_token(
 			result.overlapped_ship_index)
+	if other_token == null:
+		_log.error(("Overlap damage: could not resolve overlapped" +
+				" ship token at index %d (moving=%s). Aborting" +
+				" damage to avoid aliasing.") % [
+				result.overlapped_ship_index,
+				moving_inst.ship_data.ship_name])
+		return
+	var other_inst: ShipInstance = other_token.get_ship_instance()
+	if other_inst == null:
+		_log.error(("Overlap damage: overlapped token '%s' has no" +
+				" ShipInstance (moving=%s). Aborting damage.") % [
+				other_token.name,
+				moving_inst.ship_data.ship_name])
+		return
 	# Build toast text.
 	var toast_parts: Array[String] = []
 	if result.stayed_in_place:
@@ -1252,18 +1297,22 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 	if m_card == null:
 		_log.error("Damage deck empty — cannot deal overlap damage.")
 		return
-	var other_inst: ShipInstance = null
-	var o_card: DamageCard = null
-	if other_token:
-		other_inst = other_token.get_ship_instance()
-	if other_inst:
-		o_card = _damage_deck.draw_card()
+	var o_card: DamageCard = _damage_deck.draw_card()
+	if o_card == null:
+		_log.error("Damage deck empty after first draw — cannot " +
+				"deal overlap damage to overlapped ship.")
+		return
+	_log.info(("Overlap damage: moving='%s' overlapped='%s'" +
+			" (other_index=%d).") % [
+			moving_inst.ship_data.ship_name,
+			other_inst.ship_data.ship_name,
+			result.overlapped_ship_index])
 	# Submit command with pre-drawn cards.
 	var cmd_result: Dictionary = GameManager.submit_overlap_damage(
 			moving_inst,
-			other_inst if other_inst else moving_inst,
+			other_inst,
 			m_card.serialize(),
-			o_card.serialize() if o_card else m_card.serialize())
+			o_card.serialize())
 	if cmd_result.is_empty():
 		_log.error("OverlapDamageCommand rejected.")
 		return
@@ -1274,11 +1323,10 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 	toast_parts.append("%s takes 1 damage."
 			% moving_inst.ship_data.ship_name)
 	# Emit signals for the overlapped ship.
-	if other_inst and other_token:
-		_emit_overlap_signals(other_inst, other_token, cmd_result,
-				"other_hull", "other_destroyed")
-		toast_parts.append("%s takes 1 damage."
-				% other_inst.ship_data.ship_name)
+	_emit_overlap_signals(other_inst, other_token, cmd_result,
+			"other_hull", "other_destroyed")
+	toast_parts.append("%s takes 1 damage."
+			% other_inst.ship_data.ship_name)
 	# Show collision info inside the activation modal so it's unmissable.
 	if _panel_mgr.activation_modal:
 		_panel_mgr.activation_modal.set_collision_message("\n".join(toast_parts))

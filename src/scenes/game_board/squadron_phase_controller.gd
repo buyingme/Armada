@@ -82,6 +82,13 @@ var _log: GameLogger = GameLogger.new("SquadronPhaseController")
 ## Whether local controls are enabled for the squadron modal.
 var _modal_interactable: bool = true
 
+const _SQ_DIAG_TAG: String = "SQ_DIAG"
+
+
+## Writes a structured diagnostics line for squadron-phase sync tracing.
+func _log_diag(message: String) -> void:
+	_log.info("[%s] %s" % [_SQ_DIAG_TAG, message])
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -190,6 +197,11 @@ func try_handle_squadron_click(token: SquadronToken) -> bool:
 ## Requirements: SQA-001, SQA-TM-001.
 func begin_activation_flow() -> void:
 	_squadron_activation_count = 0
+	_log_diag("begin_activation_flow local=%d active=%d phase=%s count_reset=%d" % [
+			NetworkManager.get_local_player_index(),
+			GameManager.active_player,
+			str(GameManager.get_current_phase()),
+			_squadron_activation_count])
 	# I5b-3: drop any lingering range/move overlay from the previous
 	# active player's last activation (passive peer never gets a
 	# move_commit signal locally to clear it).
@@ -328,31 +340,47 @@ func _on_command_executed_select_squadron(command: GameCommand,
 		_result: Dictionary) -> void:
 	if command == null or command.command_type != "activate_squadron":
 		return
+	_log_diag("recv activate_squadron local=%d cmd_player=%d payload=%s" % [
+			NetworkManager.get_local_player_index(),
+			command.player_index,
+			str(command.payload)])
 	if _squadron_modal == null or not _squadron_modal.visible:
+		_log_diag("skip activate_squadron: modal unavailable")
 		return
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
+		_log_diag("skip activate_squadron: missing game state")
 		return
 	if gs.current_phase != Constants.GamePhase.SQUADRON:
+		_log_diag("skip activate_squadron: phase=%s" % str(gs.current_phase))
 		return
 	var sq_index: int = int(command.payload.get("squadron_index", -1))
 	if sq_index < 0:
+		_log_diag("skip activate_squadron: invalid squadron_index=%d" % sq_index)
 		return
 	var ps: PlayerState = gs.get_player_state(command.player_index)
 	if ps == null or sq_index >= ps.squadrons.size():
+		_log_diag("skip activate_squadron: player state missing or index out of range")
 		return
 	var instance: SquadronInstance = ps.squadrons[sq_index] as SquadronInstance
 	if instance == null:
+		_log_diag("skip activate_squadron: squadron instance missing")
 		return
 	# Already selected by the local-click path — nothing to do.
 	var current: SquadronToken = _squadron_modal.get_selected_token()
 	if current and current.get_squadron_instance() == instance:
+		_log_diag("skip activate_squadron: already selected %s" % instance.data_key)
 		return
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
 	if token == null:
+		_log_diag("skip activate_squadron: token not found for %s" % instance.data_key)
 		return
 	if _squadron_modal.select_squadron_remote(token, instance):
+		_log_diag("accepted activate_squadron for %s" % instance.data_key)
 		_on_squadron_selected_in_modal(token)
+	else:
+		_log_diag("rejected activate_squadron for %s by modal state guard" %
+				instance.data_key)
 
 
 ## Phase I5b-1: on the passive (observer) peer, advances the modal back
@@ -375,6 +403,11 @@ func _on_command_executed_advance_after_move(command: GameCommand,
 		_result: Dictionary) -> void:
 	if command == null or command.command_type != "move_squadron":
 		return
+	_log_diag("recv move_squadron local=%d cmd_player=%d count_before=%d payload=%s" % [
+			NetworkManager.get_local_player_index(),
+			command.player_index,
+			_squadron_activation_count,
+			str(command.payload)])
 	# Phase K6: hot-seat has no passive peer to advance; the active
 	# player drives the modal locally.  Discriminated on the
 	# [code]NetworkManager.get_local_player_index()[/code] axis (hot-seat
@@ -382,28 +415,36 @@ func _on_command_executed_advance_after_move(command: GameCommand,
 	# [docs/refactoring_phase_k_plan.md] §3.1b.
 	var local: int = NetworkManager.get_local_player_index()
 	if local < 0:
+		_log_diag("skip move_squadron advance: hot-seat local=%d" % local)
 		return
 	# Active peer drives modal lifecycle through its local-click flow.
 	if command.player_index == local:
+		_log_diag("skip move_squadron advance: command authored locally")
 		return
 	if _squadron_modal == null or not _squadron_modal.visible:
+		_log_diag("skip move_squadron advance: modal unavailable")
 		return
 	var gs: GameState = GameManager.current_game_state
 	if gs == null or gs.current_phase != Constants.GamePhase.SQUADRON:
+		_log_diag("skip move_squadron advance: phase/state guard failed")
 		return
 	# Ship-phase displacement moves are filtered out above (phase guard).
 	# Mirror the activation counter so open_for_turn shows the right "X of Y".
 	_squadron_activation_count += 1
+	_log_diag("accepted move_squadron advance: count_after=%d" %
+			_squadron_activation_count)
 	# I5b-3: passive peer needs to drop the previous activation's
 	# range/move overlay; only the active peer gets the local
 	# move_commit / activation_done callbacks that clear it.
 	_remove_squadron_overlay()
 	if _squadron_activation_count >= Constants.SQUADRONS_PER_ACTIVATION:
+		_log_diag("move_squadron advance reached max activations; wait for handoff")
 		# Last activation of this player's turn — handoff to opposing
 		# player via active_player_changed will reopen the modal.
 		return
 	# Same player still has activations left — reset modal.
 	var next_num: int = _squadron_activation_count + 1
+	_log_diag("move_squadron advance opening modal next_num=%d" % next_num)
 	_squadron_modal.open_for_turn(
 			next_num, Constants.SQUADRONS_PER_ACTIVATION)
 	_squadron_modal.set_interactable(_modal_interactable)
@@ -417,6 +458,10 @@ func _on_squadron_selected_in_modal(token: SquadronToken) -> void:
 	var instance: SquadronInstance = token.get_squadron_instance()
 	if instance == null:
 		return
+	_log_diag("selected squadron=%s count=%d move_submitted_reset=%s" % [
+			instance.data_key,
+			_squadron_activation_count,
+			str(_move_submitted_this_activation)])
 	if _highlight_active.is_valid():
 		_highlight_active.call(instance)
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
@@ -473,6 +518,11 @@ func _on_squadron_move_commit(token: SquadronToken) -> void:
 		var norm_y: float = token.global_position.y / pa.y
 		GameManager.submit_move_squadron(instance, norm_x, norm_y)
 		_move_submitted_this_activation = true
+		_log_diag("submit move_squadron key=%s norm=(%.4f, %.4f) count=%d" % [
+				instance.data_key,
+				norm_x,
+				norm_y,
+				_squadron_activation_count])
 
 	EventBus.squadron_moved.emit(token)
 	_log.info("Squadron move committed — engagement updated.")
@@ -492,6 +542,12 @@ func _on_squadron_attack_requested(token: SquadronToken) -> void:
 ## Called when a single squadron activation is done.
 ## Requirements: SQA-TM-002, SQA-TM-003, SQA-013.
 func _on_squadron_activation_done(instance: SquadronInstance) -> void:
+	_log_diag("activation_done start key=%s local=%d active=%d count_before=%d move_submitted=%s" % [
+			instance.data_key,
+			NetworkManager.get_local_player_index(),
+			GameManager.active_player,
+			_squadron_activation_count,
+			str(_move_submitted_this_activation)])
 	var token: SquadronToken = _find_squadron_token_for_instance(instance)
 	if token:
 		token.set_activated_visual(true)
@@ -504,6 +560,8 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 	# [docs/refactoring_phase_k_plan.md] §3.1b.
 	if NetworkManager.get_local_player_index() >= 0 \
 			and not _move_submitted_this_activation:
+		_log_diag("activation_done skip path: submit zero-distance move for %s" %
+				instance.data_key)
 		_submit_skip_move(instance, token)
 	_remove_squadron_overlay()
 	if _squadron_modal and _squadron_modal.is_command_mode():
@@ -512,6 +570,9 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 		EventBus.squadron_activation_ended.emit(instance)
 		return
 	_squadron_activation_count += 1
+	_log_diag("activation_done incremented count_after=%d key=%s" % [
+			_squadron_activation_count,
+			instance.data_key])
 	_log.info("Squadron activation done: %s (%d of %d)" % [
 			instance.data_key, _squadron_activation_count,
 			Constants.SQUADRONS_PER_ACTIVATION])
@@ -612,11 +673,19 @@ func _submit_skip_move(
 		instance: SquadronInstance, token: SquadronToken) -> void:
 	var pa: Vector2 = GameScale.play_area_size_px
 	if instance == null or pa.x <= 0.0 or pa.y <= 0.0:
+		_log_diag("skip_move aborted: invalid instance or play area")
 		return
 	var pos: Vector2 = token.global_position if token else Vector2.ZERO
 	var norm_x: float = pos.x / pa.x
 	var norm_y: float = pos.y / pa.y
 	GameManager.submit_move_squadron(instance, norm_x, norm_y)
+	_log_diag("skip_move submitted key=%s local=%d active=%d norm=(%.4f, %.4f) count=%d" % [
+			instance.data_key,
+			NetworkManager.get_local_player_index(),
+			GameManager.active_player,
+			norm_x,
+			norm_y,
+			_squadron_activation_count])
 	_log.info("Skip: submitted zero-distance move_squadron for %s." %
 			instance.data_key)
 

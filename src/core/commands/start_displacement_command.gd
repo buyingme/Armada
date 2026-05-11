@@ -3,10 +3,8 @@
 ## Opens the squadron-displacement flow after a ship maneuver causes
 ## ship–squadron overlap.  Mutates [member GameState.interaction_flow]
 ## to [code]SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE[/code] with the
-## squadron-owner peer as [code]controller_player[/code], so
-## [UIProjector] can route the displacement modal to the correct peer
-## (Phase I6b-4 fixes the network bug where the modal opened on the
-## maneuvering peer instead).
+## non-moving (opposing) peer as [code]controller_player[/code], so
+## [UIProjector] can route the displacement modal to the correct peer.
 ##
 ## Payload:
 ##   "ship_index"           — index of the maneuvering ship in the active
@@ -18,7 +16,10 @@
 ##                            entries identifying which squadrons must be
 ##                            re-placed.
 ##   "controller_player"    — int (0 or 1) — the peer that must drive the
-##                            placement modal.  Always the squadron owner.
+##                            placement modal.  Per RRG "Overlapping", p.8
+##                            this is the player who is NOT moving the
+##                            ship, regardless of who owns the displaced
+##                            squadrons.
 ##
 ## Rules Reference: RRG "Overlapping", p.8 — OV-001 to OV-004.
 class_name StartDisplacementCommand

@@ -164,7 +164,8 @@ func test_start_execute_sets_interaction_flow() -> void:
 			Constants.InteractionStep.DISPLACEMENT_PLACE,
 			"step_id should be DISPLACEMENT_PLACE.")
 	assert_eq(f.controller_player, 1,
-			"controller_player should be the squadron owner.")
+			"controller_player should match payload (set by producer to" +
+			" the opposing — non-moving — player per RRG p.8).")
 	assert_true(f.payload.has("ship_index"),
 			"Payload should carry ship_index.")
 	assert_true(f.payload.has("displaced_squadrons"),

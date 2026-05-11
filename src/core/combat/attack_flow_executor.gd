@@ -129,7 +129,7 @@ func poll_next_defense_commit(state: AttackState) -> Dictionary:
 		state.defense_step = false
 		return {
 			"has_token": false,
-			"token_index": -1,
+			"token_index": - 1,
 		}
 	var token_index: int = int(state.defense_commit_queue.pop_front())
 	return {

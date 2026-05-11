@@ -178,10 +178,12 @@ func _drive_activation_modal(gs: GameState) -> void:
 # Network displacement helpers (OV-002 fix, Phase I6b-4c-2)
 # ---------------------------------------------------------------------------
 
-## Opens the squadron-displacement modal on the squadron-owner peer
-## (controller) when [StartDisplacementCommand] broadcasts.  The
-## maneuvering peer skips this branch (its [code]_can_act_as[/code]
-## check fails because the controller is the opposing player).
+## Opens the squadron-displacement modal on the non-moving (opposing)
+## peer when [StartDisplacementCommand] broadcasts.  The maneuvering
+## peer skips this branch because its [code]_can_act_as(controller)[/code]
+## check fails — the controller is its opponent.
+## Rules Reference: RRG "Overlapping", p.8 — the player who is NOT
+## moving the ship places the overlapped squadrons.
 func _open_displacement_modal_from_command(cmd: GameCommand) -> void:
 	var payload: Dictionary = cmd.payload
 	var controller: int = int(payload.get("controller_player", -1))

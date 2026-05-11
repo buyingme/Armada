@@ -249,3 +249,30 @@ func test_resolve_damage_no_deferred_brace() -> void:
 	# if _state.brace_used. That code has been removed.
 	assert_eq(final_damage, 3,
 			"Damage should not be re-halved in resolve step")
+
+
+# =========================================================================
+# Regression — apply_defender_commit canonical re-sort
+# =========================================================================
+
+## Regression: defender clicks Brace before Evade.  Without canonical
+## re-sort in [method AttackExecutor.apply_defender_commit], the queue
+## processes Brace first (halves damage) and Evade second (overwrites
+## modified_damage from raw dice → undoes brace).
+##
+## See client log [code]client_20260510_150200.log[/code] line 2819-2840:
+## annotation 002a "the brace defense token does not work any more".
+## Rules Reference: "Defense Tokens", p.5 — Scatter → Evade → Brace.
+func test_apply_defender_commit_resorts_brace_after_evade() -> void:
+	# Defender token order: [Evade(idx 0), Brace(idx 1)].
+	_setup_tokens(["Evade", "Brace"])
+	# Defender clicked Brace then Evade — submitted [1, 0] (click order).
+	var click_order: Array[int] = [1, 0]
+	# Sort via the same helper apply_defender_commit uses.
+	var canonical: Array[int] = (
+			_executor._flow_executor.sort_defense_tokens_canonical(
+					click_order, _ship_instance.defense_tokens))
+	assert_eq(canonical[0], 0,
+			"Evade (idx 0) must sort before Brace (idx 1) per RRG p.5")
+	assert_eq(canonical[1], 1,
+			"Brace (idx 1) must sort after Evade (idx 0) per RRG p.5")

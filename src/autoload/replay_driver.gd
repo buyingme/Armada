@@ -72,11 +72,9 @@ var pending_replay_seed: int = 0
 ## Loaded replay payload.  Null until [method _ready] succeeds.
 var _replay: GameReplay = null
 
-## Index of the next command in [member _replay.commands] to process.
-var _cursor: int = 0
-
 ## Running count of [signal CommandProcessor.command_executed] emits
-## observed by the driver.  Used as the per-step sync barrier.
+## observed by the driver.  Doubles as the cursor into
+## [member _replay.commands] — see [method _run_step_loop].
 var _observed_count: int = 0
 
 ## Per-step timeout (ms).
@@ -84,6 +82,13 @@ var _step_timeout_ms: int = DEFAULT_STEP_TIMEOUT_MS
 
 ## Override destination passed via [code]--baseline-output[/code].
 var _baseline_output: String = ""
+
+## Host:port string passed via [code]--connect[/code] (network client only).
+var _connect_target: String = ""
+
+## Whether the host has already triggered [method LobbyManager.request_start_game]
+## (one-shot — repeated lobby-updated signals are ignored after).
+var _host_started: bool = false
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("ReplayDriver")
@@ -96,6 +101,7 @@ func _ready() -> void:
 		return  # No --replay flag → autoload is inert.
 	enabled = true
 	_baseline_output = _flag_value(args, "--baseline-output")
+	_connect_target = _flag_value(args, "--connect")
 	var timeout_str: String = _flag_value(args, "--replay-step-timeout")
 	if not timeout_str.is_empty() and timeout_str.is_valid_int():
 		_step_timeout_ms = timeout_str.to_int()
@@ -107,13 +113,24 @@ func _ready() -> void:
 	_log.info("ReplayDriver: loaded %d commands from %s" % [
 			_replay.commands.size(), replay_path])
 	# Pre-seed the RNG and the trace output path before any scene
-	# loads its first frame.
+	# loads its first frame.  Network host receives its seed via the
+	# lobby game-config RPC, so only hot-seat consumes
+	# pending_replay_seed (see GameManager.bootstrap_game).
 	pending_replay_seed = int(_replay.header.get("rng_seed", 0))
 	LoggingMode.enabled = true
 	BaselineTrace.output_path_override = _baseline_output
 	BaselineTrace._maybe_enable()
 	CommandProcessor.command_executed.connect(_on_command_executed)
+	CommandProcessor.command_rejected.connect(_on_command_rejected)
 	EventBus.game_started.connect(_on_game_started)
+	# Network client: kick off connect once everything is wired.
+	if not _connect_target.is_empty():
+		call_deferred("_start_network_client")
+	# Network host: ServerMain already calls NetworkManager.host() on
+	# --server, but the lobby auto-bootstrap (create lobby + ready +
+	# start game) is driven from here.  See _start_network_host.
+	if _is_server_session():
+		call_deferred("_start_network_host")
 
 
 ## Returns the value following [param flag] in [param args], or
@@ -126,6 +143,19 @@ static func parse_flag(args: PackedStringArray, flag: String) -> String:
 		if args[i] == flag and i + 1 < args.size():
 			return args[i + 1]
 	return ""
+
+
+## Returns whether the [code]--server[/code] CLI flag is set on either
+## the engine-args side or the user-args side.  Used to decide whether
+## to bootstrap the host lobby on replay start.
+func _is_server_session() -> bool:
+	for arg: String in OS.get_cmdline_args():
+		if arg == "--server":
+			return true
+	for arg: String in OS.get_cmdline_user_args():
+		if arg == "--server":
+			return true
+	return false
 
 
 ## Instance wrapper around [method parse_flag] for the
@@ -141,42 +171,65 @@ func _on_game_started() -> void:
 	call_deferred("_run_step_loop")
 
 
-## Drives the recorded commands through [CommandProcessor.submit]
-## one-at-a-time, waiting for the [signal CommandProcessor.command_executed]
-## echo before advancing.  Quits the process when the replay is
-## exhausted or a step times out.
+## Drives the recorded commands.  The board's scenario setup
+## auto-submits a small prefix (start_round + round-1 dial assignments
+## + advance to Ship Phase via [code]GameManager.apply_fixed_round1_commands[/code]),
+## so the loop reads [member _observed_count] as a global cursor:
+## the next command to drive is always [code]replay.commands[_observed_count][/code].
+## Auto-submitted prefix commands are simply observed and the cursor
+## advances past them without an explicit submit.
+##
+## In network mode the cursor advances on remote echoes too — only
+## commands whose [code]player[/code] field matches the local seat
+## are submitted by this peer; the rest are awaited as broadcasts.
 func _run_step_loop() -> void:
-	while _cursor < _replay.commands.size():
-		var ok: bool = await _execute_step(_replay.commands[_cursor])
+	# Settle phase — give auto-submitted scenario-setup commands and
+	# any remote game-start commands one frame to fire before we
+	# inspect the cursor.
+	await get_tree().process_frame
+	while _observed_count < _replay.commands.size():
+		var cmd_data: Dictionary = _replay.commands[_observed_count]
+		var ok: bool = await _execute_step(cmd_data)
 		if not ok:
 			return  # _quit already called.
-		_cursor += 1
-	_log.info("ReplayDriver: replay exhausted (%d commands)." % _cursor)
+	_log.info("ReplayDriver: replay exhausted (%d commands)." %
+			_observed_count)
 	BaselineTrace.flush_and_close()
 	_quit(EXIT_OK)
 
 
-## Executes one recorded command.  Returns [code]true[/code] on
-## success (command executed and observed), [code]false[/code] if the
-## step failed and [method _quit] has been called.
+## Executes one cursor position.  If the command at the current
+## cursor is the local peer's responsibility, attempts a submit (but
+## skips if the auto-flow already fired one in the meantime).  Then
+## waits for [signal CommandProcessor.command_executed] to advance
+## the cursor.  Returns [code]false[/code] iff the step failed and
+## [method _quit] has been called.
 func _execute_step(cmd_data: Dictionary) -> bool:
-	var expected_count: int = _observed_count + 1
+	var snapshot: int = _observed_count
 	var is_local: bool = _is_local_command(cmd_data)
 	if is_local:
+		# Give the running auto-flow / inbound RPC one extra frame to
+		# fire so we don't double-submit a prefix command.
+		await get_tree().process_frame
+		if _observed_count > snapshot:
+			return true  # auto-flow / remote already advanced the cursor.
 		var cmd: GameCommand = GameCommand.deserialize(cmd_data)
 		if cmd == null:
 			_log.error("ReplayDriver: deserialize failed: %s" % cmd_data)
 			_quit(EXIT_DESERIALIZE_FAIL)
 			return false
 		CommandProcessor.submit(cmd)
-	# Wait until we've observed the matching command_executed echo
-	# (synchronous in hot-seat, async in network).  Hot-seat submits
-	# usually complete before the await returns the first time, but
-	# guard against missed-edge races by polling.
+	# Wait for the cursor to advance past `snapshot` — either via
+	# the submit above (hot-seat: synchronous), an auto-flow firing,
+	# or a remote broadcast echo (network).
 	var deadline_ms: int = Time.get_ticks_msec() + _step_timeout_ms
-	while _observed_count < expected_count:
+	while _observed_count <= snapshot:
 		if Time.get_ticks_msec() > deadline_ms:
-			_log.error("ReplayDriver: timeout waiting for command_executed (cursor=%d)" % _cursor)
+			_log.error(
+					"ReplayDriver: timeout waiting for command_executed "
+					+ "(cursor=%d, type=%s, is_local=%s)"
+					% [snapshot, str(cmd_data.get("type", "?")),
+					str(is_local)])
 			_quit(EXIT_TIMEOUT)
 			return false
 		await get_tree().process_frame
@@ -194,11 +247,97 @@ func _is_local_command(cmd_data: Dictionary) -> bool:
 
 
 ## Counts [signal CommandProcessor.command_executed] emissions.  The
-## driver advances its cursor once the count reaches the value it
-## expected before submitting / waiting.
+## driver advances its cursor by reading this counter (it equals the
+## next replay-file index to process).
 func _on_command_executed(_command: GameCommand,
 		_result: Dictionary) -> void:
 	_observed_count += 1
+
+
+## Surfaces validation rejections during replay.  These are usually
+## benign (auto-flow already fired the same command from a different
+## site), but log them so a regression is visible in the run log.
+func _on_command_rejected(command: GameCommand, reason: String) -> void:
+	_log.warn("ReplayDriver: rejected [%s] seq=%d: %s" % [
+			command.command_type, command.sequence, reason])
+
+
+# ---------------------------------------------------------------------------
+# Network orchestration (Phase L0.5c)
+# ---------------------------------------------------------------------------
+
+## Network client entry point — connects to the running host, drives
+## the lobby ready handshake, and waits for the game-start broadcast.
+## The step loop then runs on [signal EventBus.game_started] like in
+## hot-seat.
+func _start_network_client() -> void:
+	var host: String = _connect_host()
+	var port: int = _connect_port()
+	if host.is_empty() or port <= 0:
+		_log.error("ReplayDriver: malformed --connect '%s'" % _connect_target)
+		_quit(EXIT_LOAD_FAIL)
+		return
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	# Ready the lobby once authentication completes.
+	NetworkManager.handshake_accepted.connect(
+			_on_client_handshake_accepted, CONNECT_ONE_SHOT)
+	if not NetworkManager.connect_to_server(host, port):
+		_log.error("ReplayDriver: connect_to_server failed (%s:%d)" % [
+				host, port])
+		_quit(EXIT_LOAD_FAIL)
+
+
+## Returns the host portion of [member _connect_target] (e.g.
+## [code]"127.0.0.1"[/code] from [code]"127.0.0.1:7350"[/code]).
+func _connect_host() -> String:
+	var idx: int = _connect_target.rfind(":")
+	if idx <= 0:
+		return _connect_target  # no port supplied — caller will use default
+	return _connect_target.substr(0, idx)
+
+
+## Returns the port portion of [member _connect_target] (default
+## [constant ServerMain.DEFAULT_PORT] when unspecified).
+func _connect_port() -> int:
+	var idx: int = _connect_target.rfind(":")
+	if idx <= 0:
+		return ServerMain.DEFAULT_PORT
+	var port_str: String = _connect_target.substr(idx + 1)
+	if port_str.is_valid_int():
+		return port_str.to_int()
+	return ServerMain.DEFAULT_PORT
+
+
+## Client-side: handshake completed, set ready in the lobby so the
+## host can start the game.
+func _on_client_handshake_accepted(_player_index: int) -> void:
+	LobbyManager.set_ready(true)
+
+
+## Network host entry point — creates a lobby and watches the lobby
+## state for both-players-ready, then triggers
+## [method LobbyManager.request_start_game].
+func _start_network_host() -> void:
+	# Wait until ServerMain has finished its own _ready (host on ENet).
+	await get_tree().process_frame
+	# Defensive: only proceed if we ended up in server role.
+	if not NetworkManager.is_server():
+		return
+	LobbyManager.create_lobby("ReplayHost", "")
+	LobbyManager.set_ready(true)
+	LobbyManager.lobby_updated.connect(_on_host_lobby_updated)
+
+
+## Host-side lobby watcher: triggers game start as soon as the lobby
+## reports [code]can_start[/code] (both peers ready).
+func _on_host_lobby_updated(_data: Dictionary) -> void:
+	var lobby: LobbyState = LobbyManager.current_lobby
+	if lobby == null or not lobby.can_start():
+		return
+	if _host_started:
+		return
+	_host_started = true
+	LobbyManager.request_start_game()
 
 
 ## Wrapper around [code]get_tree().quit(code)[/code] for testability.
@@ -206,3 +345,4 @@ func _quit(code: int) -> void:
 	if not is_inside_tree():
 		return
 	get_tree().quit(code)
+

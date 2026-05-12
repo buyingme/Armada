@@ -145,7 +145,7 @@ func _mode_string() -> String:
 func _role_string() -> String:
 	if not PlayMode.is_network():
 		return "solo"
-	if NetworkManager.is_host():
+	if NetworkManager.is_server():
 		return "host"
 	return "client"
 

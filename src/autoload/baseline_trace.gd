@@ -47,6 +47,13 @@ var _header_written: bool = false
 ## expects. Cleared after use.
 var output_path_override: String = ""
 
+## Whether [signal CommandProcessor.command_executed] has been
+## subscribed.  Distinct from [member _file] != null so we can
+## subscribe early (during [method _ready]) but defer file-open
+## until the first command (when PlayMode / NetworkManager have
+## settled — see [method _maybe_enable] doc comment).
+var _connected: bool = false
+
 
 func _ready() -> void:
 	# The autoload is loaded unconditionally, but only opens a file
@@ -57,15 +64,34 @@ func _ready() -> void:
 
 ## Activates tracing if [member LoggingMode.enabled] is true.
 ## Idempotent; safe to call repeatedly.
+##
+## Live play note: this method is called once from [method _ready]'s
+## deferred kick, but at that point [PlayMode] and [NetworkManager]
+## are still in their pre-handshake state (HOT_SEAT / not host) — the
+## user has not yet clicked "Host Game" or "Join Game" in the main
+## menu.  Opening the file here would write all sessions to
+## [code]baseline_trace_hot_seat_solo.jsonl[/code] and the two GUI
+## instances in [code]run_network_test.sh --gui-host[/code] would
+## clobber each other.  So we connect the signal but defer the
+## actual file-open until [method _on_command_executed] sees its
+## first command — by then [signal EventBus.game_started] has fired,
+## [PlayMode] is settled, and each peer picks the right filename.
+##
+## [ReplayDriver] supplies [code]--baseline-output[/code] which makes
+## the path explicit and immune to this timing issue, so the
+## regression harness opens immediately and the captured trace lands
+## at the requested path no matter when the first command arrives.
 func _maybe_enable() -> void:
 	if not LoggingMode.enabled:
 		return
-	if _file != null:
-		return
-	_open_trace_file()
-	if _file == null:
+	if _connected:
 		return
 	CommandProcessor.command_executed.connect(_on_command_executed)
+	_connected = true
+	# Eager open only when an output path is supplied (replay driver
+	# path).  Live-play sessions defer until first command.
+	if not output_path_override.is_empty() and _file == null:
+		_open_trace_file()
 
 
 ## Opens the per-session trace file under [PathConfig.LOGS_DIR].
@@ -130,6 +156,11 @@ func _role_string() -> String:
 ## [member GameManager.current_game_state] (it has already been
 ## mutated by [method GameCommand.execute]).
 func _on_command_executed(command: GameCommand, _result: Dictionary) -> void:
+	# Live-play deferred open — see [method _maybe_enable] doc.  By
+	# the time the first command executes, PlayMode is settled and
+	# each peer picks its correct filename (host / client / solo).
+	if _file == null:
+		_open_trace_file()
 	if _file == null:
 		return
 	if not _header_written:

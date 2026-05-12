@@ -143,7 +143,17 @@ func bootstrap_game(default_scenario_id: String) -> void:
 			config["client_mode"] = true
 	else:
 		config = {"scenario_id": default_scenario_id}
+	# Phase L0.5b — replay driver may have pre-seeded a deterministic
+	# rng_seed from the replay file header.  Apply it now (hot-seat
+	# only; in network the seed comes from the host via the lobby
+	# game-config RPC and the replay driver runs in tandem rather than
+	# overriding).  Cleared on consumption so the next bootstrap is
+	# random again.
+	if ReplayDriver.pending_replay_seed != 0 and not PlayMode.is_network():
+		config["rng_seed"] = ReplayDriver.pending_replay_seed
+		ReplayDriver.pending_replay_seed = 0
 	start_new_game(config)
+
 
 
 ## Starts a new game with the given configuration.

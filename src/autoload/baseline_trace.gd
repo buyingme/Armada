@@ -40,6 +40,13 @@ var _file: FileAccess = null
 ## Whether the header line has been written yet.
 var _header_written: bool = false
 
+## When non-empty, overrides the auto-derived
+## [code]<LOGS_DIR>/baseline_trace_<mode>_<role>.jsonl[/code] path.
+## Set by [ReplayDriver] when invoked with [code]--baseline-output[/code]
+## so the trace file lands at the location the calling shell script
+## expects. Cleared after use.
+var output_path_override: String = ""
+
 
 func _ready() -> void:
 	# The autoload is loaded unconditionally, but only opens a file
@@ -66,19 +73,36 @@ func _maybe_enable() -> void:
 ## same scenario produces three distinct fixtures (hot-seat, network
 ## host, network client).
 func _open_trace_file() -> void:
-	var dir_path: String = PathConfig.LOGS_DIR
-	DirAccess.make_dir_recursive_absolute(dir_path)
-	var mode_str: String = _mode_string()
-	var role_str: String = _role_string()
-	_trace_file_path = "%s/%s" % [
-			dir_path,
-			FILENAME_FORMAT % [mode_str, role_str],
-	]
+	if output_path_override.is_empty():
+		var dir_path: String = PathConfig.LOGS_DIR
+		DirAccess.make_dir_recursive_absolute(dir_path)
+		var mode_str: String = _mode_string()
+		var role_str: String = _role_string()
+		_trace_file_path = "%s/%s" % [
+				dir_path,
+				FILENAME_FORMAT % [mode_str, role_str],
+		]
+	else:
+		_trace_file_path = output_path_override
+		var parent_dir: String = _trace_file_path.get_base_dir()
+		if not parent_dir.is_empty():
+			DirAccess.make_dir_recursive_absolute(parent_dir)
 	_file = FileAccess.open(_trace_file_path, FileAccess.WRITE)
 	if _file == null:
 		_log.warn("BaselineTrace: could not open %s" % _trace_file_path)
 		return
 	_log.info("BaselineTrace: writing %s" % _trace_file_path)
+
+
+## Flushes any pending data and closes the trace file.
+## Called by [ReplayDriver] before quitting to ensure the trace is
+## fully durable on disk before the process exits.  Idempotent.
+func flush_and_close() -> void:
+	if _file == null:
+		return
+	_file.flush()
+	_file.close()
+	_file = null
 
 
 ## Returns the deployment mode label used in the output filename:

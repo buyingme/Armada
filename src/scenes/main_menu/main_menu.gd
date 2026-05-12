@@ -40,9 +40,22 @@ var _menu_shown: bool = false
 
 
 func _ready() -> void:
+	# Phase L0.5b — replay-driver bypass.  When the game is launched
+	# with --replay, skip the splash + menu entirely and load the
+	# game board directly so [ReplayDriver] can begin submitting
+	# commands once [signal EventBus.game_started] fires.
+	if ReplayDriver.enabled:
+		call_deferred("_enter_game_board_for_replay")
+		return
 	_build_ui()
 	_start_splash_timer()
 	MusicManager.play("rebel_theme")
+
+
+## Replay-driver entry point: jump straight to the game board scene.
+func _enter_game_board_for_replay() -> void:
+	get_tree().change_scene_to_file(GAME_BOARD_PATH)
+
 
 
 ## Builds the entire UI tree in code: splash background, title text,

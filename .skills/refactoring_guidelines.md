@@ -15,6 +15,9 @@ not explicitly about refactoring.
 ## 1. Function Size — Hard Limit
 
 **Every function must be ≤ 30 lines** (excluding doc comments and blank lines).
+This is a code-body metric: never remove useful doc comments just to make a
+function appear shorter. If the documentation exposes that the function has
+multiple responsibilities, extract behaviour into helpers instead.
 
 When adding code to an existing function would push it over 30 lines:
 1. Extract the new logic into a well-named private helper.
@@ -190,6 +193,25 @@ var _game_board: GameBoard  # controller knows about its parent's type
 | 501–1000 | Yellow | Plan extraction at next opportunity |
 | > 1000 | Red | Must be addressed — file an extraction task |
 
+### Documentation and LOC ceilings
+
+File-level LOC thresholds are **refactoring triggers**, not a reason to delete
+valuable documentation. Do not remove docstrings or rationale comments merely to
+get under a raw `wc -l` target. If good documentation pushes a file over a
+ceiling, first ask whether behaviour belongs in an extracted helper/controller;
+if extraction is not practical in the current slice, preserve the documentation
+and record a focused follow-up.
+
+Prefer source comments and docstrings that explain:
+- why the code exists,
+- the contract callers rely on,
+- invariants that must remain true,
+- timing/network/replay failure modes that are easy to break.
+
+Avoid comments that only narrate obvious implementation steps. For complex
+network, replay, serialization, and modal-flow code, err toward keeping concise
+rationale near the code, with longer historical narrative in `docs/` or arc42.
+
 ### When adding code to a large file
 
 Before adding code to any file > 500 lines:
@@ -336,8 +358,9 @@ Always work phases in order. Never start phase N+1 until N is committed and gree
 ## 12. Phase K Quantified Targets (proposed 2026-05-08)
 
 When generating code while Phase K is active or pending, treat these as
-hard ceilings — do not regress them and prefer changes that move the
-metric toward target.
+structural ceilings for responsibilities and executable code growth. Do not
+regress them, but also do not satisfy them by deleting useful docstrings or
+rationale comments; preserve the documentation and extract behaviour instead.
 
 | Target | Limit |
 |---|---|

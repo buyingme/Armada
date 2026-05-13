@@ -433,6 +433,26 @@ sequence = identical game state. This is why:
 - No randomness occurs outside `GameRng`.
 - No side channel data (pixel positions, UI state) leaks into game logic.
 
+### 5.1.1 Phase L0.5 Replay Baseline Gate
+
+`scripts/run_baseline_traces.sh --all` is the local replay gate for
+Phase L/M and any replay, modal-lifecycle, command-submission, or network-flow
+change.
+
+- Hot-seat is deterministic: `BaselineTrace` JSONL and the final-state hash
+    must match committed fixtures under `tests/fixtures/baseline_traces/`.
+- Network uses a real two-process ENet host/client replay.  Per-command JSONL
+    and full final-state hashes are not stable across separate process runs
+    because packet timing can choose different valid command interleavings.  The
+    gate therefore checks the stable invariant available today: host and client
+    must end the same run with identical canonical `GameState.serialize()` hashes.
+- Do not create committed network command-trace or network state-hash fixtures
+    until the network command pump is deterministic across separate runs.
+- During `ReplayDriver` sessions, live auto `submit_publish_attack_flow()`
+    calls are suppressed because the replay file already contains the captured
+    `PublishAttackFlowCommand` entries; the replay file is the single command
+    source for the harness.
+
 ### 5.2 Replay-Safe Checklist
 
 When adding a new feature, verify:

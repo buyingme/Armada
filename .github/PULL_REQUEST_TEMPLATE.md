@@ -32,7 +32,7 @@
 
 ## Documentation
 
-- [ ] Doc comments updated for all public API
+- [ ] Doc comments updated for all public API; useful rationale was preserved rather than removed for raw LOC targets
 - [ ] arc42 docs updated (if architecture changed)
 - [ ] README updated (if applicable)
 

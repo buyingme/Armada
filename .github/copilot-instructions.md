@@ -44,6 +44,13 @@ func calculate_damage(results: Array[Dictionary]) -> int:
 func resolve_attack_effects(pool: Array[Dictionary]) -> Array[Dictionary]:
 ```
 
+Doc comments are part of maintainability. Prefer comments that explain why the
+code exists, caller contracts, invariants, source rules, and failure modes. Do
+not remove useful docstrings merely to satisfy raw file LOC targets; the
+30-line function limit excludes doc comments and blank lines. If documentation
+pushes a file over a ceiling, preserve the rationale and extract behaviour or
+record a focused follow-up.
+
 ### 3. Tests Are Mandatory
 
 - Every new class in `src/core/` or `src/models/` **must** have a corresponding test file
@@ -97,7 +104,7 @@ if round > Constants.MAX_ROUNDS:
 - ❌ (Phase I) Subscribing to `EventBus.interaction_state_changed` (signal removed in Phase I6) — subscribe to `EventBus.command_executed` and call `UIProjector.project()`.
 - ❌ (Phase I) Inferring activation/attack sub-step from local UI events — always read `state.interaction_flow.step_id`.
 - ❌ (Phase K) Any new `if PlayMode.is_network()` / `if PlayMode.is_hot_seat()` in `src/scenes/` or `src/ui/` — `UIProjector.project()` is the only PlayMode-aware code path outside `src/autoload/`. Run `scripts/lint_phase_k.sh` (added in slice K7) before every commit. See `docs/refactoring_phase_k_plan.md`.
-- ❌ (Phase K) Growing [game_board.gd](src/scenes/game_board/game_board.gd), [attack_executor.gd](src/scenes/game_board/attack_executor.gd), [game_manager.gd](src/autoload/game_manager.gd), or [save_game_manager.gd](src/autoload/save_game_manager.gd) past their Phase K LOC ceilings (2 000 / 1 500 / 1 500 / 700). New behaviour goes into a focused controller / RefCounted helper.
+- ❌ (Phase K) Growing [game_board.gd](src/scenes/game_board/game_board.gd), [attack_executor.gd](src/scenes/game_board/attack_executor.gd), [game_manager.gd](src/autoload/game_manager.gd), or [save_game_manager.gd](src/autoload/save_game_manager.gd) past their Phase K LOC ceilings (2 000 / 1 500 / 1 500 / 700). New behaviour goes into a focused controller / RefCounted helper. Do not meet LOC ceilings by deleting useful docstrings or rationale comments; file LOC is a refactoring trigger, not a documentation-cutting target.
 
 ### 8. Game Rules Must Be Cited
 
@@ -119,6 +126,19 @@ After editing source or test files, always run the full suite **and** the Phase 
 godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
 bash scripts/lint_phase_k.sh
 ```
+
+For Phase L/M work or any change touching modal lifecycle, replay,
+`GameReplay`, `ReplayDriver`, `BaselineTrace`, command submission, or
+network flow, also run:
+
+```bash
+bash scripts/run_baseline_traces.sh --all
+```
+
+This gate diffs the committed hot-seat trace/hash and verifies that a real
+two-process network replay ends with matching host/client state hashes. Do
+not add committed network command-trace or network state-hash fixtures until
+the network command pump is deterministic across separate runs.
 
 GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
 
@@ -160,8 +180,9 @@ When asked to implement a feature or fix a bug:
    bash scripts/lint_phase_k.sh
    ```
    The lint must report `0 violations` (allow-listed branches are fine). If it fails, fix before continuing — never silence it by editing the allow-list count without explicit approval.
-9. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
-10. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
+9. **Replay baseline gate** — For Phase L/M, modal lifecycle, replay, command-submission, or network-flow changes, run `bash scripts/run_baseline_traces.sh --all` and require it to pass.
+10. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
+11. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
 
 ## Architecture Quick Reference
 

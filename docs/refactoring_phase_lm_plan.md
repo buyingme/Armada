@@ -310,18 +310,38 @@ mutation.
 | Slice | Scope | Risk | LOC delta | MT? |
 |------:|---|---|---:|:---:|
 | **L0** | Audit snapshot. Inventory every direct-callback modal open/close in `src/scenes/game_board/` and `src/ui/` (start from the lint allow-list as the seed). Catalogue each as one of: lifecycle (must migrate), affordance (sequence button etc., needs a network-side equivalent or explicit suppression), or pure local UX (tooltip, banner — out of scope). Outcome: append `docs/modal_classification.md` §L-Inventory with line-cited table covering at minimum [`ship_activation_controller.gd`](../src/scenes/game_board/ship_activation_controller.gd) (activation + sequence-button), [`displacement_controller.gd`](../src/scenes/game_board/displacement_controller.gd) (`start()`), [`command_router_adapter.gd`](../src/scenes/game_board/command_router_adapter.gd) (current network projection routes), and the `_on_active_player_changed` content fork in [`game_board.gd`](../src/scenes/game_board/game_board.gd). **No code changes.** | trivial | 0 | no |
-| **L0.5** | **Baseline trace harness.** Reuse the existing `saves/annotations/` system as the oracle backbone: annotations already capture `(seq, command_type, flow.flow_type, flow.step_id, flow.controller_player)` per `command_executed`. Add a tiny logging-mode-gated subscriber under [`src/autoload/`](../src/autoload/) that, given the same scenario, writes a canonicalised JSONL projection of those fields to `PathConfig.LOGS_DIR/baseline_trace_<mode>_<role>.jsonl`. Run a fixed scenario (Learning Scenario rounds 1–2) in hot-seat, network host, and network client; commit the three traces under `tests/fixtures/baseline_traces/` as the regression oracle for L1–L5. New unit test `test_baseline_trace_format.gd` validates the JSONL schema. Each L slice ends by re-running the scenario and `diff`-ing against the oracle; non-trivial divergence blocks the slice. **No production code paths change.** | low | +120 / 0 | no |
+| **L0.5** | **Replay regression harness.** Reuse the existing `saves/annotations/` projection as the hot-seat oracle backbone: `BaselineTrace` writes `(seq, command_type, flow.flow_type, flow.step_id, flow.controller_player)` JSONL plus a canonical final-state hash for a fixed Learning Scenario R1-R2 replay. Hot-seat is deterministic and diffs both `baseline_trace_hot_seat_solo.jsonl` and `baseline_state_hash_hot_seat_solo.txt`. Network runs the same replay through a real two-process ENet host/client pair, writes diagnostic JSONL for each peer, and gates on host/client final-state-hash equality. It intentionally does **not** compare a committed network command trace or network state hash: localhost RPC timing can produce different valid command interleavings and final hashes while both peers remain synchronized. `ReplayDriver` suppresses live auto `publish_attack_flow` snapshots during replay because those commands are already captured in the replay file. New unit tests in `test_baseline_trace_format.gd` validate the JSONL schema and canonical hash serialization. Each L/M slice that touches modal/network/replay flow must run `bash scripts/run_baseline_traces.sh --all`. | low | +150 / 0 | no |
 | **L1** | Introduce `ModalRouter` ([`src/scenes/game_board/modal_router.gd`](../src/scenes/game_board/modal_router.gd), Node). Single subscriber to `EventBus.command_executed` that calls `UIProjector.project()` and dispatches to modal controllers via a typed `UIIntent`. Extract the network-side dispatch currently living in [`command_router_adapter.gd`](../src/scenes/game_board/command_router_adapter.gd) into the new router (the adapter becomes the network composition root). Hot-seat path still uses direct callbacks at this slice — `ModalRouter` runs in both modes but only network exercises its dispatch surface today. | medium | +250 / 0 | yes |
 | **L2** | Migrate **Activation modal** lifecycle to projection in hot-seat. Producer side: the dial-drop / activation entry stops calling `ShipActivationController.configure_and_open_activation_modal()` directly; instead the responsible `GameCommand.execute()` writes the `SHIP_ACTIVATION` step into `interaction_flow`, and `ModalRouter` opens the modal. Defect-anchor: closes the same source-of-truth class as bug 1 (activation-modal stale snapshot, `c673ef0`) — the projector recomputes `is_attack_skippable` on every command so the cached-callable workaround can later be removed. Removes the §3.1a `_on_command_executed_project_ui` modal-lifecycle dispatcher allow-list site in [`game_board.gd`](../src/scenes/game_board/game_board.gd). | high | +50 / −80 | yes |
 | **L3** | Migrate **Squadron-command activation modal** lifecycle (sequence button + squadron command modal) to projection. The hot-seat-only "sequence button" affordance becomes an `ENABLER` hook surfaced through `UIIntent.affordances`. Removes the §3.1a sequence-button-origin allow-list site (now owned by `ShipActivationController._show_activation_sequence_button`). | high | +60 / −80 | yes |
 | **L4** | Migrate **Displacement modal** lifecycle to projection in hot-seat. [`displacement_controller.gd`](../src/scenes/game_board/displacement_controller.gd) `start()` becomes an effect of `SQUADRON_DISPLACEMENT/DISPLACEMENT_PLACE`, opened by `ModalRouter`. Defect-anchor: closes the same source-of-truth class as bug 4 (`c673ef0`, RRG "Overlapping", p.8): once both modes consume `interaction_flow.controller_player`, no producer can derive it ad-hoc — `controller_player = 1 - maneuver_ship.owner_player` becomes the only path. Removes the §3.1a displacement-modal-origin allow-list site. | medium | +40 / −60 | yes |
 | **L5** | Migrate **`_on_active_player_changed` content fork** (the line-889 dispatcher in [`game_board.gd`](../src/scenes/game_board/game_board.gd), `_dispatch_active_player_change_dispatcher` after K13) to a single path: build the same overlay objects on both modes, then style them via `UIIntent` (`needs_handoff_overlay` vs. `needs_waiting_overlay`). Removes the last big lifecycle allow-list branch. | high | +70 / −110 | yes |
 | **L6** | Lint tightening: update `scripts/lint_phase_k.sh` allow-list from the current **11** sites to the post-L floor of **≤ 4** (save dialog, load dialog ×2, lobby room). Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7 Phase K bullet to document the new floor and reword the (Phase I) negative rules as enduring constraints. | low | +10 / −30 | no |
-| **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Compare logs side-by-side: every modal open/close should be triggered by the *same* `command_executed` sequence with the *same* projector intent on both peers and both modes. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
+| **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Use `bash scripts/run_baseline_traces.sh --all` as the automated pre-flight, then compare logs/UI behaviour side-by-side: modal open/close should be projected from the intended `interaction_flow` state on both peers and both modes, but exact network command-trace equality across separate runs is not required until the transport has a deterministic pump. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
 
-### 4.1a L0.5 trace-regeneration automation (proposal — REVISED v2)
+### 4.1a L0.5 replay-regression automation (implemented — REVISED v3)
 
-**Status:** proposal — awaiting approval. Implements real two-process
+**Status:** implemented 2026-05-13.  The approved approach was revised
+after real two-process runs showed that network command traces and even
+full final-state hashes are timing-dependent across separate executions.
+They are, however, peer-consistent within a run.  The implemented gate is
+therefore:
+
+1. **Hot-seat committed oracle:** JSONL trace diff + committed final-state
+   hash diff.
+2. **Network peer-equivalence oracle:** real ENet host/client replay, with
+   host and client required to produce identical final-state hashes in the
+   same run.  Per-peer JSONL traces remain diagnostic artifacts only.
+3. **Manual L7/MT coverage:** still required for visual/modal semantics and
+   for comparing intended projector behaviour across hot-seat and network.
+
+Do not add a committed network command-trace or network final-state-hash
+fixture until a deterministic network command pump exists.  A flapping
+network hash fixture is worse than no fixture: it burns time on valid packet
+timing differences and hides the useful invariant, which is peer equality.
+
+**Original design note (superseded where it conflicts with the status
+above).** Implements real two-process
 network replay because debugging network behaviour has been the
 single biggest cost source so far; the regression gate must cover
 network mode end-to-end.
@@ -331,9 +351,10 @@ network mode end-to-end.
      hot-seat **and** in network (host + client),
   2. Drives every command through the real production pipeline
      (validation, networking, broadcast, command-executed signal),
-  3. Writes one `baseline_trace_<mode>_<role>.jsonl` per peer,
-  4. Diffs each trace against the committed fixture and reports
-     non-trivial divergence with the offending `(seq, step_id)` row.
+  3. Writes one `baseline_trace_<mode>_<role>.jsonl` per peer plus a
+     sibling `.state_hash` file,
+  4. Diffs hot-seat outputs against committed fixtures and checks
+     network host/client state-hash equality.
 
 **Why this is feasible.** Investigation of the existing
 infrastructure shows the network plumbing is already complete:
@@ -414,8 +435,10 @@ parsed in a small `ReplayDriver` autoload (new file:
 
 ##### `BaselineTrace` — already in place
 
-Already writes per-peer `baseline_trace_<mode>_<role>.jsonl` to
-`PathConfig.LOGS_DIR`. No changes needed.
+Writes per-peer `baseline_trace_<mode>_<role>.jsonl` to
+`PathConfig.LOGS_DIR` and, under `ReplayDriver`, writes a sibling
+`.state_hash` file derived from canonical `GameState.serialize()` JSON.
+Hot-seat traces are committed oracles; network traces are diagnostics.
 
 ##### Orchestration script
 
@@ -429,8 +452,9 @@ fixture:
      network_host.json --baseline-output <tmp>/network_host.jsonl`)
      and headless client (`--connect 127.0.0.1:7350 --replay
      network_client.json --baseline-output
-     <tmp>/network_client.jsonl`). Wait for both to exit. `diff`
-     each against its fixture.
+     <tmp>/network_client.jsonl`). Wait for both to exit. Compare
+     `network_host.jsonl.state_hash` and `network_client.jsonl.state_hash`
+     for equality.
   3. Exit 0 if all diffs are empty; print unified diff and exit 1
      otherwise.
 
@@ -463,20 +487,21 @@ already there.
 
 **Challenge B — ordering and WAIT-state divergence.**
 
-Network mode's `WAIT_FOR_OPPONENT_DIALS` (and analogous waits)
-genuinely change the post-execute flow state on each peer. That is
-captured by writing **separate** fixtures per role:
-`baseline_trace_network_host.jsonl` and
-`baseline_trace_network_client.jsonl`. The diff is per-peer. A
-host-side bug where the WAIT step is missed shows up as a diff
-against the host fixture even if the client fixture is unchanged.
+Network mode's `WAIT_FOR_OPPONENT_DIALS` (and analogous waits) can
+genuinely change intermediate post-execute flow state on each peer, and
+real ENet timing can choose different valid interleavings across separate
+runs.  The harness therefore does not commit per-role network JSONL
+fixtures.  Instead, each network run writes per-peer diagnostic traces and
+checks the durable invariant: host and client must end that same run with
+the same canonical serialized state hash.
 
-The sync barrier (waiting for `command_executed` with the expected
-`sequence` before submitting the next own-command) ensures
-deterministic ordering across peers. Without this barrier, two
-client `assign_dials` could race a host `assign_dials` and produce
-inconsistent traces. With it, each peer advances only after the
-previous command has been globally committed.
+The sync barrier is sufficient to keep peers synchronized, but not
+sufficient to make the *entire network command stream* reproducible
+across separate process runs.  Real ENet timing can still choose a
+different valid interleaving between broadcast echoes, client-originated
+commands, and post-command auto-flow.  The implemented harness therefore
+checks the invariant we can trust today: both peers end a run with the
+same canonical serialized state.
 
 #### 4.1a.3 Risks and mitigations
 
@@ -484,7 +509,8 @@ previous command has been globally committed.
 |---|---|
 | `--replay` flag accidentally activated in a production user session | Flag is parsed only if explicitly passed; absent from every export preset; documented in `docs/setup_network_game.md`. `ReplayDriver._ready` early-returns when the flag is absent. |
 | Network process startup race (client connects before server is listening) | Mirror `run_network_test.sh`'s existing `sleep 1` between server-spawn and client-spawn. Client retries connect for up to 5 s; if it fails, exit non-zero with a clear message. Both are already proven patterns in the existing script. |
-| ENet localhost flakiness on CI | Run the shell-script gate locally before every L slice. Skip it in CI initially (only the GUT in-process hot-seat test runs in CI). Promote to CI in L7 once stability is established. |
+| ENet localhost command ordering varies across runs | Do not diff network JSONL or committed network state hashes. Gate network on host/client final-state-hash equality within the same run; keep JSONL as diagnostics. |
+| ENet localhost flakiness on CI | Run the shell-script gate locally before every L/M slice. Skip it in CI initially (only the GUT in-process hot-seat test runs in CI). Promote to CI only after the transport is deterministic enough for repeated headless runs. |
 | Per-command 5 s timeout too aggressive for some commands (e.g. squadron move animations) | The timeout measures *engine* sync, not *animation* completion — `command_executed` fires synchronously inside `CommandProcessor.submit`. Animations finish later but are not observed by the trace. 5 s is generous for engine sync. Bumpable per-test via `--replay-step-timeout`. |
 | Two peers reach `game_started` at different physics frames → step loop reads stale `interaction_flow` | The sync barrier (`command_executed` with expected `sequence`) makes the loop strictly synchronous. The driver never advances on its own clock; it advances only on observed broadcast. |
 | Capturing the initial network replay pair requires manual interaction (hands on keyboard for two windows) | Yes — one-time cost. From there on, all regression checks are headless. Capturing the hot-seat replay was already a one-time cost (already paid). |
@@ -508,20 +534,18 @@ Lands as three commits on the L0.5 branch:
      execution)` — driver + unit tests + integration test. Hot-seat
      fully automated.
   2. `feat(observability): L0.5c network replay path` — `--connect`
-     flag + `run_baseline_traces.sh` + capture initial network
-     fixture pairs.
+     flag + `run_baseline_traces.sh` + network peer-equivalence gate.
   3. `docs(plan): L0.5 automation outcome` — update §1 baseline,
      promote the GUT integration test to the post-slice
      regression-gate description in §4.1.
 
-**Sequencing requirement: capture network fixtures once, manually,
-before commit 2.** The user runs `./scripts/run_network_test.sh
---logging`, plays Learning Scenario rounds 1–2 once. The resulting
-`replays/replay_*.json` is committed as `replay_network_host.json`
-(the server's view contains both peers' commands), and the
-two `logs/baseline_trace_network_{host,client}.jsonl` files are
-committed as the per-peer fixtures. From that point on,
-`run_baseline_traces.sh` regenerates them headlessly.
+**Sequencing requirement:** the network `GameReplay` fixture is still
+captured manually once (`tests/fixtures/baseline_traces/replay_network.json`),
+because it represents the real Learning Scenario R1-R2 command stream.  Do
+not commit per-peer network JSONL traces or network state-hash fixtures until
+the transport is deterministic across separate process runs.  The current
+network gate regenerates diagnostic traces headlessly and compares only
+host/client final-state hashes within the same run.
 
 #### 4.1a.5 Decision points for approval
 
@@ -536,9 +560,9 @@ committed as the per-peer fixtures. From that point on,
 3. **Sync barrier is `command_executed` per expected `sequence`.**
    Alternative would be wall-clock pacing, which would be flaky on
    loaded CI. Rejected.
-4. **Network fixtures captured manually once.** Alternative is a
-   bootstrap mode that records as it goes, which is more code for
-   a one-time event. Rejected.
+4. **Network replay captured manually once; generated network traces/hashes
+   are diagnostic only.** Alternative is a committed network trace/hash oracle,
+   which was rejected because it flaps under valid ENet timing differences.
 5. **Shell-script gate runs locally; CI runs the hot-seat GUT
    integration test only.** Promote network to CI in L7 once
    stability is observed.
@@ -551,7 +575,8 @@ I implement in the three commits above.
 1. `bash scripts/lint_phase_k.sh` shows ≤ 4 allow-listed sites, none of them in `src/scenes/game_board/` for modal lifecycle (down from the current 11).
 2. A `match`-style audit of the modal-open call sites shows each modal type opens through `ModalRouter` exclusively, with no direct calls remaining.
 3. Test baseline: ≥ 144 scripts / ≥ 2 917 tests / 0 failures (current baseline preserved or grown).
-4. Manual test L7 confirms identical modal lifecycle traces between hot-seat and network, including regression coverage for `c673ef0`'s three lifecycle-anchored defects (displacement controller, activation-modal stale snapshot, brace canonical sort).
+4. `bash scripts/run_baseline_traces.sh --all` passes: hot-seat trace/hash match committed fixtures and network host/client final-state hashes are equal within the same run.
+5. Manual test L7 confirms modal lifecycle behaviour is equivalent between hot-seat and network, including regression coverage for `c673ef0`'s three lifecycle-anchored defects (displacement controller, activation-modal stale snapshot, brace canonical sort). Exact network command-trace equality across separate runs is not an acceptance criterion until a deterministic network pump exists.
 
 ---
 
@@ -672,8 +697,8 @@ autoloads and don't touch the lifecycle path.
 ### 7.2 Phase G4 unblocking
 
 Phases G4.7 (Spectator), G4.8 (Reconnection runtime), and G4.9 (Turn
-Timers) are currently gated on Phase K. They become *easier* on top of
-L+M because:
+Timers) originally depended on Phase K. With K complete, they should wait
+for L/M flow hardening because:
 
 - **Spectator** is a third "viewer" with no controller role. With
   FlowSpec describing controller resolution, spectator is just

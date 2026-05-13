@@ -252,6 +252,7 @@ var damage := _calculate_total_damage(dice_results)
 | Writing tests without assertion messages | Always add description parameter |
 | Functions >30 lines | Split into smaller functions |
 | Missing doc comments | Add `##` to all public API |
+| File LOC pressure | Extract behaviour; do not delete useful docstrings to satisfy raw line counts |
 | Using `if/elif` chains on enum values | Use `match` statements |
 
 ## GDScript Gotchas Learned in Development
@@ -291,12 +292,19 @@ Follow the **incremental delegation pattern** from
 4. Run tests after each step.
 5. Delete dead code last.
 
+LOC ceilings are a signal to extract responsibilities, not an instruction to
+strip documentation. Preserve docstrings that explain why/contract/invariant/
+failure modes, especially in network, replay, serialization, and modal-flow
+code. Move broad phase-history narrative to `docs/`, but keep concise rationale
+near the code it protects.
+
 ### Workflow
 
 1. **Run the automated test suite** and report the results (pass count, script count, failures).
-2. **Provide manual test steps** — specific actions the user should perform in the running game to verify the change visually/interactively. Be concrete: which scene to run, what to click, what should appear on screen.
-3. **Wait for user approval** — ask explicitly: *"Please run the manual tests above and confirm the results. Should I commit?"*
-4. **Only commit after the user confirms.** If the user reports a problem, fix it and repeat from step 1.
+2. **Run the replay baseline gate when applicable.** For Phase L/M work, modal lifecycle changes, replay/trace changes, command-submission changes, or network-flow changes, run `bash scripts/run_baseline_traces.sh --all`. It verifies the committed hot-seat trace/hash and network host/client final-state-hash equality. Do not add committed network command/hash fixtures until the network command pump is deterministic across separate runs.
+3. **Provide manual test steps** — specific actions the user should perform in the running game to verify the change visually/interactively. Be concrete: which scene to run, what to click, what should appear on screen.
+4. **Wait for user approval** — ask explicitly: *"Please run the manual tests above and confirm the results. Should I commit?"*
+5. **Only commit after the user confirms.** If the user reports a problem, fix it and repeat from step 1.
 
 ### What Manual Test Steps Should Cover
 

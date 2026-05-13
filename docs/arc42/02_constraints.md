@@ -24,6 +24,6 @@
 | Convention | Description |
 |------------|-------------|
 | CV-1: GDScript Style | Follow the official [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html). |
-| CV-2: Documentation | All public functions have doc comments (`##`). |
+| CV-2: Documentation | All public functions have doc comments (`##`). Useful docstrings are part of maintainability: they should explain contracts, invariants, rationale, source rules, and failure modes, and must not be removed merely to satisfy raw LOC targets. |
 | CV-3: Signal-Based Communication | Prefer signals over direct references for cross-system communication. |
 | CV-4: Resource Pattern | Game data (ships, squadrons, upgrades) is defined as Godot Resources. |

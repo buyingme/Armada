@@ -41,10 +41,19 @@ var _menu_shown: bool = false
 
 func _ready() -> void:
 	# Phase L0.5b — replay-driver bypass.  When the game is launched
-	# with --replay, skip the splash + menu entirely and load the
-	# game board directly so [ReplayDriver] can begin submitting
-	# commands once [signal EventBus.game_started] fires.
-	if ReplayDriver.enabled:
+	# with --replay in hot-seat mode, skip the splash + menu entirely
+	# and load the game board directly so [ReplayDriver] can begin
+	# submitting commands once [signal EventBus.game_started] fires.
+	#
+	# Network replays (--replay with --server or --connect) must NOT
+	# bypass: the lobby bootstrap drives the
+	# [signal LobbyManager.game_starting] → [code]_on_lobby_game_start[/code]
+	# chain which sets [code]PlayMode.NETWORK[/code], installs the
+	# correct command submitter, and only then changes scene.  If
+	# we bypass for the host it loads the board as a hot-seat solo
+	# game and the replay diverges before the client connects
+	# (L0.5c fix).
+	if ReplayDriver.enabled and not ReplayDriver.is_network_session():
 		call_deferred("_enter_game_board_for_replay")
 		return
 	_build_ui()
@@ -55,7 +64,6 @@ func _ready() -> void:
 ## Replay-driver entry point: jump straight to the game board scene.
 func _enter_game_board_for_replay() -> void:
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
-
 
 
 ## Builds the entire UI tree in code: splash background, title text,

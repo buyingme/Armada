@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-11 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **in progress**, K14 complete through K14g — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
+> Last updated: 2026-05-13 (Phase L0.5 replay regression gate closed; loaded persistent damage-card effect rebuild fix added — see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 144 |
-| GUT tests | 2 917 |
-| GUT asserts | 5 521 |
+| GUT test scripts | 146 |
+| GUT tests | 2 933 |
+| GUT asserts | 5 567 |
 | Failing tests | 0 |
-| Last commit | `9a43860` (K15 function-size cleanup pass on attack_executor.gd; K14 remains complete through `33e697f`) |
+| Last commit | Current commit: L0.5 replay gate and loaded persistent damage-card effect fix |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -28,6 +28,17 @@ Runtime invariants:
 - Hot-seat and network use the same command path through a `CommandSubmitter`
   strategy; no parallel network channel.
 - Deterministic replay via `GameRng` + `GameReplay` works in both modes.
+- Phase L0.5 replay gate: `bash scripts/run_baseline_traces.sh --all` diffs
+  the committed hot-seat trace/hash and verifies real two-process network
+  host/client final-state-hash equality.  Network JSONL is diagnostic only;
+  no committed network trace/hash fixture until the transport is deterministic
+  across separate runs.
+
+Verification note: the 2026-05-13 full GUT summary is green
+(146 / 2 933 / 5 567, 0 failures), but Godot 4.5.1 aborted after the summary
+with `recursive_mutex lock failed` / exit 134.  The failing save/load test from
+the first full run passed in isolation (24 / 24); track the post-summary abort
+separately if it persists outside this slice.
 
 ---
 
@@ -77,20 +88,38 @@ Runtime invariants:
 | G4.5 Lobby System | ✅ |
 | G4.6 Chat System | ✅ |
 | G4.6.5 Network Game Wiring | ✅ (largely subsumed by Phase I) |
-| **G4.7 Spectator Mode** | ⏳ pending — gated on Phase K |
-| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented; gated on Phase K |
-| **G4.9 Turn Timers** | ⏳ pending — gated on Phase K |
+| **G4.7 Spectator Mode** | ⏳ pending — post-K multiplayer hardening |
+| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented |
+| **G4.9 Turn Timers** | ⏳ pending — post-K multiplayer hardening |
 | G4.10 Dedicated Server Binary | ✅ |
 
 ### Refactoring — Phase K (Presentation-Layer Hardening)
 
-Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
+Completed 2026-05-13. Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
 - Eliminate the **18** modal-authority `if PlayMode.is_*` branches across 5 files in `src/scenes/game_board/` (Phase I rule §7). 5 further session-mode discriminators in save/load + lobby flow are allow-listed.
 - Decompose `game_board.gd` (3 055 LOC), `attack_executor.gd` (2 475 LOC), `game_manager.gd` (2 241 LOC), `save_game_manager.gd` (1 061 LOC) into focused controllers / RefCounted helpers.
+- Treat LOC ceilings as extraction triggers, not documentation-cutting targets:
+  keep comments that explain contracts, invariants, and replay/network/modal
+  failure modes; extract behaviour when raw file length becomes uncomfortable.
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **IN PROGRESS** — K0 through K13 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a committed `454fd0e`: extracted core `AttackFlowExecutor` payload builders and added `test_attack_flow_executor.gd`. K14b committed `c6b4b67`: extracted attack-state init/reset/roll/defense-payload helpers and delegated corresponding `AttackExecutor` call sites. K14c committed `1559fc4`: extracted defense-commit canonical ordering and queue initialization helpers. K14d committed `54df444`: extracted defense-queue polling + faceup-card counting and delegated corresponding scene-layer paths. K14e committed `06438e7`: extracted first-faceup decision + damage-summary construction and delegated corresponding scene-layer helpers. K14f committed `d99ca32`: extracted redirect-continuation decision. K14g committed `33e697f`: extracted faceup-card preparation and immediate-effect flow decision into `AttackFlowExecutor` pure helpers, delegated corresponding `AttackExecutor` call sites, and expanded `test_attack_flow_executor.gd`. K14 is complete; K15 (remaining `attack_executor.gd` size/nesting cleanup) is next.
+Status: **COMPLETE** — K0 through K15 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a committed `454fd0e`: extracted core `AttackFlowExecutor` payload builders and added `test_attack_flow_executor.gd`. K14b committed `c6b4b67`: extracted attack-state init/reset/roll/defense-payload helpers and delegated corresponding `AttackExecutor` call sites. K14c committed `1559fc4`: extracted defense-commit canonical ordering and queue initialization helpers. K14d committed `54df444`: extracted defense-queue polling + faceup-card counting and delegated corresponding scene-layer paths. K14e committed `06438e7`: extracted first-faceup decision + damage-summary construction and delegated corresponding scene-layer helpers. K14f committed `d99ca32`: extracted redirect-continuation decision. K14g committed `33e697f`: extracted faceup-card preparation and immediate-effect flow decision into `AttackFlowExecutor` pure helpers, delegated corresponding `AttackExecutor` call sites, and expanded `test_attack_flow_executor.gd`. K15 completed the remaining `attack_executor.gd` size/nesting cleanup pass.
+
+### Refactoring — Phase L/M (Modal Lifecycle + Flow Authority)
+
+Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Goals:
+- Phase L removes the remaining modal-lifecycle PlayMode branches by routing
+  hot-seat and network through `UIProjector` + `ModalRouter`.
+- Phase M promotes the flow/step model into a declarative `FlowSpec` / rule
+  registry surface.
+- Phase L0.5 adds the replay regression gate used by all L/M slices.
+
+Status: **IN PROGRESS** — L0.5 replay regression gate is complete.  The gate is:
+- Hot-seat: committed JSONL trace + committed final-state hash.
+- Network: real two-process ENet replay; host/client final-state hashes must
+  match within the same run.  Network command traces and network final hashes
+  are diagnostic only until a deterministic network pump exists.
 
 ---
 
@@ -464,14 +493,14 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase K — Presentation-Layer Hardening** *(in progress; K0 + K1 done — commits `664d368`, `0e0b3c9`)* — see [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Decomposes `game_board.gd` / `attack_executor.gd` / `game_manager.gd` / `save_game_manager.gd`, eliminates the **18** modal-authority `if PlayMode.is_*` branches in `src/scenes/game_board/` (5 session-mode sites allow-listed), extends `UIProjector` + `InteractionFlow` tests, lands `scripts/lint_phase_k.sh`. **In progress before resuming feature work.**
+1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L0.5 replay gate complete)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI
 5. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
 6. **Terrain / Obstacles** — geometry system extension
 7. **Objectives** — scenario-variant scoring
-8. **Multiplayer (full release)** — depends on G4.7–G4.9 + auto-save (post-K)
+8. **Multiplayer (full release)** — depends on G4.7–G4.9, auto-save, and L/M flow hardening
 
 ---
 

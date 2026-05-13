@@ -51,6 +51,16 @@ Every public class, function, signal, and exported variable **must** have a doc 
 static func calculate_damage(results: Array[Dictionary]) -> int:
 ```
 
+Good doc comments explain the contract, rationale, invariants, source rules, or
+failure modes that future maintainers need. They should not merely restate the
+next line of code. Long doc comments are acceptable for complex network,
+replay, serialization, and modal-flow code when they preserve non-obvious
+context; move broad historical narrative to `docs/` or arc42.
+
+Do not remove useful doc comments to satisfy raw file LOC targets. The 30-line
+function limit excludes doc comments and blank lines; if documentation makes a
+file feel too large, prefer extracting behaviour over cutting rationale.
+
 ### Class-level Documentation
 
 Every script file must start with a doc comment block:

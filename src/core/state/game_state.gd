@@ -22,8 +22,9 @@ var initiative_player: int = 0
 ## The selected objective cards for this game.
 var objectives: Dictionary = {}
 
-## Central registry for all active gameplay effects (keywords, upgrades, etc.).
-## Created on [method initialize]; lives here so it travels with the game state.
+## Central runtime registry for active gameplay effects (keywords, upgrades,
+## persistent damage cards, etc.).  Created on [method initialize] and rebuilt
+## after deserialize because effect hook objects are transient runtime state.
 ## Rules Reference: "Effect Use and Timing", RRG p.5; ET-001–004.
 var effect_registry: EffectRegistry = null
 
@@ -152,6 +153,6 @@ static func deserialize(data: Dictionary) -> GameState:
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
 	else:
 		state.interaction_flow = InteractionFlow.new()
-	# Transient runtime cache — rebuilt on load (Phase J2).
+	# Transient runtime cache — rebuilt by GameManager.start_new_game_from_state.
 	state.effect_registry = EffectRegistry.new()
 	return state

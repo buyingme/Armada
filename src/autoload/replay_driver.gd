@@ -98,7 +98,7 @@ func _ready() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	var replay_path: String = _flag_value(args, "--replay")
 	if replay_path.is_empty():
-		return  # No --replay flag → autoload is inert.
+		return # No --replay flag → autoload is inert.
 	enabled = true
 	_baseline_output = _flag_value(args, "--baseline-output")
 	_connect_target = _flag_value(args, "--connect")
@@ -158,6 +158,17 @@ func _is_server_session() -> bool:
 	return false
 
 
+## Returns [code]true[/code] when this replay session is running as a
+## network host ([code]--server[/code]) or as a network client
+## ([code]--connect[/code]).  Consumed by [MainMenu] to decide whether
+## to bypass the splash/lobby and jump straight to the game board:
+## hot-seat replays do, network replays do not (the lobby bootstrap
+## must run so both peers transition into the board scene via the
+## standard [signal LobbyManager.game_starting] path).
+func is_network_session() -> bool:
+	return _is_server_session() or not _connect_target.is_empty()
+
+
 ## Instance wrapper around [method parse_flag] for the
 ## [code]_ready[/code] hot path.
 func _flag_value(args: PackedStringArray, flag: String) -> String:
@@ -191,11 +202,40 @@ func _run_step_loop() -> void:
 		var cmd_data: Dictionary = _replay.commands[_observed_count]
 		var ok: bool = await _execute_step(cmd_data)
 		if not ok:
-			return  # _quit already called.
+			return # _quit already called.
 	_log.info("ReplayDriver: replay exhausted (%d commands)." %
 			_observed_count)
+	# Network host: give the client a moment to observe the final
+	# broadcast-echoed command (and to flush its own trace) before we
+	# tear down ENet; otherwise the client times out on the last
+	# remote command and never writes the closing trace line.
+	if _is_server_session():
+		await _drain_network_peers()
+	# Final-state hash gate (Phase L0.5).  Compute *before*
+	# flush_and_close so the trace file's parent dir is guaranteed
+	# present; both peers write the hash as a sibling .state_hash
+	# file which the regression harness compares for host/client
+	# equality (the per-command JSONL diff is unstable in
+	# network mode; see baseline_trace.gd:write_final_state_hash).
+	BaselineTrace.write_final_state_hash(GameManager.current_game_state)
 	BaselineTrace.flush_and_close()
 	_quit(EXIT_OK)
+
+
+## Network host: wait until all connected peers disconnect (they quit
+## once their own replay exhausts) or a hard timeout elapses.  Keeps
+## the host's ENet pump running so outbound broadcasts complete.
+func _drain_network_peers() -> void:
+	const DRAIN_TIMEOUT_MS: int = 5000
+	var deadline: int = Time.get_ticks_msec() + DRAIN_TIMEOUT_MS
+	while Time.get_ticks_msec() < deadline:
+		var peers: PackedInt32Array = (
+				multiplayer.get_peers() if multiplayer else PackedInt32Array())
+		if peers.is_empty():
+			_log.info("ReplayDriver: all peers disconnected — draining done.")
+			return
+		await get_tree().process_frame
+	_log.warn("ReplayDriver: drain timeout — peers still connected.")
 
 
 ## Executes one cursor position.  If the command at the current
@@ -207,33 +247,73 @@ func _run_step_loop() -> void:
 func _execute_step(cmd_data: Dictionary) -> bool:
 	var snapshot: int = _observed_count
 	var is_local: bool = _is_local_command(cmd_data)
-	if is_local:
-		# Give the running auto-flow / inbound RPC one extra frame to
-		# fire so we don't double-submit a prefix command.
-		await get_tree().process_frame
-		if _observed_count > snapshot:
-			return true  # auto-flow / remote already advanced the cursor.
-		var cmd: GameCommand = GameCommand.deserialize(cmd_data)
-		if cmd == null:
-			_log.error("ReplayDriver: deserialize failed: %s" % cmd_data)
-			_quit(EXIT_DESERIALIZE_FAIL)
-			return false
-		CommandProcessor.submit(cmd)
-	# Wait for the cursor to advance past `snapshot` — either via
-	# the submit above (hot-seat: synchronous), an auto-flow firing,
-	# or a remote broadcast echo (network).
+	var ok: bool = await _submit_local_step(cmd_data, snapshot, is_local)
+	if not ok:
+		return false
+	if _observed_count > snapshot:
+		return true
+	return await _wait_for_step_advance(cmd_data, snapshot, is_local)
+
+
+func _submit_local_step(cmd_data: Dictionary,
+		snapshot: int,
+		is_local: bool) -> bool:
+	if not is_local:
+		return true
+	# Give the running auto-flow / inbound RPC one extra frame to
+	# fire so we don't double-submit a prefix command.
+	await get_tree().process_frame
+	if _observed_count > snapshot:
+		return true
+	var cmd: GameCommand = GameCommand.deserialize(cmd_data)
+	if cmd == null:
+		_log.error("ReplayDriver: deserialize failed: %s" % cmd_data)
+		_quit(EXIT_DESERIALIZE_FAIL)
+		return false
+	GameManager.get_command_submitter().submit(cmd)
+	return true
+
+
+func _wait_for_step_advance(cmd_data: Dictionary,
+		snapshot: int,
+		is_local: bool) -> bool:
 	var deadline_ms: int = Time.get_ticks_msec() + _step_timeout_ms
 	while _observed_count <= snapshot:
+		if _is_graceful_client_eof(snapshot, is_local):
+			_mark_graceful_client_eof(cmd_data, snapshot)
+			return true
 		if Time.get_ticks_msec() > deadline_ms:
-			_log.error(
-					"ReplayDriver: timeout waiting for command_executed "
-					+ "(cursor=%d, type=%s, is_local=%s)"
-					% [snapshot, str(cmd_data.get("type", "?")),
-					str(is_local)])
-			_quit(EXIT_TIMEOUT)
+			_fail_step_timeout(cmd_data, snapshot, is_local)
 			return false
 		await get_tree().process_frame
 	return true
+
+
+func _is_graceful_client_eof(snapshot: int, is_local: bool) -> bool:
+	return is_local \
+			and snapshot == _replay.commands.size() - 1 \
+			and PlayMode.is_network() \
+			and not _is_server_session() \
+			and (NetworkManager.connection_state
+					== NetworkManager.ConnectionState.DISCONNECTED)
+
+
+func _mark_graceful_client_eof(cmd_data: Dictionary, snapshot: int) -> void:
+	_log.info(
+			"ReplayDriver: server closed connection on final local command "
+			+"(cursor=%d, type=%s); graceful EOF (sync-gate held broadcast)."
+			% [snapshot, str(cmd_data.get("type", "?"))])
+	_observed_count = snapshot + 1
+
+
+func _fail_step_timeout(cmd_data: Dictionary,
+		snapshot: int,
+		is_local: bool) -> void:
+	_log.error(
+			"ReplayDriver: timeout waiting for command_executed "
+			+"(cursor=%d, type=%s, is_local=%s)"
+			% [snapshot, str(cmd_data.get("type", "?")), str(is_local)])
+	_quit(EXIT_TIMEOUT)
 
 
 ## Returns whether this peer is responsible for submitting
@@ -292,7 +372,7 @@ func _start_network_client() -> void:
 func _connect_host() -> String:
 	var idx: int = _connect_target.rfind(":")
 	if idx <= 0:
-		return _connect_target  # no port supplied — caller will use default
+		return _connect_target # no port supplied — caller will use default
 	return _connect_target.substr(0, idx)
 
 
@@ -308,9 +388,24 @@ func _connect_port() -> int:
 	return ServerMain.DEFAULT_PORT
 
 
-## Client-side: handshake completed, set ready in the lobby so the
-## host can start the game.
+## Client-side: handshake completed.  At this point the server has
+## accepted the peer but the lobby-state broadcast (which populates
+## [member LobbyManager.current_lobby] on the client) has not yet
+## arrived, so calling [method LobbyManager.set_ready] now would be
+## a no-op (the early-return on null [code]current_lobby[/code]).
+## Wait for the first [signal LobbyManager.lobby_updated] instead.
 func _on_client_handshake_accepted(_player_index: int) -> void:
+	if LobbyManager.current_lobby != null:
+		LobbyManager.set_ready(true)
+		return
+	LobbyManager.lobby_updated.connect(
+			_on_client_lobby_updated_once, CONNECT_ONE_SHOT)
+
+
+## Fires once on the first client-side [signal LobbyManager.lobby_updated]
+## after handshake acceptance; readies the local player so the host
+## can [method LobbyManager.request_start_game].
+func _on_client_lobby_updated_once(_data: Dictionary) -> void:
 	LobbyManager.set_ready(true)
 
 
@@ -345,4 +440,3 @@ func _quit(code: int) -> void:
 	if not is_inside_tree():
 		return
 	get_tree().quit(code)
-

@@ -47,6 +47,26 @@ func _make_squadron(key: String, owner: int) -> SquadronInstance:
 	return inst
 
 
+func _make_blinded_gunners_card() -> DamageCard:
+	var card: DamageCard = DamageCard.new()
+	card.effect_id = "blinded_gunners"
+	card.title = "Blinded Gunners"
+	card.trait_type = "Crew"
+	card.timing = "persistent"
+	card.effect_text = "While attacking, you cannot spend accuracy icons."
+	card.is_faceup = true
+	return card
+
+
+func _accuracy_spend_cancelled(
+		registry: EffectRegistry,
+		attacker: ShipInstance) -> bool:
+	var context: EffectContext = EffectContext.new()
+	context.attacker = attacker
+	registry.resolve_hook(&"ATTACK_SPEND_ACCURACY", context)
+	return context.cancelled
+
+
 func _make_populated_state() -> GameState:
 	var gs: GameState = GameState.new()
 	gs.initialize()
@@ -219,6 +239,30 @@ func test_start_new_game_from_state_registers_squadron_keywords() -> void:
 			break
 	assert_true(has_bomber,
 			"BomberEffect should be registered for the X-wing on load")
+	GameManager.current_game_state = prev_state
+	GameManager.is_game_active = prev_active
+
+
+func test_start_new_game_from_state_registers_faceup_damage_effects() -> void:
+	var gs: GameState = _make_populated_state()
+	var damaged_ship: ShipInstance = gs.player_states[0].ships[1]
+	damaged_ship.add_faceup_damage(_make_blinded_gunners_card())
+	var restored: GameState = GameState.deserialize(gs.serialize())
+	restored.effect_registry = EffectRegistry.new()
+	var restored_ship: ShipInstance = restored.player_states[0].ships[1]
+	assert_false(_accuracy_spend_cancelled(
+			restored.effect_registry, restored_ship),
+			"Precondition: deserialized state should start with no runtime hooks")
+	var prev_state: GameState = GameManager.current_game_state
+	var prev_active: bool = GameManager.is_game_active
+	GameManager.start_new_game_from_state(restored, "x")
+	var registry: EffectRegistry = GameManager.current_game_state.effect_registry
+	var effects: Array[GameEffect] = registry.get_effects_for_hook(
+			&"ATTACK_SPEND_ACCURACY")
+	assert_eq(effects.size(), 1,
+			"Loaded faceup Blinded Gunners should register its hook")
+	assert_true(_accuracy_spend_cancelled(registry, restored_ship),
+			"Loaded Blinded Gunners should block accuracy spending")
 	GameManager.current_game_state = prev_state
 	GameManager.is_game_active = prev_active
 

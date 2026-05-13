@@ -1835,20 +1835,15 @@ func _draw_next_damage_card(index: int,
 	return card
 
 ## Post-processes a faceup damage card after the command has added it.
-## Registers persistent effects, emits events, and defers immediates.
+## Emits faceup-card events and defers immediate effects.
 ## Uses AttackFlowExecutor pure helper to determine card properties.
-## Does NOT mutate game state — the card is already on the ship.
+## Does NOT mutate game state — the card and any persistent hooks are
+## already applied by [ResolveDamageCommand].
 func _post_process_faceup_card(card: DamageCard,
 		def_inst: ShipInstance) -> void:
 	# Use pure helper to determine card properties.
 	var card_info: Dictionary = _flow_executor.prepare_faceup_card(
 			card, _damage_dealer)
-
-	# Register persistent effect if needed.
-	if _effect_registry and card_info.get("should_register_persistent", false):
-		DamageCardEffectFactory.register_effect(
-				card, def_inst, _effect_registry)
-		_log.info("Persistent effect registered for '%s'." % card.title)
 
 	# Always emit card events.
 	EventBus.damage_card_flipped.emit(def_inst, card, true)

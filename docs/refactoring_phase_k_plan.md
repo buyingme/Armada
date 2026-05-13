@@ -49,6 +49,13 @@ no new gameplay behaviour.
 | K-G7 | Test baseline maintained: 0 failing tests at every commit; `godot --headless --import` clean. |
 | K-G8 | All sliced commits keep manual-test gate (per `.skills/copilot_instructions.md`). |
 
+LOC goals are architectural pressure signals, not documentation-cutting targets.
+The 30-line function cap excludes doc comments and blank lines; file-level LOC
+ceilings should be addressed by extracting behaviour, not by deleting rationale.
+Keep comments that explain contracts, invariants, timing hazards, replay/network
+failure modes, or source-rule context. Move broad phase history to `docs/` or
+arc42 when it outgrows the local source comment.
+
 ### 2.2 Non-Goals
 
 - No new gameplay features. No rules changes.

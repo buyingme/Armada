@@ -155,7 +155,6 @@ func bootstrap_game(default_scenario_id: String) -> void:
 	start_new_game(config)
 
 
-
 ## Starts a new game with the given configuration.
 ## [param config] — optional settings:
 ##   [code]"rng_seed"[/code] (int) — deterministic RNG seed.  If 0 or
@@ -213,20 +212,12 @@ func start_new_game_from_state(
 		return
 	CommandProcessor.reset()
 	current_game_state = state
-	if current_game_state.effect_registry == null:
-		current_game_state.effect_registry = EffectRegistry.new()
-	# Squadron keyword effects (Bomber, Escort, Swarm, …) are NOT
-	# serialized — `GameState.deserialize` rebuilds the registry empty.
-	# Re-register them now so loaded saves work even when the load lands
-	# outside the Squadron Phase (e.g. mid–Ship Phase, where
-	# `_begin_squadron_phase` won't run until the next round).
-	# Without this, e.g. an X-wing's Bomber crit deals 0 damage on
-	# squadron-vs-ship attacks issued under a Squadron command in the
-	# very first activation after the load.
-	if current_game_state.effect_registry.get_effect_count() == 0:
-		EffectFactory.register_squadron_keywords(
-				current_game_state,
-				current_game_state.initiative_player)
+	# Runtime effect hooks are transient; rebuild them from serialized
+	# state so loaded games immediately honor squadron keywords and
+	# persistent faceup damage cards such as Blinded Gunners.
+	EffectFactory.rebuild_runtime_effects(
+			current_game_state,
+			current_game_state.initiative_player)
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
 	is_game_active = true
@@ -1025,16 +1016,10 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 	return _submitter.submit(cmd)
 
 
-## Submits a [PublishAttackFlowCommand] that broadcasts the current
-## attack [InteractionFlow] snapshot to all peers.  Phase I6b-3 fix:
-## restores the attack-flow replication that was previously carried by
-## the legacy [code]NetworkInteractionState[/code] channel (deleted in
-## I6c) so the defender's [UIProjector] can detect
-## [constant Constants.InteractionStep.ATTACK_DEFENSE_TOKENS].
-##
-## In hot-seat mode this is a no-op:  the local FSM has already mutated
-## [member GameState.interaction_flow], the command would be redundant,
-## and skipping it keeps replays free of synthetic snapshot entries.
+## Submits the current attack [InteractionFlow] snapshot to network peers.
+## Hot-seat skips this because the local FSM already mutated the flow;
+## replay-driver sessions skip it because captured [PublishAttackFlowCommand]
+## entries are replayed directly as the single command source.
 ##
 ## [param flow] — the freshly-mutated [InteractionFlow] (typically
 ##     [code]GameManager.current_game_state.interaction_flow[/code]).
@@ -1043,6 +1028,8 @@ func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary
 func submit_publish_attack_flow(flow: InteractionFlow,
 		submitting_player: int = -1) -> Dictionary:
 	if not current_game_state or flow == null:
+		return {}
+	if ReplayDriver.enabled:
 		return {}
 	if not PlayMode.is_network():
 		return {}

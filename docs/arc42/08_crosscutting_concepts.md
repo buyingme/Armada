@@ -77,7 +77,45 @@ pretty-printed JSON. Debug keybinds: **F5** quicksave, **F8** quickload
 (debug mode only). Ship/squadron template re-association after load is
 the caller's responsibility via `AssetLoader` look-ups.
 
+### 8.6.1 Replay Regression Gates
+
+Phase L0.5 adds an opt-in replay regression harness for modal and
+network refactoring work:
+
+- `ReplayDriver` is an autoload activated only by `--replay <path>`.
+  It loads a `GameReplay`, seeds the match, drives commands through the
+  active `CommandSubmitter`, and exits non-zero on replay failure.
+- `BaselineTrace` writes a diagnostic JSONL projection of
+  `(seq, command_type, flow_type, step_id, controller_player)` plus a
+  sibling `.state_hash` file derived from canonical `GameState.serialize()`
+  JSON.
+- Hot-seat replay is deterministic.  `scripts/run_baseline_traces.sh
+  --hot-seat` diffs both the JSONL trace and final-state hash against
+  committed fixtures in `tests/fixtures/baseline_traces/`.
+- Network replay uses the real two-process ENet host/client path.  Valid
+  localhost packet timing can produce different command interleavings
+  across runs, so network JSONL is diagnostic only.  The automated gate
+  requires host and client to finish the same run with identical
+  final-state hashes.
+- During replay sessions, live auto-publishing of attack-flow snapshots is
+  suppressed because the replay file already contains the captured
+  `PublishAttackFlowCommand` entries.  This keeps the replay file as the
+  single source of commands while preserving the production command and
+  network submitter paths.
+
+For Phase L/M slices that touch modal lifecycle, replay, or network flow,
+`bash scripts/run_baseline_traces.sh --all` is a required local gate in
+addition to GUT and `scripts/lint_phase_k.sh`.
+
 ## 8.7 Code Organization
+
+Refactoring metrics are used to keep responsibilities small and testable. The
+30-line function cap excludes doc comments and blank lines. File-level LOC
+ceilings are extraction triggers: do not delete useful docstrings or rationale
+comments just to reduce raw line counts. For complex network, replay,
+serialization, and modal-flow code, concise source-level rationale is preferred;
+full historical narrative belongs in this architecture documentation or the
+phase plan.
 
 ```
 src/

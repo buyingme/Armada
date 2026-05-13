@@ -225,11 +225,27 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs 
 bash scripts/lint_phase_k.sh
 ```
 
+For Phase L/M work, or any change touching modal lifecycle, replay,
+`GameReplay`, `ReplayDriver`, `BaselineTrace`, command submission, or
+network flow, also run the replay baseline gate:
+
+```bash
+bash scripts/run_baseline_traces.sh --all
+```
+
+This gate has two parts:
+- Hot-seat: committed JSONL trace diff + committed final-state hash diff.
+- Network: real two-process ENet replay; host/client final-state hashes must
+    match within the same run.  Do not add a committed network command trace or
+    committed network state-hash fixture until the network command pump is
+    deterministic across separate runs.
+
 Requirements before any commit:
 - ✅ 0 failures
 - ✅ Total test count matches expectation (no silent drops)
 - ✅ No `Parse Error:` in output
 - ✅ `lint_phase_k.sh` exits 0 and reports `0 violations` (allow-listed branches are fine; **never** silence the lint by editing the allow-list count without explicit user approval)
+- ✅ `run_baseline_traces.sh --all` passes for Phase L/M, modal, replay, command-submission, or network-flow changes
 - ✅ Implementation plan updated if a phase task was completed
 
 ### Manual Test Gate (Mandatory)

@@ -9,7 +9,8 @@
 ##   Within each player group the player chooses order; for automated
 ##   resolution we use registration order as a stable fallback.
 ##
-## The registry lives on [GameState] so it travels with the game.
+## The registry lives on [GameState] for runtime hook resolution, but is not
+## serialized.  Load paths rebuild it from authoritative serialized entities.
 ##
 ## Rules Reference: "Effect Use and Timing", RRG p.5; ET-001–004.
 class_name EffectRegistry

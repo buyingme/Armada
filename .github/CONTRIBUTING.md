@@ -72,7 +72,7 @@ refactor(models): extract ship stats into ShipData resource
 A feature/fix is considered done when:
 
 - [ ] Code is implemented and follows the GDScript style guide
-- [ ] All doc comments (`##`) are present for public API
+- [ ] All doc comments (`##`) are present for public API and explain useful contracts, invariants, rationale, rules, or failure modes
 - [ ] Unit tests pass (≥80% coverage for core logic)
 - [ ] Integration tests pass for affected systems
 - [ ] No new warnings or errors in the Godot console
@@ -107,7 +107,7 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
 ## Code Review Checklist
 
 - [ ] Code follows GDScript style guide
-- [ ] Functions have doc comments
+- [ ] Functions have useful doc comments; raw LOC pressure was handled by extraction, not by deleting rationale
 - [ ] No hardcoded values (use Constants)
 - [ ] Signals used for cross-system communication (via EventBus)
 - [ ] Core logic doesn't depend on scene tree

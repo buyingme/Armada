@@ -44,8 +44,8 @@ func _make_state(flow_type: int, step_id: int,
 		controller: int) -> GameState:
 	var state: GameState = GameState.new()
 	state.interaction_flow = InteractionFlow.new()
-	state.interaction_flow.flow_type = flow_type
-	state.interaction_flow.step_id = step_id
+	state.interaction_flow.flow_type = flow_type as Constants.InteractionFlow
+	state.interaction_flow.step_id = step_id as Constants.InteractionStep
 	state.interaction_flow.controller_player = controller
 	return state
 
@@ -163,3 +163,34 @@ func test_record_round_trips_through_json() -> void:
 			"command_type should survive JSON round-trip")
 	assert_eq(int(dict["seq"]), 11,
 			"seq should survive JSON round-trip")
+
+
+# ---------------------------------------------------------------------------
+# Final-state hash canonicalisation
+# ---------------------------------------------------------------------------
+
+
+func test_canonical_json_sorts_dictionary_keys_recursively() -> void:
+	var left: Dictionary = {
+		"b": 2,
+		"a": {"d": 4, "c": 3},
+		"items": [ {"z": 1, "y": 2}],
+	}
+	var right: Dictionary = {
+		"items": [ {"y": 2, "z": 1}],
+		"a": {"c": 3, "d": 4},
+		"b": 2,
+	}
+	var left_json: String = BaselineTraceScript._canonical_json(left)
+	var right_json: String = BaselineTraceScript._canonical_json(right)
+	assert_eq(left_json, right_json,
+			"Canonical JSON should ignore dictionary insertion order")
+
+
+func test_canonical_json_preserves_array_order() -> void:
+	var first: Dictionary = {"items": [1, 2, 3]}
+	var second: Dictionary = {"items": [3, 2, 1]}
+	var first_json: String = BaselineTraceScript._canonical_json(first)
+	var second_json: String = BaselineTraceScript._canonical_json(second)
+	assert_ne(first_json, second_json,
+			"Canonical JSON should preserve array ordering")

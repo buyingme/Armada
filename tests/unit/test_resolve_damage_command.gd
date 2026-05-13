@@ -61,6 +61,18 @@ func _make_card(title: String, is_faceup: bool = false) -> Dictionary:
 	}
 
 
+## Creates a serialized Blinded Gunners card dict.
+func _make_blinded_gunners_card() -> Dictionary:
+	return {
+		"trait_type": "Crew",
+		"title": "Blinded Gunners",
+		"is_faceup": true,
+		"effect_text": "While attacking, you cannot spend accuracy icons.",
+		"timing": "persistent",
+		"effect_id": "blinded_gunners",
+	}
+
+
 func before_each() -> void:
 	_state = GameState.new()
 	_state.initialize()
@@ -306,6 +318,38 @@ func test_execute_ship_faceup_card() -> void:
 			"Faceup card title should match.")
 	assert_true(card.is_faceup,
 			"Card should be marked faceup.")
+
+
+func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
+	_state.initiative_player = 1
+	var idx: int = _add_ship(1)
+	var ship: ShipInstance = _state.get_ship(1, idx)
+	var cmd := ResolveDamageCommand.new(0, {
+		"target_type": "ship",
+		"owner_player": 1,
+		"ship_index": idx,
+		"hull_zone": "FRONT",
+		"shield_damage": 0,
+		"damage_cards": [_make_blinded_gunners_card()],
+		"target_destroyed": false,
+	})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(result.get("persistent_registered", 0), 1,
+			"ResolveDamageCommand should register persistent faceup effects")
+	var effects: Array[GameEffect] = _state.effect_registry.get_effects_for_hook(
+			&"ATTACK_SPEND_ACCURACY")
+	assert_eq(effects.size(), 1,
+			"Blinded Gunners should hook ATTACK_SPEND_ACCURACY")
+	var effect: DamageCardEffect = effects[0] as DamageCardEffect
+	assert_same(effect.owner, ship,
+			"Persistent damage effect owner should be the damaged ship")
+	assert_eq(effect.player_priority, 0,
+			"Initiative player's persistent damage effects should resolve first")
+	var context: EffectContext = EffectContext.new()
+	context.attacker = ship
+	_state.effect_registry.resolve_hook(&"ATTACK_SPEND_ACCURACY", context)
+	assert_true(context.cancelled,
+			"Registered Blinded Gunners should block accuracy spending")
 
 
 func test_execute_ship_mixed_cards() -> void:

@@ -2,7 +2,8 @@
 ##
 ## Applies all damage-resolution mutations atomically for replay safety.
 ## Handles both ship and squadron targets. For ships: absorbs shields,
-## deals pre-drawn damage cards (faceup/facedown), and marks destruction.
+## deals pre-drawn damage cards (faceup/facedown), registers persistent
+## faceup damage-card effects, and marks destruction.
 ## For squadrons: applies hull damage and marks destruction.
 ##
 ## The presentation layer (AttackExecutor) pre-computes shield absorption,
@@ -115,11 +116,14 @@ func _execute_ship(game_state: GameState) -> Dictionary:
 	var shield_absorbed: int = ship.reduce_shields(hull_zone, shield_damage)
 	# Step 2: Deal damage cards.
 	var cards_added: Array[Dictionary] = []
+	var persistent_registered: int = 0
 	for card_dict: Variant in card_data_array:
 		var card: DamageCard = DamageCard.deserialize(
 				card_dict as Dictionary)
 		if card.is_faceup:
 			ship.add_faceup_damage(card)
+			if _register_persistent_faceup_card(card, ship, game_state):
+				persistent_registered += 1
 		else:
 			ship.add_facedown_damage(card)
 		cards_added.append(card.serialize())
@@ -134,8 +138,24 @@ func _execute_ship(game_state: GameState) -> Dictionary:
 		"shield_absorbed": shield_absorbed,
 		"new_shields": int(ship.current_shields.get(hull_zone, 0)),
 		"cards_added": cards_added.size(),
+		"persistent_registered": persistent_registered,
 		"destroyed": destroyed,
 	}
+
+
+## Registers a persistent effect for a newly-dealt faceup card when needed.
+func _register_persistent_faceup_card(
+		card: DamageCard,
+		ship: ShipInstance,
+		game_state: GameState) -> bool:
+	if not DamageCardEffectFactory.is_persistent(card):
+		return false
+	if game_state.effect_registry == null:
+		game_state.effect_registry = EffectRegistry.new()
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, game_state.effect_registry,
+			game_state.initiative_player)
+	return effect != null
 
 
 # ---------------------------------------------------------------------------

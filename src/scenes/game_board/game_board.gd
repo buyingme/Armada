@@ -100,10 +100,9 @@ var _tool_overlay_controller: ToolOverlayController = null
 
 ## --- Command Router Adapter (Phase K12) ---
 
-## Owns the single subscription to [signal CommandProcessor.command_executed]
-## and routes each applied command + result into the appropriate controllers
-## (attack panel, debug, ship activation, displacement) and projects the
-## resulting [UIProjector.UIIntent] onto the HUD.  Created in
+## Owns the [ModalRouter] composition root that subscribes to
+## [signal CommandProcessor.command_executed], routes modal lifecycle
+## projection, and delegates non-modal command reactions.  Created in
 ## [method _create_command_router_adapter].
 var _command_router_adapter: CommandRouterAdapter = null
 
@@ -1031,9 +1030,8 @@ func _create_tool_overlay_controller() -> void:
 			get_squadron_tokens,
 			self )
 
-## Creates the [CommandRouterAdapter] child node which owns the single
-## subscription to [signal CommandProcessor.command_executed] and routes
-## per-command-type effects to the appropriate controllers (Phase K12).
+## Creates the [CommandRouterAdapter] child node which wires [ModalRouter]
+## and per-command-type effects to the appropriate controllers.
 func _create_command_router_adapter() -> void:
 	_command_router_adapter = CommandRouterAdapter.new()
 	_command_router_adapter.name = "CommandRouterAdapter"

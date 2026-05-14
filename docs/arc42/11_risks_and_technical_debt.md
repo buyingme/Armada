@@ -24,8 +24,8 @@
 | TD-5 | `UpgradeData` resource class unused in production code | Low | Placeholder for upgrade card features. Keep as-is until needed. |
 | TD-6 | Reusable anchor-based panels may flash at inflated size for one frame before deferred layout correction | Low | Cosmetic only; `_request_deferred_layout()` pattern (ADR-011) corrects on next frame. |
 | TD-7 | ~~`game_board.gd` was 3 055 LOC after Phases A–F~~ | ~~Medium~~ | **Resolved by Phase K** — board composition root reduced to 1 464 LOC and stays below the 2 000 LOC ceiling. See [docs/refactoring_phase_k_plan.md](../refactoring_phase_k_plan.md). |
-| TD-8 | `attack_executor.gd` remains above the Phase K scene-adapter ceiling after mirrored panels and Phase I integration. | High | Current size: 2 484 LOC. Keep new attack behavior in focused core/presentation helpers until a later extraction brings the adapter below 1 500 LOC. |
-| TD-15 | Phase K guardrails are enforced, but residual allow-listed presentation branches and oversized legacy managers remain. | Medium | `scripts/lint_phase_k.sh` reports 0 violations and 11 explicit allow-listed branches. Current tracked sizes: `game_board.gd` 1 464, `attack_executor.gd` 2 484, `game_manager.gd` 2 278, `save_game_manager.gd` 1 061. Phase L/M work must add new behavior through focused helpers and keep modal/network decisions projected through `UIProjector`. |
+| TD-8 | `attack_executor.gd` remains above the Phase K scene-adapter ceiling after mirrored panels and Phase I integration. | High | Current size: 2 479 LOC. Keep new attack behavior in focused core/presentation helpers until a later extraction brings the adapter below 1 500 LOC. |
+| TD-15 | Phase K guardrails are enforced, but residual allow-listed presentation branches and oversized legacy managers remain. | Medium | `scripts/lint_phase_k.sh` reports 0 violations and 10 explicit allow-listed branches after L1. Current tracked sizes: `game_board.gd` 1 462, `attack_executor.gd` 2 479, `game_manager.gd` 2 269, `save_game_manager.gd` 1 061, `command_router_adapter.gd` 100, `modal_router.gd` 221. Phase L/M work must add new behavior through focused helpers and keep modal/network decisions projected through `UIProjector`. |
 | TD-9 | `ship_card_panel.gd` is 1 407 lines — UI build + state sync + dial interaction + damage display | Medium | Refactoring Phase D3 — split into layout coordinator + entry builder + damage display. |
 | TD-10 | `attack_sim_panel.gd` is 1 455 lines — monolithic `_build_ui()` (218 lines) | Medium | Refactoring Phases A1 + D1 — extract 12 `_build_<section>()` helpers, then UIStyleHelper. |
 | TD-11 | ~~Missing `serialize()`/`deserialize()` on ShipInstance, SquadronInstance, DamageDeck, DamageCard, ShipActivationState~~ | ~~Medium~~ | **Resolved** — Phase E complete. All classes serializable. `SaveGameManager` autoload with F5/F8 debug keybinds. |
@@ -42,6 +42,6 @@
 | G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
 | G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
 
-> **Last audit:** 2026-05-13 — Phase K complete; Phase L0.5 replay gate added. Network replay gates on host/client state-hash equality rather than committed network fixtures.
+> **Last audit:** 2026-05-14 — Phase K complete; Phase L1 ModalRouter implemented. Network replay gates on host/client state-hash equality rather than committed network fixtures.
 > Architecture compliance, static typing, and doc comment coverage all PASS in core/.
 > Phases A–I, J (J1–J11), and K complete. Phase L/M modal and replay hardening continues under [docs/refactoring_phase_lm_plan.md](../refactoring_phase_lm_plan.md).

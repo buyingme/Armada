@@ -5,7 +5,7 @@
 ## [member GameState.interaction_flow] back to NONE so the activation
 ## flow can resume.
 ##
-## Submitted by the controller peer (squadron owner) once they confirm
+## Submitted by the controller peer (the non-moving player) once they confirm
 ## all placements via [DisplacementModal].  Phase I6b-4.
 ##
 ## Payload:

@@ -90,6 +90,7 @@ func build_defense_payload(state: AttackState,
 	return {
 		"locked_tokens": state.locked_tokens.duplicate(true),
 		"modified_damage": state.modified_damage,
+		"dice_results": state.dice_results.duplicate(true),
 		"defender_player": def_inst.owner_player,
 		"defender_ship_index": defender_ship_index,
 		"defender_speed": def_inst.current_speed,

@@ -39,6 +39,9 @@ var _pending_crew_panic_ship_key: String = ""
 ## Lazily created OpponentChoiceModal for the Crew Panic prompt.
 var _crew_panic_modal: OpponentChoiceModal = null
 
+## Transient guard for projected Repair auto-advance command submission.
+var _repair_auto_advance_pending: bool = false
+
 
 # ---------------------------------------------------------------------------
 # Injected references (shared with GameBoard)
@@ -371,12 +374,12 @@ func configure_and_open_activation_modal() -> void:
 	if is_command_squadron_modal_active():
 		ensure_activation_modal_hidden_for_squadron_command()
 		return
+	var has_squadron_resources: bool = bool(_has_squadron_resources.call(
+			_activation_ctx.activating_ship_token))
 	_panel_mgr.activation_modal.set_squadron_skippable(
-			not bool(_has_squadron_resources.call(
-					_activation_ctx.activating_ship_token)))
-	_panel_mgr.activation_modal.set_squadron_token_only(
-			bool(_is_squadron_token_only.call(
-					_activation_ctx.activating_ship_token)))
+			not has_squadron_resources)
+	_panel_mgr.activation_modal.set_squadron_skip_allowed(
+			has_squadron_resources)
 	_panel_mgr.activation_modal.set_repair_skippable(
 			not bool(_has_repair_resources.call(
 					_activation_ctx.activating_ship_token)))
@@ -445,6 +448,7 @@ func sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 			target_step as ShipActivationState.Step)
 	if _panel_mgr.activation_modal and _panel_mgr.activation_modal.is_open():
 		_panel_mgr.activation_modal.refresh()
+	_queue_unavailable_repair_auto_advance(flow)
 
 
 ## Submits an authoritative activation-step transition marker in every mode.
@@ -455,6 +459,70 @@ func submit_activation_step(step_id: String) -> void:
 	if ship == null:
 		return
 	GameManager.submit_advance_activation_step(ship, step_id)
+
+
+## Defers projected Repair skips so follow-up commands preserve network order.
+func _queue_unavailable_repair_auto_advance(flow: InteractionFlow) -> void:
+	if flow.step_id != Constants.InteractionStep.REPAIR_STEP:
+		_repair_auto_advance_pending = false
+		return
+	if _repair_auto_advance_pending:
+		return
+	if not _should_auto_advance_unavailable_repair(flow):
+		return
+	_repair_auto_advance_pending = true
+	call_deferred("_auto_advance_unavailable_repair_if_current")
+
+
+func _auto_advance_unavailable_repair_if_current() -> void:
+	_repair_auto_advance_pending = false
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null:
+		return
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return
+	if flow.step_id != Constants.InteractionStep.REPAIR_STEP:
+		return
+	if not _should_auto_advance_unavailable_repair(flow):
+		return
+	_log.info("No repair available in projected Repair step — auto-advancing.")
+	_on_repair_done()
+
+
+func _should_auto_advance_unavailable_repair(flow: InteractionFlow) -> bool:
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return false
+	if not _is_local_activation_modal_controller():
+		return false
+	if _activation_ctx.activating_ship_token == null:
+		return false
+	if not _has_repair_resources.is_valid():
+		return false
+	if bool(_has_repair_resources.call(_activation_ctx.activating_ship_token)):
+		return false
+	var ship: ShipInstance = _current_activating_ship()
+	if ship == null or flow.controller_player != ship.owner_player:
+		return false
+	var flow_ship_index: int = int(flow.payload.get("ship_index", -1))
+	if flow_ship_index < 0:
+		return false
+	return flow_ship_index == _current_activating_ship_index(ship)
+
+
+func _current_activating_ship() -> ShipInstance:
+	if _activation_ctx.ship_activation_state == null:
+		return null
+	return _activation_ctx.ship_activation_state.get_ship()
+
+
+func _current_activating_ship_index(ship: ShipInstance) -> int:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or ship == null:
+		return -1
+	return game_state.find_ship_index(ship)
 
 
 ## Opens the activation modal in response to an authoritative
@@ -576,12 +644,12 @@ func _open_activation_modal_mirror() -> void:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
+	var has_squadron_resources: bool = bool(_has_squadron_resources.call(
+			_activation_ctx.activating_ship_token))
 	_panel_mgr.activation_modal.set_squadron_skippable(
-			not bool(_has_squadron_resources.call(
-					_activation_ctx.activating_ship_token)))
-	_panel_mgr.activation_modal.set_squadron_token_only(
-			bool(_is_squadron_token_only.call(
-					_activation_ctx.activating_ship_token)))
+			not has_squadron_resources)
+	_panel_mgr.activation_modal.set_squadron_skip_allowed(
+			has_squadron_resources)
 	_panel_mgr.activation_modal.set_repair_skippable(
 			not bool(_has_repair_resources.call(
 					_activation_ctx.activating_ship_token)))
@@ -1154,20 +1222,12 @@ func _on_execute_maneuver() -> void:
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview.call()
 	if displaced.size() > 0:
-		# Phase I6b-4c: submit the start_displacement command on every
-		# peer so [member GameState.interaction_flow] reflects the
-		# placement state.  In hot-seat the modal is still driven by the
-		# direct [code]_displacement_controller.start()[/code] call below.
-		# In network the modal opens on the non-moving (opposing) peer
-		# via the projection handler in
-		# [method _on_command_executed_project_ui] — the maneuvering peer
-		# here just submits and waits.
-		##
-		## Rules Reference: RRG "Overlapping", p.8 — "the player who is
-		## NOT moving the ship places the overlapped squadrons,
-		## regardless of who owns them".  The controller is therefore the
-		## opponent of the maneuvering ship's owner — never the squadron
-		## owner.
+		# Phase L4: publish the authoritative displacement flow only.
+		# ModalRouter opens the modal from the projected
+		# SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE intent in every mode.
+		# Rules Reference: RRG "Overlapping", p.8 — the player who is
+		# NOT moving the ship places the overlapped squadrons, regardless
+		# of who owns them.
 		var displaced_instances: Array = []
 		for sq_token: SquadronToken in displaced:
 			var inst: SquadronInstance = sq_token.get_squadron_instance()
@@ -1177,12 +1237,6 @@ func _on_execute_maneuver() -> void:
 		var placing_player: int = 1 - maneuver_ship.owner_player
 		GameManager.submit_start_displacement(maneuver_ship,
 				placing_player, displaced_instances)
-		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
-		# Hot-seat opens the displacement modal directly; network opens
-		# it via projection (modal must open on the opposing — non-moving
-		# — peer).  Converging is a Phase L candidate.
-		if not PlayMode.is_network():
-			_displacement_controller.start(displaced, moved_ship_base)
 	else:
 		show_end_activation_after_maneuver()
 	_log.info("Ship snapped to final position.")

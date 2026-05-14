@@ -102,7 +102,7 @@ var _repair_button: Button = null
 ## Requirements: CM-020.
 var _squadron_button: Button = null
 
-## "Skip" button inside the squadron step (shown when token-only).
+## "Skip" button inside the squadron step when command resources may be declined.
 var _squadron_skip_button: Button = null
 
 ## "End Activation ►" button shown when all steps are complete (DONE).
@@ -140,10 +140,9 @@ var _skip_repair: bool = false
 ## Set by the game board via [method set_squadron_skippable] before opening.
 var _skip_squadron: bool = false
 
-## When true the ship has a Squadron token but no matching dial.
-## The player may choose to skip (not spend the token).
-## Rules Reference: "Commands" p.4 — command tokens are optional.
-var _squadron_token_only: bool = false
+## When true the player may decline the Squadron command resource.
+## Rules Reference: "Commands" p.4 — resolving a command is optional.
+var _squadron_skip_allowed: bool = false
 
 ## True once the maneuver tool has been shown (Execute pressed once).
 ## Second press commits the maneuver.
@@ -192,11 +191,18 @@ func set_squadron_skippable(skip: bool) -> void:
 	_skip_squadron = skip
 
 
-## Marks whether the ship only has a Squadron token (no dial).
+## Marks whether the Squadron command resource may be declined.
 ## When true a "Skip" button is shown alongside "Execute Squadron".
-## Rules Reference: "Commands" p.4 — spending a command token is optional.
+## Rules Reference: "Commands" p.4 — resolving a command is optional.
+func set_squadron_skip_allowed(skip_allowed: bool) -> void:
+	_squadron_skip_allowed = skip_allowed
+
+
+## Backwards-compatible wrapper for older callers/tests that only exposed
+## the token-only case.  Dial and token resources now share the same optional
+## decline affordance in the activation modal.
 func set_squadron_token_only(token_only: bool) -> void:
-	_squadron_token_only = token_only
+	set_squadron_skip_allowed(token_only)
 
 
 ## Opens the modal for the given activation state.
@@ -253,6 +259,7 @@ func open_mirror(state: ShipActivationState) -> void:
 
 ## Closes and hides the modal. Does NOT cancel the activation.
 func close() -> void:
+	_cancel_auto_skip()
 	visible = false
 	set_process_unhandled_input(false)
 	_log.info("Activation modal closed.")
@@ -260,6 +267,7 @@ func close() -> void:
 
 ## Hard-close: clears the activation state too (used when activation ends).
 func close_and_clear() -> void:
+	_cancel_auto_skip()
 	visible = false
 	_activation_state = null
 	_maneuver_tool_shown = false
@@ -284,6 +292,7 @@ func set_interactable(is_enabled: bool) -> void:
 ## Schedules a deferred layout reset because toggling button visibility
 ## inside [method _update_step_display] changes the panel's minimum size.
 func refresh() -> void:
+	_cancel_auto_skip()
 	_update_step_display()
 	if visible:
 		_request_deferred_layout()
@@ -581,6 +590,7 @@ func _update_step_display() -> void:
 		var status_label: Label = _find_status_label(row)
 		if status_label == null:
 			continue
+		_hide_step_buttons(i)
 		if i < current:
 			_style_past_step(row, status_label)
 		elif i == current:
@@ -643,7 +653,7 @@ func _style_current_squadron_step(status_label: Label) -> void:
 			_squadron_button.visible = true
 			_squadron_button.disabled = not _is_interactable
 		if _squadron_skip_button:
-			_squadron_skip_button.visible = _squadron_token_only
+			_squadron_skip_button.visible = _squadron_skip_allowed
 			_squadron_skip_button.disabled = not _is_interactable
 
 
@@ -701,7 +711,7 @@ func _style_future_step(i: int, row: PanelContainer,
 	_hide_step_buttons(i)
 
 
-## Hides action buttons for a future (not-yet-reached) step.
+## Hides action buttons before current-step styling reveals active controls.
 func _hide_step_buttons(i: int) -> void:
 	match i:
 		4:
@@ -913,6 +923,13 @@ func _start_auto_skip() -> void:
 	_try_auto_skip_next()
 
 
+func _cancel_auto_skip() -> void:
+	if not _auto_skipping:
+		return
+	_auto_skip_generation += 1
+	_auto_skipping = false
+
+
 ## Attempts to auto-skip the current step if it's a placeholder or
 ## a skippable step (no resources or no targets).
 ## Uses call_deferred to avoid processing in the same frame.
@@ -925,15 +942,9 @@ func _try_auto_skip_next() -> void:
 	# Step 3 (ATTACK) is skipped when _skip_attack is true (no valid targets).
 	# Rules Reference: "Attack", p.2 — a ship is not required to attack.
 	if _skip_squadron and current == ShipActivationState.Step.SQUADRON:
-		_update_step_display()
-		var gen: int = _auto_skip_generation
-		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
-		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
+		_queue_auto_skip_for_current_step()
 	elif _skip_repair and current == ShipActivationState.Step.REPAIR:
-		_update_step_display()
-		var gen: int = _auto_skip_generation
-		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
-		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
+		_queue_auto_skip_for_current_step()
 	elif _skip_attack and current == ShipActivationState.Step.ATTACK:
 		_refresh_skip_attack_from_check()
 		if not _skip_attack:
@@ -943,10 +954,7 @@ func _try_auto_skip_next() -> void:
 			_update_step_display()
 			_log.info("Attack auto-skip cancelled — targets are now available.")
 			return
-		_update_step_display()
-		var gen: int = _auto_skip_generation
-		var timer: SceneTreeTimer = get_tree().create_timer(0.3)
-		timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen))
+		_queue_auto_skip_for_current_step()
 	else:
 		_auto_skipping = false
 		_update_step_display()
@@ -961,10 +969,25 @@ func _try_auto_skip_next() -> void:
 					"Player must press Execute.")
 
 
+func _queue_auto_skip_for_current_step() -> void:
+	_update_step_display()
+	var gen: int = _auto_skip_generation
+	var expected_step: ShipActivationState.Step = \
+			_activation_state.get_current_step()
+	var timer: SceneTreeTimer = get_tree().create_timer(0.3)
+	timer.timeout.connect(func() -> void: _auto_skip_current_if_gen(gen, expected_step))
+
+
 ## Auto-skips the current placeholder step.
 ## Guards against stale timers via [member _auto_skip_generation].
-func _auto_skip_current_if_gen(gen: int) -> void:
+func _auto_skip_current_if_gen(gen: int,
+		expected_step: ShipActivationState.Step) -> void:
 	if gen != _auto_skip_generation or _activation_state == null:
+		return
+	if _activation_state.get_current_step() != expected_step:
+		_auto_skipping = false
+		_update_step_display()
+		_log.info("Auto-skip cancelled — activation step changed.")
 		return
 	_activation_state.skip_step()
 	_try_auto_skip_next()

@@ -116,7 +116,7 @@ func start(displaced: Array[SquadronToken],
 	_log.info("Starting squadron displacement: %d squadron(s)."
 			% displaced.size())
 	# Phase I6b-4d / Phase K5: only hot-seat (single shared camera per
-	# seat) needs to rotate to the squadron-owner's perspective.  In
+	# seat) needs to rotate to the non-moving player's perspective.  In
 	# network play each peer's camera is already pinned to its own
 	# viewer, so rotating would needlessly flip the controller to the
 	# opposing player's perspective — skip it and run the post-rotate

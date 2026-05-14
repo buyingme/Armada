@@ -50,6 +50,9 @@ func validate(game_state: GameState) -> String:
 			player_index, payload.get("ship_index", -1))
 	if ship == null:
 		return "Ship not found."
+	var flow_error: String = _validate_activation_flow(game_state)
+	if flow_error != "":
+		return flow_error
 	var speed: int = payload.get("speed", -1)
 	if speed < 0:
 		return "Invalid speed."
@@ -67,6 +70,32 @@ func validate(game_state: GameState) -> String:
 	if not payload.has("rotation_deg"):
 		return "Missing final rotation."
 	return ""
+
+
+func _validate_activation_flow(game_state: GameState) -> String:
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null or flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return ""
+	if _is_legacy_activation_open_step(flow.step_id):
+		return ""
+	if flow.step_id != Constants.InteractionStep.MANEUVER_STEP:
+		return "Maneuver command submitted outside Maneuver step."
+	if flow.controller_player != player_index:
+		return "Maneuver command submitted by non-controller player."
+	var flow_ship_index: int = int(flow.payload.get("ship_index", -1))
+	var command_ship_index: int = int(payload.get("ship_index", -1))
+	if flow_ship_index >= 0 and flow_ship_index != command_ship_index:
+		return "Maneuver command submitted for inactive ship."
+	return ""
+
+
+func _is_legacy_activation_open_step(
+		step_id: Constants.InteractionStep) -> bool:
+	return step_id == Constants.InteractionStep.NONE \
+			or step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT \
+			or step_id == Constants.InteractionStep.ACTIVATION_MODAL_OPEN \
+			or step_id == Constants.InteractionStep.REVEAL_DIAL \
+			or step_id == Constants.InteractionStep.SPEND_DIAL
 
 
 ## Updates the ship's normalised position and rotation in [GameState]

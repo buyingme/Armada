@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L3 squadron-command modal projection implemented; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-14 (Phase L4 displacement projection plus MT follow-up fixes; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 147 |
-| GUT tests | 2 942 |
-| GUT asserts | 5 585 |
+| GUT test scripts | 148 |
+| GUT tests | 2 952 |
+| GUT asserts | 5 607 |
 | Failing tests | 0 |
-| Last commit | Current commit: L3 squadron-command modal projection |
+| Last commit | Pending commit: L4 displacement modal projection + MT follow-up fixes |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -35,7 +35,7 @@ Runtime invariants:
   across separate runs.
 
 Verification note: the 2026-05-14 full GUT summary is green
-(147 / 2 942 / 5 585, 0 failures), but Godot 4.5.1 aborted after the summary
+(148 / 2 952 / 5 607, 0 failures), but Godot 4.5.1 aborted after the summary
 with `recursive_mutex lock failed` / exit 134.  The failing save/load test from
 the first full run passed in isolation (24 / 24); track the post-summary abort
 separately if it persists outside this slice.
@@ -115,7 +115,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — L3 squadron-command modal projection is implemented. L0.5 replay
+Status: **IN PROGRESS** — L4 displacement modal projection is implemented. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -134,6 +134,20 @@ regression gate is complete and remains the required L/M automated gate:
   `SQUADRON_STEP` to the command-mode squadron modal; [modal_router.gd](../src/scenes/game_board/modal_router.gd)
   opens the squadron command modal from the authoritative `advance_activation_step`
   edge; the lint floor dropped from 8 to 7 allow-listed branches.
+- L4 result: [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
+  now only submits the authoritative `start_displacement` command after
+  ship-squadron overlap; [modal_router.gd](../src/scenes/game_board/modal_router.gd)
+  opens the displacement modal from the projected `SQUADRON_DISPLACEMENT /
+  DISPLACEMENT_PLACE` intent in hot-seat and network. The lint floor dropped
+  from 7 to 6 allow-listed branches. MT follow-up fixed a projected
+  `REPAIR_STEP` stall when no repair action was available by deferring the
+  controller peer's Repair-to-Attack advance through the authoritative command
+  path and hiding stale past-step buttons during activation-modal refresh.
+  Additional MT follow-ups now republish CF-token reroll dice through
+  `interaction_flow`, carry final dice into the defense payload, expose
+  Squadron command decline from the activation modal, bind activation
+  auto-skip timers to their original step, and reject maneuver submits from
+  active non-maneuver sub-steps.
 
 ---
 
@@ -158,8 +172,8 @@ eliminating the parallel `NetworkInteractionState` RPC channel. Outcome:
   `SelectRedirectZoneCommand`, `SelectEvadeDieCommand`,
   `RedirectDoneCommand`).
 - **Squadron displacement** flows through `StartDisplacementCommand` +
-  `CommitDisplacementCommand` so the modal opens on the squadron-owner
-  peer (OV-002 fix).
+  `CommitDisplacementCommand` so the modal opens for the non-moving
+  player named by `interaction_flow.controller_player` (OV-002 fix).
 - **Reconnection acceptance gate** ([tests/integration/test_reconnection_mid_attack.gd](../tests/integration/test_reconnection_mid_attack.gd)):
   pure-function chain `serialize → filter_for_player → deserialize → project`
   validates that any peer can reconstruct the correct UI from a single
@@ -507,7 +521,7 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L3 squadron-command modal projection implemented)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
+1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L4 displacement modal projection implemented)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI

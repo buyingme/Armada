@@ -143,7 +143,7 @@ enum InteractionFlow {
 	STATUS_CLEANUP,
 	GAME_OVER,
 	# Phase I6b-4 — squadron displacement after ship maneuver overlap.
-	# Controller is the squadron-owner peer (opposing the maneuvering ship).
+	# Controller is the non-moving player (opposing the maneuvering ship).
 	# Rules Reference: RRG "Overlapping", p.8 — OV-002.
 	SQUADRON_DISPLACEMENT,
 }

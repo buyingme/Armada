@@ -98,6 +98,33 @@ func test_apply_flow_skips_target_line_when_no_defender() -> void:
 			+"defender is published yet.")
 
 
+func test_apply_flow_updates_dice_results_after_reroll_payload() -> void:
+	var payload: Dictionary = {
+		"attacker_kind": "ship",
+		"attacker_name": "Demolisher",
+		"dice_results": [{
+			"color": Constants.DiceColor.RED,
+			"face": Constants.DiceFace.BLANK,
+		}],
+	}
+	_mirror.apply_flow(payload, Constants.InteractionStep.ATTACK_MODIFY)
+	var updated_payload: Dictionary = payload.duplicate(true)
+	updated_payload["dice_results"] = [{
+		"color": Constants.DiceColor.RED,
+		"face": Constants.DiceFace.HIT,
+	}]
+
+	_mirror.apply_flow(updated_payload,
+			Constants.InteractionStep.ATTACK_MODIFY)
+
+	var cached: Array = _mirror._last_dice_results_payload
+	var first_die: Dictionary = cached[0] as Dictionary
+	assert_eq(int(first_die.get("face", -1)), int(Constants.DiceFace.HIT),
+			"Mirror should cache and render the rerolled die face.")
+	assert_eq(_mirror.get_panel()._dice_textures.size(), 1,
+			"Mirror should keep a visible die texture after rerendering.")
+
+
 func test_close_hides_panel() -> void:
 	_mirror.apply_flow({
 		"attacker_kind": "ship",

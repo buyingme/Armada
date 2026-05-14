@@ -87,7 +87,7 @@ func validate(game_state: GameState) -> String:
 
 
 ## Mutates [member GameState.interaction_flow] to open the displacement
-## modal on the squadron-owner peer.
+## modal for the non-moving player named by [code]controller_player[/code].
 func execute(game_state: GameState) -> Dictionary:
 	var controller: int = int(payload.get("controller_player", -1))
 	var ship_index: int = int(payload.get("ship_index", -1))

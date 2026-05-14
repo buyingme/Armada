@@ -218,6 +218,10 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 	state.locked_tokens = [1]
 	state.modified_damage = 3
 	state.defender_zone = int(Constants.HullZone.FRONT)
+	state.dice_results = [{
+		"color": Constants.DiceColor.RED,
+		"face": Constants.DiceFace.HIT,
+	}]
 
 	var payload: Dictionary = _executor.build_defense_payload(state, ship, gs)
 
@@ -232,6 +236,12 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 			"payload should carry modified damage")
 	assert_eq((payload.get("locked_tokens", []) as Array).size(), 1,
 			"payload should carry locked tokens")
+	var dice_results: Array = payload.get("dice_results", []) as Array
+	assert_eq(dice_results.size(), 1,
+			"payload should carry final dice results")
+	var first_die: Dictionary = dice_results[0] as Dictionary
+	assert_eq(int(first_die.get("face", -1)), int(Constants.DiceFace.HIT),
+			"payload should carry the final die face")
 
 
 func test_sort_defense_tokens_canonical_orders_by_rrg_sequence() -> void:

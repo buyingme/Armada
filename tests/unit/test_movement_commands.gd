@@ -226,6 +226,51 @@ func test_execute_maneuver_validate_ok() -> void:
 			"Should accept valid maneuver.")
 
 
+func test_execute_maneuver_validate_rejects_non_maneuver_flow() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP,
+			0,
+			Constants.Visibility.ALL,
+			{"ship_index": idx})
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 2,
+		"yaw_clicks": [0, 1],
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
+	})
+
+	assert_eq(cmd.validate(_state),
+			"Maneuver command submitted outside Maneuver step.",
+			"Should reject maneuver before the authoritative Maneuver step.")
+
+
+func test_execute_maneuver_validate_accepts_activation_open_replay_flow() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			0,
+			Constants.Visibility.ALL,
+			{"ship_index": idx})
+	var cmd := ExecuteManeuverCommand.new(0, {
+		"ship_index": idx,
+		"speed": 2,
+		"yaw_clicks": [0, 1],
+		"pos_x": 0.5,
+		"pos_y": 0.3,
+		"rotation_deg": 28.6,
+	})
+
+	assert_eq(cmd.validate(_state), "",
+			"Legacy replay entries at activation-open should remain valid.")
+
+
 func test_execute_maneuver_validate_speed_zero() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)

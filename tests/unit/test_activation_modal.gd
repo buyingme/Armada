@@ -107,6 +107,37 @@ func test_attack_row_shows_button_when_not_skippable() -> void:
 			"Execute Attack button should be visible when not skippable.")
 
 
+func test_refresh_repair_step_hides_past_squadron_skip_button() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.SQUADRON)
+	_modal.set_squadron_token_only(true)
+	_modal.open(state)
+	assert_true(_modal._squadron_skip_button.visible,
+			"Squadron Skip button should be visible on token-only Squadron step.")
+	state.set_current_step(ShipActivationState.Step.REPAIR)
+	_modal.set_repair_skippable(true)
+
+	_modal.refresh()
+
+	assert_false(_modal._squadron_skip_button.visible,
+			"Refresh should hide stale Squadron Skip button after step advances.")
+	assert_false(_modal._squadron_button.visible,
+			"Refresh should hide stale Squadron Execute button after step advances.")
+
+
+func test_squadron_skip_button_visible_when_command_resource_declinable() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.SQUADRON)
+	_modal.set_squadron_skippable(false)
+	_modal.set_squadron_skip_allowed(true)
+	_modal.open(state)
+
+	assert_true(_modal._squadron_button.visible,
+			"Execute Squadron should stay visible when resources exist.")
+	assert_true(_modal._squadron_skip_button.visible,
+			"Skip should be visible so the Squadron command can be declined.")
+
+
 # ---------------------------------------------------------------------------
 # C7 — Activation modal permission gates
 # ---------------------------------------------------------------------------
@@ -246,6 +277,24 @@ func test_attack_step_entered_signal_not_emitted_when_skippable() -> void:
 	await get_tree().create_timer(0.5).timeout
 	assert_signal_not_emitted(_modal, "attack_step_entered",
 			"attack_step_entered should not emit when skippable.")
+
+
+func test_refresh_cancels_pending_repair_auto_skip_before_attack() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.REPAIR)
+	_modal.set_repair_skippable(true)
+	_modal.set_attack_skippable(false)
+	_modal.open(state)
+	state.set_current_step(ShipActivationState.Step.ATTACK)
+
+	_modal.refresh()
+	await get_tree().create_timer(0.5).timeout
+
+	assert_eq(state.get_current_step(),
+			ShipActivationState.Step.ATTACK,
+			"Stale Repair auto-skip timer must not skip Attack.")
+	assert_true(_modal._attack_button.visible,
+			"Attack button should remain visible after projected Attack refresh.")
 
 
 # ---------------------------------------------------------------------------

@@ -91,20 +91,29 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, local: int, command: GameCommand) -> void:
-	_drive_network_displacement_modal(command)
+	_drive_displacement_modal(intent, command)
 	_sync_attack_panel_mirror(game_state, local)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
 	_apply_activation_affordances(intent)
 
 
-func _drive_network_displacement_modal(command: GameCommand) -> void:
-	if not _is_network_peer() or command == null:
+func _drive_displacement_modal(intent: UIProjector.UIIntent,
+		command: GameCommand) -> void:
+	if command == null:
 		return
 	match command.command_type:
 		"start_displacement":
-			_open_displacement_modal_from_command(command)
+			if _is_displacement_place_intent(intent):
+				_open_displacement_modal_from_command(command)
 		"commit_displacement":
-			call_deferred("_resume_after_remote_displacement")
+			if _is_network_peer():
+				call_deferred("_resume_after_remote_displacement")
+
+
+func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
+	return intent.flow_type == Constants.InteractionFlow.SQUADRON_DISPLACEMENT \
+			and intent.step_id == Constants.InteractionStep.DISPLACEMENT_PLACE \
+			and intent.modal_kind == Constants.ModalKind.DISPLACEMENT
 
 
 func _sync_attack_panel_mirror(game_state: GameState, local: int) -> void:
@@ -167,6 +176,8 @@ func _open_activation_modal_from_intent() -> void:
 
 
 func _open_displacement_modal_from_command(command: GameCommand) -> void:
+	if _displacement_controller == null:
+		return
 	var payload: Dictionary = command.payload
 	var controller: int = int(payload.get("controller_player", -1))
 	if controller < 0 or not _can_act_as(controller):

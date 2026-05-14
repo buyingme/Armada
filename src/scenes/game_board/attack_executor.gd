@@ -781,6 +781,9 @@ func _on_attack_cf_token_reroll(die_index: int) -> void:
 	if _get_panel():
 		_get_panel().update_die_result(die_index, new_result)
 		_get_panel().hide_cf_token_section()
+	_fsm_patch_payload({
+		"dice_results": _state.dice_results.duplicate(true),
+	})
 	# Show confirm.
 	_attack_exec_show_confirm()
 

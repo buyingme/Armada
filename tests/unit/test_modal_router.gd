@@ -56,9 +56,24 @@ class StubShipActivationController:
 		return modal_open
 
 
+class StubDisplacementController:
+	extends DisplacementController
+
+	var displaced_count: int = 0
+	var start_calls: int = 0
+
+
+	func start(displaced: Array[SquadronToken], _ship_base: ShipBase) -> void:
+		start_calls += 1
+		displaced_count = displaced.size()
+
+
 var _router: ModalRouter = null
 var _panel_mgr: UIPanelManager = null
 var _ship_activation_controller: StubShipActivationController = null
+var _displacement_controller: StubDisplacementController = null
+var _ship_token: ShipToken = null
+var _squadron_token: SquadronToken = null
 var _saved_game_state: GameState = null
 var _saved_active_player: int = 0
 var _saved_local_player_index: int = -1
@@ -77,10 +92,16 @@ func after_each() -> void:
 	_disconnect_router_signal()
 	_free_test_node(_router)
 	_free_test_node(_ship_activation_controller)
+	_free_test_node(_displacement_controller)
+	_free_test_node(_ship_token)
+	_free_test_node(_squadron_token)
 	_free_test_node(_panel_mgr)
 	_router = null
 	_panel_mgr = null
 	_ship_activation_controller = null
+	_displacement_controller = null
+	_ship_token = null
+	_squadron_token = null
 	GameManager.current_game_state = _saved_game_state
 	GameManager.active_player = _saved_active_player
 	NetworkManager._local_player_index = _saved_local_player_index
@@ -225,8 +246,54 @@ func test_route_command_result_squadron_step_opens_command_modal() -> void:
 			"SQUADRON_STEP should forward the activation-sequence affordance.")
 
 
+func test_route_command_result_displacement_opens_in_hot_seat() -> void:
+	# Arrange
+	var displacement: StubDisplacementController = _create_displacement_controller()
+	var ship: ShipInstance = _create_ship(0)
+	var squadron: SquadronInstance = _create_squadron(1)
+	_create_tokens(ship, squadron)
+	_create_router(Callable(), null, displacement,
+			Callable(self, "_find_test_ship_token"),
+			Callable(self, "_find_test_squadron_token"))
+	GameManager.current_game_state = _state_with_displacement_flow(ship, squadron)
+	var command: StartDisplacementCommand = _start_displacement_command()
+
+	# Act
+	_router.route_command_result(command, {})
+
+	# Assert
+	assert_eq(displacement.start_calls, 1,
+			"Hot-seat should open displacement through ModalRouter projection.")
+	assert_eq(displacement.displaced_count, 1,
+			"Projected displacement should resolve the listed squadron token.")
+
+
+func test_route_command_result_displacement_network_non_controller_skips() -> void:
+	# Arrange
+	NetworkManager._local_player_index = 0
+	var displacement: StubDisplacementController = _create_displacement_controller()
+	var ship: ShipInstance = _create_ship(0)
+	var squadron: SquadronInstance = _create_squadron(1)
+	_create_tokens(ship, squadron)
+	_create_router(Callable(), null, displacement,
+			Callable(self, "_find_test_ship_token"),
+			Callable(self, "_find_test_squadron_token"))
+	GameManager.current_game_state = _state_with_displacement_flow(ship, squadron)
+	var command: StartDisplacementCommand = _start_displacement_command()
+
+	# Act
+	_router.route_command_result(command, {})
+
+	# Assert
+	assert_eq(displacement.start_calls, 0,
+			"Network non-controller should not open the displacement modal.")
+
+
 func _create_router(command_reaction_fn: Callable,
-		ship_activation_controller: ShipActivationController = null) -> void:
+		ship_activation_controller: ShipActivationController = null,
+		displacement_controller: DisplacementController = null,
+		find_ship_token_fn: Callable = Callable(),
+		find_squadron_token_fn: Callable = Callable()) -> void:
 	_panel_mgr = UIPanelManager.new()
 	_panel_mgr.name = "TestUIPanelManager"
 	add_child(_panel_mgr)
@@ -237,10 +304,10 @@ func _create_router(command_reaction_fn: Callable,
 			_panel_mgr,
 			null,
 			ship_activation_controller,
+			displacement_controller,
 			null,
-			null,
-			Callable(),
-			Callable(),
+			find_ship_token_fn,
+			find_squadron_token_fn,
 			command_reaction_fn)
 
 
@@ -253,6 +320,36 @@ func _create_activation_controller(
 	return _ship_activation_controller
 
 
+func _create_displacement_controller() -> StubDisplacementController:
+	_displacement_controller = StubDisplacementController.new()
+	_displacement_controller.name = "StubDisplacementController"
+	add_child(_displacement_controller)
+	return _displacement_controller
+
+
+func _create_ship(owner_player: int) -> ShipInstance:
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = owner_player
+	return ship
+
+
+func _create_squadron(owner_player: int) -> SquadronInstance:
+	var squadron: SquadronInstance = SquadronInstance.new()
+	squadron.owner_player = owner_player
+	return squadron
+
+
+func _create_tokens(ship: ShipInstance, squadron: SquadronInstance) -> void:
+	_ship_token = ShipToken.new()
+	_ship_token.name = "TestShipToken"
+	_ship_token.bind_instance(ship)
+	add_child(_ship_token)
+	_squadron_token = SquadronToken.new()
+	_squadron_token.name = "TestSquadronToken"
+	_squadron_token.bind_instance(squadron)
+	add_child(_squadron_token)
+
+
 func _state_with_flow(flow_type: Constants.InteractionFlow,
 		step_id: Constants.InteractionStep,
 		controller_player: int) -> GameState:
@@ -262,6 +359,55 @@ func _state_with_flow(flow_type: Constants.InteractionFlow,
 			step_id,
 			controller_player)
 	return state
+
+
+func _state_with_displacement_flow(ship: ShipInstance,
+		squadron: SquadronInstance) -> GameState:
+	var state: GameState = _state_with_flow(
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			Constants.InteractionStep.DISPLACEMENT_PLACE,
+			1)
+	var player_zero: PlayerState = PlayerState.new()
+	player_zero.player_index = 0
+	player_zero.ships.append(ship)
+	var player_one: PlayerState = PlayerState.new()
+	player_one.player_index = 1
+	player_one.squadrons.append(squadron)
+	state.player_states = [player_zero, player_one]
+	state.interaction_flow.payload = _displacement_payload()
+	return state
+
+
+func _start_displacement_command() -> StartDisplacementCommand:
+	return StartDisplacementCommand.new(0, {
+			"ship_index": 0,
+			"controller_player": 1,
+			"displaced_squadrons": _displacement_entries(),
+	})
+
+
+func _displacement_payload() -> Dictionary:
+	return {
+			"ship_index": 0,
+			"displaced_squadrons": _displacement_entries(),
+	}
+
+
+func _displacement_entries() -> Array[Dictionary]:
+	return [{"owner": 1, "squadron_index": 0}]
+
+
+func _find_test_ship_token(ship: ShipInstance) -> ShipToken:
+	if _ship_token != null and _ship_token.get_ship_instance() == ship:
+		return _ship_token
+	return null
+
+
+func _find_test_squadron_token(squadron: SquadronInstance) -> SquadronToken:
+	if _squadron_token != null \
+			and _squadron_token.get_squadron_instance() == squadron:
+		return _squadron_token
+	return null
 
 
 func _disconnect_router_signal() -> void:

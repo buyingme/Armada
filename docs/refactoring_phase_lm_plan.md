@@ -1,14 +1,14 @@
 # Refactoring Phases L & M — Unified Flow Authority and Rule Registry
 
-> **Status:** IN PROGRESS - 2026-05-14. L0, L0.5, L1, L2, and L3 are complete; L4 is the next code-bearing slice.
+> **Status:** IN PROGRESS - 2026-05-14. L0, L0.5, L1, L2, L3, and L4 are complete; L5 is the next code-bearing slice.
 > **Predecessors:** Phase K is complete. The deferred hot-seat modal-lifecycle work from Phase K §3.1d is now Phase L's scope.
 > **Go-conditions (verified 2026-05-14):**
 >   - K12 `CommandRouterAdapter` committed (`e17ff05`).
 >   - K14 `AttackFlowExecutor` complete (K14a `454fd0e` -> K14g `33e697f`).
 >   - L0 audit exists in [docs/modal_classification.md](modal_classification.md) §L-Inventory.
 >   - L0.5 replay gate committed (`d752ffd`): `bash scripts/run_baseline_traces.sh --all` passes hot-seat trace/hash and real network host/client state-hash equality.
->   - `bash scripts/lint_phase_k.sh` exits `0` (7 allow-listed branches after L3; the L target floor is <= 4 after L6).
->   - GUT baseline: 147 scripts / 2 942 tests / 5 585 asserts / 0 failures. Godot 4.5.1 currently aborts after the green summary with `recursive_mutex lock failed` / exit 134; track separately from test failures.
+>   - `bash scripts/lint_phase_k.sh` exits `0` (6 allow-listed branches after L4; the L target floor is <= 4 after L6).
+>   - GUT baseline: 148 scripts / 2 952 tests / 5 607 asserts / 0 failures. Godot 4.5.1 currently aborts after the green summary with `recursive_mutex lock failed` / exit 134; track separately from test failures.
 >   - No `interaction_flow` schema change pending. No save-format change pending.
 > **Successor:** Resumes G4.7 (Spectator), G4.8 (Reconnection runtime), G4.9 (Turn Timers), then Phase 10c.
 > **Cross-refs:** [docs/implementation_plan.md](implementation_plan.md), [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md) §3.1d, [.skills/serialization_and_commands.md](../.skills/serialization_and_commands.md), [.skills/architecture_patterns.md](../.skills/architecture_patterns.md).
@@ -120,7 +120,7 @@ card.
 | M-G2 | Every `GameCommand` subclass declares an applicability scope: `GLOBAL`, `PHASE`, or `FLOW_STEP`. Flow-step commands declare `(flow_id, step_id)` pairs; phase/global commands declare the phase/system surface they belong to. Parity tests fail CI on missing declarations. |
 | M-G3 | At least 6 representative rules (1 keyword, 2 damage cards, 1 defense-token rule, 1 status-phase rule, 1 attack-modifier rule) migrated to `RuleRegistry` self-registration or explicitly mapped through the legacy `EffectRegistry` bridge. Adding the 7th is documented as a one-file change. |
 | M-G4 | Determinism: hook execution order across peers is byte-identical (priority + lexicographic rule_id tie-break). Replay test asserts hook order. |
-| LM-G1 | Test baseline maintained: >= 147 scripts / >= 2 942 tests / >= 5 585 asserts / 0 failures at every code-bearing commit; `godot --headless --import` clean when new scripts are added; `bash scripts/lint_phase_k.sh` exits 0; `bash scripts/run_baseline_traces.sh --all` passes for modal/network/replay/command-submission/rule-observer changes. |
+| LM-G1 | Test baseline maintained: >= 148 scripts / >= 2 952 tests / >= 5 607 asserts / 0 failures at every code-bearing commit; `godot --headless --import` clean when new scripts are added; `bash scripts/lint_phase_k.sh` exits 0; `bash scripts/run_baseline_traces.sh --all` passes for modal/network/replay/command-submission/rule-observer changes. |
 | LM-G2 | All sliced commits keep the manual-test gate (per `.skills/copilot_instructions.md`). |
 | LM-G3 | No save-format version bump. No new RPC channels. No new EventBus signals beyond what Phase L's modal-projection migration intrinsically requires. |
 
@@ -367,7 +367,7 @@ mutation.
 > under the K-G2 target of 2 000) into focused controllers. The slice
 > targets below reference the *current* owners (file + symbol), not the
 > historical `game_board.gd:NNNN` line numbers the 2026-05-10 draft used.
-> The lint allow-list currently reports **7 branches** after L3; the L target floor
+> The lint allow-list currently reports **6 branches** after L4; the L target floor
 > is **<= 4** after L6.
 
 | Slice | Scope | Risk | LOC delta | MT? |
@@ -377,9 +377,9 @@ mutation.
 | **L1** | **Complete.** Introduced `ModalRouter` ([`src/scenes/game_board/modal_router.gd`](../src/scenes/game_board/modal_router.gd), Node) as the single `CommandProcessor.command_executed` subscriber for projection-driven HUD, modal, and mirror routing. [`command_router_adapter.gd`](../src/scenes/game_board/command_router_adapter.gd) is now the composition root and delegates non-modal command reactions into the router. The former adapter `PlayMode.is_network()` branch was removed, dropping the lint allow-list from 11 to 10. Hot-seat still keeps direct lifecycle callbacks for the L2-L5 surfaces. | medium | done | yes |
 | **L2** | **Complete.** Migrated **Activation modal** lifecycle to projection in hot-seat. `ShipActivationController` now prepares activation context before `ActivateShipCommand`, submits `advance_activation_step` in both modes, and leaves activation modal open/reopen to `ModalRouter` consuming the projected `UIIntent`. `ModalRouter` opens closed activation modals only for activation lifecycle commands (`activate_ship`, `convert_dial_to_token`, `advance_activation_step`) so unrelated repair/squadron spend commands do not reopen the modal mid-panel. `AttackPanelController` now handles `resolve_immediate_effect` cleanup through the same idempotent command reaction in both modes. Lint dropped from 10 to 8 allow-listed branches. | high | done | yes |
 | **L3** | **Complete.** Migrated **Squadron-command activation modal** lifecycle to projection. `UIProjector.UIIntent` now carries `affordances["activation_sequence_button"]`, `SQUADRON_STEP` projects to the command-mode Squadron modal, and `ModalRouter` opens `ShipActivationController.open_squadron_command_from_interaction_state()` only from the authoritative `advance_activation_step("squadron_step")` edge. The token-convert hot-seat-only branch and command-mode squadron close direct button callback were removed; the lint floor dropped from 8 to 7 allow-listed branches. | high | done | yes |
-| **L4** | Migrate **Displacement modal** lifecycle to projection in hot-seat. [`displacement_controller.gd`](../src/scenes/game_board/displacement_controller.gd) `start()` becomes an effect of `SQUADRON_DISPLACEMENT/DISPLACEMENT_PLACE`, opened by `ModalRouter`. Defect-anchor: closes the same source-of-truth class as bug 4 (`c673ef0`, RRG "Overlapping", p.8): once both modes consume `interaction_flow.controller_player`, no producer can derive it ad-hoc — `controller_player = 1 - maneuver_ship.owner_player` becomes the only path. Removes the §3.1a displacement-modal-origin allow-list site. | medium | +40 / −60 | yes |
+| **L4** | **Complete.** Migrated **Displacement modal** lifecycle to projection in hot-seat. [`displacement_controller.gd`](../src/scenes/game_board/displacement_controller.gd) `start()` is now an effect of `SQUADRON_DISPLACEMENT/DISPLACEMENT_PLACE`, opened by `ModalRouter` after `StartDisplacementCommand` projects the authoritative flow. The maneuver producer now only submits `start_displacement`; both modes consume `interaction_flow.controller_player` so RRG "Overlapping", p.8's non-moving-player controller rule has one modal origin. Removed the §3.1a displacement-modal-origin allow-list site and added hot-seat/network router coverage in `test_modal_router.gd`. MT follow-ups fixed the no-repair-action `REPAIR_STEP` stall, CF-token reroll mirror sync, Squadron-command decline affordance, and stale activation auto-skip timers. | medium | done | yes |
 | **L5** | Migrate **`_on_active_player_changed` content fork** (the line-889 dispatcher in [`game_board.gd`](../src/scenes/game_board/game_board.gd), `_dispatch_active_player_change_dispatcher` after K13) to a single path: build the same overlay objects on both modes, then style them via `UIIntent` (`needs_handoff_overlay` vs. `needs_waiting_overlay`). Removes the last big lifecycle allow-list branch. | high | +70 / −110 | yes |
-| **L6** | Lint tightening: update `scripts/lint_phase_k.sh` allow-list from the current **7** branches to the post-L floor of **<= 4**. The activation-step submitter branch was removed in L2 and the sequence-button origin branch was removed in L3; this slice now focuses on collapsing the two load-dialog `PlayMode.is_network()` checks into one helper if they still count as two lint hits, and documenting the final floor in [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7. | low | +30 / −40 | no |
+| **L6** | Lint tightening: update `scripts/lint_phase_k.sh` allow-list from the current **6** branches to the post-L floor of **<= 4**. The activation-step submitter branch was removed in L2 and the sequence-button origin branch was removed in L3; this slice now focuses on collapsing the two load-dialog `PlayMode.is_network()` checks into one helper if they still count as two lint hits, and documenting the final floor in [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7. | low | +30 / −40 | no |
 | **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Use `bash scripts/run_baseline_traces.sh --all` as the automated pre-flight, then compare logs/UI behaviour side-by-side: modal open/close should be projected from the intended `interaction_flow` state on both peers and both modes, but exact network command-trace equality across separate runs is not required until the transport has a deterministic pump. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
 
 ### 4.1a L0.5 replay-regression automation (implemented — REVISED v3)
@@ -690,8 +690,8 @@ within the same run.
 
 ### 7.1 Phase K dependency
 
-Phase K is complete for LM purposes. L0, L0.5, L1, L2, and L3 are also complete,
-so the next code-bearing LM slice is **L4 Displacement modal projection**.
+Phase K is complete for LM purposes. L0, L0.5, L1, L2, L3, and L4 are also complete,
+so the next code-bearing LM slice is **L5 active-player overlay unification**.
 
 Required Phase K foundations are present:
 
@@ -699,13 +699,17 @@ Required Phase K foundations are present:
    `EventBus.command_executed -> UIProjector.project` subscription point that
    L1's `ModalRouter` extends.
 2. **K7 lint script in place and green.** `scripts/lint_phase_k.sh` currently
-   reports `0 violations (7 allow-listed branches)`. L tightens the
+   reports `0 violations (6 allow-listed branches)`. L tightens the
    allow-list; the starting count is known.
 3. **K14 (`AttackFlowExecutor`) committed (K14a `454fd0e` -> K14g
    `33e697f`).** Attack-flow payload construction, defense-commit canonical
    ordering, faceup/immediate-effect decision, and redirect continuation live
    in [src/core/combat/attack_flow_executor.gd](../src/core/combat/attack_flow_executor.gd)
    with isolated unit coverage in [tests/unit/test_attack_flow_executor.gd](../tests/unit/test_attack_flow_executor.gd).
+4. **L4 (`ModalRouter` displacement projection) complete.** The direct hot-seat
+   `_displacement_controller.start()` call was removed from [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd);
+   [modal_router.gd](../src/scenes/game_board/modal_router.gd) opens the displacement modal from the projected
+   `SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE` intent in hot-seat and network.
 
 Current post-fix snapshot (2026-05-14):
 
@@ -768,14 +772,14 @@ a single-file change.
 
 ## 8. Quick-start guide for executing this plan
 
-### Before starting L4
+### Before starting L5
 
-1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, and the loaded-save
+1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, L4, and the loaded-save
    persistent-effect fix (`d752ffd`).
-2. Confirm `bash scripts/lint_phase_k.sh` exits `0` with 7 allow-listed
-   branches after L3.
-3. Confirm the GUT green summary baseline is at least 147 scripts / 2 942
-   tests / 5 585 asserts / 0 failures. The known post-summary Godot shutdown
+2. Confirm `bash scripts/lint_phase_k.sh` exits `0` with 6 allow-listed
+   branches after L4.
+3. Confirm the GUT green summary baseline is at least 148 scripts / 2 947
+   tests / 5 597 asserts / 0 failures. The known post-summary Godot shutdown
    abort is not a test failure.
 4. Run `bash scripts/run_baseline_traces.sh --all` before starting any modal,
    network, replay, command-submission, or rule-observer slice.
@@ -841,11 +845,11 @@ The proposed approach matches the actual shape of the problem domain:
 5. The **2026-05-13 loaded Blinded Gunners bug (`d752ffd`) exposed the runtime-rule half of the same problem**: serialized state was correct, but transient hooks were missing after load. The hardened Phase M plan now treats active-rule rebuild as a first-class contract.
 
 This plan is *bounded* (concrete slice list, concrete LOC budget,
-concrete acceptance gates), *aligned* (Phase K complete; L0/L0.5/L1/L2/L3 complete;
+concrete acceptance gates), *aligned* (Phase K complete; L0/L0.5/L1/L2/L3/L4 complete;
 unblocks G4.7+ after L/M), and *minimally invasive* (no save format break,
 no new RPC, no new EventBus channel, no wholesale replacement of existing
 runtime-effect primitives).
 
-**Verdict: safe to begin L4 now.** The plan is complete enough to drive the
-displacement-modal projection slice, with hot-seat and network replay gates
+**Verdict: safe to begin L5 next.** The plan is complete enough to drive the
+active-player overlay unification slice, with hot-seat and network replay gates
 already in place.

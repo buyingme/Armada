@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L5 active-player transition projection; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-14 (Phase L6 load-dialog lint tightening; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -18,7 +18,7 @@
 | GUT tests | 2 956 |
 | GUT asserts | 5 629 |
 | Failing tests | 0 |
-| Last commit | Pending commit: L5 active-player transition projection |
+| Last commit | This commit — L6 load-dialog lint tightening |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -115,7 +115,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — L4 displacement modal projection is implemented. L0.5 replay
+Status: **IN PROGRESS** — L6 load-dialog lint tightening is implemented. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -154,6 +154,10 @@ regression gate is complete and remains the required L/M automated gate:
   Squadron observer startup, and camera/card perspective. [game_board.gd](../src/scenes/game_board/game_board.gd)
   now applies that intent through one path; the lint floor dropped from 6 to
   5 allow-listed branches.
+- L6 result: [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd)
+  centralises its deployment-mode network query in `_is_network_session()` and
+  routes both hot-seat save blocking and host network-load broadcast checks
+  through that helper; the lint floor dropped from 5 to 4 allow-listed branches.
 
 ---
 

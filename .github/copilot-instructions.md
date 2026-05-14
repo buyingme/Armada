@@ -118,6 +118,7 @@ if round > Constants.MAX_ROUNDS:
 - ❌ (Phase I) Subscribing to `EventBus.interaction_state_changed` (signal removed in Phase I6) — subscribe to `EventBus.command_executed` and call `UIProjector.project()`.
 - ❌ (Phase I) Inferring activation/attack sub-step from local UI events — always read `state.interaction_flow.step_id`.
 - ❌ (Phase K) Any new `if PlayMode.is_network()` / `if PlayMode.is_hot_seat()` in `src/scenes/` or `src/ui/` — `UIProjector.project()` is the only PlayMode-aware code path outside `src/autoload/`. Run `scripts/lint_phase_k.sh` (added in slice K7) before every commit. See `docs/refactoring_phase_k_plan.md`.
+- ❌ (Phase L) Do not raise the post-L6 presentation allow-list above 4 branches. The remaining allowed surfaces are deployment-mode dispatchers only: lobby diagnostics, game-menu save gating, save-dialog host notification, and the load-dialog network-session helper. Modal lifecycle/authority still belongs in `UIProjector.project()` and `ModalRouter`.
 - ❌ (Phase K) Growing [game_board.gd](src/scenes/game_board/game_board.gd), [attack_executor.gd](src/scenes/game_board/attack_executor.gd), [game_manager.gd](src/autoload/game_manager.gd), or [save_game_manager.gd](src/autoload/save_game_manager.gd) past their Phase K LOC ceilings (2 000 / 1 500 / 1 500 / 700). New behaviour goes into a focused controller / RefCounted helper. Do not meet LOC ceilings by deleting useful docstrings or rationale comments; file LOC is a refactoring trigger, not a documentation-cutting target.
 
 ### 8. Game Rules Must Be Cited

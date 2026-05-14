@@ -259,13 +259,13 @@ func _resume_row_label(mode: String, has: bool) -> String:
 
 func _build_named_row(entry: Dictionary) -> Button:
 	var row: Button = _make_row_button()
-	var name: String = String(entry.get("name", ""))
+	var save_name: String = String(entry.get("name", ""))
 	var disabled: bool = _row_is_disabled(entry)
 	row.disabled = disabled
 	row.text = _row_label(entry)
 	if disabled:
 		row.tooltip_text = _row_disabled_reason(entry)
-	row.toggled.connect(_on_named_row_toggled.bind(name, row))
+	row.toggled.connect(_on_named_row_toggled.bind(save_name, row))
 	return row
 
 
@@ -287,13 +287,13 @@ func _entry_mode(entry: Dictionary) -> String:
 
 func _row_label(entry: Dictionary) -> String:
 	var meta: SaveGameMetadata = entry.get("meta") as SaveGameMetadata
-	var name: String = String(entry.get("name", ""))
+	var save_name: String = String(entry.get("name", ""))
 	if meta == null:
 		return "%s   [unreadable: %s]" % [
-				name, String(entry.get("reason", "unknown"))]
+				save_name, String(entry.get("reason", "unknown"))]
 	var display: String = meta.display_name
 	if display.is_empty():
-		display = name
+		display = save_name
 	return "%s\n   %s \u00b7 Round %d \u00b7 %s \u00b7 %s" % [
 			display,
 			meta.scenario_name,
@@ -338,6 +338,23 @@ func _has_host_session() -> bool:
 	return NetworkManager.is_server()
 
 
+## True when the dialog is running inside any network deployment.
+func _is_network_session() -> bool:
+	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  The load
+	# dialog has one deployment-mode query: session presence.  Other load
+	# decisions derive from this helper so L6 counts the surface once.
+	return is_instance_valid(PlayMode) and PlayMode.is_network()
+
+
+## True when this peer is the network host allowed to broadcast a load.
+func _is_network_host_session() -> bool:
+	if not _is_network_session():
+		return false
+	if not is_instance_valid(NetworkManager):
+		return false
+	return NetworkManager.is_server()
+
+
 ## True when network rows must be greyed out in the current context.
 ## Phase J5.6: in [code]"main_menu"[/code] context, network loads are
 ## always blocked (must use the lobby).  Phase J7: in [code]"lobby"[/code]
@@ -367,11 +384,7 @@ func _network_blocked_tooltip() -> String:
 func _is_hot_seat_blocked() -> bool:
 	if context == "lobby":
 		return true
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  Loading
-	# a hot-seat save into an active network session would tear it down
-	# without including the connected client — deployment-topology guard.
-	if context == "in_game" and is_instance_valid(PlayMode) \
-			and PlayMode.is_network():
+	if context == "in_game" and _is_network_session():
 		return true
 	return false
 
@@ -404,11 +417,11 @@ func _update_action_button_states() -> void:
 	_load_button.disabled = _row_is_disabled(entry)
 
 
-func _find_entry(name: String) -> Dictionary:
-	if name.is_empty():
+func _find_entry(save_name: String) -> Dictionary:
+	if save_name.is_empty():
 		return {}
 	for entry: Dictionary in _entries:
-		if String(entry.get("name", "")) == name:
+		if String(entry.get("name", "")) == save_name:
 			return entry
 	return {}
 
@@ -427,14 +440,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func _on_named_row_toggled(pressed: bool, name: String, row: Button) -> void:
+func _on_named_row_toggled(pressed: bool, save_name: String, row: Button) -> void:
 	if not pressed:
-		if _selected_name == name:
+		if _selected_name == save_name:
 			_selected_name = ""
 			_update_action_button_states()
 		return
 	_clear_other_toggles(row)
-	_selected_name = name
+	_selected_name = save_name
 	_selected_is_resume_for_mode = ""
 	_update_action_button_states()
 
@@ -495,12 +508,7 @@ func _on_load_pressed() -> void:
 	# learns about the load and reloads its board scene.  The
 	# in-session host's own scene reload happens inside
 	# LobbyManager.host_load_save → _maybe_force_board_reload.
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a) —
-	# "is this a network host?" is intrinsically a deployment query.
-	var host_network_load: bool = (
-			is_instance_valid(PlayMode) and PlayMode.is_network()
-			and is_instance_valid(NetworkManager)
-			and NetworkManager.is_server())
+	var host_network_load: bool = _is_network_host_session()
 	if context == "lobby" or host_network_load:
 		SfxManager.play_sfx("droid_sound")
 		hide_modal()

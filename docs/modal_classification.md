@@ -106,8 +106,8 @@ L-slice rows remain in the table for traceability.
 | 7 | [lobby_room.gd:368](../src/scenes/lobby/lobby_room.gd#L368) | `_on_start_game_pressed` early-return `if not PlayMode.is_network()` | (none — lobby flow guard) | **Session-mode dispatcher (KEEP)** | — | Lobby is network-only by definition. Allow-list stays. |
 | 8 | [game_menu_modal.gd:403](../src/ui/save/game_menu_modal.gd#L403) | Save button gating `if PlayMode.is_network()` | Save dialog disable | **Session-mode dispatcher (KEEP)** | — | Network mode disables manual save (engine save is host-only). Allow-list stays. |
 | 9 | [save_game_dialog.gd:272](../src/ui/save/save_game_dialog.gd#L272) | Save flow `if PlayMode.is_network()` | Save dialog content | **Session-mode dispatcher (KEEP)** | — | Same as #8 — disables save UI in network mode. Allow-list stays. |
-| 10 | [load_game_dialog.gd:374](../src/ui/save/load_game_dialog.gd#L374) | Load list filtering `and PlayMode.is_network()` | Load dialog content | **Session-mode dispatcher (KEEP)** | — | Filters which save files appear (hot-seat vs. network checkpoints). Allow-list stays. |
-| 11 | [load_game_dialog.gd:501](../src/ui/save/load_game_dialog.gd#L501) | Load action `is_instance_valid(PlayMode) and PlayMode.is_network()` | Load dialog action gating | **Session-mode dispatcher (KEEP)** | — | Same as #10. Allow-list stays. |
+| 10 | [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd) | `_is_network_session()` centralises the load dialog's deployment-mode query | Load dialog content/action gating | **Session-mode dispatcher (KEEP, L6 tightened)** | — | Filters which save files appear and decides whether host-side network loads broadcast through `LobbyManager`; lint counts this as one surface after L6. |
+| 11 | [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd) | Former second load action `PlayMode.is_network()` branch removed in L6 | Load dialog action gating | **Session-mode dispatcher (L6 complete)** | — | Retained for traceability; no separate lint hit remains. |
 | 12 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | `_finalize_maneuver_execute` — `GameManager.submit_start_displacement(...)` is the only displacement producer path | Displacement modal producer | **Lifecycle producer (L4 complete)** | — | Producer now publishes the command/flow only. Modal origin is exclusively `ModalRouter`. |
 
 ### L-Inventory summary
@@ -116,7 +116,7 @@ L-slice rows remain in the table for traceability.
 |---|---:|---|
 | Lifecycle (must migrate)            | 0 | complete |
 | Affordance (re-express as `UIIntent.affordances`) | 0 | complete |
-| Session-mode dispatcher (KEEP — post-L allow-list floor) | 5 | — |
+| Session-mode dispatcher (KEEP — post-L allow-list floor) | 4 | — |
 | Producer-side lifecycle co-anchor | 0 | complete |
 
 ### Direct-callback modal-open sites without `PlayMode` branches
@@ -137,10 +137,8 @@ alongside the corresponding lifecycle slice.
 After L5, only these intrinsic deployment-mode sites remain:
 1. `game_menu_modal.gd:403` — save button disable.
 2. `save_game_dialog.gd:272` — save dialog content.
-3. `load_game_dialog.gd:374` + `:501` — load dialog content + action (counted as 1 surface).
+3. `load_game_dialog.gd` — load dialog content + action via `_is_network_session()`.
 4. `lobby_room.gd:368` — lobby-only flow.
 
-That is 4 surface concerns (4 UI/dialog/lobby surfaces, with load represented
-by two current hits) → 5 hits in the allow-list. The plan target is ≤ 4; L6
-will collapse the two load-dialog branches into one helper or accept the count
-as the floor and document it.
+That is 4 surface concerns and 4 lint hits after L6, meeting the post-L
+allow-list floor.

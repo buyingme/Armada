@@ -596,9 +596,8 @@ func _on_squadron_activation_done(instance: SquadronInstance) -> void:
 ## Requirements: SQA-011.
 func _on_squadron_modal_closed() -> void:
 	if _squadron_modal and _squadron_modal.is_command_mode():
-		_log.info("Squadron command modal dismissed — show activation "
-				+"button.")
-		_show_activation_button.call()
+		_log.info("Squadron command modal dismissed — activation button "
+				+"visibility stays projection-driven.")
 		return
 	if _show_squadron_modal_button:
 		_show_squadron_modal_button.show_button()

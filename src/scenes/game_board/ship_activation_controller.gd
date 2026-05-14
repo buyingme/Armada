@@ -235,13 +235,6 @@ func on_dial_token_converted(ship: ShipInstance) -> void:
 				_on_token_discard_resolved):
 			EventBus.token_discarded.connect(
 					_on_token_discard_resolved, CONNECT_ONE_SHOT)
-	elif not PlayMode.is_network():
-		# Hot-seat: show the sequence button; network uses interaction state.
-		# Phase K allow-list: session-mode dispatcher (plan §3.1a, §3.1d).
-		# Hot-seat opens the sequence button locally; network drives it
-		# via the projected interaction flow.  Converging is a Phase L
-		# candidate.
-		show_activation_sequence_button()
 
 	var cmd_name: String = ""
 	if not result.is_empty():
@@ -328,6 +321,19 @@ func show_activation_sequence_button() -> void:
 	_panel_mgr.show_activation_button.show_button()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_panel_mgr.show_activation_button.update_position(vp_size)
+
+
+## Applies the projected activation-sequence button affordance.
+func apply_activation_sequence_affordance(is_available: bool) -> void:
+	if _panel_mgr == null or _panel_mgr.show_activation_button == null:
+		return
+	if not is_available or _activation_ctx.ship_activation_state == null:
+		_panel_mgr.show_activation_button.hide_button()
+		return
+	if _is_activation_sequence_button_suppressed():
+		_panel_mgr.show_activation_button.hide_button()
+		return
+	show_activation_sequence_button()
 
 
 func _prepare_activation_context(token: ShipToken,
@@ -478,9 +484,29 @@ func open_modal_from_interaction_state() -> void:
 		configure_and_open_activation_modal()
 	else:
 		_open_activation_modal_mirror()
-	# Always show the "Show Activation Sequence" button so both peers can
-	# re-open the modal if they close it manually.
-	show_activation_sequence_button()
+	apply_activation_sequence_affordance(
+			_is_activation_sequence_affordance_projected())
+
+
+## Opens the command-mode squadron modal from the authoritative
+## ship-activation [code]squadron_step[/code] projection.
+func open_squadron_command_from_interaction_state() -> void:
+	var ship_token: ShipToken = _activation_ctx.activating_ship_token
+	if _activation_ctx.ship_activation_state == null or ship_token == null:
+		return
+	var ship: ShipInstance = ship_token.get_ship_instance()
+	if ship == null:
+		return
+	var resolver: SquadronCommandResolver = _create_squadron_command_resolver(
+			ship, ship_token)
+	if resolver.is_empty():
+		_advance_unavailable_squadron_command()
+		return
+	if not _has_eligible_squadron_in_range(ship, resolver):
+		_complete_unavailable_squadron_command(ship, resolver)
+		return
+	_hide_activation_ui_for_squadron_command()
+	_squadron_phase_controller.open_for_command(resolver, ship_token)
 
 
 ## Returns true when the ship activation modal is already visible.
@@ -773,7 +799,8 @@ func _ensure_crew_panic_modal() -> void:
 ## Called (one-shot) when the player resolves a token overflow discard.
 ## Shows the activation sequence button now that the token count is legal.
 func _on_token_discard_resolved(_ship: RefCounted, _discarded: int) -> void:
-	show_activation_sequence_button()
+	apply_activation_sequence_affordance(
+			_is_activation_sequence_affordance_projected())
 	_log.info("Token discard resolved — showing activation sequence button.")
 
 
@@ -834,39 +861,64 @@ func _on_repair_step_entered() -> void:
 
 
 ## Called when the player presses "Execute Squadron ►" in the activation modal.
-## Creates a SquadronCommandResolver and opens the SquadronActivationModal
-## in command mode.
+## Publishes the authoritative squadron-step marker; [ModalRouter] opens
+## the command-mode SquadronActivationModal from the projected result.
 ## Rules Reference: RRG "Commands" p.4 — Squadron; CM-020–CM-022.
 func _on_squadron_step_entered() -> void:
 	_log.info("Squadron step entered — starting squadron command flow.")
 	if _activation_ctx.ship_activation_state == null or _activation_ctx.activating_ship_token == null:
 		_log.info("Cannot start squadron command — no activation state.")
 		return
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var ship_token: ShipToken = _activation_ctx.activating_ship_token
-	var resolver: SquadronCommandResolver = SquadronCommandResolver.create(
+	submit_activation_step("squadron_step")
+
+
+func _create_squadron_command_resolver(ship: ShipInstance,
+		ship_token: ShipToken) -> SquadronCommandResolver:
+	return SquadronCommandResolver.create(
 			ship, ship_token.global_position, ship_token.global_rotation,
 			ship_token.get_half_width(), ship_token.get_half_length())
-	if resolver.is_empty():
-		_log.info("No squadron activations available — auto-advancing.")
-		_on_squadron_command_done()
+
+
+func _advance_unavailable_squadron_command() -> void:
+	if not _is_local_activation_modal_controller():
 		return
-	if not _has_eligible_squadron_in_range(ship, resolver):
-		_log.info("No friendly squadrons in range — consuming resources "
-				+"and auto-advancing.")
-		var token_result: Dictionary = resolver.finalize()
-		_submit_resolver_spends(ship, token_result)
-		_on_squadron_command_done()
+	_log.info("No squadron activations available — auto-advancing.")
+	_on_squadron_command_done()
+
+
+func _complete_unavailable_squadron_command(ship: ShipInstance,
+		resolver: SquadronCommandResolver) -> void:
+	if not _is_local_activation_modal_controller():
 		return
+	_log.info("No friendly squadrons in range — consuming resources "
+			+"and auto-advancing.")
+	var token_result: Dictionary = resolver.finalize()
+	_submit_resolver_spends(ship, token_result)
+	_on_squadron_command_done()
+
+
+func _hide_activation_ui_for_squadron_command() -> void:
 	if _panel_mgr.show_activation_button:
 		_panel_mgr.show_activation_button.hide_button()
-	# Phase K12-bugfix: hide the ship activation modal when opening the
-	# squadron command modal so they don't visually overlap.
 	if _panel_mgr.activation_modal:
 		_panel_mgr.activation_modal.close()
-	_squadron_phase_controller.open_for_command(resolver, _activation_ctx.activating_ship_token)
+
+
+func _is_activation_sequence_button_suppressed() -> bool:
+	if _has_pending_token_overflow_discard():
+		return true
+	if _attack_executor != null and _attack_executor.is_in_exec_mode():
+		return true
+	return is_command_squadron_modal_active()
+
+
+func _is_activation_sequence_affordance_projected() -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return false
+	var intent: UIProjector.UIIntent = UIProjector.project(
+			game_state, _local_viewer())
+	return bool(intent.affordances.get("activation_sequence_button", false))
 
 
 ## Returns true if at least one friendly non-activated squadron is within
@@ -904,9 +956,6 @@ func _on_squadron_command_done() -> void:
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
 	submit_activation_step("repair_step")
-	# Show the activation button again.
-	if _panel_mgr.show_activation_button and _activation_ctx.activating_ship_token:
-		_panel_mgr.show_activation_button.show_button()
 
 
 ## Submits [SpendDialCommand] and/or [SpendTokenCommand] based on a
@@ -1228,9 +1277,6 @@ func show_end_activation_after_maneuver() -> void:
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step() ## MANEUVER → DONE
 	submit_activation_step("activation_done")
-	# Re-show the "Show Activation Sequence" button so the player
-	# can close and reopen the modal before pressing End Activation.
-	show_activation_sequence_button()
 
 
 ## Called when the player presses "End Activation ►" in the modal.

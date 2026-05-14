@@ -132,6 +132,7 @@ func test_default_intent_values() -> void:
 	assert_eq(intent.step_id, Constants.InteractionStep.NONE)
 	assert_eq(intent.modal_kind, Constants.ModalKind.NONE)
 	assert_eq(intent.payload, {})
+	assert_eq(intent.affordances, {})
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +170,6 @@ func test_ship_activation_substeps_map_to_activation() -> void:
 			Constants.InteractionStep.REVEAL_DIAL,
 			Constants.InteractionStep.SPEND_DIAL,
 			Constants.InteractionStep.MANEUVER_STEP,
-			Constants.InteractionStep.SQUADRON_STEP,
 			Constants.InteractionStep.REPAIR_STEP,
 			Constants.InteractionStep.ATTACK_STEP,
 			Constants.InteractionStep.ACTIVATION_DONE]:
@@ -186,6 +186,32 @@ func test_wait_for_ship_select_has_no_modal() -> void:
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT, 0)
 	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
 	assert_eq(intent.modal_kind, Constants.ModalKind.NONE)
+	assert_false(intent.affordances.has("activation_sequence_button"),
+			"Waiting for ship select should not project the sequence button.")
+
+
+func test_ship_activation_squadron_step_maps_to_squadron_modal() -> void:
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP, 0)
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+	assert_eq(intent.modal_kind, Constants.ModalKind.SQUADRON,
+			"SQUADRON_STEP should project the command-mode squadron modal.")
+	assert_true(bool(intent.affordances.get(
+			"activation_sequence_button", false)),
+			"Ship activation should project the sequence-button affordance.")
+
+
+func test_ship_activation_affordance_visible_to_observer() -> void:
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN, 0)
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 1)
+	assert_false(intent.is_interactive,
+			"Observer should not control the activation modal.")
+	assert_true(bool(intent.affordances.get(
+			"activation_sequence_button", false)),
+			"Common activation modals should remain reopenable by observers.")
 
 
 func test_squadron_flow_maps_to_squadron() -> void:

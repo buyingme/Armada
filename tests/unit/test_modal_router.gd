@@ -9,9 +9,11 @@ class StubShipActivationController:
 	extends ShipActivationController
 
 	var close_calls: int = 0
+	var affordance_values: Array[bool] = []
 	var interactivity_calls: int = 0
 	var modal_open: bool = false
 	var open_calls: int = 0
+	var squadron_command_open_calls: int = 0
 	var sync_calls: int = 0
 
 
@@ -31,6 +33,15 @@ class StubShipActivationController:
 
 	func update_activation_modal_interactivity() -> void:
 		interactivity_calls += 1
+
+
+	func apply_activation_sequence_affordance(is_available: bool) -> void:
+		affordance_values.append(is_available)
+
+
+	func open_squadron_command_from_interaction_state() -> void:
+		squadron_command_open_calls += 1
+		modal_open = false
 
 
 	func is_command_squadron_modal_active() -> bool:
@@ -187,6 +198,31 @@ func test_route_command_result_wait_for_ship_select_closes_modal() -> void:
 	# Assert
 	assert_eq(controller.close_calls, 1,
 			"WAIT_FOR_SHIP_SELECT should close the activation modal.")
+	assert_eq(controller.affordance_values, [false],
+			"WAIT_FOR_SHIP_SELECT should clear the sequence-button affordance.")
+
+
+func test_route_command_result_squadron_step_opens_command_modal() -> void:
+	# Arrange
+	var controller: StubShipActivationController = _create_activation_controller(true)
+	_create_router(Callable(), controller)
+	GameManager.current_game_state = _state_with_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP,
+			0)
+	var command: AdvanceActivationStepCommand = AdvanceActivationStepCommand.new(
+			0, {"ship_index": 0, "step_id": "squadron_step"})
+
+	# Act
+	_router.route_command_result(command, {})
+
+	# Assert
+	assert_eq(controller.squadron_command_open_calls, 1,
+			"Projected squadron_step should open the command-mode squadron modal.")
+	assert_eq(controller.open_calls, 0,
+			"SQUADRON_STEP should not reopen the ship activation modal.")
+	assert_eq(controller.affordance_values, [true],
+			"SQUADRON_STEP should forward the activation-sequence affordance.")
 
 
 func _create_router(command_reaction_fn: Callable,

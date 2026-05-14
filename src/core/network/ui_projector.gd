@@ -57,6 +57,11 @@ class UIIntent extends RefCounted:
 	## an attack).  Empty dictionary when there is no flow.  Phase I6b.
 	var payload: Dictionary = {}
 
+	## Optional projected UI affordances that are not themselves game-state
+	## mutations, such as a local button that re-opens a common modal.
+	## Values are booleans keyed by stable snake_case names.
+	var affordances: Dictionary = {}
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -82,6 +87,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	intent.modal_kind = _modal_kind_for(flow)
 	intent.payload = flow.payload.duplicate(true) if flow.payload != null \
 			else {}
+	intent.affordances = _affordances_for(flow)
 	return intent
 
 
@@ -126,6 +132,8 @@ static func _modal_kind_for(flow: InteractionFlow) -> Constants.ModalKind:
 		Constants.InteractionFlow.SHIP_ACTIVATION:
 			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 				return Constants.ModalKind.NONE
+			if flow.step_id == Constants.InteractionStep.SQUADRON_STEP:
+				return Constants.ModalKind.SQUADRON
 			return Constants.ModalKind.ACTIVATION
 		Constants.InteractionFlow.SQUADRON_ACTIVATION:
 			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT:
@@ -160,3 +168,15 @@ static func _attack_modal_kind_for_step(
 		Constants.InteractionStep.ATTACK_CRITICAL_CHOICE:
 			return Constants.ModalKind.ATTACK_CRITICAL_CHOICE
 	return Constants.ModalKind.NONE
+
+
+## Computes non-mutating UI affordances from the current authoritative flow.
+static func _affordances_for(flow: InteractionFlow) -> Dictionary:
+	var affordances: Dictionary = {}
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return affordances
+	if flow.step_id == Constants.InteractionStep.NONE \
+			or flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
+		return affordances
+	affordances["activation_sequence_button"] = true
+	return affordances

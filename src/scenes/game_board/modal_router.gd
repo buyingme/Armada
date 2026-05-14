@@ -94,6 +94,7 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_network_displacement_modal(command)
 	_sync_attack_panel_mirror(game_state, local)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
+	_apply_activation_affordances(intent)
 
 
 func _drive_network_displacement_modal(command: GameCommand) -> void:
@@ -130,10 +131,21 @@ func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent,
 	match intent.step_id:
 		Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 			_ship_activation_controller.close_modal_from_interaction_state()
+		Constants.InteractionStep.SQUADRON_STEP:
+			if _is_activation_modal_open_command(command):
+				_ship_activation_controller.open_squadron_command_from_interaction_state()
 		_:
 			if intent.modal_kind == Constants.ModalKind.ACTIVATION \
 					and _is_activation_modal_open_command(command):
 				_open_activation_modal_from_intent()
+
+
+func _apply_activation_affordances(intent: UIProjector.UIIntent) -> void:
+	if _ship_activation_controller == null:
+		return
+	var show_button: bool = bool(
+			intent.affordances.get("activation_sequence_button", false))
+	_ship_activation_controller.apply_activation_sequence_affordance(show_button)
 
 
 func _is_activation_modal_open_command(command: GameCommand) -> bool:

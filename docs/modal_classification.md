@@ -90,14 +90,14 @@ Classification:
   These are the post-L allow-list floor (target ≤ 4).
 - **Pure local UX** — read-only visuals (tooltip, banner). Out of scope.
 
-Seed: the 8 sites currently allow-listed by `scripts/lint_phase_k.sh`
+Seed: the 7 sites currently allow-listed by `scripts/lint_phase_k.sh`
 plus the direct `_displacement_controller.start()` call site (no
 `PlayMode` branch but a hot-seat-only lifecycle entry point). Completed
 L-slice rows remain in the table for traceability.
 
 | # | File:Line | Symbol / context | Modal target | Classification | L slice | Notes |
 |--:|---|---|---|---|---|---|
-| 1 | [ship_activation_controller.gd:231](../src/scenes/game_board/ship_activation_controller.gd#L231) | `_on_ship_dropped_for_activation` `elif not PlayMode.is_network()` → `show_activation_sequence_button()` | Sequence button affordance | **Affordance** | L3 | Hot-seat-only trigger. Network drives it from `interaction_flow`. Re-express as `UIIntent.affordances["activation_sequence_button"]`. |
+| 1 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | Token-convert activation sequence button now flows through `UIIntent.affordances["activation_sequence_button"]`; former `elif not PlayMode.is_network()` branch removed | Sequence button affordance | **Affordance (L3 complete)** | — | L3 makes the sequence button a projected non-mutating UI affordance. |
 | 2 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | `submit_activation_step` submits `advance_activation_step` in both modes; former `submit_network_activation_step` guard removed | Activation step projection | **Lifecycle (L2 complete)** | — | L2 makes hot-seat produce command-executed projection events for activation sub-step reopens. |
 | 3 | [ship_activation_controller.gd:1116](../src/scenes/game_board/ship_activation_controller.gd#L1116) | `_finalize_maneuver_execute` `if not PlayMode.is_network(): _displacement_controller.start(...)` | Displacement modal | **Lifecycle** | L4 | The defect anchor for the 2026-05-11 displacement bug. Network already projects via `_open_displacement_modal_from_command`; L4 removes this hot-seat short-circuit so both modes flow through projection. RRG "Overlapping" p.8: controller is always the opponent of the maneuvering ship's owner — projection enforces that invariant centrally. |
 | 4 | [game_board.gd:670](../src/scenes/game_board/game_board.gd#L670) | `_on_active_player_changed` `if PlayMode.is_network(): _handle_network_active_player(...)` | Handoff overlay vs. "waiting" overlay | **Lifecycle (content fork)** | L5 | The two branches build *different* overlay objects. L5 unifies on a single overlay type styled via `UIIntent` (`needs_handoff_overlay` vs. `needs_waiting_overlay`). |
@@ -115,7 +115,7 @@ L-slice rows remain in the table for traceability.
 | Category | Count | L slice(s) |
 |---|---:|---|
 | Lifecycle (must migrate)            | 2 | L4, L5 |
-| Affordance (re-express as `UIIntent.affordances`) | 1 | L3 |
+| Affordance (re-express as `UIIntent.affordances`) | 0 | complete |
 | Session-mode dispatcher (KEEP — post-L allow-list floor) | 5 | — |
 | Producer-side lifecycle co-anchor | 1 | L4 |
 
@@ -128,13 +128,13 @@ alongside the corresponding lifecycle slice.
 | File:Line | Symbol | Modal | L slice |
 |---|---|---|---|
 | [ship_activation_controller.gd `configure_and_open_activation_modal`](../src/scenes/game_board/ship_activation_controller.gd) | Projection helper called through `open_modal_from_interaction_state()`; direct activation-entry callbacks removed in L2 | Activation modal | complete |
-| [ship_activation_controller.gd `_show_activation_sequence_button`](../src/scenes/game_board/ship_activation_controller.gd) | Direct affordance trigger | Sequence button | L3 |
-| [squadron_phase_controller.gd squadron command modal open](../src/scenes/game_board/squadron_phase_controller.gd) | Squadron-command activation modal entry | Squadron modal | L3 |
+| [ship_activation_controller.gd `_show_activation_sequence_button`](../src/scenes/game_board/ship_activation_controller.gd) | Projection affordance helper; normal activation-flow show/hide now routes through `apply_activation_sequence_affordance()` | Sequence button | complete |
+| [squadron_phase_controller.gd squadron command modal open](../src/scenes/game_board/squadron_phase_controller.gd) | Command-mode modal opens through `ModalRouter -> ShipActivationController.open_squadron_command_from_interaction_state()` on `advance_activation_step("squadron_step")` | Squadron modal | complete |
 | [displacement_controller.gd `start()`](../src/scenes/game_board/displacement_controller.gd) | Direct modal-open entry called from #12 above (hot-seat) and from [modal_router.gd](../src/scenes/game_board/modal_router.gd) (network projection) | Displacement modal | L4 |
 
 ### Post-L allow-list floor (target ≤ 4)
 
-After L2, only these intrinsic deployment-mode sites remain:
+After L3, only these intrinsic deployment-mode sites remain:
 1. `game_menu_modal.gd:403` — save button disable.
 2. `save_game_dialog.gd:272` — save dialog content.
 3. `load_game_dialog.gd:374` + `:501` — load dialog content + action (counted as 1 surface).

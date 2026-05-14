@@ -1,6 +1,6 @@
 # Refactoring Phases L & M — Unified Flow Authority and Rule Registry
 
-> **Status:** IN PROGRESS - 2026-05-14. L0, L0.5, L1, L2, L3, L4, L5, and L6 are complete; L7 is the next test/manual-sweep slice.
+> **Status:** IN PROGRESS - 2026-05-14. Phase L is complete (L0-L7); M0 is the next docs slice.
 > **Predecessors:** Phase K is complete. The deferred hot-seat modal-lifecycle work from Phase K §3.1d is now Phase L's scope.
 > **Go-conditions (verified 2026-05-14):**
 >   - K12 `CommandRouterAdapter` committed (`e17ff05`).
@@ -10,7 +10,7 @@
 >   - `bash scripts/lint_phase_k.sh` exits `0` (4 allow-listed branches after L6; the L target floor is met).
 >   - GUT baseline: 148 scripts / 2 956 tests / 5 629 asserts / 0 failures. Godot 4.5.1 currently aborts after the green summary with `recursive_mutex lock failed` / exit 134; track separately from test failures.
 >   - No `interaction_flow` schema change pending. No save-format change pending.
-> **Successor:** Resumes G4.7 (Spectator), G4.8 (Reconnection runtime), G4.9 (Turn Timers), then Phase 10c.
+> **Successor:** Complete Phase M, then resume G4.7 (Spectator), G4.8 (Reconnection runtime), G4.9 (Turn Timers), then Phase 10c.
 > **Cross-refs:** [docs/implementation_plan.md](implementation_plan.md), [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md) §3.1d, [.skills/serialization_and_commands.md](../.skills/serialization_and_commands.md), [.skills/architecture_patterns.md](../.skills/architecture_patterns.md).
 
 ---
@@ -367,8 +367,7 @@ mutation.
 > under the K-G2 target of 2 000) into focused controllers. The slice
 > targets below reference the *current* owners (file + symbol), not the
 > historical `game_board.gd:NNNN` line numbers the 2026-05-10 draft used.
-> The lint allow-list currently reports **5 branches** after L5; the L target floor
-> is **<= 4** after L6.
+> The lint allow-list reports **4 branches** after L6, meeting the Phase L target floor.
 
 | Slice | Scope | Risk | LOC delta | MT? |
 |------:|---|---|---:|:---:|
@@ -380,7 +379,7 @@ mutation.
 | **L4** | **Complete.** Migrated **Displacement modal** lifecycle to projection in hot-seat. [`displacement_controller.gd`](../src/scenes/game_board/displacement_controller.gd) `start()` is now an effect of `SQUADRON_DISPLACEMENT/DISPLACEMENT_PLACE`, opened by `ModalRouter` after `StartDisplacementCommand` projects the authoritative flow. The maneuver producer now only submits `start_displacement`; both modes consume `interaction_flow.controller_player` so RRG "Overlapping", p.8's non-moving-player controller rule has one modal origin. Removed the §3.1a displacement-modal-origin allow-list site and added hot-seat/network router coverage in `test_modal_router.gd`. MT follow-ups fixed the no-repair-action `REPAIR_STEP` stall, CF-token reroll mirror sync, Squadron-command decline affordance, and stale activation auto-skip timers. | medium | done | yes |
 | **L5** | **Complete.** Migrated **`_on_active_player_changed` content fork** to a single projected turn-transition path. `UIProjector.project_turn_transition()` now describes shared-screen handoff, active-player banners, passive waiting state, command-dial startup, Squadron observer startup, and camera/card perspective. [`game_board.gd`](../src/scenes/game_board/game_board.gd) applies that `UIIntent` without a `PlayMode.is_network()` lifecycle branch, dropping the lint floor from 6 to 5 allow-listed branches. | high | done | yes |
 | **L6** | **Complete.** Lint tightening: `LoadGameDialog` now centralises its deployment-mode query in `_is_network_session()`, so hot-seat save blocking and host-side network-load broadcast derive from one load-dialog surface. `bash scripts/lint_phase_k.sh` now reports **4** allow-listed branches, meeting the post-L floor, and [.github/copilot-instructions.md](../.github/copilot-instructions.md) §7 documents that floor. | low | done | no |
-| **L7** | Manual-test sweep: hot-seat full-game playthrough (round 1 + round 2) with every modal lifecycle observed. Same playthrough on network host + client. Use `bash scripts/run_baseline_traces.sh --all` as the automated pre-flight, then compare logs/UI behaviour side-by-side: modal open/close should be projected from the intended `interaction_flow` state on both peers and both modes, but exact network command-trace equality across separate runs is not required until the transport has a deterministic pump. Augment with the annotation-system diff for the displacement, activation-attack-skip, and brace cases (the three lifecycle-anchored defects from `c673ef0`) so the L migration is regression-tested against the bugs that motivated it. | trivial (test only) | 0 | yes |
+| **L7** | **Complete.** Manual-test sweep passed in hot-seat and network. Automated pre-flight passed (`148 / 2 956 / 5 629`, lint `0 violations (4 allow-listed branches)`, `run_baseline_traces.sh --all` hot-seat trace/state + network peer-state equality). Network-mode annotations were created for the three lifecycle-anchored regression cases: `activation modal auto skip attack: pass`, `brace order test: pass`, and `displacement test: pass`. Annotation JSON files remain local ignored runtime evidence under `saves/annotations/`, not committed fixtures. | trivial (test only) | done | yes |
 
 ### 4.1a L0.5 replay-regression automation (implemented — REVISED v3)
 
@@ -690,8 +689,8 @@ within the same run.
 
 ### 7.1 Phase K dependency
 
-Phase K is complete for LM purposes. L0, L0.5, L1, L2, L3, L4, L5, and L6 are also complete,
-so the next LM slice is **L7 manual-test sweep**.
+Phase K and Phase L are complete for LM purposes. The next LM slice is
+**M0 game-flow master document**.
 
 Required Phase K foundations are present:
 
@@ -727,7 +726,7 @@ Current post-fix snapshot (2026-05-14):
 
 Recommended next sequence:
 
-1. Begin L7 from the current post-L6 baseline.
+1. Begin M0 from the current post-L7 baseline.
 2. Keep LM changes out of [src/scenes/game_board/attack_executor.gd](../src/scenes/game_board/attack_executor.gd), [src/autoload/game_manager.gd](../src/autoload/game_manager.gd), and [src/autoload/save_game_manager.gd](../src/autoload/save_game_manager.gd) unless the slice explicitly extracts responsibilities from them.
 3. Run `bash scripts/run_baseline_traces.sh --all` for every slice that touches modal, replay, network, command-submission, or rule-observer flow.
 
@@ -772,9 +771,9 @@ a single-file change.
 
 ## 8. Quick-start guide for executing this plan
 
-### Before starting L7
+### Before starting M0
 
-1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, L4, L5, L6, and the loaded-save
+1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, L4, L5, L6, L7, and the loaded-save
    persistent-effect fix (`d752ffd`).
 2. Confirm `bash scripts/lint_phase_k.sh` exits `0` with 4 allow-listed
    branches after L6.
@@ -783,7 +782,7 @@ a single-file change.
    abort is not a test failure.
 4. Run `bash scripts/run_baseline_traces.sh --all` before starting any modal,
    network, replay, command-submission, or rule-observer slice.
-5. Start a focused branch for L7 (`phase-l/manual-sweep`) and keep replay
+5. Start a focused branch for M0 (`phase-m/game-flow-doc`) and keep replay
    artifact churn out of commits.
 
 ### During each Phase L/M slice
@@ -845,10 +844,10 @@ The proposed approach matches the actual shape of the problem domain:
 5. The **2026-05-13 loaded Blinded Gunners bug (`d752ffd`) exposed the runtime-rule half of the same problem**: serialized state was correct, but transient hooks were missing after load. The hardened Phase M plan now treats active-rule rebuild as a first-class contract.
 
 This plan is *bounded* (concrete slice list, concrete LOC budget,
-concrete acceptance gates), *aligned* (Phase K complete; L0/L0.5/L1/L2/L3/L4 complete;
-unblocks G4.7+ after L/M), and *minimally invasive* (no save format break,
+concrete acceptance gates), *aligned* (Phase K and Phase L complete;
+unblocks G4.7+ after Phase M), and *minimally invasive* (no save format break,
 no new RPC, no new EventBus channel, no wholesale replacement of existing
 runtime-effect primitives).
 
-**Verdict: safe to begin L7 next.** The plan is complete enough to drive the
-manual-test sweep, with hot-seat and network replay gates already in place.
+**Verdict: safe to begin M0 next.** Phase L closed with hot-seat and network
+manual-test parity, and the replay/lint gates are already in place for Phase M.

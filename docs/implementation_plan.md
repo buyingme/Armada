@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L6 load-dialog lint tightening; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-14 (Phase L7 manual-test sweep; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -18,7 +18,7 @@
 | GUT tests | 2 956 |
 | GUT asserts | 5 629 |
 | Failing tests | 0 |
-| Last commit | This commit — L6 load-dialog lint tightening |
+| Last commit | This commit — L7 manual-test sweep |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -115,7 +115,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — L6 load-dialog lint tightening is implemented. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -158,6 +158,13 @@ regression gate is complete and remains the required L/M automated gate:
   centralises its deployment-mode network query in `_is_network_session()` and
   routes both hot-seat save blocking and host network-load broadcast checks
   through that helper; the lint floor dropped from 5 to 4 allow-listed branches.
+- L7 result: manual-test sweep passed in hot-seat and network. Automated
+  pre-flight preserved the `148 / 2 956 / 5 629` GUT baseline, Phase K lint
+  reported `0 violations (4 allow-listed branches)`, and baseline traces
+  passed hot-seat trace/state plus network peer-state equality. Network-mode
+  annotations recorded pass evidence for activation auto-skip, brace canonical
+  order, and displacement modal projection; annotation JSON files remain local
+  ignored runtime artifacts under `saves/annotations/`.
 
 ---
 

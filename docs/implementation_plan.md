@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L1 ModalRouter slice implemented; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-14 (Phase L2 activation modal projection implemented; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 147 |
-| GUT tests | 2 936 |
-| GUT asserts | 5 571 |
+| GUT tests | 2 939 |
+| GUT asserts | 5 576 |
 | Failing tests | 0 |
-| Last commit | Current commit: L1 ModalRouter projection path |
+| Last commit | Current commit: L2 activation modal projection |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -35,7 +35,7 @@ Runtime invariants:
   across separate runs.
 
 Verification note: the 2026-05-14 full GUT summary is green
-(147 / 2 936 / 5 571, 0 failures), but Godot 4.5.1 aborted after the summary
+(147 / 2 939 / 5 576, 0 failures), but Godot 4.5.1 aborted after the summary
 with `recursive_mutex lock failed` / exit 134.  The failing save/load test from
 the first full run passed in isolation (24 / 24); track the post-summary abort
 separately if it persists outside this slice.
@@ -115,7 +115,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — L1 ModalRouter is implemented. L0.5 replay
+Status: **IN PROGRESS** — L2 activation modal projection is implemented. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -124,6 +124,11 @@ regression gate is complete and remains the required L/M automated gate:
 - L1 result: [modal_router.gd](../src/scenes/game_board/modal_router.gd)
   owns the `CommandProcessor.command_executed` projection path; the lint floor
   dropped from 11 to 10 allow-listed branches.
+- L2 result: [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
+  submits activation-step transitions through commands in both hot-seat and
+  network; [modal_router.gd](../src/scenes/game_board/modal_router.gd) opens
+  closed activation modals from projected lifecycle commands; the lint floor
+  dropped from 10 to 8 allow-listed branches.
 
 ---
 
@@ -497,7 +502,7 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L1 ModalRouter implemented)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
+1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L2 activation modal projection implemented)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI

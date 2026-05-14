@@ -90,17 +90,18 @@ Classification:
   These are the post-L allow-list floor (target ≤ 4).
 - **Pure local UX** — read-only visuals (tooltip, banner). Out of scope.
 
-Seed: the 10 sites currently allow-listed by `scripts/lint_phase_k.sh`
+Seed: the 8 sites currently allow-listed by `scripts/lint_phase_k.sh`
 plus the direct `_displacement_controller.start()` call site (no
-`PlayMode` branch but a hot-seat-only lifecycle entry point).
+`PlayMode` branch but a hot-seat-only lifecycle entry point). Completed
+L-slice rows remain in the table for traceability.
 
 | # | File:Line | Symbol / context | Modal target | Classification | L slice | Notes |
 |--:|---|---|---|---|---|---|
 | 1 | [ship_activation_controller.gd:231](../src/scenes/game_board/ship_activation_controller.gd#L231) | `_on_ship_dropped_for_activation` `elif not PlayMode.is_network()` → `show_activation_sequence_button()` | Sequence button affordance | **Affordance** | L3 | Hot-seat-only trigger. Network drives it from `interaction_flow`. Re-express as `UIIntent.affordances["activation_sequence_button"]`. |
-| 2 | [ship_activation_controller.gd:430](../src/scenes/game_board/ship_activation_controller.gd#L430) | `submit_network_activation_step` early-return `if not PlayMode.is_network()` | (none — pure RPC guard) | **Session-mode dispatcher (KEEP)** | — | Function is network-only by name. The branch guards the RPC submitter, not a modal. No lifecycle impact. Allow-list stays. |
+| 2 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | `submit_activation_step` submits `advance_activation_step` in both modes; former `submit_network_activation_step` guard removed | Activation step projection | **Lifecycle (L2 complete)** | — | L2 makes hot-seat produce command-executed projection events for activation sub-step reopens. |
 | 3 | [ship_activation_controller.gd:1116](../src/scenes/game_board/ship_activation_controller.gd#L1116) | `_finalize_maneuver_execute` `if not PlayMode.is_network(): _displacement_controller.start(...)` | Displacement modal | **Lifecycle** | L4 | The defect anchor for the 2026-05-11 displacement bug. Network already projects via `_open_displacement_modal_from_command`; L4 removes this hot-seat short-circuit so both modes flow through projection. RRG "Overlapping" p.8: controller is always the opponent of the maneuvering ship's owner — projection enforces that invariant centrally. |
 | 4 | [game_board.gd:670](../src/scenes/game_board/game_board.gd#L670) | `_on_active_player_changed` `if PlayMode.is_network(): _handle_network_active_player(...)` | Handoff overlay vs. "waiting" overlay | **Lifecycle (content fork)** | L5 | The two branches build *different* overlay objects. L5 unifies on a single overlay type styled via `UIIntent` (`needs_handoff_overlay` vs. `needs_waiting_overlay`). |
-| 5 | [attack_panel_controller.gd:99](../src/scenes/game_board/attack_panel_controller.gd#L99) | `react_to_command` — handles `resolve_immediate_effect` only `and PlayMode.is_network()` | Immediate-choice modal cleanup | **Lifecycle** | L2 (folds into activation/attack migration) | In hot-seat the local executor still owns post-modal cleanup directly; in network the remote-peer path calls `apply_remote_immediate_choice`. After L1's `ModalRouter`, both modes route through the same `command_executed` projection, eliminating the branch. |
+| 5 | [attack_panel_controller.gd](../src/scenes/game_board/attack_panel_controller.gd) | `react_to_command` handles `resolve_immediate_effect` in both modes | Immediate-choice modal cleanup | **Lifecycle (L2 complete)** | — | `apply_remote_immediate_choice()` is idempotent when no pending choice exists, so hot-seat and network now share the same command-executed cleanup path. |
 | 6 | [modal_router.gd](../src/scenes/game_board/modal_router.gd) | `_drive_network_displacement_modal` uses the network-local-player axis, not `PlayMode.is_network()` | Displacement modal (network projection path) | **Lifecycle (L1 complete)** | L4 | L1 promoted the former adapter branch into `ModalRouter` and removed one allow-listed `PlayMode` branch. L4 makes hot-seat consume the same projection route and removes the remaining hot-seat direct `start()` path. |
 | 7 | [lobby_room.gd:368](../src/scenes/lobby/lobby_room.gd#L368) | `_on_start_game_pressed` early-return `if not PlayMode.is_network()` | (none — lobby flow guard) | **Session-mode dispatcher (KEEP)** | — | Lobby is network-only by definition. Allow-list stays. |
 | 8 | [game_menu_modal.gd:403](../src/ui/save/game_menu_modal.gd#L403) | Save button gating `if PlayMode.is_network()` | Save dialog disable | **Session-mode dispatcher (KEEP)** | — | Network mode disables manual save (engine save is host-only). Allow-list stays. |
@@ -113,9 +114,9 @@ plus the direct `_displacement_controller.start()` call site (no
 
 | Category | Count | L slice(s) |
 |---|---:|---|
-| Lifecycle (must migrate)            | 3 | L2, L4, L5 |
+| Lifecycle (must migrate)            | 2 | L4, L5 |
 | Affordance (re-express as `UIIntent.affordances`) | 1 | L3 |
-| Session-mode dispatcher (KEEP — post-L allow-list floor) | 6 | — |
+| Session-mode dispatcher (KEEP — post-L allow-list floor) | 5 | — |
 | Producer-side lifecycle co-anchor | 1 | L4 |
 
 ### Direct-callback modal-open sites without `PlayMode` branches
@@ -126,27 +127,20 @@ alongside the corresponding lifecycle slice.
 
 | File:Line | Symbol | Modal | L slice |
 |---|---|---|---|
-| [ship_activation_controller.gd `configure_and_open_activation_modal`](../src/scenes/game_board/ship_activation_controller.gd) | Activation entry callback | Activation modal | L2 |
+| [ship_activation_controller.gd `configure_and_open_activation_modal`](../src/scenes/game_board/ship_activation_controller.gd) | Projection helper called through `open_modal_from_interaction_state()`; direct activation-entry callbacks removed in L2 | Activation modal | complete |
 | [ship_activation_controller.gd `_show_activation_sequence_button`](../src/scenes/game_board/ship_activation_controller.gd) | Direct affordance trigger | Sequence button | L3 |
 | [squadron_phase_controller.gd squadron command modal open](../src/scenes/game_board/squadron_phase_controller.gd) | Squadron-command activation modal entry | Squadron modal | L3 |
 | [displacement_controller.gd `start()`](../src/scenes/game_board/displacement_controller.gd) | Direct modal-open entry called from #12 above (hot-seat) and from [modal_router.gd](../src/scenes/game_board/modal_router.gd) (network projection) | Displacement modal | L4 |
 
 ### Post-L allow-list floor (target ≤ 4)
 
-After L2–L6, only these intrinsic deployment-mode sites remain:
+After L2, only these intrinsic deployment-mode sites remain:
 1. `game_menu_modal.gd:403` — save button disable.
 2. `save_game_dialog.gd:272` — save dialog content.
 3. `load_game_dialog.gd:374` + `:501` — load dialog content + action (counted as 1 surface).
 4. `lobby_room.gd:368` — lobby-only flow.
-5. `ship_activation_controller.gd:430` — `submit_network_activation_step` RPC guard.
 
-That is 5 surface concerns (4 UI dialogs + 1 RPC submitter guard) → 5
-hits in the allow-list. The plan target is ≤ 4; L6 will collapse the
-two load-dialog branches into one helper or accept the count as the
-floor and document it. **Action item carried into L6:** decide whether
-the RPC guard at #2 (`ship_activation_controller.gd:430`) can be moved
-into a network-only autoload (e.g. `NetworkPhaseSync` from K16) so the
-ship-activation controller is fully mode-agnostic. If so, the floor
-drops to 4 cleanly; if not, the plan target relaxes to ≤ 5 and L6 docs
-the reason.
-
+That is 4 surface concerns (4 UI/dialog/lobby surfaces, with load represented
+by two current hits) → 5 hits in the allow-list. The plan target is ≤ 4; L6
+will collapse the two load-dialog branches into one helper or accept the count
+as the floor and document it.

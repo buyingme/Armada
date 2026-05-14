@@ -89,14 +89,10 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command.command_type == "redirect_done":
 		_attack_executor.apply_defender_redirect_done()
 		return
-	# Phase I6b-3 R5: [ResolveImmediateEffectCommand] — when the chooser
-	# was the remote peer, the local (attacker) executor still owns the
-	# post-modal cleanup + finalize.  Hot-seat skips this branch
-	# (chooser modal runs in-process).
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a) — there
-	# is no "remote peer" concept in hot-seat by definition.
-	if command.command_type == "resolve_immediate_effect" \
-			and PlayMode.is_network():
+	# Phase I6b-3 R5 / L2: [ResolveImmediateEffectCommand] cleanup is
+	# idempotent when no pending choice exists, so both hot-seat and network
+	# consume the same command-executed reaction.
+	if command.command_type == "resolve_immediate_effect":
 		_attack_executor.apply_remote_immediate_choice(result)
 
 

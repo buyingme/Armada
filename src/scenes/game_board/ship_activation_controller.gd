@@ -177,19 +177,25 @@ func _connect_panel_signals() -> void:
 
 
 ## DialDragController signal callback.  Called when the player drops the
-## dial on the owning ship token.  Sets up activation state and shows the
-## activation-sequence button.
+## dial on the owning ship token.  Sets up activation context before the
+## command executes so [ModalRouter] can open from the projected flow.
 ## Requirements: UI-024, UI-025, SP-010, ACT-007, FLOW-002.
 func on_dial_ship_activated(token: ShipToken, ship: ShipInstance) -> void:
-	GameManager.activate_ship(ship)
+	_prepare_activation_context(token, ship)
+	var result: Dictionary = GameManager.activate_ship(ship)
+	if result.is_empty():
+		_clear_activation_context_after_rejection()
+		return
+	if bool(_is_pending_remote_result.call(result)):
+		_log.info("Ship activation submitted for '%s' (awaiting server result)." \
+				% [ship.data_key if ship else "?"])
+		return
 	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	if not revealed.is_empty():
 		var cmd: int = int(revealed.get("command", 0))
 		token.show_revealed_dial(cmd)
-	_activation_ctx.set_active(token, ShipActivationState.create(ship))
-	if _panel_mgr.activation_sidebar and ship:
-		_panel_mgr.activation_sidebar.highlight_active(ship)
-	show_activation_sequence_button()
+	if _activation_ctx.ship_activation_state != null:
+		_activation_ctx.ship_activation_state.refresh_navigate_availability()
 	_log.info("Ship activated via dial drop: '%s'." % ship.data_key)
 
 
@@ -205,16 +211,17 @@ func on_dial_token_converted(ship: ShipInstance) -> void:
 	# synchronously via call_local RPC inside NetworkHostCommandSubmitter)
 	# can find the context.
 	var token: ShipToken = _find_ship_token_for_instance.call(ship) as ShipToken
-	_activation_ctx.set_active(token, ShipActivationState.create(ship))
-	if _panel_mgr.activation_sidebar:
-		_panel_mgr.activation_sidebar.highlight_active(ship)
+	_prepare_activation_context(token, ship)
 
 	var result: Dictionary = GameManager.activate_ship_as_token(ship)
+	if result.is_empty():
+		_clear_activation_context_after_rejection()
+		return
 
-	# Network mode: modal lifecycle is driven by interaction-state updates.
+	# Modal lifecycle is driven by interaction-state updates in every mode.
 	# activation_modal_open  → open_modal_from_interaction_state()
 	# wait_for_ship_select   → close_modal_from_interaction_state()
-	# No need to show the sequence button or open the modal here.
+	# No need to open the modal directly here.
 	if bool(_is_pending_remote_result.call(result)):
 		_log.info("Ship activated via card drop (token convert): '%s' " \
 				% [ship.data_key if ship else "?"] \
@@ -323,6 +330,20 @@ func show_activation_sequence_button() -> void:
 	_panel_mgr.show_activation_button.update_position(vp_size)
 
 
+func _prepare_activation_context(token: ShipToken,
+		ship: ShipInstance) -> void:
+	_activation_ctx.set_active(token, ShipActivationState.create(ship))
+	if _panel_mgr.activation_sidebar and ship:
+		_panel_mgr.activation_sidebar.highlight_active(ship)
+
+
+func _clear_activation_context_after_rejection() -> void:
+	_activation_ctx.clear()
+	if _panel_mgr.activation_sidebar:
+		_panel_mgr.activation_sidebar.clear_active()
+		_panel_mgr.activation_sidebar.refresh()
+
+
 ## Shows and positions the End Activation button. Called from K8b
 ## leftovers (currently unused — kept for future re-introduction).
 func show_end_activation_button() -> void:
@@ -334,9 +355,8 @@ func show_end_activation_button() -> void:
 
 
 ## Applies dynamic skip/interactable flags and opens the activation modal.
-## Public so K8b leftovers (squadron-step skipped, repair done, attack
-## exec completed/cancelled, sequence requested, end-of-maneuver) can
-## still call it.
+## Called by [method open_modal_from_interaction_state] for the controller
+## peer after [ModalRouter] projects an activation lifecycle command.
 func configure_and_open_activation_modal() -> void:
 	if _panel_mgr == null or _panel_mgr.activation_modal == null:
 		return
@@ -421,13 +441,9 @@ func sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 		_panel_mgr.activation_modal.refresh()
 
 
-## Submits an authoritative activation-step transition marker in network mode.
-func submit_network_activation_step(step_id: String) -> void:
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  This
-	# helper is network-only by name and purpose — it submits an
-	# `advance_activation_step` command so the remote peer can sync
-	# its `ShipActivationState`.  Hot-seat has no remote peer.
-	if not PlayMode.is_network() or _activation_ctx.ship_activation_state == null:
+## Submits an authoritative activation-step transition marker in every mode.
+func submit_activation_step(step_id: String) -> void:
+	if _activation_ctx.ship_activation_state == null:
 		return
 	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
 	if ship == null:
@@ -436,7 +452,7 @@ func submit_network_activation_step(step_id: String) -> void:
 
 
 ## Opens the activation modal in response to an authoritative
-## interaction-state update (step_id == "activation_modal_open").
+## interaction-state update for the current ship-activation step.
 ## The controller peer runs the full flow with auto-skip; the passive peer
 ## gets a mirror view with no auto-skip so the first step is held until the
 ## next interaction-state update advances it.
@@ -465,6 +481,13 @@ func open_modal_from_interaction_state() -> void:
 	# Always show the "Show Activation Sequence" button so both peers can
 	# re-open the modal if they close it manually.
 	show_activation_sequence_button()
+
+
+## Returns true when the ship activation modal is already visible.
+func is_activation_modal_open() -> bool:
+	if _panel_mgr == null or _panel_mgr.activation_modal == null:
+		return false
+	return _panel_mgr.activation_modal.is_open()
 
 
 ## Returns true when the command-mode squadron modal is currently visible.
@@ -867,25 +890,23 @@ func _on_squadron_step_skipped() -> void:
 	_log.info("Squadron step skipped by player (token not spent).")
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
-	submit_network_activation_step("repair_step")
-	configure_and_open_activation_modal()
+	submit_activation_step("repair_step")
 
 
 ## Called when the squadron command flow is complete (all activations used
 ## or the player finishes early).
 ## Finalizes the resolver (spends dial/token), advances the activation
-## step, and re-opens the activation modal.
+## step, and submits the projection marker that re-opens the activation modal.
 ## Rules Reference: CM-020.
 func _on_squadron_command_done() -> void:
 	_log.info("Squadron command done — advancing activation step.")
 	_squadron_phase_controller.dismiss_cmd_range_overlay()
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
-	submit_network_activation_step("repair_step")
+	submit_activation_step("repair_step")
 	# Show the activation button again.
 	if _panel_mgr.show_activation_button and _activation_ctx.activating_ship_token:
 		_panel_mgr.show_activation_button.show_button()
-	configure_and_open_activation_modal()
 
 
 ## Submits [SpendDialCommand] and/or [SpendTokenCommand] based on a
@@ -903,17 +924,16 @@ func _submit_resolver_spends(ship: ShipInstance,
 
 
 ## Called when the repair panel finishes (Done or Skip pressed).
-## Advances activation state and re-opens the activation modal.
+## Advances activation state and submits the next projected activation step.
 func _on_repair_done() -> void:
 	_log.info("Repair done — advancing activation step.")
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
-	submit_network_activation_step("attack_step")
-	configure_and_open_activation_modal()
+	submit_activation_step("attack_step")
 
 
 ## Called when the attack execution step is fully complete.
-## Advances activation state and re-opens the modal.
+## Advances activation state and submits the next projected activation step.
 ## Routes to the squadron modal when a squadron attack just completed.
 ## Requirements: AE-FLOW-003, AE-CONF-002, SQA-ATK-003.
 func _on_attack_exec_completed() -> void:
@@ -925,8 +945,7 @@ func _on_attack_exec_completed() -> void:
 		return
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
-	submit_network_activation_step("maneuver_step")
-	configure_and_open_activation_modal()
+	submit_activation_step("maneuver_step")
 
 
 ## Called when the player cancels attack execution (Escape).
@@ -940,18 +959,18 @@ func _on_attack_exec_cancelled() -> void:
 			and _squadron_phase_controller.is_in_attacking_state():
 		_squadron_phase_controller.notify_attack_cancelled()
 		return
-	configure_and_open_activation_modal()
+	open_modal_from_interaction_state()
 
 
 ## Called when the player presses "Show Activation Sequence".
-## Opens the activation modal and starts the step sequence.
+## Opens the activation modal from the current interaction-state projection.
 ## Requirements: ACT-001, ACT-007.
 func _on_activation_sequence_requested() -> void:
 	_log.info("Activation sequence requested.")
 	if _activation_ctx.ship_activation_state == null:
 		_log.info("No activation state — cannot open modal.")
 		return
-	configure_and_open_activation_modal()
+	open_modal_from_interaction_state()
 
 
 # ---------------------------------------------------------------------------
@@ -1208,16 +1227,7 @@ func show_end_activation_after_maneuver() -> void:
 	# Update state to reflect completion.
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step() ## MANEUVER → DONE
-	submit_network_activation_step("activation_done")
-	# If the modal is still open (normal commit path), just refresh it
-	# so it shows all steps checked + "End Activation ►".  If it was
-	# closed (displacement path closes it), re-open it.
-	if _panel_mgr.activation_modal and _activation_ctx.ship_activation_state:
-		update_activation_modal_interactivity()
-		if _panel_mgr.activation_modal.is_open():
-			_panel_mgr.activation_modal.refresh()
-		else:
-			configure_and_open_activation_modal()
+	submit_activation_step("activation_done")
 	# Re-show the "Show Activation Sequence" button so the player
 	# can close and reopen the modal before pressing End Activation.
 	show_activation_sequence_button()

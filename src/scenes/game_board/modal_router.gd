@@ -93,7 +93,7 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, local: int, command: GameCommand) -> void:
 	_drive_network_displacement_modal(command)
 	_sync_attack_panel_mirror(game_state, local)
-	_drive_activation_modal(intent, game_state.interaction_flow)
+	_drive_activation_modal(intent, game_state.interaction_flow, command)
 
 
 func _drive_network_displacement_modal(command: GameCommand) -> void:
@@ -114,28 +114,42 @@ func _sync_attack_panel_mirror(game_state: GameState, local: int) -> void:
 
 
 func _drive_activation_modal(intent: UIProjector.UIIntent,
-		flow: InteractionFlow) -> void:
+		flow: InteractionFlow, command: GameCommand) -> void:
 	if flow == null or intent.flow_type == Constants.InteractionFlow.NONE:
 		return
 	if _ship_activation_controller == null:
 		return
 	_ship_activation_controller.sync_activation_step_from_flow(flow)
 	if intent.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:
-		_drive_ship_activation_lifecycle(intent)
+		_drive_ship_activation_lifecycle(intent, command)
 	_ship_activation_controller.update_activation_modal_interactivity()
 
 
-func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent) -> void:
+func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent,
+		command: GameCommand) -> void:
 	match intent.step_id:
-		Constants.InteractionStep.ACTIVATION_MODAL_OPEN:
-			_open_activation_modal_from_intent()
 		Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 			_ship_activation_controller.close_modal_from_interaction_state()
+		_:
+			if intent.modal_kind == Constants.ModalKind.ACTIVATION \
+					and _is_activation_modal_open_command(command):
+				_open_activation_modal_from_intent()
+
+
+func _is_activation_modal_open_command(command: GameCommand) -> bool:
+	if command == null:
+		return false
+	match command.command_type:
+		"activate_ship", "convert_dial_to_token", "advance_activation_step":
+			return true
+	return false
 
 
 func _open_activation_modal_from_intent() -> void:
 	if _ship_activation_controller.is_command_squadron_modal_active():
 		_ship_activation_controller.ensure_activation_modal_hidden_for_squadron_command()
+		return
+	if _ship_activation_controller.is_activation_modal_open():
 		return
 	_ship_activation_controller.open_modal_from_interaction_state()
 

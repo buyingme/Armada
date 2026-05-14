@@ -626,20 +626,22 @@ func get_activating_ship() -> ShipInstance:
 ## Called when a command dial is successfully dropped on a ship token.
 ## Requirements: SP-010, SP-011, UI-024.
 ## [param ship] — the ship to activate.
-func activate_ship(ship: ShipInstance) -> void:
+## Returns the command result, or an empty dictionary on validation failure.
+func activate_ship(ship: ShipInstance) -> Dictionary:
 	if _activating_ship != null:
 		_log.warn("Cannot activate — already activating a ship.")
-		return
+		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ActivateShipCommand.new(ship.owner_player,
 			{"ship_index": ship_index})
 	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
-		return
+		return {}
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 	_log.info("Ship activated: %s (command: %d)" % [
 			ship.data_key, result.get("command", -1)])
+	return result
 
 
 ## Activates a ship without requiring a revealed dial.

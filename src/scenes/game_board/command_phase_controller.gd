@@ -126,7 +126,7 @@ func _on_command_dial_order_requested(ship_ref: RefCounted) -> void:
 ## Clears the queue, hides any still-open picker, and notifies GameBoard.
 ##
 ## I5b-5: in network mode, [CommandDialPicker] may have been opened
-## speculatively by [method GameBoard._handle_network_active_player]
+## speculatively by [method GameBoard._on_active_player_changed]
 ## right before the host broadcasts pre-assigned (fixed) round-1 dials
 ## via [code]apply_fixed_round1_commands[/code].  The remote-mirror
 ## handlers complete the dial assignment without ever calling

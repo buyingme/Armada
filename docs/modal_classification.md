@@ -100,7 +100,7 @@ L-slice rows remain in the table for traceability.
 | 1 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | Token-convert activation sequence button now flows through `UIIntent.affordances["activation_sequence_button"]`; former `elif not PlayMode.is_network()` branch removed | Sequence button affordance | **Affordance (L3 complete)** | — | L3 makes the sequence button a projected non-mutating UI affordance. |
 | 2 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | `submit_activation_step` submits `advance_activation_step` in both modes; former `submit_network_activation_step` guard removed | Activation step projection | **Lifecycle (L2 complete)** | — | L2 makes hot-seat produce command-executed projection events for activation sub-step reopens. L4 MT follow-ups keep projected no-repair `REPAIR_STEP` skips on the command path, hide stale past-step buttons during refresh, expose Squadron command decline from the activation modal, and bind auto-skip timers to their original step. |
 | 3 | [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) | `_finalize_maneuver_execute` now only submits `start_displacement`; former `if not PlayMode.is_network(): _displacement_controller.start(...)` branch removed | Displacement modal | **Lifecycle (L4 complete)** | — | L4 closes the 2026-05-11 displacement defect class by making hot-seat and network open from the projected `SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE` flow. RRG "Overlapping" p.8: controller is always the opponent of the maneuvering ship's owner. |
-| 4 | [game_board.gd:670](../src/scenes/game_board/game_board.gd#L670) | `_on_active_player_changed` `if PlayMode.is_network(): _handle_network_active_player(...)` | Handoff overlay vs. "waiting" overlay | **Lifecycle (content fork)** | L5 | The two branches build *different* overlay objects. L5 unifies on a single overlay type styled via `UIIntent` (`needs_handoff_overlay` vs. `needs_waiting_overlay`). |
+| 4 | [game_board.gd](../src/scenes/game_board/game_board.gd) | `_on_active_player_changed` now applies `UIProjector.project_turn_transition()`; former `if PlayMode.is_network(): _handle_network_active_player(...)` branch removed | Handoff overlay vs. "waiting" overlay | **Lifecycle (L5 complete)** | — | Shared-screen handoff, active-player banner, passive waiting status, command-dial startup, and Squadron observer startup are now projected as `UIIntent` fields. |
 | 5 | [attack_panel_controller.gd](../src/scenes/game_board/attack_panel_controller.gd) | `react_to_command` handles `resolve_immediate_effect` in both modes | Immediate-choice modal cleanup | **Lifecycle (L2 complete)** | — | `apply_remote_immediate_choice()` is idempotent when no pending choice exists, so hot-seat and network now share the same command-executed cleanup path. |
 | 6 | [modal_router.gd](../src/scenes/game_board/modal_router.gd) | `_drive_displacement_modal` opens from projected displacement intent in hot-seat and network; commit resume remains network-only to avoid double-advancing hot-seat camera return | Displacement modal projection path | **Lifecycle (L4 complete)** | — | L4 makes `DisplacementController.start()` a `ModalRouter` effect of the authoritative interaction flow. |
 | 7 | [lobby_room.gd:368](../src/scenes/lobby/lobby_room.gd#L368) | `_on_start_game_pressed` early-return `if not PlayMode.is_network()` | (none — lobby flow guard) | **Session-mode dispatcher (KEEP)** | — | Lobby is network-only by definition. Allow-list stays. |
@@ -114,7 +114,7 @@ L-slice rows remain in the table for traceability.
 
 | Category | Count | L slice(s) |
 |---|---:|---|
-| Lifecycle (must migrate)            | 1 | L5 |
+| Lifecycle (must migrate)            | 0 | complete |
 | Affordance (re-express as `UIIntent.affordances`) | 0 | complete |
 | Session-mode dispatcher (KEEP — post-L allow-list floor) | 5 | — |
 | Producer-side lifecycle co-anchor | 0 | complete |
@@ -134,7 +134,7 @@ alongside the corresponding lifecycle slice.
 
 ### Post-L allow-list floor (target ≤ 4)
 
-After L3, only these intrinsic deployment-mode sites remain:
+After L5, only these intrinsic deployment-mode sites remain:
 1. `game_menu_modal.gd:403` — save button disable.
 2. `save_game_dialog.gd:272` — save dialog content.
 3. `load_game_dialog.gd:374` + `:501` — load dialog content + action (counted as 1 surface).

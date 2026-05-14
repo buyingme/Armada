@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L4 displacement projection plus MT follow-up fixes; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-14 (Phase L5 active-player transition projection; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 148 |
-| GUT tests | 2 952 |
-| GUT asserts | 5 607 |
+| GUT tests | 2 956 |
+| GUT asserts | 5 629 |
 | Failing tests | 0 |
-| Last commit | Pending commit: L4 displacement modal projection + MT follow-up fixes |
+| Last commit | Pending commit: L5 active-player transition projection |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -35,7 +35,7 @@ Runtime invariants:
   across separate runs.
 
 Verification note: the 2026-05-14 full GUT summary is green
-(148 / 2 952 / 5 607, 0 failures), but Godot 4.5.1 aborted after the summary
+(148 / 2 956 / 5 629, 0 failures), but Godot 4.5.1 aborted after the summary
 with `recursive_mutex lock failed` / exit 134.  The failing save/load test from
 the first full run passed in isolation (24 / 24); track the post-summary abort
 separately if it persists outside this slice.
@@ -148,6 +148,12 @@ regression gate is complete and remains the required L/M automated gate:
   Squadron command decline from the activation modal, bind activation
   auto-skip timers to their original step, and reject maneuver submits from
   active non-maneuver sub-steps.
+- L5 result: [ui_projector.gd](../src/core/network/ui_projector.gd)
+  projects active-player transition UI as `UIIntent` fields for shared-screen
+  handoff, active-player banner, passive waiting status, command-dial startup,
+  Squadron observer startup, and camera/card perspective. [game_board.gd](../src/scenes/game_board/game_board.gd)
+  now applies that intent through one path; the lint floor dropped from 6 to
+  5 allow-listed branches.
 
 ---
 

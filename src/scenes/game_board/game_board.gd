@@ -655,22 +655,14 @@ func _on_round_started(_round_number: int) -> void:
 # ---------------------------------------------------------------------------
 
 ## Called when the active player changes.
-## In hot-seat mode, shows the handoff overlay (Command Phase) or "Your Turn"
-## banner (Ship / Squadron Phase), rotates the camera, and swaps card panels.
-## In network mode, locks camera to the local player's perspective and shows
-## "Waiting for opponent…" when it is not the local player's turn.
+## Projects a turn-transition intent so shared-screen and network seats use
+## one rendering path for camera/card perspective, HUD status, and prompts.
 ## Requirements: TF-001, BP-001, BP-003, HO-001, HO-004.  G4.6.5.7/8.
 func _on_active_player_changed(player_index: int) -> void:
-	# Phase K allow-list: session-mode dispatcher (plan §3.1a).  The
-	# hot-seat path builds a handoff overlay + rotates the camera; the
-	# network path locks camera to the local seat + shows "waiting".
-	# These flows differ in *content*, not in "who is allowed to
-	# interact" — that question is already answered by `UIIntent.is_interactive`.
-	if PlayMode.is_network():
-		_handle_network_active_player(player_index)
-		return
-	_apply_hotseat_view_for_active_player(player_index)
-	_show_hotseat_turn_prompt(player_index)
+	var phase: Constants.GamePhase = GameManager.get_current_phase()
+	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
+			phase, player_index, _local_viewer(), _is_shared_screen())
+	_apply_turn_transition_intent(intent, phase)
 
 ## Called when the handoff overlay or banner is dismissed by the player.
 ## Resumes the appropriate game flow for the current phase.
@@ -704,26 +696,6 @@ func _swap_card_panels(player_index: int) -> void:
 	_panel_mgr.rebel_card_panel.set_side(rebel_left)
 	_panel_mgr.imperial_card_panel.set_side(not rebel_left)
 	_panel_mgr.update_card_panel_positions()
-
-
-## Network-mode active-player handler.
-## Locks camera to the local player's perspective (no rotation), updates
-## card panel viewer, and shows "Your Turn" banner or starts the Command
-## Phase dial flow.  During Ship/Squadron phases, the non-active player
-## sees the banner for the active player but cannot interact.
-## G4.6.5.7/8 — network active-player handling + input lockout.
-func _handle_network_active_player(_player_index: int) -> void:
-	var local: int = NetworkManager.get_local_player_index()
-	var phase: Constants.GamePhase = GameManager.get_current_phase()
-	_update_network_status_and_interactivity(_player_index, local, phase)
-	_apply_network_local_view(local)
-	if phase == Constants.GamePhase.COMMAND:
-		_command_phase_controller.begin_command_dial_flow()
-		return
-	if _player_index != local:
-		_start_network_passive_squadron_observer_if_needed(phase)
-		return
-	_show_network_turn_banner(_player_index)
 
 
 # ---------------------------------------------------------------------------
@@ -1384,57 +1356,56 @@ func _append_squadron_to_owner_state(squad: SquadronInstance,
 		rebel_ps.squadrons.append(squad)
 
 
-func _apply_hotseat_view_for_active_player(player_index: int) -> void:
+func _apply_turn_transition_intent(
+		intent: UIProjector.UIIntent,
+		phase: Constants.GamePhase) -> void:
+	_apply_turn_perspective(intent.perspective_player)
+	_panel_mgr.set_network_status_text(intent.hud_status_text)
+	_ship_activation_controller.update_activation_modal_interactivity()
+	_show_projected_turn_prompt(intent, phase)
+	if intent.should_begin_command_dial_flow:
+		_command_phase_controller.begin_command_dial_flow()
+	if intent.should_begin_passive_squadron_observer:
+		_squadron_phase_controller.begin_activation_flow()
+
+
+func _apply_turn_perspective(player_index: int) -> void:
+	if player_index < 0:
+		return
 	_panel_mgr.rebel_card_panel.set_viewer_player(player_index)
 	_panel_mgr.imperial_card_panel.set_viewer_player(player_index)
 	_camera.rotate_to_player(player_index)
 	_swap_card_panels(player_index)
 
 
-func _show_hotseat_turn_prompt(player_index: int) -> void:
-	var phase: Constants.GamePhase = GameManager.get_current_phase()
-	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	match phase:
-		Constants.GamePhase.COMMAND:
-			var phase_name: String = UIPanelManager.PHASE_NAMES.get(
-					phase, "Command Phase")
-			_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name)
-			_panel_mgr.handoff_overlay.update_size(vp_size)
-		Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON:
-			_panel_mgr.your_turn_banner.show_banner(player_index)
-			_panel_mgr.your_turn_banner.update_size(vp_size)
-
-
-func _update_network_status_and_interactivity(
-		player_index: int,
-		local: int,
+func _show_projected_turn_prompt(
+		intent: UIProjector.UIIntent,
 		phase: Constants.GamePhase) -> void:
-	if _panel_mgr == null:
+	if intent.needs_handoff_overlay:
+		_show_projected_handoff(intent.controller_player, phase)
 		return
-	var status_text: String = "waiting for opponent's choice"
-	if phase == Constants.GamePhase.COMMAND or player_index == local:
-		status_text = "make your choices"
-	_panel_mgr.set_network_status_text(status_text)
-	_ship_activation_controller.update_activation_modal_interactivity()
+	if intent.needs_turn_banner:
+		_show_projected_turn_banner(intent.controller_player)
 
 
-func _apply_network_local_view(local: int) -> void:
-	_panel_mgr.rebel_card_panel.set_viewer_player(local)
-	_panel_mgr.imperial_card_panel.set_viewer_player(local)
-	_camera.rotate_to_player(local)
-	_swap_card_panels(local)
-
-
-func _start_network_passive_squadron_observer_if_needed(
+func _show_projected_handoff(
+		player_index: int,
 		phase: Constants.GamePhase) -> void:
-	if phase == Constants.GamePhase.SQUADRON:
-		_squadron_phase_controller.begin_activation_flow()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var phase_name: String = UIPanelManager.PHASE_NAMES.get(
+			phase, "Command Phase")
+	_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name)
+	_panel_mgr.handoff_overlay.update_size(vp_size)
 
 
-func _show_network_turn_banner(player_index: int) -> void:
+func _show_projected_turn_banner(player_index: int) -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_panel_mgr.your_turn_banner.show_banner(player_index)
 	_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+func _is_shared_screen() -> bool:
+	return NetworkManager.get_local_player_index() < 0
 
 
 func _has_command_resource(ship: ShipInstance,

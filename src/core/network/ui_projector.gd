@@ -62,6 +62,26 @@ class UIIntent extends RefCounted:
 	## Values are booleans keyed by stable snake_case names.
 	var affordances: Dictionary = {}
 
+	## Which player's board/card perspective this viewer should see.
+	## For shared-screen handoff this follows the active player; for network
+	## peers it stays pinned to the local seat.
+	var perspective_player: int = -1
+
+	## True when the shared-screen transition should show the full handoff gate.
+	var needs_handoff_overlay: bool = false
+
+	## True when the transition should show the brief active-player banner.
+	var needs_turn_banner: bool = false
+
+	## True when the viewer is passive and should see the waiting status.
+	var needs_waiting_overlay: bool = false
+
+	## True when the command-dial flow should begin immediately.
+	var should_begin_command_dial_flow: bool = false
+
+	## True when a passive peer should observe the Squadron Phase modal state.
+	var should_begin_passive_squadron_observer: bool = false
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -91,6 +111,35 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	return intent
 
 
+## Projects an active-player transition without branching in the scene layer.
+## [param shared_screen] is [code]true[/code] for one local display shared by
+## both players and [code]false[/code] for a peer pinned to its local seat.
+static func project_turn_transition(
+		phase: Constants.GamePhase,
+		active_player: int,
+		viewer_player: int,
+		shared_screen: bool) -> UIIntent:
+	var intent: UIIntent = UIIntent.new()
+	intent.controller_player = active_player
+	intent.perspective_player = active_player if shared_screen else viewer_player
+	intent.is_interactive = shared_screen or active_player == viewer_player \
+			or phase == Constants.GamePhase.COMMAND
+	intent.hud_status_text = _turn_status_text(
+			phase, active_player, viewer_player, shared_screen)
+	intent.needs_handoff_overlay = shared_screen \
+			and phase == Constants.GamePhase.COMMAND
+	intent.needs_turn_banner = _needs_turn_banner(
+			phase, active_player, viewer_player, shared_screen)
+	intent.needs_waiting_overlay = not shared_screen \
+			and active_player != viewer_player
+	intent.should_begin_command_dial_flow = not shared_screen \
+			and phase == Constants.GamePhase.COMMAND
+	intent.should_begin_passive_squadron_observer = not shared_screen \
+			and phase == Constants.GamePhase.SQUADRON \
+			and active_player != viewer_player
+	return intent
+
+
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
@@ -112,6 +161,29 @@ static func _hud_status_for(flow: InteractionFlow,
 	if flow.controller_player == -1:
 		return ""
 	return "waiting for opponent's choice"
+
+
+static func _turn_status_text(
+		phase: Constants.GamePhase,
+		active_player: int,
+		viewer_player: int,
+		shared_screen: bool) -> String:
+	if shared_screen:
+		return ""
+	if phase == Constants.GamePhase.COMMAND or active_player == viewer_player:
+		return "make your choices"
+	return "waiting for opponent's choice"
+
+
+static func _needs_turn_banner(
+		phase: Constants.GamePhase,
+		active_player: int,
+		viewer_player: int,
+		shared_screen: bool) -> bool:
+	if phase != Constants.GamePhase.SHIP \
+			and phase != Constants.GamePhase.SQUADRON:
+		return false
+	return shared_screen or active_player == viewer_player
 
 
 ## Maps [member InteractionFlow.flow_type]+[member InteractionFlow.step_id]

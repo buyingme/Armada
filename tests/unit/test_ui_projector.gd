@@ -133,6 +133,66 @@ func test_default_intent_values() -> void:
 	assert_eq(intent.modal_kind, Constants.ModalKind.NONE)
 	assert_eq(intent.payload, {})
 	assert_eq(intent.affordances, {})
+	assert_eq(intent.perspective_player, -1)
+	assert_false(intent.needs_handoff_overlay)
+	assert_false(intent.needs_turn_banner)
+	assert_false(intent.needs_waiting_overlay)
+	assert_false(intent.should_begin_command_dial_flow)
+	assert_false(intent.should_begin_passive_squadron_observer)
+
+
+# ---------------------------------------------------------------------------
+# Phase L5 — active-player turn-transition projection
+# ---------------------------------------------------------------------------
+
+func test_turn_transition_shared_command_projects_handoff() -> void:
+	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
+			Constants.GamePhase.COMMAND, 1, 1, true)
+	assert_eq(intent.perspective_player, 1,
+			"Shared screen should rotate to the active player.")
+	assert_true(intent.needs_handoff_overlay,
+			"Command Phase shared-screen transition should show handoff.")
+	assert_false(intent.should_begin_command_dial_flow,
+			"Shared-screen command dial flow waits for handoff acceptance.")
+	assert_eq(intent.hud_status_text, "",
+			"Shared-screen handoff should not render network status text.")
+
+
+func test_turn_transition_network_command_starts_dial_flow() -> void:
+	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
+			Constants.GamePhase.COMMAND, 0, 1, false)
+	assert_eq(intent.perspective_player, 1,
+			"Network peer should stay pinned to its local perspective.")
+	assert_false(intent.needs_handoff_overlay,
+			"Network command transition should not show shared-screen handoff.")
+	assert_true(intent.should_begin_command_dial_flow,
+			"Network command transition should start the local dial flow.")
+	assert_eq(intent.hud_status_text, "make your choices",
+			"Both players choose dials during Command Phase.")
+
+
+func test_turn_transition_network_passive_squadron_waits() -> void:
+	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
+			Constants.GamePhase.SQUADRON, 0, 1, false)
+	assert_false(intent.is_interactive,
+			"Passive network peer should not be interactive.")
+	assert_true(intent.needs_waiting_overlay,
+			"Passive network peer should project a waiting state.")
+	assert_true(intent.should_begin_passive_squadron_observer,
+			"Passive Squadron peer should mirror the Squadron modal state.")
+	assert_eq(intent.hud_status_text, "waiting for opponent's choice")
+
+
+func test_turn_transition_network_active_ship_projects_banner() -> void:
+	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
+			Constants.GamePhase.SHIP, 0, 0, false)
+	assert_true(intent.is_interactive,
+			"Active network peer should be interactive.")
+	assert_true(intent.needs_turn_banner,
+			"Active network peer should see the turn banner.")
+	assert_false(intent.needs_waiting_overlay,
+			"Active network peer should not project waiting state.")
+	assert_eq(intent.hud_status_text, "make your choices")
 
 
 # ---------------------------------------------------------------------------

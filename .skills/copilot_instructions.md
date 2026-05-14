@@ -16,6 +16,7 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 
 ## Before Writing Code
 
+0. **Apply the ambiguity safety gate** — If there is uncertainty about the requirement, scope, behaviour, affected files, data source, hot-seat/network handling, destructive impact, or implementation path, stop before editing. Ask a concise question or present concrete options with tradeoffs, and wait for explicit user approval before proceeding. This gate is a safety net against unwanted changes.
 1. **Understand the requirement** — Check the Rules Reference in `Resources/` if it concerns game rules.
 2. **Check existing code** — Search `src/` for related classes and patterns.
 3. **Check existing tests** — See `tests/` for testing patterns used in this project.

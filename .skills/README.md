@@ -2,6 +2,15 @@
 
 These documents define the standards and patterns that **must** be followed when generating or reviewing code for this project. They ensure consistency across AI-assisted and manual development.
 
+## Global Safety Gate
+
+If there is ambiguity or uncertainty about what should be changed, how it
+should behave, which files or data sources should be touched, whether hot-seat
+and network need different handling, or whether an action could be destructive
+or broad, ask a concise clarifying question or present concrete options with
+tradeoffs. Wait for explicit user approval before making the change. This rule
+applies across all skill documents and exists to prevent unwanted code changes.
+
 ## Documents
 
 | File | Purpose |

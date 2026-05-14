@@ -28,6 +28,20 @@ You **must** read and follow these documents (in `.skills/`):
 
 These rules apply to **every** code change. No exceptions.
 
+### Safety Gate: Resolve Ambiguity Before Editing
+
+If there is ambiguity or uncertainty about what should be changed, how it
+should behave, which files or data sources should be touched, whether hot-seat
+and network need different handling, or whether an action could be destructive
+or broad, stop before editing. Ask a concise clarifying question or present
+concrete options with tradeoffs, then wait for explicit user approval before
+proceeding.
+
+This gate exists to prevent unwanted code changes. It applies before source
+edits, migrations, refactors, generated assets, dependency changes, deletions,
+large documentation rewrites, and commits. Routine read-only exploration and
+verification commands may proceed while gathering context.
+
 ### 1. Static Typing Everywhere
 
 ```gdscript
@@ -168,21 +182,22 @@ When completing a phase task or full phase:
 When asked to implement a feature or fix a bug:
 
 1. **Search first** — Check `src/` for existing related code. Check `Resources/` rules docs for game rules.
-2. **Plan the change** — Identify which layer(s) are affected (Domain? Presentation? Both?)
-3. **Check refactoring constraints** — Read `.skills/refactoring_guidelines.md`. Ensure the change does not introduce functions > 30 lines, does not add responsibilities to god objects, and follows extraction patterns if applicable.
-4. **Check serialization impact** — Read `.skills/serialization_and_commands.md`. If the change adds mutable state, add `serialize()`/`deserialize()`. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised coordinates.
-5. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
-6. **Write the tests first or alongside** — Never submit untested logic
-7. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
-8. **Verify** — Run tests **and** the Phase K lint and confirm: 0 failures, expected script count, no parse errors, lint exit 0:
+2. **Resolve ambiguity** — If the requirement, scope, behaviour, or safety impact is unclear, ask or present options and wait for approval before editing.
+3. **Plan the change** — Identify which layer(s) are affected (Domain? Presentation? Both?)
+4. **Check refactoring constraints** — Read `.skills/refactoring_guidelines.md`. Ensure the change does not introduce functions > 30 lines, does not add responsibilities to god objects, and follows extraction patterns if applicable.
+5. **Check serialization impact** — Read `.skills/serialization_and_commands.md`. If the change adds mutable state, add `serialize()`/`deserialize()`. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised coordinates.
+6. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
+7. **Write the tests first or alongside** — Never submit untested logic
+8. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
+9. **Verify** — Run tests **and** the Phase K lint and confirm: 0 failures, expected script count, no parse errors, lint exit 0:
    ```bash
    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
    bash scripts/lint_phase_k.sh
    ```
    The lint must report `0 violations` (allow-listed branches are fine). If it fails, fix before continuing — never silence it by editing the allow-list count without explicit approval.
-9. **Replay baseline gate** — For Phase L/M, modal lifecycle, replay, command-submission, or network-flow changes, run `bash scripts/run_baseline_traces.sh --all` and require it to pass.
-10. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
-11. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
+10. **Replay baseline gate** — For Phase L/M, modal lifecycle, replay, command-submission, or network-flow changes, run `bash scripts/run_baseline_traces.sh --all` and require it to pass.
+11. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
+12. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
 
 ## Architecture Quick Reference
 

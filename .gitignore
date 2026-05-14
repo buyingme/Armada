@@ -35,6 +35,9 @@ tests/results/
 # Game session logs
 logs/
 
+# Generated replay captures
+replays/replay_*.json
+
 # Temporary files
 tmp/
 temp/

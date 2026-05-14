@@ -142,14 +142,14 @@ func _initialize_controller() -> void:
 			null,
 			null,
 			Callable(),
-			Callable(self, "_has_no_repair_resources"),
-			Callable(self, "_has_no_squadron_resources"),
-			Callable(self, "_is_not_squadron_token_only"),
+			Callable(self , "_has_no_repair_resources"),
+			Callable(self , "_has_no_squadron_resources"),
+			Callable(self , "_is_not_squadron_token_only"),
 			Callable(),
 			Callable(),
-			Callable(self, "_local_squadron_controller"),
-			Callable(self, "_empty_ship_tokens"),
-			Callable(self, "_empty_squadron_tokens"),
+			Callable(self , "_local_squadron_controller"),
+			Callable(self , "_empty_ship_tokens"),
+			Callable(self , "_empty_squadron_tokens"),
 			Callable())
 
 

@@ -253,8 +253,8 @@ func test_route_command_result_displacement_opens_in_hot_seat() -> void:
 	var squadron: SquadronInstance = _create_squadron(1)
 	_create_tokens(ship, squadron)
 	_create_router(Callable(), null, displacement,
-			Callable(self, "_find_test_ship_token"),
-			Callable(self, "_find_test_squadron_token"))
+			Callable(self , "_find_test_ship_token"),
+			Callable(self , "_find_test_squadron_token"))
 	GameManager.current_game_state = _state_with_displacement_flow(ship, squadron)
 	var command: StartDisplacementCommand = _start_displacement_command()
 
@@ -276,8 +276,8 @@ func test_route_command_result_displacement_network_non_controller_skips() -> vo
 	var squadron: SquadronInstance = _create_squadron(1)
 	_create_tokens(ship, squadron)
 	_create_router(Callable(), null, displacement,
-			Callable(self, "_find_test_ship_token"),
-			Callable(self, "_find_test_squadron_token"))
+			Callable(self , "_find_test_ship_token"),
+			Callable(self , "_find_test_squadron_token"))
 	GameManager.current_game_state = _state_with_displacement_flow(ship, squadron)
 	var command: StartDisplacementCommand = _start_displacement_command()
 
@@ -394,7 +394,7 @@ func _displacement_payload() -> Dictionary:
 
 
 func _displacement_entries() -> Array[Dictionary]:
-	return [{"owner": 1, "squadron_index": 0}]
+	return [ {"owner": 1, "squadron_index": 0}]
 
 
 func _find_test_ship_token(ship: ShipInstance) -> ShipToken:

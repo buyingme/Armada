@@ -102,14 +102,14 @@ func test_apply_flow_updates_dice_results_after_reroll_payload() -> void:
 	var payload: Dictionary = {
 		"attacker_kind": "ship",
 		"attacker_name": "Demolisher",
-		"dice_results": [{
+		"dice_results": [ {
 			"color": Constants.DiceColor.RED,
 			"face": Constants.DiceFace.BLANK,
 		}],
 	}
 	_mirror.apply_flow(payload, Constants.InteractionStep.ATTACK_MODIFY)
 	var updated_payload: Dictionary = payload.duplicate(true)
-	updated_payload["dice_results"] = [{
+	updated_payload["dice_results"] = [ {
 		"color": Constants.DiceColor.RED,
 		"face": Constants.DiceFace.HIT,
 	}]

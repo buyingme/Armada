@@ -218,7 +218,7 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 	state.locked_tokens = [1]
 	state.modified_damage = 3
 	state.defender_zone = int(Constants.HullZone.FRONT)
-	state.dice_results = [{
+	state.dice_results = [ {
 		"color": Constants.DiceColor.RED,
 		"face": Constants.DiceFace.HIT,
 	}]

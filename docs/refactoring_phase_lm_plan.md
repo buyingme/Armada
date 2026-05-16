@@ -1,6 +1,6 @@
 # Refactoring Phases L & M — Unified Flow Authority and Rule Registry
 
-> **Status:** IN PROGRESS - 2026-05-14. Phase L is complete (L0-L7); M0 is the next docs slice.
+> **Status:** IN PROGRESS - 2026-05-16. Phase L is complete (L0-L7); M0, M0.5, M0.6, and M0.7 are complete; M1 is the next slice.
 > **Predecessors:** Phase K is complete. The deferred hot-seat modal-lifecycle work from Phase K §3.1d is now Phase L's scope.
 > **Go-conditions (verified 2026-05-14):**
 >   - K12 `CommandRouterAdapter` committed (`e17ff05`).
@@ -114,11 +114,11 @@ card.
 | ID | Target |
 |----|--------|
 | L-G1 | Zero modal-authority code paths that branch on `PlayMode` or `NetworkManager.get_local_player_index() >= 0` for **lifecycle** decisions (open/close/mirror). Camera-ownership branches stay (intrinsic deployment-mode property). |
-| L-G2 | Hot-seat opens, mirrors, and closes every gameplay modal (Activation, Squadron, Displacement, Attack, Immediate-Choice, Repair) via the same `EventBus.command_executed → UIProjector.project → modal lifecycle` chain that network already uses. |
+| L-G2 | Hot-seat opens, mirrors, and closes every gameplay modal (Activation, Squadron, Displacement, Attack, Immediate-Choice, Repair) via the same `CommandProcessor.command_executed -> UIProjector.project -> modal lifecycle` chain that network already uses. |
 | L-G3 | Phase K's `scripts/lint_phase_k.sh` allow-list shrinks from 11 branches to <= 4 by L6. L6 explicitly moves the ship-activation network RPC guard out of scene/controller code and collapses duplicate load-dialog branches into one helper if needed. |
-| M-G1 | Single `FlowSpec` registry covers every `(flow_id, step_id)` pair that `interaction_flow` can hold. Parity test fails CI if `UIProjector` projects an unknown pair. |
+| M-G1 | Single `FlowSpec` registry covers every documented and enum-backed `(flow_id, step_id)` pair that `interaction_flow` can hold, including legacy/projected rows not currently exercised by `UIProjector` tests. Parity tests fail CI if `docs/game_flow.md`, `Constants`, or `UIProjector` drift. |
 | M-G2 | Every `GameCommand` subclass declares an applicability scope: `GLOBAL`, `PHASE`, or `FLOW_STEP`. Flow-step commands declare `(flow_id, step_id)` pairs; phase/global commands declare the phase/system surface they belong to. Parity tests fail CI on missing declarations. |
-| M-G3 | At least 6 representative rules (1 keyword, 2 damage cards, 1 defense-token rule, 1 status-phase rule, 1 attack-modifier rule) migrated to `RuleRegistry` self-registration or explicitly mapped through the legacy `EffectRegistry` bridge. Adding the 7th is documented as a one-file change. |
+| M-G3 | At least 6 representative rules/effects matching M7-M12 are migrated to `RuleRegistry` self-registration or explicitly mapped through the legacy `EffectRegistry` bridge: defense-token validation, status-phase modification, attack-pool modification, squadron-attack conditional modification, optional UI affordance enablement, and one multi-hook recover/redirect blocker. Adding the 7th is documented as a one-file change. |
 | M-G4 | Determinism: hook execution order across peers is byte-identical (priority + lexicographic rule_id tie-break). Replay test asserts hook order. |
 | LM-G1 | Test baseline maintained: >= 148 scripts / >= 2 956 tests / >= 5 629 asserts / 0 failures at every code-bearing commit; `godot --headless --import` clean when new scripts are added; `bash scripts/lint_phase_k.sh` exits 0; `bash scripts/run_baseline_traces.sh --all` passes for modal/network/replay/command-submission/rule-observer changes. |
 | LM-G2 | All sliced commits keep the manual-test gate (per `.skills/copilot_instructions.md`). |
@@ -127,7 +127,7 @@ card.
 ### 2.2 Non-Goals
 
 - **No new gameplay features** during L or M. Bug fixes that fall out of the unification are in scope; feature additions are not.
-- **No migration of every keyword** to the registry. Migrate only those touched by L/M-G3. Older keywords stay where they are until next-touch.
+- **No migration of every keyword** to the registry. Phase M proves keyword/effect bridge semantics only where the M7-M12 rules require them; broader keyword migration waits until next-touch.
 - **No replacement of `GameCommand`.** Commands stay as today; they gain a static `applicable_steps()` declaration and consult `RuleRegistry` from `validate()` and `execute()`.
 - **No replacement of `UIProjector`.** It gains a dependency on `FlowSpec` for modal-visibility lookup and stays the single projection function.
 - **No CI/CD setup.** Same as Phase K.
@@ -150,7 +150,7 @@ card.
                         v
 +--------------------------------------------------------------+
 |  Layer 2: FlowSpec (structured machine spec)                 |
-|  src/core/state/flow_spec.gd  [RefCounted, autoload-bound]   |
+|  src/core/state/flow_spec.gd  [RefCounted, static core helper]|
 |  Skeleton: which (flow, step) pairs exist, who controls,     |
 |  which modals are visible, allowed command types,            |
 |  transitions. STABLE; rare changes.                          |
@@ -178,24 +178,51 @@ card.
 class_name FlowSpec
 extends RefCounted
 
-## Returns the spec for a given (flow_id, step_id) pair, or null
-## if the pair is not registered.  Phase M-G1: every pair that
-## InteractionFlow can hold MUST be in the registry.
+## Returns the spec for a given (flow_id, step_id) pair, or an empty
+## Dictionary if the pair is not registered.  Phase M-G1: every documented
+## pair that InteractionFlow can hold MUST be in the registry.
 ##
 ## Spec Dictionary keys:
 ##   "controller_role": Constants.ControllerRole
-##       (ACTIVE_PLAYER | OPPOSING_PLAYER | DEFENDER | ATTACKER | EITHER)
+##       (NONE | ACTIVE_PLAYER | OPPOSING_PLAYER | ATTACKER |
+##        DEFENDER_OR_ATTACKER | PAYLOAD_CONTROLLER | EITHER_PLAYER | SYSTEM)
 ##   "modals":          Array[Constants.ModalKind] visible in this step
 ##   "allowed_commands": Array[String] flow-step command_type strings legal here
 ##   "transitions":     Dictionary[String, String]
 ##       command_type -> next step_id (or "*" for "any step")
+##   "source":          String ("command_produced" | "projection_only")
 ##   "rule_citation":   String  ("RR p.4 Step 4")
 static func get_spec(flow_id: int, step_id: int) -> Dictionary:
     return _SPEC.get([flow_id, step_id], {})
+
+static func has_spec(flow_id: int, step_id: int) -> bool:
+   return _SPEC.has([flow_id, step_id])
+
+static func resolve_controller_player(flow_id: int, step_id: int,
+      game_state: GameState, context: Dictionary = {}) -> int:
+   ...
 ```
 
 The `_SPEC` table is a literal `const Dictionary` — no dynamic
 mutation. Tests can iterate it.
+
+M1 also adds `Constants.ControllerRole` with these values:
+
+| Role | Resolution contract |
+|---|---|
+| `NONE` | Resolves to `-1`; no player owns the step. |
+| `ACTIVE_PLAYER` | Resolves to the current activation/squadron active player from the provided state/context. |
+| `OPPOSING_PLAYER` | Resolves to the non-moving/non-active player. `SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE` is the regression example. |
+| `ATTACKER` | Resolves to the attacker's player index from attack context/payload. |
+| `DEFENDER_OR_ATTACKER` | Resolves to the defender player when one exists, otherwise the attacker. Used for defense-token windows against non-player targets. |
+| `PAYLOAD_CONTROLLER` | Resolves to an explicit `controller_player` carried in a validated payload/context, for card-defined chooser cases such as immediate critical choices. |
+| `EITHER_PLAYER` | Command-phase simultaneous/either-player surface. Projection decides local interactivity from submitted-player state, not one global controller. |
+| `SYSTEM` | Resolves to `-1`; deterministic system cleanup or game-over surface. |
+
+`resolve_controller_player(...)` must return `-1` when a role cannot be
+resolved from the supplied state/context, and tests must cover that failure
+path. M2.5 migrates producers to this resolver; M1 only creates the contract
+and unit tests for each role.
 
 ### 3.2.1 Command applicability scopes
 
@@ -207,12 +234,19 @@ before M3 adds declarations:
 | Scope | Meaning | Examples |
 |---|---|---|
 | `FLOW_STEP` | Legal only during explicit `(flow_id, step_id)` pairs from `FlowSpec`. | attack roll, commit defense, redirect, displacement commit |
-| `PHASE` | Legal during a game phase regardless of modal flow. | assign dial, advance phase, status cleanup, repair action when no modal owns it yet |
-| `GLOBAL` | Harness/system/debug command that is not gated by the current flow. Still runs normal `validate()`. | start round, replay publish snapshot, debug damage |
+| `PHASE` | Legal during a game phase regardless of modal flow. | assign dial, start/advance round, status cleanup, repair action when no modal owns it yet, immediate-effect resolution in Ship/Squadron phases while debug follow-ups lack a dedicated flow surface |
+| `GLOBAL` | Harness/system/debug command that is not gated by the current flow. Still runs normal `validate()`. | replay publish snapshot, debug damage, destroy-unit cleanup |
 
 M4's `CommandProcessor` gate consults `FlowSpec.allowed_commands(...)` only
 for `FLOW_STEP` commands. `PHASE` and `GLOBAL` commands get their own small
 allow-list declarations so the parity test still covers them.
+
+Post-M0.7 correction: `resolve_immediate_effect` must not be declared as
+attack-flow-only in M3. Attack damage resolution and critical-choice flows own
+the normal UI path, but the debug damage tool can submit the same command as an
+immediate follow-up outside `ATTACK`. M3 should preserve current behaviour with
+a `PHASE` declaration for `SHIP` and `SQUADRON` plus a debug-follow-up fixture;
+later slices may narrow it only after that path has its own FlowSpec surface.
 
 ### 3.3 RuleRegistry entries (open-ended content)
 
@@ -227,10 +261,10 @@ extends RefCounted
 ##               {"allowed": bool, "reason": String}.
 ##   MODIFIER  — mutates a transient context dict (dice pool, damage
 ##               total, ready set). Pure-functional preferred.
-##   OBSERVER  — reacts after a command commits. May enqueue follow-up
-##               commands through a deferred submit boundary; never mutates
-##               GameState directly and never submits synchronously from
-##               inside command_executed.
+##   OBSERVER  — reacts after a command commits. Returns follow-up command
+##               requests for the deferred queue; never mutates GameState
+##               directly and never submits synchronously from inside
+##               CommandProcessor.command_executed.
 ##   BLOCKER   — gates a step transition ("can we leave this step?").
 ##   ENABLER   — exposes optional UI affordances at this step
 ##               (an upgrade button, a re-roll choice).
@@ -250,6 +284,36 @@ static func observers_for(flow_id: int, step_id: int,
         command_type: String) -> Array[FlowHook]: ...
 ```
 
+#### 3.3.1 Deferred follow-up queue
+
+Observer hooks must return follow-up command requests; they must not call
+`CommandProcessor.submit()` or `GameManager.submit_*()` themselves. M6 adds a
+single queue owned by `CommandProcessor` so network broadcast order stays
+stable:
+
+1. Validate and execute command A.
+2. Record command A.
+3. Collect observer follow-ups for A into a FIFO queue without submitting them.
+4. Emit `CommandProcessor.command_executed` for A.
+5. After the emit returns, drain the follow-up queue through the normal
+   `CommandProcessor.submit()` path, one command at a time.
+
+This preserves the ordering lesson from Phase I6b-4d: the host must broadcast
+A before any follow-up command B can be submitted and broadcast. During
+`is_replaying`, observer follow-up generation is disabled; replayed follow-up
+commands come from the captured command history so replay does not duplicate
+generated commands.
+
+M6 acceptance tests must prove:
+
+- observer hooks cannot synchronously submit commands while they are being
+   collected;
+- the queue drains only after `CommandProcessor.command_executed` for the
+   triggering command returns;
+- replay mode does not synthesize duplicate observer follow-ups;
+- a lint or unit guard fails if files under `src/core/effects/rules/` call
+   `CommandProcessor.submit` or `GameManager.submit_` directly.
+
 A rule file (one card/keyword = one file):
 
 ```gdscript
@@ -265,7 +329,7 @@ const RULE_ID := "damage_card.faulty_countermeasures"
 static func register() -> void:
     RuleRegistry.register_rule(RULE_ID, [
         FlowHook.new(
-            flow_id    = Constants.InteractionFlow.SHIP_ATTACK,
+            flow_id    = Constants.InteractionFlow.ATTACK,
             step_id    = Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
             kind       = FlowHook.Kind.VALIDATOR,
             priority   = 100,
@@ -288,7 +352,7 @@ static func _validate_spend(state: GameState, cmd: GameCommand) -> Dictionary:
     return {"allowed": true, "reason": ""}
 ```
 
-Rule registration entry point (`autoload/rule_bootstrap.gd`) does
+Rule registration entry point (`src/autoload/rule_bootstrap.gd`) does
 nothing but call every rule's static `register()`. Adding a new card
 adds one entry to that file plus one file under
 `src/core/effects/rules/`.
@@ -332,7 +396,7 @@ path:
 GameCommand.execute() writes interaction_flow into GameState
        │
        ▼
-EventBus.command_executed (both peers, both modes)
+CommandProcessor.command_executed (both peers, both modes)
        │
        ▼
 UIProjector.project(state, local_player) consults FlowSpec
@@ -633,36 +697,106 @@ within the same run.
 
 | Slice | Scope | Risk | LOC delta | MT? |
 |------:|---|---|---:|:---:|
-| **M0** | Author the **natural-language master document** [docs/game_flow.md](game_flow.md). One block per `(flow_id, step_id)` pair currently emitted by `interaction_flow`. Each block: controller role, allowed commands, visible modals, citations, transitions. Use the inventory from L0 + the existing `tests/unit/test_ui_projector.gd` cases as ground truth. **No code changes.** | low | +0 (docs) | no |
-| **M0.5** | **Model-fitness review.** With `docs/game_flow.md` complete, do a deliberate reread asking three questions per (flow, step) block: (a) does `InteractionFlow.flow_type / step_id / controller_player / payload` carry every piece of information the prose requires? (b) are any two prose blocks describing what is logically the same step under different names (model duplication)? (c) does any prose block describe behaviour the current `GameCommand` set cannot express? Outcome: a short `docs/game_flow.md` §0 "Model fitness" subsection with the answers. If all three are clean (expected), proceed to M1. If any answer reveals a genuine model defect, stop and convert that defect into a separate, scoped slice before M1 — do **not** absorb model changes into M1's spec encoding. **Worked example to include in the review (do not skip):** the 2026-05-11 displacement bug (`c673ef0`) — RRG "Overlapping", p.8: *"the player who is NOT moving the ship places the overlapped squadrons, regardless of who owns them."* The producer in [`start_displacement_command.gd`](../src/core/commands/start_displacement_command.gd) had to invent `controller_player = 1 - maneuver_ship.owner_player` because no central declaration pinned that mapping. M0.5 confirms that `controller_role` is a *first-class column* of every FlowSpec entry (with enum values `ACTIVE_PLAYER`, `OPPOSING_PLAYER`, `DEFENDER`, `ATTACKER`, …) so M1's `_SPEC` table makes the bug syntactically unrepresentable. **No code changes.** | trivial | +0 (docs) | no |
-| **M0.6** | **Runtime-registry boundary review.** Add a `docs/game_flow.md` §0 subsection that defines the boundary between `EffectRegistry`, `EffectFactory.rebuild_runtime_effects()`, and `RuleRegistry`. Pin the loaded Blinded Gunners bug (`d752ffd`) as the worked example: serialized faceup damage state must activate the accuracy-spend blocker immediately after load. Decide which first-six M rules are pure static predicates and which still need an `EffectRegistry` bridge. **No code changes.** | trivial | +0 (docs) | no |
-| **M0.7** | **Command-scope model.** Add the `GLOBAL` / `PHASE` / `FLOW_STEP` scope taxonomy to `docs/game_flow.md` before adding command declarations. Inventory commands that intentionally run outside `interaction_flow` so M3/M4 do not misclassify replay, setup, phase-advance, or debug commands as illegal. **No code changes.** | low | +0 (docs) | no |
-| **M1** | Add [src/core/state/flow_spec.gd](../src/core/state/flow_spec.gd) (RefCounted) with a frozen `_SPEC` table that translates `docs/game_flow.md` into machine form. Add `tests/unit/test_flow_spec.gd`: every `(flow_id, step_id)` produced by any test in `tests/unit/test_ui_projector.gd` must be present in `_SPEC`. | low | +200 / 0 | no |
-| **M2** | Wire `UIProjector.project()` to consult `FlowSpec.get_spec(...)` for `controller_role` and `modals`. Today's hard-coded modal mapping in `UIProjector` becomes a lookup. Identical output asserted by `test_ui_projector.gd` (no test changes expected). | medium | +80 / −120 | yes |
-| **M3** | **Parity gate I:** add a unit test that, for every command type currently registered with `GameCommand.register_type(...)`, asserts a static applicability declaration exists. The declaration includes `scope` (`GLOBAL`, `PHASE`, or `FLOW_STEP`) plus allowed phases or `(flow_id, step_id)` pairs as appropriate. Fail with a clear error listing missing commands. Then add the declarations command-by-command in this slice. No behaviour change yet. | low | +140 / 0 | no |
-| **M4** | **Parity gate II:** `CommandProcessor.submit()` consults `FlowSpec.allowed_commands(state.flow, state.step)` before calling `cmd.validate()` only for `FLOW_STEP` commands. `PHASE` and `GLOBAL` commands are checked against their own declarations. Mismatch -> reject with a structured `{allowed: false, reason: "command X not allowed in step Y"}`. Run replay suite + manual test to catch missed declarations from M3. | medium | +40 / 0 | yes |
-| **M5** | Add [src/core/effects/rule_registry.gd](../src/core/effects/rule_registry.gd) and [src/core/effects/flow_hook.gd](../src/core/effects/flow_hook.gd). Add `autoload/rule_bootstrap.gd` that calls every registered rule's static `register()`. **Empty registry** at this slice — registry behaves identically to today and does not replace `EffectRegistry`. Test: `RuleRegistry.validators_for(...)` returns `[]` for every step until rules migrate. | low | +180 / 0 | no |
-| **M6** | `CommandProcessor.preflight()`: after FlowSpec allow-list passes, run `RuleRegistry.validators_for(flow, step, cmd.command_type)` in priority order; first denial wins. `AttackResolver.modify_dice_pool()`: consult `RuleRegistry.modifiers_for(flow, step, "dice_pool")`. `CommandProcessor.notify_observers()`: after execute, call `RuleRegistry.observers_for(...)` through a deferred follow-up command queue; observers never submit synchronously during `EventBus.command_executed`. **Empty registry** keeps behaviour identical. | medium | +140 / 0 | no |
+| **M0** | **COMPLETE 2026-05-14** - Author the **natural-language master document** [docs/game_flow.md](game_flow.md). One block per `(flow_id, step_id)` pair currently emitted by `interaction_flow`. Each block: controller role, allowed commands, visible modals, citations, transitions. Use the inventory from L0 + the existing `tests/unit/test_ui_projector.gd` cases as ground truth. **No code changes.** | low | +0 (docs) | no |
+| **M0.5** | **COMPLETE 2026-05-15** - **Model-fitness review.** With `docs/game_flow.md` complete, do a deliberate reread asking three questions per (flow, step) block: (a) does `InteractionFlow.flow_type / step_id / controller_player / payload` carry every piece of information the prose requires? (b) are any two prose blocks describing what is logically the same step under different names (model duplication)? (c) does any prose block describe behaviour the current `GameCommand` set cannot express? Outcome: a short `docs/game_flow.md` §0 "Model fitness" subsection with the answers. If all three are clean (expected), proceed to M1. If any answer reveals a genuine model defect, stop and convert that defect into a separate, scoped slice before M1 — do **not** absorb model changes into M1's spec encoding. **Worked example to include in the review (do not skip):** the 2026-05-11 displacement bug (`c673ef0`) — RRG "Overlapping", p.8: *"the player who is NOT moving the ship places the overlapped squadrons, regardless of who owns them."* The producer in [`start_displacement_command.gd`](../src/core/commands/start_displacement_command.gd) had to invent `controller_player = 1 - maneuver_ship.owner_player` because no central declaration pinned that mapping. M0.5 confirms that `controller_role` is a *first-class column* of every FlowSpec entry (with enum values `ACTIVE_PLAYER`, `OPPOSING_PLAYER`, `DEFENDER`, `ATTACKER`, …); M1 encodes the roles and M2.5 migrates producers so this bug class becomes testable and syntactically hard to reintroduce. **No code changes.** | trivial | +0 (docs) | no |
+| **M0.6** | **COMPLETE 2026-05-16** - **Runtime-registry boundary review.** Add a `docs/game_flow.md` §0 subsection that defines the boundary between `EffectRegistry`, `EffectFactory.rebuild_runtime_effects()`, and `RuleRegistry`. Pin the loaded Blinded Gunners bug (`d752ffd`) as the worked example: serialized faceup damage state must activate the accuracy-spend blocker immediately after load. Decide which first-six M rules are pure static predicates and which still need an `EffectRegistry` bridge. **No code changes.** | trivial | +0 (docs) | no |
+| **M0.7** | **COMPLETE 2026-05-16** - **Command-scope model.** Add the `GLOBAL` / `PHASE` / `FLOW_STEP` scope taxonomy to `docs/game_flow.md` before adding command declarations. Inventory commands that intentionally run outside `interaction_flow` so M3/M4 do not misclassify replay, setup, phase-advance, or debug commands as illegal. **No code changes.** | low | +0 (docs) | no |
+| **M1** | Add [src/core/state/flow_spec.gd](../src/core/state/flow_spec.gd) (RefCounted) with a frozen `_SPEC` table that translates `docs/game_flow.md` into machine form. Add `tests/unit/test_flow_spec.gd`: every documented/enum-backed `(flow_id, step_id)` pair from `docs/game_flow.md` and `Constants` must be present in `_SPEC`, including rows not currently covered by `tests/unit/test_ui_projector.gd`. Include the exact `ControllerRole` enum, `get_spec()` empty-dictionary behaviour, `has_spec()`, and `resolve_controller_player(...)` contract from §3.2; pin `SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE -> OPPOSING_PLAYER` as the regression example. | low | +260 / 0 | no |
+| **M2** | Wire `UIProjector.project()` to consult `FlowSpec.get_spec(...)` for `controller_role` and `modals`. Today's hard-coded modal mapping in `UIProjector` becomes a lookup. Identical output asserted by `test_ui_projector.gd` (no test changes expected). Explicitly keep `UIProjector.project_turn_transition()` outside `FlowSpec` unless a later slice deliberately models turn-transition intent; add a boundary assertion or doc note so handoff/waiting/banner surfaces are not mistaken for `interaction_flow` rows. | medium | +90 / −120 | yes |
+| **M2.5** | **Producer controller contract:** migrate interaction-flow producers that write `controller_player` to use the M1 FlowSpec resolver/helper instead of ad-hoc arithmetic or payload-derived fallbacks. Add focused tests for displacement's non-moving-player controller, attack defender/attacker fallback, and activation/squadron active-player ownership. No modal lifecycle change beyond making the existing controller values centrally derived. | medium | +80 / −40 | yes |
+| **M3** | **Parity gate I:** add a unit test that, for every command type currently registered with `GameCommand.register_type(...)`, asserts a static applicability declaration exists. The declaration includes `scope` (`GLOBAL`, `PHASE`, or `FLOW_STEP`) plus allowed phases or `(flow_id, step_id)` pairs as appropriate. Fail with a clear error listing missing commands. Then add the declarations command-by-command in this slice. `resolve_immediate_effect` must account for both attack-flow immediate effects and the debug-deal-damage follow-up as `PHASE: SHIP, SQUADRON`; do not declare it attack-only or fully global. No behaviour change yet. | low | +160 / 0 | no |
+| **M4** | **Parity gate II:** `CommandProcessor.submit()` consults `FlowSpec.allowed_commands(state.flow, state.step)` before calling `cmd.validate()` only for `FLOW_STEP` commands. `PHASE` and `GLOBAL` commands are checked against their own declarations. Mismatch -> reject with a structured `{allowed: false, reason: "command X not allowed in step Y"}`. Add regression coverage for attack immediate effects and debug-deal-damage immediate follow-ups in Ship/Squadron phases so M3's phase declaration is proven before replay/manual gates. Run replay suite + manual test to catch missed declarations from M3. | medium | +60 / 0 | yes |
+| **M5** | Add [src/core/effects/rule_registry.gd](../src/core/effects/rule_registry.gd) and [src/core/effects/flow_hook.gd](../src/core/effects/flow_hook.gd). Add `src/autoload/rule_bootstrap.gd` that calls every registered rule's static `register()`. **Empty registry** at this slice — registry behaves identically to today and does not replace `EffectRegistry`. Test: `RuleRegistry.validators_for(...)` returns `[]` for every step until rules migrate. | low | +180 / 0 | no |
+| **M6** | `CommandProcessor.preflight()`: after FlowSpec allow-list passes, run `RuleRegistry.validators_for(flow, step, cmd.command_type)` in priority order; first denial wins. `AttackDiceResolver.apply_gather_hook()`/dice-pool gather path consults `RuleRegistry.modifiers_for(flow, step, "dice_pool")` while preserving legacy `EffectRegistry` behaviour until rules migrate. `CommandProcessor.notify_observers()`: after execute, collect `RuleRegistry.observers_for(...)` follow-up command requests into the §3.3.1 deferred queue, emit `CommandProcessor.command_executed` for the triggering command, then drain the queue. Observers never submit synchronously. **Empty registry** keeps behaviour identical. | medium | +170 / 0 | no |
 | **M7** | Migrate **rule 1: Faulty Countermeasures** (defense-token spend validator). Single file, single VALIDATOR hook. Remove or bridge the current legacy effect path only after the new test proves identical behaviour after command-time registration and after save/load rebuild. Test: `tests/unit/test_rule_faulty_countermeasures.gd`. | low | +90 / −40 | yes |
 | **M8** | Migrate **rule 2: Compartment Fire** (defense-token ready blocker in Status Phase). Demonstrates a `PHASE`-scope MODIFIER + multi-flow registration in one file. Include a load/rebuild assertion if the current implementation uses `EffectRegistry`. | low | +90 / −40 | yes |
 | **M9** | Migrate **rule 3: Damaged Munitions** (attack-pool dice removal modifier). Demonstrates an `ATTACK_ROLL` MODIFIER hook and validates that active faceup-card state, not a stale runtime hook, decides applicability. | low | +90 / −40 | yes |
 | **M10** | Migrate **rule 4: Point-Defense Failure** (squadron-attack-only modifier). Demonstrates a flow-conditional predicate and squadron keyword/effect bridge semantics. | low | +90 / −40 | yes |
 | **M11** | Migrate **rule 5: Crew Panic** (BEFORE_REVEAL_DIAL choice modal as ENABLER). Demonstrates surfacing optional UI affordances through `UIIntent.affordances` populated by ENABLER hooks, with no modal lifecycle branch in scene code. | medium | +120 / −80 | yes |
 | **M12** | Migrate **rule 6: Capacitor Failure** (no shields -> no recover, no redirect). Demonstrates a multi-hook rule: VALIDATOR on `recover_shields`, BLOCKER on redirect step. Documents the "one rule, multiple hooks" pattern and the active-state source for each hook. | medium | +110 / −60 | yes |
-| **M13** | **Determinism guard:** add `tests/integration/test_rule_order_replay.gd`. Run a replay scenario that triggers ≥ 3 hooks in the same step on both peers (host + client harness), serialise hook execution order, assert byte-identical sequences. | low | +120 / 0 | no |
+| **M13** | **Determinism guard:** add `tests/integration/test_rule_order_replay.gd`. Run a replay scenario that triggers >= 3 hooks in the same step, serialise hook ids plus generated follow-up command types in execution order, and assert `(priority DESC, rule_id ASC)` ordering. Hot-seat must be byte-identical across repeated local runs; real ENet host/client must match each other within the same run without adding committed network trace/hash fixtures. | low | +140 / 0 | no |
 | **M14** | **Coverage tool:** `scripts/dump_flow_coverage.gd` — given a `(flow, step)`, prints all FlowSpec metadata + every registered rule. Used as a debugging aid; runs in `--headless`. | low | +80 / 0 | no |
 | **M15** | Update `docs/implementation_plan.md` §1 baseline + §2 phase status + §4 open topics. Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) "Non-Negotiable Rules" with rule §12 "New rules go through `RuleRegistry`". Update `.skills/architecture_patterns.md` with a Layer-3 (rules) section. | trivial | +0 (docs) | no |
 
+M0.5 findings now reflected in [docs/game_flow.md](game_flow.md) §0.1 and
+carried forward into M1-M4 planning:
+
+- `InteractionFlow` remains fit for M1: `flow_type`, `step_id`, resolved
+   `controller_player`, `visible_to`, and JSON-safe `payload` can carry the
+   current prose requirements. M1 must add semantic `controller_role` to
+   `FlowSpec` while keeping `InteractionFlow` as the resolved runtime snapshot.
+- No blocking duplicate-step model defect was found. Legacy/projected rows such
+   as `REVEAL_DIAL`, `SPEND_DIAL`, `SQUAD_MOVE`, `SQUAD_ATTACK`,
+   `STATUS_CLEANUP_STEP`, and `GAME_OVER_STEP` stay in M1 for parity with
+   `Constants`/`UIProjector`; M3/M4 must handle them through applicability
+   declarations rather than renaming or dropping them.
+- No current-command expressivity blocker was found. The current command set
+   can express durable actions and produced flows, but M0.7/M3 must classify
+   phase/system/projection-only surfaces as `GLOBAL`, `PHASE`, or `FLOW_STEP`
+   before command gating lands.
+- The displacement bug class remains the controller-role worked example:
+   `SQUADRON_DISPLACEMENT / DISPLACEMENT_PLACE` is semantically
+   `OPPOSING_PLAYER` (the non-moving player), so future producers must derive
+   the resolved `controller_player` from `FlowSpec` instead of accepting an
+   ad-hoc value.
+
+M0.6 findings now reflected in [docs/game_flow.md](game_flow.md) §0.2 and
+carried forward into M5-M12 planning:
+
+- `EffectRegistry` remains the transient legacy hook executor during M; it is
+   not serialized and must be rebuilt from authoritative entities by
+   `EffectFactory.rebuild_runtime_effects()` after load.
+- `RuleRegistry` is a static rule-definition catalogue, not an active-state
+   store. Migrated predicates must read `GameState` entities directly or use a
+   typed bridge that is rebuilt from those entities.
+- The loaded Blinded Gunners bug (`d752ffd`) is the acceptance example: a
+   serialized `faceup_damage.effect_id == "blinded_gunners"` must block accuracy
+   spending immediately after deserialize + install in hot-seat, network, and
+   replay.
+- First-six rule boundary: Faulty Countermeasures, Compartment Fire, Damaged
+   Munitions, Point-Defense Failure, and Capacitor Failure target pure
+   `RuleRegistry` predicates after their slices. Crew Panic needs an
+   `EffectRegistry` bridge until M11 replaces the current scene-side choice
+   modal/effect-resolution path with a projected ENABLER affordance.
+
+M0.7 findings now reflected in [docs/game_flow.md](game_flow.md) §0.3 and
+carried forward into M3-M4 planning:
+
+- Command applicability has three scopes: `GLOBAL` bypasses flow/phase gates
+   for sync, debug, and cleanup commands; `PHASE` declares allowed
+   `Constants.GamePhase` values without requiring a modal step; `FLOW_STEP`
+   declares explicit `(flow_type, step_id)` pairs from `FlowSpec`.
+- Every currently registered command type is inventoried with a proposed M3
+   scope. M3's parity test should fail on any new command missing a matching
+   declaration.
+- `publish_attack_flow` is deliberately `GLOBAL` because it writes the attack
+   flow snapshot; gating it by the current step would block the synchronization
+   command that keeps peers and replay aligned.
+- `resolve_immediate_effect` must remain conservative in M3/M4. The normal
+   attack UI path is `ATTACK_RESOLVE_DAMAGE` / `ATTACK_CRITICAL_CHOICE`, but
+   debug-dealt immediate damage cards can submit the same command outside
+   `ATTACK`, so an attack-only declaration would be a regression. The M3
+   declaration should be `PHASE: SHIP, SQUADRON`, matching the command's
+   existing `validate()` contract.
+- Conservative `PHASE` declarations are intentional for broad utility and
+   legacy effect surfaces (`spend_dial`, `spend_token`, `discard_token`,
+   `set_speed`, `persistent_effect_damage`) until later slices give each path
+   a precise projected step or migrated rule hook.
+- The first M4 behaviour gate should preserve existing command legality before
+   narrowing declarations. Tightening a `PHASE` command to `FLOW_STEP` belongs
+   in the slice that adds the missing flow surface and regression coverage.
+
 ### 5.2 Acceptance criteria for closing Phase M
 
-1. `tests/unit/test_flow_spec.gd` covers 100% of `(flow_id, step_id)` pairs that appear in `tests/unit/test_ui_projector.gd`. New pair → CI fails.
-2. Every `GameCommand` subclass declares an applicability scope plus its allowed phases or `(flow_id, step_id)` pairs. Static parity test enforces this.
-3. `CommandProcessor.submit()` rejects a command whose declaration does not include the current flow/phase surface. Tested for `FLOW_STEP`, `PHASE`, and `GLOBAL` commands.
-4. `RuleRegistry` contains the 6 migrated rules or documented bridges for any legacy `EffectRegistry` rule retained during M. Adding a 7th is reproducibly a one-file change (write rule + add to bootstrap list) unless it intentionally bridges a legacy effect.
-5. Save/load regression covers at least one migrated persistent damage-card rule, including the loaded Blinded Gunners failure class.
-6. Observer hooks use the deferred follow-up queue; no migrated rule submits synchronously during `command_executed`.
-7. Determinism replay test green.
-8. Test baseline: >= 147 scripts / >= 2 942 tests / >= 5 585 asserts / 0 failures; `bash scripts/lint_phase_k.sh` exits 0; `bash scripts/run_baseline_traces.sh --all` passes for any slice touching modal, replay, network, command-submission, or rule-observer flow.
+1. `tests/unit/test_flow_spec.gd` covers 100% of valid pairs listed in `docs/game_flow.md` §1 and detailed sections, and asserts those names still exist in `Constants`. This is not the enum cross-product; projection-only/legacy rows are included in `_SPEC` with `source = "projection_only"`. New documented pair -> CI fails until FlowSpec and projector expectations are updated.
+2. FlowSpec exposes the exact `Constants.ControllerRole` enum from §3.2 plus a producer-safe resolver/helper for resolved `controller_player`; interaction-flow producers use that helper. Regression tests cover every role's success path, the unresolved `-1` failure path, displacement's non-moving-player controller, and attack/activation ownership fallbacks.
+3. Every `GameCommand` subclass declares an applicability scope plus its allowed phases or `(flow_id, step_id)` pairs. Static parity test enforces this, including a fixture proving `resolve_immediate_effect` is `PHASE: SHIP, SQUADRON` rather than attack-only while debug immediate effects still exist.
+4. `CommandProcessor.submit()` rejects a command whose declaration does not include the current flow/phase surface. Tested for `FLOW_STEP`, `PHASE`, and `GLOBAL` commands, including attack immediate effects and debug-deal-damage immediate follow-ups in Ship/Squadron phases.
+5. `RuleRegistry` contains the 6 migrated rules/effects or documented bridges for any legacy `EffectRegistry` rule retained during M. Adding a 7th is reproducibly a one-file change (write rule + add to bootstrap list) unless it intentionally bridges a legacy effect.
+6. Save/load regression covers at least one migrated persistent damage-card rule, including the loaded Blinded Gunners failure class.
+7. Observer hooks use the §3.3.1 deferred follow-up queue; no migrated rule submits synchronously during `CommandProcessor.command_executed`, replay does not synthesize duplicate follow-ups, and rule files are guarded against direct `CommandProcessor.submit` / `GameManager.submit_` calls.
+8. Determinism replay test green, including hook-order/follow-up-order capture for repeated hot-seat runs and same-run ENet host/client equality.
+9. Test baseline: >= 148 scripts / >= 2 956 tests / >= 5 629 asserts / 0 failures; `bash scripts/lint_phase_k.sh` exits 0; `bash scripts/run_baseline_traces.sh --all` passes for any slice touching modal, replay, network, command-submission, or rule-observer flow.
 
 ---
 
@@ -672,16 +806,16 @@ within the same run.
 |---|---|---|---|
 | L2/L3/L5 hot-seat modal migration breaks observable UX (timing, animations) | Medium | High | Each slice gated by manual test L7-style comparison. Incremental: one modal type at a time. Snapshot test of `UIIntent` per scenario step keeps regressions tight. |
 | Hot-seat affordances (sequence button) don't have a clean network equivalent | Medium | Medium | L3 explicitly migrates affordances through `UIIntent.affordances`. If a true asymmetry remains, document it as an `affordance_kind` value with a clear semantic, not a `PlayMode` branch. |
-| FlowSpec entries drift from runtime (someone adds a step without updating the spec) | Medium | High | M1 parity test fails CI on unknown pairs. M3/M4 parity tests fail on unknown commands. Two safety nets. |
+| FlowSpec entries drift from runtime (someone adds a step without updating the spec) | Medium | High | M1 parity tests compare FlowSpec against the valid pair inventory in `docs/game_flow.md`, `Constants`, and projector expectations, including legacy/projected pairs marked with `source = "projection_only"`. M3/M4 parity tests fail on unknown commands. Two safety nets. |
 | Rule self-registration ordering causes peer divergence | Low | Critical | M5 + M13 enforce sort order `(priority DESC, rule_id ASC)` and a determinism replay test. Static rule list — no dynamic registration after autoload. |
-| Existing keyword effects break during M7–M12 migration | Medium | High | One rule per slice; existing tests retained; new test added for migrated rule. Old in-resolver code removed only after the new path is proven by the new test. |
+| Existing keyword/effect bridges break during M7-M12 migration | Medium | High | One rule/effect per slice; existing tests retained; new test added for migrated rule. Broader keyword migration is out of scope; old in-resolver or legacy bridge code is removed only after the new path is proven by the new test. |
 | Runtime effect/rule registry not rebuilt after load (loaded Blinded Gunners class) | Medium | Critical | M0.6 defines the `EffectRegistry` / `RuleRegistry` boundary before code migration. Every persistent damage-card migration includes a save/load regression. `EffectFactory.rebuild_runtime_effects()` remains authoritative for legacy runtime hooks until a rule is fully migrated. |
-| Observer hook submits follow-up command synchronously during network command broadcast | Medium | Critical | M6 introduces a deferred follow-up queue and forbids synchronous observer submission from inside `EventBus.command_executed`. Network replay gate must pass for any slice that adds observer hooks. |
+| Observer hook submits follow-up command synchronously during network command broadcast | Medium | Critical | M6 introduces the §3.3.1 deferred follow-up queue and forbids synchronous observer submission from inside `CommandProcessor.command_executed`. Network replay gate must pass for any slice that adds observer hooks. |
 | Save format break | Low | Critical | `interaction_flow` JSON shape unchanged; FlowSpec and RuleRegistry are computed/runtime-only; active rule state remains derived from serialized entities. Pin save format version if a slice must add serialized fields. |
 | Replay break | Low | Critical | Replay determinism gated by M13. Run `bash scripts/run_baseline_traces.sh --all` locally on every L/M slice that touches modal, replay, network, command-submission, or rule-observer flow. |
 | Scope creep ("while we're at it, let's redesign…") | High | Medium | Slice list is fixed. Every additional change must land as a separate phase (Phase N candidate). |
 | Stale line/LOC references inside this plan (drafted 2026-05-10 against `game_board.gd` ≈ 3 055 LOC; file is now 1 464 LOC after K8/K10/K11/K12/K13) | Medium | Low | L0 already refreshed the inventory in `modal_classification.md` §L-Inventory. Treat the §4.1 slice descriptions as role-based (file + symbol + lint-allow-list entry), never as `:NNNN` line addresses. |
-| New producer adds a `controller_player` ad-hoc instead of consulting FlowSpec (the 2026-05-11 displacement defect class) | Medium | High | M0.5 lands `FlowSpec.controller_role(flow_id, step_id) -> ControllerRole` and a parity test that fails CI when any `GameCommand.execute()` writes `interaction_flow.controller_player` without going through the spec. Worked example pinned in §5.1 M0/M0.5. |
+| New producer adds a `controller_player` ad-hoc instead of consulting FlowSpec (the 2026-05-11 displacement defect class) | Medium | High | M1 lands `FlowSpec.controller_role(flow_id, step_id) -> ControllerRole`; M2.5 migrates producers through a resolver/helper and adds focused controller regression tests. Worked example pinned in §5.1 M0/M0.5. |
 
 ---
 
@@ -689,13 +823,15 @@ within the same run.
 
 ### 7.1 Phase K dependency
 
-Phase K and Phase L are complete for LM purposes. The next LM slice is
-**M0 game-flow master document**.
+Phase K and Phase L are complete for LM purposes. The M0 game-flow master
+document, M0.5 model-fitness review, M0.6 runtime-registry boundary review,
+and M0.7 command-scope model are complete; the next LM slice is **M1
+FlowSpec encoding**.
 
 Required Phase K foundations are present:
 
 1. **K12 (`CommandRouterAdapter`) committed (`e17ff05`).** This is the single
-   `EventBus.command_executed -> UIProjector.project` subscription point that
+   `CommandProcessor.command_executed -> UIProjector.project` subscription point that
    L1's `ModalRouter` extends.
 2. **K7 lint script in place and green.** `scripts/lint_phase_k.sh` currently
    reports `0 violations (4 allow-listed branches)`. L6 met the
@@ -726,7 +862,7 @@ Current post-fix snapshot (2026-05-14):
 
 Recommended next sequence:
 
-1. Begin M0 from the current post-L7 baseline.
+1. Begin M1 from the current post-M0.7 docs baseline.
 2. Keep LM changes out of [src/scenes/game_board/attack_executor.gd](../src/scenes/game_board/attack_executor.gd), [src/autoload/game_manager.gd](../src/autoload/game_manager.gd), and [src/autoload/save_game_manager.gd](../src/autoload/save_game_manager.gd) unless the slice explicitly extracts responsibilities from them.
 3. Run `bash scripts/run_baseline_traces.sh --all` for every slice that touches modal, replay, network, command-submission, or rule-observer flow.
 
@@ -771,9 +907,9 @@ a single-file change.
 
 ## 8. Quick-start guide for executing this plan
 
-### Before starting M0
+### Before starting M1
 
-1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, L4, L5, L6, L7, and the loaded-save
+1. Confirm the current baseline includes L0/L0.5, L1, L2, L3, L4, L5, L6, L7, M0, M0.5, M0.6, M0.7, and the loaded-save
    persistent-effect fix (`d752ffd`).
 2. Confirm `bash scripts/lint_phase_k.sh` exits `0` with 4 allow-listed
    branches after L6.
@@ -782,7 +918,7 @@ a single-file change.
    abort is not a test failure.
 4. Run `bash scripts/run_baseline_traces.sh --all` before starting any modal,
    network, replay, command-submission, or rule-observer slice.
-5. Start a focused branch for M0 (`phase-m/game-flow-doc`) and keep replay
+5. Start a focused branch for M1 (`phase-m/flow-spec`) and keep replay
    artifact churn out of commits.
 
 ### During each Phase L/M slice
@@ -849,5 +985,8 @@ unblocks G4.7+ after Phase M), and *minimally invasive* (no save format break,
 no new RPC, no new EventBus channel, no wholesale replacement of existing
 runtime-effect primitives).
 
-**Verdict: safe to begin M0 next.** Phase L closed with hot-seat and network
-manual-test parity, and the replay/lint gates are already in place for Phase M.
+**Verdict: safe to begin M1 next.** Phase L closed with hot-seat and network
+manual-test parity, M0 captured the game-flow master document, M0.5 found no
+blocking `InteractionFlow` model defect, M0.6 pinned the runtime-registry
+boundary, M0.7 classified command scopes, and the replay/lint gates are
+already in place for Phase M.

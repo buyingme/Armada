@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-14 (Phase L7 manual-test sweep; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M0.7 command-scope model; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -18,7 +18,7 @@
 | GUT tests | 2 956 |
 | GUT asserts | 5 629 |
 | Failing tests | 0 |
-| Last commit | This commit — L7 manual-test sweep |
+| Last commit | `e7779e5` — L7 manual-test sweep |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -115,7 +115,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, and M0.7 are complete; M1 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -165,6 +165,30 @@ regression gate is complete and remains the required L/M automated gate:
   annotations recorded pass evidence for activation auto-skip, brace canonical
   order, and displacement modal projection; annotation JSON files remain local
   ignored runtime artifacts under `saves/annotations/`.
+- M0 result: [docs/game_flow.md](game_flow.md) is the human-readable master
+  flow document for Phase M. It inventories every currently projected,
+  produced, or legacy-compatible `(flow_type, step_id)` pair with controller
+  role, modal kind, allowed command surface, transitions, citations, and
+  known gaps for M0.5-M4. No source code changed.
+- M0.5 result: [docs/game_flow.md](game_flow.md) now includes the model-fitness
+  review for the three planned questions. The review found no blocking
+  `InteractionFlow` model defect before `FlowSpec`; it records that M1 must
+  make `controller_role` first-class, with `SQUADRON_DISPLACEMENT /
+  DISPLACEMENT_PLACE` as the worked example for the non-moving-player rule.
+  No source code changed.
+- M0.6 result: [docs/game_flow.md](game_flow.md) now defines the runtime
+  registry boundary: `EffectRegistry` remains transient and rebuilt from
+  serialized entities by `EffectFactory.rebuild_runtime_effects()`, while
+  `RuleRegistry` is a static definition catalogue and not an active-state
+  store. The loaded Blinded Gunners bug is pinned as the save/load acceptance
+  example, and the first-six rule migration decisions are recorded. No source
+  code changed.
+- M0.7 result: [docs/game_flow.md](game_flow.md) now defines the `GLOBAL` /
+  `PHASE` / `FLOW_STEP` command applicability taxonomy and inventories every
+  currently registered command type with a proposed M3 declaration scope. The
+  findings are reflected in the Phase L/M plan so M3/M4 can add parity tests
+  and gates without misclassifying setup, phase, sync, debug, or legacy-effect
+  commands. No source code changed.
 
 ---
 
@@ -538,7 +562,7 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; L4 displacement modal projection implemented)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
+1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; Phase L and M0-M0.7 complete, M1 next)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI

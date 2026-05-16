@@ -560,7 +560,7 @@ func test_click_different_squadron_in_action_choice_auto_finishes() -> void:
 			"Click on different squadron in ACTION_CHOICE should be consumed")
 	assert_eq(emitted["instance"], inst_a,
 			"activation_done should fire for the previously selected"
-			+ " squadron before the new one is selected")
+			+" squadron before the new one is selected")
 	assert_eq(_modal.get_selected_token(), token_b,
 			"Selected token should now be the second squadron")
 
@@ -607,7 +607,7 @@ func test_click_different_squadron_turn_mode_returns_false() -> void:
 	var consumed: bool = _modal.handle_squadron_click(token_b)
 	assert_false(consumed,
 			"Turn-mode ACTION_CHOICE click on different squadron"
-			+ " should be ignored (controller drives next pick)")
+			+" should be ignored (controller drives next pick)")
 
 
 # ===========================================================================
@@ -646,8 +646,8 @@ func test_close_after_attack_emits_activation_done() -> void:
 	_modal._finish_command_early()
 	assert_eq(emitted["instance"], inst,
 			"_finish_command_early should emit activation_done for"
-			+ " the in-progress squadron when it has already"
-			+ " attacked, so the controller can mark it activated")
+			+" the in-progress squadron when it has already"
+			+" attacked, so the controller can mark it activated")
 
 
 ## When the player closes the modal in command mode WITHOUT any action

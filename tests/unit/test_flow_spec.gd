@@ -166,7 +166,7 @@ func test_resolve_controller_player_defender_or_attacker_falls_back_to_attacker(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 			null,
-			{"attacker_player": 0, "defender_player": -1})
+			{"attacker_player": 0, "defender_player": - 1})
 	assert_eq(controller, 0,
 			"DEFENDER_OR_ATTACKER should fall back to attacker_player.")
 

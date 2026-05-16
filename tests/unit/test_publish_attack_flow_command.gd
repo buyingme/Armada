@@ -59,8 +59,8 @@ func test_execute_defense_tokens_prefers_defender_identity() -> void:
 func test_execute_defense_tokens_falls_back_to_attacker_identity() -> void:
 	var cmd := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
-		"controller_player": -1,
-		"flow_payload": {"attacker_player": 0, "defender_player": -1},
+		"controller_player": - 1,
+		"flow_payload": {"attacker_player": 0, "defender_player": - 1},
 		"final": false,
 	})
 	cmd.execute(_state)

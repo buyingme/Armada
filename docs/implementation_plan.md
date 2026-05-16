@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M4 command applicability gate; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M5 rule registry scaffold; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 151 |
-| GUT tests | 3 007 |
-| GUT asserts | 5 805 |
+| GUT test scripts | 154 |
+| GUT tests | 3 021 |
+| GUT asserts | 5 921 |
 | Failing tests | 0 |
-| Last commit | `3d76d2a` — M3 command applicability declarations |
+| Last commit | `298a181` — M4 command applicability gate |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,8 +34,8 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-16 M4 full GUT summary is green
-(151 / 3 007 / 5 805, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-16 M5 full GUT summary is green
+(154 / 3 021 / 5 921, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
 
 ---
@@ -113,7 +113,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, and M4 are complete; M5 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, and M5 are complete; M6 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -255,6 +255,18 @@ regression gate is complete and remains the required L/M automated gate:
   Phase K lint 0 violations / 4 allow-listed branches, `git diff --check`
   clean, and baseline traces passing hot-seat trace/state plus network peer
   state equality.
+- M5 result: [flow_hook.gd](../src/core/effects/flow_hook.gd) and
+  [rule_registry.gd](../src/core/effects/rule_registry.gd) add the static
+  Phase M hook catalogue without migrating any production rules out of
+  `EffectRegistry`. Hook descriptors cover validators, modifiers, observers,
+  blockers, and enablers, and [rule_bootstrap.gd](../src/autoload/rule_bootstrap.gd)
+  is registered as an autoload with an intentionally empty rule-script list.
+  New tests prove the empty registry returns no hooks for every FlowSpec pair,
+  that `register_rule(...)` pins canonical rule ids, and that the empty
+  bootstrap clears stale static hooks. Automated gates: focused M5 tests
+  14 / 116, full GUT 154 / 3 021 / 5 921 with 0 failures, Phase K lint
+  0 violations / 4 allow-listed branches, and baseline traces passing
+  hot-seat trace/state plus network peer state equality.
 
 ---
 

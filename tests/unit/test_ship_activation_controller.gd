@@ -16,7 +16,18 @@ class RecordingSubmitter:
 		return {"recorded": true}
 
 
+class StubAttackExecutor:
+	extends AttackExecutor
+
+	var has_targets: bool = false
+
+
+	func has_any_attack_target(_ship_token_arg: ShipToken) -> bool:
+		return has_targets
+
+
 var _activation_ctx: ActivationContext = null
+var _attack_executor: StubAttackExecutor = null
 var _controller: ShipActivationController = null
 var _panel_mgr: UIPanelManager = null
 var _ship_token: ShipToken = null
@@ -47,6 +58,7 @@ func after_each() -> void:
 	_controller = null
 	_panel_mgr = null
 	_ship_token = null
+	_attack_executor = null
 	_submitter = null
 
 
@@ -86,6 +98,44 @@ func test_sync_activation_step_from_flow_passive_peer_does_not_submit() -> void:
 			"Passive peer should mirror the authoritative Repair step.")
 
 
+func test_sync_activation_step_from_flow_no_attack_targets_submits_maneuver_step() -> void:
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship)
+	var flow: InteractionFlow = _attack_flow(0, 0)
+	GameManager.current_game_state.interaction_flow = flow
+
+	_controller.sync_activation_step_from_flow(flow)
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 1,
+			"Controller should submit one deferred advance from Attack to Maneuver.")
+	var command: GameCommand = _submitter.submitted_commands[0]
+	assert_true(command is AdvanceActivationStepCommand,
+			"Deferred command should be an AdvanceActivationStepCommand.")
+	assert_eq(command.payload.get("step_id", ""), "maneuver_step",
+			"No-target projected Attack step should advance to maneuver_step.")
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.MANEUVER,
+			"Local activation state should advance to MANEUVER after the skip.")
+
+
+func test_sync_activation_step_from_flow_attack_targets_does_not_submit() -> void:
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship)
+	_attack_executor.has_targets = true
+	var flow: InteractionFlow = _attack_flow(0, 0)
+	GameManager.current_game_state.interaction_flow = flow
+
+	_controller.sync_activation_step_from_flow(flow)
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 0,
+			"Controller should not auto-advance Attack when targets exist.")
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.ATTACK,
+			"Local activation state should remain at ATTACK when targets exist.")
+
+
 func _create_ship(owner_player: int) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.hull = 4
@@ -108,6 +158,8 @@ func _start_activation_for_ship(ship: ShipInstance) -> void:
 	_panel_mgr.activation_modal = ActivationModal.new()
 	_panel_mgr.add_child(_panel_mgr.activation_modal)
 	add_child_autofree(_panel_mgr)
+	_attack_executor = StubAttackExecutor.new()
+	add_child_autofree(_attack_executor)
 	_controller = ShipActivationController.new()
 	add_child_autofree(_controller)
 	_initialize_controller()
@@ -131,11 +183,20 @@ func _repair_flow(controller_player: int, ship_index: int) -> InteractionFlow:
 			{"ship_index": ship_index})
 
 
+func _attack_flow(controller_player: int, ship_index: int) -> InteractionFlow:
+	return InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP,
+			controller_player,
+			Constants.Visibility.ALL,
+			{"ship_index": ship_index})
+
+
 func _initialize_controller() -> void:
 	_controller.initialize(
 			_activation_ctx,
 			_panel_mgr,
-			null,
+			_attack_executor,
 			null,
 			null,
 			null,

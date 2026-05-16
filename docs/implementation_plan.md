@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M3 command applicability declarations; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M4 command applicability gate; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 150 |
-| GUT tests | 2 992 |
-| GUT asserts | 5 774 |
+| GUT test scripts | 151 |
+| GUT tests | 3 007 |
+| GUT asserts | 5 805 |
 | Failing tests | 0 |
-| Last commit | `8fa3b94` — M2.5 FlowSpec producer controller contract |
+| Last commit | `3d76d2a` — M3 command applicability declarations |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,10 +34,9 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-16 M3 full GUT summary is green
-(150 / 2 992 / 5 774, 0 failures), but Godot 4.5.1 still aborted after the
-summary with `recursive_mutex lock failed` / exit 134. Track the post-summary
-abort separately; no parse errors or GUT failures were reported.
+Verification note: the 2026-05-16 M4 full GUT summary is green
+(151 / 3 007 / 5 805, 0 failures). Godot still reports known shutdown RID leak
+warnings in the runner output; no parse errors or GUT failures were reported.
 
 ---
 
@@ -114,7 +113,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, and M3 are complete; M4 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, and M4 are complete; M5 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -235,6 +234,27 @@ regression gate is complete and remains the required L/M automated gate:
   (known post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
   branches, and baseline traces passing hot-seat trace/state plus network peer
   state equality. M3 adds metadata only; M4 is the runtime command gate.
+- M4 result: [command_processor.gd](../src/autoload/command_processor.gd)
+  now consults [command_applicability.gd](../src/core/commands/command_applicability.gd)
+  before each command-specific `validate()` call. `GLOBAL` commands bypass the
+  flow/phase pre-flight, `PHASE` commands check `GameState.current_phase`, and
+  `FLOW_STEP` commands check their declared pair against
+  [flow_spec.gd](../src/core/state/flow_spec.gd) `allowed_commands` before
+  execution. Rejections emit structured reasons before command validation.
+  Replay verification refined the declarations to preserve existing legality:
+  controller-prevalidated attack commands, ship/squadron activation starters,
+  movement, repair, and activation-end commands remain phase-scoped until a
+  later slice gives every producer a precise step surface. MT annotations also
+  exposed a no-target Attack skip gap: Repair could advance to `ATTACK_STEP`
+  while the visible activation modal only refreshed, so the local modal could
+  advance to Maneuver without submitting the authoritative `maneuver_step`.
+  [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
+  now auto-advances projected no-target Attack steps through
+  `advance_activation_step`. Automated gates: focused M4 tests 43 / 163,
+  activation-flow regression tests 56 / 105, full GUT 151 / 3 007 / 5 805 with 0 failures,
+  Phase K lint 0 violations / 4 allow-listed branches, `git diff --check`
+  clean, and baseline traces passing hot-seat trace/state plus network peer
+  state equality.
 
 ---
 

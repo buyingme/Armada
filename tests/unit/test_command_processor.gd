@@ -5,15 +5,19 @@ extends GutTest
 
 
 const CmdProcessor := preload("res://src/autoload/command_processor.gd")
+const TEST_NOOP_TYPE: String = "debug_deal_damage"
+const TEST_FAILING_TYPE: String = "publish_attack_flow"
 
 var _processor: Node
 var _state: GameState
 var _executed_cmds: Array[GameCommand] = []
 var _rejected_cmds: Array[GameCommand] = []
 var _rejected_reasons: Array[String] = []
+var _saved_registry: Dictionary = {}
 
 
 func before_each() -> void:
+	_saved_registry = GameCommand._registry.duplicate()
 	_processor = CmdProcessor.new()
 	add_child_autofree(_processor)
 	_state = GameState.new()
@@ -24,16 +28,18 @@ func before_each() -> void:
 	_rejected_reasons.clear()
 	_processor.command_executed.connect(_on_executed)
 	_processor.command_rejected.connect(_on_rejected)
-	# Register a trivial concrete type for testing.
-	GameCommand.register_type("_test_noop", func(p: int,
+	# Use declared global command types so M4 applicability stays active.
+	GameCommand.register_type(TEST_NOOP_TYPE, func(p: int,
 			pl: Dictionary) -> GameCommand:
 		return _NoopCommand.new(p, pl))
+	GameCommand.register_type(TEST_FAILING_TYPE, func(p: int,
+			pl: Dictionary) -> GameCommand:
+		return _FailingCommand.new(p, pl))
 
 
 func after_each() -> void:
 	GameManager.current_game_state = null
-	GameCommand._registry.erase("_test_noop")
-	GameCommand._registry.erase("_test_failing")
+	GameCommand._registry = _saved_registry
 
 
 func _on_executed(command: GameCommand, _result: Dictionary) -> void:
@@ -52,6 +58,8 @@ func _on_rejected(command: GameCommand, reason: String) -> void:
 func test_submit_executes_valid_command() -> void:
 	var cmd := _NoopCommand.new(0, {"a": 1})
 	var result: Dictionary = _processor.submit(cmd)
+	assert_eq(result.get("ok", false), true,
+			"Valid command should return its execution result.")
 	assert_eq(_processor.get_command_count(), 1,
 			"History should contain 1 command.")
 	assert_eq(cmd.sequence, 0,
@@ -89,9 +97,6 @@ func test_submit_rejects_when_no_game_state() -> void:
 
 func test_submit_rejects_on_custom_validation_failure() -> void:
 	# Register a type whose validate always fails.
-	GameCommand.register_type("_test_failing", func(p: int,
-			pl: Dictionary) -> GameCommand:
-		return _FailingCommand.new(p, pl))
 	var cmd := _FailingCommand.new(0, {})
 	var result: Dictionary = _processor.submit(cmd)
 	assert_true(result.is_empty(),
@@ -141,7 +146,7 @@ func test_serialize_history_roundtrip() -> void:
 			_processor.serialize_history()
 	assert_eq(serialized.size(), 2,
 			"Serialized history should have 2 entries.")
-	assert_eq(serialized[0]["type"], "_test_noop",
+	assert_eq(serialized[0]["type"], TEST_NOOP_TYPE,
 			"First entry type should match.")
 	assert_eq(serialized[1]["player"], 1,
 			"Second entry player should be 1.")
@@ -155,9 +160,9 @@ func test_serialize_history_roundtrip() -> void:
 
 func test_replay_commands_populates_history() -> void:
 	var serialized: Array[Dictionary] = [
-		{"type": "_test_noop", "player": 0, "sequence": 0,
+		{"type": TEST_NOOP_TYPE, "player": 0, "sequence": 0,
 				"payload": {"k": 1}},
-		{"type": "_test_noop", "player": 1, "sequence": 1,
+		{"type": TEST_NOOP_TYPE, "player": 1, "sequence": 1,
 				"payload": {"k": 2}},
 	]
 	_processor.replay_commands(serialized)
@@ -171,7 +176,7 @@ func test_replay_skips_unknown_types() -> void:
 	var serialized: Array[Dictionary] = [
 		{"type": "_unknown_xyz", "player": 0, "sequence": 0,
 				"payload": {}},
-		{"type": "_test_noop", "player": 0, "sequence": 1,
+		{"type": TEST_NOOP_TYPE, "player": 0, "sequence": 1,
 				"payload": {}},
 	]
 	_processor.replay_commands(serialized)
@@ -190,7 +195,7 @@ func test_replay_skips_unknown_types() -> void:
 class _NoopCommand extends GameCommand:
 	func _init(p_player: int = 0,
 			p_payload: Dictionary = {}) -> void:
-		super._init(p_player, "_test_noop", p_payload)
+		super._init(p_player, TEST_NOOP_TYPE, p_payload)
 
 	func execute(_game_state: GameState) -> Dictionary:
 		return {"ok": true}
@@ -200,7 +205,7 @@ class _NoopCommand extends GameCommand:
 class _FailingCommand extends GameCommand:
 	func _init(p_player: int = 0,
 			p_payload: Dictionary = {}) -> void:
-		super._init(p_player, "_test_failing", p_payload)
+		super._init(p_player, TEST_FAILING_TYPE, p_payload)
 
 	func validate(_game_state: GameState) -> String:
 		return "always fails"

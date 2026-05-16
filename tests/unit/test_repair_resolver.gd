@@ -17,6 +17,10 @@ func before_each() -> void:
 	_game_state.initialize()
 	_game_state.current_round = 1
 	_game_state.current_phase = Constants.GamePhase.SHIP
+	_game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			0)
 	_game_state.damage_deck = DamageDeck.new()
 	_game_state.damage_deck.initialize()
 	GameManager.current_game_state = _game_state
@@ -301,7 +305,7 @@ func test_repair_hull_discards_card_to_deck() -> void:
 	var card: DamageCard = DamageCard.create("Ship", "Structural Damage")
 	ship.add_facedown_damage(card)
 	var deck: DamageDeck = _make_deck()
-	var initial_draw: int = deck.get_draw_count()
+	var _initial_draw: int = deck.get_draw_count()
 	var resolver: RepairResolver = RepairResolver.create(ship, deck)
 	resolver.repair_hull(card)
 	assert_eq(deck.get_discard_count(), 1,

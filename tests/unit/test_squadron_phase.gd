@@ -29,6 +29,10 @@ func _setup_game(p0_count: int, p1_count: int) -> void:
 	# Advance to squadron phase: COMMAND → SHIP → SQUADRON.
 	# Mark all ships as activated (there are none, so just advance).
 	gs.current_phase = Constants.GamePhase.SQUADRON
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SQUADRON_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+			gs.initiative_player)
 	GameManager.active_player = gs.initiative_player
 	GameManager._squadrons_activated_this_turn = 0
 	GameManager._activating_squadron = null

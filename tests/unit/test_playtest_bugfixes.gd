@@ -94,14 +94,14 @@ func test_engaged_squadron_has_no_ship_targets() -> void:
 	## An engaged squadron should only have squadron targets.
 	## Rules Reference: RRG "Engagement" p.4.
 	var sq_friendly: SquadronInstance = _make_squadron(0, true)
-	var sq_token: SquadronToken = _make_squad_token(
+	var _sq_token: SquadronToken = _make_squad_token(
 			Vector2(100, 100), 0, true)
 	var enemy_sq: SquadronInstance = _make_squadron(1, true)
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var dist1_px: float = GameScale.distance_bands_px[0]
 	# Place enemy within distance 1
 	var center_dist: float = dist1_px + 2.0 * radius - 1.0
-	var all_squads: Array[Dictionary] = [
+	var _all_squads: Array[Dictionary] = [
 		{"instance": sq_friendly, "position": Vector2(100, 100)},
 		{"instance": enemy_sq, "position": Vector2(
 				100 + center_dist, 100)},
@@ -214,6 +214,10 @@ func test_repair_hull_emits_hull_changed_signal() -> void:
 	gs.initialize()
 	gs.current_round = 1
 	gs.current_phase = Constants.GamePhase.SHIP
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			0)
 	gs.damage_deck = deck
 	gs.get_player_state(0).ships.append(ship)
 	GameManager.current_game_state = gs
@@ -411,7 +415,7 @@ func test_squad_to_ship_range_diagonal_within_distance_1() -> void:
 	# (sq_radius + dist1_px * 0.9) from the corner — clearly within
 	# distance 1 of the corner, but far enough from ship center that
 	# the circle approximation (which uses half_length) over-estimates.
-	var d_corner: float = corner.distance_to(ship_pos)
+	var _d_corner: float = corner.distance_to(ship_pos)
 	var dir: Vector2 = (corner - ship_pos).normalized()
 	var sq_pos: Vector2 = corner + dir * (sq_radius + dist1_px * 0.9)
 	# Old circle approx: center_dist - sq_radius - half_length.

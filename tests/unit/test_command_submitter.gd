@@ -11,16 +11,19 @@ extends GutTest
 # ---------------------------------------------------------------------------
 
 ## Minimal no-op command for testing.
+const TEST_COMMAND_TYPE: String = "debug_deal_damage"
+
 var _NoopCmd: Callable = func(p: int, pl: Dictionary) -> GameCommand:
 	return _TestNoopCmd.new(p, pl)
 
 var _executed_cmds: Array[GameCommand] = []
 var _executed_results: Array[Dictionary] = []
+var _saved_registry: Dictionary = {}
 
 
 func before_each() -> void:
-	if not GameCommand._registry.has("_test_submitter_noop"):
-		GameCommand.register_type("_test_submitter_noop", _NoopCmd)
+	_saved_registry = GameCommand._registry.duplicate()
+	GameCommand.register_type(TEST_COMMAND_TYPE, _NoopCmd)
 	_executed_cmds.clear()
 	_executed_results.clear()
 	# CommandProcessor needs an active game state to accept commands.
@@ -35,6 +38,7 @@ func after_each() -> void:
 	if CommandProcessor.command_executed.is_connected(_on_executed):
 		CommandProcessor.command_executed.disconnect(_on_executed)
 	GameManager.current_game_state = null
+	GameCommand._registry = _saved_registry
 
 
 func _on_executed(cmd: GameCommand, result: Dictionary) -> void:
@@ -216,7 +220,7 @@ func test_is_replaying_true_during_replay() -> void:
 	# We can only observe is_replaying before and after replay —
 	# during replay, command_executed signals are suppressed.
 	var serialized: Array[Dictionary] = [
-		{"type": "_test_submitter_noop", "player": 0, "sequence": 0,
+		{"type": TEST_COMMAND_TYPE, "player": 0, "sequence": 0,
 				"payload": {}},
 	]
 	assert_false(CommandProcessor.is_replaying,
@@ -228,9 +232,9 @@ func test_is_replaying_true_during_replay() -> void:
 
 func test_replay_suppresses_command_executed_signal() -> void:
 	var serialized: Array[Dictionary] = [
-		{"type": "_test_submitter_noop", "player": 0, "sequence": 0,
+		{"type": TEST_COMMAND_TYPE, "player": 0, "sequence": 0,
 				"payload": {}},
-		{"type": "_test_submitter_noop", "player": 1, "sequence": 1,
+		{"type": TEST_COMMAND_TYPE, "player": 1, "sequence": 1,
 				"payload": {}},
 	]
 	CommandProcessor.replay_commands(serialized)
@@ -257,7 +261,7 @@ func test_normal_submit_emits_command_executed() -> void:
 class _TestNoopCmd extends GameCommand:
 	func _init(p_player: int = 0,
 			p_payload: Dictionary = {}) -> void:
-		super._init(p_player, "_test_submitter_noop", p_payload)
+		super._init(p_player, TEST_COMMAND_TYPE, p_payload)
 
 	func execute(_game_state: GameState) -> Dictionary:
 		return {"status": "ok"}

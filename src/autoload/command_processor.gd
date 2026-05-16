@@ -9,16 +9,21 @@
 ## [/codeblock]
 ##
 ## The processor:
-## 1. Validates the command ([method GameCommand.validate]).
-## 2. Assigns a monotonically increasing sequence number.
-## 3. Executes the command ([method GameCommand.execute]).
-## 4. Records the command in the history for replay / undo.
-## 5. Emits [signal command_executed] so the presentation layer can
+## 1. Checks the command's declared Phase M applicability surface.
+## 2. Validates the command ([method GameCommand.validate]).
+## 3. Assigns a monotonically increasing sequence number.
+## 4. Executes the command ([method GameCommand.execute]).
+## 5. Records the command in the history for replay / undo.
+## 6. Emits [signal command_executed] so the presentation layer can
 ##    react (UI updates, sound effects, network broadcast, etc.).
 ##
 ## In multiplayer (future), only the host runs [method execute];
 ## clients receive authoritative results via [signal command_executed].
 extends Node
+
+
+const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
+		preload("res://src/core/commands/command_applicability.gd")
 
 
 ## Emitted after a command has been successfully validated and executed.
@@ -99,13 +104,14 @@ func _ready() -> void:
 ## or an empty dictionary if validation fails.
 func submit(command: GameCommand) -> Dictionary:
 	var game_state: GameState = _get_game_state()
-	# --- Validate ---
+	var applicability: Dictionary = _check_applicability(command, game_state)
+	if not bool(applicability.get(
+			COMMAND_APPLICABILITY_SCRIPT.KEY_ALLOWED, false)):
+		return _reject_command(command, str(applicability.get(
+				COMMAND_APPLICABILITY_SCRIPT.KEY_REASON, "")))
 	var reason: String = command.validate(game_state)
 	if reason != "":
-		_log.warn("Command rejected [%s]: %s" % [
-				command.command_type, reason])
-		command_rejected.emit(command, reason)
-		return {}
+		return _reject_command(command, reason)
 	# --- Sequence ---
 	command.sequence = _next_sequence
 	_next_sequence += 1
@@ -198,3 +204,23 @@ func _get_game_state() -> GameState:
 	if GameManager and GameManager.current_game_state:
 		return GameManager.current_game_state
 	return null
+
+
+func _check_applicability(command: GameCommand,
+		game_state: GameState) -> Dictionary:
+	if game_state == null:
+		return {
+			COMMAND_APPLICABILITY_SCRIPT.KEY_ALLOWED: false,
+			COMMAND_APPLICABILITY_SCRIPT.KEY_REASON: "No active game state.",
+		}
+	return COMMAND_APPLICABILITY_SCRIPT.check_command(
+			command.command_type,
+			game_state.current_phase,
+			game_state.interaction_flow)
+
+
+func _reject_command(command: GameCommand, reason: String) -> Dictionary:
+	_log.warn("Command rejected [%s]: %s" % [
+			command.command_type, reason])
+	command_rejected.emit(command, reason)
+	return {}

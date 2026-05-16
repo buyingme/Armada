@@ -65,6 +65,16 @@ func before_each() -> void:
 	add_child_autofree(_modal)
 
 
+func _start_squadron_phase_game() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SQUADRON
+	GameManager.current_game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SQUADRON_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+			0)
+
+
 ## Helper: builds a minimal real [SquadronCommandResolver] for tests
 ## that need command mode (max_activations=2, none used).
 func _make_resolver() -> SquadronCommandResolver:
@@ -139,9 +149,7 @@ func test_open_for_turn_resets_selected_token() -> void:
 
 func test_click_valid_squadron_transitions_to_action_choice() -> void:
 	# Set up GameManager state for squadron phase.
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -156,9 +164,7 @@ func test_click_valid_squadron_transitions_to_action_choice() -> void:
 
 
 func test_click_wrong_player_rejected() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(1) # enemy squadron
 	GameManager.active_player = 0
 	_modal.open_for_turn(1, 2)
@@ -175,9 +181,7 @@ func test_click_wrong_player_rejected() -> void:
 
 
 func test_click_already_activated_rejected() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false, true) # activated
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -206,9 +210,7 @@ func test_click_when_hidden_returns_false() -> void:
 # ===========================================================================
 
 func test_engaged_squadron_move_hidden() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, true) # engaged
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -221,9 +223,7 @@ func test_engaged_squadron_move_hidden() -> void:
 
 
 func test_engaged_squadron_skip_disabled() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, true) # engaged
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -236,9 +236,7 @@ func test_engaged_squadron_skip_disabled() -> void:
 
 
 func test_engaged_squadron_attack_enabled() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, true) # engaged
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -251,9 +249,7 @@ func test_engaged_squadron_attack_enabled() -> void:
 
 
 func test_unengaged_squadron_all_buttons_visible() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false) # not engaged
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -274,9 +270,7 @@ func test_unengaged_squadron_all_buttons_visible() -> void:
 # ===========================================================================
 
 func test_notify_move_preview_success_transitions_to_preview() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -292,9 +286,7 @@ func test_notify_move_preview_success_transitions_to_preview() -> void:
 
 
 func test_notify_move_preview_failed_stays_in_moving() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -317,9 +309,7 @@ func test_notify_move_preview_failed_stays_in_moving() -> void:
 # ===========================================================================
 
 func test_notify_attack_completed_finishes_activation() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -335,9 +325,7 @@ func test_notify_attack_completed_finishes_activation() -> void:
 
 
 func test_notify_attack_cancelled_returns_to_action_choice() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -357,9 +345,7 @@ func test_notify_attack_cancelled_returns_to_action_choice() -> void:
 # ===========================================================================
 
 func test_skip_emits_activation_done() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -401,9 +387,7 @@ func test_close_button_hides_modal() -> void:
 # ===========================================================================
 
 func test_set_action_availability_hides_move() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -419,9 +403,7 @@ func test_set_action_availability_hides_move() -> void:
 
 
 func test_set_action_availability_hides_attack() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -441,9 +423,7 @@ func test_set_action_availability_hides_attack() -> void:
 # ===========================================================================
 
 func test_set_interactable_false_disables_action_buttons() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -463,9 +443,7 @@ func test_set_interactable_false_disables_action_buttons() -> void:
 
 
 func test_attack_handler_blocked_when_not_interactable() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -481,9 +459,7 @@ func test_attack_handler_blocked_when_not_interactable() -> void:
 
 
 func test_skip_handler_blocked_when_not_interactable() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0, false)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -503,9 +479,7 @@ func test_skip_handler_blocked_when_not_interactable() -> void:
 # ===========================================================================
 
 func test_notify_move_completed_finishes_activation() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -521,9 +495,7 @@ func test_notify_move_completed_finishes_activation() -> void:
 
 
 func test_cancel_move_returns_to_action_choice() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -621,9 +593,7 @@ func test_click_same_squadron_in_action_choice_returns_false() -> void:
 ## In turn mode, click in ACTION_CHOICE on a different squadron is NOT
 ## consumed (controller-driven flow re-opens the modal via signal).
 func test_click_different_squadron_turn_mode_returns_false() -> void:
-	GameManager.start_new_game()
-	GameManager.current_game_state.current_phase = \
-			Constants.GamePhase.SQUADRON
+	_start_squadron_phase_game()
 	GameManager.active_player = 0
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	var inst_a: SquadronInstance = _make_instance(0)

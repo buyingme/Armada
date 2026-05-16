@@ -42,6 +42,9 @@ var _crew_panic_modal: OpponentChoiceModal = null
 ## Transient guard for projected Repair auto-advance command submission.
 var _repair_auto_advance_pending: bool = false
 
+## Transient guard for projected no-target Attack auto-advance submission.
+var _attack_auto_advance_pending: bool = false
+
 
 # ---------------------------------------------------------------------------
 # Injected references (shared with GameBoard)
@@ -449,6 +452,7 @@ func sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 	if _panel_mgr.activation_modal and _panel_mgr.activation_modal.is_open():
 		_panel_mgr.activation_modal.refresh()
 	_queue_unavailable_repair_auto_advance(flow)
+	_queue_unavailable_attack_auto_advance(flow)
 
 
 ## Submits an authoritative activation-step transition marker in every mode.
@@ -492,6 +496,37 @@ func _auto_advance_unavailable_repair_if_current() -> void:
 	_on_repair_done()
 
 
+## Defers no-target Attack skips so the authoritative flow advances by command.
+func _queue_unavailable_attack_auto_advance(flow: InteractionFlow) -> void:
+	if flow.step_id != Constants.InteractionStep.ATTACK_STEP:
+		_attack_auto_advance_pending = false
+		return
+	if _attack_auto_advance_pending:
+		return
+	if not _should_auto_advance_unavailable_attack(flow):
+		return
+	_attack_auto_advance_pending = true
+	call_deferred("_auto_advance_unavailable_attack_if_current")
+
+
+func _auto_advance_unavailable_attack_if_current() -> void:
+	_attack_auto_advance_pending = false
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null:
+		return
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return
+	if flow.step_id != Constants.InteractionStep.ATTACK_STEP:
+		return
+	if not _should_auto_advance_unavailable_attack(flow):
+		return
+	_log.info("No attack targets in projected Attack step — auto-advancing.")
+	_advance_activation_to_maneuver()
+
+
 func _should_auto_advance_unavailable_repair(flow: InteractionFlow) -> bool:
 	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
 		return false
@@ -502,6 +537,22 @@ func _should_auto_advance_unavailable_repair(flow: InteractionFlow) -> bool:
 	if not _has_repair_resources.is_valid():
 		return false
 	if bool(_has_repair_resources.call(_activation_ctx.activating_ship_token)):
+		return false
+	var ship: ShipInstance = _current_activating_ship()
+	if ship == null or flow.controller_player != ship.owner_player:
+		return false
+	var flow_ship_index: int = int(flow.payload.get("ship_index", -1))
+	if flow_ship_index < 0:
+		return false
+	return flow_ship_index == _current_activating_ship_index(ship)
+
+
+func _should_auto_advance_unavailable_attack(flow: InteractionFlow) -> bool:
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return false
+	if not _is_local_activation_modal_controller():
+		return false
+	if not _compute_attack_skippable_now():
 		return false
 	var ship: ShipInstance = _current_activating_ship()
 	if ship == null or flow.controller_player != ship.owner_player:
@@ -1060,6 +1111,10 @@ func _on_attack_exec_completed() -> void:
 			and _squadron_phase_controller.is_in_attacking_state():
 		_squadron_phase_controller.notify_attack_completed()
 		return
+	_advance_activation_to_maneuver()
+
+
+func _advance_activation_to_maneuver() -> void:
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
 	submit_activation_step("maneuver_step")

@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M2.5 producer controller contract; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M3 command applicability declarations; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 149 |
-| GUT tests | 2 982 |
-| GUT asserts | 5 761 |
+| GUT test scripts | 150 |
+| GUT tests | 2 992 |
+| GUT asserts | 5 774 |
 | Failing tests | 0 |
-| Last commit | `d6a36e1` — M2 FlowSpec projector wiring |
+| Last commit | `8fa3b94` — M2.5 FlowSpec producer controller contract |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,8 +34,8 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-16 M2.5 full GUT summary is green
-(149 / 2 982 / 5 761, 0 failures), but Godot 4.5.1 still aborted after the
+Verification note: the 2026-05-16 M3 full GUT summary is green
+(150 / 2 992 / 5 774, 0 failures), but Godot 4.5.1 still aborted after the
 summary with `recursive_mutex lock failed` / exit 134. Track the post-summary
 abort separately; no parse errors or GUT failures were reported.
 
@@ -114,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, and M2.5 are complete; M3 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, and M3 are complete; M4 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -223,6 +223,18 @@ regression gate is complete and remains the required L/M automated gate:
   gates: full GUT 149 / 2 982 / 5 761 with 0 failures (known post-summary Godot
   abort), Phase K lint 0 violations / 4 allow-listed branches, and baseline
   traces passing hot-seat trace/state plus network peer state equality.
+- M3 result: [command_applicability.gd](../src/core/commands/command_applicability.gd)
+  now declares `GLOBAL`, `PHASE`, and `FLOW_STEP` applicability metadata for
+  every registered production command. [test_command_applicability.gd](../tests/unit/test_command_applicability.gd)
+  isolates the production command registry, fails on missing/stale
+  declarations, validates scope target shape, and cross-checks FLOW_STEP pairs
+  against [flow_spec.gd](../src/core/state/flow_spec.gd). The declaration for
+  `resolve_immediate_effect` remains `PHASE: SHIP, SQUADRON` to preserve both
+  attack-flow immediate effects and debug-deal-damage follow-ups. Automated
+  gates: focused M3 tests 20 / 39, full GUT 150 / 2 992 / 5 774 with 0 failures
+  (known post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
+  branches, and baseline traces passing hot-seat trace/state plus network peer
+  state equality. M3 adds metadata only; M4 is the runtime command gate.
 
 ---
 

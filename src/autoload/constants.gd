@@ -129,6 +129,16 @@ enum GamePhase {
 	STATUS,
 }
 
+## --- Command Applicability Scopes (Phase M) ---
+##
+## Declares the coarse surface where a command may run before command-specific
+## validation handles payload and rule details.
+enum CommandScope {
+	GLOBAL,
+	PHASE,
+	FLOW_STEP,
+}
+
 ## --- Interaction Flow (Phase I) ---
 ##
 ## Identifies the high-level interactive UI flow currently active.

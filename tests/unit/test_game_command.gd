@@ -116,6 +116,20 @@ func test_register_and_create() -> void:
 	GameCommand._registry.erase("_test_reg")
 
 
+func test_registered_types_returns_sorted_names() -> void:
+	GameCommand.register_type("_test_z", func(p: int,
+			pl: Dictionary) -> GameCommand:
+		return GameCommand.new(p, "_test_z", pl))
+	GameCommand.register_type("_test_a", func(p: int,
+			pl: Dictionary) -> GameCommand:
+		return GameCommand.new(p, "_test_a", pl))
+	var types: Array[String] = GameCommand.registered_types()
+	assert_lt(types.find("_test_a"), types.find("_test_z"),
+			"registered_types() should return sorted command type names.")
+	GameCommand._registry.erase("_test_a")
+	GameCommand._registry.erase("_test_z")
+
+
 func test_create_unregistered_returns_null() -> void:
 	var cmd: GameCommand = GameCommand._create_by_type(
 			"_no_such_type", 0, {})

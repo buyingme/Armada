@@ -48,7 +48,7 @@ func _init(p_player: int = 0, p_type: String = "",
 ## Executes the command against the given [param game_state].
 ## Returns a result dictionary whose shape depends on the subclass.
 ## Subclasses **must** override this method.
-func execute(game_state: GameState) -> Dictionary:
+func execute(_game_state: GameState) -> Dictionary:
 	push_warning("GameCommand.execute() called on base class — "
 			+"override in subclass '%s'." % command_type)
 	return {}
@@ -109,6 +109,15 @@ static var _registry: Dictionary = {}
 static func register_type(type_name: String,
 		factory: Callable) -> void:
 	_registry[type_name] = factory
+
+
+## Returns sorted command type names currently registered with the factory.
+static func registered_types() -> Array[String]:
+	var types: Array[String] = []
+	for type_name: Variant in _registry.keys():
+		types.append(str(type_name))
+	types.sort()
+	return types
 
 
 ## Creates a command by type name via the registry.

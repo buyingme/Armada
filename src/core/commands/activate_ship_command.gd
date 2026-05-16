@@ -11,6 +11,9 @@ class_name ActivateShipCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("activate_ship", func(player: int,
@@ -57,11 +60,11 @@ func execute(game_state: GameState) -> Dictionary:
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		return {"command": - 1}
-	# Phase I2: mirror legacy interaction-state into game state.
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
-			player_index,
+			game_state,
+			{"active_player": player_index},
 			Constants.Visibility.ALL,
 			{"ship_index": payload.get("ship_index", -1)})
 	return {"command": int(dial.get("command", -1)),

@@ -15,15 +15,16 @@
 ##                            [code]{ "owner": int, "squadron_index": int }[/code]
 ##                            entries identifying which squadrons must be
 ##                            re-placed.
-##   "controller_player"    — int (0 or 1) — the peer that must drive the
-##                            placement modal.  Per RRG "Overlapping", p.8
-##                            this is the player who is NOT moving the
-##                            ship, regardless of who owns the displaced
-##                            squadrons.
+##   "controller_player"    — optional compatibility field.  When present,
+##                            it must match the FlowSpec-derived non-moving
+##                            player.
 ##
 ## Rules Reference: RRG "Overlapping", p.8 — OV-001 to OV-004.
 class_name StartDisplacementCommand
 extends GameCommand
+
+
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -43,7 +44,8 @@ func _init(p_player: int = 0,
 ## - Phase must be Ship Phase (overlap occurs during a maneuver).
 ## - Maneuvering ship must exist and not be destroyed.
 ## - Each listed squadron must exist and not be destroyed.
-## - [code]controller_player[/code] must be 0 or 1.
+## - Optional [code]controller_player[/code] must match the FlowSpec-derived
+##   non-moving player.
 ## - No other displacement flow may already be active.
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
@@ -57,9 +59,9 @@ func validate(game_state: GameState) -> String:
 		return "Maneuvering ship not found."
 	if ship.is_destroyed():
 		return "Maneuvering ship is destroyed."
-	var controller: int = int(payload.get("controller_player", -1))
-	if controller != 0 and controller != 1:
-		return "controller_player must be 0 or 1."
+	var controller_error: String = _validate_controller_contract(game_state)
+	if controller_error != "":
+		return controller_error
 	var raw_list: Variant = payload.get("displaced_squadrons", [])
 	if not (raw_list is Array):
 		return "displaced_squadrons must be an Array."
@@ -87,9 +89,9 @@ func validate(game_state: GameState) -> String:
 
 
 ## Mutates [member GameState.interaction_flow] to open the displacement
-## modal for the non-moving player named by [code]controller_player[/code].
+## modal for the FlowSpec-derived non-moving player.
 func execute(game_state: GameState) -> Dictionary:
-	var controller: int = int(payload.get("controller_player", -1))
+	var controller: int = _resolve_controller(game_state)
 	var ship_index: int = int(payload.get("ship_index", -1))
 	var raw_list: Array = payload.get("displaced_squadrons", []) as Array
 	# Defensive deep copy so later payload mutation cannot leak into
@@ -98,10 +100,11 @@ func execute(game_state: GameState) -> Dictionary:
 	for entry: Variant in raw_list:
 		if entry is Dictionary:
 			list_copy.append((entry as Dictionary).duplicate(true))
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
 			Constants.InteractionStep.DISPLACEMENT_PLACE,
-			controller,
+			game_state,
+			_controller_context(),
 			Constants.Visibility.ALL,
 			{
 				"ship_index": ship_index,
@@ -112,3 +115,26 @@ func execute(game_state: GameState) -> Dictionary:
 		"controller_player": controller,
 		"displaced_squadrons": list_copy,
 	}
+
+
+func _validate_controller_contract(game_state: GameState) -> String:
+	var expected_controller: int = _resolve_controller(game_state)
+	if expected_controller == -1:
+		return "Unable to resolve displacement controller."
+	if payload.has("controller_player"):
+		var supplied_controller: int = int(payload.get("controller_player", -1))
+		if supplied_controller != expected_controller:
+			return "controller_player must match FlowSpec controller."
+	return ""
+
+
+func _resolve_controller(game_state: GameState) -> int:
+	return FLOW_SPEC_SCRIPT.resolve_controller_player(
+			Constants.InteractionFlow.SQUADRON_DISPLACEMENT,
+			Constants.InteractionStep.DISPLACEMENT_PLACE,
+			game_state,
+			_controller_context())
+
+
+func _controller_context() -> Dictionary:
+	return {"moving_player": player_index}

@@ -301,6 +301,25 @@ static func resolve_controller_player(
 			return -1
 
 
+## Builds an [InteractionFlow] with [member InteractionFlow.controller_player]
+## resolved from this spec's semantic controller role.
+static func make_interaction_flow(
+		flow_id: Constants.InteractionFlow,
+		step_id: Constants.InteractionStep,
+		game_state: GameState,
+		context: Dictionary = {},
+		visible_to: Constants.Visibility = Constants.Visibility.ALL,
+		payload: Dictionary = {}) -> InteractionFlow:
+	var controller: int = resolve_controller_player(
+			int(flow_id), int(step_id), game_state, context)
+	return InteractionFlow.make(
+			flow_id,
+			step_id,
+			controller,
+			visible_to,
+			payload)
+
+
 static func _get_spec_ref(flow_id: int, step_id: int) -> Dictionary:
 	var step_specs: Dictionary = _SPEC.get(flow_id, {})
 	return step_specs.get(step_id, {})

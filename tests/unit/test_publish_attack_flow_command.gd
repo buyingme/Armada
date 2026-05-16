@@ -43,6 +43,58 @@ func test_execute_writes_attack_flow_snapshot() -> void:
 			"payload.modified_damage should match")
 
 
+func test_execute_defense_tokens_prefers_defender_identity() -> void:
+	var cmd := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
+		"controller_player": 0,
+		"flow_payload": {"attacker_player": 0, "defender_player": 1},
+		"final": false,
+	})
+	cmd.execute(_state)
+
+	assert_eq(_state.interaction_flow.controller_player, 1,
+			"DEFENDER_OR_ATTACKER should prefer defender identity over snapshot controller.")
+
+
+func test_execute_defense_tokens_falls_back_to_attacker_identity() -> void:
+	var cmd := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
+		"controller_player": -1,
+		"flow_payload": {"attacker_player": 0, "defender_player": -1},
+		"final": false,
+	})
+	cmd.execute(_state)
+
+	assert_eq(_state.interaction_flow.controller_player, 0,
+			"DEFENDER_OR_ATTACKER should fall back to attacker identity.")
+
+
+func test_execute_resolve_damage_uses_attacker_identity() -> void:
+	var cmd := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE),
+		"controller_player": 1,
+		"flow_payload": {"attacker_player": 0, "defender_player": 1},
+		"final": false,
+	})
+	cmd.execute(_state)
+
+	assert_eq(_state.interaction_flow.controller_player, 0,
+			"ATTACK_RESOLVE_DAMAGE should resolve to the attacker identity.")
+
+
+func test_execute_critical_choice_uses_chooser_payload() -> void:
+	var cmd := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_CRITICAL_CHOICE),
+		"controller_player": 0,
+		"flow_payload": {"chooser_player": 1},
+		"final": false,
+	})
+	cmd.execute(_state)
+
+	assert_eq(_state.interaction_flow.controller_player, 1,
+			"PAYLOAD_CONTROLLER should resolve from the chooser payload.")
+
+
 func test_execute_final_clears_flow() -> void:
 	# Pre-seed interaction_flow with a non-empty value.
 	_state.interaction_flow = InteractionFlow.make(

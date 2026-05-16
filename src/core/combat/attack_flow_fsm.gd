@@ -40,6 +40,9 @@ class_name AttackFlowFSM
 extends RefCounted
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 # ---------------------------------------------------------------------------
 # Step definitions
 # ---------------------------------------------------------------------------
@@ -137,10 +140,11 @@ func patch_payload(game_state: GameState, patch: Dictionary) -> void:
 		payload[key] = _deep_copy_value(patch[key])
 	if game_state == null:
 		return
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.ATTACK,
 			get_interaction_step(),
-			get_controller_player(),
+			game_state,
+			_controller_context(),
 			Constants.Visibility.ALL,
 			payload)
 
@@ -204,20 +208,14 @@ func get_interaction_step() -> Constants.InteractionStep:
 
 
 ## Returns the player index whose UI must drive the current step.
-##
-##   DECLARE / ROLL / MODIFY            -> attacker
-##   DEFENSE_TOKENS / CRITICAL_CHOICE   -> defender (or attacker if no defender)
-##   IDLE / END                         -> -1
+## Controller ownership is resolved from [FlowSpec] so attack producers share
+## the same attacker/defender/chooser contract as published flow snapshots.
 func get_controller_player() -> int:
-	match current_step:
-		Step.DECLARE, Step.ROLL, Step.MODIFY, Step.RESOLVE_DAMAGE:
-			return attacker_player
-		Step.DEFENSE_TOKENS, Step.CRITICAL_CHOICE:
-			if defender_player >= 0:
-				return defender_player
-			return attacker_player
-		_:
-			return -1
+	return FLOW_SPEC_SCRIPT.resolve_controller_player(
+			Constants.InteractionFlow.ATTACK,
+			get_interaction_step(),
+			null,
+			_controller_context())
 
 
 ## Returns true when [param player_index] must act on the current step.
@@ -238,12 +236,36 @@ func _transition(game_state: GameState, next: Step) -> void:
 	current_step = next
 	if game_state == null:
 		return
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.ATTACK,
 			get_interaction_step(),
-			get_controller_player(),
+			game_state,
+			_controller_context(),
 			Constants.Visibility.ALL,
 			payload)
+
+
+func _controller_context() -> Dictionary:
+	return {
+		"attacker_player": attacker_player,
+		"defender_player": defender_player,
+		"controller_player": _payload_controller_player(),
+	}
+
+
+func _payload_controller_player() -> int:
+	if _is_valid_player(defender_player):
+		return defender_player
+	var chooser_player: int = int(payload.get("chooser_player", -1))
+	if _is_valid_player(chooser_player):
+		return chooser_player
+	if _is_valid_player(attacker_player):
+		return attacker_player
+	return -1
+
+
+func _is_valid_player(player: int) -> bool:
+	return player >= 0 and player < Constants.PLAYER_COUNT
 
 
 static func _name(s: Step) -> String:

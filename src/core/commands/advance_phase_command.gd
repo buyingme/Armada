@@ -15,6 +15,9 @@ class_name AdvancePhaseCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("advance_phase", func(player: int,
@@ -53,20 +56,20 @@ func execute(game_state: GameState) -> Dictionary:
 	var prev: int = int(game_state.current_phase)
 	var target: int = payload.get("next_phase", prev)
 	game_state.current_phase = target as Constants.GamePhase
-	# Phase I2: mirror legacy interaction-state.
-	var controller: int = game_state.initiative_player
 	match target:
 		Constants.GamePhase.SHIP:
-			game_state.interaction_flow = InteractionFlow.make(
+			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 					Constants.InteractionFlow.SHIP_ACTIVATION,
 					Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
-					controller,
+					game_state,
+					{"active_player": game_state.initiative_player},
 					Constants.Visibility.ALL)
 		Constants.GamePhase.SQUADRON:
-			game_state.interaction_flow = InteractionFlow.make(
+			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 					Constants.InteractionFlow.SQUADRON_ACTIVATION,
 					Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
-					controller,
+					game_state,
+					{"active_player": game_state.initiative_player},
 					Constants.Visibility.ALL)
 	return {"previous_phase": prev, "new_phase": target}
 

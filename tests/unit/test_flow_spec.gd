@@ -231,6 +231,22 @@ func test_resolve_controller_player_matching_flow_state_returns_controller() -> 
 			"Resolver may use a matching InteractionFlow controller as fallback.")
 
 
+func test_make_interaction_flow_resolves_controller_and_copies_payload() -> void:
+	var payload: Dictionary = {"ship_index": 2}
+	var flow: InteractionFlow = FlowSpecScript.make_interaction_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			null,
+			{"active_player": 1},
+			Constants.Visibility.ALL,
+			payload)
+	payload["ship_index"] = 99
+	assert_eq(flow.controller_player, 1,
+			"make_interaction_flow() should resolve the semantic controller role.")
+	assert_eq(int(flow.payload.get("ship_index", -1)), 2,
+			"make_interaction_flow() should preserve InteractionFlow's payload copy contract.")
+
+
 func _documented_pairs() -> Array[Dictionary]:
 	return [
 		_pair(Constants.InteractionFlow.NONE, Constants.InteractionStep.NONE),

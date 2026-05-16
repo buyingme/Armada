@@ -13,6 +13,9 @@ class_name EndActivationCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("end_activation", func(player: int,
@@ -55,14 +58,12 @@ func execute(game_state: GameState) -> Dictionary:
 		if not spent.is_empty():
 			spent_command = int(spent.get("command", -1))
 	ship.activated_this_round = true
-	# Phase I2: mirror legacy interaction-state.  The next activator under
-	# the alternation rule is the opposing player; the legacy producer
-	# emits this transition unconditionally.
-	var next_controller: int = 1 - player_index
-	game_state.interaction_flow = InteractionFlow.make(
+	var next_active_player: int = Constants.PLAYER_COUNT - 1 - player_index
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
-			next_controller,
+			game_state,
+			{"active_player": next_active_player},
 			Constants.Visibility.ALL)
 	return {"spent_command": spent_command,
 			"ship_index": payload.get("ship_index", -1)}

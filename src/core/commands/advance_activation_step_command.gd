@@ -15,6 +15,9 @@ class_name AdvanceActivationStepCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 const _ALLOWED_STEP_IDS: Array[String] = [
 	"squadron_step",
 	"repair_step",
@@ -60,13 +63,13 @@ func validate(game_state: GameState) -> String:
 ## Flow-control no-op execution.
 func execute(game_state: GameState) -> Dictionary:
 	var step_id_str: String = payload.get("step_id", "")
-	# Phase I2: mirror legacy interaction-state.
 	var step_enum: int = int(Constants.LEGACY_STEP_ID_MAP.get(
 			step_id_str, Constants.InteractionStep.NONE))
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			step_enum as Constants.InteractionStep,
-			player_index,
+			game_state,
+			{"active_player": player_index},
 			Constants.Visibility.ALL,
 			{"ship_index": payload.get("ship_index", -1)})
 	return {

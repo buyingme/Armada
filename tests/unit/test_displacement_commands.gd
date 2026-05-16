@@ -66,11 +66,10 @@ func test_start_validate_accepts_legal_displacement() -> void:
 	var sq_idx: int = _add_squadron(1)
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": ship_idx,
-		"controller_player": 1,
 		"displaced_squadrons": [ {"owner": 1, "squadron_index": sq_idx}],
 	})
 	assert_eq(cmd.validate(_state), "",
-			"Legal displacement should validate.")
+			"Legal displacement should validate without payload controller.")
 
 
 func test_start_validate_rejects_non_ship_phase() -> void:
@@ -117,7 +116,7 @@ func test_start_validate_rejects_invalid_controller() -> void:
 		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	assert_ne(cmd.validate(_state), "",
-			"Should reject controller_player outside [0,1].")
+			"Should reject payload controllers that do not match FlowSpec.")
 
 
 func test_start_validate_rejects_empty_squadron_list() -> void:
@@ -152,7 +151,7 @@ func test_start_execute_sets_interaction_flow() -> void:
 	_add_squadron(1)
 	var cmd := StartDisplacementCommand.new(0, {
 		"ship_index": 0,
-		"controller_player": 1,
+		"controller_player": 0,
 		"displaced_squadrons": [ {"owner": 1, "squadron_index": 0}],
 	})
 	cmd.execute(_state)
@@ -164,8 +163,8 @@ func test_start_execute_sets_interaction_flow() -> void:
 			Constants.InteractionStep.DISPLACEMENT_PLACE,
 			"step_id should be DISPLACEMENT_PLACE.")
 	assert_eq(f.controller_player, 1,
-			"controller_player should match payload (set by producer to" +
-			" the opposing — non-moving — player per RRG p.8).")
+			"controller_player should be derived from the non-moving player" +
+			" per FlowSpec, not trusted from payload.")
 	assert_true(f.payload.has("ship_index"),
 			"Payload should carry ship_index.")
 	assert_true(f.payload.has("displaced_squadrons"),

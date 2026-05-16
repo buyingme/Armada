@@ -11,6 +11,9 @@ class_name ActivateSquadronCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("activate_squadron", func(
@@ -45,11 +48,11 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	# The command only validates and records — the presentation layer
 	# sets GameManager._activating_squadron when the signal fires.
-	# Phase I2: mirror legacy interaction-state.
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SQUADRON_ACTIVATION,
 			Constants.InteractionStep.ACTION_CHOICE,
-			player_index,
+			game_state,
+			{"active_player": player_index},
 			Constants.Visibility.ALL,
 			{"squadron_index": payload.get("squadron_index", -1)})
 	return {"squadron_index": payload.get("squadron_index", -1)}

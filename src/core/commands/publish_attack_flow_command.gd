@@ -39,6 +39,9 @@ class_name PublishAttackFlowCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("publish_attack_flow", func(player: int,
@@ -67,10 +70,39 @@ func execute(game_state: GameState) -> Dictionary:
 			int(Constants.InteractionStep.NONE)))
 			as Constants.InteractionStep)
 	var flow_payload: Dictionary = payload.get("flow_payload", {})
-	game_state.interaction_flow = InteractionFlow.make(
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.ATTACK,
 			step_id,
-			int(payload.get("controller_player", -1)),
+			game_state,
+			_attack_controller_context(flow_payload),
 			Constants.Visibility.ALL,
 			flow_payload)
 	return {"applied": true, "step_id": int(step_id)}
+
+
+func _attack_controller_context(flow_payload: Dictionary) -> Dictionary:
+	var snapshot_controller: int = int(payload.get("controller_player", -1))
+	return {
+		"attacker_player": _first_valid_player([
+				flow_payload.get("attacker_player", -1),
+				payload.get("attacker_player", -1),
+				snapshot_controller,
+		]),
+		"defender_player": _first_valid_player([
+				flow_payload.get("defender_player", -1),
+				payload.get("defender_player", -1),
+		]),
+		"controller_player": _first_valid_player([
+				flow_payload.get("chooser_player", -1),
+				flow_payload.get("controller_player", -1),
+				snapshot_controller,
+		]),
+	}
+
+
+func _first_valid_player(candidates: Array) -> int:
+	for candidate: Variant in candidates:
+		var player: int = int(candidate)
+		if player >= 0 and player < Constants.PLAYER_COUNT:
+			return player
+	return -1

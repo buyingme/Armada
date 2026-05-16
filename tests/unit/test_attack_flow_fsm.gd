@@ -294,6 +294,19 @@ func test_defender_controls_critical_choice() -> void:
 	assert_eq(fsm.get_controller_player(), 1)
 
 
+func test_critical_choice_uses_chooser_payload_controller() -> void:
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	var gs: GameState = _make_state()
+	fsm.begin(gs, 0, 1, {})
+	fsm.advance(gs, AttackFlowFSM.Step.ROLL)
+	fsm.advance(gs, AttackFlowFSM.Step.MODIFY)
+	fsm.advance(gs, AttackFlowFSM.Step.RESOLVE_DAMAGE)
+	fsm.patch_payload(gs, {"chooser_player": 1})
+	fsm.advance(gs, AttackFlowFSM.Step.CRITICAL_CHOICE)
+	assert_eq(fsm.get_controller_player(), 1,
+			"CRITICAL_CHOICE should resolve through FlowSpec's payload-controller role.")
+
+
 func test_attacker_controls_defense_when_no_defender() -> void:
 	# Squadron-vs-squadron salvo: defender_player = -1.
 	var fsm: AttackFlowFSM = AttackFlowFSM.new()

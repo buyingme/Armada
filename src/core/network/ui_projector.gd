@@ -22,6 +22,9 @@ class_name UIProjector
 extends RefCounted
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+
 ## Result of projecting a [GameState] for a single local viewer.
 class UIIntent extends RefCounted:
 	## Score-header helper string.  Empty when the HUD should not append
@@ -99,12 +102,14 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return intent
+	var spec: Dictionary = FLOW_SPEC_SCRIPT.get_spec(
+			int(flow.flow_type), int(flow.step_id))
 	intent.controller_player = flow.controller_player
-	intent.is_interactive = (flow.controller_player == viewer_player)
-	intent.hud_status_text = _hud_status_for(flow, viewer_player)
+	intent.is_interactive = _is_interactive_for(flow, spec, viewer_player)
+	intent.hud_status_text = _hud_status_for(flow, spec, viewer_player)
 	intent.flow_type = flow.flow_type
 	intent.step_id = flow.step_id
-	intent.modal_kind = _modal_kind_for(flow)
+	intent.modal_kind = _modal_kind_for(spec)
 	intent.payload = flow.payload.duplicate(true) if flow.payload != null \
 			else {}
 	intent.affordances = _affordances_for(flow)
@@ -112,6 +117,8 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 
 
 ## Projects an active-player transition without branching in the scene layer.
+## This is intentionally outside [FlowSpec]: it represents between-flow handoff
+## surfaces, not a persisted [InteractionFlow] row.
 ## [param shared_screen] is [code]true[/code] for one local display shared by
 ## both players and [code]false[/code] for a peer pinned to its local seat.
 static func project_turn_transition(
@@ -150,17 +157,26 @@ static func project_turn_transition(
 ## [code]StatusTextPolicy[/code] / fallback path so the UI is byte-for-byte
 ## indistinguishable from before.
 static func _hud_status_for(flow: InteractionFlow,
+		spec: Dictionary,
 		viewer_player: int) -> String:
-	# Command-phase: both players choose dials simultaneously.  Both see
-	# the same prompt regardless of "controller" identity.
-	if flow.flow_type == Constants.InteractionFlow.COMMAND_PHASE:
+	if _is_either_player_surface(flow, spec):
 		return "make your choices"
-	# All other flows: controller acts, opponent waits.
 	if flow.controller_player == viewer_player:
 		return "make your choices"
 	if flow.controller_player == -1:
 		return ""
 	return "waiting for opponent's choice"
+
+
+static func _is_interactive_for(
+		flow: InteractionFlow,
+		spec: Dictionary,
+		viewer_player: int) -> bool:
+	if _is_either_player_surface(flow, spec):
+		return true
+	if _is_system_or_empty_surface(spec):
+		return false
+	return flow.controller_player == viewer_player
 
 
 static func _turn_status_text(
@@ -186,60 +202,37 @@ static func _needs_turn_banner(
 	return shared_screen or active_player == viewer_player
 
 
-## Maps [member InteractionFlow.flow_type]+[member InteractionFlow.step_id]
-## to the [enum Constants.ModalKind] the presentation layer should display.
-##
-## Phase I6b — added so attack-step UI consumers can switch on a single
-## enum instead of reading the legacy step-id strings.  All ship-activation
-## sub-steps map to [code]ACTIVATION[/code] because the activation modal
-## remains the dominant UI throughout the activation; the WAIT_FOR_*_SELECT
-## steps return [code]NONE[/code] because no modal is open while a target
-## is being chosen.
-static func _modal_kind_for(flow: InteractionFlow) -> Constants.ModalKind:
-	match flow.flow_type:
-		Constants.InteractionFlow.NONE:
-			return Constants.ModalKind.NONE
-		Constants.InteractionFlow.COMMAND_PHASE:
-			return Constants.ModalKind.COMMAND_DIALS
-		Constants.InteractionFlow.SHIP_ACTIVATION:
-			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
-				return Constants.ModalKind.NONE
-			if flow.step_id == Constants.InteractionStep.SQUADRON_STEP:
-				return Constants.ModalKind.SQUADRON
-			return Constants.ModalKind.ACTIVATION
-		Constants.InteractionFlow.SQUADRON_ACTIVATION:
-			if flow.step_id == Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT:
-				return Constants.ModalKind.NONE
-			return Constants.ModalKind.SQUADRON
-		Constants.InteractionFlow.ATTACK:
-			return _attack_modal_kind_for_step(flow.step_id)
-		Constants.InteractionFlow.SQUADRON_DISPLACEMENT:
-			return Constants.ModalKind.DISPLACEMENT
-		Constants.InteractionFlow.STATUS_CLEANUP:
-			return Constants.ModalKind.STATUS_CLEANUP
-		Constants.InteractionFlow.GAME_OVER:
-			return Constants.ModalKind.GAME_OVER
-	return Constants.ModalKind.NONE
+## Maps FlowSpec modal metadata to the primary modal the presentation layer
+## should display. Empty or invalid pairs project no modal.
+static func _modal_kind_for(spec: Dictionary) -> Constants.ModalKind:
+	var modals: Array = spec.get("modals", [])
+	if modals.is_empty():
+		return Constants.ModalKind.NONE
+	return int(modals[0]) as Constants.ModalKind
 
 
-## Sub-helper for the attack flow — keeps [method _modal_kind_for] under
-## the 30-line ceiling.  Phase I6b.
-static func _attack_modal_kind_for_step(
-		step_id: Constants.InteractionStep) -> Constants.ModalKind:
-	match step_id:
-		Constants.InteractionStep.ATTACK_DECLARE:
-			return Constants.ModalKind.ATTACK_DECLARE
-		Constants.InteractionStep.ATTACK_ROLL:
-			return Constants.ModalKind.ATTACK_ROLL
-		Constants.InteractionStep.ATTACK_MODIFY:
-			return Constants.ModalKind.ATTACK_MODIFY
-		Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
-			return Constants.ModalKind.ATTACK_DEFENSE_TOKENS
-		Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE:
-			return Constants.ModalKind.ATTACK_RESOLVE_DAMAGE
-		Constants.InteractionStep.ATTACK_CRITICAL_CHOICE:
-			return Constants.ModalKind.ATTACK_CRITICAL_CHOICE
-	return Constants.ModalKind.NONE
+static func _is_either_player_surface(
+		flow: InteractionFlow,
+		spec: Dictionary) -> bool:
+	if _controller_role_for(spec) == Constants.ControllerRole.EITHER_PLAYER:
+		return true
+	return spec.is_empty() \
+			and flow.flow_type == Constants.InteractionFlow.COMMAND_PHASE
+
+
+static func _is_system_or_empty_surface(spec: Dictionary) -> bool:
+	if spec.is_empty():
+		return false
+	match _controller_role_for(spec):
+		Constants.ControllerRole.NONE, Constants.ControllerRole.SYSTEM:
+			return true
+		_:
+			return false
+
+
+static func _controller_role_for(spec: Dictionary) -> Constants.ControllerRole:
+	return (int(spec.get("controller_role", Constants.ControllerRole.NONE))
+			as Constants.ControllerRole)
 
 
 ## Computes non-mutating UI affordances from the current authoritative flow.

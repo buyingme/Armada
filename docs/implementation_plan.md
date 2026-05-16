@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M1 FlowSpec skeleton; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M2 FlowSpec projector wiring; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -18,7 +18,7 @@
 | GUT tests | 2 976 |
 | GUT asserts | 5 754 |
 | Failing tests | 0 |
-| Last commit | `98262c8` — Phase M groundwork docs |
+| Last commit | `fde4083` — M1 FlowSpec skeleton |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,7 +34,7 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-16 M1 full GUT summary is green
+Verification note: the 2026-05-16 M2 full GUT summary is green
 (149 / 2 976 / 5 754, 0 failures), but Godot 4.5.1 still aborted after the
 summary with `recursive_mutex lock failed` / exit 134. Track the post-summary
 abort separately; no parse errors or GUT failures were reported.
@@ -114,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, and M1 are complete; M2 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, and M2 are complete; M2.5 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -199,6 +199,17 @@ regression gate is complete and remains the required L/M automated gate:
   post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
   branches, and baseline traces passing hot-seat trace/state plus network peer
   state equality.
+- M2 result: [ui_projector.gd](../src/core/network/ui_projector.gd) now reads
+  FlowSpec modal metadata instead of maintaining a hard-coded flow/step modal
+  switch. Projection also reads FlowSpec controller roles for either-player and
+  system/no-controller surfaces while preserving the resolved
+  `interaction_flow.controller_player` fallback for legacy no-step test rows.
+  `project_turn_transition()` remains explicitly outside FlowSpec because it
+  represents between-flow handoff surfaces, not persisted `InteractionFlow`
+  rows. Automated gates: focused UIProjector + FlowSpec tests 49 / 216, full
+  GUT 149 / 2 976 / 5 754 with 0 failures (known post-summary Godot abort),
+  Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
+  passing hot-seat trace/state plus network peer state equality.
 
 ---
 

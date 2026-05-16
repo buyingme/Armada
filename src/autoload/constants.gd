@@ -193,6 +193,20 @@ enum Visibility {
 	SPECTATOR,
 }
 
+## Semantic controller roles for a [FlowSpec] entry.
+## [InteractionFlow] stores the resolved player index; FlowSpec stores the
+## rule meaning that lets producers derive that index consistently.
+enum ControllerRole {
+	NONE,
+	ACTIVE_PLAYER,
+	OPPOSING_PLAYER,
+	ATTACKER,
+	DEFENDER_OR_ATTACKER,
+	PAYLOAD_CONTROLLER,
+	EITHER_PLAYER,
+	SYSTEM,
+}
+
 ## Identifies which modal/panel the local viewer's UI should currently
 ## display.  Computed by [UIProjector] from
 ## [member GameState.interaction_flow] so the presentation layer can render

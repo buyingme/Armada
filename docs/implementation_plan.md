@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M0.7 command-scope model; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-16 (Phase M1 FlowSpec skeleton; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 148 |
-| GUT tests | 2 956 |
-| GUT asserts | 5 629 |
+| GUT test scripts | 149 |
+| GUT tests | 2 976 |
+| GUT asserts | 5 754 |
 | Failing tests | 0 |
-| Last commit | `e7779e5` — L7 manual-test sweep |
+| Last commit | `98262c8` — Phase M groundwork docs |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,11 +34,10 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-14 full GUT summary is green
-(148 / 2 956 / 5 629, 0 failures), but Godot 4.5.1 aborted after the summary
-with `recursive_mutex lock failed` / exit 134.  The failing save/load test from
-the first full run passed in isolation (24 / 24); track the post-summary abort
-separately if it persists outside this slice.
+Verification note: the 2026-05-16 M1 full GUT summary is green
+(149 / 2 976 / 5 754, 0 failures), but Godot 4.5.1 still aborted after the
+summary with `recursive_mutex lock failed` / exit 134. Track the post-summary
+abort separately; no parse errors or GUT failures were reported.
 
 ---
 
@@ -115,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, and M0.7 are complete; M1 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, and M1 are complete; M2 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -189,6 +188,17 @@ regression gate is complete and remains the required L/M automated gate:
   findings are reflected in the Phase L/M plan so M3/M4 can add parity tests
   and gates without misclassifying setup, phase, sync, debug, or legacy-effect
   commands. No source code changed.
+- M1 result: [flow_spec.gd](../src/core/state/flow_spec.gd) now encodes all
+  25 documented interaction-flow pairs from [docs/game_flow.md](game_flow.md)
+  as static machine-readable metadata, including controller roles, modal
+  metadata, command surfaces, transitions, source tags, and rule citations.
+  [test_flow_spec.gd](../tests/unit/test_flow_spec.gd) adds 20 tests / 125
+  asserts covering pair parity, enum drift, projection-only rows, resolver
+  success/failure paths, and the displacement non-moving-player regression.
+  Automated gates: 149 / 2 976 / 5 754 GUT baseline with 0 failures (known
+  post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
+  branches, and baseline traces passing hot-seat trace/state plus network peer
+  state equality.
 
 ---
 

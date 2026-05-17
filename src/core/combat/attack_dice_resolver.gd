@@ -81,15 +81,26 @@ func compute_pool_for_parts(
 
 ## Applies the ATTACK_GATHER_DICE effect hook to [param pool], returning
 ## the (possibly modified) pool.  The hook may add or remove dice.
-## [param registry] may be [code]null[/code] — in that case the pool is
-## returned unchanged.
+## [param registry] may be [code]null[/code] — in that case only static
+## [RuleRegistry] dice-pool modifiers for the supplied FlowSpec pair run.
+## With an empty [RuleRegistry], the pool is returned unchanged.
 ## Rules Reference: "Attack", Step 2, p.2 (effects that add dice).
 func apply_gather_hook(
 		pool: Dictionary,
 		registry: EffectRegistry,
-		parts: CombatParticipants) -> Dictionary:
-	if registry == null:
-		return pool
+		parts: CombatParticipants,
+		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
+		step_id: Constants.InteractionStep = \
+				Constants.InteractionStep.ATTACK_ROLL) -> Dictionary:
+	var ctx: EffectContext = _make_gather_context(pool, parts)
+	if registry != null:
+		ctx = registry.resolve_hook(&"ATTACK_GATHER_DICE", ctx)
+	ctx = _apply_rule_pool_modifiers(ctx, flow_id, step_id)
+	return ctx.dice_pool
+
+
+func _make_gather_context(pool: Dictionary,
+		parts: CombatParticipants) -> EffectContext:
 	var ctx: EffectContext = EffectContext.new()
 	ctx.dice_pool = pool
 	if parts.atk_ship and parts.atk_ship is ShipToken:
@@ -98,8 +109,20 @@ func apply_gather_hook(
 		ctx.defender = parts.def_squad.get_squadron_instance()
 	elif parts.def_ship and parts.def_ship is ShipToken:
 		ctx.defender = (parts.def_ship as ShipToken).get_ship_instance()
-	ctx = registry.resolve_hook(&"ATTACK_GATHER_DICE", ctx)
-	return ctx.dice_pool
+	return ctx
+
+
+func _apply_rule_pool_modifiers(ctx: EffectContext,
+		flow_id: Constants.InteractionFlow,
+		step_id: Constants.InteractionStep) -> EffectContext:
+	var hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			int(flow_id), int(step_id), "dice_pool")
+	for hook: FlowHook in hooks:
+		if hook.callback.is_valid():
+			var raw: Variant = hook.callback.call(ctx)
+			if raw is EffectContext:
+				ctx = raw as EffectContext
+	return ctx
 
 
 # ---------------------------------------------------------------------------

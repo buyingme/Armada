@@ -1699,7 +1699,7 @@ func _on_network_command_result(
 				or remote_authored:
 			_handle_remote_command_effects(cmd, result)
 		return
-	CommandProcessor.submit(cmd)
+	CommandProcessor.submit_mirror(cmd)
 	_handle_remote_command_effects(cmd, result)
 	if _submitter is NetworkCommandSubmitter:
 		(_submitter as NetworkCommandSubmitter).clear_awaiting()

@@ -10,12 +10,15 @@
 ##
 ## The processor:
 ## 1. Checks the command's declared Phase M applicability surface.
-## 2. Validates the command ([method GameCommand.validate]).
-## 3. Assigns a monotonically increasing sequence number.
-## 4. Executes the command ([method GameCommand.execute]).
-## 5. Records the command in the history for replay / undo.
-## 6. Emits [signal command_executed] so the presentation layer can
+## 2. Runs static [RuleRegistry] validator hooks for the active flow step.
+## 3. Validates the command ([method GameCommand.validate]).
+## 4. Assigns a monotonically increasing sequence number.
+## 5. Executes the command ([method GameCommand.execute]).
+## 6. Records the command in the history for replay / undo.
+## 7. Collects [RuleRegistry] observer follow-ups into a deferred queue.
+## 8. Emits [signal command_executed] so the presentation layer can
 ##    react (UI updates, sound effects, network broadcast, etc.).
+## 9. Drains observer follow-ups through the active authority path.
 ##
 ## In multiplayer (future), only the host runs [method execute];
 ## clients receive authoritative results via [signal command_executed].
@@ -37,6 +40,15 @@ var _next_sequence: int = 0
 
 ## Ordered history of all executed commands (for replay).
 var _history: Array[GameCommand] = []
+
+## Observer-generated follow-up commands waiting for deferred submission.
+var _observer_followups: Array[GameCommand] = []
+
+## Guards observer callbacks from submitting synchronously while collecting.
+var _is_collecting_observer_followups: bool = false
+
+## Prevents nested drains from re-entering the FIFO loop.
+var _is_draining_observer_followups: bool = false
 
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("CommandProcessor")
@@ -103,28 +115,78 @@ func _ready() -> void:
 ## Returns the result dictionary from [method GameCommand.execute],
 ## or an empty dictionary if validation fails.
 func submit(command: GameCommand) -> Dictionary:
-	var game_state: GameState = _get_game_state()
+	return _submit(command, true, true)
+
+
+## Submits an authoritative command while leaving observer follow-ups queued.
+## Network authorities use this so they can broadcast the triggering command
+## before draining follow-ups through their submitter/broadcast path.
+func submit_deferred_followups(command: GameCommand) -> Dictionary:
+	return _submit(command, false, true)
+
+
+## Applies an already-authoritative network mirror command locally.
+## The command still emits [signal command_executed] for UI projection, but
+## observer follow-ups are suppressed so passive peers do not synthesize
+## duplicate commands.
+func submit_mirror(command: GameCommand) -> Dictionary:
+	return _submit(command, true, false)
+
+
+## Runs command preflight checks before command-specific validation.
+## Returns an empty string when the command may continue, otherwise the
+## rejection reason that should be emitted to callers.
+func preflight(command: GameCommand, game_state: GameState) -> String:
 	var applicability: Dictionary = _check_applicability(command, game_state)
 	if not bool(applicability.get(
 			COMMAND_APPLICABILITY_SCRIPT.KEY_ALLOWED, false)):
-		return _reject_command(command, str(applicability.get(
-				COMMAND_APPLICABILITY_SCRIPT.KEY_REASON, "")))
+		return str(applicability.get(
+				COMMAND_APPLICABILITY_SCRIPT.KEY_REASON, ""))
+	return _check_rule_validators(command, game_state)
+
+
+## Drains observer follow-up commands in FIFO order.
+## [param submitter] may route commands through a network-aware submitter;
+## when omitted, follow-ups use [method submit] directly.
+func drain_observer_followups(submitter: Callable = Callable()) -> void:
+	if _is_draining_observer_followups:
+		return
+	_is_draining_observer_followups = true
+	while not _observer_followups.is_empty():
+		var followup: GameCommand = \
+				_observer_followups.pop_front() as GameCommand
+		_submit_followup(followup, submitter)
+	_is_draining_observer_followups = false
+
+
+## Returns the number of observer follow-up commands still queued.
+func get_pending_observer_followup_count() -> int:
+	return _observer_followups.size()
+
+
+func _submit(command: GameCommand,
+		drain_followups: bool,
+		collect_observers: bool) -> Dictionary:
+	if _is_collecting_observer_followups:
+		return _reject_command(command,
+				"Observer hooks must return follow-up commands instead of "
+				+ "submitting.")
+	var game_state: GameState = _get_game_state()
+	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
+	var preflight_reason: String = preflight(command, game_state)
+	if preflight_reason != "":
+		return _reject_command(command, preflight_reason)
 	var reason: String = command.validate(game_state)
 	if reason != "":
 		return _reject_command(command, reason)
-	# --- Sequence ---
-	command.sequence = _next_sequence
-	_next_sequence += 1
-	# --- Execute ---
-	var result: Dictionary = command.execute(game_state)
-	_log.info("Executed [%s] seq=%d player=%d." % [
-			command.command_type, command.sequence,
-			command.player_index])
-	# --- Record ---
-	_history.append(command)
-	# --- Notify ---
+	var result: Dictionary = _execute_and_record(command, game_state)
 	if not is_replaying:
+		if collect_observers:
+			_collect_observer_followups(
+					command, result, game_state, flow_snapshot)
 		command_executed.emit(command, result)
+		if drain_followups:
+			drain_observer_followups()
 	return result
 
 
@@ -142,6 +204,7 @@ func get_command_count() -> int:
 ## Called at game start / new game.
 func reset() -> void:
 	_history.clear()
+	_observer_followups.clear()
 	_next_sequence = 0
 	_log.info("Command history reset.")
 
@@ -217,6 +280,113 @@ func _check_applicability(command: GameCommand,
 			command.command_type,
 			game_state.current_phase,
 			game_state.interaction_flow)
+
+
+func _snapshot_flow(game_state: GameState) -> InteractionFlow:
+	if game_state == null or game_state.interaction_flow == null:
+		return InteractionFlow.empty()
+	var flow: InteractionFlow = game_state.interaction_flow
+	return InteractionFlow.make(
+			flow.flow_type,
+			flow.step_id,
+			flow.controller_player,
+			flow.visible_to,
+			flow.payload)
+
+
+func _execute_and_record(command: GameCommand,
+		game_state: GameState) -> Dictionary:
+	command.sequence = _next_sequence
+	_next_sequence += 1
+	var result: Dictionary = command.execute(game_state)
+	_log.info("Executed [%s] seq=%d player=%d." % [
+			command.command_type, command.sequence,
+			command.player_index])
+	_history.append(command)
+	return result
+
+
+func _check_rule_validators(command: GameCommand,
+		game_state: GameState) -> String:
+	if game_state == null or game_state.interaction_flow == null:
+		return ""
+	var flow: InteractionFlow = game_state.interaction_flow
+	var hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			int(flow.flow_type), int(flow.step_id), command.command_type)
+	for hook: FlowHook in hooks:
+		var reason: String = _run_validator_hook(hook, game_state, command)
+		if reason != "":
+			return reason
+	return ""
+
+
+func _run_validator_hook(hook: FlowHook,
+		game_state: GameState,
+		command: GameCommand) -> String:
+	if hook == null or not hook.callback.is_valid():
+		return ""
+	var raw: Variant = hook.callback.call(game_state, command)
+	if not (raw is Dictionary):
+		return ""
+	var result: Dictionary = raw as Dictionary
+	if bool(result.get("allowed", true)):
+		return ""
+	var fallback: String = "Rule %s rejected command." % hook.rule_id
+	return str(result.get("reason", fallback))
+
+
+func _collect_observer_followups(command: GameCommand,
+		result: Dictionary,
+		game_state: GameState,
+		flow_snapshot: InteractionFlow) -> void:
+	if game_state == null or flow_snapshot == null:
+		return
+	var hooks: Array[FlowHook] = RuleRegistry.observers_for(
+			int(flow_snapshot.flow_type), int(flow_snapshot.step_id),
+			command.command_type)
+	if hooks.is_empty():
+		return
+	_is_collecting_observer_followups = true
+	for hook: FlowHook in hooks:
+		_enqueue_observer_result(hook, game_state, command, result)
+	_is_collecting_observer_followups = false
+
+
+func _enqueue_observer_result(hook: FlowHook,
+		game_state: GameState,
+		command: GameCommand,
+		result: Dictionary) -> void:
+	if hook == null or not hook.callback.is_valid():
+		return
+	var raw: Variant = hook.callback.call(game_state, command, result)
+	if raw is Array:
+		for item: Variant in (raw as Array):
+			_enqueue_observer_item(hook, item)
+		return
+	_enqueue_observer_item(hook, raw)
+
+
+func _enqueue_observer_item(hook: FlowHook, item: Variant) -> void:
+	if item == null:
+		return
+	if item is GameCommand:
+		_observer_followups.append(item as GameCommand)
+		return
+	if item is Dictionary:
+		var command: GameCommand = GameCommand.deserialize(item as Dictionary)
+		if command != null:
+			_observer_followups.append(command)
+		return
+	_log.warn("Observer rule [%s] returned unsupported follow-up." % hook.rule_id)
+
+
+func _submit_followup(followup: GameCommand, submitter: Callable) -> void:
+	if followup == null:
+		return
+	if submitter.is_valid():
+		submitter.call(followup)
+		return
+	submit(followup)
 
 
 func _reject_command(command: GameCommand, reason: String) -> Dictionary:

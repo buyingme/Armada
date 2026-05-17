@@ -20,7 +20,7 @@ var _log: GameLogger = GameLogger.new("NetworkHostCommandSubmitter")
 ## Executes the command locally and broadcasts the result to clients.
 ## Returns the execution result (non-empty on success).
 func submit(command: GameCommand) -> Dictionary:
-	var result: Dictionary = CommandProcessor.submit(command)
+	var result: Dictionary = CommandProcessor.submit_deferred_followups(command)
 	if result.is_empty():
 		_log.warn("Command [%s] rejected by validation." %
 				command.command_type)

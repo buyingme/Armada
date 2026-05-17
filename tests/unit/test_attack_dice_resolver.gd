@@ -17,7 +17,12 @@ var _resolver: AttackDiceResolver
 
 
 func before_each() -> void:
+	RuleRegistry.clear()
 	_resolver = AttackDiceResolver.new()
+
+
+func after_each() -> void:
+	RuleRegistry.clear()
 
 
 ## Creates a ShipToken with the given faction and configurable ShipData.
@@ -102,6 +107,21 @@ func _squad_vs_squad(
 		atk_sq: SquadronToken,
 		def_sq: SquadronToken) -> CombatParticipants:
 	return CombatParticipants.create(null, -1, atk_sq, null, -1, def_sq)
+
+
+func _blue_die_modifier() -> FlowHook:
+	return FlowHook.modifier("test_blue_die",
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			"dice_pool",
+			Callable(self, "_add_blue_die"))
+
+
+func _add_blue_die(ctx: EffectContext) -> EffectContext:
+	var pool: Dictionary = ctx.dice_pool.duplicate()
+	pool["BLUE"] = int(pool.get("BLUE", 0)) + 1
+	ctx.dice_pool = pool
+	return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +356,26 @@ func test_apply_gather_hook_empty_registry_unchanged() -> void:
 			pool, registry, parts)
 	assert_eq(result, {"RED": 2, "BLUE": 1},
 			"Empty registry should return pool unchanged")
+
+
+func test_apply_gather_hook_rule_modifier_changes_pool() -> void:
+	var pool: Dictionary = {"RED": 2}
+	var parts: CombatParticipants = CombatParticipants.new()
+	RuleRegistry.register_modifier(_blue_die_modifier())
+	var result: Dictionary = _resolver.apply_gather_hook(pool, null, parts)
+	assert_eq(result, {"RED": 2, "BLUE": 1},
+			"RuleRegistry dice-pool modifiers should run without EffectRegistry.")
+
+
+func test_apply_gather_hook_legacy_and_rule_modifiers_stack() -> void:
+	var pool: Dictionary = {"RED": 1}
+	var parts: CombatParticipants = CombatParticipants.new()
+	var registry: EffectRegistry = EffectRegistry.new()
+	registry.register(_AddRedDieEffect.new())
+	RuleRegistry.register_modifier(_blue_die_modifier())
+	var result: Dictionary = _resolver.apply_gather_hook(pool, registry, parts)
+	assert_eq(result, {"RED": 2, "BLUE": 1},
+			"RuleRegistry modifiers should preserve legacy EffectRegistry output.")
 
 
 # ---------------------------------------------------------------------------
@@ -618,3 +658,14 @@ func test_calc_damage_empty_results_returns_zero() -> void:
 	var damage: int = _resolver.calc_damage(results, parts, null)
 	assert_eq(damage, 0,
 			"Empty results should yield 0 damage")
+
+
+class _AddRedDieEffect extends GameEffect:
+	func get_hooks() -> Array[StringName]:
+		var hooks: Array[StringName] = [&"ATTACK_GATHER_DICE"]
+		return hooks
+
+	func resolve(context: EffectContext) -> void:
+		var pool: Dictionary = context.dice_pool.duplicate()
+		pool["RED"] = int(pool.get("RED", 0)) + 1
+		context.dice_pool = pool

@@ -40,7 +40,10 @@ var command_type: String = ANY
 ## Modifier/blocker/enabler target surface, or [constant ANY].
 var target: String = ANY
 
-## Callable invoked by later rule-processing slices.
+## Callable invoked by rule-processing slices.
+## Validator: (GameState, GameCommand) -> {"allowed": bool, "reason": String}.
+## Modifier: (EffectContext) -> EffectContext or mutates the context in place.
+## Observer: (GameState, GameCommand, Dictionary) -> Array[GameCommand/Dictionary].
 var callback: Callable = Callable()
 
 

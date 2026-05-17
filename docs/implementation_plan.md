@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-16 (Phase M5 rule registry scaffold; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-17 (Phase M6 rule hook wiring; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 154 |
-| GUT tests | 3 021 |
-| GUT asserts | 5 921 |
+| GUT test scripts | 155 |
+| GUT tests | 3 031 |
+| GUT asserts | 5 947 |
 | Failing tests | 0 |
-| Last commit | `298a181` — M4 command applicability gate |
+| Last commit | `2377aee` — M5 rule registry scaffold |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,8 +34,8 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-16 M5 full GUT summary is green
-(154 / 3 021 / 5 921, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-17 M6 full GUT summary is green
+(155 / 3 031 / 5 947, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
 
 ---
@@ -113,7 +113,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, and M5 are complete; M6 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, and M6 are complete; M7 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -267,6 +267,23 @@ regression gate is complete and remains the required L/M automated gate:
   14 / 116, full GUT 154 / 3 021 / 5 921 with 0 failures, Phase K lint
   0 violations / 4 allow-listed branches, and baseline traces passing
   hot-seat trace/state plus network peer state equality.
+- M6 result: [command_processor.gd](../src/autoload/command_processor.gd)
+  now runs [RuleRegistry](../src/core/effects/rule_registry.gd) validators
+  after the M4 applicability gate and before command-specific validation,
+  and collects observer follow-up command requests into a deferred FIFO queue.
+  Network authorities drain that queue only after broadcasting the triggering
+  command, while passive client mirrors suppress observer synthesis to avoid
+  duplicate follow-ups. [attack_dice_resolver.gd](../src/core/combat/attack_dice_resolver.gd)
+  now applies static dice-pool modifiers after the legacy `ATTACK_GATHER_DICE`
+  `EffectRegistry` hook, so the empty registry preserves existing behaviour.
+  [test_command_processor_rule_hooks.gd](../tests/unit/test_command_processor_rule_hooks.gd)
+  covers validator ordering, applicability-before-validator ordering,
+  observer queue timing, replay suppression, mirror suppression, synchronous
+  observer-submit rejection, and the rule-file guard. Automated gates: focused
+  M6/M4/M5 regression set 6 scripts / 81 tests / 228 asserts, full GUT
+  155 / 3 031 / 5 947 with 0 failures, Phase K lint 0 violations / 4
+  allow-listed branches, and baseline traces passing hot-seat trace/state plus
+  network peer state equality.
 
 ---
 

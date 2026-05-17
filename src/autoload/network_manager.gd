@@ -612,7 +612,7 @@ func _submit_command_to_server(data: Dictionary) -> void:
 					sender_id, cmd.player_index, expected_player,
 					cmd.command_type])
 			return
-	var result: Dictionary = CommandProcessor.submit(cmd)
+	var result: Dictionary = CommandProcessor.submit_deferred_followups(cmd)
 	if result.is_empty():
 		_log.info("Command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])
@@ -639,9 +639,11 @@ func _submit_command_to_server(data: Dictionary) -> void:
 			for entry: Dictionary in _sync_gate.release():
 				_broadcast_command_result.rpc(
 						entry["command_data"], entry["result"])
+			_drain_server_observer_followups()
 		return
 	# --- Normal path: broadcast immediately ---
 	_broadcast_command_result.rpc(cmd_data, result)
+	_drain_server_observer_followups()
 
 
 ## Server → All: broadcasts an executed command and its result.
@@ -653,6 +655,25 @@ func _submit_command_to_server(data: Dictionary) -> void:
 func _broadcast_command_result(command_data: Dictionary,
 		result: Dictionary) -> void:
 	command_result_received.emit(command_data, result)
+
+
+## Server-side observer follow-up submitter.
+## Called by [CommandProcessor.drain_observer_followups] after the triggering
+## command has already been broadcast, preserving command-result order.
+func _submit_observer_followup_from_server(command: GameCommand) -> void:
+	if role != Role.SERVER:
+		return
+	var result: Dictionary = CommandProcessor.submit_deferred_followups(command)
+	if result.is_empty():
+		_log.info("Observer follow-up [%s] rejected by validation." %
+				command.command_type)
+		return
+	_broadcast_command_result.rpc(command.serialize(), result)
+
+
+func _drain_server_observer_followups() -> void:
+	CommandProcessor.drain_observer_followups(
+			Callable(self, "_submit_observer_followup_from_server"))
 
 
 # ---------------------------------------------------------------------------
@@ -741,9 +762,11 @@ func handle_host_command(command: GameCommand, result: Dictionary) -> void:
 			for entry: Dictionary in _sync_gate.release():
 				_broadcast_command_result.rpc(
 						entry["command_data"], entry["result"])
+			_drain_server_observer_followups()
 		return
 	# --- Normal path: broadcast immediately ---
 	_broadcast_command_result.rpc(cmd_data, result)
+	_drain_server_observer_followups()
 
 
 # ---------------------------------------------------------------------------

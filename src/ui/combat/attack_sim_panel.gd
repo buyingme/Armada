@@ -95,6 +95,10 @@ signal evade_die_confirmed(die_index: int)
 ## remove one die of his choice from his attack pool."
 signal obstruction_die_selected(colour_key: String)
 
+## Emitted when the attacker chooses a die colour for a generic pre-roll
+## attack-pool removal prompt.
+signal attack_pool_die_selected(reason_id: String, colour_key: String)
+
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackSimPanel")
@@ -126,8 +130,12 @@ var _cf_dial_buttons: HBoxContainer = null
 var _cf_dial_skip_button: Button = null
 ## Obstruction die-removal section container.
 var _obstruction_container: VBoxContainer = null
+## Label for the shared pre-roll die-removal section.
+var _obstruction_label: Label = null
 ## HBox holding colour buttons for obstruction removal.
 var _obstruction_buttons: HBoxContainer = null
+## Reason identifier for the currently displayed pre-roll die choice.
+var _die_choice_reason_id: String = ""
 ## Empty-pool notice container (target beyond range / no dice).
 var _empty_pool_container: VBoxContainer = null
 ## "Roll Dice" button.
@@ -207,6 +215,8 @@ var _selected_reroll_index: int = -1
 var _evade_mode: bool = false
 ## Size of each die image in the row (pixels).
 const _DIE_IMAGE_SIZE: float = 32.0
+## Reason identifier used by the shared die-choice section for obstruction.
+const DIE_CHOICE_REASON_OBSTRUCTION: String = "obstruction"
 
 ## Whether this panel is in attack execution mode (shows dice count + Done).
 var _attack_execution_mode: bool = false
@@ -525,11 +535,12 @@ func _build_obstruction_section() -> VBoxContainer:
 	_obstruction_container = VBoxContainer.new()
 	_obstruction_container.add_theme_constant_override("separation", 4)
 	_obstruction_container.visible = false
-	var obs_label: Label = Label.new()
-	obs_label.text = "Obstructed \u2014 remove 1 die:"
-	obs_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	obs_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	_obstruction_container.add_child(obs_label)
+	_obstruction_label = Label.new()
+	_obstruction_label.text = "Obstructed \u2014 remove 1 die:"
+	_obstruction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_obstruction_label.add_theme_color_override("font_color",
+			Color(1.0, 0.6, 0.2))
+	_obstruction_container.add_child(_obstruction_label)
 	_obstruction_buttons = HBoxContainer.new()
 	_obstruction_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_obstruction_buttons.add_theme_constant_override("separation", 8)
@@ -774,7 +785,9 @@ func _null_attack_step_refs() -> void:
 	_cf_dial_buttons = null
 	_cf_dial_skip_button = null
 	_obstruction_container = null
+	_obstruction_label = null
 	_obstruction_buttons = null
+	_die_choice_reason_id = ""
 	_empty_pool_container = null
 	_cf_token_container = null
 	_cf_token_buttons = null
@@ -882,20 +895,25 @@ func _on_cf_dial_skip() -> void:
 ## attacker may choose from.
 ## Requirements: AE-OBS-002.
 func show_obstruction_die_choice(available_colours: Array[String]) -> void:
+	show_attack_pool_die_choice(DIE_CHOICE_REASON_OBSTRUCTION,
+			"Obstructed \u2014 remove 1 die:", available_colours)
+
+
+## Shows a pre-roll die-colour choice for an attack-pool removal rule.
+## [param reason_id] — stable rule/reason identifier returned in the signal.
+## [param title] — display text for the prompt label.
+## [param available_colours] — colour keys the attacker may choose from.
+func show_attack_pool_die_choice(reason_id: String,
+		title: String,
+		available_colours: Array[String]) -> void:
 	if not _obstruction_buttons or not _obstruction_container:
 		return
-	# Clear any previous buttons.
-	for child: Node in _obstruction_buttons.get_children():
-		child.queue_free()
+	_die_choice_reason_id = reason_id
+	if _obstruction_label:
+		_obstruction_label.text = title
+	_clear_obstruction_buttons()
 	for colour_key: String in available_colours:
-		var btn: Button = Button.new()
-		var display: String = _CF_COLOUR_DISPLAY.get(colour_key, colour_key)
-		btn.text = display
-		btn.custom_minimum_size = Vector2(70.0, 28.0)
-		if _CF_COLOUR_TINTS.has(colour_key):
-			btn.add_theme_color_override("font_color", _CF_COLOUR_TINTS[colour_key])
-		btn.pressed.connect(_on_obstruction_colour.bind(colour_key))
-		_obstruction_buttons.add_child(btn)
+		_add_attack_pool_die_button(colour_key)
 	_obstruction_container.visible = true
 
 
@@ -933,11 +951,30 @@ func hide_empty_pool_section() -> void:
 func hide_obstruction_section() -> void:
 	if _obstruction_container:
 		_obstruction_container.visible = false
+	_die_choice_reason_id = ""
 
 
 func _on_obstruction_colour(colour_key: String) -> void:
 	SfxManager.play_sfx("droid_sound")
-	obstruction_die_selected.emit(colour_key)
+	var reason_id: String = _die_choice_reason_id
+	attack_pool_die_selected.emit(reason_id, colour_key)
+	if reason_id == "" or reason_id == DIE_CHOICE_REASON_OBSTRUCTION:
+		obstruction_die_selected.emit(colour_key)
+
+
+func _clear_obstruction_buttons() -> void:
+	for child: Node in _obstruction_buttons.get_children():
+		child.queue_free()
+
+
+func _add_attack_pool_die_button(colour_key: String) -> void:
+	var btn: Button = Button.new()
+	btn.text = _CF_COLOUR_DISPLAY.get(colour_key, colour_key)
+	btn.custom_minimum_size = Vector2(70.0, 28.0)
+	if _CF_COLOUR_TINTS.has(colour_key):
+		btn.add_theme_color_override("font_color", _CF_COLOUR_TINTS[colour_key])
+	btn.pressed.connect(_on_obstruction_colour.bind(colour_key))
+	_obstruction_buttons.add_child(btn)
 
 
 # =========================================================================

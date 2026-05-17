@@ -117,10 +117,38 @@ func _blue_die_modifier() -> FlowHook:
 			Callable(self, "_add_blue_die"))
 
 
+func _black_die_modifier() -> FlowHook:
+	return FlowHook.modifier("test_black_die",
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			"dice_pool",
+			Callable(self, "_add_black_die"))
+
+
+func _metadata_modifier() -> FlowHook:
+	return FlowHook.modifier("test_metadata",
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			"dice_pool",
+			Callable(self, "_mark_choice_required"))
+
+
 func _add_blue_die(ctx: EffectContext) -> EffectContext:
 	var pool: Dictionary = ctx.dice_pool.duplicate()
 	pool["BLUE"] = int(pool.get("BLUE", 0)) + 1
 	ctx.dice_pool = pool
+	return ctx
+
+
+func _add_black_die(ctx: EffectContext) -> EffectContext:
+	var pool: Dictionary = ctx.dice_pool.duplicate()
+	pool["BLACK"] = int(pool.get("BLACK", 0)) + 1
+	ctx.dice_pool = pool
+	return ctx
+
+
+func _mark_choice_required(ctx: EffectContext) -> EffectContext:
+	ctx.set_meta_value("choice_required", true)
 	return ctx
 
 
@@ -376,6 +404,30 @@ func test_apply_gather_hook_legacy_and_rule_modifiers_stack() -> void:
 	var result: Dictionary = _resolver.apply_gather_hook(pool, registry, parts)
 	assert_eq(result, {"RED": 2, "BLUE": 1},
 			"RuleRegistry modifiers should preserve legacy EffectRegistry output.")
+
+
+func test_apply_gather_context_preserves_rule_metadata() -> void:
+	var pool: Dictionary = {"RED": 1}
+	var parts: CombatParticipants = CombatParticipants.new()
+	RuleRegistry.register_modifier(_metadata_modifier())
+	var ctx: EffectContext = _resolver.apply_gather_context(pool, null, parts)
+	assert_eq(ctx.dice_pool, {"RED": 1},
+			"Metadata-only modifiers should leave the dice pool unchanged.")
+	assert_eq(ctx.get_meta_value("choice_required", false), true,
+			"apply_gather_context should preserve modifier metadata.")
+
+
+func test_apply_rule_pool_modifier_runs_only_selected_rule() -> void:
+	var pool: Dictionary = {"RED": 1}
+	var parts: CombatParticipants = CombatParticipants.new()
+	RuleRegistry.register_modifier(_blue_die_modifier())
+	RuleRegistry.register_modifier(_black_die_modifier())
+	var ctx: EffectContext = _resolver.apply_rule_pool_modifier(pool,
+			parts, "test_blue_die", {"choice": "blue"})
+	assert_eq(ctx.dice_pool, {"RED": 1, "BLUE": 1},
+			"Selected rule modifier should run without unrelated modifiers.")
+	assert_eq(ctx.get_meta_value("choice", ""), "blue",
+			"Selected rule modifier should receive caller metadata.")
 
 
 # ---------------------------------------------------------------------------

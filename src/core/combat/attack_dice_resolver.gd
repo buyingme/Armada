@@ -92,11 +92,40 @@ func apply_gather_hook(
 		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
 		step_id: Constants.InteractionStep = \
 				Constants.InteractionStep.ATTACK_ROLL) -> Dictionary:
+	return apply_gather_context(pool, registry, parts, flow_id, step_id).dice_pool
+
+
+## Applies gather-dice hooks and returns the full context so callers can read
+## rule metadata, such as mandatory pre-roll die-choice payloads.
+## Rules Reference: "Attack", Step 2, p.2 (effects before rolling dice).
+func apply_gather_context(
+		pool: Dictionary,
+		registry: EffectRegistry,
+		parts: CombatParticipants,
+		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
+		step_id: Constants.InteractionStep = \
+				Constants.InteractionStep.ATTACK_ROLL) -> EffectContext:
 	var ctx: EffectContext = _make_gather_context(pool, parts)
 	if registry != null:
 		ctx = registry.resolve_hook(&"ATTACK_GATHER_DICE", ctx)
 	ctx = _apply_rule_pool_modifiers(ctx, flow_id, step_id)
-	return ctx.dice_pool
+	return ctx
+
+
+## Applies one selected RuleRegistry dice-pool modifier to [param pool].
+## Used when an earlier gather pass exposed a mandatory player choice and the
+## presentation layer now supplies the chosen JSON-safe metadata.
+func apply_rule_pool_modifier(
+		pool: Dictionary,
+		parts: CombatParticipants,
+		rule_id: String,
+		metadata: Dictionary,
+		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
+		step_id: Constants.InteractionStep = \
+				Constants.InteractionStep.ATTACK_ROLL) -> EffectContext:
+	var ctx: EffectContext = _make_gather_context(pool, parts)
+	ctx.metadata = metadata.duplicate(true)
+	return _apply_selected_rule_pool_modifier(ctx, rule_id, flow_id, step_id)
 
 
 func _make_gather_context(pool: Dictionary,
@@ -122,6 +151,21 @@ func _apply_rule_pool_modifiers(ctx: EffectContext,
 			var raw: Variant = hook.callback.call(ctx)
 			if raw is EffectContext:
 				ctx = raw as EffectContext
+	return ctx
+
+
+func _apply_selected_rule_pool_modifier(ctx: EffectContext,
+		rule_id: String,
+		flow_id: Constants.InteractionFlow,
+		step_id: Constants.InteractionStep) -> EffectContext:
+	var hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			int(flow_id), int(step_id), "dice_pool")
+	for hook: FlowHook in hooks:
+		if hook.rule_id != rule_id or not hook.callback.is_valid():
+			continue
+		var raw: Variant = hook.callback.call(ctx)
+		if raw is EffectContext:
+			ctx = raw as EffectContext
 	return ctx
 
 

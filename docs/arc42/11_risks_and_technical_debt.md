@@ -43,6 +43,6 @@
 | G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
 | G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
 
-> **Last audit:** 2026-05-17 — Phase M7 Faulty Countermeasures rule migration completed with MT pass; rule-integration skill and source-first rule folder proposal added. Network replay gates on host/client state-hash equality rather than committed network fixtures.
+> **Last audit:** 2026-05-17 — Phase M9 Damaged Munitions rule migration is complete with attacker die-colour choice, automated gates passing, and user MT pass. Network replay gates on host/client state-hash equality rather than committed network fixtures.
 > Architecture compliance, static typing, and doc comment coverage all PASS in core/.
 > Phases A–I, J (J1–J11), and K complete. Phase L/M modal and replay hardening continues under [docs/refactoring_phase_lm_plan.md](../refactoring_phase_lm_plan.md).

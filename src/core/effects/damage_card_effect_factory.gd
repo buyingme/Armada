@@ -9,15 +9,14 @@ class_name DamageCardEffectFactory
 extends RefCounted
 
 
-## Effect IDs that should be registered as persistent effects.
-## These are the 16 persistent cards plus the hybrid Life Support Failure.
+## Effect IDs that should still be registered as legacy persistent effects.
+## Migrated RuleRegistry cards are intentionally omitted from this list.
 const PERSISTENT_EFFECT_IDS: Array[String] = [
 	"blinded_gunners",
 	"capacitor_failure",
 	"coolant_discharge",
 	"crew_panic",
 	"damaged_controls",
-	"damaged_munitions",
 	"depowered_armament",
 	"disengaged_fire_control",
 	"faulty_countermeasures",

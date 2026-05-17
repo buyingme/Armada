@@ -36,9 +36,13 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.STATUS_CLEANUP,
 			Constants.InteractionStep.STATUS_CLEANUP_STEP,
 			StatusPhaseCleanupCommand.TARGET_DEFENSE_TOKEN_READYING)
-	assert_eq(registered, 2,
-			"Bootstrap should invoke both production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 2,
+	var dice_hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			"dice_pool")
+	assert_eq(registered, 3,
+			"Bootstrap should invoke all three production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 3,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 1,
 			"Faulty Countermeasures should register one validator hook.")
@@ -50,3 +54,7 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Compartment Fire should register one token-readying modifier.")
 	assert_eq(ready_hooks[0].rule_id, CompartmentFire.RULE_ID,
 			"Modifier should carry the Compartment Fire rule id.")
+	assert_eq(dice_hooks.size(), 1,
+			"Damaged Munitions should register one dice-pool modifier.")
+	assert_eq(dice_hooks[0].rule_id, DamagedMunitions.RULE_ID,
+			"Modifier should carry the Damaged Munitions rule id.")

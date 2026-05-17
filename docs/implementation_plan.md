@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-17 (Phase M8 Compartment Fire rule migration; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-17 (Phase M9 Damaged Munitions rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 157 |
-| GUT tests | 3 046 |
-| GUT asserts | 6 007 |
+| GUT test scripts | 158 |
+| GUT tests | 3 062 |
+| GUT asserts | 6 072 |
 | Failing tests | 0 |
-| Last commit | `ce149b7` — M8 Compartment Fire rule migration |
+| Last commit | `8635b2e` — M8 baseline plan record |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,11 +34,10 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-17 M8 full GUT summary is green
-(157 / 3 046 / 6 007, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-17 M9 full GUT summary is green
+(158 / 3 054 / 6 043, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
-M7 MT passed after the defense-token marker-command/UI-affordance fix; M8 MT
-is pending.
+M8 MT passed; M9 MT is pending.
 
 ---
 
@@ -115,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, and M8 are complete; M9 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, and M9 are complete; M10 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -323,6 +322,26 @@ regression gate is complete and remains the required L/M automated gate:
   with 0 failures, full GUT 157 / 3 046 / 6 007 with 0 failures, Phase K lint
   0 violations / 4 allow-listed branches, and baseline traces passing hot-seat
   trace/state plus network peer state equality.
+- M9 result: [damaged_munitions.gd](../src/core/effects/rules/damage_cards/ship/damaged_munitions.gd)
+  registers the third production [RuleRegistry](../src/core/effects/rule_registry.gd)
+  hook: a `MODIFIER` for `ATTACK / ATTACK_ROLL` target `dice_pool`.
+  [attack_dice_resolver.gd](../src/core/combat/attack_dice_resolver.gd)
+  applies static dice-pool modifiers after remaining legacy gather-dice hooks.
+  Damaged Munitions now exposes available die colours as rule metadata first;
+  [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) publishes
+  the pending choice and applies the attacker-selected colour before rolling.
+  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers Damaged Munitions in the transient `EffectRegistry`,
+  while Point-Defense Failure stays on the legacy bridge for M10.
+  [test_rule_damaged_munitions.gd](../tests/unit/test_rule_damaged_munitions.gd)
+  covers direct choice metadata, selected-colour removal, other-ship isolation,
+  squadron-defender exclusion, resolver integration, empty-pool safety, and
+  save/load plus `EffectFactory.rebuild_runtime_effects()` with zero legacy
+  Damaged Munitions bridge effects. Automated gates: focused M9 regression set
+  5 scripts / 169 tests / 254 asserts with 0 failures, full GUT 158 / 3 062 /
+  6 072 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
+  `git diff --check` clean, and baseline traces passing hot-seat trace/state
+  plus network peer state equality, and user MT pass confirmed 2026-05-17.
 
 ---
 

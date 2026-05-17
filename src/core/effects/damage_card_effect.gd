@@ -1,8 +1,9 @@
 ## DamageCardEffect
 ##
-## A configurable [GameEffect] subclass that implements all 16 persistent
-## damage card effects. The behaviour is driven by the [member effect_id]
-## string, which maps to the card's JSON `effect_id` field.
+## A configurable [GameEffect] subclass that implements legacy persistent
+## damage card effects not yet migrated to RuleRegistry. The behaviour is
+## driven by the [member effect_id] string, which maps to the card's JSON
+## `effect_id` field.
 ##
 ## Each persistent card registers one DamageCardEffect instance when dealt
 ## faceup. The effect is unregistered when the card is repaired (discarded)
@@ -35,7 +36,7 @@ func get_hooks() -> Array[StringName]:
 			return [&"ATTACK_VALIDATE_TARGET"]
 		"disengaged_fire_control":
 			return [&"ATTACK_VALIDATE_TARGET"]
-		"damaged_munitions", "point_defense_failure":
+		"point_defense_failure":
 			return [&"ATTACK_GATHER_DICE"]
 		"blinded_gunners":
 			return [&"ATTACK_SPEND_ACCURACY"]
@@ -80,8 +81,6 @@ func should_trigger(context: EffectContext) -> bool:
 			return _trigger_depowered_armament(context)
 		"disengaged_fire_control":
 			return _trigger_disengaged_fire_control(context)
-		"damaged_munitions":
-			return context.attacker == owner
 		"point_defense_failure":
 			return context.attacker == owner and \
 					context.defender is SquadronInstance
@@ -120,7 +119,7 @@ func resolve(context: EffectContext) -> void:
 				"blinded_gunners", "faulty_countermeasures", \
 				"life_support_failure":
 			context.cancelled = true
-		"damaged_munitions", "point_defense_failure":
+		"point_defense_failure":
 			_resolve_remove_one_die(context)
 		"targeter_disruption":
 			context.critical_allowed = false

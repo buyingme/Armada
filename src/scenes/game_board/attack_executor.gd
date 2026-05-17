@@ -97,6 +97,10 @@ var _flow_executor: RefCounted = AttackFlowExecutorScript.new()
 ## the AttackSimPanel. Created and wired in [method initialize].
 var _target_selector: TargetSelector = null
 
+## Transient — true while the attack panel is awaiting the Damaged Munitions
+## pre-roll die-removal choice for the current attack.
+var _damaged_munitions_choice_pending: bool = false
+
 # ---------------------------------------------------------------------------
 # Null-safe accessors for TargetSelector sub-objects
 # ---------------------------------------------------------------------------
@@ -346,6 +350,7 @@ func has_any_attack_target(ship_token: ShipToken) -> bool:
 
 ## Resets all attack execution state variables.
 func _reset_exec_state() -> void:
+	_damaged_munitions_choice_pending = false
 	_state.clear_all()
 
 ## Resets deferred damage card state.
@@ -408,6 +413,9 @@ func _connect_attack_sequence_signals() -> void:
 	if not p.obstruction_die_selected.is_connected(
 			_on_obstruction_die_selected):
 		p.obstruction_die_selected.connect(_on_obstruction_die_selected)
+	if not p.attack_pool_die_selected.is_connected(
+			_on_attack_pool_die_selected):
+		p.attack_pool_die_selected.connect(_on_attack_pool_die_selected)
 	if not p.roll_dice_pressed.is_connected(_on_attack_roll_dice):
 		p.roll_dice_pressed.connect(_on_attack_roll_dice)
 	if not p.cf_token_reroll_requested.is_connected(
@@ -456,15 +464,18 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 		return
 	if _state.exec_ship_token == null and _state.exec_squad_token == null:
 		return
+	_damaged_munitions_choice_pending = false
 	# --- ATTACK_VALIDATE_TARGET hook (Coolant Discharge, Depowered
 	# Armament, Disengaged Fire Control) — reject attack if cancelled.
 	# Rules Reference: RRG "Damage Cards", p.4; ET-001.
 	if _is_attack_blocked_by_damage(range_band):
 		return
 	_state.dice_pool = _compute_attack_pool_dict(range_band)
-	_apply_gather_dice_hook()
+	var gather_context: EffectContext = _apply_gather_dice_hook()
 	_publish_attack_declare_patch(range_band)
 	_get_panel().show_skip_attack_button()
+	if _handle_damaged_munitions_choice(gather_context):
+		return
 	# Empty pool guard: if no dice remain after gather-dice hooks, the
 	# attack cannot be declared.
 	# Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
@@ -525,10 +536,117 @@ func _try_offer_cf_dial() -> bool:
 	return true
 
 ## Applies the ATTACK_GATHER_DICE effect hook to the pool.
-func _apply_gather_dice_hook() -> void:
+func _apply_gather_dice_hook() -> EffectContext:
 	var parts: CombatParticipants = _build_current_participants()
-	_state.dice_pool = _dice_resolver.apply_gather_hook(
+	var context: EffectContext = _dice_resolver.apply_gather_context(
 			_state.dice_pool, _effect_registry, parts)
+	_state.dice_pool = context.dice_pool
+	return context
+
+
+## Handles the Damaged Munitions mandatory pre-roll die-removal choice.
+## Returns true when the attack flow is waiting for player input.
+func _handle_damaged_munitions_choice(context: EffectContext) -> bool:
+	if context == null:
+		return false
+	var rule_id: String = str(context.get_meta_value(
+			DamagedMunitions.META_PENDING_RULE_ID, ""))
+	if rule_id != DamagedMunitions.RULE_ID:
+		return false
+	var available: Array[String] = _metadata_die_colours(
+			context.get_meta_value(DamagedMunitions.META_AVAILABLE_COLOURS, []))
+	if available.is_empty():
+		return false
+	if available.size() == 1:
+		_apply_damaged_munitions_die_choice(available[0])
+		return false
+	_damaged_munitions_choice_pending = true
+	_publish_damaged_munitions_pending_choice(available)
+	_get_panel().show_attack_pool_die_choice(
+			DamagedMunitions.RULE_ID,
+			str(context.get_meta_value(DamagedMunitions.META_PENDING_TITLE,
+					DamagedMunitions.CHOICE_TITLE)),
+			available)
+	_log.info("Damaged Munitions: awaiting die choice from %s." % [
+			str(available)])
+	return true
+
+
+func _metadata_die_colours(raw_colours: Variant) -> Array[String]:
+	var colours: Array[String] = []
+	if not raw_colours is Array:
+		return colours
+	var colour_values: Array = raw_colours as Array
+	for raw_colour: Variant in colour_values:
+		var colour_key: String = str(raw_colour).to_upper()
+		if colour_key != "" and int(_state.dice_pool.get(colour_key, 0)) > 0:
+			colours.append(colour_key)
+	return colours
+
+
+func _publish_damaged_munitions_pending_choice(
+		available_colours: Array[String]) -> void:
+	_fsm_patch_payload({
+		"dice_pool": _state.dice_pool.duplicate(true),
+		"pending_die_removal": {
+			"rule_id": DamagedMunitions.RULE_ID,
+			"title": DamagedMunitions.CHOICE_TITLE,
+			"available_colours": available_colours.duplicate(),
+			"controller_player": _get_attacker_player(),
+		},
+	})
+
+
+func _apply_damaged_munitions_die_choice(colour_key: String) -> bool:
+	var parts: CombatParticipants = _build_current_participants()
+	var metadata: Dictionary = {
+		DamagedMunitions.META_CHOSEN_COLOUR: colour_key,
+	}
+	var context: EffectContext = _dice_resolver.apply_rule_pool_modifier(
+			_state.dice_pool, parts, DamagedMunitions.RULE_ID, metadata)
+	var removed: String = str(context.get_meta_value(
+			DamagedMunitions.META_REMOVED_COLOUR, ""))
+	if removed == "":
+		return false
+	_state.dice_pool = context.dice_pool
+	_update_pool_after_damaged_munitions(removed)
+	return true
+
+
+func _update_pool_after_damaged_munitions(removed_colour: String) -> void:
+	_log.info("Damaged Munitions: removed 1 %s die. Pool: %s." % [
+			removed_colour, DicePool.format_pool(_state.dice_pool)])
+	if _get_panel():
+		_get_panel().show_dice_count(DicePool.format_pool(_state.dice_pool))
+		_get_panel().hide_obstruction_section()
+	_fsm_patch_payload({
+		"dice_pool": _state.dice_pool.duplicate(true),
+		"pending_die_removal": {},
+		"damaged_munitions_removed_colour": removed_colour,
+	})
+
+
+func _on_attack_pool_die_selected(reason_id: String, colour_key: String) -> void:
+	if reason_id != DamagedMunitions.RULE_ID:
+		return
+	if not _damaged_munitions_choice_pending:
+		return
+	if not _apply_damaged_munitions_die_choice(colour_key):
+		return
+	_damaged_munitions_choice_pending = false
+	_attack_exec_continue_after_damaged_munitions()
+
+
+func _attack_exec_continue_after_damaged_munitions() -> void:
+	if DicePool.get_total_count(_state.dice_pool) <= 0:
+		_handle_empty_attack_pool()
+		return
+	if _state.obstructed:
+		_handle_obstruction_step()
+		return
+	if _try_offer_cf_dial():
+		return
+	_attack_exec_show_roll_button()
 
 ## Checks whether a persistent damage card effect blocks this attack.
 ## Builds an ATTACK_VALIDATE_TARGET context with range, obstruction,

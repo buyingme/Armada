@@ -243,21 +243,28 @@ func test_disengaged_fire_control_triggers_when_obstructed() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Damaged Munitions — remove 1 die when attacking a ship
+# Damaged Munitions — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_damaged_munitions_removes_one_die() -> void:
+func test_damaged_munitions_no_longer_registers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("damaged_munitions", ship)
-	var ctx: EffectContext = _make_context(&"ATTACK_GATHER_DICE")
-	ctx.attacker = ship
-	ctx.dice_pool = {0: 2, 1: 1} # 2 red, 1 blue
-	e.resolve(ctx)
-	var total: int = 0
-	for count: Variant in ctx.dice_pool.values():
-		total += int(count)
-	assert_eq(total, 2, "Should have 1 fewer die")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("damaged_munitions")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Damaged Munitions should be handled by RuleRegistry after M9.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Damaged Munitions should not add a legacy runtime hook.")
+
+
+func test_damaged_munitions_no_longer_declares_gather_hook() -> void:
+	var effect: DamageCardEffect = _make_effect(
+			"damaged_munitions", _make_ship())
+	var hooks: Array[StringName] = effect.get_hooks()
+	assert_false(hooks.has(&"ATTACK_GATHER_DICE"),
+			"Damaged Munitions should not use the legacy gather hook after M9.")
 
 
 # ---------------------------------------------------------------------------

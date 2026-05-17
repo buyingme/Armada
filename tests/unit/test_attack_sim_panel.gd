@@ -223,6 +223,46 @@ func test_cf_dial_skip_signal_emitted() -> void:
 			"cf_dial_skipped should be emitted.")
 
 
+# ── Phase 6b-2: Pre-roll Die Choice ─────────────────────────────────
+
+func test_show_attack_pool_die_choice_sets_label_and_buttons() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	_panel.show_attack_pool_die_choice(DamagedMunitions.RULE_ID,
+			DamagedMunitions.CHOICE_TITLE,
+			["RED", "BLACK"] as Array[String])
+	assert_true(_panel._obstruction_container.visible,
+			"Shared die-choice container should be visible.")
+	assert_eq(_panel._obstruction_label.text, DamagedMunitions.CHOICE_TITLE,
+			"Shared die-choice label should show the supplied rule title.")
+	assert_eq(_panel._obstruction_buttons.get_child_count(), 2,
+			"Shared die-choice section should build one button per colour.")
+
+
+func test_attack_pool_die_choice_signal_emits_reason_and_colour() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	watch_signals(_panel)
+	_panel.show_attack_pool_die_choice(DamagedMunitions.RULE_ID,
+			DamagedMunitions.CHOICE_TITLE, ["BLUE"] as Array[String])
+	_panel._on_obstruction_colour("BLUE")
+	assert_signal_emitted(_panel, "attack_pool_die_selected",
+			"Generic die-choice signal should emit for rule prompts.")
+	var params: Array = get_signal_parameters(_panel,
+			"attack_pool_die_selected")
+	assert_eq(params, [DamagedMunitions.RULE_ID, "BLUE"],
+			"Generic die-choice signal should include reason id and colour.")
+	assert_signal_not_emitted(_panel, "obstruction_die_selected",
+			"Rule prompts should not emit the obstruction-specific signal.")
+
+
+func test_obstruction_die_choice_keeps_legacy_signal() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	watch_signals(_panel)
+	_panel.show_obstruction_die_choice(["RED"] as Array[String])
+	_panel._on_obstruction_colour("RED")
+	assert_signal_emitted(_panel, "obstruction_die_selected",
+			"Obstruction prompt should still emit obstruction-specific signal.")
+
+
 # ── Phase 6b-2: Roll Dice ───────────────────────────────────────────
 
 func test_show_roll_button_makes_visible() -> void:

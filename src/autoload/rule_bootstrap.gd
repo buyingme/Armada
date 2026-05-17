@@ -10,6 +10,7 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/damage_cards/ship/compartment_fire.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/damaged_munitions.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/point_defense_failure.gd"),
 ]
 
 var _log: GameLogger = GameLogger.new("RuleBootstrap")

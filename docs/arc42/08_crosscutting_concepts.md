@@ -452,17 +452,18 @@ are passed via `EffectContext.metadata`.
 |---|-----------|----------|---------|----------------|
 | 0 | `ATTACK_CALC_DAMAGE` | `AttackExecutor._calc_attack_damage()` | Modify final damage total | Bomber (keyword) |
 | 1 | `ATTACK_VALIDATE_TARGET` | Target selection in attack flow | Block illegal targets | Coolant Discharge (1 ship/round), Depowered Armament (no long range), Disengaged Fire Control (no obstructed) |
-| 2 | `ATTACK_GATHER_DICE` | After assembling dice pool, before roll | Remove dice from pool | Point-Defense Failure (−1 die vs squadron) |
-| 2a | `dice_pool` RuleRegistry modifier | `AttackDiceResolver.apply_gather_hook()` after legacy gather-dice hooks | Expose/apply pre-roll dice-pool choices | Damaged Munitions (attacker chooses −1 die vs ship) |
+| 2 | `ATTACK_GATHER_DICE` | After assembling dice pool, before roll | Legacy pre-roll dice-pool effects | Remaining non-migrated effects only |
+| 2a | `dice_pool` RuleRegistry modifier | `AttackDiceResolver.apply_gather_hook()` after legacy gather-dice hooks | Expose/apply pre-roll dice-pool choices | Damaged Munitions (attacker chooses −1 die vs ship), Point-Defense Failure (attacker chooses −1 die vs squadron) |
 | 3 | `ATTACK_SPEND_ACCURACY` | During accuracy-spending sub-step | Block accuracy spending | Blinded Gunners (cannot spend accuracy icons) |
 | 4 | `ATTACK_RESOLVE_CRITICAL` | Before resolving standard critical effect | Block critical effects | Targeter Disruption (cannot resolve critical effects) |
 | 5 | `DEFENSE_VALIDATE_TOKEN` | When checking if a defense token can be spent | Block specific token spending | Faulty Countermeasures (no exhausted tokens), Capacitor Failure (no Redirect if zone shields = 0) |
 
 **Context fields:**
 - Hook 1: `metadata.target_is_ship` (bool), `metadata.is_obstructed` (bool), `metadata.ship_attacks_this_round` (int). Sets `cancelled`.
-- Hook 2: `dice_pool` (existing). Effect removes entries.
+- Hook 2: `dice_pool` (existing legacy surface). Remaining effects remove entries.
 - Hook 2a: `attacker`, `defender`, and `dice_pool`. The modifier reads the
-  attacker's `faceup_damage`, then removes one die when the defender is a ship.
+  attacker's `faceup_damage`, exposes pending die-choice metadata, and then
+  removes the selected die when the target predicate matches the card text.
 - Hook 3: Sets `cancelled` to block accuracy spending.
 - Hook 4: Sets `critical_allowed = false` (existing field).
 - Hook 5: `metadata.token_type` (Constants.DefenseToken), `metadata.token_state` (Constants.DefenseTokenState), `defending_zone` (existing). Sets `cancelled`.
@@ -511,8 +512,8 @@ Damage cards fall into two categories:
 | Timing | Behaviour | Hook Needed? | Cards |
 |--------|-----------|-------------|-------|
 | **Immediate** | Resolved inline when dealt faceup, then flipped facedown | No hook — resolved by `DamageDeck`/`AttackExecutor` at deal time | Structural Damage (×8), Projector Misaligned (×2), Shield Failure (×2), Comm Noise (×2), Injured Crew (×4) |
-| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more hooks above | Blinded Gunners, Capacitor Failure, Coolant Discharge, Crew Panic, Damaged Controls, Depowered Armament, Disengaged FC, Faulty Countermeasures, Point-Defense Failure, Power Failure, Ruptured Engine, Targeter Disruption, Thrust Control Malfunction, Thruster Fissure |
-| **RuleRegistry-migrated persistent** | Static rule hook reads active `faceup_damage` state instead of registering a legacy runtime effect | No legacy bridge after migration unless noted | Compartment Fire, Damaged Munitions |
+| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more hooks above | Blinded Gunners, Capacitor Failure, Coolant Discharge, Crew Panic, Damaged Controls, Depowered Armament, Disengaged FC, Faulty Countermeasures, Power Failure, Ruptured Engine, Targeter Disruption, Thrust Control Malfunction, Thruster Fissure |
+| **RuleRegistry-migrated persistent** | Static rule hook reads active `faceup_damage` state instead of registering a legacy runtime effect | No legacy bridge after migration unless noted | Faulty Countermeasures (legacy UI bridge remains), Compartment Fire, Damaged Munitions, Point-Defense Failure |
 | **Hybrid** | Immediate action + persistent restriction; stays faceup | Yes | Life Support Failure (discard all tokens immediately; cannot gain tokens while faceup) |
 
 ### 8.9.5 Resolution Order

@@ -268,30 +268,28 @@ func test_damaged_munitions_no_longer_declares_gather_hook() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Point-Defense Failure — remove 1 die vs squadrons
+# Point-Defense Failure — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_point_defense_failure_triggers_vs_squadron() -> void:
+func test_point_defense_failure_no_longer_registers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
-	var sq: SquadronInstance = _make_squadron(1)
-	var e: DamageCardEffect = _make_effect("point_defense_failure", ship)
-	var ctx: EffectContext = _make_context(&"ATTACK_GATHER_DICE")
-	ctx.attacker = ship
-	ctx.defender = sq
-	assert_true(e.should_trigger(ctx),
-			"Should trigger vs squadron")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("point_defense_failure")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Point-Defense Failure should be handled by RuleRegistry after M10.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Point-Defense Failure should not add a legacy runtime hook.")
 
 
-func test_point_defense_failure_no_trigger_vs_ship() -> void:
-	var ship: ShipInstance = _make_ship()
-	var defender: ShipInstance = _make_ship(1)
-	var e: DamageCardEffect = _make_effect("point_defense_failure", ship)
-	var ctx: EffectContext = _make_context(&"ATTACK_GATHER_DICE")
-	ctx.attacker = ship
-	ctx.defender = defender
-	assert_false(e.should_trigger(ctx),
-			"Should not trigger vs ship")
+func test_point_defense_failure_no_longer_declares_gather_hook() -> void:
+	var effect: DamageCardEffect = _make_effect(
+			"point_defense_failure", _make_ship())
+	var hooks: Array[StringName] = effect.get_hooks()
+	assert_false(hooks.has(&"ATTACK_GATHER_DICE"),
+			"Point-Defense Failure should not use the legacy gather hook after M10.")
 
 
 # ---------------------------------------------------------------------------

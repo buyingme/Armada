@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-17 (Phase M9 Damaged Munitions rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-17 (Phase M10 Point-Defense Failure rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 158 |
-| GUT tests | 3 062 |
-| GUT asserts | 6 072 |
+| GUT test scripts | 159 |
+| GUT tests | 3 071 |
+| GUT asserts | 6 110 |
 | Failing tests | 0 |
-| Last commit | `8635b2e` — M8 baseline plan record |
+| Last commit | `9a2891e` — M9 Damaged Munitions choice |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,10 +34,10 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-17 M9 full GUT summary is green
-(158 / 3 054 / 6 043, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-17 M10 full GUT summary is green
+(159 / 3 071 / 6 110, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
-M8 MT passed; M9 MT is pending.
+M10 automated gates pass; user MT pass confirmed 2026-05-17.
 
 ---
 
@@ -114,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, and M9 are complete; M10 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, and M10 are complete; M11 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -331,8 +331,8 @@ regression gate is complete and remains the required L/M automated gate:
   [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) publishes
   the pending choice and applies the attacker-selected colour before rolling.
   [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Damaged Munitions in the transient `EffectRegistry`,
-  while Point-Defense Failure stays on the legacy bridge for M10.
+  no longer registers Damaged Munitions in the transient `EffectRegistry`;
+  Point-Defense Failure remained on the legacy bridge until the M10 migration.
   [test_rule_damaged_munitions.gd](../tests/unit/test_rule_damaged_munitions.gd)
   covers direct choice metadata, selected-colour removal, other-ship isolation,
   squadron-defender exclusion, resolver integration, empty-pool safety, and
@@ -342,6 +342,27 @@ regression gate is complete and remains the required L/M automated gate:
   6 072 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
   `git diff --check` clean, and baseline traces passing hot-seat trace/state
   plus network peer state equality, and user MT pass confirmed 2026-05-17.
+- M10 result: [point_defense_failure.gd](../src/core/effects/rules/damage_cards/ship/point_defense_failure.gd)
+  registers the fourth production [RuleRegistry](../src/core/effects/rule_registry.gd)
+  hook: a `MODIFIER` for `ATTACK / ATTACK_ROLL` target `dice_pool`.
+  The predicate reads the attacking ship's serialized `faceup_damage`, applies
+  only when the defender is a squadron, and uses shared `EffectContext`
+  metadata to expose available die colours before applying the attacker-selected
+  colour. [attack_executor.gd](../src/scenes/game_board/attack_executor.gd)
+  now handles pre-roll die-removal choices generically by rule id, so Damaged
+  Munitions and Point-Defense Failure share the same UI/payload surface.
+  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers Point-Defense Failure in the transient `EffectRegistry`.
+  [test_rule_point_defense_failure.gd](../tests/unit/test_rule_point_defense_failure.gd)
+  covers direct choice metadata, selected-colour removal, ship-defender
+  exclusion, other-ship isolation, resolver integration, empty-pool safety, and
+  save/load plus `EffectFactory.rebuild_runtime_effects()` with zero legacy
+  Point-Defense Failure bridge effects. Automated gates: focused M10 regression
+  set 4 scripts / 76 tests / 173 asserts with 0 failures, full GUT 159 /
+  3 071 / 6 110 with 0 failures, Phase K lint 0 violations / 4 allow-listed
+  branches, `git diff --check` clean, and baseline traces passing hot-seat
+  trace/state plus network peer state equality, and user MT pass confirmed
+  2026-05-17.
 
 ---
 

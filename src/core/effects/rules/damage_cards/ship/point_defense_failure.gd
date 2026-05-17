@@ -1,29 +1,29 @@
-## Damaged Munitions
+## Point-Defense Failure
 ##
-## Static rule hook for the Damaged Munitions damage card.
-## Rules Reference: Damage Card "Damaged Munitions" —
-## "When attacking a ship, before you roll your attack pool, remove 1 die
+## Static rule hook for the Point-Defense Failure damage card.
+## Rules Reference: Damage Card "Point-Defense Failure" —
+## "When attacking a squadron, before you roll your attack pool, remove 1 die
 ## of your choice."
-class_name DamagedMunitions
+class_name PointDefenseFailure
 extends RefCounted
 
 
-const RULE_ID: String = "damage_card.damaged_munitions"
-const EFFECT_ID: String = "damaged_munitions"
+const RULE_ID: String = "damage_card.point_defense_failure"
+const EFFECT_ID: String = "point_defense_failure"
 const META_PENDING_RULE_ID: String = EffectContext.META_PENDING_DIE_REMOVAL_RULE_ID
 const META_PENDING_TITLE: String = EffectContext.META_PENDING_DIE_REMOVAL_TITLE
 const META_AVAILABLE_COLOURS: String = EffectContext.META_AVAILABLE_DIE_COLOURS
 const META_CHOSEN_COLOUR: String = EffectContext.META_CHOSEN_DIE_COLOUR
 const META_REMOVED_COLOUR: String = EffectContext.META_REMOVED_DIE_COLOUR
-const CHOICE_TITLE: String = "Damaged Munitions - remove 1 die:"
+const CHOICE_TITLE: String = "Point-Defense Failure - remove 1 die:"
 
-static var _rule_instance: DamagedMunitions = null
+static var _rule_instance: PointDefenseFailure = null
 
 
 ## Registers the attack-roll dice-pool modifier hook.
 static func register() -> void:
 	if _rule_instance == null:
-		_rule_instance = DamagedMunitions.new()
+		_rule_instance = PointDefenseFailure.new()
 	RuleRegistry.register_rule(RULE_ID, [
 		FlowHook.modifier(RULE_ID,
 				Constants.InteractionFlow.ATTACK,
@@ -37,17 +37,17 @@ static func register() -> void:
 ## caller supplies [constant META_CHOSEN_COLOUR]. Active card state is read
 ## from attacker [member ShipInstance.faceup_damage], not transient registry
 ## state.
-## Rules Reference: Damage Card "Damaged Munitions" — "remove 1 die of your
-## choice."
+## Rules Reference: Damage Card "Point-Defense Failure" — "remove 1 die of
+## your choice."
 func apply_attack_pool_modifier(context: EffectContext) -> EffectContext:
 	if context == null:
 		return context
 	if not context.attacker is ShipInstance:
 		return context
-	if not context.defender is ShipInstance:
+	if not context.defender is SquadronInstance:
 		return context
 	var attacker: ShipInstance = context.attacker as ShipInstance
-	if not _has_damaged_munitions(attacker):
+	if not _has_point_defense_failure(attacker):
 		return context
 	var available: Array[String] = _available_die_colours(context.dice_pool)
 	if available.is_empty():
@@ -61,7 +61,7 @@ func apply_attack_pool_modifier(context: EffectContext) -> EffectContext:
 	return context
 
 
-func _has_damaged_munitions(ship: ShipInstance) -> bool:
+func _has_point_defense_failure(ship: ShipInstance) -> bool:
 	for card_var: Variant in ship.faceup_damage:
 		if not card_var is DamageCard:
 			continue

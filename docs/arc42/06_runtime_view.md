@@ -266,9 +266,9 @@ AttackExecutor (target selection)
     ├─ resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)    ── Coolant Discharge, Depowered Armament, Disengaged FC
     │
 AttackExecutor (dice pool assembly)
-    ├─ resolve_hook(&"ATTACK_GATHER_DICE", ctx)         ── Point-Defense Failure
+    ├─ resolve_hook(&"ATTACK_GATHER_DICE", ctx)         ── Remaining legacy gather effects
     ├─ RuleRegistry.modifiers_for(ATTACK/ATTACK_ROLL,
-    │     "dice_pool")                                  ── Damaged Munitions choice/removal
+    │     "dice_pool")                                  ── Damaged Munitions / Point-Defense Failure choice/removal
     │
 AttackExecutor (accuracy spending)
     ├─ resolve_hook(&"ATTACK_SPEND_ACCURACY", ctx)      ── Blinded Gunners

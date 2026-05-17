@@ -36,8 +36,6 @@ func get_hooks() -> Array[StringName]:
 			return [&"ATTACK_VALIDATE_TARGET"]
 		"disengaged_fire_control":
 			return [&"ATTACK_VALIDATE_TARGET"]
-		"point_defense_failure":
-			return [&"ATTACK_GATHER_DICE"]
 		"blinded_gunners":
 			return [&"ATTACK_SPEND_ACCURACY"]
 		"targeter_disruption":
@@ -81,9 +79,6 @@ func should_trigger(context: EffectContext) -> bool:
 			return _trigger_depowered_armament(context)
 		"disengaged_fire_control":
 			return _trigger_disengaged_fire_control(context)
-		"point_defense_failure":
-			return context.attacker == owner and \
-					context.defender is SquadronInstance
 		"blinded_gunners":
 			return context.attacker == owner
 		"targeter_disruption":
@@ -119,8 +114,6 @@ func resolve(context: EffectContext) -> void:
 				"blinded_gunners", "faulty_countermeasures", \
 				"life_support_failure":
 			context.cancelled = true
-		"point_defense_failure":
-			_resolve_remove_one_die(context)
 		"targeter_disruption":
 			context.critical_allowed = false
 		"capacitor_failure":
@@ -240,20 +233,6 @@ func _resolve_coolant_discharge(context: EffectContext) -> void:
 			context.cancelled = true
 		&"ATTACK_CALC_DAMAGE":
 			context.damage_total += 1
-
-
-## Removes 1 die from the dice pool (attacker removes lowest-value die).
-## The removed die is stored in metadata for possible future inspection.
-func _resolve_remove_one_die(context: EffectContext) -> void:
-	if context.dice_pool.is_empty():
-		return
-	# Remove one die — prefer the pool with the most dice, or any available.
-	for color: Variant in context.dice_pool.keys():
-		var count: int = int(context.dice_pool[color])
-		if count > 0:
-			context.dice_pool[color] = count - 1
-			context.set_meta_value("removed_die_color", color)
-			return
 
 
 ## Capacitor Failure: cancel redirect or repair shield operation.

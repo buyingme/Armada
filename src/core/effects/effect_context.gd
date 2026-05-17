@@ -12,6 +12,18 @@ class_name EffectContext
 extends RefCounted
 
 
+## Metadata key for a pending pre-roll die-removal rule id.
+const META_PENDING_DIE_REMOVAL_RULE_ID: String = "pending_die_removal_rule_id"
+## Metadata key for the pending pre-roll die-removal prompt title.
+const META_PENDING_DIE_REMOVAL_TITLE: String = "pending_die_removal_title"
+## Metadata key for available pre-roll die-removal colour choices.
+const META_AVAILABLE_DIE_COLOURS: String = "available_die_colours"
+## Metadata key carrying the player's selected die colour.
+const META_CHOSEN_DIE_COLOUR: String = "chosen_die_colour"
+## Metadata key recording which die colour a rule removed.
+const META_REMOVED_DIE_COLOUR: String = "removed_die_color"
+
+
 ## The hook that is currently being resolved (e.g. &"ATTACK_CALC_DAMAGE").
 var hook: StringName = &""
 

@@ -148,6 +148,27 @@ func test_show_defense_section_locked_tokens_disabled() -> void:
 			"Locked token button should be disabled")
 
 
+func test_show_defense_section_blocked_tokens_disabled() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.EXHAUSTED},
+		{"type": Constants.DefenseToken.EVADE,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	var blocked: Array[int] = [0]
+	_panel.show_defense_section(tokens, [], 3, 2,
+			{"blocked_indices": blocked})
+	var first_btn: Button = (
+			_panel._defense_token_buttons.get_child(0) as Button)
+	assert_true(first_btn.disabled,
+			"Blocked token button should be disabled")
+	assert_true("[BLOCKED]" in first_btn.text,
+			"Blocked token button should explain its disabled state")
+	_panel._on_defense_token_pressed(0)
+	assert_true(_panel.get_defense_selected_indices().is_empty(),
+			"Blocked token should not enter selected indices")
+
+
 func test_hide_defense_section_hides() -> void:
 	var tokens: Array[Dictionary] = [
 		{"type": Constants.DefenseToken.EVADE,

@@ -226,6 +226,35 @@ func test_defense_done_connected_at_defense_tokens() -> void:
 			"defense_tokens_done must be disconnected after close().")
 
 
+func test_apply_flow_disables_blocked_defense_tokens() -> void:
+	var payload: Dictionary = {
+		"attacker_kind": "ship",
+		"attacker_name": "Demolisher",
+		"defender_name": "CR90",
+		"defender_player": 1,
+		"defender_ship_index": 0,
+		"defender_speed": 2,
+		"defender_zone": Constants.HullZone.FRONT,
+		"modified_damage": 3,
+		"locked_tokens": [],
+		"blocked_defense_token_indices": [0],
+		"defense_tokens": [
+			{"type": Constants.DefenseToken.BRACE,
+			"state": Constants.DefenseTokenState.EXHAUSTED},
+			{"type": Constants.DefenseToken.EVADE,
+			"state": Constants.DefenseTokenState.READY},
+		],
+	}
+	_mirror.apply_flow(payload,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	var first_btn: Button = (
+			_mirror.get_panel()._defense_token_buttons.get_child(0) as Button)
+	assert_true(first_btn.disabled,
+			"Mirror should disable payload-blocked defense tokens.")
+	assert_true("[BLOCKED]" in first_btn.text,
+			"Mirror blocked button should show a blocked label.")
+
+
 func test_evade_section_opens_when_evade_active_flag_set() -> void:
 	# Phase I6b-3 R3: when the attacker peer publishes
 	# `evade_active=true` (with a non-empty `evade_range_band`) into

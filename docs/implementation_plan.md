@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-17 (Phase M6 rule hook wiring; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-17 (Phase M7 Faulty Countermeasures rule migration, MT bugfix, and rule-integration workflow; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 155 |
-| GUT tests | 3 031 |
-| GUT asserts | 5 947 |
+| GUT test scripts | 156 |
+| GUT tests | 3 040 |
+| GUT asserts | 5 982 |
 | Failing tests | 0 |
-| Last commit | `2377aee` — M5 rule registry scaffold |
+| Last commit | `47d0e50` — M6 rule hook wiring |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,9 +34,10 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-17 M6 full GUT summary is green
-(155 / 3 031 / 5 947, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-17 M7 full GUT summary is green
+(156 / 3 040 / 5 982, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
+M7 MT passed after the defense-token marker-command/UI-affordance fix.
 
 ---
 
@@ -113,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, and M6 are complete; M7 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, and M7 are complete; M8 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -284,6 +285,27 @@ regression gate is complete and remains the required L/M automated gate:
   155 / 3 031 / 5 947 with 0 failures, Phase K lint 0 violations / 4
   allow-listed branches, and baseline traces passing hot-seat trace/state plus
   network peer state equality.
+- M7 result: [faulty_countermeasures.gd](../src/core/effects/rules/faulty_countermeasures.gd)
+  registers the first production [RuleRegistry](../src/core/effects/rule_registry.gd)
+  validator hook for `ATTACK / ATTACK_DEFENSE_TOKENS` and
+  defense-token commands (`commit_defense` and `spend_defense_token`). The
+  command-time predicate reads active state from serialized
+  `ShipInstance.faceup_damage` plus token state, so an exhausted token is
+  rejected when the defender has Faulty Countermeasures even after a save/load
+  runtime-effect rebuild. The legacy `DEFENSE_VALIDATE_TOKEN` `EffectRegistry`
+  path remains in place for UI parity and publishes
+  `blocked_defense_token_indices` during Phase M.
+  [test_rule_faulty_countermeasures.gd](../tests/unit/test_rule_faulty_countermeasures.gd)
+  covers rejection, commit rejection, ready-token allowance, other-ship
+  isolation, no-card allowance, and save/load rebuild behaviour. Automated
+  gates: focused M7 regression set 5 scripts / 90 tests / 199 asserts with 0
+  failures, full GUT 156 / 3 040 / 5 982 with 0 failures, Phase K lint 0
+  violations / 4 allow-listed branches, and baseline traces passing hot-seat
+  trace/state plus network peer state equality. M7 manual testing passed after
+  the marker-command parity fix. The reusable rule-integration workflow now
+  lives in [.github/skills/rule-integration/SKILL.md](../.github/skills/rule-integration/SKILL.md),
+  and [src/core/effects/rules/README.md](../src/core/effects/rules/README.md)
+  records the source-first rule folder proposal.
 
 ---
 
@@ -362,6 +384,16 @@ Bulk MTs that were never formally stamped (~150 tests across phases 2–12,
 refactoring A–F, bug fixes) should be regression-stamped before the next
 release milestone — full table preserved in
 [docs/old/open_topics.md](old/open_topics.md) § "Never Formally Stamped".
+
+### 4.5 Rule File Organization Follow-Up
+
+M7 leaves the first production rule file flat under
+[src/core/effects/rules/](../src/core/effects/rules/) to avoid path churn after
+manual testing. Once M8 or a later slice adds another rule, adopt the
+source-first grouping proposed in
+[src/core/effects/rules/README.md](../src/core/effects/rules/README.md): core
+rules by subsystem, damage cards by deck/type, keywords, upgrades by slot,
+objectives by category, obstacles, and special tokens.
 
 ---
 

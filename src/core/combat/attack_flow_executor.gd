@@ -85,9 +85,13 @@ func reset_for_confirm(state: AttackState, damage: int) -> void:
 ## Builds the DEFENSE_TOKENS payload patch for interaction flow.
 func build_defense_payload(state: AttackState,
 		def_inst: ShipInstance,
-		gs: GameState) -> Dictionary:
+		gs: GameState,
+		defense_resolver: DefenseTokenResolver = null,
+		effect_registry: EffectRegistry = null) -> Dictionary:
 	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
 	return {
+		"blocked_defense_token_indices": build_blocked_defense_token_indices(
+				state, def_inst, defense_resolver, effect_registry),
 		"locked_tokens": state.locked_tokens.duplicate(true),
 		"modified_damage": state.modified_damage,
 		"dice_results": state.dice_results.duplicate(true),
@@ -97,6 +101,27 @@ func build_defense_payload(state: AttackState,
 		"defender_zone": state.defender_zone,
 		"defense_tokens": def_inst.defense_tokens.duplicate(true),
 	}
+
+
+## Returns token indices blocked by persistent defense-token effects.
+## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
+func build_blocked_defense_token_indices(state: AttackState,
+		def_inst: ShipInstance,
+		defense_resolver: DefenseTokenResolver,
+		effect_registry: EffectRegistry) -> Array[int]:
+	var blocked: Array[int] = []
+	if state == null or def_inst == null or defense_resolver == null:
+		return blocked
+	for i: int in range(def_inst.defense_tokens.size()):
+		var token: Dictionary = def_inst.defense_tokens[i]
+		var token_state: Constants.DefenseTokenState = (
+				token["state"] as Constants.DefenseTokenState)
+		if token_state == Constants.DefenseTokenState.DISCARDED:
+			continue
+		if defense_resolver.is_token_blocked_by_effect(
+				def_inst, token, effect_registry, state.defender_zone):
+			blocked.append(i)
+	return blocked
 
 
 ## Sorts selected defense token indices into canonical RRG resolve order.

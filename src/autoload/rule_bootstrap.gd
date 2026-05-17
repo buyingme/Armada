@@ -1,12 +1,14 @@
 ## RuleBootstrap
 ##
 ## Autoload that initializes the static Phase M RuleRegistry catalogue.
-## M5 keeps [constant RULE_SCRIPTS] empty so the registry has no production
-## hooks and legacy EffectRegistry behaviour remains unchanged.
+## Production rule scripts register static command-time hooks while legacy
+## EffectRegistry behaviour remains available during the Phase M migration.
 extends Node
 
 
-const RULE_SCRIPTS: Array[GDScript] = []
+const RULE_SCRIPTS: Array[GDScript] = [
+	preload("res://src/core/effects/rules/faulty_countermeasures.gd"),
+]
 
 var _log: GameLogger = GameLogger.new("RuleBootstrap")
 

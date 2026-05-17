@@ -924,7 +924,8 @@ func _attack_exec_start_defense() -> void:
 	# + modified damage so the defender client can render the defense UI
 	# from interaction_flow alone.
 	_fsm_patch_payload(_flow_executor.build_defense_payload(
-			_state, def_inst, GameManager.current_game_state))
+			_state, def_inst, GameManager.current_game_state,
+			_defense_resolver, _effect_registry))
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	# Phase K4: hot-seat detected via `local_player_index < 0` (no
 	# network session).  In network each peer's camera is locked to
@@ -965,7 +966,10 @@ func _show_defense_section(def_inst: ShipInstance) -> void:
 			_state.locked_tokens,
 			_state.modified_damage,
 			def_inst.current_speed,
-			NetworkManager.get_local_player_index() < 0)
+			{
+				"interactive": NetworkManager.get_local_player_index() < 0,
+				"blocked_indices": _get_blocked_defense_token_indices(def_inst),
+			})
 
 ## Returns true if the defender has spendable tokens and speed > 0.
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
@@ -987,29 +991,39 @@ func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 			inst, _state.locked_tokens,
 			_effect_registry, _state.defender_zone)
 
+
+## Returns non-discarded token indices blocked by persistent effects.
+func _get_blocked_defense_token_indices(
+		inst: ShipInstance) -> Array[int]:
+	return _flow_executor.build_blocked_defense_token_indices(
+			_state, inst, _defense_resolver, _effect_registry)
+
 ## Called when the player spends a defense token.
 ## [param token_index] — index in the defender's defense_tokens array.
 ## [param spend_method] — "exhaust" or "discard".
 ## Requirements: AE-DEF-001–016.
 ## Rules Reference: "Defense Tokens", p.5 — each token type at most once.
 func _on_attack_defense_token_spent(token_index: int,
-		spend_method: String) -> void:
+		spend_method: String) -> bool:
 	if _state.defender_ship == null:
-		return
+		return false
 	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
 	if def_inst == null:
-		return
+		return false
 	if token_index < 0 or token_index >= def_inst.defense_tokens.size():
-		return
+		return false
 	var token: Dictionary = def_inst.defense_tokens[token_index]
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
 	if not _is_defense_token_spendable(token_index, token):
-		return
+		return false
 	var actual_method: String = _resolve_spend_method(spend_method, token)
 	# Route through command system for replay determinism.
-	GameManager.submit_spend_defense_token(
+	var result: Dictionary = GameManager.submit_spend_defense_token(
 			def_inst, token_index, actual_method)
+	if result.is_empty():
+		_log.warn("Defense token spend command rejected — skipping effects.")
+		return false
 	_state.spent_tokens[token_type] = actual_method
 	EventBus.ship_defense_token_changed.emit(def_inst)
 	EventBus.defense_token_spent.emit(
@@ -1018,6 +1032,7 @@ func _on_attack_defense_token_spent(token_index: int,
 			Constants.DEFENSE_TOKEN_NAMES.get(token_type, "?"),
 			actual_method])
 	_apply_defense_token_effect(token_type, def_inst)
+	return true
 
 ## Returns true if the token at the given index can be spent.
 ## Checks discard state, one-per-type limit, accuracy locks, and
@@ -1457,8 +1472,8 @@ func _on_attack_defense_done() -> void:
 	var selected: Array[int] = []
 	if _get_panel():
 		selected = _get_panel().get_defense_selected_indices()
+	if _submit_commit_defense(selected) and _get_panel():
 		_get_panel().disable_all_defense_buttons()
-	_submit_commit_defense(selected)
 
 
 ## Builds and submits the [CommitDefenseCommand] for the current
@@ -1466,19 +1481,24 @@ func _on_attack_defense_done() -> void:
 ## happen on the attacker peer when [method apply_defender_commit] is
 ## triggered from the [signal CommandProcessor.command_executed]
 ## broadcast.
-func _submit_commit_defense(selected: Array[int]) -> void:
+## Returns false when command validation rejects the commit.
+func _submit_commit_defense(selected: Array[int]) -> bool:
 	if _state.defender_ship == null:
 		_log.warn("Commit defense with no defender — ignoring.")
-		return
+		return false
 	var def_inst: ShipInstance = \
 			_state.defender_ship.get_ship_instance()
 	if def_inst == null:
-		return
+		return false
 	# Sort into canonical resolution order before sending so all peers
 	# process tokens deterministically.
 	var canonical: Array[int] = _flow_executor.sort_defense_tokens_canonical(
 			selected, def_inst.defense_tokens)
-	GameManager.submit_commit_defense(def_inst, canonical)
+	var result: Dictionary = GameManager.submit_commit_defense(def_inst, canonical)
+	if result.is_empty():
+		_log.warn("Defense commit command rejected — controls remain enabled.")
+		return false
+	return true
 
 
 ## Applies a defender's commit on the attacker peer.  Called from
@@ -1572,7 +1592,10 @@ func _process_next_defense_commit() -> void:
 	_log.info("Processing committed token index %d." % token_index)
 	# Reuse the existing spending logic (validates, applies, starts
 	# sub-steps for Evade/Redirect).
-	_on_attack_defense_token_spent(token_index, "exhaust")
+	var spent: bool = _on_attack_defense_token_spent(token_index, "exhaust")
+	if not spent:
+		_process_next_defense_commit()
+		return
 	# For simple tokens (Scatter, Brace, Contain) the method returns
 	# synchronously. For Evade/Redirect, sub-steps will call
 	# _process_next_defense_commit() when they finish.

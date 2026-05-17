@@ -24,6 +24,10 @@ You **must** read and follow these documents (in `.skills/`):
 7. **`.skills/refactoring_guidelines.md`** — Function size limits, extraction patterns, serialization, god-object prevention, quantified targets
 8. **`.skills/serialization_and_commands.md`** — Serialization contract, command system, normalised positions, replay safety, banned patterns
 
+When adding, migrating, reviewing, or debugging a game rule, card effect,
+keyword, objective, upgrade, defense-token eligibility rule, or UI affordance
+derived from rules, also load **`.github/skills/rule-integration/SKILL.md`**.
+
 ## Non-Negotiable Rules
 
 These rules apply to **every** code change. No exceptions.
@@ -187,6 +191,7 @@ When asked to implement a feature or fix a bug:
 3. **Plan the change** — Identify which layer(s) are affected (Domain? Presentation? Both?)
 4. **Check refactoring constraints** — Read `.skills/refactoring_guidelines.md`. Ensure the change does not introduce functions > 30 lines, does not add responsibilities to god objects, and follows extraction patterns if applicable.
 5. **Check serialization impact** — Read `.skills/serialization_and_commands.md`. If the change adds mutable state, add `serialize()`/`deserialize()`. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised coordinates.
+5a. **Check rule integration impact** — For rule/card/keyword/upgrade/objective work, load `.github/skills/rule-integration/SKILL.md`. Cover marker commands, mutation commands, projected UI eligibility, save/load rebuild, replay, and network paths.
 6. **Write the core logic** — `src/core/` with `RefCounted`, no scene tree dependency
 7. **Write the tests first or alongside** — Never submit untested logic
 8. **Wire up the presentation** — `src/scenes/` connects to core via EventBus

@@ -178,6 +178,8 @@ var _defense_done_button: Button = null
 var _defense_info_label: Label = null
 ## Tracks defense token indices currently selected (not yet committed).
 var _defense_selected_indices: Array[int] = []
+## Tracks defense token indices blocked by current attack rules/effects.
+var _defense_blocked_indices: Array[int] = []
 
 ## --- Phase 6c-2: Redirect zone selection UI ---
 
@@ -1223,19 +1225,21 @@ func _update_accuracy_button_visuals() -> void:
 ## [param defender_speed] — defender's speed (0 blocks spending).
 ## Requirements: AE-DEF-001–005.
 ## Rules Reference: "Defense Tokens", bullet 4, p.5 — speed 0 blocks all.
-## [param interactive] — when [code]false[/code] the section renders
-## as read-only (Phase I6b-3 R6: attacker peer's panel during the
-## defender-controlled DEFENSE_TOKENS sub-step).  Token buttons stay
-## visible but disabled, the Commit Defense button is hidden, and no
-## input signals are wired up.
+## [param options] — optional keys:
+##   "interactive" (bool): false renders a read-only section.
+##   "blocked_indices" (Array[int]): rule/effect-blocked token indices.
 func show_defense_section(tokens: Array[Dictionary],
 		locked_indices: Array[int], damage: int,
 		defender_speed: int,
-		interactive: bool = true) -> void:
+		options: Dictionary = {}) -> void:
 	if _defense_container == null or _defense_token_buttons == null:
 		return
+	var interactive: bool = bool(options.get("interactive", true))
+	var blocked_indices: Array[int] = _defense_option_indices(
+			options, "blocked_indices")
 	# Reset selection state.
 	_defense_selected_indices.clear()
+	_defense_blocked_indices = blocked_indices.duplicate()
 	# Clear old buttons.
 	for child: Node in _defense_token_buttons.get_children():
 		child.queue_free()
@@ -1249,7 +1253,8 @@ func show_defense_section(tokens: Array[Dictionary],
 					"Damage: %d — Speed 0: cannot spend tokens." % damage)
 		_defense_container.visible = true
 		return
-	_populate_defense_token_buttons(tokens, locked_indices, interactive)
+	_populate_defense_token_buttons(
+			tokens, locked_indices, interactive, blocked_indices)
 	# Re-show Commit button (may have been hidden during a previous commit).
 	# In read-only mode the local peer is the attacker watching the
 	# defender choose, so the Commit button is hidden — the eventual
@@ -1265,28 +1270,45 @@ func show_defense_section(tokens: Array[Dictionary],
 ## [code]pressed[/code] signal is connected (read-only attacker view).
 func _populate_defense_token_buttons(tokens: Array[Dictionary],
 		locked_indices: Array[int],
-		interactive: bool = true) -> void:
+		interactive: bool = true,
+		blocked_indices: Array[int] = []) -> void:
 	for i: int in range(tokens.size()):
 		var token: Dictionary = tokens[i]
 		var state: Constants.DefenseTokenState = (
 				token["state"] as Constants.DefenseTokenState)
 		if state == Constants.DefenseTokenState.DISCARDED:
 			continue
+		var btn: Button = _create_token_button(token, i)
 		if i in locked_indices:
 			# Show locked token (greyed out, not clickable).
-			var btn: Button = _create_token_button(token, i)
 			btn.disabled = true
 			btn.modulate = Color(0.4, 0.4, 0.4, 1.0)
 			btn.text = btn.get_meta("base_text", "") + " [LOCKED]"
 			_defense_token_buttons.add_child(btn)
 			continue
-		var btn: Button = _create_token_button(token, i)
+		if i in blocked_indices:
+			btn.disabled = true
+			btn.modulate = Color(0.45, 0.45, 0.45, 1.0)
+			btn.text = btn.get_meta("base_text", "") + " [BLOCKED]"
+			_defense_token_buttons.add_child(btn)
+			continue
 		if interactive:
 			btn.pressed.connect(_on_defense_token_pressed.bind(i))
 		else:
 			btn.disabled = true
 			btn.modulate = Color(0.6, 0.6, 0.6, 1.0)
 		_defense_token_buttons.add_child(btn)
+
+
+func _defense_option_indices(options: Dictionary,
+		key: String) -> Array[int]:
+	var result: Array[int] = []
+	var raw_value: Variant = options.get(key, [])
+	if not raw_value is Array:
+		return result
+	for raw_idx: Variant in raw_value as Array:
+		result.append(int(raw_idx))
+	return result
 
 
 ## Hides the defense section.
@@ -1325,6 +1347,8 @@ func disable_defense_token_button(token_index: int) -> void:
 ## deselected first (only one of each type per attack).
 ## Rules Reference: "Defense Tokens", bullet 3, p.5.
 func _on_defense_token_pressed(token_index: int) -> void:
+	if token_index in _defense_blocked_indices:
+		return
 	if token_index in _defense_selected_indices:
 		_defense_selected_indices.erase(token_index)
 		_set_defense_token_highlight(token_index, false)

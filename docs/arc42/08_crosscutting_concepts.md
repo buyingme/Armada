@@ -539,6 +539,28 @@ To add a new keyword, upgrade, or damage card effect:
 - **Optional flag:** `is_optional` on GameEffect supports future player-choice effects
 - **Metadata dict:** New hook-specific fields use `EffectContext.metadata` to keep the class stable across phases
 
+### 8.9.8 RuleRegistry Integration Pattern
+
+Phase M adds `RuleRegistry` as the static catalogue for rule hooks while
+`EffectRegistry` remains the transient runtime bridge for legacy effects. A
+rule file declares which hooks exist, but active rule status is derived from
+serialized game entities (`GameState`, ships, squadrons, faceup damage cards,
+upgrades, objectives) or from a documented `EffectRegistry` bridge rebuilt from
+those entities after load.
+
+The M7 Faulty Countermeasures bug established an additional crosscutting rule:
+player-choice rules must cover every command surface, not only the final state
+mutation. If a panel submits a marker command before a mutation command, both
+must be validated by the same rule. Any disabled/blocked choice metadata must
+be published through `GameState.interaction_flow.payload`, and UI panels must
+render that metadata without re-implementing card text.
+
+The source-first grouping proposal for future rule files is documented in
+[src/core/effects/rules/README.md](../../src/core/effects/rules/README.md):
+core rules by subsystem, damage cards by deck/type, squadron and ship keywords,
+upgrades by slot, objectives by category, obstacles, and special tokens. This
+keeps rules findable by the game component a contributor sees on the table.
+
 ## 8.10 Reusable Anchor-Based Panel Layout
 
 ### 8.10.1 Problem

@@ -70,7 +70,7 @@ from those entities.
 |---|---|---|
 | `EffectRegistry` | Runtime collection of active `GameEffect` instances, keyed by legacy hook names such as `DEFENSE_VALIDATE_TOKEN`, `ATTACK_GATHER_DICE`, and `BEFORE_REVEAL_DIAL`. | Transient. It lives on `GameState` but is not serialized. Loaded games must rebuild it before play resumes. |
 | `EffectFactory.rebuild_runtime_effects()` | Recreates transient effects from serialized state: squadron keywords and faceup damage cards. Command paths that deal, repair, discard, or destroy cards must keep this runtime state aligned with serialized entities. | Rebuild boundary after deserialize/load. It is the current acceptance gate for persistent damage effects such as Blinded Gunners. |
-| `RuleRegistry` | Future static catalogue of hook definitions, priorities, and command/flow attachment points. It decides what predicates exist and how they are ordered. | Computed/runtime-only. It stores definitions, not active card instances. Predicates read `GameState` or a typed bridge rebuilt by `EffectFactory`. |
+| `RuleRegistry` | Static catalogue of hook definitions, priorities, and command/flow attachment points. It decides what predicates exist and how they are ordered. | Computed/runtime-only. It stores definitions, not active card instances. Predicates read `GameState` or a typed bridge rebuilt by `EffectFactory`. |
 
 Worked example: the loaded Blinded Gunners regression fixed in `d752ffd`.
 The save contained a ship with serialized `faceup_damage.effect_id ==
@@ -86,7 +86,7 @@ First-six Phase M rule boundary decisions:
 
 | Slice | Rule | Current legacy hook surface | M target | EffectRegistry bridge decision |
 |---|---|---|---|---|
-| M7 | Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` blocks exhausted defense-token spends. | Pure `RuleRegistry` validator for defense-token spend commands; active source is defender `faceup_damage`. | No bridge after migration. Keep legacy `DamageCardEffect` until M7 removes/replaces the current path. |
+| M7 | Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` blocks exhausted defense-token spends. | Pure `RuleRegistry` validator for defense-token commands; active source is defender `faceup_damage`. | M7 keeps the legacy `DamageCardEffect` path as the UI-side bridge for `blocked_defense_token_indices` while command submission is protected by `RuleRegistry`. Remove it only after the UI resolver no longer needs the legacy hook. |
 | M8 | Compartment Fire | `STATUS_READY_TOKENS` blocks readying defense tokens during status cleanup. | Pure status-phase modifier/blocker; active source is each ship's `faceup_damage`. | No bridge after migration. Save/load regression should prove rebuilt legacy and pure rule behaviour match. |
 | M9 | Damaged Munitions | `ATTACK_GATHER_DICE` removes one die before a ship attack roll. | Pure `ATTACK_ROLL` modifier; active source is attacker `faceup_damage` and current attack context. | No bridge after migration. The predicate must not depend on stale runtime registration. |
 | M10 | Point-Defense Failure | `ATTACK_GATHER_DICE` removes one die before attacking a squadron. | Pure `ATTACK_ROLL` modifier with defender-is-squadron predicate. | No bridge after migration. Squadron-vs-ship targeting data must come from the attack context/payload. |
@@ -113,6 +113,48 @@ when `interaction_flow` is empty or temporarily points at a different surface.
 | `GLOBAL` | Not gated by the current `interaction_flow` or by a normal gameplay phase surface. Used for synchronization snapshots, debug tooling, and cleanup commands whose own validation owns legality. | Declare the command type as globally exempt from FlowSpec step checks; keep command `validate()` as the authoritative guard. |
 | `PHASE` | Legal during one or more `Constants.GamePhase` values regardless of the current modal/step. Used for phase transitions, status cleanup, command-token utility commands, and legacy effect follow-ups that are not cleanly represented as a single flow step yet. | Declare the allowed phases. M4 checks `GameState.current_phase` before command `validate()`. |
 | `FLOW_STEP` | Legal only inside explicit `(flow_type, step_id)` pairs. Used for player choices and flow-control markers that are meaningful only while a concrete projected interaction is active. | Declare all allowed pairs. M4 checks `GameState.interaction_flow` before command `validate()`. |
+
+### 0.4 Rule Integration Workflow (M7 MT lesson)
+
+The M7 Faulty Countermeasures manual-test follow-up changed the rule migration
+acceptance bar. The original direct validator correctly rejected
+`spend_defense_token`, but the real UI path first sent `commit_defense` with a
+list of selected token indices. Because the marker command and payload choices
+were not rule-gated, the panel could still select exhausted tokens and scene
+code could apply local effects even when the later mutation command was
+rejected.
+
+Future rule integrations must check all of these surfaces before a slice is
+done:
+
+- **Command parity:** every marker/commit command and every final mutation
+  command that can express the illegal action is covered by the rule.
+- **Payload affordance:** if the player chooses from a list, core/application
+  code publishes rule-derived eligibility in `interaction_flow.payload`
+  using JSON-safe fields such as `blocked_defense_token_indices`.
+- **Renderer-only UI:** panels use those payload fields to disable or enable
+  controls and do not interpret card text themselves.
+- **Submit-result guard:** scene/controller local effects run only after
+  `GameManager.submit_*` returns a non-empty accepted result.
+- **Rebuild path:** save/load, replay, hot-seat, and network derive active rule
+  state from serialized entities or a documented rebuilt `EffectRegistry`
+  bridge.
+
+The reusable checklist now lives in
+[.github/skills/rule-integration/SKILL.md](../.github/skills/rule-integration/SKILL.md).
+
+RRG v1.5 shows the remaining rule families that need this treatment:
+
+| Rule family | Main future hook surfaces |
+|---|---|
+| Attack and dice | Declare target, gather/roll dice, spend accuracies, modify dice, resolve criticals, resolve damage, additional squadron targets, salvo/counter/ignition variants. |
+| Defense tokens | Spend eligibility, accuracy locks, token state transitions, speed-0 prohibition, cost-only spends, contain/redirect/evade/brace/scatter/salvo effects. |
+| Commands | Dial/token resolution, command-triggered upgrades, command-token costs, raid-token blockers, repair targeting, squadron activation counts, concentrate-fire dice. |
+| Movement and geometry | Speed/yaw changes, maneuver execution, overlap, displacement ownership, obstacle effects, out-of-play destruction, huge-ship exceptions. |
+| Squadrons and keywords | Engagement, movement gates, activation state, attack eligibility, counter/snipe/escort/rogue/grit/heavy/intel/strategic and unique squadron defense tokens. |
+| Status and readying | Defense-token readying, upgrade-card ready costs, recurring/non-recurring cards, round-token advance, cleanup timing. |
+| Objectives and setup | Objective choice, setup-area changes, obstacle placement/movement, objective ships/tokens, scoring and victory tokens. |
+| Upgrades and special tokens | Commander/officer/weapon/etc. effects, grav/chaff/focus/raid/proximity mine tokens, armed/destroyed stations, ignition targeting tokens. |
 
 Current registered command inventory for M3:
 
@@ -431,7 +473,7 @@ channel for network/replay parity.
 | modal_kind | `ATTACK_DEFENSE_TOKENS` |
 | allowed_commands | `spend_defense_token`, `commit_defense`, `select_evade_die`, `select_redirect_zone`, `redirect_done`, `publish_attack_flow` |
 | transitions | Defense/redirect complete -> `ATTACK_RESOLVE_DAMAGE`; cancelled -> `NONE`. |
-| producer | `AttackFlowFSM.advance(Step.DEFENSE_TOKENS)` and defense payload patches. |
+| producer | `AttackFlowFSM.advance(Step.DEFENSE_TOKENS)` and defense payload patches, including `blocked_defense_token_indices` for rule/effect-blocked choices. |
 | rule citation | RRG "Defense Tokens", p.4; RRG "Attack", spend defense tokens. |
 
 ### `ATTACK / ATTACK_RESOLVE_DAMAGE`

@@ -4,7 +4,7 @@
 
 | ID | Risk | Probability | Impact | Mitigation |
 |----|------|-------------|--------|------------|
-| R-1 | Rules complexity leads to implementation errors | High | High | Test-driven development, systematic rules extraction |
+| R-1 | Rules complexity leads to implementation errors | High | High | Test-driven development, systematic rules extraction, and the `.github/skills/rule-integration/SKILL.md` checklist for command/payload/UI parity. |
 | R-2 | Godot Engine updates break compatibility | Low | Medium | Pin to Godot 4.5, test before upgrading |
 | R-3 | Scope creep (too many features too early) | Medium | High | Clear prioritization, iterative development |
 | R-4 | Performance issues with complex game states | Low | Medium | Profile early, optimize data structures |
@@ -33,6 +33,7 @@
 | TD-13 | All UI is procedurally built in GDScript (only 4 `.tscn` files) | Low | Workable but slower iteration; consider `.tscn` for new complex UI. |
 | TD-14 | ~~UI flow state lives outside `GameState`; reconnection cannot reconstruct in-flight modals~~ | ~~High~~ | **Resolved** — Phase I (closed 2026-05-02). `GameState.interaction_flow` is serializable and replicates over `command_result`; `UIProjector` projects modal authority from filtered state. Reconnection acceptance gate at [tests/integration/test_reconnection_mid_attack.gd](../../tests/integration/test_reconnection_mid_attack.gd). |
 | TD-16 | Network replay harness cannot yet use committed per-command or committed final-state network fixtures because real localhost packet timing can change valid command interleavings between runs. | Medium | Phase L0.5 uses the stable invariant available today: hot-seat committed trace/hash plus network host/client state-hash equality. Future deterministic transport/tick work can promote network to committed fixtures. |
+| TD-17 | `src/core/effects/rules/` is still flat after the first production rule. | Low | Adopt the source-first grouping in [src/core/effects/rules/README.md](../../src/core/effects/rules/README.md) once M8 or a later slice adds another rule and the folder becomes noisy. |
 
 ## 11.3 Remaining Network Work (Phase G4.7+)
 
@@ -42,6 +43,6 @@
 | G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
 | G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
 
-> **Last audit:** 2026-05-14 — Phase K complete; Phase L3 squadron-command modal projection implemented. Network replay gates on host/client state-hash equality rather than committed network fixtures.
+> **Last audit:** 2026-05-17 — Phase M7 Faulty Countermeasures rule migration completed with MT pass; rule-integration skill and source-first rule folder proposal added. Network replay gates on host/client state-hash equality rather than committed network fixtures.
 > Architecture compliance, static typing, and doc comment coverage all PASS in core/.
 > Phases A–I, J (J1–J11), and K complete. Phase L/M modal and replay hardening continues under [docs/refactoring_phase_lm_plan.md](../refactoring_phase_lm_plan.md).

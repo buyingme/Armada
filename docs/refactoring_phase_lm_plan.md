@@ -1,6 +1,6 @@
 # Refactoring Phases L & M — Unified Flow Authority and Rule Registry
 
-> **Status:** IN PROGRESS - 2026-05-17. Phase L is complete (L0-L7); M0 through M6 are complete; M7 is the next slice.
+> **Status:** IN PROGRESS - 2026-05-17. Phase L is complete (L0-L7); M0 through M7 are complete; M8 is the next slice.
 > **Predecessors:** Phase K is complete. The deferred hot-seat modal-lifecycle work from Phase K §3.1d is now Phase L's scope.
 > **Go-conditions (verified 2026-05-14):**
 >   - K12 `CommandRouterAdapter` committed (`e17ff05`).
@@ -387,7 +387,81 @@ Migration rule for M7-M12:
    spending immediately after deserialize + install, in hot-seat, network, and
    replay.
 
-### 3.5 How this collapses mode divergence
+### 3.5 M7 MT lesson: selectable rules need three aligned surfaces
+
+The Faulty Countermeasures manual-test bug exposed a structural trap in rule
+migration: protecting only the final mutation command is insufficient when the
+UI first submits a marker command or selection payload. The real defense flow
+is `commit_defense` (selected indices) followed by one or more
+`spend_defense_token` commands on the attacker peer. The first M7 draft
+validated only `spend_defense_token`, so an illegal exhausted token could still
+be selected and then scene code could apply local defense effects even if the
+final command was rejected.
+
+Rule integrations that expose player choices must now align three surfaces:
+
+- **Rule surface:** one rule file registers every command expression of the
+    illegal action, including marker commands (`commit_defense`) and mutation
+    commands (`spend_defense_token`).
+- **Payload surface:** core/application code publishes rule-derived
+    eligibility in `interaction_flow.payload` using JSON-safe fields such as
+    `blocked_defense_token_indices`.
+- **UI surface:** panels render those payload fields as disabled/available
+    choices and never re-implement card text locally.
+
+Command-submit call sites must also treat an empty result as rejection and stop
+scene-side effects immediately. This keeps `RuleRegistry` as the rule
+authority, `GameState.interaction_flow` as the UI-state carrier, and panels as
+renderers.
+
+### 3.6 Rule file organization proposal
+
+The RRG inventory shows future rules will span attack timing, defense tokens,
+commands, movement/overlap, obstacles, squadrons and keywords, status/ready
+costs, setup, objectives, upgrades, and special tokens. A flat
+`src/core/effects/rules/` folder will quickly become hard to scan.
+
+Use source-first grouping once the next migration makes the flat folder noisy:
+
+```text
+src/core/effects/rules/
+   README.md
+   core/
+      attack/
+      commands/
+      movement/
+      status/
+   damage_cards/
+      ship/
+      crew/
+   squadron_keywords/
+   ship_keywords/
+   upgrades/
+      commander/
+      officer/
+      weapons_team/
+      defensive_retrofit/
+      ion_cannons/
+      ordnance/
+      turbolasers/
+      support_team/
+      title/
+      other/
+   objectives/
+      assault/
+      defense/
+      navigation/
+   obstacles/
+   tokens/
+```
+
+Source-first grouping is intentionally user-facing: a contributor usually knows
+the card, keyword, objective, obstacle, or token they are looking for before
+they know its internal hook surface. Keep all hooks for one rule in one file,
+even when that rule attaches to multiple flows, so multi-hook cards such as
+Capacitor Failure remain discoverable as one behaviour.
+
+### 3.7 How this collapses mode divergence
 
 Hot-seat and network become *byte-identical* on the modal-lifecycle
 path:
@@ -708,7 +782,7 @@ within the same run.
 | **M4** | **COMPLETE 2026-05-16** - **Parity gate II.** `CommandProcessor.submit()` now consults `CommandApplicability.check_command(...)` before calling `cmd.validate()`. `GLOBAL` commands bypass the flow/phase pre-flight, `PHASE` commands check `GameState.current_phase`, and `FLOW_STEP` commands require both a declared `(flow, step)` pair and agreement with `FlowSpec.allowed_commands`. Rejections use structured reasons such as `command X not allowed in step Y` and occur before command-specific validation. Added [test_command_processor_applicability.gd](../tests/unit/test_command_processor_applicability.gd) coverage for FLOW_STEP, PHASE, GLOBAL, missing-declaration, cleared-flow activation/squadron surfaces, attack immediate effects, and debug-deal-damage follow-ups. Replay gate refined the M3 inventory: controller-prevalidated attack commands, activation starters, movement, repair, and activation-end commands remain `PHASE` until later slices publish precise flow rows for every producer. MT annotations added the no-target Attack auto-advance fix: projected `ATTACK_STEP` with no targets now submits `advance_activation_step("maneuver_step")` through [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd) instead of relying on a local modal refresh/reopen. Verification: focused M4 tests 43 / 163, activation-flow regression tests 56 / 105, full GUT 151 / 3 007 / 5 805 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches, `git diff --check` clean, and baseline traces passing hot-seat trace/state plus network peer equality. | medium | +60 / 0 | yes |
 | **M5** | **COMPLETE 2026-05-16** - Added [rule_registry.gd](../src/core/effects/rule_registry.gd), [flow_hook.gd](../src/core/effects/flow_hook.gd), and [rule_bootstrap.gd](../src/autoload/rule_bootstrap.gd). The registry is a static Phase M catalogue only: validators, modifiers, observers, blockers, and enablers can be declared and deterministically sorted, but the production bootstrap rule list is empty and no legacy `EffectRegistry` behaviour is replaced. `RuleBootstrap` runs before `CommandProcessor` and clears/replays registered rule scripts at startup; M5 intentionally invokes zero scripts. Tests cover empty hook queries for every FlowSpec pair, canonical `register_rule(...)` ids, deterministic ordering, and empty-bootstrap cleanup. Verification: focused M5 tests 14 / 116, full GUT 154 / 3 021 / 5 921 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches, and baseline traces passing hot-seat trace/state plus network peer equality. | low | +180 / 0 | no |
 | **M6** | **COMPLETE 2026-05-17** - `CommandProcessor.preflight()` now keeps the M4 applicability gate first, then runs `RuleRegistry.validators_for(flow, step, cmd.command_type)` in deterministic order before command-specific validation; first denial wins. `CommandProcessor` also owns the §3.3.1 observer FIFO: observers are collected before `command_executed`, drained after the triggering emit returns, rejected if they submit synchronously during collection, suppressed during replay, and suppressed on passive network mirrors. Network host/server paths use deferred submission so the triggering command is broadcast before observer follow-ups drain through the network-aware submitter. `AttackDiceResolver.apply_gather_hook()` now runs `RuleRegistry.modifiers_for(flow, step, "dice_pool")` after the legacy `EffectRegistry` `ATTACK_GATHER_DICE` hook, preserving existing behaviour with the empty production registry. Tests cover validator ordering, applicability-before-validator ordering, observer queue timing, replay/mirror suppression, synchronous observer-submit rejection, the rule-file guard, and dice-pool modifier stacking with the legacy registry. Verification: focused M6/M4/M5 regression set 6 scripts / 81 tests / 228 asserts, full GUT 155 / 3 031 / 5 947 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches, and baseline traces passing hot-seat trace/state plus network peer equality. | medium | +170 / 0 | no |
-| **M7** | Migrate **rule 1: Faulty Countermeasures** (defense-token spend validator). Single file, single VALIDATOR hook. Remove or bridge the current legacy effect path only after the new test proves identical behaviour after command-time registration and after save/load rebuild. Test: `tests/unit/test_rule_faulty_countermeasures.gd`. | low | +90 / −40 | yes |
+| **M7** | **COMPLETE 2026-05-17** - Migrated **rule 1: Faulty Countermeasures** into [faulty_countermeasures.gd](../src/core/effects/rules/faulty_countermeasures.gd), registered through [rule_bootstrap.gd](../src/autoload/rule_bootstrap.gd) as a single wildcard `VALIDATOR` hook for `ATTACK / ATTACK_DEFENSE_TOKENS` defense-token commands. The predicate reads active state from `ShipInstance.faceup_damage` and the selected/commanded token state, rejecting exhausted defense tokens for both `commit_defense` and `spend_defense_token` while letting invalid payloads fall through to canonical command validation. The legacy `DEFENSE_VALIDATE_TOKEN` `EffectRegistry` path remains as the UI-side bridge for `blocked_defense_token_indices` during Phase M. [test_rule_faulty_countermeasures.gd](../tests/unit/test_rule_faulty_countermeasures.gd) covers command-time registration, commit rejection, ready-token allowance, no-card allowance, other-ship isolation, and save/load plus `EffectFactory.rebuild_runtime_effects()` parity. MT found the marker-command/UI-affordance gap; the fix and the reusable workflow are documented in §3.5, [.github/skills/rule-integration/SKILL.md](../.github/skills/rule-integration/SKILL.md), and [src/core/effects/rules/README.md](../src/core/effects/rules/README.md). Verification: focused M7 regression set 5 scripts / 90 tests / 199 asserts with 0 failures, full GUT 156 / 3 040 / 5 982 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches, baseline traces passing hot-seat trace/state plus network peer equality, and user MT pass. | low | +120 / 0 | yes |
 | **M8** | Migrate **rule 2: Compartment Fire** (defense-token ready blocker in Status Phase). Demonstrates a `PHASE`-scope MODIFIER + multi-flow registration in one file. Include a load/rebuild assertion if the current implementation uses `EffectRegistry`. | low | +90 / −40 | yes |
 | **M9** | Migrate **rule 3: Damaged Munitions** (attack-pool dice removal modifier). Demonstrates an `ATTACK_ROLL` MODIFIER hook and validates that active faceup-card state, not a stale runtime hook, decides applicability. | low | +90 / −40 | yes |
 | **M10** | Migrate **rule 4: Point-Defense Failure** (squadron-attack-only modifier). Demonstrates a flow-conditional predicate and squadron keyword/effect bridge semantics. | low | +90 / −40 | yes |
@@ -716,7 +790,7 @@ within the same run.
 | **M12** | Migrate **rule 6: Capacitor Failure** (no shields -> no recover, no redirect). Demonstrates a multi-hook rule: VALIDATOR on `recover_shields`, BLOCKER on redirect step. Documents the "one rule, multiple hooks" pattern and the active-state source for each hook. | medium | +110 / −60 | yes |
 | **M13** | **Determinism guard:** add `tests/integration/test_rule_order_replay.gd`. Run a replay scenario that triggers >= 3 hooks in the same step, serialise hook ids plus generated follow-up command types in execution order, and assert `(priority DESC, rule_id ASC)` ordering. Hot-seat must be byte-identical across repeated local runs; real ENet host/client must match each other within the same run without adding committed network trace/hash fixtures. | low | +140 / 0 | no |
 | **M14** | **Coverage tool:** `scripts/dump_flow_coverage.gd` — given a `(flow, step)`, prints all FlowSpec metadata + every registered rule. Used as a debugging aid; runs in `--headless`. | low | +80 / 0 | no |
-| **M15** | Update `docs/implementation_plan.md` §1 baseline + §2 phase status + §4 open topics. Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) "Non-Negotiable Rules" with rule §12 "New rules go through `RuleRegistry`". Update `.skills/architecture_patterns.md` with a Layer-3 (rules) section. | trivial | +0 (docs) | no |
+| **M15** | Update `docs/implementation_plan.md` §1 baseline + §2 phase status + §4 open topics. Update [.github/copilot-instructions.md](../.github/copilot-instructions.md) "Non-Negotiable Rules" with rule §12 "New rules go through `RuleRegistry`". Update `.skills/architecture_patterns.md` with a Layer-3 (rules) section. If at least one additional rule has landed, migrate `src/core/effects/rules/` to the source-first folder grouping in §3.6. | trivial | +0 (docs) | no |
 
 M0.5 findings now reflected in [docs/game_flow.md](game_flow.md) §0.1 and
 carried forward into M1-M4 planning:

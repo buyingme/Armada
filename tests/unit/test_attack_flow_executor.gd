@@ -6,6 +6,7 @@ extends GutTest
 
 const AttackFlowExecutorScript := preload(
 		"res://src/core/combat/attack_flow_executor.gd")
+const FAULTY_COUNTERMEASURES_EFFECT_ID: String = "faulty_countermeasures"
 
 
 var _executor: RefCounted = null
@@ -242,6 +243,37 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 	var first_die: Dictionary = dice_results[0] as Dictionary
 	assert_eq(int(first_die.get("face", -1)), int(Constants.DiceFace.HIT),
 			"payload should carry the final die face")
+
+
+func test_build_defense_payload_includes_blocked_token_indices() -> void:
+	GameManager.start_new_game()
+	var gs: GameState = GameManager.current_game_state
+	var ps: PlayerState = gs.get_player_state(1)
+	var ship: ShipInstance = _make_ship_instance(1)
+	ship.defense_tokens = [
+		{"type": Constants.DefenseToken.BRACE,
+		"state": Constants.DefenseTokenState.EXHAUSTED},
+		{"type": Constants.DefenseToken.EVADE,
+		"state": Constants.DefenseTokenState.READY},
+	]
+	ps.ships.append(ship)
+	var card: DamageCard = DamageCard.create(
+			"Ship", "Faulty Countermeasures")
+	card.effect_id = FAULTY_COUNTERMEASURES_EFFECT_ID
+	card.timing = "persistent"
+	card.is_faceup = true
+	ship.add_faceup_damage(card)
+	var registry: EffectRegistry = EffectRegistry.new()
+	DamageCardEffectFactory.register_effect(card, ship, registry)
+	var state: AttackState = AttackState.new()
+	state.defender_zone = int(Constants.HullZone.FRONT)
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+
+	var payload: Dictionary = _executor.build_defense_payload(
+			state, ship, gs, resolver, registry)
+
+	assert_eq(payload.get("blocked_defense_token_indices", []) as Array, [0],
+			"payload should include effect-blocked defense token indices")
 
 
 func test_sort_defense_tokens_canonical_orders_by_rrg_sequence() -> void:

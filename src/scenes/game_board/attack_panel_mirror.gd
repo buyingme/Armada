@@ -345,10 +345,16 @@ func _apply_defense_section(payload: Dictionary,
 	var locked: Array[int] = []
 	for raw_idx: Variant in locked_raw:
 		locked.append(int(raw_idx))
+	var blocked_raw: Array = payload.get(
+			"blocked_defense_token_indices", []) as Array
+	var blocked: Array[int] = []
+	for raw_idx: Variant in blocked_raw:
+		blocked.append(int(raw_idx))
 	var modified_damage: int = int(payload.get("modified_damage", 0))
 	var defender_speed: int = int(payload.get("defender_speed", 1))
 	_panel.show_defense_section(
-			tokens, locked, modified_damage, defender_speed)
+			tokens, locked, modified_damage, defender_speed,
+			{"blocked_indices": blocked})
 	_last_modified_damage = modified_damage
 	if not _defense_signal_connected:
 		_panel.defense_tokens_done.connect(_on_defense_tokens_done)
@@ -646,7 +652,6 @@ func _on_defense_tokens_done() -> void:
 	if _panel == null:
 		return
 	var selected: Array[int] = _panel.get_defense_selected_indices()
-	_panel.disable_all_defense_buttons()
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
@@ -664,7 +669,11 @@ func _on_defense_tokens_done() -> void:
 		_log.warn("Defense commit: ship %d/%d not found." %
 				[def_player, def_index])
 		return
-	GameManager.submit_commit_defense(def_inst, selected)
+	var result: Dictionary = GameManager.submit_commit_defense(def_inst, selected)
+	if result.is_empty():
+		_log.warn("Defense commit command rejected — controls remain enabled.")
+		return
+	_panel.disable_all_defense_buttons()
 
 
 ## Hides the mirror panel.  Idempotent.

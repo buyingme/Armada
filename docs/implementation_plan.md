@@ -18,7 +18,7 @@
 | GUT tests | 3 046 |
 | GUT asserts | 6 007 |
 | Failing tests | 0 |
-| Last commit | `2b9a169` — M8 Compartment Fire rule migration |
+| Last commit | `ce149b7` — M8 Compartment Fire rule migration |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

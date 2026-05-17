@@ -6,9 +6,8 @@
 ##   2. Reset activation flags on all surviving units.
 ##   3. Clear spent-dial history on ship command stacks.
 ##
-## The Compartment Fire damage card may block token readying for
-## individual ships — this is resolved via the STATUS_READY_TOKENS
-## effect hook inside [method execute].
+## The Compartment Fire damage card may block token readying for individual
+## ships — this is resolved through RuleRegistry status-cleanup modifiers.
 ##
 ## Payload:  (none required — fully deterministic from GameState)
 ##
@@ -16,6 +15,9 @@
 ## "Compartment Fire" card text (blocks readying).
 class_name StatusPhaseCleanupCommand
 extends GameCommand
+
+
+const TARGET_DEFENSE_TOKEN_READYING: String = "defense_token_readying"
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -70,7 +72,6 @@ func _cleanup_ships(game_state: GameState, ps: PlayerState,
 		var si: ShipInstance = s as ShipInstance
 		if si.is_destroyed():
 			continue
-		# STATUS_READY_TOKENS hook — Compartment Fire may block readying.
 		if _is_token_ready_blocked(game_state, si):
 			result["ships_blocked"].append(si.data_key)
 		else:
@@ -97,14 +98,30 @@ func _cleanup_squadrons(ps: PlayerState,
 		result["activations_reset"] += 1
 
 
-## Returns true if the STATUS_READY_TOKENS hook cancels readying
-## for [param ship] (e.g. Compartment Fire).
+## Returns true if a status-cleanup rule cancels readying for [param ship].
 func _is_token_ready_blocked(game_state: GameState,
 		ship: ShipInstance) -> bool:
-	if not game_state.effect_registry:
-		return false
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
+	ctx = _apply_rule_ready_modifiers(ctx)
+	if ctx.cancelled:
+		return true
+	if not game_state.effect_registry:
+		return false
 	ctx = game_state.effect_registry.resolve_hook(
 			&"STATUS_READY_TOKENS", ctx)
 	return ctx.cancelled
+
+
+func _apply_rule_ready_modifiers(ctx: EffectContext) -> EffectContext:
+	var hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			int(Constants.InteractionFlow.STATUS_CLEANUP),
+			int(Constants.InteractionStep.STATUS_CLEANUP_STEP),
+			TARGET_DEFENSE_TOKEN_READYING)
+	for hook: FlowHook in hooks:
+		if not hook.callback.is_valid():
+			continue
+		var raw: Variant = hook.callback.call(ctx)
+		if raw is EffectContext:
+			ctx = raw as EffectContext
+	return ctx

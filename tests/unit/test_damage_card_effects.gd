@@ -550,18 +550,20 @@ func test_power_failure_rounds_down() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Compartment Fire — cannot ready defense tokens
+# Compartment Fire — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_compartment_fire_cancels_token_readying() -> void:
+func test_compartment_fire_no_longer_registers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("compartment_fire", ship)
-	var ctx: EffectContext = _make_context(&"STATUS_READY_TOKENS")
-	ctx.set_meta_value("ship", ship)
-	e.resolve(ctx)
-	assert_true(ctx.cancelled,
-			"Should cancel defense token readying")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("compartment_fire")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Compartment Fire should be handled by RuleRegistry after M8.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Compartment Fire should not add a legacy runtime hook.")
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +787,7 @@ func test_repair_validate_pipeline_capacitor_allows_shielded_zone() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_status_ready_pipeline_compartment_fire_blocks() -> void:
+func test_status_ready_pipeline_compartment_fire_has_no_legacy_bridge() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
@@ -796,8 +798,8 @@ func test_status_ready_pipeline_compartment_fire_blocks() -> void:
 	ctx.set_meta_value("ship", ship)
 	ctx = reg.resolve_hook(&"STATUS_READY_TOKENS", ctx)
 	# Assert
-	assert_true(ctx.cancelled,
-			"Token readying should be blocked by Compartment Fire")
+	assert_false(ctx.cancelled,
+			"Compartment Fire token readying is now blocked by RuleRegistry.")
 
 
 # ---------------------------------------------------------------------------

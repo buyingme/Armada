@@ -20,8 +20,20 @@ applies across all skill documents and exists to prevent unwanted code changes.
 | [testing_standards.md](testing_standards.md) | Testing conventions, naming, and coverage requirements |
 | [file_organization.md](file_organization.md) | File and folder structure rules |
 | [copilot_instructions.md](copilot_instructions.md) | Instructions for AI code generation |
+| [ui_styling.md](ui_styling.md) | Modal panel, overlay, button, label, and layout styling rules |
+| [refactoring_guidelines.md](refactoring_guidelines.md) | Function-size limits, extraction patterns, and refactoring targets |
 | [serialization_and_commands.md](serialization_and_commands.md) | Serialization contract, command system, normalised positions, replay safety |
+| [sound_and_music.md](sound_and_music.md) | Audio architecture and sound/music implementation guidance |
 
 ## Usage
 
 When working with AI assistants (GitHub Copilot, etc.), reference these documents to ensure generated code meets project standards. The AI should be instructed to follow these guidelines for every code generation task.
+
+The core mandatory set is defined in `.github/copilot-instructions.md` and
+currently includes all of the documents above except `sound_and_music.md`,
+which is a domain-specific guide to load when a task touches audio.
+
+These `.skills/*.md` files are project guidance documents referenced by
+instructions. Discoverable workspace Copilot skills live under
+`.github/skills/` as `SKILL.md` files, for example
+`.github/skills/rule-integration/SKILL.md`.

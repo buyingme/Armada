@@ -15,7 +15,7 @@ func after_each() -> void:
 	RuleRegistry.clear()
 
 
-func test_bootstrap_rules_registers_faulty_countermeasures() -> void:
+func test_bootstrap_rules_registers_production_rules() -> void:
 	RuleRegistry.register_validator(FlowHook.validator("stale_rule",
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
@@ -32,9 +32,13 @@ func test_bootstrap_rules_registers_faulty_countermeasures() -> void:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 			"commit_defense")
-	assert_eq(registered, 1,
-			"M7 bootstrap should invoke the production rule script.")
-	assert_eq(RuleRegistry.registered_hook_count(), 1,
+	var ready_hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			Constants.InteractionFlow.STATUS_CLEANUP,
+			Constants.InteractionStep.STATUS_CLEANUP_STEP,
+			StatusPhaseCleanupCommand.TARGET_DEFENSE_TOKEN_READYING)
+	assert_eq(registered, 2,
+			"Bootstrap should invoke both production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 2,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 1,
 			"Faulty Countermeasures should register one validator hook.")
@@ -42,3 +46,7 @@ func test_bootstrap_rules_registers_faulty_countermeasures() -> void:
 			"Validator should carry the Faulty Countermeasures rule id.")
 	assert_eq(commit_hooks.size(), 1,
 			"The same validator should cover defense commits.")
+	assert_eq(ready_hooks.size(), 1,
+			"Compartment Fire should register one token-readying modifier.")
+	assert_eq(ready_hooks[0].rule_id, CompartmentFire.RULE_ID,
+			"Modifier should carry the Compartment Fire rule id.")

@@ -60,8 +60,6 @@ func _get_non_attack_hooks() -> Array[StringName]:
 			return [&"BEFORE_REVEAL_DIAL"]
 		"power_failure":
 			return [&"CALC_ENGINEERING_VALUE"]
-		"compartment_fire":
-			return [&"STATUS_READY_TOKENS"]
 		"capacitor_failure":
 			return [&"DEFENSE_VALIDATE_TOKEN", &"REPAIR_VALIDATE_SHIELD"]
 		"life_support_failure":
@@ -103,8 +101,7 @@ func should_trigger(context: EffectContext) -> bool:
 func _should_trigger_non_attack(context: EffectContext) -> bool:
 	match effect_id:
 		"thrust_control_malfunction", "thruster_fissure", \
-				"crew_panic", "power_failure", "compartment_fire", \
-				"life_support_failure":
+				"crew_panic", "power_failure", "life_support_failure":
 			return context.get_meta_value("ship", null) == owner
 		"ruptured_engine":
 			return _trigger_ruptured_engine(context)
@@ -121,7 +118,7 @@ func resolve(context: EffectContext) -> void:
 			_resolve_coolant_discharge(context)
 		"depowered_armament", "disengaged_fire_control", \
 				"blinded_gunners", "faulty_countermeasures", \
-				"compartment_fire", "life_support_failure":
+				"life_support_failure":
 			context.cancelled = true
 		"damaged_munitions", "point_defense_failure":
 			_resolve_remove_one_die(context)

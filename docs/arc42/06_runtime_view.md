@@ -301,7 +301,7 @@ Repair command resolution
     ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Capacitor Failure
 
 Status phase (token readying)
-    ├─ resolve_hook(&"STATUS_READY_TOKENS", ctx)         ── Compartment Fire
+    ├─ RuleRegistry.modifiers_for("defense_token_readying") ── Compartment Fire
 
 Command token gain
     ├─ resolve_hook(&"ON_COMMAND_TOKEN_GAIN", ctx)       ── Life Support Failure

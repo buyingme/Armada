@@ -2,15 +2,17 @@
 
 `RuleRegistry` rule files declare static hook definitions for game rules. Active rule state must come from authoritative game state (`GameState`, ship/squadron instances, faceup damage cards, upgrades, objectives) or from a documented transient `EffectRegistry` bridge rebuilt from that state.
 
-Current Phase M files are still flat while the first rules are migrated:
+Phase M rule files now use source-first grouping so contributors can find a
+rule by the component printed on the table before they know its hook surface.
 
 | Rule | Source | Hooks | Notes |
 |---|---|---|---|
-| `faulty_countermeasures.gd` | Damage card | `VALIDATOR` on `ATTACK / ATTACK_DEFENSE_TOKENS` for `commit_defense` and `spend_defense_token` | UI receives `blocked_defense_token_indices` from the legacy `DEFENSE_VALIDATE_TOKEN` bridge until the defense-token resolver no longer needs it. |
+| `damage_cards/ship/faulty_countermeasures.gd` | Ship damage card | `VALIDATOR` on `ATTACK / ATTACK_DEFENSE_TOKENS` for `commit_defense` and `spend_defense_token` | UI receives `blocked_defense_token_indices` from the legacy `DEFENSE_VALIDATE_TOKEN` bridge until the defense-token resolver no longer needs it. |
+| `damage_cards/ship/compartment_fire.gd` | Ship damage card | `MODIFIER` on `STATUS_CLEANUP / STATUS_CLEANUP_STEP` for `defense_token_readying` | No legacy `EffectRegistry` bridge remains; status cleanup reads this rule from `RuleRegistry` and active state from `ShipInstance.faceup_damage`. |
 
-## Proposed Grouping
+## Grouping
 
-Adopt this grouping when the next rule move makes a flat folder hard to scan:
+Use this grouping for future rule files:
 
 ```text
 src/core/effects/rules/

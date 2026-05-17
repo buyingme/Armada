@@ -7,7 +7,8 @@ extends Node
 
 
 const RULE_SCRIPTS: Array[GDScript] = [
-	preload("res://src/core/effects/rules/faulty_countermeasures.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/compartment_fire.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd"),
 ]
 
 var _log: GameLogger = GameLogger.new("RuleBootstrap")

@@ -227,7 +227,7 @@ func _add_point_defense_failure(ship: ShipInstance) -> DamageCard:
 	var card: DamageCard = DamageCard.create("Ship", "Point-Defense Failure")
 	card.effect_id = PointDefenseFailure.EFFECT_ID
 	card.effect_text = "When attacking a squadron, before you roll your " \
-			+ "attack pool, remove 1 die of your choice."
+			+"attack pool, remove 1 die of your choice."
 	card.timing = "persistent"
 	card.is_faceup = true
 	ship.add_faceup_damage(card)

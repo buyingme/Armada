@@ -18,7 +18,7 @@
 | GUT tests | 3 079 |
 | GUT asserts | 6 131 |
 | Failing tests | 0 |
-| Last commit | `4d686d1` — M10 Point-Defense Failure rule migration |
+| Last commit | `c5c6c61` — M11 Crew Panic rule migration |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

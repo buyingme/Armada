@@ -1,8 +1,8 @@
 ## ShipActivationController
 ##
 ## Owns the ship-activation modal lifecycle, dial-drop entry points, the
-## Crew Panic [code]BEFORE_REVEAL_DIAL[/code] choice modal, the activation-
-## sequence button, and the projection-driven open/close + step-sync helpers.
+## Crew Panic pre-reveal choice modal, the activation-sequence button, and
+## the projection-driven open/close + step-sync helpers.
 ##
 ## Extracted from [GameBoard] in refactoring Phase K8a (modal lifecycle,
 ## dial-drop entry, Crew Panic) and K8b (activation step routing,
@@ -76,7 +76,7 @@ var _has_squadron_resources: Callable = Callable()
 ## (token: Variant) -> bool
 var _is_squadron_token_only: Callable = Callable()
 
-## (ship: ShipInstance, persistent_effect_id: String) -> void
+## (ship: ShipInstance, persistent_effect_id: String) -> Dictionary
 var _submit_persistent_damage: Callable = Callable()
 
 ## (result: Dictionary) -> bool
@@ -251,59 +251,71 @@ func on_dial_token_converted(ship: ShipInstance) -> void:
 			str(needs_discard)])
 
 
-## Checks if BEFORE_REVEAL_DIAL effects need to fire (Crew Panic).
-## Called from [DialDragController] via callable BEFORE the drag begins.
-## Returns true if a modal was shown (drag will start — or not — in the
-## callback).
+## Checks whether Crew Panic must interrupt a hidden-dial reveal.
+## Called by [ShipCardPanel] through a generic pre-reveal callback before
+## [method GameManager.submit_reveal_dial] runs.
 ## Rules Reference: "Crew Panic" card text — "Before you reveal a command
 ## dial, you must either suffer 1 damage or discard that dial.  If you
 ## discard it, do not reveal a dial this round."
-func check_crew_panic_before_drag(ship: ShipInstance) -> bool:
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
+func check_crew_panic_before_reveal(ship: ShipInstance) -> bool:
+	var choice_info: Dictionary = _crew_panic_choice_for_ship(ship)
+	if choice_info.is_empty():
 		return false
-	if ship == null:
-		return false
-	var effects: Array[GameEffect] = registry.get_effects_for_hook(
-			&"BEFORE_REVEAL_DIAL")
-	var has_crew_panic: bool = false
-	for eff: GameEffect in effects:
-		if eff is DamageCardEffect:
-			var dce: DamageCardEffect = eff as DamageCardEffect
-			if dce.effect_id == "crew_panic" and dce.owner == ship:
-				has_crew_panic = true
-				break
-	if not has_crew_panic:
-		return false
-	# Store ship independently — no drag is active yet.
 	_pending_crew_panic_ship = ship
 	_pending_crew_panic_ship_key = ship.data_key
-	var choice_info: Dictionary = {
-		"choice_type": "crew_panic",
-		"chooser": "owner",
-		"multi_select": false,
-		"max_selections": 1,
-		"card_title": "Crew Panic",
-		"effect_text": "Before you reveal a command dial, you must either "
-				+"suffer 1 damage or discard that dial. If you discard it, "
-				+"do not reveal a dial this round.",
-		"options": [
-			{"id": "discard_card", "label": "Discard command dial",
-					"available": true},
-			{"id": "suffer_damage", "label": "Suffer 1 facedown damage",
-					"available": true},
-		],
-	}
+	_open_crew_panic_choice(choice_info)
+	_log.info("Crew Panic — showing pre-reveal choice for %s." % ship.data_key)
+	return true
+
+
+func _crew_panic_choice_for_ship(ship: ShipInstance) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if ship == null or game_state == null:
+		return {}
+	var ship_index: int = game_state.find_ship_index(ship)
+	if ship_index < 0:
+		return {}
+	var intent: UIProjector.UIIntent = UIProjector.project(
+			game_state, _local_viewer())
+	var raw_payload: Variant = intent.affordances.get(
+			CrewPanic.AFFORDANCE_KEY, {})
+	if not raw_payload is Dictionary:
+		return {}
+	return _crew_panic_choice_from_payload(
+			raw_payload as Dictionary, ship.owner_player, ship_index)
+
+
+func _crew_panic_choice_from_payload(payload: Dictionary,
+		owner_player: int,
+		ship_index: int) -> Dictionary:
+	var ships: Array = payload.get("ships", [])
+	for ship_var: Variant in ships:
+		if not ship_var is Dictionary:
+			continue
+		var ship_choice: Dictionary = ship_var as Dictionary
+		if _matches_crew_panic_choice(ship_choice, owner_player, ship_index):
+			var info: Variant = ship_choice.get("choice_info", {})
+			if info is Dictionary:
+				var choice_info: Dictionary = info as Dictionary
+				return choice_info.duplicate(true)
+			return {}
+	return {}
+
+
+func _matches_crew_panic_choice(choice: Dictionary,
+		owner_player: int,
+		ship_index: int) -> bool:
+	return int(choice.get("owner_player", -1)) == owner_player \
+			and int(choice.get("ship_index", -1)) == ship_index
+
+
+func _open_crew_panic_choice(choice_info: Dictionary) -> void:
 	_ensure_crew_panic_modal()
 	if not _crew_panic_modal.choice_confirmed.is_connected(
 			_on_crew_panic_choice):
 		_crew_panic_modal.choice_confirmed.connect(
 				_on_crew_panic_choice, CONNECT_ONE_SHOT)
 	_crew_panic_modal.open(choice_info)
-	_log.info("Crew Panic — showing choice modal for %s." % ship.data_key)
-	return true
 
 
 ## Hides all Phase 5b UI elements (activation button, modal). Called from
@@ -841,34 +853,35 @@ func _on_activation_modal_closed() -> void:
 # ---------------------------------------------------------------------------
 
 ## Finishes activation when Crew Panic discarded the dial.
-## The revealed dial is spent (moved to the discarded pile) and the ship
-## activates without any command available this round.  No drag is active
-## — the ship is passed directly from the callback.
+## The hidden dial is discarded and the ship activates without any command
+## available this round. No reveal occurs.
 ## Rules Reference: "Crew Panic" — "discard that dial … do not reveal a
 ## dial this round."
 func _finish_crew_panic_dial_discarded(
 		ship: ShipInstance, ship_key: String) -> void:
-	# Spend the already-revealed dial so it moves to the discarded pile.
-	if ship and ship.command_dial_stack:
-		var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
-		if not revealed.is_empty():
-			GameManager.submit_spend_dial(ship, "spend")
-		else:
-			GameManager.submit_spend_dial(ship, "discard")
-	GameManager.force_activate_ship(ship)
+	if not _discard_crew_panic_dial(ship):
+		_log.error("Crew Panic discard selected but no dial was available.")
+		return
 	var act_token: ShipToken = _find_ship_token_for_instance.call(ship) as ShipToken
-	_activation_ctx.set_active(act_token, ShipActivationState.create(ship))
-	if _panel_mgr.activation_sidebar and ship:
-		_panel_mgr.activation_sidebar.highlight_active(ship)
-	show_activation_sequence_button()
+	_prepare_activation_context(act_token, ship)
+	var result: Dictionary = GameManager.activate_ship_without_command(
+			ship, CrewPanic.EFFECT_ID)
+	if result.is_empty():
+		_clear_activation_context_after_rejection()
+		return
+	if bool(_is_pending_remote_result.call(result)):
+		_log.info("Crew Panic activation submitted for '%s'." % ship_key)
+		return
+	if _activation_ctx.ship_activation_state != null:
+		_activation_ctx.ship_activation_state.refresh_navigate_availability()
 	_log.info("Ship activated (dial discarded by Crew Panic): '%s'."
 			% ship_key)
 
 
 ## Callback when the player makes their Crew Panic choice.
 ## No drag is active — the ship is stored in [member _pending_crew_panic_ship].
-## On "discard dial": spend the revealed dial, activate ship without command.
-## On "suffer damage": resolve the hook, then start the dial drag.
+## On "discard dial": discard the hidden dial and activate without command.
+## On "suffer damage": resolve the damage, then reveal the dial normally.
 func _on_crew_panic_choice(selection: Dictionary) -> void:
 	var ship: ShipInstance = _pending_crew_panic_ship
 	var ship_key: String = _pending_crew_panic_ship_key
@@ -877,29 +890,44 @@ func _on_crew_panic_choice(selection: Dictionary) -> void:
 	if ship == null:
 		_log.error("Crew Panic choice callback but no pending ship!")
 		return
-	var chose_discard: bool = str(selection.get("id", "")) == "discard_card"
-	# Resolve the BEFORE_REVEAL_DIAL hook with the player's choice.
-	var dial_discarded: bool = false
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry:
-		var ctx: EffectContext = EffectContext.new()
-		ctx.set_meta_value("ship", ship)
-		ctx.set_meta_value("damage_deck", _damage_deck)
-		ctx.set_meta_value("dial_discarded", chose_discard)
-		ctx.set_meta_value("effect_registry", registry)
-		registry.resolve_hook(&"BEFORE_REVEAL_DIAL", ctx)
-		dial_discarded = ctx.get_meta_value(
-				"crew_panic_dial_discarded", false) as bool
-		if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-			_submit_persistent_damage.call(ship,
-					str(ctx.get_meta_value("persistent_effect_id", "")))
-	if dial_discarded:
-		_finish_crew_panic_dial_discarded(ship, ship_key)
-	else:
-		# Player chose to suffer damage — resume the normal drag flow.
-		_dial_drag_controller.start_dial_drag(ship)
+	match str(selection.get("id", "")):
+		CrewPanic.OPTION_DISCARD_DIAL:
+			_finish_crew_panic_dial_discarded(ship, ship_key)
+		CrewPanic.OPTION_SUFFER_DAMAGE:
+			_resolve_crew_panic_damage_then_reveal(ship, ship_key)
+		_:
+			_log.warn("Unknown Crew Panic choice for '%s'." % ship_key)
+
+
+func _discard_crew_panic_dial(ship: ShipInstance) -> bool:
+	if ship == null or ship.command_dial_stack == null:
+		return false
+	if not ship.command_dial_stack.get_revealed_dial().is_empty():
+		GameManager.submit_spend_dial(ship, "spend")
+		return true
+	if ship.command_dial_stack.get_hidden_count() > 0:
+		GameManager.submit_spend_dial(ship, "discard")
+		return true
+	return false
+
+
+func _resolve_crew_panic_damage_then_reveal(
+		ship: ShipInstance,
+		ship_key: String) -> void:
+	var result: Dictionary = _submit_crew_panic_damage(ship)
+	if bool(result.get("destroyed", false)):
+		_log.info("Crew Panic destroyed '%s' before reveal." % ship_key)
+		return
+	GameManager.submit_reveal_dial(ship)
+	_log.info("Crew Panic damage resolved; revealed dial for '%s'." % ship_key)
+
+
+func _submit_crew_panic_damage(ship: ShipInstance) -> Dictionary:
+	var raw_result: Variant = _submit_persistent_damage.call(
+			ship, CrewPanic.EFFECT_ID)
+	if raw_result is Dictionary:
+		return raw_result as Dictionary
+	return {}
 
 
 ## Lazily creates the Crew Panic choice modal.

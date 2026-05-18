@@ -1,7 +1,8 @@
 ## Test: DamageCardEffect + DamageCardEffectFactory
 ##
-## Unit tests for all 16 persistent damage card effects and the factory
-## that registers/unregisters them in the EffectRegistry.
+## Unit tests for legacy persistent damage card effects and the factory
+## that registers/unregisters them in the EffectRegistry. Migrated
+## RuleRegistry cards are asserted absent from the legacy bridge.
 ##
 ## Rules Reference: RRG "Damage Cards", p.4; individual card texts.
 extends GutTest
@@ -493,38 +494,24 @@ func test_thruster_fissure_triggers_on_speed_change() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Crew Panic — suffer 1 facedown OR discard this card
+# Crew Panic — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_crew_panic_suffer_damage() -> void:
+func test_crew_panic_no_longer_declares_before_reveal_hook() -> void:
 	var ship: ShipInstance = _make_ship()
-	var deck: DamageDeck = _make_deck()
-	var card: DamageCard = _make_card("crew_panic")
-	var e: DamageCardEffect = _make_effect("crew_panic", ship, card)
-	var ctx: EffectContext = _make_context(&"BEFORE_REVEAL_DIAL")
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", deck)
-	ctx.set_meta_value("dial_discarded", false)
-	e.resolve(ctx)
-	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
-			"Should flag extra_damage_dealt for command submission")
+	var effect: DamageCardEffect = _make_effect("crew_panic", ship)
+	assert_eq(effect.get_hooks().size(), 0,
+			"Crew Panic should not expose legacy BEFORE_REVEAL_DIAL hooks.")
 
 
-func test_crew_panic_discard_dial_sets_flag() -> void:
+func test_crew_panic_no_longer_triggers_legacy_context() -> void:
 	var ship: ShipInstance = _make_ship()
-	var card: DamageCard = _make_card("crew_panic")
-	ship.add_faceup_damage(card)
-	var e: DamageCardEffect = _make_effect("crew_panic", ship, card)
+	var effect: DamageCardEffect = _make_effect("crew_panic", ship)
 	var ctx: EffectContext = _make_context(&"BEFORE_REVEAL_DIAL")
 	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", _make_deck())
-	ctx.set_meta_value("dial_discarded", true)
-	e.resolve(ctx)
-	assert_true(ctx.get_meta_value("crew_panic_dial_discarded", false) as bool,
-			"Should set crew_panic_dial_discarded flag")
-	assert_true(ship.faceup_damage.has(card),
-			"Crew Panic card should remain faceup (persistent)")
+	assert_false(effect.should_trigger(ctx),
+			"Crew Panic should be inactive in legacy EffectRegistry contexts.")
 
 
 # ---------------------------------------------------------------------------
@@ -644,57 +631,26 @@ func test_faulty_countermeasures_pipeline_ignores_other_ship() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Integration: Crew Panic unregister on discard via EffectRegistry
+# Integration: Crew Panic migrated out of EffectRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_crew_panic_discard_keeps_registration() -> void:
-	# Arrange — register Crew Panic via the factory.
+func test_crew_panic_no_longer_registers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var card: DamageCard = _make_card("crew_panic")
 	ship.add_faceup_damage(card)
 	var reg: EffectRegistry = EffectRegistry.new()
 	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
 			card, ship, reg)
-	assert_not_null(effect, "Effect should be created")
-	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect registered")
-	# Act — resolve BEFORE_REVEAL_DIAL with dial_discarded = true.
-	# Crew Panic is persistent: the card stays faceup and registered.
-	var ctx: EffectContext = EffectContext.new()
-	ctx.hook = &"BEFORE_REVEAL_DIAL"
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", _make_deck())
-	ctx.set_meta_value("dial_discarded", true)
-	ctx.set_meta_value("effect_registry", reg)
-	effect.resolve(ctx)
-	# Assert — card still on ship AND effect still registered.
-	assert_true(ship.faceup_damage.has(card),
-			"Crew Panic card should remain faceup (persistent)")
-	assert_eq(reg.get_effect_count(), 1,
-			"Effect should remain registered (Crew Panic is permanent)")
-	assert_true(ctx.get_meta_value("crew_panic_dial_discarded", false) as bool,
-			"Should set crew_panic_dial_discarded flag")
+	assert_null(effect, "Crew Panic should not create a legacy effect.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Crew Panic should not be present in the legacy registry.")
 
 
-func test_crew_panic_suffer_keeps_registration() -> void:
-	# Arrange — register Crew Panic.
-	var ship: ShipInstance = _make_ship()
+func test_crew_panic_factory_is_not_persistent() -> void:
 	var card: DamageCard = _make_card("crew_panic")
-	ship.add_faceup_damage(card)
-	var reg: EffectRegistry = EffectRegistry.new()
-	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
-			card, ship, reg)
-	# Act — resolve with dial_discarded = false (suffer damage).
-	var ctx: EffectContext = EffectContext.new()
-	ctx.hook = &"BEFORE_REVEAL_DIAL"
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", _make_deck())
-	ctx.set_meta_value("dial_discarded", false)
-	ctx.set_meta_value("effect_registry", reg)
-	effect.resolve(ctx)
-	# Assert — effect should remain registered.
-	assert_eq(reg.get_effect_count(), 1,
-			"Effect should remain registered when choosing to suffer damage")
+	assert_false(DamageCardEffectFactory.is_persistent(card),
+			"Crew Panic should be registered by RuleRegistry, not EffectRegistry.")
 
 
 # ---------------------------------------------------------------------------

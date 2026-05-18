@@ -40,12 +40,16 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			"dice_pool")
+	var crew_hooks: Array[FlowHook] = RuleRegistry.enablers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			CrewPanic.TARGET_COMMAND_DIAL_REVEAL)
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 4,
-			"Bootstrap should invoke all four production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 4,
+	assert_eq(registered, 5,
+			"Bootstrap should invoke all five production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 5,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 1,
 			"Faulty Countermeasures should register one validator hook.")
@@ -63,3 +67,7 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Dice-pool modifiers should include Damaged Munitions.")
 	assert_true(dice_rule_ids.has(PointDefenseFailure.RULE_ID),
 			"Dice-pool modifiers should include Point-Defense Failure.")
+	assert_eq(crew_hooks.size(), 1,
+			"Crew Panic should register one pre-reveal enabler.")
+	assert_eq(crew_hooks[0].rule_id, CrewPanic.RULE_ID,
+			"Enabler should carry the Crew Panic rule id.")

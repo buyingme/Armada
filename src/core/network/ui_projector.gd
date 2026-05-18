@@ -62,7 +62,7 @@ class UIIntent extends RefCounted:
 
 	## Optional projected UI affordances that are not themselves game-state
 	## mutations, such as a local button that re-opens a common modal.
-	## Values are booleans keyed by stable snake_case names.
+	## Values are booleans or JSON-safe payloads keyed by stable snake_case names.
 	var affordances: Dictionary = {}
 
 	## Which player's board/card perspective this viewer should see.
@@ -112,7 +112,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	intent.modal_kind = _modal_kind_for(spec)
 	intent.payload = flow.payload.duplicate(true) if flow.payload != null \
 			else {}
-	intent.affordances = _affordances_for(flow)
+	intent.affordances = _affordances_for(state, flow, viewer_player)
 	return intent
 
 
@@ -236,8 +236,11 @@ static func _controller_role_for(spec: Dictionary) -> Constants.ControllerRole:
 
 
 ## Computes non-mutating UI affordances from the current authoritative flow.
-static func _affordances_for(flow: InteractionFlow) -> Dictionary:
-	var affordances: Dictionary = {}
+static func _affordances_for(state: GameState,
+		flow: InteractionFlow,
+		viewer_player: int) -> Dictionary:
+	var affordances: Dictionary = _rule_affordances_for(
+			state, flow, viewer_player)
 	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
 		return affordances
 	if flow.step_id == Constants.InteractionStep.NONE \
@@ -245,3 +248,26 @@ static func _affordances_for(flow: InteractionFlow) -> Dictionary:
 		return affordances
 	affordances["activation_sequence_button"] = true
 	return affordances
+
+
+static func _rule_affordances_for(state: GameState,
+		flow: InteractionFlow,
+		viewer_player: int) -> Dictionary:
+	var affordances: Dictionary = {}
+	for hook: FlowHook in RuleRegistry.enablers_for_step(
+			int(flow.flow_type), int(flow.step_id)):
+		if not hook.callback.is_valid():
+			continue
+		var raw_payload: Variant = hook.callback.call(
+				state, flow, viewer_player)
+		if raw_payload is Dictionary:
+			_merge_affordance_payload(affordances, raw_payload as Dictionary)
+	return affordances
+
+
+static func _merge_affordance_payload(
+		affordances: Dictionary,
+		payload: Dictionary) -> void:
+	for key_var: Variant in payload.keys():
+		var key: String = str(key_var)
+		affordances[key] = payload[key_var]

@@ -212,6 +212,26 @@ func test_activate_ship_execute_reveals_dial() -> void:
 			"Ship should have a revealed dial after activation.")
 
 
+func test_activate_ship_skip_reveal_opens_activation_without_command() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_ship(0)
+	var cmd := ActivateShipCommand.new(0, {
+		"ship_index": idx,
+		ActivateShipCommand.PAYLOAD_SKIP_REVEAL: true,
+		ActivateShipCommand.PAYLOAD_REASON: CrewPanic.EFFECT_ID,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Skip-reveal activation should allow an empty dial stack.")
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(result.get("command", 0), -1,
+			"Skip-reveal activation should not expose a command.")
+	assert_true(result.get("activation_without_command", false) as bool,
+			"Result should identify the no-command activation path.")
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			"Skip-reveal activation should still open activation flow.")
+
+
 func test_activate_ship_serialize_roundtrip() -> void:
 	var cmd := ActivateShipCommand.new(0, {"ship_index": 1})
 	cmd.sequence = 3

@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-17 (Phase M10 Point-Defense Failure rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-18 (Phase M11 Crew Panic rule migration automated gates pass; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 159 |
-| GUT tests | 3 071 |
-| GUT asserts | 6 110 |
+| GUT test scripts | 160 |
+| GUT tests | 3 079 |
+| GUT asserts | 6 131 |
 | Failing tests | 0 |
-| Last commit | `9a2891e` — M9 Damaged Munitions choice |
+| Last commit | `4d686d1` — M10 Point-Defense Failure rule migration |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,10 +34,10 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-17 M10 full GUT summary is green
-(159 / 3 071 / 6 110, 0 failures). Godot still reports known shutdown RID leak
+Verification note: the 2026-05-18 M11 full GUT summary is green
+(160 / 3 079 / 6 131, 0 failures). Godot still reports known shutdown RID leak
 warnings in the runner output; no parse errors or GUT failures were reported.
-M10 automated gates pass; user MT pass confirmed 2026-05-17.
+M11 automated gates pass; user MT pass confirmed 2026-05-18.
 
 ---
 
@@ -114,7 +114,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, and M10 are complete; M11 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, and M11 are complete; M12 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -363,6 +363,27 @@ regression gate is complete and remains the required L/M automated gate:
   branches, `git diff --check` clean, and baseline traces passing hot-seat
   trace/state plus network peer state equality, and user MT pass confirmed
   2026-05-17.
+- M11 result: [crew_panic.gd](../src/core/effects/rules/damage_cards/ship/crew_panic.gd)
+  registers the fifth production [RuleRegistry](../src/core/effects/rule_registry.gd)
+  hook: an `ENABLER` for `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` target
+  `command_dial_reveal`. The predicate reads the active player's
+  `faceup_damage` and hidden dial state, then projects JSON-safe
+  `crew_panic_choices` through [UIProjector](../src/core/network/ui_projector.gd).
+  [ShipCardPanel](../src/ui/ship/ship_card_panel.gd) now calls a generic
+  pre-reveal handler before `reveal_dial`; [ShipActivationController](../src/scenes/game_board/ship_activation_controller.gd)
+  consumes the projected affordance and opens the choice before the first
+  reveal. Suffer-damage submits `persistent_effect_damage` and then reveals;
+  discard submits `spend_dial(mode=discard)` and `activate_ship(skip_reveal=true)`
+  so the activation still flows through commands. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers Crew Panic in the transient `EffectRegistry`.
+  [test_rule_crew_panic.gd](../tests/unit/test_rule_crew_panic.gd) covers
+  enabler registration, choice metadata, active-player/hidden-dial gating,
+  passive viewer exclusion, and save/load plus `EffectFactory.rebuild_runtime_effects()`
+  with zero legacy bridge effects. Automated gates: unit suite 151 scripts /
+  2 947 tests / 5 857 asserts with 0 failures, full GUT 160 / 3 079 / 6 131
+  with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
+  baseline traces passing hot-seat trace/state plus network peer state equality.
+  User MT pass confirmed 2026-05-18.
 
 ---
 

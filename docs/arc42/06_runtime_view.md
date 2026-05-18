@@ -296,7 +296,7 @@ Navigate command / speed change
 Command & Status Hooks
 ──────────────────────
 Ship activation (before dial reveal)
-    ├─ resolve_hook(&"BEFORE_REVEAL_DIAL", ctx)          ── Crew Panic
+    ├─ UIProjector.affordances via RuleRegistry ENABLER  ── Crew Panic pre-reveal choice
 
 Repair command resolution
     ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)       ── Power Failure

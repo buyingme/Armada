@@ -19,7 +19,7 @@ extends GameEffect
 var effect_id: String = ""
 
 ## Reference to the DamageCard this effect is attached to.
-## Used by Crew Panic (player may choose to discard the card itself).
+## Preserved for legacy persistent effects that need card identity.
 var damage_card: DamageCard = null
 
 
@@ -55,8 +55,6 @@ func _get_non_attack_hooks() -> Array[StringName]:
 			return [&"AFTER_MANEUVER_EXECUTE"]
 		"thruster_fissure":
 			return [&"ON_SPEED_CHANGE"]
-		"crew_panic":
-			return [&"BEFORE_REVEAL_DIAL"]
 		"power_failure":
 			return [&"CALC_ENGINEERING_VALUE"]
 		"capacitor_failure":
@@ -95,7 +93,7 @@ func should_trigger(context: EffectContext) -> bool:
 func _should_trigger_non_attack(context: EffectContext) -> bool:
 	match effect_id:
 		"thrust_control_malfunction", "thruster_fissure", \
-				"crew_panic", "power_failure", "life_support_failure":
+				"power_failure", "life_support_failure":
 			return context.get_meta_value("ship", null) == owner
 		"ruptured_engine":
 			return _trigger_ruptured_engine(context)
@@ -130,9 +128,6 @@ func _resolve_non_attack(context: EffectContext) -> void:
 		"ruptured_engine", "damaged_controls", "thruster_fissure":
 			context.set_meta_value("persistent_effect_id", effect_id)
 			_resolve_suffer_facedown(context)
-		"crew_panic":
-			context.set_meta_value("persistent_effect_id", effect_id)
-			_resolve_crew_panic(context)
 		"power_failure":
 			_resolve_power_failure(context)
 
@@ -257,7 +252,7 @@ func _resolve_thrust_control(context: EffectContext) -> void:
 ## Flags that 1 facedown damage card should be dealt to the ship.
 ## The actual draw + add_facedown_damage is performed by the caller via
 ## [PersistentEffectDamageCommand] so the mutation is replay-safe.
-## Used by Ruptured Engine, Damaged Controls, Thruster Fissure, Crew Panic.
+## Used by Ruptured Engine, Damaged Controls, and Thruster Fissure.
 func _resolve_suffer_facedown(context: EffectContext) -> void:
 	var ship: Variant = context.get_meta_value("ship", null)
 	var deck: Variant = context.get_meta_value("damage_deck", null)
@@ -266,27 +261,6 @@ func _resolve_suffer_facedown(context: EffectContext) -> void:
 	if not ship is ShipInstance or not deck is DamageDeck:
 		return
 	context.set_meta_value("extra_damage_dealt", true)
-
-
-## Crew Panic: suffer 1 facedown damage OR discard the top command dial.
-## The player's choice is stored in metadata.dial_discarded.
-## Crew Panic is persistent — the card stays faceup and triggers every
-## activation until repaired.
-## Rules Reference: "Crew Panic" card text — "Before you reveal a command
-## dial, you must either suffer 1 damage or discard that dial.  If you
-## discard it, do not reveal a dial this round."
-func _resolve_crew_panic(context: EffectContext) -> void:
-	var discard_dial: bool = context.get_meta_value(
-			"dial_discarded", false) as bool
-	if discard_dial:
-		# The player chose to discard the top command dial.
-		# Set a flag so the game board knows to spend/discard the dial
-		# and skip the normal dial command for this activation.
-		context.set_meta_value("crew_panic_dial_discarded", true)
-	else:
-		# Suffer 1 facedown damage card.
-		_resolve_suffer_facedown(context)
-
 
 ## Power Failure: halve engineering value (rounded down), stackable.
 func _resolve_power_failure(context: EffectContext) -> void:

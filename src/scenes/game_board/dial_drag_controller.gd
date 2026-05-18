@@ -41,11 +41,6 @@ var _find_ship_token_at_fn: Callable
 ## position to the ShipInstance whose card-panel entry contains it, or null.
 var _find_card_panel_hit_fn: Callable
 
-## Callable(ship: ShipInstance) -> bool — returns true when the Crew-Panic
-## "BEFORE_REVEAL_DIAL" hook intercepts the drag (modal shown; the drag
-## will start — or not — from the modal callback).
-var _check_crew_panic_fn: Callable
-
 ## The TurnManagementLayer CanvasLayer that hosts the floating preview.
 var _tm_layer: CanvasLayer = null
 
@@ -85,17 +80,14 @@ const CMD_DRAG_ICON_FILES: Dictionary = {
 ## controller is added to the scene tree.
 ## [param find_ship_token_at] — Callable(Vector2) -> ShipToken
 ## [param find_card_panel_hit] — Callable(Vector2) -> ShipInstance
-## [param check_crew_panic] — Callable(ShipInstance) -> bool
 ## [param tm_layer] — TurnManagementLayer CanvasLayer
 func initialize(
 		find_ship_token_at: Callable,
 		find_card_panel_hit: Callable,
-		check_crew_panic: Callable,
 		tm_layer: CanvasLayer,
 ) -> void:
 	_find_ship_token_at_fn = find_ship_token_at
 	_find_card_panel_hit_fn = find_card_panel_hit
-	_check_crew_panic_fn = check_crew_panic
 	_tm_layer = tm_layer
 	EventBus.dial_drag_started.connect(_on_dial_drag_started)
 
@@ -130,8 +122,6 @@ func is_drag_active() -> bool:
 
 
 ## Starts the command-dial drag for [param ship].
-## Public so that the Crew-Panic callback in GameBoard can resume the drag
-## after the modal is dismissed.
 func start_dial_drag(ship: ShipInstance) -> void:
 	_drag_active = true
 	_drag_ship_instance = ship
@@ -154,7 +144,6 @@ func start_dial_drag(ship: ShipInstance) -> void:
 ## Called when the player clicks on an already-revealed command dial in the
 ## card panel (second click of the two-step flow).  The dial was revealed by
 ## the first click in ShipCardPanel._handle_dial_stack_click().
-## If Crew Panic is active, the modal is shown BEFORE the drag starts.
 ## Requirements: UI-024, UI-027.
 func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 	if not ship_ref is ShipInstance:
@@ -164,10 +153,6 @@ func _on_dial_drag_started(ship_ref: RefCounted) -> void:
 		_log.info("dial_drag_started ignored — drag already active.")
 		return
 	var ship: ShipInstance = ship_ref as ShipInstance
-	# BEFORE_REVEAL_DIAL hook — Crew Panic must fire before the drag.
-	# Rules Reference: "Crew Panic" — "Before you reveal a command dial …"
-	if _check_crew_panic_fn.call(ship):
-		return # Modal shown; drag will start (or not) in the callback.
 	start_dial_drag(ship)
 
 

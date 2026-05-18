@@ -5,6 +5,8 @@
 ##
 ## Payload:
 ##   "ship_index" — index of the ship in the player's fleet array.
+##   "skip_reveal" — optional, true when a rule discarded the dial first.
+##   "reason" — optional rule/effect id explaining skip_reveal.
 ##
 ## Rules Reference: "Ship Phase", SP-010 — reveal top facedown dial.
 class_name ActivateShipCommand
@@ -12,6 +14,8 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const PAYLOAD_SKIP_REVEAL: String = "skip_reveal"
+const PAYLOAD_REASON: String = "reason"
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -39,6 +43,8 @@ func validate(game_state: GameState) -> String:
 		return "Ship not found."
 	if ship.activated_this_round:
 		return "Ship already activated this round."
+	if _skip_reveal_requested():
+		return ""
 	if ship.command_dial_stack == null:
 		return "Ship has no dial stack."
 	if ship.command_dial_stack.get_hidden_count() == 0 \
@@ -54,12 +60,28 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
+	if _skip_reveal_requested():
+		_open_activation_flow(game_state)
+		return {"command": -1,
+				"ship_index": payload.get("ship_index", -1),
+				"activation_without_command": true,
+				"reason": str(payload.get(PAYLOAD_REASON, ""))}
 	# Use already-revealed dial if present (two-click activation flow).
 	var dial: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
 		return {"command": - 1}
+	_open_activation_flow(game_state)
+	return {"command": int(dial.get("command", -1)),
+			"ship_index": payload.get("ship_index", -1)}
+
+
+func _skip_reveal_requested() -> bool:
+	return bool(payload.get(PAYLOAD_SKIP_REVEAL, false))
+
+
+func _open_activation_flow(game_state: GameState) -> void:
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
@@ -67,5 +89,3 @@ func execute(game_state: GameState) -> Dictionary:
 			{"active_player": player_index},
 			Constants.Visibility.ALL,
 			{"ship_index": payload.get("ship_index", -1)})
-	return {"command": int(dial.get("command", -1)),
-			"ship_index": payload.get("ship_index", -1)}

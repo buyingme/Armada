@@ -208,6 +208,14 @@ func add_ship_to_card_panel(instance: ShipInstance) -> void:
 			imperial_card_panel.add_ship_entry(instance)
 
 
+## Sets the command-dial pre-reveal handler on both ship card panels.
+func set_pre_reveal_dial_handler(handler: Callable) -> void:
+	if rebel_card_panel != null:
+		rebel_card_panel.set_pre_reveal_dial_handler(handler)
+	if imperial_card_panel != null:
+		imperial_card_panel.set_pre_reveal_dial_handler(handler)
+
+
 ## Creates and displays the VictoryScreen overlay.
 ## Requirements: WN-001–004.
 func show_game_end(details: Dictionary) -> void:

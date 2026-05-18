@@ -485,12 +485,14 @@ are passed via `EffectContext.metadata`.
 
 | # | Hook Name | Call Site | Purpose | Cards Using It |
 |---|-----------|----------|---------|----------------|
-| 9 | `BEFORE_REVEAL_DIAL` | Start of ship activation, before dial reveal | Pre-reveal penalties | Crew Panic (suffer 1 dmg or discard dial) |
+| 9 | `command_dial_reveal` RuleRegistry enabler | `UIProjector.affordances` during `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` | Pre-reveal choice affordance | Crew Panic (suffer 1 dmg or discard dial) |
 | 10 | `CALC_ENGINEERING_VALUE` | RepairResolver.get_engineering_points() | Modify engineering value | Power Failure (halve, rounded down; stackable) |
 | 11 | `defense_token_readying` RuleRegistry modifier | StatusPhaseCleanupCommand ship cleanup | Block token readying | Compartment Fire (cannot ready defense tokens) |
 
 **Context fields:**
-- Hook 9: `metadata.dial_discarded` (bool, set if player chooses to discard).
+- Hook 9: `UIIntent.affordances.crew_panic_choices` contains JSON-safe
+  `owner_player`, `ship_index`, and modal `choice_info`; active state comes
+  from `ShipInstance.faceup_damage`.
 - Hook 10: `metadata.engineering_value` (int, mutated by each Power Failure).
 - Hook 11: `metadata.ship` (ShipInstance). Sets `cancelled` to block token readying for this ship.
 
@@ -512,8 +514,8 @@ Damage cards fall into two categories:
 | Timing | Behaviour | Hook Needed? | Cards |
 |--------|-----------|-------------|-------|
 | **Immediate** | Resolved inline when dealt faceup, then flipped facedown | No hook — resolved by `DamageDeck`/`AttackExecutor` at deal time | Structural Damage (×8), Projector Misaligned (×2), Shield Failure (×2), Comm Noise (×2), Injured Crew (×4) |
-| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more hooks above | Blinded Gunners, Capacitor Failure, Coolant Discharge, Crew Panic, Damaged Controls, Depowered Armament, Disengaged FC, Faulty Countermeasures, Power Failure, Ruptured Engine, Targeter Disruption, Thrust Control Malfunction, Thruster Fissure |
-| **RuleRegistry-migrated persistent** | Static rule hook reads active `faceup_damage` state instead of registering a legacy runtime effect | No legacy bridge after migration unless noted | Faulty Countermeasures (legacy UI bridge remains), Compartment Fire, Damaged Munitions, Point-Defense Failure |
+| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more hooks above | Blinded Gunners, Capacitor Failure, Coolant Discharge, Damaged Controls, Depowered Armament, Disengaged FC, Faulty Countermeasures, Power Failure, Ruptured Engine, Targeter Disruption, Thrust Control Malfunction, Thruster Fissure |
+| **RuleRegistry-migrated persistent** | Static rule hook reads active `faceup_damage` state instead of registering a legacy runtime effect | No legacy bridge after migration unless noted | Faulty Countermeasures (legacy UI bridge remains), Compartment Fire, Crew Panic, Damaged Munitions, Point-Defense Failure |
 | **Hybrid** | Immediate action + persistent restriction; stays faceup | Yes | Life Support Failure (discard all tokens immediately; cannot gain tokens while faceup) |
 
 ### 8.9.5 Resolution Order

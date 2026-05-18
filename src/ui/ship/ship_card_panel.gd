@@ -60,6 +60,9 @@ var _tex_cache: Dictionary = {}
 ## The player index viewing this panel (for dial order modal access control).
 var _viewer_player: int = -1
 
+## Optional callback invoked before a hidden command dial is revealed.
+var _pre_reveal_dial_handler: Callable = Callable()
+
 ## Logger.
 var _log: GameLogger = GameLogger.new("ShipCardPanel")
 
@@ -112,6 +115,12 @@ func set_side(left_side: bool) -> void:
 ## Requirements: UI-023 — cannot view opponent's unrevealed dials.
 func set_viewer_player(player_index: int) -> void:
 	_viewer_player = player_index
+
+
+## Sets a pre-reveal dial handler.
+## [param handler] — Callable(ShipInstance) -> bool, true when handled.
+func set_pre_reveal_dial_handler(handler: Callable) -> void:
+	_pre_reveal_dial_handler = handler
 
 
 ## Returns the number of ship entries in this panel.
@@ -344,6 +353,8 @@ func _try_ship_phase_activation(instance: ShipInstance) -> bool:
 		EventBus.dial_drag_started.emit(instance)
 		return true
 	if instance.command_dial_stack.get_hidden_count() > 0:
+		if _handle_pre_reveal_dial(instance):
+			return true
 		_unreveal_other_ships(instance)
 		_log.info("Dial step 1 — revealing top for '%s'." \
 				% instance.data_key)
@@ -352,6 +363,12 @@ func _try_ship_phase_activation(instance: ShipInstance) -> bool:
 	_log.info("Dial click on '%s' — eligible but no revealed/hidden dials." \
 			% instance.data_key)
 	return false
+
+
+func _handle_pre_reveal_dial(instance: ShipInstance) -> bool:
+	if not _pre_reveal_dial_handler.is_valid():
+		return false
+	return bool(_pre_reveal_dial_handler.call(instance))
 
 
 ## Logs detailed diagnostics for an ineligible dial click.

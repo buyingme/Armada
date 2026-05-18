@@ -644,21 +644,29 @@ func activate_ship(ship: ShipInstance) -> Dictionary:
 	return result
 
 
-## Activates a ship without requiring a revealed dial.
-## Used when Crew Panic discards the command dial before reveal.
-## The ship is marked as activating but has no command for this round.
-## Rules Reference: "Crew Panic" — "discard that dial … do not reveal a
-## dial this round."
-func force_activate_ship(ship: ShipInstance) -> void:
+## Starts a ship's activation without revealing a command dial.
+## Used when a rule has already discarded the dial before reveal.
+## Rules Reference: Damage Card "Crew Panic" — "If you discard it, do not
+## reveal a dial this round."
+func activate_ship_without_command(ship: ShipInstance,
+		reason: String = "") -> Dictionary:
 	if _activating_ship != null:
-		_log.warn("Cannot force-activate — already activating a ship.")
-		return
-	if ship.activated_this_round:
-		_log.warn("Cannot force-activate — already activated this round.")
-		return
+		_log.warn("Cannot activate without command — already activating.")
+		return {}
+	var ship_index: int = current_game_state.find_ship_index(ship)
+	var cmd := ActivateShipCommand.new(ship.owner_player, {
+		"ship_index": ship_index,
+		ActivateShipCommand.PAYLOAD_SKIP_REVEAL: true,
+		ActivateShipCommand.PAYLOAD_REASON: reason,
+	})
+	var result: Dictionary = _submitter.submit(cmd)
+	if result.is_empty():
+		return {}
 	_activating_ship = ship
-	_log.info("Ship force-activated (no dial): %s" % ship.data_key)
-
+	EventBus.command_dials_changed.emit(ship)
+	_log.info("Ship activated without command: %s (%s)." % [
+			ship.data_key, reason])
+	return result
 
 ## Starts a ship's activation by revealing and immediately spending its top
 ## command dial, then attempting to convert it to a matching command token.

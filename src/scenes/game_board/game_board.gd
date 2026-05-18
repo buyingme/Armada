@@ -134,7 +134,7 @@ var _damage_deck: DamageDeck = null
 ## --- Ship Activation Controller (Phase K8a) ---
 
 ## Owns activation-modal lifecycle, dial-drop entry points, the Crew Panic
-## BEFORE_REVEAL_DIAL choice modal, and the projection-driven open/close +
+## pre-reveal choice modal, and the projection-driven open/close +
 ## step-sync helpers.  Created in [method _create_ship_activation_controller].
 ## Maneuver / overlap resolution / step routing remain on this scene until
 ## the K8b extraction.
@@ -904,13 +904,14 @@ func _fade_out_destroyed_token(token: Node2D) -> void:
 ## [PersistentEffectDamageCommand] for the given ship and effect.
 ## Emits [code]damage_card_dealt[/code], [code]ship_hull_changed[/code],
 ## and — on destruction — [code]ship_destroyed[/code] + fade-out.
+## Returns the submitted command result, or an empty dictionary on failure.
 func _submit_persistent_damage(ship: ShipInstance,
-		eff_id: String) -> void:
+		eff_id: String) -> Dictionary:
 	if _damage_deck == null:
-		return
+		return {}
 	var card: DamageCard = _damage_deck.draw_card()
 	if card == null:
-		return
+		return {}
 	var result: Dictionary = GameManager.submit_persistent_effect_damage(
 			ship, eff_id, card.serialize())
 	if not result.is_empty():
@@ -925,6 +926,7 @@ func _submit_persistent_damage(ship: ShipInstance,
 				_log.info("Ship destroyed by %s: %s" % [eff_id, ship.data_key])
 				EventBus.ship_destroyed.emit(token)
 				_fade_out_destroyed_token(token)
+	return result
 
 ## Shows a brief toast when a damage card is dealt to a ship.
 ## Faceup cards show the card name in red; facedown cards show a generic message.
@@ -1077,8 +1079,7 @@ func _create_dial_drag_controller() -> void:
 	_dial_drag_controller.name = "DialDragController"
 	add_child(_dial_drag_controller)
 	_dial_drag_controller.initialize(
-			_find_ship_token_at, _find_card_panel_hit,
-			_ship_activation_controller.check_crew_panic_before_drag, tm_layer)
+			_find_ship_token_at, _find_card_panel_hit, tm_layer)
 	_dial_drag_controller.ship_activated.connect(
 			_ship_activation_controller.on_dial_ship_activated)
 	_dial_drag_controller.token_converted.connect(
@@ -1118,6 +1119,8 @@ func _initialize_ship_activation_controller() -> void:
 			get_ship_tokens,
 			get_squadron_tokens,
 			_dismiss_maneuver_tool_with_preview)
+	_panel_mgr.set_pre_reveal_dial_handler(
+			_ship_activation_controller.check_crew_panic_before_reveal)
 
 ## Creates the [CommandPhaseController] child node and wires its signal.
 func _create_command_phase_controller() -> void:

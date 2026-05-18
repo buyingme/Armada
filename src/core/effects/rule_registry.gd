@@ -103,6 +103,12 @@ static func enablers_for(flow_id: int,
 	return _matching_target_hooks(_enablers, flow_id, step_id, target)
 
 
+## Returns all enablers matching a FlowSpec pair, regardless of target.
+static func enablers_for_step(flow_id: int,
+		step_id: int) -> Array[FlowHook]:
+	return _matching_step_hooks(_enablers, flow_id, step_id)
+
+
 ## Returns the total registered hook count across every kind.
 static func registered_hook_count() -> int:
 	return _validators.size() + _modifiers.size() \
@@ -139,6 +145,16 @@ static func _matching_target_hooks(hooks: Array[FlowHook],
 	for hook: FlowHook in hooks:
 		if hook.matches_step(flow_id, step_id) \
 				and hook.matches_target(target):
+			result.append(hook)
+	return _sorted_hooks(result)
+
+
+static func _matching_step_hooks(hooks: Array[FlowHook],
+		flow_id: int,
+		step_id: int) -> Array[FlowHook]:
+	var result: Array[FlowHook] = []
+	for hook: FlowHook in hooks:
+		if hook.matches_step(flow_id, step_id):
 			result.append(hook)
 	return _sorted_hooks(result)
 

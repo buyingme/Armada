@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-19 (Phase M13 determinism guard complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-19 (Phase M14 coverage tool complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 162 |
-| GUT tests | 3 091 |
-| GUT asserts | 6 196 |
+| GUT test scripts | 163 |
+| GUT tests | 3 096 |
+| GUT asserts | 6 209 |
 | Failing tests | 0 |
-| Last commit | `435d897` — M13 rule observer replay-order guard |
+| Last commit | `f76b199` — M14 flow coverage dump tool |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,8 +34,8 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-19 M13 full GUT summary is green
-(162 / 3 091 / 6 196, 0 failures). Phase K lint reports 0 violations / 4
+Verification note: the 2026-05-19 M14 full GUT summary is green
+(163 / 3 096 / 6 209, 0 failures). Phase K lint reports 0 violations / 4
 allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
 network peer equality, and `git diff --check` is clean. Godot still reports known
 shutdown RID leak warnings in the runner output; no parse errors or GUT
@@ -116,7 +116,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, and M13 are complete; M14 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, and M14 are complete; M15 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -421,6 +421,20 @@ regression gate is complete and remains the required L/M automated gate:
   violations / 4 allow-listed branches, baseline traces passing hot-seat
   trace/state plus network peer state equality, `git diff --check` clean, and
   user MT pass confirmed 2026-05-19.
+- M14 result: [dump_flow_coverage.gd](../scripts/dump_flow_coverage.gd)
+  adds a headless debugging aid for inspecting a `(flow, step)` surface. It
+  emits FlowSpec source, controller role, modal metadata, allowed commands,
+  transitions, rule citation, and every registered RuleRegistry hook with hook
+  kind, rule id, priority, and command/target surface. [RuleRegistry](../src/core/effects/rule_registry.gd)
+  now exposes `hooks_for_step()` for read-only tooling without exposing private
+  storage. [test_dump_flow_coverage.gd](../tests/unit/test_dump_flow_coverage.gd)
+  covers positional and named CLI arguments, metadata output, deterministic
+  hook ordering, and invalid-pair diagnostics. Automated verification: focused
+  M14 test 1 script / 5 tests / 13 asserts, headless smoke `ATTACK / ATTACK_ROLL`
+  exits 0 and reports the two dice-pool rule hooks, full GUT 163 / 3 096 /
+  6 209 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
+  baseline traces passing hot-seat trace/state plus network peer state equality,
+  `git diff --check` clean, and user MT pass confirmed 2026-05-19.
 
 ---
 

@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-18 (Phase M12 Capacitor Failure rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-19 (Phase M13 determinism guard complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 161 |
-| GUT tests | 3 088 |
-| GUT asserts | 6 188 |
+| GUT test scripts | 162 |
+| GUT tests | 3 091 |
+| GUT asserts | 6 196 |
 | Failing tests | 0 |
-| Last commit | `8889fd9` — M12 Capacitor Failure rule migration |
+| Last commit | `435d897` — M13 rule observer replay-order guard |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-18 M12 full GUT summary is green
-(161 / 3 088 / 6 188, 0 failures). Phase K lint reports 0 violations / 4
-allow-listed branches, baseline traces pass hot-seat trace/state plus network
-peer equality, and `git diff --check` is clean. Godot still reports known
+Verification note: the 2026-05-19 M13 full GUT summary is green
+(162 / 3 091 / 6 196, 0 failures). Phase K lint reports 0 violations / 4
+allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
+network peer equality, and `git diff --check` is clean. Godot still reports known
 shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. User MT pass confirmed 2026-05-18.
+failures were reported. User MT pass confirmed 2026-05-19.
 
 ---
 
@@ -116,7 +116,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, and M12 are complete; M13 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, and M13 are complete; M14 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -408,6 +408,19 @@ regression gate is complete and remains the required L/M automated gate:
   allow-listed branches, baseline traces passing hot-seat trace/state plus
   network peer state equality, `git diff --check` clean, and user MT pass
   confirmed 2026-05-18.
+- M13 result: [test_rule_order_replay.gd](../tests/integration/test_rule_order_replay.gd)
+  adds the determinism guard for RuleRegistry observer ordering across replay
+  serialization. The hot-seat scenario triggers three observer hooks on the
+  same `ATTACK / ATTACK_ROLL` step, records hook ids plus generated follow-up
+  command types, asserts `(priority DESC, rule_id ASC)` through both callback
+  order and executed replay history, and canonicalizes the payload to prove
+  repeated local runs are byte-identical. Real ENet host/client equality remains
+  covered by the L0.5 baseline gate without committing network trace/hash
+  fixtures. Automated verification: exact M13 test 1 script / 3 tests / 8
+  asserts, full GUT 162 / 3 091 / 6 196 with 0 failures, Phase K lint 0
+  violations / 4 allow-listed branches, baseline traces passing hot-seat
+  trace/state plus network peer state equality, `git diff --check` clean, and
+  user MT pass confirmed 2026-05-19.
 
 ---
 

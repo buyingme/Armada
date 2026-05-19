@@ -18,7 +18,7 @@
 | GUT tests | 3 096 |
 | GUT asserts | 6 209 |
 | Failing tests | 0 |
-| Last commit | `f76b199` — M14 flow coverage dump tool |
+| Last commit | `b9bbe82` — M15 RuleRegistry governance closeout |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

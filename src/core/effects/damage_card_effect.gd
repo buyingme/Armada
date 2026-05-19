@@ -57,8 +57,6 @@ func _get_non_attack_hooks() -> Array[StringName]:
 			return [&"ON_SPEED_CHANGE"]
 		"power_failure":
 			return [&"CALC_ENGINEERING_VALUE"]
-		"capacitor_failure":
-			return [&"DEFENSE_VALIDATE_TOKEN", &"REPAIR_VALIDATE_SHIELD"]
 		"life_support_failure":
 			return [&"ON_COMMAND_TOKEN_GAIN"]
 		_:
@@ -83,8 +81,6 @@ func should_trigger(context: EffectContext) -> bool:
 			return context.attacker == owner
 		"faulty_countermeasures":
 			return _trigger_faulty_countermeasures(context)
-		"capacitor_failure":
-			return _trigger_capacitor_failure(context)
 		_:
 			return _should_trigger_non_attack(context)
 
@@ -114,8 +110,6 @@ func resolve(context: EffectContext) -> void:
 			context.cancelled = true
 		"targeter_disruption":
 			context.critical_allowed = false
-		"capacitor_failure":
-			_resolve_capacitor_failure(context)
 		_:
 			_resolve_non_attack(context)
 
@@ -175,31 +169,6 @@ func _trigger_faulty_countermeasures(context: EffectContext) -> bool:
 	return token_state == Constants.DefenseTokenState.EXHAUSTED
 
 
-## Capacitor Failure: On DEFENSE_VALIDATE_TOKEN — block Redirect if the
-## zone receiving the redirect has 0 shields.
-## On REPAIR_VALIDATE_SHIELD — block recover/move to a zone with 0 shields.
-func _trigger_capacitor_failure(context: EffectContext) -> bool:
-	match context.hook:
-		&"DEFENSE_VALIDATE_TOKEN":
-			if context.defender != owner:
-				return false
-			var token_type: int = int(
-					context.get_meta_value("token_type", -1))
-			if token_type != Constants.DefenseToken.REDIRECT:
-				return false
-			var zone_shields: int = int(
-					context.get_meta_value("target_zone_shields", 1))
-			return zone_shields <= 0
-		&"REPAIR_VALIDATE_SHIELD":
-			if context.get_meta_value("ship", null) != owner:
-				return false
-			var target_zone_shields: int = int(
-					context.get_meta_value("target_zone_shields", 1))
-			return target_zone_shields <= 0
-		_:
-			return false
-
-
 ## Ruptured Engine: Suffer 1 damage after maneuver if speed > 1.
 func _trigger_ruptured_engine(context: EffectContext) -> bool:
 	if context.get_meta_value("ship", null) != owner:
@@ -228,11 +197,6 @@ func _resolve_coolant_discharge(context: EffectContext) -> void:
 			context.cancelled = true
 		&"ATTACK_CALC_DAMAGE":
 			context.damage_total += 1
-
-
-## Capacitor Failure: cancel redirect or repair shield operation.
-func _resolve_capacitor_failure(context: EffectContext) -> void:
-	context.cancelled = true
 
 
 ## Thrust Control Malfunction: reduce yaw at last adjustable joint by 1.

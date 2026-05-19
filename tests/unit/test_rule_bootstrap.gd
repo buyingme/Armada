@@ -44,19 +44,25 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
 			CrewPanic.TARGET_COMMAND_DIAL_REVEAL)
+	var repair_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			"repair_action")
+	var repair_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			CapacitorFailure.TARGET_REPAIR_SHIELD)
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 5,
-			"Bootstrap should invoke all five production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 5,
+	assert_eq(registered, 6,
+			"Bootstrap should invoke all six production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 9,
 			"Bootstrap should clear stale hooks before registering rules.")
-	assert_eq(hooks.size(), 1,
-			"Faulty Countermeasures should register one validator hook.")
-	assert_eq(hooks[0].rule_id, FaultyCountermeasures.RULE_ID,
-			"Validator should carry the Faulty Countermeasures rule id.")
-	assert_eq(commit_hooks.size(), 1,
-			"The same validator should cover defense commits.")
+	assert_eq(hooks.size(), 2,
+			"Faulty Countermeasures and Capacitor Failure should validate spends.")
+	assert_eq(commit_hooks.size(), 2,
+			"Both defense-token rules should cover defense commits.")
 	assert_eq(ready_hooks.size(), 1,
 			"Compartment Fire should register one token-readying modifier.")
 	assert_eq(ready_hooks[0].rule_id, CompartmentFire.RULE_ID,
@@ -71,3 +77,7 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Crew Panic should register one pre-reveal enabler.")
 	assert_eq(crew_hooks[0].rule_id, CrewPanic.RULE_ID,
 			"Enabler should carry the Crew Panic rule id.")
+	assert_eq(repair_hooks.size(), 1,
+			"Capacitor Failure should validate repair actions.")
+	assert_eq(repair_blockers.size(), 1,
+			"Capacitor Failure should expose one repair-shield blocker.")

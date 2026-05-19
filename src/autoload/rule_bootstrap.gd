@@ -7,6 +7,7 @@ extends Node
 
 
 const RULE_SCRIPTS: Array[GDScript] = [
+	preload("res://src/core/effects/rules/damage_cards/ship/capacitor_failure.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/compartment_fire.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/crew_panic.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/damaged_munitions.gd"),

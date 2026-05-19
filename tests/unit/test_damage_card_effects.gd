@@ -136,13 +136,13 @@ func test_blinded_gunners_hooks() -> void:
 			"Blinded Gunners should hook ATTACK_SPEND_ACCURACY")
 
 
-func test_capacitor_failure_hooks() -> void:
+func test_capacitor_failure_no_longer_declares_legacy_hooks() -> void:
 	var e: DamageCardEffect = _make_effect("capacitor_failure", _make_ship())
 	var hooks: Array[StringName] = e.get_hooks()
-	assert_has(hooks, &"DEFENSE_VALIDATE_TOKEN",
-			"Should hook DEFENSE_VALIDATE_TOKEN")
-	assert_has(hooks, &"REPAIR_VALIDATE_SHIELD",
-			"Should hook REPAIR_VALIDATE_SHIELD")
+	assert_false(hooks.has(&"DEFENSE_VALIDATE_TOKEN"),
+			"Capacitor Failure should not use the legacy defense hook after M12.")
+	assert_false(hooks.has(&"REPAIR_VALIDATE_SHIELD"),
+			"Capacitor Failure should not use the legacy repair hook after M12.")
 
 
 func test_coolant_discharge_hooks() -> void:
@@ -321,41 +321,20 @@ func test_faulty_countermeasures_allows_ready_token() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Capacitor Failure — blocks Redirect if zone has 0 shields,
-# and blocks repair shield ops to 0-shield zones
+# Capacitor Failure — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_capacitor_failure_blocks_redirect_to_empty_zone() -> void:
+func test_capacitor_failure_no_longer_registers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("capacitor_failure", ship)
-	var ctx: EffectContext = _make_context(&"DEFENSE_VALIDATE_TOKEN")
-	ctx.defender = ship
-	ctx.set_meta_value("token_type", Constants.DefenseToken.REDIRECT)
-	ctx.set_meta_value("target_zone_shields", 0)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger for Redirect to 0-shield zone")
-
-
-func test_capacitor_failure_allows_redirect_to_shielded_zone() -> void:
-	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("capacitor_failure", ship)
-	var ctx: EffectContext = _make_context(&"DEFENSE_VALIDATE_TOKEN")
-	ctx.defender = ship
-	ctx.set_meta_value("token_type", Constants.DefenseToken.REDIRECT)
-	ctx.set_meta_value("target_zone_shields", 2)
-	assert_false(e.should_trigger(ctx),
-			"Should not trigger for zone with shields")
-
-
-func test_capacitor_failure_blocks_repair_to_empty_zone() -> void:
-	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("capacitor_failure", ship)
-	var ctx: EffectContext = _make_context(&"REPAIR_VALIDATE_SHIELD")
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("target_zone_shields", 0)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger for repair to 0-shield zone")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("capacitor_failure")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Capacitor Failure should be handled by RuleRegistry after M12.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Capacitor Failure should not add a legacy runtime hook.")
 
 
 # ---------------------------------------------------------------------------
@@ -711,36 +690,20 @@ func test_attack_validate_pipeline_disengaged_fire_blocks_obstructed() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_repair_validate_pipeline_capacitor_blocks_empty_zone() -> void:
-	# Arrange
+func test_repair_validate_pipeline_capacitor_has_no_legacy_bridge() -> void:
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("capacitor_failure")
-	DamageCardEffectFactory.register_effect(card, ship, reg)
-	# Act — try to repair a zone with 0 shields.
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("target_zone_shields", 0)
 	ctx = reg.resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)
-	# Assert
-	assert_true(ctx.cancelled,
-			"Repair to 0-shield zone should be blocked by Capacitor Failure")
-
-
-func test_repair_validate_pipeline_capacitor_allows_shielded_zone() -> void:
-	# Arrange
-	var ship: ShipInstance = _make_ship()
-	var reg: EffectRegistry = EffectRegistry.new()
-	var card: DamageCard = _make_card("capacitor_failure")
-	DamageCardEffectFactory.register_effect(card, ship, reg)
-	# Act — repair a zone with shields.
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("target_zone_shields", 2)
-	ctx = reg.resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)
-	# Assert
+	assert_null(effect,
+			"Capacitor Failure should not register a legacy repair hook.")
 	assert_false(ctx.cancelled,
-			"Repair to shielded zone should be allowed")
+			"Legacy repair hook should not cancel after M12 migration.")
 
 
 # ---------------------------------------------------------------------------

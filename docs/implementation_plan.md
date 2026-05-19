@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-18 (Phase M11 Crew Panic rule migration automated gates pass; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-18 (Phase M12 Capacitor Failure rule migration complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 160 |
-| GUT tests | 3 079 |
-| GUT asserts | 6 131 |
+| GUT test scripts | 161 |
+| GUT tests | 3 088 |
+| GUT asserts | 6 188 |
 | Failing tests | 0 |
-| Last commit | `c5c6c61` — M11 Crew Panic rule migration |
+| Last commit | pending M12 feature commit |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,10 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-18 M11 full GUT summary is green
-(160 / 3 079 / 6 131, 0 failures). Godot still reports known shutdown RID leak
-warnings in the runner output; no parse errors or GUT failures were reported.
-M11 automated gates pass; user MT pass confirmed 2026-05-18.
+Verification note: the 2026-05-18 M12 full GUT summary is green
+(161 / 3 088 / 6 188, 0 failures). Phase K lint reports 0 violations / 4
+allow-listed branches, baseline traces pass hot-seat trace/state plus network
+peer equality, and `git diff --check` is clean. Godot still reports known
+shutdown RID leak warnings in the runner output; no parse errors or GUT
+failures were reported. User MT pass confirmed 2026-05-18.
 
 ---
 
@@ -114,7 +116,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, and M11 are complete; M12 is next. L0.5 replay
+Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, and M12 are complete; M13 is next. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -384,6 +386,28 @@ regression gate is complete and remains the required L/M automated gate:
   with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
   baseline traces passing hot-seat trace/state plus network peer state equality.
   User MT pass confirmed 2026-05-18.
+- M12 result: [capacitor_failure.gd](../src/core/effects/rules/damage_cards/ship/capacitor_failure.gd)
+  registers Capacitor Failure as the first multi-hook migrated damage-card
+  rule: defense-token validators and blockers for the attack defense-token
+  step, plus repair-action validators and blockers for the ship activation
+  repair step. The attack side blocks Redirect token commits/spends and direct
+  redirect-zone submissions when the defending hull zone has no shields. The
+  repair side blocks `recover_shields` and `move_shields` targets whose current
+  shield value is 0. [DefenseTokenResolver](../src/core/combat/defense_token_resolver.gd)
+  and [RepairResolver](../src/core/damage/repair_resolver.gd) now consume
+  RuleRegistry blocker metadata so UI button eligibility and command safety
+  share the same rule predicate. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers Capacitor Failure in the transient `EffectRegistry`.
+  [test_rule_capacitor_failure.gd](../tests/unit/test_rule_capacitor_failure.gd)
+  covers hook registration, defense UI blocking, command validator rejection,
+  repair resolver eligibility, repair command validation, repaired-card
+  re-enabling, and save/load plus `EffectFactory.rebuild_runtime_effects()`
+  with zero legacy bridge effects. Automated verification: focused M12 test 1
+  script / 12 tests / 57 asserts, bridge/helper regressions green, full GUT
+  161 / 3 088 / 6 188 with 0 failures, Phase K lint 0 violations / 4
+  allow-listed branches, baseline traces passing hot-seat trace/state plus
+  network peer state equality, `git diff --check` clean, and user MT pass
+  confirmed 2026-05-18.
 
 ---
 

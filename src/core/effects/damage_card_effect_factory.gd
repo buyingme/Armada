@@ -13,7 +13,6 @@ extends RefCounted
 ## Migrated RuleRegistry cards are intentionally omitted from this list.
 const PERSISTENT_EFFECT_IDS: Array[String] = [
 	"blinded_gunners",
-	"capacitor_failure",
 	"coolant_discharge",
 	"damaged_controls",
 	"depowered_armament",

@@ -111,35 +111,63 @@ func is_token_spendable(token_index: int, token: Dictionary,
 
 ## Returns true if a persistent damage card effect blocks spending this
 ## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
-## context's cancelled flag.
+## context's cancelled flag.  Migrated RuleRegistry blockers are checked
+## before the remaining legacy EffectRegistry bridge.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func is_token_blocked_by_effect(inst: ShipInstance,
 		token: Dictionary, registry: EffectRegistry,
 		def_zone: int) -> bool:
-	if registry == null:
-		return false
 	if inst == null:
 		return false
+	var ctx: EffectContext = _make_defense_token_context(
+			inst, token, def_zone)
+	if _is_token_blocked_by_rule(ctx):
+		return true
+	if registry == null:
+		return false
+	ctx = registry.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
+	return ctx.cancelled
+
+
+func _make_defense_token_context(inst: ShipInstance,
+		token: Dictionary,
+		def_zone: int) -> EffectContext:
 	var ctx: EffectContext = EffectContext.new()
 	ctx.defender = inst
+	ctx.defending_zone = def_zone
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
 	var token_state: Constants.DefenseTokenState = (
 			token["state"] as Constants.DefenseTokenState)
 	ctx.set_meta_value("token_type", token_type)
 	ctx.set_meta_value("token_state", token_state)
-	# Capacitor Failure needs the defending zone's current shield count
-	# to decide whether Redirect is blocked.
-	# Rules Reference: "Capacitor Failure" — if the defending zone has
-	# 0 shields the defender cannot spend Redirect tokens.
-	if def_zone >= 0:
-		var zone_key: String = ConstantsScript.hull_zone_to_string(
-				def_zone as Constants.HullZone)
-		if zone_key != "" and inst.current_shields.has(zone_key):
-			ctx.set_meta_value("target_zone_shields",
-					int(inst.current_shields[zone_key]))
-	ctx = registry.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
-	return ctx.cancelled
+	_add_defending_zone_shields(ctx, inst, def_zone)
+	return ctx
+
+
+func _add_defending_zone_shields(ctx: EffectContext,
+		inst: ShipInstance,
+		def_zone: int) -> void:
+	if def_zone < 0:
+		return
+	var zone_key: String = ConstantsScript.hull_zone_to_string(
+			def_zone as Constants.HullZone)
+	if zone_key == "" or not inst.current_shields.has(zone_key):
+		return
+	ctx.set_meta_value("target_zone_shields",
+			int(inst.current_shields[zone_key]))
+
+
+func _is_token_blocked_by_rule(ctx: EffectContext) -> bool:
+	var hooks: Array[FlowHook] = RuleRegistry.blockers_for(
+			int(Constants.InteractionFlow.ATTACK),
+			int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
+			CapacitorFailure.TARGET_DEFENSE_TOKEN_SPEND)
+	for hook: FlowHook in hooks:
+		var raw: Variant = hook.callback.call(ctx)
+		if raw is Dictionary and bool((raw as Dictionary).get("blocked", false)):
+			return true
+	return false
 
 
 # ---------------------------------------------------------------------------

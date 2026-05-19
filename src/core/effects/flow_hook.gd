@@ -44,6 +44,7 @@ var target: String = ANY
 ## Validator: (GameState, GameCommand) -> {"allowed": bool, "reason": String}.
 ## Modifier: (EffectContext) -> EffectContext or mutates the context in place.
 ## Observer: (GameState, GameCommand, Dictionary) -> Array[GameCommand/Dictionary].
+## Blocker: (EffectContext) -> {"blocked": bool, "reason": String}.
 ## Enabler: (GameState, InteractionFlow, int) -> Dictionary of UI affordances.
 var callback: Callable = Callable()
 

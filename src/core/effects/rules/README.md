@@ -7,6 +7,7 @@ rule by the component printed on the table before they know its hook surface.
 
 | Rule | Source | Hooks | Notes |
 |---|---|---|---|
+| `damage_cards/ship/capacitor_failure.gd` | Ship damage card | `VALIDATOR` and `BLOCKER` on `ATTACK / ATTACK_DEFENSE_TOKENS` for Redirect spending; `VALIDATOR` and `BLOCKER` on `SHIP_ACTIVATION / REPAIR_STEP` for shield repair actions | No legacy `EffectRegistry` bridge remains; defense and repair helper UI eligibility reads blocker metadata while command validators protect replay/network submissions. |
 | `damage_cards/ship/faulty_countermeasures.gd` | Ship damage card | `VALIDATOR` on `ATTACK / ATTACK_DEFENSE_TOKENS` for `commit_defense` and `spend_defense_token` | UI receives `blocked_defense_token_indices` from the legacy `DEFENSE_VALIDATE_TOKEN` bridge until the defense-token resolver no longer needs it. |
 | `damage_cards/ship/compartment_fire.gd` | Ship damage card | `MODIFIER` on `STATUS_CLEANUP / STATUS_CLEANUP_STEP` for `defense_token_readying` | No legacy `EffectRegistry` bridge remains; status cleanup reads this rule from `RuleRegistry` and active state from `ShipInstance.faceup_damage`. |
 | `damage_cards/ship/crew_panic.gd` | Ship damage card | `ENABLER` on `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` for `command_dial_reveal` | No legacy `EffectRegistry` bridge remains; `UIProjector.affordances` exposes pre-reveal choice metadata for ships with faceup Crew Panic and hidden dials. |

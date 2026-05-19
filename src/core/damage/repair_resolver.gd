@@ -143,7 +143,7 @@ func can_move_shields_between(from_zone: String, to_zone: String) -> bool:
 	var target_max: int = _ship.get_max_shields(to_zone)
 	if target_shields >= target_max:
 		return false
-	return true
+	return _is_shield_op_allowed(to_zone)
 
 
 ## Moves 1 shield from [param from_zone] to [param to_zone].
@@ -194,7 +194,9 @@ func can_recover_shields_on(zone: String) -> bool:
 		return false
 	var current: int = int(_ship.current_shields.get(zone, 0))
 	var max_val: int = _ship.get_max_shields(zone)
-	return current < max_val
+	if current >= max_val:
+		return false
+	return _is_shield_op_allowed(zone)
 
 
 ## Recovers 1 shield on [param zone].
@@ -346,21 +348,38 @@ func _apply_engineering_hook() -> void:
 		_remaining_points = _total_points
 
 
-## Checks the REPAIR_VALIDATE_SHIELD hook for [param zone].
+## Checks migrated RuleRegistry blockers and the remaining legacy
+## REPAIR_VALIDATE_SHIELD hook for [param zone].
 ## Returns true if the operation is allowed (not cancelled).
 ## Capacitor Failure blocks shield operations targeting zones with 0 shields.
 ## Rules Reference: RRG "Damage Cards", p.4; "Capacitor Failure" card text.
 func _is_shield_op_allowed(zone: String) -> bool:
-	if not _effect_registry:
-		return true
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", _ship)
+	ctx.set_meta_value("target_zone", zone)
 	ctx.set_meta_value(
 			"target_zone_shields",
 			int(_ship.current_shields.get(zone, 0)))
+	if _is_shield_op_blocked_by_rule(ctx):
+		_log.info("Shield operation on %s blocked by damage rule." % zone)
+		return false
+	if not _effect_registry:
+		return true
 	ctx = _effect_registry.resolve_hook(
 			&"REPAIR_VALIDATE_SHIELD", ctx)
 	if ctx.cancelled:
 		_log.info("Shield operation on %s blocked by damage effect." % zone)
 		return false
 	return true
+
+
+func _is_shield_op_blocked_by_rule(ctx: EffectContext) -> bool:
+	var hooks: Array[FlowHook] = RuleRegistry.blockers_for(
+			int(Constants.InteractionFlow.SHIP_ACTIVATION),
+			int(Constants.InteractionStep.REPAIR_STEP),
+			CapacitorFailure.TARGET_REPAIR_SHIELD)
+	for hook: FlowHook in hooks:
+		var raw: Variant = hook.callback.call(ctx)
+		if raw is Dictionary and bool((raw as Dictionary).get("blocked", false)):
+			return true
+	return false

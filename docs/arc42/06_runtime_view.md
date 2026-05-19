@@ -274,7 +274,11 @@ AttackExecutor (accuracy spending)
     ├─ resolve_hook(&"ATTACK_SPEND_ACCURACY", ctx)      ── Blinded Gunners
     │
 AttackExecutor (defense token spending)
-    ├─ resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)     ── Faulty Countermeasures, Capacitor Failure
+    ├─ RuleRegistry.blockers_for("defense_token_spend") ── Capacitor Failure UI eligibility
+    ├─ RuleRegistry.validators_for("commit_defense" /
+    │     "spend_defense_token" / "select_redirect_zone")
+    │                                                   ── Capacitor Failure command safety
+    ├─ resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)     ── Faulty Countermeasures legacy UI bridge
     │
 AttackExecutor (resolve critical)
     ├─ resolve_hook(&"ATTACK_RESOLVE_CRITICAL", ctx)    ── Targeter Disruption
@@ -300,7 +304,9 @@ Ship activation (before dial reveal)
 
 Repair command resolution
     ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)       ── Power Failure
-    ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Capacitor Failure
+    ├─ RuleRegistry.blockers_for("repair_shield")        ── Capacitor Failure UI eligibility
+    ├─ RuleRegistry.validators_for("repair_action")      ── Capacitor Failure command safety
+    ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Remaining legacy repair blockers
 
 Status phase (token readying)
     ├─ RuleRegistry.modifiers_for("defense_token_readying") ── Compartment Fire

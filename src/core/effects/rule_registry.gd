@@ -109,6 +109,17 @@ static func enablers_for_step(flow_id: int,
 	return _matching_step_hooks(_enablers, flow_id, step_id)
 
 
+## Returns every hook matching a FlowSpec pair, regardless of command or target.
+static func hooks_for_step(flow_id: int, step_id: int) -> Array[FlowHook]:
+	var result: Array[FlowHook] = []
+	_append_step_hooks(result, _validators, flow_id, step_id)
+	_append_step_hooks(result, _modifiers, flow_id, step_id)
+	_append_step_hooks(result, _observers, flow_id, step_id)
+	_append_step_hooks(result, _blockers, flow_id, step_id)
+	_append_step_hooks(result, _enablers, flow_id, step_id)
+	return _sorted_hooks(result)
+
+
 ## Returns the total registered hook count across every kind.
 static func registered_hook_count() -> int:
 	return _validators.size() + _modifiers.size() \
@@ -153,10 +164,17 @@ static func _matching_step_hooks(hooks: Array[FlowHook],
 		flow_id: int,
 		step_id: int) -> Array[FlowHook]:
 	var result: Array[FlowHook] = []
+	_append_step_hooks(result, hooks, flow_id, step_id)
+	return _sorted_hooks(result)
+
+
+static func _append_step_hooks(targets: Array[FlowHook],
+		hooks: Array[FlowHook],
+		flow_id: int,
+		step_id: int) -> void:
 	for hook: FlowHook in hooks:
 		if hook.matches_step(flow_id, step_id):
-			result.append(hook)
-	return _sorted_hooks(result)
+			targets.append(hook)
 
 
 static func _sorted_hooks(hooks: Array[FlowHook]) -> Array[FlowHook]:

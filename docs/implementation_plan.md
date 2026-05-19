@@ -18,7 +18,7 @@
 | GUT tests | 3 088 |
 | GUT asserts | 6 188 |
 | Failing tests | 0 |
-| Last commit | pending M12 feature commit |
+| Last commit | `8889fd9` — M12 Capacitor Failure rule migration |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`

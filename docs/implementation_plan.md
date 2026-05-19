@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-19 (Phase M14 coverage tool complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-19 (Phase M15 closeout complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
 
 ---
 
@@ -116,7 +116,7 @@ Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_pl
   registry surface.
 - Phase L0.5 adds the replay regression gate used by all L/M slices.
 
-Status: **IN PROGRESS** — Phase L is complete; M0, M0.5, M0.6, M0.7, M1, M2, M2.5, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, and M14 are complete; M15 is next. L0.5 replay
+Status: **COMPLETE** — Phase L is complete and Phase M is complete through M15. L0.5 replay
 regression gate is complete and remains the required L/M automated gate:
 - Hot-seat: committed JSONL trace + committed final-state hash.
 - Network: real two-process ENet replay; host/client final-state hashes must
@@ -435,6 +435,20 @@ regression gate is complete and remains the required L/M automated gate:
   6 209 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
   baseline traces passing hot-seat trace/state plus network peer state equality,
   `git diff --check` clean, and user MT pass confirmed 2026-05-19.
+- M15 result: Phase M closeout promoted the rule-extension workflow into
+  project instructions. [.github/copilot-instructions.md](../.github/copilot-instructions.md)
+  now includes Non-Negotiable Rule §12, requiring new rules, card effects,
+  keywords, upgrades, objectives, defense-token eligibility rules, and
+  rule-derived UI affordances to go through `RuleRegistry` unless an explicitly
+  approved legacy bridge is documented. [.skills/architecture_patterns.md](../.skills/architecture_patterns.md)
+  now documents Layer 3 rules: FlowSpec owns steps and controller roles,
+  RuleRegistry owns static hook definitions, active state comes from serialized
+  `GameState` entities or rebuilt transient bridges, and observers must use the
+  deferred follow-up queue. §4 open topics were cleaned up so resolved Phase M
+  rule-file organization work no longer appears as pending. Verification:
+  `git diff --check` clean, full GUT 163 / 3 096 / 6 209 with 0 failures,
+  Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
+  passing hot-seat trace/state plus network peer equality.
 
 ---
 
@@ -498,8 +512,6 @@ Phase I R2.
 |-----|----------|----------|-------|
 | Activated squadron loses ghosted appearance after ship-overlap displacement | Minor (visual only) | 2026-04-12 | Squadron cannot be re-activated (logic correct); only the dimmed visual state is lost. |
 | Repair effect not visible on ship token | Minor (visual only) | 2026-05-01 | Token's hull/shield pip overlay stale after repair until next refresh. Likely missing `ship_shields_changed` / `ship_hull_changed` emit on repair path. |
-| Network: passive-peer auto-resolve damage cards don't refresh visuals | Minor (visual only) | 2026-05-01 | `GameManager._handle_remote_immediate_effect` emits only `command_dials_changed` + `ship_defense_token_changed`; missing `damage_card_flipped` + shield/hull deltas on passive peer. Closed by extracting `_emit_immediate_signals` into a shared helper. |
-| **Ship activation modal visible behind squadron command modal** | **Minor (visual only)** | **2026-05-09** | **FIXED (K12-bugfix, pending commit)** — When opening squadron command during ship activation, the ship activation modal now closes before opening the squadron modal so they don't overlap. Fix in `ShipActivationController._on_squadron_step_entered()`. |
 
 ### 4.4 Manual Tests Pending
 
@@ -513,14 +525,6 @@ Bulk MTs that were never formally stamped (~150 tests across phases 2–12,
 refactoring A–F, bug fixes) should be regression-stamped before the next
 release milestone — full table preserved in
 [docs/old/open_topics.md](old/open_topics.md) § "Never Formally Stamped".
-
-### 4.5 Rule File Organization Status
-
-Resolved by M8: production rule files now use the source-first grouping in
-[src/core/effects/rules/](../src/core/effects/rules/). Current ship damage-card
-rules live under `damage_cards/ship/`; future core rules, keywords, upgrades,
-objectives, obstacles, and token rules should use the matching folders from
-[src/core/effects/rules/README.md](../src/core/effects/rules/README.md).
 
 ---
 

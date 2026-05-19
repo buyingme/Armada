@@ -49,6 +49,7 @@ var ship_data: ShipData = load("res://data/ships/cr90_corvette.tres")
 # BAD — hardcoded
 var hull := 4
 var shields := {"front": 2, "left": 1}
+```
 
 ### 5. Interaction-Flow as Domain State (Phase I, supersedes Network UI Authority Pattern)
 
@@ -89,7 +90,38 @@ Banned patterns (enforced by lint after Phase I6; tightened in Phase K):
 - ❌ Inferring sub-step from local UI events (e.g. modal opened/closed) —
   always read `interaction_flow.step_id`.
 
-```
+### 6. Layer 3 — Rules (Phase M)
+
+FlowSpec owns which interaction steps exist and who controls them. Rules attach
+to those existing surfaces through `RuleRegistry`; they do not invent steps,
+mutate `GameState` directly, or live in presentation code.
+
+Rules:
+
+- New game rules, card effects, keywords, upgrades, objectives, obstacles,
+  token rules, defense-token eligibility rules, and rule-derived UI affordances
+  go in `src/core/effects/rules/` and register with `RuleRegistry`.
+- Use source-first grouping from `src/core/effects/rules/README.md` so one
+  card, keyword, objective, obstacle, or token rule stays in one file even when
+  it registers multiple hooks.
+- `RuleRegistry` stores static hook definitions only. Active status is resolved
+  from authoritative serialized state (`GameState`, ship/squadron instances,
+  faceup damage cards, upgrades, objectives, obstacles, tokens) or from a
+  documented transient `EffectRegistry` bridge rebuilt by `EffectFactory`.
+- Register hooks through `RuleBootstrap` and `RuleRegistry.register_rule()`.
+  Hook execution order must remain deterministic: priority descending, then
+  `rule_id` ascending.
+- Validators and blockers protect direct command submissions in hot-seat,
+  replay, and network. UI affordances are projected from the same rule data via
+  `UIProjector`; scenes and widgets may display affordances but must not own
+  rule predicates.
+- Observer hooks return follow-up `GameCommand` requests for the deferred queue.
+  They must not call `CommandProcessor.submit()` or `GameManager.submit_*()`.
+- Save/load tests must prove migrated persistent rules rebuild from serialized
+  state. Replay/network gates must cover rule-order or observer-follow-up
+  changes.
+- Before adding a rule hook, run or inspect `scripts/dump_flow_coverage.gd` for
+  the target `(flow, step)` so the hook attaches to the correct FlowSpec pair.
 
 ## Required Patterns
 

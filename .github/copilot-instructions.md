@@ -182,6 +182,33 @@ When completing a phase task or full phase:
 - See `.skills/copilot_instructions.md` for the exact update procedure and the MT scenario template
 - Archived originals in `docs/old/` for historical reference (per-slice narratives, MT logs, fix follow-ups)
 
+### 12. New Rules Go Through `RuleRegistry`
+
+Every new game rule, card effect, damage card, squadron keyword, upgrade,
+objective, obstacle, token rule, defense-token eligibility rule, and UI
+affordance derived from rules must use `RuleRegistry` hooks under
+`src/core/effects/rules/` unless the user explicitly approves a temporary
+legacy bridge.
+
+- Keep one source rule per file and use the source-first folders described in
+    `src/core/effects/rules/README.md`.
+- Register static hooks through `RuleBootstrap` and `RuleRegistry.register_rule()`;
+    do not scatter rule branches through scenes, UI, command producers, or
+    resolver special cases.
+- `RuleRegistry` is a static definition catalogue only. Active rule state must
+    come from serialized `GameState` entities such as ships, squadrons, faceup
+    damage cards, upgrades, objectives, obstacles, or tokens; legacy active
+    effects must be rebuilt from serialized state via `EffectFactory`.
+- Validators, blockers, modifiers, observers, and enablers must cover every
+    relevant command surface: marker commands, final mutation commands, projected
+    UI eligibility, direct replay submissions, and network mirrors.
+- Observer hooks must return follow-up commands for the deferred queue; rule
+    files must never call `CommandProcessor.submit()` or `GameManager.submit_*()`.
+- Rule tests must cover save/load rebuild, replay determinism where ordering or
+    observer follow-ups are involved, and hot-seat/network command safety.
+- Use `scripts/dump_flow_coverage.gd` to inspect which FlowSpec surface and
+    registered hooks apply before adding a new rule hook.
+
 ## Code Generation Workflow
 
 When asked to implement a feature or fix a bug:

@@ -5,6 +5,15 @@
 Phase M rule files now use source-first grouping so contributors can find a
 rule by the component printed on the table before they know its hook surface.
 
+## Shared Surface Names
+
+Use `RuleSurface` for common RuleRegistry target strings and callback runners.
+Phase N added no-op-safe surfaces for attack-target blocking, attack-damage
+modification, accuracy and critical blocking, engineering and token-gain rules,
+maneuver yaw modification, and post-maneuver observer follow-ups. Rule files
+still register static hooks through `RuleRegistry`; `RuleSurface` only names and
+executes surfaces that callers explicitly choose.
+
 | Rule | Source | Hooks | Notes |
 |---|---|---|---|
 | `damage_cards/ship/capacitor_failure.gd` | Ship damage card | `VALIDATOR` and `BLOCKER` on `ATTACK / ATTACK_DEFENSE_TOKENS` for Redirect spending; `VALIDATOR` and `BLOCKER` on `SHIP_ACTIVATION / REPAIR_STEP` for shield repair actions | No legacy `EffectRegistry` bridge remains; defense and repair helper UI eligibility reads blocker metadata while command validators protect replay/network submissions. |

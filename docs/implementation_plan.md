@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-19 (Phase M15 closeout complete; see §2 and [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md))
+> Last updated: 2026-05-20 (Phase M15 closeout complete; Phase N has N0 audit and N1 scaffolding complete; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 163 |
-| GUT tests | 3 096 |
-| GUT asserts | 6 209 |
+| GUT test scripts | 164 |
+| GUT tests | 3 107 |
+| GUT asserts | 6 233 |
 | Failing tests | 0 |
-| Last commit | `b9bbe82` — M15 RuleRegistry governance closeout |
+| Last completed slice | N1 — RuleSurface scaffolding closeout |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-19 M14 full GUT summary is green
-(163 / 3 096 / 6 209, 0 failures). Phase K lint reports 0 violations / 4
+Verification note: the 2026-05-20 N1 full GUT summary is green
+(164 / 3 107 / 6 233, 0 failures). Phase K lint reports 0 violations / 4
 allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
 network peer equality, and `git diff --check` is clean. Godot still reports known
 shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. User MT pass confirmed 2026-05-19.
+failures were reported. Last user MT pass confirmed 2026-05-19 before N1.
 
 ---
 
@@ -490,6 +490,12 @@ and [docs/old/progress_summary.md](old/progress_summary.md).
 ---
 
 ## 4. Open Topics
+
+Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md)
+is now started. N0 completed the docs-only inventory and semantic audit for
+the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, and N1
+added no-behaviour-change `RuleSurface` scaffolding for the remaining migration
+targets. N2 is the next slice before implementation migrations resume.
 
 ### 4.1 Network Features Pending
 

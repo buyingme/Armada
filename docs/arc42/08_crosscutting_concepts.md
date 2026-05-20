@@ -559,6 +559,12 @@ serialized game entities (`GameState`, ships, squadrons, faceup damage cards,
 upgrades, objectives) or from a documented `EffectRegistry` bridge rebuilt from
 those entities after load.
 
+Phase N adds `RuleSurface` as the shared vocabulary and callback runner for
+common target surfaces. It keeps surface names such as attack target blocking,
+attack damage modification, engineering value modification, command-token gain
+blocking, maneuver yaw modification, and post-maneuver observer follow-ups in
+one pure core helper while `RuleRegistry` remains the only hook catalogue.
+
 The M7 Faulty Countermeasures bug established an additional crosscutting rule:
 player-choice rules must cover every command surface, not only the final state
 mutation. If a panel submits a marker command before a mutation command, both

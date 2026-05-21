@@ -17,7 +17,6 @@ const PERSISTENT_EFFECT_IDS: Array[String] = [
 	"damaged_controls",
 	"depowered_armament",
 	"disengaged_fire_control",
-	"faulty_countermeasures",
 	"life_support_failure",
 	"power_failure",
 	"ruptured_engine",

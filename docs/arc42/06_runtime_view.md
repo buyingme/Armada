@@ -274,11 +274,10 @@ AttackExecutor (accuracy spending)
     ├─ resolve_hook(&"ATTACK_SPEND_ACCURACY", ctx)      ── Blinded Gunners
     │
 AttackExecutor (defense token spending)
-    ├─ RuleRegistry.blockers_for("defense_token_spend") ── Capacitor Failure UI eligibility
+    ├─ RuleRegistry.blockers_for("defense_token_spend") ── Faulty Countermeasures / Capacitor Failure UI eligibility
     ├─ RuleRegistry.validators_for("commit_defense" /
     │     "spend_defense_token" / "select_redirect_zone")
-    │                                                   ── Capacitor Failure command safety
-    ├─ resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)     ── Faulty Countermeasures legacy UI bridge
+    │                                                   ── Faulty Countermeasures / Capacitor Failure command safety
     │
 AttackExecutor (resolve critical)
     ├─ resolve_hook(&"ATTACK_RESOLVE_CRITICAL", ctx)    ── Targeter Disruption

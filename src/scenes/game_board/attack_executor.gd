@@ -1156,7 +1156,7 @@ func _on_attack_defense_token_spent(token_index: int,
 
 ## Returns true if the token at the given index can be spent.
 ## Checks discard state, one-per-type limit, accuracy locks, and
-## persistent damage card effects (DEFENSE_VALIDATE_TOKEN hook).
+## RuleRegistry defense-token blockers.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _is_defense_token_spendable(token_index: int,
 		token: Dictionary) -> bool:
@@ -1195,9 +1195,7 @@ func _get_attacker_player() -> int:
 			return si.owner_player
 	return 0
 
-## Returns true if a persistent damage card effect blocks spending this
-## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
-## context's cancelled flag.
+## Returns true if a RuleRegistry blocker prevents spending this token.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func _is_token_blocked_by_effect(inst: ShipInstance,
 		token: Dictionary) -> bool:

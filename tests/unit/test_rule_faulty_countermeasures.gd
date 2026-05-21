@@ -40,6 +40,48 @@ func after_each() -> void:
 	_rejected_reasons.clear()
 
 
+func test_register_adds_validator_and_blocker_hooks() -> void:
+	var spend_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			FaultyCountermeasures.COMMAND_SPEND_DEFENSE_TOKEN)
+	var commit_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			FaultyCountermeasures.COMMAND_COMMIT_DEFENSE)
+	var blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			FaultyCountermeasures.TARGET_DEFENSE_TOKEN_SPEND)
+	assert_eq(spend_hooks.size(), 1,
+			"Faulty Countermeasures should validate direct token spends.")
+	assert_eq(commit_hooks.size(), 1,
+			"Faulty Countermeasures should validate defense commits.")
+	assert_eq(blockers.size(), 1,
+			"Faulty Countermeasures should expose one token blocker.")
+	assert_eq(RuleRegistry.registered_hook_count(), 2,
+			"Faulty Countermeasures should register validator and blocker hooks.")
+
+
+func test_blocker_marks_exhausted_token_for_payload() -> void:
+	var ship: ShipInstance = _state.get_ship(
+			DEFENDER_PLAYER, DEFENDER_SHIP_INDEX)
+	_add_faulty_countermeasures(ship)
+	ship.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
+	var blocked: Array[int] = _blocked_defense_indices(ship)
+	assert_eq(blocked, [0],
+			"Defense payload blockers should include exhausted tokens.")
+
+
+func test_blocker_allows_ready_token_for_payload() -> void:
+	var ship: ShipInstance = _state.get_ship(
+			DEFENDER_PLAYER, DEFENDER_SHIP_INDEX)
+	_add_faulty_countermeasures(ship)
+	var blocked: Array[int] = _blocked_defense_indices(ship)
+	assert_eq(blocked, [],
+			"Ready defense tokens should remain available in payload metadata.")
+
+
 func test_validator_rejects_exhausted_token_after_registration() -> void:
 	var ship: ShipInstance = _state.get_ship(
 			DEFENDER_PLAYER, DEFENDER_SHIP_INDEX)
@@ -126,8 +168,8 @@ func test_validator_rejects_after_save_load_effect_rebuild() -> void:
 	var restored_ship: ShipInstance = restored.get_ship(
 			DEFENDER_PLAYER, DEFENDER_SHIP_INDEX)
 	var result: Dictionary = _processor.submit(_make_spend_command(0, "discard"))
-	assert_gt(restored.effect_registry.get_effect_count(), 0,
-			"Save/load rebuild should restore legacy runtime hooks too.")
+	assert_eq(restored.effect_registry.get_effect_count(), 0,
+			"Save/load rebuild should not restore a legacy Faulty effect.")
 	assert_true(result.is_empty(),
 			"Command-time rule should still reject after save/load rebuild.")
 	assert_eq(restored_ship.defense_tokens[0]["state"],
@@ -190,3 +232,12 @@ func _make_commit_command(selected_indices: Array[int]) -> CommitDefenseCommand:
 		"ship_index": DEFENDER_SHIP_INDEX,
 		"selected_indices": payload_indices,
 	})
+
+
+func _blocked_defense_indices(ship: ShipInstance) -> Array[int]:
+	var attack_state: AttackState = AttackState.new()
+	attack_state.defender_zone = int(Constants.HullZone.FRONT)
+	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
+	var flow_executor: AttackFlowExecutor = AttackFlowExecutor.new()
+	return flow_executor.build_blocked_defense_token_indices(
+			attack_state, ship, resolver, null)

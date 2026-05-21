@@ -17,10 +17,12 @@ var _saved_active_player: int = 0
 func before_each() -> void:
 	_saved_game_state = GameManager.current_game_state
 	_saved_active_player = GameManager.active_player
+	RuleRegistry.clear()
 	_executor = AttackFlowExecutorScript.new()
 
 
 func after_each() -> void:
+	RuleRegistry.clear()
 	GameManager.current_game_state = _saved_game_state
 	GameManager.active_player = _saved_active_player
 
@@ -263,17 +265,16 @@ func test_build_defense_payload_includes_blocked_token_indices() -> void:
 	card.timing = "persistent"
 	card.is_faceup = true
 	ship.add_faceup_damage(card)
-	var registry: EffectRegistry = EffectRegistry.new()
-	DamageCardEffectFactory.register_effect(card, ship, registry)
+	FaultyCountermeasures.register()
 	var state: AttackState = AttackState.new()
 	state.defender_zone = int(Constants.HullZone.FRONT)
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 
 	var payload: Dictionary = _executor.build_defense_payload(
-			state, ship, gs, resolver, registry)
+			state, ship, gs, resolver, null)
 
 	assert_eq(payload.get("blocked_defense_token_indices", []) as Array, [0],
-			"payload should include effect-blocked defense token indices")
+			"payload should include RuleRegistry-blocked defense token indices")
 
 
 func test_sort_defense_tokens_canonical_orders_by_rrg_sequence() -> void:

@@ -1,6 +1,6 @@
 # Refactoring Phase N - Rule System Completion
 
-> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1; N2 next.
+> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2; N3 next.
 > **Predecessor:** Phase M is closed at `b9bbe82` / `988641a` with
 > RuleRegistry governance in project instructions and architecture skills.
 > **Decision point:** Taking Phase N before G4.7 intentionally delays the
@@ -14,7 +14,8 @@
 |---:|---|---|
 | N0 | ✅ Complete | Inventory and semantic audit recorded in Section 4. |
 | N1 | ✅ Complete | `RuleSurface` scaffolding and deterministic fixture coverage added. |
-| N2 | ⏳ Next | Retire the Faulty Countermeasures legacy UI bridge. |
+| N2 | ✅ Complete | Faulty Countermeasures bridge retired; UI eligibility uses RuleRegistry blockers. |
+| N3 | ⏳ Next | Migrate Power Failure. |
 
 ---
 
@@ -50,7 +51,7 @@ Current legacy production surfaces:
 
 | Surface | Legacy source | Current call sites / notes |
 |---|---|---|
-| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 12 effect ids still listed, including one partial bridge (`faulty_countermeasures`). |
+| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 11 effect ids still listed after N2 removed the Faulty Countermeasures bridge. |
 | Squadron keyword effects | `BomberEffect`, `EscortEffect`, `SwarmEffect` from `EffectFactory._create_keyword_effect()` | Bomber is wired through damage calculation; Escort is also enforced directly in `EngagementResolver`; Swarm has an old effect class but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found in `src/`. |
 | Attack validation/damage hooks | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE`, `ATTACK_SPEND_ACCURACY`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses target declaration, accuracy locking, critical resolution, and damage calculation. |
 | Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | Some hooks are still invoked from scene/tool code; Phase N should move rule decisions toward core/command surfaces. |
@@ -134,7 +135,7 @@ following findings are now binding for later Phase N slices.
 
 | Rule source | Legacy hook(s) | Source-text parity | Phase N direction |
 |---|---|---|---|
-| Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` | Matches card text: exhausted defense tokens cannot be spent. RuleRegistry validators already exist; only the UI/eligibility bridge remains. | N2 retires the bridge and removes the id from `PERSISTENT_EFFECT_IDS`. |
+| Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` | Matches card text: exhausted defense tokens cannot be spent. | Complete in N2: RuleRegistry validator and blocker now cover command safety and UI eligibility; the id is removed from `PERSISTENT_EFFECT_IDS`. |
 | Power Failure | `CALC_ENGINEERING_VALUE` | Matches card text and FAQ: halve rounded down; multiple copies apply one after the other. | N3 migrates as a RuleRegistry repair/engineering modifier. |
 | Life Support Failure | `ON_COMMAND_TOKEN_GAIN` plus immediate resolver token discard | Matches card text. Immediate token discard must stay in the immediate resolver; persistent token-gain blocking must cover both GameManager token gain and `ConvertDialToTokenCommand`. | N4 migrates only the persistent restriction. |
 | Depowered Armament | `ATTACK_VALIDATE_TARGET` | Matches card text: damaged ship cannot attack at long range. | N5 migrates as an attack target blocker/validator. |
@@ -155,7 +156,7 @@ original damage-card rules have moved to RuleRegistry:
 | Hook | Current status | Retirement path |
 |---|---|---|
 | `ATTACK_GATHER_DICE` | Legacy bridge still runs before RuleRegistry dice-pool modifiers; migrated Damaged Munitions and Point-Defense Failure no longer need a legacy `DamageCardEffect`. | Remove after remaining attack modifier surfaces no longer depend on `EffectRegistry`; N19 static guard should catch reintroduction. |
-| `DEFENSE_VALIDATE_TOKEN` | Needed only for the Faulty Countermeasures bridge until blocked-token metadata moves fully to RuleRegistry. | N2 removes the production need. |
+| `DEFENSE_VALIDATE_TOKEN` | No production resolver fallback remains after N2; Faulty Countermeasures moved to RuleRegistry blocker metadata. | Remove any remaining dead legacy declarations during N19 static-guard cleanup. |
 | `REPAIR_VALIDATE_SHIELD` | Compatibility fallback after Capacitor Failure migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
 | `STATUS_READY_TOKENS` | Compatibility fallback after Compartment Fire migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
 
@@ -209,7 +210,7 @@ or be actively pair-reviewed.
 |---:|---|---|:---:|---|
 | N0 | Inventory and semantic audit. Freeze the remaining legacy hook inventory, compare each legacy behaviour to `Resources/Game_Components/damage_cards.json`, RRG/card text, and production call sites. Explicitly decide whether Coolant Discharge's legacy `+1 close damage` behaviour is valid or stale. | low | No | Complete 2026-05-19; audit findings are recorded in Section 4 and block blind ports of Coolant Discharge, Thrust Control Malfunction, and Swarm. |
 | N1 | Rule-surface scaffolding. Add no-behaviour-change RuleRegistry targets/helpers for attack target blockers, attack damage modifiers, accuracy blockers, critical blockers, engineering modifiers, token-gain blockers, maneuver yaw modifiers, and maneuver observers. Existing legacy bridge remains. | medium | No | Complete 2026-05-19; `RuleSurface` fixture hooks prove new surfaces run in deterministic order and preserve old output when no production rule is registered. |
-| N2 | Retire the Faulty Countermeasures legacy UI bridge. Move blocked-token metadata fully to RuleRegistry blocker/projection data and remove `faulty_countermeasures` from `PERSISTENT_EFFECT_IDS`. | low | Yes | Existing M7 command coverage still passes; defense-token UI eligibility no longer depends on `DEFENSE_VALIDATE_TOKEN`. |
+| N2 | Retire the Faulty Countermeasures legacy UI bridge. Move blocked-token metadata fully to RuleRegistry blocker/projection data and remove `faulty_countermeasures` from `PERSISTENT_EFFECT_IDS`. | low | Yes | Complete 2026-05-20 with MT pass confirmed 2026-05-21; existing M7 command coverage still passes and defense-token UI eligibility no longer depends on `DEFENSE_VALIDATE_TOKEN`. |
 | N3 | Migrate Power Failure. Register a `MODIFIER` for repair/engineering value and remove its legacy `CALC_ENGINEERING_VALUE` effect. | low | Yes | Stacked Power Failure cards halve/round down correctly after save/load with zero legacy effect count. |
 | N4 | Migrate Life Support Failure persistent restriction. Keep the immediate token-discard effect in the immediate resolver, but move "cannot gain command tokens" to RuleRegistry validators/blockers for every token-gain surface. | medium | Yes + review | `convert_dial_to_token`, GameManager token-gain helper paths, save/load, replay, and network mirrors all block token gain from serialized faceup damage. |
 | N5 | Migrate Depowered Armament. Register an attack target `BLOCKER`/`VALIDATOR` for long-range attacks by the damaged ship. | low | Yes | Long-range target declaration is blocked through RuleRegistry and old `ATTACK_VALIDATE_TARGET` is not needed for this card. |

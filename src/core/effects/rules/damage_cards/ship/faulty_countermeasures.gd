@@ -11,6 +11,7 @@ const RULE_ID: String = "damage_card.faulty_countermeasures"
 const EFFECT_ID: String = "faulty_countermeasures"
 const COMMAND_COMMIT_DEFENSE: String = "commit_defense"
 const COMMAND_SPEND_DEFENSE_TOKEN: String = "spend_defense_token"
+const TARGET_DEFENSE_TOKEN_SPEND: String = "defense_token_spend"
 const REJECTION_REASON: String = \
 		"Faulty Countermeasures: exhausted defense tokens cannot be spent."
 
@@ -27,6 +28,11 @@ static func register() -> void:
 				Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 				FlowHook.ANY,
 				Callable(_rule_instance, "validate_defense_token_command")),
+		FlowHook.blocker(RULE_ID,
+				Constants.InteractionFlow.ATTACK,
+				Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+				TARGET_DEFENSE_TOKEN_SPEND,
+				Callable(_rule_instance, "block_defense_token")),
 	])
 
 
@@ -44,6 +50,21 @@ func validate_defense_token_command(game_state: GameState,
 			return _validate_commit_command(game_state, command)
 		_:
 			return _allow()
+
+
+## Returns blocker metadata for defense-token UI eligibility.
+## [param context] must carry `defender` and `metadata.token_state`.
+func block_defense_token(context: EffectContext) -> Dictionary:
+	if context == null:
+		return _not_blocked()
+	var ship: ShipInstance = context.defender as ShipInstance
+	if ship == null or not _has_faulty_countermeasures(ship):
+		return _not_blocked()
+	var token_state: int = int(context.get_meta_value(
+			"token_state", Constants.DefenseTokenState.READY))
+	if token_state == Constants.DefenseTokenState.EXHAUSTED:
+		return _blocked(REJECTION_REASON)
+	return _not_blocked()
 
 
 func _validate_spend_command(game_state: GameState,
@@ -108,3 +129,11 @@ func _token_is_exhausted(ship: ShipInstance, token_index: int) -> bool:
 
 func _allow() -> Dictionary:
 	return {"allowed": true, "reason": ""}
+
+
+func _blocked(reason: String) -> Dictionary:
+	return {"blocked": true, "reason": reason}
+
+
+func _not_blocked() -> Dictionary:
+	return {"blocked": false, "reason": ""}

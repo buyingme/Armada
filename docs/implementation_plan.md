@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-20 (Phase M15 closeout complete; Phase N has N0 audit and N1 scaffolding complete; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-21 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, and N2 bridge retirement complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -15,10 +15,10 @@
 | Metric | Value |
 |--------|-------|
 | GUT test scripts | 164 |
-| GUT tests | 3 107 |
-| GUT asserts | 6 233 |
+| GUT tests | 3 109 |
+| GUT asserts | 6 243 |
 | Failing tests | 0 |
-| Last completed slice | N1 — RuleSurface scaffolding closeout |
+| Last completed slice | N2 — Faulty Countermeasures bridge retirement |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-20 N1 full GUT summary is green
-(164 / 3 107 / 6 233, 0 failures). Phase K lint reports 0 violations / 4
+Verification note: the 2026-05-20 N2 full GUT summary is green
+(164 / 3 109 / 6 243, 0 failures). Phase K lint reports 0 violations / 4
 allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
 network peer equality, and `git diff --check` is clean. Godot still reports known
 shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. Last user MT pass confirmed 2026-05-19 before N1.
+failures were reported. Last user MT pass confirmed 2026-05-21 for N2.
 
 ---
 
@@ -287,16 +287,13 @@ regression gate is complete and remains the required L/M automated gate:
   155 / 3 031 / 5 947 with 0 failures, Phase K lint 0 violations / 4
   allow-listed branches, and baseline traces passing hot-seat trace/state plus
   network peer state equality.
-- M7 result: [faulty_countermeasures.gd](../src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd)
+- M7/N2 result: [faulty_countermeasures.gd](../src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd)
   registers the first production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  validator hook for `ATTACK / ATTACK_DEFENSE_TOKENS` and
+  validator and blocker hooks for `ATTACK / ATTACK_DEFENSE_TOKENS` and
   defense-token commands (`commit_defense` and `spend_defense_token`). The
-  command-time predicate reads active state from serialized
-  `ShipInstance.faceup_damage` plus token state, so an exhausted token is
-  rejected when the defender has Faulty Countermeasures even after a save/load
-  runtime-effect rebuild. The legacy `DEFENSE_VALIDATE_TOKEN` `EffectRegistry`
-  path remains in place for UI parity and publishes
-  `blocked_defense_token_indices` during Phase M.
+  predicates read active state from serialized `ShipInstance.faceup_damage`
+  plus token state, so exhausted tokens are rejected and projected as blocked
+  without a legacy `DEFENSE_VALIDATE_TOKEN` `EffectRegistry` bridge.
   [test_rule_faulty_countermeasures.gd](../tests/unit/test_rule_faulty_countermeasures.gd)
   covers rejection, commit rejection, ready-token allowance, other-ship
   isolation, no-card allowance, and save/load rebuild behaviour. Automated
@@ -493,9 +490,10 @@ and [docs/old/progress_summary.md](old/progress_summary.md).
 
 Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md)
 is now started. N0 completed the docs-only inventory and semantic audit for
-the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, and N1
-added no-behaviour-change `RuleSurface` scaffolding for the remaining migration
-targets. N2 is the next slice before implementation migrations resume.
+the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, N1 added
+no-behaviour-change `RuleSurface` scaffolding for the remaining migration
+targets, and N2 retired the Faulty Countermeasures legacy UI bridge. N3 is the
+next slice before implementation migrations resume.
 
 ### 4.1 Network Features Pending
 

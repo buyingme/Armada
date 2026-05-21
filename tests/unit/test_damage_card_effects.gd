@@ -145,6 +145,14 @@ func test_capacitor_failure_no_longer_declares_legacy_hooks() -> void:
 			"Capacitor Failure should not use the legacy repair hook after M12.")
 
 
+func test_faulty_countermeasures_no_longer_declares_legacy_hook() -> void:
+	var e: DamageCardEffect = _make_effect(
+			"faulty_countermeasures", _make_ship())
+	var hooks: Array[StringName] = e.get_hooks()
+	assert_false(hooks.has(&"DEFENSE_VALIDATE_TOKEN"),
+			"Faulty Countermeasures should use RuleRegistry blockers after N2.")
+
+
 func test_coolant_discharge_hooks() -> void:
 	var e: DamageCardEffect = _make_effect("coolant_discharge", _make_ship())
 	var hooks: Array[StringName] = e.get_hooks()
@@ -294,30 +302,30 @@ func test_point_defense_failure_no_longer_declares_gather_hook() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Faulty Countermeasures — cannot spend exhausted defense tokens
+# Faulty Countermeasures — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_faulty_countermeasures_blocks_exhausted_token() -> void:
+func test_faulty_countermeasures_no_longer_triggers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
 	var ctx: EffectContext = _make_context(&"DEFENSE_VALIDATE_TOKEN")
 	ctx.defender = ship
 	ctx.set_meta_value("token_state", Constants.DefenseTokenState.EXHAUSTED)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger for exhausted tokens")
-	e.resolve(ctx)
-	assert_true(ctx.cancelled, "Should cancel spending")
-
-
-func test_faulty_countermeasures_allows_ready_token() -> void:
-	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
-	var ctx: EffectContext = _make_context(&"DEFENSE_VALIDATE_TOKEN")
-	ctx.defender = ship
-	ctx.set_meta_value("token_state", Constants.DefenseTokenState.READY)
 	assert_false(e.should_trigger(ctx),
-			"Should not trigger for ready tokens")
+			"Faulty Countermeasures should no longer trigger legacy effects.")
+
+
+func test_faulty_countermeasures_factory_no_longer_registers_effect() -> void:
+	var ship: ShipInstance = _make_ship()
+	var card: DamageCard = _make_card("faulty_countermeasures")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Faulty Countermeasures should not register a legacy effect after N2.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Faulty Countermeasures should leave EffectRegistry empty.")
 
 
 # ---------------------------------------------------------------------------
@@ -553,60 +561,24 @@ func test_life_support_failure_blocks_token_gain() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Integration: Faulty Countermeasures via EffectRegistry pipeline
+# Integration: Faulty Countermeasures migrated out of EffectRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_faulty_countermeasures_pipeline_blocks_exhausted_token() -> void:
-	# Arrange — register the effect via the full pipeline.
+func test_faulty_countermeasures_pipeline_no_longer_blocks_tokens() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
 	var reg: EffectRegistry = EffectRegistry.new()
 	reg.register(e)
-	# Act — resolve the hook with an exhausted token.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.defender = ship
 	ctx.set_meta_value("token_state",
 			Constants.DefenseTokenState.EXHAUSTED)
 	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
-	# Assert
-	assert_true(ctx.cancelled,
-			"Exhausted token should be blocked through the full pipeline")
-
-
-func test_faulty_countermeasures_pipeline_allows_ready_token() -> void:
-	# Arrange
-	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship)
-	var reg: EffectRegistry = EffectRegistry.new()
-	reg.register(e)
-	# Act — resolve with a ready token.
-	var ctx: EffectContext = EffectContext.new()
-	ctx.defender = ship
-	ctx.set_meta_value("token_state",
-			Constants.DefenseTokenState.READY)
-	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
-	# Assert
 	assert_false(ctx.cancelled,
-			"Ready token should NOT be blocked")
-
-
-func test_faulty_countermeasures_pipeline_ignores_other_ship() -> void:
-	# Arrange — effect owner is ship_a, defender is ship_b.
-	var ship_a: ShipInstance = _make_ship(0)
-	var ship_b: ShipInstance = _make_ship(1)
-	var e: DamageCardEffect = _make_effect("faulty_countermeasures", ship_a)
-	var reg: EffectRegistry = EffectRegistry.new()
-	reg.register(e)
-	# Act — resolve with ship_b as defender.
-	var ctx: EffectContext = EffectContext.new()
-	ctx.defender = ship_b
-	ctx.set_meta_value("token_state",
-			Constants.DefenseTokenState.EXHAUSTED)
-	ctx = reg.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
-	# Assert
-	assert_false(ctx.cancelled,
-			"Effect should not fire on a different ship")
+			"Legacy DEFENSE_VALIDATE_TOKEN should not block after N2.")
+	assert_eq(reg.get_effects_for_hook(&"DEFENSE_VALIDATE_TOKEN").size(), 0,
+			"Faulty Countermeasures should not register the legacy hook.")
 
 
 # ---------------------------------------------------------------------------

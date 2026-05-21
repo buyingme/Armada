@@ -40,8 +40,6 @@ func get_hooks() -> Array[StringName]:
 			return [&"ATTACK_SPEND_ACCURACY"]
 		"targeter_disruption":
 			return [&"ATTACK_RESOLVE_CRITICAL"]
-		"faulty_countermeasures":
-			return [&"DEFENSE_VALIDATE_TOKEN"]
 		_:
 			return _get_non_attack_hooks()
 
@@ -79,8 +77,6 @@ func should_trigger(context: EffectContext) -> bool:
 			return context.attacker == owner
 		"targeter_disruption":
 			return context.attacker == owner
-		"faulty_countermeasures":
-			return _trigger_faulty_countermeasures(context)
 		_:
 			return _should_trigger_non_attack(context)
 
@@ -105,8 +101,7 @@ func resolve(context: EffectContext) -> void:
 		"coolant_discharge":
 			_resolve_coolant_discharge(context)
 		"depowered_armament", "disengaged_fire_control", \
-				"blinded_gunners", "faulty_countermeasures", \
-				"life_support_failure":
+				"blinded_gunners", "life_support_failure":
 			context.cancelled = true
 		"targeter_disruption":
 			context.critical_allowed = false
@@ -157,16 +152,6 @@ func _trigger_depowered_armament(context: EffectContext) -> bool:
 func _trigger_disengaged_fire_control(context: EffectContext) -> bool:
 	return context.attacker == owner and \
 			context.get_meta_value("is_obstructed", false) as bool
-
-
-## Faulty Countermeasures: Cannot spend exhausted defense tokens.
-func _trigger_faulty_countermeasures(context: EffectContext) -> bool:
-	if context.defender != owner:
-		return false
-	var token_state: int = int(
-			context.get_meta_value("token_state",
-			Constants.DefenseTokenState.READY))
-	return token_state == Constants.DefenseTokenState.EXHAUSTED
 
 
 ## Ruptured Engine: Suffer 1 damage after maneuver if speed > 1.

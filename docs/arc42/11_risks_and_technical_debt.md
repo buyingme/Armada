@@ -43,6 +43,6 @@
 | G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
 | G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
 
-> **Last audit:** 2026-05-18 — Phase M12 Capacitor Failure rule migration is complete with command validators plus RuleRegistry blockers for defense-token and repair-shield eligibility; no legacy EffectRegistry bridge remains for the card. Automated gates pass and user MT pass is confirmed. Network replay gates on host/client state-hash equality rather than committed network fixtures.
+> **Last audit:** 2026-05-21 — Phase N2 retired the Faulty Countermeasures legacy `DEFENSE_VALIDATE_TOKEN` UI bridge, with MT pass confirmed. Faulty Countermeasures and Capacitor Failure now share RuleRegistry defense-token blockers for UI eligibility, while command validators protect direct submissions. Network replay gates on host/client state-hash equality rather than committed network fixtures.
 > Architecture compliance, static typing, and doc comment coverage all PASS in core/.
 > Phases A–I, J (J1–J11), and K complete. Phase L/M modal and replay hardening continues under [docs/refactoring_phase_lm_plan.md](../refactoring_phase_lm_plan.md).

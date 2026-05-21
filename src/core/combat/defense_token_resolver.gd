@@ -63,7 +63,7 @@ func can_spend_tokens(def_inst: ShipInstance,
 
 
 ## Returns the number of spendable (non-discarded, non-locked, not
-## blocked by persistent effects) tokens.
+## blocked by RuleRegistry defense-token blockers) tokens.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func count_spendable_tokens(def_inst: ShipInstance,
 		locked_tokens: Array[int],
@@ -87,7 +87,7 @@ func count_spendable_tokens(def_inst: ShipInstance,
 
 ## Returns true if the token at the given index can be spent.
 ## Checks discard state, one-per-type limit, accuracy locks, and
-## persistent damage card effects (DEFENSE_VALIDATE_TOKEN hook).
+## RuleRegistry defense-token blockers.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func is_token_spendable(token_index: int, token: Dictionary,
 		spent_tokens: Dictionary, locked_tokens: Array[int],
@@ -109,24 +109,19 @@ func is_token_spendable(token_index: int, token: Dictionary,
 	return true
 
 
-## Returns true if a persistent damage card effect blocks spending this
-## token.  Resolves the DEFENSE_VALIDATE_TOKEN hook and checks the
-## context's cancelled flag.  Migrated RuleRegistry blockers are checked
-## before the remaining legacy EffectRegistry bridge.
+## Returns true if a RuleRegistry blocker prevents spending this token.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func is_token_blocked_by_effect(inst: ShipInstance,
-		token: Dictionary, registry: EffectRegistry,
+		token: Dictionary, _registry: EffectRegistry,
 		def_zone: int) -> bool:
 	if inst == null:
 		return false
 	var ctx: EffectContext = _make_defense_token_context(
 			inst, token, def_zone)
-	if _is_token_blocked_by_rule(ctx):
-		return true
-	if registry == null:
-		return false
-	ctx = registry.resolve_hook(&"DEFENSE_VALIDATE_TOKEN", ctx)
-	return ctx.cancelled
+	return RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			RuleSurface.TARGET_DEFENSE_TOKEN_SPEND)
 
 
 func _make_defense_token_context(inst: ShipInstance,
@@ -156,18 +151,6 @@ func _add_defending_zone_shields(ctx: EffectContext,
 		return
 	ctx.set_meta_value("target_zone_shields",
 			int(inst.current_shields[zone_key]))
-
-
-func _is_token_blocked_by_rule(ctx: EffectContext) -> bool:
-	var hooks: Array[FlowHook] = RuleRegistry.blockers_for(
-			int(Constants.InteractionFlow.ATTACK),
-			int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
-			CapacitorFailure.TARGET_DEFENSE_TOKEN_SPEND)
-	for hook: FlowHook in hooks:
-		var raw: Variant = hook.callback.call(ctx)
-		if raw is Dictionary and bool((raw as Dictionary).get("blocked", false)):
-			return true
-	return false
 
 
 # ---------------------------------------------------------------------------

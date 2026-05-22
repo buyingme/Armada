@@ -53,7 +53,7 @@ func validate(game_state: GameState) -> String:
 
 
 ## Reveals the top dial, spends it, adds the matching token.
-## Checks for Life Support Failure (ON_COMMAND_TOKEN_GAIN hook).
+## Checks RuleRegistry command-token gain blockers.
 ## Returns {"command": int, "token_added": bool, "duplicate": bool,
 ##          "overflow": bool, "token_blocked": bool}.
 func execute(game_state: GameState) -> Dictionary:
@@ -77,8 +77,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var cmd_type: int = int(dial.get("command", 0))
 	# Spend the dial.
 	ship.command_dial_stack.spend_revealed()
-	# Check Life Support Failure (damage card blocks token gain).
-	## Rules Reference: "Life Support Failure" card text.
+	# Rules Reference: "Life Support Failure" card text.
 	if _is_token_gain_blocked(game_state, ship):
 		return {"command": cmd_type, "token_added": false,
 				"duplicate": false, "overflow": false,
@@ -101,14 +100,22 @@ func execute(game_state: GameState) -> Dictionary:
 		"ship_index": payload.get("ship_index", -1),
 	}
 
-
-## Checks if a damage card effect (Life Support Failure) blocks token gain.
+## Checks if a damage card rule blocks command-token gain.
 func _is_token_gain_blocked(game_state: GameState,
 		ship: ShipInstance) -> bool:
-	if not game_state.effect_registry:
-		return false
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
-	ctx = game_state.effect_registry.resolve_hook(
-			&"ON_COMMAND_TOKEN_GAIN", ctx)
-	return ctx.cancelled
+	var step_id: Constants.InteractionStep = _token_gain_step(game_state)
+	return RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			step_id,
+			RuleSurface.TARGET_COMMAND_TOKEN_GAIN)
+
+
+func _token_gain_step(game_state: GameState) -> Constants.InteractionStep:
+	if game_state == null or game_state.interaction_flow == null:
+		return Constants.InteractionStep.ACTIVATION_MODAL_OPEN
+	if game_state.interaction_flow.flow_type \
+			!= Constants.InteractionFlow.SHIP_ACTIVATION:
+		return Constants.InteractionStep.ACTIVATION_MODAL_OPEN
+	return game_state.interaction_flow.step_id

@@ -1,6 +1,6 @@
 # Refactoring Phase N - Rule System Completion
 
-> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2; N3 next.
+> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5; N6 next.
 > **Predecessor:** Phase M is closed at `b9bbe82` / `988641a` with
 > RuleRegistry governance in project instructions and architecture skills.
 > **Decision point:** Taking Phase N before G4.7 intentionally delays the
@@ -15,7 +15,10 @@
 | N0 | ✅ Complete | Inventory and semantic audit recorded in Section 4. |
 | N1 | ✅ Complete | `RuleSurface` scaffolding and deterministic fixture coverage added. |
 | N2 | ✅ Complete | Faulty Countermeasures bridge retired; UI eligibility uses RuleRegistry blockers. |
-| N3 | ⏳ Next | Migrate Power Failure. |
+| N3 | ✅ Complete | Power Failure bridge removed; RuleRegistry engineering modifier covered by focused tests, full-suite gate, and MT pass. |
+| N4 | ✅ Complete | Life Support Failure token-gain bridge removed; immediate discard remains command/resolver based. MT pass confirmed. |
+| N5 | ✅ Complete | Depowered Armament target bridge removed; blocked long-range targets keep Skip Attack available. MT pass confirmed. |
+| N6 | ⏳ Next | Migrate Disengaged Fire Control. |
 
 ---
 
@@ -51,11 +54,11 @@ Current legacy production surfaces:
 
 | Surface | Legacy source | Current call sites / notes |
 |---|---|---|
-| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 11 effect ids still listed after N2 removed the Faulty Countermeasures bridge. |
+| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 8 effect ids remain after N3-N5 removed Power Failure, Life Support Failure, and Depowered Armament from the legacy bridge. |
 | Squadron keyword effects | `BomberEffect`, `EscortEffect`, `SwarmEffect` from `EffectFactory._create_keyword_effect()` | Bomber is wired through damage calculation; Escort is also enforced directly in `EngagementResolver`; Swarm has an old effect class but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found in `src/`. |
-| Attack validation/damage hooks | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE`, `ATTACK_SPEND_ACCURACY`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses target declaration, accuracy locking, critical resolution, and damage calculation. |
+| Attack validation/damage hooks | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE`, `ATTACK_SPEND_ACCURACY`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses target declaration, accuracy locking, critical resolution, and damage calculation. After N5, `ATTACK_VALIDATE_TARGET` remains only for unmigrated Coolant Discharge and Disengaged Fire Control. |
 | Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | Some hooks are still invoked from scene/tool code; Phase N should move rule decisions toward core/command surfaces. |
-| Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | Power Failure and Life Support Failure are good low-risk bridge removals once the RuleRegistry targets exist. |
+| Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | N3/N4 retired production use of these hooks for Power Failure and Life Support Failure. `RepairResolver` still has a legacy engineering fallback until N19 cleanup, but no current `DamageCardEffect` maps to either migrated id. |
 
 The main risk of doing nothing is architectural drift: new features will have
 to understand two rule systems, two rebuild stories, and two testing idioms.
@@ -136,9 +139,9 @@ following findings are now binding for later Phase N slices.
 | Rule source | Legacy hook(s) | Source-text parity | Phase N direction |
 |---|---|---|---|
 | Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` | Matches card text: exhausted defense tokens cannot be spent. | Complete in N2: RuleRegistry validator and blocker now cover command safety and UI eligibility; the id is removed from `PERSISTENT_EFFECT_IDS`. |
-| Power Failure | `CALC_ENGINEERING_VALUE` | Matches card text and FAQ: halve rounded down; multiple copies apply one after the other. | N3 migrates as a RuleRegistry repair/engineering modifier. |
-| Life Support Failure | `ON_COMMAND_TOKEN_GAIN` plus immediate resolver token discard | Matches card text. Immediate token discard must stay in the immediate resolver; persistent token-gain blocking must cover both GameManager token gain and `ConvertDialToTokenCommand`. | N4 migrates only the persistent restriction. |
-| Depowered Armament | `ATTACK_VALIDATE_TARGET` | Matches card text: damaged ship cannot attack at long range. | N5 migrates as an attack target blocker/validator. |
+| Power Failure | `CALC_ENGINEERING_VALUE` | Matches card text and FAQ: halve rounded down; multiple copies apply one after the other. | Complete in N3: RuleRegistry repair/engineering modifier, zero legacy effect after save/load, MT pass confirmed 2026-05-22. |
+| Life Support Failure | `ON_COMMAND_TOKEN_GAIN` plus immediate resolver token discard | Matches card text. Immediate token discard must stay in the immediate resolver; persistent token-gain blocking must cover both GameManager token gain and `ConvertDialToTokenCommand`. | Complete in N4: immediate discard remains, persistent restriction is RuleRegistry validator/blocker, MT pass confirmed 2026-05-22. |
+| Depowered Armament | `ATTACK_VALIDATE_TARGET` | Matches card text: damaged ship cannot attack at long range. | Complete in N5: attack-target blocker plus `publish_attack_flow` validator; blocked target UI keeps Skip Attack available. MT pass confirmed 2026-05-22. |
 | Disengaged Fire Control | `ATTACK_VALIDATE_TARGET` | Matches card text and FAQ interaction with obstruction sources such as Admiral Montferrat. | N6 migrates as an attack target blocker/validator using authoritative obstruction metadata. |
 | Coolant Discharge | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE` | Partially mismatched. Source text only says: "Only one attack you perform each round can target a ship." No checked source supports the legacy `+1 close damage` side effect. The legacy predicate also uses the attack executor's per-activation `current_attack` counter, while the card is worded per round and ship-target-specific. | N7 must migrate the ship-target limit only, remove the damage bonus, and define an authoritative ship-target attack count for current/future attack surfaces. |
 | Blinded Gunners | `ATTACK_SPEND_ACCURACY` | Matches card text: while attacking, the damaged ship cannot spend accuracy icons. | N8 migrates with payload/UI eligibility because the visible accuracy-spending step must agree with command safety. |
@@ -159,6 +162,9 @@ original damage-card rules have moved to RuleRegistry:
 | `DEFENSE_VALIDATE_TOKEN` | No production resolver fallback remains after N2; Faulty Countermeasures moved to RuleRegistry blocker metadata. | Remove any remaining dead legacy declarations during N19 static-guard cleanup. |
 | `REPAIR_VALIDATE_SHIELD` | Compatibility fallback after Capacitor Failure migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
 | `STATUS_READY_TOKENS` | Compatibility fallback after Compartment Fire migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
+| `CALC_ENGINEERING_VALUE` | Compatibility fallback remains in `RepairResolver`; Power Failure moved to RuleRegistry in N3 and no current `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
+| `ON_COMMAND_TOKEN_GAIN` | No production resolver fallback remains after N4; Life Support Failure moved to RuleRegistry blockers/validators. | Remove dead declarations during N19 static-guard cleanup. |
+| `ATTACK_VALIDATE_TARGET` | Compatibility fallback remains for Coolant Discharge and Disengaged Fire Control after N5 moved Depowered Armament to RuleRegistry. | Shrinks again in N6/N7, then remove during N19. |
 
 ### 4.4 Remaining Legacy Keyword Effects
 
@@ -211,9 +217,9 @@ or be actively pair-reviewed.
 | N0 | Inventory and semantic audit. Freeze the remaining legacy hook inventory, compare each legacy behaviour to `Resources/Game_Components/damage_cards.json`, RRG/card text, and production call sites. Explicitly decide whether Coolant Discharge's legacy `+1 close damage` behaviour is valid or stale. | low | No | Complete 2026-05-19; audit findings are recorded in Section 4 and block blind ports of Coolant Discharge, Thrust Control Malfunction, and Swarm. |
 | N1 | Rule-surface scaffolding. Add no-behaviour-change RuleRegistry targets/helpers for attack target blockers, attack damage modifiers, accuracy blockers, critical blockers, engineering modifiers, token-gain blockers, maneuver yaw modifiers, and maneuver observers. Existing legacy bridge remains. | medium | No | Complete 2026-05-19; `RuleSurface` fixture hooks prove new surfaces run in deterministic order and preserve old output when no production rule is registered. |
 | N2 | Retire the Faulty Countermeasures legacy UI bridge. Move blocked-token metadata fully to RuleRegistry blocker/projection data and remove `faulty_countermeasures` from `PERSISTENT_EFFECT_IDS`. | low | Yes | Complete 2026-05-20 with MT pass confirmed 2026-05-21; existing M7 command coverage still passes and defense-token UI eligibility no longer depends on `DEFENSE_VALIDATE_TOKEN`. |
-| N3 | Migrate Power Failure. Register a `MODIFIER` for repair/engineering value and remove its legacy `CALC_ENGINEERING_VALUE` effect. | low | Yes | Stacked Power Failure cards halve/round down correctly after save/load with zero legacy effect count. |
-| N4 | Migrate Life Support Failure persistent restriction. Keep the immediate token-discard effect in the immediate resolver, but move "cannot gain command tokens" to RuleRegistry validators/blockers for every token-gain surface. | medium | Yes + review | `convert_dial_to_token`, GameManager token-gain helper paths, save/load, replay, and network mirrors all block token gain from serialized faceup damage. |
-| N5 | Migrate Depowered Armament. Register an attack target `BLOCKER`/`VALIDATOR` for long-range attacks by the damaged ship. | low | Yes | Long-range target declaration is blocked through RuleRegistry and old `ATTACK_VALIDATE_TARGET` is not needed for this card. |
+| N3 | Migrate Power Failure. Register a `MODIFIER` for repair/engineering value and remove its legacy `CALC_ENGINEERING_VALUE` effect. | low | Yes | Complete 2026-05-22 with MT pass: stacked Power Failure cards halve/round down correctly after save/load with zero legacy effect count. |
+| N4 | Migrate Life Support Failure persistent restriction. Keep the immediate token-discard effect in the immediate resolver, but move "cannot gain command tokens" to RuleRegistry validators/blockers for every token-gain surface. | medium | Yes + review | Complete 2026-05-22 with MT pass: `convert_dial_to_token`, GameManager token-gain helper paths, and save/load rebuild all block token gain from serialized faceup damage. |
+| N5 | Migrate Depowered Armament. Register an attack target `BLOCKER`/`VALIDATOR` for long-range attacks by the damaged ship. | low | Yes | Complete 2026-05-22 with MT pass: long-range target declaration is blocked through RuleRegistry, old `ATTACK_VALIDATE_TARGET` is not needed for this card, and the blocked-target panel still offers Skip Attack. |
 | N6 | Migrate Disengaged Fire Control. Register an attack target `BLOCKER`/`VALIDATOR` for obstructed attacks by the damaged ship. | medium | Yes + review | Target eligibility and direct attack-flow submissions agree on obstruction blocking in hot-seat and network. |
 | N7 | Migrate Coolant Discharge. Implement the source-text rule only: one ship-targeting attack each round for the damaged ship. Remove the stale close-range damage bonus. | high | No | Ship-target attack count is authoritative and replay-safe; no `ATTACK_CALC_DAMAGE` side effect remains. |
 | N8 | Migrate Blinded Gunners. Move accuracy-spend blocking to RuleRegistry and make the attack payload/UI show no spendable accuracies when active. | high | No | Accuracy UI, direct submissions, save/load, and replay all derive blocking from `faceup_damage`; loaded Blinded Gunners regression remains covered. |
@@ -276,7 +282,8 @@ Additional gates by slice type:
 | Legacy retirement | Static guard test plus `rg`/grep inventory showing old production surfaces are gone. |
 
 Manual test gates should be required for N8, N11-N15, N17, and N18 because
-they touch visible attack/maneuver/keyword interaction timing.
+they touch visible attack/maneuver/keyword interaction timing. N3-N5 were
+batched behind one MT gate by user request; MT pass was confirmed 2026-05-22.
 
 ---
 

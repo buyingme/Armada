@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-21 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, and N2 bridge retirement complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-22 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, and N3-N5 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 164 |
-| GUT tests | 3 109 |
-| GUT asserts | 6 243 |
+| GUT test scripts | 167 |
+| GUT tests | 3 134 |
+| GUT asserts | 6 332 |
 | Failing tests | 0 |
-| Last completed slice | N2 — Faulty Countermeasures bridge retirement |
+| Last completed slice | N5 — Depowered Armament migration in the N3-N5 batch |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-20 N2 full GUT summary is green
-(164 / 3 109 / 6 243, 0 failures). Phase K lint reports 0 violations / 4
+Verification note: the 2026-05-22 N3-N5 full GUT summary is green
+(167 / 3 134 / 6 332, 0 failures). Phase K lint reports 0 violations / 4
 allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
-network peer equality, and `git diff --check` is clean. Godot still reports known
-shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. Last user MT pass confirmed 2026-05-21 for N2.
+network peer equality, and `git diff --check` is clean. Godot still reports
+known shutdown RID leak warnings in the runner output; no parse errors or GUT
+failures were reported. User MT pass confirmed 2026-05-22 for the N3-N5 batch.
 
 ---
 
@@ -446,6 +446,24 @@ regression gate is complete and remains the required L/M automated gate:
   `git diff --check` clean, full GUT 163 / 3 096 / 6 209 with 0 failures,
   Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
   passing hot-seat trace/state plus network peer equality.
+- N3-N5 automated implementation result: [power_failure.gd](../src/core/effects/rules/damage_cards/ship/power_failure.gd), [life_support_failure.gd](../src/core/effects/rules/damage_cards/ship/life_support_failure.gd), and [depowered_armament.gd](../src/core/effects/rules/damage_cards/ship/depowered_armament.gd)
+  migrate three more persistent damage-card behaviours out of
+  `DamageCardEffect`. Power Failure is now a RuleRegistry `engineering_value`
+  modifier for repair engineering; Life Support Failure keeps its immediate
+  token-discard resolver while moving persistent command-token gain blocking
+  to validators/blockers; Depowered Armament is now an `attack_target` blocker
+  plus `publish_attack_flow` validator for long-range target declarations.
+  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers these cards in the transient `EffectRegistry`.
+  [test_rule_power_failure.gd](../tests/unit/test_rule_power_failure.gd),
+  [test_rule_life_support_failure.gd](../tests/unit/test_rule_life_support_failure.gd),
+  [test_rule_depowered_armament.gd](../tests/unit/test_rule_depowered_armament.gd),
+  and legacy absence updates in [test_damage_card_effects.gd](../tests/unit/test_damage_card_effects.gd)
+  cover registration, direct blockers/modifiers, command submission safety,
+  resolver integration, and save/load rebuild with zero legacy effects.
+  [test_attack_sim_panel.gd](../tests/unit/test_attack_sim_panel.gd) covers the
+  N5 MT follow-up where a rule-blocked target keeps the Skip Attack affordance
+  available. User MT pass confirmed 2026-05-22 for the combined N3-N5 batch.
 
 ---
 
@@ -492,8 +510,9 @@ Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md)
 is now started. N0 completed the docs-only inventory and semantic audit for
 the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, N1 added
 no-behaviour-change `RuleSurface` scaffolding for the remaining migration
-targets, and N2 retired the Faulty Countermeasures legacy UI bridge. N3 is the
-next slice before implementation migrations resume.
+targets, N2 retired the Faulty Countermeasures legacy UI bridge, and N3-N5
+completed Power Failure, Life Support Failure, and Depowered Armament migration
+with MT pass. N6 Disengaged Fire Control is next.
 
 ### 4.1 Network Features Pending
 

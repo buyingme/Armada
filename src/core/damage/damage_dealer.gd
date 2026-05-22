@@ -186,8 +186,8 @@ func should_deal_faceup(card_index: int,
 	return card_index == 0 and first_card_faceup
 
 
-## Returns true if a faceup damage card has a persistent effect that
-## should be registered with the EffectRegistry.
+## Returns true if a faceup damage card still has a legacy persistent effect
+## that should be registered with the EffectRegistry.
 ## Delegates to [DamageCardEffectFactory.is_persistent].
 ## Rules Reference: DM-005 — persistent effects remain while faceup.
 func should_register_persistent(card: DamageCard) -> bool:

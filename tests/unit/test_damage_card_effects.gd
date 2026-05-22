@@ -153,6 +153,20 @@ func test_faulty_countermeasures_no_longer_declares_legacy_hook() -> void:
 			"Faulty Countermeasures should use RuleRegistry blockers after N2.")
 
 
+func test_n3_to_n5_cards_no_longer_declare_legacy_hooks() -> void:
+	var depowered: DamageCardEffect = _make_effect(
+			"depowered_armament", _make_ship())
+	var power: DamageCardEffect = _make_effect("power_failure", _make_ship())
+	var life_support: DamageCardEffect = _make_effect(
+			"life_support_failure", _make_ship())
+	assert_false(depowered.get_hooks().has(&"ATTACK_VALIDATE_TARGET"),
+			"Depowered Armament should use RuleRegistry target blockers after N5.")
+	assert_false(power.get_hooks().has(&"CALC_ENGINEERING_VALUE"),
+			"Power Failure should use RuleRegistry modifiers after N3.")
+	assert_false(life_support.get_hooks().has(&"ON_COMMAND_TOKEN_GAIN"),
+			"Life Support Failure should use RuleRegistry blockers after N4.")
+
+
 func test_coolant_discharge_hooks() -> void:
 	var e: DamageCardEffect = _make_effect("coolant_discharge", _make_ship())
 	var hooks: Array[StringName] = e.get_hooks()
@@ -212,28 +226,30 @@ func test_targeter_disruption_blocks_critical() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Depowered Armament — cannot attack at long range
+# Depowered Armament — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_depowered_armament_triggers_at_long() -> void:
+func test_depowered_armament_no_longer_triggers_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("depowered_armament", ship)
 	var ctx: EffectContext = _make_context(&"ATTACK_VALIDATE_TARGET")
 	ctx.attacker = ship
 	ctx.range_band = "long"
-	assert_true(e.should_trigger(ctx),
-			"Should trigger at long range")
-
-
-func test_depowered_armament_no_trigger_at_close() -> void:
-	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("depowered_armament", ship)
-	var ctx: EffectContext = _make_context(&"ATTACK_VALIDATE_TARGET")
-	ctx.attacker = ship
-	ctx.range_band = "close"
 	assert_false(e.should_trigger(ctx),
-			"Should not trigger at close range")
+			"Depowered Armament should be inactive in legacy contexts after N5.")
+
+
+func test_depowered_armament_factory_no_longer_registers_effect() -> void:
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("depowered_armament")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Depowered Armament should not register a legacy effect after N5.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Depowered Armament should not add legacy runtime hooks.")
 
 
 # ---------------------------------------------------------------------------
@@ -502,30 +518,31 @@ func test_crew_panic_no_longer_triggers_legacy_context() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Power Failure — halve engineering value
+# Power Failure — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_power_failure_halves_eng_value() -> void:
+func test_power_failure_no_longer_resolves_legacy_modifier() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("power_failure", ship)
 	var ctx: EffectContext = _make_context(&"CALC_ENGINEERING_VALUE")
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("engineering_value", 4)
 	e.resolve(ctx)
-	assert_eq(int(ctx.get_meta_value("engineering_value")), 2,
-			"Should halve 4 → 2")
+	assert_eq(int(ctx.get_meta_value("engineering_value")), 4,
+			"Legacy Power Failure should no longer mutate engineering value.")
 
 
-func test_power_failure_rounds_down() -> void:
+func test_power_failure_factory_no_longer_registers_effect() -> void:
 	var ship: ShipInstance = _make_ship()
-	var e: DamageCardEffect = _make_effect("power_failure", ship)
-	var ctx: EffectContext = _make_context(&"CALC_ENGINEERING_VALUE")
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("engineering_value", 3)
-	e.resolve(ctx)
-	assert_eq(int(ctx.get_meta_value("engineering_value")), 1,
-			"Should halve 3 → 1 (rounded down)")
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("power_failure")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Power Failure should not register a legacy effect after N3.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Power Failure should not add legacy runtime hooks.")
 
 
 # ---------------------------------------------------------------------------
@@ -546,18 +563,30 @@ func test_compartment_fire_no_longer_registers_legacy_effect() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Life Support Failure (persistent) — cannot gain command tokens
+# Life Support Failure (persistent) — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_life_support_failure_blocks_token_gain() -> void:
+func test_life_support_failure_no_longer_blocks_legacy_token_gain() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("life_support_failure", ship)
 	var ctx: EffectContext = _make_context(&"ON_COMMAND_TOKEN_GAIN")
 	ctx.set_meta_value("ship", ship)
 	e.resolve(ctx)
-	assert_true(ctx.cancelled,
-			"Should cancel command token gain")
+	assert_false(ctx.cancelled,
+			"Legacy Life Support Failure should not cancel token gain after N4.")
+
+
+func test_life_support_failure_factory_no_longer_registers_effect() -> void:
+	var ship: ShipInstance = _make_ship()
+	var reg: EffectRegistry = EffectRegistry.new()
+	var card: DamageCard = _make_card("life_support_failure")
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
+	assert_null(effect,
+			"Life Support Failure should not register a legacy effect after N4.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Life Support Failure should not add legacy runtime hooks.")
 
 
 # ---------------------------------------------------------------------------
@@ -625,7 +654,7 @@ func test_attack_validate_pipeline_coolant_discharge_blocks() -> void:
 			"Second attack should be cancelled by Coolant Discharge pipeline")
 
 
-func test_attack_validate_pipeline_depowered_armament_blocks_long() -> void:
+func test_attack_validate_pipeline_depowered_armament_no_longer_blocks_long() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
@@ -637,8 +666,10 @@ func test_attack_validate_pipeline_depowered_armament_blocks_long() -> void:
 	ctx.range_band = "long"
 	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
 	# Assert
-	assert_true(ctx.cancelled,
-			"Long-range attack should be cancelled by Depowered Armament")
+	assert_false(ctx.cancelled,
+			"Depowered Armament target blocking should come from RuleRegistry.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Depowered Armament should not register a legacy target hook.")
 
 
 func test_attack_validate_pipeline_disengaged_fire_blocks_obstructed() -> void:
@@ -703,7 +734,7 @@ func test_status_ready_pipeline_compartment_fire_has_no_legacy_bridge() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_token_gain_pipeline_life_support_blocks() -> void:
+func test_token_gain_pipeline_life_support_no_longer_blocks() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
@@ -714,8 +745,10 @@ func test_token_gain_pipeline_life_support_blocks() -> void:
 	ctx.set_meta_value("ship", ship)
 	ctx = reg.resolve_hook(&"ON_COMMAND_TOKEN_GAIN", ctx)
 	# Assert
-	assert_true(ctx.cancelled,
-			"Token gain should be blocked by Life Support Failure")
+	assert_false(ctx.cancelled,
+			"Life Support Failure token blocking should come from RuleRegistry.")
+	assert_eq(reg.get_effect_count(), 0,
+			"Life Support Failure should not register a legacy token hook.")
 
 
 # ---------------------------------------------------------------------------

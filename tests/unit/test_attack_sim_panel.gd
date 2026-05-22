@@ -404,6 +404,23 @@ func test_show_dice_count_exec_mode_hides_done_button() -> void:
 			"Done button should not show in attack execution mode.")
 
 
+func test_show_attack_blocked_skip_keeps_skip_available() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	_panel.show_skip_attack_button()
+	_panel.show_target_selected("Attacker", "FRONT",
+			"Defender", "FRONT", "Clear", "long")
+	_panel.show_dice_count("2 red")
+	_panel.show_attack_blocked_skip(
+			"Attack blocked by damage card. Select another target or skip.")
+	assert_true(_panel._skip_attack_button.visible,
+			"Blocked attacks should leave Skip Attack available.")
+	assert_false(_panel._dice_count_label.visible,
+			"Blocked attacks should hide the stale dice count.")
+	assert_eq(_panel.get_body_text(),
+			"Attack blocked by damage card. Select another target or skip.",
+			"Blocked attacks should explain that the player can skip.")
+
+
 func test_show_dice_count_sim_mode_shows_done_button() -> void:
 	_panel.show_initial()
 	_panel.show_dice_count("2 red")

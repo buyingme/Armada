@@ -22,6 +22,9 @@ executes surfaces that callers explicitly choose.
 | `damage_cards/ship/crew_panic.gd` | Ship damage card | `ENABLER` on `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` for `command_dial_reveal` | No legacy `EffectRegistry` bridge remains; `UIProjector.affordances` exposes pre-reveal choice metadata for ships with faceup Crew Panic and hidden dials. |
 | `damage_cards/ship/damaged_munitions.gd` | Ship damage card | `MODIFIER` on `ATTACK / ATTACK_ROLL` for `dice_pool` | No legacy `EffectRegistry` bridge remains; the first pass exposes available die colours from the attacking ship's `faceup_damage`, and the selected colour is applied before rolling. |
 | `damage_cards/ship/point_defense_failure.gd` | Ship damage card | `MODIFIER` on `ATTACK / ATTACK_ROLL` for `dice_pool` | No legacy `EffectRegistry` bridge remains; the first pass exposes available die colours when the defender is a squadron, and the selected colour is applied before rolling. |
+| `damage_cards/ship/power_failure.gd` | Ship damage card | `MODIFIER` on `SHIP_ACTIVATION / REPAIR_STEP` for `engineering_value` | No legacy `EffectRegistry` bridge remains; repair engineering points are halved once per faceup copy, rounded down each time. |
+| `damage_cards/ship/life_support_failure.gd` | Crew damage card | `VALIDATOR` for `convert_dial_to_token` and `BLOCKER` for `command_token_gain` on ship-activation token-conversion steps | No legacy token-gain bridge remains; immediate command-token discard still resolves through the immediate-effect command/resolver, while the persistent restriction reads `faceup_damage`. |
+| `damage_cards/ship/depowered_armament.gd` | Ship damage card | `BLOCKER` for `attack_target` and `VALIDATOR` for `publish_attack_flow` on `ATTACK / ATTACK_DECLARE` | No legacy `ATTACK_VALIDATE_TARGET` bridge remains for this card; long-range target declaration is rejected from serialized attacker damage state. |
 
 ## Grouping
 

@@ -343,8 +343,8 @@ func test_should_register_persistent_false_for_immediate() -> void:
 func test_should_register_persistent_immediate_persistent() -> void:
 	var card: DamageCard = _make_card("Life Support Failure",
 			"immediate_persistent", "life_support_failure")
-	assert_true(_dealer.should_register_persistent(card),
-			"immediate_persistent → register.")
+	assert_false(_dealer.should_register_persistent(card),
+			"Life Support Failure persistent restriction moved to RuleRegistry.")
 
 
 # ===========================================================================

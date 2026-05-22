@@ -48,6 +48,22 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REPAIR_STEP,
 			"repair_action")
+	var engineering_hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			RuleSurface.TARGET_ENGINEERING_VALUE)
+	var token_gain_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			LifeSupportFailure.COMMAND_CONVERT_DIAL_TO_TOKEN)
+	var token_gain_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			RuleSurface.TARGET_COMMAND_TOKEN_GAIN)
+	var target_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DECLARE,
+			RuleSurface.TARGET_ATTACK_TARGET)
 	var defense_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
@@ -59,9 +75,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 6,
-			"Bootstrap should invoke all six production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 10,
+	assert_eq(registered, 9,
+			"Bootstrap should invoke all nine production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 19,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -83,6 +99,14 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Enabler should carry the Crew Panic rule id.")
 	assert_eq(repair_hooks.size(), 1,
 			"Capacitor Failure should validate repair actions.")
+	assert_eq(engineering_hooks.size(), 1,
+			"Power Failure should register one engineering modifier.")
+	assert_eq(token_gain_hooks.size(), 1,
+			"Life Support Failure should validate command-token gain.")
+	assert_eq(token_gain_blockers.size(), 1,
+			"Life Support Failure should expose token-gain blocker metadata.")
+	assert_eq(target_blockers.size(), 1,
+			"Depowered Armament should expose attack-target blocker metadata.")
 	assert_eq(defense_blockers.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should expose blockers.")
 	assert_eq(repair_blockers.size(), 1,

@@ -41,8 +41,8 @@ var _token_points: int = 0
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("RepairResolver")
 
-## Optional EffectRegistry for hook resolution (Power Failure,
-## Capacitor Failure, persistent effect unregistration).
+## Optional EffectRegistry for remaining legacy hook resolution and
+## persistent effect unregistration.
 var _effect_registry: EffectRegistry = null
 
 
@@ -330,19 +330,24 @@ func _resolve_availability(ship: ShipInstance) -> void:
 			str(_has_repair_token), _token_points, _total_points])
 
 
-## Applies the CALC_ENGINEERING_VALUE hook (e.g. Power Failure halves value).
+## Applies RuleRegistry and remaining legacy engineering-value modifiers.
 func _apply_engineering_hook() -> void:
-	if not _effect_registry or _total_points <= 0:
+	if _total_points <= 0:
 		return
 	var eng_ctx: EffectContext = EffectContext.new()
 	eng_ctx.set_meta_value("ship", _ship)
 	eng_ctx.set_meta_value("engineering_value", _total_points)
-	eng_ctx = _effect_registry.resolve_hook(
-			&"CALC_ENGINEERING_VALUE", eng_ctx)
+	eng_ctx = RuleSurface.apply_modifiers(eng_ctx,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			RuleSurface.TARGET_ENGINEERING_VALUE)
+	if _effect_registry:
+		eng_ctx = _effect_registry.resolve_hook(
+				&"CALC_ENGINEERING_VALUE", eng_ctx)
 	var modified: int = int(eng_ctx.get_meta_value(
 			"engineering_value", _total_points))
 	if modified != _total_points:
-		_log.info("Engineering value modified: %d → %d (damage effect)"
+		_log.info("Engineering value modified: %d → %d (damage rule)"
 				% [_total_points, modified])
 		_total_points = modified
 		_remaining_points = _total_points
@@ -374,12 +379,7 @@ func _is_shield_op_allowed(zone: String) -> bool:
 
 
 func _is_shield_op_blocked_by_rule(ctx: EffectContext) -> bool:
-	var hooks: Array[FlowHook] = RuleRegistry.blockers_for(
-			int(Constants.InteractionFlow.SHIP_ACTIVATION),
-			int(Constants.InteractionStep.REPAIR_STEP),
-			CapacitorFailure.TARGET_REPAIR_SHIELD)
-	for hook: FlowHook in hooks:
-		var raw: Variant = hook.callback.call(ctx)
-		if raw is Dictionary and bool((raw as Dictionary).get("blocked", false)):
-			return true
-	return false
+	return RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.REPAIR_STEP,
+			RuleSurface.TARGET_REPAIR_SHIELD)

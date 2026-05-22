@@ -82,7 +82,7 @@ accuracy spending in hot-seat, network, and replay. If Blinded Gunners later
 migrates to `RuleRegistry`, the predicate must still derive active status from
 `ShipInstance.faceup_damage`, not from an un-serialized registry snapshot.
 
-First-six Phase M rule boundary decisions:
+Phase M/N rule boundary decisions:
 
 | Slice | Rule | Current legacy hook surface | M target | EffectRegistry bridge decision |
 |---|---|---|---|---|
@@ -92,6 +92,9 @@ First-six Phase M rule boundary decisions:
 | M10 | Point-Defense Failure | `ATTACK_GATHER_DICE` removed one die before attacking a squadron. | Pure `ATTACK_ROLL` modifier with defender-is-squadron predicate. | M10 removes the legacy `EffectRegistry` bridge. The RuleRegistry modifier exposes available die-colour metadata first, then applies the attacker-selected colour before rolling; squadron-vs-ship targeting data comes from the attack context/payload. |
 | M11 | Crew Panic | Pre-M11 `BEFORE_REVEAL_DIAL` bridge opened the choice on the second dial click, after reveal. | Pure `RuleRegistry` ENABLER on `WAIT_FOR_SHIP_SELECT` exposes pre-reveal choice metadata through `UIIntent.affordances`; damage/discard/activation mutations are command-backed. | M11 removes the legacy `EffectRegistry` bridge. The first hidden-dial click now prompts before `reveal_dial`; damage choice submits `persistent_effect_damage` then reveals, and discard choice submits `spend_dial(mode=discard)` then `activate_ship(skip_reveal=true)`. |
 | M12 | Capacitor Failure | `DEFENSE_VALIDATE_TOKEN` blocked redirect and `REPAIR_VALIDATE_SHIELD` blocked shield repair into zones with 0 shields. | Pure multi-hook rule: command validators plus RuleRegistry blockers for defense-token and repair-shield UI eligibility. Active state comes from `ShipInstance.faceup_damage`. | No legacy `EffectRegistry` bridge remains after M12. |
+| N3 | Power Failure | `CALC_ENGINEERING_VALUE` halved engineering value in `RepairResolver`. | Pure `RuleRegistry` modifier on `SHIP_ACTIVATION / REPAIR_STEP` target `engineering_value`; active source is ship `faceup_damage`. | N3 removes the legacy `DamageCardEffect` bridge. Save/load rebuild registers no legacy Power Failure effect; stacked copies still halve and round down successively. |
+| N4 | Life Support Failure | `ON_COMMAND_TOKEN_GAIN` blocked command-token gain after the immediate discard resolver left the card faceup. | Pure `RuleRegistry` validators/blockers for `convert_dial_to_token` and `command_token_gain` on ship-activation token-conversion steps; active source is ship `faceup_damage`. | N4 removes the legacy token-gain bridge while preserving the immediate token-discard command/resolver path. |
+| N5 | Depowered Armament | `ATTACK_VALIDATE_TARGET` blocked long-range attacks by the damaged ship. | Pure `RuleRegistry` attack-target blocker plus direct `publish_attack_flow` validator on `ATTACK / ATTACK_DECLARE`; active source is attacker `faceup_damage`. | N5 removes the Depowered Armament legacy target bridge. Remaining `ATTACK_VALIDATE_TARGET` fallback covers only unmigrated target rules such as Coolant Discharge and Disengaged Fire Control. |
 
 Boundary rule for migration slices: a migrated rule may remove its legacy
 `DamageCardEffect` path only after tests prove command-time registration,

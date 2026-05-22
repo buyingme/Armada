@@ -464,8 +464,8 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	if _state.exec_ship_token == null and _state.exec_squad_token == null:
 		return
 	_attack_pool_die_choice_rule_id = ""
-	# --- ATTACK_VALIDATE_TARGET hook (Coolant Discharge, Depowered
-	# Armament, Disengaged Fire Control) — reject attack if cancelled.
+	# --- Attack-target damage rules/effects (Depowered Armament, Coolant
+	# Discharge, Disengaged Fire Control) — reject attack if blocked.
 	# Rules Reference: RRG "Damage Cards", p.4; ET-001.
 	if _is_attack_blocked_by_damage(range_band):
 		return
@@ -650,10 +650,9 @@ func _attack_exec_continue_after_attack_pool_die_choice() -> void:
 		return
 	_attack_exec_show_roll_button()
 
-## Checks whether a persistent damage card effect blocks this attack.
-## Builds an ATTACK_VALIDATE_TARGET context with range, obstruction,
-## and attack count, then resolves the hook.
-## Returns true (attack blocked) if any effect sets cancelled.
+## Checks whether a persistent damage card rule/effect blocks this attack.
+## Builds an attack-target context with range, obstruction, and attack count.
+## Returns true when any migrated blocker or remaining legacy effect rejects.
 ## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
 ## "Depowered Armament", "Disengaged Fire Control".
 func _is_attack_blocked_by_damage(range_band: String) -> bool:
@@ -664,7 +663,8 @@ func _is_attack_blocked_by_damage(range_band: String) -> bool:
 	if blocked:
 		_log.info("Attack blocked by damage card effect.")
 		if _get_panel():
-			_get_panel().show_empty_pool_auto_skip()
+			_get_panel().show_attack_blocked_skip(
+					"Attack blocked by damage card. Select another target or skip.")
 		TooltipManager.show_text(
 				"Attack blocked by damage card.", Vector2.INF, 2.0, true)
 	return blocked

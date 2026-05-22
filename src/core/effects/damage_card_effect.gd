@@ -32,8 +32,6 @@ func get_hooks() -> Array[StringName]:
 	match effect_id:
 		"coolant_discharge":
 			return [&"ATTACK_VALIDATE_TARGET", &"ATTACK_CALC_DAMAGE"]
-		"depowered_armament":
-			return [&"ATTACK_VALIDATE_TARGET"]
 		"disengaged_fire_control":
 			return [&"ATTACK_VALIDATE_TARGET"]
 		"blinded_gunners":
@@ -53,10 +51,6 @@ func _get_non_attack_hooks() -> Array[StringName]:
 			return [&"AFTER_MANEUVER_EXECUTE"]
 		"thruster_fissure":
 			return [&"ON_SPEED_CHANGE"]
-		"power_failure":
-			return [&"CALC_ENGINEERING_VALUE"]
-		"life_support_failure":
-			return [&"ON_COMMAND_TOKEN_GAIN"]
 		_:
 			return []
 
@@ -69,8 +63,6 @@ func should_trigger(context: EffectContext) -> bool:
 	match effect_id:
 		"coolant_discharge":
 			return _trigger_coolant_discharge(context)
-		"depowered_armament":
-			return _trigger_depowered_armament(context)
 		"disengaged_fire_control":
 			return _trigger_disengaged_fire_control(context)
 		"blinded_gunners":
@@ -84,8 +76,7 @@ func should_trigger(context: EffectContext) -> bool:
 ## Checks non-attack effects (movement, command, repair, status).
 func _should_trigger_non_attack(context: EffectContext) -> bool:
 	match effect_id:
-		"thrust_control_malfunction", "thruster_fissure", \
-				"power_failure", "life_support_failure":
+		"thrust_control_malfunction", "thruster_fissure":
 			return context.get_meta_value("ship", null) == owner
 		"ruptured_engine":
 			return _trigger_ruptured_engine(context)
@@ -100,8 +91,7 @@ func resolve(context: EffectContext) -> void:
 	match effect_id:
 		"coolant_discharge":
 			_resolve_coolant_discharge(context)
-		"depowered_armament", "disengaged_fire_control", \
-				"blinded_gunners", "life_support_failure":
+		"disengaged_fire_control", "blinded_gunners":
 			context.cancelled = true
 		"targeter_disruption":
 			context.critical_allowed = false
@@ -117,8 +107,6 @@ func _resolve_non_attack(context: EffectContext) -> void:
 		"ruptured_engine", "damaged_controls", "thruster_fissure":
 			context.set_meta_value("persistent_effect_id", effect_id)
 			_resolve_suffer_facedown(context)
-		"power_failure":
-			_resolve_power_failure(context)
 
 
 # ---------------------------------------------------------------------------
@@ -141,11 +129,6 @@ func _trigger_coolant_discharge(context: EffectContext) -> bool:
 			return context.range_band == "close"
 		_:
 			return false
-
-
-## Depowered Armament: Cannot attack at long range.
-func _trigger_depowered_armament(context: EffectContext) -> bool:
-	return context.attacker == owner and context.range_band == "long"
 
 
 ## Disengaged Fire Control: Cannot attack obstructed targets.
@@ -210,9 +193,3 @@ func _resolve_suffer_facedown(context: EffectContext) -> void:
 	if not ship is ShipInstance or not deck is DamageDeck:
 		return
 	context.set_meta_value("extra_damage_dealt", true)
-
-## Power Failure: halve engineering value (rounded down), stackable.
-func _resolve_power_failure(context: EffectContext) -> void:
-	var eng: int = int(context.get_meta_value("engineering_value", 0))
-	eng = eng / 2 # Integer division = floor.
-	context.set_meta_value("engineering_value", eng)

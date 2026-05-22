@@ -941,6 +941,17 @@ func show_empty_pool_auto_skip() -> void:
 		_empty_pool_container.visible = true
 
 
+## Shows a rule-blocked target notice while preserving the player's option to
+## skip the attack from the execution panel.
+func show_attack_blocked_skip(message: String) -> void:
+	hide_dice_count()
+	var title: String = get_title_text()
+	if title == "":
+		title = "Attack blocked"
+	_set_prompt(title, message)
+	show_skip_attack_button()
+
+
 ## Hides the empty-pool notice section.
 func hide_empty_pool_section() -> void:
 	if _empty_pool_container:

@@ -255,15 +255,18 @@ _advance_squadron_phase_turn()
 
 ### Effect/Hook Pipeline
 
-The EffectRegistry resolves named hook points throughout the game loop.
-Effects (keywords, damage cards, upgrades) register for hooks and mutate
-a shared EffectContext when triggered. See §8.9 for the full hook catalogue.
+RuleRegistry handles migrated rules by FlowSpec surface, while EffectRegistry
+remains only for legacy keyword/damage-card hooks that have not yet migrated.
+Both paths use a shared EffectContext-style data bag where a rule mutates
+attack, repair, command, movement, or status context. See §8.9 for the full
+hook catalogue.
 
 ```
 Attack Flow Hook Sequence
 ─────────────────────────
 AttackExecutor (target selection)
-    ├─ resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)    ── Coolant Discharge, Depowered Armament, Disengaged FC
+    ├─ RuleRegistry.blockers_for("attack_target")       ── Depowered Armament
+    ├─ resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)     ── Coolant Discharge, Disengaged FC
     │
 AttackExecutor (dice pool assembly)
     ├─ resolve_hook(&"ATTACK_GATHER_DICE", ctx)         ── Remaining legacy gather effects
@@ -302,7 +305,8 @@ Ship activation (before dial reveal)
     ├─ UIProjector.affordances via RuleRegistry ENABLER  ── Crew Panic pre-reveal choice
 
 Repair command resolution
-    ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)       ── Power Failure
+    ├─ RuleRegistry.modifiers_for("engineering_value")    ── Power Failure
+    ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)        ── Legacy fallback; no current card after N3
     ├─ RuleRegistry.blockers_for("repair_shield")        ── Capacitor Failure UI eligibility
     ├─ RuleRegistry.validators_for("repair_action")      ── Capacitor Failure command safety
     ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Remaining legacy repair blockers
@@ -311,7 +315,8 @@ Status phase (token readying)
     ├─ RuleRegistry.modifiers_for("defense_token_readying") ── Compartment Fire
 
 Command token gain
-    ├─ resolve_hook(&"ON_COMMAND_TOKEN_GAIN", ctx)       ── Life Support Failure
+    ├─ RuleRegistry.blockers_for("command_token_gain")    ── Life Support Failure
+    ├─ RuleRegistry.validators_for("convert_dial_to_token") ── Life Support Failure command safety
 ```
 
 ### Engagement Resolution
@@ -338,6 +343,7 @@ EngagementResolver.get_valid_engaged_targets(squadron, engaged_enemies)
 | Component | Role |
 |-----------|------|
 | `GameManager` (Autoload) | Orchestrates squadron phase turns, activation validation |
+| `RuleRegistry` / `RuleSurface` (RefCounted statics) | Static migrated rule catalogue and shared surface runners |
 | `EffectRegistry` (RefCounted) | Resolves hook points, dispatches to registered effects |
 | `EffectFactory` (RefCounted) | Scans squadrons, creates/registers keyword effects |
 | `EffectContext` (RefCounted) | Mutable data bag for hook pipeline |

@@ -173,12 +173,11 @@ func _apply_selected_rule_pool_modifier(ctx: EffectContext,
 # Attack-blocked check
 # ---------------------------------------------------------------------------
 
-## Checks whether a persistent damage card effect blocks this attack.
-## Builds an ATTACK_VALIDATE_TARGET context with range, obstruction, and
-## attack count, then resolves the hook.
-## Returns [code]true[/code] (attack blocked) if any effect sets
+## Checks whether a damage card rule or remaining legacy effect blocks this
+## attack. Builds an attack-target context with obstruction and attack count.
+## Returns [code]true[/code] when a rule blocker fires or any legacy effect sets
 ## [code]cancelled[/code].
-## [param registry] may be [code]null[/code] — returns [code]false[/code].
+## [param registry] may be [code]null[/code]; RuleRegistry blockers still run.
 ## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
 ## "Depowered Armament", "Disengaged Fire Control".
 func is_blocked_by_damage(
@@ -186,18 +185,9 @@ func is_blocked_by_damage(
 		parts: CombatParticipants,
 		obstructed: bool,
 		attack_count: int) -> bool:
-	if registry == null:
-		return false
-	var ctx: EffectContext = EffectContext.new()
-	if parts.atk_ship and parts.atk_ship is ShipToken:
-		ctx.attacker = (parts.atk_ship as ShipToken).get_ship_instance()
-	elif parts.atk_squad:
-		ctx.attacker = parts.atk_squad.get_squadron_instance()
-	ctx.range_band = ""
-	ctx.set_meta_value("is_obstructed", obstructed)
-	ctx.set_meta_value("ship_attacks_this_round", attack_count)
-	ctx = registry.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
-	return ctx.cancelled
+	var ctx: EffectContext = _build_attack_target_context(
+			parts, obstructed, attack_count, "")
+	return _is_attack_target_blocked(ctx, registry)
 
 
 ## Overload that also accepts a range band string for the attack.
@@ -207,8 +197,15 @@ func is_blocked_by_damage_at_range(
 		obstructed: bool,
 		attack_count: int,
 		range_band: String) -> bool:
-	if registry == null:
-		return false
+	var ctx: EffectContext = _build_attack_target_context(
+			parts, obstructed, attack_count, range_band)
+	return _is_attack_target_blocked(ctx, registry)
+
+
+func _build_attack_target_context(parts: CombatParticipants,
+		obstructed: bool,
+		attack_count: int,
+		range_band: String) -> EffectContext:
 	var ctx: EffectContext = EffectContext.new()
 	if parts.atk_ship and parts.atk_ship is ShipToken:
 		ctx.attacker = (parts.atk_ship as ShipToken).get_ship_instance()
@@ -217,6 +214,18 @@ func is_blocked_by_damage_at_range(
 	ctx.range_band = range_band
 	ctx.set_meta_value("is_obstructed", obstructed)
 	ctx.set_meta_value("ship_attacks_this_round", attack_count)
+	return ctx
+
+
+func _is_attack_target_blocked(ctx: EffectContext,
+		registry: EffectRegistry) -> bool:
+	if RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DECLARE,
+			RuleSurface.TARGET_ATTACK_TARGET):
+		return true
+	if registry == null:
+		return false
 	ctx = registry.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
 	return ctx.cancelled
 

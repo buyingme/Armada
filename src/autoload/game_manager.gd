@@ -723,13 +723,13 @@ func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
 
 ## Force-adds a command token and handles duplicate / overflow cases.
 ## Returns a dictionary with "token_added" and "needs_discard" keys.
-## ON_COMMAND_TOKEN_GAIN hook — Life Support Failure blocks token gain.
+## RuleRegistry command-token gain blockers cover Life Support Failure.
 ## Rules Reference: "Life Support Failure" card text.
 func _handle_token_add_result(ship: ShipInstance,
 		cmd: int) -> Dictionary:
-	# Check for damage card effects that block token gain.
+	# Check for damage card rules that block token gain.
 	if _is_token_gain_blocked(ship):
-		_log.info("Token gain blocked for %s (damage effect)." % ship.data_key)
+		_log.info("Token gain blocked for %s (damage rule)." % ship.data_key)
 		return {"token_added": false, "needs_discard": false}
 	var result: Dictionary = ship.command_tokens.force_add_token(cmd)
 
@@ -1608,17 +1608,25 @@ func _perform_status_phase_cleanup() -> void:
 			current_game_state.initiative_player])
 
 
-## Returns true if the ON_COMMAND_TOKEN_GAIN hook cancels token gain
-## for [param ship] (e.g. Life Support Failure).
+## Returns true if a RuleRegistry command-token gain blocker rejects
+## token gain for [param ship] (e.g. Life Support Failure).
 ## Rules Reference: RRG "Damage Cards", p.4; "Life Support Failure".
 func _is_token_gain_blocked(ship: ShipInstance) -> bool:
-	if not current_game_state or not current_game_state.effect_registry:
-		return false
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
-	ctx = current_game_state.effect_registry.resolve_hook(
-			&"ON_COMMAND_TOKEN_GAIN", ctx)
-	return ctx.cancelled
+	return RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			_token_gain_step(),
+			RuleSurface.TARGET_COMMAND_TOKEN_GAIN)
+
+
+func _token_gain_step() -> Constants.InteractionStep:
+	if not current_game_state or current_game_state.interaction_flow == null:
+		return Constants.InteractionStep.ACTIVATION_MODAL_OPEN
+	if current_game_state.interaction_flow.flow_type \
+			!= Constants.InteractionFlow.SHIP_ACTIVATION:
+		return Constants.InteractionStep.ACTIVATION_MODAL_OPEN
+	return current_game_state.interaction_flow.step_id
 
 
 # ---------------------------------------------------------------------------

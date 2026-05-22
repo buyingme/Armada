@@ -7,7 +7,8 @@
 ## [code]effect_id[/code] in the payload:
 ##   [code]structural_damage[/code]  — deal 1 extra facedown, flip facedown
 ##   [code]projector_misaligned[/code] — strip shields from a zone, flip facedown
-##   [code]life_support_failure[/code] — discard all command tokens (stays faceup)
+##   [code]life_support_failure[/code] — discard all command tokens; persistent
+##      token-gain restriction is enforced by RuleRegistry while faceup
 ##   [code]injured_crew[/code] — discard 1 defense token, flip facedown
 ##   [code]shield_failure[/code] — reduce shields in up to 2 zones, flip facedown
 ##   [code]comm_noise[/code] — reduce speed OR change top dial, flip facedown
@@ -89,7 +90,7 @@ func _validate_choice(effect_id: String,
 	var choice: Dictionary = payload.get("choice", {})
 	match effect_id:
 		"structural_damage", "life_support_failure":
-			return ""  # No choice needed.
+			return "" # No choice needed.
 		"projector_misaligned":
 			return _validate_projector_choice(choice, ship)
 		"injured_crew":
@@ -106,7 +107,7 @@ func _validate_projector_choice(choice: Dictionary,
 		ship: ShipInstance) -> String:
 	var chosen_id: String = str(choice.get("id", ""))
 	if chosen_id.is_empty():
-		return ""  # Auto-resolve (unique max).
+		return "" # Auto-resolve (unique max).
 	if not chosen_id.begins_with("zone_"):
 		return "Invalid projector choice id: '%s'." % chosen_id
 	var zone: String = chosen_id.substr(5)

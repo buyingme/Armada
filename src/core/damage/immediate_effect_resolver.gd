@@ -7,7 +7,8 @@
 ## Six damage cards have immediate effects:
 ##   1. Structural Damage  — suffer 1 extra facedown damage, then flip facedown
 ##   2. Projector Misaligned — reduce each hull zone's shields by 1, flip facedown
-##   3. Life Support Failure — discard all command tokens, stays faceup (persistent)
+##   3. Life Support Failure — discard all command tokens, stays faceup;
+##      its persistent token-gain restriction lives in RuleRegistry
 ##   4. Injured Crew — ship owner chooses and discards 1 defense token;
 ##      flip facedown
 ##   5. Shield Failure — opponent chooses up to 2 hull zones; each loses 1

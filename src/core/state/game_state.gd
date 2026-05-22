@@ -42,6 +42,11 @@ var rng: GameRng = null
 ## [method initialize].  See [code]docs/refactoring_phase_i_plan.md[/code].
 var interaction_flow: InteractionFlow = InteractionFlow.new()
 
+## Per-round count of ship-targeting attacks performed by each ship.
+## Keys are `round:owner_player:ship_index`; values are ints.
+## Used by Coolant Discharge and serialized for save/replay determinism.
+var ship_target_attack_counts: Dictionary = {}
+
 
 ## Initializes a new game state with default values.
 func initialize() -> void:
@@ -52,10 +57,11 @@ func initialize() -> void:
 	if rng == null:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
+	ship_target_attack_counts.clear()
 	player_states.clear()
-	for i in range(Constants.PLAYER_COUNT):
+	for player_index: int in range(Constants.PLAYER_COUNT):
 		var ps := PlayerState.new()
-		ps.player_index = i
+		ps.player_index = player_index
 		player_states.append(ps)
 
 
@@ -116,6 +122,37 @@ func get_squadron(player_index: int,
 	return ps.squadrons[squadron_index] as SquadronInstance
 
 
+## Records one ship-targeting attack for [param ship] in the current round.
+func record_ship_target_attack(ship: ShipInstance) -> void:
+	var key: String = _ship_target_attack_key(ship)
+	if key == "":
+		return
+	ship_target_attack_counts[key] = get_ship_target_attack_count(ship) + 1
+
+
+## Returns how many ship-targeting attacks [param ship] made this round.
+func get_ship_target_attack_count(ship: ShipInstance) -> int:
+	var key: String = _ship_target_attack_key(ship)
+	if key == "":
+		return 0
+	return int(ship_target_attack_counts.get(key, 0))
+
+
+func _ship_target_attack_key(ship: ShipInstance) -> String:
+	if ship == null:
+		return ""
+	var ship_index: int = find_ship_index(ship)
+	if ship_index < 0:
+		return ""
+	return _ship_target_attack_key_for(
+			current_round, ship.owner_player, ship_index)
+
+
+static func _ship_target_attack_key_for(round_number: int,
+		owner_player: int, ship_index: int) -> String:
+	return "%d:%d:%d" % [round_number, owner_player, ship_index]
+
+
 ## Serializes the game state to a dictionary for saving.
 func serialize() -> Dictionary:
 	var data := {
@@ -126,9 +163,10 @@ func serialize() -> Dictionary:
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
 		"rng": rng.serialize() if rng else {},
 		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
+		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
 	}
-	for ps in player_states:
-		data["player_states"].append(ps.serialize())
+	for player_state: PlayerState in player_states:
+		data["player_states"].append(player_state.serialize())
 	return data
 
 
@@ -140,8 +178,10 @@ static func deserialize(data: Dictionary) -> GameState:
 	state.current_round = data.get("current_round", 0)
 	state.current_phase = int(data.get("current_phase", 0)) as Constants.GamePhase
 	state.initiative_player = data.get("initiative_player", 0)
-	for ps_data in data.get("player_states", []):
-		state.player_states.append(PlayerState.deserialize(ps_data))
+	for player_state_data: Variant in data.get("player_states", []):
+		state.player_states.append(PlayerState.deserialize(player_state_data))
+	state.ship_target_attack_counts = _deserialize_attack_counts(
+			data.get("ship_target_attack_counts", {}))
 	var deck_data: Dictionary = data.get("damage_deck", {})
 	if not deck_data.is_empty():
 		state.damage_deck = DamageDeck.deserialize(deck_data)
@@ -156,3 +196,13 @@ static func deserialize(data: Dictionary) -> GameState:
 	# Transient runtime cache — rebuilt by GameManager.start_new_game_from_state.
 	state.effect_registry = EffectRegistry.new()
 	return state
+
+
+static func _deserialize_attack_counts(raw_counts: Variant) -> Dictionary:
+	var counts: Dictionary = {}
+	if not raw_counts is Dictionary:
+		return counts
+	var saved_counts: Dictionary = raw_counts as Dictionary
+	for raw_key: Variant in saved_counts.keys():
+		counts[str(raw_key)] = int(saved_counts[raw_key])
+	return counts

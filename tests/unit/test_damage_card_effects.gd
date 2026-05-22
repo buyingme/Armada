@@ -77,9 +77,9 @@ func _make_deck() -> DamageDeck:
 
 
 func test_factory_is_persistent_returns_true_for_persistent_cards() -> void:
-	var card: DamageCard = _make_card("blinded_gunners")
+	var card: DamageCard = _make_card("targeter_disruption")
 	assert_true(DamageCardEffectFactory.is_persistent(card),
-			"Blinded Gunners should be persistent")
+			"Targeter Disruption should remain a legacy persistent effect")
 
 
 func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
@@ -91,20 +91,20 @@ func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
 
 func test_factory_register_creates_and_registers() -> void:
 	var ship: ShipInstance = _make_ship()
-	var card: DamageCard = _make_card("blinded_gunners")
+	var card: DamageCard = _make_card("targeter_disruption")
 	var reg: EffectRegistry = EffectRegistry.new()
 	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
 			card, ship, reg)
 	assert_not_null(effect, "Should return created effect")
 	assert_eq(reg.get_effect_count(), 1, "Should register 1 effect")
 	assert_eq(effect.owner, ship, "Effect owner should be the ship")
-	assert_eq(effect.effect_id, "blinded_gunners",
+	assert_eq(effect.effect_id, "targeter_disruption",
 			"Effect ID should match card")
 
 
 func test_factory_unregister_removes_by_card() -> void:
 	var ship: ShipInstance = _make_ship()
-	var card: DamageCard = _make_card("blinded_gunners")
+	var card: DamageCard = _make_card("targeter_disruption")
 	var reg: EffectRegistry = EffectRegistry.new()
 	DamageCardEffectFactory.register_effect(card, ship, reg)
 	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect")
@@ -129,11 +129,11 @@ func test_factory_register_returns_null_for_immediate() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_blinded_gunners_hooks() -> void:
+func test_blinded_gunners_no_longer_declares_legacy_hook() -> void:
 	var e: DamageCardEffect = _make_effect("blinded_gunners", _make_ship())
 	var hooks: Array[StringName] = e.get_hooks()
-	assert_has(hooks, &"ATTACK_SPEND_ACCURACY",
-			"Blinded Gunners should hook ATTACK_SPEND_ACCURACY")
+	assert_false(hooks.has(&"ATTACK_SPEND_ACCURACY"),
+			"Blinded Gunners should use RuleRegistry blockers after N8.")
 
 
 func test_capacitor_failure_no_longer_declares_legacy_hooks() -> void:
@@ -153,14 +153,28 @@ func test_faulty_countermeasures_no_longer_declares_legacy_hook() -> void:
 			"Faulty Countermeasures should use RuleRegistry blockers after N2.")
 
 
-func test_n3_to_n5_cards_no_longer_declare_legacy_hooks() -> void:
+func test_n3_to_n8_cards_no_longer_declare_legacy_hooks() -> void:
+	var blinded: DamageCardEffect = _make_effect(
+			"blinded_gunners", _make_ship())
+	var coolant: DamageCardEffect = _make_effect(
+			"coolant_discharge", _make_ship())
 	var depowered: DamageCardEffect = _make_effect(
 			"depowered_armament", _make_ship())
+	var disengaged: DamageCardEffect = _make_effect(
+			"disengaged_fire_control", _make_ship())
 	var power: DamageCardEffect = _make_effect("power_failure", _make_ship())
 	var life_support: DamageCardEffect = _make_effect(
 			"life_support_failure", _make_ship())
+	assert_false(blinded.get_hooks().has(&"ATTACK_SPEND_ACCURACY"),
+			"Blinded Gunners should use RuleRegistry blockers after N8.")
+	assert_false(coolant.get_hooks().has(&"ATTACK_VALIDATE_TARGET"),
+			"Coolant Discharge should use RuleRegistry blockers after N7.")
+	assert_false(coolant.get_hooks().has(&"ATTACK_CALC_DAMAGE"),
+			"Coolant Discharge should no longer add close-range damage after N7.")
 	assert_false(depowered.get_hooks().has(&"ATTACK_VALIDATE_TARGET"),
 			"Depowered Armament should use RuleRegistry target blockers after N5.")
+	assert_false(disengaged.get_hooks().has(&"ATTACK_VALIDATE_TARGET"),
+			"Disengaged Fire Control should use RuleRegistry blockers after N6.")
 	assert_false(power.get_hooks().has(&"CALC_ENGINEERING_VALUE"),
 			"Power Failure should use RuleRegistry modifiers after N3.")
 	assert_false(life_support.get_hooks().has(&"ON_COMMAND_TOKEN_GAIN"),
@@ -170,10 +184,10 @@ func test_n3_to_n5_cards_no_longer_declare_legacy_hooks() -> void:
 func test_coolant_discharge_hooks() -> void:
 	var e: DamageCardEffect = _make_effect("coolant_discharge", _make_ship())
 	var hooks: Array[StringName] = e.get_hooks()
-	assert_has(hooks, &"ATTACK_VALIDATE_TARGET",
-			"Should hook ATTACK_VALIDATE_TARGET")
-	assert_has(hooks, &"ATTACK_CALC_DAMAGE",
-			"Should hook ATTACK_CALC_DAMAGE for close-range bonus")
+	assert_false(hooks.has(&"ATTACK_VALIDATE_TARGET"),
+			"Coolant Discharge should not use the legacy target hook after N7.")
+	assert_false(hooks.has(&"ATTACK_CALC_DAMAGE"),
+			"Coolant Discharge should not use stale close-damage bonus after N7.")
 
 
 # ---------------------------------------------------------------------------
@@ -186,8 +200,8 @@ func test_blinded_gunners_triggers_when_owner_attacks() -> void:
 	var e: DamageCardEffect = _make_effect("blinded_gunners", ship)
 	var ctx: EffectContext = _make_context(&"ATTACK_SPEND_ACCURACY")
 	ctx.attacker = ship
-	assert_true(e.should_trigger(ctx),
-			"Should trigger when owner is attacker")
+	assert_false(e.should_trigger(ctx),
+			"Blinded Gunners should be inactive in legacy contexts after N8.")
 
 
 func test_blinded_gunners_no_trigger_when_other_attacks() -> void:
@@ -206,7 +220,8 @@ func test_blinded_gunners_cancels() -> void:
 	var ctx: EffectContext = _make_context(&"ATTACK_SPEND_ACCURACY")
 	ctx.attacker = ship
 	e.resolve(ctx)
-	assert_true(ctx.cancelled, "Should cancel accuracy spending")
+	assert_false(ctx.cancelled,
+			"Legacy Blinded Gunners should not cancel accuracy after N8.")
 
 
 # ---------------------------------------------------------------------------
@@ -263,8 +278,8 @@ func test_disengaged_fire_control_triggers_when_obstructed() -> void:
 	var ctx: EffectContext = _make_context(&"ATTACK_VALIDATE_TARGET")
 	ctx.attacker = ship
 	ctx.set_meta_value("is_obstructed", true)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger when target is obstructed")
+	assert_false(e.should_trigger(ctx),
+			"Disengaged Fire Control should be inactive after N6.")
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +377,7 @@ func test_capacitor_failure_no_longer_registers_legacy_effect() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Coolant Discharge — 1 attack/round, +1 damage at close
+# Coolant Discharge — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
@@ -372,10 +387,11 @@ func test_coolant_discharge_blocks_second_attack() -> void:
 	var ctx: EffectContext = _make_context(&"ATTACK_VALIDATE_TARGET")
 	ctx.attacker = ship
 	ctx.set_meta_value("ship_attacks_this_round", 1)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger when ship already attacked once")
+	assert_false(e.should_trigger(ctx),
+			"Coolant Discharge should be inactive in legacy contexts after N7.")
 	e.resolve(ctx)
-	assert_true(ctx.cancelled, "Should cancel second attack")
+	assert_false(ctx.cancelled,
+			"Legacy Coolant Discharge should not cancel after N7.")
 
 
 func test_coolant_discharge_allows_first_attack() -> void:
@@ -388,16 +404,16 @@ func test_coolant_discharge_allows_first_attack() -> void:
 			"Should not trigger for the first attack")
 
 
-func test_coolant_discharge_bonus_at_close() -> void:
+func test_coolant_discharge_no_stale_close_bonus() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("coolant_discharge", ship)
 	var ctx: EffectContext = _make_context(&"ATTACK_CALC_DAMAGE")
 	ctx.attacker = ship
 	ctx.range_band = "close"
 	ctx.damage_total = 3
-	assert_true(e.should_trigger(ctx), "Should trigger at close range")
 	e.resolve(ctx)
-	assert_eq(ctx.damage_total, 4, "Should add +1 damage at close range")
+	assert_eq(ctx.damage_total, 3,
+			"Coolant Discharge should not add stale close-range damage after N7.")
 
 
 # ---------------------------------------------------------------------------
@@ -638,20 +654,23 @@ func test_crew_panic_factory_is_not_persistent() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_attack_validate_pipeline_coolant_discharge_blocks() -> void:
+func test_attack_validate_pipeline_coolant_discharge_no_legacy_bridge() -> void:
 	# Arrange — register Coolant Discharge.
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("coolant_discharge")
-	DamageCardEffectFactory.register_effect(card, ship, reg)
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
 	# Act — ship already attacked once.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.attacker = ship
 	ctx.set_meta_value("ship_attacks_this_round", 1)
 	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
 	# Assert
-	assert_true(ctx.cancelled,
-			"Second attack should be cancelled by Coolant Discharge pipeline")
+	assert_null(effect,
+			"Coolant Discharge should not register a legacy target hook after N7.")
+	assert_false(ctx.cancelled,
+			"Coolant Discharge target blocking should come from RuleRegistry.")
 
 
 func test_attack_validate_pipeline_depowered_armament_no_longer_blocks_long() -> void:
@@ -672,20 +691,23 @@ func test_attack_validate_pipeline_depowered_armament_no_longer_blocks_long() ->
 			"Depowered Armament should not register a legacy target hook.")
 
 
-func test_attack_validate_pipeline_disengaged_fire_blocks_obstructed() -> void:
+func test_attack_validate_pipeline_disengaged_fire_no_legacy_bridge() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("disengaged_fire_control")
-	DamageCardEffectFactory.register_effect(card, ship, reg)
+	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
+			card, ship, reg)
 	# Act — obstructed attack.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.attacker = ship
 	ctx.set_meta_value("is_obstructed", true)
 	ctx = reg.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
 	# Assert
-	assert_true(ctx.cancelled,
-			"Obstructed attack should be cancelled by Disengaged Fire Control")
+	assert_null(effect,
+			"Disengaged Fire Control should not register a legacy hook after N6.")
+	assert_false(ctx.cancelled,
+			"Disengaged Fire Control blocking should come from RuleRegistry.")
 
 
 # ---------------------------------------------------------------------------

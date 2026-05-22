@@ -141,6 +141,19 @@ AttackExecutor enters SELECTING mode — click a friendly ship hull zone
 
 ### 6.3.2 Attack Execution (Activation Step 4)
 
+Before the roll step, attack declaration builds a RuleRegistry
+`attack_target` context from the serialized attacker/target state, range band,
+obstruction result, and the current round's serialized ship-target attack
+count. Migrated damage-card blockers such as Depowered Armament, Disengaged
+Fire Control, and Coolant Discharge reject illegal targets before dice are
+rolled, and `publish_attack_flow` validators reject direct/network snapshots
+that try to publish the same illegal declaration.
+
+After dice are confirmed, Blinded Gunners is resolved through the
+RuleRegistry `accuracy_spend` blocker. The attack payload preserves both the
+raw accuracy count and the spendable accuracy count so mirrored panels and
+direct defense-step submissions agree that locked tokens are unavailable.
+
 ```
 ActivationModal Step 4 ("Attack")  →  GameBoard._on_attack_step_entered()
     │                                       └─ AttackExecutor.start_ship_attack(ship_token)

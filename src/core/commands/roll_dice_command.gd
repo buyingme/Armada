@@ -6,6 +6,9 @@
 ## Payload:
 ##   "dice_pool" — Dictionary mapping colour string ("red"/"blue"/"black")
 ##                 to count, e.g. {"red": 2, "blue": 1}.
+## Optional attack identity metadata:
+##   "attacker_kind", "attacker_player", "attacker_ship_index",
+##   "target_kind" — records ship-target attacks for damage rules.
 ##
 ## Rules Reference: "Attack", Step 2, p.2 — "Roll Attack Dice".
 class_name RollDiceCommand
@@ -53,4 +56,18 @@ func execute(game_state: GameState) -> Dictionary:
 	var engine_pool: Dictionary = DicePool.to_engine_pool(upper_pool)
 	var results: Array[Dictionary] = Dice.roll_pool(
 			engine_pool, game_state.rng)
+	_record_ship_target_attack(game_state)
 	return {"dice_results": results}
+
+
+func _record_ship_target_attack(game_state: GameState) -> void:
+	if game_state == null:
+		return
+	if str(payload.get("attacker_kind", "")) != "ship":
+		return
+	if str(payload.get("target_kind", "")) != "ship":
+		return
+	var owner: int = int(payload.get("attacker_player", player_index))
+	var ship_index: int = int(payload.get("attacker_ship_index", -1))
+	var attacker: ShipInstance = game_state.get_ship(owner, ship_index)
+	game_state.record_ship_target_attack(attacker)

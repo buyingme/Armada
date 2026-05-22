@@ -43,6 +43,6 @@
 | G4.8 Reconnection runtime | ⏳ pending | Domain-side contract validated by Phase I7; runtime RPC pause/replay/timer not yet implemented |
 | G4.9 Turn Timers | ⏳ pending | Server-enforced, forfeit on timeout, restart from auto-save |
 
-> **Last audit:** 2026-05-22 — Phase N3-N5 moved Power Failure, Life Support Failure's persistent token-gain restriction, and Depowered Armament to RuleRegistry hooks, leaving 8 legacy persistent damage-card ids. Combined N3-N5 MT pass confirmed the repair, token-gain, and long-range attack-blocking paths, including the blocked-target Skip Attack affordance. Network replay gates on host/client state-hash equality rather than committed network fixtures.
+> **Last audit:** 2026-05-22 — Phase N6-N8 moved Disengaged Fire Control, Coolant Discharge, and Blinded Gunners to RuleRegistry hooks, leaving 5 legacy persistent damage-card ids. Coolant Discharge now uses a serialized ship-target attack count instead of the scene-local activation counter, and the unsupported close-range damage bonus was removed. N6-N8 MT pass confirmed 2026-05-22. Network replay gates on host/client state-hash equality rather than committed network fixtures.
 > Architecture compliance, static typing, and doc comment coverage all PASS in core/.
 > Phases A–I, J (J1–J11), and K complete. Phase L/M modal and replay hardening continues under [docs/refactoring_phase_lm_plan.md](../refactoring_phase_lm_plan.md).

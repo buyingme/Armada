@@ -61,15 +61,15 @@ func _make_card(title: String, is_faceup: bool = false) -> Dictionary:
 	}
 
 
-## Creates a serialized Blinded Gunners card dict.
-func _make_blinded_gunners_card() -> Dictionary:
+## Creates a serialized Targeter Disruption card dict.
+func _make_targeter_disruption_card() -> Dictionary:
 	return {
 		"trait_type": "Crew",
-		"title": "Blinded Gunners",
+		"title": "Targeter Disruption",
 		"is_faceup": true,
-		"effect_text": "While attacking, you cannot spend accuracy icons.",
+		"effect_text": "You cannot resolve critical effects.",
 		"timing": "persistent",
-		"effect_id": "blinded_gunners",
+		"effect_id": "targeter_disruption",
 	}
 
 
@@ -330,16 +330,16 @@ func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
 		"ship_index": idx,
 		"hull_zone": "FRONT",
 		"shield_damage": 0,
-		"damage_cards": [_make_blinded_gunners_card()],
+		"damage_cards": [_make_targeter_disruption_card()],
 		"target_destroyed": false,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("persistent_registered", 0), 1,
 			"ResolveDamageCommand should register persistent faceup effects")
 	var effects: Array[GameEffect] = _state.effect_registry.get_effects_for_hook(
-			&"ATTACK_SPEND_ACCURACY")
+			&"ATTACK_RESOLVE_CRITICAL")
 	assert_eq(effects.size(), 1,
-			"Blinded Gunners should hook ATTACK_SPEND_ACCURACY")
+			"Targeter Disruption should hook ATTACK_RESOLVE_CRITICAL")
 	var effect: DamageCardEffect = effects[0] as DamageCardEffect
 	assert_same(effect.owner, ship,
 			"Persistent damage effect owner should be the damaged ship")
@@ -347,9 +347,10 @@ func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
 			"Initiative player's persistent damage effects should resolve first")
 	var context: EffectContext = EffectContext.new()
 	context.attacker = ship
-	_state.effect_registry.resolve_hook(&"ATTACK_SPEND_ACCURACY", context)
-	assert_true(context.cancelled,
-			"Registered Blinded Gunners should block accuracy spending")
+	context.critical_allowed = true
+	_state.effect_registry.resolve_hook(&"ATTACK_RESOLVE_CRITICAL", context)
+	assert_false(context.critical_allowed,
+			"Registered Targeter Disruption should block critical effects")
 
 
 func test_execute_ship_mixed_cards() -> void:

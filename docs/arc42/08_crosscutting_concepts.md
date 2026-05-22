@@ -67,6 +67,12 @@ Serialized classes: `GameState`, `PlayerState`, `ShipInstance`,
 `SquadronInstance`, `DamageDeck`, `DamageCard`, `ShipActivationState`,
 `CommandDialStack`, `CommandTokens`, `GameCommand` (and all 26 subclasses).
 
+`GameState` also serializes round-scoped rule counters when they affect
+future legality. N7 added `ship_target_attack_counts`, keyed by
+`round:owner_player:ship_index`, so Coolant Discharge can block later
+ship-target declarations from save/load, replay, hot-seat, and network state
+without depending on scene-local attack-executor counters.
+
 `GameCommand.serialize()` produces `{type, player, sequence, payload}`.
 `GameCommand.deserialize()` dispatches to the correct subclass via the
 command type registry.  Replay files (`GameReplay`) store the full

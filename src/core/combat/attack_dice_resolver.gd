@@ -211,9 +211,16 @@ func _build_attack_target_context(parts: CombatParticipants,
 		ctx.attacker = (parts.atk_ship as ShipToken).get_ship_instance()
 	elif parts.atk_squad:
 		ctx.attacker = parts.atk_squad.get_squadron_instance()
+	if parts.def_ship and parts.def_ship is ShipToken:
+		ctx.defender = (parts.def_ship as ShipToken).get_ship_instance()
+		ctx.set_meta_value("target_kind", "ship")
+	elif parts.def_squad:
+		ctx.defender = parts.def_squad.get_squadron_instance()
+		ctx.set_meta_value("target_kind", "squadron")
 	ctx.range_band = range_band
 	ctx.set_meta_value("is_obstructed", obstructed)
 	ctx.set_meta_value("ship_attacks_this_round", attack_count)
+	ctx.set_meta_value("ship_target_attacks_this_round", attack_count)
 	return ctx
 
 
@@ -228,6 +235,63 @@ func _is_attack_target_blocked(ctx: EffectContext,
 		return false
 	ctx = registry.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
 	return ctx.cancelled
+
+
+# ---------------------------------------------------------------------------
+# Accuracy spend eligibility
+# ---------------------------------------------------------------------------
+
+## Resolves accuracy icons into spendable accuracy count, applying migrated
+## RuleRegistry blockers and the remaining legacy ATTACK_SPEND_ACCURACY hook.
+## Rules Reference: "Accuracy", RRG p.2; Damage Card "Blinded Gunners".
+func resolve_accuracy_spend(
+		results: Array[Dictionary],
+		parts: CombatParticipants,
+		registry: EffectRegistry) -> Dictionary:
+	var accuracy_count: int = Dice.count_accuracy(results)
+	if accuracy_count <= 0:
+		return _accuracy_result(accuracy_count, accuracy_count, false)
+	var ctx: EffectContext = _build_accuracy_context(parts)
+	if RuleSurface.is_blocked(ctx,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			RuleSurface.TARGET_ACCURACY_SPEND):
+		return _accuracy_result(accuracy_count, 0, true)
+	if _legacy_accuracy_spend_blocked(ctx, registry):
+		return _accuracy_result(accuracy_count, 0, true)
+	return _accuracy_result(accuracy_count, accuracy_count, false)
+
+
+func _build_accuracy_context(parts: CombatParticipants) -> EffectContext:
+	var ctx: EffectContext = EffectContext.new()
+	if parts.atk_ship and parts.atk_ship is ShipToken:
+		ctx.attacker = (parts.atk_ship as ShipToken).get_ship_instance()
+	elif parts.atk_squad:
+		ctx.attacker = parts.atk_squad.get_squadron_instance()
+	if parts.def_ship and parts.def_ship is ShipToken:
+		ctx.defender = (parts.def_ship as ShipToken).get_ship_instance()
+	elif parts.def_squad:
+		ctx.defender = parts.def_squad.get_squadron_instance()
+	return ctx
+
+
+func _legacy_accuracy_spend_blocked(ctx: EffectContext,
+		registry: EffectRegistry) -> bool:
+	if registry == null:
+		return false
+	var resolved: EffectContext = registry.resolve_hook(
+			&"ATTACK_SPEND_ACCURACY", ctx)
+	return resolved.cancelled
+
+
+func _accuracy_result(accuracy_count: int,
+		spendable_count: int,
+		blocked: bool) -> Dictionary:
+	return {
+		"accuracy_count": accuracy_count,
+		"spendable_accuracy_count": spendable_count,
+		"blocked": blocked,
+	}
 
 
 # ---------------------------------------------------------------------------

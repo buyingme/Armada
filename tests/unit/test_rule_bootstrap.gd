@@ -64,6 +64,10 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DECLARE,
 			RuleSurface.TARGET_ATTACK_TARGET)
+	var accuracy_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			RuleSurface.TARGET_ACCURACY_SPEND)
 	var defense_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
@@ -75,9 +79,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 9,
-			"Bootstrap should invoke all nine production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 19,
+	assert_eq(registered, 12,
+			"Bootstrap should invoke all twelve production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 25,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -105,8 +109,10 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Life Support Failure should validate command-token gain.")
 	assert_eq(token_gain_blockers.size(), 1,
 			"Life Support Failure should expose token-gain blocker metadata.")
-	assert_eq(target_blockers.size(), 1,
-			"Depowered Armament should expose attack-target blocker metadata.")
+	assert_eq(target_blockers.size(), 3,
+			"Three damage cards should expose attack-target blocker metadata.")
+	assert_eq(accuracy_blockers.size(), 1,
+			"Blinded Gunners should expose accuracy-spend blocker metadata.")
 	assert_eq(defense_blockers.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should expose blockers.")
 	assert_eq(repair_blockers.size(), 1,

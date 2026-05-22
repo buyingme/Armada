@@ -501,6 +501,9 @@ func _publish_attack_declare_patch(range_band: String) -> void:
 	var declare_patch: Dictionary = _compute_attack_identity_patch()
 	declare_patch["range_band"] = range_band
 	declare_patch["dice_pool"] = _state.dice_pool.duplicate(true)
+	declare_patch["is_obstructed"] = _state.obstructed
+	declare_patch["ship_target_attacks_this_round"] = \
+			_current_ship_target_attack_count()
 	_fsm_patch_payload(declare_patch)
 
 
@@ -659,7 +662,7 @@ func _is_attack_blocked_by_damage(range_band: String) -> bool:
 	var parts: CombatParticipants = _build_current_participants()
 	var blocked: bool = _dice_resolver.is_blocked_by_damage_at_range(
 			_effect_registry, parts, _state.obstructed,
-			_state.current_attack, range_band)
+			_current_ship_target_attack_count(), range_band)
 	if blocked:
 		_log.info("Attack blocked by damage card effect.")
 		if _get_panel():
@@ -805,7 +808,7 @@ func _on_attack_roll_dice() -> void:
 	# Submit dice roll via command for deterministic replay.
 	var atk_player: int = _get_attacker_player()
 	var roll_result: Dictionary = GameManager.submit_roll_dice(
-			atk_player, _state.dice_pool)
+			atk_player, _state.dice_pool, _build_roll_attack_context())
 	# Network client: result arrives asynchronously via broadcast.
 	# Wait for _apply_dice_roll_result() to be called from the
 	# network command handler.
@@ -988,18 +991,36 @@ func _attack_exec_start_accuracy() -> void:
 
 ## Counts accuracy icons, applying the ATTACK_SPEND_ACCURACY hook.
 func _resolve_accuracy_count() -> int:
-	var acc_count: int = Dice.count_accuracy(_state.dice_results)
-	if acc_count > 0 and _effect_registry:
-		var acc_ctx: EffectContext = EffectContext.new()
-		if _state.attacker_ship is ShipToken:
-			acc_ctx.attacker = (
-					_state.attacker_ship as ShipToken).get_ship_instance()
-		acc_ctx = _effect_registry.resolve_hook(
-				&"ATTACK_SPEND_ACCURACY", acc_ctx)
-		if acc_ctx.cancelled:
-			_log.info("Accuracy spending blocked by damage card effect.")
-			return 0
-	return acc_count
+	var parts: CombatParticipants = _build_current_participants()
+	var result: Dictionary = _dice_resolver.resolve_accuracy_spend(
+			_state.dice_results, parts, _effect_registry)
+	_fsm_patch_payload({
+		"accuracy_count": int(result.get("accuracy_count", 0)),
+		"spendable_accuracy_count": int(result.get(
+				"spendable_accuracy_count", 0)),
+		"accuracy_spend_blocked": bool(result.get("blocked", false)),
+	})
+	if bool(result.get("blocked", false)):
+		_log.info("Accuracy spending blocked by damage card effect.")
+	return int(result.get("spendable_accuracy_count", 0))
+
+
+func _current_ship_target_attack_count() -> int:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or _state.attacker_ship == null:
+		return 0
+	var attacker: ShipInstance = _state.attacker_ship.get_ship_instance()
+	return game_state.get_ship_target_attack_count(attacker)
+
+
+func _build_roll_attack_context() -> Dictionary:
+	var identity: Dictionary = _compute_attack_identity_patch()
+	return {
+		"attacker_kind": str(identity.get("attacker_kind", "")),
+		"attacker_player": int(identity.get("attacker_player", -1)),
+		"attacker_ship_index": int(identity.get("attacker_ship_index", -1)),
+		"target_kind": str(identity.get("target_kind", "")),
+	}
 
 ## Counts non-discarded defense tokens on a ship instance.
 func _count_lockable_tokens(def_inst: ShipInstance) -> int:

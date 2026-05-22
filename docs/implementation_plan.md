@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-22 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, and N3-N5 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-22 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, and N6-N8 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 167 |
-| GUT tests | 3 134 |
-| GUT asserts | 6 332 |
+| GUT test scripts | 170 |
+| GUT tests | 3 160 |
+| GUT asserts | 6 438 |
 | Failing tests | 0 |
-| Last completed slice | N5 — Depowered Armament migration in the N3-N5 batch |
+| Last completed slice | N8 — Blinded Gunners migration in the N6-N8 batch |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,12 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-22 N3-N5 full GUT summary is green
-(167 / 3 134 / 6 332, 0 failures). Phase K lint reports 0 violations / 4
+Verification note: the 2026-05-22 N6-N8 full GUT summary is green
+(170 / 3 160 / 6 438, 0 failures). Phase K lint reports 0 violations / 4
 allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
 network peer equality, and `git diff --check` is clean. Godot still reports
 known shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. User MT pass confirmed 2026-05-22 for the N3-N5 batch.
+failures were reported. User MT pass confirmed 2026-05-22 for the N6-N8 batch.
 
 ---
 
@@ -464,6 +464,26 @@ regression gate is complete and remains the required L/M automated gate:
   [test_attack_sim_panel.gd](../tests/unit/test_attack_sim_panel.gd) covers the
   N5 MT follow-up where a rule-blocked target keeps the Skip Attack affordance
   available. User MT pass confirmed 2026-05-22 for the combined N3-N5 batch.
+- N6-N8 automated implementation result: [disengaged_fire_control.gd](../src/core/effects/rules/damage_cards/ship/disengaged_fire_control.gd), [coolant_discharge.gd](../src/core/effects/rules/damage_cards/ship/coolant_discharge.gd), and [blinded_gunners.gd](../src/core/effects/rules/damage_cards/ship/blinded_gunners.gd)
+  migrate three attack-facing persistent damage-card behaviours out of
+  `DamageCardEffect`. Disengaged Fire Control is now an `attack_target`
+  blocker/validator using obstruction metadata; Coolant Discharge now enforces
+  the source-text one ship-targeting attack per round with serialized
+  `GameState.ship_target_attack_counts` recorded by `RollDiceCommand`; Blinded
+  Gunners is now an `accuracy_spend` blocker with a defense-step validator that
+  rejects non-empty `locked_tokens`. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers these cards in the transient `EffectRegistry`, and the
+  stale Coolant close-range damage bonus was removed. Focused tests
+  [test_rule_disengaged_fire_control.gd](../tests/unit/test_rule_disengaged_fire_control.gd),
+  [test_rule_coolant_discharge.gd](../tests/unit/test_rule_coolant_discharge.gd),
+  [test_rule_blinded_gunners.gd](../tests/unit/test_rule_blinded_gunners.gd),
+  and updated legacy absence/save-load/bootstrap tests cover command safety,
+  resolver integration, serialized counts, and zero legacy rebuilds. Full GUT
+  is green at 170 / 3 160 / 6 438 with 0 failures, Phase K lint reports 0
+  violations / 4 allow-listed branches, baseline traces pass hot-seat
+  trace/state plus network peer-state equality, and `git diff --check` is
+  clean. The hot-seat state-hash fixture was updated for the intentional
+  `GameState.serialize()` addition. User MT pass confirmed 2026-05-22.
 
 ---
 
@@ -510,9 +530,10 @@ Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md)
 is now started. N0 completed the docs-only inventory and semantic audit for
 the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, N1 added
 no-behaviour-change `RuleSurface` scaffolding for the remaining migration
-targets, N2 retired the Faulty Countermeasures legacy UI bridge, and N3-N5
+targets, N2 retired the Faulty Countermeasures legacy UI bridge, N3-N5
 completed Power Failure, Life Support Failure, and Depowered Armament migration
-with MT pass. N6 Disengaged Fire Control is next.
+with MT pass, and N6-N8 completed Disengaged Fire Control, Coolant Discharge,
+and Blinded Gunners migration with MT pass. N9 Targeter Disruption is next.
 
 ### 4.1 Network Features Pending
 

@@ -30,12 +30,6 @@ func _init() -> void:
 ## Returns the hook points this effect responds to, based on [member effect_id].
 func get_hooks() -> Array[StringName]:
 	match effect_id:
-		"coolant_discharge":
-			return [&"ATTACK_VALIDATE_TARGET", &"ATTACK_CALC_DAMAGE"]
-		"disengaged_fire_control":
-			return [&"ATTACK_VALIDATE_TARGET"]
-		"blinded_gunners":
-			return [&"ATTACK_SPEND_ACCURACY"]
 		"targeter_disruption":
 			return [&"ATTACK_RESOLVE_CRITICAL"]
 		_:
@@ -61,12 +55,6 @@ func should_trigger(context: EffectContext) -> bool:
 	if context == null or owner == null:
 		return false
 	match effect_id:
-		"coolant_discharge":
-			return _trigger_coolant_discharge(context)
-		"disengaged_fire_control":
-			return _trigger_disengaged_fire_control(context)
-		"blinded_gunners":
-			return context.attacker == owner
 		"targeter_disruption":
 			return context.attacker == owner
 		_:
@@ -89,10 +77,6 @@ func _should_trigger_non_attack(context: EffectContext) -> bool:
 ## Mutates the context to apply this effect.
 func resolve(context: EffectContext) -> void:
 	match effect_id:
-		"coolant_discharge":
-			_resolve_coolant_discharge(context)
-		"disengaged_fire_control", "blinded_gunners":
-			context.cancelled = true
 		"targeter_disruption":
 			context.critical_allowed = false
 		_:
@@ -114,29 +98,6 @@ func _resolve_non_attack(context: EffectContext) -> void:
 # ---------------------------------------------------------------------------
 
 
-## Coolant Discharge: Only attack 1 ship per activation.
-## ATTACK_VALIDATE_TARGET — cancel if this ship has already attacked.
-## ATTACK_CALC_DAMAGE — add +1 damage at close range.
-func _trigger_coolant_discharge(context: EffectContext) -> bool:
-	if context.attacker != owner:
-		return false
-	match context.hook:
-		&"ATTACK_VALIDATE_TARGET":
-			var attacks: int = int(
-					context.get_meta_value("ship_attacks_this_round", 0))
-			return attacks >= 1
-		&"ATTACK_CALC_DAMAGE":
-			return context.range_band == "close"
-		_:
-			return false
-
-
-## Disengaged Fire Control: Cannot attack obstructed targets.
-func _trigger_disengaged_fire_control(context: EffectContext) -> bool:
-	return context.attacker == owner and \
-			context.get_meta_value("is_obstructed", false) as bool
-
-
 ## Ruptured Engine: Suffer 1 damage after maneuver if speed > 1.
 func _trigger_ruptured_engine(context: EffectContext) -> bool:
 	if context.get_meta_value("ship", null) != owner:
@@ -156,15 +117,6 @@ func _trigger_damaged_controls(context: EffectContext) -> bool:
 # ---------------------------------------------------------------------------
 # Resolve helpers
 # ---------------------------------------------------------------------------
-
-
-## Coolant Discharge: ATTACK_VALIDATE_TARGET → cancel; ATTACK_CALC_DAMAGE → +1.
-func _resolve_coolant_discharge(context: EffectContext) -> void:
-	match context.hook:
-		&"ATTACK_VALIDATE_TARGET":
-			context.cancelled = true
-		&"ATTACK_CALC_DAMAGE":
-			context.damage_total += 1
 
 
 ## Thrust Control Malfunction: reduce yaw at last adjustable joint by 1.

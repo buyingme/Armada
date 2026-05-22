@@ -12,10 +12,7 @@ extends RefCounted
 ## Effect IDs that should still be registered as legacy persistent effects.
 ## Migrated RuleRegistry cards are intentionally omitted from this list.
 const PERSISTENT_EFFECT_IDS: Array[String] = [
-	"blinded_gunners",
-	"coolant_discharge",
 	"damaged_controls",
-	"disengaged_fire_control",
 	"ruptured_engine",
 	"targeter_disruption",
 	"thrust_control_malfunction",

@@ -931,12 +931,16 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 ## Returns the command result containing [code]"dice_results"[/code].
 ## [param player] — the attacking player index.
 ## [param dice_pool] — Dictionary mapping colour string to count.
+## [param attack_context] — optional JSON-safe attack identity metadata.
 func submit_roll_dice(player: int,
-		dice_pool: Dictionary) -> Dictionary:
+		dice_pool: Dictionary,
+		attack_context: Dictionary = {}) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var cmd := RollDiceCommand.new(player,
-			{"dice_pool": dice_pool.duplicate()})
+	var payload: Dictionary = {"dice_pool": dice_pool.duplicate()}
+	for context_key: String in attack_context.keys():
+		payload[context_key] = attack_context[context_key]
+	var cmd := RollDiceCommand.new(player, payload)
 	return _submitter.submit(cmd)
 
 

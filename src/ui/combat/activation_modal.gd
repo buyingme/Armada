@@ -111,6 +111,9 @@ var _end_activation_button: Button = null
 ## Label showing collision/overlap info (between step rows and End button).
 var _collision_label: Label = null
 
+## Label warning that the current maneuver will trigger damage-card effects.
+var _maneuver_warning_label: Label = null
+
 ## Whether auto-skip is currently running.
 var _auto_skipping: bool = false
 
@@ -324,6 +327,21 @@ func set_collision_message(text: String) -> void:
 		_request_deferred_layout()
 
 
+## Sets the maneuver damage warning shown while the maneuver tool is open.
+## Pass an empty string to hide the warning.
+func set_maneuver_warning_message(text: String) -> void:
+	if _maneuver_warning_label == null:
+		return
+	if text.is_empty():
+		_maneuver_warning_label.visible = false
+		_maneuver_warning_label.text = ""
+	else:
+		_maneuver_warning_label.text = text
+		_maneuver_warning_label.visible = true
+	if visible:
+		_request_deferred_layout()
+
+
 ## Escape key dismisses the modal.
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
@@ -379,6 +397,7 @@ func _build_ui() -> void:
 	vbox.add_child(_build_header_labels())
 	vbox.add_child(HSeparator.new())
 	vbox.add_child(_build_step_section())
+	vbox.add_child(_build_maneuver_warning_label())
 	vbox.add_child(_build_collision_label())
 	vbox.add_child(_build_end_activation_section())
 	vbox.add_child(HSeparator.new())
@@ -452,6 +471,19 @@ func _build_collision_label() -> Label:
 			Color(1.0, 0.75, 0.3))
 	_collision_label.visible = false
 	return _collision_label
+
+
+## Creates the maneuver damage warning label.
+func _build_maneuver_warning_label() -> Label:
+	_maneuver_warning_label = Label.new()
+	_maneuver_warning_label.name = "ManeuverWarningLabel"
+	_maneuver_warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_maneuver_warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_maneuver_warning_label.add_theme_font_size_override("font_size", 13)
+	_maneuver_warning_label.add_theme_color_override("font_color",
+			Color(1.0, 0.75, 0.3))
+	_maneuver_warning_label.visible = false
+	return _maneuver_warning_label
 
 
 ## Creates the "End Activation ►" button section.
@@ -572,6 +604,7 @@ func _clear_ui() -> void:
 	_squadron_skip_button = null
 	_end_activation_button = null
 	_collision_label = null
+	_maneuver_warning_label = null
 
 
 # ---------------------------------------------------------------------------

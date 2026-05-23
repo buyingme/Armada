@@ -315,7 +315,7 @@ func get_token_button_index(token_type: Constants.DefenseToken,
 
 ## Determines if the first damage card should be dealt faceup (critical).
 ## Returns true if any dice show a critical face and Contain was not
-## used, unless blocked by an ATTACK_RESOLVE_CRITICAL effect.
+## used, unless blocked by RuleRegistry or legacy critical effects.
 ## Rules Reference: "Critical Effect", RRG v1.5.0, p.4.
 func determine_first_card_faceup(dice_results: Array[Dictionary],
 		contain_used: bool, registry: EffectRegistry,
@@ -324,17 +324,24 @@ func determine_first_card_faceup(dice_results: Array[Dictionary],
 	var faceup: bool = (has_crit and not contain_used)
 	if not faceup:
 		return false
+	var crit_ctx: EffectContext = _build_critical_context(attacker)
+	if RuleSurface.is_blocked(crit_ctx,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_CRITICAL_EFFECT):
+		return false
 	if registry == null:
-		return faceup
+		return true
+	crit_ctx = registry.resolve_hook(&"ATTACK_RESOLVE_CRITICAL", crit_ctx)
+	return crit_ctx.critical_allowed
+
+
+func _build_critical_context(attacker: ShipInstance) -> EffectContext:
 	var crit_ctx: EffectContext = EffectContext.new()
 	if attacker != null:
 		crit_ctx.attacker = attacker
 	crit_ctx.critical_allowed = true
-	crit_ctx = registry.resolve_hook(
-			&"ATTACK_RESOLVE_CRITICAL", crit_ctx)
-	if not crit_ctx.critical_allowed:
-		return false
-	return true
+	return crit_ctx
 
 
 # ---------------------------------------------------------------------------

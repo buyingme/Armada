@@ -1205,16 +1205,118 @@ func _on_maneuver_step_entered() -> void:
 		EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 		show_end_activation_after_maneuver()
 		return
-	# Show the maneuver tool in activation mode.
-	_maneuver_tool_controller.show_activation_tool(
-			_activation_ctx.activating_ship_token,
-			_activation_ctx.ship_activation_state)
+	_show_activation_maneuver_tool()
 	# Disable the simulation maneuver button while activation tool is active.
 	if _panel_mgr.action_toolbar:
 		_panel_mgr.action_toolbar.set_tool_buttons_disabled(true)
 	# Yaw bonus (Navigate dial) is applied interactively when the player
 	# clicks a joint beyond its base limit — not auto-assigned to joint 0.
 	# Modal's embedded Execute button is already visible — no extra button needed.
+
+# TODO(refactor): extract maneuver damage warnings with the maneuver tool cluster.
+## Shows the activation maneuver tool and starts damage-preview updates.
+func _show_activation_maneuver_tool() -> void:
+	_maneuver_tool_controller.show_activation_tool(
+			_activation_ctx.activating_ship_token,
+			_activation_ctx.ship_activation_state)
+	var scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if scene != null and not scene.maneuver_preview_changed.is_connected(
+			_update_maneuver_damage_hint):
+		scene.maneuver_preview_changed.connect(_update_maneuver_damage_hint)
+	_update_maneuver_damage_hint()
+
+
+## Refreshes the warning for damage-card effects caused by the previewed move.
+func _update_maneuver_damage_hint() -> void:
+	if _panel_mgr.activation_modal == null:
+		return
+	_panel_mgr.activation_modal.set_maneuver_warning_message(
+			_build_maneuver_damage_hint())
+
+
+func _clear_maneuver_damage_hint() -> void:
+	if _panel_mgr.activation_modal:
+		_panel_mgr.activation_modal.set_maneuver_warning_message("")
+
+
+func _build_maneuver_damage_hint() -> String:
+	var ship: ShipInstance = _active_maneuver_ship()
+	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if ship == null or mt_scene == null:
+		return ""
+	var effect_ids: Array[String] = _preview_maneuver_damage_effect_ids(
+			ship, mt_scene)
+	if effect_ids.is_empty():
+		return ""
+	return "Committing this maneuver will trigger damage from %s." % \
+			_format_effect_names(ship, effect_ids)
+
+
+func _preview_maneuver_damage_effect_ids(ship: ShipInstance,
+		mt_scene: ManeuverToolScene) -> Array[String]:
+	var tool_state: ManeuverToolState = mt_scene.get_state()
+	var did_overlap: bool = _preview_damaged_controls_overlap(ship)
+	return ManeuverRuleResolver.preview_maneuver_damage_effect_ids(
+			GameManager.current_game_state, ship, _damage_deck,
+			tool_state.get_simulated_speed(), did_overlap,
+			_activation_ctx.ship_activation_state.get_total_speed_change() != 0)
+
+
+func _preview_damaged_controls_overlap(ship: ShipInstance) -> bool:
+	if not _ship_has_faceup_effect(
+			ship, ManeuverRuleResolver.EFFECT_DAMAGED_CONTROLS):
+		return false
+	var overlap_result: OverlapResolver.ShipShipResult = \
+			_preview_maneuver_overlap_result()
+	return overlap_result != null and (
+			overlap_result.overlaps or overlap_result.stayed_in_place)
+
+
+func _ship_has_faceup_effect(ship: ShipInstance, effect_id: String) -> bool:
+	for card_var: Variant in ship.faceup_damage:
+		if not card_var is DamageCard:
+			continue
+		var card: DamageCard = card_var as DamageCard
+		if card.is_faceup and card.effect_id == effect_id:
+			return true
+	return false
+
+
+func _active_maneuver_ship() -> ShipInstance:
+	if _activation_ctx.ship_activation_state == null:
+		return null
+	return _activation_ctx.ship_activation_state.get_ship()
+
+
+func _format_effect_names(ship: ShipInstance,
+		effect_ids: Array[String]) -> String:
+	var names: Array[String] = []
+	for effect_id: String in effect_ids:
+		names.append(_effect_title_for_id(ship, effect_id))
+	if names.size() == 1:
+		return names[0]
+	var prefix: Array[String] = []
+	for index: int in range(names.size() - 1):
+		prefix.append(names[index])
+	return "%s and %s" % [", ".join(prefix), names[names.size() - 1]]
+
+
+func _effect_title_for_id(ship: ShipInstance, effect_id: String) -> String:
+	for card_var: Variant in ship.faceup_damage:
+		if not card_var is DamageCard:
+			continue
+		var card: DamageCard = card_var as DamageCard
+		if card.effect_id == effect_id and not card.title.is_empty():
+			return card.title
+	match effect_id:
+		ManeuverRuleResolver.EFFECT_RUPTURED_ENGINE:
+			return "Ruptured Engine"
+		ManeuverRuleResolver.EFFECT_DAMAGED_CONTROLS:
+			return "Damaged Controls"
+		ManeuverRuleResolver.EFFECT_THRUSTER_FISSURE:
+			return "Thruster Fissure"
+		_:
+			return effect_id.capitalize()
 
 
 ## Called when the player commits the maneuver (modal "Commit ►" button).
@@ -1284,24 +1386,24 @@ func _on_execute_maneuver() -> void:
 		# This prevents the activation from becoming stuck.
 		_maneuver_tool_controller.dismiss(null)
 		if _activation_ctx.activating_ship_token and _activation_ctx.ship_activation_state:
-			_maneuver_tool_controller.show_activation_tool(
-					_activation_ctx.activating_ship_token,
-					_activation_ctx.ship_activation_state)
+			_show_activation_maneuver_tool()
 			TooltipManager.show_text(
 					"Maneuver validation failed. Adjust and try again.",
 					Vector2.INF, 3.0, true)
 			_log.info("Maneuver tool re-shown for retry after validation failure.")
 		return
 
-	# AFTER_MANEUVER_EXECUTE hook — Ruptured Engine and Damaged Controls.
+	# Resolve central maneuver rule effects after command acceptance.
 	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
-	_resolve_after_maneuver_hook(_activation_ctx.last_maneuver_overlapped)
-	# ON_SPEED_CHANGE hook — Thruster Fissure deals facedown damage.
+	_resolve_after_maneuver_hook(
+			maneuver_result, _activation_ctx.last_maneuver_overlapped)
+	# Thruster Fissure deals facedown damage after player speed changes.
 	# Only fires if the player's final speed differs from the original.
 	# Deferred to commit time because speed changes are reversible during preview.
 	# Rules Reference: "Thruster Fissure" card text.
 	if _activation_ctx.ship_activation_state.get_total_speed_change() != 0:
 		_resolve_speed_change_hook()
+	_clear_maneuver_damage_hint()
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview.call()
 	if displaced.size() > 0:
@@ -1327,10 +1429,28 @@ func _on_execute_maneuver() -> void:
 
 ## Computes the final transform after ship–ship overlap resolution.
 ## Applies overlap damage if a collision occurred.
-## Sets [member _activation_ctx].last_maneuver_overlapped for the AFTER_MANEUVER_EXECUTE hook.
+## Sets [member _activation_ctx].last_maneuver_overlapped for maneuver rules.
 ## Requirements: OV-010–013.
 func _resolve_maneuver_overlaps_ex() -> Transform2D:
+	var result: OverlapResolver.ShipShipResult = _preview_maneuver_overlap_result()
+	if result == null:
+		return Transform2D(
+				_activation_ctx.activating_ship_token.global_rotation,
+				_activation_ctx.activating_ship_token.global_position)
+	_activation_ctx.last_maneuver_overlapped = result.overlaps or result.stayed_in_place
+	if _activation_ctx.last_maneuver_overlapped:
+		_apply_overlap_damage(result)
+	else:
+		if _panel_mgr.activation_modal:
+			_panel_mgr.activation_modal.set_collision_message("")
+	return result.final_transform
+
+
+## Previews ship-overlap resolution for the current maneuver tool state.
+func _preview_maneuver_overlap_result() -> OverlapResolver.ShipShipResult:
 	var mt_scene: ManeuverToolScene = _maneuver_tool_controller.get_scene()
+	if mt_scene == null:
+		return null
 	var tool_state: ManeuverToolState = mt_scene.get_state()
 	var attach: Dictionary = mt_scene._compute_attachment()
 	var start_pos: Vector2 = attach["position"]
@@ -1346,59 +1466,37 @@ func _resolve_maneuver_overlaps_ex() -> Transform2D:
 			resolver.check_ship_ship_overlap(
 					tool_state, start_pos, start_rot, ghost_side,
 					ship_size, other_bases, original_xform))
-	_activation_ctx.last_maneuver_overlapped = result.overlaps or result.stayed_in_place
-	if _activation_ctx.last_maneuver_overlapped:
-		_apply_overlap_damage(result)
-	else:
-		if _panel_mgr.activation_modal:
-			_panel_mgr.activation_modal.set_collision_message("")
-	return result.final_transform
+	return result
 
 
-## Resolves the AFTER_MANEUVER_EXECUTE hook for persistent damage cards.
+## Resolves post-maneuver persistent damage cards through the core rule helper.
 ## Ruptured Engine: suffer 1 facedown if speed > 1.
 ## Damaged Controls: suffer 1 facedown if overlapping a ship or obstacle.
 ## Rules Reference: "Ruptured Engine", "Damaged Controls" card texts.
-func _resolve_after_maneuver_hook(did_overlap: bool) -> void:
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return
+func _resolve_after_maneuver_hook(maneuver_result: Dictionary,
+		did_overlap: bool) -> void:
 	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
 	if ship == null:
 		return
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("ship_speed", ship.current_speed)
-	ctx.set_meta_value("did_overlap", did_overlap)
-	ctx.set_meta_value("damage_deck", _damage_deck)
-	ctx = registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
-	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		_submit_persistent_damage.call(ship,
-				str(ctx.get_meta_value("persistent_effect_id", "")))
+	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
+			GameManager.current_game_state, ship, _damage_deck,
+			maneuver_result, did_overlap)
+	if effect_id != "":
+		_submit_persistent_damage.call(ship, effect_id)
 
 
-## Resolves the ON_SPEED_CHANGE hook after maneuver commit.
+## Resolves speed-change persistent damage cards after maneuver commit.
 ## Thruster Fissure: suffer 1 facedown damage when speed changes.
 ## Called only when total_speed_change != 0 (deferred from preview to commit).
 ## Rules Reference: "Thruster Fissure" card text.
 func _resolve_speed_change_hook() -> void:
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return
 	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
 	if ship == null:
 		return
-	var ctx: EffectContext = EffectContext.new()
-	ctx.set_meta_value("ship", ship)
-	ctx.set_meta_value("damage_deck", _damage_deck)
-	ctx = registry.resolve_hook(&"ON_SPEED_CHANGE", ctx)
-	if ctx.get_meta_value("extra_damage_dealt", false) as bool:
-		_submit_persistent_damage.call(ship,
-				str(ctx.get_meta_value("persistent_effect_id", "")))
+	var effect_id: String = ManeuverRuleResolver.resolve_speed_change_effect_id(
+			GameManager.current_game_state, ship, _damage_deck)
+	if effect_id != "":
+		_submit_persistent_damage.call(ship, effect_id)
 
 
 ## Shows the activation modal at the DONE step so the player can review

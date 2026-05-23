@@ -77,9 +77,9 @@ func _make_deck() -> DamageDeck:
 
 
 func test_factory_is_persistent_returns_true_for_persistent_cards() -> void:
-	var card: DamageCard = _make_card("targeter_disruption")
+	var card: DamageCard = _make_card("ruptured_engine")
 	assert_true(DamageCardEffectFactory.is_persistent(card),
-			"Targeter Disruption should remain a legacy persistent effect")
+			"Ruptured Engine should remain a legacy persistent effect")
 
 
 func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
@@ -91,20 +91,20 @@ func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
 
 func test_factory_register_creates_and_registers() -> void:
 	var ship: ShipInstance = _make_ship()
-	var card: DamageCard = _make_card("targeter_disruption")
+	var card: DamageCard = _make_card("ruptured_engine")
 	var reg: EffectRegistry = EffectRegistry.new()
 	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
 			card, ship, reg)
 	assert_not_null(effect, "Should return created effect")
 	assert_eq(reg.get_effect_count(), 1, "Should register 1 effect")
 	assert_eq(effect.owner, ship, "Effect owner should be the ship")
-	assert_eq(effect.effect_id, "targeter_disruption",
+	assert_eq(effect.effect_id, "ruptured_engine",
 			"Effect ID should match card")
 
 
 func test_factory_unregister_removes_by_card() -> void:
 	var ship: ShipInstance = _make_ship()
-	var card: DamageCard = _make_card("targeter_disruption")
+	var card: DamageCard = _make_card("ruptured_engine")
 	var reg: EffectRegistry = EffectRegistry.new()
 	DamageCardEffectFactory.register_effect(card, ship, reg)
 	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect")
@@ -153,7 +153,7 @@ func test_faulty_countermeasures_no_longer_declares_legacy_hook() -> void:
 			"Faulty Countermeasures should use RuleRegistry blockers after N2.")
 
 
-func test_n3_to_n8_cards_no_longer_declare_legacy_hooks() -> void:
+func test_n3_to_n9_cards_no_longer_declare_legacy_hooks() -> void:
 	var blinded: DamageCardEffect = _make_effect(
 			"blinded_gunners", _make_ship())
 	var coolant: DamageCardEffect = _make_effect(
@@ -165,6 +165,8 @@ func test_n3_to_n8_cards_no_longer_declare_legacy_hooks() -> void:
 	var power: DamageCardEffect = _make_effect("power_failure", _make_ship())
 	var life_support: DamageCardEffect = _make_effect(
 			"life_support_failure", _make_ship())
+	var targeter: DamageCardEffect = _make_effect(
+			"targeter_disruption", _make_ship())
 	assert_false(blinded.get_hooks().has(&"ATTACK_SPEND_ACCURACY"),
 			"Blinded Gunners should use RuleRegistry blockers after N8.")
 	assert_false(coolant.get_hooks().has(&"ATTACK_VALIDATE_TARGET"),
@@ -179,6 +181,8 @@ func test_n3_to_n8_cards_no_longer_declare_legacy_hooks() -> void:
 			"Power Failure should use RuleRegistry modifiers after N3.")
 	assert_false(life_support.get_hooks().has(&"ON_COMMAND_TOKEN_GAIN"),
 			"Life Support Failure should use RuleRegistry blockers after N4.")
+	assert_false(targeter.get_hooks().has(&"ATTACK_RESOLVE_CRITICAL"),
+			"Targeter Disruption should use RuleRegistry blockers after N9.")
 
 
 func test_coolant_discharge_hooks() -> void:
@@ -225,19 +229,19 @@ func test_blinded_gunners_cancels() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Targeter Disruption — cannot resolve critical effects
+# Targeter Disruption — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_targeter_disruption_blocks_critical() -> void:
+func test_targeter_disruption_no_longer_blocks_critical_in_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("targeter_disruption", ship)
 	var ctx: EffectContext = _make_context(&"ATTACK_RESOLVE_CRITICAL")
 	ctx.attacker = ship
 	ctx.critical_allowed = true
 	e.resolve(ctx)
-	assert_false(ctx.critical_allowed,
-			"Should set critical_allowed = false")
+	assert_true(ctx.critical_allowed,
+			"Targeter Disruption should not mutate legacy critical context after N9.")
 
 
 # ---------------------------------------------------------------------------

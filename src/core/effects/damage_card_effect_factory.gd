@@ -14,7 +14,6 @@ extends RefCounted
 const PERSISTENT_EFFECT_IDS: Array[String] = [
 	"damaged_controls",
 	"ruptured_engine",
-	"targeter_disruption",
 	"thrust_control_malfunction",
 	"thruster_fissure",
 ]

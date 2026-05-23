@@ -10,6 +10,10 @@ class_name ManeuverToolScene
 extends Node2D
 
 
+## Emitted when speed or yaw choices change the maneuver preview.
+signal maneuver_preview_changed()
+
+
 ## Click detection radius around joint positions (in game pixels).
 const JOINT_CLICK_RADIUS: float = 24.0
 
@@ -101,8 +105,7 @@ func setup(ship_token: ShipToken, side: String = "left") -> void:
 		if ship_data:
 			nav_chart = ship_data.navigation_chart.duplicate(true)
 			max_speed = ship_data.max_speed
-	# MANEUVER_DETERMINE_YAWS hook — Thrust Control Malfunction reduces
-	# last joint yaw by 1 at each speed level.
+	# Apply central maneuver rule modifiers before the tool state is built.
 	# Rules Reference: "Thrust Control Malfunction" card text.
 	nav_chart = _apply_yaw_hooks(nav_chart, instance)
 	_state.setup(speed, nav_chart, ship_size, max_speed)
@@ -141,27 +144,13 @@ func refresh() -> void:
 	_update_visual()
 
 
-## Applies the MANEUVER_DETERMINE_YAWS hook to each speed level of
-## the nav chart, allowing damage cards (e.g. Thrust Control Malfunction)
-## to reduce yaw values.  Returns the (possibly modified) nav chart.
+## Applies central maneuver rule modifiers to the navigation chart.
+## Returns the possibly modified nav chart.
 ## Rules Reference: "Thrust Control Malfunction" card text.
 func _apply_yaw_hooks(nav_chart: Array,
 		ship: ShipInstance) -> Array:
-	if ship == null:
-		return nav_chart
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
-	if registry == null:
-		return nav_chart
-	for speed_idx: int in range(nav_chart.size()):
-		var yaw_arr: Array = (nav_chart[speed_idx] as Array).duplicate()
-		var ctx: EffectContext = EffectContext.new()
-		ctx.set_meta_value("ship", ship)
-		ctx.set_meta_value("yaw_values", yaw_arr)
-		ctx = registry.resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)
-		nav_chart[speed_idx] = ctx.get_meta_value("yaw_values", yaw_arr)
-	return nav_chart
+	return ManeuverRuleResolver.apply_yaw_modifiers(
+			nav_chart, ship, GameManager.current_game_state)
 
 
 # ------------------------------------------------------------------
@@ -602,6 +591,7 @@ func _try_joint_click(mb: InputEventMouseButton) -> void:
 			applied = _try_apply_yaw_bonus_for(j, mb.button_index)
 		if applied:
 			_update_visual()
+			maneuver_preview_changed.emit()
 			_log.info("Joint %d clicked %s → %d" % [
 					j, "left" if mb.button_index == MOUSE_BUTTON_LEFT \
 					else "right", _state.get_joint_clicks()[j]])
@@ -759,6 +749,7 @@ func _handle_speed_change(delta: int) -> void:
 			# Sync the tool state to the new actual speed.
 			_state.set_simulated_speed(ship.current_speed)
 			_update_visual()
+			maneuver_preview_changed.emit()
 			_log.info("Activation speed %+d → %d" % [
 					delta, ship.current_speed])
 			EventBus.ship_speed_changed.emit(ship, ship.current_speed)
@@ -770,6 +761,7 @@ func _handle_speed_change(delta: int) -> void:
 		_state.set_simulated_speed(old_speed + delta)
 		if _state.get_simulated_speed() != old_speed:
 			_update_visual()
+			maneuver_preview_changed.emit()
 			_log.info("Speed %s → %d" % [
 					"+" if delta > 0 else "−",
 					_state.get_simulated_speed()])

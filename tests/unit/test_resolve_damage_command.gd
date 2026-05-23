@@ -61,15 +61,15 @@ func _make_card(title: String, is_faceup: bool = false) -> Dictionary:
 	}
 
 
-## Creates a serialized Targeter Disruption card dict.
-func _make_targeter_disruption_card() -> Dictionary:
+## Creates a serialized legacy persistent damage card dict.
+func _make_ruptured_engine_card() -> Dictionary:
 	return {
-		"trait_type": "Crew",
-		"title": "Targeter Disruption",
+		"trait_type": "Ship",
+		"title": "Ruptured Engine",
 		"is_faceup": true,
-		"effect_text": "You cannot resolve critical effects.",
+		"effect_text": "After you execute a maneuver, if your speed is greater than 1, suffer 1 damage.",
 		"timing": "persistent",
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 	}
 
 
@@ -330,27 +330,28 @@ func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
 		"ship_index": idx,
 		"hull_zone": "FRONT",
 		"shield_damage": 0,
-		"damage_cards": [_make_targeter_disruption_card()],
+		"damage_cards": [_make_ruptured_engine_card()],
 		"target_destroyed": false,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("persistent_registered", 0), 1,
 			"ResolveDamageCommand should register persistent faceup effects")
 	var effects: Array[GameEffect] = _state.effect_registry.get_effects_for_hook(
-			&"ATTACK_RESOLVE_CRITICAL")
+			&"AFTER_MANEUVER_EXECUTE")
 	assert_eq(effects.size(), 1,
-			"Targeter Disruption should hook ATTACK_RESOLVE_CRITICAL")
+			"Ruptured Engine should hook AFTER_MANEUVER_EXECUTE")
 	var effect: DamageCardEffect = effects[0] as DamageCardEffect
 	assert_same(effect.owner, ship,
 			"Persistent damage effect owner should be the damaged ship")
 	assert_eq(effect.player_priority, 0,
 			"Initiative player's persistent damage effects should resolve first")
 	var context: EffectContext = EffectContext.new()
-	context.attacker = ship
-	context.critical_allowed = true
-	_state.effect_registry.resolve_hook(&"ATTACK_RESOLVE_CRITICAL", context)
-	assert_false(context.critical_allowed,
-			"Registered Targeter Disruption should block critical effects")
+	context.set_meta_value("ship", ship)
+	context.set_meta_value("ship_speed", 2)
+	context.set_meta_value("damage_deck", DamageDeck.new())
+	_state.effect_registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", context)
+	assert_true(bool(context.get_meta_value("extra_damage_dealt", false)),
+			"Registered Ruptured Engine should mark extra maneuver damage")
 
 
 func test_execute_ship_mixed_cards() -> void:

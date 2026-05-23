@@ -29,11 +29,7 @@ func _init() -> void:
 
 ## Returns the hook points this effect responds to, based on [member effect_id].
 func get_hooks() -> Array[StringName]:
-	match effect_id:
-		"targeter_disruption":
-			return [&"ATTACK_RESOLVE_CRITICAL"]
-		_:
-			return _get_non_attack_hooks()
+	return _get_non_attack_hooks()
 
 
 ## Returns hooks for movement, command, and repair effects.
@@ -54,11 +50,7 @@ func _get_non_attack_hooks() -> Array[StringName]:
 func should_trigger(context: EffectContext) -> bool:
 	if context == null or owner == null:
 		return false
-	match effect_id:
-		"targeter_disruption":
-			return context.attacker == owner
-		_:
-			return _should_trigger_non_attack(context)
+	return _should_trigger_non_attack(context)
 
 
 ## Checks non-attack effects (movement, command, repair, status).
@@ -76,11 +68,7 @@ func _should_trigger_non_attack(context: EffectContext) -> bool:
 
 ## Mutates the context to apply this effect.
 func resolve(context: EffectContext) -> void:
-	match effect_id:
-		"targeter_disruption":
-			context.critical_allowed = false
-		_:
-			_resolve_non_attack(context)
+	_resolve_non_attack(context)
 
 
 ## Resolves movement, command, and repair effects.

@@ -1,6 +1,6 @@
 # Refactoring Phase N - Rule System Completion
 
-> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8; N9 next.
+> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8, ✅ N9, ✅ N10, ✅ N11; N12 next.
 > **Predecessor:** Phase M is closed at `b9bbe82` / `988641a` with
 > RuleRegistry governance in project instructions and architecture skills.
 > **Decision point:** Taking Phase N before G4.7 intentionally delays the
@@ -21,6 +21,9 @@
 | N6 | ✅ Complete | Disengaged Fire Control migrated to RuleRegistry attack-target blocker/validator for obstructed attacks. MT pass confirmed 2026-05-22. |
 | N7 | ✅ Complete | Coolant Discharge source-text ship-target-per-round rule implemented with serialized command-backed count; stale close damage removed. MT pass confirmed 2026-05-22. |
 | N8 | ✅ Complete | Blinded Gunners migrated to RuleRegistry accuracy-spend blocker plus locked-token publish validator. MT pass confirmed 2026-05-22. |
+| N9 | ✅ Complete | Targeter Disruption migrated to a RuleRegistry critical-effect blocker. MT pass confirmed 2026-05-23. |
+| N10 | ✅ Complete | Bomber migrated to a squadron keyword attack-damage modifier; save/load no longer rebuilds `BomberEffect`. MT pass confirmed 2026-05-23. |
+| N11 | ✅ Complete | Maneuver rule application extracted into `ManeuverRuleResolver`; scene/tool legacy hook ownership removed while behaviour is preserved, and pre-commit hints warn for Ruptured Engine, Damaged Controls, and Thruster Fissure damage. MT pass confirmed 2026-05-23. |
 
 ---
 
@@ -56,10 +59,10 @@ Current legacy production surfaces:
 
 | Surface | Legacy source | Current call sites / notes |
 |---|---|---|
-| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 5 effect ids remain after N6-N8 removed Blinded Gunners, Coolant Discharge, and Disengaged Fire Control from the legacy bridge. |
-| Squadron keyword effects | `BomberEffect`, `EscortEffect`, `SwarmEffect` from `EffectFactory._create_keyword_effect()` | Bomber is wired through damage calculation; Escort is also enforced directly in `EngagementResolver`; Swarm has an old effect class but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found in `src/`. |
-| Attack validation/damage hooks | `ATTACK_CALC_DAMAGE`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses critical resolution and damage calculation. After N8, no remaining legacy damage card maps to `ATTACK_VALIDATE_TARGET` or `ATTACK_SPEND_ACCURACY`; `ATTACK_CALC_DAMAGE` remains for legacy Bomber until N10. |
-| Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | Some hooks are still invoked from scene/tool code; Phase N should move rule decisions toward core/command surfaces. |
+| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | 4 effect ids remain after N9 removed Targeter Disruption from the legacy bridge: Thrust Control Malfunction, Ruptured Engine, Damaged Controls, and Thruster Fissure. |
+| Squadron keyword effects | `EscortEffect`, `SwarmEffect` from `EffectFactory._create_keyword_effect()` plus unused legacy keyword classes | Bomber no longer rebuilds a legacy effect after N10; Escort is also enforced directly in `EngagementResolver`; Swarm has an old effect class but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found in `src/`. |
+| Attack validation/damage hooks | `ATTACK_CALC_DAMAGE`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses critical resolution and damage calculation. After N10, Targeter Disruption and Bomber use RuleRegistry surfaces; these legacy attack hooks remain compatibility fallbacks only. |
+| Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | N11 centralised legacy movement-hook execution in `ManeuverRuleResolver`; scene/tool code no longer owns these rule predicates while N12-N15 migrate the remaining movement cards. |
 | Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | N3/N4 retired production use of these hooks for Power Failure and Life Support Failure. `RepairResolver` still has a legacy engineering fallback until N19 cleanup, but no current `DamageCardEffect` maps to either migrated id. |
 
 The main risk of doing nothing is architectural drift: new features will have
@@ -148,7 +151,7 @@ following findings are now binding for later Phase N slices.
 | Coolant Discharge | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE` | Partially mismatched. Source text only says: "Only one attack you perform each round can target a ship." No checked source supports the legacy `+1 close damage` side effect. The legacy predicate also uses the attack executor's per-activation `current_attack` counter, while the card is worded per round and ship-target-specific. | Complete in N7: source-text ship-target-per-round blocker/validator uses serialized `GameState.ship_target_attack_counts` recorded by `roll_dice`; stale close-range damage is not migrated. MT pass confirmed 2026-05-22. |
 | Blinded Gunners | `ATTACK_SPEND_ACCURACY` | Matches card text: while attacking, the damaged ship cannot spend accuracy icons. | Complete in N8: RuleRegistry `accuracy_spend` blocker drives zero spendable accuracies and a defense-step publish validator rejects non-empty `locked_tokens`. MT pass confirmed 2026-05-22. |
 | Targeter Disruption | `ATTACK_RESOLVE_CRITICAL` | Matches card text: while attacking, the damaged ship cannot resolve critical effects. | N9 migrates as a critical-effect blocker. |
-| Thrust Control Malfunction | `MANEUVER_DETERMINE_YAWS` | Partially mismatched. Source text and FAQ limit the effect to the last adjustable joint at the ship's current speed. The legacy tool applies the hook to each speed row in the nav chart and the effect reduces the last array entry without checking whether that joint is adjustable. | N11/N12 must move yaw application into a core helper and implement current-speed/adjustable-joint semantics, not blindly preserve the old preview mutation. |
+| Thrust Control Malfunction | `MANEUVER_DETERMINE_YAWS` | Partially mismatched. Source text and FAQ limit the effect to the last adjustable joint at the ship's current speed. The legacy tool applies the hook to each speed row in the nav chart and the effect reduces the last array entry without checking whether that joint is adjustable. | N11 moved yaw application into a core helper while preserving behaviour; N12 implements current-speed/adjustable-joint semantics and removes the legacy hook for this card. |
 | Ruptured Engine | `AFTER_MANEUVER_EXECUTE` | Matches card text: after maneuver, if speed dial is greater than 1, suffer 1 damage. | N13 migrates as a deterministic post-maneuver observer follow-up. |
 | Damaged Controls | `AFTER_MANEUVER_EXECUTE` | Matches card text and FAQ: resolves during the Move Ship step while executing a maneuver; overlap ship or obstacle deals 1 facedown damage in addition to other obstacle effects. | N14 migrates as a post-maneuver overlap observer using authoritative maneuver-result metadata. |
 | Thruster Fissure | `ON_SPEED_CHANGE` | Mostly matches current player-driven speed-change path. FAQ states Admiral Konstantine's external speed change does not trigger it, so future non-player speed-change effects must not share this trigger automatically. | N15 migrates as a command/result-bound speed-change observer and keeps the trigger scoped to player speed changes unless a later rule explicitly broadens it. |
@@ -167,12 +170,14 @@ original damage-card rules have moved to RuleRegistry:
 | `CALC_ENGINEERING_VALUE` | Compatibility fallback remains in `RepairResolver`; Power Failure moved to RuleRegistry in N3 and no current `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
 | `ON_COMMAND_TOKEN_GAIN` | No production resolver fallback remains after N4; Life Support Failure moved to RuleRegistry blockers/validators. | Remove dead declarations during N19 static-guard cleanup. |
 | `ATTACK_VALIDATE_TARGET` | No remaining legacy damage-card source maps to this hook after N6/N7; the compatibility fallback can now be retired during cleanup once downstream keyword/attack migrations no longer need the bridge. | Remove during N19 static-guard cleanup. |
+| `ATTACK_RESOLVE_CRITICAL` | Targeter Disruption moved to a RuleRegistry `critical_effect` blocker in N9; the fallback remains only for compatibility until N19. | Remove during N19 static-guard cleanup. |
+| `ATTACK_CALC_DAMAGE` | Bomber moved to a RuleRegistry `attack_damage` modifier in N10 and is no longer rebuilt by `EffectFactory`; the fallback remains only for compatibility until N19. | Remove during N19 static-guard cleanup. |
 
 ### 4.4 Remaining Legacy Keyword Effects
 
 | Keyword | Legacy state | Source-text parity | Phase N direction |
 |---|---|---|---|
-| Bomber | `BomberEffect` is registered by `EffectFactory` and wired through `ATTACK_CALC_DAMAGE`. | Matches RRG and FAQ: crit icons count as damage against ships, and Bomber can resolve standard critical effects. | N10 migrates as a RuleRegistry damage/critical modifier reading attacker keyword state from squadron data. |
+| Bomber | N10 no longer registers `BomberEffect`; damage calculation reads the attacker's serialized squadron keyword data through a RuleRegistry `attack_damage` modifier. | Matches RRG and FAQ: crit icons count as damage against ships, and Bomber can resolve standard critical effects. | Complete with MT pass: focused tests and save/load regression prove behaviour derives from squadron data, not a rebuilt legacy effect. |
 | Escort | `EscortEffect` is registered, but no production `SQUADRON_MUST_ATTACK_ENGAGED` resolver was found. `EngagementResolver.get_valid_engaged_targets()` already filters engaged targets to Escort squadrons. | Core resolver matches the main RRG rule, but N16 must account for exceptions such as Counter and Snipe before changing behaviour. | N16/N17 should remove the inert effect class and either document/core-test the existing resolver as the rule implementation or add RuleRegistry target-blocker affordances if the attack flow needs projection metadata. |
 | Swarm | `SwarmEffect` is registered, but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found. The old effect auto-rerolls the worst die with `Dice.roll_die()` rather than offering the optional player choice or using replay-safe RNG. | Does not match the RRG optional timing as implemented in the old class. It is effectively inert in production and should not be ported as-is. | N18 either implements a real optional command-backed reroll with `GameRng` and UI affordance, or deletes the inert legacy class with a documented future keyword TODO. |
 
@@ -225,9 +230,9 @@ or be actively pair-reviewed.
 | N6 | Migrate Disengaged Fire Control. Register an attack target `BLOCKER`/`VALIDATOR` for obstructed attacks by the damaged ship. | medium | Yes + review | Complete 2026-05-22 with MT pass: target eligibility and direct attack-flow submissions agree on obstruction blocking. |
 | N7 | Migrate Coolant Discharge. Implement the source-text rule only: one ship-targeting attack each round for the damaged ship. Remove the stale close-range damage bonus. | high | No | Complete 2026-05-22 with MT pass: ship-target attack count is serialized, command-backed, replay-safe, and no `ATTACK_CALC_DAMAGE` side effect remains. |
 | N8 | Migrate Blinded Gunners. Move accuracy-spend blocking to RuleRegistry and make the attack payload/UI show no spendable accuracies when active. | high | No | Complete 2026-05-22 with MT pass: accuracy UI payload, direct submissions, save/load, and replay derive blocking from `faceup_damage`. |
-| N9 | Migrate Targeter Disruption. Move critical-effect blocking to RuleRegistry. | medium | Yes + review | Standard critical effect and direct damage-resolution paths respect the rule without `ATTACK_RESOLVE_CRITICAL`. |
-| N10 | Migrate Bomber keyword. Replace `BomberEffect` with a squadron keyword RuleRegistry damage modifier that reads attacker keyword state from serialized squadron data. | low-medium | Yes + review | X-wing/Bomber save-load regression no longer expects `BomberEffect`; damage calculation still counts crit icons against ships only. |
-| N11 | Extract maneuver rule application away from scene/tool legacy hooks. Add core/application helpers that can apply yaw modifiers and post-maneuver observer contexts from command/result data, while preserving behaviour. | high | No | No production scene/tool code owns rule predicates; legacy movement effects still pass through compatibility during transition. |
+| N9 | Migrate Targeter Disruption. Move critical-effect blocking to RuleRegistry. | medium | Yes + review | Complete 2026-05-23 with MT pass: standard critical effect and direct damage-resolution paths respect the rule without registering `ATTACK_RESOLVE_CRITICAL`. |
+| N10 | Migrate Bomber keyword. Replace `BomberEffect` with a squadron keyword RuleRegistry damage modifier that reads attacker keyword state from serialized squadron data. | low-medium | Yes + review | Complete 2026-05-23 with MT pass: X-wing/Bomber save-load regression no longer expects `BomberEffect`; damage calculation still counts crit icons against ships only. |
+| N11 | Extract maneuver rule application away from scene/tool legacy hooks. Add core/application helpers that can apply yaw modifiers and post-maneuver observer contexts from command/result data, while preserving behaviour. | high | No | Complete 2026-05-23 with MT pass: no production scene/tool code owns movement hook predicates; legacy movement effects still pass through compatibility during transition, and activation UI warns before maneuver damage triggers. |
 | N12 | Migrate Thrust Control Malfunction. Register a maneuver yaw `MODIFIER` and remove `MANEUVER_DETERMINE_YAWS` for the card. | medium | Yes + review | Maneuver tool yaw preview changes exactly one last adjustable joint at the current speed, after save/load, and does not reduce non-adjustable joints or every speed row. |
 | N13 | Migrate Ruptured Engine. Register a post-maneuver `OBSERVER` that emits a deterministic facedown-damage follow-up command when final speed is greater than 1. | high | No | Follow-up ordering is captured in replay; network host/client state hashes match; observer does not submit synchronously. |
 | N14 | Migrate Damaged Controls. Register a post-maneuver/overlap `OBSERVER` for extra facedown damage on ship/obstacle overlap. | high | No | Ship and obstacle overlap metadata comes from the authoritative maneuver result, not scene-local cached state. |
@@ -287,7 +292,8 @@ Manual test gates should be required for N6-N8, N11-N15, N17, and N18 because
 they touch visible attack/maneuver/keyword interaction timing. N3-N5 were
 batched behind one MT gate by user request; MT pass was confirmed 2026-05-22.
 N6-N8 were likewise batched behind one MT gate; MT pass was confirmed
-2026-05-22.
+2026-05-22. N9-N11 were batched behind one MT gate by user request; automated
+gates passed and MT pass was confirmed 2026-05-23.
 
 ---
 

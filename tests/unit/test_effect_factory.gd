@@ -33,17 +33,15 @@ func _setup_state(
 
 # --- Registration ---
 
-func test_register_bomber_keyword() -> void:
+func test_register_bomber_keyword_returns_zero_after_rule_migration() -> void:
 	var gs: GameState = _setup_state([["Bomber"]], [])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 1,
-			"Should register 1 effect for 1 Bomber keyword")
+	assert_eq(count, 0,
+			"Bomber should use RuleRegistry instead of EffectFactory after N10")
 	var effects: Array[GameEffect] = gs.effect_registry.get_effects_for_hook(
 			&"ATTACK_CALC_DAMAGE")
-	assert_eq(effects.size(), 1,
-			"ATTACK_CALC_DAMAGE hook should have 1 effect")
-	assert_true(effects[0] is BomberEffect,
-			"Effect should be a BomberEffect")
+	assert_eq(effects.size(), 0,
+			"No legacy ATTACK_CALC_DAMAGE effect should be registered")
 
 
 func test_register_escort_keyword() -> void:
@@ -63,8 +61,8 @@ func test_register_swarm_keyword() -> void:
 func test_register_multiple_keywords() -> void:
 	var gs: GameState = _setup_state([["Bomber", "Escort"]], [])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 2,
-			"Should register 2 effects for a squadron with Bomber+Escort")
+	assert_eq(count, 1,
+			"Only Escort should register a legacy effect after Bomber migration")
 
 
 func test_register_unknown_keyword_ignored() -> void:
@@ -82,7 +80,7 @@ func test_register_no_squadrons() -> void:
 
 
 func test_register_sets_owner() -> void:
-	var gs: GameState = _setup_state([["Bomber"]], [])
+	var gs: GameState = _setup_state([["Escort"]], [])
 	EffectFactory.register_squadron_keywords(gs, 0)
 	var effects: Array[GameEffect] = gs.effect_registry.get_all_effects()
 	assert_eq(effects.size(), 1, "Should have 1 effect")
@@ -94,7 +92,7 @@ func test_register_sets_owner() -> void:
 
 func test_register_player_priority_initiative() -> void:
 	# Player 0 has initiative, player 1 does not.
-	var gs: GameState = _setup_state([["Bomber"]], [["Bomber"]])
+	var gs: GameState = _setup_state([["Escort"]], [["Escort"]])
 	EffectFactory.register_squadron_keywords(gs, 0)
 	var effects: Array[GameEffect] = gs.effect_registry.get_all_effects()
 	assert_eq(effects.size(), 2, "Should have 2 effects total")
@@ -126,5 +124,5 @@ func test_register_both_players() -> void:
 			[["Bomber"], ["Swarm"]],
 			[["Escort"]])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 3,
-			"Should register 3 effects across both players")
+	assert_eq(count, 2,
+			"Only Swarm and Escort should register legacy effects after N10")

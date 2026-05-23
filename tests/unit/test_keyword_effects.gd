@@ -1,6 +1,6 @@
-## Test: Keyword Effects (Bomber, Escort, Swarm)
+## Test: Legacy Keyword Effects (Escort, Swarm)
 ##
-## Unit tests for the three core-set squadron keyword GameEffect subclasses.
+## Unit tests for the remaining core-set squadron keyword GameEffect subclasses.
 ## Rules Reference: "Squadron Keywords", RRG p.12; SM-030–032.
 extends GutTest
 
@@ -41,82 +41,6 @@ func _make_ship_instance() -> ShipInstance:
 	sd.navigation_chart = [[1], [1, 1], [1, 1, 1]]
 	var si: ShipInstance = ShipInstance.create_from_data("test_ship", sd, 0, 0)
 	return si
-
-
-# ===========================================================================
-# BomberEffect
-# ===========================================================================
-
-func test_bomber_get_hooks_returns_attack_calc_damage() -> void:
-	var e: BomberEffect = BomberEffect.new()
-	var hooks: Array[StringName] = e.get_hooks()
-	assert_eq(hooks.size(), 1, "Bomber should have 1 hook")
-	assert_eq(hooks[0], &"ATTACK_CALC_DAMAGE",
-			"Bomber hook should be ATTACK_CALC_DAMAGE")
-
-
-func test_bomber_source_id_is_bomber() -> void:
-	var e: BomberEffect = BomberEffect.new()
-	assert_eq(e.source_id, "bomber",
-			"source_id should be 'bomber'")
-
-
-func test_bomber_triggers_when_owner_attacks_ship() -> void:
-	var bomber_sq: SquadronInstance = _make_squadron(["Bomber"])
-	var ship: ShipInstance = _make_ship_instance()
-	var e: BomberEffect = BomberEffect.new()
-	e.owner = bomber_sq
-	var ctx: EffectContext = EffectContext.new()
-	ctx.attacker = bomber_sq
-	ctx.defender = ship
-	assert_true(e.should_trigger(ctx),
-			"Bomber should trigger when its owner attacks a ship")
-
-
-func test_bomber_does_not_trigger_vs_squadron() -> void:
-	var bomber_sq: SquadronInstance = _make_squadron(["Bomber"])
-	var target_sq: SquadronInstance = _make_squadron([])
-	var e: BomberEffect = BomberEffect.new()
-	e.owner = bomber_sq
-	var ctx: EffectContext = EffectContext.new()
-	ctx.attacker = bomber_sq
-	ctx.defender = target_sq
-	assert_false(e.should_trigger(ctx),
-			"Bomber should not trigger vs another squadron")
-
-
-func test_bomber_does_not_trigger_for_other_attacker() -> void:
-	var bomber_sq: SquadronInstance = _make_squadron(["Bomber"])
-	var other: SquadronInstance = _make_squadron([])
-	var ship: ShipInstance = _make_ship_instance()
-	var e: BomberEffect = BomberEffect.new()
-	e.owner = bomber_sq
-	var ctx: EffectContext = EffectContext.new()
-	ctx.attacker = other
-	ctx.defender = ship
-	assert_false(e.should_trigger(ctx),
-			"Bomber should not trigger when a different squadron attacks")
-
-
-func test_bomber_resolve_counts_criticals() -> void:
-	var bomber_sq: SquadronInstance = _make_squadron(["Bomber"])
-	var ship: ShipInstance = _make_ship_instance()
-	var e: BomberEffect = BomberEffect.new()
-	e.owner = bomber_sq
-	var ctx: EffectContext = EffectContext.new()
-	ctx.attacker = bomber_sq
-	ctx.defender = ship
-	# Simulate dice results: 1 HIT (1 dmg) + 1 CRITICAL (0 vs squad, 1 vs ship)
-	ctx.dice_results = [
-		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.HIT},
-		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.CRITICAL},
-	]
-	# Base damage vs squadron would be 1 (crit ignored), set that:
-	ctx.damage_total = 1
-	e.resolve(ctx)
-	# Bomber should recalculate using ship formula: HIT=1 + CRITICAL=1 = 2
-	assert_eq(ctx.damage_total, 2,
-			"Bomber should count critical icons as damage vs ships (SM-030)")
 
 
 # ===========================================================================

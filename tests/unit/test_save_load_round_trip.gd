@@ -212,36 +212,43 @@ func test_start_new_game_from_state_initialises_effect_registry() -> void:
 	GameManager.is_game_active = prev_active
 
 
-## Regression: when a save is loaded outside the Squadron Phase (e.g.
-## mid-Ship-Phase), squadron keyword effects (Bomber, Escort, Swarm)
-## must already be registered so that the next squadron attack issued
-## under a Squadron command resolves keyword damage correctly.
-##
-## Without this, an X-wing's Bomber crit deals 0 damage on a
-## squadron-vs-ship attack — see attack_executor → calc_damage which
-## relies on the ATTACK_CALC_DAMAGE hook firing.
-func test_start_new_game_from_state_registers_squadron_keywords() -> void:
+## Regression: loaded games still derive Bomber from serialized squadron data
+## after N10, without rebuilding a legacy BomberEffect instance.
+func test_start_new_game_from_state_preserves_bomber_rule_after_load() -> void:
+	RuleRegistry.clear()
+	BomberKeyword.register()
 	var gs: GameState = _make_populated_state()
 	gs.effect_registry = EffectRegistry.new() # empty, like a load
 	var prev_state: GameState = GameManager.current_game_state
 	var prev_active: bool = GameManager.is_game_active
 	GameManager.start_new_game_from_state(gs, "x")
 	var registry: EffectRegistry = GameManager.current_game_state.effect_registry
-	assert_gt(registry.get_effect_count(), 0,
-			"squadron keyword effects should be registered after load "
-			+"so Bomber crits resolve outside the Squadron Phase")
-	# X-wing has Bomber + Escort — both should be present.
-	var hooks: Array[GameEffect] = registry.get_effects_for_hook(
-			&"ATTACK_CALC_DAMAGE")
-	var has_bomber: bool = false
-	for e: GameEffect in hooks:
-		if e is BomberEffect:
-			has_bomber = true
-			break
-	assert_true(has_bomber,
-			"BomberEffect should be registered for the X-wing on load")
+	assert_eq(registry.get_effects_for_hook(&"ATTACK_CALC_DAMAGE").size(), 0,
+			"Loaded X-wing should not rebuild legacy BomberEffect after N10")
+	var xwing: SquadronInstance = GameManager.current_game_state.get_squadron(0, 0)
+	var defender: ShipInstance = GameManager.current_game_state.get_ship(0, 1)
+	var context: EffectContext = _bomber_damage_context(xwing, defender)
+	var modified: EffectContext = RuleSurface.apply_modifiers(context,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_ATTACK_DAMAGE)
+	assert_eq(modified.damage_total, 2,
+			"Loaded X-wing Bomber crit should count through RuleRegistry")
 	GameManager.current_game_state = prev_state
 	GameManager.is_game_active = prev_active
+
+
+func _bomber_damage_context(attacker: SquadronInstance,
+		defender: ShipInstance) -> EffectContext:
+	var context: EffectContext = EffectContext.new()
+	context.attacker = attacker
+	context.defender = defender
+	context.damage_total = 1
+	context.dice_results = [
+		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.CRITICAL},
+	]
+	return context
 
 
 func test_start_new_game_from_state_registers_faceup_damage_effects() -> void:

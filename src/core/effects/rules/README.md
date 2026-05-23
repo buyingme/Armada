@@ -28,6 +28,18 @@ executes surfaces that callers explicitly choose.
 | `damage_cards/ship/life_support_failure.gd` | Crew damage card | `VALIDATOR` for `convert_dial_to_token` and `BLOCKER` for `command_token_gain` on ship-activation token-conversion steps | No legacy token-gain bridge remains; immediate command-token discard still resolves through the immediate-effect command/resolver, while the persistent restriction reads `faceup_damage`. |
 | `damage_cards/ship/depowered_armament.gd` | Ship damage card | `BLOCKER` for `attack_target` and `VALIDATOR` for `publish_attack_flow` on `ATTACK / ATTACK_DECLARE` | No legacy `ATTACK_VALIDATE_TARGET` bridge remains for this card; long-range target declaration is rejected from serialized attacker damage state. |
 | `damage_cards/ship/disengaged_fire_control.gd` | Ship damage card | `BLOCKER` for `attack_target` and `VALIDATOR` for `publish_attack_flow` on `ATTACK / ATTACK_DECLARE` | No legacy `ATTACK_VALIDATE_TARGET` bridge remains; obstruction metadata is published in the attack-declare payload and checked against attacker `faceup_damage`. |
+| `damage_cards/ship/targeter_disruption.gd` | Ship damage card | `BLOCKER` for `critical_effect` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `ATTACK_RESOLVE_CRITICAL` bridge remains for this card; first-faceup critical handling reads the attacking ship's `faceup_damage`. |
+| `squadron_keywords/bomber.gd` | Squadron keyword | `MODIFIER` for `attack_damage` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `BomberEffect` rebuild remains; damage calculation reads the attacking squadron's serialized keyword data and counts critical icons against ships only. |
+
+## Compatibility Adapters
+
+`src/core/movement/maneuver_rule_resolver.gd` centralises remaining Phase N
+movement compatibility for yaw, post-maneuver, and speed-change effects. Scene
+and tool code calls this core helper instead of resolving legacy movement hook
+names directly while N12-N15 migrate the remaining movement cards to
+RuleRegistry surfaces. The same helper exposes a non-mutating preview list so
+the activation modal can warn before Ruptured Engine, Damaged Controls, or
+Thruster Fissure will deal post-maneuver damage.
 
 ## Grouping
 

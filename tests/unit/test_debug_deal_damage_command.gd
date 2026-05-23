@@ -30,14 +30,14 @@ func _add_ship(player: int, speed: int = 2) -> int:
 	return ps.ships.size() - 1
 
 
-## Builds a serialized persistent damage card (Targeter Disruption).
+## Builds a serialized legacy persistent damage card (Ruptured Engine).
 func _make_persistent_card_data() -> Dictionary:
 	var card := DamageCard.new()
-	card.effect_id = "targeter_disruption"
-	card.title = "Targeter Disruption"
+	card.effect_id = "ruptured_engine"
+	card.title = "Ruptured Engine"
 	card.timing = "persistent"
-	card.trait_type = "Crew"
-	card.effect_text = "Cannot resolve critical effects."
+	card.trait_type = "Ship"
+	card.effect_text = "After maneuvering at speed greater than 1, suffer 1 damage."
 	card.is_faceup = true
 	return card.serialize()
 
@@ -75,7 +75,7 @@ func test_validate_ok_persistent() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -88,7 +88,7 @@ func test_validate_ok_any_phase() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -103,7 +103,7 @@ func test_validate_missing_ship() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": 99,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
@@ -114,7 +114,7 @@ func test_validate_invalid_owner() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": - 1,
 		"ship_index": 0,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	assert_ne(cmd.validate(_state), "",
@@ -138,7 +138,7 @@ func test_validate_missing_card_data() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": {},
 	})
 	assert_ne(cmd.validate(_state), "",
@@ -149,7 +149,7 @@ func test_validate_no_game_state() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": 0,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	assert_ne(cmd.validate(null), "",
@@ -168,7 +168,7 @@ func test_execute_adds_faceup_card() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	var result: Dictionary = cmd.execute(_state)
@@ -177,13 +177,13 @@ func test_execute_adds_faceup_card() -> void:
 	var card: DamageCard = ship.faceup_damage[0]
 	assert_true(card.is_faceup,
 			"Card should be faceup")
-	assert_eq(card.effect_id, "targeter_disruption",
+	assert_eq(card.effect_id, "ruptured_engine",
 			"Card effect_id should match")
-	assert_eq(card.title, "Targeter Disruption",
+	assert_eq(card.title, "Ruptured Engine",
 			"Card title should match")
-	assert_eq(result.get("effect_id"), "targeter_disruption",
+	assert_eq(result.get("effect_id"), "ruptured_engine",
 			"Result should contain effect_id")
-	assert_eq(result.get("card_title"), "Targeter Disruption",
+	assert_eq(result.get("card_title"), "Ruptured Engine",
 			"Result should contain card_title")
 	assert_true(result.get("persistent_registered", false),
 			"Persistent effect should be registered")
@@ -199,7 +199,7 @@ func test_execute_registers_persistent_effect() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	cmd.execute(_state)
@@ -246,7 +246,7 @@ func test_execute_hull_decreases() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
 	var result: Dictionary = cmd.execute(_state)
@@ -265,7 +265,7 @@ func test_roundtrip() -> void:
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
-		"effect_id": "targeter_disruption",
+		"effect_id": "ruptured_engine",
 		"card_data": card_data,
 	})
 	cmd.sequence = 55
@@ -279,7 +279,7 @@ func test_roundtrip() -> void:
 			"Player index should roundtrip")
 	assert_eq(restored.sequence, 55,
 			"Sequence should roundtrip")
-	assert_eq(restored.payload.get("effect_id"), "targeter_disruption",
+	assert_eq(restored.payload.get("effect_id"), "ruptured_engine",
 			"effect_id should roundtrip")
 	assert_eq(restored.payload.get("owner_player"), 0,
 			"owner_player should roundtrip")
@@ -288,5 +288,5 @@ func test_roundtrip() -> void:
 	var restored_card: Dictionary = restored.payload.get("card_data", {})
 	assert_false(restored_card.is_empty(),
 			"card_data should roundtrip")
-	assert_eq(restored_card.get("effect_id"), "targeter_disruption",
+	assert_eq(restored_card.get("effect_id"), "ruptured_engine",
 			"card_data.effect_id should roundtrip")

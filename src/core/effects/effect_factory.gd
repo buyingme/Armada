@@ -124,8 +124,6 @@ static func _register_faceup_damage_for_ship(
 ## Returns null for keywords that do not yet have an effect implementation.
 static func _create_keyword_effect(keyword_name: String) -> GameEffect:
 	match keyword_name.to_lower():
-		"bomber":
-			return BomberEffect.new()
 		"escort":
 			return EscortEffect.new()
 		"swarm":

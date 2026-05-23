@@ -376,8 +376,8 @@ func _build_current_participants() -> CombatParticipants:
 ## formula for the combatant types. Critical icons only count as damage when
 ## both attacker and defender are ships; if either combatant is a squadron
 ## the no-critical formula is used.
-## After the base calculation, the ATTACK_CALC_DAMAGE hook is resolved
-## so keyword effects (e.g. Bomber) can adjust the total.
+## After the base calculation, RuleRegistry damage modifiers and remaining
+## legacy damage hooks can adjust the total.
 ## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
 ## defender are ships, this icon adds one damage to the damage total."
 func _calc_attack_damage(results: Array[Dictionary]) -> int:

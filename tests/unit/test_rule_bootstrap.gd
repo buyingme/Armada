@@ -68,6 +68,14 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
 			RuleSurface.TARGET_ACCURACY_SPEND)
+	var critical_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_CRITICAL_EFFECT)
+	var damage_modifiers: Array[FlowHook] = RuleRegistry.modifiers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_ATTACK_DAMAGE)
 	var defense_blockers: Array[FlowHook] = RuleRegistry.blockers_for(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
@@ -79,9 +87,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 12,
-			"Bootstrap should invoke all twelve production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 25,
+	assert_eq(registered, 14,
+			"Bootstrap should invoke all fourteen production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 27,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -113,6 +121,10 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Three damage cards should expose attack-target blocker metadata.")
 	assert_eq(accuracy_blockers.size(), 1,
 			"Blinded Gunners should expose accuracy-spend blocker metadata.")
+	assert_eq(critical_blockers.size(), 1,
+			"Targeter Disruption should expose critical-effect blocker metadata.")
+	assert_eq(damage_modifiers.size(), 1,
+			"Bomber should expose attack-damage modifier metadata.")
 	assert_eq(defense_blockers.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should expose blockers.")
 	assert_eq(repair_blockers.size(), 1,

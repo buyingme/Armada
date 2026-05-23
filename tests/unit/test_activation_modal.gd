@@ -458,3 +458,39 @@ func test_set_collision_message_empty_hides_label() -> void:
 	_modal.set_collision_message("")
 	assert_false(_modal._collision_label.visible,
 			"Collision label should be hidden after empty message.")
+
+
+# ---------------------------------------------------------------------------
+# Maneuver damage warning label
+# ---------------------------------------------------------------------------
+
+
+func test_maneuver_warning_label_hidden_by_default() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	assert_false(_modal._maneuver_warning_label.visible,
+			"Maneuver warning label should be hidden by default.")
+
+
+func test_set_maneuver_warning_message_shows_label() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	_modal.set_maneuver_warning_message(
+			"Committing this maneuver will trigger damage from Ruptured Engine.")
+	assert_true(_modal._maneuver_warning_label.visible,
+			"Maneuver warning label should be visible after message set.")
+	assert_eq(_modal._maneuver_warning_label.text,
+			"Committing this maneuver will trigger damage from Ruptured Engine.",
+			"Maneuver warning label text should match set value.")
+
+
+func test_set_maneuver_warning_message_empty_hides_label() -> void:
+	var state: ShipActivationState = _make_state_at(
+			ShipActivationState.Step.MANEUVER)
+	_modal.open(state)
+	_modal.set_maneuver_warning_message("Maneuver warning")
+	_modal.set_maneuver_warning_message("")
+	assert_false(_modal._maneuver_warning_label.visible,
+			"Maneuver warning label should be hidden after empty message.")

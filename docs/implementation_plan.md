@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-22 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, and N6-N8 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-23 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, N6-N8 complete with MT pass, and N9-N11 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 170 |
-| GUT tests | 3 160 |
-| GUT asserts | 6 438 |
+| GUT test scripts | 173 |
+| GUT tests | 3 179 |
+| GUT asserts | 6 470 |
 | Failing tests | 0 |
-| Last completed slice | N8 — Blinded Gunners migration in the N6-N8 batch |
+| Last completed batch | N9-N11 — Targeter Disruption, Bomber, and maneuver-rule extraction |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,12 +34,13 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-22 N6-N8 full GUT summary is green
-(170 / 3 160 / 6 438, 0 failures). Phase K lint reports 0 violations / 4
-allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
-network peer equality, and `git diff --check` is clean. Godot still reports
-known shutdown RID leak warnings in the runner output; no parse errors or GUT
-failures were reported. User MT pass confirmed 2026-05-22 for the N6-N8 batch.
+Verification note: the 2026-05-23 N9-N11 automated implementation full GUT
+summary is green (173 / 3 179 / 6 470, 0 failures). Phase K lint reports 0
+violations / 4 allow-listed branches, baseline traces pass hot-seat trace/state
+plus real ENet network peer equality, and `git diff --check` is clean. Godot
+still reports known shutdown RID leak warnings in the runner output; no parse
+errors or GUT failures were reported. User MT pass confirmed 2026-05-23 for
+the N9-N11 batch.
 
 ---
 
@@ -484,6 +485,29 @@ regression gate is complete and remains the required L/M automated gate:
   trace/state plus network peer-state equality, and `git diff --check` is
   clean. The hot-seat state-hash fixture was updated for the intentional
   `GameState.serialize()` addition. User MT pass confirmed 2026-05-22.
+- N9-N11 implementation result: [targeter_disruption.gd](../src/core/effects/rules/damage_cards/ship/targeter_disruption.gd), [bomber.gd](../src/core/effects/rules/squadron_keywords/bomber.gd), and [maneuver_rule_resolver.gd](../src/core/movement/maneuver_rule_resolver.gd)
+  migrate Targeter Disruption and Bomber out of legacy runtime effects while
+  centralising remaining maneuver-rule compatibility in core. Targeter
+  Disruption is now a `critical_effect` blocker for `ATTACK /
+  ATTACK_RESOLVE_DAMAGE`; Bomber is now an `attack_damage` modifier that reads
+  the attacking squadron's serialized keyword data; and maneuver yaw,
+  post-maneuver, and speed-change legacy hooks are invoked through
+  `ManeuverRuleResolver` instead of scene/tool-owned rule predicates.
+  A follow-up usability improvement previews Ruptured Engine, Damaged Controls,
+  and Thruster Fissure damage in the activation modal before the player commits
+  the maneuver.
+  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
+  no longer registers Targeter Disruption, and [effect_factory.gd](../src/core/effects/effect_factory.gd)
+  no longer rebuilds `BomberEffect`. Focused tests
+  [test_rule_targeter_disruption.gd](../tests/unit/test_rule_targeter_disruption.gd),
+  [test_rule_bomber_keyword.gd](../tests/unit/test_rule_bomber_keyword.gd), and
+  [test_maneuver_rule_resolver.gd](../tests/unit/test_maneuver_rule_resolver.gd)
+  cover registration, resolver integration, save/load rebuild absence, and
+  movement-bridge preservation and the pre-commit warning label. Full GUT is
+  green at 173 / 3 179 / 6 470 with
+  0 failures, Phase K lint reports 0 violations / 4 allow-listed branches,
+  baseline traces pass hot-seat trace/state plus network peer-state equality,
+  and `git diff --check` is clean. User MT pass confirmed 2026-05-23.
 
 ---
 
@@ -533,7 +557,9 @@ no-behaviour-change `RuleSurface` scaffolding for the remaining migration
 targets, N2 retired the Faulty Countermeasures legacy UI bridge, N3-N5
 completed Power Failure, Life Support Failure, and Depowered Armament migration
 with MT pass, and N6-N8 completed Disengaged Fire Control, Coolant Discharge,
-and Blinded Gunners migration with MT pass. N9 Targeter Disruption is next.
+and Blinded Gunners migration with MT pass. N9-N11 automated implementation
+for Targeter Disruption, Bomber, and maneuver-rule extraction is complete with
+MT pass confirmed 2026-05-23. N12 Thrust Control Malfunction is next.
 
 ### 4.1 Network Features Pending
 

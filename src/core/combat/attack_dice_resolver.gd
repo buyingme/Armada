@@ -364,8 +364,9 @@ func remove_obstruction_die(
 
 ## Calculates the damage total from rolled dice [param results].
 ## When either combatant is a squadron, critical icons do not add damage.
-## Optionally resolves the ATTACK_CALC_DAMAGE hook via [param registry].
-## [param registry] may be [code]null[/code] — base damage only.
+## Applies RuleRegistry damage modifiers, then the legacy ATTACK_CALC_DAMAGE
+## hook via [param registry] for not-yet-migrated compatibility effects.
+## [param registry] may be [code]null[/code] — RuleRegistry modifiers still run.
 ## Rules Reference: "Dice Icons", p.5 — critical adds damage only when
 ## both attacker and defender are ships.
 func calc_damage(
@@ -373,27 +374,32 @@ func calc_damage(
 		parts: CombatParticipants,
 		registry: EffectRegistry) -> int:
 	var base_damage: int
-	# Critical icons only add damage when BOTH combatants are ships.
 	if parts.def_squad != null or parts.atk_squad != null:
 		base_damage = Dice.calculate_damage_vs_squadron(results)
 	else:
 		base_damage = Dice.calculate_damage(results)
-	# Resolve ATTACK_CALC_DAMAGE hook for keyword effects (e.g. Bomber).
+	var ctx: EffectContext = _build_damage_context(results, parts, base_damage)
+	ctx = RuleSurface.apply_modifiers(ctx,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_ATTACK_DAMAGE)
 	if registry != null:
-		var ctx: EffectContext = EffectContext.new()
-		ctx.dice_results = results
-		ctx.damage_total = base_damage
-		# Determine attacker/defender RefCounted references.
-		if parts.atk_ship and parts.atk_ship is ShipToken:
-			ctx.attacker = (
-					parts.atk_ship as ShipToken).get_ship_instance()
-		if parts.atk_squad:
-			ctx.attacker = parts.atk_squad.get_squadron_instance()
-		if parts.def_squad:
-			ctx.defender = parts.def_squad.get_squadron_instance()
-		elif parts.def_ship and parts.def_ship is ShipToken:
-			ctx.defender = (
-					parts.def_ship as ShipToken).get_ship_instance()
 		ctx = registry.resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)
-		return ctx.damage_total
-	return base_damage
+	return ctx.damage_total
+
+
+func _build_damage_context(results: Array[Dictionary],
+		parts: CombatParticipants,
+		base_damage: int) -> EffectContext:
+	var ctx: EffectContext = EffectContext.new()
+	ctx.dice_results = results
+	ctx.damage_total = base_damage
+	if parts.atk_ship and parts.atk_ship is ShipToken:
+		ctx.attacker = (parts.atk_ship as ShipToken).get_ship_instance()
+	elif parts.atk_squad:
+		ctx.attacker = parts.atk_squad.get_squadron_instance()
+	if parts.def_squad:
+		ctx.defender = parts.def_squad.get_squadron_instance()
+	elif parts.def_ship and parts.def_ship is ShipToken:
+		ctx.defender = (parts.def_ship as ShipToken).get_ship_instance()
+	return ctx

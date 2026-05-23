@@ -73,6 +73,10 @@ var is_state_preloaded: bool = false
 ## config key.
 var _scenario_id: String = ""
 
+## Transient scenario id selected before the game board scene bootstraps.
+## Not serialized; consumed once by [method consume_next_scenario_id].
+var _next_scenario_id: String = ""
+
 ## Strategy for submitting commands — [LocalCommandSubmitter] for hot-seat
 ## and single-player, [NetworkCommandSubmitter] for network multiplayer.
 ## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
@@ -123,6 +127,20 @@ func set_command_submitter(submitter: CommandSubmitter) -> void:
 ## Returns the active [CommandSubmitter].
 func get_command_submitter() -> CommandSubmitter:
 	return _submitter
+
+
+## Stores the scenario id that the next board bootstrap should load.
+func set_next_scenario_id(scenario_id: String) -> void:
+	_next_scenario_id = scenario_id.strip_edges()
+
+
+## Returns and clears the pending scenario id, falling back to [param default_id].
+func consume_next_scenario_id(default_id: String) -> String:
+	var scenario_id: String = _next_scenario_id
+	_next_scenario_id = ""
+	if scenario_id.is_empty():
+		return default_id
+	return scenario_id
 
 
 ## Starts a new game in a play-mode-aware way.  Hot-seat passes
@@ -852,6 +870,18 @@ func submit_move_squadron(squadron: SquadronInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits a [CompleteSquadronActivationCommand] when a Squadron Phase
+## activation ends without a legal movement command.
+func submit_complete_squadron_activation(
+		squadron: SquadronInstance) -> Dictionary:
+	if not current_game_state or squadron == null:
+		return {}
+	var sq_index: int = current_game_state.find_squadron_index(squadron)
+	var cmd := CompleteSquadronActivationCommand.new(squadron.owner_player,
+			{"squadron_index": sq_index})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [StartDisplacementCommand] opening the squadron-displacement
 ## flow on the opposing (non-moving) peer.  Phase I6b-4.
 ##
@@ -945,6 +975,63 @@ func submit_roll_dice(player: int,
 	for context_key: String in attack_context.keys():
 		payload[context_key] = attack_context[context_key]
 	var cmd := RollDiceCommand.new(player, payload)
+	return _submitter.submit(cmd)
+
+
+## Submits a [RerollAttackDieCommand] for optional attack die rerolls.
+## Uses [member GameState.rng] for deterministic replay/network outcomes.
+func submit_reroll_attack_die(player: int,
+		die_index: int,
+		dice_results: Array[Dictionary],
+		source_rule_id: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var payload_results: Array[Dictionary] = []
+	for result: Dictionary in dice_results:
+		payload_results.append(result.duplicate(true))
+	var cmd := RerollAttackDieCommand.new(player, {
+		"die_index": die_index,
+		"dice_results": payload_results,
+		"source_rule_id": source_rule_id,
+	})
+	return _submitter.submit(cmd)
+
+
+## Submits a [SkipAttackModifierCommand] for controller-owned optional
+## attack modifiers such as Swarm when the acting peer does not own the
+## local attack pipeline.
+func submit_skip_attack_modifier(player: int,
+		source_rule_id: String,
+		attack_context: Dictionary = {}) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var payload: Dictionary = attack_context.duplicate(true)
+	payload["source_rule_id"] = source_rule_id
+	var cmd := SkipAttackModifierCommand.new(player, payload)
+	return _submitter.submit(cmd)
+
+
+## Submits a [ConfirmAttackDiceCommand] after attack dice and optional
+## attacker modifiers are final.
+func submit_confirm_attack_dice(player: int,
+		attack_context: Dictionary = {}) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var cmd := ConfirmAttackDiceCommand.new(player,
+			attack_context.duplicate(true))
+	return _submitter.submit(cmd)
+
+
+## Submits a [CounterChoiceCommand] from the squadron owner who may resolve
+## Counter after being attacked by a non-Counter squadron attack.
+func submit_counter_choice(player: int,
+		accepted: bool,
+		counter_context: Dictionary = {}) -> Dictionary:
+	if not current_game_state:
+		return {}
+	var payload: Dictionary = counter_context.duplicate(true)
+	payload["accepted"] = accepted
+	var cmd := CounterChoiceCommand.new(player, payload)
 	return _submitter.submit(cmd)
 
 
@@ -1758,6 +1845,8 @@ func _handle_remote_command_effects(
 			_handle_remote_activate_squadron(cmd)
 		"move_squadron":
 			_handle_remote_move_squadron(cmd)
+		"complete_squadron_activation":
+			_handle_remote_complete_squadron_activation(cmd)
 		"start_displacement":
 			# Phase I6b-4d: modal lifecycle is driven by the
 			# [signal EventBus.command_executed] projection in
@@ -1793,6 +1882,11 @@ func _handle_remote_command_effects(
 			# Phase I6b-3 R2: marker command — attacker peer's
 			# AttackExecutor reacts via command_executed.  No
 			# additional GameManager-side handling required.
+			pass
+		"reroll_attack_die", "skip_attack_modifier", "confirm_attack_dice", \
+				"counter_choice":
+			# Marker commands — the attack pipeline reacts through
+			# CommandProcessor.command_executed on the peer that owns it.
 			pass
 		"resolve_damage":
 			_handle_remote_resolve_damage(cmd, result)
@@ -1938,6 +2032,16 @@ func _handle_remote_move_squadron(cmd: GameCommand) -> void:
 		sq.activated_this_round = true
 		if not is_local:
 			EventBus.squadron_repositioned_remotely.emit(sq)
+	_activating_squadron = null
+	_finish_remote_squadron_activation(cmd.player_index)
+
+
+## Mirrors Squadron Phase activation completion when no movement command was
+## submitted, e.g. an engaged squadron attacked or skipped movement.
+func _handle_remote_complete_squadron_activation(cmd: GameCommand) -> void:
+	var sq: SquadronInstance = _find_squadron_from_command(cmd)
+	if sq:
+		sq.activated_this_round = true
 	_activating_squadron = null
 	_finish_remote_squadron_activation(cmd.player_index)
 

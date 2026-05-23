@@ -135,6 +135,11 @@ done:
 
 - **Command parity:** every marker/commit command and every final mutation
   command that can express the illegal action is covered by the rule.
+- **Non-active-player choice gate:** before implementing any choice owned by a
+  defender, opponent, non-active player, or off-turn controller, first add or
+  update the `FlowSpec`/this document row. The row must name the controller
+  role, ownership payload, allowed command(s), transition edges, projection
+  path, and hot-seat/network/replay tests before UI buttons are wired.
 - **Payload affordance:** if the player chooses from a list, core/application
   code publishes rule-derived eligibility in `interaction_flow.payload`
   using JSON-safe fields such as `blocked_defense_token_indices`.
@@ -189,8 +194,12 @@ Current registered command inventory for M3:
 | `end_activation` | `FLOW_STEP` | `SHIP_ACTIVATION / MANEUVER_STEP`, `SHIP_ACTIVATION / ACTIVATION_DONE` | Ends the active ship after maneuver/terminal activation flow and returns to ship selection. |
 | `activate_squadron` | `FLOW_STEP` | `SQUADRON_ACTIVATION / WAIT_FOR_SQUAD_SELECT` | Squadron selection enters the action-choice modal. |
 | `move_squadron` | `FLOW_STEP` | `SQUADRON_ACTIVATION / ACTION_CHOICE`, `SQUADRON_ACTIVATION / SQUAD_MOVE`, `SHIP_ACTIVATION / SQUADRON_STEP` | Durable squadron position update for Squadron Phase movement or ship Squadron-command movement. |
+| `complete_squadron_activation` | `PHASE` | `SQUADRON` | Durable lifecycle marker for a Squadron Phase activation that ends without a legal movement command; never use zero-distance `move_squadron` as a completion marker. |
 | `skip_attack` | `FLOW_STEP` | `SHIP_ACTIVATION / ATTACK_STEP`, `SQUADRON_ACTIVATION / SQUAD_ATTACK`, `ATTACK / ATTACK_DECLARE`, `ATTACK / ATTACK_ROLL`, `ATTACK / ATTACK_MODIFY` | Replay-visible choice to pass attack or sub-step where attacker owns the choice. |
 | `roll_dice` | `FLOW_STEP` | `ATTACK / ATTACK_ROLL` | Attack dice roll is meaningful only inside the attack roll step. Optional attacker/target identity metadata records ship-target attacks for Coolant Discharge without changing existing replay payload compatibility. |
+| `skip_attack_modifier` | `FLOW_STEP` | `ATTACK / ATTACK_MODIFY` | Controller marker for optional attack-modifier skips such as Swarm when the projected attack controller is not the peer that owns the local attack pipeline. |
+| `confirm_attack_dice` | `FLOW_STEP` | `ATTACK / ATTACK_MODIFY` | Controller marker that final dice are accepted after roll and optional attacker modifiers, including remote-controlled Counter attacks. |
+| `counter_choice` | `FLOW_STEP` | `ATTACK / ATTACK_COUNTER_CHOICE` | Counter owner marker that accepts or skips the optional Counter attack; identity payload binds the choice to the pending squadron attacker/target pair. |
 | `spend_defense_token` | `FLOW_STEP` | `ATTACK / ATTACK_DEFENSE_TOKENS` | Defender token spend during the defense-token window. |
 | `commit_defense` | `FLOW_STEP` | `ATTACK / ATTACK_DEFENSE_TOKENS` | Defender authority marker for selected defense tokens. |
 | `select_evade_die` | `FLOW_STEP` | `ATTACK / ATTACK_DEFENSE_TOKENS` | Defender authority marker for Evade target selection. |
@@ -213,7 +222,7 @@ coverage.
 | `COMMAND_PHASE` | `SELECT_DIALS`, `WAIT_FOR_OPPONENT_DIALS` |
 | `SHIP_ACTIVATION` | `WAIT_FOR_SHIP_SELECT`, `ACTIVATION_MODAL_OPEN`, `REVEAL_DIAL`, `SPEND_DIAL`, `SQUADRON_STEP`, `REPAIR_STEP`, `ATTACK_STEP`, `MANEUVER_STEP`, `ACTIVATION_DONE` |
 | `SQUADRON_ACTIVATION` | `WAIT_FOR_SQUAD_SELECT`, `ACTION_CHOICE`, `SQUAD_MOVE`, `SQUAD_ATTACK` |
-| `ATTACK` | `ATTACK_DECLARE`, `ATTACK_ROLL`, `ATTACK_MODIFY`, `ATTACK_DEFENSE_TOKENS`, `ATTACK_RESOLVE_DAMAGE`, `ATTACK_CRITICAL_CHOICE` |
+| `ATTACK` | `ATTACK_DECLARE`, `ATTACK_ROLL`, `ATTACK_MODIFY`, `ATTACK_DEFENSE_TOKENS`, `ATTACK_RESOLVE_DAMAGE`, `ATTACK_COUNTER_CHOICE`, `ATTACK_CRITICAL_CHOICE` |
 | `SQUADRON_DISPLACEMENT` | `DISPLACEMENT_PLACE` |
 | `STATUS_CLEANUP` | `STATUS_CLEANUP_STEP` |
 | `GAME_OVER` | `GAME_OVER_STEP` |
@@ -404,7 +413,7 @@ Rules reference: RRG "Squadron Phase", p.12; two squadrons per activation by
 |---|---|
 | controller_role | Active squadron-phase player |
 | modal_kind | `SQUADRON` |
-| allowed_commands | `move_squadron`, `publish_attack_flow`, zero-distance `move_squadron` for skip synchronization. |
+| allowed_commands | `move_squadron`, `publish_attack_flow`, `complete_squadron_activation` for no-move completion synchronization. |
 | transitions | Move chosen -> `SQUAD_MOVE`; attack chosen -> `SQUAD_ATTACK` or `ATTACK / ATTACK_DECLARE`; activation done -> `WAIT_FOR_SQUAD_SELECT` or turn handoff. |
 | producer | `ActivateSquadronCommand`. |
 | rule citation | RRG "Squadron Phase", p.12; squadron movement/attack rules. |
@@ -466,10 +475,10 @@ channel for network/replay parity.
 |---|---|
 | controller_role | Attacker |
 | modal_kind | `ATTACK_MODIFY` |
-| allowed_commands | `spend_dial`, `spend_token`, `publish_attack_flow`, `skip_attack` |
+| allowed_commands | `spend_dial`, `spend_token`, `publish_attack_flow`, `skip_attack`, `skip_attack_modifier`, `confirm_attack_dice` |
 | transitions | Defender can spend tokens -> `ATTACK_DEFENSE_TOKENS`; no defense window -> `ATTACK_RESOLVE_DAMAGE`. |
 | producer | `AttackFlowFSM.advance(Step.MODIFY)` and `patch_payload()` after dice changes. |
-| rule citation | RRG "Attack", modify dice, p.2; Concentrate Fire command. |
+| rule citation | RRG "Attack", modify dice, p.2; Concentrate Fire command; Swarm keyword. |
 
 ### `ATTACK / ATTACK_DEFENSE_TOKENS`
 
@@ -489,9 +498,27 @@ channel for network/replay parity.
 | controller_role | Attacker |
 | modal_kind | `ATTACK_RESOLVE_DAMAGE` |
 | allowed_commands | `resolve_damage`, `resolve_immediate_effect`, `publish_attack_flow` |
-| transitions | Immediate damage-card choice required -> `ATTACK_CRITICAL_CHOICE`; otherwise flow clears to `NONE` or restarts at `ATTACK_DECLARE` for another attack. |
+| transitions | Counter available -> `ATTACK_COUNTER_CHOICE`; immediate damage-card choice required -> `ATTACK_CRITICAL_CHOICE`; otherwise flow clears to `NONE` or restarts at `ATTACK_DECLARE` for another attack. |
 | producer | `AttackFlowFSM.advance(Step.RESOLVE_DAMAGE)`. |
 | rule citation | RRG "Attack", resolve damage, p.2; damage-card immediate effects. |
+
+### `ATTACK / ATTACK_COUNTER_CHOICE`
+
+| Field | Value |
+|---|---|
+| controller_role | Counter squadron owner, encoded by `counter_controller_player` / `controller_player` payload. |
+| modal_kind | `ATTACK_COUNTER_CHOICE` |
+| allowed_commands | `counter_choice`, `publish_attack_flow` |
+| transitions | `counter_choice(accepted=true)` starts a Counter attack at `ATTACK_DECLARE`/`ATTACK_ROLL` with the Counter squadron as attacker; `accepted=false` clears to `NONE` or resumes the parent activation/squadron flow. |
+| producer | `AttackFlowFSM.advance(Step.COUNTER_CHOICE)` after damage resolution when `CounterKeyword.is_counter_trigger_available()` is true. |
+| rule citation | RRG "Squadron Keywords", Counter. |
+
+Notes: Counter is the canonical off-turn attack example. The original attack
+executor owns the pipeline, but the choice and accepted Counter attack are
+controlled by the defending squadron's owner. Presentation must project the
+choice, roll, optional Swarm modifier, and dice confirm from
+`interaction_flow.payload`; it must not show scene-local buttons on the
+triggering attacker's panel without a command-backed flow surface.
 
 ### `ATTACK / ATTACK_CRITICAL_CHOICE`
 

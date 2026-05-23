@@ -31,8 +31,9 @@ func _init(p_player: int = 0,
 
 
 ## Validates that the squadron move is legal.
-## Distance/engagement validation is performed by the presentation layer
-## ([SquadronPhaseController]) before submitting.
+## Distance validation is performed by the presentation layer
+## ([SquadronPhaseController]) before submitting. Engagement validation is
+## repeated here so direct command/replay/network submissions respect Heavy.
 func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
@@ -48,7 +49,21 @@ func validate(game_state: GameState) -> String:
 		return "Squadron is destroyed."
 	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing target position."
+	if not _can_move_under_engagement_rules(game_state, sq):
+		return "Engaged by a non-Heavy squadron."
 	return ""
+
+
+func _can_move_under_engagement_rules(game_state: GameState,
+		squadron: SquadronInstance) -> bool:
+	var all_squadrons: Array[Dictionary] = \
+			SquadronKeywordRuleHelper.positions_from_state(game_state)
+	var obstruction_bodies: Array = \
+			EngagementResolver.obstruction_bodies_from_state(game_state)
+	var squadron_pos: Vector2 = \
+			SquadronKeywordRuleHelper.position_from_state(squadron)
+	return SquadronKeywordRuleHelper.can_move_with_heavy_rule(
+			squadron, squadron_pos, all_squadrons, obstruction_bodies)
 
 
 ## Updates the squadron's normalised position in [GameState] and returns

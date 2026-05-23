@@ -262,10 +262,17 @@ func _build_scenario_picker(parent: VBoxContainer) -> void:
 	parent.add_child(label)
 
 	_scenario_option = OptionButton.new()
-	_scenario_option.add_item("Learning Scenario", 0)
+	for option: Dictionary in LobbyState.get_scenario_options():
+		_add_scenario_option(option)
 	_scenario_option.custom_minimum_size.y = 32
 	_scenario_option.item_selected.connect(_on_scenario_selected)
 	parent.add_child(_scenario_option)
+
+
+func _add_scenario_option(option: Dictionary) -> void:
+	_scenario_option.add_item(str(option.get("label", "")))
+	var index: int = _scenario_option.get_item_count() - 1
+	_scenario_option.set_item_metadata(index, option.get("id", ""))
 
 
 ## Builds the embedded chat area for lobby chat (G4.6.6).
@@ -427,11 +434,10 @@ func _update_empty_player_rows() -> void:
 ## Updates the scenario picker from lobby state.
 func _update_scenario(lobby: LobbyState) -> void:
 	_scenario_option.disabled = not LobbyManager.is_host()
-	var scenario: String = lobby.scenario
-	if scenario.is_empty():
-		scenario = "Learning Scenario"
+	var scenario: String = LobbyState.normalize_scenario_id(lobby.scenario)
 	for i: int in range(_scenario_option.item_count):
-		if _scenario_option.get_item_text(i) == scenario:
+		var metadata: Variant = _scenario_option.get_item_metadata(i)
+		if str(metadata) == scenario:
 			_scenario_option.selected = i
 			return
 
@@ -484,8 +490,9 @@ func _on_ready_pressed() -> void:
 func _on_scenario_selected(index: int) -> void:
 	if not LobbyManager.is_host():
 		return
-	var scenario_name: String = _scenario_option.get_item_text(index)
-	LobbyManager.update_scenario(scenario_name)
+	var metadata: Variant = _scenario_option.get_item_metadata(index)
+	if metadata is String:
+		LobbyManager.update_scenario(metadata as String)
 
 
 ## Requests the host to start the game.

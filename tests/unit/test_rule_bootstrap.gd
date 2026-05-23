@@ -40,6 +40,14 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			"dice_pool")
+	var counter_roll_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			CounterKeyword.COMMAND_ROLL_DICE)
+	var counter_choice_hooks: Array[FlowHook] = RuleRegistry.validators_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+			CounterKeyword.COMMAND_COUNTER_CHOICE)
 	var crew_hooks: Array[FlowHook] = RuleRegistry.enablers_for(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
@@ -95,9 +103,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 18,
-			"Bootstrap should invoke all eighteen production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 31,
+	assert_eq(registered, 22,
+			"Bootstrap should invoke all twenty-two production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 39,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -113,6 +121,12 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Dice-pool modifiers should include Damaged Munitions.")
 	assert_true(dice_rule_ids.has(PointDefenseFailure.RULE_ID),
 			"Dice-pool modifiers should include Point-Defense Failure.")
+	assert_eq(counter_roll_hooks.size(), 1,
+			"Counter should validate Counter roll dice pools.")
+	assert_eq(counter_roll_hooks[0].rule_id, CounterKeyword.RULE_ID,
+			"Counter roll validator should carry the Counter rule id.")
+	assert_eq(counter_choice_hooks.size(), 1,
+			"Counter should validate Counter choice markers.")
 	assert_eq(crew_hooks.size(), 1,
 			"Crew Panic should register one pre-reveal enabler.")
 	assert_eq(crew_hooks[0].rule_id, CrewPanic.RULE_ID,
@@ -125,12 +139,12 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Life Support Failure should validate command-token gain.")
 	assert_eq(token_gain_blockers.size(), 1,
 			"Life Support Failure should expose token-gain blocker metadata.")
-	assert_eq(target_blockers.size(), 3,
-			"Three damage cards should expose attack-target blocker metadata.")
+	assert_eq(target_blockers.size(), 4,
+			"Three damage cards plus Escort should expose blockers.")
 	assert_eq(accuracy_blockers.size(), 1,
 			"Blinded Gunners should expose accuracy-spend blocker metadata.")
-	assert_eq(critical_blockers.size(), 1,
-			"Targeter Disruption should expose critical-effect blocker metadata.")
+	assert_eq(critical_blockers.size(), 2,
+			"Targeter Disruption and Bomber should expose critical blockers.")
 	assert_eq(damage_modifiers.size(), 1,
 			"Bomber should expose attack-damage modifier metadata.")
 	assert_eq(defense_blockers.size(), 2,

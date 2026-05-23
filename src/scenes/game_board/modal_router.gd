@@ -119,6 +119,9 @@ func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
 func _sync_attack_panel_mirror(game_state: GameState, local: int) -> void:
 	if _attack_panel_controller == null:
 		return
+	if not _is_network_peer():
+		_attack_panel_controller.close_mirror()
+		return
 	_attack_panel_controller.sync_mirror_from_flow(
 			game_state.interaction_flow, local)
 

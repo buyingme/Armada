@@ -103,7 +103,7 @@ func request_start_game() -> void:
 	_log.info("Starting game from lobby.")
 	# Generate shared RNG seed and broadcast config BEFORE scene transition.
 	var rng_seed: int = Time.get_ticks_usec()
-	var scenario_id: String = "learning_scenario"
+	var scenario_id: String = _selected_scenario_id()
 	NetworkManager.broadcast_game_config(rng_seed, scenario_id)
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
@@ -195,14 +195,20 @@ func is_host() -> bool:
 
 ## Updates the selected scenario (host only).
 ## G4.5.4 — scenario picker.
-func update_scenario(scenario_name: String) -> void:
+func update_scenario(scenario_id: String) -> void:
 	if not NetworkManager.is_server():
 		return
 	if current_lobby == null:
 		return
-	current_lobby.scenario = LobbyState.sanitize_name(scenario_name)
+	current_lobby.scenario = LobbyState.normalize_scenario_id(scenario_id)
 	_log.info("Scenario changed to '%s'." % current_lobby.scenario)
 	_broadcast_lobby_state()
+
+
+func _selected_scenario_id() -> String:
+	if current_lobby == null:
+		return LobbyState.SCENARIO_LEARNING_ID
+	return LobbyState.normalize_scenario_id(current_lobby.scenario)
 
 
 # ---------------------------------------------------------------------------

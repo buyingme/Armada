@@ -22,6 +22,7 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 3. **Check existing tests** — See `tests/` for testing patterns used in this project.
 4. **Follow the architecture** — See `.skills/architecture_patterns.md`.
 5. **Check serialization impact** — See `.skills/serialization_and_commands.md`. If the change adds mutable state fields, update `serialize()`/`deserialize()` in the same edit. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised `pos_x`/`pos_y`/`rotation_deg`.
+6. **Specify off-turn ownership first** — If a defender, opponent, non-active player, or off-turn controller makes a choice, update `docs/game_flow.md` and `FlowSpec` before UI/scene edits. Name the controller role, identity payload, allowed commands, transitions, projection route, and regression tests. Counter is the reference pattern.
 
 ### Network Refactor Guardrail (G4.6.6+)
 

@@ -48,6 +48,69 @@ func test_get_squadron_placements_returns_ten_squadrons() -> void:
 			"Ten squadrons: 6 TIE Fighters and 4 X-wings")
 
 
+# --- Debug Scenario ---
+
+func test_debug_scenario_get_token_count_returns_eight() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_eq(setup.get_token_count(), 8,
+			"Debug Scenario has 8 tokens (2 ships + 6 squadrons)")
+
+
+func test_debug_scenario_get_ship_placements_returns_two() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_eq(setup.get_ship_placements().size(), 2,
+			"Debug Scenario should include the VSD and CR90")
+
+
+func test_debug_scenario_get_squadron_placements_returns_six() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_eq(setup.get_squadron_placements().size(), 6,
+			"Debug Scenario should include four Imperial and two Rebel squadrons")
+
+
+func test_debug_scenario_has_no_fixed_round1_commands() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_false(setup.has_fixed_round1_commands(),
+			"Debug Scenario should use normal command-dial assignment")
+	assert_eq(setup.get_fixed_round1_commands().size(), 0,
+			"Debug Scenario should not pre-assign round-1 commands")
+
+
+func test_debug_scenario_uses_learning_map() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_eq(setup.get_map_image_filename(), "map_3x3_distant_planet_v3.jpg",
+			"Debug Scenario should use the same map as the Learning Scenario")
+
+
+func test_debug_scenario_contains_requested_squadron_keys() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	assert_eq(_count_by_key(setup, "tie_fighter_squadron"), 1,
+			"Debug Scenario should include one TIE Fighter squadron")
+	assert_eq(_count_by_key(setup, "tie_bomber_squadron"), 1,
+			"Debug Scenario should include one TIE Bomber squadron")
+	assert_eq(_count_by_key(setup, "tie_advanced_squadron"), 1,
+			"Debug Scenario should include one TIE Advanced squadron")
+	assert_eq(_count_by_key(setup, "tie_interceptor_squadron"), 1,
+			"Debug Scenario should include one TIE Interceptor squadron")
+	assert_eq(_count_by_key(setup, "x_wing_squadron"), 2,
+			"Debug Scenario should include two X-wing squadrons")
+
+
+func test_debug_scenario_populate_game_state_sets_requested_forces() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	setup.populate_game_state(gs)
+	assert_eq(gs.get_player_state(0).ships.size(), 1,
+			"Debug Scenario Rebel player should have one ship")
+	assert_eq(gs.get_player_state(0).squadrons.size(), 2,
+			"Debug Scenario Rebel player should have two squadrons")
+	assert_eq(gs.get_player_state(1).ships.size(), 1,
+			"Debug Scenario Imperial player should have one ship")
+	assert_eq(gs.get_player_state(1).squadrons.size(), 4,
+			"Debug Scenario Imperial player should have four squadrons")
+
+
 # --- Factions ---
 
 func test_victory_ii_is_imperial() -> void:
@@ -170,6 +233,14 @@ func _find_by_key(key: String) -> TokenPlacement:
 		if p.data_key == key:
 			return p
 	return null
+
+
+func _count_by_key(setup: LearningScenarioSetup, key: String) -> int:
+	var count: int = 0
+	for p: TokenPlacement in setup.get_all_placements():
+		if p.data_key == key:
+			count += 1
+	return count
 
 
 # ---------------------------------------------------------------------------

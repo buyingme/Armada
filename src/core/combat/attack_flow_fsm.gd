@@ -24,8 +24,11 @@
 ##     -> RESOLVE_DAMAGE      (defender done)
 ##     -> END
 ##   RESOLVE_DAMAGE
+##     -> COUNTER_CHOICE      (defender may resolve Counter)
 ##     -> CRITICAL_CHOICE     (immediate-effect card requires a player choice)
 ##     -> END                 (no choice required)
+##   COUNTER_CHOICE
+##     -> END                 (Counter skipped or counter attack completed)
 ##   CRITICAL_CHOICE
 ##     -> END                 (choice resolved)
 ## [/codeblock]
@@ -56,6 +59,7 @@ enum Step {
 	MODIFY,
 	DEFENSE_TOKENS,
 	RESOLVE_DAMAGE,
+	COUNTER_CHOICE,
 	CRITICAL_CHOICE,
 	END,
 }
@@ -70,6 +74,7 @@ const STEP_TO_INTERACTION: Dictionary = {
 	Step.MODIFY: Constants.InteractionStep.ATTACK_MODIFY,
 	Step.DEFENSE_TOKENS: Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 	Step.RESOLVE_DAMAGE: Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+	Step.COUNTER_CHOICE: Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
 	Step.CRITICAL_CHOICE: Constants.InteractionStep.ATTACK_CRITICAL_CHOICE,
 	Step.END: Constants.InteractionStep.NONE,
 }
@@ -82,7 +87,8 @@ const _LEGAL_TRANSITIONS: Dictionary = {
 	Step.ROLL: [Step.MODIFY, Step.END],
 	Step.MODIFY: [Step.DEFENSE_TOKENS, Step.RESOLVE_DAMAGE, Step.END],
 	Step.DEFENSE_TOKENS: [Step.RESOLVE_DAMAGE, Step.END],
-	Step.RESOLVE_DAMAGE: [Step.CRITICAL_CHOICE, Step.END],
+	Step.RESOLVE_DAMAGE: [Step.COUNTER_CHOICE, Step.CRITICAL_CHOICE, Step.END],
+	Step.COUNTER_CHOICE: [Step.END],
 	Step.CRITICAL_CHOICE: [Step.END],
 	Step.END: [Step.IDLE, Step.DECLARE], # End may restart for a new attack.
 }
@@ -254,6 +260,9 @@ func _controller_context() -> Dictionary:
 
 
 func _payload_controller_player() -> int:
+	var explicit_controller: int = int(payload.get("controller_player", -1))
+	if _is_valid_player(explicit_controller):
+		return explicit_controller
 	if _is_valid_player(defender_player):
 		return defender_player
 	var chooser_player: int = int(payload.get("chooser_player", -1))
@@ -276,6 +285,7 @@ static func _name(s: Step) -> String:
 		Step.MODIFY: return "MODIFY"
 		Step.DEFENSE_TOKENS: return "DEFENSE_TOKENS"
 		Step.RESOLVE_DAMAGE: return "RESOLVE_DAMAGE"
+		Step.COUNTER_CHOICE: return "COUNTER_CHOICE"
 		Step.CRITICAL_CHOICE: return "CRITICAL_CHOICE"
 		Step.END: return "END"
 		_: return "UNKNOWN"

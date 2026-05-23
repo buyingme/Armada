@@ -111,6 +111,12 @@ var dice_pool: Dictionary = {}
 ## Range band of the current attack target.
 var range_band: String = ""
 
+## Attack-kind metadata for keyword rules such as Counter and Escort.
+var attack_kind: String = SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD
+
+## Whether the current attack already used or skipped its Swarm reroll.
+var swarm_reroll_used: bool = false
+
 ## Whether the CF dial has already been used during this activation's attacks.
 var cf_dial_used: bool = false
 
@@ -242,6 +248,8 @@ func reset_dice() -> void:
 	dice_results.clear()
 	dice_pool.clear()
 	range_band = ""
+	attack_kind = SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD
+	swarm_reroll_used = false
 
 
 ## Resets the deferred-damage sub-state.

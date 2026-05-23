@@ -356,6 +356,14 @@ func prepare_next_squadron_target() -> void:
 	_target_selecting = true
 
 
+## Disables attacker/target click routing while preserving current visuals.
+## Used by rule-defined attacks such as Counter where target and dice are
+## already locked by the active attack flow.
+func lock_current_target_selection() -> void:
+	_selecting = false
+	_target_selecting = false
+
+
 ## Prepares for the next hull-zone attack (AE-2HZ flow).
 ## Clears overlay target marker and returns to attacker-selection mode.
 func prepare_next_hull_zone() -> void:
@@ -607,7 +615,7 @@ func _validate_target_ship_click(token: ShipToken,
 	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
 	if _state.exec_mode and _state.squad_exec_mode \
 			and _state.exec_squad_token:
-		if _is_squad_attacker_engaged_fresh():
+		if _is_squad_attacker_engaged_by_non_heavy_fresh():
 			return _reject_target(
 					"Attack exec: engaged squadron cannot target ships.",
 					"Engaged — must attack an engaged enemy squadron.",
@@ -654,9 +662,26 @@ func _is_squad_attacker_engaged_fresh() -> bool:
 	if sq_inst == null:
 		return false
 	var all_squads: Array[Dictionary] = _build_squadron_positions()
+	var obstruction_bodies: Array = build_engagement_obstruction_bodies()
 	return EngagementResolver.is_engaged(
 			sq_inst, _state.exec_squad_token.global_position,
-			all_squads)
+			all_squads, obstruction_bodies)
+
+
+## Returns true when the current squadron attacker is engaged by at least
+## one non-Heavy enemy squadron.
+func _is_squad_attacker_engaged_by_non_heavy_fresh() -> bool:
+	if _state.exec_squad_token == null:
+		return false
+	var sq_inst: SquadronInstance = \
+			_state.exec_squad_token.get_squadron_instance()
+	if sq_inst == null:
+		return false
+	var all_squads: Array[Dictionary] = _build_squadron_positions()
+	var obstruction_bodies: Array = build_engagement_obstruction_bodies()
+	return SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
+			sq_inst, _state.exec_squad_token.global_position,
+			all_squads, obstruction_bodies)
 
 
 ## Builds an array of {"instance": …, "position": …} for all
@@ -755,25 +780,84 @@ func _validate_target_squadron_click(
 	# Fresh recomputation avoids stale is_engaged after mid-turn destruction.
 	if _state.exec_mode and _state.squad_exec_mode \
 			and _state.exec_squad_token:
-		if _is_squad_attacker_engaged_fresh():
-			var all_squads: Array[Dictionary] = \
-					_build_squadron_positions()
-			var def_inst: SquadronInstance = \
-					token.get_squadron_instance()
-			var def_engaged: bool = false
-			if def_inst:
-				def_engaged = EngagementResolver.is_engaged(
-						def_inst, token.global_position, all_squads)
-			if not def_engaged:
-				return _reject_target(
-						"Attack exec: engaged attacker cannot target "
-						+"non-engaged squadron.",
-						"Must attack an engaged enemy squadron.",
-						"must_attack_engaged")
+		var all_squads: Array[Dictionary] = _build_squadron_positions()
+		var obstruction_bodies: Array = build_engagement_obstruction_bodies()
+		var attacker_inst: SquadronInstance = \
+				_state.exec_squad_token.get_squadron_instance()
+		if _attacker_must_target_engaged_squadron(
+				attacker_inst, token, all_squads, obstruction_bodies):
+			return _reject_target(
+					"Attack exec: engaged attacker cannot target "
+					+"non-engaged squadron.",
+					"Must attack an engaged enemy squadron.",
+					"must_attack_engaged")
+		var escort_reject: String = _validate_escort_target(
+				attacker_inst, token, all_squads, obstruction_bodies)
+		if escort_reject != "":
+			return escort_reject
 	# Already-attacked guard (Step 6, AE-SQ-002).
 	if _state.exec_mode and token in _state.attacked_squads:
 		return _reject_already_attacked_squad(token)
 	return ""
+
+
+func _attacker_must_target_engaged_squadron(
+		attacker_inst: SquadronInstance,
+		token: SquadronToken,
+		all_squads: Array[Dictionary],
+		obstruction_bodies: Array) -> bool:
+	if attacker_inst == null:
+		return false
+	if not SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
+			attacker_inst, _state.exec_squad_token.global_position,
+			all_squads, obstruction_bodies):
+		return false
+	var def_inst: SquadronInstance = token.get_squadron_instance()
+	return not SquadronKeywordRuleHelper.is_engaged_with_target(
+			attacker_inst, _state.exec_squad_token.global_position,
+			def_inst, token.global_position, obstruction_bodies)
+
+
+func _validate_escort_target(attacker_inst: SquadronInstance,
+		token: SquadronToken,
+		all_squads: Array[Dictionary],
+		obstruction_bodies: Array) -> String:
+	var context: EffectContext = _build_squadron_target_context(
+			attacker_inst, token, all_squads, obstruction_bodies)
+	var result: Dictionary = RuleSurface.block_result(context,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DECLARE,
+			RuleSurface.TARGET_ATTACK_TARGET)
+	if not bool(result.get(RuleSurface.RESULT_BLOCKED, false)):
+		return ""
+	return _reject_target(str(result.get(RuleSurface.RESULT_REASON, "")),
+			str(result.get(RuleSurface.RESULT_REASON, "")), "escort")
+
+
+func _build_squadron_target_context(attacker_inst: SquadronInstance,
+		token: SquadronToken,
+		all_squads: Array[Dictionary],
+		obstruction_bodies: Array) -> EffectContext:
+	var context: EffectContext = EffectContext.new()
+	context.attacker = attacker_inst
+	context.defender = token.get_squadron_instance()
+	context.metadata = {
+		SquadronKeywordRuleHelper.PAYLOAD_ATTACKER_POS:
+				_state.exec_squad_token.global_position,
+		SquadronKeywordRuleHelper.PAYLOAD_TARGET_POS: token.global_position,
+		SquadronKeywordRuleHelper.PAYLOAD_ALL_SQUADRONS: all_squads,
+		SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND: _current_attack_kind(),
+		SquadronKeywordRuleHelper.META_OBSTRUCTION_BODIES: obstruction_bodies,
+	}
+	return context
+
+
+func _current_attack_kind() -> String:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or game_state.interaction_flow == null:
+		return SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD
+	return SquadronKeywordRuleHelper.attack_kind_from_payload(
+			game_state.interaction_flow.payload)
 
 
 ## Rejects a squadron that has already been attacked this activation.
@@ -923,13 +1007,23 @@ func _compute_dice_text(range_band: String) -> String:
 	return _dice_resolver.compute_dice_text(parts, range_band)
 
 
+## Builds ship obstruction bodies for live squadron engagement checks.
+## Rules Reference: RRG "Engagement" — obstructed squadrons are not engaged.
+func build_engagement_obstruction_bodies() -> Array:
+	return _build_ship_obstruction_bodies(false)
+
+
 ## Builds obstruction bodies from all ships excluding attacker/defender.
 func _build_obstruction_bodies() -> Array:
+	return _build_ship_obstruction_bodies(true)
+
+
+func _build_ship_obstruction_bodies(exclude_attack_ships: bool) -> Array:
 	var bodies: Array = []
 	for child: Node in _token_container.get_children():
 		if child is ShipToken:
 			var st: ShipToken = child as ShipToken
-			if st == _state.attacker_ship or st == _state.defender_ship:
+			if exclude_attack_ships and _is_attack_ship(st):
 				continue
 			var sd: ShipData = st.get_ship_data()
 			if sd:
@@ -939,3 +1033,7 @@ func _build_obstruction_bodies() -> Array:
 								st.rotation, st.get_half_width(),
 								st.get_half_length()))
 	return bodies
+
+
+func _is_attack_ship(ship_token: ShipToken) -> bool:
+	return ship_token == _state.attacker_ship or ship_token == _state.defender_ship

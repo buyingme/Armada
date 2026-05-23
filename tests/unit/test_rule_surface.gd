@@ -58,6 +58,18 @@ func test_existing_surface_aliases_match_phase_m_strings() -> void:
 			"Readying aliases should match status cleanup hooks.")
 
 
+func test_surface_constants_cover_n17_keyword_foundation() -> void:
+	assert_eq(RuleSurface.TARGET_SQUADRON_MOVEMENT, "squadron_movement",
+			"Heavy needs a stable squadron-movement surface name.")
+	assert_eq(RuleSurface.TARGET_ATTACK_MODIFIER_AFFORDANCE,
+			"attack_modifier_affordance",
+			"Optional attack modifiers need a stable affordance surface name.")
+	assert_eq(RuleSurface.COMMAND_MOVE_SQUADRON, "move_squadron",
+			"Heavy movement validation needs the move_squadron command id.")
+	assert_eq(RuleSurface.COMMAND_PUBLISH_ATTACK_FLOW, "publish_attack_flow",
+			"Target legality validation needs the attack-flow publish command id.")
+
+
 func test_apply_modifiers_empty_registry_preserves_context() -> void:
 	var context: EffectContext = EffectContext.new()
 	context.damage_total = 5

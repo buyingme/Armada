@@ -1,0 +1,31 @@
+{
+    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_source": "Resources/Game_Components/squadrons/tie_bomber_squadron_card.png",
+    "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "squadron_name": "TIE Bomber Squadron",
+    "faction": "GALACTIC_EMPIRE",
+    "point_cost": 9,
+    "hull": 5,
+    "speed": 4,
+    "anti_squadron_armament": {
+        "BLACK": 1
+    },
+    "battery_armament": {
+        "BLACK": 1
+    },
+    "keywords": [
+        {
+            "name": "Bomber"
+        },
+        {
+            "name": "Heavy"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+        "Heavy": "You do not prevent engaged squadrons from attacking ships or moving."
+    },
+    "ability_text": "",
+    "is_unique": false,
+    "defense_tokens": []
+}

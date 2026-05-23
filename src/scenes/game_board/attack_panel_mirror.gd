@@ -1,12 +1,9 @@
-## Read-only mirror of the [AttackSimPanel] shown on the non-attacker
-## peer in network play.
+## Projected mirror/controller surface for [AttackSimPanel] in network play.
 ##
 ## Phase I6b-3 R1b: opens the same `AttackSimPanel` UI on the passive
-## peer, populated entirely from `interaction_flow.payload`.  Input
-## signals are intentionally [b]not[/b] connected — the mirror is
-## strictly informational at this slice.  Subsequent slices (R2–R5)
-## will turn defender-driven sub-steps interactive on the defender peer
-## via dedicated commands.
+## peer, populated entirely from `interaction_flow.payload`. Later slices
+## made defender/non-active-player choices command-backed here: defense
+## tokens, Evade, Redirect, critical-choice, and Counter attack choices.
 ##
 ## Lifecycle:
 ##  * [method setup] is called once by [UIPanelManager] with a
@@ -99,6 +96,25 @@ var _last_redirect_remaining: int = -1
 ## connected.  Tracked independently so [method close] can disconnect
 ## cleanly.
 var _redirect_signal_connected: bool = false
+
+## True while the Counter choice buttons are open for the projected
+## Counter controller.
+var _counter_section_active: bool = false
+
+## True once Counter accept/skip signals are connected on the mirror panel.
+var _counter_signal_connected: bool = false
+
+## True once the remote roll button signal is connected.
+var _roll_signal_connected: bool = false
+
+## True while the remote Swarm reroll section is open.
+var _swarm_section_active: bool = false
+
+## True once remote Swarm reroll/skip signals are connected.
+var _swarm_signal_connected: bool = false
+
+## True once the remote dice-confirm signal is connected.
+var _confirm_signal_connected: bool = false
 
 ## Phase I6b-3 R5: lazily-created modal shown on the chooser peer when
 ## a damage card with a player choice is dealt.  Owned and parented to
@@ -255,6 +271,10 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 	# the published payload so the passive peer's mirror shows the
 	# attacker's dice and roll outcome.
 	_apply_dice_sections(payload)
+	_apply_counter_choice_section(payload, step_id)
+	_apply_remote_roll_section(payload, step_id)
+	_apply_remote_swarm_section(payload, step_id)
+	_apply_remote_confirm_section(payload, step_id)
 	# Phase I6b-3 R2: render the interactive defense section once we
 	# enter the DEFENSE_TOKENS sub-step.  Idempotent — only populated
 	# on the transition edge.
@@ -407,6 +427,200 @@ func _apply_modified_damage_update(payload: Dictionary) -> void:
 	_last_modified_damage = damage
 	if _panel.has_method("update_defense_damage"):
 		_panel.update_defense_damage(damage)
+
+
+func _apply_counter_choice_section(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null:
+		return
+	var active: bool = step_id == Constants.InteractionStep.ATTACK_COUNTER_CHOICE \
+			and _is_local_counter_controller(payload)
+	if active and not _counter_section_active:
+		_panel.show_counter_section()
+		_connect_counter_signals()
+		_counter_section_active = true
+	elif not active and _counter_section_active:
+		_panel.hide_counter_section()
+		_counter_section_active = false
+
+
+func _apply_remote_roll_section(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null:
+		return
+	var active: bool = step_id == Constants.InteractionStep.ATTACK_ROLL \
+			and _is_local_attacker(payload) and _is_counter_attack(payload) \
+			and not _has_dice_results(payload)
+	if active:
+		_panel.show_roll_button()
+		_connect_roll_signal()
+	elif _roll_signal_connected:
+		_panel.hide_roll_button()
+
+
+func _apply_remote_swarm_section(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null:
+		return
+	var active: bool = step_id == Constants.InteractionStep.ATTACK_MODIFY \
+			and _is_local_attacker(payload) \
+			and bool(payload.get(SwarmKeyword.PAYLOAD_AVAILABLE, false))
+	if active and not _swarm_section_active:
+		_panel.show_swarm_reroll_section()
+		_connect_swarm_signals()
+		_swarm_section_active = true
+	elif not active and _swarm_section_active:
+		_panel.hide_cf_token_section()
+		_swarm_section_active = false
+
+
+func _apply_remote_confirm_section(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null:
+		return
+	var active: bool = step_id == Constants.InteractionStep.ATTACK_MODIFY \
+			and _is_local_attacker(payload) and _has_dice_results(payload) \
+			and not bool(payload.get(SwarmKeyword.PAYLOAD_AVAILABLE, false))
+	if active:
+		_panel.show_confirm_button()
+		_connect_confirm_signal()
+	elif _confirm_signal_connected:
+		_panel.hide_confirm_button()
+
+
+func _connect_counter_signals() -> void:
+	if _counter_signal_connected or _panel == null:
+		return
+	_panel.counter_attack_requested.connect(_on_counter_attack_requested)
+	_panel.counter_attack_skipped.connect(_on_counter_attack_skipped)
+	_counter_signal_connected = true
+
+
+func _connect_roll_signal() -> void:
+	if _roll_signal_connected or _panel == null:
+		return
+	_panel.roll_dice_pressed.connect(_on_roll_dice_pressed)
+	_roll_signal_connected = true
+
+
+func _connect_swarm_signals() -> void:
+	if _swarm_signal_connected or _panel == null:
+		return
+	_panel.cf_token_reroll_requested.connect(_on_swarm_reroll_requested)
+	_panel.cf_token_reroll_skipped.connect(_on_swarm_reroll_skipped)
+	_swarm_signal_connected = true
+
+
+func _connect_confirm_signal() -> void:
+	if _confirm_signal_connected or _panel == null:
+		return
+	_panel.confirm_pressed.connect(_on_confirm_attack_dice)
+	_confirm_signal_connected = true
+
+
+func _is_local_counter_controller(payload: Dictionary) -> bool:
+	var local: int = NetworkManager.get_local_player_index()
+	if local < 0:
+		return false
+	return local == int(payload.get(CounterKeyword.PAYLOAD_CONTROLLER_PLAYER, -1))
+
+
+func _is_local_attacker(payload: Dictionary) -> bool:
+	var local: int = NetworkManager.get_local_player_index()
+	if local < 0:
+		return false
+	return local == int(payload.get("attacker_player", -1))
+
+
+func _is_counter_attack(payload: Dictionary) -> bool:
+	return SquadronKeywordRuleHelper.attack_kind_from_payload(payload) \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
+
+
+func _has_dice_results(payload: Dictionary) -> bool:
+	return (payload.get("dice_results", []) as Array).size() > 0
+
+
+func _current_flow_payload() -> Dictionary:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or gs.interaction_flow == null:
+		return {}
+	return gs.interaction_flow.payload.duplicate(true)
+
+
+func _attack_context_from_payload(payload: Dictionary) -> Dictionary:
+	var context: Dictionary = {}
+	var keys: Array[String] = ["attacker_kind", "attacker_player",
+			"attacker_ship_index", "attacker_squadron_index", "target_kind",
+			"target_ship_index", "target_squadron_index", "defender_player",
+			"defender_zone", SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND]
+	for key: String in keys:
+		if payload.has(key):
+			context[key] = payload[key]
+	return context
+
+
+func _dice_results_from_payload(payload: Dictionary) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for entry: Variant in (payload.get("dice_results", []) as Array):
+		results.append(entry as Dictionary)
+	return results
+
+
+func _on_counter_attack_requested() -> void:
+	_submit_counter_choice(true)
+
+
+func _on_counter_attack_skipped() -> void:
+	_submit_counter_choice(false)
+
+
+func _submit_counter_choice(accepted: bool) -> void:
+	var payload: Dictionary = _current_flow_payload()
+	var controller: int = int(payload.get(
+			CounterKeyword.PAYLOAD_CONTROLLER_PLAYER, -1))
+	if controller < 0:
+		return
+	GameManager.submit_counter_choice(controller, accepted, payload)
+
+
+func _on_roll_dice_pressed() -> void:
+	var payload: Dictionary = _current_flow_payload()
+	var dice_pool: Dictionary = payload.get("dice_pool", {}) as Dictionary
+	var attacker: int = int(payload.get("attacker_player", -1))
+	if attacker < 0 or dice_pool.is_empty():
+		_log.warn("Counter roll submit without attacker/dice payload.")
+		return
+	GameManager.submit_roll_dice(attacker, dice_pool,
+			_attack_context_from_payload(payload))
+	_panel.hide_roll_button()
+
+
+func _on_swarm_reroll_requested(die_index: int) -> void:
+	var payload: Dictionary = _current_flow_payload()
+	var attacker: int = int(payload.get("attacker_player", -1))
+	if attacker < 0:
+		return
+	GameManager.submit_reroll_attack_die(attacker, die_index,
+			_dice_results_from_payload(payload), SwarmKeyword.RULE_ID)
+
+
+func _on_swarm_reroll_skipped() -> void:
+	var payload: Dictionary = _current_flow_payload()
+	var attacker: int = int(payload.get("attacker_player", -1))
+	if attacker < 0:
+		return
+	GameManager.submit_skip_attack_modifier(attacker,
+			SwarmKeyword.RULE_ID, _attack_context_from_payload(payload))
+
+
+func _on_confirm_attack_dice() -> void:
+	var payload: Dictionary = _current_flow_payload()
+	var attacker: int = int(payload.get("attacker_player", -1))
+	if attacker < 0:
+		return
+	GameManager.submit_confirm_attack_dice(attacker,
+			_attack_context_from_payload(payload))
 
 
 ## Submits a [SelectEvadeDieCommand] from the defender peer when the
@@ -698,6 +912,34 @@ func close() -> void:
 			_panel.redirect_done_pressed.disconnect(
 					_on_redirect_done_confirmed)
 		_redirect_signal_connected = false
+	if _counter_signal_connected:
+		if _panel.counter_attack_requested.is_connected(
+				_on_counter_attack_requested):
+			_panel.counter_attack_requested.disconnect(
+					_on_counter_attack_requested)
+		if _panel.counter_attack_skipped.is_connected(
+				_on_counter_attack_skipped):
+			_panel.counter_attack_skipped.disconnect(
+					_on_counter_attack_skipped)
+		_counter_signal_connected = false
+	if _roll_signal_connected:
+		if _panel.roll_dice_pressed.is_connected(_on_roll_dice_pressed):
+			_panel.roll_dice_pressed.disconnect(_on_roll_dice_pressed)
+		_roll_signal_connected = false
+	if _swarm_signal_connected:
+		if _panel.cf_token_reroll_requested.is_connected(
+				_on_swarm_reroll_requested):
+			_panel.cf_token_reroll_requested.disconnect(
+					_on_swarm_reroll_requested)
+		if _panel.cf_token_reroll_skipped.is_connected(
+				_on_swarm_reroll_skipped):
+			_panel.cf_token_reroll_skipped.disconnect(
+					_on_swarm_reroll_skipped)
+		_swarm_signal_connected = false
+	if _confirm_signal_connected:
+		if _panel.confirm_pressed.is_connected(_on_confirm_attack_dice):
+			_panel.confirm_pressed.disconnect(_on_confirm_attack_dice)
+		_confirm_signal_connected = false
 	# Phase I6b-3 R5: tear down the chooser modal if still active.
 	if _choice_modal != null and _choice_modal_active:
 		if _choice_modal.choice_confirmed.is_connected(
@@ -714,6 +956,8 @@ func close() -> void:
 	_defense_section_active = false
 	_evade_section_active = false
 	_redirect_section_active = false
+	_counter_section_active = false
+	_swarm_section_active = false
 	_last_redirect_remaining = -1
 	_last_dice_pool_text = ""
 	_last_dice_results_payload = []

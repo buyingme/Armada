@@ -95,6 +95,20 @@ func test_execute_critical_choice_uses_chooser_payload() -> void:
 			"PAYLOAD_CONTROLLER should resolve from the chooser payload.")
 
 
+func test_execute_counter_choice_uses_counter_controller_payload() -> void:
+	var cmd := PublishAttackFlowCommand.new(0, {
+		"step_id": int(Constants.InteractionStep.ATTACK_COUNTER_CHOICE),
+		"controller_player": 0,
+		"flow_payload": {"controller_player": 1,
+				CounterKeyword.PAYLOAD_CONTROLLER_PLAYER: 1},
+		"final": false,
+	})
+	cmd.execute(_state)
+
+	assert_eq(_state.interaction_flow.controller_player, 1,
+			"Counter choice should resolve to the Counter squadron owner.")
+
+
 func test_execute_final_clears_flow() -> void:
 	# Pre-seed interaction_flow with a non-empty value.
 	_state.interaction_flow = InteractionFlow.make(

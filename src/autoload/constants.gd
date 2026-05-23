@@ -194,6 +194,8 @@ enum InteractionStep {
 	GAME_OVER_STEP,
 	# Phase I6b-4 — Squadron Displacement.
 	DISPLACEMENT_PLACE,
+	# Phase N — Counter choice appended to avoid shifting legacy enum values.
+	ATTACK_COUNTER_CHOICE,
 }
 
 ## Visibility scope of an [InteractionFlow] payload.
@@ -238,6 +240,8 @@ enum ModalKind {
 	GAME_OVER,
 	# Phase I6b-4 — squadron displacement after ship-squadron overlap.
 	DISPLACEMENT,
+	# Phase N — Counter choice appended to avoid shifting legacy modal values.
+	ATTACK_COUNTER_CHOICE,
 }
 
 ## Mapping from legacy interaction-state flow-type strings to
@@ -277,6 +281,7 @@ const LEGACY_STEP_ID_MAP: Dictionary = {
 	"attack_modify": InteractionStep.ATTACK_MODIFY,
 	"attack_defense_tokens": InteractionStep.ATTACK_DEFENSE_TOKENS,
 	"attack_resolve_damage": InteractionStep.ATTACK_RESOLVE_DAMAGE,
+	"attack_counter_choice": InteractionStep.ATTACK_COUNTER_CHOICE,
 	"attack_critical_choice": InteractionStep.ATTACK_CRITICAL_CHOICE,
 	"status_cleanup": InteractionStep.STATUS_CLEANUP_STEP,
 	"game_over": InteractionStep.GAME_OVER_STEP,

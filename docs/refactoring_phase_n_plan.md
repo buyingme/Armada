@@ -1,6 +1,6 @@
 # Refactoring Phase N - Rule System Completion
 
-> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8, ✅ N9, ✅ N10, ✅ N11, ✅ N12, ✅ N13, ✅ N14, ✅ N15; N16 next.
+> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8, ✅ N9, ✅ N10, ✅ N11, ✅ N12, ✅ N13, ✅ N14, ✅ N15, ✅ N16, ✅ N17, ✅ N18, ✅ N19, ✅ N20, ✅ N21, ✅ N22; N17-N22 MT pass confirmed 2026-05-23; N23 next.
 > **Predecessor:** Phase M is closed at `b9bbe82` / `988641a` with
 > RuleRegistry governance in project instructions and architecture skills.
 > **Decision point:** Taking Phase N before G4.7 intentionally delays the
@@ -28,6 +28,66 @@
 | N13 | ✅ Complete | Ruptured Engine migrated to execute-maneuver observer follow-up with command-owned damage-deck draw. MT pass confirmed 2026-05-23. |
 | N14 | ✅ Complete | Damaged Controls migrated to execute-maneuver overlap observer using authoritative maneuver-result metadata. MT pass confirmed 2026-05-23. |
 | N15 | ✅ Complete | Thruster Fissure migrated to execute-maneuver speed-delta observer scoped to player-authored maneuver speed changes. MT pass confirmed 2026-05-23. |
+| N16 | ✅ Complete | Squadron keyword compliance audit completed for Heavy, Escort, Counter, Bomber, and Swarm. Bomber damage works through RuleRegistry but still needs explicit critical-effect eligibility coverage; Heavy, Escort, Counter, and Swarm are not production-compliant yet. |
+| N17 | ✅ Complete | Keyword foundation added: shared keyword lookup, standard/Counter attack-kind metadata, non-Heavy engagement predicates, attacker-target-specific engagement checks, target-legality payload fields, and optional attack-modifier affordance metadata. No live gameplay targeting or movement behaviour changed. MT pass confirmed 2026-05-23. |
+| N18 | ✅ Complete | Heavy engagement rules now permit movement and ship attacks only when every unobstructed engaging enemy has Heavy; `move_squadron`, target declaration, and UI availability share obstruction-aware serialized squadron keyword predicates. MT pass confirmed 2026-05-23. |
+| N19 | ✅ Complete | Escort now uses RuleRegistry target blockers/validators, blocks non-Escort squadron targets while engaged with Escort, exempts Counter attacks, and removes the inert legacy effect class. MT pass confirmed 2026-05-23. |
+| N20 | ✅ Complete | Counter projects an explicit defender-owned `ATTACK_COUNTER_CHOICE` flow, accepts/skips through `CounterChoiceCommand`, starts a locked Counter attack with X blue dice, carries attack-kind metadata, prevents Counter recursion, validates roll dice through RuleRegistry, reuses the existing attack panel in hot-seat, projects remote Counter roll/Swarm/confirm controls through the network mirror, and triggers even when the original attack deals zero damage. MT pass confirmed 2026-05-23. |
+| N21 | ✅ Complete | Swarm now offers an optional command-backed reroll through `RerollAttackDieCommand`, uses `GameState.rng`, revalidates obstruction-aware engagement from `GameState`, updates attack payload dice deterministically, and removes the inert legacy effect class. MT pass confirmed 2026-05-23. |
+| N22 | ✅ Complete | Bomber critical-effect permission is keyword-aware, non-Bomber squadron criticals remain blocked, and the all-keyword regression suite covers Heavy/Escort/Counter/Swarm/Bomber together. MT pass confirmed 2026-05-23. |
+
+N18-N22 verification: full GUT passed at 179 scripts / 3 211 tests / 6 560
+asserts with 0 failures, Phase K lint reported 0 violations / 4 allow-listed
+branches, baseline traces passed hot-seat trace/state plus real ENet host/client
+state-hash equality, and `git diff --check` was clean. The network replay
+fixture omits one old `move_squadron` command that attempted to move an engaged
+non-Heavy squadron and is now rejected by the authoritative Heavy validator.
+
+Post-playtest keyword follow-up verification: full GUT passed at 181 scripts /
+3 239 tests / 6 616 asserts with 0 failures, Phase K lint reported 0
+violations / 4 allow-listed branches, baseline traces passed with network-state
+hash `50c9edaf428b32bda280a5f7a3104b8bb82066eed4d7fd407087197a8ad6f293`, and
+`git diff --check` was clean. The follow-up fixes Counter panel reset/reuse,
+locks accepted Counter attacks to their rule-defined target/dice pool, validates
+Counter roll dice through RuleRegistry, keeps the network-only attack mirror
+closed in hot-seat Counter/Swarm follow-ups, triggers Counter on zero-damage
+squadron attacks, and threads obstruction-aware squadron engagement through
+Heavy, Escort, Swarm, movement validation, target selection, and Swarm reroll
+command validation.
+
+Command-backed Counter ownership follow-up verification: full GUT passed at
+185 scripts / 3 262 tests / 6 657 asserts with 0 failures, Phase K lint
+reported 0 violations / 4 allow-listed branches, baseline traces passed with
+network-state hash
+`e00bd2c154663d70b70d95b35230bc9aa128996587b24de935748da265f0d214`, and
+`git diff --check` was clean. The follow-up promotes Counter accept/skip to a
+dedicated flow/command surface, lets the projected Counter owner control the
+accepted Counter roll, Swarm reroll/skip, and dice confirm over the network,
+and records the project rule that all defender/opponent/off-turn choices must
+define ownership, payload identity, command surfaces, and projection before UI
+buttons are wired.
+
+Squadron no-move activation completion follow-up verification: full GUT passed
+at 185 scripts / 3 269 tests / 6 669 asserts with 0 failures, Phase K lint
+reported 0 violations / 4 allow-listed branches, baseline traces passed with
+network-state hash
+`1d70beddcb69cee6b956d1725537d4c09b25c87840f1e86ea5964e5c8b58c334`, and
+`git diff --check` was clean. The follow-up replaces zero-distance
+`move_squadron` skip synchronization with `complete_squadron_activation`, so
+engaged attack-only squadrons blocked by the Heavy movement validator still
+advance passive network modal counters and hand off the Squadron Phase turn.
+
+Network Swarm reroll affordance follow-up verification: full GUT passed at
+185 scripts / 3 272 tests / 6 676 asserts with 0 failures, Phase K lint
+reported 0 violations / 4 allow-listed branches, baseline traces passed with
+network-state hash
+`7e3725022a42514f9cf9d368670da262e13cc8e2f72f7d2236fdd6c33e9f8580`, and
+`git diff --check` was clean. The follow-up keeps hits, crits, and all other
+dice results selectable for Swarm, ignores network `awaiting_remote` sentinels
+until authoritative roll/reroll results arrive, and applies standard-attack
+Swarm reroll echoes through the active attack pipeline.
+User MT pass confirmed 2026-05-23 for the complete N17-N22 keyword foundation
+and live keyword batch.
 
 ---
 
@@ -64,10 +124,10 @@ Current legacy production surfaces:
 | Surface | Legacy source | Current call sites / notes |
 |---|---|---|
 | Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | N12-N15 emptied the persistent damage-card id bridge; migrated damage-card rules now read `ShipInstance.faceup_damage` through RuleRegistry or immediate command/resolver paths. |
-| Squadron keyword effects | `EscortEffect`, `SwarmEffect` from `EffectFactory._create_keyword_effect()` plus unused legacy keyword classes | Bomber no longer rebuilds a legacy effect after N10; Escort is also enforced directly in `EngagementResolver`; Swarm has an old effect class but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found in `src/`. |
+| Squadron keyword effects | Retired `EscortEffect` / `SwarmEffect` classes and no legacy keyword rebuild path | N18-N22 implement Heavy, Escort, Counter, Swarm, and Bomber critical permission through RuleRegistry surfaces and command-backed payloads. Remaining legacy runtime-system cleanup is deferred to N23 static-guard retirement. |
 | Attack validation/damage hooks | `ATTACK_CALC_DAMAGE`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses critical resolution and damage calculation. After N10, Targeter Disruption and Bomber use RuleRegistry surfaces; these legacy attack hooks remain compatibility fallbacks only. |
 | Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | N12-N15 migrated the remaining movement damage cards to RuleRegistry yaw/observer surfaces; `ExecuteManeuverCommand` now carries overlap and speed-delta metadata for deterministic follow-ups. |
-| Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | N3/N4 retired production use of these hooks for Power Failure and Life Support Failure. `RepairResolver` still has a legacy engineering fallback until N19 cleanup, but no current `DamageCardEffect` maps to either migrated id. |
+| Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | N3/N4 retired production use of these hooks for Power Failure and Life Support Failure. `RepairResolver` still has a legacy engineering fallback until N23 cleanup, but no current `DamageCardEffect` maps to either migrated id. |
 
 The main risk of doing nothing is architectural drift: new features will have
 to understand two rule systems, two rebuild stories, and two testing idioms.
@@ -138,7 +198,7 @@ following findings are now binding for later Phase N slices.
 |---|---|
 | `Resources/Game_Components/damage_cards.json` | Canonical card titles, timing, and effect text for implemented damage cards. |
 | `Resources/Game_Components/damage_deck/damage_deck_composition.txt` | Cross-check of damage-deck composition plus FAQ snippets not present in JSON. |
-| `Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md` | Squadron keyword rules and FAQ entries for Power Failure, Damaged Controls, Disengaged Fire Control, Thruster Fissure, Counter/Swarm, and Bomber. |
+| `Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md` | Squadron keyword rules and FAQ entries for Power Failure, Damaged Controls, Disengaged Fire Control, Thruster Fissure, Heavy, Escort, Counter, Bomber, and Swarm. |
 | `src/core/effects/damage_card_effect.gd` and `src/core/effects/damage_card_effect_factory.gd` | Legacy persistent damage-card behaviour and active effect id list. |
 | `src/core/effects/effect_factory.gd` and `src/core/effects/keywords/*.gd` | Legacy keyword rebuild and behaviour. |
 | `src/core/combat/*`, `src/core/damage/*`, `src/core/commands/*`, `src/scenes/game_board/*`, `src/scenes/tools/*` | Production legacy hook call sites and metadata. |
@@ -167,24 +227,26 @@ original damage-card rules have moved to RuleRegistry:
 
 | Hook | Current status | Retirement path |
 |---|---|---|
-| `ATTACK_GATHER_DICE` | Legacy bridge still runs before RuleRegistry dice-pool modifiers; migrated Damaged Munitions and Point-Defense Failure no longer need a legacy `DamageCardEffect`. | Remove after remaining attack modifier surfaces no longer depend on `EffectRegistry`; N19 static guard should catch reintroduction. |
-| `DEFENSE_VALIDATE_TOKEN` | No production resolver fallback remains after N2; Faulty Countermeasures moved to RuleRegistry blocker metadata. | Remove any remaining dead legacy declarations during N19 static-guard cleanup. |
-| `REPAIR_VALIDATE_SHIELD` | Compatibility fallback after Capacitor Failure migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
-| `STATUS_READY_TOKENS` | Compatibility fallback after Compartment Fire migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
-| `CALC_ENGINEERING_VALUE` | Compatibility fallback remains in `RepairResolver`; Power Failure moved to RuleRegistry in N3 and no current `DamageCardEffect` source maps to this hook. | Remove during N19 unless another audited rule still needs it. |
-| `ON_COMMAND_TOKEN_GAIN` | No production resolver fallback remains after N4; Life Support Failure moved to RuleRegistry blockers/validators. | Remove dead declarations during N19 static-guard cleanup. |
-| `ATTACK_VALIDATE_TARGET` | No remaining legacy damage-card source maps to this hook after N6/N7; the compatibility fallback can now be retired during cleanup once downstream keyword/attack migrations no longer need the bridge. | Remove during N19 static-guard cleanup. |
-| `ATTACK_RESOLVE_CRITICAL` | Targeter Disruption moved to a RuleRegistry `critical_effect` blocker in N9; the fallback remains only for compatibility until N19. | Remove during N19 static-guard cleanup. |
-| `ATTACK_CALC_DAMAGE` | Bomber moved to a RuleRegistry `attack_damage` modifier in N10 and is no longer rebuilt by `EffectFactory`; the fallback remains only for compatibility until N19. | Remove during N19 static-guard cleanup. |
-| `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | The remaining movement damage cards moved to RuleRegistry in N12-N15; scene/tool code now uses `ManeuverRuleResolver` for yaw modifiers and non-mutating preview only. | Remove dead legacy declarations and guard against reintroduction during N19. |
+| `ATTACK_GATHER_DICE` | Legacy bridge still runs before RuleRegistry dice-pool modifiers; migrated Damaged Munitions and Point-Defense Failure no longer need a legacy `DamageCardEffect`. | Remove after remaining attack modifier surfaces no longer depend on `EffectRegistry`; N23 static guard should catch reintroduction. |
+| `DEFENSE_VALIDATE_TOKEN` | No production resolver fallback remains after N2; Faulty Countermeasures moved to RuleRegistry blocker metadata. | Remove any remaining dead legacy declarations during N23 static-guard cleanup. |
+| `REPAIR_VALIDATE_SHIELD` | Compatibility fallback after Capacitor Failure migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
+| `STATUS_READY_TOKENS` | Compatibility fallback after Compartment Fire migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
+| `CALC_ENGINEERING_VALUE` | Compatibility fallback remains in `RepairResolver`; Power Failure moved to RuleRegistry in N3 and no current `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
+| `ON_COMMAND_TOKEN_GAIN` | No production resolver fallback remains after N4; Life Support Failure moved to RuleRegistry blockers/validators. | Remove dead declarations during N23 static-guard cleanup. |
+| `ATTACK_VALIDATE_TARGET` | No remaining legacy damage-card source maps to this hook after N6/N7; the compatibility fallback can now be retired during cleanup once downstream keyword/attack migrations no longer need the bridge. | Remove during N23 static-guard cleanup. |
+| `ATTACK_RESOLVE_CRITICAL` | Targeter Disruption moved to a RuleRegistry `critical_effect` blocker in N9; the fallback remains only for compatibility until N23. | Remove during N23 static-guard cleanup. |
+| `ATTACK_CALC_DAMAGE` | Bomber moved to a RuleRegistry `attack_damage` modifier in N10 and is no longer rebuilt by `EffectFactory`; the fallback remains only for compatibility until N23. | Remove during N23 static-guard cleanup. |
+| `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | The remaining movement damage cards moved to RuleRegistry in N12-N15; scene/tool code now uses `ManeuverRuleResolver` for yaw modifiers and non-mutating preview only. | Remove dead legacy declarations and guard against reintroduction during N23. |
 
-### 4.4 Remaining Legacy Keyword Effects
+### 4.4 Squadron Keyword Compliance
 
-| Keyword | Legacy state | Source-text parity | Phase N direction |
+| Keyword | Current implementation | Source-text parity | Phase N direction |
 |---|---|---|---|
-| Bomber | N10 no longer registers `BomberEffect`; damage calculation reads the attacker's serialized squadron keyword data through a RuleRegistry `attack_damage` modifier. | Matches RRG and FAQ: crit icons count as damage against ships, and Bomber can resolve standard critical effects. | Complete with MT pass: focused tests and save/load regression prove behaviour derives from squadron data, not a rebuilt legacy effect. |
-| Escort | `EscortEffect` is registered, but no production `SQUADRON_MUST_ATTACK_ENGAGED` resolver was found. `EngagementResolver.get_valid_engaged_targets()` already filters engaged targets to Escort squadrons. | Core resolver matches the main RRG rule, but N16 must account for exceptions such as Counter and Snipe before changing behaviour. | N16/N17 should remove the inert effect class and either document/core-test the existing resolver as the rule implementation or add RuleRegistry target-blocker affordances if the attack flow needs projection metadata. |
-| Swarm | `SwarmEffect` is registered, but no production `ATTACK_MODIFY_DICE_ATTACKER` resolver was found. The old effect auto-rerolls the worst die with `Dice.roll_die()` rather than offering the optional player choice or using replay-safe RNG. | Does not match the RRG optional timing as implemented in the old class. It is effectively inert in production and should not be ported as-is. | N18 either implements a real optional command-backed reroll with `GameRng` and UI affordance, or deletes the inert legacy class with a documented future keyword TODO. |
+| Heavy | Implemented through shared serialized keyword predicates, squadron movement command validation, squadron activation availability, target selection, and a RuleRegistry `publish_attack_flow` validator. Engagement predicates now include ship/obstacle obstruction context from live tokens or serialized `GameState`. | Compliant for the core rule: Heavy enemies do not prevent movement or ship attacks; mixed engagement with any unobstructed non-Heavy enemy still blocks those options. | Complete in N18; future Grit/Snipe keyword work should reuse the same attack-kind and obstruction-aware engagement boundary. |
+| Escort | Implemented through a RuleRegistry `attack_target` blocker and `publish_attack_flow` validator. The inert legacy class and rebuild path are deleted. | Compliant for core attacks: attackers engaged with an unobstructed Escort cannot target non-Escort squadrons, and Counter attacks are exempt. | Complete in N19; future Snipe metadata should keep feeding the same blocker/validator context. |
+| Counter X | Implemented as an explicit `ATTACK_COUNTER_CHOICE` flow with `CounterChoiceCommand`, locked Counter dice validation, and projected remote attack controls for the accepted Counter roll/Swarm/confirm surfaces. Attack-kind metadata prevents Counter recursion, and hot-seat reuses the existing attack panel without layering stale UI. | Compliant for the core optional attack: eligible squadron defenders can Counter after non-Counter squadron attacks regardless of damage, use X blue dice, and may Counter even if destroyed. | Complete in N20; the accept/skip choice is now a replay/network-visible marker command instead of scene-local UI state. |
+| Bomber | Damage calculation and critical-effect permission both read the attacking squadron's serialized Bomber keyword through RuleRegistry hooks. | Compliant for current damage/critical surfaces: critical icons add damage against ships and only Bomber squadron attackers can resolve a critical effect. | Complete in N22; all-keyword regressions cover non-Bomber squadron critical blocking. |
+| Swarm | Implemented as an optional RuleRegistry affordance rendered by the attack panel and applied by `RerollAttackDieCommand` with `GameState.rng`. The inert legacy class and rebuild path are deleted. UI projection and command validation both rederive obstruction-aware engagement. | Compliant for current attack flow: Swarm can reroll one die when attacking a squadron engaged with another unobstructed friendly squadron, including Counter attacks. | Complete in N21; future optional-effect marker standardization can reuse the same command-backed reroll command. |
 
 ### 4.5 N0 Decisions
 
@@ -196,12 +258,12 @@ original damage-card rules have moved to RuleRegistry:
 - Thrust Control Malfunction must be implemented against the current speed and
   last adjustable joint semantics from the FAQ, not the current all-row legacy
   preview hook.
-- Swarm is not currently production-wired. Any Phase N implementation must be a
-  new optional, command-backed, replay-safe rule rather than a mechanical port
-  of the old `SwarmEffect`.
-- Escort's old effect class appears inert, but the rule itself is already
-  partly enforced in `EngagementResolver`. N16 decides whether the final shape
-  is core-only with docs/tests, RuleRegistry blocker metadata, or both.
+- N16 confirmed Heavy, Escort, Counter, and Swarm were not
+   production-compliant. N18-N22 now implement the live rules for all five
+   squadron keywords requested for the phase: Heavy, Escort, Counter, Bomber,
+   and Swarm.
+- N16 confirmed Bomber damage was RuleRegistry-backed but its critical-effect
+   permission needed explicit keyword awareness; N22 adds that blocker coverage.
 
 ### 4.6 N1 Scaffolding Outcome
 
@@ -212,6 +274,65 @@ original damage-card rules have moved to RuleRegistry:
    blockers, maneuver yaw modifiers, and post-maneuver observer surfaces.
 - No production rule registrations or legacy bridge call sites changed in N1;
    fixture hooks prove deterministic ordering and empty-registry no-op output.
+
+### 4.7 N16 Squadron Keyword Audit Outcome
+
+N16 re-ran the keyword audit against production call sites, source rules, and
+tests before touching behaviour. The audited RRG v1.5.0 "Squadron Keywords"
+rules are:
+
+- Heavy: "You do not prevent engaged squadrons from attacking ships or moving."
+- Escort: "Squadrons you are engaged with cannot attack squadrons that lack
+   escort unless performing a counter attack."
+- Counter X: "After a squadron performs a non-counter attack against you, you
+   may attack that squadron with an anti-squadron armament of blue dice equal to
+   X, even if you are destroyed."
+- Bomber: "While attacking a ship, each of your critical icons adds 1 damage to
+   the damage total and you can resolve a critical effect."
+- Swarm: "While attacking a squadron engaged with another squadron, you may
+   reroll 1 die."
+
+Findings:
+
+- `SQUADRON_MUST_ATTACK_ENGAGED` appears only in `EscortEffect`; no production
+   resolver invokes that hook.
+- `ATTACK_MODIFY_DICE_ATTACKER` appears only in `SwarmEffect`; no production
+   resolver invokes that hook.
+- Heavy has no production rule surface; current movement and ship-target gates
+   block engaged squadrons without checking whether every engaging enemy has
+   Heavy.
+- Counter has no production rule surface; there is no attack-kind metadata,
+   post-defense trigger, command, UI affordance, or replay-safe counter attack
+   flow.
+- `EngagementResolver.get_valid_engaged_targets()` and
+   `EngagementResolver.is_swarm_eligible()` are pure helpers with no production
+   callers in `src/`.
+- `TargetSelector` currently prevents an engaged squadron from targeting ships,
+   but it does not apply Escort filtering. Its squadron-target guard also checks
+   whether the selected defender is engaged by any enemy, not specifically
+   whether it is engaged with the attacker.
+- Bomber's RuleRegistry damage modifier is production-wired, save/load tested,
+   and matches the damage-total clause. The critical-effect clause still needs a
+   keyword-aware regression because the current faceup-card gate sees critical
+   icons without receiving the squadron attacker's keyword state.
+- No production Snipe attack flow exists yet. N20 Counter metadata should still
+   name attack kind generically so future Snipe can share the same rule boundary.
+
+Decisions:
+
+- N17 added shared keyword-rule scaffolding: authoritative keyword lookup,
+   engagement predicates that can answer "engaged by at least one non-Heavy",
+   attack-kind metadata, and target/reroll affordance payload conventions.
+- N17 completed that scaffolding in `SquadronKeywordRuleHelper` and
+   `RuleSurface` constants without wiring live gameplay behaviour.
+- N18 implements Heavy. N19 implements Escort. N20 implements Counter. N21
+   implements Swarm. N22 hardens Bomber's critical-effect clause and runs the
+   all-keyword regression sweep.
+- N18-N22 intentionally remove the inert Escort/Swarm legacy effect classes;
+   N23 handles final runtime-system retirement and static guards.
+- N16 intentionally makes no gameplay behaviour changes. It records the
+   architectural decision point so the upcoming keyword slices do not preserve
+   accidental legacy behaviour.
 
 ---
 
@@ -242,11 +363,15 @@ or be actively pair-reviewed.
 | N13 | Migrate Ruptured Engine. Register a post-maneuver `OBSERVER` that emits a deterministic facedown-damage follow-up command when final speed is greater than 1. | high | No | Complete 2026-05-23 with MT pass: observer returns a deferred `PersistentEffectDamageCommand`; draw-from-deck happens in command execution for replay/network determinism. |
 | N14 | Migrate Damaged Controls. Register a post-maneuver/overlap `OBSERVER` for extra facedown damage on ship/obstacle overlap. | high | No | Complete 2026-05-23 with MT pass: `ExecuteManeuverCommand` carries authoritative `did_overlap` metadata from the move result. |
 | N15 | Migrate Thruster Fissure. Register a speed-change/maneuver `OBSERVER` for deterministic facedown damage when speed changes by 1 or more. | high | No | Complete 2026-05-23 with MT pass: `ExecuteManeuverCommand` carries player-authored `speed_delta`; observer follow-ups do not synthesize on mirrored clients. |
-| N16 | Keyword target-rule audit: Escort and Swarm. Decide which existing non-EffectRegistry logic is already authoritative and which behaviour still needs RuleRegistry affordances. | medium | No | Documents whether Escort moves to RuleRegistry blocker, remains a core engagement rule, or needs both; confirms Swarm is or is not currently wired. |
-| N17 | Migrate Escort, if N16 keeps it in RuleRegistry scope. Replace the unused legacy `EscortEffect` with either a RuleRegistry target blocker or a documented core engagement rule outside EffectRegistry. | medium | No | No `SQUADRON_MUST_ATTACK_ENGAGED` effect remains; target filtering still obeys Escort. |
-| N18 | Migrate Swarm, if N16 confirms implemented behaviour should ship now. Add attacker optional reroll affordance/command support through RuleRegistry instead of the unused legacy effect class. | high | No | Optional reroll is command-backed, `GameRng`/replay-safe, and projected as UI affordance; otherwise the old inert class is deleted with a documented TODO for future keyword implementation. |
-| N19 | Retire legacy runtime system. Delete or quarantine `EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect classes, and obsolete tests. Add a static guard forbidding production `EffectRegistry.resolve_hook`, old hook strings, and new `GameEffect` subclasses. | high | No | Full suite, lint, baseline traces pass; grep/static test proves no production legacy effect system remains. |
-| N20 | Documentation and baseline closeout. Update `docs/implementation_plan.md`, arc42 crosscutting/runtime docs, rule README, risks/technical debt, and archive Phase N. | low | Yes | Docs state the new single rule architecture and the next roadmap item unambiguously. |
+| N16 | Squadron keyword compliance audit. Compare Heavy, Escort, Counter, Bomber, and Swarm against RRG/source data and production call sites. | medium | No | Complete 2026-05-23; Bomber damage is wired, Bomber critical eligibility needs hardening, and Heavy/Escort/Counter/Swarm require implementation slices before Phase N closes. |
+| N17 | Keyword rule foundation. Add shared core predicates/surfaces for squadron keyword lookup, engagement-by-non-Heavy, target legality, attack-kind metadata, and optional attack modifier affordances. | high | No | Complete 2026-05-23 with MT pass; `SquadronKeywordRuleHelper` and `RuleSurface` constants add no live gameplay behaviour, and focused tests prove Heavy/non-Heavy engagement, standard/Counter attack kind, attacker-target-specific engagement, and JSON-safe payload conventions. |
+| N18 | Implement Heavy. Engaged squadrons may move and attack ships when every engaging enemy has Heavy; mixed engagement with any non-Heavy still blocks movement and ship attacks. | high | No | Complete 2026-05-23 with MT pass: movement availability, `move_squadron`, ship target declaration, and direct publish validators derive Heavy from serialized squadron data. |
+| N19 | Implement Escort. Replace the unused legacy `EscortEffect` with a RuleRegistry target blocker/validator backed by core engagement predicates and projection-safe metadata. | high | No | Complete 2026-05-23 with MT pass: no `SQUADRON_MUST_ATTACK_ENGAGED` effect remains; target filtering obeys Escort and Counter attacks are exempt. |
+| N20 | Implement Counter X. Add optional post-defense counter-attack affordance and command support for squadron defenders after non-Counter squadron attacks. | high | No | Complete 2026-05-23 with MT pass: Counter uses X blue dice, can trigger after defender destruction, does not recurse from Counter attacks, and publishes attack-kind metadata. |
+| N21 | Implement Swarm. Replace inert `SwarmEffect` with an optional attacker reroll affordance/command that applies during standard and Counter squadron attacks when the defender is engaged with another squadron. | high | No | Complete 2026-05-23 with MT pass: reroll choice is command-backed, uses `GameState.rng`, updates attack payload/dice deterministically, works with Counter attacks, and no `ATTACK_MODIFY_DICE_ATTACKER` effect remains. |
+| N22 | Bomber closeout and all-keyword regression. Harden Bomber critical-effect eligibility and verify the five keyword rules together. | high | No | Complete 2026-05-23 with MT pass: Bomber damage and critical-effect permission are keyword-aware; non-Bomber squadron critical icons do not create faceup damage; keyword regressions and replay/network gates pass. |
+| N23 | Retire legacy runtime system. Delete or quarantine `EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect classes, and obsolete tests. Add a static guard forbidding production `EffectRegistry.resolve_hook`, old hook strings, and new `GameEffect` subclasses. | high | No | Full suite, lint, baseline traces pass; grep/static test proves no production legacy effect system remains. |
+| N24 | Documentation and baseline closeout. Update `docs/implementation_plan.md`, arc42 crosscutting/runtime docs, rule README, risks/technical debt, and archive Phase N. | low | Yes | Docs state the new single rule architecture, all five requested squadron keywords, and the next roadmap item unambiguously. |
 
 ---
 
@@ -264,10 +389,12 @@ or be actively pair-reviewed.
 4. **Then maneuver observers (N11-N15).** These are deliberately late because
    they require moving rule decisions away from scene/tool code and making
    follow-up damage command ordering deterministic.
-5. **Then keywords and retirement (N16-N20).** Bomber can migrate earlier
-   because it is wired through damage calculation, but Escort and Swarm need an
-   explicit audit: Escort is already duplicated in core engagement logic, while
-   Swarm appears to have an old effect class without a production resolver.
+5. **Then keywords and retirement (N16-N24).** Bomber migrated earlier because
+   it was wired through damage calculation, but N16 expands the keyword closeout
+   to Heavy, Escort, Counter, Bomber, and Swarm. Heavy/Escort must share core
+   engagement predicates, Counter introduces attack-kind metadata, Swarm needs
+   command-backed optional rerolls, and Bomber needs explicit critical-effect
+   eligibility coverage before the legacy system can be retired.
 
 ---
 
@@ -293,13 +420,15 @@ Additional gates by slice type:
 | Keyword migration | Save/load keyword-state test proving active status comes from squadron data, not registered `GameEffect` instances. |
 | Legacy retirement | Static guard test plus `rg`/grep inventory showing old production surfaces are gone. |
 
-Manual test gates should be required for N6-N8, N11-N15, N17, and N18 because
+Manual test gates should be required for N6-N8, N11-N15, and N18-N22 because
 they touch visible attack/maneuver/keyword interaction timing. N3-N5 were
 batched behind one MT gate by user request; MT pass was confirmed 2026-05-22.
 N6-N8 were likewise batched behind one MT gate; MT pass was confirmed
 2026-05-22. N9-N11 were batched behind one MT gate by user request; automated
 gates passed and MT pass was confirmed 2026-05-23.
 N12-N15 were batched behind one MT gate by user request; automated gates passed
+and MT pass was confirmed 2026-05-23.
+N17-N22 were batched behind one MT gate by user request; automated gates passed
 and MT pass was confirmed 2026-05-23.
 
 ---
@@ -328,7 +457,7 @@ Good lightweight-model candidates:
 - N3 Power Failure.
 - N5 Depowered Armament.
 - N10 Bomber, after N1 scaffolding exists.
-- N20 documentation closeout.
+- N24 documentation closeout.
 
 Poor lightweight-model candidates:
 
@@ -337,7 +466,8 @@ Poor lightweight-model candidates:
    define an authoritative ship-target count.
 - N8 because accuracy spending is visible UI plus attack-state timing.
 - N11-N15 because maneuver observers require command/replay/network ordering.
-- N16-N19 because they decide keyword semantics and retire foundational code.
+- N16-N23 because they decide keyword semantics, add attack timing, and retire
+   foundational code.
 
 ---
 
@@ -348,10 +478,10 @@ Poor lightweight-model candidates:
 | Migrating a legacy bug as if it were a rule | Medium | High | N0 semantic audit blocks implementation when card JSON/RRG and legacy behaviour disagree. Coolant Discharge, Thrust Control Malfunction, and Swarm are the known examples. |
 | UI remains enabled while command validation rejects | Medium | High | Reuse the M7 lesson: cover marker commands, final mutation commands, payload metadata, panel rendering, and submit-result guards. |
 | Observer follow-ups duplicate in replay/network | Medium | Critical | Use RuleRegistry observer queue only; add replay history assertions and run baseline traces for every observer slice. |
-| Scene/tool code keeps owning rule predicates | Medium | High | N11 explicitly extracts maneuver rule application before migrating movement cards. Static guard in N19 catches legacy hook reintroduction. |
-| Keyword migration removes behaviour that is already implemented elsewhere | Medium | Medium | N16 audits Escort/Swarm before deletion or migration. Existing direct resolver behaviour is either codified as core rule or connected through RuleRegistry. |
+| Scene/tool code keeps owning rule predicates | Medium | High | N11 explicitly extracts maneuver rule application before migrating movement cards. Static guard in N23 catches legacy hook reintroduction. |
+| Keyword migration removes behaviour that is already implemented elsewhere | Medium | Medium | N16 audits Heavy, Escort, Counter, Bomber, and Swarm before migration. Existing direct resolver helpers are either codified as core rules or connected through RuleRegistry. |
 | Save/load loses active rule status | Low | Critical | Every persistent migration proves active status from serialized entities after `EffectFactory.rebuild_runtime_effects()`, with zero legacy effect for the migrated source. |
-| Big-bang cleanup hides regressions | High | High | One rule or one narrow family per slice; no broad deletion until N19. |
+| Big-bang cleanup hides regressions | High | High | One rule or one narrow family per slice; no broad deletion until N23. |
 
 ---
 
@@ -361,9 +491,9 @@ Phase N is complete when:
 
 1. No production code depends on `EffectRegistry`, `GameEffect`,
    `DamageCardEffect`, or legacy hook-string dispatch.
-2. All currently implemented persistent damage-card rules and keyword effects
-   either live in RuleRegistry or are explicitly documented as non-hook core
-   rules outside the old effect system.
+2. Heavy, Escort, Counter, Bomber, and Swarm are implemented through
+   RuleRegistry/core command surfaces with active status derived from serialized
+   squadron keyword data.
 3. `src/core/effects/rules/README.md` indexes every migrated production rule.
 4. `docs/game_flow.md` and arc42 describe one rule-extension architecture.
 5. Full GUT, Phase K lint, baseline traces, and `git diff --check` pass.

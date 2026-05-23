@@ -302,6 +302,8 @@ func test_attack_steps_each_map_to_dedicated_modal_kind() -> void:
 					Constants.ModalKind.ATTACK_DEFENSE_TOKENS],
 			[Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
 					Constants.ModalKind.ATTACK_RESOLVE_DAMAGE],
+			[Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
+					Constants.ModalKind.ATTACK_COUNTER_CHOICE],
 			[Constants.InteractionStep.ATTACK_CRITICAL_CHOICE,
 					Constants.ModalKind.ATTACK_CRITICAL_CHOICE]]
 	for pair in pairs:

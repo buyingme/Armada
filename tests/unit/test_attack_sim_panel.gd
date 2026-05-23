@@ -36,6 +36,40 @@ func test_show_initial_body_text() -> void:
 			"Body should show the initial prompt.")
 
 
+func test_show_initial_squadron_exec_clears_counter_damage_sections() -> void:
+	_panel.show_initial_squadron_exec("TIE Interceptor Squadron")
+	_panel.show_damage_info("1 damage suffered")
+	_panel.show_counter_section()
+	assert_true(_panel._damage_info_container.visible,
+			"Damage section should be visible before panel reset.")
+	assert_true(_panel._counter_container.visible,
+			"Counter section should be visible before panel reset.")
+	_panel.show_initial_squadron_exec("TIE Interceptor Squadron")
+	assert_false(_panel._damage_info_container.visible,
+			"Damage section should be hidden after squadron panel reset.")
+	assert_false(_panel._counter_container.visible,
+			"Counter section should be hidden after squadron panel reset.")
+
+
+func test_show_counter_attack_exec_uses_locked_target_and_dice() -> void:
+	_panel.show_initial_squadron_exec("TIE Interceptor Squadron")
+	_panel.show_counter_section()
+	_panel.show_skip_attack_button()
+	_panel.show_counter_attack_exec(
+			"TIE Interceptor Squadron", "X-wing Squadron", "2 blue")
+	assert_eq(_panel.get_title_text(),
+			"TIE Interceptor Squadron \u2192 X-wing Squadron",
+			"Counter panel should show the locked attacker and target.")
+	assert_eq(_panel.get_body_text(), "LOS: Clear \u00b7 Range: Close",
+			"Counter panel should show the locked close-range attack.")
+	assert_eq(_panel.get_dice_count_text(), "Dice: 2 blue",
+			"Counter panel should show the Counter dice pool.")
+	assert_false(_panel._counter_container.visible,
+			"Counter choice should be hidden after accepting Counter.")
+	assert_false(_panel._skip_attack_button.visible,
+			"Counter attacks should not expose normal attack skip.")
+
+
 func test_close_hides_panel() -> void:
 	_panel.show_initial()
 	_panel.close()
@@ -349,6 +383,26 @@ func test_cf_token_skip_signal_emitted() -> void:
 	_panel._on_cf_token_skip()
 	assert_signal_emitted(_panel, "cf_token_reroll_skipped",
 			"cf_token_reroll_skipped should be emitted.")
+
+
+func test_show_dice_results_keeps_hit_and_crit_rerollable() -> void:
+	_panel.show_initial_attack_exec("TIE Fighter Squadron")
+	_panel.show_swarm_reroll_section()
+	var results: Array[Dictionary] = [
+		{"color": Constants.DiceColor.BLUE,
+				"face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLACK,
+				"face": Constants.DiceFace.HIT_CRITICAL},
+	]
+	_panel.show_dice_results(results)
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	_panel._on_die_clicked(click, _panel._dice_textures[1])
+	assert_eq(_panel.get_selected_reroll_index(), 1,
+			"Swarm should allow selecting hit/crit dice for reroll.")
+	assert_false(_panel._cf_token_reroll_button.disabled,
+			"Reroll button should enable after selecting any die result.")
 
 
 # ── Phase 6b-2: Confirm / Skip Attack ───────────────────────────────

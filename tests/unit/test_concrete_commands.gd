@@ -54,6 +54,7 @@ func before_each() -> void:
 	EndActivationCommand.register()
 	ConvertDialToTokenCommand.register()
 	ActivateSquadronCommand.register()
+	CompleteSquadronActivationCommand.register()
 	SpendTokenCommand.register()
 	SpendDialCommand.register()
 
@@ -64,6 +65,7 @@ func after_each() -> void:
 	GameCommand._registry.erase("end_activation")
 	GameCommand._registry.erase("convert_dial_to_token")
 	GameCommand._registry.erase("activate_squadron")
+	GameCommand._registry.erase("complete_squadron_activation")
 	GameCommand._registry.erase("spend_token")
 	GameCommand._registry.erase("spend_dial")
 
@@ -457,6 +459,69 @@ func test_activate_squadron_serialize_roundtrip() -> void:
 	assert_not_null(restored,
 			"Deserialized command should not be null.")
 	assert_eq(restored.command_type, "activate_squadron",
+			"Restored type should match.")
+
+
+# ======================================================================
+# CompleteSquadronActivationCommand
+# ======================================================================
+
+func test_complete_squadron_activation_validate_ok() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_squadron(0)
+	var cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Should accept valid activation completion marker.")
+
+
+func test_complete_squadron_activation_allows_destroyed_squadron() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = \
+			_state.get_player_state(0).squadrons[idx] as SquadronInstance
+	squadron.current_hull = 0
+	var cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Counter can destroy the activating squadron before completion sync.")
+
+
+func test_complete_squadron_activation_allows_already_activated_echo() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = \
+			_state.get_player_state(0).squadrons[idx] as SquadronInstance
+	squadron.activated_this_round = true
+	var cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Authoritative echoes may arrive after local optimistic completion.")
+
+
+func test_complete_squadron_activation_execute_marks_activated() -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	var idx: int = _add_squadron(0)
+	var squadron: SquadronInstance = \
+			_state.get_player_state(0).squadrons[idx] as SquadronInstance
+	var cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": idx})
+	var result: Dictionary = cmd.execute(_state)
+	assert_true(squadron.activated_this_round,
+			"Completion marker should mark the squadron activated.")
+	assert_eq(result.get("squadron_index", -1), idx,
+			"Execute should return squadron index.")
+
+
+func test_complete_squadron_activation_serialize_roundtrip() -> void:
+	var cmd := CompleteSquadronActivationCommand.new(1, {
+		"squadron_index": 0})
+	cmd.sequence = 10
+	var data: Dictionary = cmd.serialize()
+	var restored: GameCommand = GameCommand.deserialize(data)
+	assert_not_null(restored,
+			"Deserialized command should not be null.")
+	assert_eq(restored.command_type, "complete_squadron_activation",
 			"Restored type should match.")
 
 

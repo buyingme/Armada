@@ -21,11 +21,15 @@ const TARGET_ENGINEERING_VALUE: String = "engineering_value"
 const TARGET_COMMAND_TOKEN_GAIN: String = "command_token_gain"
 const TARGET_DEFENSE_TOKEN_READYING: String = "defense_token_readying"
 const TARGET_COMMAND_DIAL_REVEAL: String = "command_dial_reveal"
+const TARGET_SQUADRON_MOVEMENT: String = "squadron_movement"
 const TARGET_MANEUVER_YAW: String = "maneuver_yaw"
 const TARGET_POST_MANEUVER: String = "post_maneuver"
 const TARGET_SPEED_CHANGE: String = "speed_change"
+const TARGET_ATTACK_MODIFIER_AFFORDANCE: String = "attack_modifier_affordance"
 
 const COMMAND_EXECUTE_MANEUVER: String = "execute_maneuver"
+const COMMAND_MOVE_SQUADRON: String = "move_squadron"
+const COMMAND_PUBLISH_ATTACK_FLOW: String = "publish_attack_flow"
 
 
 ## Applies all modifier hooks for [param target] on the given FlowSpec pair.

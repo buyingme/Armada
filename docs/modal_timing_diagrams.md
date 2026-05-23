@@ -136,7 +136,7 @@ Status: ✅ (with caveat — see 1.4 below)
     │     ├─ _activating_squadron = null
     │     └─ _finish_remote_squadron_activation()
     │           └─ counter++, if limit reached → advance turn
-    └─ SquadronPhaseController._on_command_executed_advance_after_move ← I5b-1
+    └─ SquadronPhaseController._on_command_executed_advance_after_activation_progress
           ├─ guard player_index == local → skip (active peer)
           ├─ guard phase == SQUADRON ✓
           ├─ _squadron_activation_count += 1
@@ -145,6 +145,28 @@ Status: ✅ (with caveat — see 1.4 below)
                 _squadron_modal.set_interactable(_modal_interactable)
             else: skip (turn handoff path will reset)
 ```
+
+    ### 1.4 Complete squadron N without movement
+
+    ```
+    [A] SquadronPhaseController._on_squadron_activation_done(instance)
+        ├─ no move_squadron was submitted
+        └─► GameManager.submit_complete_squadron_activation(instance)
+            └─► CommandProcessor.execute(complete_squadron_activation)
+                └─ CompleteSquadronActivationCommand.execute(gs)
+                    (marks squadron activated; no position update)
+                └─► EventBus.command_executed(complete_squadron_activation)
+
+    [P] CommandProcessor.command_executed(complete_squadron_activation)
+        ├─ GameManager._handle_remote_complete_squadron_activation(cmd)
+        │     ├─ sq.activated_this_round = true
+        │     ├─ _activating_squadron = null
+        │     └─ _finish_remote_squadron_activation()
+        │           └─ counter++, if limit reached → advance turn
+        └─ SquadronPhaseController._on_command_executed_advance_after_activation_progress
+            ├─ _squadron_activation_count += 1
+            └─ if count < 2: open passive observer for the next squadron
+    ```
 
 Status: ✅ post-fix I5b-1 (was 🐞: passive peer's modal stayed in
 `ACTION_CHOICE`, blocking the next `select_squadron_remote`).
@@ -199,8 +221,8 @@ Status: ✅
 | Open modal at phase start | `EventBus.handoff_accepted` (active peer); `_handle_network_active_player` observer branch (passive peer) |
 | Modal reaches `ACTION_CHOICE` | `command_executed(activate_squadron)` → `select_squadron_remote` |
 | Range overlay on **both** peers | `_on_squadron_selected_in_modal` invoked from the controller's `command_executed` handler |
-| Modal back to `WAITING_FOR_SELECTION` between activations | **[A]:** `_on_squadron_activation_done` (modal `move_commit`)<br>**[P]:** `command_executed(move_squadron)` → `_on_command_executed_advance_after_move` (I5b-1) |
-| Range/move overlay removed between activations | **[A]:** `_on_squadron_move_commit` / `_on_squadron_activation_done`<br>**[P]:** same `_on_command_executed_advance_after_move` (I5b-3) |
+| Modal back to `WAITING_FOR_SELECTION` between activations | **[A]:** `_on_squadron_activation_done` (modal `move_commit` or completion marker)<br>**[P]:** `command_executed(move_squadron)` / `command_executed(complete_squadron_activation)` → `_on_command_executed_advance_after_activation_progress` |
+| Range/move overlay removed between activations | **[A]:** `_on_squadron_move_commit` / `_on_squadron_activation_done`<br>**[P]:** same `_on_command_executed_advance_after_activation_progress` |
 | Range/move overlay removed on turn handoff | `begin_activation_flow` (now drops overlay before `open_for_turn`) — I5b-3 |
 | Modal reset on turn handoff | `EventBus.active_player_changed` → `begin_activation_flow` |
 | Interactivity gate | `_is_local_squadron_modal_controller()` = `(active_player == local)` — no longer reads stale `_interaction_controller_player` (I5b-2) |

@@ -1,0 +1,32 @@
+{
+    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_source": "Resources/Game_Components/squadrons/tie_interceptor_squadron_card.png",
+    "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "squadron_name": "TIE Interceptor Squadron",
+    "faction": "GALACTIC_EMPIRE",
+    "point_cost": 11,
+    "hull": 3,
+    "speed": 5,
+    "anti_squadron_armament": {
+        "BLUE": 4
+    },
+    "battery_armament": {
+        "BLUE": 1
+    },
+    "keywords": [
+        {
+            "name": "Counter",
+            "value": 2
+        },
+        {
+            "name": "Swarm"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Counter": "After a squadron performs a non-counter attack against you, you may attack that squadron with an anti-squadron armament of 2 blue dice, even if you are destroyed.",
+        "Swarm": "While attacking a squadron engaged with another squadron, you may reroll 1 die."
+    },
+    "ability_text": "",
+    "is_unique": false,
+    "defense_tokens": []
+}

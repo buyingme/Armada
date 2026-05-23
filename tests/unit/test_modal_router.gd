@@ -5,6 +5,10 @@
 extends GutTest
 
 
+const ATTACK_PANEL_CONTROLLER_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/attack_panel_controller.gd")
+
+
 class StubShipActivationController:
 	extends ShipActivationController
 
@@ -68,10 +72,30 @@ class StubDisplacementController:
 		displaced_count = displaced.size()
 
 
+class StubAttackPanelMirror:
+	extends AttackPanelMirror
+
+	var apply_flow_calls: int = 0
+	var close_calls: int = 0
+	var last_payload: Dictionary = {}
+	var last_step_id: int = -1
+
+
+	func apply_flow(payload: Dictionary, step_id: int) -> void:
+		apply_flow_calls += 1
+		last_payload = payload.duplicate(true)
+		last_step_id = step_id
+
+
+	func close() -> void:
+		close_calls += 1
+
+
 var _router: ModalRouter = null
 var _panel_mgr: UIPanelManager = null
 var _ship_activation_controller: StubShipActivationController = null
 var _displacement_controller: StubDisplacementController = null
+var _attack_panel_controller: Node = null
 var _ship_token: ShipToken = null
 var _squadron_token: SquadronToken = null
 var _saved_game_state: GameState = null
@@ -91,6 +115,7 @@ func before_each() -> void:
 func after_each() -> void:
 	_disconnect_router_signal()
 	_free_test_node(_router)
+	_free_test_node(_attack_panel_controller)
 	_free_test_node(_ship_activation_controller)
 	_free_test_node(_displacement_controller)
 	_free_test_node(_ship_token)
@@ -98,6 +123,7 @@ func after_each() -> void:
 	_free_test_node(_panel_mgr)
 	_router = null
 	_panel_mgr = null
+	_attack_panel_controller = null
 	_ship_activation_controller = null
 	_displacement_controller = null
 	_ship_token = null
@@ -289,20 +315,83 @@ func test_route_command_result_displacement_network_non_controller_skips() -> vo
 			"Network non-controller should not open the displacement modal.")
 
 
+func test_route_command_result_hot_seat_counter_attack_closes_mirror() -> void:
+	# Arrange
+	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
+	_create_router(Callable(), null, null, Callable(), Callable(), mirror)
+	GameManager.active_player = 0
+	NetworkManager._local_player_index = -1
+	GameManager.current_game_state = _state_with_attack_flow(1)
+
+	# Act
+	_router.route_command_result(null, {})
+
+	# Assert
+	assert_eq(mirror.close_calls, 1,
+			"Hot-seat attacks should close any stale network mirror.")
+	assert_eq(mirror.apply_flow_calls, 0,
+			"Hot-seat Counter attacks should not open the network mirror.")
+
+
+func test_route_command_result_network_non_attacker_syncs_mirror() -> void:
+	# Arrange
+	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
+	_create_router(Callable(), null, null, Callable(), Callable(), mirror)
+	NetworkManager._local_player_index = 0
+	GameManager.current_game_state = _state_with_attack_flow(1)
+
+	# Act
+	_router.route_command_result(null, {})
+
+	# Assert
+	assert_eq(mirror.close_calls, 0,
+			"Network non-attacker should not be filtered as hot-seat.")
+	assert_eq(mirror.apply_flow_calls, 1,
+			"Network non-attacker should still receive the attack mirror.")
+	assert_eq(mirror.last_step_id, Constants.InteractionStep.ATTACK_ROLL,
+			"Mirror sync should receive the authoritative attack step.")
+	assert_eq(int(mirror.last_payload.get("attacker_player", -1)), 1,
+			"Mirror sync should receive the Counter attacker from the flow.")
+
+
+func test_close_mirror_delegates_to_attack_panel_mirror() -> void:
+	# Arrange
+	var controller: Variant = _new_attack_panel_controller()
+	var panel_mgr: UIPanelManager = UIPanelManager.new()
+	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
+	panel_mgr.attack_panel_mirror = mirror
+	controller._panel_mgr = panel_mgr
+
+	# Act
+	controller.close_mirror()
+
+	# Assert
+	assert_eq(mirror.close_calls, 1,
+			"close_mirror() should delegate to the owned AttackPanelMirror.")
+
+
 func _create_router(command_reaction_fn: Callable,
 		ship_activation_controller: ShipActivationController = null,
 		displacement_controller: DisplacementController = null,
 		find_ship_token_fn: Callable = Callable(),
-		find_squadron_token_fn: Callable = Callable()) -> void:
+		find_squadron_token_fn: Callable = Callable(),
+		attack_panel_mirror: AttackPanelMirror = null) -> void:
 	_panel_mgr = UIPanelManager.new()
 	_panel_mgr.name = "TestUIPanelManager"
 	add_child(_panel_mgr)
+	var attack_panel_controller: Variant = null
+	if attack_panel_mirror != null:
+		_panel_mgr.attack_panel_mirror = attack_panel_mirror
+		attack_panel_controller = _new_attack_panel_controller()
+		attack_panel_controller._panel_mgr = _panel_mgr
+		_attack_panel_controller = attack_panel_controller as Node
+		add_child(_attack_panel_controller)
 	_router = ModalRouter.new()
 	_router.name = "TestModalRouter"
 	add_child(_router)
 	_router.initialize(
 			_panel_mgr,
-			null,
+			attack_panel_controller,
 			ship_activation_controller,
 			displacement_controller,
 			null,
@@ -325,6 +414,12 @@ func _create_displacement_controller() -> StubDisplacementController:
 	_displacement_controller.name = "StubDisplacementController"
 	add_child(_displacement_controller)
 	return _displacement_controller
+
+
+func _new_attack_panel_controller() -> Variant:
+	var controller: Node = ATTACK_PANEL_CONTROLLER_SCRIPT.new() as Node
+	controller.name = "TestAttackPanelController"
+	return controller
 
 
 func _create_ship(owner_player: int) -> ShipInstance:
@@ -375,6 +470,21 @@ func _state_with_displacement_flow(ship: ShipInstance,
 	player_one.squadrons.append(squadron)
 	state.player_states = [player_zero, player_one]
 	state.interaction_flow.payload = _displacement_payload()
+	return state
+
+
+func _state_with_attack_flow(attacker_player: int) -> GameState:
+	var state: GameState = _state_with_flow(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_ROLL,
+			attacker_player)
+	state.interaction_flow.payload = {
+			"attack_kind": "counter",
+			"attacker_kind": "squadron",
+			"attacker_name": "TIE Interceptor Squadron",
+			"attacker_player": attacker_player,
+			"target_kind": "squadron",
+	}
 	return state
 
 

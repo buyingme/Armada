@@ -21,6 +21,21 @@ const MAX_NAME_LENGTH: int = 32
 
 ## Maximum number of players in a lobby (always 2 for Armada).
 const MAX_PLAYERS: int = 2
+## Canonical scenario id for the standard learning setup.
+const SCENARIO_LEARNING_ID: String = "learning_scenario"
+## Canonical scenario id for the compact rule-testing setup.
+const SCENARIO_DEBUG_ID: String = "debug_scenario"
+## Display label for the standard learning setup.
+const SCENARIO_LEARNING_LABEL: String = "Learning Scenario"
+## Display label for the compact rule-testing setup.
+const SCENARIO_DEBUG_LABEL: String = "Debug Scenario"
+## Legacy lobby scenario value used before scenario ids were stored.
+const SCENARIO_LEARNING_LEGACY_ID: String = "learning"
+## Host-selectable scenarios shown in the lobby picker.
+const SCENARIO_OPTIONS: Array[Dictionary] = [
+	{"label": SCENARIO_LEARNING_LABEL, "id": SCENARIO_LEARNING_ID},
+	{"label": SCENARIO_DEBUG_LABEL, "id": SCENARIO_DEBUG_ID},
+]
 
 
 ## Unique lobby identifier.
@@ -36,7 +51,7 @@ var lobby_name: String = ""
 var host_peer_id: int = 1
 
 ## Selected scenario identifier.
-var scenario: String = "learning"
+var scenario: String = SCENARIO_LEARNING_ID
 
 ## SHA-256 hash of the lobby password, or empty for no password.
 var password_hash: String = ""
@@ -177,7 +192,8 @@ static func deserialize(data: Dictionary) -> LobbyState:
 	state.code = data.get("code", "")
 	state.lobby_name = data.get("lobby_name", "")
 	state.host_peer_id = data.get("host_peer_id", 1)
-	state.scenario = data.get("scenario", "learning")
+	state.scenario = normalize_scenario_id(
+			data.get("scenario", SCENARIO_LEARNING_ID) as String)
 	state.password_hash = data.get("password_hash", "")
 	var raw_players: Array = data.get("players", [])
 	state.players = []
@@ -185,6 +201,23 @@ static func deserialize(data: Dictionary) -> LobbyState:
 		if p is Dictionary:
 			state.players.append(p as Dictionary)
 	return state
+
+
+## Returns the lobby scenario picker options as a JSON-safe copy.
+static func get_scenario_options() -> Array[Dictionary]:
+	return SCENARIO_OPTIONS.duplicate(true)
+
+
+## Returns the canonical scenario id for current and legacy lobby values.
+static func normalize_scenario_id(raw_scenario: String) -> String:
+	var candidate: String = raw_scenario.strip_edges()
+	match candidate:
+		SCENARIO_DEBUG_ID, SCENARIO_DEBUG_LABEL:
+			return SCENARIO_DEBUG_ID
+		SCENARIO_LEARNING_ID, SCENARIO_LEARNING_LABEL, SCENARIO_LEARNING_LEGACY_ID:
+			return SCENARIO_LEARNING_ID
+		_:
+			return SCENARIO_LEARNING_ID
 
 
 # ---------------------------------------------------------------------------

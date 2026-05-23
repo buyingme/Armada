@@ -44,6 +44,12 @@ signal cf_token_reroll_requested(die_index: int)
 ## Requirements: AE-CF-013.
 signal cf_token_reroll_skipped()
 
+## Emitted when the player accepts an optional Counter attack.
+signal counter_attack_requested()
+
+## Emitted when the player skips an optional Counter attack.
+signal counter_attack_skipped()
+
 ## Emitted when the player presses "Confirm" to finalise the attack.
 ## Requirements: AE-CONF-001.
 signal confirm_pressed()
@@ -144,6 +150,8 @@ var _roll_button: Button = null
 var _dice_container: HBoxContainer = null
 ## CF token reroll section container.
 var _cf_token_container: VBoxContainer = null
+## Label reused by optional attack reroll effects.
+var _cf_token_label: Label = null
 ## HBox holding the Reroll + Skip buttons for CF token.
 var _cf_token_buttons: HBoxContainer = null
 ## "Reroll" button inside CF token section.
@@ -206,6 +214,12 @@ var _redirect_done_button: Button = null
 var _damage_info_container: VBoxContainer = null
 ## Damage info label.
 var _damage_info_label: Label = null
+## Optional Counter attack prompt container.
+var _counter_container: VBoxContainer = null
+## Button that accepts the Counter attack.
+var _counter_attack_button: Button = null
+## Button that skips the Counter attack.
+var _counter_skip_button: Button = null
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -260,6 +274,22 @@ func show_initial_squadron_exec(squad_name: String) -> void:
 	_attack_execution_mode = true
 	_build_ui()
 	_set_prompt("Attacking: %s" % squad_name, "Select a target.")
+	visible = true
+	_request_deferred_layout()
+
+
+## Builds the panel for a locked Counter attack.
+## Rules Reference: RRG "Squadron Keywords" — Counter attacks target the
+## squadron that performed the triggering non-counter attack.
+func show_counter_attack_exec(attacker_name: String,
+		defender_name: String,
+		dice_text: String) -> void:
+	_attack_execution_mode = true
+	_build_ui()
+	show_target_selected(attacker_name, "", defender_name, "", "Clear",
+			Constants.RANGE_BAND_CLOSE)
+	show_dice_count(dice_text)
+	hide_skip_attack_button()
 	visible = true
 	_request_deferred_layout()
 
@@ -350,6 +380,7 @@ func hide_dice_count() -> void:
 	hide_roll_button()
 	hide_dice_results()
 	hide_cf_token_section()
+	hide_counter_section()
 	hide_confirm_button()
 	hide_skip_attack_button()
 
@@ -448,6 +479,7 @@ func _build_ui() -> void:
 	_content.add_child(_build_defense_section())
 	_content.add_child(_build_redirect_section())
 	_content.add_child(_build_damage_info_section())
+	_content.add_child(_build_counter_section())
 
 
 ## Creates and applies the standard modal panel StyleBox.
@@ -586,13 +618,13 @@ func _build_cf_token_section() -> VBoxContainer:
 	_cf_token_container = VBoxContainer.new()
 	_cf_token_container.add_theme_constant_override("separation", 4)
 	_cf_token_container.visible = false
-	var cf_token_label: Label = Label.new()
-	cf_token_label.text = "CF Token — select a die to reroll:"
-	cf_token_label.add_theme_font_size_override("font_size", 13)
-	cf_token_label.add_theme_color_override("font_color",
+	_cf_token_label = Label.new()
+	_cf_token_label.text = "CF Token — select a die to reroll:"
+	_cf_token_label.add_theme_font_size_override("font_size", 13)
+	_cf_token_label.add_theme_color_override("font_color",
 			Color(1.0, 0.8, 0.3))
-	cf_token_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_cf_token_container.add_child(cf_token_label)
+	_cf_token_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cf_token_container.add_child(_cf_token_label)
 	_cf_token_buttons = HBoxContainer.new()
 	_cf_token_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_cf_token_buttons.add_theme_constant_override("separation", 6)
@@ -609,6 +641,30 @@ func _build_cf_token_section() -> VBoxContainer:
 	_cf_token_skip_button.pressed.connect(_on_cf_token_skip)
 	_cf_token_buttons.add_child(_cf_token_skip_button)
 	return _cf_token_container
+
+
+## Creates the optional Counter attack section.
+func _build_counter_section() -> VBoxContainer:
+	_counter_container = VBoxContainer.new()
+	_counter_container.add_theme_constant_override("separation", 4)
+	_counter_container.visible = false
+	var counter_label: Label = Label.new()
+	counter_label.text = "Counter available"
+	counter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_counter_container.add_child(counter_label)
+	var buttons: HBoxContainer = HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 6)
+	_counter_container.add_child(buttons)
+	_counter_attack_button = Button.new()
+	_counter_attack_button.text = "Counter"
+	_counter_attack_button.pressed.connect(_on_counter_attack)
+	buttons.add_child(_counter_attack_button)
+	_counter_skip_button = Button.new()
+	_counter_skip_button.text = "Skip"
+	_counter_skip_button.pressed.connect(_on_counter_skip)
+	buttons.add_child(_counter_skip_button)
+	return _counter_container
 
 
 ## Creates the Confirm button, Skip Attack button, and skip confirmation.
@@ -790,6 +846,7 @@ func _null_attack_step_refs() -> void:
 	_die_choice_reason_id = ""
 	_empty_pool_container = null
 	_cf_token_container = null
+	_cf_token_label = null
 	_cf_token_buttons = null
 	_cf_token_reroll_button = null
 	_cf_token_skip_button = null
@@ -814,6 +871,9 @@ func _null_defense_step_refs() -> void:
 	_redirect_done_button = null
 	_damage_info_container = null
 	_damage_info_label = null
+	_counter_container = null
+	_counter_attack_button = null
+	_counter_skip_button = null
 
 
 ## Resets selection/state tracking variables.
@@ -1024,6 +1084,8 @@ func show_dice_results(results: Array[Dictionary]) -> void:
 		_dice_container.add_child(tex_rect)
 		_dice_textures.append(tex_rect)
 	_dice_container.visible = true
+	if _cf_token_container != null and _cf_token_container.visible:
+		_set_dice_clickable(true)
 
 
 ## Updates a single die image after a reroll.
@@ -1064,9 +1126,20 @@ func _on_roll_pressed() -> void:
 ## Shows the CF token reroll section.  Die images become clickable.
 ## Requirements: AE-CF-010.
 func show_cf_token_section() -> void:
+	_show_reroll_section("CF Token — select a die to reroll:")
+
+
+## Shows the Swarm reroll section. Die images become clickable.
+func show_swarm_reroll_section() -> void:
+	_show_reroll_section("Swarm — select 1 die to reroll:")
+
+
+func _show_reroll_section(prompt: String) -> void:
 	if _cf_token_container == null:
 		return
 	_selected_reroll_index = -1
+	if _cf_token_label:
+		_cf_token_label.text = prompt
 	_cf_token_container.visible = true
 	if _cf_token_reroll_button:
 		_cf_token_reroll_button.disabled = true
@@ -1096,6 +1169,28 @@ func _on_cf_token_reroll() -> void:
 func _on_cf_token_skip() -> void:
 	SfxManager.play_sfx("skip_beep")
 	cf_token_reroll_skipped.emit()
+
+
+## Shows the optional Counter attack prompt.
+func show_counter_section() -> void:
+	if _counter_container:
+		_counter_container.visible = true
+
+
+## Hides the optional Counter attack prompt.
+func hide_counter_section() -> void:
+	if _counter_container:
+		_counter_container.visible = false
+
+
+func _on_counter_attack() -> void:
+	SfxManager.play_sfx("droid_sound")
+	counter_attack_requested.emit()
+
+
+func _on_counter_skip() -> void:
+	SfxManager.play_sfx("skip_beep")
+	counter_attack_skipped.emit()
 
 
 # =========================================================================

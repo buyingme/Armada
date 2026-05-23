@@ -177,13 +177,20 @@ func count_faceup_cards(card_data: Array) -> int:
 func determine_first_card_faceup(state: AttackState,
 		defense_resolver: DefenseTokenResolver,
 		effect_registry: EffectRegistry) -> bool:
-	var attacker: ShipInstance = null
+	var attacker: RefCounted = null
+	var defender: RefCounted = null
 	if state.attacker_ship is ShipToken:
 		attacker = (
 				state.attacker_ship as ShipToken).get_ship_instance()
+	elif state.attacker_squadron is SquadronToken:
+		attacker = (
+				state.attacker_squadron as SquadronToken).get_squadron_instance()
+	if state.defender_ship is ShipToken:
+		defender = (
+				state.defender_ship as ShipToken).get_ship_instance()
 	return defense_resolver.determine_first_card_faceup(
 			state.dice_results, state.contain_used,
-			effect_registry, attacker)
+			effect_registry, attacker, defender)
 
 
 ## Builds the ship-damage summary string for UI display.
@@ -230,6 +237,8 @@ func build_clear_target_patch() -> Dictionary:
 		"target_kind": "",
 		"target_ship_index": - 1,
 		"target_squadron_index": - 1,
+		SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND:
+				SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
 		"range_band": "",
 		"modified_damage": 0,
 		"final_damage": 0,
@@ -256,6 +265,8 @@ func compute_attack_identity_patch(state: AttackState,
 		"defender_name": state.defender_name,
 		"defender_zone": int(state.defender_zone),
 	}
+	patch.merge(SquadronKeywordRuleHelper.make_attack_kind_payload(
+			state.attack_kind), true)
 	if gs == null:
 		return patch
 	if state.attacker_ship != null:
@@ -275,11 +286,15 @@ func compute_attack_identity_patch(state: AttackState,
 		var def_inst: ShipInstance = state.defender_ship.get_ship_instance()
 		patch["target_kind"] = "ship"
 		patch["target_ship_index"] = gs.find_ship_index(def_inst)
+		if def_inst != null:
+			patch["defender_player"] = def_inst.owner_player
 	elif state.defender_squadron != null:
 		var def_sq: SquadronInstance = \
 				state.defender_squadron.get_squadron_instance()
 		patch["target_kind"] = "squadron"
 		patch["target_squadron_index"] = gs.find_squadron_index(def_sq)
+		if def_sq != null:
+			patch["defender_player"] = def_sq.owner_player
 	return patch
 
 

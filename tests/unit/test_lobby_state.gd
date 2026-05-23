@@ -214,7 +214,7 @@ func test_serialize_roundtrip() -> void:
 	lobby.code = "ABC123"
 	lobby.lobby_name = "Test Lobby"
 	lobby.host_peer_id = 1
-	lobby.scenario = "learning"
+	lobby.scenario = LobbyState.SCENARIO_LEARNING_ID
 	lobby.password_hash = "hash123"
 	lobby.add_player(1, "Host", 0)
 	lobby.add_player(10, "Guest", 1)
@@ -227,7 +227,8 @@ func test_serialize_roundtrip() -> void:
 	assert_eq(restored.code, "ABC123", "code should roundtrip.")
 	assert_eq(restored.lobby_name, "Test Lobby", "lobby_name should roundtrip.")
 	assert_eq(restored.host_peer_id, 1, "host_peer_id should roundtrip.")
-	assert_eq(restored.scenario, "learning", "scenario should roundtrip.")
+	assert_eq(restored.scenario, LobbyState.SCENARIO_LEARNING_ID,
+			"scenario should roundtrip.")
 	assert_eq(restored.password_hash, "hash123",
 			"password_hash should roundtrip.")
 	assert_eq(restored.get_player_count(), 2,
@@ -255,8 +256,8 @@ func test_deserialize_missing_fields_uses_defaults() -> void:
 	assert_eq(lobby.code, "", "Missing code defaults to empty.")
 	assert_eq(lobby.lobby_name, "", "Missing lobby_name defaults to empty.")
 	assert_eq(lobby.host_peer_id, 1, "Missing host_peer_id defaults to 1.")
-	assert_eq(lobby.scenario, "learning",
-			"Missing scenario defaults to 'learning'.")
+	assert_eq(lobby.scenario, LobbyState.SCENARIO_LEARNING_ID,
+			"Missing scenario defaults to learning scenario id.")
 	assert_eq(lobby.get_player_count(), 0, "Missing players defaults to 0.")
 
 
@@ -335,19 +336,42 @@ func test_ready_state_reset_on_rejoin() -> void:
 
 func test_scenario_defaults_to_learning() -> void:
 	var lobby: LobbyState = LobbyState.new()
-	assert_eq(lobby.scenario, "learning",
-			"Scenario should default to 'learning'.")
+	assert_eq(lobby.scenario, LobbyState.SCENARIO_LEARNING_ID,
+			"Scenario should default to the learning scenario id.")
 
 
 func test_scenario_included_in_serialization() -> void:
 	var lobby: LobbyState = LobbyState.new()
-	lobby.scenario = "Learning Scenario"
+	lobby.scenario = LobbyState.SCENARIO_DEBUG_ID
 	var data: Dictionary = lobby.serialize()
-	assert_eq(data["scenario"], "Learning Scenario",
+	assert_eq(data["scenario"], LobbyState.SCENARIO_DEBUG_ID,
 			"Serialized data should contain scenario.")
 	var restored: LobbyState = LobbyState.deserialize(data)
-	assert_eq(restored.scenario, "Learning Scenario",
+	assert_eq(restored.scenario, LobbyState.SCENARIO_DEBUG_ID,
 			"Deserialized lobby should have scenario.")
+
+
+func test_deserialize_legacy_learning_scenario_label_uses_id() -> void:
+	var lobby: LobbyState = LobbyState.deserialize({
+		"scenario": LobbyState.SCENARIO_LEARNING_LABEL,
+	})
+	assert_eq(lobby.scenario, LobbyState.SCENARIO_LEARNING_ID,
+			"Legacy learning labels should normalize to the scenario id.")
+
+
+func test_normalize_scenario_debug_label_returns_id() -> void:
+	assert_eq(LobbyState.normalize_scenario_id(
+			LobbyState.SCENARIO_DEBUG_LABEL), LobbyState.SCENARIO_DEBUG_ID,
+			"Debug Scenario label should normalize to debug_scenario.")
+
+
+func test_scenario_options_include_debug_scenario() -> void:
+	var options: Array[Dictionary] = LobbyState.get_scenario_options()
+	var ids: Array[String] = []
+	for option: Dictionary in options:
+		ids.append(str(option.get("id", "")))
+	assert_true(ids.has(LobbyState.SCENARIO_DEBUG_ID),
+			"Lobby scenario options should include the debug scenario.")
 
 
 # ---------------------------------------------------------------------------

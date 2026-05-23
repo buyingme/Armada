@@ -1,0 +1,27 @@
+{
+    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_source": "Resources/Game_Components/squadrons/tie_advanced_squadron_card.png",
+    "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "squadron_name": "TIE Advanced Squadron",
+    "faction": "GALACTIC_EMPIRE",
+    "point_cost": 12,
+    "hull": 5,
+    "speed": 4,
+    "anti_squadron_armament": {
+        "BLUE": 3
+    },
+    "battery_armament": {
+        "BLACK": 1
+    },
+    "keywords": [
+        {
+            "name": "Escort"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack."
+    },
+    "ability_text": "",
+    "is_unique": false,
+    "defense_tokens": []
+}

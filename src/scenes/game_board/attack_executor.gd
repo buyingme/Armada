@@ -100,6 +100,15 @@ var _target_selector: TargetSelector = null
 ## Transient — rule id whose pre-roll die-removal choice is pending.
 var _attack_pool_die_choice_rule_id: String = ""
 
+## Transient — rule id for the currently displayed optional reroll prompt.
+var _pending_reroll_rule_id: String = ""
+
+## Original attacking squadron waiting to be targeted by a Counter attack.
+var _pending_counter_target: SquadronToken = null
+
+## Squadron that may perform the pending Counter attack.
+var _pending_counter_attacker: SquadronToken = null
+
 # ---------------------------------------------------------------------------
 # Null-safe accessors for TargetSelector sub-objects
 # ---------------------------------------------------------------------------
@@ -227,6 +236,9 @@ func set_handoff_overlay(overlay: HandoffOverlay) -> void:
 ## Called by TargetSelector when a valid target is confirmed in exec mode.
 ## Begins the dice sequence.
 func _on_target_locked(range_band: String, _dice_text: String) -> void:
+	if _state.attack_kind == SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		_log.info("Counter attack target is locked; ignoring target selector event.")
+		return
 	_attack_exec_begin_sequence(range_band)
 
 ## Starts the attack execution flow from the activation modal.
@@ -390,6 +402,13 @@ func _get_ship_name() -> String:
 		return _state.exec_ship_token.get_ship_data().ship_name
 	return ""
 
+
+func _should_show_local_attack_controls() -> bool:
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player < 0:
+		return true
+	return local_player == _get_attacker_player()
+
 # ===========================================================================
 # Phase 6b-2 — Attack Sequence Orchestration
 # ===========================================================================
@@ -423,6 +442,10 @@ func _connect_attack_sequence_signals() -> void:
 	if not p.cf_token_reroll_skipped.is_connected(
 			_on_attack_cf_token_skipped):
 		p.cf_token_reroll_skipped.connect(_on_attack_cf_token_skipped)
+	if not p.counter_attack_requested.is_connected(_on_counter_attack_requested):
+		p.counter_attack_requested.connect(_on_counter_attack_requested)
+	if not p.counter_attack_skipped.is_connected(_on_counter_attack_skipped):
+		p.counter_attack_skipped.connect(_on_counter_attack_skipped)
 	if not p.confirm_pressed.is_connected(_on_attack_confirm):
 		p.confirm_pressed.connect(_on_attack_confirm)
 	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
@@ -812,6 +835,8 @@ func _on_attack_roll_dice() -> void:
 	# Network client: result arrives asynchronously via broadcast.
 	# Wait for _apply_dice_roll_result() to be called from the
 	# network command handler.
+	if _is_waiting_for_remote_command_result(roll_result):
+		return
 	if roll_result.is_empty():
 		return
 	_apply_dice_roll_result(roll_result)
@@ -827,7 +852,7 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 		"dice_results": _state.dice_results.duplicate(true),
 	})
 	# Show results.
-	if _get_panel():
+	if _get_panel() and _should_show_local_attack_controls():
 		_get_panel().hide_roll_button()
 		_get_panel().show_dice_results(_state.dice_results)
 	# Log results.
@@ -839,6 +864,8 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 		if _get_panel():
 			_get_panel().show_cf_token_section()
 		_log.info("CF token available — offering reroll.")
+		return
+	if _try_offer_swarm_reroll():
 		return
 	# No token — show confirm.
 	_attack_exec_show_confirm()
@@ -856,10 +883,10 @@ func _on_network_dice_result(result: Dictionary) -> void:
 ## is a ship (turbolasers) or squadron (rhythmic burst, faction-dependent).
 ## Requirements: SFX-004, SFX-005, SFX-006.
 func _play_dice_roll_sfx() -> void:
-	if _state.squad_exec_mode and _state.exec_squad_token:
+	if _state.squad_exec_mode and _state.attacker_squadron:
 		# Squadron attack — rhythmic burst.
 		var inst: SquadronInstance = (
-				_state.exec_squad_token.get_squadron_instance())
+				_state.attacker_squadron.get_squadron_instance())
 		if inst and inst.squadron_data:
 			var faction: Constants.Faction = inst.squadron_data.faction
 			match faction:
@@ -882,9 +909,66 @@ func _play_dice_roll_sfx() -> void:
 func _attack_exec_has_cf_token() -> bool:
 	return _dice_resolver.has_cf_token(_state.exec_ship_token)
 
+
+func _try_offer_swarm_reroll() -> bool:
+	if _state.swarm_reroll_used or not _is_swarm_reroll_available():
+		return false
+	_pending_reroll_rule_id = SwarmKeyword.RULE_ID
+	_state.swarm_reroll_used = true
+	_publish_swarm_payload(true)
+	if _get_panel() and _should_show_local_attack_controls():
+		_get_panel().show_swarm_reroll_section()
+	_log.info("Swarm available — offering one die reroll.")
+	return true
+
+
+func _is_swarm_reroll_available() -> bool:
+	if not _state.attacker_squadron or not _state.defender_squadron:
+		return false
+	var attacker: SquadronInstance = \
+			_state.attacker_squadron.get_squadron_instance()
+	var target: SquadronInstance = \
+			_state.defender_squadron.get_squadron_instance()
+	return SquadronKeywordRuleHelper.is_swarm_eligible(
+			attacker, _state.attacker_squadron.global_position,
+			target, _state.defender_squadron.global_position,
+			_build_attack_squadron_positions(),
+			_build_attack_obstruction_bodies())
+
+
+func _build_attack_squadron_positions() -> Array[Dictionary]:
+	var positions: Array[Dictionary] = []
+	if _target_selector == null:
+		return positions
+	for token: SquadronToken in _target_selector.get_squadron_tokens_callable().call():
+		var inst: SquadronInstance = token.get_squadron_instance()
+		if inst and not inst.is_destroyed():
+			positions.append({"instance": inst, "position": token.global_position})
+	return positions
+
+
+func _build_attack_obstruction_bodies() -> Array:
+	if _target_selector == null:
+		return []
+	return _target_selector.build_engagement_obstruction_bodies()
+
+
+func _publish_swarm_payload(available: bool) -> void:
+	var indices: Array[int] = []
+	for index: int in range(_state.dice_results.size()):
+		indices.append(index)
+	_fsm_patch_payload({
+		SwarmKeyword.PAYLOAD_AVAILABLE: available,
+		SwarmKeyword.PAYLOAD_CONTROLLER_PLAYER: _get_attacker_player(),
+		SwarmKeyword.PAYLOAD_DIE_INDICES: indices,
+	})
+
 ## Called when the player selects a die and confirms reroll (CF token).
 ## Requirements: AE-CF-011, AE-CF-012, AE-CF-014.
 func _on_attack_cf_token_reroll(die_index: int) -> void:
+	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
+		_on_attack_swarm_reroll(die_index)
+		return
 	if die_index < 0 or die_index >= _state.dice_results.size():
 		return
 	var old_result: Dictionary = _state.dice_results[die_index]
@@ -913,18 +997,50 @@ func _on_attack_cf_token_reroll(die_index: int) -> void:
 ## Called when the player skips the CF token reroll.
 ## Requirements: AE-CF-013.
 func _on_attack_cf_token_skipped() -> void:
+	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
+		_pending_reroll_rule_id = ""
+		_publish_swarm_payload(false)
+		if _get_panel():
+			_get_panel().hide_cf_token_section()
+		_attack_exec_show_confirm()
+		return
 	_log.info("CF token reroll skipped.")
 	if _get_panel():
 		_get_panel().hide_cf_token_section()
 	_attack_exec_show_confirm()
 
+
+func _on_attack_swarm_reroll(die_index: int) -> void:
+	if die_index < 0 or die_index >= _state.dice_results.size():
+		return
+	var result: Dictionary = GameManager.submit_reroll_attack_die(
+			_get_attacker_player(), die_index, _state.dice_results,
+			SwarmKeyword.RULE_ID)
+	if _is_waiting_for_remote_command_result(result):
+		return
+	if result.is_empty():
+		return
+	_state.dice_results = _flow_executor.extract_roll_results(result)
+	var new_result: Dictionary = result.get("new_result", {})
+	if _get_panel():
+		_get_panel().update_die_result(die_index, new_result)
+		_get_panel().hide_cf_token_section()
+	_pending_reroll_rule_id = ""
+	_publish_swarm_payload(false)
+	_fsm_patch_payload({"dice_results": _state.dice_results.duplicate(true)})
+	_attack_exec_show_confirm()
+
 ## Shows the Confirm button after dice are finalised.
 ## Requirements: AE-CONF-001.
 func _attack_exec_show_confirm() -> void:
-	if _get_panel():
+	if _get_panel() and _should_show_local_attack_controls():
 		_get_panel().show_confirm_button()
 	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info("Final dice: %d damage. Awaiting confirm." % damage)
+
+
+func _is_waiting_for_remote_command_result(result: Dictionary) -> bool:
+	return bool(result.get("awaiting_remote", false))
 
 ## Called when the player presses "Confirm" to accept the dice results.
 ## Starts the accuracy spending step (Step 3), then defense (Step 4),
@@ -1019,7 +1135,16 @@ func _build_roll_attack_context() -> Dictionary:
 		"attacker_kind": str(identity.get("attacker_kind", "")),
 		"attacker_player": int(identity.get("attacker_player", -1)),
 		"attacker_ship_index": int(identity.get("attacker_ship_index", -1)),
+		"attacker_squadron_index": int(identity.get(
+				"attacker_squadron_index", -1)),
 		"target_kind": str(identity.get("target_kind", "")),
+		"target_ship_index": int(identity.get("target_ship_index", -1)),
+		"target_squadron_index": int(identity.get(
+				"target_squadron_index", -1)),
+		"defender_player": int(identity.get("defender_player", -1)),
+		"defender_zone": int(identity.get("defender_zone", -1)),
+		SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND:
+				SquadronKeywordRuleHelper.attack_kind_from_payload(identity),
 	}
 
 ## Counts non-discarded defense tokens on a ship instance.
@@ -1204,6 +1329,11 @@ func _get_defender_instance() -> ShipInstance:
 ## Returns the attacker's owner_player index.
 ## Works for both ship and squadron attack modes.
 func _get_attacker_player() -> int:
+	if _state.attacker_squadron:
+		var current_sq: SquadronInstance = \
+				_state.attacker_squadron.get_squadron_instance()
+		if current_sq:
+			return current_sq.owner_player
 	if _state.squad_exec_mode and _state.exec_squad_token:
 		var sq: SquadronInstance = \
 				_state.exec_squad_token.get_squadron_instance()
@@ -1785,6 +1915,8 @@ func _attack_exec_resolve_damage() -> void:
 		return
 	if _state.defender_squadron:
 		_resolve_squadron_damage(final_damage)
+		if _pending_counter_attacker != null:
+			return
 		_attack_exec_finalize_after_delay()
 		return
 	if _state.defender_ship:
@@ -1794,13 +1926,17 @@ func _attack_exec_resolve_damage() -> void:
 	_attack_exec_finalize_attack()
 
 
-## Zero-damage resolution path: show the "no damage" panel and
-## finalise after the standard delay.
+## Zero-damage resolution path: show the "no damage" panel and offer Counter
+## for eligible squadron defenders before finalising.
+## Rules Reference: RRG "Squadron Keywords" — Counter triggers after a
+## squadron performs a non-Counter attack, regardless of damage.
 func _resolve_zero_damage() -> void:
 	_log.info("No damage to resolve.")
 	if _get_panel():
 		_get_panel().show_damage_info(
 				_damage_dealer.build_no_damage_info())
+	if _maybe_offer_counter_attack():
+		return
 	_attack_exec_finalize_after_delay()
 
 
@@ -1854,6 +1990,265 @@ func _resolve_squadron_damage(damage: int) -> void:
 		_log.info("Squadron destroyed!")
 		EventBus.squadron_destroyed.emit(_state.defender_squadron)
 		_fade_out_token(_state.defender_squadron)
+	_maybe_offer_counter_attack()
+
+
+func _maybe_offer_counter_attack() -> bool:
+	if not _is_counter_available():
+		return false
+	_pending_counter_attacker = _state.defender_squadron
+	_pending_counter_target = _state.attacker_squadron
+	_start_counter_choice_flow()
+	if _get_panel() and NetworkManager.get_local_player_index() < 0:
+		_get_panel().show_counter_section()
+	_log.info("Counter available — awaiting defender choice.")
+	return true
+
+
+func _is_counter_available() -> bool:
+	var attacker: SquadronInstance = null
+	var defender: SquadronInstance = null
+	if _state.attacker_squadron:
+		attacker = _state.attacker_squadron.get_squadron_instance()
+	if _state.defender_squadron:
+		defender = _state.defender_squadron.get_squadron_instance()
+	return CounterKeyword.is_counter_trigger_available(
+			_state.attack_kind, attacker, defender)
+
+
+func _publish_counter_payload(available: bool) -> void:
+	_fsm_patch_payload(_counter_choice_payload(available))
+
+
+func _start_counter_choice_flow() -> void:
+	_flow_fsm.defender_player = _get_counter_controller_player()
+	_fsm_advance(AttackFlowFSM.Step.COUNTER_CHOICE)
+	_publish_counter_payload(true)
+
+
+func _get_counter_controller_player() -> int:
+	if _pending_counter_attacker == null:
+		return -1
+	var squadron: SquadronInstance = \
+			_pending_counter_attacker.get_squadron_instance()
+	return squadron.owner_player if squadron != null else -1
+
+
+func _counter_dice_pool() -> Dictionary:
+	var squadron: SquadronInstance = null
+	if _pending_counter_attacker:
+		squadron = _pending_counter_attacker.get_squadron_instance()
+	var dice_count: int = SquadronKeywordRuleHelper.get_keyword_value(
+			squadron, SquadronKeywordRuleHelper.KEYWORD_COUNTER)
+	if dice_count <= 0:
+		return {}
+	return {"BLUE": dice_count}
+
+
+func _counter_choice_payload(available: bool) -> Dictionary:
+	var controller: int = _get_counter_controller_player()
+	return {
+		CounterKeyword.PAYLOAD_AVAILABLE: available,
+		CounterKeyword.PAYLOAD_CONTROLLER_PLAYER: controller,
+		CounterKeyword.PAYLOAD_DICE_POOL: _counter_dice_pool(),
+		"controller_player": controller,
+		"counter_attacker_player": controller,
+		"counter_attacker_squadron_index": _counter_attacker_index(),
+		"counter_target_player": _counter_target_player(),
+		"counter_target_squadron_index": _counter_target_index(),
+	}
+
+
+func _counter_attacker_index() -> int:
+	return _squadron_index_for_token(_pending_counter_attacker)
+
+
+func _counter_target_player() -> int:
+	var squadron: SquadronInstance = _squadron_instance_for_token(
+			_pending_counter_target)
+	return squadron.owner_player if squadron != null else -1
+
+
+func _counter_target_index() -> int:
+	return _squadron_index_for_token(_pending_counter_target)
+
+
+func _squadron_index_for_token(token: SquadronToken) -> int:
+	var game_state: GameState = GameManager.current_game_state
+	var squadron: SquadronInstance = _squadron_instance_for_token(token)
+	if game_state == null or squadron == null:
+		return -1
+	return game_state.find_squadron_index(squadron)
+
+
+func _squadron_instance_for_token(token: SquadronToken) -> SquadronInstance:
+	if token == null:
+		return null
+	return token.get_squadron_instance()
+
+
+func _on_counter_attack_requested() -> void:
+	if _pending_counter_attacker == null or _pending_counter_target == null:
+		return
+	GameManager.submit_counter_choice(
+			_get_counter_controller_player(), true,
+			_counter_choice_payload(true))
+
+
+func _on_counter_attack_skipped() -> void:
+	if _pending_counter_attacker == null or _pending_counter_target == null:
+		return
+	GameManager.submit_counter_choice(
+			_get_counter_controller_player(), false,
+			_counter_choice_payload(true))
+
+
+## Applies an accepted [CounterChoiceCommand] result on the peer that owns
+## the active attack pipeline.
+func apply_counter_choice_result(result: Dictionary) -> void:
+	if _pending_counter_attacker == null or _pending_counter_target == null:
+		return
+	if _get_panel():
+		_get_panel().hide_counter_section()
+	_publish_counter_payload(false)
+	if bool(result.get("accepted", false)):
+		_begin_counter_attack()
+		return
+	_pending_counter_attacker = null
+	_pending_counter_target = null
+	_attack_exec_finalize_after_delay()
+
+
+## Applies a remote Counter roll result to the attack pipeline.
+func apply_remote_counter_roll_result(command: GameCommand,
+		result: Dictionary) -> void:
+	if not _is_counter_pipeline_command(command):
+		return
+	if not _state.dice_results.is_empty():
+		return
+	_apply_dice_roll_result(result)
+
+
+## Applies a remote optional attack-modifier skip to the attack pipeline.
+func apply_remote_attack_modifier_skip(command: GameCommand,
+		result: Dictionary) -> void:
+	if not _is_counter_pipeline_command(command):
+		return
+	if str(result.get("source_rule_id", "")) != SwarmKeyword.RULE_ID:
+		return
+	_on_attack_cf_token_skipped()
+
+
+## Applies a broadcast Swarm reroll result to the attack pipeline.
+func apply_remote_counter_reroll_result(command: GameCommand,
+		result: Dictionary) -> void:
+	if not _is_attack_pipeline_command(command):
+		return
+	if str(command.payload.get("source_rule_id", "")) != SwarmKeyword.RULE_ID:
+		return
+	if _pending_reroll_rule_id != SwarmKeyword.RULE_ID:
+		return
+	_apply_swarm_reroll_result(result)
+
+
+## Applies a remote dice-confirm marker to the attack pipeline.
+func apply_remote_attack_confirm(command: GameCommand,
+		_result: Dictionary) -> void:
+	if not _is_counter_pipeline_command(command):
+		return
+	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
+		_pending_reroll_rule_id = ""
+		_publish_swarm_payload(false)
+	_on_attack_confirm()
+
+
+func _is_counter_pipeline_command(command: GameCommand) -> bool:
+	if command == null:
+		return false
+	if _state.attack_kind != SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return false
+	return command.player_index == _get_attacker_player()
+
+
+func _is_attack_pipeline_command(command: GameCommand) -> bool:
+	if command == null:
+		return false
+	return command.player_index == _get_attacker_player()
+
+
+func _apply_swarm_reroll_result(result: Dictionary) -> void:
+	_state.dice_results = _flow_executor.extract_roll_results(result)
+	var new_result: Dictionary = result.get("new_result", {})
+	var die_index: int = int(result.get("die_index", -1))
+	if _get_panel() and _should_show_local_attack_controls():
+		_get_panel().update_die_result(die_index, new_result)
+		_get_panel().hide_cf_token_section()
+	_pending_reroll_rule_id = ""
+	_publish_swarm_payload(false)
+	_fsm_patch_payload({"dice_results": _state.dice_results.duplicate(true)})
+	_attack_exec_show_confirm()
+
+
+func _begin_counter_attack() -> void:
+	var counter_attacker: SquadronToken = _pending_counter_attacker
+	var counter_target: SquadronToken = _pending_counter_target
+	_pending_counter_attacker = null
+	_pending_counter_target = null
+	_reset_for_counter_attack(counter_attacker, counter_target)
+	_state.dice_pool = _counter_dice_pool_for_state()
+	_state.range_band = Constants.RANGE_BAND_CLOSE
+	_target_selector.lock_current_target_selection()
+	var game_state: GameState = GameManager.current_game_state
+	_flow_fsm.begin(game_state, _get_attacker_player(), -1, {})
+	_publish_attack_declare_patch(Constants.RANGE_BAND_CLOSE)
+	_fsm_advance(AttackFlowFSM.Step.ROLL)
+	if _should_show_local_attack_controls():
+		_reset_panel_for_counter_attack()
+	elif _get_panel():
+		_get_panel().close()
+	_log.info("Counter accepted: %s attacks %s with %s." % [
+			_state.attacker_name, _state.defender_name,
+			DicePool.format_pool(_state.dice_pool)])
+	if _should_show_local_attack_controls():
+		_attack_exec_show_roll_button()
+
+
+func _reset_for_counter_attack(attacker: SquadronToken,
+		defender: SquadronToken) -> void:
+	_state.reset_for_next_attack()
+	_state.attack_kind = SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER
+	_state.attacker_squadron = attacker
+	_state.defender_squadron = defender
+	_state.attacker_name = _squadron_name(attacker)
+	_state.defender_name = _squadron_name(defender)
+	_state.squad_exec_mode = true
+	_state.exec_squad_token = attacker
+
+
+func _reset_panel_for_counter_attack() -> void:
+	var panel: AttackSimPanel = _get_panel()
+	if panel == null:
+		return
+	panel.show_counter_attack_exec(_state.attacker_name,
+			_state.defender_name, DicePool.format_pool(_state.dice_pool))
+
+
+func _counter_dice_pool_for_state() -> Dictionary:
+	var attacker: SquadronInstance = null
+	if _state.attacker_squadron:
+		attacker = _state.attacker_squadron.get_squadron_instance()
+	var dice_count: int = SquadronKeywordRuleHelper.get_keyword_value(
+			attacker, SquadronKeywordRuleHelper.KEYWORD_COUNTER)
+	return {"BLUE": dice_count}
+
+
+func _squadron_name(token: SquadronToken) -> String:
+	if token == null:
+		return "Squadron"
+	var squadron: SquadronInstance = token.get_squadron_instance()
+	if squadron != null and squadron.squadron_data != null:
+		return squadron.squadron_data.squadron_name
+	return "Squadron"
 
 ## Resolves damage against a ship.
 ## Shields absorb damage first. Remaining damage becomes damage cards.
@@ -2351,6 +2746,9 @@ func _attack_exec_finalize_attack() -> void:
 		_get_panel().hide_accuracy_section()
 		_get_panel().hide_redirect_section()
 	_rotate_camera_to_attacker()
+	if _state.squad_exec_mode:
+		_finish_attack_execution()
+		return
 	# --- Squadron defender: Step 6 loop ---
 	if _state.defender_squadron:
 		_finalize_squadron_attack()

@@ -10,6 +10,10 @@ extends Control
 const SPLASH_PATH: String = "res://Resources/Game_Components/screen_art/splash.jpg"
 ## Path to the learning-scenario game board scene.
 const GAME_BOARD_PATH: String = "res://src/scenes/game_board/game_board.tscn"
+## Default scenario id used by the temporary new-game scenario picker.
+const SCENARIO_LEARNING_ID: String = "learning_scenario"
+## Debug scenario id used by the temporary new-game scenario picker.
+const SCENARIO_DEBUG_ID: String = "debug_scenario"
 ## Delay before the menu modal appears (seconds).
 const SPLASH_DELAY: float = 2.0
 ## Duration for the toast notification (seconds).
@@ -17,6 +21,7 @@ const TOAST_DURATION: float = 2.0
 
 ## UI references built in [method _build_ui].
 var _menu_panel: PanelContainer
+var _scenario_dialog: PanelContainer
 var _host_dialog: PanelContainer
 var _join_dialog: PanelContainer
 var _prefs_dialog: PanelContainer
@@ -35,6 +40,7 @@ var _join_port_input: LineEdit
 var _join_error_label: Label
 var _prefs_name_input: LineEdit
 var _load_dialog: LoadGameDialog
+var _scenario_option: OptionButton
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
 
@@ -75,6 +81,9 @@ func _build_ui() -> void:
 	_menu_panel = _build_menu_modal()
 	_menu_panel.visible = false
 	add_child(_menu_panel)
+	_scenario_dialog = _build_scenario_dialog()
+	_scenario_dialog.visible = false
+	add_child(_scenario_dialog)
 	_host_dialog = _build_host_dialog()
 	_host_dialog.visible = false
 	add_child(_host_dialog)
@@ -197,10 +206,6 @@ func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	btn_load_game.pressed.connect(_on_load_game_pressed)
 	vbox.add_child(btn_load_game)
 
-	var btn_learning: Button = _create_menu_button("Learning Scenario")
-	btn_learning.pressed.connect(_on_learning_scenario_pressed)
-	vbox.add_child(btn_learning)
-
 	var btn_host: Button = _create_menu_button("Host Game")
 	btn_host.pressed.connect(_on_host_game_pressed)
 	vbox.add_child(btn_host)
@@ -230,6 +235,57 @@ func _create_menu_button(label_text: String) -> Button:
 	btn.text = label_text
 	btn.custom_minimum_size = Vector2(200, 44)
 	return btn
+
+
+## Builds the temporary new-game scenario picker.
+func _build_scenario_dialog() -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.set_anchors_preset(PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(360, 0)
+	panel.add_theme_stylebox_override("panel",
+			UIStyleHelper.create_modal_panel_style(0.0))
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+	_populate_scenario_dialog(vbox)
+	return panel
+
+
+func _populate_scenario_dialog(vbox: VBoxContainer) -> void:
+	vbox.add_child(UIStyleHelper.create_title_label(
+			"New Game", UIStyleHelper.GOLD_TITLE))
+	vbox.add_child(HSeparator.new())
+	_scenario_option = OptionButton.new()
+	_scenario_option.custom_minimum_size = Vector2(260, 36)
+	_add_scenario_option("Learning Scenario", SCENARIO_LEARNING_ID)
+	_add_scenario_option("Debug Scenario", SCENARIO_DEBUG_ID)
+	vbox.add_child(_scenario_option)
+	vbox.add_child(_build_scenario_dialog_buttons())
+
+
+func _add_scenario_option(label_text: String, scenario_id: String) -> void:
+	_scenario_option.add_item(label_text)
+	var index: int = _scenario_option.get_item_count() - 1
+	_scenario_option.set_item_metadata(index, scenario_id)
+
+
+func _build_scenario_dialog_buttons() -> HBoxContainer:
+	var buttons: HBoxContainer = HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 12)
+	var start_btn: Button = _create_menu_button("Start")
+	start_btn.pressed.connect(_on_scenario_start_pressed)
+	buttons.add_child(start_btn)
+	var cancel_btn: Button = _create_menu_button("Cancel")
+	cancel_btn.pressed.connect(_on_scenario_cancel_pressed)
+	buttons.add_child(cancel_btn)
+	return buttons
 
 
 ## Starts the splash delay timer. UI-030.
@@ -263,10 +319,12 @@ func _show_menu() -> void:
 	_menu_panel.visible = true
 
 
-## Placeholder — shows "Coming Soon" toast. UI-032.
+## Opens the temporary scenario picker for starting a new hot-seat game.
 func _on_new_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
-	_show_toast("Coming Soon")
+	_menu_panel.visible = false
+	_scenario_option.select(0)
+	_scenario_dialog.visible = true
 
 
 ## Placeholder — opens the LoadGameDialog (Phase J5).
@@ -289,7 +347,33 @@ func _on_load_dialog_cancelled() -> void:
 ## Transitions to the learning scenario game board. UI-031.
 func _on_learning_scenario_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
+	_start_scenario(SCENARIO_LEARNING_ID)
+
+
+func _on_scenario_start_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	_start_scenario(_selected_scenario_id())
+
+
+func _on_scenario_cancel_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	_scenario_dialog.visible = false
+	_menu_panel.visible = true
+
+
+func _start_scenario(scenario_id: String) -> void:
+	GameManager.set_next_scenario_id(scenario_id)
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
+
+
+func _selected_scenario_id() -> String:
+	var selected: int = _scenario_option.selected
+	if selected < 0:
+		return SCENARIO_LEARNING_ID
+	var metadata: Variant = _scenario_option.get_item_metadata(selected)
+	if metadata is String:
+		return metadata as String
+	return SCENARIO_LEARNING_ID
 
 
 ## Shows the host-game dialog. G4.5.5.

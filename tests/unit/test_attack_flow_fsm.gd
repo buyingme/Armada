@@ -353,17 +353,33 @@ func test_each_step_populates_interaction_flow() -> void:
 				Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 		AttackFlowFSM.Step.RESOLVE_DAMAGE:
 				Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+		AttackFlowFSM.Step.COUNTER_CHOICE:
+				Constants.InteractionStep.ATTACK_COUNTER_CHOICE,
 	}
 	for step: AttackFlowFSM.Step in [
 			AttackFlowFSM.Step.ROLL,
 			AttackFlowFSM.Step.MODIFY,
 			AttackFlowFSM.Step.DEFENSE_TOKENS,
-			AttackFlowFSM.Step.RESOLVE_DAMAGE]:
+			AttackFlowFSM.Step.RESOLVE_DAMAGE,
+			AttackFlowFSM.Step.COUNTER_CHOICE]:
 		fsm.advance(gs, step)
 		assert_eq(gs.interaction_flow.step_id,
 				expected[step] as Constants.InteractionStep,
 				"step_id must match for %d" % int(step))
 
+
+func test_counter_choice_uses_payload_controller() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	var fsm: AttackFlowFSM = AttackFlowFSM.new()
+	fsm.begin(gs, 0, -1, {"controller_player": 1})
+	fsm.advance(gs, AttackFlowFSM.Step.ROLL)
+	fsm.advance(gs, AttackFlowFSM.Step.MODIFY)
+	fsm.advance(gs, AttackFlowFSM.Step.RESOLVE_DAMAGE)
+	fsm.advance(gs, AttackFlowFSM.Step.COUNTER_CHOICE)
+
+	assert_eq(gs.interaction_flow.controller_player, 1,
+			"Counter choice should use explicit payload controller metadata.")
 
 func test_payload_is_mirrored_into_interaction_flow() -> void:
 	var fsm: AttackFlowFSM = AttackFlowFSM.new()

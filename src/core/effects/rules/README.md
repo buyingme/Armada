@@ -10,9 +10,11 @@ rule by the component printed on the table before they know its hook surface.
 Use `RuleSurface` for common RuleRegistry target strings and callback runners.
 Phase N added no-op-safe surfaces for attack-target blocking, attack-damage
 modification, accuracy and critical blocking, engineering and token-gain rules,
-maneuver yaw modification, and post-maneuver observer follow-ups. Rule files
-still register static hooks through `RuleRegistry`; `RuleSurface` only names and
-executes surfaces that callers explicitly choose.
+maneuver yaw modification, post-maneuver observer follow-ups, and the N17
+squadron-keyword foundation surfaces for movement, attack-kind metadata, and
+optional attack-modifier affordances. Rule files still register static hooks
+through `RuleRegistry`; `RuleSurface` only names and executes surfaces that
+callers explicitly choose.
 
 | Rule | Source | Hooks | Notes |
 |---|---|---|---|
@@ -33,7 +35,12 @@ executes surfaces that callers explicitly choose.
 | `damage_cards/ship/targeter_disruption.gd` | Ship damage card | `BLOCKER` for `critical_effect` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `ATTACK_RESOLVE_CRITICAL` bridge remains for this card; first-faceup critical handling reads the attacking ship's `faceup_damage`. |
 | `damage_cards/ship/thrust_control_malfunction.gd` | Ship damage card | `MODIFIER` on `SHIP_ACTIVATION / MANEUVER_STEP` for `maneuver_yaw` | No legacy `MANEUVER_DETERMINE_YAWS` bridge remains; modifier reduces the last adjustable joint only at the damaged ship's current speed, including after save/load. |
 | `damage_cards/ship/thruster_fissure.gd` | Ship damage card | `OBSERVER` on `SHIP_ACTIVATION / MANEUVER_STEP` for `execute_maneuver` | No legacy `ON_SPEED_CHANGE` bridge remains; observer follow-up reads player-authored `speed_delta` from the maneuver command/result boundary so external speed changes do not trigger automatically. |
-| `squadron_keywords/bomber.gd` | Squadron keyword | `MODIFIER` for `attack_damage` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `BomberEffect` rebuild remains; damage calculation reads the attacking squadron's serialized keyword data and counts critical icons against ships only. |
+| `squadron_keywords/squadron_keyword_rule_helper.gd` | Squadron keyword foundation | No hooks; shared predicates and payload conventions for keyword rules | Owns authoritative keyword lookup, standard/Counter attack-kind metadata, obstruction-aware non-Heavy engagement predicates, attacker-target-specific engagement checks, target-legality payload fields, Counter affordance metadata, and optional attack-modifier affordance metadata. |
+| `squadron_keywords/heavy.gd` | Squadron keyword | `VALIDATOR` for `publish_attack_flow` on `ATTACK / ATTACK_DECLARE`; movement command validation uses the shared helper | Heavy enemies do not prevent movement or ship attacks; mixed engagement with at least one unobstructed non-Heavy enemy still blocks those options. |
+| `squadron_keywords/escort.gd` | Squadron keyword | `BLOCKER` for `attack_target` and `VALIDATOR` for `publish_attack_flow` on `ATTACK / ATTACK_DECLARE` | Escort target legality reads serialized squadron keyword data, obstruction-aware engagement, and attack-kind metadata; Counter attacks are exempt. |
+| `squadron_keywords/counter.gd` | Squadron keyword | `ENABLER` on `ATTACK / ATTACK_RESOLVE_DAMAGE` for optional Counter attack affordance metadata; `VALIDATOR` for `roll_dice` on `ATTACK / ATTACK_ROLL` | Counter availability is command/payload backed, triggers after a non-Counter squadron attack regardless of damage, and projects only to the defending squadron's controller; accepted Counter rolls must use the locked Counter X blue dice pool. |
+| `squadron_keywords/swarm.gd` | Squadron keyword | `ENABLER` on `ATTACK / ATTACK_MODIFY` for optional reroll affordance metadata | Swarm rerolls use `RerollAttackDieCommand` and `GameState.rng`; UI renders the projected payload and the command revalidates obstruction-aware engagement from serialized state. |
+| `squadron_keywords/bomber.gd` | Squadron keyword | `MODIFIER` and `BLOCKER` for `attack_damage` / `critical_effect` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `BomberEffect` rebuild remains; damage and critical permission both read the attacking squadron's serialized keyword data. |
 
 ## Compatibility Adapters
 

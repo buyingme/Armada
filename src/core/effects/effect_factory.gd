@@ -124,10 +124,6 @@ static func _register_faceup_damage_for_ship(
 ## Returns null for keywords that do not yet have an effect implementation.
 static func _create_keyword_effect(keyword_name: String) -> GameEffect:
 	match keyword_name.to_lower():
-		"escort":
-			return EscortEffect.new()
-		"swarm":
-			return SwarmEffect.new()
 		_:
-			# Keyword not yet implemented (e.g. Heavy, Counter, Intel).
+			# Squadron keywords are static RuleRegistry hooks in Phase N.
 			return null

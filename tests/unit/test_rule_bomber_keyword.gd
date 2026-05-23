@@ -25,8 +25,17 @@ func test_register_adds_attack_damage_modifier() -> void:
 			RuleSurface.TARGET_ATTACK_DAMAGE)
 	assert_eq(modifiers.size(), 1,
 			"Bomber should expose one attack-damage modifier.")
-	assert_eq(RuleRegistry.registered_hook_count(), 1,
-			"Bomber should register one hook.")
+	assert_eq(RuleRegistry.registered_hook_count(), 2,
+			"Bomber should register damage and critical hooks.")
+
+
+func test_register_adds_critical_effect_blocker() -> void:
+	var blockers: Array[FlowHook] = RuleRegistry.blockers_for(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_CRITICAL_EFFECT)
+	assert_eq(blockers.size(), 1,
+			"Bomber should expose one critical-effect blocker.")
 
 
 func test_modifier_counts_critical_icons_against_ship() -> void:
@@ -51,6 +60,24 @@ func test_modifier_ignores_squadron_defender() -> void:
 	var result: EffectContext = BomberKeyword.new().modify_attack_damage(context)
 	assert_eq(result.damage_total, 1,
 			"Bomber should not count critical icons against squadrons.")
+
+
+func test_critical_blocker_allows_bomber_squadron_ship_attack() -> void:
+	var context: EffectContext = _critical_context(
+			_make_squadron(["Bomber"]), _make_ship())
+	var result: Dictionary = BomberKeyword.new().block_non_bomber_critical(
+			context)
+	assert_false(bool(result.get("blocked", false)),
+			"Bomber squadrons should be allowed to resolve critical effects.")
+
+
+func test_critical_blocker_blocks_non_bomber_squadron_ship_attack() -> void:
+	var context: EffectContext = _critical_context(
+			_make_squadron([]), _make_ship())
+	var result: Dictionary = BomberKeyword.new().block_non_bomber_critical(
+			context)
+	assert_true(bool(result.get("blocked", false)),
+			"Non-Bomber squadrons should not resolve ship critical effects.")
 
 
 func test_attack_dice_resolver_uses_rule_without_legacy_registry() -> void:
@@ -83,6 +110,14 @@ func _damage_context(attacker: SquadronInstance,
 	context.defender = defender
 	context.damage_total = base_damage
 	context.dice_results = _hit_critical_results()
+	return context
+
+
+func _critical_context(attacker: SquadronInstance,
+		defender: RefCounted) -> EffectContext:
+	var context: EffectContext = EffectContext.new()
+	context.attacker = attacker
+	context.defender = defender
 	return context
 
 

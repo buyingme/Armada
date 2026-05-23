@@ -15,6 +15,7 @@ A rule integration is complete only when all surfaces agree:
 - Static rule definition: `RuleRegistry` declares which rule exists and where it attaches.
 - Active state source: the predicate reads authoritative serialized state (`GameState`, `ShipInstance.faceup_damage`, squadron keywords, upgrades, objective state), not stale transient caches.
 - Command surface: every command that can express the illegal action is covered, including marker commands such as `commit_defense`, not only the final mutation command.
+- Flow ownership: every defender, opponent, non-active-player, or off-turn controller choice has an explicit `FlowSpec` row before UI work begins.
 - Interaction payload: if a player can choose from UI options, publish rule-derived eligibility in `interaction_flow.payload` with JSON-safe fields.
 - UI rendering: panels render disabled/available choices from payload metadata; they do not re-implement card or keyword rules.
 - Rebuild/replay: save/load, replay, hot-seat, and network paths rebuild or derive the same active rule state.
@@ -34,7 +35,13 @@ A rule integration is complete only when all surfaces agree:
    - Status/setup: ready defense tokens, ready upgrade cards, setup deployment effects, pass tokens, objective setup.
    - Objectives/upgrades/tokens: objective tokens, proximity mines, grav/chaff/focus/raid tokens, special obstacles, scoring.
 
-3. Pick the hook kind and attachment.
+3. Resolve controller ownership before editing UI.
+   - If the choice is made by any player other than the active/attacking local pipeline owner, update `docs/game_flow.md` and `FlowSpec` first.
+   - Name the controller role, payload identity keys, allowed marker/mutation commands, transition edges, and projected modal/affordance.
+   - Add command and projection tests for hot-seat, network, and replay safety before scene/UI wiring.
+   - Counter is the reference pattern: the triggering attack pipeline remains with the original executor, but the Counter owner submits `counter_choice`, then owns the Counter roll/modifier/confirm commands.
+
+4. Pick the hook kind and attachment.
    - `VALIDATOR`: rejects a command or selected option.
    - `MODIFIER`: changes a pool/value/context.
    - `OBSERVER`: creates deterministic follow-up commands after an event.
@@ -42,24 +49,24 @@ A rule integration is complete only when all surfaces agree:
    - `ENABLER`: exposes optional affordances through projection/UI intent.
    - Attach to existing `FlowSpec` pairs. Rules cannot invent new steps; adding a step is a separate FlowSpec change.
 
-4. Cover every command path.
+5. Cover every command path.
    - Search for commands and marker commands in the flow before coding.
    - If UI submits a marker and a controller later submits a mutation command, validate both.
    - Treat direct command validation as a safety net, not the only guard.
    - Rejected command results must stop local scene-side effects.
 
-5. Keep UI rule-free.
+6. Keep UI rule-free.
    - Compute eligibility in core/application code and publish it as JSON-safe payload metadata.
    - Use names such as `blocked_*_indices`, `enabled_*`, or `affordances`.
    - UI panels should only render disabled controls, tooltips/labels, and selected state from that metadata.
    - Never infer card-rule state from local button events.
 
-6. Preserve active-state rebuild semantics.
+7. Preserve active-state rebuild semantics.
    - Static rule definitions live in `RuleRegistry` and are bootstrapped.
    - Active rule status comes from serialized entities or a documented `EffectRegistry` bridge rebuilt by `EffectFactory.rebuild_runtime_effects()`.
    - Do not serialize `RuleRegistry` or use it as an active-card store.
 
-7. Test the full surface.
+8. Test the full surface.
    - Unit-test the rule predicate for allow/reject cases and other-entity isolation.
    - Test marker command and mutation command paths when both exist.
    - Test save/load plus runtime-effect rebuild for persistent effects.
@@ -67,7 +74,7 @@ A rule integration is complete only when all surfaces agree:
    - Test UI panels render blocked/available options without owning rule logic.
    - For command submission, run baseline traces as required by Phase L/M.
 
-8. Update docs.
+9. Update docs.
    - Update `docs/game_flow.md` for new payload fields, allowed commands, or rule-boundary decisions.
    - Update `docs/refactoring_phase_lm_plan.md` for phase status and lessons.
    - Update `docs/implementation_plan.md` baseline counts and open topics.

@@ -147,6 +147,26 @@ func test_two_activations_then_turn_switches() -> void:
 			"After 2 activations, turn should pass to player 1 (SQ-002)")
 
 
+func test_remote_completion_markers_switch_squadron_turn() -> void:
+	_setup_game(2, 2)
+	var player_state: PlayerState = \
+			GameManager.current_game_state.get_player_state(0)
+	var first_cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 0})
+	var second_cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 1})
+	GameManager._handle_remote_complete_squadron_activation(first_cmd)
+	assert_eq(GameManager.active_player, 0,
+			"One remote completion should keep the same Squadron turn.")
+	GameManager._handle_remote_complete_squadron_activation(second_cmd)
+	assert_true((player_state.squadrons[0] as SquadronInstance).activated_this_round,
+			"Remote completion should mark the first squadron activated.")
+	assert_true((player_state.squadrons[1] as SquadronInstance).activated_this_round,
+			"Remote completion should mark the second squadron activated.")
+	assert_eq(GameManager.active_player, 1,
+			"Two remote completion markers should pass the Squadron turn.")
+
+
 func test_auto_pass_when_no_squadrons_left() -> void:
 	_setup_game(1, 2)
 	var gs: GameState = GameManager.current_game_state

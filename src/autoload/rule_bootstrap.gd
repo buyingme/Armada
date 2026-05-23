@@ -24,6 +24,10 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/damage_cards/ship/targeter_disruption.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/thrust_control_malfunction.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/thruster_fissure.gd"),
+	preload("res://src/core/effects/rules/squadron_keywords/heavy.gd"),
+	preload("res://src/core/effects/rules/squadron_keywords/escort.gd"),
+	preload("res://src/core/effects/rules/squadron_keywords/counter.gd"),
+	preload("res://src/core/effects/rules/squadron_keywords/swarm.gd"),
 	preload("res://src/core/effects/rules/squadron_keywords/bomber.gd"),
 ]
 

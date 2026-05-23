@@ -67,6 +67,7 @@ func _ready() -> void:
 	EndActivationCommand.register()
 	ConvertDialToTokenCommand.register()
 	ActivateSquadronCommand.register()
+	CompleteSquadronActivationCommand.register()
 	SpendTokenCommand.register()
 	SpendDialCommand.register()
 	# Tier 2 — attack commands.
@@ -105,6 +106,10 @@ func _ready() -> void:
 	CommitDefenseCommand.register()
 	SelectEvadeDieCommand.register()
 	RedirectDoneCommand.register()
+	RerollAttackDieCommand.register()
+	SkipAttackModifierCommand.register()
+	ConfirmAttackDiceCommand.register()
+	CounterChoiceCommand.register()
 	# Tier 14 — squadron-displacement authority (Phase I6b-4).
 	StartDisplacementCommand.register()
 	CommitDisplacementCommand.register()
@@ -170,7 +175,7 @@ func _submit(command: GameCommand,
 	if _is_collecting_observer_followups:
 		return _reject_command(command,
 				"Observer hooks must return follow-up commands instead of "
-				+ "submitting.")
+				+"submitting.")
 	var game_state: GameState = _get_game_state()
 	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
 	var preflight_reason: String = preflight(command, game_state)

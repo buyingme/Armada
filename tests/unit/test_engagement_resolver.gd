@@ -31,6 +31,18 @@ func _dist1() -> float:
 	return GameScale.distance_bands_px[0]
 
 
+func _close_pos() -> Vector2:
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var center_dist: float = _dist1() + 2.0 * radius - 1.0
+	return Vector2(center_dist, 0.0)
+
+
+func _obstruction_between(pos_a: Vector2, pos_b: Vector2) -> Array:
+	var mid_point: Vector2 = pos_a.lerp(pos_b, 0.5)
+	return [LineOfSightChecker.ObstructionBody.from_ship_base(
+			"Blocker", mid_point, 0.0, 40.0, 80.0)]
+
+
 # ===========================================================================
 # get_engaged_enemies
 # ===========================================================================
@@ -77,6 +89,22 @@ func test_engaged_enemies_finds_close_enemy() -> void:
 			"Enemy squadron within distance 1 should be engaged")
 	assert_eq(result[0], sq_b,
 			"Engaged enemy should be sq_b")
+
+
+func test_engaged_enemies_excludes_obstructed_close_enemy() -> void:
+	var sq_a: SquadronInstance = _make_squadron(0)
+	var sq_b: SquadronInstance = _make_squadron(1)
+	var enemy_pos: Vector2 = _close_pos()
+	var all: Array[Dictionary] = [
+		_entry(sq_a, Vector2.ZERO),
+		_entry(sq_b, enemy_pos),
+	]
+	var result: Array[SquadronInstance] = \
+			EngagementResolver.get_engaged_enemies(
+					sq_a, Vector2.ZERO, all,
+					_obstruction_between(Vector2.ZERO, enemy_pos))
+	assert_eq(result.size(), 0,
+			"Obstructed close squadrons should not be engaged.")
 
 
 func test_engaged_enemies_excludes_far_enemy() -> void:
@@ -207,6 +235,21 @@ func test_can_move_false_when_engaged() -> void:
 			"Engaged squadron should not be able to move (SM-011)")
 
 
+func test_can_move_true_when_close_enemy_obstructed() -> void:
+	var sq_a: SquadronInstance = _make_squadron(0)
+	var sq_b: SquadronInstance = _make_squadron(1)
+	var enemy_pos: Vector2 = _close_pos()
+	var all: Array[Dictionary] = [
+		_entry(sq_a, Vector2.ZERO),
+		_entry(sq_b, enemy_pos),
+	]
+	assert_true(
+			EngagementResolver.can_squadron_move(
+					sq_a, Vector2.ZERO, all,
+					_obstruction_between(Vector2.ZERO, enemy_pos)),
+			"Obstructed close enemies should not prevent movement.")
+
+
 # ===========================================================================
 # must_attack_engaged_target
 # ===========================================================================
@@ -233,6 +276,21 @@ func test_must_attack_engaged_false_when_not_engaged() -> void:
 			EngagementResolver.must_attack_engaged_target(
 					sq, Vector2.ZERO, all),
 			"No engagement constraint when not engaged")
+
+
+func test_must_attack_engaged_false_when_close_enemy_obstructed() -> void:
+	var sq_a: SquadronInstance = _make_squadron(0)
+	var sq_b: SquadronInstance = _make_squadron(1)
+	var enemy_pos: Vector2 = _close_pos()
+	var all: Array[Dictionary] = [
+		_entry(sq_a, Vector2.ZERO),
+		_entry(sq_b, enemy_pos),
+	]
+	assert_false(
+			EngagementResolver.must_attack_engaged_target(
+					sq_a, Vector2.ZERO, all,
+					_obstruction_between(Vector2.ZERO, enemy_pos)),
+			"Obstructed close enemies should not force squadron targets.")
 
 
 # ===========================================================================
@@ -343,3 +401,21 @@ func test_swarm_eligible_false_when_no_friendly_engages() -> void:
 					attacker, Vector2.ZERO, target,
 					Vector2(50, 0), all),
 			"Swarm not eligible when no other friendly engages target")
+
+
+func test_swarm_eligible_false_when_friendly_engagement_obstructed() -> void:
+	var attacker: SquadronInstance = _make_squadron(0, ["Swarm"])
+	var friendly: SquadronInstance = _make_squadron(0)
+	var target: SquadronInstance = _make_squadron(1)
+	var target_pos: Vector2 = _close_pos()
+	var friendly_pos: Vector2 = target_pos + _close_pos()
+	var all: Array[Dictionary] = [
+		_entry(attacker, Vector2.ZERO),
+		_entry(target, target_pos),
+		_entry(friendly, friendly_pos),
+	]
+	assert_false(
+			EngagementResolver.is_swarm_eligible(
+					attacker, Vector2.ZERO, target, target_pos, all,
+					_obstruction_between(target_pos, friendly_pos)),
+			"Swarm should require unobstructed friendly engagement.")

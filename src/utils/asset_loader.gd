@@ -146,7 +146,8 @@ const ASSET_MANIFEST: Array[Dictionary] = [
 		"category": "scenarios",
 		"path": "scenarios/",
 		"files": [
-			"learning_scenario.json",
+			"debug_scenario.json",
+			"learning_scenario.json"
 		],
 		"optional": false,
 	},

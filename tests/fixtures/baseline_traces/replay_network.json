@@ -1,9 +1,7 @@
 {
 	"commands": [
 		{
-			"payload": {
-
-			},
+			"payload": {},
 			"player": 0,
 			"sequence": 0,
 			"type": "start_round"
@@ -402,17 +400,13 @@
 			"type": "advance_phase"
 		},
 		{
-			"payload": {
-
-			},
+			"payload": {},
 			"player": 1,
 			"sequence": 42,
 			"type": "status_phase_cleanup"
 		},
 		{
-			"payload": {
-
-			},
+			"payload": {},
 			"player": 1,
 			"sequence": 43,
 			"type": "start_round"
@@ -538,9 +532,7 @@
 			"payload": {
 				"controller_player": 1,
 				"final": false,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 16
 			},
 			"player": 1,
@@ -1104,9 +1096,7 @@
 			"payload": {
 				"controller_player": -1,
 				"final": true,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 0
 			},
 			"player": 1,
@@ -1204,9 +1194,7 @@
 			"payload": {
 				"controller_player": 0,
 				"final": false,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 16
 			},
 			"player": 0,
@@ -1451,9 +1439,7 @@
 			"payload": {
 				"controller_player": -1,
 				"final": true,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 0
 			},
 			"player": 0,
@@ -1474,9 +1460,7 @@
 			"payload": {
 				"controller_player": 0,
 				"final": false,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 16
 			},
 			"player": 0,
@@ -1721,9 +1705,7 @@
 			"payload": {
 				"controller_player": -1,
 				"final": true,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 0
 			},
 			"player": 0,
@@ -1752,9 +1734,7 @@
 			"payload": {
 				"controller_player": 0,
 				"final": false,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 16
 			},
 			"player": 0,
@@ -2147,9 +2127,7 @@
 					"defender_speed": 2,
 					"defender_zone": -1,
 					"defense_tokens": [],
-					"dice_pool": {
-
-					},
+					"dice_pool": {},
 					"dice_results": [],
 					"evade_active": false,
 					"evade_range_band": "",
@@ -2187,9 +2165,7 @@
 					"defender_speed": 2,
 					"defender_zone": -1,
 					"defense_tokens": [],
-					"dice_pool": {
-
-					},
+					"dice_pool": {},
 					"dice_results": [],
 					"evade_active": false,
 					"evade_range_band": "",
@@ -2479,9 +2455,7 @@
 			"payload": {
 				"controller_player": -1,
 				"final": true,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 0
 			},
 			"player": 0,
@@ -2587,9 +2561,7 @@
 			"payload": {
 				"controller_player": 1,
 				"final": false,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 16
 			},
 			"player": 1,
@@ -2875,24 +2847,12 @@
 			"payload": {
 				"controller_player": -1,
 				"final": true,
-				"flow_payload": {
-
-				},
+				"flow_payload": {},
 				"step_id": 0
 			},
 			"player": 1,
 			"sequence": 149,
 			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"pos_x": 0.4140949955693,
-				"pos_y": 0.338383596914786,
-				"squadron_index": 1
-			},
-			"player": 1,
-			"sequence": 150,
-			"type": "move_squadron"
 		},
 		{
 			"payload": {
@@ -2975,17 +2935,13 @@
 			"type": "advance_phase"
 		},
 		{
-			"payload": {
-
-			},
+			"payload": {},
 			"player": 1,
 			"sequence": 160,
 			"type": "status_phase_cleanup"
 		},
 		{
-			"payload": {
-
-			},
+			"payload": {},
 			"player": 1,
 			"sequence": 161,
 			"type": "start_round"

@@ -2,7 +2,8 @@
 ##
 ## Static rule hook for the Bomber squadron keyword.
 ## Rules Reference: RRG "Squadron Keywords" — "While attacking a ship,
-## each of your critical icons adds 1 damage to the damage total."
+## each of your critical icons adds 1 damage to the damage total and you can
+## resolve a critical effect."
 class_name BomberKeyword
 extends RefCounted
 
@@ -13,7 +14,11 @@ const KEYWORD_NAME: String = "Bomber"
 static var _rule_instance: BomberKeyword = null
 
 
-## Registers the attack-damage modifier hook for Bomber squadrons.
+const NON_BOMBER_CRIT_REASON: String = \
+		"Non-Bomber squadrons cannot resolve ship critical effects."
+
+
+## Registers attack-damage and critical-effect hooks for Bomber squadrons.
 static func register() -> void:
 	if _rule_instance == null:
 		_rule_instance = BomberKeyword.new()
@@ -23,6 +28,11 @@ static func register() -> void:
 				Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
 				RuleSurface.TARGET_ATTACK_DAMAGE,
 				Callable(_rule_instance, "modify_attack_damage")),
+		FlowHook.blocker(RULE_ID,
+				Constants.InteractionFlow.ATTACK,
+				Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+				RuleSurface.TARGET_CRITICAL_EFFECT,
+				Callable(_rule_instance, "block_non_bomber_critical")),
 	])
 
 
@@ -31,7 +41,8 @@ func modify_attack_damage(context: EffectContext) -> EffectContext:
 	if context == null:
 		return context
 	var attacker: SquadronInstance = context.attacker as SquadronInstance
-	if attacker == null or not _has_bomber(attacker):
+	if attacker == null or not SquadronKeywordRuleHelper.has_keyword(
+			attacker, SquadronKeywordRuleHelper.KEYWORD_BOMBER):
 		return context
 	if not context.defender is ShipInstance:
 		return context
@@ -41,13 +52,22 @@ func modify_attack_damage(context: EffectContext) -> EffectContext:
 	return context
 
 
-func _has_bomber(squadron: SquadronInstance) -> bool:
-	if squadron.squadron_data == null:
-		return false
-	for keyword_var: Variant in squadron.squadron_data.keywords:
-		if not keyword_var is Dictionary:
-			continue
-		var keyword: Dictionary = keyword_var as Dictionary
-		if str(keyword.get("name", "")).to_lower() == KEYWORD_NAME.to_lower():
-			return true
-	return false
+## Blocks standard critical effects for non-Bomber squadron ship attacks.
+func block_non_bomber_critical(context: EffectContext) -> Dictionary:
+	if context == null:
+		return _not_blocked()
+	var attacker: SquadronInstance = context.attacker as SquadronInstance
+	if attacker == null or not context.defender is ShipInstance:
+		return _not_blocked()
+	if SquadronKeywordRuleHelper.has_keyword(
+			attacker, SquadronKeywordRuleHelper.KEYWORD_BOMBER):
+		return _not_blocked()
+	return _blocked(NON_BOMBER_CRIT_REASON)
+
+
+func _blocked(reason: String) -> Dictionary:
+	return {"blocked": true, "reason": reason}
+
+
+func _not_blocked() -> Dictionary:
+	return {"blocked": false, "reason": ""}

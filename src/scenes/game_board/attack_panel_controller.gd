@@ -94,6 +94,21 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	# consume the same command-executed reaction.
 	if command.command_type == "resolve_immediate_effect":
 		_attack_executor.apply_remote_immediate_choice(result)
+		return
+	if command.command_type == "counter_choice":
+		_attack_executor.apply_counter_choice_result(result)
+		return
+	if command.command_type == "roll_dice":
+		_attack_executor.apply_remote_counter_roll_result(command, result)
+		return
+	if command.command_type == "reroll_attack_die":
+		_attack_executor.apply_remote_counter_reroll_result(command, result)
+		return
+	if command.command_type == "skip_attack_modifier":
+		_attack_executor.apply_remote_attack_modifier_skip(command, result)
+		return
+	if command.command_type == "confirm_attack_dice":
+		_attack_executor.apply_remote_attack_confirm(command, result)
 
 
 # ---------------------------------------------------------------------------
@@ -116,8 +131,8 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 ##     [param local], or — defensively — the local executor is not in
 ##     exec mode).
 ##
-## Hot-seat is filtered out by the [code]is_network()[/code] guard at
-## the call site in [GameBoard].
+## Hot-seat is filtered out by the network-peer guard at the call site in
+## [ModalRouter].
 func sync_mirror_from_flow(flow: InteractionFlow, local: int) -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
 		return
@@ -128,19 +143,35 @@ func sync_mirror_from_flow(flow: InteractionFlow, local: int) -> void:
 		return
 	var attacker_player: int = int(
 			flow.payload.get("attacker_player", -1))
-	var local_is_attacker: bool = (
-			attacker_player >= 0 and attacker_player == local)
+	var local_is_attacker: bool = _local_is_published_attacker(
+			attacker_player, local)
 	# Defensive fall-back when the identity patch hasn't been applied yet
 	# (very early in the flow): treat the local executor's exec-mode as
 	# the source of truth.
 	if attacker_player < 0 and _attack_executor != null \
 			and _attack_executor.is_in_exec_mode():
 		local_is_attacker = true
-	if local_is_attacker:
+	if local_is_attacker and _local_executor_owns_attack():
 		_panel_mgr.attack_panel_mirror.close()
 		return
 	_panel_mgr.attack_panel_mirror.apply_flow(
 			flow.payload, int(flow.step_id))
+
+
+func _local_is_published_attacker(attacker_player: int,
+		local: int) -> bool:
+	return attacker_player >= 0 and attacker_player == local
+
+
+func _local_executor_owns_attack() -> bool:
+	return _attack_executor != null and _attack_executor.is_in_exec_mode()
+
+
+## Closes the read-only [AttackPanelMirror] if it exists.
+func close_mirror() -> void:
+	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
+		return
+	_panel_mgr.attack_panel_mirror.close()
 
 
 # ---------------------------------------------------------------------------

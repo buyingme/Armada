@@ -47,22 +47,22 @@ func test_register_bomber_keyword_returns_zero_after_rule_migration() -> void:
 func test_register_escort_keyword() -> void:
 	var gs: GameState = _setup_state([["Escort"]], [])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 1,
-			"Should register 1 effect for 1 Escort keyword")
+	assert_eq(count, 0,
+			"Escort should use RuleRegistry instead of EffectFactory after N19")
 
 
 func test_register_swarm_keyword() -> void:
 	var gs: GameState = _setup_state([["Swarm"]], [])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 1,
-			"Should register 1 effect for 1 Swarm keyword")
+	assert_eq(count, 0,
+			"Swarm should use RuleRegistry instead of EffectFactory after N21")
 
 
 func test_register_multiple_keywords() -> void:
 	var gs: GameState = _setup_state([["Bomber", "Escort"]], [])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 1,
-			"Only Escort should register a legacy effect after Bomber migration")
+	assert_eq(count, 0,
+			"Migrated squadron keywords should not register legacy effects")
 
 
 func test_register_unknown_keyword_ignored() -> void:
@@ -83,11 +83,8 @@ func test_register_sets_owner() -> void:
 	var gs: GameState = _setup_state([["Escort"]], [])
 	EffectFactory.register_squadron_keywords(gs, 0)
 	var effects: Array[GameEffect] = gs.effect_registry.get_all_effects()
-	assert_eq(effects.size(), 1, "Should have 1 effect")
-	var sq: SquadronInstance = \
-			gs.get_player_state(0).squadrons[0] as SquadronInstance
-	assert_eq(effects[0].owner, sq,
-			"Effect owner should be set to the squadron instance")
+	assert_eq(effects.size(), 0,
+			"Migrated keywords should not create legacy owned effects")
 
 
 func test_register_player_priority_initiative() -> void:
@@ -95,22 +92,8 @@ func test_register_player_priority_initiative() -> void:
 	var gs: GameState = _setup_state([["Escort"]], [["Escort"]])
 	EffectFactory.register_squadron_keywords(gs, 0)
 	var effects: Array[GameEffect] = gs.effect_registry.get_all_effects()
-	assert_eq(effects.size(), 2, "Should have 2 effects total")
-	# Find the effect belonging to player 0 vs player 1.
-	var p0_effect: GameEffect = null
-	var p1_effect: GameEffect = null
-	for e: GameEffect in effects:
-		var owner_sq: SquadronInstance = e.owner as SquadronInstance
-		if owner_sq.owner_player == 0:
-			p0_effect = e
-		else:
-			p1_effect = e
-	assert_not_null(p0_effect, "Player 0 should have an effect")
-	assert_not_null(p1_effect, "Player 1 should have an effect")
-	assert_eq(p0_effect.player_priority, 0,
-			"Initiative player effects should have priority 0")
-	assert_eq(p1_effect.player_priority, 1,
-			"Non-initiative player effects should have priority 1")
+	assert_eq(effects.size(), 0,
+			"Migrated keywords should not depend on legacy priority ordering")
 
 
 func test_register_null_game_state_returns_zero() -> void:
@@ -124,5 +107,5 @@ func test_register_both_players() -> void:
 			[["Bomber"], ["Swarm"]],
 			[["Escort"]])
 	var count: int = EffectFactory.register_squadron_keywords(gs, 0)
-	assert_eq(count, 2,
-			"Only Swarm and Escort should register legacy effects after N10")
+	assert_eq(count, 0,
+			"Migrated squadron keywords should not register legacy effects")

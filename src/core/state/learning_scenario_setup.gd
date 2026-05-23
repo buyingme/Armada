@@ -1,7 +1,6 @@
 ## LearningScenarioSetup
 ##
-## Loads Learning Scenario token placements from
-## Resources/Game_Components/scenarios/learning_scenario.json.
+## Loads scenario token placements from Resources/Game_Components/scenarios/.
 ## Faction and ship size are resolved from the individual card JSON files
 ## (ships/<key>.json, squadrons/<key>.json) — never hardcoded in GDScript.
 ##
@@ -15,10 +14,10 @@ class_name LearningScenarioSetup
 extends RefCounted
 
 
-## Subfolder and filename for the scenario placement data.
+## Subfolder and default id for scenario placement data.
 ## Rules Reference: Resources/Game_Components/scenarios/learning_scenario.json
 const SCENARIO_SUBFOLDER: String = "scenarios/"
-const SCENARIO_FILENAME: String = "learning_scenario.json"
+const DEFAULT_SCENARIO_ID: String = "learning_scenario"
 
 ## Learning Scenario initial speed for all ships (SU-021).
 ## Rules Reference: "Learning Scenario Setup", step 4, p.5:
@@ -34,8 +33,18 @@ const IMPERIAL_PLAYER: int = 1
 ## Cached scenario data dictionary loaded once from JSON.
 var _data: Dictionary = {}
 
+## Scenario id resolved to [code]scenarios/<id>.json[/code].
+var _scenario_id: String = DEFAULT_SCENARIO_ID
+
 ## The shared damage deck, initialised once.
 var _damage_deck: DamageDeck = null
+
+
+## Creates a scenario setup loader for [param scenario_id].
+func _init(scenario_id: String = DEFAULT_SCENARIO_ID) -> void:
+	_scenario_id = scenario_id.strip_edges()
+	if _scenario_id.is_empty():
+		_scenario_id = DEFAULT_SCENARIO_ID
 
 
 ## Loads the scenario JSON into the internal cache.
@@ -43,9 +52,15 @@ var _damage_deck: DamageDeck = null
 func _ensure_loaded() -> void:
 	if not _data.is_empty():
 		return
-	_data = AssetLoader.load_json(SCENARIO_SUBFOLDER, SCENARIO_FILENAME)
+	var scenario_filename: String = _scenario_id + ".json"
+	_data = AssetLoader.load_json(SCENARIO_SUBFOLDER, scenario_filename)
 	if _data.is_empty():
-		push_error("LearningScenarioSetup: could not load %s" % SCENARIO_FILENAME)
+		push_error("LearningScenarioSetup: could not load %s" % scenario_filename)
+
+
+## Returns the scenario id this setup loads.
+func get_scenario_id() -> String:
+	return _scenario_id
 
 
 ## Returns the map image filename declared in the scenario JSON

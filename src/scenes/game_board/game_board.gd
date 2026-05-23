@@ -276,8 +276,8 @@ func _connect_panel_signals() -> void:
 ## them in [GameState] so GameManager tracks dial submission, binds instances
 ## to visual tokens, and adds ship cards to the side panels.
 ## Rules Reference: "Learning Scenario Setup", step 9, p.5; SU-010–030.
-func _spawn_learning_scenario_tokens() -> void:
-	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
+func _spawn_learning_scenario_tokens(scenario_id: String) -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new(scenario_id)
 	var prepared: Dictionary = _prepare_learning_scenario_instances(setup)
 	var ship_instances: Array[ShipInstance] = prepared["ships"] as Array[ShipInstance]
 	var squad_instances: Array[SquadronInstance] = prepared["squadrons"] as Array[SquadronInstance]
@@ -301,7 +301,8 @@ func _spawn_learning_scenario_tokens() -> void:
 ## [br]- Constructs [TokenPlacement] objects from each instance's
 ##   [code]pos_x[/code] / [code]pos_y[/code] / [code]rotation_deg[/code].
 func _spawn_tokens_from_loaded_state() -> void:
-	var setup: LearningScenarioSetup = LearningScenarioSetup.new()
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new(
+			GameManager.get_scenario_id())
 	_load_map_texture(setup.get_map_image_filename())
 	_init_scenario_systems_for_loaded_state()
 	var gs: GameState = GameManager.current_game_state
@@ -1206,8 +1207,17 @@ func _bootstrap_or_load_board_state() -> void:
 	if GameManager.consume_preloaded_flag():
 		_spawn_tokens_from_loaded_state()
 		return
-	GameManager.bootstrap_game("learning_scenario")
-	_spawn_learning_scenario_tokens()
+	var scenario_id: String = GameManager.consume_next_scenario_id(
+			LearningScenarioSetup.DEFAULT_SCENARIO_ID)
+	GameManager.bootstrap_game(scenario_id)
+	_spawn_learning_scenario_tokens(_scenario_id_for_spawn(scenario_id))
+
+
+func _scenario_id_for_spawn(fallback_scenario_id: String) -> String:
+	var active_scenario_id: String = GameManager.get_scenario_id().strip_edges()
+	if active_scenario_id.is_empty():
+		return fallback_scenario_id
+	return active_scenario_id
 
 
 func _finalize_ready_sequence() -> void:

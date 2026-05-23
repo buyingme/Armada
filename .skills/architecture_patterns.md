@@ -74,6 +74,10 @@ Rules:
   text). UI never decides modal/authority logic itself.
 - Hot-seat and network mode use the **same** projection path — no
   `if PlayMode.is_network()` branching in presentation code.
+- Any defender, opponent, non-active-player, or off-turn controller choice must
+  have an explicit `FlowSpec` row and `docs/game_flow.md` entry before UI or
+  scene wiring. That entry must state the controller role, ownership payload,
+  allowed command surface, transitions, and projection route.
 - `interaction_flow.payload` is filtered by `StateFilter` for the
   requesting player.
 - Reconnection: a single filtered `state_snapshot` is sufficient to

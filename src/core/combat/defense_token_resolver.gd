@@ -319,12 +319,13 @@ func get_token_button_index(token_type: Constants.DefenseToken,
 ## Rules Reference: "Critical Effect", RRG v1.5.0, p.4.
 func determine_first_card_faceup(dice_results: Array[Dictionary],
 		contain_used: bool, registry: EffectRegistry,
-		attacker: ShipInstance) -> bool:
+		attacker: RefCounted,
+		defender: RefCounted = null) -> bool:
 	var has_crit: bool = Dice.has_any_critical(dice_results)
 	var faceup: bool = (has_crit and not contain_used)
 	if not faceup:
 		return false
-	var crit_ctx: EffectContext = _build_critical_context(attacker)
+	var crit_ctx: EffectContext = _build_critical_context(attacker, defender)
 	if RuleSurface.is_blocked(crit_ctx,
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
@@ -336,10 +337,13 @@ func determine_first_card_faceup(dice_results: Array[Dictionary],
 	return crit_ctx.critical_allowed
 
 
-func _build_critical_context(attacker: ShipInstance) -> EffectContext:
+func _build_critical_context(attacker: RefCounted,
+		defender: RefCounted) -> EffectContext:
 	var crit_ctx: EffectContext = EffectContext.new()
 	if attacker != null:
 		crit_ctx.attacker = attacker
+	if defender != null:
+		crit_ctx.defender = defender
 	crit_ctx.critical_allowed = true
 	return crit_ctx
 

@@ -9,13 +9,20 @@ extends GutTest
 
 var _mirror: AttackPanelMirror = null
 var _layer: CanvasLayer = null
+var _saved_local_player_index: int = -1
 
 
 func before_each() -> void:
+	_saved_local_player_index = NetworkManager._local_player_index
+	NetworkManager._local_player_index = -1
 	_mirror = AttackPanelMirror.new()
 	_layer = CanvasLayer.new()
 	add_child_autofree(_layer)
 	_mirror.setup(_layer)
+
+
+func after_each() -> void:
+	NetworkManager._local_player_index = _saved_local_player_index
 
 
 func test_setup_creates_panel_hidden() -> void:
@@ -343,6 +350,89 @@ func test_redirect_section_opens_when_redirect_active_flag_set() -> void:
 			"redirect_zone_selected must be disconnected after close().")
 	assert_eq(panel.redirect_done_pressed.get_connections().size(), 0,
 			"redirect_done_pressed must be disconnected after close().")
+
+
+func test_counter_choice_section_connects_for_counter_controller() -> void:
+	NetworkManager._local_player_index = 1
+	var payload: Dictionary = {
+		"attacker_kind": "squadron",
+		"attacker_name": "TIE Interceptor",
+		CounterKeyword.PAYLOAD_CONTROLLER_PLAYER: 1,
+		CounterKeyword.PAYLOAD_AVAILABLE: true,
+	}
+
+	_mirror.apply_flow(payload,
+			Constants.InteractionStep.ATTACK_COUNTER_CHOICE)
+
+	var panel: AttackSimPanel = _mirror.get_panel()
+	assert_eq(panel.counter_attack_requested.get_connections().size(), 1,
+			"Counter accept signal should connect for the Counter owner.")
+	assert_eq(panel.counter_attack_skipped.get_connections().size(), 1,
+			"Counter skip signal should connect for the Counter owner.")
+	_mirror.close()
+	assert_eq(panel.counter_attack_requested.get_connections().size(), 0,
+			"Counter accept signal should disconnect after close().")
+
+
+func test_counter_roll_connects_for_remote_counter_attacker() -> void:
+	NetworkManager._local_player_index = 1
+	var payload: Dictionary = _counter_attack_payload()
+
+	_mirror.apply_flow(payload, Constants.InteractionStep.ATTACK_ROLL)
+
+	var panel: AttackSimPanel = _mirror.get_panel()
+	assert_eq(panel.roll_dice_pressed.get_connections().size(), 1,
+			"Remote Counter attacker should own the roll button.")
+	_mirror.close()
+	assert_eq(panel.roll_dice_pressed.get_connections().size(), 0,
+			"Remote roll signal should disconnect after close().")
+
+
+func test_swarm_skip_and_reroll_connect_for_remote_attacker() -> void:
+	NetworkManager._local_player_index = 1
+	var payload: Dictionary = _counter_attack_payload()
+	payload["dice_results"] = _one_blue_hit()
+	payload[SwarmKeyword.PAYLOAD_AVAILABLE] = true
+
+	_mirror.apply_flow(payload, Constants.InteractionStep.ATTACK_MODIFY)
+
+	var panel: AttackSimPanel = _mirror.get_panel()
+	assert_eq(panel.cf_token_reroll_requested.get_connections().size(), 1,
+			"Remote attacker should be able to request Swarm reroll.")
+	assert_eq(panel.cf_token_reroll_skipped.get_connections().size(), 1,
+			"Remote attacker should be able to skip Swarm reroll.")
+
+
+func test_confirm_connects_for_remote_attacker_after_modifiers() -> void:
+	NetworkManager._local_player_index = 1
+	var payload: Dictionary = _counter_attack_payload()
+	payload["dice_results"] = _one_blue_hit()
+	payload[SwarmKeyword.PAYLOAD_AVAILABLE] = false
+
+	_mirror.apply_flow(payload, Constants.InteractionStep.ATTACK_MODIFY)
+
+	assert_eq(_mirror.get_panel().confirm_pressed.get_connections().size(), 1,
+			"Remote attacker should be able to confirm final dice.")
+
+
+func _counter_attack_payload() -> Dictionary:
+	return {
+		"attacker_kind": "squadron",
+		"attacker_name": "TIE Interceptor",
+		"attacker_player": 1,
+		"attacker_squadron_index": 0,
+		"target_kind": "squadron",
+		"defender_player": 0,
+		"target_squadron_index": 0,
+		"dice_pool": {"BLUE": 2},
+		SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND:
+				SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER,
+	}
+
+
+func _one_blue_hit() -> Array[Dictionary]:
+	return [ {"color": Constants.DiceColor.BLUE,
+			"face": Constants.DiceFace.HIT}]
 
 
 func test_clearing_defender_drops_target_title() -> void:

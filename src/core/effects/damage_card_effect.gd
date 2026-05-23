@@ -34,15 +34,7 @@ func get_hooks() -> Array[StringName]:
 
 ## Returns hooks for movement, command, and repair effects.
 func _get_non_attack_hooks() -> Array[StringName]:
-	match effect_id:
-		"thrust_control_malfunction":
-			return [&"MANEUVER_DETERMINE_YAWS"]
-		"ruptured_engine", "damaged_controls":
-			return [&"AFTER_MANEUVER_EXECUTE"]
-		"thruster_fissure":
-			return [&"ON_SPEED_CHANGE"]
-		_:
-			return []
+	return []
 
 
 ## Returns true if this effect should fire for the given context.
@@ -55,15 +47,7 @@ func should_trigger(context: EffectContext) -> bool:
 
 ## Checks non-attack effects (movement, command, repair, status).
 func _should_trigger_non_attack(context: EffectContext) -> bool:
-	match effect_id:
-		"thrust_control_malfunction", "thruster_fissure":
-			return context.get_meta_value("ship", null) == owner
-		"ruptured_engine":
-			return _trigger_ruptured_engine(context)
-		"damaged_controls":
-			return _trigger_damaged_controls(context)
-		_:
-			return false
+	return false
 
 
 ## Mutates the context to apply this effect.
@@ -73,12 +57,7 @@ func resolve(context: EffectContext) -> void:
 
 ## Resolves movement, command, and repair effects.
 func _resolve_non_attack(context: EffectContext) -> void:
-	match effect_id:
-		"thrust_control_malfunction":
-			_resolve_thrust_control(context)
-		"ruptured_engine", "damaged_controls", "thruster_fissure":
-			context.set_meta_value("persistent_effect_id", effect_id)
-			_resolve_suffer_facedown(context)
+	pass
 
 
 # ---------------------------------------------------------------------------

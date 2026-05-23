@@ -11,12 +11,7 @@ extends RefCounted
 
 ## Effect IDs that should still be registered as legacy persistent effects.
 ## Migrated RuleRegistry cards are intentionally omitted from this list.
-const PERSISTENT_EFFECT_IDS: Array[String] = [
-	"damaged_controls",
-	"ruptured_engine",
-	"thrust_control_malfunction",
-	"thruster_fissure",
-]
+const PERSISTENT_EFFECT_IDS: Array[String] = []
 
 
 ## Returns true if the given card should have a persistent effect registered.

@@ -1372,7 +1372,9 @@ func _on_execute_maneuver() -> void:
 			maneuver_submitted = true
 			maneuver_result = GameManager.submit_execute_maneuver(
 					maneuver_ship, spd, active_clicks,
-					norm_x, norm_y, rot_deg, bonus_joint)
+					norm_x, norm_y, rot_deg, bonus_joint,
+					_activation_ctx.last_maneuver_overlapped,
+					_activation_ctx.ship_activation_state.get_total_speed_change())
 	# If the command was rejected (empty Dictionary), revert the local
 	# visual snap so the host stays consistent with the authoritative
 	# GameState (and with any remote peer, which never received a
@@ -1393,16 +1395,8 @@ func _on_execute_maneuver() -> void:
 			_log.info("Maneuver tool re-shown for retry after validation failure.")
 		return
 
-	# Resolve central maneuver rule effects after command acceptance.
-	# Rules Reference: "Ruptured Engine" / "Damaged Controls" card texts.
-	_resolve_after_maneuver_hook(
-			maneuver_result, _activation_ctx.last_maneuver_overlapped)
-	# Thruster Fissure deals facedown damage after player speed changes.
-	# Only fires if the player's final speed differs from the original.
-	# Deferred to commit time because speed changes are reversible during preview.
-	# Rules Reference: "Thruster Fissure" card text.
-	if _activation_ctx.ship_activation_state.get_total_speed_change() != 0:
-		_resolve_speed_change_hook()
+	# RuleRegistry observers enqueue any maneuver damage follow-up commands.
+	# Rules Reference: "Ruptured Engine", "Damaged Controls", "Thruster Fissure".
 	_clear_maneuver_damage_hint()
 	EventBus.ship_moved.emit(_activation_ctx.activating_ship_token)
 	_dismiss_maneuver_tool_with_preview.call()
@@ -1467,36 +1461,6 @@ func _preview_maneuver_overlap_result() -> OverlapResolver.ShipShipResult:
 					tool_state, start_pos, start_rot, ghost_side,
 					ship_size, other_bases, original_xform))
 	return result
-
-
-## Resolves post-maneuver persistent damage cards through the core rule helper.
-## Ruptured Engine: suffer 1 facedown if speed > 1.
-## Damaged Controls: suffer 1 facedown if overlapping a ship or obstacle.
-## Rules Reference: "Ruptured Engine", "Damaged Controls" card texts.
-func _resolve_after_maneuver_hook(maneuver_result: Dictionary,
-		did_overlap: bool) -> void:
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
-			GameManager.current_game_state, ship, _damage_deck,
-			maneuver_result, did_overlap)
-	if effect_id != "":
-		_submit_persistent_damage.call(ship, effect_id)
-
-
-## Resolves speed-change persistent damage cards after maneuver commit.
-## Thruster Fissure: suffer 1 facedown damage when speed changes.
-## Called only when total_speed_change != 0 (deferred from preview to commit).
-## Rules Reference: "Thruster Fissure" card text.
-func _resolve_speed_change_hook() -> void:
-	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
-	if ship == null:
-		return
-	var effect_id: String = ManeuverRuleResolver.resolve_speed_change_effect_id(
-			GameManager.current_game_state, ship, _damage_deck)
-	if effect_id != "":
-		_submit_persistent_damage.call(ship, effect_id)
 
 
 ## Shows the activation modal at the DONE step so the player can review

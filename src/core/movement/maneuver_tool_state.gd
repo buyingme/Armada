@@ -300,6 +300,12 @@ func get_max_speed() -> int:
 	return _max_speed
 
 
+## Replaces the navigation chart and clamps selected joints to the new limits.
+func set_navigation_chart(nav_chart: Array) -> void:
+	_nav_chart = nav_chart
+	_clamp_joints_to_nav_chart()
+
+
 ## Sets the simulated speed and clamps joint clicks that exceed the
 ## new navigation chart row. Speed is clamped to [1, _max_speed].
 ## Requirements: MT-S-002, MT-S-003, AC-20, AC-21, AC-22.

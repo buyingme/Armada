@@ -380,6 +380,18 @@ func test_persistent_validate_missing_card_data() -> void:
 			"Should reject when card_data is empty")
 
 
+func test_persistent_validate_draw_from_deck_ok() -> void:
+	var idx: int = _add_ship(0)
+	var cmd := PersistentEffectDamageCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": idx,
+		"effect_id": "damaged_controls",
+		"draw_from_deck": true,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Observer follow-ups should validate with draw_from_deck.")
+
+
 # ======================================================================
 # PersistentEffectDamageCommand — execute
 # ======================================================================
@@ -401,6 +413,28 @@ func test_persistent_execute_ruptured_engine() -> void:
 			"Hull should be 5 - 1 = 4")
 	assert_false(result.get("destroyed", true) as bool,
 			"Ship should survive")
+
+
+func test_persistent_execute_draw_from_deck() -> void:
+	var idx: int = _add_ship(0)
+	var ps: PlayerState = _state.get_player_state(0)
+	var ship: ShipInstance = ps.ships[idx]
+	var before_count: int = _state.damage_deck.get_total_count()
+	var cmd := PersistentEffectDamageCommand.new(0, {
+		"owner_player": 0,
+		"ship_index": idx,
+		"effect_id": "thruster_fissure",
+		"draw_from_deck": true,
+	})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(ship.facedown_damage.size(), 1,
+			"Draw-from-deck execution should add one facedown damage card.")
+	assert_eq(_state.damage_deck.get_total_count(), before_count - 1,
+			"Damage deck should lose the drawn card.")
+	assert_eq(int(result.get("cards_added", 0)), 1,
+			"Result should report one card added.")
+	assert_false(result.get("card_data", {}).is_empty(),
+			"Result should include serialized drawn card data for replay/debug.")
 
 
 func test_persistent_execute_crew_panic() -> void:

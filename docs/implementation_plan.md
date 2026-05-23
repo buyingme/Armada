@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-23 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, N6-N8 complete with MT pass, and N9-N11 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-23 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, N6-N8 complete with MT pass, N9-N11 complete with MT pass, and N12-N15 complete with MT pass; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 173 |
-| GUT tests | 3 179 |
-| GUT asserts | 6 470 |
+| GUT test scripts | 177 |
+| GUT tests | 3 201 |
+| GUT asserts | 6 537 |
 | Failing tests | 0 |
-| Last completed batch | N9-N11 — Targeter Disruption, Bomber, and maneuver-rule extraction |
+| Last completed batch | N12-N15 — movement damage-card RuleRegistry migration |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -34,13 +34,13 @@ Runtime invariants:
   no committed network trace/hash fixture until the transport is deterministic
   across separate runs.
 
-Verification note: the 2026-05-23 N9-N11 automated implementation full GUT
-summary is green (173 / 3 179 / 6 470, 0 failures). Phase K lint reports 0
+Verification note: the 2026-05-23 N12-N15 automated implementation full GUT
+summary is green (177 / 3 201 / 6 537, 0 failures). Phase K lint reports 0
 violations / 4 allow-listed branches, baseline traces pass hot-seat trace/state
 plus real ENet network peer equality, and `git diff --check` is clean. Godot
 still reports known shutdown RID leak warnings in the runner output; no parse
 errors or GUT failures were reported. User MT pass confirmed 2026-05-23 for
-the N9-N11 batch.
+the N12-N15 batch.
 
 ---
 

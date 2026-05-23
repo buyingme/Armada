@@ -78,6 +78,13 @@ without depending on scene-local attack-executor counters.
 command type registry.  Replay files (`GameReplay`) store the full
 command history as a JSON array of serialized commands.
 
+Movement rule observers depend on command-result metadata rather than local UI
+state. N12-N15 added `ExecuteManeuverCommand` fields for `did_overlap` and
+`speed_delta`, and `PersistentEffectDamageCommand` can draw from
+`GameState.damage_deck` during `execute()`. This keeps Ruptured Engine,
+Damaged Controls, and Thruster Fissure follow-up damage deterministic across
+hot-seat, replay, and network mirrors.
+
 `SaveGameManager` saves to `res://saves/` (project directory) as
 pretty-printed JSON. Debug keybinds: **F5** quicksave, **F8** quickload
 (debug mode only). Ship/squadron template re-association after load is

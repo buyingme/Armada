@@ -19,6 +19,8 @@
 ##                       Navigate command's yaw bonus, or -1 if none.
 ##                       Rules Reference: "Navigate" — increase 1 yaw
 ##                       value by 1 at any joint.
+##   "did_overlap"  — bool, authoritative overlap metadata from the move.
+##   "speed_delta"  — int, player-authored speed-dial change for this maneuver.
 ##
 ## Rules Reference: "Ship Phase", "Execute Maneuver", p.7; MV-001–005.
 class_name ExecuteManeuverCommand
@@ -127,6 +129,8 @@ func execute(game_state: GameState) -> Dictionary:
 		"pos_y": new_y,
 		"rotation_deg": new_rot,
 		"yaw_bonus_joint": int(payload.get("yaw_bonus_joint", -1)),
+		"did_overlap": bool(payload.get("did_overlap", false)),
+		"speed_delta": int(payload.get("speed_delta", 0)),
 	}
 
 

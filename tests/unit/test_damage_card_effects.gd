@@ -76,10 +76,10 @@ func _make_deck() -> DamageDeck:
 # ---------------------------------------------------------------------------
 
 
-func test_factory_is_persistent_returns_true_for_persistent_cards() -> void:
+func test_factory_is_persistent_returns_false_for_migrated_cards() -> void:
 	var card: DamageCard = _make_card("ruptured_engine")
-	assert_true(DamageCardEffectFactory.is_persistent(card),
-			"Ruptured Engine should remain a legacy persistent effect")
+	assert_false(DamageCardEffectFactory.is_persistent(card),
+			"Ruptured Engine should be handled by RuleRegistry after N13")
 
 
 func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
@@ -89,17 +89,15 @@ func test_factory_is_persistent_returns_false_for_immediate_cards() -> void:
 			"Structural Damage is immediate, not persistent")
 
 
-func test_factory_register_creates_and_registers() -> void:
+func test_factory_register_returns_null_for_migrated_cards() -> void:
 	var ship: ShipInstance = _make_ship()
 	var card: DamageCard = _make_card("ruptured_engine")
 	var reg: EffectRegistry = EffectRegistry.new()
 	var effect: DamageCardEffect = DamageCardEffectFactory.register_effect(
 			card, ship, reg)
-	assert_not_null(effect, "Should return created effect")
-	assert_eq(reg.get_effect_count(), 1, "Should register 1 effect")
-	assert_eq(effect.owner, ship, "Effect owner should be the ship")
-	assert_eq(effect.effect_id, "ruptured_engine",
-			"Effect ID should match card")
+	assert_null(effect, "Migrated movement cards should not create effects")
+	assert_eq(reg.get_effect_count(), 0,
+			"Migrated movement cards should not register legacy effects")
 
 
 func test_factory_unregister_removes_by_card() -> void:
@@ -107,9 +105,9 @@ func test_factory_unregister_removes_by_card() -> void:
 	var card: DamageCard = _make_card("ruptured_engine")
 	var reg: EffectRegistry = EffectRegistry.new()
 	DamageCardEffectFactory.register_effect(card, ship, reg)
-	assert_eq(reg.get_effect_count(), 1, "Pre: 1 effect")
+	assert_eq(reg.get_effect_count(), 0, "Pre: no legacy effect")
 	var removed: bool = DamageCardEffectFactory.unregister_effect(card, reg)
-	assert_true(removed, "Should find and unregister effect")
+	assert_false(removed, "Migrated cards have no legacy effect to unregister")
 	assert_eq(reg.get_effect_count(), 0, "Post: 0 effects")
 
 
@@ -421,11 +419,11 @@ func test_coolant_discharge_no_stale_close_bonus() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Thrust Control Malfunction — reduce yaw at last joint
+# Thrust Control Malfunction — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_thrust_control_reduces_last_yaw() -> void:
+func test_thrust_control_no_longer_reduces_yaw_via_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect(
 			"thrust_control_malfunction", ship)
@@ -434,25 +432,25 @@ func test_thrust_control_reduces_last_yaw() -> void:
 	ctx.set_meta_value("yaw_values", [1, 2, 1])
 	e.resolve(ctx)
 	var yaws: Array = ctx.get_meta_value("yaw_values") as Array
-	assert_eq(int(yaws[2]), 0,
-			"Last joint yaw should be reduced from 1 to 0")
+	assert_eq(int(yaws[2]), 1,
+			"Legacy effect should not change Thrust Control yaw after N12")
 	assert_eq(int(yaws[0]), 1,
 			"First joint should be unaffected")
 
 
 # ---------------------------------------------------------------------------
-# Ruptured Engine — suffer 1 facedown if speed > 1
+# Ruptured Engine — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_ruptured_engine_triggers_at_speed_2() -> void:
+func test_ruptured_engine_no_longer_triggers_via_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("ruptured_engine", ship)
 	var ctx: EffectContext = _make_context(&"AFTER_MANEUVER_EXECUTE")
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("ship_speed", 2)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger at speed > 1")
+	assert_false(e.should_trigger(ctx),
+			"Legacy effect should not trigger Ruptured Engine after N13")
 
 
 func test_ruptured_engine_no_trigger_at_speed_1() -> void:
@@ -465,7 +463,7 @@ func test_ruptured_engine_no_trigger_at_speed_1() -> void:
 			"Should not trigger at speed 1")
 
 
-func test_ruptured_engine_deals_facedown() -> void:
+func test_ruptured_engine_no_longer_flags_legacy_damage() -> void:
 	var ship: ShipInstance = _make_ship()
 	var deck: DamageDeck = _make_deck()
 	var e: DamageCardEffect = _make_effect("ruptured_engine", ship)
@@ -474,23 +472,23 @@ func test_ruptured_engine_deals_facedown() -> void:
 	ctx.set_meta_value("ship_speed", 2)
 	ctx.set_meta_value("damage_deck", deck)
 	e.resolve(ctx)
-	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
-			"Should flag extra_damage_dealt for command submission")
+	assert_false(ctx.get_meta_value("extra_damage_dealt", false),
+			"Legacy effect should not submit Ruptured Engine damage after N13")
 
 
 # ---------------------------------------------------------------------------
-# Damaged Controls — extra facedown on obstacle overlap
+# Damaged Controls — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_damaged_controls_triggers_on_overlap() -> void:
+func test_damaged_controls_no_longer_triggers_via_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("damaged_controls", ship)
 	var ctx: EffectContext = _make_context(&"AFTER_MANEUVER_EXECUTE")
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("did_overlap", true)
-	assert_true(e.should_trigger(ctx),
-			"Should trigger when ship overlaps obstacle")
+	assert_false(e.should_trigger(ctx),
+			"Legacy effect should not trigger Damaged Controls after N14")
 
 
 func test_damaged_controls_no_trigger_without_overlap() -> void:
@@ -504,16 +502,17 @@ func test_damaged_controls_no_trigger_without_overlap() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Thruster Fissure — suffer 1 facedown on speed change
+# Thruster Fissure — migrated to RuleRegistry
 # ---------------------------------------------------------------------------
 
 
-func test_thruster_fissure_triggers_on_speed_change() -> void:
+func test_thruster_fissure_no_longer_triggers_via_legacy_effect() -> void:
 	var ship: ShipInstance = _make_ship()
 	var e: DamageCardEffect = _make_effect("thruster_fissure", ship)
 	var ctx: EffectContext = _make_context(&"ON_SPEED_CHANGE")
 	ctx.set_meta_value("ship", ship)
-	assert_true(e.should_trigger(ctx), "Should trigger for owning ship")
+	assert_false(e.should_trigger(ctx),
+			"Legacy effect should not trigger Thruster Fissure after N15")
 
 
 # ---------------------------------------------------------------------------
@@ -778,16 +777,18 @@ func test_token_gain_pipeline_life_support_no_longer_blocks() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Integration: MANEUVER_DETERMINE_YAWS pipeline
+# Integration: migrated maneuver bridge is empty
 # ---------------------------------------------------------------------------
 
 
-func test_yaw_pipeline_thrust_control_reduces_last() -> void:
+func test_yaw_pipeline_thrust_control_does_not_register_legacy_effect() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("thrust_control_malfunction")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
+	assert_eq(reg.get_effect_count(), 0,
+			"Thrust Control should not register legacy yaw hooks after N12.")
 	# Act — speed 3 with yaw_values [0, 1, 1].
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
@@ -795,8 +796,8 @@ func test_yaw_pipeline_thrust_control_reduces_last() -> void:
 	ctx = reg.resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)
 	# Assert
 	var yaws: Array = ctx.get_meta_value("yaw_values") as Array
-	assert_eq(int(yaws[2]), 0,
-			"Last joint yaw should be reduced from 1 to 0")
+	assert_eq(int(yaws[2]), 1,
+			"Legacy pipeline should leave Thrust Control yaw unchanged.")
 	assert_eq(int(yaws[0]), 0,
 			"First joint should be unaffected")
 
@@ -806,13 +807,15 @@ func test_yaw_pipeline_thrust_control_reduces_last() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_after_maneuver_pipeline_ruptured_engine_damage() -> void:
+func test_after_maneuver_pipeline_ruptured_engine_does_not_register() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var deck: DamageDeck = _make_deck()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("ruptured_engine")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
+	assert_eq(reg.get_effect_count(), 0,
+			"Ruptured Engine should not register legacy hooks after N13.")
 	# Act — speed 2.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
@@ -821,17 +824,19 @@ func test_after_maneuver_pipeline_ruptured_engine_damage() -> void:
 	ctx.set_meta_value("did_overlap", false)
 	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
 	# Assert
-	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
-			"Ruptured Engine should flag extra_damage_dealt at speed 2 via pipeline")
+	assert_false(ctx.get_meta_value("extra_damage_dealt", false),
+			"Legacy pipeline should not flag Ruptured Engine damage after N13.")
 
 
-func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
+func test_after_maneuver_pipeline_damaged_controls_does_not_register() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var deck: DamageDeck = _make_deck()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("damaged_controls")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
+	assert_eq(reg.get_effect_count(), 0,
+			"Damaged Controls should not register legacy hooks after N14.")
 	# Act — overlapped obstacle.
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
@@ -840,8 +845,8 @@ func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
 	ctx.set_meta_value("did_overlap", true)
 	ctx = reg.resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)
 	# Assert
-	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
-			"Damaged Controls should flag extra_damage_dealt on overlap via pipeline")
+	assert_false(ctx.get_meta_value("extra_damage_dealt", false),
+			"Legacy pipeline should not flag Damaged Controls damage after N14.")
 
 
 # ---------------------------------------------------------------------------
@@ -849,18 +854,20 @@ func test_after_maneuver_pipeline_damaged_controls_on_overlap() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_speed_change_pipeline_thruster_fissure_damage() -> void:
+func test_speed_change_pipeline_thruster_fissure_does_not_register() -> void:
 	# Arrange
 	var ship: ShipInstance = _make_ship()
 	var deck: DamageDeck = _make_deck()
 	var reg: EffectRegistry = EffectRegistry.new()
 	var card: DamageCard = _make_card("thruster_fissure")
 	DamageCardEffectFactory.register_effect(card, ship, reg)
+	assert_eq(reg.get_effect_count(), 0,
+			"Thruster Fissure should not register legacy hooks after N15.")
 	# Act
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
 	ctx.set_meta_value("damage_deck", deck)
 	ctx = reg.resolve_hook(&"ON_SPEED_CHANGE", ctx)
 	# Assert
-	assert_true(ctx.get_meta_value("extra_damage_dealt", false),
-			"Thruster Fissure should flag extra_damage_dealt on speed change")
+	assert_false(ctx.get_meta_value("extra_damage_dealt", false),
+			"Legacy pipeline should not flag Thruster Fissure damage after N15.")

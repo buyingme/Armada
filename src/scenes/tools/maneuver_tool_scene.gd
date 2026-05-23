@@ -153,6 +153,13 @@ func _apply_yaw_hooks(nav_chart: Array,
 			nav_chart, ship, GameManager.current_game_state)
 
 
+func _refresh_navigation_chart_for_ship(ship: ShipInstance) -> void:
+	if _state == null or ship == null or ship.ship_data == null:
+		return
+	var nav_chart: Array = ship.ship_data.navigation_chart.duplicate(true)
+	_state.set_navigation_chart(_apply_yaw_hooks(nav_chart, ship))
+
+
 # ------------------------------------------------------------------
 # Texture and sprite creation
 # ------------------------------------------------------------------
@@ -747,6 +754,7 @@ func _handle_speed_change(delta: int) -> void:
 						target_speed)
 				return
 			# Sync the tool state to the new actual speed.
+			_refresh_navigation_chart_for_ship(ship)
 			_state.set_simulated_speed(ship.current_speed)
 			_update_visual()
 			maneuver_preview_changed.emit()

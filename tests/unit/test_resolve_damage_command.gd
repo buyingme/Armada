@@ -320,10 +320,9 @@ func test_execute_ship_faceup_card() -> void:
 			"Card should be marked faceup.")
 
 
-func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
+func test_execute_ship_faceup_movement_card_does_not_register_legacy_effect() -> void:
 	_state.initiative_player = 1
 	var idx: int = _add_ship(1)
-	var ship: ShipInstance = _state.get_ship(1, idx)
 	var cmd := ResolveDamageCommand.new(0, {
 		"target_type": "ship",
 		"owner_player": 1,
@@ -334,24 +333,12 @@ func test_execute_ship_faceup_persistent_card_registers_effect() -> void:
 		"target_destroyed": false,
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_eq(result.get("persistent_registered", 0), 1,
-			"ResolveDamageCommand should register persistent faceup effects")
+	assert_eq(result.get("persistent_registered", -1), 0,
+			"Ruptured Engine should not register legacy effects after N13")
 	var effects: Array[GameEffect] = _state.effect_registry.get_effects_for_hook(
 			&"AFTER_MANEUVER_EXECUTE")
-	assert_eq(effects.size(), 1,
-			"Ruptured Engine should hook AFTER_MANEUVER_EXECUTE")
-	var effect: DamageCardEffect = effects[0] as DamageCardEffect
-	assert_same(effect.owner, ship,
-			"Persistent damage effect owner should be the damaged ship")
-	assert_eq(effect.player_priority, 0,
-			"Initiative player's persistent damage effects should resolve first")
-	var context: EffectContext = EffectContext.new()
-	context.set_meta_value("ship", ship)
-	context.set_meta_value("ship_speed", 2)
-	context.set_meta_value("damage_deck", DamageDeck.new())
-	_state.effect_registry.resolve_hook(&"AFTER_MANEUVER_EXECUTE", context)
-	assert_true(bool(context.get_meta_value("extra_damage_dealt", false)),
-			"Registered Ruptured Engine should mark extra maneuver damage")
+	assert_eq(effects.size(), 0,
+			"Ruptured Engine should not hook AFTER_MANEUVER_EXECUTE after N13")
 
 
 func test_execute_ship_mixed_cards() -> void:

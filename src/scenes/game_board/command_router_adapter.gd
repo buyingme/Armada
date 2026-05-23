@@ -24,6 +24,7 @@ extends Node
 var _attack_panel_controller: AttackPanelController = null
 var _debug_controller: DebugController = null
 var _modal_router: ModalRouter = null
+var _find_ship_token_fn: Callable = Callable()
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,7 @@ func initialize(
 		find_squadron_token_fn: Callable) -> void:
 	_attack_panel_controller = attack_panel_controller
 	_debug_controller = debug_controller
+	_find_ship_token_fn = find_ship_token_fn
 	_create_modal_router(
 			panel_mgr,
 			attack_panel_controller,
@@ -98,3 +100,38 @@ func _route_to_controllers(cmd: GameCommand, result: Dictionary) -> void:
 	if cmd != null and _debug_controller != null \
 			and cmd.command_type == "debug_deal_damage":
 		_debug_controller.react_to_command(cmd, result)
+	if cmd != null and cmd.command_type == "persistent_effect_damage":
+		_emit_persistent_damage_events(cmd, result)
+
+
+func _emit_persistent_damage_events(cmd: GameCommand,
+		result: Dictionary) -> void:
+	var ship: ShipInstance = _persistent_damage_ship(cmd, result)
+	if ship == null or result.is_empty():
+		return
+	EventBus.damage_card_dealt.emit(ship, null, false)
+	EventBus.ship_hull_changed.emit(ship, int(result.get("new_hull", 0)))
+	if bool(result.get("destroyed", false)):
+		var target: Node = _destroyed_ship_signal_target(ship)
+		if target != null:
+			EventBus.ship_destroyed.emit(target)
+
+
+func _persistent_damage_ship(cmd: GameCommand,
+		result: Dictionary) -> ShipInstance:
+	var state: GameState = GameManager.current_game_state
+	if state == null:
+		return null
+	var owner_player: int = int(result.get(
+			"owner_player", cmd.payload.get("owner_player", -1)))
+	var ship_index: int = int(result.get(
+			"ship_index", cmd.payload.get("ship_index", -1)))
+	return state.get_ship(owner_player, ship_index)
+
+
+func _destroyed_ship_signal_target(ship: ShipInstance) -> Node:
+	if _find_ship_token_fn.is_valid():
+		var token: Variant = _find_ship_token_fn.call(ship)
+		if token is Node:
+			return token as Node
+	return null

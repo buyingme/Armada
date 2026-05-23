@@ -902,8 +902,7 @@ func _fade_out_destroyed_token(token: Node2D) -> void:
 
 ## Pre-draws a card from [member _damage_deck] and submits a
 ## [PersistentEffectDamageCommand] for the given ship and effect.
-## Emits [code]damage_card_dealt[/code], [code]ship_hull_changed[/code],
-## and — on destruction — [code]ship_destroyed[/code] + fade-out.
+## Command-result routing emits card, hull, and destruction presentation events.
 ## Returns the submitted command result, or an empty dictionary on failure.
 func _submit_persistent_damage(ship: ShipInstance,
 		eff_id: String) -> Dictionary:
@@ -912,21 +911,8 @@ func _submit_persistent_damage(ship: ShipInstance,
 	var card: DamageCard = _damage_deck.draw_card()
 	if card == null:
 		return {}
-	var result: Dictionary = GameManager.submit_persistent_effect_damage(
+	return GameManager.submit_persistent_effect_damage(
 			ship, eff_id, card.serialize())
-	if not result.is_empty():
-		EventBus.damage_card_dealt.emit(ship, null, false)
-		var new_hull: int = int(result.get("new_hull", 0))
-		EventBus.ship_hull_changed.emit(ship, new_hull)
-		_log.info("Persistent damage (%s) dealt (hull now %d)." % [
-				eff_id, new_hull])
-		if result.get("destroyed", false) as bool:
-			var token: ShipToken = _find_ship_token_for_instance(ship)
-			if token:
-				_log.info("Ship destroyed by %s: %s" % [eff_id, ship.data_key])
-				EventBus.ship_destroyed.emit(token)
-				_fade_out_destroyed_token(token)
-	return result
 
 ## Shows a brief toast when a damage card is dealt to a ship.
 ## Faceup cards show the card name in red; facedown cards show a generic message.

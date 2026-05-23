@@ -1,88 +1,77 @@
 ## ManeuverRuleResolver
 ##
 ## Core adapter for maneuver rule surfaces. Scene and tool code call this
-## helper instead of resolving legacy movement hooks directly; remaining
-## legacy damage cards are still applied here until their RuleRegistry slices.
+## helper instead of resolving scene-local movement damage hooks directly.
 class_name ManeuverRuleResolver
 extends RefCounted
 
 
-const LEGACY_HOOK_MANEUVER_YAW: StringName = &"MANEUVER_DETERMINE_YAWS"
-const LEGACY_HOOK_AFTER_MANEUVER: StringName = &"AFTER_MANEUVER_EXECUTE"
-const LEGACY_HOOK_SPEED_CHANGE: StringName = &"ON_SPEED_CHANGE"
 const EFFECT_RUPTURED_ENGINE: String = "ruptured_engine"
 const EFFECT_DAMAGED_CONTROLS: String = "damaged_controls"
 const EFFECT_THRUSTER_FISSURE: String = "thruster_fissure"
 
 
-## Applies RuleRegistry and legacy maneuver-yaw modifiers to a nav chart copy.
+## Applies RuleRegistry maneuver-yaw modifiers to a nav chart copy.
 ## Rules Reference: Damage Card "Thrust Control Malfunction".
 static func apply_yaw_modifiers(nav_chart: Array,
 		ship: ShipInstance,
-		game_state: GameState) -> Array:
+		_game_state: GameState) -> Array:
 	var result: Array = nav_chart.duplicate(true)
 	if ship == null:
 		return result
 	for speed_index: int in range(result.size()):
-		result[speed_index] = _resolve_yaw_row(
-				result, speed_index, ship, game_state)
+		result[speed_index] = _resolve_yaw_row(result, speed_index, ship)
 	return result
 
 
-## Resolves legacy post-maneuver damage-card effects and returns the effect id.
+## Resolves post-maneuver damage-card preview ids from faceup damage state.
 ## Rules Reference: Damage Cards "Ruptured Engine" and "Damaged Controls".
-static func resolve_after_maneuver_effect_id(game_state: GameState,
+static func resolve_after_maneuver_effect_id(_game_state: GameState,
 		ship: ShipInstance,
-		damage_deck: DamageDeck,
+		_damage_deck: DamageDeck,
 		maneuver_result: Dictionary,
 		did_overlap: bool) -> String:
 	if ship == null:
 		return ""
-	var context: EffectContext = _build_after_maneuver_context(
-			ship, damage_deck, maneuver_result, did_overlap)
-	context = _resolve_legacy_hook(game_state, LEGACY_HOOK_AFTER_MANEUVER,
-			context)
-	return _persistent_effect_id(context)
+	var effect_ids: Array[String] = _effect_ids_after_maneuver(
+			ship, _maneuver_speed(ship, maneuver_result), did_overlap)
+	if effect_ids.is_empty():
+		return ""
+	return effect_ids[0]
 
 
-## Resolves legacy speed-change damage-card effects and returns the effect id.
+## Resolves speed-change damage-card preview ids from faceup damage state.
 ## Rules Reference: Damage Card "Thruster Fissure".
-static func resolve_speed_change_effect_id(game_state: GameState,
+static func resolve_speed_change_effect_id(_game_state: GameState,
 		ship: ShipInstance,
-		damage_deck: DamageDeck) -> String:
+		_damage_deck: DamageDeck) -> String:
 	if ship == null:
 		return ""
-	var context: EffectContext = EffectContext.new()
-	context.set_meta_value("ship", ship)
-	context.set_meta_value("damage_deck", damage_deck)
-	context = _resolve_legacy_hook(game_state, LEGACY_HOOK_SPEED_CHANGE,
-			context)
-	return _persistent_effect_id(context)
+	if _has_faceup_effect(ship, EFFECT_THRUSTER_FISSURE):
+		return EFFECT_THRUSTER_FISSURE
+	return ""
 
 
 ## Previews maneuver damage-card effects without mutating game state.
 ## Rules Reference: Damage Cards "Ruptured Engine", "Damaged Controls",
 ## and "Thruster Fissure".
-static func preview_maneuver_damage_effect_ids(game_state: GameState,
+static func preview_maneuver_damage_effect_ids(_game_state: GameState,
 		ship: ShipInstance,
-		damage_deck: DamageDeck,
+		_damage_deck: DamageDeck,
 		maneuver_speed: int,
 		did_overlap: bool,
 		did_change_speed: bool) -> Array[String]:
-	var effect_ids: Array[String] = []
-	var maneuver_result: Dictionary = {"speed": maneuver_speed}
-	_append_effect_id(effect_ids, resolve_after_maneuver_effect_id(
-			game_state, ship, damage_deck, maneuver_result, did_overlap))
+	var effect_ids: Array[String] = _effect_ids_after_maneuver(
+			ship, maneuver_speed, did_overlap)
 	if did_change_speed:
-		_append_effect_id(effect_ids, resolve_speed_change_effect_id(
-				game_state, ship, damage_deck))
+		_append_effect_id(effect_ids,
+				resolve_speed_change_effect_id(null, ship, null))
 	return effect_ids
 
 
 static func _resolve_yaw_row(nav_chart: Array,
 		speed_index: int,
-		ship: ShipInstance,
-		game_state: GameState) -> Array:
+		ship: ShipInstance) -> Array:
 	var row_variant: Variant = nav_chart[speed_index]
 	if not row_variant is Array:
 		return []
@@ -93,8 +82,6 @@ static func _resolve_yaw_row(nav_chart: Array,
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.MANEUVER_STEP,
 			RuleSurface.TARGET_MANEUVER_YAW)
-	context = _resolve_legacy_hook(game_state, LEGACY_HOOK_MANEUVER_YAW,
-			context)
 	return _yaw_values_from_context(context, yaw_values)
 
 
@@ -108,31 +95,11 @@ static func _build_yaw_context(ship: ShipInstance,
 	return context
 
 
-static func _build_after_maneuver_context(ship: ShipInstance,
-		damage_deck: DamageDeck,
-		maneuver_result: Dictionary,
-		did_overlap: bool) -> EffectContext:
-	var context: EffectContext = EffectContext.new()
-	context.set_meta_value("ship", ship)
-	context.set_meta_value("ship_speed", _maneuver_speed(ship, maneuver_result))
-	context.set_meta_value("did_overlap", did_overlap)
-	context.set_meta_value("damage_deck", damage_deck)
-	return context
-
-
 static func _maneuver_speed(ship: ShipInstance,
 		maneuver_result: Dictionary) -> int:
 	if maneuver_result.has("speed"):
 		return int(maneuver_result.get("speed", 0))
 	return ship.current_speed
-
-
-static func _resolve_legacy_hook(game_state: GameState,
-		hook_name: StringName,
-		context: EffectContext) -> EffectContext:
-	if game_state == null or game_state.effect_registry == null:
-		return context
-	return game_state.effect_registry.resolve_hook(hook_name, context)
 
 
 static func _yaw_values_from_context(context: EffectContext,
@@ -143,10 +110,27 @@ static func _yaw_values_from_context(context: EffectContext,
 	return fallback
 
 
-static func _persistent_effect_id(context: EffectContext) -> String:
-	if not bool(context.get_meta_value("extra_damage_dealt", false)):
-		return ""
-	return str(context.get_meta_value("persistent_effect_id", ""))
+static func _effect_ids_after_maneuver(ship: ShipInstance,
+		maneuver_speed: int,
+		did_overlap: bool) -> Array[String]:
+	var effect_ids: Array[String] = []
+	if _has_faceup_effect(ship, EFFECT_RUPTURED_ENGINE) and maneuver_speed > 1:
+		_append_effect_id(effect_ids, EFFECT_RUPTURED_ENGINE)
+	if _has_faceup_effect(ship, EFFECT_DAMAGED_CONTROLS) and did_overlap:
+		_append_effect_id(effect_ids, EFFECT_DAMAGED_CONTROLS)
+	return effect_ids
+
+
+static func _has_faceup_effect(ship: ShipInstance, effect_id: String) -> bool:
+	if ship == null:
+		return false
+	for card_var: Variant in ship.faceup_damage:
+		if not card_var is DamageCard:
+			continue
+		var card: DamageCard = card_var as DamageCard
+		if card.is_faceup and card.effect_id == effect_id:
+			return true
+	return false
 
 
 static func _append_effect_id(effect_ids: Array[String],

@@ -484,6 +484,8 @@ func test_execute_maneuver_execute_returns_data() -> void:
 		"pos_x": 0.75,
 		"pos_y": 0.42,
 		"rotation_deg": - 17.2,
+		"did_overlap": true,
+		"speed_delta": -1,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("ship_index", -1), idx,
@@ -496,6 +498,10 @@ func test_execute_maneuver_execute_returns_data() -> void:
 			"Result should include pos_y.")
 	assert_almost_eq(result.get("rotation_deg", 0.0), -17.2, 0.01,
 			"Result should include rotation_deg.")
+	assert_true(bool(result.get("did_overlap", false)),
+			"Result should include authoritative overlap metadata.")
+	assert_eq(int(result.get("speed_delta", 0)), -1,
+			"Result should include player-authored speed delta.")
 	var yaw: Array = result.get("yaw_clicks", [])
 	assert_eq(yaw.size(), 2,
 			"Result should include yaw clicks array.")
@@ -532,6 +538,8 @@ func test_execute_maneuver_serialize_roundtrip() -> void:
 		"pos_x": 0.6,
 		"pos_y": 0.35,
 		"rotation_deg": 90.0,
+		"did_overlap": true,
+		"speed_delta": 1,
 	})
 	cmd.sequence = 42
 	var data: Dictionary = cmd.serialize()
@@ -547,3 +555,7 @@ func test_execute_maneuver_serialize_roundtrip() -> void:
 			"Restored speed should match.")
 	assert_eq(restored.payload.get("ship_index", -1), 1,
 			"Restored ship_index should match.")
+	assert_true(bool(restored.payload.get("did_overlap", false)),
+			"Restored overlap metadata should match.")
+	assert_eq(int(restored.payload.get("speed_delta", 0)), 1,
+			"Restored speed delta should match.")

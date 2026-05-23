@@ -1,7 +1,7 @@
 ## Test: ManeuverRuleResolver
 ##
-## Verifies the Phase N11 core adapter that centralizes maneuver rule
-## application while legacy movement cards continue to work during migration.
+## Verifies the Phase N maneuver adapter for RuleRegistry movement rules and
+## preview warnings derived from serialized faceup damage.
 extends GutTest
 
 
@@ -32,16 +32,17 @@ func test_apply_yaw_modifiers_preserves_chart_without_ship() -> void:
 			"Missing ship should preserve the nav chart.")
 
 
-func test_apply_yaw_modifiers_uses_legacy_thrust_control() -> void:
-	_register_damage_effect("thrust_control_malfunction")
+func test_apply_yaw_modifiers_uses_rule_thrust_control_current_speed() -> void:
+	_add_faceup_damage("thrust_control_malfunction")
+	ThrustControlMalfunction.register()
 	var result: Array = ManeuverRuleResolver.apply_yaw_modifiers(
-			[[2], [1, 2]], _ship, _state)
-	assert_eq(result, [[1], [1, 1]],
-			"Legacy Thrust Control should still reduce each row during N11.")
+			[[2], [1, 2], [0, 1, 2]], _ship, _state)
+	assert_eq(result, [[2], [1, 1], [0, 1, 2]],
+			"Thrust Control should reduce only the current-speed last joint.")
 
 
 func test_after_maneuver_returns_ruptured_engine_effect_id() -> void:
-	_register_damage_effect("ruptured_engine")
+	_add_faceup_damage("ruptured_engine")
 	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
 			_state, _ship, _deck, {"speed": 2}, false)
 	assert_eq(effect_id, "ruptured_engine",
@@ -49,7 +50,7 @@ func test_after_maneuver_returns_ruptured_engine_effect_id() -> void:
 
 
 func test_after_maneuver_returns_damaged_controls_on_overlap() -> void:
-	_register_damage_effect("damaged_controls")
+	_add_faceup_damage("damaged_controls")
 	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
 			_state, _ship, _deck, {"speed": 1}, true)
 	assert_eq(effect_id, "damaged_controls",
@@ -57,15 +58,15 @@ func test_after_maneuver_returns_damaged_controls_on_overlap() -> void:
 
 
 func test_speed_change_returns_thruster_fissure_effect_id() -> void:
-	_register_damage_effect("thruster_fissure")
+	_add_faceup_damage("thruster_fissure")
 	var effect_id: String = ManeuverRuleResolver.resolve_speed_change_effect_id(
 			_state, _ship, _deck)
 	assert_eq(effect_id, "thruster_fissure",
-			"Thruster Fissure should still trigger from the central resolver.")
+			"Thruster Fissure should preview from faceup damage state.")
 
 
 func test_preview_maneuver_damage_lists_ruptured_engine() -> void:
-	_register_damage_effect("ruptured_engine")
+	_add_faceup_damage("ruptured_engine")
 	var effect_ids: Array[String] = \
 			ManeuverRuleResolver.preview_maneuver_damage_effect_ids(
 					_state, _ship, _deck, 2, false, false)
@@ -74,7 +75,7 @@ func test_preview_maneuver_damage_lists_ruptured_engine() -> void:
 
 
 func test_preview_maneuver_damage_lists_damaged_controls() -> void:
-	_register_damage_effect("damaged_controls")
+	_add_faceup_damage("damaged_controls")
 	var effect_ids: Array[String] = \
 			ManeuverRuleResolver.preview_maneuver_damage_effect_ids(
 					_state, _ship, _deck, 1, true, false)
@@ -83,7 +84,7 @@ func test_preview_maneuver_damage_lists_damaged_controls() -> void:
 
 
 func test_preview_maneuver_damage_lists_thruster_fissure() -> void:
-	_register_damage_effect("thruster_fissure")
+	_add_faceup_damage("thruster_fissure")
 	var effect_ids: Array[String] = \
 			ManeuverRuleResolver.preview_maneuver_damage_effect_ids(
 					_state, _ship, _deck, 1, false, true)
@@ -92,7 +93,7 @@ func test_preview_maneuver_damage_lists_thruster_fissure() -> void:
 
 
 func test_preview_maneuver_damage_ignores_unchanged_thruster_fissure() -> void:
-	_register_damage_effect("thruster_fissure")
+	_add_faceup_damage("thruster_fissure")
 	var effect_ids: Array[String] = \
 			ManeuverRuleResolver.preview_maneuver_damage_effect_ids(
 					_state, _ship, _deck, 1, false, false)
@@ -100,22 +101,20 @@ func test_preview_maneuver_damage_ignores_unchanged_thruster_fissure() -> void:
 			"Preview should ignore Thruster Fissure before speed changes.")
 
 
-func test_after_maneuver_without_registry_returns_empty() -> void:
+func test_after_maneuver_without_faceup_damage_returns_empty() -> void:
 	_state.effect_registry = null
 	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
 			_state, _ship, _deck, {"speed": 2}, true)
 	assert_eq(effect_id, "",
-			"Missing legacy registry should produce no compatibility effect id.")
+			"Missing faceup movement damage should produce no warning effect id.")
 
 
-func _register_damage_effect(effect_id: String) -> void:
+func _add_faceup_damage(effect_id: String) -> void:
 	var card: DamageCard = DamageCard.create("Ship", effect_id)
 	card.effect_id = effect_id
 	card.timing = "persistent"
 	card.is_faceup = true
 	_ship.add_faceup_damage(card)
-	DamageCardEffectFactory.register_effect(
-			card, _ship, _state.effect_registry, _state.initiative_player)
 
 
 func _make_ship() -> ShipInstance:

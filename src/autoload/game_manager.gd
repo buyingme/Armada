@@ -915,7 +915,9 @@ func submit_commit_displacement(placements: Array) -> Dictionary:
 ##   "Navigate" — increase 1 yaw value by 1 at any joint.
 func submit_execute_maneuver(ship: ShipInstance, speed: int,
 		yaw_clicks: Array, norm_x: float, norm_y: float,
-		rotation_deg: float, yaw_bonus_joint: int = -1) -> Dictionary:
+		rotation_deg: float, yaw_bonus_joint: int = -1,
+		did_overlap: bool = false,
+		speed_delta: int = 0) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
@@ -923,7 +925,9 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 		"ship_index": ship_index, "speed": speed,
 		"yaw_clicks": yaw_clicks, "pos_x": norm_x, "pos_y": norm_y,
 		"rotation_deg": rotation_deg,
-		"yaw_bonus_joint": yaw_bonus_joint})
+		"yaw_bonus_joint": yaw_bonus_joint,
+		"did_overlap": did_overlap,
+		"speed_delta": speed_delta})
 	return _submitter.submit(cmd)
 
 
@@ -1792,8 +1796,10 @@ func _handle_remote_command_effects(
 			pass
 		"resolve_damage":
 			_handle_remote_resolve_damage(cmd, result)
-		"overlap_damage", "persistent_effect_damage":
+		"overlap_damage":
 			_handle_remote_damage_event(cmd, result)
+		"persistent_effect_damage":
+			pass # CommandRouterAdapter emits persistent-damage presentation events.
 		"repair_action":
 			_handle_remote_repair_action(cmd)
 		"resolve_immediate_effect":

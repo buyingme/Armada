@@ -185,13 +185,13 @@ func test_execute_adds_faceup_card() -> void:
 			"Result should contain effect_id")
 	assert_eq(result.get("card_title"), "Ruptured Engine",
 			"Result should contain card_title")
-	assert_true(result.get("persistent_registered", false),
-			"Persistent effect should be registered")
+	assert_false(result.get("persistent_registered", true),
+			"Ruptured Engine should not register legacy effects after N13")
 	assert_eq(result.get("new_hull"), 4,
 			"New hull should be hull(5) - faceup(1) = 4")
 
 
-func test_execute_registers_persistent_effect() -> void:
+func test_execute_movement_card_does_not_register_persistent_effect() -> void:
 	var idx: int = _add_ship(0)
 	var ship: ShipInstance = _state.get_ship(0, idx)
 	var registry: EffectRegistry = _state.effect_registry
@@ -204,8 +204,8 @@ func test_execute_registers_persistent_effect() -> void:
 	})
 	cmd.execute(_state)
 	var after_count: int = registry.get_all_effects().size()
-	assert_gt(after_count, before_count,
-			"Registry should have more effects after persistent card")
+	assert_eq(after_count, before_count,
+			"Registry should not change for migrated movement damage cards")
 
 
 # ======================================================================

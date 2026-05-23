@@ -84,12 +84,20 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REPAIR_STEP,
 			CapacitorFailure.TARGET_REPAIR_SHIELD)
+	var maneuver_yaw_hooks: Array[FlowHook] = RuleRegistry.modifiers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP,
+			RuleSurface.TARGET_MANEUVER_YAW)
+	var maneuver_observers: Array[FlowHook] = RuleRegistry.observers_for(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP,
+			RuleSurface.COMMAND_EXECUTE_MANEUVER)
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 14,
-			"Bootstrap should invoke all fourteen production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 27,
+	assert_eq(registered, 18,
+			"Bootstrap should invoke all eighteen production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 31,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -129,3 +137,7 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Faulty Countermeasures and Capacitor Failure should expose blockers.")
 	assert_eq(repair_blockers.size(), 1,
 			"Capacitor Failure should expose one repair-shield blocker.")
+	assert_eq(maneuver_yaw_hooks.size(), 1,
+			"Thrust Control Malfunction should expose one yaw modifier.")
+	assert_eq(maneuver_observers.size(), 3,
+			"Three movement damage cards should observe execute_maneuver.")

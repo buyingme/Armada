@@ -12,6 +12,7 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/damage_cards/ship/compartment_fire.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/coolant_discharge.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/crew_panic.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/damaged_controls.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/damaged_munitions.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/depowered_armament.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/disengaged_fire_control.gd"),
@@ -19,7 +20,10 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/damage_cards/ship/life_support_failure.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/point_defense_failure.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/power_failure.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/ruptured_engine.gd"),
 	preload("res://src/core/effects/rules/damage_cards/ship/targeter_disruption.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/thrust_control_malfunction.gd"),
+	preload("res://src/core/effects/rules/damage_cards/ship/thruster_fissure.gd"),
 	preload("res://src/core/effects/rules/squadron_keywords/bomber.gd"),
 ]
 

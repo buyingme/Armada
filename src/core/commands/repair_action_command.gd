@@ -154,10 +154,6 @@ func _execute_repair_hull(game_state: GameState) -> Dictionary:
 	var card_idx: int = payload.get("card_index", -1) as int
 	var arr: Array = ship.faceup_damage if is_faceup else ship.facedown_damage
 	var card: DamageCard = arr[card_idx]
-	# Unregister persistent effect before removal.
-	if card.is_faceup and game_state.effect_registry:
-		DamageCardEffectFactory.unregister_effect(
-				card, game_state.effect_registry)
 	ship.remove_damage_card(card)
 	if game_state.damage_deck:
 		game_state.damage_deck.discard(card)

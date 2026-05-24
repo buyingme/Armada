@@ -86,12 +86,11 @@ func reset_for_confirm(state: AttackState, damage: int) -> void:
 func build_defense_payload(state: AttackState,
 		def_inst: ShipInstance,
 		gs: GameState,
-		defense_resolver: DefenseTokenResolver = null,
-		effect_registry: EffectRegistry = null) -> Dictionary:
+		defense_resolver: DefenseTokenResolver = null) -> Dictionary:
 	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
 	return {
 		"blocked_defense_token_indices": build_blocked_defense_token_indices(
-				state, def_inst, defense_resolver, effect_registry),
+				state, def_inst, defense_resolver),
 		"locked_tokens": state.locked_tokens.duplicate(true),
 		"modified_damage": state.modified_damage,
 		"dice_results": state.dice_results.duplicate(true),
@@ -107,8 +106,7 @@ func build_defense_payload(state: AttackState,
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func build_blocked_defense_token_indices(state: AttackState,
 		def_inst: ShipInstance,
-		defense_resolver: DefenseTokenResolver,
-		effect_registry: EffectRegistry) -> Array[int]:
+		defense_resolver: DefenseTokenResolver) -> Array[int]:
 	var blocked: Array[int] = []
 	if state == null or def_inst == null or defense_resolver == null:
 		return blocked
@@ -119,7 +117,7 @@ func build_blocked_defense_token_indices(state: AttackState,
 		if token_state == Constants.DefenseTokenState.DISCARDED:
 			continue
 		if defense_resolver.is_token_blocked_by_effect(
-				def_inst, token, effect_registry, state.defender_zone):
+				def_inst, token, state.defender_zone):
 			blocked.append(i)
 	return blocked
 
@@ -175,8 +173,7 @@ func count_faceup_cards(card_data: Array) -> int:
 
 ## Determines if the first dealt damage card should be faceup.
 func determine_first_card_faceup(state: AttackState,
-		defense_resolver: DefenseTokenResolver,
-		effect_registry: EffectRegistry) -> bool:
+		defense_resolver: DefenseTokenResolver) -> bool:
 	var attacker: RefCounted = null
 	var defender: RefCounted = null
 	if state.attacker_ship is ShipToken:
@@ -189,8 +186,7 @@ func determine_first_card_faceup(state: AttackState,
 		defender = (
 				state.defender_ship as ShipToken).get_ship_instance()
 	return defense_resolver.determine_first_card_faceup(
-			state.dice_results, state.contain_used,
-			effect_registry, attacker, defender)
+			state.dice_results, state.contain_used, attacker, defender)
 
 
 ## Builds the ship-damage summary string for UI display.
@@ -299,20 +295,16 @@ func compute_attack_identity_patch(state: AttackState,
 
 
 ## Prepares a faceup damage card for post-processing.
-## Returns a descriptor indicating what needs to happen: persistent effect
-## registration and immediate effect deferral.
+## Returns a descriptor indicating whether immediate effect deferral is needed.
 ## Does NOT mutate any state — callers decide what to do with the result.
 ##
 ## Returns Dictionary:
-##   "should_register_persistent": bool — card needs persistent effect registered
 ##   "has_immediate": bool — card has immediate effect (may need deferral)
 ##   "card_title": String — card name for logging/deferred tracking
 func prepare_faceup_card(card: DamageCard,
 		damage_dealer: DamageDealer) -> Dictionary:
-	var should_register: bool = damage_dealer.should_register_persistent(card)
 	var has_immediate: bool = damage_dealer.has_immediate_effect(card)
 	return {
-		"should_register_persistent": should_register,
 		"has_immediate": has_immediate,
 		"card_title": card.title,
 	}

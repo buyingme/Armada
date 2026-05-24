@@ -51,7 +51,7 @@ func test_defense_resolver_uses_rule_without_legacy_registry() -> void:
 	var attacker: ShipInstance = _attacker_ship()
 	_add_targeter_disruption(attacker)
 	var faceup: bool = _resolver.determine_first_card_faceup(
-			_critical_results(), false, null, attacker)
+			_critical_results(), false, attacker)
 	assert_false(faceup,
 			"RuleRegistry should block the standard critical effect without legacy hooks.")
 
@@ -69,9 +69,7 @@ func test_resolve_damage_command_does_not_register_legacy_effect() -> void:
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(int(result.get("persistent_registered", -1)), 0,
-			"Targeter Disruption should not register a legacy effect after N9.")
-	assert_eq(_state.effect_registry.get_effect_count(), 0,
-			"No legacy Targeter Disruption effect should be registered.")
+			"Targeter Disruption should not register transient runtime effects.")
 	assert_true(_critical_effect_blocked(attacker),
 			"The newly dealt card should still block through RuleRegistry.")
 
@@ -79,11 +77,8 @@ func test_resolve_damage_command_does_not_register_legacy_effect() -> void:
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_targeter_disruption(_attacker_ship())
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Targeter Disruption should not rebuild a legacy effect.")
 	assert_true(_critical_effect_blocked(restored_attacker),
 			"RuleRegistry blocker should still apply after save/load rebuild.")
 

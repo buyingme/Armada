@@ -66,18 +66,12 @@ func execute(game_state: GameState) -> Dictionary:
 	var card: DamageCard = DamageCard.deserialize(card_data)
 	card.is_faceup = true
 	ship.add_faceup_damage(card)
-	# Register persistent effect if applicable.
-	var persistent_registered: bool = false
-	var registry: EffectRegistry = game_state.effect_registry
-	if registry and DamageCardEffectFactory.is_persistent(card):
-		DamageCardEffectFactory.register_effect(card, ship, registry)
-		persistent_registered = true
 	var new_hull: int = ship.ship_data.hull - ship.get_total_damage()
 	return {
 		"effect_id": effect_id,
 		"owner_player": owner,
 		"ship_index": ship_index,
 		"card_title": card.title,
-		"persistent_registered": persistent_registered,
+		"persistent_registered": false,
 		"new_hull": new_hull,
 	}

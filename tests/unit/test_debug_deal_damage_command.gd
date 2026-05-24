@@ -186,26 +186,22 @@ func test_execute_adds_faceup_card() -> void:
 	assert_eq(result.get("card_title"), "Ruptured Engine",
 			"Result should contain card_title")
 	assert_false(result.get("persistent_registered", true),
-			"Ruptured Engine should not register legacy effects after N13")
+			"Ruptured Engine should not register transient runtime effects.")
 	assert_eq(result.get("new_hull"), 4,
 			"New hull should be hull(5) - faceup(1) = 4")
 
 
 func test_execute_movement_card_does_not_register_persistent_effect() -> void:
 	var idx: int = _add_ship(0)
-	var ship: ShipInstance = _state.get_ship(0, idx)
-	var registry: EffectRegistry = _state.effect_registry
-	var before_count: int = registry.get_all_effects().size()
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
 		"effect_id": "ruptured_engine",
 		"card_data": _make_persistent_card_data(),
 	})
-	cmd.execute(_state)
-	var after_count: int = registry.get_all_effects().size()
-	assert_eq(after_count, before_count,
-			"Registry should not change for migrated movement damage cards")
+	var result: Dictionary = cmd.execute(_state)
+	assert_false(result.get("persistent_registered", true),
+			"Debug damage should not register transient runtime effects.")
 
 
 # ======================================================================
@@ -215,8 +211,6 @@ func test_execute_movement_card_does_not_register_persistent_effect() -> void:
 func test_execute_immediate_no_persistent_registration() -> void:
 	var idx: int = _add_ship(0)
 	var ship: ShipInstance = _state.get_ship(0, idx)
-	var registry: EffectRegistry = _state.effect_registry
-	var before_count: int = registry.get_all_effects().size()
 	var cmd := DebugDealDamageCommand.new(0, {
 		"owner_player": 0,
 		"ship_index": idx,
@@ -228,9 +222,6 @@ func test_execute_immediate_no_persistent_registration() -> void:
 			"Should have 1 faceup damage card")
 	assert_false(result.get("persistent_registered", true),
 			"Immediate card should not register persistent effect")
-	var after_count: int = registry.get_all_effects().size()
-	assert_eq(after_count, before_count,
-			"Registry should not change for immediate card")
 
 
 # ======================================================================

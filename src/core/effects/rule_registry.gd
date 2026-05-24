@@ -1,9 +1,8 @@
 ## RuleRegistry
 ##
 ## Static catalogue of rule hooks keyed by FlowSpec surfaces.
-## M5 intentionally registers no production hooks; later Phase M slices add
-## migrated rules through the registration methods here while EffectRegistry
-## continues to handle the legacy runtime effects.
+## Rule definitions are static; active rule state is derived from serialized
+## game entities such as ships, squadrons, faceup damage cards, and tokens.
 class_name RuleRegistry
 extends RefCounted
 

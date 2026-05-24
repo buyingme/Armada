@@ -107,7 +107,7 @@ func test_attack_dice_resolver_uses_rule_without_legacy_registry() -> void:
 			_make_ship_token(attacker), Constants.HullZone.FRONT, null,
 			_make_ship_token(_defender_ship()), Constants.HullZone.FRONT, null)
 	var blocked: bool = _resolver.is_blocked_by_damage_at_range(
-			null, parts, false, 1, Constants.RANGE_BAND_CLOSE)
+			parts, false, 1, Constants.RANGE_BAND_CLOSE)
 	assert_true(blocked,
 			"AttackDiceResolver should consume the Coolant target blocker.")
 
@@ -141,11 +141,8 @@ func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_coolant_discharge(attacker)
 	_state.record_ship_target_attack(attacker)
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Coolant Discharge should not rebuild a legacy effect.")
 	assert_eq(restored.get_ship_target_attack_count(restored_attacker), 1,
 			"Ship-target attack counts should survive save/load.")
 	assert_true(_attack_target_blocked(restored_attacker, "ship", 1),

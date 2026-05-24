@@ -320,7 +320,7 @@ func test_execute_ship_faceup_card() -> void:
 			"Card should be marked faceup.")
 
 
-func test_execute_ship_faceup_movement_card_does_not_register_legacy_effect() -> void:
+func test_execute_ship_faceup_movement_card_records_no_persistent_runtime() -> void:
 	_state.initiative_player = 1
 	var idx: int = _add_ship(1)
 	var cmd := ResolveDamageCommand.new(0, {
@@ -334,11 +334,7 @@ func test_execute_ship_faceup_movement_card_does_not_register_legacy_effect() ->
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("persistent_registered", -1), 0,
-			"Ruptured Engine should not register legacy effects after N13")
-	var effects: Array[GameEffect] = _state.effect_registry.get_effects_for_hook(
-			&"AFTER_MANEUVER_EXECUTE")
-	assert_eq(effects.size(), 0,
-			"Ruptured Engine should not hook AFTER_MANEUVER_EXECUTE after N13")
+			"Ruptured Engine should not register transient runtime effects.")
 
 
 func test_execute_ship_mixed_cards() -> void:

@@ -1,10 +1,10 @@
 ## EffectContext
 ##
-## Mutable data bag passed through the effect hook pipeline.
-## Each hook point populates the context with relevant data; effects
-## read and mutate fields to modify game behaviour.
+## Mutable data bag passed through RuleRegistry hook callbacks.
+## Each hook surface populates the context with relevant data; rules read and
+## mutate fields to modify game behaviour.
 ##
-## The context is created fresh for each hook invocation and discarded
+## The context is created fresh for each rule invocation and discarded
 ## afterwards — it carries no persistent state.
 ##
 ## Rules Reference: "Effect Use and Timing", RRG p.5; ET-001–004.
@@ -24,7 +24,7 @@ const META_CHOSEN_DIE_COLOUR: String = "chosen_die_colour"
 const META_REMOVED_DIE_COLOUR: String = "removed_die_color"
 
 
-## The hook that is currently being resolved (e.g. &"ATTACK_CALC_DAMAGE").
+## Optional diagnostic surface name for the current rule invocation.
 var hook: StringName = &""
 
 ## --- Participants ---
@@ -44,16 +44,16 @@ var defending_zone: int = -1
 ## --- Dice ---
 
 ## Dice pool before rolling.  Keys are Constants.DiceColor, values are int
-## counts.  Effects on ATTACK_GATHER_DICE may add or remove dice.
+## counts.  RuleRegistry dice-pool modifiers may add or remove dice.
 var dice_pool: Dictionary = {}
 
 ## Rolled dice results — Array of {"color": DiceColor, "face": DiceFace}.
-## Effects on ATTACK_MODIFY_DICE_* may reroll, add, or remove entries.
+## RuleRegistry attack-modifier affordances may reroll, add, or remove entries.
 var dice_results: Array[Dictionary] = []
 
 ## --- Damage ---
 
-## Running damage total.  Effects on ATTACK_CALC_DAMAGE may adjust this.
+## Running damage total.  RuleRegistry damage modifiers may adjust this.
 var damage_total: int = 0
 
 ## Whether the standard critical effect is allowed.

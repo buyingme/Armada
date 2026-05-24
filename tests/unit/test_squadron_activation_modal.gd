@@ -511,15 +511,12 @@ func test_cancel_move_returns_to_action_choice() -> void:
 
 
 # ===========================================================================
-# Phase K12-bugfix — auto-finish on click of different squadron
+# Squadron command preview selection
 # ===========================================================================
 
-## When the modal is in ACTION_CHOICE (command mode) and the player
-## clicks a *different* squadron, the previous activation should
-## auto-finish (emitting activation_done) and the new squadron should
-## be selected.  Restricted to command mode because turn mode is
-## driven by the controller re-opening via signal.
-func test_click_different_squadron_in_action_choice_auto_finishes() -> void:
+## Clicking another squadron in command mode before moving/attacking is only
+## a preview switch. It must not spend command activation budget.
+func test_click_different_squadron_command_preview_no_spend() -> void:
 	GameManager.start_new_game()
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
@@ -531,38 +528,124 @@ func test_click_different_squadron_in_action_choice_auto_finishes() -> void:
 	ps.squadrons.append(inst_b)
 	var token_a: SquadronToken = _make_token(inst_a)
 	var token_b: SquadronToken = _make_token(inst_b)
-	# Position both tokens at the ship origin so the range check passes.
 	token_a.position = Vector2.ZERO
 	token_b.position = Vector2.ZERO
-	# Manually configure the modal as if we're mid-command-mode after
-	# squadron A has been selected (this avoids needing a real
-	# SquadronCommandResolver in a unit test).
+	var resolver: SquadronCommandResolver = _make_resolver()
 	_modal.visible = true
 	_modal._is_interactable = true
 	_modal._is_command_mode = true
 	_modal._allow_move_and_attack = true
-	_modal._command_resolver = _make_resolver()
+	_modal._command_resolver = resolver
 	_modal._selected_token = token_a
 	_modal._selected_instance = inst_a
 	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
-	# Mark inst_a activated externally so the click-validator
-	# accepts inst_b (and so the auto-finish doesn't get rejected
-	# by re-selecting inst_a).
-	inst_a.activated_this_round = true
+	watch_signals(_modal)
+	var consumed: bool = _modal.handle_squadron_click(token_b)
+	assert_true(consumed,
+			"Click on different squadron in ACTION_CHOICE should be consumed")
+	assert_signal_not_emitted(_modal, "activation_done",
+			"Preview switch should not finish the previous squadron.")
+	assert_eq(resolver.get_activations_used(), 0,
+			"Preview switch should not spend command activation budget.")
+	assert_eq(_modal.get_selected_token(), token_b,
+			"Selected token should now be the second squadron")
+
+
+## After a squadron has committed to a real action, clicking another squadron
+## finishes the current activation before previewing the next one.
+func test_click_different_squadron_after_action_finishes_activation() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
+	var inst_a: SquadronInstance = _make_instance(0)
+	var inst_b: SquadronInstance = _make_instance(0)
+	ps.squadrons.append(inst_a)
+	ps.squadrons.append(inst_b)
+	var token_a: SquadronToken = _make_token(inst_a)
+	var token_b: SquadronToken = _make_token(inst_b)
+	token_a.position = Vector2.ZERO
+	token_b.position = Vector2.ZERO
+	var resolver: SquadronCommandResolver = _make_resolver()
+	resolver.use_activation()
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._command_resolver = resolver
+	_modal._selected_token = token_a
+	_modal._selected_instance = inst_a
+	_modal._activation_slot_committed = true
+	_modal._has_attacked = true
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
 	var emitted: Dictionary = {"instance": null}
 	_modal.activation_done.connect(
 			func(sq: SquadronInstance) -> void:
 				emitted["instance"] = sq,
 			CONNECT_ONE_SHOT)
-	watch_signals(_modal)
 	var consumed: bool = _modal.handle_squadron_click(token_b)
 	assert_true(consumed,
-			"Click on different squadron in ACTION_CHOICE should be consumed")
+			"Committed activation should allow selecting the next squadron.")
 	assert_eq(emitted["instance"], inst_a,
-			"activation_done should fire for the previously selected"
-			+" squadron before the new one is selected")
+			"activation_done should fire for the committed squadron.")
+	assert_eq(resolver.get_activations_used(), 1,
+			"Selecting the next preview should not spend a second slot yet.")
 	assert_eq(_modal.get_selected_token(), token_b,
-			"Selected token should now be the second squadron")
+			"Selected token should now be the second squadron.")
+
+
+func test_attack_pressed_command_mode_spends_one_activation() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var inst: SquadronInstance = _make_instance(0)
+	var resolver: SquadronCommandResolver = _make_resolver()
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._command_resolver = resolver
+	_modal._selected_token = _make_token(inst)
+	_modal._selected_instance = inst
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
+	watch_signals(_modal)
+	_modal._on_attack_pressed()
+	assert_eq(resolver.get_activations_used(), 1,
+			"Attack should spend exactly one command activation slot.")
+	assert_signal_emitted(_modal, "attack_requested",
+			"Attack should still start after the slot is committed.")
+
+
+func test_back_pressed_command_preview_clears_without_spend() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = \
+			Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var inst: SquadronInstance = _make_instance(0)
+	var resolver: SquadronCommandResolver = _make_resolver()
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._command_resolver = resolver
+	_modal._selected_token = _make_token(inst)
+	_modal._selected_instance = inst
+	_modal._state = SquadronActivationModal.State.ACTION_CHOICE
+	watch_signals(_modal)
+	_modal._on_skip_pressed()
+	assert_eq(resolver.get_activations_used(), 0,
+			"Back from preview should not spend command activation budget.")
+	assert_null(_modal.get_selected_token(),
+			"Back from preview should clear the selected squadron.")
+	assert_eq(int(_modal.get_state()),
+			int(SquadronActivationModal.State.WAITING_FOR_SELECTION),
+			"Back from preview should return to squadron selection.")
+	assert_signal_not_emitted(_modal, "activation_done",
+			"Back from preview should not finish an activation.")
+	assert_signal_emitted(_modal, "selection_cleared",
+			"Back from preview should notify the controller to clear overlays.")
 
 
 ## Clicking the SAME squadron in ACTION_CHOICE (command mode) is ignored.

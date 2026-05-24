@@ -362,42 +362,6 @@ func test_destroy_returns_cards_to_deck() -> void:
 			"Discard pile should grow by 1 (DM-030).")
 
 
-func test_destroy_unregisters_persistent_effects() -> void:
-	var ship: ShipInstance = _make_ship(0)
-	_state.get_player_state(0).ships.append(ship)
-
-	# Register a dummy effect keyed to this ship.
-	var registry: EffectRegistry = EffectRegistry.new()
-	var effect: GameEffect = GameEffect.new()
-	effect.owner = ship
-	effect.source_id = "test_effect"
-	# Override get_hooks to return a test hook.
-	var script: GDScript = GDScript.new()
-	script.source_code = """
-extends GameEffect
-func get_hooks() -> Array[StringName]:
-	return [&"ATTACK_CALC_DAMAGE"]
-"""
-	script.reload()
-	effect.set_script(script)
-	effect.owner = ship
-	registry.register(effect)
-	_state.effect_registry = registry
-	var before: int = registry.get_effects_for_hook(
-			&"ATTACK_CALC_DAMAGE").size()
-
-	var cmd := DestroyUnitCommand.new(0, {
-		"owner_player": 0,
-		"ship_index": 0,
-	})
-	cmd.execute(_state)
-
-	var after: int = registry.get_effects_for_hook(
-			&"ATTACK_CALC_DAMAGE").size()
-	assert_true(after < before,
-			"Persistent effects should be unregistered after destruction.")
-
-
 # ======================================================================
 # DestroyUnitCommand — serialize / deserialize
 # ======================================================================

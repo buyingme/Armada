@@ -83,11 +83,8 @@ func test_cleanup_blocks_after_save_load_without_legacy_effect() -> void:
 	_add_compartment_fire(ship)
 	ship.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_ship: ShipInstance = restored.get_ship(OWNER_PLAYER, SHIP_INDEX)
 	var result: Dictionary = StatusPhaseCleanupCommand.new(0, {}).execute(restored)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Compartment Fire should no longer require a legacy effect bridge.")
 	assert_eq(int(restored_ship.defense_tokens[0]["state"]),
 			int(Constants.DefenseTokenState.EXHAUSTED),
 			"RuleRegistry should still block the restored ship's readying.")

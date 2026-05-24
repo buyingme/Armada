@@ -57,53 +57,31 @@ receive and trust an ad-hoc `controller_player`. M1's `FlowSpec` must make that
 role explicit, so future producers derive the resolved controller instead of
 re-inventing it.
 
-### 0.2 Runtime Registry Boundary Review (M0.6)
+### 0.2 Rule Runtime Boundary (N23)
 
-M0.6 defines the boundary between today's transient effect runtime and the
-future static rule catalogue. `EffectRegistry` remains the live hook executor
-for legacy effects during M; `RuleRegistry` must not become a second saved
-state store. Active rule status is always derived from authoritative serialized
-entities, or from a documented bridge over runtime effects that are rebuilt
-from those entities.
+N23 retired the transient `EffectRegistry` / `GameEffect` runtime. There is now
+one production rule extension model: `RuleRegistry` declares static hook
+definitions, while active rule status is derived from authoritative serialized
+entities such as `GameState`, ship/squadron instances, faceup damage cards,
+upgrades, objectives, obstacles, and tokens.
 
 | Surface | Responsibility | Persistence contract |
 |---|---|---|
-| `EffectRegistry` | Runtime collection of active `GameEffect` instances, keyed by legacy hook names such as `DEFENSE_VALIDATE_TOKEN`, `ATTACK_GATHER_DICE`, and `BEFORE_REVEAL_DIAL`. | Transient. It lives on `GameState` but is not serialized. Loaded games must rebuild it before play resumes. |
-| `EffectFactory.rebuild_runtime_effects()` | Recreates transient effects from serialized state: squadron keywords and remaining legacy faceup damage cards. Command paths that deal, repair, discard, or destroy cards must keep this runtime state aligned with serialized entities until Phase N retires it. | Rebuild boundary after deserialize/load. Migrated RuleRegistry cards such as Blinded Gunners must register no legacy runtime effect and still read active status from `ShipInstance.faceup_damage`. |
-| `RuleRegistry` | Static catalogue of hook definitions, priorities, and command/flow attachment points. It decides what predicates exist and how they are ordered. | Computed/runtime-only. It stores definitions, not active card instances. Predicates read `GameState` or a typed bridge rebuilt by `EffectFactory`. |
+| `RuleRegistry` | Static catalogue of validators, modifiers, observers, blockers, enablers, priorities, and FlowSpec attachment points. | Computed/runtime-only. It stores definitions, not active card instances. |
+| `RuleSurface` | Shared target names and callback runners for command validation, projection eligibility, modifiers, and observer follow-ups. | Stateless; callers provide serialized state/context for each invocation. |
+| Serialized entities | Source of active rule truth: faceup damage cards, squadron keywords, objective/upgrades/tokens, and command/result metadata. | Serialized by `GameState` or owned model classes and rebuilt through normal deserialize/load paths. |
 
-Worked example: the loaded Blinded Gunners regression fixed in `d752ffd` and
-retired in N8. The save contained a ship with serialized
-`faceup_damage.effect_id == "blinded_gunners"`, but
-`GameState.effect_registry` was empty after deserialize, so the old
-`ATTACK_SPEND_ACCURACY` blocker did not fire. The post-N8 invariant is that
-after `deserialize -> start_new_game_from_state ->
-EffectFactory.rebuild_runtime_effects`, no legacy Blinded Gunners hook is
-rebuilt, but the RuleRegistry `accuracy_spend` blocker still derives active
-status from `ShipInstance.faceup_damage` in hot-seat, network, and replay.
+Worked example: Blinded Gunners. The save contains a ship with serialized
+`faceup_damage.effect_id == "blinded_gunners"`. After deserialize, no runtime
+effect is rebuilt; the RuleRegistry `accuracy_spend` blocker reads the active
+card directly from `ShipInstance.faceup_damage` in hot-seat, network, replay,
+and direct command validation.
 
-Phase M/N rule boundary decisions:
-
-| Slice | Rule | Current legacy hook surface | M target | EffectRegistry bridge decision |
-|---|---|---|---|---|
-| M7/N2 | Faulty Countermeasures | `DEFENSE_VALIDATE_TOKEN` previously blocked exhausted defense-token spends. | Pure `RuleRegistry` validator plus blocker for defense-token commands and UI eligibility; active source is defender `faceup_damage`. | N2 removes the legacy `DamageCardEffect` bridge. `blocked_defense_token_indices` now comes from the `defense_token_spend` blocker surface. |
-| M8 | Compartment Fire | `STATUS_READY_TOKENS` previously blocked readying defense tokens during status cleanup. | Pure `RuleRegistry` status-cleanup modifier on `defense_token_readying`; active source is each ship's `faceup_damage`. | M8 removes the legacy `EffectRegistry` bridge. Save/load regression proves the rule still blocks after `EffectFactory.rebuild_runtime_effects()` registers no Compartment Fire effect. |
-| M9 | Damaged Munitions | `ATTACK_GATHER_DICE` previously removed one die before a ship attack roll. | Pure `ATTACK_ROLL` modifier; active source is attacker `faceup_damage` and current attack context. | M9 removes the legacy `EffectRegistry` bridge. The RuleRegistry modifier exposes available die-colour metadata first, then applies the attacker-selected colour before rolling; save/load regression proves the rule still works after `EffectFactory.rebuild_runtime_effects()` registers no Damaged Munitions effect. |
-| M10 | Point-Defense Failure | `ATTACK_GATHER_DICE` removed one die before attacking a squadron. | Pure `ATTACK_ROLL` modifier with defender-is-squadron predicate. | M10 removes the legacy `EffectRegistry` bridge. The RuleRegistry modifier exposes available die-colour metadata first, then applies the attacker-selected colour before rolling; squadron-vs-ship targeting data comes from the attack context/payload. |
-| M11 | Crew Panic | Pre-M11 `BEFORE_REVEAL_DIAL` bridge opened the choice on the second dial click, after reveal. | Pure `RuleRegistry` ENABLER on `WAIT_FOR_SHIP_SELECT` exposes pre-reveal choice metadata through `UIIntent.affordances`; damage/discard/activation mutations are command-backed. | M11 removes the legacy `EffectRegistry` bridge. The first hidden-dial click now prompts before `reveal_dial`; damage choice submits `persistent_effect_damage` then reveals, and discard choice submits `spend_dial(mode=discard)` then `activate_ship(skip_reveal=true)`. |
-| M12 | Capacitor Failure | `DEFENSE_VALIDATE_TOKEN` blocked redirect and `REPAIR_VALIDATE_SHIELD` blocked shield repair into zones with 0 shields. | Pure multi-hook rule: command validators plus RuleRegistry blockers for defense-token and repair-shield UI eligibility. Active state comes from `ShipInstance.faceup_damage`. | No legacy `EffectRegistry` bridge remains after M12. |
-| N3 | Power Failure | `CALC_ENGINEERING_VALUE` halved engineering value in `RepairResolver`. | Pure `RuleRegistry` modifier on `SHIP_ACTIVATION / REPAIR_STEP` target `engineering_value`; active source is ship `faceup_damage`. | N3 removes the legacy `DamageCardEffect` bridge. Save/load rebuild registers no legacy Power Failure effect; stacked copies still halve and round down successively. |
-| N4 | Life Support Failure | `ON_COMMAND_TOKEN_GAIN` blocked command-token gain after the immediate discard resolver left the card faceup. | Pure `RuleRegistry` validators/blockers for `convert_dial_to_token` and `command_token_gain` on ship-activation token-conversion steps; active source is ship `faceup_damage`. | N4 removes the legacy token-gain bridge while preserving the immediate token-discard command/resolver path. |
-| N5 | Depowered Armament | `ATTACK_VALIDATE_TARGET` blocked long-range attacks by the damaged ship. | Pure `RuleRegistry` attack-target blocker plus direct `publish_attack_flow` validator on `ATTACK / ATTACK_DECLARE`; active source is attacker `faceup_damage`. | N5 removes the Depowered Armament legacy target bridge. Remaining `ATTACK_VALIDATE_TARGET` fallback covers only unmigrated target rules such as Coolant Discharge and Disengaged Fire Control. |
-| N6 | Disengaged Fire Control | `ATTACK_VALIDATE_TARGET` blocked obstructed attacks by the damaged ship. | Pure `RuleRegistry` attack-target blocker plus direct `publish_attack_flow` validator on `ATTACK / ATTACK_DECLARE`; active source is attacker `faceup_damage` and attack-declare obstruction metadata. | N6 removes the Disengaged Fire Control legacy target bridge. |
-| N7 | Coolant Discharge | `ATTACK_VALIDATE_TARGET` blocked a second attack using the activation-local counter; `ATTACK_CALC_DAMAGE` added a stale close-range damage bonus. | Pure `RuleRegistry` attack-target blocker plus direct `publish_attack_flow` validator on `ATTACK / ATTACK_DECLARE`; active source is attacker `faceup_damage` plus serialized `GameState.ship_target_attack_counts`. | N7 removes the Coolant Discharge legacy bridge and does not migrate the unsupported close-range damage side effect. `RollDiceCommand` records ship-target attacks through optional attack identity metadata. |
-| N8 | Blinded Gunners | `ATTACK_SPEND_ACCURACY` cancelled accuracy spending for the damaged attacker. | Pure `RuleRegistry` `accuracy_spend` blocker on `ATTACK / ATTACK_MODIFY` plus defense-step `publish_attack_flow` validator rejecting non-empty `locked_tokens`; active source is attacker `faceup_damage`. | N8 removes the Blinded Gunners legacy bridge. Attack payload metadata exposes raw and spendable accuracy counts so the visible UI and direct submissions agree. |
-
-Boundary rule for migration slices: a migrated rule may remove its legacy
-`DamageCardEffect` path only after tests prove command-time registration,
-save/load rebuild, and replay behaviour all match. A non-migrated persistent
-effect remains in `EffectFactory.rebuild_runtime_effects()` so loaded games do
-not regress while Phase M proceeds one rule at a time.
+The static guard in `scripts/lint_phase_k.sh` fails if production code
+reintroduces the retired runtime classes or legacy hook-string dispatch. Future
+rules must therefore define a RuleRegistry surface, identify the serialized
+state that proves active status, and cover command, projection, replay, and
+network paths through that one source of truth.
 
 ### 0.3 Command Scope Model (M0.7)
 
@@ -148,8 +126,7 @@ done:
 - **Submit-result guard:** scene/controller local effects run only after
   `GameManager.submit_*` returns a non-empty accepted result.
 - **Rebuild path:** save/load, replay, hot-seat, and network derive active rule
-  state from serialized entities or a documented rebuilt `EffectRegistry`
-  bridge.
+  state from serialized entities only.
 
 The reusable checklist now lives in
 [.github/skills/rule-integration/SKILL.md](../.github/skills/rule-integration/SKILL.md).
@@ -194,7 +171,7 @@ Current registered command inventory for M3:
 | `end_activation` | `FLOW_STEP` | `SHIP_ACTIVATION / MANEUVER_STEP`, `SHIP_ACTIVATION / ACTIVATION_DONE` | Ends the active ship after maneuver/terminal activation flow and returns to ship selection. |
 | `activate_squadron` | `FLOW_STEP` | `SQUADRON_ACTIVATION / WAIT_FOR_SQUAD_SELECT` | Squadron selection enters the action-choice modal. |
 | `move_squadron` | `FLOW_STEP` | `SQUADRON_ACTIVATION / ACTION_CHOICE`, `SQUADRON_ACTIVATION / SQUAD_MOVE`, `SHIP_ACTIVATION / SQUADRON_STEP` | Durable squadron position update for Squadron Phase movement or ship Squadron-command movement. |
-| `complete_squadron_activation` | `PHASE` | `SQUADRON` | Durable lifecycle marker for a Squadron Phase activation that ends without a legal movement command; never use zero-distance `move_squadron` as a completion marker. |
+| `complete_squadron_activation` | `PHASE` | `SHIP`, `SQUADRON` | Durable lifecycle marker for a Squadron Phase or ship Squadron-command activation that ends without a legal movement command; never use zero-distance `move_squadron` as a completion marker. |
 | `skip_attack` | `FLOW_STEP` | `SHIP_ACTIVATION / ATTACK_STEP`, `SQUADRON_ACTIVATION / SQUAD_ATTACK`, `ATTACK / ATTACK_DECLARE`, `ATTACK / ATTACK_ROLL`, `ATTACK / ATTACK_MODIFY` | Replay-visible choice to pass attack or sub-step where attacker owns the choice. |
 | `roll_dice` | `FLOW_STEP` | `ATTACK / ATTACK_ROLL` | Attack dice roll is meaningful only inside the attack roll step. Optional attacker/target identity metadata records ship-target attacks for Coolant Discharge without changing existing replay payload compatibility. |
 | `skip_attack_modifier` | `FLOW_STEP` | `ATTACK / ATTACK_MODIFY` | Controller marker for optional attack-modifier skips such as Swarm when the projected attack controller is not the peer that owns the local attack pipeline. |
@@ -338,7 +315,7 @@ activation lifecycle commands.
 |---|---|
 | controller_role | Active activation player |
 | modal_kind | `SQUADRON` |
-| allowed_commands | `advance_activation_step`, `spend_dial`, `spend_token`, `move_squadron`, `publish_attack_flow` when a commanded squadron attacks. |
+| allowed_commands | `advance_activation_step`, `spend_dial`, `spend_token`, `move_squadron`, `complete_squadron_activation`, `publish_attack_flow` when a commanded squadron attacks. |
 | transitions | Squadron command complete or declined -> `REPAIR_STEP`. |
 | producer | `AdvanceActivationStepCommand(step_id="squadron_step")`. |
 | rule citation | RRG "Squadron" command; squadron command activation rules. |

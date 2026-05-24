@@ -983,11 +983,8 @@ func _on_repair_step_entered() -> void:
 	var ship: ShipInstance = _activation_ctx.activating_ship_token.get_ship_instance()
 	if ship == null:
 		return
-	var registry: EffectRegistry = null
-	if GameManager.current_game_state:
-		registry = GameManager.current_game_state.effect_registry
 	var resolver: RepairResolver = RepairResolver.create(
-			ship, _damage_deck, registry)
+			ship, _damage_deck)
 	if resolver.is_empty():
 		_log.info("No engineering points — auto-advancing repair step.")
 		_on_repair_done()

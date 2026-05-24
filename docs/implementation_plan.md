@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-23 (Phase M15 closeout complete; Phase N has N0 audit, N1 scaffolding, N2 bridge retirement, N3-N5 complete with MT pass, N6-N8 complete with MT pass, N9-N11 complete with MT pass, N12-N15 complete with MT pass, N16 five-keyword audit complete, N17 keyword foundation complete, N18-N22 live keyword implementation complete, the post-playtest Counter lock + hot-seat mirror + zero-damage trigger follow-ups verified, the debug scenario network-lobby picker + board-spawn handoff verified, the command-backed Counter ownership flow verified, the squadron no-move activation completion marker verified, the network Swarm reroll affordance verified, and N17-N22 MT pass confirmed; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-24 (Phase M15 closeout complete; Phase N has N0-N23 complete through legacy runtime retirement, including N17-N22 live keyword implementation, the post-playtest Counter lock + hot-seat mirror + zero-damage trigger follow-ups, debug scenario network-lobby picker + board-spawn handoff, command-backed Counter ownership flow, squadron no-move activation completion marker, ship-phase completion and preview-commit follow-ups, network Swarm reroll affordance, and N23 static guard; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 185 |
-| GUT tests | 3 272 |
-| GUT asserts | 6 676 |
+| GUT test scripts | 181 |
+| GUT tests | 3 189 |
+| GUT asserts | 6 534 |
 | Failing tests | 0 |
-| Last completed batch | N17-N22 — keyword foundation + live squadron keyword implementation + Counter follow-ups + debug scenario network-lobby picker/board-spawn handoff + command-backed Counter ownership flow + squadron no-move activation completion marker + network Swarm reroll affordance + MT pass |
+| Last completed batch | N23 — legacy runtime retirement + static guard |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -85,6 +85,29 @@ treating `awaiting_remote` command-submit sentinels as empty roll/reroll
 results before the authoritative dice payload arrives.
 User MT pass confirmed 2026-05-23 for the complete N17-N22 keyword foundation
 and live keyword batch.
+N23 legacy runtime retirement passed 2026-05-23: deleted the legacy runtime
+effect classes/factories and obsolete tests, removed `GameState.effect_registry`
+plus resolver hook fallbacks, and extended `scripts/lint_phase_k.sh` with the
+Phase N static guard. Full GUT green (181 / 3 184 / 6 520, 0 failures), Phase
+K/N lint 0 retired legacy surfaces / 0 violations / 4 allow-listed branches,
+baseline traces pass with hot-seat hash
+`26b9d737befabfce469206f77f0007a54ab32c2df1cef5177c38aa0dd94f3167` and
+network-state hash
+`5af18ca87b397fa6ebcc26e35560339f207edc9c59dfe08180bdc1b7c872d808`.
+Ship-phase Squadron command completion follow-up passed 2026-05-23: full GUT
+green (181 / 3 186 / 6 522, 0 failures), Phase K/N lint 0 retired legacy
+surfaces / 0 violations / 4 allow-listed branches, baseline traces pass with
+network-state hash
+`43d373139b1cf5dad5886178dec97a167b46f23e4a643a333d6ac72b01bf6e12`, and
+`git diff --check` clean. This keeps `complete_squadron_activation` legal for
+ship-phase Squadron commands that finish without a movement command.
+Squadron command preview-commit UX follow-up passed 2026-05-24: full GUT green
+(181 / 3 189 / 6 534, 0 failures), Phase K/N lint 0 retired legacy surfaces /
+0 violations / 4 allow-listed branches, baseline traces pass with
+network-state hash
+`51abc12744068d05efea753a6c0e3b2e9d079f402836ed7e888bea3aea0eeb55`. This
+keeps command-mode squadron clicks as transient range/action previews until a
+real move or attack commits the activation slot.
 
 ---
 
@@ -222,13 +245,11 @@ regression gate is complete and remains the required L/M automated gate:
   make `controller_role` first-class, with `SQUADRON_DISPLACEMENT /
   DISPLACEMENT_PLACE` as the worked example for the non-moving-player rule.
   No source code changed.
-- M0.6 result: [docs/game_flow.md](game_flow.md) now defines the runtime
-  registry boundary: `EffectRegistry` remains transient and rebuilt from
-  serialized entities by `EffectFactory.rebuild_runtime_effects()`, while
-  `RuleRegistry` is a static definition catalogue and not an active-state
-  store. The loaded Blinded Gunners bug is pinned as the save/load acceptance
-  example, and the first-six rule migration decisions are recorded. No source
-  code changed.
+- M0.6 result: [docs/game_flow.md](game_flow.md) defined the historical runtime
+  registry boundary that guided Phase M migration. N23 supersedes that boundary:
+  `RuleRegistry` is now the only production rule hook catalogue, and active
+  rule state comes from serialized entities only. The loaded Blinded Gunners
+  bug remains the save/load acceptance example.
 - M0.7 result: [docs/game_flow.md](game_flow.md) now defines the `GLOBAL` /
   `PHASE` / `FLOW_STEP` command applicability taxonomy and inventories every
   currently registered command type with a proposed M3 declaration scope. The
@@ -481,12 +502,11 @@ regression gate is complete and remains the required L/M automated gate:
   project instructions. [.github/copilot-instructions.md](../.github/copilot-instructions.md)
   now includes Non-Negotiable Rule §12, requiring new rules, card effects,
   keywords, upgrades, objectives, defense-token eligibility rules, and
-  rule-derived UI affordances to go through `RuleRegistry` unless an explicitly
-  approved legacy bridge is documented. [.skills/architecture_patterns.md](../.skills/architecture_patterns.md)
+  rule-derived UI affordances to go through `RuleRegistry`. [.skills/architecture_patterns.md](../.skills/architecture_patterns.md)
   now documents Layer 3 rules: FlowSpec owns steps and controller roles,
   RuleRegistry owns static hook definitions, active state comes from serialized
-  `GameState` entities or rebuilt transient bridges, and observers must use the
-  deferred follow-up queue. §4 open topics were cleaned up so resolved Phase M
+  `GameState` entities, and observers must use the deferred follow-up queue.
+  §4 open topics were cleaned up so resolved Phase M
   rule-file organization work no longer appears as pending. Verification:
   `git diff --check` clean, full GUT 163 / 3 096 / 6 209 with 0 failures,
   Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
@@ -613,7 +633,10 @@ affordance metadata. N18-N22 now implement Heavy movement/ship-target rules,
 Escort target blocking, optional Counter attacks, command-backed Swarm rerolls,
 and Bomber critical-effect eligibility through RuleRegistry-backed keyword
 surfaces. User MT pass is confirmed for N17-N22. N23 legacy runtime retirement
-and N24 documentation closeout remain before Phase N closes.
+is complete: production no longer has `EffectRegistry`, `GameEffect`,
+`DamageCardEffect`, legacy keyword effect classes, runtime rebuild factories,
+or legacy hook-string dispatch, and the Phase K/N lint guard blocks
+reintroduction. N24 documentation closeout remains before Phase N closes.
 
 ### 4.1 Network Features Pending
 
@@ -948,7 +971,7 @@ Ordered by dependency:
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI
-5. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
+5. **Upgrade Cards** — RuleRegistry hook architecture is ready for upgrade rules
 6. **Terrain / Obstacles** — geometry system extension
 7. **Objectives** — scenario-variant scoring
 8. **Multiplayer (full release)** — depends on G4.7–G4.9, auto-save, and L/M flow hardening

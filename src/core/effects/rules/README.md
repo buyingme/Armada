@@ -1,6 +1,6 @@
 # Rule Files
 
-`RuleRegistry` rule files declare static hook definitions for game rules. Active rule state must come from authoritative game state (`GameState`, ship/squadron instances, faceup damage cards, upgrades, objectives) or from a documented transient `EffectRegistry` bridge rebuilt from that state.
+`RuleRegistry` rule files declare static hook definitions for game rules. Active rule state must come from authoritative game state (`GameState`, ship/squadron instances, faceup damage cards, upgrades, objectives, obstacles, tokens), not from transient runtime effect objects.
 
 Phase M rule files now use source-first grouping so contributors can find a
 rule by the component printed on the table before they know its hook surface.

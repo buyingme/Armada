@@ -127,6 +127,16 @@ func test_submit_complete_squadron_activation_allowed_when_flow_cleared() -> voi
 			"No-move completion should remain legal after attack flow clears.")
 
 
+func test_submit_complete_squadron_activation_allowed_in_ship_phase() -> void:
+	_set_phase_and_flow(Constants.GamePhase.SHIP,
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP)
+	var cmd := _ScopedCommand.new("complete_squadron_activation")
+	var result: Dictionary = _processor.submit(cmd)
+	assert_eq(result.get("ok", false), true,
+			"Ship-phase Squadron command completions should pass applicability.")
+
+
 func test_submit_roll_dice_allowed_from_ship_phase_legacy_flow() -> void:
 	_set_phase_and_flow(Constants.GamePhase.SHIP,
 			Constants.InteractionFlow.SHIP_ACTIVATION,

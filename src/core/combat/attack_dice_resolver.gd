@@ -5,9 +5,8 @@
 ## calculation, and damage-card attack-blocking checks.
 ##
 ## Every public method is stateless: callers pass a [CombatParticipants]
-## bundle (and optionally an [EffectRegistry]) so the resolver never
-## stores mutable references.  UI side-effects (panel updates, tooltips)
-## stay in [AttackExecutor].
+## bundle so the resolver never stores mutable references.  UI side-effects
+## (panel updates, tooltips) stay in [AttackExecutor].
 ##
 ## Extracted from AttackExecutor as part of refactoring step F4b.
 ## Rules Reference: "Attack", Steps 2–3, pp.2–3.
@@ -79,20 +78,17 @@ func compute_pool_for_parts(
 # Gather-dice hook
 # ---------------------------------------------------------------------------
 
-## Applies the ATTACK_GATHER_DICE effect hook to [param pool], returning
-## the (possibly modified) pool.  The hook may add or remove dice.
-## [param registry] may be [code]null[/code] — in that case only static
-## [RuleRegistry] dice-pool modifiers for the supplied FlowSpec pair run.
-## With an empty [RuleRegistry], the pool is returned unchanged.
+## Applies static [RuleRegistry] dice-pool modifiers to [param pool], returning
+## the possibly modified pool. With an empty [RuleRegistry], the pool is
+## returned unchanged.
 ## Rules Reference: "Attack", Step 2, p.2 (effects that add dice).
 func apply_gather_hook(
 		pool: Dictionary,
-		registry: EffectRegistry,
 		parts: CombatParticipants,
 		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
 		step_id: Constants.InteractionStep = \
 				Constants.InteractionStep.ATTACK_ROLL) -> Dictionary:
-	return apply_gather_context(pool, registry, parts, flow_id, step_id).dice_pool
+	return apply_gather_context(pool, parts, flow_id, step_id).dice_pool
 
 
 ## Applies gather-dice hooks and returns the full context so callers can read
@@ -100,14 +96,11 @@ func apply_gather_hook(
 ## Rules Reference: "Attack", Step 2, p.2 (effects before rolling dice).
 func apply_gather_context(
 		pool: Dictionary,
-		registry: EffectRegistry,
 		parts: CombatParticipants,
 		flow_id: Constants.InteractionFlow = Constants.InteractionFlow.ATTACK,
 		step_id: Constants.InteractionStep = \
 				Constants.InteractionStep.ATTACK_ROLL) -> EffectContext:
 	var ctx: EffectContext = _make_gather_context(pool, parts)
-	if registry != null:
-		ctx = registry.resolve_hook(&"ATTACK_GATHER_DICE", ctx)
 	ctx = _apply_rule_pool_modifiers(ctx, flow_id, step_id)
 	return ctx
 
@@ -173,33 +166,29 @@ func _apply_selected_rule_pool_modifier(ctx: EffectContext,
 # Attack-blocked check
 # ---------------------------------------------------------------------------
 
-## Checks whether a damage card rule or remaining legacy effect blocks this
-## attack. Builds an attack-target context with obstruction and attack count.
-## Returns [code]true[/code] when a rule blocker fires or any legacy effect sets
-## [code]cancelled[/code].
-## [param registry] may be [code]null[/code]; RuleRegistry blockers still run.
+## Checks whether a damage-card rule blocks this attack. Builds an
+## attack-target context with obstruction and attack count.
+## Returns [code]true[/code] when a RuleRegistry blocker fires.
 ## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
 ## "Depowered Armament", "Disengaged Fire Control".
 func is_blocked_by_damage(
-		registry: EffectRegistry,
 		parts: CombatParticipants,
 		obstructed: bool,
 		attack_count: int) -> bool:
 	var ctx: EffectContext = _build_attack_target_context(
 			parts, obstructed, attack_count, "")
-	return _is_attack_target_blocked(ctx, registry)
+	return _is_attack_target_blocked(ctx)
 
 
 ## Overload that also accepts a range band string for the attack.
 func is_blocked_by_damage_at_range(
-		registry: EffectRegistry,
 		parts: CombatParticipants,
 		obstructed: bool,
 		attack_count: int,
 		range_band: String) -> bool:
 	var ctx: EffectContext = _build_attack_target_context(
 			parts, obstructed, attack_count, range_band)
-	return _is_attack_target_blocked(ctx, registry)
+	return _is_attack_target_blocked(ctx)
 
 
 func _build_attack_target_context(parts: CombatParticipants,
@@ -224,30 +213,23 @@ func _build_attack_target_context(parts: CombatParticipants,
 	return ctx
 
 
-func _is_attack_target_blocked(ctx: EffectContext,
-		registry: EffectRegistry) -> bool:
-	if RuleSurface.is_blocked(ctx,
+func _is_attack_target_blocked(ctx: EffectContext) -> bool:
+	return RuleSurface.is_blocked(ctx,
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DECLARE,
-			RuleSurface.TARGET_ATTACK_TARGET):
-		return true
-	if registry == null:
-		return false
-	ctx = registry.resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)
-	return ctx.cancelled
+			RuleSurface.TARGET_ATTACK_TARGET)
 
 
 # ---------------------------------------------------------------------------
 # Accuracy spend eligibility
 # ---------------------------------------------------------------------------
 
-## Resolves accuracy icons into spendable accuracy count, applying migrated
-## RuleRegistry blockers and the remaining legacy ATTACK_SPEND_ACCURACY hook.
+## Resolves accuracy icons into spendable accuracy count, applying
+## RuleRegistry blockers.
 ## Rules Reference: "Accuracy", RRG p.2; Damage Card "Blinded Gunners".
 func resolve_accuracy_spend(
 		results: Array[Dictionary],
-		parts: CombatParticipants,
-		registry: EffectRegistry) -> Dictionary:
+		parts: CombatParticipants) -> Dictionary:
 	var accuracy_count: int = Dice.count_accuracy(results)
 	if accuracy_count <= 0:
 		return _accuracy_result(accuracy_count, accuracy_count, false)
@@ -256,8 +238,6 @@ func resolve_accuracy_spend(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
 			RuleSurface.TARGET_ACCURACY_SPEND):
-		return _accuracy_result(accuracy_count, 0, true)
-	if _legacy_accuracy_spend_blocked(ctx, registry):
 		return _accuracy_result(accuracy_count, 0, true)
 	return _accuracy_result(accuracy_count, accuracy_count, false)
 
@@ -273,15 +253,6 @@ func _build_accuracy_context(parts: CombatParticipants) -> EffectContext:
 	elif parts.def_squad:
 		ctx.defender = parts.def_squad.get_squadron_instance()
 	return ctx
-
-
-func _legacy_accuracy_spend_blocked(ctx: EffectContext,
-		registry: EffectRegistry) -> bool:
-	if registry == null:
-		return false
-	var resolved: EffectContext = registry.resolve_hook(
-			&"ATTACK_SPEND_ACCURACY", ctx)
-	return resolved.cancelled
 
 
 func _accuracy_result(accuracy_count: int,
@@ -364,15 +335,12 @@ func remove_obstruction_die(
 
 ## Calculates the damage total from rolled dice [param results].
 ## When either combatant is a squadron, critical icons do not add damage.
-## Applies RuleRegistry damage modifiers, then the legacy ATTACK_CALC_DAMAGE
-## hook via [param registry] for not-yet-migrated compatibility effects.
-## [param registry] may be [code]null[/code] — RuleRegistry modifiers still run.
+## Applies RuleRegistry damage modifiers after base damage calculation.
 ## Rules Reference: "Dice Icons", p.5 — critical adds damage only when
 ## both attacker and defender are ships.
 func calc_damage(
 		results: Array[Dictionary],
-		parts: CombatParticipants,
-		registry: EffectRegistry) -> int:
+		parts: CombatParticipants) -> int:
 	var base_damage: int
 	if parts.def_squad != null or parts.atk_squad != null:
 		base_damage = Dice.calculate_damage_vs_squadron(results)
@@ -383,8 +351,6 @@ func calc_damage(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
 			RuleSurface.TARGET_ATTACK_DAMAGE)
-	if registry != null:
-		ctx = registry.resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)
 	return ctx.damage_total
 
 

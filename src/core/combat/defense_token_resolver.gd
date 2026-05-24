@@ -4,10 +4,10 @@
 ## Spend Defense Tokens step of an attack (Step 4).
 ##
 ## Every public method is stateless: callers pass the defender's
-## [ShipInstance], the current attack state (locked tokens, spent tokens,
-## redirect remaining, etc.) and optionally an [EffectRegistry] so the
-## resolver never stores mutable references.  UI side-effects (panel
-## updates, button disabling, camera rotation) stay in [AttackExecutor].
+## [ShipInstance] and the current attack state (locked tokens, spent tokens,
+## redirect remaining, etc.) so the resolver never stores mutable references.
+## UI side-effects (panel updates, button disabling, camera rotation) stay in
+## [AttackExecutor].
 ##
 ## Extracted from AttackExecutor as part of refactoring step F4c.
 ## Rules Reference: "Defense Tokens", p.5; individual token entries.
@@ -51,10 +51,9 @@ func count_lockable_tokens(def_inst: ShipInstance) -> int:
 ## "If the defender's speed is 0, he cannot spend any defense tokens."
 func can_spend_tokens(def_inst: ShipInstance,
 		locked_tokens: Array[int],
-		effect_registry: EffectRegistry,
 		def_zone: int) -> bool:
 	var spendable: int = count_spendable_tokens(
-			def_inst, locked_tokens, effect_registry, def_zone)
+			def_inst, locked_tokens, def_zone)
 	if spendable == 0:
 		return false
 	if def_inst.current_speed == 0:
@@ -67,7 +66,6 @@ func can_spend_tokens(def_inst: ShipInstance,
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func count_spendable_tokens(def_inst: ShipInstance,
 		locked_tokens: Array[int],
-		effect_registry: EffectRegistry,
 		def_zone: int) -> int:
 	var count: int = 0
 	for i: int in range(def_inst.defense_tokens.size()):
@@ -78,8 +76,7 @@ func count_spendable_tokens(def_inst: ShipInstance,
 				token["state"] as Constants.DefenseTokenState)
 		if state == Constants.DefenseTokenState.DISCARDED:
 			continue
-		if is_token_blocked_by_effect(
-				def_inst, token, effect_registry, def_zone):
+		if is_token_blocked_by_effect(def_inst, token, def_zone):
 			continue
 		count += 1
 	return count
@@ -91,7 +88,7 @@ func count_spendable_tokens(def_inst: ShipInstance,
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func is_token_spendable(token_index: int, token: Dictionary,
 		spent_tokens: Dictionary, locked_tokens: Array[int],
-		def_inst: ShipInstance, effect_registry: EffectRegistry,
+		def_inst: ShipInstance,
 		def_zone: int) -> bool:
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
@@ -103,8 +100,7 @@ func is_token_spendable(token_index: int, token: Dictionary,
 		return false
 	if token_index in locked_tokens:
 		return false
-	if is_token_blocked_by_effect(
-			def_inst, token, effect_registry, def_zone):
+	if is_token_blocked_by_effect(def_inst, token, def_zone):
 		return false
 	return true
 
@@ -112,8 +108,7 @@ func is_token_spendable(token_index: int, token: Dictionary,
 ## Returns true if a RuleRegistry blocker prevents spending this token.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func is_token_blocked_by_effect(inst: ShipInstance,
-		token: Dictionary, _registry: EffectRegistry,
-		def_zone: int) -> bool:
+		token: Dictionary, def_zone: int) -> bool:
 	if inst == null:
 		return false
 	var ctx: EffectContext = _make_defense_token_context(
@@ -197,13 +192,12 @@ func apply_brace(damage: int) -> int:
 ## Rules Reference: "Evade", RRG v1.5.0, p.5.
 func apply_evade_remove(die_index: int,
 		dice_results: Array[Dictionary],
-		parts: CombatParticipants,
-		effect_registry: EffectRegistry) -> Dictionary:
+		parts: CombatParticipants) -> Dictionary:
 	var results: Array[Dictionary] = dice_results.duplicate(true)
 	if die_index < 0 or die_index >= results.size():
 		return {"dice_results": results, "damage": Dice.calculate_damage(results)}
 	results.remove_at(die_index)
-	var damage: int = _calc_damage(results, parts, effect_registry)
+	var damage: int = _calc_damage(results, parts)
 	return {"dice_results": results, "damage": damage}
 
 
@@ -213,8 +207,7 @@ func apply_evade_remove(die_index: int,
 ## Rules Reference: "Evade", RRG v1.5.0, p.5.
 func apply_evade_reroll(die_index: int,
 		dice_results: Array[Dictionary],
-		parts: CombatParticipants,
-		effect_registry: EffectRegistry) -> Dictionary:
+		parts: CombatParticipants) -> Dictionary:
 	var results: Array[Dictionary] = dice_results.duplicate(true)
 	if die_index < 0 or die_index >= results.size():
 		return {
@@ -226,7 +219,7 @@ func apply_evade_reroll(die_index: int,
 			results[die_index]["color"] as Constants.DiceColor)
 	var new_face: Constants.DiceFace = Dice.roll_die(color)
 	results[die_index]["face"] = new_face
-	var damage: int = _calc_damage(results, parts, effect_registry)
+	var damage: int = _calc_damage(results, parts)
 	return {
 		"dice_results": results,
 		"damage": damage,
@@ -315,11 +308,10 @@ func get_token_button_index(token_type: Constants.DefenseToken,
 
 ## Determines if the first damage card should be dealt faceup (critical).
 ## Returns true if any dice show a critical face and Contain was not
-## used, unless blocked by RuleRegistry or legacy critical effects.
+## used, unless blocked by RuleRegistry critical-effect blockers.
 ## Rules Reference: "Critical Effect", RRG v1.5.0, p.4.
 func determine_first_card_faceup(dice_results: Array[Dictionary],
-		contain_used: bool, registry: EffectRegistry,
-		attacker: RefCounted,
+		contain_used: bool, attacker: RefCounted,
 		defender: RefCounted = null) -> bool:
 	var has_crit: bool = Dice.has_any_critical(dice_results)
 	var faceup: bool = (has_crit and not contain_used)
@@ -331,10 +323,7 @@ func determine_first_card_faceup(dice_results: Array[Dictionary],
 			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
 			RuleSurface.TARGET_CRITICAL_EFFECT):
 		return false
-	if registry == null:
-		return true
-	crit_ctx = registry.resolve_hook(&"ATTACK_RESOLVE_CRITICAL", crit_ctx)
-	return crit_ctx.critical_allowed
+	return true
 
 
 func _build_critical_context(attacker: RefCounted,
@@ -353,11 +342,7 @@ func _build_critical_context(attacker: RefCounted,
 # ---------------------------------------------------------------------------
 
 
-## Calculates damage, delegating to [Dice.calculate_damage] for simple
-## pool-only calculation.  The caller should use the full hook-aware path
-## via [AttackDiceResolver.calc_damage] when the [EffectRegistry] matters,
-## but for evade rerolls/removals, basic damage is sufficient.
+## Calculates damage for evade rerolls/removals.
 func _calc_damage(results: Array[Dictionary],
-		_parts: CombatParticipants,
-		_registry: EffectRegistry) -> int:
+		_parts: CombatParticipants) -> int:
 	return Dice.calculate_damage(results)

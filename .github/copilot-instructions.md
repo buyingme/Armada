@@ -187,8 +187,7 @@ When completing a phase task or full phase:
 Every new game rule, card effect, damage card, squadron keyword, upgrade,
 objective, obstacle, token rule, defense-token eligibility rule, and UI
 affordance derived from rules must use `RuleRegistry` hooks under
-`src/core/effects/rules/` unless the user explicitly approves a temporary
-legacy bridge.
+`src/core/effects/rules/`.
 
 - Keep one source rule per file and use the source-first folders described in
     `src/core/effects/rules/README.md`.
@@ -197,8 +196,8 @@ legacy bridge.
     resolver special cases.
 - `RuleRegistry` is a static definition catalogue only. Active rule state must
     come from serialized `GameState` entities such as ships, squadrons, faceup
-    damage cards, upgrades, objectives, obstacles, or tokens; legacy active
-    effects must be rebuilt from serialized state via `EffectFactory`.
+    damage cards, upgrades, objectives, obstacles, or tokens; transient runtime
+    effect objects are forbidden in production after Phase N23.
 - Validators, blockers, modifiers, observers, and enablers must cover every
     relevant command surface: marker commands, final mutation commands, projected
     UI eligibility, direct replay submissions, and network mirrors.

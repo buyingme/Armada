@@ -86,7 +86,7 @@ func test_attack_dice_resolver_uses_rule_without_legacy_registry() -> void:
 	var parts: CombatParticipants = CombatParticipants.create(
 			null, -1, attacker_token, defender_token,
 			Constants.HullZone.FRONT, null)
-	var damage: int = _resolver.calc_damage(_hit_critical_results(), parts, null)
+	var damage: int = _resolver.calc_damage(_hit_critical_results(), parts)
 	assert_eq(damage, 2,
 			"AttackDiceResolver should apply Bomber from squadron data.")
 
@@ -97,7 +97,7 @@ func test_attack_dice_resolver_keeps_non_bomber_critical_at_zero() -> void:
 	var parts: CombatParticipants = CombatParticipants.create(
 			null, -1, attacker_token, defender_token,
 			Constants.HullZone.FRONT, null)
-	var damage: int = _resolver.calc_damage(_critical_only_results(), parts, null)
+	var damage: int = _resolver.calc_damage(_critical_only_results(), parts)
 	assert_eq(damage, 0,
 			"Non-Bomber squadron critical icons should not add ship damage.")
 

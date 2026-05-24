@@ -195,10 +195,6 @@ func _compute_attack_identity_patch() -> Dictionary:
 # Phase 6c: Accuracy, Defense Tokens, Damage Resolution
 # ---------------------------------------------------------------------------
 
-## Reference to the game's [EffectRegistry] for hook resolution.
-## Set via [method set_effect_registry] after game initialisation.
-var _effect_registry: EffectRegistry = null
-
 # ===========================================================================
 # Public Interface
 # ===========================================================================
@@ -220,10 +216,6 @@ func initialize(target_selector: TargetSelector,
 	if not EventBus.network_dice_result.is_connected(
 			_on_network_dice_result):
 		EventBus.network_dice_result.connect(_on_network_dice_result)
-
-## Sets the [EffectRegistry] for hook resolution during attacks.
-func set_effect_registry(registry: EffectRegistry) -> void:
-	_effect_registry = registry
 
 ## Sets the shared damage deck reference.
 func set_damage_deck(deck: DamageDeck) -> void:
@@ -388,13 +380,13 @@ func _build_current_participants() -> CombatParticipants:
 ## formula for the combatant types. Critical icons only count as damage when
 ## both attacker and defender are ships; if either combatant is a squadron
 ## the no-critical formula is used.
-## After the base calculation, RuleRegistry damage modifiers and remaining
-## legacy damage hooks can adjust the total.
+## After the base calculation, RuleRegistry damage modifiers can adjust the
+## total.
 ## Rules Reference: "Dice Icons", p.5 — "Critical: If the attacker and
 ## defender are ships, this icon adds one damage to the damage total."
 func _calc_attack_damage(results: Array[Dictionary]) -> int:
 	var parts: CombatParticipants = _build_current_participants()
-	return _dice_resolver.calc_damage(results, parts, _effect_registry)
+	return _dice_resolver.calc_damage(results, parts)
 
 ## Returns the ship display name for the exec ship.
 func _get_ship_name() -> String:
@@ -560,11 +552,11 @@ func _try_offer_cf_dial() -> bool:
 	_log.info("CF dial available — offering colours: %s." % [str(available)])
 	return true
 
-## Applies the ATTACK_GATHER_DICE effect hook to the pool.
+## Applies RuleRegistry dice-pool modifiers to the pool.
 func _apply_gather_dice_hook() -> EffectContext:
 	var parts: CombatParticipants = _build_current_participants()
 	var context: EffectContext = _dice_resolver.apply_gather_context(
-			_state.dice_pool, _effect_registry, parts)
+			_state.dice_pool, parts)
 	_state.dice_pool = context.dice_pool
 	return context
 
@@ -676,15 +668,15 @@ func _attack_exec_continue_after_attack_pool_die_choice() -> void:
 		return
 	_attack_exec_show_roll_button()
 
-## Checks whether a persistent damage card rule/effect blocks this attack.
+## Checks whether a persistent damage-card rule blocks this attack.
 ## Builds an attack-target context with range, obstruction, and attack count.
-## Returns true when any migrated blocker or remaining legacy effect rejects.
+## Returns true when a migrated RuleRegistry blocker rejects.
 ## Rules Reference: RRG "Damage Cards", p.4; "Coolant Discharge",
 ## "Depowered Armament", "Disengaged Fire Control".
 func _is_attack_blocked_by_damage(range_band: String) -> bool:
 	var parts: CombatParticipants = _build_current_participants()
 	var blocked: bool = _dice_resolver.is_blocked_by_damage_at_range(
-			_effect_registry, parts, _state.obstructed,
+			parts, _state.obstructed,
 			_current_ship_target_attack_count(), range_band)
 	if blocked:
 		_log.info("Attack blocked by damage card effect.")
@@ -1105,11 +1097,11 @@ func _attack_exec_start_accuracy() -> void:
 				def_inst.defense_tokens, acc_count)
 		_get_panel().hide_confirm_button()
 
-## Counts accuracy icons, applying the ATTACK_SPEND_ACCURACY hook.
+## Counts accuracy icons, applying RuleRegistry accuracy blockers.
 func _resolve_accuracy_count() -> int:
 	var parts: CombatParticipants = _build_current_participants()
 	var result: Dictionary = _dice_resolver.resolve_accuracy_spend(
-			_state.dice_results, parts, _effect_registry)
+			_state.dice_results, parts)
 	_fsm_patch_payload({
 		"accuracy_count": int(result.get("accuracy_count", 0)),
 		"spendable_accuracy_count": int(result.get(
@@ -1191,7 +1183,7 @@ func _attack_exec_start_defense() -> void:
 	# from interaction_flow alone.
 	_fsm_patch_payload(_flow_executor.build_defense_payload(
 			_state, def_inst, GameManager.current_game_state,
-			_defense_resolver, _effect_registry))
+			_defense_resolver))
 	# Rotate camera to the defender's perspective (AE-DEF-011).
 	# Phase K4: hot-seat detected via `local_player_index < 0` (no
 	# network session).  In network each peer's camera is locked to
@@ -1241,7 +1233,7 @@ func _show_defense_section(def_inst: ShipInstance) -> void:
 func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 	var result: bool = _defense_resolver.can_spend_tokens(
 			def_inst, _state.locked_tokens,
-			_effect_registry, _state.defender_zone)
+			_state.defender_zone)
 	if not result:
 		if def_inst.current_speed == 0:
 			_log.info("Defender speed 0 — cannot spend defense tokens.")
@@ -1249,20 +1241,20 @@ func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 			_log.info("No spendable defense tokens — skipping defense step.")
 	return result
 
-## Returns the number of spendable (non-discarded, non-locked, not
-## blocked by persistent effects) tokens.
+## Returns the number of spendable, non-discarded, non-locked tokens that are
+## not blocked by RuleRegistry defense-token blockers.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 	return _defense_resolver.count_spendable_tokens(
 			inst, _state.locked_tokens,
-			_effect_registry, _state.defender_zone)
+			_state.defender_zone)
 
 
-## Returns non-discarded token indices blocked by persistent effects.
+## Returns non-discarded token indices blocked by RuleRegistry.
 func _get_blocked_defense_token_indices(
 		inst: ShipInstance) -> Array[int]:
 	return _flow_executor.build_blocked_defense_token_indices(
-			_state, inst, _defense_resolver, _effect_registry)
+			_state, inst, _defense_resolver)
 
 ## Called when the player spends a defense token.
 ## [param token_index] — index in the defender's defense_tokens array.
@@ -1309,7 +1301,7 @@ func _is_defense_token_spendable(token_index: int,
 	var result: bool = _defense_resolver.is_token_spendable(
 			token_index, token, _state.spent_tokens,
 			_state.locked_tokens, _get_defender_instance(),
-			_effect_registry, _state.defender_zone)
+			_state.defender_zone)
 	if not result:
 		_log.info("Token %d not spendable — ignoring." % token_index)
 	return result
@@ -1351,7 +1343,7 @@ func _get_attacker_player() -> int:
 func _is_token_blocked_by_effect(inst: ShipInstance,
 		token: Dictionary) -> bool:
 	return _defense_resolver.is_token_blocked_by_effect(
-			inst, token, _effect_registry, _state.defender_zone)
+			inst, token, _state.defender_zone)
 
 ## Applies the effect of a defense token to the current attack.
 ## Requirements: AE-DEF-006–016.
@@ -1529,8 +1521,7 @@ func _refresh_post_evade_panel() -> void:
 func _apply_evade_remove(die_index: int) -> void:
 	var parts: CombatParticipants = _build_current_participants()
 	var result: Dictionary = _defense_resolver.apply_evade_remove(
-			die_index, _state.dice_results, parts,
-			_effect_registry)
+			die_index, _state.dice_results, parts)
 	_state.dice_results = result["dice_results"]
 	_state.modified_damage = result["damage"]
 	_log.info("Evade (long): removed die %d. Damage now %d." % [
@@ -1543,8 +1534,7 @@ func _apply_evade_remove(die_index: int) -> void:
 func _apply_evade_reroll(die_index: int) -> void:
 	var parts: CombatParticipants = _build_current_participants()
 	var result: Dictionary = _defense_resolver.apply_evade_reroll(
-			die_index, _state.dice_results, parts,
-			_effect_registry)
+			die_index, _state.dice_results, parts)
 	_state.dice_results = result["dice_results"]
 	_state.modified_damage = result["damage"]
 	var new_face: Constants.DiceFace = (
@@ -2373,7 +2363,7 @@ func _emit_card_events(def_inst: ShipInstance,
 ## Determines if the first damage card should be dealt faceup (critical).
 func _determine_first_card_faceup() -> bool:
 	var faceup: bool = _flow_executor.determine_first_card_faceup(
-			_state, _defense_resolver, _effect_registry)
+			_state, _defense_resolver)
 	_log.info("Damage cards: first_faceup=%s, contain=%s." % [
 			faceup, _state.contain_used])
 	return faceup

@@ -322,32 +322,6 @@ func test_should_deal_faceup_later_card_no_crit() -> void:
 
 
 # ===========================================================================
-# should_register_persistent
-# ===========================================================================
-
-
-func test_should_register_persistent_false_for_migrated_movement_card() -> void:
-	var card: DamageCard = _make_card("Damaged Controls", "persistent",
-			"damaged_controls")
-	assert_false(_dealer.should_register_persistent(card),
-			"Damaged Controls persistent hook moved to RuleRegistry.")
-
-
-func test_should_register_persistent_false_for_immediate() -> void:
-	var card: DamageCard = _make_card("Structural Damage", "immediate",
-			"structural_damage")
-	assert_false(_dealer.should_register_persistent(card),
-			"Immediate timing → don't register as persistent.")
-
-
-func test_should_register_persistent_immediate_persistent() -> void:
-	var card: DamageCard = _make_card("Life Support Failure",
-			"immediate_persistent", "life_support_failure")
-	assert_false(_dealer.should_register_persistent(card),
-			"Life Support Failure persistent restriction moved to RuleRegistry.")
-
-
-# ===========================================================================
 # has_immediate_effect
 # ===========================================================================
 

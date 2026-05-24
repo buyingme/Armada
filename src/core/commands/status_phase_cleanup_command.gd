@@ -104,12 +104,6 @@ func _is_token_ready_blocked(game_state: GameState,
 	var ctx: EffectContext = EffectContext.new()
 	ctx.set_meta_value("ship", ship)
 	ctx = _apply_rule_ready_modifiers(ctx)
-	if ctx.cancelled:
-		return true
-	if not game_state.effect_registry:
-		return false
-	ctx = game_state.effect_registry.resolve_hook(
-			&"STATUS_READY_TOKENS", ctx)
 	return ctx.cancelled
 
 

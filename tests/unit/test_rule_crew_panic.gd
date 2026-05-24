@@ -1,7 +1,7 @@
 ## Test: CrewPanic RuleRegistry integration
 ##
 ## Verifies Crew Panic projects a pre-reveal choice from serialized ship state
-## and no longer relies on legacy EffectRegistry runtime hooks.
+## without transient runtime effect objects.
 extends GutTest
 
 
@@ -85,11 +85,6 @@ func test_save_load_rebuild_has_no_legacy_effect_but_projects_rule() -> void:
 	var ship: ShipInstance = _add_ship(state, 0, true)
 	_add_crew_panic(ship)
 	var loaded: GameState = GameState.deserialize(state.serialize())
-	var registered: int = EffectFactory.rebuild_runtime_effects(loaded, 0)
-	assert_eq(registered, 0,
-			"Loaded Crew Panic should not rebuild a legacy effect.")
-	assert_eq(loaded.effect_registry.get_effect_count(), 0,
-			"Legacy EffectRegistry should remain empty for Crew Panic.")
 	assert_false(_project_choice_info(loaded, 0).is_empty(),
 			"RuleRegistry should still project from loaded faceup damage.")
 
@@ -127,8 +122,8 @@ func _add_crew_panic(ship: ShipInstance) -> void:
 	var card: DamageCard = DamageCard.create("Crew", "Crew Panic")
 	card.effect_id = CrewPanic.EFFECT_ID
 	card.effect_text = "Before you reveal a command dial, you must either " \
-			+ "suffer 1 damage or discard that dial. If you discard it, " \
-			+ "do not reveal a dial this round."
+			+"suffer 1 damage or discard that dial. If you discard it, " \
+			+"do not reveal a dial this round."
 	card.timing = "persistent"
 	card.is_faceup = true
 	ship.add_faceup_damage(card)

@@ -56,11 +56,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var idx: int = int(payload["ship_index"])
 	var ship: ShipInstance = game_state.get_ship(owner, idx)
 
-	# 1. Unregister persistent effects owned by this ship.
-	if game_state.effect_registry:
-		game_state.effect_registry.unregister_by_owner(ship)
-
-	# 2. Clear damage cards and return to discard pile.
+	# Clear damage cards and return to discard pile.
 	var cards: Array = ship.clear_all_damage_cards()
 	if game_state.damage_deck:
 		for card: Variant in cards:

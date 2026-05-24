@@ -98,7 +98,7 @@ func test_resolver_exposes_choice_without_legacy_effect() -> void:
 			_make_ship_token(attacker), Constants.HullZone.FRONT, null,
 			null, -1, _make_squadron_token(DEFENDER_PLAYER))
 	var ctx: EffectContext = _resolver.apply_gather_context(
-			{DicePool.RED_KEY: 2, DicePool.BLUE_KEY: 1}, null, participants)
+			{DicePool.RED_KEY: 2, DicePool.BLUE_KEY: 1}, participants)
 	assert_eq(DicePool.get_total_count(ctx.dice_pool), 3,
 			"AttackDiceResolver should expose player choice before removal.")
 	assert_eq(ctx.get_meta_value(PointDefenseFailure.META_PENDING_RULE_ID, ""),
@@ -126,15 +126,12 @@ func test_modifier_applies_after_save_load_without_legacy_effect() -> void:
 	var attacker: ShipInstance = _state.get_ship(ATTACKER_PLAYER, SHIP_INDEX)
 	_add_point_defense_failure(attacker)
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
 	var defender: SquadronInstance = _make_squadron(DEFENDER_PLAYER)
 	var ctx: EffectContext = _apply_registered_modifier(restored_attacker,
 			defender, {DicePool.RED_KEY: 2},
 			{PointDefenseFailure.META_CHOSEN_COLOUR: DicePool.RED_KEY})
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Point-Defense Failure should no longer require a legacy bridge.")
 	assert_eq(DicePool.get_total_count(ctx.dice_pool), 1,
 			"Chosen RuleRegistry removal should work after save/load rebuild.")
 

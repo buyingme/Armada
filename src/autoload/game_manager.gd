@@ -230,12 +230,6 @@ func start_new_game_from_state(
 		return
 	CommandProcessor.reset()
 	current_game_state = state
-	# Runtime effect hooks are transient; rebuild them from serialized
-	# state so loaded games immediately honor squadron keywords and
-	# persistent faceup damage cards such as Blinded Gunners.
-	EffectFactory.rebuild_runtime_effects(
-			current_game_state,
-			current_game_state.initiative_player)
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
 	is_game_active = true
@@ -1575,11 +1569,6 @@ func _begin_ship_phase() -> void:
 func _begin_squadron_phase() -> void:
 	if not current_game_state:
 		return
-	# Register keyword effects for all squadrons if not already done.
-	if current_game_state.effect_registry.get_effect_count() == 0:
-		EffectFactory.register_squadron_keywords(
-				current_game_state,
-				current_game_state.initiative_player)
 	# If neither player has unactivated squadrons, auto-skip.
 	var init: int = current_game_state.initiative_player
 	if not _has_unactivated_squadrons(init) \
@@ -2359,10 +2348,6 @@ func _advance_squadron_phase_turn_client() -> void:
 func _begin_squadron_phase_client() -> void:
 	if not current_game_state:
 		return
-	if current_game_state.effect_registry.get_effect_count() == 0:
-		EffectFactory.register_squadron_keywords(
-				current_game_state,
-				current_game_state.initiative_player)
 	_squadrons_activated_this_turn = 0
 	_activating_squadron = null
 	var init: int = current_game_state.initiative_player

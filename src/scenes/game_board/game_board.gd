@@ -319,8 +319,8 @@ func _spawn_tokens_from_loaded_state() -> void:
 	_panel_mgr.update_card_panel_positions()
 	_refresh_activation_sidebar_ui()
 
-## Wires [member _attack_executor] / damage deck / effect registry from
-## the loaded [GameState] (no fresh deck construction).  Phase J5.6.
+## Wires [member _attack_executor] / damage deck from the loaded
+## [GameState] (no fresh deck construction).  Phase J5.6.
 func _init_scenario_systems_for_loaded_state() -> void:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
@@ -332,8 +332,6 @@ func _init_scenario_systems_for_loaded_state() -> void:
 		_debug_controller.set_damage_deck(_damage_deck)
 	if _attack_executor and _panel_mgr.handoff_overlay:
 		_attack_executor.set_handoff_overlay(_panel_mgr.handoff_overlay)
-	if _attack_executor and gs.effect_registry:
-		_attack_executor.set_effect_registry(gs.effect_registry)
 
 ## Builds a [TokenPlacement] from a [ShipInstance]'s position fields.
 func _placement_from_ship(ship: ShipInstance) -> TokenPlacement:
@@ -372,10 +370,6 @@ func _init_scenario_systems(setup: LearningScenarioSetup) -> void:
 		_debug_controller.set_damage_deck(_damage_deck)
 	if _attack_executor and _panel_mgr.handoff_overlay:
 		_attack_executor.set_handoff_overlay(_panel_mgr.handoff_overlay)
-	if _attack_executor and GameManager.current_game_state \
-			and GameManager.current_game_state.effect_registry:
-		_attack_executor.set_effect_registry(
-				GameManager.current_game_state.effect_registry)
 
 ## Spawns ship and squadron tokens and binds them to their instances.
 ##

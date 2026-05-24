@@ -45,16 +45,14 @@
 | `ShipActivationState` | RefCounted | `src/core/ship_activation_state.gd` | Activation step tracking, command spending |
 | `CommandTokenManager` | RefCounted | `src/core/command_token_manager.gd` | Token pool management, add/remove/spend |
 | `TooltipLayout` | RefCounted | `src/core/tooltip_layout.gd` | Pure tooltip position computation |
-| `EffectContext` | RefCounted | `src/core/effects/effect_context.gd` | Mutable data bag passed through effect hook pipeline |
-| `GameEffect` | RefCounted | `src/core/effects/game_effect.gd` | Base class for all rule-modifying effects (keywords, upgrades, damage cards) |
-| `EffectRegistry` | RefCounted | `src/core/effects/effect_registry.gd` | Central registry: collects effects, resolves hook points in priority order |
+| `EffectContext` | RefCounted | `src/core/effects/effect_context.gd` | Mutable data bag passed through RuleRegistry callbacks |
+| `RuleRegistry` | RefCounted | `src/core/effects/rule_registry.gd` | Static catalogue for validators, modifiers, observers, blockers, and enablers |
+| `RuleSurface` | RefCounted | `src/core/effects/rule_surface.gd` | Shared target names and callback runners for rule surfaces |
+| `FlowHook` | RefCounted | `src/core/effects/flow_hook.gd` | Deterministic hook descriptor used by RuleRegistry |
 | `InteractionFlow` (Phase I) | RefCounted | `src/core/state/interaction_flow.gd` | Serializable description of the active interactive UI step (`flow_type`, `step_id`, `controller_player`, `visible_to`, `payload`). Held inside `GameState`. Mutated only by `GameCommand.execute()`. |
 | `AttackFlowFSM` (Phase I) | RefCounted | `src/core/combat/attack_flow_fsm.gd` | Pure state machine for attack sub-steps (declare → roll → modify → defense → resolve → critical). Reads/writes `InteractionFlow.step_id` via commands. Replaces the implicit ~40-variable FSM in `attack_executor.gd`. |
 | `UIProjector` (Phase I) | RefCounted | `src/core/network/ui_projector.gd` | Pure function `project(state, local_player_index) -> UIIntent`. Single source of truth for which modal is open, who can act, what HUD text shows. Replaces `is_network()` branching across presentation code. |
-| `EffectFactory` | RefCounted | `src/core/effects/effect_factory.gd` | Creates and registers squadron keyword effects at game start |
-| `BomberEffect` | GameEffect | `src/core/effects/keywords/bomber_effect.gd` | Bomber keyword: crits count as damage vs ships |
-| `EscortEffect` | GameEffect | `src/core/effects/keywords/escort_effect.gd` | Escort keyword: engaged squadrons must target Escort first |
-| `SwarmEffect` | GameEffect | `src/core/effects/keywords/swarm_effect.gd` | Swarm keyword: reroll worst die when friendly also engaged |
+| `SquadronKeywordRuleHelper` | RefCounted | `src/core/effects/rules/squadron_keywords/squadron_keyword_rule_helper.gd` | Shared keyword lookup, engagement, attack-kind, and affordance predicates |
 | `EngagementResolver` | RefCounted | `src/core/engagement_resolver.gd` | Edge-to-edge distance-1 engagement checks, valid target filtering |
 | `SquadronMover` | RefCounted | `src/core/squadron_mover.gd` | Distance band + overlap validation for squadron placement |
 | `LineOfSightChecker` | RefCounted | `src/core/line_of_sight_checker.gd` | LOS edge-to-edge tracing, obstruction detection |
@@ -62,7 +60,7 @@
 | `RepairResolver` | RefCounted | `src/core/repair_resolver.gd` | Repair command: dial/token budget, recover shields / discard damage cards |
 | `SquadronCommandResolver` | RefCounted | `src/core/squadron_command_resolver.gd` | Squadron command: dial/token activation budget, range check, finalize spend |
 | `ScoringCalculator` | RefCounted | `src/core/scoring_calculator.gd` | End-of-game scoring: ship/squadron destruction points, objective tokens, margin-of-victory table |
-| `DamageCardEffectFactory` | RefCounted | `src/core/damage_card_effect_factory.gd` | Factory for damage card effects — creates `GameEffect` instances for each critical card type |
+| `DamageRuleHelper` | RefCounted | `src/core/effects/rules/damage_cards/damage_rule_helper.gd` | Shared faceup-damage lookup and predicate helpers for damage-card rule files |
 | `ImmediateEffectResolver` | RefCounted | `src/core/immediate_effect_resolver.gd` | Resolves faceup damage card immediate effects (Structural Damage, Projector Misaligned, etc.) |
 | `ActivationContext` | RefCounted | `src/core/activation_context.gd` | Shared activation state (current ship, activation state, overlap flag) injected into all controllers |
 | `GameCommand` | RefCounted | `src/core/game_command.gd` | Abstract base for all player-initiated game actions — serialize, validate, execute |

@@ -1,8 +1,8 @@
 ## RuleBootstrap
 ##
 ## Autoload that initializes the static Phase M RuleRegistry catalogue.
-## Production rule scripts register static command-time hooks while legacy
-## EffectRegistry behaviour remains available during the Phase M migration.
+## Production rule scripts register static command-time hooks; active rule
+## status is derived from serialized game entities.
 extends Node
 
 

@@ -80,7 +80,7 @@ func test_attack_dice_resolver_uses_rule_without_legacy_registry() -> void:
 			_make_ship_token(attacker), Constants.HullZone.FRONT, null,
 			_make_ship_token(_defender_ship()), Constants.HullZone.FRONT, null)
 	var blocked: bool = _resolver.is_blocked_by_damage_at_range(
-			null, parts, true, 0, Constants.RANGE_BAND_MEDIUM)
+			parts, true, 0, Constants.RANGE_BAND_MEDIUM)
 	assert_true(blocked,
 			"AttackDiceResolver should consume RuleRegistry target blockers.")
 
@@ -108,11 +108,8 @@ func test_publish_attack_flow_validator_allows_unobstructed_target() -> void:
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_disengaged_fire_control(_attacker_ship())
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Disengaged Fire Control should not rebuild a legacy effect.")
 	assert_true(_attack_target_blocked(restored_attacker, true),
 			"RuleRegistry blocker should still apply after save/load rebuild.")
 

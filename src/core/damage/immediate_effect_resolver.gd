@@ -172,8 +172,8 @@ func _pick_projector_zone(ship: ShipInstance,
 
 
 ## Life Support Failure: Discard all command tokens.
-## This card stays FACEUP because it has a persistent effect:
-## "You cannot have command tokens" (registered in DamageCardEffectFactory).
+## This card stays FACEUP because it has a persistent RuleRegistry restriction:
+## "You cannot have command tokens".
 ## Rules Reference: "Life Support Failure" card text.
 func _resolve_life_support_failure(card: DamageCard,
 		ship: ShipInstance) -> bool:

@@ -72,7 +72,7 @@ func test_repair_resolver_uses_rule_modifier_without_legacy_registry() -> void:
 	_prepare_repair_dial(ship)
 	_add_power_failure(ship)
 	var resolver: RepairResolver = RepairResolver.create(
-			ship, DamageDeck.new(), null)
+			ship, DamageDeck.new())
 	assert_eq(resolver.get_total_points(), 2,
 			"RepairResolver should consume RuleRegistry engineering modifiers.")
 
@@ -82,12 +82,9 @@ func test_modifier_applies_after_save_load_without_legacy_effect() -> void:
 	_prepare_repair_dial(ship)
 	_add_power_failure(ship)
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_ship: ShipInstance = restored.get_ship(OWNER_PLAYER, SHIP_INDEX)
 	var resolver: RepairResolver = RepairResolver.create(
-			restored_ship, restored.damage_deck, restored.effect_registry)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Power Failure should not rebuild a legacy effect after N3.")
+			restored_ship, restored.damage_deck)
 	assert_eq(resolver.get_total_points(), 1,
 			"RuleRegistry should still halve CR90 engineering after save/load.")
 

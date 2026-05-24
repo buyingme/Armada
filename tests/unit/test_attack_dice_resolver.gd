@@ -114,7 +114,7 @@ func _blue_die_modifier() -> FlowHook:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			"dice_pool",
-			Callable(self, "_add_blue_die"))
+			Callable(self , "_add_blue_die"))
 
 
 func _black_die_modifier() -> FlowHook:
@@ -122,7 +122,7 @@ func _black_die_modifier() -> FlowHook:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			"dice_pool",
-			Callable(self, "_add_black_die"))
+			Callable(self , "_add_black_die"))
 
 
 func _metadata_modifier() -> FlowHook:
@@ -130,7 +130,7 @@ func _metadata_modifier() -> FlowHook:
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			"dice_pool",
-			Callable(self, "_mark_choice_required"))
+			Callable(self , "_mark_choice_required"))
 
 
 func _add_blue_die(ctx: EffectContext) -> EffectContext:
@@ -363,54 +363,42 @@ func test_compute_pool_for_parts_ship_vs_ship() -> void:
 # apply_gather_hook
 # ---------------------------------------------------------------------------
 
-func test_apply_gather_hook_null_registry_unchanged() -> void:
+func test_apply_gather_hook_no_rule_modifiers_unchanged() -> void:
 	var pool: Dictionary = {"RED": 2, "BLUE": 1}
 	var parts: CombatParticipants = CombatParticipants.new()
 	var result: Dictionary = _resolver.apply_gather_hook(
-			pool, null, parts)
+			pool, parts)
 	assert_eq(result, {"RED": 2, "BLUE": 1},
-			"Null registry should return pool unchanged")
+			"No rule modifiers should return pool unchanged")
 
 
-func test_apply_gather_hook_empty_registry_unchanged() -> void:
+func test_apply_gather_hook_with_participants_unchanged() -> void:
 	var pool: Dictionary = {"RED": 2, "BLUE": 1}
-	var registry: EffectRegistry = EffectRegistry.new()
 	var atk: ShipToken = _make_ship_token()
 	var def: ShipToken = _make_ship_token(
 			Constants.Faction.GALACTIC_EMPIRE)
 	var parts: CombatParticipants = _ship_vs_ship(
 			atk, Constants.HullZone.FRONT, def)
 	var result: Dictionary = _resolver.apply_gather_hook(
-			pool, registry, parts)
+			pool, parts)
 	assert_eq(result, {"RED": 2, "BLUE": 1},
-			"Empty registry should return pool unchanged")
+			"Participants alone should return pool unchanged")
 
 
 func test_apply_gather_hook_rule_modifier_changes_pool() -> void:
 	var pool: Dictionary = {"RED": 2}
 	var parts: CombatParticipants = CombatParticipants.new()
 	RuleRegistry.register_modifier(_blue_die_modifier())
-	var result: Dictionary = _resolver.apply_gather_hook(pool, null, parts)
+	var result: Dictionary = _resolver.apply_gather_hook(pool, parts)
 	assert_eq(result, {"RED": 2, "BLUE": 1},
-			"RuleRegistry dice-pool modifiers should run without EffectRegistry.")
-
-
-func test_apply_gather_hook_legacy_and_rule_modifiers_stack() -> void:
-	var pool: Dictionary = {"RED": 1}
-	var parts: CombatParticipants = CombatParticipants.new()
-	var registry: EffectRegistry = EffectRegistry.new()
-	registry.register(_AddRedDieEffect.new())
-	RuleRegistry.register_modifier(_blue_die_modifier())
-	var result: Dictionary = _resolver.apply_gather_hook(pool, registry, parts)
-	assert_eq(result, {"RED": 2, "BLUE": 1},
-			"RuleRegistry modifiers should preserve legacy EffectRegistry output.")
+			"RuleRegistry dice-pool modifiers should run.")
 
 
 func test_apply_gather_context_preserves_rule_metadata() -> void:
 	var pool: Dictionary = {"RED": 1}
 	var parts: CombatParticipants = CombatParticipants.new()
 	RuleRegistry.register_modifier(_metadata_modifier())
-	var ctx: EffectContext = _resolver.apply_gather_context(pool, null, parts)
+	var ctx: EffectContext = _resolver.apply_gather_context(pool, parts)
 	assert_eq(ctx.dice_pool, {"RED": 1},
 			"Metadata-only modifiers should leave the dice pool unchanged.")
 	assert_eq(ctx.get_meta_value("choice_required", false), true,
@@ -434,23 +422,22 @@ func test_apply_rule_pool_modifier_runs_only_selected_rule() -> void:
 # is_blocked_by_damage
 # ---------------------------------------------------------------------------
 
-func test_is_blocked_null_registry_returns_false() -> void:
+func test_is_blocked_without_rules_returns_false() -> void:
 	var parts: CombatParticipants = CombatParticipants.new()
 	var blocked: bool = _resolver.is_blocked_by_damage(
-			null, parts, false, 1)
+			parts, false, 1)
 	assert_false(blocked,
-			"Null registry should not block attack")
+			"No active rules should not block attack")
 
 
-func test_is_blocked_empty_registry_returns_false() -> void:
-	var registry: EffectRegistry = EffectRegistry.new()
+func test_is_blocked_with_participants_returns_false() -> void:
 	var atk: ShipToken = _make_ship_token()
 	var parts: CombatParticipants = CombatParticipants.create(
 			atk, Constants.HullZone.FRONT, null, null, -1, null)
 	var blocked: bool = _resolver.is_blocked_by_damage(
-			registry, parts, false, 1)
+			parts, false, 1)
 	assert_false(blocked,
-			"Empty registry should not block attack")
+			"No active rules should not block attack")
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +596,7 @@ func test_calc_damage_ship_vs_ship_counts_crits() -> void:
 		{"color": Constants.DiceColor.RED,
 				"face": Constants.DiceFace.CRITICAL},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 2,
 			"Ship-vs-ship: HIT + CRIT should equal 2 damage")
 
@@ -624,7 +611,7 @@ func test_calc_damage_ship_vs_ship_hit_crit_face() -> void:
 		{"color": Constants.DiceColor.RED,
 				"face": Constants.DiceFace.HIT_CRITICAL},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 2,
 			"Ship-vs-ship: HIT_CRITICAL face should equal 2 damage")
 
@@ -643,7 +630,7 @@ func test_calc_damage_ship_vs_squad_crit_not_counted() -> void:
 		{"color": Constants.DiceColor.BLUE,
 				"face": Constants.DiceFace.CRITICAL},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 0,
 			"Ship-vs-squad: standalone CRIT should deal 0 damage")
 
@@ -657,7 +644,7 @@ func test_calc_damage_squad_vs_ship_crit_not_counted() -> void:
 		{"color": Constants.DiceColor.RED,
 				"face": Constants.DiceFace.CRITICAL},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 0,
 			"Squad-vs-ship: standalone CRIT should deal 0 damage")
 
@@ -671,17 +658,16 @@ func test_calc_damage_squad_vs_squad_hit_crit_partial() -> void:
 		{"color": Constants.DiceColor.RED,
 				"face": Constants.DiceFace.HIT_CRITICAL},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 1,
 			"Squad-vs-squad: HIT_CRITICAL should deal only 1 (hit portion)")
 
 
 # ---------------------------------------------------------------------------
-# calc_damage — with effect registry (no effects = base)
+# calc_damage — no active rules
 # ---------------------------------------------------------------------------
 
-func test_calc_damage_with_empty_registry_returns_base() -> void:
-	var registry: EffectRegistry = EffectRegistry.new()
+func test_calc_damage_without_rules_returns_base() -> void:
 	var atk: ShipToken = _make_ship_token()
 	var def: ShipToken = _make_ship_token(
 			Constants.Faction.GALACTIC_EMPIRE)
@@ -691,9 +677,9 @@ func test_calc_damage_with_empty_registry_returns_base() -> void:
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 	]
-	var damage: int = _resolver.calc_damage(results, parts, registry)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 2,
-			"Empty registry should still return base damage of 2")
+			"No active rules should still return base damage of 2")
 
 
 # ---------------------------------------------------------------------------
@@ -707,17 +693,6 @@ func test_calc_damage_empty_results_returns_zero() -> void:
 	var parts: CombatParticipants = _ship_vs_ship(
 			atk, Constants.HullZone.FRONT, def)
 	var results: Array[Dictionary] = []
-	var damage: int = _resolver.calc_damage(results, parts, null)
+	var damage: int = _resolver.calc_damage(results, parts)
 	assert_eq(damage, 0,
 			"Empty results should yield 0 damage")
-
-
-class _AddRedDieEffect extends GameEffect:
-	func get_hooks() -> Array[StringName]:
-		var hooks: Array[StringName] = [&"ATTACK_GATHER_DICE"]
-		return hooks
-
-	func resolve(context: EffectContext) -> void:
-		var pool: Dictionary = context.dice_pool.duplicate()
-		pool["RED"] = int(pool.get("RED", 0)) + 1
-		context.dice_pool = pool

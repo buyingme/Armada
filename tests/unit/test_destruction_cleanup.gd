@@ -1,8 +1,7 @@
 ## Test: Destruction Cleanup
 ##
-## Unit tests verifying that when a ship is destroyed, its damage cards
-## are returned to the discard pile and its persistent effects are
-## unregistered from the EffectRegistry.
+## Unit tests verifying that when a ship is destroyed, its damage cards are
+## returned to the discard pile.
 ##
 ## Rules Reference: DM-030 — destroyed ships return damage cards.
 extends GutTest
@@ -162,30 +161,3 @@ func test_destroyed_ship_faceup_cards_also_returned() -> void:
 	EventBus.ship_destroyed.emit(token)
 	assert_eq(deck.get_discard_count(), discard_before + 5,
 			"All 5 cards (3 facedown + 2 faceup) returned to discard (DM-030)")
-
-
-# ---------------------------------------------------------------------------
-# Destruction cleanup — effects unregistered
-# ---------------------------------------------------------------------------
-
-
-func test_destroyed_ship_effects_unregistered() -> void:
-	var si: ShipInstance = _make_ship(5, 0)
-	GameManager.current_game_state.player_states[0].ships.append(si)
-	var si1: ShipInstance = _make_ship(5, 1)
-	GameManager.current_game_state.player_states[1].ships.append(si1)
-	# Register a fake effect owned by this ship.
-	var effect: GameEffect = GameEffect.new()
-	effect.owner = si
-	effect.source_type = GameEffect.EffectSource.DAMAGE_CARD
-	effect.source_id = "ruptured_engine"
-	var reg: EffectRegistry = GameManager.current_game_state.effect_registry
-	reg.register(effect)
-	assert_eq(reg.get_effect_count(), 1, "Pre-condition: 1 effect registered")
-	# Destroy the ship.
-	for i: int in range(5):
-		_deal_facedown(si, "Structural Damage")
-	var token: Node2D = _make_token(si)
-	EventBus.ship_destroyed.emit(token)
-	assert_eq(reg.get_effect_count(), 0,
-			"Effect should be unregistered after ship destruction (DM-030)")

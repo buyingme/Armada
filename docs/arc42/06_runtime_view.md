@@ -228,10 +228,6 @@ All pixel dimensions read from `scale_config.json`.
 ```
 Ship Phase ends → GameManager._begin_squadron_phase()
     │
-    ├─ EffectFactory.register_squadron_keywords(game_state, initiative_player)
-    │    └─ Scans all squadrons for keywords (Bomber, Escort, Swarm)
-    │       and registers GameEffect instances in EffectRegistry
-    │
     ├─ If neither player has squadrons → skip to Status Phase
     │
     ▼
@@ -268,26 +264,25 @@ _advance_squadron_phase_turn()
 
 ### Effect/Hook Pipeline
 
-RuleRegistry handles migrated rules by FlowSpec surface, while EffectRegistry
-remains only for legacy keyword/damage-card hooks that have not yet migrated.
-Both paths use a shared EffectContext-style data bag where a rule mutates
-attack, repair, command, movement, or status context. See §8.9 for the full
-hook catalogue.
+RuleRegistry is the only production rule hook catalogue. Rule files attach
+validators, modifiers, observers, blockers, and enablers to FlowSpec surfaces.
+Each invocation receives an `EffectContext`-style data bag populated from
+serialized entities and command/result metadata; rules do not register active
+runtime effect instances. See §8.9 for the rule integration pattern.
 
 ```
 Attack Flow Hook Sequence
 ─────────────────────────
 AttackExecutor (target selection)
     ├─ RuleRegistry.blockers_for("attack_target")       ── Depowered Armament
-    ├─ resolve_hook(&"ATTACK_VALIDATE_TARGET", ctx)     ── Coolant Discharge, Disengaged FC
+    ├─ RuleRegistry.validators_for("publish_attack_flow") ── command safety for declared targets
     │
 AttackExecutor (dice pool assembly)
-    ├─ resolve_hook(&"ATTACK_GATHER_DICE", ctx)         ── Remaining legacy gather effects
     ├─ RuleRegistry.modifiers_for(ATTACK/ATTACK_ROLL,
     │     "dice_pool")                                  ── Damaged Munitions / Point-Defense Failure choice/removal
     │
 AttackExecutor (accuracy spending)
-    ├─ resolve_hook(&"ATTACK_SPEND_ACCURACY", ctx)      ── Blinded Gunners
+    ├─ RuleRegistry.blockers_for("accuracy_spend")      ── Blinded Gunners
     │
 AttackExecutor (defense token spending)
     ├─ RuleRegistry.blockers_for("defense_token_spend") ── Faulty Countermeasures / Capacitor Failure UI eligibility
@@ -296,21 +291,21 @@ AttackExecutor (defense token spending)
     │                                                   ── Faulty Countermeasures / Capacitor Failure command safety
     │
 AttackExecutor (resolve critical)
-    ├─ resolve_hook(&"ATTACK_RESOLVE_CRITICAL", ctx)    ── Targeter Disruption
+    ├─ RuleRegistry.blockers_for("critical_effect")     ── Targeter Disruption
     │
 AttackExecutor._calc_attack_damage(results)
-    ├─ resolve_hook(&"ATTACK_CALC_DAMAGE", ctx)         ── Bomber (existing)
+    ├─ RuleRegistry.modifiers_for("attack_damage")      ── Bomber
 
 Movement Flow Hook Sequence
 ───────────────────────────
 ManeuverTool (yaw calculation)
-    ├─ resolve_hook(&"MANEUVER_DETERMINE_YAWS", ctx)    ── Thrust Control Malfunction
+    ├─ RuleRegistry.modifiers_for("maneuver_yaw")       ── Thrust Control Malfunction
     │
 After maneuver committed
-    ├─ resolve_hook(&"AFTER_MANEUVER_EXECUTE", ctx)     ── Ruptured Engine, Damaged Controls
+    ├─ RuleRegistry.observers_for("after_maneuver")     ── Ruptured Engine, Damaged Controls
     │
 Navigate command / speed change
-    ├─ resolve_hook(&"ON_SPEED_CHANGE", ctx)             ── Thruster Fissure
+    ├─ RuleRegistry.observers_for("speed_change")        ── Thruster Fissure
 
 Command & Status Hooks
 ──────────────────────
@@ -319,10 +314,8 @@ Ship activation (before dial reveal)
 
 Repair command resolution
     ├─ RuleRegistry.modifiers_for("engineering_value")    ── Power Failure
-    ├─ resolve_hook(&"CALC_ENGINEERING_VALUE", ctx)        ── Legacy fallback; no current card after N3
     ├─ RuleRegistry.blockers_for("repair_shield")        ── Capacitor Failure UI eligibility
     ├─ RuleRegistry.validators_for("repair_action")      ── Capacitor Failure command safety
-    ├─ resolve_hook(&"REPAIR_VALIDATE_SHIELD", ctx)      ── Remaining legacy repair blockers
 
 Status phase (token readying)
     ├─ RuleRegistry.modifiers_for("defense_token_readying") ── Compartment Fire
@@ -357,12 +350,8 @@ EngagementResolver.get_valid_engaged_targets(squadron, engaged_enemies)
 |-----------|------|
 | `GameManager` (Autoload) | Orchestrates squadron phase turns, activation validation |
 | `RuleRegistry` / `RuleSurface` (RefCounted statics) | Static migrated rule catalogue and shared surface runners |
-| `EffectRegistry` (RefCounted) | Resolves hook points, dispatches to registered effects |
-| `EffectFactory` (RefCounted) | Scans squadrons, creates/registers keyword effects |
-| `EffectContext` (RefCounted) | Mutable data bag for hook pipeline |
+| `EffectContext` (RefCounted) | Mutable data bag for RuleRegistry callbacks |
 | `EngagementResolver` (RefCounted) | Distance-1 engagement checks, valid target filtering |
 | `SquadronMover` (RefCounted) | Movement distance + overlap validation |
-| `BomberEffect` (GameEffect) | Recalculates damage using `Dice.calculate_damage()` vs ships |
-| `EscortEffect` (GameEffect) | Cancels attacks targeting non-Escort when Escort engaged |
-| `SwarmEffect` (GameEffect) | Rerolls worst die when friendly squadron also engaged |
+| `SquadronKeywordRuleHelper` (RefCounted) | Shared Heavy/Escort/Counter/Swarm/Bomber keyword predicates and payload metadata |
 | `EventBus` (Autoload) | `squadron_activation_ended` signal |

@@ -151,7 +151,7 @@ func test_repair_resolver_blocks_recover_and_move_to_empty_zone() -> void:
 	ship.current_shields["FRONT"] = 0
 	ship.current_shields["LEFT"] = 1
 	var resolver: RepairResolver = RepairResolver.create(
-			ship, _state.damage_deck, _state.effect_registry)
+			ship, _state.damage_deck)
 	assert_false(resolver.can_recover_shields_on("FRONT"),
 			"Repair UI should hide recovery for zero-shield Capacitor zones.")
 	assert_false(resolver.can_move_shields_between("LEFT", "FRONT"),
@@ -202,17 +202,11 @@ func test_save_load_rebuild_has_no_legacy_effect_but_rule_rejects() -> void:
 	_add_capacitor_failure(ship)
 	ship.current_shields["FRONT"] = 0
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	var registered: int = EffectFactory.rebuild_runtime_effects(
-			restored, restored.initiative_player)
 	GameManager.current_game_state = restored
 	var restored_ship: ShipInstance = restored.get_ship(
 			DEFENDER_PLAYER, SHIP_INDEX)
 	var result: Dictionary = _processor.submit(
 			_make_spend_command(_redirect_token_index(restored_ship)))
-	assert_eq(registered, 0,
-			"Loaded Capacitor Failure should not rebuild a legacy effect.")
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Legacy EffectRegistry should remain empty for Capacitor Failure.")
 	assert_true(result.is_empty(),
 			"RuleRegistry should still reject after save/load rebuild.")
 	assert_engine_error(1,
@@ -290,8 +284,8 @@ func _add_capacitor_failure(ship: ShipInstance) -> DamageCard:
 	var card: DamageCard = DamageCard.create("Ship", "Capacitor Failure")
 	card.effect_id = CapacitorFailure.EFFECT_ID
 	card.effect_text = "If a hull zone has no remaining shields, you cannot " \
-			+ "recover shields in it nor move shields to it. If that hull " \
-			+ "zone is defending, you cannot spend Redirect tokens."
+			+"recover shields in it nor move shields to it. If that hull " \
+			+"zone is defending, you cannot spend Redirect tokens."
 	card.timing = "persistent"
 	card.is_faceup = true
 	ship.add_faceup_damage(card)
@@ -312,7 +306,7 @@ func _blocked_defense_indices(ship: ShipInstance) -> Array[int]:
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 	var flow_executor: AttackFlowExecutor = AttackFlowExecutor.new()
 	return flow_executor.build_blocked_defense_token_indices(
-			state, ship, resolver, null)
+			state, ship, resolver)
 
 
 func _make_spend_command(token_index: int) -> SpendDefenseTokenCommand:

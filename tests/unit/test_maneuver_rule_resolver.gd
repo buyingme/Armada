@@ -102,7 +102,6 @@ func test_preview_maneuver_damage_ignores_unchanged_thruster_fissure() -> void:
 
 
 func test_after_maneuver_without_faceup_damage_returns_empty() -> void:
-	_state.effect_registry = null
 	var effect_id: String = ManeuverRuleResolver.resolve_after_maneuver_effect_id(
 			_state, _ship, _deck, {"speed": 2}, true)
 	assert_eq(effect_id, "",

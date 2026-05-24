@@ -116,7 +116,7 @@ func test_resolver_exposes_choice_without_legacy_effect() -> void:
 			attacker_token, Constants.HullZone.FRONT, null,
 			defender_token, Constants.HullZone.FRONT, null)
 	var ctx: EffectContext = _resolver.apply_gather_context(
-			{DicePool.RED_KEY: 2, DicePool.BLUE_KEY: 1}, null, participants)
+			{DicePool.RED_KEY: 2, DicePool.BLUE_KEY: 1}, participants)
 	assert_eq(DicePool.get_total_count(ctx.dice_pool), 3,
 			"AttackDiceResolver should expose player choice before removal.")
 	assert_eq(ctx.get_meta_value(DamagedMunitions.META_PENDING_RULE_ID, ""),
@@ -145,7 +145,6 @@ func test_modifier_applies_after_save_load_without_legacy_effect() -> void:
 	var attacker: ShipInstance = _state.get_ship(ATTACKER_PLAYER, SHIP_INDEX)
 	_add_damaged_munitions(attacker)
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
 	var restored_defender: ShipInstance = restored.get_ship(
@@ -153,8 +152,6 @@ func test_modifier_applies_after_save_load_without_legacy_effect() -> void:
 	var ctx: EffectContext = _apply_registered_modifier(restored_attacker,
 			restored_defender, {DicePool.RED_KEY: 2},
 			{DamagedMunitions.META_CHOSEN_COLOUR: DicePool.RED_KEY})
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Damaged Munitions should no longer require a legacy effect bridge.")
 	assert_eq(DicePool.get_total_count(ctx.dice_pool), 1,
 			"Chosen RuleRegistry removal should work after save/load rebuild.")
 
@@ -238,7 +235,7 @@ func _add_damaged_munitions(ship: ShipInstance) -> DamageCard:
 	var card: DamageCard = DamageCard.create("Ship", "Damaged Munitions")
 	card.effect_id = DamagedMunitions.EFFECT_ID
 	card.effect_text = "When attacking a ship, before you roll your attack pool, " \
-			+ "remove 1 die of your choice."
+			+"remove 1 die of your choice."
 	card.timing = "persistent"
 	card.is_faceup = true
 	ship.add_faceup_damage(card)

@@ -29,9 +29,6 @@ signal move_commit_requested(squadron_token: SquadronToken)
 ## Player clicked "Attack" — game board should open the attack executor.
 signal attack_requested(squadron_token: SquadronToken)
 
-## Player clicked "Skip (End Activation)" — end without action.
-signal skip_requested()
-
 ## A single squadron activation is done (move, attack, or skip completed).
 ## The game board should emit [code]EventBus.squadron_activation_ended[/code].
 signal activation_done(squadron_instance: SquadronInstance)
@@ -42,6 +39,9 @@ signal command_done()
 
 ## The modal was closed / dismissed by the player.
 signal modal_closed()
+
+## The current command-mode preview selection was cleared without activation.
+signal selection_cleared()
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +108,9 @@ var _has_moved: bool = false
 
 ## Whether the squadron has already attacked this activation.
 var _has_attacked: bool = false
+
+## Transient — true after command-mode budget is committed to this selection.
+var _activation_slot_committed: bool = false
 
 ## True when operating in command mode (during Ship Phase activation).
 var _is_command_mode: bool = false
@@ -185,6 +188,7 @@ func open_for_turn(activation_num: int, max_act: int) -> void:
 	_selected_instance = null
 	_has_moved = false
 	_has_attacked = false
+	_activation_slot_committed = false
 	_is_command_mode = false
 	_command_resolver = null
 	_command_ship_token = null
@@ -209,6 +213,7 @@ func open_for_command(resolver: SquadronCommandResolver,
 	_selected_instance = null
 	_has_moved = false
 	_has_attacked = false
+	_activation_slot_committed = false
 	_transition_to(State.WAITING_FOR_SELECTION)
 	visible = true
 	_log.info("Opened for squadron command: activation %d of %d." % [
@@ -226,24 +231,11 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 		State.WAITING_FOR_SELECTION:
 			return _try_select_squadron(token)
 		State.ACTION_CHOICE:
-			# UX (Phase K12-bugfix): clicking a DIFFERENT squadron while
-			# the current one is still on ACTION_CHOICE auto-finishes the
-			# current activation (as if Skip was pressed) and selects the
-			# new squadron.  Without this the modal is trapped on the
-			# previous squadron and the player has no obvious way to
-			# pick a different one.  Restricted to command mode because
-			# in turn mode [SquadronPhaseController] re-opens the modal
-			# via [signal activation_done] (controller re-opens for the
-			# next turn-pick), and we must let that signal-driven path
-			# run rather than synchronously selecting the next squadron.
 			if not _is_command_mode:
 				return false
 			if token == _selected_token:
 				return false
-			_finish_activation()
-			if _state == State.WAITING_FOR_SELECTION:
-				return _try_select_squadron(token)
-			return false
+			return _try_select_different_command_squadron(token)
 		State.MOVING:
 			# During movement, clicks on other squadrons are ignored
 			# (board click handler is used for placement).
@@ -255,7 +247,7 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 ## Called by game_board when the player clicks on the board (not a token)
 ## during the MOVING state.  [param world_pos] is the click position in
 ## game-world coordinates.
-func handle_board_click(world_pos: Vector2) -> bool:
+func handle_board_click(_world_pos: Vector2) -> bool:
 	if not visible:
 		return false
 	if not _is_interactable:
@@ -331,6 +323,7 @@ func close_modal() -> void:
 	_is_command_mode = false
 	_command_resolver = null
 	_command_ship_token = null
+	_activation_slot_committed = false
 	_state = State.WAITING_FOR_SELECTION
 	visible = false
 
@@ -393,6 +386,12 @@ func is_command_mode() -> bool:
 	return _is_command_mode
 
 
+## Commits command-mode activation budget before submitting a real action.
+## Returns false if no activation slot remains.
+func commit_selected_command_activation() -> bool:
+	return _commit_command_activation_if_needed()
+
+
 # ---------------------------------------------------------------------------
 # Private — state transitions
 # ---------------------------------------------------------------------------
@@ -417,6 +416,14 @@ func _try_select_squadron(token: SquadronToken) -> bool:
 	return true
 
 
+func _try_select_different_command_squadron(token: SquadronToken) -> bool:
+	if _has_committed_current_activation():
+		_finish_activation()
+		if _state != State.WAITING_FOR_SELECTION:
+			return false
+	return _try_select_squadron(token)
+
+
 ## Validates that the token's squadron can be selected for activation.
 ## Returns the SquadronInstance on success, or null (with error shown).
 func _validate_squadron_selection(
@@ -436,6 +443,9 @@ func _validate_squadron_selection(
 		return null
 	# Range check in command mode — squadron must be at close–medium range.
 	if _is_command_mode and _command_resolver != null:
+		if _command_resolver.is_done():
+			_show_error("All Squadron command activations are used.")
+			return null
 		if not _command_resolver.is_squadron_in_range(
 				token.global_position):
 			_show_error("Out of range (requires close–medium).")
@@ -468,21 +478,41 @@ func _apply_squadron_selection(token: SquadronToken,
 	# Defaults — game_board overrides via set_action_availability().
 	_can_move = not _is_engaged
 	_has_targets = true
+	_activation_slot_committed = false
 	_log.info("Selected squadron: %s (engaged=%s, move_and_attack=%s)" % [
 			instance.data_key, str(_is_engaged),
 			str(_allow_move_and_attack)])
-	# Consume an activation slot in command mode.
-	if _is_command_mode and _command_resolver != null:
-		_command_resolver.use_activation()
 	_transition_to(State.ACTION_CHOICE)
+
+
+func _commit_command_activation_if_needed() -> bool:
+	if not _is_command_mode:
+		return true
+	if _activation_slot_committed:
+		return true
+	if _command_resolver == null:
+		_show_error("No Squadron command is active.")
+		return false
+	if not _command_resolver.use_activation():
+		_show_error("No Squadron command activations remaining.")
+		return false
+	_activation_slot_committed = true
+	return true
+
+
+func _has_committed_current_activation() -> bool:
+	return _activation_slot_committed or _has_moved or _has_attacked
 
 
 func _finish_activation() -> void:
 	_transition_to(State.DONE)
-	if _selected_instance != null:
+	if _should_emit_activation_done():
 		activation_done.emit(_selected_instance)
 	_selected_token = null
 	_selected_instance = null
+	_has_moved = false
+	_has_attacked = false
+	_activation_slot_committed = false
 	# In command mode, check if more activations remain.
 	if _is_command_mode and _command_resolver != null:
 		if _command_resolver.is_done():
@@ -503,6 +533,24 @@ func _finish_activation() -> void:
 			_transition_to(State.WAITING_FOR_SELECTION)
 
 
+func _should_emit_activation_done() -> bool:
+	if _selected_instance == null:
+		return false
+	if not _is_command_mode:
+		return true
+	return _has_committed_current_activation()
+
+
+func _clear_command_preview_selection() -> void:
+	_selected_token = null
+	_selected_instance = null
+	_has_moved = false
+	_has_attacked = false
+	_activation_slot_committed = false
+	selection_cleared.emit()
+	_transition_to(State.WAITING_FOR_SELECTION)
+
+
 ## Ends the squadron command early (player pressed Done).
 ## Emits command_done even if activations remain.
 func _finish_command_early() -> void:
@@ -513,10 +561,13 @@ func _finish_command_early() -> void:
 	# activation_done handler).  Without this, dismissing the modal
 	# after the squadron attacked leaves it eligible for re-activation
 	# in the Squadron Phase.
-	if _selected_instance != null and (_has_moved or _has_attacked):
+	if _selected_instance != null and _has_committed_current_activation():
 		activation_done.emit(_selected_instance)
 	_selected_token = null
 	_selected_instance = null
+	_has_moved = false
+	_has_attacked = false
+	_activation_slot_committed = false
 	_transition_to(State.DONE)
 	if _command_resolver != null:
 		var token_result: Dictionary = _command_resolver.finalize()
@@ -786,6 +837,7 @@ func _update_action_buttons() -> void:
 		_skip_button.tooltip_text = "Engaged — must attack an engaged enemy"
 	else:
 		_skip_button.tooltip_text = ""
+	_skip_button.text = _get_skip_button_text()
 
 	# Done button — only in command mode, hidden during ACTION_CHOICE
 	# for the selected squadron (Skip is used to end the current activation).
@@ -813,6 +865,12 @@ func _apply_button_interactable(btn: Button) -> void:
 	if btn == null or not btn.visible:
 		return
 	btn.disabled = not _is_interactable
+
+
+func _get_skip_button_text() -> String:
+	if _is_command_mode and not _has_committed_current_activation():
+		return "Back"
+	return "Skip"
 
 
 ## Returns true when action handlers should early-return for passive peers.
@@ -879,6 +937,8 @@ func _on_move_pressed() -> void:
 func _on_attack_pressed() -> void:
 	if _is_action_blocked("Attack"):
 		return
+	if not _commit_command_activation_if_needed():
+		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Attack pressed for %s" % _get_squadron_name())
 	_transition_to(State.ATTACKING)
@@ -889,12 +949,18 @@ func _on_skip_pressed() -> void:
 	if _is_action_blocked("Skip"):
 		return
 	SfxManager.play_sfx("skip_beep")
+	if _is_command_mode and not _has_committed_current_activation():
+		_log.info("Back pressed — clearing Squadron command preview.")
+		_clear_command_preview_selection()
+		return
 	_log.info("Skip pressed for %s" % _get_squadron_name())
 	_finish_activation()
 
 
 func _on_commit_move_pressed() -> void:
 	if _is_action_blocked("Commit Move"):
+		return
+	if not _commit_command_activation_if_needed():
 		return
 	SfxManager.play_sfx("droid_sound")
 	_log.info("Commit Move pressed for %s" % _get_squadron_name())

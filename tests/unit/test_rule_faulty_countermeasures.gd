@@ -163,13 +163,10 @@ func test_validator_rejects_after_save_load_effect_rebuild() -> void:
 	_add_faulty_countermeasures(ship)
 	ship.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	GameManager.current_game_state = restored
 	var restored_ship: ShipInstance = restored.get_ship(
 			DEFENDER_PLAYER, DEFENDER_SHIP_INDEX)
 	var result: Dictionary = _processor.submit(_make_spend_command(0, "discard"))
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Save/load rebuild should not restore a legacy Faulty effect.")
 	assert_true(result.is_empty(),
 			"Command-time rule should still reject after save/load rebuild.")
 	assert_eq(restored_ship.defense_tokens[0]["state"],
@@ -240,4 +237,4 @@ func _blocked_defense_indices(ship: ShipInstance) -> Array[int]:
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 	var flow_executor: AttackFlowExecutor = AttackFlowExecutor.new()
 	return flow_executor.build_blocked_defense_token_indices(
-			attack_state, ship, resolver, null)
+			attack_state, ship, resolver)

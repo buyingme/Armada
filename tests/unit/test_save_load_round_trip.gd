@@ -200,31 +200,15 @@ func test_start_new_game_from_state_emits_game_started() -> void:
 	GameManager.is_game_active = prev_active
 
 
-func test_start_new_game_from_state_initialises_effect_registry() -> void:
-	var gs: GameState = _make_populated_state()
-	gs.effect_registry = null # simulate a freshly-deserialised state
-	var prev_state: GameState = GameManager.current_game_state
-	var prev_active: bool = GameManager.is_game_active
-	GameManager.start_new_game_from_state(gs, "x")
-	assert_not_null(GameManager.current_game_state.effect_registry,
-			"start_new_game_from_state should ensure effect_registry exists")
-	GameManager.current_game_state = prev_state
-	GameManager.is_game_active = prev_active
-
-
 ## Regression: loaded games still derive Bomber from serialized squadron data
-## after N10, without rebuilding a legacy BomberEffect instance.
+## without rebuilding transient runtime effect objects.
 func test_start_new_game_from_state_preserves_bomber_rule_after_load() -> void:
 	RuleRegistry.clear()
 	BomberKeyword.register()
 	var gs: GameState = _make_populated_state()
-	gs.effect_registry = EffectRegistry.new() # empty, like a load
 	var prev_state: GameState = GameManager.current_game_state
 	var prev_active: bool = GameManager.is_game_active
 	GameManager.start_new_game_from_state(gs, "x")
-	var registry: EffectRegistry = GameManager.current_game_state.effect_registry
-	assert_eq(registry.get_effects_for_hook(&"ATTACK_CALC_DAMAGE").size(), 0,
-			"Loaded X-wing should not rebuild legacy BomberEffect after N10")
 	var xwing: SquadronInstance = GameManager.current_game_state.get_squadron(0, 0)
 	var defender: ShipInstance = GameManager.current_game_state.get_ship(0, 1)
 	var context: EffectContext = _bomber_damage_context(xwing, defender)
@@ -251,26 +235,17 @@ func _bomber_damage_context(attacker: SquadronInstance,
 	return context
 
 
-func test_start_new_game_from_state_registers_faceup_damage_effects() -> void:
+func test_start_new_game_from_state_preserves_faceup_damage_rules() -> void:
 	RuleRegistry.clear()
 	BlindedGunners.register()
 	var gs: GameState = _make_populated_state()
 	var damaged_ship: ShipInstance = gs.player_states[0].ships[1]
 	damaged_ship.add_faceup_damage(_make_blinded_gunners_card())
 	var restored: GameState = GameState.deserialize(gs.serialize())
-	restored.effect_registry = EffectRegistry.new()
 	var restored_ship: ShipInstance = restored.player_states[0].ships[1]
-	assert_eq(restored.effect_registry.get_effects_for_hook(
-			&"ATTACK_SPEND_ACCURACY").size(), 0,
-			"Precondition: migrated cards should not rebuild legacy hooks")
 	var prev_state: GameState = GameManager.current_game_state
 	var prev_active: bool = GameManager.is_game_active
 	GameManager.start_new_game_from_state(restored, "x")
-	var registry: EffectRegistry = GameManager.current_game_state.effect_registry
-	var effects: Array[GameEffect] = registry.get_effects_for_hook(
-			&"ATTACK_SPEND_ACCURACY")
-	assert_eq(effects.size(), 0,
-			"Loaded faceup Blinded Gunners should not rebuild legacy hooks")
 	assert_true(_accuracy_spend_blocked(restored_ship),
 			"Loaded Blinded Gunners should block accuracy through RuleRegistry")
 	GameManager.current_game_state = prev_state

@@ -271,7 +271,7 @@ func test_build_defense_payload_includes_blocked_token_indices() -> void:
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 
 	var payload: Dictionary = _executor.build_defense_payload(
-			state, ship, gs, resolver, null)
+			state, ship, gs, resolver)
 
 	assert_eq(payload.get("blocked_defense_token_indices", []) as Array, [0],
 			"payload should include RuleRegistry-blocked defense token indices")
@@ -371,7 +371,7 @@ func test_determine_first_card_faceup_true_for_critical_without_contain() -> voi
 	]
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 	var first_faceup: bool = _executor.determine_first_card_faceup(
-			state, resolver, null)
+			state, resolver)
 	assert_true(first_faceup,
 			"critical result without contain should set first card faceup")
 
@@ -387,7 +387,7 @@ func test_determine_first_card_faceup_false_when_contain_used() -> void:
 	]
 	var resolver: DefenseTokenResolver = DefenseTokenResolver.new()
 	var first_faceup: bool = _executor.determine_first_card_faceup(
-			state, resolver, null)
+			state, resolver)
 	assert_false(first_faceup,
 			"contain should prevent first card from being faceup")
 
@@ -428,15 +428,13 @@ func test_can_continue_redirect_false_when_no_budget() -> void:
 			"redirect should stop when remaining budget is zero")
 
 
-func test_prepare_faceup_card_returns_registration_and_immediate_flags() -> void:
+func test_prepare_faceup_card_returns_immediate_flags() -> void:
 	var card: DamageCard = DamageCard.new()
 	card.title = "Structural Damage"
 	card.timing = "immediate"
 	card.effect_id = "structural_damage"
 	var dealer: DamageDealer = DamageDealer.new()
 	var result: Dictionary = _executor.prepare_faceup_card(card, dealer)
-	assert_true(result.has("should_register_persistent"),
-			"result should have should_register_persistent key")
 	assert_true(result.has("has_immediate"),
 			"result should have has_immediate key")
 	assert_eq(result.get("card_title", ""), "Structural Damage",

@@ -80,7 +80,7 @@ func test_attack_dice_resolver_uses_rule_blocker_without_legacy_registry() -> vo
 			_make_ship_token(attacker), Constants.HullZone.FRONT, null,
 			_make_ship_token(_defender_ship()), Constants.HullZone.FRONT, null)
 	var blocked: bool = _resolver.is_blocked_by_damage_at_range(
-			null, parts, false, 0, Constants.RANGE_BAND_LONG)
+			parts, false, 0, Constants.RANGE_BAND_LONG)
 	assert_true(blocked,
 			"AttackDiceResolver should consume RuleRegistry attack blockers.")
 
@@ -110,11 +110,8 @@ func test_publish_attack_flow_validator_allows_medium_range_target() -> void:
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_depowered_armament(_attacker_ship())
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Depowered Armament should not rebuild a legacy target effect.")
 	assert_true(_attack_target_blocked(
 			restored_attacker, Constants.RANGE_BAND_LONG),
 			"RuleRegistry blocker should still apply after save/load rebuild.")

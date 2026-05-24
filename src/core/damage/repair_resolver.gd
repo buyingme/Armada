@@ -41,24 +41,16 @@ var _token_points: int = 0
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("RepairResolver")
 
-## Optional EffectRegistry for remaining legacy hook resolution and
-## persistent effect unregistration.
-var _effect_registry: EffectRegistry = null
-
-
 ## Creates a RepairResolver for the given ship.
 ## Examines the ship's revealed dial and command tokens to determine
 ## available engineering points.
 ## [param ship] — the ShipInstance being repaired.
 ## [param deck] — the shared DamageDeck for discarding cards.
-## [param registry] — optional EffectRegistry for damage card hooks.
 ## Rules Reference: CM-031, CM-032.
-static func create(ship: ShipInstance, deck: DamageDeck,
-		registry: EffectRegistry = null) -> RepairResolver:
+static func create(ship: ShipInstance, deck: DamageDeck) -> RepairResolver:
 	var resolver: RepairResolver = RepairResolver.new()
 	resolver._ship = ship
 	resolver._damage_deck = deck
-	resolver._effect_registry = registry
 	resolver._resolve_availability(ship)
 	return resolver
 
@@ -330,7 +322,7 @@ func _resolve_availability(ship: ShipInstance) -> void:
 			str(_has_repair_token), _token_points, _total_points])
 
 
-## Applies RuleRegistry and remaining legacy engineering-value modifiers.
+## Applies RuleRegistry engineering-value modifiers.
 func _apply_engineering_hook() -> void:
 	if _total_points <= 0:
 		return
@@ -341,9 +333,6 @@ func _apply_engineering_hook() -> void:
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REPAIR_STEP,
 			RuleSurface.TARGET_ENGINEERING_VALUE)
-	if _effect_registry:
-		eng_ctx = _effect_registry.resolve_hook(
-				&"CALC_ENGINEERING_VALUE", eng_ctx)
 	var modified: int = int(eng_ctx.get_meta_value(
 			"engineering_value", _total_points))
 	if modified != _total_points:
@@ -353,9 +342,8 @@ func _apply_engineering_hook() -> void:
 		_remaining_points = _total_points
 
 
-## Checks migrated RuleRegistry blockers and the remaining legacy
-## REPAIR_VALIDATE_SHIELD hook for [param zone].
-## Returns true if the operation is allowed (not cancelled).
+## Checks RuleRegistry blockers for [param zone]. Returns true if the operation
+## is allowed.
 ## Capacitor Failure blocks shield operations targeting zones with 0 shields.
 ## Rules Reference: RRG "Damage Cards", p.4; "Capacitor Failure" card text.
 func _is_shield_op_allowed(zone: String) -> bool:
@@ -367,13 +355,6 @@ func _is_shield_op_allowed(zone: String) -> bool:
 			int(_ship.current_shields.get(zone, 0)))
 	if _is_shield_op_blocked_by_rule(ctx):
 		_log.info("Shield operation on %s blocked by damage rule." % zone)
-		return false
-	if not _effect_registry:
-		return true
-	ctx = _effect_registry.resolve_hook(
-			&"REPAIR_VALIDATE_SHIELD", ctx)
-	if ctx.cancelled:
-		_log.info("Shield operation on %s blocked by damage effect." % zone)
 		return false
 	return true
 

@@ -111,7 +111,7 @@ func test_count_lockable_tokens_no_tokens() -> void:
 func test_can_spend_tokens_ready_tokens_speed_nonzero() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade"], 2)
 	var result: bool = _resolver.can_spend_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_true(result,
 			"Should allow spending with ready tokens and speed > 0")
 
@@ -119,7 +119,7 @@ func test_can_spend_tokens_ready_tokens_speed_nonzero() -> void:
 func test_can_spend_tokens_speed_zero_returns_false() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade"], 0)
 	var result: bool = _resolver.can_spend_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_false(result,
 			"Speed 0 defender should not be able to spend tokens")
 
@@ -127,7 +127,7 @@ func test_can_spend_tokens_speed_zero_returns_false() -> void:
 func test_can_spend_tokens_no_tokens_returns_false() -> void:
 	var def: ShipInstance = _make_defender([], 2)
 	var result: bool = _resolver.can_spend_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_false(result,
 			"No tokens should return false")
 
@@ -136,7 +136,7 @@ func test_can_spend_tokens_all_locked_returns_false() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade"], 2)
 	var locked: Array[int] = [0, 1]
 	var result: bool = _resolver.can_spend_tokens(
-			def, locked, null, Constants.HullZone.FRONT)
+			def, locked, Constants.HullZone.FRONT)
 	assert_false(result,
 			"All tokens locked should return false")
 
@@ -145,7 +145,7 @@ func test_can_spend_tokens_one_locked_one_free() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade"], 2)
 	var locked: Array[int] = [0]
 	var result: bool = _resolver.can_spend_tokens(
-			def, locked, null, Constants.HullZone.FRONT)
+			def, locked, Constants.HullZone.FRONT)
 	assert_true(result,
 			"One free token should allow spending")
 
@@ -154,7 +154,7 @@ func test_can_spend_tokens_all_discarded_returns_false() -> void:
 	var def: ShipInstance = _make_defender(["Brace"], 2)
 	def.defense_tokens[0]["state"] = Constants.DefenseTokenState.DISCARDED
 	var result: bool = _resolver.can_spend_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_false(result,
 			"All discarded tokens should return false")
 
@@ -166,7 +166,7 @@ func test_can_spend_tokens_all_discarded_returns_false() -> void:
 func test_count_spendable_all_ready() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade", "Redirect"])
 	var result: int = _resolver.count_spendable_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_eq(result, 3,
 			"All ready tokens should be spendable")
 
@@ -175,7 +175,7 @@ func test_count_spendable_skips_locked() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade", "Redirect"])
 	var locked: Array[int] = [1]
 	var result: int = _resolver.count_spendable_tokens(
-			def, locked, null, Constants.HullZone.FRONT)
+			def, locked, Constants.HullZone.FRONT)
 	assert_eq(result, 2,
 			"Locked token should be skipped")
 
@@ -184,7 +184,7 @@ func test_count_spendable_skips_discarded() -> void:
 	var def: ShipInstance = _make_defender(["Brace", "Evade"])
 	def.defense_tokens[0]["state"] = Constants.DefenseTokenState.DISCARDED
 	var result: int = _resolver.count_spendable_tokens(
-			def, [], null, Constants.HullZone.FRONT)
+			def, [], Constants.HullZone.FRONT)
 	assert_eq(result, 1,
 			"Discarded token should be skipped")
 
@@ -197,7 +197,7 @@ func test_is_token_spendable_ready_token() -> void:
 	var def: ShipInstance = _make_defender(["Brace"])
 	var token: Dictionary = def.defense_tokens[0]
 	var result: bool = _resolver.is_token_spendable(
-			0, token, {}, [], def, null, Constants.HullZone.FRONT)
+			0, token, {}, [], def, Constants.HullZone.FRONT)
 	assert_true(result,
 			"Ready, unlocked, unspent token should be spendable")
 
@@ -207,7 +207,7 @@ func test_is_token_spendable_discarded_returns_false() -> void:
 	def.defense_tokens[0]["state"] = Constants.DefenseTokenState.DISCARDED
 	var token: Dictionary = def.defense_tokens[0]
 	var result: bool = _resolver.is_token_spendable(
-			0, token, {}, [], def, null, Constants.HullZone.FRONT)
+			0, token, {}, [], def, Constants.HullZone.FRONT)
 	assert_false(result,
 			"Discarded token should not be spendable")
 
@@ -217,7 +217,7 @@ func test_is_token_spendable_already_spent_type_returns_false() -> void:
 	var token: Dictionary = def.defense_tokens[0]
 	var spent: Dictionary = {Constants.DefenseToken.BRACE: "exhaust"}
 	var result: bool = _resolver.is_token_spendable(
-			0, token, spent, [], def, null, Constants.HullZone.FRONT)
+			0, token, spent, [], def, Constants.HullZone.FRONT)
 	assert_false(result,
 			"Already spent type should not be spendable again")
 
@@ -227,7 +227,7 @@ func test_is_token_spendable_locked_returns_false() -> void:
 	var token: Dictionary = def.defense_tokens[0]
 	var locked: Array[int] = [0]
 	var result: bool = _resolver.is_token_spendable(
-			0, token, {}, locked, def, null, Constants.HullZone.FRONT)
+			0, token, {}, locked, def, Constants.HullZone.FRONT)
 	assert_false(result,
 			"Locked token should not be spendable")
 
@@ -237,7 +237,7 @@ func test_is_token_spendable_exhausted_is_still_spendable() -> void:
 	def.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
 	var token: Dictionary = def.defense_tokens[0]
 	var result: bool = _resolver.is_token_spendable(
-			0, token, {}, [], def, null, Constants.HullZone.FRONT)
+			0, token, {}, [], def, Constants.HullZone.FRONT)
 	assert_true(result,
 			"Exhausted token should be spendable (will be discarded)")
 
@@ -246,32 +246,30 @@ func test_is_token_spendable_exhausted_is_still_spendable() -> void:
 # is_token_blocked_by_effect
 # =========================================================================
 
-func test_is_token_blocked_null_registry_returns_false() -> void:
+func test_is_token_blocked_without_rules_returns_false() -> void:
 	var def: ShipInstance = _make_defender(["Brace"])
 	var token: Dictionary = def.defense_tokens[0]
 	var result: bool = _resolver.is_token_blocked_by_effect(
-			def, token, null, Constants.HullZone.FRONT)
+			def, token, Constants.HullZone.FRONT)
 	assert_false(result,
-			"Null registry should never block")
+			"No active rules should never block")
 
 
 func test_is_token_blocked_null_instance_returns_false() -> void:
-	var registry: EffectRegistry = EffectRegistry.new()
 	var token: Dictionary = _make_token(Constants.DefenseToken.BRACE)
 	var result: bool = _resolver.is_token_blocked_by_effect(
-			null, token, registry, Constants.HullZone.FRONT)
+			null, token, Constants.HullZone.FRONT)
 	assert_false(result,
 			"Null instance should never block")
 
 
-func test_is_token_blocked_empty_registry_returns_false() -> void:
+func test_is_token_blocked_no_rule_matches_returns_false() -> void:
 	var def: ShipInstance = _make_defender(["Brace"])
-	var registry: EffectRegistry = EffectRegistry.new()
 	var token: Dictionary = def.defense_tokens[0]
 	var result: bool = _resolver.is_token_blocked_by_effect(
-			def, token, registry, Constants.HullZone.FRONT)
+			def, token, Constants.HullZone.FRONT)
 	assert_false(result,
-			"Empty registry should not block")
+			"No matching rule should not block")
 
 
 # =========================================================================
@@ -358,8 +356,9 @@ func test_apply_evade_remove_removes_die() -> void:
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var result: Dictionary = _resolver.apply_evade_remove(
-			0, dice, null, null)
+			0, dice, parts)
 	assert_eq(result["dice_results"].size(), 1,
 			"Should have 1 die after removal")
 	assert_eq(result["damage"], 1,
@@ -370,8 +369,9 @@ func test_apply_evade_remove_invalid_index_no_change() -> void:
 	var dice: Array[Dictionary] = [
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var result: Dictionary = _resolver.apply_evade_remove(
-			5, dice, null, null)
+			5, dice, parts)
 	assert_eq(result["dice_results"].size(), 1,
 			"Invalid index should not remove any die")
 
@@ -381,8 +381,9 @@ func test_apply_evade_remove_does_not_mutate_original() -> void:
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 		{"color": Constants.DiceColor.BLUE, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var _result: Dictionary = _resolver.apply_evade_remove(
-			0, dice, null, null)
+			0, dice, parts)
 	assert_eq(dice.size(), 2,
 			"Original dice array should not be mutated")
 
@@ -395,8 +396,9 @@ func test_apply_evade_reroll_returns_new_face() -> void:
 	var dice: Array[Dictionary] = [
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var result: Dictionary = _resolver.apply_evade_reroll(
-			0, dice, null, null)
+			0, dice, parts)
 	assert_has(result, "new_face",
 			"Result should contain new_face key")
 	assert_eq(result["dice_results"].size(), 1,
@@ -407,8 +409,9 @@ func test_apply_evade_reroll_does_not_mutate_original() -> void:
 	var dice: Array[Dictionary] = [
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var _result: Dictionary = _resolver.apply_evade_reroll(
-			0, dice, null, null)
+			0, dice, parts)
 	assert_eq(dice[0]["face"], Constants.DiceFace.HIT,
 			"Original dice should not be mutated")
 
@@ -417,8 +420,9 @@ func test_apply_evade_reroll_invalid_index_no_change() -> void:
 	var dice: Array[Dictionary] = [
 		{"color": Constants.DiceColor.RED, "face": Constants.DiceFace.HIT},
 	]
+	var parts: CombatParticipants = CombatParticipants.new()
 	var result: Dictionary = _resolver.apply_evade_reroll(
-			-1, dice, null, null)
+			-1, dice, parts)
 	assert_eq(result["dice_results"].size(), 1,
 			"Invalid index should return unchanged dice")
 

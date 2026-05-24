@@ -103,7 +103,7 @@ attack → commit), reusing existing systems wherever possible.
 | "Repeat until all activated" | ✅ Matches RRG "Squadron Phase". | OK |
 | Not mentioned: "A squadron can end activation without moving or attacking" | ⚠️ **Must add:** RRG explicitly allows skipping both. Added as SQA-008. | ADDED |
 | Not mentioned: **Rogue** keyword | ⚠️ **Must handle:** Rogue squadrons can move AND attack during Squadron Phase. The learning scenario has neither X-wings nor TIE Fighters with Rogue, but the system should support it for correctness. | ADDED (SQA-007) |
-| Not mentioned: **Grit** / **Heavy** interaction | ⚠️ **Must handle via existing EffectRegistry hook:** Grit allows movement when engaged by only 1 squadron (unless that squadron lacks Heavy). Already registered as effects in Phase 7. The Move button state should check the `SQUADRON_CAN_MOVE` hook, not just raw engagement. | Architecture note |
+| Not mentioned: **Grit** / **Heavy** interaction | ⚠️ **Must handle via RuleRegistry keyword surfaces:** Grit allows movement when engaged by only 1 squadron (unless that squadron lacks Heavy). Move-button state should use projected keyword eligibility, not just raw engagement. | Architecture note |
 
 ---
 

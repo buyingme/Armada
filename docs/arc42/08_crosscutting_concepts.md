@@ -422,173 +422,103 @@ TooltipManager="*res://src/autoload/tooltip_manager.gd"
 | 10 | Remove dead code (old Label creation/cleanup methods) | Steps 7–9 |
 | 11 | Run full test suite, verify script count + 0 failures | Step 10 |
 
-## 8.9 Effect/Hook Pipeline
+## 8.9 RuleRegistry Hook Pipeline
 
 ### 8.9.1 Purpose
 
-A pluggable pipeline for rule-modifying effects (squadron keywords, upgrade cards,
-damage card effects, objective modifiers). Effects register for named "hook points"
-and are resolved in priority order at runtime. This replaces hard-coded keyword
-checks with an extensible architecture.
+A pluggable pipeline for rule-modifying behavior: squadron keywords, upgrade
+cards, damage cards, objectives, obstacles, tokens, and rule-derived UI
+affordances. `RuleRegistry` stores static hook definitions; active rule status
+comes from serialized game entities and command/flow context.
 
 ### 8.9.2 Architecture Overview
 
 ```
-┌────────────────┐     ┌───────────────┐     ┌───────────────┐
-│  EffectFactory │────▶│ EffectRegistry│────▶│  GameEffect   │
-│  (registers)   │     │  (resolves)   │     │  (base class) │
-└────────────────┘     └───────┬───────┘     └───────────────┘
-                               │                      ▲
-                               │ resolve_hook()       │ extends
-                               ▼                      │
-                       ┌───────────────┐     ┌────────┴────────────────┐
-                       │ EffectContext │     │ BomberEffect            │
-                       │ (mutable bag) │     │ EscortEffect            │
-                       └───────────────┘     │ SwarmEffect             │
-                                             │ StructuralDamageEffect  │
-                                             │ BlindedGunnersEffect    │
-                                             │ … (22 damage card types)│
-                                             └─────────────────────────┘
+┌──────────────┐     ┌──────────────┐     ┌───────────────┐
+│ RuleBootstrap│────▶│ RuleRegistry │────▶│  FlowHook     │
+│ (registers)  │     │ (catalogue)  │     │  descriptors  │
+└──────────────┘     └──────┬───────┘     └───────────────┘
+                            │
+                            │ RuleSurface runners
+                            ▼
+                    ┌───────────────┐
+                    │ EffectContext │
+                    │ (mutable bag) │
+                    └──────┬────────┘
+                           │
+                           ▼
+              Serialized entities and command metadata
 ```
 
-### 8.9.3 Hook Points
+### 8.9.3 Rule Surfaces
 
-Legacy hooks are resolved via `EffectRegistry.resolve_hook(hook_name, context)`.
-Migrated Phase M rules use `RuleRegistry` hook descriptors on FlowSpec
-surfaces and share the same transient `EffectContext` data bag where a hook
-modifies an attack, status, or repair context. Unless noted, new context fields
-are passed via `EffectContext.metadata`.
+Rule files register `FlowHook` descriptors on `RuleSurface` target names.
+Callers pass typed objects plus JSON-safe metadata through `EffectContext`; rule
+callbacks may validate, block, modify, enable UI affordances, or return
+follow-up commands. The registry never stores active card/keyword instances.
 
-#### Attack Pipeline Hooks
-
-| # | Hook Name | Call Site | Purpose | Cards Using It |
-|---|-----------|----------|---------|----------------|
-| 0 | `ATTACK_CALC_DAMAGE` | `AttackDiceResolver.calc_damage()` legacy fallback | Legacy damage-total modifiers | No current production keyword after N10; compatibility fallback only. |
-| 0a | `attack_damage` RuleRegistry modifier | `AttackDiceResolver.calc_damage()` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | Modify final damage total from serialized attacker/defender state | Bomber (squadron crit icons count against ships). |
-| 1 | `ATTACK_VALIDATE_TARGET` | Target selection in attack flow legacy fallback | Legacy target blockers | No current production damage card after N7; compatibility fallback only. |
-| 1a | `attack_target` RuleRegistry blocker | `AttackDiceResolver` and `publish_attack_flow` validation on `ATTACK / ATTACK_DECLARE` | Block illegal target declarations from serialized state | Depowered Armament (no long range), Disengaged Fire Control (no obstructed), Coolant Discharge (one ship-targeting attack per round). |
-| 2 | `ATTACK_GATHER_DICE` | After assembling dice pool, before roll | Legacy pre-roll dice-pool effects | Remaining non-migrated effects only |
-| 2a | `dice_pool` RuleRegistry modifier | `AttackDiceResolver.apply_gather_hook()` after legacy gather-dice hooks | Expose/apply pre-roll dice-pool choices | Damaged Munitions (attacker chooses −1 die vs ship), Point-Defense Failure (attacker chooses −1 die vs squadron) |
-| 3 | `ATTACK_SPEND_ACCURACY` | Accuracy-spending legacy fallback | Block accuracy spending | No current production damage card after N8; compatibility fallback only. |
-| 3a | `accuracy_spend` RuleRegistry blocker | Attack defense-step payload and command validation | Block accuracy spending from serialized attacker state | Blinded Gunners (cannot spend accuracy icons). |
-| 4 | `ATTACK_RESOLVE_CRITICAL` | Critical-resolution legacy fallback | Block critical effects | No current production damage card after N9; compatibility fallback only. |
-| 4a | `critical_effect` RuleRegistry blocker | `DefenseTokenResolver.determine_first_card_faceup()` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | Block critical effects from serialized attacker state | Targeter Disruption (cannot resolve critical effects). |
-| 5 | `DEFENSE_VALIDATE_TOKEN` | Retired production bridge after N2 | Former legacy defense-token hook | No current production cards use this bridge. |
-| 5a | `defense_token_spend` RuleRegistry blocker | `DefenseTokenResolver` while building spendable-token/UI eligibility | Block specific defense-token buttons from authoritative state | Faulty Countermeasures (no exhausted tokens), Capacitor Failure (no Redirect if the defending hull zone has 0 shields) |
-
-**Context fields:**
-- Hook 1: `metadata.target_is_ship` (bool), `metadata.is_obstructed` (bool), `metadata.ship_attacks_this_round` (int). Sets `cancelled` for remaining legacy target effects.
-- Hook 0a: `attacker`, `defender`, `dice_results`, and `damage_total`. Bomber recalculates critical icons as damage only when a Bomber squadron attacks a ship.
-- Hook 1a: `attacker`, `defender`, `range_band`, obstruction metadata, serialized ship-target attack counts, and attack-flow payload identity. Blocks long range, obstructed attacks, or extra ship-targeting attacks according to the active faceup damage card.
-- Hook 2: `dice_pool` (existing legacy surface). Remaining effects remove entries.
-- Hook 2a: `attacker`, `defender`, and `dice_pool`. The modifier reads the
-  attacker's `faceup_damage`, exposes pending die-choice metadata, and then
-  removes the selected die when the target predicate matches the card text.
-- Hook 3/3a: Legacy effects set `cancelled`; RuleRegistry blockers publish zero spendable accuracies and reject locked-token submissions.
-- Hook 4/4a: Legacy effects set `critical_allowed = false`; RuleRegistry blockers force the first damage card facedown when the attacking ship has faceup Targeter Disruption.
-- Hook 5: `metadata.token_type` (Constants.DefenseToken), `metadata.token_state` (Constants.DefenseTokenState), `defending_zone` (existing). Sets `cancelled`.
-
-#### Movement Pipeline Hooks
-
-| # | Hook Name | Call Site | Purpose | Cards Using It |
-|---|-----------|----------|---------|----------------|
-| 6 | `MANEUVER_DETERMINE_YAWS` | `ManeuverRuleResolver.apply_yaw_modifiers()` compatibility fallback | Reduce yaw at joints | Thrust Control Malfunction (legacy behaviour preserved until N12). |
-| 6a | `maneuver_yaw` RuleRegistry modifier | `ManeuverRuleResolver.apply_yaw_modifiers()` on `SHIP_ACTIVATION / MANEUVER_STEP` | Modify maneuver yaw values from serialized ship state | Reserved for Thrust Control Malfunction migration in N12. |
-| 7 | `AFTER_MANEUVER_EXECUTE` | `ManeuverRuleResolver.resolve_after_maneuver_effect_id()` compatibility fallback | Post-move triggers | Ruptured Engine (suffer 1 dmg if speed > 1), Damaged Controls (+1 facedown on overlap). |
-| 8 | `ON_SPEED_CHANGE` | `ManeuverRuleResolver.resolve_speed_change_effect_id()` compatibility fallback | Speed-change triggers | Thruster Fissure (suffer 1 dmg on any speed change). |
-
-**Context fields:**
-- Hook 6: `metadata.yaw_values` (Array[int], mutated). `metadata.ship_speed` (int).
-- Hook 7: `metadata.ship_speed` (int), `metadata.did_overlap` (bool).
-- Hook 8: `metadata.old_speed` (int), `metadata.new_speed` (int).
-
-#### Command & Status Phase Hooks
-
-| # | Hook Name | Call Site | Purpose | Cards Using It |
-|---|-----------|----------|---------|----------------|
-| 9 | `command_dial_reveal` RuleRegistry enabler | `UIProjector.affordances` during `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` | Pre-reveal choice affordance | Crew Panic (suffer 1 dmg or discard dial) |
-| 10 | `CALC_ENGINEERING_VALUE` | RepairResolver legacy fallback | Legacy engineering value modifier | No current production card after N3. |
-| 10a | `engineering_value` RuleRegistry modifier | RepairResolver engineering point calculation | Modify engineering value from serialized damage state | Power Failure (halve, rounded down; stackable) |
-| 11 | `defense_token_readying` RuleRegistry modifier | StatusPhaseCleanupCommand ship cleanup | Block token readying | Compartment Fire (cannot ready defense tokens) |
-
-**Context fields:**
-- Hook 9: `UIIntent.affordances.crew_panic_choices` contains JSON-safe
-  `owner_player`, `ship_index`, and modal `choice_info`; active state comes
-  from `ShipInstance.faceup_damage`.
-- Hook 10/10a: `metadata.engineering_value` (int, mutated by each Power Failure through RuleRegistry after N3).
-- Hook 11: `metadata.ship` (ShipInstance). Sets `cancelled` to block token readying for this ship.
-
-#### Repair & Token Hooks
-
-| # | Hook Name | Call Site | Purpose | Cards Using It |
-|---|-----------|----------|---------|----------------|
-| 12 | `REPAIR_VALIDATE_SHIELD` | RepairResolver.recover_shields() / move_shields() | Legacy shield-operation blockers | Remaining non-migrated repair effects only |
-| 12a | `repair_shield` RuleRegistry blocker | `RepairResolver` repair action eligibility | Block shield ops on empty zones | Capacitor Failure (cannot recover/move shields to zone with 0 shields) |
-| 13 | `ON_COMMAND_TOKEN_GAIN` | Retired production bridge after N4 | Former legacy token-gain blocker | No current production cards use this bridge. |
-| 13a | `command_token_gain` RuleRegistry blocker | Convert-dial/token helper paths during ship activation | Block command-token gain from serialized damage state | Life Support Failure (cannot have/gain command tokens) |
-
-**Context fields:**
-- Hook 12: `metadata.target_zone` (String), `metadata.target_zone_shields` (int). Sets `cancelled`.
-- Hook 13a: `metadata.ship` (ShipInstance). Blocks token acquisition; immediate token discard remains in the immediate-effect command/resolver.
+| Surface | Typical Call Sites | Purpose | Current Rules |
+|---|---|---|---|
+| `attack_damage` | `AttackDiceResolver.calc_damage()` | Modify final damage total from serialized attacker/defender state | Bomber |
+| `attack_target` | Attack declaration validation and target filtering | Block illegal target declarations | Depowered Armament, Disengaged Fire Control, Coolant Discharge, Escort |
+| `dice_pool` | `AttackDiceResolver.apply_gather_hook()` | Expose/apply pre-roll dice-pool choices | Damaged Munitions, Point-Defense Failure |
+| `attack_dice_attacker` | Attack modification step | Attacker-side dice affordances/results | Swarm |
+| `accuracy_spend` | Defense-step payload and command validation | Block accuracy spending | Blinded Gunners |
+| `critical_effect` | Damage resolution | Block critical effects | Targeter Disruption |
+| `defense_token_spend` | Defense-token eligibility/projection | Block specific defense-token buttons | Faulty Countermeasures, Capacitor Failure |
+| `squadron_attack` | Squadron activation attack validation/projection | Enforce keyword attack rules | Heavy, Counter, Escort |
+| `maneuver_yaw` | Maneuver yaw calculation | Modify yaw values from faceup damage state | Thrust Control Malfunction |
+| `after_maneuver` | Maneuver observer follow-ups | Add post-move damage follow-up commands | Damaged Controls, Ruptured Engine |
+| `speed_change` | Speed-change observer follow-ups | Add speed-change damage follow-up commands | Thruster Fissure |
+| `command_dial_reveal` | Pre-reveal projection and activation command paths | Offer/validate rule choices before reveal | Crew Panic |
+| `engineering_value` | Repair point calculation | Modify engineering value | Power Failure |
+| `defense_token_readying` | Status-phase cleanup | Block token readying | Compartment Fire |
+| `repair_shield` | Repair action eligibility | Block shield operations | Capacitor Failure |
+| `command_token_gain` | Dial/token conversion and token gain helpers | Block command-token gain | Life Support Failure |
 
 ### 8.9.4 Immediate vs Persistent Damage Card Effects
 
-Damage cards fall into two categories:
+Damage cards fall into three categories:
 
-| Timing | Behaviour | Hook Needed? | Cards |
-|--------|-----------|-------------|-------|
-| **Immediate** | Resolved inline when dealt faceup, then flipped facedown | No hook — resolved by `DamageDeck`/`AttackExecutor` at deal time | Structural Damage (×8), Projector Misaligned (×2), Shield Failure (×2), Comm Noise (×2), Injured Crew (×4) |
-| **Persistent** | Registered in `EffectRegistry` while faceup; unregistered on discard/flip | Yes — uses one or more legacy hooks above | Damaged Controls, Ruptured Engine, Thrust Control Malfunction, Thruster Fissure |
-| **RuleRegistry-migrated persistent** | Static rule hook reads active `faceup_damage` state instead of registering a legacy runtime effect | No legacy bridge after migration unless noted | Faulty Countermeasures, Capacitor Failure, Compartment Fire, Crew Panic, Damaged Munitions, Point-Defense Failure, Power Failure, Depowered Armament, Disengaged Fire Control, Coolant Discharge, Blinded Gunners, Targeter Disruption |
-| **Hybrid** | Immediate action + persistent restriction; stays faceup | Immediate command/resolver plus RuleRegistry persistent restriction | Life Support Failure (discard all tokens immediately; cannot gain tokens while faceup) |
+| Timing | Behaviour | Active Source | Examples |
+|---|---|---|---|
+| **Immediate** | Resolved inline when dealt faceup, then flipped facedown | Damage deck result and command payload | Structural Damage, Projector Misaligned, Shield Failure, Comm Noise, Injured Crew |
+| **Persistent** | Faceup card stays on the ship and RuleRegistry callbacks read `ShipInstance.faceup_damage` | Serialized faceup damage | Faulty Countermeasures, Capacitor Failure, Compartment Fire, Damaged Munitions, Point-Defense Failure, Power Failure, Depowered Armament, Disengaged Fire Control, Coolant Discharge, Blinded Gunners, Targeter Disruption, movement damage cards |
+| **Hybrid** | Immediate action plus persistent restriction | Immediate command/resolver plus serialized faceup damage | Life Support Failure, Crew Panic |
 
 ### 8.9.5 Resolution Order
 
-1. All effects registered for the current hook are collected
-2. Effects are sorted by `player_priority` (initiative player = 0, other = 1)
-3. Each effect's `should_trigger(context)` is checked
-4. If true, `resolve(context)` mutates the shared `EffectContext`
-5. After all effects resolve, the caller reads the mutated context
+1. `RuleBootstrap` registers static hook descriptors at startup/test setup.
+2. The caller invokes the relevant `RuleSurface` runner with current state and context.
+3. Matching hooks are sorted by priority and deterministic registration order.
+4. Each callback reads serialized active state and mutates `EffectContext` or returns follow-up commands.
+5. The command/projection caller consumes the accepted result or payload metadata.
 
 ### 8.9.6 Adding New Rules
 
 New rules, damage-card effects, keywords, upgrades, objectives, obstacles, and
 rule-derived UI affordances go through `RuleRegistry` rule files under
 `src/core/effects/rules/`. A rule file registers static `FlowHook` descriptors,
-reads active state from serialized game entities such as `ShipInstance.faceup_damage`,
+reads active state from serialized entities such as `ShipInstance.faceup_damage`,
 and returns validation, blocking, modification, enablement, or observer results
 without storing mutable active state in the registry.
 
-The older `GameEffect` / `EffectRegistry` pattern remains only for Phase N
-legacy bridges until their source rules migrate. New production work should not
-add `GameEffect` subclasses unless a temporary legacy bridge is explicitly
-approved and documented.
-
 ### 8.9.7 Design Decisions
 
-- **RefCounted, not Node:** Effects are pure logic, no scene tree dependency
-- **Mutable context:** Single object passed by reference avoids allocations
-- **Priority sort:** Ensures initiative player's effects resolve first (RRG "Effects and Timing")
-- **Optional flag:** `is_optional` on GameEffect supports future player-choice effects
-- **Metadata dict:** New hook-specific fields use `EffectContext.metadata` to keep the class stable across phases
+- **RefCounted, not Node:** rules are pure logic, no scene tree dependency
+- **Serialized active state:** save/load, replay, hot-seat, and network all derive active status from the same state
+- **Priority sort:** deterministic ordering supports timing conflicts and initiative-sensitive effects
+- **Metadata dict:** hook-specific fields use `EffectContext.metadata` to keep the class stable across phases
 
 ### 8.9.8 RuleRegistry Integration Pattern
 
-Phase M adds `RuleRegistry` as the static catalogue for rule hooks while
-`EffectRegistry` remains the transient runtime bridge for legacy effects. A
-rule file declares which hooks exist, but active rule status is derived from
-serialized game entities (`GameState`, ships, squadrons, faceup damage cards,
-upgrades, objectives) or from a documented `EffectRegistry` bridge rebuilt from
-those entities after load.
-
-Phase N adds `RuleSurface` as the shared vocabulary and callback runner for
-common target surfaces. It keeps surface names such as attack target blocking,
-attack damage modification, critical-effect blocking, engineering value
-modification, command-token gain blocking, maneuver yaw modification, and
-post-maneuver observer follow-ups in one pure core helper while
-`RuleRegistry` remains the only hook catalogue. N11 routes remaining movement
-compatibility through `ManeuverRuleResolver` so scene/tool code no longer owns
-legacy movement hook predicates during the N12-N15 migration.
+`RuleSurface` is the shared vocabulary and callback runner for common target
+surfaces. It keeps surface names such as attack target blocking, attack damage
+modification, critical-effect blocking, engineering value modification,
+command-token gain blocking, maneuver yaw modification, and post-maneuver
+observer follow-ups in one pure core helper while `RuleRegistry` remains the
+only hook catalogue. The Phase N23 static guard prevents production code from
+reintroducing retired runtime effect classes or legacy hook-string dispatch.
 
 The M7 Faulty Countermeasures bug established an additional crosscutting rule:
 player-choice rules must cover every command surface, not only the final state

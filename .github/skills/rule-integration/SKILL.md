@@ -1,6 +1,6 @@
 ---
 name: rule-integration
-description: 'Use when: adding, migrating, debugging, or reviewing Armada game rules, card effects, damage cards, squadron keywords, upgrades, objectives, defense-token eligibility, command validators, RuleRegistry hooks, EffectRegistry bridges, FlowSpec step rules, or UI affordances derived from rules.'
+description: 'Use when: adding, migrating, debugging, or reviewing Armada game rules, card effects, damage cards, squadron keywords, upgrades, objectives, defense-token eligibility, command validators, RuleRegistry hooks, FlowSpec step rules, or UI affordances derived from rules.'
 argument-hint: 'Describe the rule/card/keyword and affected flow step'
 ---
 
@@ -61,15 +61,15 @@ A rule integration is complete only when all surfaces agree:
    - UI panels should only render disabled controls, tooltips/labels, and selected state from that metadata.
    - Never infer card-rule state from local button events.
 
-7. Preserve active-state rebuild semantics.
+7. Preserve active-state semantics.
    - Static rule definitions live in `RuleRegistry` and are bootstrapped.
-   - Active rule status comes from serialized entities or a documented `EffectRegistry` bridge rebuilt by `EffectFactory.rebuild_runtime_effects()`.
+   - Active rule status comes from serialized entities only: `GameState`, ships, squadrons, faceup damage cards, upgrades, objectives, obstacles, and tokens.
    - Do not serialize `RuleRegistry` or use it as an active-card store.
 
 8. Test the full surface.
    - Unit-test the rule predicate for allow/reject cases and other-entity isolation.
    - Test marker command and mutation command paths when both exist.
-   - Test save/load plus runtime-effect rebuild for persistent effects.
+   - Test save/load/deserialize for persistent effects so active status is proven to come from serialized entities.
    - Test payload metadata that drives UI affordances.
    - Test UI panels render blocked/available options without owning rule logic.
    - For command submission, run baseline traces as required by Phase L/M.

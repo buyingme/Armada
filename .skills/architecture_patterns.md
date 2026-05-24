@@ -110,8 +110,8 @@ Rules:
   it registers multiple hooks.
 - `RuleRegistry` stores static hook definitions only. Active status is resolved
   from authoritative serialized state (`GameState`, ship/squadron instances,
-  faceup damage cards, upgrades, objectives, obstacles, tokens) or from a
-  documented transient `EffectRegistry` bridge rebuilt by `EffectFactory`.
+  faceup damage cards, upgrades, objectives, obstacles, tokens), never from a
+  transient runtime effect object.
 - Register hooks through `RuleBootstrap` and `RuleRegistry.register_rule()`.
   Hook execution order must remain deterministic: priority descending, then
   `rule_id` ascending.

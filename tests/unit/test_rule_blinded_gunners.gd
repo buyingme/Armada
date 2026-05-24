@@ -73,7 +73,7 @@ func test_resolver_returns_zero_spendable_accuracy_without_legacy_registry() -> 
 			_make_ship_token(attacker), Constants.HullZone.FRONT, null,
 			_make_ship_token(_defender_ship()), Constants.HullZone.FRONT, null)
 	var result: Dictionary = _resolver.resolve_accuracy_spend(
-			_accuracy_results(), parts, null)
+			_accuracy_results(), parts)
 	assert_eq(int(result.get("accuracy_count", 0)), 2,
 			"The raw accuracy count should remain visible in payload metadata.")
 	assert_eq(int(result.get("spendable_accuracy_count", 0)), 0,
@@ -105,11 +105,8 @@ func test_publish_attack_flow_validator_allows_empty_locked_tokens() -> void:
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_blinded_gunners(_attacker_ship())
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Blinded Gunners should not rebuild a legacy effect.")
 	assert_true(_accuracy_spend_blocked(restored_attacker),
 			"RuleRegistry blocker should still apply after save/load rebuild.")
 

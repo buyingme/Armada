@@ -475,6 +475,15 @@ func test_complete_squadron_activation_validate_ok() -> void:
 			"Should accept valid activation completion marker.")
 
 
+func test_complete_squadron_activation_validate_ok_ship_phase() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	var idx: int = _add_squadron(0)
+	var cmd := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": idx})
+	assert_eq(cmd.validate(_state), "",
+			"Ship-phase Squadron commands need the same completion marker.")
+
+
 func test_complete_squadron_activation_allows_destroyed_squadron() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var idx: int = _add_squadron(0)

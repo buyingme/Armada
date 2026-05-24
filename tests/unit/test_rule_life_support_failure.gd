@@ -103,12 +103,9 @@ func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	var ship: ShipInstance = _state.get_ship(OWNER_PLAYER, SHIP_INDEX)
 	_add_life_support_failure(ship)
 	var restored: GameState = GameState.deserialize(_state.serialize())
-	EffectFactory.rebuild_runtime_effects(restored, restored.initiative_player)
 	GameManager.current_game_state = restored
 	var restored_ship: ShipInstance = restored.get_ship(OWNER_PLAYER, SHIP_INDEX)
 	var result: Dictionary = _make_convert_command().execute(restored)
-	assert_eq(restored.effect_registry.get_effect_count(), 0,
-			"Life Support Failure should not rebuild a legacy token-gain effect.")
 	assert_true(result.get("token_blocked", false),
 			"RuleRegistry blocker should still apply after save/load rebuild.")
 	assert_eq(restored_ship.command_tokens.get_token_count(), 0,

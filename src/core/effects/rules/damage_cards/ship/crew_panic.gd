@@ -33,7 +33,7 @@ static func register() -> void:
 
 ## Projects mandatory Crew Panic choices for the active player's hidden dials.
 ## Active state is derived from [member ShipInstance.faceup_damage], so the
-## rule survives save/load without a legacy [EffectRegistry] bridge.
+## rule survives save/load without transient runtime effect objects.
 ## Rules Reference: Damage Card "Crew Panic" — "Before you reveal a command
 ## dial..."
 func project_pre_reveal_affordance(state: GameState,

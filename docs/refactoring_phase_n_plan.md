@@ -115,25 +115,25 @@ The target end state is:
 ## 1. Why Now
 
 Phase M proved the new model with six representative production rules and
-closed the governance gap. The codebase is now in a transitional state:
-new rules must go through `RuleRegistry`, but remaining production behaviour
-still relies on legacy effect classes and old hook names.
+closed the governance gap. Phase N then migrated the remaining damage-card and
+squadron-keyword behaviour to `RuleRegistry` surfaces before N23 removed the
+legacy runtime effect system from production.
 
-Current legacy production surfaces:
+N23 legacy-runtime retirement status:
 
 | Surface | Legacy source | Current call sites / notes |
 |---|---|---|
-| Persistent ship/crew damage cards | `DamageCardEffectFactory.PERSISTENT_EFFECT_IDS` and `DamageCardEffect` | N12-N15 emptied the persistent damage-card id bridge; migrated damage-card rules now read `ShipInstance.faceup_damage` through RuleRegistry or immediate command/resolver paths. |
-| Squadron keyword effects | Retired `EscortEffect` / `SwarmEffect` classes and no legacy keyword rebuild path | N18-N22 implement Heavy, Escort, Counter, Swarm, and Bomber critical permission through RuleRegistry surfaces and command-backed payloads. Remaining legacy runtime-system cleanup is deferred to N23 static-guard retirement. |
-| Attack validation/damage hooks | `ATTACK_CALC_DAMAGE`, `ATTACK_RESOLVE_CRITICAL` | Rule timing crosses critical resolution and damage calculation. After N10, Targeter Disruption and Bomber use RuleRegistry surfaces; these legacy attack hooks remain compatibility fallbacks only. |
-| Movement hooks | `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | N12-N15 migrated the remaining movement damage cards to RuleRegistry yaw/observer surfaces; `ExecuteManeuverCommand` now carries overlap and speed-delta metadata for deterministic follow-ups. |
-| Command/repair hooks | `CALC_ENGINEERING_VALUE`, `ON_COMMAND_TOKEN_GAIN` | N3/N4 retired production use of these hooks for Power Failure and Life Support Failure. `RepairResolver` still has a legacy engineering fallback until N23 cleanup, but no current `DamageCardEffect` maps to either migrated id. |
+| Persistent ship/crew damage cards | Deleted `DamageCardEffectFactory` / `DamageCardEffect` runtime | Migrated damage-card rules read `ShipInstance.faceup_damage` through RuleRegistry or immediate command/resolver paths. Damage commands no longer register transient persistent effects. |
+| Squadron keyword effects | Deleted legacy keyword effect classes and rebuild factory | Heavy, Escort, Counter, Swarm, and Bomber critical permission are RuleRegistry/core-command backed and derive active status from serialized squadron keyword data. |
+| Attack validation/damage hooks | Removed legacy attack hook dispatch | Targeter Disruption, Bomber, Blinded Gunners, Coolant Discharge, Depowered Armament, Disengaged Fire Control, Damaged Munitions, and Point-Defense Failure use RuleRegistry surfaces only. |
+| Movement hooks | Removed legacy movement hook dispatch | N12-N15 movement damage cards use RuleRegistry yaw/observer surfaces and command/result metadata for deterministic follow-ups. |
+| Command/repair hooks | Removed legacy command and repair hook fallbacks | Power Failure, Life Support Failure, Capacitor Failure, and Compartment Fire use RuleRegistry modifiers, validators, or blockers only. |
 
-The main risk of doing nothing is architectural drift: new features will have
-to understand two rule systems, two rebuild stories, and two testing idioms.
-The main risk of doing Phase N poorly is a broad behavioural regression in
-attack or maneuver timing. The plan therefore migrates one vertical slice at a
-time and keeps the legacy bridge only until the replacement path is proven.
+The main risk of doing nothing was architectural drift: new features would
+have to understand two rule systems, two rebuild stories, and two testing
+idioms. N23 removes that dual-runtime state from production. The main remaining
+risk for Phase N is documenting the new single architecture clearly enough that
+future slices do not reintroduce a bridge.
 
 ---
 
@@ -199,9 +199,9 @@ following findings are now binding for later Phase N slices.
 | `Resources/Game_Components/damage_cards.json` | Canonical card titles, timing, and effect text for implemented damage cards. |
 | `Resources/Game_Components/damage_deck/damage_deck_composition.txt` | Cross-check of damage-deck composition plus FAQ snippets not present in JSON. |
 | `Resources/SWM-RULES-REFERENCE-GUIDE-150/SWM-RULES-REFERENCE-GUIDE-150.md` | Squadron keyword rules and FAQ entries for Power Failure, Damaged Controls, Disengaged Fire Control, Thruster Fissure, Heavy, Escort, Counter, Bomber, and Swarm. |
-| `src/core/effects/damage_card_effect.gd` and `src/core/effects/damage_card_effect_factory.gd` | Legacy persistent damage-card behaviour and active effect id list. |
-| `src/core/effects/effect_factory.gd` and `src/core/effects/keywords/*.gd` | Legacy keyword rebuild and behaviour. |
-| `src/core/combat/*`, `src/core/damage/*`, `src/core/commands/*`, `src/scenes/game_board/*`, `src/scenes/tools/*` | Production legacy hook call sites and metadata. |
+| Deleted `src/core/effects/damage_card_effect*.gd` and `effect_factory.gd` history | Legacy persistent damage-card behaviour and active effect id list audited before N23 deletion. |
+| Deleted `src/core/effects/keywords/bomber_effect.gd` history | Legacy keyword rebuild behaviour audited before N23 deletion. |
+| `src/core/combat/*`, `src/core/damage/*`, `src/core/commands/*`, `src/scenes/game_board/*`, `src/scenes/tools/*` | Production RuleRegistry call sites and command/result metadata. |
 
 ### 4.2 Remaining Legacy Damage Cards
 
@@ -214,29 +214,30 @@ following findings are now binding for later Phase N slices.
 | Disengaged Fire Control | `ATTACK_VALIDATE_TARGET` | Matches card text and FAQ interaction with obstruction sources such as Admiral Montferrat. | Complete in N6: `attack_target` blocker and `publish_attack_flow` validator read obstruction metadata plus attacker `faceup_damage`; no legacy effect rebuild remains. MT pass confirmed 2026-05-22. |
 | Coolant Discharge | `ATTACK_VALIDATE_TARGET`, `ATTACK_CALC_DAMAGE` | Partially mismatched. Source text only says: "Only one attack you perform each round can target a ship." No checked source supports the legacy `+1 close damage` side effect. The legacy predicate also uses the attack executor's per-activation `current_attack` counter, while the card is worded per round and ship-target-specific. | Complete in N7: source-text ship-target-per-round blocker/validator uses serialized `GameState.ship_target_attack_counts` recorded by `roll_dice`; stale close-range damage is not migrated. MT pass confirmed 2026-05-22. |
 | Blinded Gunners | `ATTACK_SPEND_ACCURACY` | Matches card text: while attacking, the damaged ship cannot spend accuracy icons. | Complete in N8: RuleRegistry `accuracy_spend` blocker drives zero spendable accuracies and a defense-step publish validator rejects non-empty `locked_tokens`. MT pass confirmed 2026-05-22. |
-| Targeter Disruption | `ATTACK_RESOLVE_CRITICAL` | Matches card text: while attacking, the damaged ship cannot resolve critical effects. | N9 migrates as a critical-effect blocker. |
+| Targeter Disruption | `ATTACK_RESOLVE_CRITICAL` | Matches card text: while attacking, the damaged ship cannot resolve critical effects. | Complete in N9: RuleRegistry critical-effect blocker reads attacker `faceup_damage`; N23 removed the legacy fallback. |
 | Thrust Control Malfunction | `MANEUVER_DETERMINE_YAWS` | Partially mismatched. Source text and FAQ limit the effect to the last adjustable joint at the ship's current speed. The legacy tool applied the hook to each speed row in the nav chart and reduced the last array entry without checking whether that joint was adjustable. | Complete in N12: RuleRegistry maneuver-yaw modifier applies only to the current speed's last adjustable joint, including after save/load. |
 | Ruptured Engine | `AFTER_MANEUVER_EXECUTE` | Matches card text: after maneuver, if speed dial is greater than 1, suffer 1 damage. | Complete in N13: execute-maneuver observer returns a `PersistentEffectDamageCommand` follow-up with deterministic draw-from-deck execution. |
 | Damaged Controls | `AFTER_MANEUVER_EXECUTE` | Matches card text and FAQ: resolves during the Move Ship step while executing a maneuver; overlap ship or obstacle deals 1 facedown damage in addition to other obstacle effects. | Complete in N14: execute-maneuver observer reads authoritative `did_overlap` result metadata. Current production overlap metadata covers ship overlap/stayed-in-place paths; future obstacle metadata should feed the same command field. |
 | Thruster Fissure | `ON_SPEED_CHANGE` | Mostly matches current player-driven speed-change path. FAQ states Admiral Konstantine's external speed change does not trigger it, so future non-player speed-change effects must not share this trigger automatically. | Complete in N15: execute-maneuver observer reads command/result `speed_delta`, so external `SetSpeedCommand`-style effects do not trigger this rule automatically. |
 
-### 4.3 Already Migrated Legacy Call Sites To Retire
+### 4.3 Retired Legacy Call Sites
 
-Some legacy hook call sites remain as compatibility fallbacks even though their
-original damage-card rules have moved to RuleRegistry:
+N23 removed all production compatibility fallbacks for legacy hook strings.
+The Phase K/N lint guard now fails if production code reintroduces these
+symbols or old runtime effect classes.
 
 | Hook | Current status | Retirement path |
 |---|---|---|
-| `ATTACK_GATHER_DICE` | Legacy bridge still runs before RuleRegistry dice-pool modifiers; migrated Damaged Munitions and Point-Defense Failure no longer need a legacy `DamageCardEffect`. | Remove after remaining attack modifier surfaces no longer depend on `EffectRegistry`; N23 static guard should catch reintroduction. |
-| `DEFENSE_VALIDATE_TOKEN` | No production resolver fallback remains after N2; Faulty Countermeasures moved to RuleRegistry blocker metadata. | Remove any remaining dead legacy declarations during N23 static-guard cleanup. |
-| `REPAIR_VALIDATE_SHIELD` | Compatibility fallback after Capacitor Failure migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
-| `STATUS_READY_TOKENS` | Compatibility fallback after Compartment Fire migration; no remaining `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
-| `CALC_ENGINEERING_VALUE` | Compatibility fallback remains in `RepairResolver`; Power Failure moved to RuleRegistry in N3 and no current `DamageCardEffect` source maps to this hook. | Remove during N23 unless another audited rule still needs it. |
-| `ON_COMMAND_TOKEN_GAIN` | No production resolver fallback remains after N4; Life Support Failure moved to RuleRegistry blockers/validators. | Remove dead declarations during N23 static-guard cleanup. |
-| `ATTACK_VALIDATE_TARGET` | No remaining legacy damage-card source maps to this hook after N6/N7; the compatibility fallback can now be retired during cleanup once downstream keyword/attack migrations no longer need the bridge. | Remove during N23 static-guard cleanup. |
-| `ATTACK_RESOLVE_CRITICAL` | Targeter Disruption moved to a RuleRegistry `critical_effect` blocker in N9; the fallback remains only for compatibility until N23. | Remove during N23 static-guard cleanup. |
-| `ATTACK_CALC_DAMAGE` | Bomber moved to a RuleRegistry `attack_damage` modifier in N10 and is no longer rebuilt by `EffectFactory`; the fallback remains only for compatibility until N23. | Remove during N23 static-guard cleanup. |
-| `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | The remaining movement damage cards moved to RuleRegistry in N12-N15; scene/tool code now uses `ManeuverRuleResolver` for yaw modifiers and non-mutating preview only. | Remove dead legacy declarations and guard against reintroduction during N23. |
+| `ATTACK_GATHER_DICE` | Removed. Damaged Munitions and Point-Defense Failure use RuleRegistry dice-pool modifiers only. | Guarded by `scripts/lint_phase_k.sh`. |
+| `DEFENSE_VALIDATE_TOKEN` | Removed. Faulty Countermeasures and Capacitor Failure use RuleRegistry validators/blockers. | Guarded by `scripts/lint_phase_k.sh`. |
+| `REPAIR_VALIDATE_SHIELD` | Removed. Capacitor Failure repair eligibility uses RuleRegistry validators/blockers. | Guarded by `scripts/lint_phase_k.sh`. |
+| `STATUS_READY_TOKENS` | Removed. Compartment Fire uses a RuleRegistry readying modifier. | Guarded by `scripts/lint_phase_k.sh`. |
+| `CALC_ENGINEERING_VALUE` | Removed. Power Failure uses a RuleRegistry engineering modifier. | Guarded by `scripts/lint_phase_k.sh`. |
+| `ON_COMMAND_TOKEN_GAIN` | Removed. Life Support Failure uses RuleRegistry validators/blockers. | Guarded by `scripts/lint_phase_k.sh`. |
+| `ATTACK_VALIDATE_TARGET` | Removed. Attack-target restrictions use RuleRegistry blockers/validators. | Guarded by `scripts/lint_phase_k.sh`. |
+| `ATTACK_RESOLVE_CRITICAL` | Removed. Targeter Disruption and Bomber critical permission use RuleRegistry critical blockers. | Guarded by `scripts/lint_phase_k.sh`. |
+| `ATTACK_CALC_DAMAGE` | Removed. Bomber damage uses a RuleRegistry attack-damage modifier. | Guarded by `scripts/lint_phase_k.sh`. |
+| `MANEUVER_DETERMINE_YAWS`, `AFTER_MANEUVER_EXECUTE`, `ON_SPEED_CHANGE` | Removed. Movement damage cards use RuleRegistry yaw/observer surfaces. | Guarded by `scripts/lint_phase_k.sh`. |
 
 ### 4.4 Squadron Keyword Compliance
 
@@ -370,7 +371,7 @@ or be actively pair-reviewed.
 | N20 | Implement Counter X. Add optional post-defense counter-attack affordance and command support for squadron defenders after non-Counter squadron attacks. | high | No | Complete 2026-05-23 with MT pass: Counter uses X blue dice, can trigger after defender destruction, does not recurse from Counter attacks, and publishes attack-kind metadata. |
 | N21 | Implement Swarm. Replace inert `SwarmEffect` with an optional attacker reroll affordance/command that applies during standard and Counter squadron attacks when the defender is engaged with another squadron. | high | No | Complete 2026-05-23 with MT pass: reroll choice is command-backed, uses `GameState.rng`, updates attack payload/dice deterministically, works with Counter attacks, and no `ATTACK_MODIFY_DICE_ATTACKER` effect remains. |
 | N22 | Bomber closeout and all-keyword regression. Harden Bomber critical-effect eligibility and verify the five keyword rules together. | high | No | Complete 2026-05-23 with MT pass: Bomber damage and critical-effect permission are keyword-aware; non-Bomber squadron critical icons do not create faceup damage; keyword regressions and replay/network gates pass. |
-| N23 | Retire legacy runtime system. Delete or quarantine `EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect classes, and obsolete tests. Add a static guard forbidding production `EffectRegistry.resolve_hook`, old hook strings, and new `GameEffect` subclasses. | high | No | Full suite, lint, baseline traces pass; grep/static test proves no production legacy effect system remains. |
+| N23 | Retire legacy runtime system. Delete or quarantine `EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect classes, and obsolete tests. Add a static guard forbidding production `EffectRegistry.resolve_hook`, old hook strings, and new `GameEffect` subclasses. | high | No | Complete 2026-05-23: deleted legacy runtime classes/tests, removed `GameState.effect_registry` and resolver hook fallbacks, added the Phase K/N static guard. Latest verification after the Squadron command preview-commit UX follow-up: full GUT 181 / 3 189 / 6 534, lint 0 violations / 4 allow-listed branches, baseline traces pass hot-seat + network peer equality. |
 | N24 | Documentation and baseline closeout. Update `docs/implementation_plan.md`, arc42 crosscutting/runtime docs, rule README, risks/technical debt, and archive Phase N. | low | Yes | Docs state the new single rule architecture, all five requested squadron keywords, and the next roadmap item unambiguously. |
 
 ---
@@ -413,11 +414,11 @@ Additional gates by slice type:
 
 | Slice type | Extra required coverage |
 |---|---|
-| Persistent damage-card migration | Focused rule tests, command/direct-submission tests where applicable, save/load plus `EffectFactory.rebuild_runtime_effects()` proving zero legacy effect for the migrated card. |
+| Persistent damage-card migration | Focused rule tests, command/direct-submission tests where applicable, and serialize/deserialize coverage proving active status comes from serialized entities without transient runtime effects. |
 | UI-affordance migration | UIProjector/payload test plus panel rendering test proving UI displays metadata without owning rule text. |
 | Observer/follow-up migration | Replay determinism test proving observer order and follow-up command history; network baseline traces required. |
 | Movement migration | Focused maneuver/yaw/overlap tests and manual hot-seat sanity test for maneuver preview/commit timing. |
-| Keyword migration | Save/load keyword-state test proving active status comes from squadron data, not registered `GameEffect` instances. |
+| Keyword migration | Save/load keyword-state test proving active status comes from serialized squadron data. |
 | Legacy retirement | Static guard test plus `rg`/grep inventory showing old production surfaces are gone. |
 
 Manual test gates should be required for N6-N8, N11-N15, and N18-N22 because
@@ -441,7 +442,7 @@ the prompt includes:
 - the exact source card/keyword text;
 - the target FlowSpec pair and RuleRegistry target string;
 - the command and UI surfaces to cover;
-- the expected removal from `DamageCardEffectFactory` or `EffectFactory`;
+- the expected RuleRegistry source-state path and any deleted legacy surface;
 - the focused test names to add/update;
 - the full verification commands above.
 
@@ -480,7 +481,7 @@ Poor lightweight-model candidates:
 | Observer follow-ups duplicate in replay/network | Medium | Critical | Use RuleRegistry observer queue only; add replay history assertions and run baseline traces for every observer slice. |
 | Scene/tool code keeps owning rule predicates | Medium | High | N11 explicitly extracts maneuver rule application before migrating movement cards. Static guard in N23 catches legacy hook reintroduction. |
 | Keyword migration removes behaviour that is already implemented elsewhere | Medium | Medium | N16 audits Heavy, Escort, Counter, Bomber, and Swarm before migration. Existing direct resolver helpers are either codified as core rules or connected through RuleRegistry. |
-| Save/load loses active rule status | Low | Critical | Every persistent migration proves active status from serialized entities after `EffectFactory.rebuild_runtime_effects()`, with zero legacy effect for the migrated source. |
+| Save/load loses active rule status | Low | Critical | Every persistent migration proves active status from serialized entities after serialize/deserialize, with no transient effect registry or rebuild bridge. |
 | Big-bang cleanup hides regressions | High | High | One rule or one narrow family per slice; no broad deletion until N23. |
 
 ---

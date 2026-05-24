@@ -28,8 +28,8 @@ var activating_ship_token: ShipToken = null
 var ship_activation_state: ShipActivationState = null
 
 ## Whether the last committed maneuver resulted in a ship–ship overlap.
-## Set by the maneuver overlap resolver, consumed by the
-## AFTER_MANEUVER_EXECUTE damage-card hook.
+## Set by the maneuver overlap resolver and consumed by migrated maneuver
+## damage-card rule observers.
 var last_maneuver_overlapped: bool = false
 
 

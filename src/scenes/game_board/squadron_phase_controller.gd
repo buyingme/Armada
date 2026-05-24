@@ -128,6 +128,8 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 	_squadron_modal.command_done.connect(_on_squadron_command_done)
 	_squadron_modal.modal_closed.connect(
 			_on_squadron_modal_closed)
+	_squadron_modal.selection_cleared.connect(
+			_on_squadron_selection_cleared)
 	layer.add_child(_squadron_modal)
 	_squadron_modal.set_interactable(_modal_interactable)
 
@@ -525,7 +527,10 @@ func _on_squadron_move_requested(token: SquadronToken) -> void:
 
 ## Called when the modal emits move_commit_requested.
 ## Requirements: SQM-006, SQM-007.
-func _on_squadron_move_commit(token: SquadronToken) -> void:
+func _on_squadron_move_commit(token: SquadronToken) -> bool:
+	if _squadron_modal and not _squadron_modal.commit_selected_command_activation():
+		_log.info("Squadron move commit blocked — no command activation slot.")
+		return false
 	_remove_squadron_overlay()
 	var all_squads: Array[Dictionary] = _build_all_squadron_positions()
 	var obstruction_bodies: Array = _build_obstruction_bodies()
@@ -547,6 +552,7 @@ func _on_squadron_move_commit(token: SquadronToken) -> void:
 
 	EventBus.squadron_moved.emit(token)
 	_log.info("Squadron move committed — engagement updated.")
+	return true
 
 
 ## Called when the modal emits attack_requested.
@@ -627,6 +633,11 @@ func _on_squadron_modal_closed() -> void:
 	_log.info("Squadron modal closed — button shown.")
 
 
+func _on_squadron_selection_cleared() -> void:
+	_remove_squadron_overlay()
+	_log.info("Squadron command preview cleared.")
+
+
 ## Called when the player presses the ShowSquadronModalButton.
 ## Requirements: SQA-013.
 func _on_show_squadron_modal_requested() -> void:
@@ -674,7 +685,8 @@ func _commit_squadron_placement(token: SquadronToken) -> void:
 			instance, _squadron_move_original_pos, token.global_position,
 			all_squads, bases)
 	if error.is_empty():
-		_on_squadron_move_commit(token)
+		if not _on_squadron_move_commit(token):
+			return
 		var updated_squads: Array[Dictionary] = \
 				_build_all_squadron_positions()
 		var obstruction_bodies: Array = _build_obstruction_bodies()

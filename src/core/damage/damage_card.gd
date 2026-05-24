@@ -2,7 +2,7 @@
 ##
 ## Represents a single damage card in the 52-card damage deck.
 ## Each card has a trait ("Ship" or "Crew"), a title, effect text, timing
-## category, and an effect identifier for the EffectFactory.
+## category, and an effect identifier used by immediate resolvers and rules.
 ##
 ## Timing categories:
 ##   "persistent"          — effect remains active while faceup
@@ -33,7 +33,7 @@ var effect_text: String = ""
 ## Timing category: "persistent", "immediate", or "immediate_persistent".
 var timing: String = ""
 
-## Identifier used by EffectFactory to look up the concrete GameEffect class.
+## Identifier used by command resolvers and RuleRegistry rules.
 var effect_id: String = ""
 
 

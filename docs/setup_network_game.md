@@ -1,9 +1,13 @@
-# Setting Up a Network Game — Two Macs on the Same Home Router
+# Setting Up a Network Game
 
 This guide walks two players through hosting and joining an *Armada*
-network game on a home network. Both Macs must already have the app
-installed (either the exported `Armada.app` or a development build run
-from the Godot editor).
+network game. Both Macs must already have the app installed (either the
+exported `Armada.app` or a development build run from the Godot editor).
+
+- **Same home network (LAN)?** Follow §1–§11 below.
+- **Different locations over the internet?** Follow
+  [§12 — Playing Over the Internet with Tailscale](#12-playing-over-the-internet-with-tailscale)
+  first to create a private virtual network, then use §5–§9 as normal.
 
 For build, export, and release packaging, see
 [release_ops.md](release_ops.md).
@@ -193,3 +197,160 @@ open -a "/Applications/Armada.app" --args -- --logging
 ```
 
 The log file will appear in `~/Library/Application Support/Armada/logs/`.
+
+---
+
+## 12. Playing Over the Internet with Tailscale
+
+Tailscale is a free mesh VPN built on WireGuard. It lets two Macs on
+different home networks (or different continents) appear on the same
+private subnet — so the normal LAN host/join flow works without port
+forwarding or exposing any ports to the public internet.
+
+Tailscale requires **macOS Monterey 12.0 or later**.
+
+### 12.1 Why Tailscale?
+
+- **No router configuration.** Tailscale handles NAT traversal
+  automatically. Neither player needs to touch their router settings.
+- **Encrypted traffic.** All game traffic travels through an encrypted
+  WireGuard tunnel, not over the open internet.
+- **Stable addresses.** Each device gets a permanent `100.x.y.z`
+  Tailscale IP that doesn't change when the device switches networks.
+- **Free for personal use.** The Personal plan is free for a single user with up to 100 devices.
+
+### 12.2 One-Time Setup (both players, ~5 minutes each)
+
+Do this once. You only need to repeat it if you get a new computer.
+
+#### Step 1 — Install Tailscale
+
+On each Mac, download the **Standalone variant** (recommended) from:
+
+```
+https://pkgs.tailscale.com/stable/#macos
+```
+
+Alternatively, search for **Tailscale** in the Mac App Store (free).
+
+Minimum requirement: macOS Monterey 12.0.
+
+After installation, Tailscale appears as a menu bar icon (a white or
+grey icon that looks like a wireframe cube).
+
+#### Step 2 — Create or sign into a Tailscale account
+
+One player (the **tailnet owner**) creates a free Personal account at
+`https://tailscale.com`. They can log in with Google, GitHub, Apple ID,
+or another supported identity provider. No credit card required.
+
+The other player can use their own separate Tailscale account — they
+do **not** need to join the owner's tailnet. Both players simply need
+Tailscale installed and signed in to any account.
+
+#### Step 3 — Turn on Tailscale
+
+Click the Tailscale menu bar icon and select **Connect** (or it
+connects automatically on launch).
+
+The icon turns blue (or solid) when connected. Your Tailscale IP
+(`100.x.y.z`) appears in the menu.
+
+To see your IP at any time:
+
+```bash
+tailscale ip -4
+```
+
+### 12.3 Before Every Play Session
+
+Both players must have Tailscale running and connected before launching
+*Armada*. Confirm with:
+
+```bash
+tailscale status
+```
+
+You should see both your own device and be able to ping the other player's
+Tailscale IP:
+
+```bash
+ping -c 3 <other-player-tailscale-ip>
+```
+
+A response with round-trip times under ~200 ms means the tunnel is healthy.
+
+### 12.4 Find the Host's Tailscale IP
+
+The **host** player finds their Tailscale IP in one of three ways:
+
+1. **Menu bar** — Click the Tailscale icon; your `100.x.y.z` IP is
+   shown at the top of the menu.
+2. **Terminal:**
+   ```bash
+   tailscale ip -4
+   ```
+3. **Admin console** — Visit `https://login.tailscale.com/admin/machines`
+   and look for your machine name.
+
+Share this `100.x.y.z` IP with the other player via chat, message, or
+voice. Keep it private — only share it with your intended opponent.
+
+### 12.5 Host the Game
+
+Hosting over Tailscale is identical to the LAN flow:
+
+1. Launch *Armada*.
+2. From the main menu, click **Host Game**.
+3. Fill in your name, optional lobby name and password, and confirm the
+   port (default `7350`).
+4. Click **Host**.
+
+The lobby screen shows *"Hosting on `<Tailscale IP>`:`7350`"*.
+Share that line with the other player.
+
+> **Firewall note:** macOS may prompt to allow incoming connections
+> when the first internet client connects via Tailscale. Click **Allow**
+> (or pre-allow `Armada.app` in System Settings → Network → Firewall).
+> The client Mac does not need any firewall change.
+
+### 12.6 Join the Game
+
+On the **client** Mac:
+
+1. Launch *Armada*.
+2. From the main menu, click **Join Game**.
+3. Fill in:
+   - **Your Name**
+   - **Server IP** — the host's Tailscale IP (`100.x.y.z`).
+   - **Password** — only if the host set one.
+   - **Port** — default `7350`.
+4. Click **Connect**.
+
+On success the lobby screen appears and both diagnostics rows show
+*Peers: 1*.
+
+### 12.7 Quick Reference — Tailscale Internet Play
+
+| Item | Value |
+|---|---|
+| Host's address to share | Tailscale IP, e.g. `100.64.0.1` |
+| Default port | `7350/UDP` |
+| Port forwarding required | **No** |
+| Router changes required | **No** |
+| Encryption | WireGuard (end-to-end) |
+| Tailscale free plan | Free for personal use, 1 user, 100 devices |
+| macOS requirement | Monterey 12.0+ |
+| Download | `https://tailscale.com/download/macos` |
+
+### 12.8 Troubleshooting — Tailscale
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `tailscale status` shows no peers | Tailscale not connected on one Mac | Click the menu bar icon and select **Connect**; check that you are signed in. |
+| `ping 100.x.y.z` times out | Tailscale not connected on the target Mac | Confirm both Macs show a blue/active Tailscale icon before launching Armada. |
+| Client gets "Connecting…" forever | Firewall blocking the host | On host: System Settings → Network → Firewall → allow `Armada.app` for incoming connections. |
+| Tailscale icon shows "Logged out" | Session expired | Click the icon, select **Log in**, and reauthenticate. |
+| Ping works but game fails to connect | Wrong IP entered | Double-check the host's Tailscale IP with `tailscale ip -4`; it must start with `100.`. |
+| High latency / lag during play | Long relay route | Both players close and reopen Tailscale to re-attempt a direct peer connection; run `tailscale netcheck` for diagnostics. |
+| "Both Macs on same Wi-Fi but still no connection" note in §9 | Active Tailscale interferes with LAN detection | For LAN play: turn Tailscale off on both Macs and follow §1–§9 with the LAN IP instead. |

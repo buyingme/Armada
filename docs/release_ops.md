@@ -36,7 +36,8 @@ Use this for:
 - two-machine LAN host/join verification
 
 Out of scope:
-- internet (WAN) hosting and port-forwarding
+- internet (WAN) hosting and port-forwarding; see the Tailscale guide in
+   [setup_network_game.md](setup_network_game.md#12-playing-over-the-internet-with-tailscale)
 - spectator/reconnect runtime features (tracked in implementation plan)
 
 ## 2. Preconditions

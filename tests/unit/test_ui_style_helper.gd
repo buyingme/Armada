@@ -3,6 +3,11 @@ extends GutTest
 ## font-size tiers, and label factory methods.
 
 
+func _tracked_label(label: Label) -> Label:
+	autofree(label)
+	return label
+
+
 # ── Colour constants ─────────────────────────────────────────────────
 
 func test_gold_title_matches_canonical_value() -> void:
@@ -106,26 +111,30 @@ func test_create_modal_panel_style_custom_content_margin() -> void:
 # ── create_dismiss_hint ──────────────────────────────────────────────
 
 func test_create_dismiss_hint_text() -> void:
-	var label: Label = UIStyleHelper.create_dismiss_hint("Press Escape")
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_dismiss_hint("Press Escape"))
 	assert_eq(label.text, "Press Escape",
 			"Label text should match input")
 
 
 func test_create_dismiss_hint_centered() -> void:
-	var label: Label = UIStyleHelper.create_dismiss_hint("test")
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_dismiss_hint("test"))
 	assert_eq(label.horizontal_alignment, HORIZONTAL_ALIGNMENT_CENTER,
 			"Hint should be centered")
 
 
 func test_create_dismiss_hint_font_size() -> void:
-	var label: Label = UIStyleHelper.create_dismiss_hint("test")
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_dismiss_hint("test"))
 	assert_eq(label.get_theme_font_size("font_size"),
 			UIStyleHelper.FONT_HINT,
 			"Hint should use FONT_HINT size")
 
 
 func test_create_dismiss_hint_colour() -> void:
-	var label: Label = UIStyleHelper.create_dismiss_hint("test")
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_dismiss_hint("test"))
 	assert_eq(label.get_theme_color("font_color"),
 			UIStyleHelper.DIMMED_HINT,
 			"Hint should use DIMMED_HINT colour")
@@ -134,32 +143,33 @@ func test_create_dismiss_hint_colour() -> void:
 # ── create_title_label ───────────────────────────────────────────────
 
 func test_create_title_label_text() -> void:
-	var label: Label = UIStyleHelper.create_title_label("Title")
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_title_label("Title"))
 	assert_eq(label.text, "Title", "Label text should match input")
 
 
 func test_create_title_label_centered() -> void:
-	var label: Label = UIStyleHelper.create_title_label("T")
+	var label: Label = _tracked_label(UIStyleHelper.create_title_label("T"))
 	assert_eq(label.horizontal_alignment, HORIZONTAL_ALIGNMENT_CENTER,
 			"Title should be centered")
 
 
 func test_create_title_label_font_size() -> void:
-	var label: Label = UIStyleHelper.create_title_label("T")
+	var label: Label = _tracked_label(UIStyleHelper.create_title_label("T"))
 	assert_eq(label.get_theme_font_size("font_size"),
 			UIStyleHelper.FONT_TITLE,
 			"Title should use FONT_TITLE size")
 
 
 func test_create_title_label_no_colour_by_default() -> void:
-	var label: Label = UIStyleHelper.create_title_label("T")
+	var label: Label = _tracked_label(UIStyleHelper.create_title_label("T"))
 	assert_false(label.has_theme_color_override("font_color"),
 			"No colour override when sentinel is used")
 
 
 func test_create_title_label_with_gold_colour() -> void:
-	var label: Label = UIStyleHelper.create_title_label("T",
-			UIStyleHelper.GOLD_TITLE)
+	var label: Label = _tracked_label(UIStyleHelper.create_title_label(
+			"T", UIStyleHelper.GOLD_TITLE))
 	assert_eq(label.get_theme_color("font_color"),
 			UIStyleHelper.GOLD_TITLE,
 			"Gold colour should be applied")
@@ -168,27 +178,30 @@ func test_create_title_label_with_gold_colour() -> void:
 # ── create_section_label ─────────────────────────────────────────────
 
 func test_create_section_label_text_and_size() -> void:
-	var label: Label = UIStyleHelper.create_section_label("Body", 13)
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_section_label("Body", 13))
 	assert_eq(label.text, "Body", "Label text should match")
 	assert_eq(label.get_theme_font_size("font_size"), 13,
 			"Font size should match input")
 
 
 func test_create_section_label_centered() -> void:
-	var label: Label = UIStyleHelper.create_section_label("X", 12)
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_section_label("X", 12))
 	assert_eq(label.horizontal_alignment, HORIZONTAL_ALIGNMENT_CENTER,
 			"Section label should be centered")
 
 
 func test_create_section_label_no_colour_by_default() -> void:
-	var label: Label = UIStyleHelper.create_section_label("X", 12)
+	var label: Label = _tracked_label(
+			UIStyleHelper.create_section_label("X", 12))
 	assert_false(label.has_theme_color_override("font_color"),
 			"No colour override when sentinel is used")
 
 
 func test_create_section_label_with_colour() -> void:
-	var label: Label = UIStyleHelper.create_section_label("X", 12,
-			UIStyleHelper.BLUE_ACCENT)
+	var label: Label = _tracked_label(UIStyleHelper.create_section_label(
+			"X", 12, UIStyleHelper.BLUE_ACCENT))
 	assert_eq(label.get_theme_color("font_color"),
 			UIStyleHelper.BLUE_ACCENT,
 			"Colour override should be applied")

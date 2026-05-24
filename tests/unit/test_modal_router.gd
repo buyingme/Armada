@@ -10,7 +10,7 @@ const ATTACK_PANEL_CONTROLLER_SCRIPT: GDScript = preload(
 
 
 class StubShipActivationController:
-	extends ShipActivationController
+	extends "res://src/scenes/game_board/ship_activation_controller.gd"
 
 	var close_calls: int = 0
 	var affordance_values: Array[bool] = []
@@ -73,7 +73,7 @@ class StubDisplacementController:
 
 
 class StubAttackPanelMirror:
-	extends AttackPanelMirror
+	extends "res://src/scenes/game_board/attack_panel_mirror.gd"
 
 	var apply_flow_calls: int = 0
 	var close_calls: int = 0
@@ -359,6 +359,10 @@ func test_close_mirror_delegates_to_attack_panel_mirror() -> void:
 	var controller: Variant = _new_attack_panel_controller()
 	var panel_mgr: UIPanelManager = UIPanelManager.new()
 	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
+	_attack_panel_controller = controller as Node
+	_panel_mgr = panel_mgr
+	add_child(_attack_panel_controller)
+	add_child(_panel_mgr)
 	panel_mgr.attack_panel_mirror = mirror
 	controller._panel_mgr = panel_mgr
 

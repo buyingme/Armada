@@ -21,9 +21,16 @@ func after_each() -> void:
 	GameManager.current_game_state = _saved_game_state
 	GameManager._activating_ship = _saved_activating_ship
 	GameManager._activating_squadron = _saved_activating_squadron
-	if _sidebar and is_instance_valid(_sidebar):
-		_sidebar.queue_free()
+	_free_node(_sidebar)
 	_sidebar = null
+
+
+func _free_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.free()
 
 
 func _make_state_with_units() -> Dictionary:

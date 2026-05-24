@@ -6,6 +6,10 @@
 extends GutTest
 
 
+const NetworkHarnessScript: GDScript = preload(
+		"res://tests/fixtures/network_harness.gd")
+
+
 ## Port used for integration tests (different from default to avoid conflicts).
 const TEST_PORT: int = 17350
 
@@ -167,7 +171,7 @@ func test_peer_disconnected_cleans_up_state() -> void:
 # ---------------------------------------------------------------------------
 
 func test_harness_setup_creates_peers() -> void:
-	var harness := TestNetworkHarness.new()
+	var harness: Variant = NetworkHarnessScript.new()
 	harness.setup()
 	assert_not_null(harness.server_peer,
 			"Server peer should be created.")
@@ -179,7 +183,7 @@ func test_harness_setup_creates_peers() -> void:
 
 
 func test_harness_teardown_clears_peers() -> void:
-	var harness := TestNetworkHarness.new()
+	var harness: Variant = NetworkHarnessScript.new()
 	harness.setup()
 	harness.teardown()
 	assert_null(harness.server_peer,
@@ -191,7 +195,7 @@ func test_harness_teardown_clears_peers() -> void:
 
 
 func test_harness_make_handshake_uses_defaults() -> void:
-	var harness := TestNetworkHarness.new()
+	var harness: Variant = NetworkHarnessScript.new()
 	var hs: Dictionary = harness.make_handshake()
 	assert_eq(hs["protocol_version"], NetworkManager.PROTOCOL_VERSION,
 			"Default protocol version should match NetworkManager.")
@@ -202,7 +206,7 @@ func test_harness_make_handshake_uses_defaults() -> void:
 
 
 func test_harness_make_handshake_custom_values() -> void:
-	var harness := TestNetworkHarness.new()
+	var harness: Variant = NetworkHarnessScript.new()
 	var hs: Dictionary = harness.make_handshake(99, "custom-id", "CustomName")
 	assert_eq(hs["protocol_version"], 99,
 			"Custom protocol version should be 99.")

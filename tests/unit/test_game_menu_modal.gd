@@ -10,7 +10,24 @@ var _modal: GameMenuModal = null
 
 func before_each() -> void:
 	_modal = GameMenuModal.new()
-	add_child_autofree(_modal)
+	add_child(_modal)
+
+
+func after_each() -> void:
+	if _modal != null and is_instance_valid(_modal):
+		_free_node(_modal.get_save_on_quit_dialog())
+		_free_node(_modal.get_save_game_dialog())
+		_free_node(_modal.get_load_game_dialog())
+	_free_node(_modal)
+	_modal = null
+
+
+func _free_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.free()
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,9 @@
 extends GutTest
 
 
+const FixturesScript: GDScript = preload("res://tests/fixtures/fixtures.gd")
+
+
 # --- Default Values ---
 
 func test_default_squadron_name_is_empty() -> void:
@@ -50,7 +53,7 @@ func test_default_ability_text_is_empty() -> void:
 
 func test_has_keyword_returns_true_for_existing_keyword() -> void:
 	# Arrange
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 
 	# Act & Assert
 	assert_true(squad.has_keyword("Bomber"), "Test squadron should have Bomber keyword")
@@ -58,7 +61,7 @@ func test_has_keyword_returns_true_for_existing_keyword() -> void:
 
 func test_has_keyword_returns_true_for_escort() -> void:
 	# Arrange
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 
 	# Act & Assert
 	assert_true(squad.has_keyword("Escort"), "Test squadron should have Escort keyword")
@@ -66,7 +69,7 @@ func test_has_keyword_returns_true_for_escort() -> void:
 
 func test_has_keyword_returns_false_for_missing_keyword() -> void:
 	# Arrange
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 
 	# Act & Assert
 	assert_false(squad.has_keyword("Swarm"), "Test squadron should not have Swarm keyword")
@@ -84,7 +87,7 @@ func test_has_keyword_empty_keywords() -> void:
 
 func test_get_keyword_value_returns_zero_for_valueless_keyword() -> void:
 	# Arrange
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 
 	# Act
 	var value: int = squad.get_keyword_value("Bomber")
@@ -107,7 +110,7 @@ func test_get_keyword_value_returns_value_for_valued_keyword() -> void:
 
 func test_get_keyword_value_returns_zero_for_missing_keyword() -> void:
 	# Arrange
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 
 	# Act
 	var value: int = squad.get_keyword_value("Counter")
@@ -119,37 +122,37 @@ func test_get_keyword_value_returns_zero_for_missing_keyword() -> void:
 # --- TestFixtures Integration ---
 
 func test_fixture_squadron_has_valid_name() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_ne(squad.squadron_name, "", "Test squadron should have a name")
 
 
 func test_fixture_squadron_has_anti_squadron_dice() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.anti_squadron_armament.size() > 0, "Test squadron should have anti-squadron armament")
 
 
 func test_fixture_squadron_has_battery_armament() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.battery_armament.size() > 0, "Test squadron should have battery armament")
 
 
 func test_fixture_squadron_has_keywords() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.keywords.size() > 0, "Test squadron should have keywords")
 
 
 func test_fixture_squadron_has_reminder_text() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.keyword_reminder_text.size() > 0, "Test squadron should have keyword reminder text")
 
 
 func test_fixture_squadron_has_positive_hull() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.hull > 0, "Squadron hull should be positive")
 
 
 func test_fixture_squadron_has_positive_speed() -> void:
-	var squad: SquadronData = TestFixtures.create_test_squadron()
+	var squad: SquadronData = FixturesScript.create_test_squadron()
 	assert_true(squad.speed > 0, "Squadron speed should be positive")
 
 

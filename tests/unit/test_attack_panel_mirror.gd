@@ -22,7 +22,20 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	if _mirror != null:
+		_free_node(_mirror._modal_layer)
+	_free_node(_layer)
+	_mirror = null
+	_layer = null
 	NetworkManager._local_player_index = _saved_local_player_index
+
+
+func _free_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.free()
 
 
 func test_setup_creates_panel_hidden() -> void:

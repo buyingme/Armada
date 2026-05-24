@@ -20,7 +20,7 @@ tests/
 │   ├── test_attack_sequence.gd
 │   └── ...
 └── fixtures/                # Shared test data and factories
-    └── test_fixtures.gd
+    └── fixtures.gd          # No test_ prefix; GUT would execute it as a test
 ```
 
 ## Naming Conventions
@@ -29,6 +29,11 @@ tests/
 
 - Prefix: `test_`
 - Name matches the source file: `dice.gd` → `test_dice.gd`
+- Exception: helper scripts under `tests/fixtures/` must not start with
+    `test_`, because the recursive GUT runner treats matching files as test
+    scripts and warns when they do not extend `GutTest`.
+- Fixture helper scripts should be preloaded by the tests that use them rather
+    than declared as `class_name`, keeping them out of Godot's global class cache.
 
 ### Test Functions
 

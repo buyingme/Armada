@@ -14,9 +14,16 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	if _mgr and is_instance_valid(_mgr):
-		_mgr.queue_free()
+	_free_node(_mgr)
 	_mgr = null
+
+
+func _free_node(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	node.free()
 
 
 # -----------------------------------------------------------------------
@@ -38,7 +45,7 @@ func test_register_resizable_adds_entry() -> void:
 			"Method should match.")
 	assert_eq(_mgr._resizable_widgets[0]["only_visible"], false,
 			"only_visible should default to false.")
-	ctrl.queue_free()
+	_free_node(ctrl)
 
 
 func test_register_resizable_only_visible_flag() -> void:
@@ -50,7 +57,7 @@ func test_register_resizable_only_visible_flag() -> void:
 	# Assert
 	assert_eq(_mgr._resizable_widgets[0]["only_visible"], true,
 			"only_visible should be true when specified.")
-	ctrl.queue_free()
+	_free_node(ctrl)
 
 
 # -----------------------------------------------------------------------
@@ -94,7 +101,7 @@ func test_set_phase_hud_visible_toggles_label() -> void:
 	assert_false(label.visible, "Label should be hidden.")
 	_mgr.set_phase_hud_visible(true)
 	assert_true(label.visible, "Label should be visible again.")
-	label.queue_free()
+	_free_node(label)
 
 
 # -----------------------------------------------------------------------
@@ -121,7 +128,7 @@ func test_set_network_status_text_triggers_hud_refresh_when_label_exists() -> vo
 	# Assert
 	assert_true(label.text.contains("make your choices"),
 			"HUD text should include the status suffix whenever it is set.")
-	label.queue_free()
+	_free_node(label)
 
 
 # -----------------------------------------------------------------------

@@ -16,7 +16,6 @@
 ## [/codeblock]
 ##
 ## G4 Network Plan: §3 — G4.1.8
-class_name TestNetworkHarness
 extends RefCounted
 
 

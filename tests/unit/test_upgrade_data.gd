@@ -4,6 +4,9 @@
 extends GutTest
 
 
+const FixturesScript: GDScript = preload("res://tests/fixtures/fixtures.gd")
+
+
 # --- Default Values ---
 
 func test_default_upgrade_name_is_empty() -> void:
@@ -54,27 +57,27 @@ func test_default_size_restriction_is_empty() -> void:
 # --- TestFixtures Integration ---
 
 func test_fixture_upgrade_has_valid_name() -> void:
-	var upgrade: UpgradeData = TestFixtures.create_test_upgrade()
+	var upgrade: UpgradeData = FixturesScript.create_test_upgrade()
 	assert_ne(upgrade.upgrade_name, "", "Test upgrade should have a name")
 
 
 func test_fixture_upgrade_has_type() -> void:
-	var upgrade: UpgradeData = TestFixtures.create_test_upgrade()
+	var upgrade: UpgradeData = FixturesScript.create_test_upgrade()
 	assert_ne(upgrade.upgrade_type, "", "Test upgrade should have a type")
 
 
 func test_fixture_upgrade_has_positive_cost() -> void:
-	var upgrade: UpgradeData = TestFixtures.create_test_upgrade()
+	var upgrade: UpgradeData = FixturesScript.create_test_upgrade()
 	assert_true(upgrade.point_cost > 0, "Test upgrade should have positive cost")
 
 
 func test_fixture_upgrade_is_unique() -> void:
-	var upgrade: UpgradeData = TestFixtures.create_test_upgrade()
+	var upgrade: UpgradeData = FixturesScript.create_test_upgrade()
 	assert_true(upgrade.is_unique, "Test commander upgrade should be unique")
 
 
 func test_fixture_upgrade_has_effect_text() -> void:
-	var upgrade: UpgradeData = TestFixtures.create_test_upgrade()
+	var upgrade: UpgradeData = FixturesScript.create_test_upgrade()
 	assert_ne(upgrade.effect_text, "", "Test upgrade should have effect text")
 
 

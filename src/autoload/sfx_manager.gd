@@ -36,16 +36,33 @@ var _pool: Array[AudioStreamPlayer] = []
 ## Index of the next player to use (round-robin).
 var _pool_index: int = 0
 
+var _audio_enabled: bool = true
+
 
 func _ready() -> void:
+	_audio_enabled = DisplayServer.get_name() != "headless"
+	if not _audio_enabled:
+		_log.info("SFX disabled in headless mode.")
+		return
 	_load_config()
 	_create_pool()
 	_connect_signals()
 
 
+func _exit_tree() -> void:
+	_disconnect_signals()
+	_stop_pool()
+	_streams.clear()
+	_volumes.clear()
+	_rhythms.clear()
+	_shield_cache.clear()
+
+
 ## Plays a single SFX clip identified by [param key] (must match a key in
 ## sound_config.json → sfx).
 func play_sfx(key: String) -> void:
+	if not _audio_enabled:
+		return
 	if not _streams.has(key):
 		_log.warn("Unknown SFX key: %s" % key)
 		return
@@ -60,6 +77,8 @@ func play_sfx(key: String) -> void:
 ## follow after each interval in [param rhythm_key] (an array of pause
 ## durations in ms stored in sound_config.json → sfx_rhythms).
 func play_rhythmic(sfx_key: String, rhythm_key: String) -> void:
+	if not _audio_enabled:
+		return
 	if not _streams.has(sfx_key):
 		_log.warn("Unknown SFX key for rhythmic play: %s" % sfx_key)
 		return
@@ -147,6 +166,29 @@ func _connect_signals() -> void:
 	EventBus.squadron_hull_changed.connect(_on_squadron_hull_changed)
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
 	EventBus.ship_shields_changed.connect(_on_ship_shields_changed)
+
+
+func _disconnect_signals() -> void:
+	_safe_disconnect(EventBus.squadron_moved, _on_squadron_moved)
+	_safe_disconnect(EventBus.ship_destroyed, _on_ship_destroyed)
+	_safe_disconnect(EventBus.squadron_destroyed, _on_squadron_destroyed)
+	_safe_disconnect(EventBus.squadron_hull_changed, _on_squadron_hull_changed)
+	_safe_disconnect(EventBus.damage_card_dealt, _on_damage_card_dealt)
+	_safe_disconnect(EventBus.ship_shields_changed, _on_ship_shields_changed)
+
+
+func _safe_disconnect(event_signal: Signal, callback: Callable) -> void:
+	if event_signal.is_connected(callback):
+		event_signal.disconnect(callback)
+
+
+func _stop_pool() -> void:
+	for player: AudioStreamPlayer in _pool:
+		if player == null:
+			continue
+		player.stop()
+		player.stream = null
+	_pool.clear()
 
 
 ## Plays a faction-appropriate flyby sound when a squadron moves.

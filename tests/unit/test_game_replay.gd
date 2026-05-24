@@ -30,8 +30,8 @@ func _make_replay(cmd_count: int = 3) -> GameReplay:
 
 
 ## Returns a temporary file path inside the test directory.
-func _temp_path(name: String = "test_replay") -> String:
-	return "res://tests/fixtures/%s.json" % name
+func _temp_path(replay_name: String = "test_replay") -> String:
+	return "res://tests/fixtures/%s.json" % replay_name
 
 
 ## Deletes a file if it exists (cleanup).
@@ -219,7 +219,7 @@ func test_load_from_file_roundtrip() -> void:
 	assert_not_null(loaded, "load_from_file should return a GameReplay.")
 	assert_eq(loaded.header["scenario_id"], "learning_scenario",
 			"File roundtrip should preserve scenario_id.")
-	assert_eq(loaded.header["rng_seed"], 42,
+	assert_eq(int(loaded.header["rng_seed"]), 42,
 			"File roundtrip should preserve rng_seed.")
 	assert_eq(loaded.get_command_count(), 4,
 			"File roundtrip should preserve command count.")

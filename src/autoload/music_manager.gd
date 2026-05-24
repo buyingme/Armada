@@ -67,11 +67,30 @@ var _volume_multiplier: float = 1.0
 ## Step size for volume +/− buttons (10%).
 const VOLUME_STEP: float = 0.1
 
+var _audio_enabled: bool = true
+
 
 func _ready() -> void:
+	_audio_enabled = DisplayServer.get_name() != "headless"
+	if not _audio_enabled:
+		_log.info("Music disabled in headless mode.")
+		return
 	_load_config()
 	_create_players()
 	_connect_signals()
+
+
+func _exit_tree() -> void:
+	_disconnect_signals()
+	_disconnect_override_timer()
+	_stop_player(_player_a)
+	_stop_player(_player_b)
+	_streams.clear()
+	_volumes.clear()
+	_playlist.clear()
+	_current_track_key = ""
+	_override_active = false
+	_override_timer = null
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +101,8 @@ func _ready() -> void:
 ## track to the new one. If [param key] is already playing, does nothing.
 ## Requirements: MUS-002, MUS-003.
 func play(key: String) -> void:
+	if not _audio_enabled:
+		return
 	if key == _current_track_key:
 		return
 	if not _streams.has(key):
@@ -94,6 +115,8 @@ func play(key: String) -> void:
 func stop() -> void:
 	_current_track_key = ""
 	_override_active = false
+	if not _audio_enabled:
+		return
 	var current: AudioStreamPlayer = _get_current_player()
 	if current.playing:
 		_fade_out(current)
@@ -104,6 +127,8 @@ func stop() -> void:
 ## Requirements: MUS-011.
 func toggle_pause() -> void:
 	_paused = not _paused
+	if not _audio_enabled:
+		return
 	var current: AudioStreamPlayer = _get_current_player()
 	current.stream_paused = _paused
 	_log.info("Music %s." % ("paused" if _paused else "resumed"))
@@ -121,8 +146,12 @@ func skip_to_next() -> void:
 	_override_active = false
 	if _paused:
 		_paused = false
+		if not _audio_enabled:
+			return
 		var current: AudioStreamPlayer = _get_current_player()
 		current.stream_paused = false
+	if not _audio_enabled:
+		return
 	_advance_playlist()
 	_log.info("Skipped to next track.")
 
@@ -137,6 +166,8 @@ func get_volume_percent() -> int:
 ## Requirements: MUS-013.
 func set_volume_percent(percent: int) -> void:
 	_volume_multiplier = clampf(float(percent) / 100.0, 0.0, 1.0)
+	if not _audio_enabled:
+		return
 	var current: AudioStreamPlayer = _get_current_player()
 	var track_vol: float = _volumes.get(_current_track_key, 1.0)
 	current.volume_db = linear_to_db(track_vol * _volume_multiplier)
@@ -310,6 +341,34 @@ func _connect_signals() -> void:
 	EventBus.ship_destroyed.connect(_on_ship_destroyed)
 	EventBus.game_ended.connect(_on_game_ended)
 	EventBus.game_started.connect(_on_game_started)
+
+
+func _disconnect_signals() -> void:
+	_safe_disconnect(EventBus.ship_destroyed, _on_ship_destroyed)
+	_safe_disconnect(EventBus.game_ended, _on_game_ended)
+	_safe_disconnect(EventBus.game_started, _on_game_started)
+
+
+func _safe_disconnect(event_signal: Signal, callback: Callable) -> void:
+	if event_signal.is_connected(callback):
+		event_signal.disconnect(callback)
+
+
+func _disconnect_override_timer() -> void:
+	if _override_timer == null:
+		return
+	if _override_timer.timeout.is_connected(_on_override_expired):
+		_override_timer.timeout.disconnect(_on_override_expired)
+
+
+func _stop_player(player: AudioStreamPlayer) -> void:
+	if player == null:
+		return
+	if player.finished.is_connected(_on_player_finished):
+		player.finished.disconnect(_on_player_finished)
+	player.stop()
+	player.stream = null
+	player.stream_paused = false
 
 
 ## Called when an AudioStreamPlayer finishes its stream (non-looping tracks).

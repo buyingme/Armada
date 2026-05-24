@@ -2,7 +2,6 @@
 ##
 ## Factory functions for creating test ship data instances.
 ## Use these in tests to avoid duplicating test data setup.
-class_name TestFixtures
 extends RefCounted
 
 

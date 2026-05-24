@@ -431,6 +431,12 @@ cards, damage cards, objectives, obstacles, tokens, and rule-derived UI
 affordances. `RuleRegistry` stores static hook definitions; active rule status
 comes from serialized game entities and command/flow context.
 
+As of Phase N24, this is the only production rule-extension architecture. The
+legacy runtime effect system (`EffectRegistry`, `GameEffect`,
+`DamageCardEffect`, runtime rebuild factories, and old hook-string dispatch)
+is retired and guarded from production reintroduction by the Phase K/N lint
+gate.
+
 ### 8.9.2 Architecture Overview
 
 ```
@@ -509,6 +515,7 @@ without storing mutable active state in the registry.
 - **Serialized active state:** save/load, replay, hot-seat, and network all derive active status from the same state
 - **Priority sort:** deterministic ordering supports timing conflicts and initiative-sensitive effects
 - **Metadata dict:** hook-specific fields use `EffectContext.metadata` to keep the class stable across phases
+- **No runtime effect rebuild:** save/load restores serialized entities only; rule files re-evaluate active status from that state on demand
 
 ### 8.9.8 RuleRegistry Integration Pattern
 
@@ -526,6 +533,16 @@ mutation. If a panel submits a marker command before a mutation command, both
 must be validated by the same rule. Any disabled/blocked choice metadata must
 be published through `GameState.interaction_flow.payload`, and UI panels must
 render that metadata without re-implementing card text.
+
+The N23/N24 Squadron command follow-ups add two related command-flow rules.
+First, lifecycle markers must be legal wherever their producers can emit them:
+`complete_squadron_activation` is phase-scoped for both SHIP and SQUADRON and
+is also listed on the ship-activation Squadron step so no-move activations can
+synchronize hot-seat, replay, and network peers. Second, preview is not commit:
+clicking a squadron to inspect ranges or switching selection is presentation
+state only. Squadron command activation budget is consumed when a real move or
+attack begins, and no-move completion uses the explicit lifecycle marker rather
+than a dummy zero-distance movement command.
 
 The source-first grouping proposal for future rule files is documented in
 [src/core/effects/rules/README.md](../../src/core/effects/rules/README.md):

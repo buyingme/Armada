@@ -23,6 +23,10 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
 4. **Follow the architecture** — See `.skills/architecture_patterns.md`.
 5. **Check serialization impact** — See `.skills/serialization_and_commands.md`. If the change adds mutable state fields, update `serialize()`/`deserialize()` in the same edit. If it mutates game state, route through a `GameCommand`. If it involves positions, use normalised `pos_x`/`pos_y`/`rotation_deg`.
 6. **Specify off-turn ownership first** — If a defender, opponent, non-active player, or off-turn controller makes a choice, update `docs/game_flow.md` and `FlowSpec` before UI/scene edits. Name the controller role, identity payload, allowed commands, transitions, projection route, and regression tests. Counter is the reference pattern.
+7. **Separate preview from commit** — If the UI lets a player inspect ranges,
+   select candidates, or switch selection, keep that state transient. Spend
+   command budget or activation slots only when a command-backed move, attack,
+   reroll, choice, or lifecycle marker is committed.
 
 ### Network Refactor Guardrail (G4.6.6+)
 
@@ -247,6 +251,8 @@ var damage := _calculate_total_damage(dice_results)
 | Hardcoding scenario placement data in GDScript (positions, rotations, token list) | Create `scenarios/<name>.json` and load via `AssetLoader.load_json("scenarios/", file)` |
 | Adding mutable state field without updating `serialize()`/`deserialize()` | Update both methods in the same edit — see `.skills/serialization_and_commands.md` §2 |
 | Mutating GameState outside a GameCommand `execute()` | Write a command — see `.skills/serialization_and_commands.md` §4.6 |
+| Spending command resources during selection preview | Keep previews local/transient; spend only on committed move/attack/reroll/choice/marker commands |
+| Adding a marker command without preflight parity | Update `CommandApplicability`, `FlowSpec.allowed_commands`, command `validate()`, and tests together |
 | Storing pixel positions in command payloads or serialized state | Use normalised `pos_x`/`pos_y`/`rotation_deg` (0.0–1.0) — see `.skills/serialization_and_commands.md` §3 |
 | Using `Vector2`/`Color` in serialized dictionaries | Use separate float keys (`pos_x`, `pos_y`) for JSON safety |
 | Using `play_area_side_px` (float) in `get_pixel_position()` | Use `play_area_size_px` (Vector2) for rectangular board support |
@@ -269,6 +275,8 @@ These are subtle bugs actually encountered in this project:
 | Forgetting `static` on utility class method | `Method not found in base 'RefCounted'` at runtime | All methods in a static utility class must carry the `static` keyword |
 | `match` arm body indented at wrong level | Parse error or wrong arm executes | Each arm body must be exactly one tab deeper than the arm label |
 | GUT `-gexit` required in 9.5.0 | Headless process never terminates without it — tests run but the shell hangs | Always use `-gexit 2>&1 \| tail -20`; output IS visible through the pipe |
+| Lifecycle command legal in one phase but produced in another | Host preflight rejects the command and passive network UI stalls | Make marker commands legal on every producer phase/FlowSpec row; test both applicability and command validation |
+| Selection preview consumes command budget | Merely clicking a different token spends a Squadron command activation | Keep selection/range checks transient; commit budget only when movement or attack starts, and clear preview on Back |
 | Multi-line `git commit -m` in terminal tool | Zsh garbles multi-line quoted strings passed via the terminal tool — produces `cmdand dquote>` artifacts, duplicated fragments, or truncated messages | **Never** use `git commit -m` with multi-line messages. Always write the message to a temp file first, then commit with `-F`. See the Git Commit section below |
 
 ---

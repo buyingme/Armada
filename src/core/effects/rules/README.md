@@ -2,6 +2,12 @@
 
 `RuleRegistry` rule files declare static hook definitions for game rules. Active rule state must come from authoritative game state (`GameState`, ship/squadron instances, faceup damage cards, upgrades, objectives, obstacles, tokens), not from transient runtime effect objects.
 
+Phase N24 closed the migration to this single production rule architecture.
+`EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect
+classes, runtime rebuild factories, and old hook-string dispatch are retired;
+new rules must add static hook definitions here and derive active status from
+serialized entities.
+
 Phase M rule files now use source-first grouping so contributors can find a
 rule by the component printed on the table before they know its hook surface.
 
@@ -41,6 +47,12 @@ callers explicitly choose.
 | `squadron_keywords/counter.gd` | Squadron keyword | `ENABLER` on `ATTACK / ATTACK_RESOLVE_DAMAGE` for optional Counter attack affordance metadata; `VALIDATOR` for `roll_dice` on `ATTACK / ATTACK_ROLL` | Counter availability is command/payload backed, triggers after a non-Counter squadron attack regardless of damage, and projects only to the defending squadron's controller; accepted Counter rolls must use the locked Counter X blue dice pool. |
 | `squadron_keywords/swarm.gd` | Squadron keyword | `ENABLER` on `ATTACK / ATTACK_MODIFY` for optional reroll affordance metadata | Swarm rerolls use `RerollAttackDieCommand` and `GameState.rng`; UI renders the projected payload and the command revalidates obstruction-aware engagement from serialized state. |
 | `squadron_keywords/bomber.gd` | Squadron keyword | `MODIFIER` and `BLOCKER` for `attack_damage` / `critical_effect` on `ATTACK / ATTACK_RESOLVE_DAMAGE` | No legacy `BomberEffect` rebuild remains; damage and critical permission both read the attacking squadron's serialized keyword data. |
+
+The five Phase N squadron keywords are complete in this architecture: Heavy,
+Escort, Counter, Swarm, and Bomber all use serialized keyword data plus
+RuleRegistry/core command surfaces. Selection previews remain presentation
+state; committed movement, attacks, rerolls, and off-turn choices are
+command-backed for replay and network parity.
 
 ## Compatibility Adapters
 

@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-24 (Phase M15 closeout complete; Phase N has N0-N23 complete through legacy runtime retirement, including N17-N22 live keyword implementation, the post-playtest Counter lock + hot-seat mirror + zero-damage trigger follow-ups, debug scenario network-lobby picker + board-spawn handoff, command-backed Counter ownership flow, squadron no-move activation completion marker, ship-phase completion and preview-commit follow-ups, network Swarm reroll affordance, and N23 static guard; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-24 (Phase M15 closeout complete; Phase N is closed with N0-N24 complete, including the N17-N22 live squadron keyword implementation, post-playtest Counter/Swarm/network follow-ups, ship-phase Squadron command completion, preview-commit Squadron command UX, N23 legacy runtime retirement, and N24 documentation baseline closeout; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
 
 ---
 
@@ -18,7 +18,7 @@
 | GUT tests | 3 189 |
 | GUT asserts | 6 534 |
 | Failing tests | 0 |
-| Last completed batch | N23 — legacy runtime retirement + static guard |
+| Last completed batch | N24 — Phase N documentation closeout |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -105,9 +105,17 @@ Squadron command preview-commit UX follow-up passed 2026-05-24: full GUT green
 (181 / 3 189 / 6 534, 0 failures), Phase K/N lint 0 retired legacy surfaces /
 0 violations / 4 allow-listed branches, baseline traces pass with
 network-state hash
-`51abc12744068d05efea753a6c0e3b2e9d079f402836ed7e888bea3aea0eeb55`. This
+`901f8ea134d70510ea0c850dabfa79d1a1c4b2684b71d72c64ddc10c1267ab78`. This
 keeps command-mode squadron clicks as transient range/action previews until a
 real move or attack commits the activation slot.
+N24 documentation closeout records the post-N23 end state: `RuleRegistry` is
+the only production rule hook catalogue, active rule status is derived from
+serialized entities, and the legacy runtime effect system remains deleted and
+guarded against production reintroduction. The closeout also promotes the
+bugfix lessons into project instructions and skills: lifecycle marker command
+parity, FlowSpec-first off-turn ownership, and preview-vs-commit separation.
+This was a docs/skill-only slice; no GUT script/test/assert counts changed
+from the preview-commit baseline.
 
 ---
 
@@ -614,29 +622,17 @@ and [docs/old/progress_summary.md](old/progress_summary.md).
 
 ## 4. Open Topics
 
-Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md)
-is now started. N0 completed the docs-only inventory and semantic audit for
-the remaining legacy `EffectRegistry` / `GameEffect` rule surfaces, N1 added
-no-behaviour-change `RuleSurface` scaffolding for the remaining migration
-targets, N2 retired the Faulty Countermeasures legacy UI bridge, N3-N5
-completed Power Failure, Life Support Failure, and Depowered Armament migration
-with MT pass, and N6-N8 completed Disengaged Fire Control, Coolant Discharge,
-and Blinded Gunners migration with MT pass. N9-N11 automated implementation
-for Targeter Disruption, Bomber, and maneuver-rule extraction is complete with
-MT pass confirmed 2026-05-23. N12-N15 completed the remaining movement damage
-cards with MT pass confirmed 2026-05-23. N16 completed the squadron keyword
-compliance audit for Heavy, Escort, Counter, Bomber, and Swarm. N17 added the
-shared keyword foundation: authoritative keyword lookup, standard/Counter
-attack-kind metadata, non-Heavy engagement predicates, attacker-target-specific
-engagement checks, target-legality payload fields, and optional attack-modifier
-affordance metadata. N18-N22 now implement Heavy movement/ship-target rules,
-Escort target blocking, optional Counter attacks, command-backed Swarm rerolls,
-and Bomber critical-effect eligibility through RuleRegistry-backed keyword
-surfaces. User MT pass is confirmed for N17-N22. N23 legacy runtime retirement
-is complete: production no longer has `EffectRegistry`, `GameEffect`,
-`DamageCardEffect`, legacy keyword effect classes, runtime rebuild factories,
-or legacy hook-string dispatch, and the Phase K/N lint guard blocks
-reintroduction. N24 documentation closeout remains before Phase N closes.
+Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md) is
+closed. N0-N15 migrated the remaining persistent damage-card rule surfaces,
+N16-N22 audited and implemented Heavy, Escort, Counter, Bomber, and Swarm,
+N23 retired the legacy runtime effect system, and N24 recorded the settled
+single rule architecture in the implementation plan, project instructions,
+skills, arc42, risks/technical debt, and rule README. Production rule
+extensions now use `RuleRegistry`,
+`RuleSurface`, serialized active state, command-backed mutations, and
+FlowSpec-owned UI affordances. No production `EffectRegistry`, `GameEffect`,
+`DamageCardEffect`, legacy keyword effect class, runtime rebuild factory, or
+legacy hook-string dispatch remains.
 
 ### 4.1 Network Features Pending
 

@@ -112,6 +112,17 @@ Activation Modal opens (centred, dark-blue panel)
 | `CommandTokenManager` (RefCounted) | Spends Navigate token on commit |
 | `EventBus` (Autoload) | Signals: `ship_activated`, `ship_moved`, `activation_ended` |
 
+### Squadron Command Preview and Completion
+
+During the ship-activation Squadron command step, `SquadronActivationModal`
+uses selection as a transient preview. Clicking owned squadrons may update
+range overlays and available actions, but it does not consume
+`SquadronCommandResolver` activation budget. The budget is committed only when
+the player starts a real attack or commits `move_squadron`. If a commanded
+squadron attacks without moving, or otherwise ends without a movement command,
+the durable sync surface is `complete_squadron_activation`; it is legal in both
+SHIP and SQUADRON phases and keeps passive network modal counters aligned.
+
 ## 6.3 Attack Resolution Sequence
 
 The attack system is split between `GameBoard` (activation flow) and
@@ -268,7 +279,9 @@ RuleRegistry is the only production rule hook catalogue. Rule files attach
 validators, modifiers, observers, blockers, and enablers to FlowSpec surfaces.
 Each invocation receives an `EffectContext`-style data bag populated from
 serialized entities and command/result metadata; rules do not register active
-runtime effect instances. See §8.9 for the rule integration pattern.
+runtime effect instances. Phase N24 closes the migration: the legacy runtime
+effect classes, rebuild factories, and hook-string dispatch are no longer
+production extension points. See §8.9 for the rule integration pattern.
 
 ```
 Attack Flow Hook Sequence

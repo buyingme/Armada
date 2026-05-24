@@ -78,6 +78,16 @@ Rules:
   have an explicit `FlowSpec` row and `docs/game_flow.md` entry before UI or
   scene wiring. That entry must state the controller role, ownership payload,
   allowed command surface, transitions, and projection route.
+- `FlowSpec.allowed_commands`, `CommandApplicability`, and concrete command
+  `validate()` methods are one contract. When a marker or lifecycle command can
+  be submitted from more than one phase/flow, update all three surfaces and add
+  preflight plus concrete-command tests. The `complete_squadron_activation`
+  follow-up is the reference pattern: ship-phase Squadron commands and Squadron
+  Phase activations both need the same durable completion marker.
+- Selection/range previews are presentation state. They may highlight tokens,
+  overlays, and action ranges, but they must not spend command budget or write
+  serialized state until the player commits a command-backed action or explicit
+  lifecycle marker.
 - `interaction_flow.payload` is filtered by `StateFilter` for the
   requesting player.
 - Reconnection: a single filtered `state_snapshot` is sufficient to
@@ -94,7 +104,7 @@ Banned patterns (enforced by lint after Phase I6; tightened in Phase K):
 - ❌ Inferring sub-step from local UI events (e.g. modal opened/closed) —
   always read `interaction_flow.step_id`.
 
-### 6. Layer 3 — Rules (Phase M)
+### 6. Layer 3 — Rules (Phase M/N)
 
 FlowSpec owns which interaction steps exist and who controls them. Rules attach
 to those existing surfaces through `RuleRegistry`; they do not invent steps,

@@ -123,7 +123,7 @@ if round > Constants.MAX_ROUNDS:
 - ❌ (Phase I) Inferring activation/attack sub-step from local UI events — always read `state.interaction_flow.step_id`.
 - ❌ (Phase K) Any new `if PlayMode.is_network()` / `if PlayMode.is_hot_seat()` in `src/scenes/` or `src/ui/` — `UIProjector.project()` is the only PlayMode-aware code path outside `src/autoload/`. Run `scripts/lint_phase_k.sh` (added in slice K7) before every commit. See `docs/refactoring_phase_k_plan.md`.
 - ❌ (Phase L) Do not raise the post-L6 presentation allow-list above 4 branches. The remaining allowed surfaces are deployment-mode dispatchers only: lobby diagnostics, game-menu save gating, save-dialog host notification, and the load-dialog network-session helper. Modal lifecycle/authority still belongs in `UIProjector.project()` and `ModalRouter`.
-- ❌ (Phase K) Growing [game_board.gd](src/scenes/game_board/game_board.gd), [attack_executor.gd](src/scenes/game_board/attack_executor.gd), [game_manager.gd](src/autoload/game_manager.gd), or [save_game_manager.gd](src/autoload/save_game_manager.gd) past their Phase K LOC ceilings (2 000 / 1 500 / 1 500 / 700). New behaviour goes into a focused controller / RefCounted helper. Do not meet LOC ceilings by deleting useful docstrings or rationale comments; file LOC is a refactoring trigger, not a documentation-cutting target.
+- ❌ (Phase K) Growing [game_board.gd](../src/scenes/game_board/game_board.gd), [attack_executor.gd](../src/scenes/game_board/attack_executor.gd), [game_manager.gd](../src/autoload/game_manager.gd), or [save_game_manager.gd](../src/autoload/save_game_manager.gd) past their Phase K LOC ceilings (2 000 / 1 500 / 1 500 / 700). New behaviour goes into a focused controller / RefCounted helper. Do not meet LOC ceilings by deleting useful docstrings or rationale comments; file LOC is a refactoring trigger, not a documentation-cutting target.
 
 ### 8. Game Rules Must Be Cited
 
@@ -201,6 +201,15 @@ affordance derived from rules must use `RuleRegistry` hooks under
 - Validators, blockers, modifiers, observers, and enablers must cover every
     relevant command surface: marker commands, final mutation commands, projected
     UI eligibility, direct replay submissions, and network mirrors.
+- Marker/lifecycle commands must be legal everywhere they can be produced:
+    update `CommandApplicability`, `FlowSpec.allowed_commands`, concrete
+    `validate()`, and tests together. Do not leave a UI/network producer able
+    to submit a command that the host preflight rejects in another phase.
+- Treat UI selection/range previews as presentation state only. Do not spend a
+    command budget, activation slot, token, or serialized state field until a
+    real command-backed move, attack, reroll, choice, or lifecycle marker is
+    committed. Use explicit marker commands for no-move completion; never use a
+    dummy movement command as synchronization.
 - Observer hooks must return follow-up commands for the deferred queue; rule
     files must never call `CommandProcessor.submit()` or `GameManager.submit_*()`.
 - Rule tests must cover save/load rebuild, replay determinism where ordering or

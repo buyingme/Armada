@@ -359,45 +359,6 @@ maneuver_tool.set_activation_mode(state, _submit_persistent_damage)
 # Child (maneuver_tool_scene.gd) — stores and calls:
 var _persistent_damage_handler: Callable
 
-### 4.10 Network Interaction State Contract (G4.6.6+)
-
-For networked step-by-step UI flows (activation, attack, displacement),
-`GameState` mutations and interaction progression must remain consistent.
-
-#### Required fields
-
-`NetworkInteractionState` payloads must include at least:
-- `flow_type: String`
-- `step_id: String`
-- `controller_player: int`
-- `visible_to: String`
-- `payload: Dictionary`
-- `version: int` (monotonic per match)
-
-#### Ordering and idempotency rules
-
-1. Apply `command_result` by sequence number (`seq`) order.
-2. Apply interaction updates by `version` order.
-3. Ignore duplicate `seq`/`version` values (idempotent no-op).
-4. If interaction step `version=N` depends on command `seq=M`, do not
-    render the step until `seq=M` has been applied.
-
-#### Reconnection rule
-
-A reconnect snapshot must restore both:
-- serialized `GameState`
-- current `NetworkInteractionState`
-
-Input remains disabled until both are applied.
-
-#### Privacy invariant (command phase)
-
-Hidden dial contents must never be present in opponent-facing payloads.
-Add negative tests for leakage in:
-- snapshot dictionaries
-- command result payloads
-- UI event payload dictionaries
-
 func _on_speed_change_hook_triggered(ship: ShipInstance, eff_id: String) -> void:
     if _persistent_damage_handler.is_valid():
         _persistent_damage_handler.call(ship, eff_id)
@@ -409,6 +370,42 @@ single responsibility for damage/destruction signalling.
 ❌ **Never** duplicate the signal-emitting helper in multiple scenes.
 ❌ **Never** have a child scene emit `ship_destroyed` directly — it lacks
    the `ShipToken` reference needed for the fade-out.
+
+### 4.10 Interaction Flow and Command Applicability Contract
+
+`GameState.interaction_flow` is the only production source of step-by-step UI
+flow state. The old `NetworkInteractionState` side channel is retired; network
+peers rebuild UI from filtered `GameState` snapshots and `command_result`.
+
+When adding or changing a gameplay command:
+
+1. Update `CommandApplicability` for the command's coarse scope.
+2. If the command is flow-step scoped, update the matching
+    `FlowSpec.allowed_commands` row.
+3. Keep the concrete command `validate()` phase/step checks in agreement with
+    the preflight declaration.
+4. Add tests for both preflight applicability and concrete validation.
+
+Lifecycle marker commands must be legal in every phase or flow that can submit
+them. For example, `complete_squadron_activation` is valid in both SHIP and
+SQUADRON phases because ship Squadron-command activations and Squadron Phase
+activations can both end without a movement command.
+
+Preview state is not committed state. Selection changes, range overlays, and
+candidate placements may live in UI/controller fields, but they must not spend
+command budget, activation slots, tokens, RNG, or serialized state. Commit only
+when a real `GameCommand` records a move, attack, reroll, choice, or explicit
+lifecycle marker. Never use a zero-distance movement command as a sync marker
+for "no movement happened".
+
+Rejected command submissions must stop local scene-side effects. If
+`CommandProcessor.submit()` returns a failed result, do not advance modals,
+consume local budget, clear overlays as if success occurred, or emit success
+signals.
+
+Hidden dial contents must never be present in opponent-facing payloads. Add
+negative tests for leakage in snapshots, command result payloads, and UI event
+payload dictionaries.
 
 ---
 

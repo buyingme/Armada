@@ -1,6 +1,6 @@
 # Refactoring Phase N - Rule System Completion
 
-> **Status:** IN PROGRESS - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8, ✅ N9, ✅ N10, ✅ N11, ✅ N12, ✅ N13, ✅ N14, ✅ N15, ✅ N16, ✅ N17, ✅ N18, ✅ N19, ✅ N20, ✅ N21, ✅ N22; N17-N22 MT pass confirmed 2026-05-23; N23 next.
+> **Status:** COMPLETE - completed slices: ✅ N0, ✅ N1, ✅ N2, ✅ N3, ✅ N4, ✅ N5, ✅ N6, ✅ N7, ✅ N8, ✅ N9, ✅ N10, ✅ N11, ✅ N12, ✅ N13, ✅ N14, ✅ N15, ✅ N16, ✅ N17, ✅ N18, ✅ N19, ✅ N20, ✅ N21, ✅ N22, ✅ N23, ✅ N24. N17-N22 MT pass confirmed 2026-05-23; N23 legacy runtime retirement committed in `837f6bf`; N24 closed the documentation baseline on 2026-05-24.
 > **Predecessor:** Phase M is closed at `b9bbe82` / `988641a` with
 > RuleRegistry governance in project instructions and architecture skills.
 > **Decision point:** Taking Phase N before G4.7 intentionally delays the
@@ -28,13 +28,15 @@
 | N13 | ✅ Complete | Ruptured Engine migrated to execute-maneuver observer follow-up with command-owned damage-deck draw. MT pass confirmed 2026-05-23. |
 | N14 | ✅ Complete | Damaged Controls migrated to execute-maneuver overlap observer using authoritative maneuver-result metadata. MT pass confirmed 2026-05-23. |
 | N15 | ✅ Complete | Thruster Fissure migrated to execute-maneuver speed-delta observer scoped to player-authored maneuver speed changes. MT pass confirmed 2026-05-23. |
-| N16 | ✅ Complete | Squadron keyword compliance audit completed for Heavy, Escort, Counter, Bomber, and Swarm. Bomber damage works through RuleRegistry but still needs explicit critical-effect eligibility coverage; Heavy, Escort, Counter, and Swarm are not production-compliant yet. |
+| N16 | ✅ Complete | Squadron keyword compliance audit completed for Heavy, Escort, Counter, Bomber, and Swarm. The audit found the gaps that N17-N22 later closed. |
 | N17 | ✅ Complete | Keyword foundation added: shared keyword lookup, standard/Counter attack-kind metadata, non-Heavy engagement predicates, attacker-target-specific engagement checks, target-legality payload fields, and optional attack-modifier affordance metadata. No live gameplay targeting or movement behaviour changed. MT pass confirmed 2026-05-23. |
 | N18 | ✅ Complete | Heavy engagement rules now permit movement and ship attacks only when every unobstructed engaging enemy has Heavy; `move_squadron`, target declaration, and UI availability share obstruction-aware serialized squadron keyword predicates. MT pass confirmed 2026-05-23. |
 | N19 | ✅ Complete | Escort now uses RuleRegistry target blockers/validators, blocks non-Escort squadron targets while engaged with Escort, exempts Counter attacks, and removes the inert legacy effect class. MT pass confirmed 2026-05-23. |
 | N20 | ✅ Complete | Counter projects an explicit defender-owned `ATTACK_COUNTER_CHOICE` flow, accepts/skips through `CounterChoiceCommand`, starts a locked Counter attack with X blue dice, carries attack-kind metadata, prevents Counter recursion, validates roll dice through RuleRegistry, reuses the existing attack panel in hot-seat, projects remote Counter roll/Swarm/confirm controls through the network mirror, and triggers even when the original attack deals zero damage. MT pass confirmed 2026-05-23. |
 | N21 | ✅ Complete | Swarm now offers an optional command-backed reroll through `RerollAttackDieCommand`, uses `GameState.rng`, revalidates obstruction-aware engagement from `GameState`, updates attack payload dice deterministically, and removes the inert legacy effect class. MT pass confirmed 2026-05-23. |
 | N22 | ✅ Complete | Bomber critical-effect permission is keyword-aware, non-Bomber squadron criticals remain blocked, and the all-keyword regression suite covers Heavy/Escort/Counter/Swarm/Bomber together. MT pass confirmed 2026-05-23. |
+| N23 | ✅ Complete | Legacy runtime effect classes, factories, rebuild paths, and hook-string dispatch are deleted from production; Phase K/N lint guards prevent reintroduction. Committed in `837f6bf`. |
+| N24 | ✅ Complete | Documentation and baseline closeout mark Phase N closed, promote bugfix lessons into instructions/skills/arc42, and point the roadmap back to G4.7 Spectator Mode, G4.8 Reconnection runtime, G4.9 Turn Timers, and Phase 10c coverage. |
 
 N18-N22 verification: full GUT passed at 179 scripts / 3 211 tests / 6 560
 asserts with 0 failures, Phase K lint reported 0 violations / 4 allow-listed
@@ -364,7 +366,7 @@ or be actively pair-reviewed.
 | N13 | Migrate Ruptured Engine. Register a post-maneuver `OBSERVER` that emits a deterministic facedown-damage follow-up command when final speed is greater than 1. | high | No | Complete 2026-05-23 with MT pass: observer returns a deferred `PersistentEffectDamageCommand`; draw-from-deck happens in command execution for replay/network determinism. |
 | N14 | Migrate Damaged Controls. Register a post-maneuver/overlap `OBSERVER` for extra facedown damage on ship/obstacle overlap. | high | No | Complete 2026-05-23 with MT pass: `ExecuteManeuverCommand` carries authoritative `did_overlap` metadata from the move result. |
 | N15 | Migrate Thruster Fissure. Register a speed-change/maneuver `OBSERVER` for deterministic facedown damage when speed changes by 1 or more. | high | No | Complete 2026-05-23 with MT pass: `ExecuteManeuverCommand` carries player-authored `speed_delta`; observer follow-ups do not synthesize on mirrored clients. |
-| N16 | Squadron keyword compliance audit. Compare Heavy, Escort, Counter, Bomber, and Swarm against RRG/source data and production call sites. | medium | No | Complete 2026-05-23; Bomber damage is wired, Bomber critical eligibility needs hardening, and Heavy/Escort/Counter/Swarm require implementation slices before Phase N closes. |
+| N16 | Squadron keyword compliance audit. Compare Heavy, Escort, Counter, Bomber, and Swarm against RRG/source data and production call sites. | medium | No | Complete 2026-05-23; Bomber damage was already wired, and the audit identified Bomber critical eligibility plus Heavy/Escort/Counter/Swarm implementation gaps that N17-N22 later closed. |
 | N17 | Keyword rule foundation. Add shared core predicates/surfaces for squadron keyword lookup, engagement-by-non-Heavy, target legality, attack-kind metadata, and optional attack modifier affordances. | high | No | Complete 2026-05-23 with MT pass; `SquadronKeywordRuleHelper` and `RuleSurface` constants add no live gameplay behaviour, and focused tests prove Heavy/non-Heavy engagement, standard/Counter attack kind, attacker-target-specific engagement, and JSON-safe payload conventions. |
 | N18 | Implement Heavy. Engaged squadrons may move and attack ships when every engaging enemy has Heavy; mixed engagement with any non-Heavy still blocks movement and ship attacks. | high | No | Complete 2026-05-23 with MT pass: movement availability, `move_squadron`, ship target declaration, and direct publish validators derive Heavy from serialized squadron data. |
 | N19 | Implement Escort. Replace the unused legacy `EscortEffect` with a RuleRegistry target blocker/validator backed by core engagement predicates and projection-safe metadata. | high | No | Complete 2026-05-23 with MT pass: no `SQUADRON_MUST_ATTACK_ENGAGED` effect remains; target filtering obeys Escort and Counter attacks are exempt. |
@@ -372,7 +374,7 @@ or be actively pair-reviewed.
 | N21 | Implement Swarm. Replace inert `SwarmEffect` with an optional attacker reroll affordance/command that applies during standard and Counter squadron attacks when the defender is engaged with another squadron. | high | No | Complete 2026-05-23 with MT pass: reroll choice is command-backed, uses `GameState.rng`, updates attack payload/dice deterministically, works with Counter attacks, and no `ATTACK_MODIFY_DICE_ATTACKER` effect remains. |
 | N22 | Bomber closeout and all-keyword regression. Harden Bomber critical-effect eligibility and verify the five keyword rules together. | high | No | Complete 2026-05-23 with MT pass: Bomber damage and critical-effect permission are keyword-aware; non-Bomber squadron critical icons do not create faceup damage; keyword regressions and replay/network gates pass. |
 | N23 | Retire legacy runtime system. Delete or quarantine `EffectRegistry`, `GameEffect`, `DamageCardEffect`, legacy keyword effect classes, and obsolete tests. Add a static guard forbidding production `EffectRegistry.resolve_hook`, old hook strings, and new `GameEffect` subclasses. | high | No | Complete 2026-05-23: deleted legacy runtime classes/tests, removed `GameState.effect_registry` and resolver hook fallbacks, added the Phase K/N static guard. Latest verification after the Squadron command preview-commit UX follow-up: full GUT 181 / 3 189 / 6 534, lint 0 violations / 4 allow-listed branches, baseline traces pass hot-seat + network peer equality. |
-| N24 | Documentation and baseline closeout. Update `docs/implementation_plan.md`, arc42 crosscutting/runtime docs, rule README, risks/technical debt, and archive Phase N. | low | Yes | Docs state the new single rule architecture, all five requested squadron keywords, and the next roadmap item unambiguously. |
+| N24 | Documentation and baseline closeout. Update `docs/implementation_plan.md`, project instructions/skills, arc42 crosscutting/runtime docs, rule README, risks/technical debt, and archive Phase N. | low | Yes | Complete 2026-05-24: docs and skills state the single RuleRegistry architecture, all five requested squadron keywords, retired legacy runtime guardrails, command-flow bugfix lessons, and the next roadmap items unambiguously. |
 
 ---
 
@@ -391,11 +393,12 @@ or be actively pair-reviewed.
    they require moving rule decisions away from scene/tool code and making
    follow-up damage command ordering deterministic.
 5. **Then keywords and retirement (N16-N24).** Bomber migrated earlier because
-   it was wired through damage calculation, but N16 expands the keyword closeout
-   to Heavy, Escort, Counter, Bomber, and Swarm. Heavy/Escort must share core
-   engagement predicates, Counter introduces attack-kind metadata, Swarm needs
-   command-backed optional rerolls, and Bomber needs explicit critical-effect
-   eligibility coverage before the legacy system can be retired.
+   it was wired through damage calculation, but N16 expanded the keyword
+   closeout to Heavy, Escort, Counter, Bomber, and Swarm. Heavy/Escort share
+   core engagement predicates, Counter owns attack-kind metadata and
+   defender-controlled off-turn flow, Swarm uses command-backed optional
+   rerolls, Bomber owns damage and critical-effect permission, and N23/N24
+   retired the legacy system and documented the final architecture.
 
 ---
 
@@ -452,7 +455,7 @@ review` slices, a stronger model or human reviewer should explicitly check
 source-rule fidelity and whether marker commands, payload metadata, save/load,
 replay, and network mirrors are all covered.
 
-Good lightweight-model candidates:
+Good lightweight-model candidates were:
 
 - N2 Faulty Countermeasures bridge retirement.
 - N3 Power Failure.
@@ -460,7 +463,7 @@ Good lightweight-model candidates:
 - N10 Bomber, after N1 scaffolding exists.
 - N24 documentation closeout.
 
-Poor lightweight-model candidates:
+Poor lightweight-model candidates were:
 
 - N0/N1 because they define architecture and surfaces.
 - N7 because the Coolant Discharge migration must remove stale behaviour and
@@ -488,7 +491,7 @@ Poor lightweight-model candidates:
 
 ## 10. Closing Criteria
 
-Phase N is complete when:
+Phase N is complete. The closing criteria are satisfied:
 
 1. No production code depends on `EffectRegistry`, `GameEffect`,
    `DamageCardEffect`, or legacy hook-string dispatch.
@@ -498,8 +501,8 @@ Phase N is complete when:
 3. `src/core/effects/rules/README.md` indexes every migrated production rule.
 4. `docs/game_flow.md` and arc42 describe one rule-extension architecture.
 5. Full GUT, Phase K lint, baseline traces, and `git diff --check` pass.
-6. `docs/implementation_plan.md` records the Phase N baseline and the next
-   approved roadmap item.
+6. `docs/implementation_plan.md`, project instructions/skills, and arc42 record
+   the Phase N baseline, bugfix learnings, and the next approved roadmap item.
 
 ---
 

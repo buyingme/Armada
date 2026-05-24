@@ -1,17 +1,19 @@
 # Game Flow Master Document
 
-> Phase M0 source-of-truth draft. This document describes the current
-> interaction-flow skeleton in human-readable form before it is encoded as
-> `FlowSpec` in M1.
+> Current human-readable reference for `FlowSpec`, command applicability, and
+> rule/runtime ownership. Phase M originally drafted this document before
+> `FlowSpec`; Phase N24 keeps it as the settled flow reference after the legacy
+> runtime rule system was retired.
 >
 > Scope: every `(flow_type, step_id)` pair currently projected by
 > `UIProjector`, produced by `InteractionFlow.make()`, or retained as a
 > legacy-compatible `InteractionStep` in `Constants`. It records controller
 > role, visible modal, allowed command surface, transition edges, rule
-> citation, current producer, and notes for later M slices.
+> citation, current producer, and notes for future flow/rule work.
 >
-> Non-scope for M0: no runtime behavior changes, no command gating, no
-> RuleRegistry migration, and no save-format changes.
+> Non-scope: this document is descriptive architecture/reference material. Code
+> changes still go through `FlowSpec`, `CommandApplicability`, `RuleRegistry`,
+> tests, and the normal verification gates.
 
 ## 0. Conventions
 
@@ -57,13 +59,14 @@ receive and trust an ad-hoc `controller_player`. M1's `FlowSpec` must make that
 role explicit, so future producers derive the resolved controller instead of
 re-inventing it.
 
-### 0.2 Rule Runtime Boundary (N23)
+### 0.2 Rule Runtime Boundary (N24)
 
-N23 retired the transient `EffectRegistry` / `GameEffect` runtime. There is now
-one production rule extension model: `RuleRegistry` declares static hook
-definitions, while active rule status is derived from authoritative serialized
-entities such as `GameState`, ship/squadron instances, faceup damage cards,
-upgrades, objectives, obstacles, and tokens.
+N23 retired the transient `EffectRegistry` / `GameEffect` runtime, and N24
+closed the documentation baseline. There is now one production rule extension
+model: `RuleRegistry` declares static hook definitions, while active rule
+status is derived from authoritative serialized entities such as `GameState`,
+ship/squadron instances, faceup damage cards, upgrades, objectives, obstacles,
+and tokens.
 
 | Surface | Responsibility | Persistence contract |
 |---|---|---|
@@ -554,20 +557,22 @@ explicit so producers do not re-derive it ad hoc.
 | producer | Game-end/victory presentation path; projected by `UIProjector` when stored in `interaction_flow`. |
 | rule citation | RRG "End of Game" / six-round limit; `Constants.MAX_ROUNDS`. |
 
-## 9. Current Gaps To Resolve In Later M Slices
+## 9. Legacy Notes and Remaining Flow Gaps
 
 - `COMMAND_PHASE / SELECT_DIALS`, `WAIT_FOR_OPPONENT_DIALS`,
   `STATUS_CLEANUP_STEP`, and `GAME_OVER_STEP` are documented here because they
-  are constants/projectable states, but current runtime does not uniformly
-  enter them through `GameCommand.execute()`. M3/M4 must classify the relevant
-  commands as `PHASE` or `GLOBAL` where flow-step gating would be wrong.
+  are constants/projectable states. The runtime command gate now classifies the
+  relevant commands as `PHASE` or `GLOBAL` where flow-step gating would be
+  wrong.
 - `SQUAD_MOVE` and `SQUAD_ATTACK` are legacy-compatible step ids. Current
   Squadron modal state often represents these locally while durable state uses
   `ACTION_CHOICE`, `move_squadron`, and the shared `ATTACK` flow.
 - Attack target declaration and many attack payload patches are still driven by
   `AttackExecutor`/`AttackFlowFSM` plus `publish_attack_flow`, not individual
-  player-action commands for every UI click. M3/M4 should avoid over-gating
-  these internal snapshot commands.
-- Rule hooks are intentionally not encoded here. M5+ adds `RuleRegistry`; M7+
-  migrates representative rules while preserving the loaded-effect rebuild
-  invariant.
+  player-action commands for every UI click. Applicability should keep these
+  internal snapshot commands on the documented surfaces instead of over-gating
+  local presentation events.
+- Rule hooks are intentionally not duplicated in this document. Use
+  `scripts/dump_flow_coverage.gd` to inspect the registered `RuleRegistry`
+  hooks for a specific `(flow_type, step_id)` pair, and keep rule ownership in
+  source-first files under `src/core/effects/rules/`.

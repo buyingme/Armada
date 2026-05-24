@@ -15,9 +15,15 @@ A rule integration is complete only when all surfaces agree:
 - Static rule definition: `RuleRegistry` declares which rule exists and where it attaches.
 - Active state source: the predicate reads authoritative serialized state (`GameState`, `ShipInstance.faceup_damage`, squadron keywords, upgrades, objective state), not stale transient caches.
 - Command surface: every command that can express the illegal action is covered, including marker commands such as `commit_defense`, not only the final mutation command.
+- Command applicability: `CommandApplicability`, `FlowSpec.allowed_commands`,
+   and concrete command `validate()` agree for every phase/step that can produce
+   the command.
 - Flow ownership: every defender, opponent, non-active-player, or off-turn controller choice has an explicit `FlowSpec` row before UI work begins.
 - Interaction payload: if a player can choose from UI options, publish rule-derived eligibility in `interaction_flow.payload` with JSON-safe fields.
 - UI rendering: panels render disabled/available choices from payload metadata; they do not re-implement card or keyword rules.
+- Preview/commit boundary: selection and range previews do not spend command
+   budget or mutate serialized state; only committed command-backed actions and
+   explicit lifecycle markers do.
 - Rebuild/replay: save/load, replay, hot-seat, and network paths rebuild or derive the same active rule state.
 
 ## Procedure
@@ -52,6 +58,9 @@ A rule integration is complete only when all surfaces agree:
 5. Cover every command path.
    - Search for commands and marker commands in the flow before coding.
    - If UI submits a marker and a controller later submits a mutation command, validate both.
+   - If a lifecycle marker can be submitted from multiple phases or flows,
+     update `CommandApplicability`, `FlowSpec.allowed_commands`, and concrete
+     command validation together.
    - Treat direct command validation as a safety net, not the only guard.
    - Rejected command results must stop local scene-side effects.
 
@@ -60,6 +69,8 @@ A rule integration is complete only when all surfaces agree:
    - Use names such as `blocked_*_indices`, `enabled_*`, or `affordances`.
    - UI panels should only render disabled controls, tooltips/labels, and selected state from that metadata.
    - Never infer card-rule state from local button events.
+   - Keep selection/range previews transient. Do not consume command resources
+     or activation slots when the user is only inspecting candidates.
 
 7. Preserve active-state semantics.
    - Static rule definitions live in `RuleRegistry` and are bootstrapped.

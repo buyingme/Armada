@@ -1,8 +1,16 @@
 # Squadron Phase Activation UI — Requirements & Implementation Plan
 
-> **Status:** DRAFT — awaiting approval before implementation.
+> **Status:** HISTORICAL DRAFT — superseded by the implemented Squadron modal,
+> `docs/game_flow.md`, and `docs/refactoring_phase_n_plan.md`.
 > **Phase:** 7b (Squadron Phase UI)
 > **Prerequisite phases:** Phase 7 (effect pipeline, engagement, movement validation), Phase 6 (attack execution pipeline)
+>
+> Phase N24 note: this file preserves the original requirements discussion, not
+> current architecture. Current behaviour uses command-backed activation,
+> `FlowSpec` ownership for off-turn Counter choices, RuleRegistry keyword
+> predicates for Heavy/Escort/Counter/Swarm/Bomber, preview-only Squadron
+> command selection, and `complete_squadron_activation` for no-move completion
+> synchronization.
 
 ---
 

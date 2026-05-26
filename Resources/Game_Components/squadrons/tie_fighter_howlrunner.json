@@ -40,6 +40,20 @@
         "BRACE",
         "SCATTER"
     ],
+    "rules_reference_ids": [
+        "squadron_keyword.swarm",
+        "squadron_ability.tie_fighter_howlrunner"
+    ],
+    "rules_integration": {
+        "status": "PARTIAL",
+        "implemented_rule_ids": [
+            "squadron_keyword.swarm"
+        ],
+        "pending_rule_surfaces": [
+            "attack.roll_attack_dice.squadron_aura"
+        ],
+        "notes": "Generic squadron keyword rules are implemented; named squadron ability gameplay is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

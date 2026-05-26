@@ -44,6 +44,22 @@
         "BRACE",
         "BRACE"
     ],
+    "rules_reference_ids": [
+        "squadron_keyword.bomber",
+        "squadron_keyword.escort",
+        "squadron_ability.x_wing_luke_skywalker"
+    ],
+    "rules_integration": {
+        "status": "PARTIAL",
+        "implemented_rule_ids": [
+            "squadron_keyword.bomber",
+            "squadron_keyword.escort"
+        ],
+        "pending_rule_surfaces": [
+            "attack.resolve_damage.ship_shields"
+        ],
+        "notes": "Generic squadron keyword rules are implemented; named squadron ability gameplay is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

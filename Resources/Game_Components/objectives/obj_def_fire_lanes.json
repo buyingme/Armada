@@ -37,6 +37,17 @@
             "movement_range": "distance_1_2"
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_def_fire_lanes"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "round.end"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "SCORING",

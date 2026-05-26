@@ -25,6 +25,17 @@
             "rule": "first_player_deploys_all_ships_and_squadrons_before_second_player"
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_nav_superior_positions"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.after_performed"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "OBSERVER",

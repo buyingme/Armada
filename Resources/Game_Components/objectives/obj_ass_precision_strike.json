@@ -27,6 +27,18 @@
             "count_per_ship": 1
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_ass_precision_strike"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_attack_effects",
+            "attack.after_performed"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

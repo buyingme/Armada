@@ -41,6 +41,18 @@
         "This effect does not allow spending a defense token type already spent during the attack.",
         "This effect does not allow spending the same defense token more than once during an attack."
     ],
+    "rules_reference_ids": [
+        "upgrade.electronic_countermeasures"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.spend_defense_tokens.accuracy_override",
+            "status.ready_upgrade_card"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

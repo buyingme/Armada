@@ -45,6 +45,17 @@
             "timing": "after_setup_complete"
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_def_fleet_ambush"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "setup.deploy_component"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "VALIDATOR",

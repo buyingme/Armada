@@ -30,6 +30,18 @@
         "Armada 1.5 changed this card's effect. Source cites RRG 1.5.0 p.25."
     ],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.gunnery_team"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_attack_effects.repeat_hull_zone",
+            "attack.declare_target.same_hull_zone_repeat"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

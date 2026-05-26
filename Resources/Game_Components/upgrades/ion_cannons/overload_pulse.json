@@ -27,6 +27,17 @@
     ],
     "errata": [],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.overload_pulse"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_damage.critical_effect"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

@@ -30,6 +30,17 @@
         "Nav Team is not cumulative with General Madine's effect.",
         "A ship that spends a Navigate token through Nav Team to increase yaw may still resolve Admiral Ozzel's speed-change effect."
     ],
+    "rules_reference_ids": [
+        "upgrade.nav_team"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "movement.execute_maneuver.navigate_token"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

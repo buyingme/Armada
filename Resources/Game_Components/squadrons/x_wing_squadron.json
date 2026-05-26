@@ -1,81 +1,94 @@
 {
-  "_comment": "Pre-filled from Rules Reference v1.5.0 and enriched from the provided squadron rules note on 2026-05-25.",
-  "_source": "Resources/Game_Components/squadrons/x_wing_squadron_card.png",
-  "_status": "VERIFIED",
-  "data_key": "x_wing_squadron",
-  "kind": "squadron_card",
-  "wave": 0,
-  "expansion": "core_set",
-  "available_through": [
-    "star_wars_armada_core_set",
-    "rebel_fighter_squadrons_expansion_pack"
-  ],
-  "card_image": "x_wing_squadron_card.png",
-  "token_image": "x_wing_squadron_token.png",
-  "rules_source": "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
-  "squadron_family": "x_wing",
-  "ace_variants": [
-    "luke_skywalker",
-    "biggs_darklighter",
-    "wedge_antilles",
-    "hera_syndulla",
-    "rogue_squadron"
-  ],
-  "squadron_name": "X-wing Squadron",
-  "faction": "REBEL_ALLIANCE",
-  "point_cost": 13,
-  "hull": 5,
-  "speed": 3,
-  "anti_squadron_armament": {
-    "BLUE": 4
-  },
-  "battery_armament": {
-    "RED": 1
-  },
-  "keywords": [
-    {
-      "name": "Bomber"
+    "_comment": "Pre-filled from Rules Reference v1.5.0 and enriched from the provided squadron rules note on 2026-05-25.",
+    "_source": "Resources/Game_Components/squadrons/x_wing_squadron_card.png",
+    "_status": "VERIFIED",
+    "data_key": "x_wing_squadron",
+    "kind": "squadron_card",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "rebel_fighter_squadrons_expansion_pack"
+    ],
+    "card_image": "x_wing_squadron_card.png",
+    "token_image": "x_wing_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
+    "squadron_family": "x_wing",
+    "ace_variants": [
+        "luke_skywalker",
+        "biggs_darklighter",
+        "wedge_antilles",
+        "hera_syndulla",
+        "rogue_squadron"
+    ],
+    "squadron_name": "X-wing Squadron",
+    "faction": "REBEL_ALLIANCE",
+    "point_cost": 13,
+    "hull": 5,
+    "speed": 3,
+    "anti_squadron_armament": {
+        "BLUE": 4
     },
-    {
-      "name": "Escort"
-    }
-  ],
-  "keyword_reminder_text": {
-    "Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
-    "Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack."
-  },
-  "ability_text": "",
-  "is_unique": false,
-  "unique_group": "",
-  "defense_tokens": [],
-  "rule_surfaces": [
-    {
-      "kind": "MODIFIER",
-      "surface": "attack.resolve_damage.bomber_keyword",
-      "timing": "while_attacking_ship",
-      "summary": "Critical icons add 1 damage to the damage total and can resolve a critical effect while attacking a ship."
+    "battery_armament": {
+        "RED": 1
     },
-    {
-      "kind": "BLOCKER",
-      "surface": "attack.declare_target.escort_keyword",
-      "timing": "while_engaged_squadron_declares_target",
-      "summary": "Squadrons engaged with this Escort squadron cannot attack squadrons that lack Escort unless performing a Counter attack."
-    }
-  ],
-  "runtime_state_requirements": [
-    "bomber_keyword_damage_modifier",
-    "escort_targeting_restriction"
-  ],
-  "search_tags": [
-    "rebel",
-    "wave_0",
-    "core_set",
-    "x_wing",
-    "bomber",
-    "escort"
-  ],
-  "source_refs": [
-    "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
-    "RRG 1.5.0 Squadron Keywords"
-  ]
+    "keywords": [
+        {
+            "name": "Bomber"
+        },
+        {
+            "name": "Escort"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+        "Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack."
+    },
+    "ability_text": "",
+    "is_unique": false,
+    "unique_group": "",
+    "defense_tokens": [],
+    "rules_reference_ids": [
+        "squadron_keyword.bomber",
+        "squadron_keyword.escort"
+    ],
+    "rules_integration": {
+        "status": "INTEGRATED",
+        "implemented_rule_ids": [
+            "squadron_keyword.bomber",
+            "squadron_keyword.escort"
+        ],
+        "pending_rule_surfaces": [],
+        "notes": "Generic squadron keyword rules are implemented through RuleRegistry."
+    },
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.resolve_damage.bomber_keyword",
+            "timing": "while_attacking_ship",
+            "summary": "Critical icons add 1 damage to the damage total and can resolve a critical effect while attacking a ship."
+        },
+        {
+            "kind": "BLOCKER",
+            "surface": "attack.declare_target.escort_keyword",
+            "timing": "while_engaged_squadron_declares_target",
+            "summary": "Squadrons engaged with this Escort squadron cannot attack squadrons that lack Escort unless performing a Counter attack."
+        }
+    ],
+    "runtime_state_requirements": [
+        "bomber_keyword_damage_modifier",
+        "escort_targeting_restriction"
+    ],
+    "search_tags": [
+        "rebel",
+        "wave_0",
+        "core_set",
+        "x_wing",
+        "bomber",
+        "escort"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
 }

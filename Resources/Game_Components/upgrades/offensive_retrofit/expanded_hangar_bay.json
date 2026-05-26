@@ -26,6 +26,17 @@
     ],
     "errata": [],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.expanded_hangar_bay"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.squadron.resolve"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

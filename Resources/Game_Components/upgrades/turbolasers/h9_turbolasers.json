@@ -29,6 +29,17 @@
         "Armada 1.5 changed this card and added the Modification trait."
     ],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.h9_turbolasers"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_attack_effects.modify_dice"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

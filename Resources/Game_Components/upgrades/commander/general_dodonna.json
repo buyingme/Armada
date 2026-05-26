@@ -29,6 +29,17 @@
     "clarifications": [
         "During a Corellian Conflict All-Out Offensive, this effect can only resolve when a ship belonging to the opponent chosen in Assign Targets is dealt a faceup damage card."
     ],
+    "rules_reference_ids": [
+        "upgrade.general_dodonna"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "damage.before_faceup_card_dealt"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

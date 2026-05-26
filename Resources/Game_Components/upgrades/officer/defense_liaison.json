@@ -27,6 +27,17 @@
     ],
     "errata": [],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.defense_liaison"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.before_reveal.change_dial"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

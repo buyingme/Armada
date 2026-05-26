@@ -37,6 +37,18 @@
             "count_per_target": 1
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_ass_most_wanted"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.dice_pool",
+            "game.end_scoring"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

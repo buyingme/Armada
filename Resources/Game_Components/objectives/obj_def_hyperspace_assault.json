@@ -45,6 +45,19 @@
             ]
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_def_hyperspace_assault"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "round.start_choice",
+            "setup.deploy_set_aside_units",
+            "game.end_scoring"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

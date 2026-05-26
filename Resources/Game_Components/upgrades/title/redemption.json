@@ -34,6 +34,17 @@
     "clarifications": [
         "The rules note lists 8 points, but the provided card image shows 5 points; this JSON uses the card image value."
     ],
+    "rules_reference_ids": [
+        "upgrade.redemption"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.repair.points.friendly_ship_aura"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

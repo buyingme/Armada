@@ -33,6 +33,17 @@
     "clarifications": [
         "If a ship spends a command token to resolve a command, it cannot spend the matching token gained by Wulff Yularen to resolve that command or its effect again this round."
     ],
+    "rules_reference_ids": [
+        "upgrade.wulff_yularen"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.after_token_spent"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "OBSERVER",

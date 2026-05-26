@@ -42,6 +42,18 @@
             ]
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_nav_dangerous_territory"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "movement.ship_overlap_obstacle",
+            "movement.obstacle_effect"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "OBSERVER",

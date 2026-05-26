@@ -35,6 +35,17 @@
     "clarifications": [
         "When this effect is chosen, the damage total drops to zero, but the defender cannot undo defense token spending from Attack Step 4."
     ],
+    "rules_reference_ids": [
+        "upgrade.dodonnas_pride"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_damage.critical_effect"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

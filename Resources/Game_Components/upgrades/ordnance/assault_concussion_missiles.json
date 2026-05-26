@@ -34,6 +34,17 @@
         "Armada 1.5 changed this card's effect and point cost to 5."
     ],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.assault_concussion_missiles"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_damage.critical_effect"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

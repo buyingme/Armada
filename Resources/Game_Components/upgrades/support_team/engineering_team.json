@@ -32,6 +32,17 @@
         "When spending a Repair token, halve the engineering value first and add the additional point second.",
         "If a Repair dial and token are spent together, they are one command and this adds 1 total point."
     ],
+    "rules_reference_ids": [
+        "upgrade.engineering_team"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.repair.points"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

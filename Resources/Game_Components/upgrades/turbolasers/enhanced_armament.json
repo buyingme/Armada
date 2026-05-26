@@ -29,6 +29,17 @@
     "clarifications": [
         "Does not increase the battery armament of auxiliary side arcs on huge ships."
     ],
+    "rules_reference_ids": [
+        "upgrade.enhanced_armament"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.roll_attack_dice.battery_armament"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "MODIFIER",

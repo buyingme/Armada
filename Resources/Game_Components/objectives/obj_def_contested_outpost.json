@@ -37,6 +37,19 @@
             ]
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_def_contested_outpost"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.obstruction",
+            "movement.obstacle_effect",
+            "round.end"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "BLOCKER",

@@ -32,6 +32,17 @@
     ],
     "errata": [],
     "clarifications": [],
+    "rules_reference_ids": [
+        "upgrade.dominator"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.resolve_attack_effects.spend_shields_for_dice"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

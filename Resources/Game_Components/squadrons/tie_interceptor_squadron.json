@@ -46,6 +46,19 @@
     "is_unique": false,
     "unique_group": "",
     "defense_tokens": [],
+    "rules_reference_ids": [
+        "squadron_keyword.counter",
+        "squadron_keyword.swarm"
+    ],
+    "rules_integration": {
+        "status": "INTEGRATED",
+        "implemented_rule_ids": [
+            "squadron_keyword.counter",
+            "squadron_keyword.swarm"
+        ],
+        "pending_rule_surfaces": [],
+        "notes": "Generic squadron keyword rules are implemented through RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

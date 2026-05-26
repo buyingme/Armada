@@ -44,6 +44,18 @@
             "count_per_player": 1
         }
     ],
+    "rules_reference_ids": [
+        "objective.obj_nav_intel_sweep"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "command.reveal_dial",
+            "game.end_scoring"
+        ],
+        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+    },
     "rule_surfaces": [
         {
             "kind": "ENABLER",

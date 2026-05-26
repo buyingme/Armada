@@ -707,6 +707,7 @@ test gate is passed.
 | Acceptance | Tests can list and load ships, squadrons, upgrades, objectives, obstacles, and rules-reference records by key; card/component loaders expose `rules_reference_ids` and `rules_integration`; missing/invalid JSON produces clear failures without crashing. |
 | Tests | Model parsing tests, loader enumeration tests, invalid/missing asset tests, rules-reference resolution tests. |
 | Verification | `godot --headless --import`, targeted GUT, full GUT if `AssetLoader` behavior changes broadly, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-26: `UpgradeData.from_dict()` added, objective/obstacle/rules-reference data resources added, `AssetLoader` can enumerate and load catalog records by key without per-card manifest entries, and focused parser/loader GUT coverage added. |
 
 ### FB2.5 - Setup Contract Extraction And Canonical Hash
 
@@ -976,27 +977,19 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0 and FB1 are now the requirements and component-contract baseline. Continue
-with FB2 before any gameplay setup wiring. FB2.5 is the required risk reduction
-step before FB11-FB13 or any fleet-builder game-start integration.
+FB0-FB2 are now the requirements, component-contract, and typed-loading
+baseline. Continue with FB2.5 before any gameplay setup wiring. FB2.5 is the
+required risk reduction step before FB11-FB13 or any fleet-builder game-start
+integration.
 
-1. Rewrite `docs/requirements/fleet_builder.txt` into the MVP/deferred structure.
-2. Update `Resources/Game_Components/README.md` for `upgrades/`, `objectives/`,
-   `obstacles/`, and `rules/`.
-3. Define the network-ready roster/setup-package contract, including embedded
-   rosters, player indices, canonical package hashing, and the rule that backend
-   sync is separate from network game setup.
-4. Extend `card_data_schema.json` with the minimum fields needed by the Core Set
-  data already being prepared, including the objective JSON fields in Section 4.5
-  and the rules-reference fields in Section 4.4.
-5. Add initial rules-reference JSON for implemented squadron keywords, then make
-  squadron JSON reference those ids rather than treating reminder text as the
-  long-term display source.
-6. Add `ObjectiveData.from_dict()` and loader tests for the 12 objective JSON
-  files before wiring fleet-builder objective selectors.
-7. Convert `obstacles/obstacles_specs.txt` into draft obstacle JSON records or
-   keep it as a source note while adding the JSON schema.
-8. Complete FB2.5 before setup packages reach `GameManager`, `GameBoard`, lobby
+1. Add a canonical JSON/hash helper for setup-package payloads.
+2. Add a setup-package shell that can embed full rosters without depending on
+  local fleet-library files.
+3. Extract testable scenario/setup preparation helpers while preserving the
+  current learning-scenario start path.
+4. Convert `obstacles/obstacles_specs.txt` into draft obstacle JSON records
+  before deployment validators depend on obstacle metadata.
+5. Complete FB2.5 before setup packages reach `GameManager`, `GameBoard`, lobby
   networking, replay traces, or save/load state.
 
 This gives later code slices a stable contract, keeps the architecture clean,

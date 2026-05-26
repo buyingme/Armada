@@ -137,6 +137,75 @@ func test_load_json_ship_data() -> void:
 		"Should load cr90_corvette_a.json")
 
 
+# --- Catalog Key Discovery ---
+
+func test_list_ship_keys_includes_core_ship_expected() -> void:
+	var keys: Array[String] = AssetLoader.list_ship_keys()
+	assert_true(keys.has("cr90_corvette_a"),
+		"Ship key discovery should include Core Set CR90 A")
+
+
+func test_list_upgrade_keys_recurses_nested_folders_expected() -> void:
+	var keys: Array[String] = AssetLoader.list_upgrade_keys()
+	assert_true(keys.has("general_dodonna"),
+		"Upgrade key discovery should recurse into commander/")
+	assert_true(keys.has("expanded_hangar_bay"),
+		"Upgrade key discovery should recurse into offensive_retrofit/")
+
+
+func test_list_objective_keys_includes_core_objective_expected() -> void:
+	var keys: Array[String] = AssetLoader.list_objective_keys()
+	assert_true(keys.has("obj_ass_most_wanted"),
+		"Objective key discovery should include Most Wanted")
+
+
+func test_list_rule_reference_keys_uses_data_keys_expected() -> void:
+	var keys: Array[String] = AssetLoader.list_rule_reference_keys()
+	assert_true(keys.has("squadron_keyword.bomber"),
+		"Rules-reference discovery should expose dotted RuleRegistry ids")
+
+
+func test_list_obstacle_keys_returns_empty_without_json_expected() -> void:
+	var keys: Array[String] = AssetLoader.list_obstacle_keys()
+	assert_eq(keys.size(), 0,
+		"Obstacle key discovery should tolerate source-only obstacle folder")
+
+
+# --- Typed Catalog Loading ---
+
+func test_load_upgrade_data_nested_key_expected() -> void:
+	var upgrade: UpgradeData = AssetLoader.load_upgrade_data("general_dodonna")
+	assert_not_null(upgrade, "Should load General Dodonna from nested upgrade folders")
+	assert_eq(upgrade.upgrade_name, "General Dodonna", "Should parse loaded upgrade")
+
+
+func test_load_objective_data_key_expected() -> void:
+	var objective: ObjectiveData = AssetLoader.load_objective_data("obj_ass_most_wanted")
+	assert_not_null(objective, "Should load Most Wanted objective")
+	assert_eq(objective.category, "ASSAULT", "Should parse objective category")
+
+
+func test_load_rule_reference_data_dotted_key_expected() -> void:
+	var rule_reference: RuleReferenceData = AssetLoader.load_rule_reference_data("squadron_keyword.bomber")
+	assert_not_null(rule_reference, "Should load Bomber rules reference by dotted id")
+	assert_eq(rule_reference.display_name, "Bomber", "Should parse rules reference")
+
+
+func test_load_rule_reference_data_file_stem_fallback_expected() -> void:
+	var rule_reference: RuleReferenceData = AssetLoader.load_rule_reference_data("squadron_keyword_bomber")
+	assert_not_null(rule_reference, "Should load Bomber rules reference by file stem")
+	assert_eq(rule_reference.data_key, "squadron_keyword.bomber", "Should preserve catalog data key")
+
+
+func test_load_missing_catalog_records_return_null_expected() -> void:
+	assert_null(AssetLoader.load_upgrade_data("missing_upgrade"),
+		"Missing upgrade should return null")
+	assert_null(AssetLoader.load_objective_data("missing_objective"),
+		"Missing objective should return null")
+	assert_null(AssetLoader.load_rule_reference_data("missing_rule"),
+		"Missing rules reference should return null")
+
+
 # --- load_texture ---
 
 func test_load_texture_existing_png() -> void:

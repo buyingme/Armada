@@ -12,10 +12,13 @@ extends RefCounted
 
 ## Base path for all game component assets.
 const BASE_PATH: String = "res://Resources/Game_Components/"
-
-## Logger instance.
-var _log: GameLogger = GameLogger.new("AssetLoader")
-
+const SHIP_FOLDER: String = "ships/"
+const SQUADRON_FOLDER: String = "squadrons/"
+const UPGRADE_FOLDER: String = "upgrades/"
+const OBJECTIVE_FOLDER: String = "objectives/"
+const OBSTACLE_FOLDER: String = "obstacles/"
+const RULE_FOLDER: String = "rules/"
+const JSON_EXTENSION: String = ".json"
 
 ## Result of a validation run.
 class ValidationResult:
@@ -165,7 +168,7 @@ const ASSET_MANIFEST: Array[Dictionary] = [
 ## Validates all asset categories and returns a dictionary of category → result.
 static func validate_all() -> Dictionary:
 	var results: Dictionary = {}
-	var log := GameLogger.new("AssetLoader")
+	var logger := GameLogger.new("AssetLoader")
 
 	for manifest: Dictionary in ASSET_MANIFEST:
 		var category: String = manifest["category"]
@@ -184,13 +187,13 @@ static func validate_all() -> Dictionary:
 		results[category] = result
 
 		if result.is_valid:
-			log.info("%s: all %d assets found" % [category, result.total_expected])
+			logger.info("%s: all %d assets found" % [category, result.total_expected])
 		elif optional:
-			log.warn("%s: %d/%d missing (optional) — %s" % [
+			logger.warn("%s: %d/%d missing (optional) — %s" % [
 				category, result.missing.size(), result.total_expected,
 				", ".join(result.missing)])
 		else:
-			log.error("%s: %d/%d MISSING — %s" % [
+			logger.error("%s: %d/%d MISSING — %s" % [
 				category, result.missing.size(), result.total_expected,
 				", ".join(result.missing)])
 
@@ -235,7 +238,7 @@ static func load_texture(subfolder: String, filename: String) -> Texture2D:
 ## [param key] is the snake_case ship identifier (e.g. "cr90_corvette_a").
 ## Returns null if the file cannot be found or parsed.
 static func load_ship_data(key: String) -> ShipData:
-	var data: Dictionary = load_json("ships/", key + ".json")
+	var data: Dictionary = load_json(SHIP_FOLDER, key + JSON_EXTENSION)
 	if data.is_empty():
 		return null
 	return ShipData.from_dict(data)
@@ -245,15 +248,111 @@ static func load_ship_data(key: String) -> ShipData:
 ## [param key] is the snake_case squadron identifier (e.g. "x_wing_squadron").
 ## Returns null if the file cannot be found or parsed.
 static func load_squadron_data(key: String) -> SquadronData:
-	var data: Dictionary = load_json("squadrons/", key + ".json")
+	var data: Dictionary = load_json(SQUADRON_FOLDER, key + JSON_EXTENSION)
 	if data.is_empty():
 		return null
 	return SquadronData.from_dict(data)
 
 
+## Returns all ship card data keys discovered in the catalog.
+static func list_ship_keys() -> Array[String]:
+	return _list_catalog_keys(SHIP_FOLDER, false)
+
+
+## Returns all squadron card data keys discovered in the catalog.
+static func list_squadron_keys() -> Array[String]:
+	return _list_catalog_keys(SQUADRON_FOLDER, false)
+
+
+## Returns all upgrade card data keys discovered in nested upgrade folders.
+static func list_upgrade_keys() -> Array[String]:
+	return _list_catalog_keys(UPGRADE_FOLDER, true)
+
+
+## Returns all objective card data keys discovered in the catalog.
+static func list_objective_keys() -> Array[String]:
+	return _list_catalog_keys(OBJECTIVE_FOLDER, false)
+
+
+## Returns all obstacle component data keys discovered in the catalog.
+static func list_obstacle_keys() -> Array[String]:
+	return _list_catalog_keys(OBSTACLE_FOLDER, false)
+
+
+## Returns all rules-reference data keys discovered in the catalog.
+static func list_rule_reference_keys() -> Array[String]:
+	return _list_catalog_keys(RULE_FOLDER, false)
+
+
+## Loads and parses an upgrade JSON data file into an UpgradeData resource.
+static func load_upgrade_data(key: String) -> UpgradeData:
+	var data: Dictionary = _load_catalog_record(UPGRADE_FOLDER, key, true)
+	if data.is_empty():
+		return null
+	return UpgradeData.from_dict(data)
+
+
+## Loads and parses an objective JSON data file into an ObjectiveData resource.
+static func load_objective_data(key: String) -> ObjectiveData:
+	var data: Dictionary = _load_catalog_record(OBJECTIVE_FOLDER, key, false)
+	if data.is_empty():
+		return null
+	return ObjectiveData.from_dict(data)
+
+
+## Loads and parses an obstacle JSON data file into an ObstacleData resource.
+static func load_obstacle_data(key: String) -> ObstacleData:
+	var data: Dictionary = _load_catalog_record(OBSTACLE_FOLDER, key, false)
+	if data.is_empty():
+		return null
+	return ObstacleData.from_dict(data)
+
+
+## Loads and parses a rules-reference JSON file into a RuleReferenceData resource.
+static func load_rule_reference_data(key: String) -> RuleReferenceData:
+	var data: Dictionary = _load_catalog_record(RULE_FOLDER, key, false)
+	if data.is_empty():
+		return null
+	return RuleReferenceData.from_dict(data)
+
+
 ## Loads a JSON asset and returns the parsed data as a Dictionary (or empty).
 static func load_json(subfolder: String, filename: String) -> Dictionary:
-	var path: String = BASE_PATH + subfolder + filename
+	return _load_json_at_path(BASE_PATH + subfolder + filename)
+
+
+static func _load_catalog_record(subfolder: String, key: String, recursive: bool) -> Dictionary:
+	for relative_path: String in _list_json_paths(subfolder, recursive):
+		var data: Dictionary = _load_json_relative(relative_path)
+		if data.is_empty():
+			continue
+		if _catalog_record_matches(data, relative_path, key):
+			return data
+	return {}
+
+
+static func _list_catalog_keys(subfolder: String, recursive: bool) -> Array[String]:
+	var keys: Array[String] = []
+	for relative_path: String in _list_json_paths(subfolder, recursive):
+		var data: Dictionary = _load_json_relative(relative_path)
+		if data.is_empty():
+			continue
+		keys.append(str(data.get("data_key", _file_stem(relative_path))))
+	keys.sort()
+	return keys
+
+
+static func _catalog_record_matches(data: Dictionary, relative_path: String, key: String) -> bool:
+	if str(data.get("data_key", "")) == key:
+		return true
+	return _file_stem(relative_path) == key
+
+
+static func _load_json_relative(relative_path: String) -> Dictionary:
+	return _load_json_at_path(BASE_PATH + relative_path)
+
+
+static func _load_json_at_path(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
 
@@ -272,3 +371,43 @@ static func load_json(subfolder: String, filename: String) -> Dictionary:
 	if json.data is Dictionary:
 		return json.data as Dictionary
 	return {}
+
+
+static func _list_json_paths(subfolder: String, recursive: bool) -> Array[String]:
+	var paths: Array[String] = []
+	_collect_json_paths(subfolder, recursive, paths)
+	paths.sort()
+	return paths
+
+
+static func _collect_json_paths(subfolder: String, recursive: bool, paths: Array[String]) -> void:
+	var dir: DirAccess = DirAccess.open(BASE_PATH + subfolder)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry_name: String = dir.get_next()
+	while entry_name != "":
+		_collect_json_entry(dir, subfolder, entry_name, recursive, paths)
+		entry_name = dir.get_next()
+	dir.list_dir_end()
+
+
+static func _collect_json_entry(
+	dir: DirAccess,
+	subfolder: String,
+	entry_name: String,
+	recursive: bool,
+	paths: Array[String]
+) -> void:
+	if entry_name.begins_with("."):
+		return
+	var relative_path: String = subfolder + entry_name
+	if dir.current_is_dir():
+		if recursive:
+			_collect_json_paths(relative_path + "/", recursive, paths)
+	elif entry_name.ends_with(JSON_EXTENSION):
+		paths.append(relative_path)
+
+
+static func _file_stem(relative_path: String) -> String:
+	return relative_path.get_file().get_basename()

@@ -54,6 +54,48 @@ func test_default_size_restriction_is_empty() -> void:
 	assert_eq(upgrade.size_restriction.size(), 0, "Default size restriction should be empty")
 
 
+# --- from_dict ---
+
+func test_from_dict_parses_upgrade_identity_expected() -> void:
+	var data: Dictionary = _load_general_dodonna_record()
+	var upgrade: UpgradeData = UpgradeData.from_dict(data)
+	assert_eq(upgrade.data_key, "general_dodonna", "Should parse stable upgrade key")
+	assert_eq(upgrade.upgrade_name, "General Dodonna", "Should parse upgrade name")
+	assert_eq(upgrade.upgrade_type, "COMMANDER", "Should parse upgrade slot")
+	assert_eq(upgrade.point_cost, 20, "Should parse upgrade cost")
+
+
+func test_from_dict_parses_catalog_metadata_expected() -> void:
+	var data: Dictionary = _load_general_dodonna_record()
+	var upgrade: UpgradeData = UpgradeData.from_dict(data)
+	assert_eq(upgrade.wave, 0, "Core Set upgrades should parse as wave 0")
+	assert_eq(upgrade.expansion, "core_set", "Should parse source expansion")
+	assert_true(upgrade.available_through.has("star_wars_armada_core_set"),
+		"Should parse product availability")
+	assert_eq(upgrade.card_image, "w0_general_dodonna_card.png", "Should parse card image")
+
+
+func test_from_dict_parses_restrictions_expected() -> void:
+	var data: Dictionary = _load_general_dodonna_record()
+	var upgrade: UpgradeData = UpgradeData.from_dict(data)
+	assert_true(upgrade.is_unique, "General Dodonna should be unique")
+	assert_eq(upgrade.unique_group, "general_dodonna", "Should parse unique group")
+	assert_eq(upgrade.faction_restriction[0], Constants.Faction.REBEL_ALLIANCE,
+		"Should parse Rebel faction restriction")
+	assert_eq(upgrade.size_restriction.size(), 0, "Should preserve empty size restrictions")
+
+
+func test_from_dict_preserves_rules_metadata_expected() -> void:
+	var data: Dictionary = _load_general_dodonna_record()
+	var upgrade: UpgradeData = UpgradeData.from_dict(data)
+	assert_eq(upgrade.rules_reference_ids[0], "upgrade.general_dodonna",
+		"Should parse rules-reference ids")
+	assert_eq(upgrade.rules_integration.get("status", ""), "NOT_INTEGRATED",
+		"Should parse implementation status")
+	assert_eq(upgrade.rule_surfaces[0].get("surface", ""), "damage.before_faceup_card_dealt",
+		"Should preserve future RuleRegistry surface metadata")
+
+
 # --- TestFixtures Integration ---
 
 func test_fixture_upgrade_has_valid_name() -> void:
@@ -115,3 +157,7 @@ func test_set_faction_restriction() -> void:
 	# Assert
 	assert_eq(upgrade.faction_restriction.size(), 1, "Should have one faction restriction")
 	assert_eq(upgrade.faction_restriction[0], Constants.Faction.REBEL_ALLIANCE, "Should be restricted to Rebels")
+
+
+func _load_general_dodonna_record() -> Dictionary:
+	return AssetLoader.load_json("upgrades/commander/", "general_dodonna.json")

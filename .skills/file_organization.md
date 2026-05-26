@@ -77,6 +77,7 @@ src/core/
 │   └── keywords/    → Squadron keyword effects (Bomber, Escort, …)
 ├── geometry/        → Ship bases, range finding, line of sight, layout math
 ├── movement/        → Maneuver tool, overlap resolution, squadron/token movement
+├── setup/           → Setup packages, scenario preparation, match handoff
 └── state/           → GameState, activation context, dial/token management, RNG, scoring
 ```
 

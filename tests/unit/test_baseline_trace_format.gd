@@ -181,8 +181,8 @@ func test_canonical_json_sorts_dictionary_keys_recursively() -> void:
 		"a": {"c": 3, "d": 4},
 		"b": 2,
 	}
-	var left_json: String = BaselineTraceScript._canonical_json(left)
-	var right_json: String = BaselineTraceScript._canonical_json(right)
+	var left_json: String = CanonicalJson.stringify(left)
+	var right_json: String = CanonicalJson.stringify(right)
 	assert_eq(left_json, right_json,
 			"Canonical JSON should ignore dictionary insertion order")
 
@@ -190,7 +190,7 @@ func test_canonical_json_sorts_dictionary_keys_recursively() -> void:
 func test_canonical_json_preserves_array_order() -> void:
 	var first: Dictionary = {"items": [1, 2, 3]}
 	var second: Dictionary = {"items": [3, 2, 1]}
-	var first_json: String = BaselineTraceScript._canonical_json(first)
-	var second_json: String = BaselineTraceScript._canonical_json(second)
+	var first_json: String = CanonicalJson.stringify(first)
+	var second_json: String = CanonicalJson.stringify(second)
 	assert_ne(first_json, second_json,
 			"Canonical JSON should preserve array ordering")

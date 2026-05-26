@@ -197,7 +197,7 @@ func _result_payload(replay: GameReplay) -> Dictionary:
 		"executed_followups": _executed_followups(replay.commands),
 		"replay": replay.serialize(),
 	}
-	payload["canonical_json"] = BaselineTraceScript._canonical_json(payload)
+	payload["canonical_json"] = CanonicalJson.stringify(payload)
 	return payload
 
 

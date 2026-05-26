@@ -173,7 +173,7 @@ func write_final_state_hash(state: GameState) -> String:
 		return ""
 	if _trace_file_path.is_empty():
 		return ""
-	var canonical: String = _canonical_json(state.serialize())
+	var canonical: String = CanonicalJson.stringify(state.serialize())
 	var hash_hex: String = canonical.sha256_text()
 	var hash_path: String = _trace_file_path + ".state_hash"
 	var f: FileAccess = FileAccess.open(hash_path, FileAccess.WRITE)
@@ -186,26 +186,6 @@ func write_final_state_hash(state: GameState) -> String:
 	_log.info("BaselineTrace: wrote state hash %s -> %s" % [
 			hash_hex.substr(0, 12), hash_path])
 	return hash_hex
-
-
-## Serializes [param value] to JSON with dictionary keys sorted at every level.
-static func _canonical_json(value: Variant) -> String:
-	if value is Dictionary:
-		var keys: Array = (value as Dictionary).keys()
-		keys.sort()
-		var parts: PackedStringArray = PackedStringArray()
-		for key: Variant in keys:
-			parts.append("%s:%s" % [
-					JSON.stringify(key),
-					_canonical_json((value as Dictionary)[key]),
-			])
-		return "{" + ",".join(parts) + "}"
-	if value is Array:
-		var arr_parts: PackedStringArray = PackedStringArray()
-		for item: Variant in (value as Array):
-			arr_parts.append(_canonical_json(item))
-		return "[" + ",".join(arr_parts) + "]"
-	return JSON.stringify(value)
 
 
 ## Returns the deployment mode label used in the output filename:

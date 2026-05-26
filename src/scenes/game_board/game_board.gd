@@ -392,26 +392,6 @@ func _spawn_and_bind_tokens(setup: LearningScenarioSetup,
 			token.bind_instance(squad_instances[i])
 
 
-## Copies normalised position + rotation from each scenario placement
-## into the matching [ShipInstance] / [SquadronInstance].  Must run
-## before any [GameCommand] executes so auto-checkpoints record the
-## correct deployment positions instead of (0, 0).
-func _seed_instance_positions(setup: LearningScenarioSetup,
-		ship_instances: Array[ShipInstance],
-		squad_instances: Array[SquadronInstance]) -> void:
-	var ship_placements: Array[TokenPlacement] = setup.get_ship_placements()
-	var squad_placements: Array[TokenPlacement] = setup.get_squadron_placements()
-	for i: int in range(min(ship_placements.size(), ship_instances.size())):
-		ship_instances[i].pos_x = ship_placements[i].pos_x
-		ship_instances[i].pos_y = ship_placements[i].pos_y
-		ship_instances[i].rotation_deg = rad_to_deg(
-				ship_placements[i].rotation_rad)
-	for i: int in range(min(squad_placements.size(), squad_instances.size())):
-		squad_instances[i].pos_x = squad_placements[i].pos_x
-		squad_instances[i].pos_y = squad_placements[i].pos_y
-		squad_instances[i].rotation_deg = rad_to_deg(
-				squad_placements[i].rotation_rad)
-
 ## Instantiates and configures a ShipToken for the given placement.
 ## Returns the created token.
 func _spawn_ship_token(
@@ -581,24 +561,6 @@ func _build_other_squad_circles(exclude: Node) -> Array:
 # ---------------------------------------------------------------------------
 # Game state registration
 # ---------------------------------------------------------------------------
-
-## Registers ship and squadron instances into the active [GameState] so
-## that [GameManager]'s auto-submit logic sees the same objects the UI
-## operates on. Also sets faction and initiative per the Learning Scenario.
-## Rules Reference: SU-020 — Rebel has initiative.
-func _register_instances_in_game_state(
-		ships: Array[ShipInstance],
-		squads: Array[SquadronInstance]) -> void:
-	var gs: GameState = GameManager.current_game_state
-	if gs == null:
-		return
-	var player_states: Dictionary = _prepare_learning_scenario_player_states(gs)
-	var rebel_ps: PlayerState = player_states["rebel"] as PlayerState
-	var imperial_ps: PlayerState = player_states["imperial"] as PlayerState
-	for ship: ShipInstance in ships:
-		_append_ship_to_owner_state(ship, rebel_ps, imperial_ps)
-	for squad: SquadronInstance in squads:
-		_append_squadron_to_owner_state(squad, rebel_ps, imperial_ps)
 
 # ---------------------------------------------------------------------------
 # Turn-management UI creation
@@ -1280,14 +1242,8 @@ func _prepare_learning_scenario_instances(
 		setup: LearningScenarioSetup) -> Dictionary:
 	_load_map_texture(setup.get_map_image_filename())
 	_init_scenario_systems(setup)
-	var ship_instances: Array[ShipInstance] = setup.create_ship_instances()
-	var squad_instances: Array[SquadronInstance] = setup.create_squadron_instances()
-	_seed_instance_positions(setup, ship_instances, squad_instances)
-	_register_instances_in_game_state(ship_instances, squad_instances)
-	return {
-		"ships": ship_instances,
-		"squadrons": squad_instances,
-	}
+	return LearningScenarioPreparer.prepare_game_state(
+			setup, GameManager.current_game_state)
 
 
 func _finalize_learning_scenario_spawn_ui() -> void:
@@ -1316,40 +1272,6 @@ func _spawn_loaded_tokens_for_player(ps: PlayerState) -> void:
 		var sq_placement: TokenPlacement = _placement_from_squadron(squad)
 		var sq_token: SquadronToken = _spawn_squadron_token(sq_placement)
 		sq_token.bind_instance(squad)
-
-
-func _prepare_learning_scenario_player_states(gs: GameState) -> Dictionary:
-	gs.initiative_player = 0 # Rebel has initiative (SU-020).
-	var rebel_ps: PlayerState = gs.get_player_state(0)
-	var imperial_ps: PlayerState = gs.get_player_state(1)
-	rebel_ps.faction = Constants.Faction.REBEL_ALLIANCE
-	imperial_ps.faction = Constants.Faction.GALACTIC_EMPIRE
-	return {
-		"rebel": rebel_ps,
-		"imperial": imperial_ps,
-	}
-
-
-func _append_ship_to_owner_state(ship: ShipInstance,
-		rebel_ps: PlayerState,
-		imperial_ps: PlayerState) -> void:
-	if ship.ship_data == null:
-		return
-	if ship.ship_data.faction == Constants.Faction.GALACTIC_EMPIRE:
-		imperial_ps.ships.append(ship)
-	else:
-		rebel_ps.ships.append(ship)
-
-
-func _append_squadron_to_owner_state(squad: SquadronInstance,
-		rebel_ps: PlayerState,
-		imperial_ps: PlayerState) -> void:
-	if squad.squadron_data == null:
-		return
-	if squad.squadron_data.faction == Constants.Faction.GALACTIC_EMPIRE:
-		imperial_ps.squadrons.append(squad)
-	else:
-		rebel_ps.squadrons.append(squad)
 
 
 func _apply_turn_transition_intent(

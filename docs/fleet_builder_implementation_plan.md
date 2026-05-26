@@ -719,6 +719,7 @@ test gate is passed.
 | Acceptance | Learning scenario bootstrap still behaves the same; setup preparation can be tested without a scene tree; equivalent setup payloads hash identically across repeated runs; the setup package shell has no dependency on local fleet-library files; existing loaded-state spawning remains intact. |
 | Tests | Canonical hash stability, setup-package shell round trip, scenario preparation parity, missing data rejection, loaded-state spawn regression if touched. |
 | Verification | `godot --headless --import` if new scripts are added, targeted GUT, full GUT and `bash scripts/lint_phase_k.sh` if board or game-manager code changes, `git diff --check`. |
+| Status | Complete as of 2026-05-26: `CanonicalJson` added and shared by baseline traces, `FleetSetupPackage` added with embedded-roster hashing and basic validation, Learning Scenario preparation extracted from `GameBoard` into `LearningScenarioPreparer`, and focused GUT coverage added. |
 
 ### FB3 - Core Set Data Ingestion
 
@@ -977,20 +978,20 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB2 are now the requirements, component-contract, and typed-loading
-baseline. Continue with FB2.5 before any gameplay setup wiring. FB2.5 is the
-required risk reduction step before FB11-FB13 or any fleet-builder game-start
-integration.
+FB0-FB2.5 are now the requirements, component-contract, typed-loading, and
+setup-hash baseline. Continue with the remaining FB3 catalog gap before roster
+model work: convert `obstacles/obstacles_specs.txt` into draft obstacle JSON
+records and add catalog completeness tests that cover those obstacle records.
 
-1. Add a canonical JSON/hash helper for setup-package payloads.
-2. Add a setup-package shell that can embed full rosters without depending on
-  local fleet-library files.
-3. Extract testable scenario/setup preparation helpers while preserving the
-  current learning-scenario start path.
-4. Convert `obstacles/obstacles_specs.txt` into draft obstacle JSON records
-  before deployment validators depend on obstacle metadata.
-5. Complete FB2.5 before setup packages reach `GameManager`, `GameBoard`, lobby
-  networking, replay traces, or save/load state.
+1. Add draft obstacle JSON records with wave, expansion, token image,
+   setup constraints, shape metadata placeholders, source refs, and
+   `rules_integration.status = "NOT_INTEGRATED"`.
+2. Add catalog completeness tests for Core Set obstacles alongside the existing
+   objective, upgrade, squadron, and rules-reference checks.
+3. Confirm all Core Set card/component JSON remains loadable through
+   `AssetLoader` typed catalog APIs.
+4. Keep gameplay setup wiring out of scope until FB4-FB6 roster/validation
+   contracts exist.
 
 This gives later code slices a stable contract, keeps the architecture clean,
 and avoids building UI, validators, or network setup against moving data shapes.

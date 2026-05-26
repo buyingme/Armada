@@ -66,6 +66,8 @@
 | `GameCommand` | RefCounted | `src/core/game_command.gd` | Abstract base for all player-initiated game actions — serialize, validate, execute |
 | `GameRng` | RefCounted | `src/core/game_rng.gd` | Deterministic seeded RNG wrapper for dice rolls and deck shuffles |
 | `GameReplay` | RefCounted | `src/core/game_replay.gd` | Replay recording/playback — v1 JSON file format, header + command array |
+| `FleetSetupPackage` | RefCounted | `src/core/setup/fleet_setup_package.gd` | Serializable setup-package shell with deterministic canonical hash for embedded roster payloads |
+| `LearningScenarioPreparer` | RefCounted | `src/core/setup/learning_scenario_preparer.gd` | Scene-independent Learning Scenario preparation: instance creation, normalized position seeding, and GameState registration |
 
 ### Additional Core Components
 
@@ -90,6 +92,7 @@
 | `DefenseTokenResolver` | RefCounted | `src/core/defense_token_resolver.gd` | Defense token availability, spend-method resolution, token effects |
 | `DamageDealer` | RefCounted | `src/core/damage_dealer.gd` | Final damage calc, shield absorption, hull tracking, card dealing |
 | `LearningScenarioSetup` | RefCounted | `src/core/learning_scenario_setup.gd` | Loads learning scenario JSON and spawns initial placement |
+| `CanonicalJson` | RefCounted | `src/utils/canonical_json.gd` | Utility for sorted-key JSON stringification and stable SHA-256 payload hashes |
 
 ## 5.3 Level 2 — UI Detail
 

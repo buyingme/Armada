@@ -683,6 +683,7 @@ test gate is passed.
 | Primary files | `docs/requirements/fleet_builder.txt`, this plan, possibly `docs/arc42/01_introduction_and_goals.md`. |
 | Acceptance | Requirements contain MVP/deferred split, JSON/import-export requirement, point formats, objective/deployment integration, network setup consumption from host/client fleets, rule-integration network safety, and backend/auth deferral. |
 | Verification | `git diff --check`. |
+| Status | Complete as of 2026-05-26 in `docs/requirements/fleet_builder.txt`; continue with FB1 before source implementation. |
 
 ### FB1 - Component Folder And Schema Contract
 
@@ -958,10 +959,10 @@ code-bearing slices.
   layout before FB1 locks the schema and loader behavior.
 2. Confirm the exact Core Set upgrade card list to treat as the
    MVP completeness checklist.
-3. Confirm whether first-player selection should be manual for MVP or derived
-   from fleet bid immediately.
-4. Confirm whether deployment should begin as warning-guided manual placement or
-   strict hard enforcement from the first setup slice.
+3. First-player selection is manual for MVP and recorded in the setup package;
+  bid/initiative automation is later work.
+4. Deployment begins as warning-guided manual placement with normalized
+  positions; strict hard enforcement can harden in later setup validators.
 5. Confirm whether local fleet files should live beside saves, under a new
    `fleets/` folder, or in Godot user data only.
 6. Confirm which generic rules beyond squadron keywords belong in the first
@@ -974,9 +975,10 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-Start with FB0 and FB1 together as a docs/data-contract batch, then move
-through FB2 before any gameplay setup wiring. FB2.5 is the required risk
-reduction step before FB11-FB13 or any fleet-builder game-start integration.
+FB0 is now the requirements baseline. Continue with FB1 as the next
+docs/data-contract slice, then move through FB2 before any gameplay setup
+wiring. FB2.5 is the required risk reduction step before FB11-FB13 or any
+fleet-builder game-start integration.
 
 1. Rewrite `docs/requirements/fleet_builder.txt` into the MVP/deferred structure.
 2. Update `Resources/Game_Components/README.md` for `upgrades/`, `objectives/`,

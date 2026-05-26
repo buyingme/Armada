@@ -1,31 +1,178 @@
-In this document I describe the requirements for the fleet builder, which is a tool that allows users to create and manage their fleets. The fleet builder should have the following features:
-1. User Authentication: Users should be able to create an account and log in to access their fleet builder.
-2. Fleet Creation: Users should be able to create a new fleet by providing a name and description for the fleet.
-3. Fleet Management: Users should be able to add, edit, and delete components in their fleet. A Fleet consists of a number of capital ships and a number of squadrons. As per the rules ships have point cost values and may be attributed with a number of upgrades. Squadrons have point cost values and may not be attributed with a number of upgrades. The fleet builder should calculate the total point cost of the fleet based on the components added.
-4. Fleet Sharing: Users should be able to share their fleet with other users by providing a unique link or code.
-5. Fleet Export: Users should be able to export their fleet in a format that can be easily shared or imported into other tools, such as a PDF or CSV file.
-6. Fleet Import: Users should be able to import a fleet from a file, allowing them to easily transfer their fleet from one device to another or share it with others.
-7. Fleet Versioning: Users should be able to save multiple versions of their fleet, allowing them to keep track of changes and revert to previous versions if needed.
-8. Fleet Validation: The fleet builder should validate the fleet against the game rules, ensuring that users cannot create fleets that exceed point limits or violate other game constraints.
-9. User Interface: The fleet builder should have a user-friendly interface that allows users to easily navigate and manage their fleets. The interface should be integrated in the godot project and have the same styling as the main game interface.
-10. Performance: The fleet builder should be optimized for performance, allowing users to quickly create and manage their fleets without experiencing lag or delays. The fleet builder should be able to handle large fleets with many components without crashing or slowing down the application.
-11. Research the rules of the game to ensure that the fleet builder is compliant with the game mechanics and constraints. This includes understanding the point cost values for ships and squadrons, as well as any restrictions on upgrades or fleet composition.
-12. Future Backend Infrastructure: A backend system for user authentication, remote fleet management, cloud storage, and APIs can be added later. It must use the same versioned fleet JSON contract as the local builder and must not be required for network game setup.
-13. Design a user-friendly interface that allows users to easily create and manage their fleets. This may involve using drag-and-drop functionality for adding components to the fleet, as well as providing clear visual indicators for point costs and fleet composition.
-14. The fleet components hav various classifiers, that makes it easy to identify and filter them. These are:
-- Faction: The faction to which the component belongs (e.g., Rebel, Imperial, Scum).
-- Type: The type of component (e.g., capital ship, squadron).
-- Point Cost: The point cost value of the component.
-- Upgrades: The number of upgrades that can be attributed to the component (if applicable).
-- Upgrade Type: The type of upgrades that can be attributed to the component (if applicable).
-- Wave: The wave in which the component was released.
-- Expansion: The expansion in which the component was released.
-- Keywords: Any additional keywords or attributes that may be relevant for filtering or categorizing the component
-15. Implement a search and filter functionality that allows users to easily find and select components for their fleet based on the classifiers mentioned above. This may involve using dropdown menus, checkboxes, or a search bar to allow users to specify their criteria for filtering components.
-16. Rules Reference: The fleet builder should include a rules reference section where users can browse generic game rules, such as squadron keywords, commands, defense tokens, obstacle rules, attack timing, and setup rules, as well as component-specific rules for ships, squadrons, upgrades, objectives, and obstacles. Generic rules should have one source of truth for both display text and implementation tracking; game components should reference those rules rather than duplicating them.
-17. Network Game Setup: The fleet builder may run locally, but network game setup must consume fleets from both host and client through the same versioned roster and setup-package contract used by local setup. Before a network match starts, the host must validate the expanded setup package and both peers must agree on the same package contents/hash.
-18. Network-Safe Rules Integration: Any objective, upgrade, obstacle, squadron ability, or setup rule that becomes live must be implemented through the command/RuleRegistry architecture so hot-seat, save/load, replay, and network games all derive the same legality, UI eligibility, and state changes.
-19. Backend Clarification: Accounts, remote fleet storage, cloud sync, and share links are optional infrastructure. Deferring those features must not defer the core network-game setup contract.
+# Fleet Builder Requirements
 
-rules are available in the Resources folder of the project.
-rules for expansions and other informations about the upgrades and all game components on https://starwars-armada.fandom.com/wiki/Star_Wars:_Armada_Wiki
+Status: FB0 baseline
+Last updated: 2026-05-26
+
+## 1. Purpose
+
+The fleet builder is an integrated local-first tool for creating, validating,
+saving, loading, importing, exporting, and preparing Star Wars: Armada fleets for
+play inside this Godot project.
+
+The builder must not be an isolated list editor. Its roster and setup contracts
+must support hot-seat setup, network setup, save/load, replay, and later backend
+sync without introducing a second fleet format.
+
+## 2. Scope Decisions
+
+| Area | Requirement |
+|---|---|
+| MVP storage | Fleets are stored locally first through versioned JSON. |
+| MVP exchange | Native JSON import/export is required. PDF, CSV, and external-builder imports are deferred. |
+| MVP formats | Standard 400, Core Set 180, and custom agreed point totals are supported. |
+| MVP catalog | Core Set ships, squadrons, upgrades, objectives, and obstacles are the first completeness target. Existing Wave 1 generic Imperial squadrons may stay in the catalog, but they are not the Core Set gate. |
+| MVP setup | Two valid fleets can be consumed by setup, objective choice, obstacle placement, deployment, and match start. |
+| Network setup | Network games must consume the same setup package contract as local setup. The host validates the expanded package, and both peers agree on the same package hash before match start. |
+| Rules reference | Generic rules and component-specific rules are browsable through a rules-reference catalog. Generic rules have one source of truth for display text and implementation tracking. |
+| Backend | Accounts, cloud sync, remote fleet storage, APIs, and share links are deferred infrastructure. Deferring backend work must not defer network game setup. |
+
+## 3. MVP Functional Requirements
+
+| ID | Requirement |
+|---|---|
+| FB-REQ-001 | Users can create, rename, duplicate, delete, save, and load local fleets. |
+| FB-REQ-002 | A fleet has a name, description, faction, point format, point limit, ships, squadrons, upgrades, and three objectives. |
+| FB-REQ-003 | Users can add, edit, and remove ships, squadrons, ship upgrade assignments, and objective selections. |
+| FB-REQ-004 | The builder continuously calculates total fleet points, ship points, squadron points, and upgrade points. |
+| FB-REQ-005 | The catalog supports search and filtering by faction, component type, point cost, upgrade slot or type, wave, expansion, keyword, rules-reference category, implementation status, and search tags. |
+| FB-REQ-006 | The builder validates point total, faction alignment, commander/flagship rules, squadron point cap, unique-name limits, unique squadron limits, objective category selection, and upgrade assignment legality. |
+| FB-REQ-007 | Validation results are structured and deterministic, including severity, rule id, source reference, affected roster entry ids, and readable user-facing text. |
+| FB-REQ-008 | Users can import and export the native versioned fleet roster JSON. |
+| FB-REQ-009 | The local library stores multiple versions or snapshots per fleet and can restore an older version. |
+| FB-REQ-010 | Two valid rosters can be expanded into a match-ready setup package that embeds both rosters and has no dependency on local fleet-library files. |
+| FB-REQ-011 | Setup records first player, selected objective, objective owner, objective chooser, obstacles, deployments, and any objective-derived setup state in JSON-safe fields. |
+| FB-REQ-012 | Setup and deployment positions serialize as normalized `pos_x`, `pos_y`, and `rotation_deg`, never pixels or Godot value types. |
+| FB-REQ-013 | Save/load after setup preserves selected objective, obstacle placements/state, deployments, fleet points, ships, squadrons, upgrade assignments, and objective-derived runtime state. |
+| FB-REQ-014 | The fleet-builder UI is integrated in the Godot project and follows the existing game styling. UI renders core catalog, roster, validation, and library results; it does not own rules. |
+| FB-REQ-015 | The UI provides a Rules Reference section for generic rules and component-specific rules, including visible implementation status for pending, partial, and integrated gameplay rules. |
+| FB-REQ-016 | Component entries can open linked rules-reference records from catalog search results or roster selections. |
+| FB-REQ-017 | Network lobbies consume one expanded roster payload from the host and one from the client through the same setup package contract used by local setup. |
+| FB-REQ-018 | Before a network match starts, the host validates the setup package and both peers confirm the same canonical package hash. |
+| FB-REQ-019 | Any objective, upgrade, obstacle, squadron ability, or setup effect that becomes live is implemented through the command and `RuleRegistry` architecture so hot-seat, save/load, replay, and network games derive the same legality, UI eligibility, and state changes. |
+| FB-REQ-020 | The builder remains responsive for large future fleets by keeping catalog queries deterministic, cached where useful, and independent from scene-tree work. |
+
+## 4. Deferred Requirements
+
+| ID | Requirement | Deferred until |
+|---|---|---|
+| FB-DEFER-001 | User accounts and authentication. | Native roster JSON and local setup packages are stable. |
+| FB-DEFER-002 | Remote fleet library, cloud storage, and sync conflict handling. | Local library, import/export, and setup contracts are stable. |
+| FB-DEFER-003 | Public or private share links/codes. | Backend direction is selected. |
+| FB-DEFER-004 | PDF and CSV export. | Native JSON export is proven. |
+| FB-DEFER-005 | External fleet-builder import adapters. | Native schema has stopped changing. |
+| FB-DEFER-006 | Full non-Core card catalog. | Core Set validation and setup flow are proven. |
+| FB-DEFER-007 | Strict tournament automation and full competitive policy packs. | Core rules and custom agreed totals are stable. |
+
+Deferred backend and sharing work must use the same versioned roster contract as
+the local builder. It must not introduce a second source of truth.
+
+## 5. Non-Goals For MVP
+
+- No backend dependency for creating, editing, saving, importing, exporting, or
+  using fleets in local or network setup.
+- No live gameplay implementation for objectives, upgrades, obstacles, or named
+  ace abilities until their `RuleRegistry` slices are explicitly scheduled.
+- No UI-specific enforcement of fleet or setup legality. All legality decisions
+  come from core validators and static catalog data.
+- No storage of pixels, `Vector2`, `Color`, resources, scene nodes, peer ids, or
+  local file paths in roster or setup package JSON.
+- No PlayMode-specific fleet-builder or setup logic under `src/scenes/` or
+  `src/ui/`.
+
+## 6. Data Source Policy
+
+| Source | Role |
+|---|---|
+| `Resources/SWM-RULES-REFERENCE-GUIDE-150/` | Primary local rules reference for construction, setup, objective, obstacle, command, attack, defense token, scoring, and keyword rules. |
+| `Resources/SWM01-ARMADA-LEARN-TO-PLAY/` | Local learning and setup reference, especially for Core Set assumptions. |
+| `Resources/Game_Components/*/*_rules.txt` and `obstacles_specs.txt` | Component-level source notes used to create structured catalog JSON and rules-reference records. |
+| `Resources/Game_Components/wave_expansion_set_content_information.txt` | Local wave, expansion, and Core Set inventory reference. |
+| `Resources/Game_Components/*.json` | Static catalog source once normalized and validated. Runtime code reads card facts from these files, not hardcoded GDScript values. |
+| `Resources/Game_Components/rules/` | Planned static rules-reference catalog for display text, source refs, tags, and implementation status. |
+| `RuleRegistry` rule files | Gameplay implementation authority for live effects. Rules-reference JSON is not executable code. |
+| External wiki pages | Manual verification only. External wiki data must be copied into local source notes or structured JSON before implementation depends on it. |
+
+## 7. Source Inventory Checklist
+
+| Area | Current FB0 inventory | FB0 status | Follow-up slice |
+|---|---|---|---|
+| Rules Reference Guide | Local RRG markdown and extracted images exist under `Resources/SWM-RULES-REFERENCE-GUIDE-150/`. | Ready as source. | FB1/FB3 create rules-reference records. |
+| Learn to Play | Local Learn to Play resources exist under `Resources/SWM01-ARMADA-LEARN-TO-PLAY/`. | Ready as source. | Use during setup/deployment validation. |
+| Wave/expansion notes | `Resources/Game_Components/wave_expansion_set_content_information.txt` records Core Set and Wave 1 inventory. | Ready as source. | Keep as verification note for schema/catalog tests. |
+| Ships | 6 ship JSON files are present in `ships/` for Core Set ship cards. | Ready for FB1/FB2 schema and loader refresh. | FB1/FB2. |
+| Squadrons | 7 squadron JSON files are present: Core Set squadrons plus Wave 1 generic Imperial squadrons. | Ready, with Wave 1 entries not part of the Core Set gate. | FB1/FB2/FB3. |
+| Upgrades | 18 Core Set upgrade JSON files are present under per-type subfolders. | Ready for schema/parser work. | FB1/FB2/FB3. |
+| Objectives | 12 Core Set objective JSON files are present: 4 Assault, 4 Defense, and 4 Navigation. | Ready for schema/parser work. | FB1/FB2/FB3. |
+| Obstacles | 6 obstacle token images and `obstacles_specs.txt` are present; no obstacle JSON exists yet. | Source only. | FB1/FB3 create obstacle JSON and shape metadata. |
+| Rules reference catalog | No `Resources/Game_Components/rules/` folder exists yet. Generic squadron keyword implementations exist in `RuleRegistry`. | Missing catalog. | FB1/FB3. |
+| Schema | `card_data_schema.json` still primarily describes the older ship/squadron set. | Stale. | FB1. |
+| Component README | `Resources/Game_Components/README.md` does not yet describe upgrades, objectives, obstacles, or rules. | Stale. | FB1. |
+
+## 8. Construction And Validation Rules For MVP
+
+Validators must cite the source rule in public API doc comments when they are
+implemented. The MVP validation surfaces are:
+
+| Rule area | Requirement |
+|---|---|
+| Point total | A fleet cannot exceed the agreed point total. Standard is 400; Core Set mode is 180; custom agreed totals are allowed. |
+| Faction alignment | A fleet has one faction, and cards aligned with another faction are illegal unless a future card explicitly permits it. |
+| Commander and flagship | A fleet has exactly one commander and one flagship when commanders are included. |
+| Squadron cap | Squadron points cannot exceed one third of the agreed fleet total, rounded up. |
+| Unique squadrons | A fleet can include one unique squadron with defense tokens per 100 points of agreed fleet total. |
+| Unique names | A fleet cannot contain more than one copy of the same unique name. |
+| Objectives | A fleet selects exactly one Assault, one Defense, and one Navigation objective. |
+| Upgrade slots | A ship can equip only upgrades allowed by its upgrade bar and slot groups. |
+| Duplicate ship upgrades | A ship cannot equip more than one copy of the same upgrade card. |
+| Upgrade restrictions | Faction, size, ship trait/name, title, commander, modification, flagship, and other printed restrictions are enforced from catalog data. |
+
+## 9. Setup And Network Contract Requirements
+
+- The editable roster model is not runtime `PlayerState`.
+- The match-ready setup package embeds two full roster payloads and does not
+  depend on local fleet ids or local library files.
+- Core setup JSON stores `player_index` and owner fields. Transport peer ids are
+  mapped outside core setup data.
+- The canonical package hash excludes local-only timestamps, local file paths,
+  UI state, and other non-gameplay metadata.
+- The same setup package is the handoff contract for hot-seat, network, replay,
+  save/load, and bootstrap.
+- If placement or objective setup happens before bootstrap, it mutates the
+  setup package. If it happens after `GameState` exists, it uses commands.
+- Runtime state introduced by setup must serialize and deserialize in the same
+  implementation slice that introduces it.
+
+## 10. MVP Assumptions
+
+| Topic | MVP assumption | Later option |
+|---|---|---|
+| First player | First player is selected manually during setup and recorded in the setup package. | Bid/initiative automation can be added after validation and setup packages are stable. |
+| Objective choice | The selected objective belongs to the second player's roster and records its owner and the choosing player in setup JSON. | Richer objective-choice UI can be added after `ObjectiveData` and setup state exist. |
+| Deployment | Deployment begins as warning-guided manual placement with normalized positions. | Strict deployment-zone and overlap enforcement can harden in later setup validators. |
+| Obstacles | Core Set obstacle tokens are the first setup target. | Expansion/objective-specific obstacle additions follow after obstacle JSON exists. |
+| Local fleet files | The exact storage folder is a later local-library decision. | It may be project/user data or a dedicated `fleets/` folder, but setup packages cannot depend on it. |
+
+## 11. UI Requirements
+
+- The first screen of the fleet builder is the usable builder experience, not a
+  marketing or explanatory page.
+- The interface provides fleet header/edit controls, point totals, validation
+  status, catalog search/filter, selected ships and upgrade slots, squadron list,
+  objective selectors, local library actions, import/export, and rules-reference
+  browsing.
+- The UI must be efficient for repeated editing: filters are quick to adjust,
+  validation messages are tied to affected roster entries, and saving/exporting
+  is explicit.
+- UI controls call core catalog, roster, validator, setup, and library services.
+  They do not duplicate construction rules or gameplay rule logic.
+
+## 12. FB0 Exit Criteria
+
+- Requirements are split into MVP, deferred, and non-goal sections.
+- Data-source policy identifies local authoritative sources and the limited role
+  of external wiki data.
+- Source inventory records the current Core Set catalog state and gaps.
+- Network setup is a first-class requirement, separate from deferred backend
+  infrastructure.
+- First-player and deployment assumptions are explicit.
+- The next implementation step is FB1: component folder and schema contract.

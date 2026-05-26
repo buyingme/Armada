@@ -1,41 +1,117 @@
-# Game Components — README
+# Game Components
 
-All game assets organised in a **flat, snake_case** folder structure.
-Each sub-folder co-locates data (JSON), card art (PNG), and token art (PNG)
-for the same game concept so nothing drifts apart.
+Static game component data lives here. Folders and files use lower_snake_case so
+Godot imports, loaders, and fleet-builder catalog queries can derive stable keys
+from file names.
+
+Each component folder co-locates static JSON, card art, token art, and source
+notes for that component type. Upgrade cards may use one lower_snake_case
+subfolder per upgrade type because the Core Set already groups upgrades that
+way.
 
 ## Folder Structure
 
-```
+```text
 Game_Components/
-├── ships/            → Ship card data (JSON), card art, ship tokens
-├── squadrons/        → Squadron card data (JSON), card art, tokens, shared base art
-├── dice/             → Attack dice face PNGs (4 per colour × 3 colours)
-├── defense_tokens/   → Defense token PNGs (ready + exhausted per type)
-├── command_tokens/   → Command dial token PNGs (one per command type)
-├── maps/             → Play area background JPGs
-├── tools/            → Range ruler + maneuver tool piece PNGs
-├── scale/            → Scale calibration JSON (pixel measurements)
-└── card_data_schema.json  → JSON schema all ship/squadron data validates against
+├── ships/                  Ship card JSON, card art, ship token art, rule notes
+├── squadrons/              Squadron JSON, card art, token art, shared base art, rule notes
+├── upgrades/               Upgrade JSON, card art, and rule notes grouped by upgrade type
+├── objectives/             Objective JSON, card art, objective token art, rule notes
+├── obstacles/              Obstacle token art and source notes; JSON records arrive in FB3
+├── rules/                  Rules-reference catalog contract; JSON records arrive in FB3
+├── dice/                   Attack dice face PNGs
+├── defense_tokens/         Defense token PNGs
+├── command_tokens/         Command dial/token PNGs
+├── maps/                   Play area background JPGs
+├── tools/                  Range ruler and maneuver tool PNGs
+├── scale/                  Scale calibration JSON
+├── scenarios/              Scenario setup JSON
+├── damage_deck/            Damage card art
+├── damage_cards.json       Damage card static data
+├── wave_expansion_set_content_information.txt
+└── card_data_schema.json   Static component catalog schema
 ```
+
+## Current Fleet-Builder Inventory
+
+| Category | Folder | Current FB1 status | Follow-up |
+|---|---|---|---|
+| Ships | `ships/` | 6 Core Set ship JSON records with card art and partial token art. | FB2 typed loader refresh. |
+| Squadrons | `squadrons/` | 7 squadron JSON records: Core Set squadrons plus Wave 1 generic Imperial squadrons. | FB3 completeness tests distinguish Core Set gate from extra Wave 1 content. |
+| Upgrades | `upgrades/` | 18 Core Set upgrade JSON records under per-type subfolders, with card art and rule notes. | FB2 `UpgradeData.from_dict()` and loader enumeration. |
+| Objectives | `objectives/` | 12 Core Set objective JSON records: 4 Assault, 4 Defense, 4 Navigation. | FB2 `ObjectiveData` and loader enumeration. |
+| Obstacles | `obstacles/` | 6 Core Set obstacle token images and `obstacles_specs.txt`; no obstacle JSON yet. | FB3 obstacle JSON and shape metadata. |
+| Rules reference | `rules/` | 5 generic squadron keyword rules-reference JSON records for implemented keyword rules. | FB3 broadens generic and component-specific rules. |
+| Schema | `card_data_schema.json` | FB1 schema describes ships, squadrons, upgrades, objectives, obstacles, and rules-reference records. | FB2 loaders and schema contract tests expand with new model parsers. |
 
 ## Naming Convention
 
-All file and folder names use **lower_snake_case** — no spaces, no hyphens,
-no PascalCase. See `.skills/file_organization.md` § Resource Assets for the
-full naming rules.
+- Folders and files use lower_snake_case.
+- Do not use spaces, hyphens, or PascalCase in new component files.
+- JSON `data_key` values match the file stem unless a future migration records a
+  compatibility alias.
+- Static catalog facts belong in JSON, not GDScript constants or UI code.
 
-## What Goes Where
+## Per-Folder Patterns
 
-| Category | Folder | Status | Notes |
-|----------|--------|--------|-------|
-| Ship data + card art + tokens | `ships/` | 6 JSON, 6 card PNGs, 3 token PNGs | 2 ship tokens still needed |
-| Squadron data + card art + tokens | `squadrons/` | 2 JSON, 2 card/token PNGs, 5 base PNGs | Complete for MVP |
-| Dice faces | `dice/` | 12 PNGs (5 red, 3 blue, 4 black) | Complete |
-| Defense tokens | `defense_tokens/` | 10 PNGs (5 types × ready/exhausted) | Complete |
-| Command tokens | `command_tokens/` | 4 PNGs | Complete |
-| Play area backgrounds | `maps/` | 4 JPGs | Complete |
-| Range ruler + maneuver tool | `tools/` | 2 ruler PNGs + 3 maneuver PNGs | Complete |
-| Scale config | `scale/` | 1 JSON | Pixel measurements from ruler |
+| Folder | Pattern | Example |
+|---|---|---|
+| `ships/` | `<ship_key>.json`, `<ship_key>_card.png`, `<ship_key>_token.png` | `cr90_corvette_a.json` |
+| `squadrons/` | `<squadron_key>.json`, `<squadron_key>_card.png`, `<squadron_key>_token.png` | `x_wing_squadron.json` |
+| `upgrades/<upgrade_type>/` | `<upgrade_key>.json`, `w<index>_<upgrade_key>_card.png`, `w<index>_<upgrade_key>_rules.txt` | `commander/general_dodonna.json` |
+| `objectives/` | `obj_<category>_<objective_key>.json`, matching `_card.png` and `_rules.txt` | `obj_ass_opening_salvo.json` |
+| `obstacles/` | `<obstacle_key>_token.png`, future `<obstacle_key>.json` | `asteroid_1_token.png` |
+| `rules/` | `<rules_reference_key>.json` using lower_snake_case for file names | `squadron_keyword_bomber.json` |
 
-See `docs/implementation_plan.md` for full asset specifications.
+## Fleet-Builder Metadata
+
+Static component JSON may include these shared fields:
+
+| Field | Purpose |
+|---|---|
+| `data_key` | Stable catalog id. |
+| `kind` | Record type such as `ship_card`, `squadron_card`, `upgrade_card`, `objective_card`, `obstacle_component`, or `rules_reference`. |
+| `wave` | Numeric wave. Core Set content is Wave 0. |
+| `expansion` | Source product or expansion key. |
+| `available_through` | Products that contain the component. |
+| `card_image` / `token_image` | Local image filenames in the component folder. |
+| `search_tags` | Lower_snake_case tags for catalog filtering. |
+| `source_refs` | Local source files or rules references used to verify the record. |
+| `rules_reference_ids` | Links to generic or component-specific records in the rules-reference catalog. |
+| `rules_integration` | Implementation status and matching `RuleRegistry` rule ids. |
+
+`rules_integration.status` values are:
+
+| Status | Meaning |
+|---|---|
+| `NOT_INTEGRATED` | Static catalog data exists, but gameplay behavior is not live. |
+| `PARTIAL` | Some linked generic rules are live, but named/component-specific behavior is pending. |
+| `INTEGRATED` | All relevant gameplay behavior is implemented through registered rule ids. |
+
+## Rules Reference Policy
+
+Generic rule text should be authored once under `rules/` and referenced by
+components through `rules_reference_ids`. Existing duplicated reminder text, such
+as squadron keyword text in squadron JSON, is transitional compatibility data.
+
+Rules-reference records expose display text, source refs, tags, implementation
+status, and matching `RuleRegistry` ids. They are not executable gameplay code.
+Live gameplay behavior belongs in `src/core/effects/rules/` and is registered by
+`RuleBootstrap`.
+
+## Validation
+
+- Component JSON must parse as JSON.
+- Fleet-builder component records should match the appropriate definition in
+  `card_data_schema.json`.
+- New objective and upgrade cards with pending gameplay text must include
+  `rules_integration.status = "NOT_INTEGRATED"` until their rule slices are
+  implemented.
+- Generic keyword-only squadrons can be `INTEGRATED` only when their keyword ids
+  map to registered `RuleRegistry` rules.
+- Unique ace abilities or card-specific rules remain `PARTIAL` or
+  `NOT_INTEGRATED` until their named behavior is live.
+
+See `docs/fleet_builder_implementation_plan.md` for the implementation slices
+that turn this static catalog contract into loaders, validators, setup packages,
+and UI.

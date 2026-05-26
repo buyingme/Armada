@@ -1,0 +1,24 @@
+{
+    "data_key": "squadron_keyword.escort",
+    "kind": "rules_reference",
+    "scope": "GENERIC",
+    "display_name": "Escort",
+    "category": "SQUADRON_KEYWORD",
+    "rules_text": "Squadrons you are engaged with cannot attack squadrons that lack Escort unless performing a Counter attack.",
+    "summary": "Engaged enemy squadrons must attack Escort squadrons before non-Escort squadrons, except during Counter attacks.",
+    "search_tags": [
+        "squadron",
+        "keyword",
+        "escort",
+        "engagement",
+        "targeting"
+    ],
+    "source_refs": [
+        "RRG 1.5.0 Squadron Keywords",
+        "src/core/effects/rules/squadron_keywords/escort.gd"
+    ],
+    "implemented_rule_ids": [
+        "squadron_keyword.escort"
+    ],
+    "implementation_status": "INTEGRATED"
+}

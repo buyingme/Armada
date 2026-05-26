@@ -1,0 +1,24 @@
+{
+    "data_key": "squadron_keyword.heavy",
+    "kind": "rules_reference",
+    "scope": "GENERIC",
+    "display_name": "Heavy",
+    "category": "SQUADRON_KEYWORD",
+    "rules_text": "You do not prevent engaged squadrons from attacking ships or moving.",
+    "summary": "This squadron does not stop engaged squadrons from moving or attacking ships.",
+    "search_tags": [
+        "squadron",
+        "keyword",
+        "heavy",
+        "engagement",
+        "movement"
+    ],
+    "source_refs": [
+        "RRG 1.5.0 Squadron Keywords",
+        "src/core/effects/rules/squadron_keywords/heavy.gd"
+    ],
+    "implemented_rule_ids": [
+        "squadron_keyword.heavy"
+    ],
+    "implementation_status": "INTEGRATED"
+}

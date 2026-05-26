@@ -1,490 +1,846 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Star Wars: Armada Card Data Schemas",
-  "description": "Schemas for extracting ship and squadron card data from card images. These map directly to the Godot Resource classes ShipData and SquadronData.",
-  "definitions": {
-    "faction": {
-      "type": "string",
-      "enum": [
-        "REBEL_ALLIANCE",
-        "GALACTIC_EMPIRE"
-      ],
-      "description": "Rebel cards have the Rebel Alliance starbird icon. Imperial cards have the Imperial crest."
-    },
-    "ship_size": {
-      "type": "string",
-      "enum": [
-        "SMALL",
-        "MEDIUM",
-        "LARGE",
-        "HUGE"
-      ],
-      "description": "Small ships have a small base. Medium ships (e.g., Victory-class) have a medium base. Large ships have a large base."
-    },
-    "dice_color": {
-      "type": "string",
-      "enum": [
-        "RED",
-        "BLUE",
-        "BLACK"
-      ],
-      "description": "Colors of attack dice shown as colored symbols on the card."
-    },
-    "defense_token": {
-      "type": "string",
-      "enum": [
-        "EVADE",
-        "REDIRECT",
-        "BRACE",
-        "SCATTER",
-        "CONTAIN",
-        "SALVO"
-      ],
-      "description": "Defense token types shown as circular icons on the card. Evade=curved arrow, Redirect=angled arrows, Brace=angular bracket, Scatter=starburst, Contain=circle, Salvo=three arrows."
-    },
-    "upgrade_slot": {
-      "type": "string",
-      "enum": [
-        "COMMANDER",
-        "TITLE",
-        "OFFICER",
-        "WEAPONS_TEAM",
-        "SUPPORT_TEAM",
-        "OFFENSIVE_RETROFIT",
-        "DEFENSIVE_RETROFIT",
-        "ORDNANCE",
-        "ION_CANNONS",
-        "TURBOLASERS",
-        "FLEET_COMMAND",
-        "FLEET_SUPPORT",
-        "EXPERIMENTAL_RETROFIT",
-        "SUPER_WEAPON"
-      ],
-      "description": "Upgrade slot icons shown in the upgrade bar at the bottom of the ship card."
-    },
-    "dice_pool": {
-      "type": "object",
-      "description": "A pool of dice expressed as count per color. Only include colors with count > 0.",
-      "properties": {
-        "RED": {
-          "type": "integer",
-          "minimum": 0
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Star Wars: Armada Component Catalog Schema",
+    "description": "Schema contract for static ship, squadron, upgrade, objective, obstacle, and rules-reference records used by the fleet builder. Runtime game logic reads static card facts from these JSON records rather than hardcoded GDScript values.",
+    "oneOf": [
+        {
+            "$ref": "#/definitions/ship_card"
         },
-        "BLUE": {
-          "type": "integer",
-          "minimum": 0
+        {
+            "$ref": "#/definitions/squadron_card"
         },
-        "BLACK": {
-          "type": "integer",
-          "minimum": 0
+        {
+            "$ref": "#/definitions/upgrade_card"
+        },
+        {
+            "$ref": "#/definitions/objective_card"
+        },
+        {
+            "$ref": "#/definitions/obstacle_component"
+        },
+        {
+            "$ref": "#/definitions/rules_reference"
         }
-      },
-      "additionalProperties": false
-    },
-    "yaw_row": {
-      "type": "array",
-      "description": "Yaw values for one speed level. Index 0 = first joint (closest to ship), index 1 = second joint, etc. Each value is the max number of yaw 'clicks' (I or II) allowed at that joint. Use 0 if no yaw, 1 for one tick (I), 2 for two ticks (II). A '-' or empty on the card means 0.",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 2
-      }
-    },
-    "ship_card": {
-      "type": "object",
-      "required": [
-        "ship_name",
-        "faction",
-        "ship_size",
-        "point_cost",
-        "hull",
-        "command_value",
-        "squadron_value",
-        "engineering_value",
-        "max_speed",
-        "shields",
-        "battery_armament",
-        "anti_squadron_armament",
-        "defense_tokens",
-        "upgrade_slots",
-        "navigation_chart"
-      ],
-      "properties": {
-        "ship_name": {
-          "type": "string",
-          "description": "Full display name, e.g. 'CR90 Corvette A', 'Victory II-class Star Destroyer'"
-        },
+    ],
+    "definitions": {
         "faction": {
-          "$ref": "#/definitions/faction"
+            "type": "string",
+            "enum": [
+                "REBEL_ALLIANCE",
+                "GALACTIC_EMPIRE",
+                "DUAL",
+                "NEUTRAL"
+            ]
         },
         "ship_size": {
-          "$ref": "#/definitions/ship_size"
+            "type": "string",
+            "enum": [
+                "SMALL",
+                "MEDIUM",
+                "LARGE",
+                "HUGE"
+            ]
         },
-        "point_cost": {
-          "type": "integer",
-          "description": "Fleet point cost shown in the lower-right corner of the card."
+        "dice_color": {
+            "type": "string",
+            "enum": [
+                "RED",
+                "BLUE",
+                "BLACK"
+            ]
         },
-        "hull": {
-          "type": "integer",
-          "description": "Hull value (large number, typically in the lower-center of the card)."
+        "defense_token": {
+            "type": "string",
+            "enum": [
+                "EVADE",
+                "REDIRECT",
+                "BRACE",
+                "SCATTER",
+                "CONTAIN",
+                "SALVO"
+            ]
         },
-        "command_value": {
-          "type": "integer",
-          "description": "Command value (number of command dials in command stack). Shown on the left stat column."
+        "upgrade_slot": {
+            "type": "string",
+            "enum": [
+                "COMMANDER",
+                "TITLE",
+                "OFFICER",
+                "WEAPONS_TEAM",
+                "SUPPORT_TEAM",
+                "OFFENSIVE_RETROFIT",
+                "DEFENSIVE_RETROFIT",
+                "ORDNANCE",
+                "ION_CANNONS",
+                "TURBOLASERS",
+                "FLEET_COMMAND",
+                "FLEET_SUPPORT",
+                "EXPERIMENTAL_RETROFIT",
+                "SUPER_WEAPON"
+            ]
         },
-        "squadron_value": {
-          "type": "integer",
-          "description": "Squadron value (how many squadrons this ship can activate). Shown on the left stat column."
+        "objective_category": {
+            "type": "string",
+            "enum": [
+                "ASSAULT",
+                "DEFENSE",
+                "NAVIGATION"
+            ]
         },
-        "engineering_value": {
-          "type": "integer",
-          "description": "Engineering value (repair points). Shown on the left stat column."
+        "rules_integration_status": {
+            "type": "string",
+            "enum": [
+                "NOT_INTEGRATED",
+                "PARTIAL",
+                "INTEGRATED"
+            ]
         },
-        "max_speed": {
-          "type": "integer",
-          "description": "Maximum speed from the speed chart. The highest speed number shown."
+        "rules_scope": {
+            "type": "string",
+            "enum": [
+                "GENERIC",
+                "COMPONENT_SPECIFIC"
+            ]
         },
-        "shields": {
-          "type": "object",
-          "description": "Shield values per hull zone, shown as blue numbers around the ship silhouette on the card.",
-          "required": [
-            "FRONT",
-            "LEFT",
-            "RIGHT",
-            "REAR"
-          ],
-          "properties": {
-            "FRONT": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "LEFT": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "RIGHT": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "REAR": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          "additionalProperties": false
-        },
-        "battery_armament": {
-          "type": "object",
-          "description": "Dice pool for each hull zone, shown as colored dice icons in each arc on the card.",
-          "required": [
-            "FRONT",
-            "LEFT",
-            "RIGHT",
-            "REAR"
-          ],
-          "properties": {
-            "FRONT": {
-              "$ref": "#/definitions/dice_pool"
-            },
-            "LEFT": {
-              "$ref": "#/definitions/dice_pool"
-            },
-            "RIGHT": {
-              "$ref": "#/definitions/dice_pool"
-            },
-            "REAR": {
-              "$ref": "#/definitions/dice_pool"
-            }
-          },
-          "additionalProperties": false
-        },
-        "anti_squadron_armament": {
-          "$ref": "#/definitions/dice_pool",
-          "description": "Dice used when attacking squadrons, shown in a separate section on the card (usually near the hull zone arcs)."
-        },
-        "defense_tokens": {
-          "type": "array",
-          "description": "List of defense token types. Include duplicates if the ship has multiple of the same type. E.g., ['EVADE', 'REDIRECT', 'REDIRECT'] means 1 evade + 2 redirects.",
-          "items": {
-            "$ref": "#/definitions/defense_token"
-          }
-        },
-        "upgrade_slots": {
-          "type": "array",
-          "description": "Upgrade slot icons shown in the upgrade bar at the bottom of the card, listed left to right.",
-          "items": {
-            "$ref": "#/definitions/upgrade_slot"
-          }
-        },
-        "navigation_chart": {
-          "type": "array",
-          "description": "Speed chart / navigation chart. One entry per speed level (index 0 = speed 1, index 1 = speed 2, etc.). Each entry is a yaw_row array showing max yaw at each joint for that speed.",
-          "items": {
-            "$ref": "#/definitions/yaw_row"
-          }
-        },
-        "token_label_offsets": {
-          "type": "object",
-          "description": "Pixel [x, y] offsets from PNG origin for label positions on the ship token image.",
-          "additionalProperties": {
+        "string_array": {
             "type": "array",
             "items": {
-              "type": "number"
-            },
-            "minItems": 2,
-            "maxItems": 2
-          }
-        },
-        "firing_arc_boundaries": {
-          "type": "object",
-          "description": "Pixel coordinates defining the four arc boundary lines on the ship token. Each boundary separates two adjacent hull zones and is defined by an inner point and an outer point (on the token edge). All [x, y] pairs are measured from the PNG origin (top-left corner).",
-          "properties": {
-            "inner_point_front_left": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Inner point of the FRONT/LEFT arc boundary"
-            },
-            "outer_point_front_left": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Outer (edge) point of the FRONT/LEFT arc boundary"
-            },
-            "inner_point_front_right": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Inner point of the FRONT/RIGHT arc boundary"
-            },
-            "outer_point_front_right": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Outer (edge) point of the FRONT/RIGHT arc boundary"
-            },
-            "inner_point_rear_left": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Inner point of the REAR/LEFT arc boundary"
-            },
-            "outer_point_rear_left": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Outer (edge) point of the REAR/LEFT arc boundary"
-            },
-            "inner_point_rear_right": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Inner point of the REAR/RIGHT arc boundary"
-            },
-            "outer_point_rear_right": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2,
-              "description": "Outer (edge) point of the REAR/RIGHT arc boundary"
+                "type": "string"
             }
-          },
-          "required": [
-            "inner_point_front_left",
-            "outer_point_front_left",
-            "inner_point_front_right",
-            "outer_point_front_right",
-            "inner_point_rear_left",
-            "outer_point_rear_left",
-            "inner_point_rear_right",
-            "outer_point_rear_right"
-          ],
-          "additionalProperties": false
         },
-        "line_of_sight_origins": {
-          "type": "object",
-          "description": "Each hull zone has one line-of-sight origin dot used to trace LOS to targets. Pixel [x, y] from PNG origin.",
-          "properties": {
-            "FRONT": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2
-            },
-            "LEFT": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2
-            },
-            "RIGHT": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2
-            },
-            "REAR": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2
+        "note_array": {
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {
+                        "type": "string"
+                    },
+                    {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                ]
             }
-          },
-          "required": [
-            "FRONT",
-            "LEFT",
-            "RIGHT",
-            "REAR"
-          ],
-          "additionalProperties": false
+        },
+        "dice_pool": {
+            "type": "object",
+            "description": "A pool of attack dice expressed as count per color. Only include colors with count > 0.",
+            "properties": {
+                "RED": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "BLUE": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "BLACK": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            },
+            "additionalProperties": false
+        },
+        "yaw_row": {
+            "type": "array",
+            "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2
+            }
+        },
+        "rules_integration": {
+            "type": "object",
+            "required": [
+                "status",
+                "implemented_rule_ids",
+                "pending_rule_surfaces",
+                "notes"
+            ],
+            "properties": {
+                "status": {
+                    "$ref": "#/definitions/rules_integration_status"
+                },
+                "implemented_rule_ids": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "pending_rule_surfaces": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "notes": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        },
+        "rule_surface": {
+            "type": "object",
+            "required": [
+                "kind",
+                "surface",
+                "timing",
+                "summary"
+            ],
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "surface": {
+                    "type": "string"
+                },
+                "timing": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true
+        },
+        "common_catalog_metadata": {
+            "type": "object",
+            "properties": {
+                "_comment": {
+                    "type": "string"
+                },
+                "_source": {
+                    "type": "string"
+                },
+                "_status": {
+                    "type": "string"
+                },
+                "data_key": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "wave": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "expansion": {
+                    "type": "string"
+                },
+                "available_through": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "card_image": {
+                    "type": "string"
+                },
+                "alternate_images": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "token_image": {
+                    "type": "string"
+                },
+                "rules_source": {
+                    "type": "string"
+                },
+                "search_tags": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "source_refs": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "rules_reference_ids": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "rules_integration": {
+                    "$ref": "#/definitions/rules_integration"
+                },
+                "rule_surfaces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rule_surface"
+                    }
+                },
+                "runtime_state_requirements": {
+                    "$ref": "#/definitions/string_array"
+                }
+            },
+            "additionalProperties": true
+        },
+        "ship_card": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/common_catalog_metadata"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "data_key",
+                        "kind",
+                        "ship_name",
+                        "faction",
+                        "ship_size",
+                        "point_cost",
+                        "hull",
+                        "command_value",
+                        "squadron_value",
+                        "engineering_value",
+                        "max_speed",
+                        "shields",
+                        "battery_armament",
+                        "anti_squadron_armament",
+                        "defense_tokens",
+                        "upgrade_slots",
+                        "navigation_chart"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "ship_card"
+                        },
+                        "ship_name": {
+                            "type": "string"
+                        },
+                        "faction": {
+                            "$ref": "#/definitions/faction"
+                        },
+                        "ship_size": {
+                            "$ref": "#/definitions/ship_size"
+                        },
+                        "point_cost": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "hull": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "command_value": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "squadron_value": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "engineering_value": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "max_speed": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "ship_class": {
+                            "type": "string"
+                        },
+                        "ship_variant": {
+                            "type": "string"
+                        },
+                        "title_upgrade_group": {
+                            "type": "string"
+                        },
+                        "related_ship_data_keys": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "class_specifics": {
+                            "type": "string"
+                        },
+                        "lore_aliases": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "shields": {
+                            "type": "object",
+                            "required": [
+                                "FRONT",
+                                "LEFT",
+                                "RIGHT",
+                                "REAR"
+                            ],
+                            "properties": {
+                                "FRONT": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "LEFT": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "RIGHT": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "REAR": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "battery_armament": {
+                            "type": "object",
+                            "required": [
+                                "FRONT",
+                                "LEFT",
+                                "RIGHT",
+                                "REAR"
+                            ],
+                            "properties": {
+                                "FRONT": {
+                                    "$ref": "#/definitions/dice_pool"
+                                },
+                                "LEFT": {
+                                    "$ref": "#/definitions/dice_pool"
+                                },
+                                "RIGHT": {
+                                    "$ref": "#/definitions/dice_pool"
+                                },
+                                "REAR": {
+                                    "$ref": "#/definitions/dice_pool"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "anti_squadron_armament": {
+                            "$ref": "#/definitions/dice_pool"
+                        },
+                        "defense_tokens": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/defense_token"
+                            }
+                        },
+                        "upgrade_slots": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/upgrade_slot"
+                            }
+                        },
+                        "navigation_chart": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/yaw_row"
+                            }
+                        }
+                    },
+                    "additionalProperties": true
+                }
+            ]
+        },
+        "squadron_keyword": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            },
+            "additionalProperties": false
+        },
+        "squadron_card": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/common_catalog_metadata"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "data_key",
+                        "kind",
+                        "squadron_name",
+                        "faction",
+                        "point_cost",
+                        "hull",
+                        "speed",
+                        "anti_squadron_armament",
+                        "battery_armament",
+                        "keywords",
+                        "is_unique",
+                        "defense_tokens",
+                        "rules_reference_ids",
+                        "rules_integration"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "squadron_card"
+                        },
+                        "squadron_name": {
+                            "type": "string"
+                        },
+                        "faction": {
+                            "$ref": "#/definitions/faction"
+                        },
+                        "point_cost": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "hull": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "speed": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "squadron_family": {
+                            "type": "string"
+                        },
+                        "ace_variants": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "anti_squadron_armament": {
+                            "$ref": "#/definitions/dice_pool"
+                        },
+                        "battery_armament": {
+                            "$ref": "#/definitions/dice_pool"
+                        },
+                        "keywords": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/squadron_keyword"
+                            }
+                        },
+                        "keyword_reminder_text": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        },
+                        "ability_text": {
+                            "type": "string"
+                        },
+                        "is_unique": {
+                            "type": "boolean"
+                        },
+                        "unique_group": {
+                            "type": "string"
+                        },
+                        "defense_tokens": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/defense_token"
+                            }
+                        }
+                    },
+                    "additionalProperties": true
+                }
+            ]
+        },
+        "upgrade_card": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/common_catalog_metadata"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "data_key",
+                        "kind",
+                        "upgrade_name",
+                        "upgrade_type",
+                        "wave",
+                        "expansion",
+                        "available_through",
+                        "card_image",
+                        "point_cost",
+                        "is_unique",
+                        "unique_group",
+                        "faction_restriction",
+                        "size_restriction",
+                        "ship_class_restriction",
+                        "ship_data_key_restriction",
+                        "is_exhaustible",
+                        "is_modification",
+                        "effect_text",
+                        "rules_reference_ids",
+                        "rules_integration",
+                        "rule_surfaces",
+                        "runtime_state_requirements",
+                        "search_tags",
+                        "source_refs"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "upgrade_card"
+                        },
+                        "upgrade_name": {
+                            "type": "string"
+                        },
+                        "upgrade_type": {
+                            "$ref": "#/definitions/upgrade_slot"
+                        },
+                        "point_cost": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "is_unique": {
+                            "type": "boolean"
+                        },
+                        "unique_group": {
+                            "type": "string"
+                        },
+                        "faction_restriction": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/faction"
+                            }
+                        },
+                        "size_restriction": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/ship_size"
+                            }
+                        },
+                        "ship_class_restriction": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "ship_data_key_restriction": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "is_exhaustible": {
+                            "type": "boolean"
+                        },
+                        "is_modification": {
+                            "type": "boolean"
+                        },
+                        "effect_text": {
+                            "type": "string"
+                        },
+                        "timing_notes": {
+                            "$ref": "#/definitions/note_array"
+                        },
+                        "errata": {
+                            "$ref": "#/definitions/note_array"
+                        },
+                        "clarifications": {
+                            "$ref": "#/definitions/note_array"
+                        }
+                    },
+                    "additionalProperties": true
+                }
+            ]
+        },
+        "objective_tokens": {
+            "type": "object",
+            "required": [
+                "uses_tokens",
+                "count",
+                "count_formula",
+                "placement"
+            ],
+            "properties": {
+                "uses_tokens": {
+                    "type": "boolean"
+                },
+                "count": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "minimum": 0
+                },
+                "count_formula": {
+                    "type": "string"
+                },
+                "placement": {
+                    "$ref": "#/definitions/string_array"
+                }
+            },
+            "additionalProperties": true
+        },
+        "objective_card": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/common_catalog_metadata"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "data_key",
+                        "kind",
+                        "objective_name",
+                        "category",
+                        "wave",
+                        "expansion",
+                        "available_through",
+                        "card_image",
+                        "victory_token_points",
+                        "task_force_recommended",
+                        "setup_text",
+                        "special_rule_text",
+                        "end_of_round_text",
+                        "end_of_game_text",
+                        "timing_notes",
+                        "errata",
+                        "clarifications",
+                        "setup_effects",
+                        "rules_reference_ids",
+                        "rules_integration",
+                        "rule_surfaces",
+                        "objective_tokens",
+                        "runtime_state_requirements",
+                        "search_tags",
+                        "source_refs"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "objective_card"
+                        },
+                        "objective_name": {
+                            "type": "string"
+                        },
+                        "category": {
+                            "$ref": "#/definitions/objective_category"
+                        },
+                        "victory_token_points": {
+                            "type": [
+                                "integer",
+                                "null"
+                            ],
+                            "minimum": 0
+                        },
+                        "task_force_recommended": {
+                            "type": "boolean"
+                        },
+                        "setup_text": {
+                            "type": "string"
+                        },
+                        "special_rule_text": {
+                            "type": "string"
+                        },
+                        "end_of_round_text": {
+                            "type": "string"
+                        },
+                        "end_of_game_text": {
+                            "type": "string"
+                        },
+                        "timing_notes": {
+                            "$ref": "#/definitions/note_array"
+                        },
+                        "errata": {
+                            "$ref": "#/definitions/note_array"
+                        },
+                        "clarifications": {
+                            "$ref": "#/definitions/note_array"
+                        },
+                        "setup_effects": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        },
+                        "objective_tokens": {
+                            "$ref": "#/definitions/objective_tokens"
+                        }
+                    },
+                    "additionalProperties": true
+                }
+            ]
+        },
+        "obstacle_component": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/common_catalog_metadata"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "data_key",
+                        "kind",
+                        "obstacle_name",
+                        "obstacle_type",
+                        "token_image",
+                        "wave",
+                        "expansion",
+                        "available_through",
+                        "setup_constraints",
+                        "rules_reference_ids",
+                        "rules_integration",
+                        "search_tags",
+                        "source_refs"
+                    ],
+                    "properties": {
+                        "kind": {
+                            "const": "obstacle_component"
+                        },
+                        "obstacle_name": {
+                            "type": "string"
+                        },
+                        "obstacle_type": {
+                            "type": "string",
+                            "enum": [
+                                "ASTEROID",
+                                "DEBRIS",
+                                "STATION",
+                                "OBJECTIVE_TOKEN"
+                            ]
+                        },
+                        "token_image": {
+                            "type": "string"
+                        },
+                        "setup_constraints": {
+                            "$ref": "#/definitions/string_array"
+                        },
+                        "shape_metadata": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "additionalProperties": true
+                }
+            ]
+        },
+        "rules_reference": {
+            "type": "object",
+            "required": [
+                "data_key",
+                "kind",
+                "scope",
+                "display_name",
+                "category",
+                "rules_text",
+                "summary",
+                "search_tags",
+                "source_refs",
+                "implemented_rule_ids",
+                "implementation_status"
+            ],
+            "properties": {
+                "data_key": {
+                    "type": "string"
+                },
+                "kind": {
+                    "const": "rules_reference"
+                },
+                "scope": {
+                    "$ref": "#/definitions/rules_scope"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "rules_text": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "search_tags": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "source_refs": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "implemented_rule_ids": {
+                    "$ref": "#/definitions/string_array"
+                },
+                "implementation_status": {
+                    "$ref": "#/definitions/rules_integration_status"
+                }
+            },
+            "additionalProperties": true
         }
-      },
-      "additionalProperties": false
-    },
-    "squadron_keyword": {
-      "type": "object",
-      "description": "A keyword ability on a squadron card. Keywords with a numeric value (Counter X, Snipe X, etc.) include that value. The rules_text is the full game rule from the Rules Reference (not the reminder text on the card).",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "type": "string",
-          "enum": [
-            "Adept",
-            "AI: Battery",
-            "AI: Anti-Squadron",
-            "Assault",
-            "Bomber",
-            "Cloak",
-            "Counter",
-            "Dodge",
-            "Escort",
-            "Grit",
-            "Heavy",
-            "Intel",
-            "Relay",
-            "Rogue",
-            "Scout",
-            "Screen",
-            "Snipe",
-            "Strategic",
-            "Swarm"
-          ],
-          "description": "The keyword name exactly as listed in the Rules Reference."
-        },
-        "value": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Numeric value for keywords that have one (Counter X, Snipe X, Relay X, Adept X, Dodge X, AI X, Screen). Omit for keywords without a value (Bomber, Escort, etc.)."
-        }
-      },
-      "additionalProperties": false
-    },
-    "squadron_card": {
-      "type": "object",
-      "required": [
-        "squadron_name",
-        "faction",
-        "point_cost",
-        "hull",
-        "speed",
-        "anti_squadron_armament",
-        "battery_armament",
-        "keywords",
-        "is_unique",
-        "defense_tokens"
-      ],
-      "properties": {
-        "squadron_name": {
-          "type": "string",
-          "description": "Full display name, e.g. 'X-wing Squadron', 'TIE Fighter Squadron'. Include 'Squadron' suffix for generic types."
-        },
-        "faction": {
-          "$ref": "#/definitions/faction"
-        },
-        "point_cost": {
-          "type": "integer",
-          "description": "Fleet point cost per squadron, shown in the lower-right corner."
-        },
-        "hull": {
-          "type": "integer",
-          "description": "Hull points, shown on the card."
-        },
-        "speed": {
-          "type": "integer",
-          "description": "Squadron speed value."
-        },
-        "anti_squadron_armament": {
-          "$ref": "#/definitions/dice_pool",
-          "description": "Dice used when attacking other squadrons."
-        },
-        "battery_armament": {
-          "$ref": "#/definitions/dice_pool",
-          "description": "Dice used when attacking ships (shown separately from anti-squadron dice, often with a different icon section)."
-        },
-        "keywords": {
-          "type": "array",
-          "description": "Keyword abilities as structured objects. Each keyword has a name and optional numeric value.",
-          "items": {
-            "$ref": "#/definitions/squadron_keyword"
-          }
-        },
-        "keyword_reminder_text": {
-          "type": "object",
-          "description": "The reminder text printed on the card for each keyword, keyed by keyword name. This text is displayed to the player in-game. Extract verbatim from the card.",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "ability_text": {
-          "type": "string",
-          "description": "Special ability text for unique squadrons, beyond their keywords. Empty string for generic squadrons."
-        },
-        "is_unique": {
-          "type": "boolean",
-          "description": "True if the card has a bullet (•) before the name, indicating a unique/named squadron."
-        },
-        "defense_tokens": {
-          "type": "array",
-          "description": "Defense tokens (usually only for unique squadrons). Empty array for generic squadrons.",
-          "items": {
-            "$ref": "#/definitions/defense_token"
-          }
-        }
-      },
-      "additionalProperties": false
     }
-  }
 }

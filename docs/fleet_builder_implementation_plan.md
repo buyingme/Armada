@@ -695,6 +695,7 @@ test gate is passed.
 | Acceptance | Schema can express Core Set upgrade/objective/obstacle records and generic rules-reference records; README lists the new folders; objective schema validates all 12 Core Set objective JSON files; every objective/upgrade with pending gameplay text has `rules_integration.status = "NOT_INTEGRATED"`; generic squadron keyword records map to existing `RuleRegistry` rule ids; no PascalCase or space-containing folder names. |
 | Tests | Add schema-validation tests or a small Godot test helper that loads sample JSON and reports schema/required-field failures. |
 | Verification | `godot --headless --import`, targeted schema/loader tests, `git diff --check`. |
+| Status | Complete as of 2026-05-26: component README refreshed, schema expanded, rules-reference folder added, implemented squadron keyword reference records added, and schema contract GUT coverage added. |
 
 ### FB2 - Static Data Models And Loaders
 
@@ -975,10 +976,9 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0 is now the requirements baseline. Continue with FB1 as the next
-docs/data-contract slice, then move through FB2 before any gameplay setup
-wiring. FB2.5 is the required risk reduction step before FB11-FB13 or any
-fleet-builder game-start integration.
+FB0 and FB1 are now the requirements and component-contract baseline. Continue
+with FB2 before any gameplay setup wiring. FB2.5 is the required risk reduction
+step before FB11-FB13 or any fleet-builder game-start integration.
 
 1. Rewrite `docs/requirements/fleet_builder.txt` into the MVP/deferred structure.
 2. Update `Resources/Game_Components/README.md` for `upgrades/`, `objectives/`,

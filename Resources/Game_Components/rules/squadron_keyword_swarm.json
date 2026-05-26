@@ -1,0 +1,24 @@
+{
+    "data_key": "squadron_keyword.swarm",
+    "kind": "rules_reference",
+    "scope": "GENERIC",
+    "display_name": "Swarm",
+    "category": "SQUADRON_KEYWORD",
+    "rules_text": "While attacking a squadron engaged with another squadron, you may reroll 1 die.",
+    "summary": "While attacking an engaged squadron, this squadron may reroll one attack die.",
+    "search_tags": [
+        "squadron",
+        "keyword",
+        "swarm",
+        "reroll",
+        "engagement"
+    ],
+    "source_refs": [
+        "RRG 1.5.0 Squadron Keywords",
+        "src/core/effects/rules/squadron_keywords/swarm.gd"
+    ],
+    "implemented_rule_ids": [
+        "squadron_keyword.swarm"
+    ],
+    "implementation_status": "INTEGRATED"
+}

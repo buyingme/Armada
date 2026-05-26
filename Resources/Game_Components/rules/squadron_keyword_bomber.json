@@ -1,0 +1,24 @@
+{
+    "data_key": "squadron_keyword.bomber",
+    "kind": "rules_reference",
+    "scope": "GENERIC",
+    "display_name": "Bomber",
+    "category": "SQUADRON_KEYWORD",
+    "rules_text": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+    "summary": "Critical icons count as damage and can resolve critical effects while this squadron attacks a ship.",
+    "search_tags": [
+        "squadron",
+        "keyword",
+        "bomber",
+        "critical",
+        "ship_attack"
+    ],
+    "source_refs": [
+        "RRG 1.5.0 Squadron Keywords",
+        "src/core/effects/rules/squadron_keywords/bomber.gd"
+    ],
+    "implemented_rule_ids": [
+        "squadron_keyword.bomber"
+    ],
+    "implementation_status": "INTEGRATED"
+}

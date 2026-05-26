@@ -1,0 +1,24 @@
+{
+    "data_key": "squadron_keyword.counter",
+    "kind": "rules_reference",
+    "scope": "GENERIC",
+    "display_name": "Counter",
+    "category": "SQUADRON_KEYWORD",
+    "rules_text": "After a squadron performs a non-counter attack against you, you may attack that squadron with an anti-squadron armament of blue dice equal to X, even if you are destroyed.",
+    "summary": "After a non-Counter squadron attack, this squadron may make a blue-dice Counter attack equal to the keyword value.",
+    "search_tags": [
+        "squadron",
+        "keyword",
+        "counter",
+        "blue_dice",
+        "counter_attack"
+    ],
+    "source_refs": [
+        "RRG 1.5.0 Squadron Keywords",
+        "src/core/effects/rules/squadron_keywords/counter.gd"
+    ],
+    "implemented_rule_ids": [
+        "squadron_keyword.counter"
+    ],
+    "implementation_status": "INTEGRATED"
+}

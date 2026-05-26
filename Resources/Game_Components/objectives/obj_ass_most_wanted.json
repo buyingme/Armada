@@ -1,0 +1,77 @@
+{
+    "data_key": "obj_ass_most_wanted",
+    "kind": "objective_card",
+    "objective_name": "Most Wanted",
+    "category": "ASSAULT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_ass_most_wanted_card.png",
+    "alternate_images": [
+        "obj_ass_most_wanted_card_corr.png"
+    ],
+    "victory_token_points": null,
+    "task_force_recommended": true,
+    "setup_text": "After deploying fleets, the second player chooses 1 of their ships and 1 of the first player's ships to be objective ships.",
+    "special_rule_text": "While a ship is attacking an objective ship, it may add 1 die of any color already in its attack pool.",
+    "end_of_round_text": "",
+    "end_of_game_text": "Destroyed objective ships score double their ship cost, excluding upgrades.",
+    "timing_notes": [],
+    "errata": [
+        {
+            "field": "special_rule_text",
+            "summary": "Errata limits the bonus die to ship attacks against objective ships."
+        }
+    ],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "choose_objective_ship_pair",
+            "controller": "SECOND_PLAYER",
+            "targets": [
+                "own_ship",
+                "first_player_ship"
+            ],
+            "count_per_target": 1
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.dice_pool",
+            "timing": "before_rolling_attack_dice",
+            "summary": "A ship attacking an objective ship may add 1 die matching a color already in its attack pool."
+        },
+        {
+            "kind": "SCORING",
+            "surface": "game.end_scoring",
+            "timing": "end_of_game",
+            "summary": "Double destroyed objective ship base cost, excluding upgrades."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 2,
+        "count_formula": "one_objective_ship_for_each_player",
+        "placement": [
+            "assigned_to_objective_ship_cards"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_ships_by_player",
+        "destroyed_objective_ship_scoring"
+    ],
+    "search_tags": [
+        "assault",
+        "objective_ship",
+        "bonus_die",
+        "errata",
+        "end_game_scoring"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_ass_most_wanted_rules_txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

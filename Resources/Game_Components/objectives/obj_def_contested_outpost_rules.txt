@@ -1,0 +1,22 @@
+Contested Outpost
+SAVE
+EDIT
+ Contested Outpost Objective card
+Contested Outpost Objective card
+How-to_play_Objective_"Contested_Outpost"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Contested Outpost" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+Card Text
+Setup: Place obstacles as normal, excluding the station. Then the second player places the station in the setup area beyond distance 1 of all obstacles and beyond distance 5 of both players' edges.
+
+Special Rule: The station does not obstruct attacks and does not have the ability to discard damage cards or recover hull points.
+
+End of Round: Each player sums the command values of his ships at distance 1 of the station. The player with the highest total gains 1 victory token.
+
+Victory Token: 20 pts.
+
+See also
+All Defense Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

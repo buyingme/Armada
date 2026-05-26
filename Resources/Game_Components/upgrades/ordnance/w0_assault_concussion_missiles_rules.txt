@@ -1,0 +1,41 @@
+Assault Concussion Missiles
+5
+SAVE
+EDIT
+ Assault Concussion Missiles Weapons Upgrade card, new size, new text
+Assault Concussion Missiles Weapons Upgrade card, new size, new text
+How-to_use_Ordnance_"Assault_Concussion_Missiles"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Ordnance "Assault Concussion Missiles" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+Assault Concussion Missiles Weapons Upgrade card, mini size, outdated
+Assault Concussion Missiles Weapons Upgrade card, mini size, outdated
+
+Contents
+1	New Rule
+2	New Card Text
+2.1	Outdated Card Text
+3	Attributes
+4	Available Through
+5	Timing
+New Rule
+With Armada 1.5 published in December 2020 this card's effect and cost have been changed.
+
+New Card Text
+"Black Icon Dice Crit: Exhaust this card. Each hull zone adjacent to the defending hull zone suffers 1 damage."
+
+Outdated Card Text
+
+"Black Icon Dice Crit: Each hull zone adjacent to the defending hull zone suffers 1 damage."
+
+Attributes
+Icon Upgrade Ordnance Ordnance Upgrade Card
+Recur-iconauto Recur
+5 points (old: 7 points)
+Available Through
+Star Wars: Armada Core Set
+Victory-class Star Destroyer Expansion Pack
+Gladiator-class Star Destroyer Expansion Pack
+Galactic Republic Fleet Starter (new card size/updated text)
+Upgrade Card Collection (new card size/updated text) (x2)
+Timing
+The effect of this Upgrade Card can be chosen during Attack Step 5: "Resolve Damage"

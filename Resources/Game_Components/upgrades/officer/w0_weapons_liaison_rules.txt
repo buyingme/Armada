@@ -1,0 +1,28 @@
+Weapons Liaison
+2
+SAVE
+EDIT
+ Weapons Liaison Crew Upgrade card
+Weapons Liaison Crew Upgrade card
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+Card Text
+"Before you reveal a command, you may spend 1 command token to change that command to a Icon Command ConcentrateFire or Icon Command Squadron command."
+
+Attributes
+Icon Upgrade Officer Officer Upgrade Card
+3 points
+How-to_use_Officer_"Weapons_Liaison"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Officer "Weapons Liaison" - Star Wars Armada Explained (SWAE)
+A video from SWAE - Star Wars Armada Explained - by Karneck
+Available Through
+Star Wars: Armada Core Set
+Assault Frigate Mark II Expansion Pack
+Gladiator-class Star Destroyer Expansion Pack
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card triggers during Ship Activation before step 1: "Reveal Command Dial"

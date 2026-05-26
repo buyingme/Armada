@@ -1,0 +1,74 @@
+{
+    "data_key": "obj_def_fire_lanes",
+    "kind": "objective_card",
+    "objective_name": "Fire Lanes",
+    "category": "DEFENSE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_def_fire_lanes_card.png",
+    "victory_token_points": 15,
+    "task_force_recommended": false,
+    "setup_text": "After placing obstacles, the second player places 3 objective tokens in the setup area beyond distance 4 of both player edges; then the first player may move each token to within distance 1-2 of its current position.",
+    "special_rule_text": "At the end of each round, objective token control is determined by ship battery dice pools measured with attack range and line of sight to that token; overlapping units can give control to the opponent or deny both players.",
+    "end_of_round_text": "Each player gains 1 victory token for each objective token they control.",
+    "end_of_game_text": "",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [
+        "This objective is not recommended for Task Force play."
+    ],
+    "setup_effects": [
+        {
+            "kind": "place_objective_tokens",
+            "controller": "SECOND_PLAYER",
+            "count": 3,
+            "placement_constraints": [
+                "setup_area",
+                "beyond_distance_4_of_player_edges"
+            ]
+        },
+        {
+            "kind": "move_objective_tokens",
+            "controller": "FIRST_PLAYER",
+            "count": 3,
+            "movement_range": "distance_1_2"
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "SCORING",
+            "surface": "round.end",
+            "timing": "end_of_round",
+            "summary": "Determine control of each objective token using ship battery armament range and line of sight, then award victory tokens."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 3,
+        "count_formula": "fixed",
+        "placement": [
+            "setup_area",
+            "beyond_distance_4_of_player_edges",
+            "first_player_may_move_distance_1_2"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_token_placements",
+        "objective_token_control_by_round",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "defense",
+        "objective_tokens",
+        "line_of_sight",
+        "battery_armament",
+        "victory_tokens"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_def_fire_lanes_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

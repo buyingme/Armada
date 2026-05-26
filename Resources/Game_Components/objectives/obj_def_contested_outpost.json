@@ -1,0 +1,82 @@
+{
+    "data_key": "obj_def_contested_outpost",
+    "kind": "objective_card",
+    "objective_name": "Contested Outpost",
+    "category": "DEFENSE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_def_contested_outpost_card.png",
+    "victory_token_points": 20,
+    "task_force_recommended": true,
+    "setup_text": "Place obstacles as normal excluding the station; then the second player places the station in the setup area beyond distance 1 of all obstacles and beyond distance 5 of both player edges.",
+    "special_rule_text": "The station does not obstruct attacks and does not resolve its normal discard-damage-card or recover-hull effect.",
+    "end_of_round_text": "Each player totals command values of ships at distance 1 of the station; the higher total gains 1 victory token.",
+    "end_of_game_text": "",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "obstacle_set_override",
+            "controller": "BOTH_PLAYERS",
+            "excluded_obstacles": [
+                "station"
+            ]
+        },
+        {
+            "kind": "place_special_obstacle",
+            "controller": "SECOND_PLAYER",
+            "obstacle_type": "station",
+            "placement_constraints": [
+                "setup_area",
+                "beyond_distance_1_of_obstacles",
+                "beyond_distance_5_of_player_edges"
+            ]
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "BLOCKER",
+            "surface": "attack.obstruction",
+            "timing": "during_line_of_sight_check",
+            "summary": "The objective station does not obstruct attacks."
+        },
+        {
+            "kind": "BLOCKER",
+            "surface": "movement.obstacle_effect",
+            "timing": "after_overlap_station",
+            "summary": "The objective station does not resolve normal station repair/recover effects."
+        },
+        {
+            "kind": "SCORING",
+            "surface": "round.end",
+            "timing": "end_of_round",
+            "summary": "Award 1 victory token to the player with the highest command-value total at distance 1 of the station."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": false,
+        "count": 0,
+        "count_formula": "none",
+        "placement": []
+    },
+    "runtime_state_requirements": [
+        "objective_station_obstacle",
+        "station_effect_override",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "defense",
+        "station",
+        "command_value",
+        "end_of_round",
+        "victory_tokens"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_def_contested_outpost_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

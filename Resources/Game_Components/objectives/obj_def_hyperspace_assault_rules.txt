@@ -1,0 +1,38 @@
+Hyperspace Assault
+3
+SAVE
+EDIT
+ Hyperspace Assault Objective card
+Hyperspace Assault Objective card
+How-to_play_Objective_"Hyperspace_Assault"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Hyperspace Assault" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	See also
+4	Available Through
+Card Text
+Setup: Before deploying fleets, the second player sets aside 1 of his small or medium ships and up to 3 of his squadrons; he does not deploy them during setup. Then he places 3 objective tokens in the play area beyond distance 3 of both players' edges.
+
+Special Rule: At the start of any round after the first round, the second player can deploy the ship and squadrons that he set aside at distance 1 of 1 objective token. Then remove all objective tokens. The ship can be deployed overlapping squadrons; the first player places those squadrons as though the ship had overlapped them while executing a maneuver.
+
+If the second player does not deploy, he may move each objective token to within distance 1 of its current position.
+
+Rules Clarification
+Ships and squadrons set aside are not in play. Their abilities and upgrades are inactive and they cannot be affected by any abilities. When a squadron that was set aside is deployed, set its activation slider to display the same color as the initiative token.
+
+During setup, if the second player must deploy a squadron but cannot because they have no ships in the play area, their squadrons that are not set aside are destroyed.
+
+The second player cannot move objective tokens at the start of the first round.
+
+If a player has no ships in play, their ships and squadrons that are set aside are destroyed. If the game goes to time, or the end of the sixth round, their ships and squadrons that are set aside are destroyed.
+
+FaQ Version 3.3.1; Dec. 2017
+
+See also
+All Defense Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

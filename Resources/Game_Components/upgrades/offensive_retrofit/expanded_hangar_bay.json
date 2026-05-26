@@ -1,0 +1,49 @@
+{
+    "data_key": "expanded_hangar_bay",
+    "kind": "upgrade_card",
+    "upgrade_name": "Expanded Hangar Bay",
+    "upgrade_type": "OFFENSIVE_RETROFIT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "victory_class_star_destroyer_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_expanded_hangar_bay_card.png",
+    "point_cost": 5,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Your squadron value is increased by 1.",
+    "timing_notes": [
+        "Triggers during the Ship Phase while resolving a Squadron command dial."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "command.squadron.resolve",
+            "timing": "while_resolving_squadron_command_dial",
+            "summary": "Increase the equipped ship's squadron value by 1 for Squadron command resolution."
+        }
+    ],
+    "runtime_state_requirements": [
+        "temporary_squadron_value_modifier"
+    ],
+    "search_tags": [
+        "offensive_retrofit",
+        "squadron",
+        "command",
+        "squadron_value"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/offensive_retrofit/w0_expanded_hangar_bay_rules.txt"
+    ]
+}

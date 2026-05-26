@@ -1,0 +1,55 @@
+{
+    "data_key": "nav_team",
+    "kind": "upgrade_card",
+    "upgrade_name": "Nav Team",
+    "upgrade_type": "SUPPORT_TEAM",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "cr90_corellian_corvette_expansion_pack",
+        "gladiator_class_star_destroyer_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_nav_team_card.png",
+    "point_cost": 4,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Navigate: Your Navigate tokens can either change your speed or increase your yaw value by 1.",
+    "timing_notes": [
+        "Triggers during Ship Phase step 3: Execute Maneuver."
+    ],
+    "errata": [],
+    "clarifications": [
+        "Nav Team is not cumulative with General Madine's effect.",
+        "A ship that spends a Navigate token through Nav Team to increase yaw may still resolve Admiral Ozzel's speed-change effect."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "movement.execute_maneuver.navigate_token",
+            "timing": "during_execute_maneuver",
+            "summary": "Allow a Navigate token to increase yaw by 1 instead of changing speed."
+        }
+    ],
+    "runtime_state_requirements": [
+        "navigate_token_spend_choice",
+        "yaw_modifier"
+    ],
+    "search_tags": [
+        "support_team",
+        "navigate",
+        "yaw",
+        "speed",
+        "maneuver"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/support_team/w0_nav_team_rules.txt"
+    ]
+}

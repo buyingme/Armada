@@ -1,0 +1,56 @@
+{
+    "data_key": "obj_nav_superior_positions",
+    "kind": "objective_card",
+    "objective_name": "Superior Positions",
+    "category": "NAVIGATION",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_nav_superior_positions_card.png",
+    "victory_token_points": 15,
+    "task_force_recommended": true,
+    "setup_text": "The first player must deploy all ships and squadrons before the second player.",
+    "special_rule_text": "After a ship or squadron attacks the rear hull zone of another ship, if the defender suffered at least 1 damage, the attacker's owner gains 1 victory token.",
+    "end_of_round_text": "",
+    "end_of_game_text": "",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "deployment_order_override",
+            "controller": "FIRST_PLAYER",
+            "rule": "first_player_deploys_all_ships_and_squadrons_before_second_player"
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "OBSERVER",
+            "surface": "attack.after_performed",
+            "timing": "after_attack_performed",
+            "summary": "Award 1 victory token after a ship or squadron attack damages a ship's rear hull zone."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": false,
+        "count": 0,
+        "count_formula": "none",
+        "placement": []
+    },
+    "runtime_state_requirements": [
+        "deployment_order_override",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "navigation",
+        "rear_hull_zone",
+        "deployment",
+        "victory_tokens"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_nav_superior_positions_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

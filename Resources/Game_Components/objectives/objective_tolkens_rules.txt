@@ -1,0 +1,13 @@
+Rule
+Some objective cards and other effects refer to using objective tokens. These tokens are used to mark those effects by either placing them in the play area or assinging them to a ship.
+
+Source: RRG 1.5.0 p.11
+
+Some objectives ask players to indicate terrain or ships. Players can gain victory tokens when collecting or controlling objective tokens according to the conditions at the played objective.
+
+When a ship is chosen as an objective ship, indicate this by placing an objective token next to its ship card.
+Some objectives allow you to indicate 1 or more points in the setup area with an objective token.
+For other objectives players have to place objective tokens on obstacles.
+Special Rules
+Squadrons with keyword Strategic can relocate objective tokens in the play area.
+Jyn Erso can earn a victory token when targeting a ship with an objective token.

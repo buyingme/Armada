@@ -1,0 +1,51 @@
+{
+    "data_key": "overload_pulse",
+    "kind": "upgrade_card",
+    "upgrade_name": "Overload Pulse",
+    "upgrade_type": "ION_CANNONS",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "victory_class_star_destroyer_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_overload_pulse_card.png",
+    "point_cost": 8,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Blue critical: Exhaust all of the defender's defense tokens.",
+    "timing_notes": [
+        "Can be chosen during Attack Step 5: Resolve Damage.",
+        "This critical effect triggers after the defender has already spent defense tokens during Attack Step 4."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_damage.critical_effect",
+            "timing": "during_resolve_damage",
+            "summary": "Enable a blue critical effect that exhausts all of the defender's defense tokens."
+        }
+    ],
+    "runtime_state_requirements": [
+        "critical_effect_choice",
+        "defender_defense_token_states"
+    ],
+    "search_tags": [
+        "ion_cannons",
+        "blue_critical",
+        "critical_effect",
+        "defense_tokens"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/ion_cannons/w0_overload_pulse_rules.txt"
+    ]
+}

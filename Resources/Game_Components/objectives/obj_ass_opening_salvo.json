@@ -1,0 +1,66 @@
+{
+    "data_key": "obj_ass_opening_salvo",
+    "kind": "objective_card",
+    "objective_name": "Opening Salvo",
+    "category": "ASSAULT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_ass_opening_salvo_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": true,
+    "setup_text": "After deploying fleets, assign 1 objective token to each ship.",
+    "special_rule_text": "The first time a ship attacks another ship, discard the attacker's objective token. First-player ships add 2 red dice; second-player ships add 2 dice of any colors.",
+    "end_of_round_text": "",
+    "end_of_game_text": "Each player scores half the fleet point cost, rounded up, of each enemy ship in the play area that has at least 1 damage card.",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "assign_objective_tokens",
+            "target": "each_ship",
+            "count_per_ship": 1
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.dice_pool",
+            "timing": "before_rolling_attack_dice",
+            "summary": "A ship's first ship-to-ship attack discards its objective token and adds objective dice based on owner role."
+        },
+        {
+            "kind": "SCORING",
+            "surface": "game.end_scoring",
+            "timing": "end_of_game",
+            "summary": "Score half cost of enemy ships still in play with at least 1 damage card."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": null,
+        "count_formula": "one_per_ship",
+        "placement": [
+            "assigned_to_each_ship_card"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_tokens_by_ship",
+        "objective_token_spent_by_ship",
+        "damaged_enemy_ship_end_scoring"
+    ],
+    "search_tags": [
+        "assault",
+        "objective_tokens",
+        "bonus_dice",
+        "ship_attack",
+        "end_game_scoring"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_ass_opening_salvo_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

@@ -1,0 +1,39 @@
+X-wing Squadron
+2
+SAVE
+EDIT
+ X-wing Squadron card
+X-wing Squadron card
+"The Rebel Alliance found its salvation in the versatile X-wing. Worth every credit spent on its development, the starfighter's reliable firepower and sustainability allowed it to excel in all roles."
+
+How-to_use_Squadron_"Xwing"_(and_uniques)_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Squadron "Xwing" (and uniques) - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Aces&Famous Squadrons
+4	Available Through
+5	Appearance
+Card Text
+Bomber Bomber. (While attacking a ship, each of your Icon Dice Crit adds 1 damage to the damage total and you can resolve a critical effect.)
+
+Escort Escort. (Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack.)
+
+
+
+Attributes
+RebLogo Rebel Squadron Card
+13 points
+Aces&Famous Squadrons
+Icon X-wing Luke Skywalker
+Icon X-wing Biggs Darklighter
+Icon X-wing Wedge Antilles
+Icon X-wing Hera Syndulla
+Icon X-wing Rogue Squadron
+Available Through
+Star Wars: Armada Core Set
+Rebel Fighter Squadrons Expansion Pack
+Appearance
+The T-65B X-wing starfighter was used by the Rebel Alliance during the Galactic Civil War. It became the backbone of the Rebel Alliance Starfighter Corps. They played a major part in all battles shown in the Original Trilogy. Newer X-wing models such as the T-70 X-wing fighter would eventually fall into the hands of the Resistance in Episode VII.

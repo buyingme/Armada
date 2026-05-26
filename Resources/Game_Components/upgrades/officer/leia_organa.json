@@ -1,0 +1,51 @@
+{
+    "data_key": "leia_organa",
+    "kind": "upgrade_card",
+    "upgrade_name": "Leia Organa",
+    "upgrade_type": "OFFICER",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "w0_leia-organa_card.png",
+    "point_cost": 3,
+    "is_unique": true,
+    "unique_group": "leia_organa",
+    "faction_restriction": [
+        "REBEL_ALLIANCE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "When you reveal a command, you may choose another friendly ship at distance 1-5 and change that ship's top command to your revealed command.",
+    "timing_notes": [
+        "Triggers during Ship Phase step 1: Reveal Command Dial."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "command.reveal.change_other_ship_top_command",
+            "timing": "when_revealing_command_dial",
+            "summary": "Choose another friendly ship at distance 1-5 and change its top command to the revealed command."
+        }
+    ],
+    "runtime_state_requirements": [
+        "friendly_ship_distance_query",
+        "command_stack_rewrite"
+    ],
+    "search_tags": [
+        "officer",
+        "rebel",
+        "unique",
+        "command",
+        "dial_change"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/officer/w0_leia-organa_rules.txt"
+    ]
+}

@@ -1,0 +1,21 @@
+Opening Salvo
+1
+SAVE
+EDIT
+ Opening Salvo Objective card
+Opening Salvo Objective card
+How-to_play_Objective_"Opening_Salvo"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Opening Salvo" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+Card Text
+Setup: After deploying fleets, assign 1 objective token to each ship.
+
+Special Rule: The first time a ship performs an attack against another ship, discard the attacker's objective token. If the attacker belongs to the first player, he adds 2 red dice to the attack pool. If the attacker belongs to the second player, he adds 2 dice, each of any color, to the attack pool.
+
+End of Game: Each player increases his final score by half the fleet point cost of each enemy ship in the play area that has at least 1 damage card, rounded up.
+
+See also
+All Assault Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

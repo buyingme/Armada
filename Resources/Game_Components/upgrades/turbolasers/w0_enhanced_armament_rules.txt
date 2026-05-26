@@ -1,0 +1,37 @@
+Enhanced Armament
+2
+SAVE
+EDIT
+ Enhanced Armament Weapons Upgrade card
+Enhanced Armament Weapons Upgrade card
+How-to_use_Turbolasers_"Enhanced_Armament"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Turbolasers "Enhanced Armament" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Attributes
+4	Available Through
+5	Timing
+Card Text
+"Modification."
+
+"The battery armaments for your left and right hull zones are increased by 1 red die."
+
+Rules Clarification
+Enhanced Armament doesn't increase the battery armament of auxilliary side arcs of huge sized ships.
+
+FFG video
+
+Attributes
+Icon Upgrade Turbolasers Turbolasers Upgrade Card
+Modification
+10 points
+Available Through
+Star Wars: Armada Core Set
+Assault Frigate Mark II Expansion Pack
+Nebulon-B Frigate Expansion Pack
+Upgrade Card Collection (new card size) (x2)
+Timing
+The effect of this Upgrade Card triggers during Attack Step 2: "Roll Attack Dice"

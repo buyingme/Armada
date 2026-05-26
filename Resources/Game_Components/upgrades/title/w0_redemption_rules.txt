@@ -1,0 +1,32 @@
+Redemption
+4
+SAVE
+EDIT
+ Redemption Title Upgrade card
+Redemption Title Upgrade card
+How-to_use_Title_"Redemption"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Title "Redemption" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+5	Appearance
+Card Text
+"When a friendly ship at distance 1-5 resolves a Icon Command Repair command, it gains 1 additional engineering point."
+
+Attributes
+Icon Upgrade Title Title Upgrade Card for Nebulon-B Escort Frigate
+• Unique
+RebLogo Rebel Upgrade Card
+8 points
+Available Through
+Star Wars: Armada Core Set
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card triggers during Ship Phase after step 1: "Reveal Command Dial", when resolving a Repair Command.
+
+Appearance
+The Redemption was an Nebulon-B Escort Frigate. She was refitted with advanced medical facilities and served the Rebel Alliance fleet as the primary medical frigate before and during the Battle of Endor. The ship appears at the end of Episode V and in Episode VI.

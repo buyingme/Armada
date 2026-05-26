@@ -1,0 +1,41 @@
+General Dodonna
+4
+SAVE
+EDIT
+ General Dodonna Commander Upgrade card
+General Dodonna Commander Upgrade card
+How-to_use_Commander_"General_Dodonna"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Commander "General Dodonna" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+2.1	Corellian Conflict Campaign
+3	Attributes
+4	Available Through
+5	Timing
+6	Appearance
+Card Text
+"Before an enemy ship is dealt a faceup damage card, look at the top 4 cards of the damage deck, place 1 on top of the deck and discard the others."
+
+Rules Clarification
+Corellian Conflict Campaign
+
+During an All-Out Offensive, this card’s effect can only resolve when a ship belonging to the opponent you chose in the Assign Targets step is dealt a faceup damage card.
+
+FaQ Version 3.3.1; Dec. 2017
+
+Attributes
+Icon Upgrade Commander Commander Upgrade Card
+• Unique
+RebLogo Rebel Upgrade Card
+20 points
+Available Through
+Star Wars: Armada Core Set
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card triggers during Attack Step 5: "Resolve Damage"
+
+Appearance
+General Dodonna was one of the first captains of a Star Destroyer. He abandoned the Empire and rose to command the Great Temple of Massassi, a rebel base on the fourth moon of Yavin in Episode IV: A new hope.

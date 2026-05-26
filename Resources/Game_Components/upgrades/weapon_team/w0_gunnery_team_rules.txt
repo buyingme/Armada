@@ -1,0 +1,43 @@
+Gunnery Team
+7
+SAVE
+EDIT
+ Gunnery Team Crew Upgrade card
+Gunnery Team Crew Upgrade card
+How-to_use_Weapons_Team_"Gunnery_Team"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Weapons Team "Gunnery Team" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	New Rule
+2	Card Text
+2.1	Old Text
+3	Attributes
+4	Available Through
+5	Timing
+New Rule
+With Armada 1.5 published in December 2020 this card's effect has been changed.
+
+Card Text
+Icon Command ConcentrateFire: The next attack you perform this activation can be performed from this hull zone.
+
+Each of your hull zones cannot target the same ship or squadron more than once during your activation.
+
+Source: RRG 1.5.0 p. 25
+
+Gunnery Team old version
+Gunnery Team old version
+Old Text
+
+"You can attack from the same hull zone more than once per activation. That hull zone cannot target the same ship or squadron more than once during that activation."
+
+Attributes
+Icon Upgrade WeapTeam Weapons Team Upgrade Card
+7 points
+Available Through
+Star Wars: Armada Core Set
+Victory-class Star Destroyer Expansion Pack
+Assault Frigate Mark II Expansion Pack
+Upgrade Card Collection (new card size/updated text) (x2)
+Timing
+This effect can be resolved once while this ship is resolving a Icon Command ConcentrateFire command, during the “Resolve Attack Effects” step of an attack. If it does, the next attack during this ship's activation may declare target from the same hull zone.

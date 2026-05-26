@@ -1,0 +1,84 @@
+{
+    "data_key": "obj_nav_dangerous_territory",
+    "kind": "objective_card",
+    "objective_name": "Dangerous Territory",
+    "category": "NAVIGATION",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_nav_dangerous_territory_card.png",
+    "victory_token_points": 15,
+    "task_force_recommended": true,
+    "setup_text": "Obstacles must be placed in the setup area beyond distance 5 of both player edges. After placing obstacles, place 1 objective token on each obstacle.",
+    "special_rule_text": "When a ship overlaps an obstacle, its owner may remove the objective token on that obstacle to gain 1 victory token. Second-player ships ignore asteroid field and debris field effects.",
+    "end_of_round_text": "",
+    "end_of_game_text": "",
+    "timing_notes": [
+        "The special rule resolves during the Move Ship step while executing a maneuver."
+    ],
+    "errata": [],
+    "clarifications": [
+        "Strategic can move objective tokens off of or onto obstacles.",
+        "An objective token can only be removed for a victory token if it is overlapping an obstacle.",
+        "If multiple objective tokens overlap an obstacle, only 1 can be removed when a ship overlaps that obstacle."
+    ],
+    "setup_effects": [
+        {
+            "kind": "obstacle_placement_override",
+            "controller": "BOTH_PLAYERS",
+            "placement_constraints": [
+                "setup_area",
+                "beyond_distance_5_of_player_edges"
+            ]
+        },
+        {
+            "kind": "place_objective_tokens",
+            "controller": "BOTH_PLAYERS",
+            "count_formula": "one_per_obstacle",
+            "placement_constraints": [
+                "on_each_obstacle"
+            ]
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "OBSERVER",
+            "surface": "movement.ship_overlap_obstacle",
+            "timing": "move_ship_step_after_overlap",
+            "summary": "Ship owner may remove an objective token on the overlapped obstacle to gain 1 victory token."
+        },
+        {
+            "kind": "BLOCKER",
+            "surface": "movement.obstacle_effect",
+            "timing": "after_second_player_ship_overlaps_asteroid_or_debris",
+            "summary": "Second-player ships ignore asteroid field and debris field effects."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": null,
+        "count_formula": "one_per_obstacle",
+        "placement": [
+            "on_each_obstacle"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_tokens_on_obstacles",
+        "removed_objective_tokens",
+        "second_player_obstacle_effect_immunity",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "navigation",
+        "obstacles",
+        "objective_tokens",
+        "move_ship",
+        "victory_tokens"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_nav_dangerous_territory_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

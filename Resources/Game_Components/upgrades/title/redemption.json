@@ -1,0 +1,61 @@
+{
+    "data_key": "redemption",
+    "kind": "upgrade_card",
+    "upgrade_name": "Redemption",
+    "upgrade_type": "TITLE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_redemption_card.png",
+    "point_cost": 5,
+    "is_unique": true,
+    "unique_group": "redemption",
+    "faction_restriction": [
+        "REBEL_ALLIANCE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [
+        "nebulon_b_frigate"
+    ],
+    "ship_data_key_restriction": [
+        "nebulon_b_escort_frigate",
+        "nebulon_b_support_refit"
+    ],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "When a friendly ship at distance 1-5 resolves a Repair command, it gains 1 additional engineering point.",
+    "timing_notes": [
+        "Triggers during Ship Phase after step 1: Reveal Command Dial, when resolving a Repair command."
+    ],
+    "errata": [],
+    "clarifications": [
+        "The rules note lists 8 points, but the provided card image shows 5 points; this JSON uses the card image value."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "command.repair.points.friendly_ship_aura",
+            "timing": "while_friendly_ship_resolves_repair_command",
+            "summary": "Add 1 engineering point to a friendly ship at distance 1-5 when it resolves a Repair command."
+        }
+    ],
+    "runtime_state_requirements": [
+        "friendly_ship_distance_query",
+        "repair_command_point_total"
+    ],
+    "search_tags": [
+        "title",
+        "rebel",
+        "unique",
+        "nebulon_b",
+        "repair",
+        "engineering"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/title/w0_redemption_rules.txt",
+        "Resources/Game_Components/upgrades/title/w0_redemption_card.png"
+    ]
+}

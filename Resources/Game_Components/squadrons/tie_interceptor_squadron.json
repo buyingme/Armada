@@ -1,7 +1,23 @@
 {
-    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_comment": "Extracted from uploaded squadron card image and enriched from the provided squadron rules note on 2026-05-25.",
     "_source": "Resources/Game_Components/squadrons/tie_interceptor_squadron_card.png",
     "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "data_key": "tie_interceptor_squadron",
+    "kind": "squadron_card",
+    "wave": 1,
+    "expansion": "imperial_fighter_squadrons_expansion_pack",
+    "available_through": [
+        "imperial_fighter_squadrons_expansion_pack"
+    ],
+    "card_image": "tie_interceptor_squadron_card.png",
+    "token_image": "tie_interceptor_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/tie_interceptor_squadron_rules.txt",
+    "squadron_family": "tie_interceptor",
+    "ace_variants": [
+        "ciena_ree",
+        "soontir_fel",
+        "saber_squadron"
+    ],
     "squadron_name": "TIE Interceptor Squadron",
     "faction": "GALACTIC_EMPIRE",
     "point_cost": 11,
@@ -28,5 +44,38 @@
     },
     "ability_text": "",
     "is_unique": false,
-    "defense_tokens": []
+    "unique_group": "",
+    "defense_tokens": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.after_squadron_attack.counter_keyword",
+            "timing": "after_non_counter_squadron_attack_against_this_squadron",
+            "summary": "May perform a Counter 2 attack against the attacking squadron, even if destroyed."
+        },
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects.swarm_keyword",
+            "timing": "while_attacking_engaged_squadron",
+            "summary": "May reroll 1 die while attacking a squadron engaged with another squadron."
+        }
+    ],
+    "runtime_state_requirements": [
+        "counter_attack_offer",
+        "counter_attack_pool_blue_2",
+        "swarm_engagement_check",
+        "dice_reroll_choice"
+    ],
+    "search_tags": [
+        "imperial",
+        "wave_1",
+        "imperial_fighter_squadrons",
+        "tie_interceptor",
+        "counter",
+        "swarm"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/tie_interceptor_squadron_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
 }

@@ -1,0 +1,26 @@
+Expanded Hangar Bay
+SAVE
+EDIT
+ Expanded Hangar Bay Retrofit Upgrade card
+Expanded Hangar Bay Retrofit Upgrade card
+How-to_use_Offensive_Retrofit_"Expanded_Hangar_Bay"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Offensive Retrofit "Expanded Hangar Bay" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+Card Text
+"Your squadron value is increased by 1."
+
+Attributes
+Icon Upgrade OffensiveRetrofit Offensive Retrofit Upgrade Card
+5 points
+Available Through
+Star Wars: Armada Core Set
+Victory-class Star Destroyer Expansion Pack
+Upgrade Card Collection (new card size) (x2)
+Timing
+The effect of this Upgrade Card triggers during Ship Phase while resolving a Icon Command Squadron command dial.

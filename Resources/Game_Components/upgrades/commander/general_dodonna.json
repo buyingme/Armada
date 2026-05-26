@@ -1,0 +1,55 @@
+{
+    "data_key": "general_dodonna",
+    "kind": "upgrade_card",
+    "upgrade_name": "General Dodonna",
+    "upgrade_type": "COMMANDER",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_general_dodonna_card.png",
+    "point_cost": 20,
+    "is_unique": true,
+    "unique_group": "general_dodonna",
+    "faction_restriction": [
+        "REBEL_ALLIANCE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Before an enemy ship is dealt a faceup damage card, look at the top 4 cards of the damage deck, place 1 on top of the deck and discard the others.",
+    "timing_notes": [
+        "Triggers during Attack Step 5: Resolve Damage before an enemy ship is dealt a faceup damage card."
+    ],
+    "errata": [],
+    "clarifications": [
+        "During a Corellian Conflict All-Out Offensive, this effect can only resolve when a ship belonging to the opponent chosen in Assign Targets is dealt a faceup damage card."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "damage.before_faceup_card_dealt",
+            "timing": "before_enemy_ship_dealt_faceup_damage_card",
+            "summary": "Let the Dodonna player choose one of the top 4 damage cards to place on top and discard the rest before faceup damage is dealt."
+        }
+    ],
+    "runtime_state_requirements": [
+        "damage_deck_peek_choice",
+        "damage_deck_order_mutation",
+        "commander_owner_player"
+    ],
+    "search_tags": [
+        "commander",
+        "rebel",
+        "unique",
+        "damage_deck",
+        "faceup_damage"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/commander/w0_general_dodonna_rules.txt"
+    ]
+}

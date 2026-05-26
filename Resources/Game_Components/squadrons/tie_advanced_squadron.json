@@ -1,7 +1,23 @@
 {
-    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_comment": "Extracted from uploaded squadron card image and enriched from the provided squadron rules note on 2026-05-25.",
     "_source": "Resources/Game_Components/squadrons/tie_advanced_squadron_card.png",
     "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "data_key": "tie_advanced_squadron",
+    "kind": "squadron_card",
+    "wave": 1,
+    "expansion": "imperial_fighter_squadrons_expansion_pack",
+    "available_through": [
+        "imperial_fighter_squadrons_expansion_pack"
+    ],
+    "card_image": "tie_advanced_squadron_card.png",
+    "token_image": "tie_advanced_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/tie_advanced_squadron_rules.txt",
+    "squadron_family": "tie_advanced",
+    "ace_variants": [
+        "darth_vader",
+        "zertik_strom",
+        "tempest_squadron"
+    ],
     "squadron_name": "TIE Advanced Squadron",
     "faction": "GALACTIC_EMPIRE",
     "point_cost": 12,
@@ -23,5 +39,28 @@
     },
     "ability_text": "",
     "is_unique": false,
-    "defense_tokens": []
+    "unique_group": "",
+    "defense_tokens": [],
+    "rule_surfaces": [
+        {
+            "kind": "BLOCKER",
+            "surface": "attack.declare_target.escort_keyword",
+            "timing": "while_engaged_squadron_declares_target",
+            "summary": "Squadrons engaged with this Escort squadron cannot attack squadrons that lack Escort unless performing a Counter attack."
+        }
+    ],
+    "runtime_state_requirements": [
+        "escort_targeting_restriction"
+    ],
+    "search_tags": [
+        "imperial",
+        "wave_1",
+        "imperial_fighter_squadrons",
+        "tie_advanced",
+        "escort"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/tie_advanced_squadron_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
 }

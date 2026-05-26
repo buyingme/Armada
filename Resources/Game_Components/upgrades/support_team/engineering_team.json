@@ -1,0 +1,55 @@
+{
+    "data_key": "engineering_team",
+    "kind": "upgrade_card",
+    "upgrade_name": "Engineering Team",
+    "upgrade_type": "SUPPORT_TEAM",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "nebulon_b_frigate_expansion_pack",
+        "interdictor_expansion_pack",
+        "imperial_light_cruiser_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_engineering_team_card.png",
+    "point_cost": 3,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Repair: Gain 1 additional engineering point.",
+    "timing_notes": [
+        "Triggers during Ship Activation after Reveal Command Dial when resolving Repair command effects."
+    ],
+    "errata": [],
+    "clarifications": [
+        "A ship gains 1 additional engineering point for every Repair command.",
+        "When spending a Repair token, halve the engineering value first and add the additional point second.",
+        "If a Repair dial and token are spent together, they are one command and this adds 1 total point."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "command.repair.points",
+            "timing": "while_resolving_repair_command",
+            "summary": "Add 1 engineering point to the equipped ship's Repair command total."
+        }
+    ],
+    "runtime_state_requirements": [
+        "repair_command_point_total"
+    ],
+    "search_tags": [
+        "support_team",
+        "repair",
+        "engineering",
+        "command"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/support_team/w0_engineering_team_rules.txt"
+    ]
+}

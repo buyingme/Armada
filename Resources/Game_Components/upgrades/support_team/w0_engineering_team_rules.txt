@@ -1,0 +1,36 @@
+Engineering Team
+SAVE
+EDIT
+ Engineering Crew Upgrade card
+Engineering Crew Upgrade card
+How-to_use_Support_Team_"Engineering_Team"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Support Team "Engineering Team" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Attributes
+4	Available Through
+5	Timing
+Card Text
+" Icon Command Repair: Gain 1 additional engineering point."
+
+Rules Clarification
+A ship gains an additional engineering point for every Icon Command Repair command.
+
+When a Icon Command Repair token is spent, you half the engineering value first and add 1 point second.
+If Icon Command Repair token and Icon Command Repair dial are spent together, that's a single command. You only gain 1 additional engineering point.
+Attributes
+Icon Upgrade SupportTeam Support Team Upgrade Card
+3 points
+Available Through
+Star Wars: Armada Core Set
+Nebulon-B Frigate Expansion Pack
+Interdictor Expansion Pack
+Imperial Light Cruiser Expansion Pack
+Upgrade Card Collection (new card size) (x2)
+Timing
+The effect of this Upgrade Card triggers during Ship Activation after step 1: Reveal Command Dial, when resolving effects of Icon Command Repair commands.
+
+Categories

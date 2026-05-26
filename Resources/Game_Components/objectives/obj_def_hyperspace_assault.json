@@ -1,0 +1,95 @@
+{
+    "data_key": "obj_def_hyperspace_assault",
+    "kind": "objective_card",
+    "objective_name": "Hyperspace Assault",
+    "category": "DEFENSE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_def_hyperspace_assault_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": true,
+    "setup_text": "Before deploying fleets, the second player sets aside 1 small or medium ship and up to 3 squadrons, then places 3 objective tokens in the play area beyond distance 3 of both player edges.",
+    "special_rule_text": "At the start of any round after round 1, the second player may deploy the set-aside units at distance 1 of 1 objective token and remove all objective tokens. If not deploying, the second player may move each objective token within distance 1.",
+    "end_of_round_text": "",
+    "end_of_game_text": "Set-aside units are destroyed if their owner has no ships in play or if they remain set aside when the game ends.",
+    "timing_notes": [
+        "The second player cannot deploy set-aside units or move objective tokens at the start of round 1."
+    ],
+    "errata": [],
+    "clarifications": [
+        "Set-aside ships and squadrons are not in play; their abilities and upgrades are inactive and they cannot be affected by abilities.",
+        "When a set-aside squadron is deployed, set its activation slider to match the initiative token.",
+        "During setup, non-set-aside squadrons are destroyed if the second player must deploy a squadron but has no ships in play.",
+        "A hyperspace-deployed ship can overlap squadrons; the first player places those squadrons as if the ship had overlapped them while executing a maneuver."
+    ],
+    "setup_effects": [
+        {
+            "kind": "set_aside_units",
+            "controller": "SECOND_PLAYER",
+            "ship_constraints": [
+                "small_or_medium_ship"
+            ],
+            "ship_count": 1,
+            "squadron_count_max": 3
+        },
+        {
+            "kind": "place_objective_tokens",
+            "controller": "SECOND_PLAYER",
+            "count": 3,
+            "placement_constraints": [
+                "play_area",
+                "beyond_distance_3_of_player_edges"
+            ]
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "round.start_choice",
+            "timing": "start_of_round_after_first",
+            "summary": "Second player chooses whether to deploy set-aside units or move objective tokens."
+        },
+        {
+            "kind": "VALIDATOR",
+            "surface": "setup.deploy_set_aside_units",
+            "timing": "start_of_round_after_first",
+            "summary": "Deploy set-aside ship and squadrons at distance 1 of one objective token, then remove all tokens."
+        },
+        {
+            "kind": "OBSERVER",
+            "surface": "game.end_scoring",
+            "timing": "end_of_game_or_no_ships_in_play",
+            "summary": "Destroy set-aside units if their owner has no ships in play or the game ends before deployment."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 3,
+        "count_formula": "fixed",
+        "placement": [
+            "play_area",
+            "beyond_distance_3_of_player_edges",
+            "may_move_distance_1_after_round_1"
+        ]
+    },
+    "runtime_state_requirements": [
+        "set_aside_units_by_player",
+        "objective_token_placements",
+        "hyperspace_assault_deployed",
+        "set_aside_unit_destruction"
+    ],
+    "search_tags": [
+        "defense",
+        "set_aside",
+        "objective_tokens",
+        "start_of_round",
+        "deployment"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_def_hyperspace_assault_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

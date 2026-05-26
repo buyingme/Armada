@@ -1,0 +1,66 @@
+{
+    "data_key": "obj_ass_precision_strike",
+    "kind": "objective_card",
+    "objective_name": "Precision Strike",
+    "category": "ASSAULT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_ass_precision_strike_card.png",
+    "victory_token_points": 15,
+    "task_force_recommended": true,
+    "setup_text": "After deploying fleets, each of the second player's ships gains 1 Concentrate Fire command token.",
+    "special_rule_text": "A ship or Bomber squadron may spend 1 hit die while attacking to flip 1 random facedown defender damage card faceup. The attacker gains victory tokens for damage cards dealt or flipped faceup during that attack.",
+    "end_of_round_text": "",
+    "end_of_game_text": "",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "grant_command_tokens",
+            "controller": "SECOND_PLAYER",
+            "target": "each_second_player_ship",
+            "command_type": "CONCENTRATE_FIRE",
+            "count_per_ship": 1
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects",
+            "timing": "during_resolve_attack_effects",
+            "summary": "A ship or Bomber squadron may spend a hit die to flip a random facedown defender damage card faceup."
+        },
+        {
+            "kind": "OBSERVER",
+            "surface": "attack.after_performed",
+            "timing": "after_attack_performed",
+            "summary": "Award victory tokens for damage cards dealt faceup or flipped faceup during the attack."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": false,
+        "count": 0,
+        "count_formula": "none",
+        "placement": []
+    },
+    "runtime_state_requirements": [
+        "second_player_setup_command_tokens",
+        "faceup_damage_cards_this_attack",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "assault",
+        "bomber",
+        "faceup_damage",
+        "victory_tokens",
+        "concentrate_fire"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_ass_precision_strike_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

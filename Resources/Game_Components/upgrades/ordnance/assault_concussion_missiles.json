@@ -1,0 +1,60 @@
+{
+    "data_key": "assault_concussion_missiles",
+    "kind": "upgrade_card",
+    "upgrade_name": "Assault Concussion Missiles",
+    "upgrade_type": "ORDNANCE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "victory_class_star_destroyer_expansion_pack",
+        "gladiator_class_star_destroyer_expansion_pack",
+        "galactic_republic_fleet_starter",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_assault_concussion_missiles_card.png",
+    "point_cost": 5,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": true,
+    "is_modification": false,
+    "refresh": {
+        "mode": "recur",
+        "ready_cost": null
+    },
+    "effect_text": "Black critical: Exhaust this card. Each hull zone adjacent to the defending hull zone suffers 1 damage.",
+    "timing_notes": [
+        "Can be chosen during Attack Step 5: Resolve Damage."
+    ],
+    "errata": [
+        "Armada 1.5 changed this card's effect and point cost to 5."
+    ],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_damage.critical_effect",
+            "timing": "during_resolve_damage",
+            "summary": "Enable a black critical effect that exhausts this card and deals 1 damage to adjacent hull zones."
+        }
+    ],
+    "runtime_state_requirements": [
+        "upgrade_exhaustion_state",
+        "defending_hull_zone",
+        "adjacent_hull_zone_damage"
+    ],
+    "search_tags": [
+        "ordnance",
+        "black_critical",
+        "critical_effect",
+        "exhaust",
+        "hull_zone_damage"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/ordnance/w0_assault_concussion_missiles_rules.txt"
+    ]
+}

@@ -1,0 +1,32 @@
+CR90 Corvette B
+1
+SAVE
+EDIT
+ CR90 Corvette B Rebel Ship card
+CR90 Corvette B Rebel Ship card
+
+Contents
+1	Defense Tokens
+2	Possible Upgrades
+3	Class Specifics
+4	Available Through
+5	Appearance
+Defense Tokens
+Green-defensetokenB Evade (x2)
+Green-defensetokenD Redirect
+Possible Upgrades
+Icon Upgrade Title CR90 Title
+Icon Upgrade Officer Officer
+Icon Upgrade SupportTeam Support Team
+Icon Upgrade DefensiveRetrofit Defensive Retrofit
+Icon Upgrade IonCannons Ion Cannons
+Class Specifics
+Compared to the CR90 Corvette A for 44 pts. the B variant is solely armed with blue dice instead of 2 red at the front battery, and 1 red at side and rear batteries. It possesses an Ion Cannon Upgrade slot instead of an Turbolaser Upgrade slot.
+
+See: Ship Comparison Chart
+
+Available Through
+Star Wars: Armada Core Set
+CR90 Corellian Corvette Expansion Pack
+Appearance
+The CR90 corvettes, also known as Alderaan Cruisers, Corellian corvettes, or blockade runners, were manufactured by the Corellian Engineering Corporation. They were in use within the late Galactic Republic. Later many vessels would be appropriated by the Rebel Alliance against the Galactic Empire, despite not being designed as a combat-oriented vessel. The ship-class is the first to be seen in Episode IV. It also appears in Episode VI, Episode III, Rogue One, and in the TV-series The Clone Wars and Star Wars Rebels.

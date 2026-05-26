@@ -1,0 +1,36 @@
+Nav Team
+2
+SAVE
+EDIT
+ Nav Team Crew Upgrade card
+Nav Team Crew Upgrade card
+How-to_use_Support_Team_"Nav_Team"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Support Team "Nav Team" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Attributes
+4	Available Through
+5	Timing
+Card Text
+" Icon Command Navigate: Your Icon Command Navigate tokens can either change your speed or increase your yaw value by 1."
+
+Rules Clarification
+Nav Team’s effect is not cumulative with General Madine’s effect.
+
+A friendly ship equipped with Nav Team that resolves a Icon Command Navigate command using a Icon Command Navigate token to increase a yaw value may resolve Admiral Ozzel’s effect to change its speed by 1.
+
+FaQ Version 2.2.1; 10/24/2016
+
+Attributes
+Icon Upgrade SupportTeam Support Team Upgrade Card
+4 points
+Available Through
+Star Wars: Armada Core Set
+CR90 Corellian Corvette Expansion Pack
+Gladiator-class Star Destroyer Expansion Pack
+Upgrade Card Collection (new card size) (x2)
+Timing
+The effect of this Upgrade Card triggers during Ship Phase step 3: "Execute Maneuver"

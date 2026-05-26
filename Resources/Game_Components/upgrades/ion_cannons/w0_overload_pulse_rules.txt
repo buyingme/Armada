@@ -1,0 +1,29 @@
+Overload Pulse
+7
+SAVE
+EDIT
+ Overload Pulse Weapons Upgrade card
+Overload Pulse Weapons Upgrade card
+How-to_use_Ion_Cannon_"Overload_Pulse"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Ion Cannon "Overload Pulse" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text/Abilities
+2	Attributes
+3	Available Through
+4	Timing
+Card Text/Abilities
+"Blue Icon Dice Crit: Exhaust all of the defender's defense tokens."
+
+Attributes
+Icon Upgrade IonCannons Ion Cannons Upgrade Card
+8 points
+Available Through
+Star Wars: Armada Core Set
+Victory-class Star Destroyer Expansion Pack
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card can be chosen during Attack Step 5: "Resolve Damage"
+
+Important: The critical effect triggers after the defender already spent his defense tokens. (Attack Step 4)

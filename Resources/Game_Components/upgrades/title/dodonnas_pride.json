@@ -1,0 +1,62 @@
+{
+    "data_key": "dodonnas_pride",
+    "kind": "upgrade_card",
+    "upgrade_name": "Dodonna's Pride",
+    "upgrade_type": "TITLE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_dodonnas_pride_card.png",
+    "point_cost": 4,
+    "is_unique": true,
+    "unique_group": "dodonnas_pride",
+    "faction_restriction": [
+        "REBEL_ALLIANCE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [
+        "cr90_corvette"
+    ],
+    "ship_data_key_restriction": [
+        "cr90_corvette_a",
+        "cr90_corvette_b"
+    ],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Blue critical: Cancel all attack dice to deal 1 faceup damage card to the defender.",
+    "timing_notes": [
+        "Can be chosen during Attack Step 5: Resolve Damage.",
+        "The critical effect is chosen after the defender has spent defense tokens."
+    ],
+    "errata": [],
+    "clarifications": [
+        "When this effect is chosen, the damage total drops to zero, but the defender cannot undo defense token spending from Attack Step 4."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_damage.critical_effect",
+            "timing": "during_resolve_damage",
+            "summary": "Enable a blue critical effect that cancels all attack dice and deals 1 faceup damage card."
+        }
+    ],
+    "runtime_state_requirements": [
+        "critical_effect_choice",
+        "attack_dice_cancellation",
+        "faceup_damage_card_deal"
+    ],
+    "search_tags": [
+        "title",
+        "rebel",
+        "unique",
+        "cr90",
+        "blue_critical",
+        "faceup_damage"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/title/w0_dodonnas_pride_rules.txt"
+    ]
+}

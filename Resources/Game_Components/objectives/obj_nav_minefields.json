@@ -1,0 +1,77 @@
+{
+    "data_key": "obj_nav_minefields",
+    "kind": "objective_card",
+    "objective_name": "Minefields",
+    "category": "NAVIGATION",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_nav_minefields_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": true,
+    "setup_text": "The second player places all obstacles anywhere in the setup area, including deployment zones, beyond distance 5 of each other. Then the second player places 6 objective tokens at distance 1 of an obstacle and beyond distance 1 of all other objective tokens.",
+    "special_rule_text": "If a ship ends movement at distance 1 of an objective token, remove that token and roll 2 blue dice. Deal facedown damage for hit or critical icons rolled; if at least 1 critical icon is rolled, deal the first damage card faceup.",
+    "end_of_round_text": "",
+    "end_of_game_text": "",
+    "timing_notes": [
+        "The special rule resolves during the Move Ship step while executing a maneuver."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "setup_effects": [
+        {
+            "kind": "obstacle_placement_override",
+            "controller": "SECOND_PLAYER",
+            "placement_constraints": [
+                "setup_area",
+                "deployment_zones_allowed",
+                "beyond_distance_5_of_obstacles"
+            ]
+        },
+        {
+            "kind": "place_objective_tokens",
+            "controller": "SECOND_PLAYER",
+            "count": 6,
+            "placement_constraints": [
+                "distance_1_of_obstacle",
+                "beyond_distance_1_of_objective_tokens"
+            ]
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "OBSERVER",
+            "surface": "movement.ship_end",
+            "timing": "move_ship_step_after_final_position",
+            "summary": "If a ship ends movement at distance 1 of a mine token, remove it, roll 2 blue dice, and deal damage based on hit/critical icons."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 6,
+        "count_formula": "fixed",
+        "placement": [
+            "distance_1_of_obstacle",
+            "beyond_distance_1_of_other_objective_tokens"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_token_placements",
+        "removed_mine_tokens",
+        "rng",
+        "minefield_damage_resolution"
+    ],
+    "search_tags": [
+        "navigation",
+        "mines",
+        "objective_tokens",
+        "obstacles",
+        "damage"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_nav_minefields_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

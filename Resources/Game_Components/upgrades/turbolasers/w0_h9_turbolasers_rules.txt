@@ -1,0 +1,37 @@
+H9 Turbolasers
+2
+SAVE
+EDIT
+ H9 Turbolasers Weapons Upgrade card
+H9 Turbolasers Weapons Upgrade card
+How-to_use_Turbolasers_"H9_Turbolasers"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Turbolasers "H9 Turbolasers" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	New Rule
+2	Card Text
+3	Attributes
+4	Available Through
+5	Timing
+New Rule
+With Armada 1.5 published in December 2020 this card has been changed. It now shows the Modification trait.
+
+Card Text
+"Modification."
+
+"While attacking, you may change 1 die face with a Icon Dice Hit or Icon Dice Crit to a face with an Icon Dice Accuracy icon."
+
+H9 Turbolasers old version
+H9 Turbolasers old version
+Attributes
+Icon Upgrade Turbolasers Turbolasers Upgrade Card
+Modification
+8 points
+Available Through
+Star Wars: Armada Core Set
+Assault Frigate Mark II Expansion Pack
+CR90 Corellian Corvette Expansion Pack
+Upgrade Card Collection (new card size/updated text) (x2)
+Timing
+The effect of this Upgrade Card triggers during Attack Step 3: "Resolve Attack Effects"

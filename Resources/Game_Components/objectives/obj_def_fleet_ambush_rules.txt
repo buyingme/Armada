@@ -1,0 +1,42 @@
+Fleet Ambush
+1
+SAVE
+EDIT
+ Fleet Ambush Objective card
+Fleet Ambush Objective card
+How-to_play_Objective_"Fleet_Ambush"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Fleet Ambush" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Setup Diagram
+4	Task Force Rule
+5	See also
+6	Available Through
+Card Text
+Setup: The portion of the setup area that is beyond distance 5 of any edge of the setup area is the Ambush Zone. Players mark the corners of the ambush zone with objective tokens.
+
+Players take turns deploying fleets as normal but must deploy all ships before deploying any squadrons. The first player must deploy ships within the ambush zone on his odd-numbered deployment turn, starting with his first turn. He cannot deploy ships or squadrons overlapping obstacles in the ambush zone. After setup is complete, he removes all objective tokens from the play area.
+
+Rules Clarification
+After a player has placed all of his ships he begins placing squadrons on his next deployment turn. The other player continues placing ships until all of his ships have been placed, then he begins placing squadrons.
+
+The first player can deploy squadrons within distance 1–2 of a ship inside the ambush zone.
+
+If a ship must be deployed into the Ambush Zone and cannot fit without overlapping obstacles or extending beyond the Ambush Zone, the player must deploy that ship so that the ship fits as completely into the Ambush Zone as possible.
+
+Source: FAQ 5.1.1; 2020/03/09
+
+Setup Diagram
+SWA Board FleetAmbush-0
+
+Task Force Rule
+This objective is not recommended for Task Force play.
+
+See also
+All Defense Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

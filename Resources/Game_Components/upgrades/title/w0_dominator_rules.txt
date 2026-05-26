@@ -1,0 +1,32 @@
+Dominator
+4
+SAVE
+EDIT
+ Dominator Title Upgrade card
+Dominator Title Upgrade card
+How-to_use_Title_"Dominator"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Title "Dominator" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+5	Appearance
+Card Text
+"While attacking at close-medium range, you may spend up to 2 shields from any of your hull zones to add the same number of blue dice to your attack pool."
+
+Attributes
+Icon Upgrade Title Title Upgrade Card for Victory-class Star Destroyer
+• Unique
+ImpLogo Imperial Upgrade Card
+7 points
+Available Through
+Star Wars: Armada Core Set
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card triggers during Attack Step 3: "Resolve Attack Effects"
+
+Appearance
+The Dominator was responsible for destroying an Alliance training base on Taul. It first appeared in the role-playing magazine Star Wars Adventure Journal Volume 1, Number 1.

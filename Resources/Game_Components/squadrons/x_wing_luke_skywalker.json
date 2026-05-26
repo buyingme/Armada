@@ -1,0 +1,86 @@
+{
+    "_comment": "Extracted from the corrected Luke Skywalker card image and provided rules note on 2026-05-25.",
+    "_source": "Resources/Game_Components/squadrons/x_wing_luke_skywalker_card_corr.png",
+    "_status": "VERIFIED_FROM_CARD_IMAGE_AND_RULES_NOTE",
+    "data_key": "x_wing_luke_skywalker",
+    "kind": "squadron_card",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "x_wing_luke_skywalker_card_corr.png",
+    "token_image": "x_wing_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/x_wing_luke_skywalker_rules.txt",
+    "base_squadron_data_key": "x_wing_squadron",
+    "squadron_family": "x_wing",
+    "squadron_name": "Luke Skywalker X-wing Squadron",
+    "faction": "REBEL_ALLIANCE",
+    "point_cost": 20,
+    "hull": 5,
+    "speed": 3,
+    "anti_squadron_armament": {
+        "BLACK": 4
+    },
+    "battery_armament": {
+        "RED": 1
+    },
+    "keywords": [
+        {
+            "name": "Bomber"
+        },
+        {
+            "name": "Escort"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Bomber": "While attacking a ship, each of your critical icons adds 1 damage to the damage total and you can resolve a critical effect.",
+        "Escort": "Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack."
+    },
+    "ability_text": "While attacking a ship, treat the defender as having no shields.",
+    "is_unique": true,
+    "unique_group": "luke_skywalker",
+    "defense_tokens": [
+        "BRACE",
+        "BRACE"
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.resolve_damage.ship_shields",
+            "timing": "during_resolve_damage",
+            "summary": "Treat the defending ship as having no shields while Luke Skywalker attacks it."
+        },
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.resolve_damage.bomber_keyword",
+            "timing": "while_attacking_ship",
+            "summary": "Critical icons add 1 damage to the damage total and can resolve a critical effect while attacking a ship."
+        },
+        {
+            "kind": "BLOCKER",
+            "surface": "attack.declare_target.escort_keyword",
+            "timing": "while_engaged_squadron_declares_target",
+            "summary": "Squadrons engaged with this Escort squadron cannot attack squadrons that lack Escort unless performing a Counter attack."
+        }
+    ],
+    "runtime_state_requirements": [
+        "luke_skywalker_ignore_ship_shields",
+        "bomber_keyword_damage_modifier",
+        "escort_targeting_restriction"
+    ],
+    "search_tags": [
+        "rebel",
+        "wave_0",
+        "core_set",
+        "unique",
+        "x_wing",
+        "bomber",
+        "escort",
+        "shields"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/x_wing_luke_skywalker_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
+}

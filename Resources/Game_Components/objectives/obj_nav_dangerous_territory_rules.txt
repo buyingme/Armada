@@ -1,0 +1,39 @@
+Dangerous Territory
+SAVE
+EDIT
+ Dangerous Territory Objective card
+Dangerous Territory Objective card
+How-to_play_Objective_"Dangerous_Territory"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Dangerous Territory" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Timing
+4	See also
+5	Available Through
+Card Text
+Setup: Obstacles must be placed in the setup area beyond distance 5 of both players' edges. After placing obstacles, place 1 objective token on each obstacle.
+
+Special Rule: When a ship overlaps an obstacle, the ship's owner may remove the objective token on that obstacle to gain 1 victory token.
+
+When one of the second player's ships overlaps an asteroid field or debris field, that obstacle has no effect.
+
+Victory Token: 15 pt.
+
+Rules Clarification
+A squadron with strategic can move objective tokens off of or onto obstacles. An objective token can only be removed to gain 1 victory token if it is overlapping an obstacle. If multiple objective tokens are overlapping an obstacle, only 1 can be removed when a ship overlaps that obstacle.
+
+FAQ 3.1.1 April 2017
+
+Timing
+This card’s Special Rule effect resolves during the Move Ship step while executing a maneuver.
+
+FaQ Version 3.3.1; Dec. 2017
+
+See also
+All Navigation Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

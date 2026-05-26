@@ -1,0 +1,33 @@
+"Howlrunner" TIE Fighter Squadron
+3
+SAVE
+EDIT
+ "Howlrunner" TIE Fighter Squadron card
+"Howlrunner" TIE Fighter Squadron card
+" Civé Rashon was a female TIE pilot in the Imperial Navy during the Galactic Civil War. She led Obsidian Squadron, an elite TIE squadron stationed aboard the Star Destroyer Avenger, and was given the call sign "Howlrunner". In 3 ABY, Rashon and Obsidian Squadron participated in the takeover of the planet Bespin and in the pursuit of the fugitive Rebel starship, the Millennium Falcon, as it escaped the planet. A year later, Rashon and Obsidian Squadron fought in the Battle of Endor. "
+
+
+Contents
+1	Card Text
+2	Defense Tokens
+3	Attributes
+4	Available Through
+5	Timing
+6	Appearance
+Card Text
+"While another friendly squadron with Swarm at distance 1 is attacking a squadron, it may add 1 blue die to its attack pool."
+
+Icon SQKey Swarm Swarm (While attacking a squadron engaged with another squadron, you may reroll 1 die.)
+
+Defense Tokens
+Green-defensetokenC Brace
+Green-defensetokenA Scatter
+Attributes
+ImpLogo Imperial Squadron Card
+• Unique
+16 points
+Icon TIE-Fighter TIE Fighter
+Available Through
+Star Wars: Armada Core Set
+Timing
+The effect of this Squadron Card triggers during Attack Step 3: "Resolve Attack Effects"

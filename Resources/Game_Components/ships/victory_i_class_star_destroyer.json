@@ -2,6 +2,42 @@
     "_comment": "Extracted from provided card image on 2026-03-07",
     "_source": "shipcard_victory-i-class-star-destroyer.jpg",
     "_status": "VERIFIED",
+    "data_key": "victory_i_class_star_destroyer",
+    "kind": "ship_card",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "victory_class_star_destroyer_expansion_pack"
+    ],
+    "card_image": "victory_i_class_star_destroyer_card.png",
+    "rules_source": "Resources/Game_Components/ships/victory_i_class_star_destroyer_rules.txt",
+    "ship_class": "victory_class_star_destroyer",
+    "ship_variant": "i",
+    "title_upgrade_group": "victory_class_star_destroyer",
+    "related_ship_data_keys": [
+        "victory_ii_class_star_destroyer"
+    ],
+    "class_specifics": "Compared to the Victory II-class Star Destroyer, the I-class variant uses black dice in its front and side batteries and has an Ordnance slot instead of an Ion Cannons slot.",
+    "lore_aliases": [
+        "victory_class_star_destroyer",
+        "vsd"
+    ],
+    "search_tags": [
+        "imperial",
+        "wave_0",
+        "core_set",
+        "medium_ship",
+        "victory_class",
+        "star_destroyer",
+        "black_dice",
+        "ordnance",
+        "slow_ship",
+        "high_hull"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/ships/victory_i_class_star_destroyer_rules.txt"
+    ],
     "ship_name": "Victory I-class Star Destroyer",
     "faction": "GALACTIC_EMPIRE",
     "ship_size": "MEDIUM",

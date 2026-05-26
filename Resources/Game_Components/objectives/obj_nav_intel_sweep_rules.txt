@@ -1,0 +1,30 @@
+Intel Sweep
+1
+SAVE
+EDIT
+ Intel Sweep Objective card
+Intel Sweep Objective card
+How-to_play_Objective_"Intel_Sweep"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Intel Sweep" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Task Force Rule
+3	See also
+4	Available Through
+Card Text
+Setup: After placing obstacles the players alternate placing a total of 5 objective tokens in the setup area, starting with the second player. Each token must be placed in the play area beyond distance 5 of both players' edges and beyond distance 3 of all other objective tokens. Then each player chooses one of his ships to be an objective ship, starting with the first player.
+
+Special Rule: When a player's objective ship reveals a command dial, that player may choose 1 objective token at a distance of 1 of that ship and remove it from the play area to gain 1 victory token.
+
+End of Game: If a player has more victory tokens than his opponent, increase his final score by 75.
+
+Task Force Rule
+This objective is not recommended for Task Force play.
+
+See also
+All Navigation Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

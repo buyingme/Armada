@@ -1,0 +1,88 @@
+{
+    "data_key": "obj_nav_intel_sweep",
+    "kind": "objective_card",
+    "objective_name": "Intel Sweep",
+    "category": "NAVIGATION",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_nav_intel_sweep_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": false,
+    "setup_text": "After placing obstacles, players alternate placing 5 objective tokens in the setup area, starting with the second player. Tokens must be beyond distance 5 of both player edges and beyond distance 3 of all other objective tokens. Then each player chooses 1 of their ships to be an objective ship, starting with the first player.",
+    "special_rule_text": "When a player's objective ship reveals a command dial, that player may remove 1 objective token at distance 1 of that ship to gain 1 victory token.",
+    "end_of_round_text": "",
+    "end_of_game_text": "If one player has more victory tokens than the opponent, increase that player's final score by 75.",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [
+        "This objective is not recommended for Task Force play."
+    ],
+    "setup_effects": [
+        {
+            "kind": "place_objective_tokens_alternating",
+            "controller_order": [
+                "SECOND_PLAYER",
+                "FIRST_PLAYER"
+            ],
+            "count": 5,
+            "placement_constraints": [
+                "setup_area",
+                "beyond_distance_5_of_player_edges",
+                "beyond_distance_3_of_objective_tokens"
+            ]
+        },
+        {
+            "kind": "choose_objective_ship",
+            "controller_order": [
+                "FIRST_PLAYER",
+                "SECOND_PLAYER"
+            ],
+            "target": "own_ship",
+            "count_per_player": 1
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "command.reveal_dial",
+            "timing": "when_objective_ship_reveals_command_dial",
+            "summary": "Objective ship owner may remove an objective token at distance 1 to gain 1 victory token."
+        },
+        {
+            "kind": "SCORING",
+            "surface": "game.end_scoring",
+            "timing": "end_of_game",
+            "summary": "If one player has more victory tokens, increase that player's final score by 75."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 5,
+        "count_formula": "fixed",
+        "placement": [
+            "setup_area",
+            "beyond_distance_5_of_player_edges",
+            "beyond_distance_3_of_other_objective_tokens"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_token_placements",
+        "objective_ships_by_player",
+        "removed_objective_tokens",
+        "victory_tokens_by_player"
+    ],
+    "search_tags": [
+        "navigation",
+        "objective_ship",
+        "objective_tokens",
+        "command_dial",
+        "end_game_scoring"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_nav_intel_sweep_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

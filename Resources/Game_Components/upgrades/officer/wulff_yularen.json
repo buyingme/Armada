@@ -1,0 +1,58 @@
+{
+    "data_key": "wulff_yularen",
+    "kind": "upgrade_card",
+    "upgrade_name": "Wulff Yularen",
+    "upgrade_type": "OFFICER",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_wulff_yularen_card.png",
+    "point_cost": 7,
+    "is_unique": true,
+    "unique_group": "wulff_yularen",
+    "faction_restriction": [
+        "GALACTIC_EMPIRE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": true,
+    "is_modification": false,
+    "refresh": {
+        "mode": "standard_status_ready",
+        "ready_cost": null
+    },
+    "effect_text": "When you spend a command token, you may exhaust this card to gain 1 command token of the same type.",
+    "timing_notes": [
+        "Triggers immediately after spending a command token."
+    ],
+    "errata": [],
+    "clarifications": [
+        "If a ship spends a command token to resolve a command, it cannot spend the matching token gained by Wulff Yularen to resolve that command or its effect again this round."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "OBSERVER",
+            "surface": "command.after_token_spent",
+            "timing": "immediately_after_spending_command_token",
+            "summary": "Optionally exhaust this card to regain one command token of the same type."
+        }
+    ],
+    "runtime_state_requirements": [
+        "upgrade_exhaustion_state",
+        "command_token_spend_history"
+    ],
+    "search_tags": [
+        "officer",
+        "imperial",
+        "unique",
+        "command_token",
+        "exhaust"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/officer/w0_wulff_yularen_rules.txt"
+    ]
+}

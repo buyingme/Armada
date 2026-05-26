@@ -1,0 +1,34 @@
+Dodonna's Pride
+4
+SAVE
+EDIT
+ Dodonna's Pride Title Upgrade card
+Dodonna's Pride Title Upgrade card
+How-to_use_Title_"Dodonna's_Pride"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Title "Dodonna's Pride" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+5	Appearance
+Card Text
+"Blue Icon Dice Crit: Cancel all attack dice to deal 1 faceup damage card to the defender."
+
+Attributes
+Icon Upgrade Title Title Upgrade Card for CR90 Corellian Corvette
+• Unique
+RebLogo Rebel Upgrade Card
+4 points
+Available Through
+Star Wars: Armada Core Set
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card can be chosen during Attack Step 5: Resolve Damage
+
+Important: The critical effect must be chosen and pronounced after the defender already spent his defense tokens (Attack Step 4). When the attacker decides for Dodonna's Pride effect, the Damage Total drops to zero, but the defender cannot undo his decision.
+
+Appearance
+The Dodonna's Pride was named for General Jan Dodonna. That CR90 Corvette was used by the Rebel Alliance in the real time strategy game Empire at War.

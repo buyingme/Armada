@@ -1,0 +1,81 @@
+{
+    "data_key": "obj_def_fleet_ambush",
+    "kind": "objective_card",
+    "objective_name": "Fleet Ambush",
+    "category": "DEFENSE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_def_fleet_ambush_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": false,
+    "setup_text": "The area beyond distance 5 of any setup-area edge is the Ambush Zone, marked with objective tokens. Players deploy all ships before squadrons. The first player must deploy ships in the Ambush Zone on odd-numbered deployment turns, starting with the first turn.",
+    "special_rule_text": "First-player ships and squadrons cannot deploy overlapping obstacles in the Ambush Zone. Remove the Ambush Zone objective tokens after setup.",
+    "end_of_round_text": "",
+    "end_of_game_text": "",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [
+        "After a player has placed all ships, that player begins placing squadrons on their next deployment turn while the other player continues placing ships until all ships are placed.",
+        "The first player can deploy squadrons within distance 1-2 of a ship inside the Ambush Zone.",
+        "If a required Ambush Zone ship cannot fit without overlapping obstacles or leaving the zone, place it as completely inside the Ambush Zone as possible.",
+        "This objective is not recommended for Task Force play."
+    ],
+    "setup_effects": [
+        {
+            "kind": "mark_ambush_zone",
+            "controller": "BOTH_PLAYERS",
+            "objective_token_count": 4,
+            "zone_rule": "beyond_distance_5_of_any_setup_area_edge"
+        },
+        {
+            "kind": "deployment_order_override",
+            "controller": "BOTH_PLAYERS",
+            "rule": "deploy_all_ships_before_any_squadrons"
+        },
+        {
+            "kind": "deployment_zone_override",
+            "controller": "FIRST_PLAYER",
+            "rule": "odd_numbered_ship_deployments_in_ambush_zone"
+        },
+        {
+            "kind": "remove_objective_tokens",
+            "timing": "after_setup_complete"
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "VALIDATOR",
+            "surface": "setup.deploy_component",
+            "timing": "during_deploy_ships_and_squadrons",
+            "summary": "Validate ship-before-squadron order, odd first-player Ambush Zone deployments, and no Ambush Zone obstacle overlaps."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 4,
+        "count_formula": "ambush_zone_corner_markers",
+        "placement": [
+            "ambush_zone_corners",
+            "removed_after_setup"
+        ]
+    },
+    "runtime_state_requirements": [
+        "ambush_zone_bounds",
+        "deployment_turn_counts",
+        "temporary_objective_tokens"
+    ],
+    "search_tags": [
+        "defense",
+        "deployment",
+        "ambush_zone",
+        "objective_tokens",
+        "task_force_not_recommended"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_def_fleet_ambush_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

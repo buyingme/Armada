@@ -1,0 +1,24 @@
+TIE Advanced Squadron
+1
+SAVE
+EDIT
+ TIE Advanced Squadron card
+TIE Advanced Squadron card
+
+Contents
+1	Card Text
+2	Attributes
+3	Aces&Infamous Squadrons
+4	Available Through
+Card Text
+Escort Escort. (Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack.)
+
+Attributes
+ImpLogo Imperial Squadron Card
+12 points
+Aces&Infamous Squadrons
+Icon TIE-Advanced Darth Vader
+Icon TIE-Advanced Zertik Strom
+Icon TIE-Advanced Tempest Squadron
+Available Through
+Imperial Fighter Squadrons Expansion Pack

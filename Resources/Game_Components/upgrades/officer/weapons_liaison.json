@@ -1,0 +1,52 @@
+{
+    "data_key": "weapons_liaison",
+    "kind": "upgrade_card",
+    "upgrade_name": "Weapons Liaison",
+    "upgrade_type": "OFFICER",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "assault_frigate_mark_ii_expansion_pack",
+        "gladiator_class_star_destroyer_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_weapons_liaison_card.png",
+    "point_cost": 3,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Before you reveal a command, you may spend 1 command token to change that command to a Concentrate Fire or Squadron command.",
+    "timing_notes": [
+        "Triggers during Ship Activation before step 1: Reveal Command Dial."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "command.before_reveal.change_dial",
+            "timing": "before_reveal_command_dial",
+            "summary": "Spend 1 command token to change the revealed command to Concentrate Fire or Squadron."
+        }
+    ],
+    "runtime_state_requirements": [
+        "command_token_spend",
+        "command_dial_rewrite"
+    ],
+    "search_tags": [
+        "officer",
+        "command",
+        "concentrate_fire",
+        "squadron",
+        "dial_change"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/officer/w0_weapons_liaison_rules.txt"
+    ]
+}

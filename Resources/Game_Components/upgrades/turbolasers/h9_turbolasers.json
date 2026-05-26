@@ -1,0 +1,53 @@
+{
+    "data_key": "h9_turbolasers",
+    "kind": "upgrade_card",
+    "upgrade_name": "H9 Turbolasers",
+    "upgrade_type": "TURBOLASERS",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "assault_frigate_mark_ii_expansion_pack",
+        "cr90_corellian_corvette_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_h9_turbolasers_card.png",
+    "point_cost": 8,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": true,
+    "effect_text": "Modification. While attacking, you may change 1 die face with a Hit or Critical icon to a face with an Accuracy icon.",
+    "timing_notes": [
+        "Triggers during Attack Step 3: Resolve Attack Effects."
+    ],
+    "errata": [
+        "Armada 1.5 changed this card and added the Modification trait."
+    ],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects.modify_dice",
+            "timing": "during_resolve_attack_effects",
+            "summary": "Change one die showing a Hit or Critical icon to a face with an Accuracy icon."
+        }
+    ],
+    "runtime_state_requirements": [
+        "dice_face_change_choice",
+        "accuracy_icon_face_lookup"
+    ],
+    "search_tags": [
+        "turbolasers",
+        "modification",
+        "accuracy",
+        "dice_modification"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/turbolasers/w0_h9_turbolasers_rules.txt"
+    ]
+}

@@ -2,6 +2,42 @@
   "_comment": "Extracted from provided card image on 2026-03-07",
   "_source": "Resources/Game_Components/Ships/Rebel/shipcard_cr90b-corvette.png",
   "_status": "VERIFIED",
+  "data_key": "cr90_corvette_b",
+  "kind": "ship_card",
+  "wave": 0,
+  "expansion": "core_set",
+  "available_through": [
+    "star_wars_armada_core_set",
+    "cr90_corellian_corvette_expansion_pack"
+  ],
+  "card_image": "cr90_corvette_b_card.png",
+  "rules_source": "Resources/Game_Components/ships/cr90_corvette_b_rules.txt",
+  "ship_class": "cr90_corvette",
+  "ship_variant": "b",
+  "title_upgrade_group": "cr90_corvette",
+  "related_ship_data_keys": [
+    "cr90_corvette_a"
+  ],
+  "class_specifics": "Compared to the CR90 Corvette A, the B variant is armed only with blue dice and uses an Ion Cannons slot instead of a Turbolasers slot.",
+  "lore_aliases": [
+    "alderaan_cruiser",
+    "corellian_corvette",
+    "blockade_runner"
+  ],
+  "search_tags": [
+    "rebel",
+    "wave_0",
+    "core_set",
+    "small_ship",
+    "cr90",
+    "corvette",
+    "blue_dice",
+    "ion_cannons",
+    "fast_ship"
+  ],
+  "source_refs": [
+    "Resources/Game_Components/ships/cr90_corvette_b_rules.txt"
+  ],
   "ship_name": "CR90 Corvette B",
   "faction": "REBEL_ALLIANCE",
   "ship_size": "SMALL",

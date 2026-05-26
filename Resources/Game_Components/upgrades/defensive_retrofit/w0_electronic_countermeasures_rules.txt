@@ -1,0 +1,44 @@
+Electronic Countermeasures
+1
+SAVE
+EDIT
+ Electronic Countermeasures Retrofit Upgrade card
+Electronic Countermeasures Retrofit Upgrade card
+How-to_use_Defensive_Retrofit_"Electronic_Countermeasures"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Defensive Retrofit "Electronic Countermeasures" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	New Rule
+2	Card Text
+3	Rules Clarification
+4	Attributes
+5	Available Through
+6	Timing
+New Rule
+With Armada 1.5 published in December 2020 this card has been changed from Recur to non-Recur. You now have to pay 1 Icon Command Repair token during Status Phase to ready this card.
+
+Electronic Countermeasures old version
+Electronic Countermeasures old version
+Card Text
+"While defending you may exhaust this card to spend 1 defense token that your opponent targeted with an Icon Dice Accuracy result."
+
+Rules Clarification
+This card’s effect does not allow you to do any of the following:
+
+Spend a defense token while at speed “0”.
+Spend a defense token of a type the defender has already spent during an attack.
+Spend a defense token more than once during an attack.
+FaQ Version 3.3.1; Dec. 2017
+
+Attributes
+Icon Upgrade DefensiveRetrofit Defensive Retrofit Upgrade Card
+NonRecur-iconRecur cost: 1 Icon Command Repair token (old: Recur-icon)
+7 points
+Available Through
+Star Wars: Armada Core Set
+Assault Frigate Mark II Expansion Pack
+CR90 Corellian Corvette Expansion Pack
+Upgrade Card Collection (new card size/updated text) (x2)
+Timing
+This Upgrade Card has to be exhausted and triggers during Attack Step 4: "Spend Defense Tokens"

@@ -1,0 +1,59 @@
+{
+    "data_key": "dominator",
+    "kind": "upgrade_card",
+    "upgrade_name": "Dominator",
+    "upgrade_type": "TITLE",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_dominator_card.png",
+    "point_cost": 7,
+    "is_unique": true,
+    "unique_group": "dominator",
+    "faction_restriction": [
+        "GALACTIC_EMPIRE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [
+        "victory_class_star_destroyer"
+    ],
+    "ship_data_key_restriction": [
+        "victory_i_class_star_destroyer",
+        "victory_ii_class_star_destroyer"
+    ],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "While attacking at close-medium range, you may spend up to 2 shields from any of your hull zones to add that many blue dice to your attack pool.",
+    "timing_notes": [
+        "Triggers during Attack Step 3: Resolve Attack Effects."
+    ],
+    "errata": [],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects.spend_shields_for_dice",
+            "timing": "during_resolve_attack_effects",
+            "summary": "At close-medium range, spend up to 2 shields from any hull zones to add the same number of blue dice."
+        }
+    ],
+    "runtime_state_requirements": [
+        "attack_range_band",
+        "shield_spend_choice",
+        "dice_pool_modifier"
+    ],
+    "search_tags": [
+        "title",
+        "imperial",
+        "unique",
+        "victory",
+        "blue_dice",
+        "shields"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/title/w0_dominator_rules.txt"
+    ]
+}

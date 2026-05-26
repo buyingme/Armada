@@ -1,0 +1,27 @@
+Defense Liaison
+SAVE
+EDIT
+ Defense Liaison Crew Upgrade card
+Defense Liaison Crew Upgrade card
+How-to_use_Officer_"Defense_Liaison"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Officer "Defense Liaison" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Attributes
+3	Available Through
+4	Timing
+Card Text
+"Before you reveal a command, you may spend 1 command token to change that command to a Icon Command Navigate or Icon Command Repair command."
+
+Attributes
+Icon Upgrade Officer Officer Upgrade Card
+3 points
+Available Through
+Star Wars: Armada Core Set
+Nebulon-B Frigate Expansion Pack
+Victory-class Star Destroyer Expansion Pack
+Upgrade Card Collection (new card size)
+Timing
+The effect of this Upgrade Card triggers during Ship Activation before step 1: "Reveal Command Dial"

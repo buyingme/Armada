@@ -1,7 +1,23 @@
 {
-    "_comment": "Extracted from uploaded squadron card image — verify against Rules Reference v1.5.0 if used beyond MT setup",
+    "_comment": "Extracted from uploaded squadron card image and enriched from the provided squadron rules note on 2026-05-25.",
     "_source": "Resources/Game_Components/squadrons/tie_bomber_squadron_card.png",
     "_status": "VERIFIED_FROM_CARD_IMAGE",
+    "data_key": "tie_bomber_squadron",
+    "kind": "squadron_card",
+    "wave": 1,
+    "expansion": "imperial_fighter_squadrons_expansion_pack",
+    "available_through": [
+        "imperial_fighter_squadrons_expansion_pack"
+    ],
+    "card_image": "tie_bomber_squadron_card.png",
+    "token_image": "tie_bomber_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/tie_bomber_squadron_rules.txt",
+    "squadron_family": "tie_bomber",
+    "ace_variants": [
+        "captain_jonus",
+        "major_rhymer",
+        "gamma_squadron"
+    ],
     "squadron_name": "TIE Bomber Squadron",
     "faction": "GALACTIC_EMPIRE",
     "point_cost": 9,
@@ -27,5 +43,36 @@
     },
     "ability_text": "",
     "is_unique": false,
-    "defense_tokens": []
+    "unique_group": "",
+    "defense_tokens": [],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.resolve_damage.bomber_keyword",
+            "timing": "while_attacking_ship",
+            "summary": "Critical icons add 1 damage to the damage total and can resolve a critical effect while attacking a ship."
+        },
+        {
+            "kind": "MODIFIER",
+            "surface": "engagement.heavy_keyword",
+            "timing": "while_enemy_squadron_is_engaged_only_by_heavy_squadrons",
+            "summary": "Does not prevent engaged squadrons from attacking ships or moving."
+        }
+    ],
+    "runtime_state_requirements": [
+        "bomber_keyword_damage_modifier",
+        "heavy_engagement_movement_and_ship_attack_exception"
+    ],
+    "search_tags": [
+        "imperial",
+        "wave_1",
+        "imperial_fighter_squadrons",
+        "tie_bomber",
+        "bomber",
+        "heavy"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/tie_bomber_squadron_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
 }

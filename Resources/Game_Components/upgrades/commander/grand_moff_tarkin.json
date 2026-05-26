@@ -1,0 +1,61 @@
+{
+    "data_key": "grand_moff_tarkin",
+    "kind": "upgrade_card",
+    "upgrade_name": "Grand Moff Tarkin",
+    "upgrade_type": "COMMANDER",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_grand_moff_tarkin_card.png",
+    "point_cost": 28,
+    "is_unique": true,
+    "unique_group": "grand_moff_tarkin",
+    "faction_restriction": [
+        "GALACTIC_EMPIRE"
+    ],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "At the start of each Ship Phase, you may choose 1 command. Each friendly ship gains a command token matching that command.",
+    "timing_notes": [
+        "Triggers at the start of each Ship Phase.",
+        "The chosen command tokens are dealt at the start of the Ship Phase and can then be spent to trigger Ship Phase upgrade cards."
+    ],
+    "errata": [
+        "Armada 1.5 changed this card's point cost to 28."
+    ],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "phase.ship.start.command_choice",
+            "timing": "start_of_ship_phase",
+            "summary": "Let the Tarkin player choose one command type at the start of each Ship Phase."
+        },
+        {
+            "kind": "OBSERVER",
+            "surface": "phase.ship.start.grant_tokens",
+            "timing": "after_tarkin_command_choice",
+            "summary": "Each friendly ship gains a command token matching the chosen command."
+        }
+    ],
+    "runtime_state_requirements": [
+        "ship_phase_start_choice",
+        "friendly_ship_command_tokens"
+    ],
+    "search_tags": [
+        "commander",
+        "imperial",
+        "unique",
+        "command_token",
+        "ship_phase"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/commander/w0_grand_moff_tarkin_rules.txt"
+    ]
+}

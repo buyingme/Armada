@@ -1,0 +1,62 @@
+{
+    "data_key": "gunnery_team",
+    "kind": "upgrade_card",
+    "upgrade_name": "Gunnery Team",
+    "upgrade_type": "WEAPONS_TEAM",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "victory_class_star_destroyer_expansion_pack",
+        "assault_frigate_mark_ii_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_gunnery_team_card.png",
+    "point_cost": 7,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": false,
+    "effect_text": "Concentrate Fire: The next attack you perform this activation can be performed from this hull zone. Each of your hull zones cannot target the same ship or squadron more than once during your activation.",
+    "timing_notes": [
+        "Can be resolved once while the equipped ship resolves a Concentrate Fire command during Resolve Attack Effects.",
+        "If resolved, the next attack during this activation may declare a target from the same hull zone."
+    ],
+    "errata": [
+        "Armada 1.5 changed this card's effect. Source cites RRG 1.5.0 p.25."
+    ],
+    "clarifications": [],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects.repeat_hull_zone",
+            "timing": "while_resolving_concentrate_fire_command",
+            "summary": "Allow the next attack this activation to be performed from the same hull zone."
+        },
+        {
+            "kind": "VALIDATOR",
+            "surface": "attack.declare_target.same_hull_zone_repeat",
+            "timing": "during_declare_target",
+            "summary": "Prevent each hull zone from targeting the same ship or squadron more than once during the activation."
+        }
+    ],
+    "runtime_state_requirements": [
+        "concentrate_fire_command_resolution",
+        "per_activation_hull_zone_target_history"
+    ],
+    "search_tags": [
+        "weapons_team",
+        "concentrate_fire",
+        "attack",
+        "hull_zone",
+        "targeting"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/weapon_team/w0_gunnery_team_rules.txt",
+        "RRG 1.5.0 p.25"
+    ]
+}

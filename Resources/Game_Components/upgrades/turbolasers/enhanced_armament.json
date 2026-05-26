@@ -1,0 +1,53 @@
+{
+    "data_key": "enhanced_armament",
+    "kind": "upgrade_card",
+    "upgrade_name": "Enhanced Armament",
+    "upgrade_type": "TURBOLASERS",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "assault_frigate_mark_ii_expansion_pack",
+        "nebulon_b_frigate_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_enhanced_armament_card.png",
+    "point_cost": 10,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": false,
+    "is_modification": true,
+    "effect_text": "Modification. The battery armaments for your left and right hull zones are increased by 1 red die.",
+    "timing_notes": [
+        "Triggers during Attack Step 2: Roll Attack Dice."
+    ],
+    "errata": [],
+    "clarifications": [
+        "Does not increase the battery armament of auxiliary side arcs on huge ships."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.roll_attack_dice.battery_armament",
+            "timing": "before_rolling_attack_dice",
+            "summary": "Add 1 red die to attacks from the equipped ship's left or right hull zones."
+        }
+    ],
+    "runtime_state_requirements": [
+        "attacking_hull_zone",
+        "dice_pool_modifier"
+    ],
+    "search_tags": [
+        "turbolasers",
+        "modification",
+        "red_dice",
+        "battery_armament"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/turbolasers/w0_enhanced_armament_rules.txt"
+    ]
+}

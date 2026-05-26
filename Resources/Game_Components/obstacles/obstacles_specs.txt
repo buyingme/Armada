@@ -1,0 +1,23 @@
+Rule
+Attacks that draw line of sight through an obstacle token are obstructed.
+
+When a ship or squadron overlaps an obstacle after executing a maneuver, it resolves an effect that depends on the type of obstacle it overlapped.
+
+A ship or squadron overlaps an obstacle if part of its base is on top of the obstacle token after moving (excluding activation sliders).
+If a ship overlaps more than one obstacle, it resolves the effects of each obstacle in any order.
+When playing a standard game with an objective card, players must use the six obstacle tokens from a core set or fleet expansion and add obstacles from a campaign expansion if specified by the chosen objective card. Players must use the obstacle shapes provided in a core set or campaign expansion and cannot choose a different mix of shapes by combining multiple sets.
+Source: RRG 1.5.0 p.12
+
+Asteroid Field
+The ship is dealt one faceup damage card.
+Squadrons are unaffected.
+Source: RRG 1.5.0 p.12
+
+Debris Field
+The ship suffers two damage on any one hull zone.
+Squadrons are unaffected.
+Source: RRG 1.5.0 p.12
+
+Space Station
+The ship can discard one of its faceup or facedown damage cards.
+The squadron can recover one hull point.

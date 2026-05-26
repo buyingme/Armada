@@ -1,0 +1,47 @@
+Luke Skywalker X-wing Squadron
+4
+SAVE
+EDIT
+ Luke Skywalker X-wing Squadron card
+Luke Skywalker X-wing Squadron card
+How-to_use_Squadron_"Xwing"_(and_uniques)_-_Star_Wars_Armada_Explained_(SWAE)
+How-to use Squadron "Xwing" (and uniques) - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Rules Clarification
+3	Defense Tokens
+4	Attributes
+5	Available Through
+6	Timing
+7	Appearance
+Card Text
+"While attacking a ship, treat the defender as having no shields."
+
+Bomber Bomber. (While attacking a ship, each of your Icon Dice Crit adds 1 damage to the damage total and you can resolve a critical effect.)
+
+Escort Escort. (Squadrons you are engaged with cannot attack squadrons that lack escort unless performing a counter attack.)
+
+
+
+Rules Clarification
+Ignore Luke Skywalker’s ability while resolving the “Projector Misaligned” and “Shield Failure” damage card effects.
+
+FaQ Version 3.3.1; Dec. 2017
+
+Luke Skywalker does not resolve the critical effect granted by Norra Wexley’s ability while attacking a ship with shields.
+
+FAQ Version 4.1.1; 2018/04/23
+
+Defense Tokens
+Green-defensetokenCGreen-defensetokenC Brace (x2)
+Attributes
+RebLogo Rebel Squadron Card
+• Unique
+20 points
+Icon X-wing X-wing Squadron
+Available Through
+Star Wars: Armada Core Set
+Timing
+The effect of this Squadron Card triggers during Attack step 5: "Resolve Damage"

@@ -1,0 +1,30 @@
+Fire Lanes
+3
+SAVE
+EDIT
+ Fire Lanes Objective card
+Fire Lanes Objective card
+How-to_play_Objective_"Fire_Lanes"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Fire Lanes" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	See also
+3	Task Force Rule
+4	Available Through
+Card Text
+Setup: After placing obstacles, the second player places 3 objective tokens in the setup area beyond distance 4 of both players' edges. Then the first player may move each objective token to within distance 1-2 of its current position
+
+End of Round: Each player gains 1 victory token for each objective he controls. To determine control of each token, players measure attack range and line of sight from each of their ships' hull zones as if performing attacks with battery armament targeting that objective token. The player with the highest total number of dice in his combined attack pool controls that token. If a player's ship or squadron overlaps an objective token, his opponent controls that token; if both players' ships or squadrons overlap the same token, neither player controls it.
+
+Victory Token: 15 pts.
+
+See also
+All Defense Objective Cards
+All Objective Cards
+Task Force Rule
+This objective is not recommended for Task Force play.
+
+Available Through
+Star Wars: Armada Core Set

@@ -1,0 +1,77 @@
+{
+    "_comment": "Extracted from the Howlrunner card image and provided rules note on 2026-05-25.",
+    "_source": "Resources/Game_Components/squadrons/tie_fighter_howlrunner_card.png",
+    "_status": "VERIFIED_FROM_CARD_IMAGE_AND_RULES_NOTE",
+    "data_key": "tie_fighter_howlrunner",
+    "kind": "squadron_card",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "tie_fighter_howlrunner_card.png",
+    "token_image": "tie_fighter_squadron_token.png",
+    "rules_source": "Resources/Game_Components/squadrons/tie_fighter_howlrunner_rules.txt",
+    "base_squadron_data_key": "tie_fighter_squadron",
+    "squadron_family": "tie_fighter",
+    "squadron_name": "Howlrunner TIE Fighter Squadron",
+    "faction": "GALACTIC_EMPIRE",
+    "point_cost": 16,
+    "hull": 3,
+    "speed": 4,
+    "anti_squadron_armament": {
+        "BLUE": 3
+    },
+    "battery_armament": {
+        "BLUE": 1
+    },
+    "keywords": [
+        {
+            "name": "Swarm"
+        }
+    ],
+    "keyword_reminder_text": {
+        "Swarm": "While attacking a squadron engaged with another squadron, you may reroll 1 die."
+    },
+    "ability_text": "While another friendly squadron with Swarm at distance 1 is attacking a squadron, it may add 1 blue die to its attack pool.",
+    "is_unique": true,
+    "unique_group": "howlrunner",
+    "defense_tokens": [
+        "BRACE",
+        "SCATTER"
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.roll_attack_dice.squadron_aura",
+            "timing": "during_resolve_attack_effects",
+            "summary": "Add 1 blue die when another friendly Swarm squadron at distance 1 attacks a squadron."
+        },
+        {
+            "kind": "ENABLER",
+            "surface": "attack.resolve_attack_effects.swarm_keyword",
+            "timing": "while_attacking_engaged_squadron",
+            "summary": "May reroll 1 die while attacking a squadron engaged with another squadron."
+        }
+    ],
+    "runtime_state_requirements": [
+        "howlrunner_distance_1_swarm_aura",
+        "friendly_squadron_swarm_check",
+        "swarm_engagement_check",
+        "dice_reroll_choice"
+    ],
+    "search_tags": [
+        "imperial",
+        "wave_0",
+        "core_set",
+        "unique",
+        "tie_fighter",
+        "swarm",
+        "aura",
+        "blue_dice"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/squadrons/tie_fighter_howlrunner_rules.txt",
+        "RRG 1.5.0 Squadron Keywords"
+    ]
+}

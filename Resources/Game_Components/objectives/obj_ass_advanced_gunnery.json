@@ -1,0 +1,80 @@
+{
+    "data_key": "obj_ass_advanced_gunnery",
+    "kind": "objective_card",
+    "objective_name": "Advanced Gunnery",
+    "category": "ASSAULT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "card_image": "obj_ass_advanced_gunnery_card.png",
+    "victory_token_points": null,
+    "task_force_recommended": true,
+    "setup_text": "After deploying fleets, each player chooses 1 of their ships to be an objective ship, starting with the first player.",
+    "special_rule_text": "Objective ships may perform attacks from the same hull zone. The first player's objective ship cannot attack the same hull zone or squadron more than once each round with that hull zone; the second player's objective ship can attack the same target.",
+    "end_of_round_text": "",
+    "end_of_game_text": "Destroyed objective ships score double their ship cost, excluding upgrades.",
+    "timing_notes": [],
+    "errata": [],
+    "clarifications": [
+        "Gunnery Team does not allow the same ship or squadron to be targeted more than once during the same activation.",
+        "Slaved Turrets still prevents more than one attack per round.",
+        "Impetuous and Ordnance Pods cannot use the same hull zone to target the same squadron more than once during that ship's activation."
+    ],
+    "setup_effects": [
+        {
+            "kind": "choose_objective_ship",
+            "controller_order": [
+                "FIRST_PLAYER",
+                "SECOND_PLAYER"
+            ],
+            "target": "own_ship",
+            "count_per_player": 1
+        }
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "MODIFIER",
+            "surface": "attack.hull_zone_reuse",
+            "timing": "during_ship_attack_declaration",
+            "summary": "Objective ships can attack from a hull zone already used this round."
+        },
+        {
+            "kind": "BLOCKER",
+            "surface": "attack.repeat_target",
+            "timing": "during_ship_attack_declaration",
+            "summary": "The first player's objective ship cannot target the same hull zone or squadron more than once each round with the reused hull zone."
+        },
+        {
+            "kind": "SCORING",
+            "surface": "game.end_scoring",
+            "timing": "end_of_game",
+            "summary": "Double destroyed objective ship base cost, excluding upgrades."
+        }
+    ],
+    "objective_tokens": {
+        "uses_tokens": true,
+        "count": 2,
+        "count_formula": "one_objective_ship_per_player",
+        "placement": [
+            "assigned_to_objective_ship_cards"
+        ]
+    },
+    "runtime_state_requirements": [
+        "objective_ships_by_player",
+        "per_round_objective_hull_zone_targets",
+        "destroyed_objective_ship_scoring"
+    ],
+    "search_tags": [
+        "assault",
+        "objective_ship",
+        "hull_zone",
+        "extra_attack",
+        "end_game_scoring"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/objectives/obj_ass_advanced_gunnery_rules.txt",
+        "RRG 1.5.0 Objective Cards, p.11"
+    ]
+}

@@ -1,0 +1,27 @@
+In this document I describe the requirements for the fleet builder, which is a tool that allows users to create and manage their fleets. The fleet builder should have the following features:
+1. User Authentication: Users should be able to create an account and log in to access their fleet builder.
+2. Fleet Creation: Users should be able to create a new fleet by providing a name and description for the fleet.
+3. Fleet Management: Users should be able to add, edit, and delete components in their fleet. A Fleet consists of a number of capital ships and a number of squadrons. As per the rules ships have point cost values and may be attributed with a number of upgrades. Squadrons have point cost values and may not be attributed with a number of upgrades. The fleet builder should calculate the total point cost of the fleet based on the components added.
+4. Fleet Sharing: Users should be able to share their fleet with other users by providing a unique link or code.
+5. Fleet Export: Users should be able to export their fleet in a format that can be easily shared or imported into other tools, such as a PDF or CSV file.
+6. Fleet Import: Users should be able to import a fleet from a file, allowing them to easily transfer their fleet from one device to another or share it with others.
+7. Fleet Versioning: Users should be able to save multiple versions of their fleet, allowing them to keep track of changes and revert to previous versions if needed.
+8. Fleet Validation: The fleet builder should validate the fleet against the game rules, ensuring that users cannot create fleets that exceed point limits or violate other game constraints.
+9. User Interface: The fleet builder should have a user-friendly interface that allows users to easily navigate and manage their fleets. The interface should be integrated in the godot project and have the same styling as the main game interface.
+10. Performance: The fleet builder should be optimized for performance, allowing users to quickly create and manage their fleets without experiencing lag or delays. The fleet builder should be able to handle large fleets with many components without crashing or slowing down the application.
+11. Research the rules of the game to ensure that the fleet builder is compliant with the game mechanics and constraints. This includes understanding the point cost values for ships and squadrons, as well as any restrictions on upgrades or fleet composition.
+12. Implement a robust backend system to handle user authentication, fleet management, and data storage. This may involve using a database to store user information and fleet data, as well as implementing APIs to facilitate communication between the frontend and backend of the fleet builder.
+13. Design a user-friendly interface that allows users to easily create and manage their fleets. This may involve using drag-and-drop functionality for adding components to the fleet, as well as providing clear visual indicators for point costs and fleet composition.
+14. The fleet components hav various classifiers, that makes it easy to identify and filter them. These are:
+- Faction: The faction to which the component belongs (e.g., Rebel, Imperial, Scum).
+- Type: The type of component (e.g., capital ship, squadron).
+- Point Cost: The point cost value of the component.
+- Upgrades: The number of upgrades that can be attributed to the component (if applicable).
+- Upgrade Type: The type of upgrades that can be attributed to the component (if applicable).
+- Wave: The wave in which the component was released.
+- Expansion: The expansion in which the component was released.
+- Keywords: Any additional keywords or attributes that may be relevant for filtering or categorizing the component
+15. Implement a search and filter functionality that allows users to easily find and select components for their fleet based on the classifiers mentioned above. This may involve using dropdown menus, checkboxes, or a search bar to allow users to specify their criteria for filtering components.
+
+rules are available in the Resources folder of the project.
+rules for expansions and other informations about the upgrades and all game components on https://starwars-armada.fandom.com/wiki/Star_Wars:_Armada_Wiki

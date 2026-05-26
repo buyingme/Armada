@@ -1,0 +1,31 @@
+TIE Fighter Squadron
+1
+SAVE
+EDIT
+ TIE Fighter Squadron card
+TIE Fighter Squadron card
+"Imperial doctrine dictates that TIE fighters and similar starfighters remain in close proximity to capital ships, providing a screen against fighter assaults and allowing those ships to focus their firepower on larger ships."
+
+
+Contents
+1	Card Text
+2	Attributes
+3	Aces&Infamous Squadrons
+4	Available Through
+5	Appearance
+Card Text
+Icon SQKey Swarm Swarm. (While attacking a squadron engaged with another squadron, you may reroll 1 die.)
+
+Attributes
+ImpLogo Imperial Squadron Card
+8 points
+Aces&Infamous Squadrons
+Icon TIE-Fighter "Howlrunner"
+Icon TIE-Fighter "Mauler" Mithel
+Icon TIE-Fighter Valen Rudor
+Icon TIE-Fighter Black Squadron
+Available Through
+Star Wars: Armada Core Set
+Imperial Fighter Squadrons Expansion Pack
+Appearance
+The TIE/LN starfighter, or TIE/line starfighter, simply known as the TIE Fighter or T/F, was the standard Imperial starfighter seen in massive numbers throughout most of the Galactic Civil War and onward. It appears in all the films of the Original Trilogy, the Sequel Trilogy, Spin-offs and the TV-series Star Wars Rebels.

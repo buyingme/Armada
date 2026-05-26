@@ -2,6 +2,41 @@
     "_comment": "Extracted from provided card image on 2026-03-07",
     "_source": "Resources/Game_Components/Ships/Rebel/shipcard_nebulon-b-escort-frigate.png",
     "_status": "VERIFIED",
+    "data_key": "nebulon_b_escort_frigate",
+    "kind": "ship_card",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "nebulon_b_frigate_expansion_pack"
+    ],
+    "card_image": "nebulon_b_escort_frigate_card.png",
+    "rules_source": "Resources/Game_Components/ships/nebulon_b_escort_frigate_rules.txt",
+    "ship_class": "nebulon_b_frigate",
+    "ship_variant": "escort_frigate",
+    "title_upgrade_group": "nebulon_b_frigate",
+    "related_ship_data_keys": [
+        "nebulon_b_support_refit"
+    ],
+    "class_specifics": "Compared to the Nebulon-B Support Refit, the Escort Frigate has +1 squadron value and 2 blue anti-squadron dice.",
+    "lore_aliases": [
+        "ef76_nebulon_b_escort_frigate",
+        "medical_frigate"
+    ],
+    "search_tags": [
+        "rebel",
+        "wave_0",
+        "core_set",
+        "small_ship",
+        "nebulon_b",
+        "escort_frigate",
+        "squadron_value_2",
+        "anti_squadron",
+        "turbolasers"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/ships/nebulon_b_escort_frigate_rules.txt"
+    ],
     "ship_name": "Nebulon-B Escort Frigate",
     "faction": "REBEL_ALLIANCE",
     "ship_size": "SMALL",

@@ -1,0 +1,30 @@
+Minefields
+3
+SAVE
+EDIT
+ Minefields Objective card
+Minefields Objective card
+How-to_play_Objective_"Minefields"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Minefields" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+
+Contents
+1	Card Text
+2	Timing
+3	See also
+4	Available Through
+Card Text
+Setup: The second player places all obstacles. He can place them anywhere in the setup area (even in deployment zones) and must place them beyond distance 5 of each other. Then he places 6 objective tokens. Each objective token must be placed at distance 1 of an obstacle and beyond distance 1 of all other objective tokens.
+
+Special Rule: If a ship ends its movement at distance 1 of an objective token, remove that objective token from the play area and roll 2 blue dice. That ship is dealt 1 facedown damage card for each Icon Dice Hit or crit hit icon rolled. If there is at least 1 crit hit icon, deal the first damage card faceup.
+
+Timing
+This card’s Special Rule effect resolves during the Move Ship step while executing a maneuver.
+
+FaQ Version 3.3.1; Dec. 2017
+
+See also
+All Navigation Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

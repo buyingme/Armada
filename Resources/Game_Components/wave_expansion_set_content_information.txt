@@ -1,0 +1,164 @@
+# Wave 0
+
+## Core Set
+
+Information
+This is the base set for the Star Wars: Armada Miniatures Game. It comes with 3 pre-painted ships and everything you need to start a 2-player game. The base set can be further expanded upon with the expansion packs.
+
+More info at FFG...
+
+Models
+Empire:
+
+Victory-class Star Destroyer
+TIE Fighter squadron (6x)
+Rebel:
+
+CR90 Corellian Corvette
+Nebulon-B Frigate
+X-wing squadron (4x)
+Components
+Star Wars Armada: Learn To Play booklet (link to download -- 25 MB)
+Star Wars Armada: Rules Reference booklet (link to download -- 1 MB)
+Deck of 52 Damage Cards
+Custom d8 Dice (3 red, 3 blue, 3 black)
+1 Maneuver Tool
+1 Range Ruler (double-sided)
+13 Defense Tokens (6 Brace, 3 Evade, 3 Redirect, 1 Scatter)
+6 Obstacle Tokens (3 Asteroid Fields, 2 Debris Fields, 1 Station)
+1 Initiative Token
+6 Round Tokens
+4 Setup Area Markers
+12 Command Tokens
+10 Victory Tokens (double-sided)
+7 Objective Tokens
+6 Ship ID Tokens and 4 Flagship ID Tokens
+3 Main Ship ID Tokens and 2 Main Flagship ID Tokens (double-sided)
+20 Squadron Tokens
+Ship Cards
+Empire:
+
+Victory I-class Star Destroyer
+Victory II-class Star Destroyer
+Rebel:
+
+CR90 Corvette A
+CR90 Corvette B
+Nebulon-B Escort Frigate
+Nebulon-B Support Refit
+Squadron Cards
+Empire:
+
+TIE Fighter Squadron
+• "Howlrunner" (TIE Fighter)
+Rebel:
+
+X-wing Squadron
+• Luke Skywalker (X-wing)
+Upgrades
+Icon Upgrade Commander Commander:
+
+RebLogo • General Dodonna
+ImpLogo • Grand Moff Tarkin
+Icon Upgrade DefensiveRetrofit Defensive Retrofit:
+
+Electronic Countermeasures
+Icon Upgrade IonCannons Ion Cannons:
+
+Overload Pulse
+Icon Upgrade OffensiveRetrofit Offensive Retrofit:
+
+Expanded Hangar Bay
+Icon Upgrade Officer Officer:
+
+RebLogo • Leia Organa
+ImpLogo • Wulff Yularen
+Defense Liaison
+Weapons Liaison
+Icon Upgrade Ordnance Ordnance:
+
+Assault Concussion Missiles
+Icon Upgrade SupportTeam Support Team:
+
+Engineering Team
+Nav Team
+Icon Upgrade Title Title:
+
+RebLogo • Dodonna's Pride (CR90)
+RebLogo • Redemption (Nebulon B)
+ImpLogo • Dominator (Victory SD)
+Icon Upgrade Turbolasers Turbolasers:
+
+Enhanced Armament
+H9 Turbolasers
+Icon Upgrade WeapTeam Weapons Team:
+
+Gunnery Team
+Objective Cards
+Objective edge red Assault Objective Cards:
+
+Advanced Gunnery
+Most Wanted
+Opening Salvo
+Precision Strike
+Objective edge yellow Defense Objective Cards:
+
+Contested Outpost
+Fire Lanes
+Fleet Ambush
+Hyperspace Assault
+Objective edge blue Navigation Objective Cards:
+
+Dangerous Territory
+Intel Sweep
+Minefields
+Superior Positions
+
+# Wave 1
+
+## Imperial Fighter Squadrons Expansion Pack
+
+SAVE
+EDIT
+Imperial Fighter Squadrons Expansion Pack
+Swm08 main-0
+Overwhelming oppositon by sheer numbers
+Product Info
+SKU
+SWM08
+ISBN
+9781633440005
+Price
+USD 19.95
+Release Info
+Wave
+1
+Announced
+November 10, 2014
+Released
+May 15, 2015
+" In battle, the Empire deployed swarms of TIEs to neutralize enemy squadrons and safeguard its larger Star Destroyers and their superior firepower. These easily recognizable starfighters were designed for speed and maneuverability, rather than durability, and the aces who flew them through many battles quickly earned intimidating reputations for their combat skill and fanatical loyalty. "
+
+Imperial-Squadrons-Layout-3-cards
+" The Imperial Fighter Squadrons Expansion Pack for Star Wars: Armada introduces an array of eight starfighter squadrons, evenly split between four different types of fighters. By adding these TIE advanced, TIE interceptor, TIE bomber, and TIE fighter squadrons to your fleet, you’ll be able to swarm your foes, protect your capital ships, and send the Rebellion’s hopes down in flames. "
+
+This is not a complete game experience. A copy of the Star Wars: Armada Miniatures Game Core Set is required to play.
+
+More info at FFG ...
+
+The prerelease packaging showed a TIE Interceptor on the front panel, with a TIE Fighter on the left panel. The final released product flipped the images' positions.
+The prerelease packaging showed a TIE Interceptor on the front panel, with a TIE Fighter on the left panel. The final released product flipped the images' positions.
+Models
+TIE Fighter Squadron (x2)
+TIE Advanced Squadron (x2)
+TIE Interceptor Squadron (x2)
+TIE Bomber Squadron (x2)
+Squadron Cards
+Icon TIE-Fighter TIE Fighter Squadron
+Icon TIE-Fighter • "Mauler" Mithel (TIE Fighter)
+Icon TIE-Advanced TIE Advanced Squadron
+Icon TIE-Advanced • Darth Vader (TIE Advanced)
+Icon TIE-Interceptor TIE Interceptor Squadron
+Icon TIE-Interceptor • Soontir Fel (TIE Interceptor)
+Icon TIE-Bomber TIE Bomber Squadron
+Icon TIE-Bomber • Major Rhymer (TIE Bomber)

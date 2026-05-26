@@ -1,0 +1,75 @@
+{
+    "data_key": "electronic_countermeasures",
+    "kind": "upgrade_card",
+    "upgrade_name": "Electronic Countermeasures",
+    "upgrade_type": "DEFENSIVE_RETROFIT",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set",
+        "assault_frigate_mark_ii_expansion_pack",
+        "cr90_corellian_corvette_expansion_pack",
+        "upgrade_card_collection"
+    ],
+    "card_image": "w0_electronic_countermeasures_rules.png",
+    "point_cost": 7,
+    "is_unique": false,
+    "unique_group": "",
+    "faction_restriction": [],
+    "size_restriction": [],
+    "ship_class_restriction": [],
+    "ship_data_key_restriction": [],
+    "is_exhaustible": true,
+    "is_modification": false,
+    "refresh": {
+        "mode": "ready_cost",
+        "ready_cost": {
+            "token_type": "REPAIR",
+            "count": 1
+        }
+    },
+    "effect_text": "While defending, you may exhaust this card to spend 1 defense token that your opponent targeted with an Accuracy result.",
+    "timing_notes": [
+        "Exhausts and triggers during Attack Step 4: Spend Defense Tokens.",
+        "Armada 1.5 changed this card from Recur to non-Recur with a Repair token ready cost."
+    ],
+    "errata": [
+        "Armada 1.5 changed this card from Recur to non-Recur. It now costs 1 Repair command token to ready during the Status Phase."
+    ],
+    "clarifications": [
+        "This effect does not allow spending a defense token while at speed 0.",
+        "This effect does not allow spending a defense token type already spent during the attack.",
+        "This effect does not allow spending the same defense token more than once during an attack."
+    ],
+    "rule_surfaces": [
+        {
+            "kind": "ENABLER",
+            "surface": "attack.spend_defense_tokens.accuracy_override",
+            "timing": "during_spend_defense_tokens",
+            "summary": "Allow the defender to exhaust this card and spend one accuracy-targeted defense token if all normal token spending rules still allow it."
+        },
+        {
+            "kind": "VALIDATOR",
+            "surface": "status.ready_upgrade_card",
+            "timing": "during_status_phase_ready_cards",
+            "summary": "Require 1 Repair command token to ready this non-Recur card."
+        }
+    ],
+    "runtime_state_requirements": [
+        "upgrade_exhaustion_state",
+        "accuracy_targeted_tokens",
+        "spent_defense_tokens_this_attack",
+        "status_phase_ready_costs"
+    ],
+    "search_tags": [
+        "defensive_retrofit",
+        "defense_token",
+        "accuracy",
+        "exhaust",
+        "repair_token",
+        "status_phase"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/upgrades/defensive_retrofit/w0_electronic_countermeasures_rules.txt"
+    ]
+}

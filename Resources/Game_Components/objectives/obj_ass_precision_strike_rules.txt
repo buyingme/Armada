@@ -1,0 +1,23 @@
+Precision Strike
+1
+SAVE
+EDIT
+ Precision Strike Objective card
+Precision Strike Objective card
+How-to_play_Objective_"Precision_Strike"_-_Star_Wars_Armada_Explained_(SWAE)
+How-to play Objective "Precision Strike" - Star Wars Armada Explained (SWAE)
+Instructions and hints by Karneck
+Card Text
+Setup: After deploying fleets, each of the second player's ships gains a Icon Command ConcentrateFire token.
+
+Special Rule: When a squadron with Bomber or a ship is attacking, it may spend 1 die with a Icon Dice Hit icon to flip 1 random facedown damage card on the defender faceup.
+
+After a squadron with Bomber or a ship performs an attack, its owner gains 1 victory token for each damage card that was dealt faceup or flipped faceup during that attack.
+
+Victory Token: 15 pts.
+
+See also
+All Assault Objective Cards
+All Objective Cards
+Available Through
+Star Wars: Armada Core Set

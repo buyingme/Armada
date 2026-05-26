@@ -1,0 +1,17 @@
+Card Text
+Setup: After deploying fleets, each player chooses 1 of his ships to be an objective ship, starting with the first player.
+
+Special Rule: The first player's objective ship may perform each of its attacks from the same hull zone. It cannot target the same hull zone or squadron more than once each round with that hull zone.
+
+The second player's objective ship may perform each of its attacks from the same hull zone, and it may do so against the same target.
+
+End of Game: The fleet point cost of a destroyed objective ship is doubled. Do not double the cost of its upgrade cards.
+
+Rules Clarification
+If either player’s objective ship is equipped with Gunnery Team and attacks from the same hull zone during its activation, that ship cannot target the same ship or squadron more than once during its activation.
+
+If either player’s objective ship is equipped with Slaved Turrets, that ship cannot attack more than once per round.
+
+If the first player’s objective ship is equipped with Impetuous or
+
+Ordnance Pods, its hull zone cannot target the same squadron more than once during that ship’s activation.

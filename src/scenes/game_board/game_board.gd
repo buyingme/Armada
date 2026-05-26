@@ -949,7 +949,7 @@ func _create_target_selector() -> void:
 			_token_container, _camera, AttackState.new(),
 			AttackDiceResolver.new())
 	_target_selector.dismiss_other_tools_requested.connect(
-			_tool_overlay_controller.dismiss_other_tools)
+			_on_dismiss_other_tools_requested)
 
 ## Creates the [AttackExecutor] child node.  Its
 ## attack_exec_completed / attack_exec_cancelled signals are connected
@@ -1110,12 +1110,15 @@ func _create_command_phase_controller() -> void:
 	add_child(_command_phase_controller)
 	_command_phase_controller.initialize()
 
-## Called by [signal AttackExecutor.dismiss_other_tools_requested].
+## Called by [signal TargetSelector.dismiss_other_tools_requested].
 ## Dismisses range overlay, targeting list, and maneuver tool via the
 ## [ToolOverlayController].  Phase K11: thin delegation wrapper kept for
-## any direct callers — the actual signal connection points at
-## [method ToolOverlayController.dismiss_other_tools].
+## startup safety: [TargetSelector] can connect to this board-owned callable
+## without dereferencing [member _tool_overlay_controller] during creation.
 func _on_dismiss_other_tools_requested() -> void:
+	if _tool_overlay_controller == null:
+		_log.info("Dismiss-other-tools requested before ToolOverlayController was ready.")
+		return
 	_tool_overlay_controller.dismiss_other_tools()
 
 ## Returns true if the given ship token has a revealed Repair dial
@@ -1186,10 +1189,10 @@ func _create_board_components() -> void:
 	_panel_mgr.initialize(self )
 	_squadron_phase_controller.create_ui(
 			_panel_mgr.turn_management_layer, _panel_mgr.register_resizable)
+	_create_tool_overlay_controller()
 	_create_target_selector()
 	_create_attack_executor()
 	_create_attack_panel_controller()
-	_create_tool_overlay_controller()
 	_create_displacement_controller()
 	_create_ship_activation_controller()
 	_create_dial_drag_controller()

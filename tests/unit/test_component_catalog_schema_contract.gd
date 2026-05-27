@@ -65,6 +65,15 @@ const UPGRADE_FILES: Array[String] = [
 	"upgrades/weapon_team/gunnery_team.json",
 ]
 
+const OBSTACLE_FILES: Array[String] = [
+	"obstacles/asteroid_1.json",
+	"obstacles/asteroid_2.json",
+	"obstacles/asteroid_3.json",
+	"obstacles/debris_1.json",
+	"obstacles/debris_2.json",
+	"obstacles/station.json",
+]
+
 const RULE_REFERENCE_FILES: Array[String] = [
 	"rules/squadron_keyword_bomber.json",
 	"rules/squadron_keyword_counter.json",
@@ -126,6 +135,25 @@ func test_upgrade_records_have_required_fb1_metadata_expected() -> void:
 		var rules_integration: Dictionary = record.get("rules_integration", {})
 		assert_eq(rules_integration.get("status", ""), "NOT_INTEGRATED",
 			"%s upgrade rules should remain marked not integrated" % file_path)
+
+
+func test_obstacle_records_have_required_fb3_metadata_expected() -> void:
+	# Arrange / Act / Assert
+	for file_path: String in OBSTACLE_FILES:
+		var record: Dictionary = _load_component_record(file_path)
+		_assert_common_catalog_metadata(record, file_path)
+		assert_eq(record.get("kind", ""), "obstacle_component",
+			"%s should be an obstacle_component record" % file_path)
+		var token_image: String = str(record.get("token_image", ""))
+		assert_true(FileAccess.file_exists(COMPONENT_ROOT + "obstacles/" + token_image),
+			"%s should point to a committed obstacle token image" % file_path)
+		assert_false(record.get("setup_constraints", []).is_empty(),
+			"%s should include setup constraints" % file_path)
+		assert_false(record.get("shape_metadata", {}).is_empty(),
+			"%s should include draft shape metadata" % file_path)
+		var rules_integration: Dictionary = record.get("rules_integration", {})
+		assert_eq(rules_integration.get("status", ""), "NOT_INTEGRATED",
+			"%s obstacle rules should remain marked not integrated" % file_path)
 
 
 func test_squadron_records_have_rules_integration_metadata_expected() -> void:

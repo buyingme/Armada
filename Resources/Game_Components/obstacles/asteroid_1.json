@@ -1,0 +1,47 @@
+{
+    "data_key": "asteroid_1",
+    "kind": "obstacle_component",
+    "obstacle_name": "Asteroid Field 1",
+    "obstacle_type": "ASTEROID",
+    "token_image": "asteroid_1_token.png",
+    "wave": 0,
+    "expansion": "core_set",
+    "available_through": [
+        "star_wars_armada_core_set"
+    ],
+    "setup_constraints": [
+        "standard_obstacle_pool",
+        "use_core_set_or_fleet_expansion_shapes",
+        "objective_cards_may_add_obstacles"
+    ],
+    "shape_metadata": {
+        "source": "token_image_pending_measurement",
+        "token_image": "asteroid_1_token.png",
+        "shape_type": "irregular_polygon",
+        "measurement_status": "PLACEHOLDER"
+    },
+    "rules_reference_ids": [
+        "obstacle.core_obstruction",
+        "obstacle.asteroid_field"
+    ],
+    "rules_integration": {
+        "status": "NOT_INTEGRATED",
+        "implemented_rule_ids": [],
+        "pending_rule_surfaces": [
+            "attack.obstruction",
+            "movement.overlap_obstacle"
+        ],
+        "notes": "Static catalog metadata only; obstacle obstruction and overlap effects still need RuleRegistry-backed setup/gameplay integration."
+    },
+    "search_tags": [
+        "obstacle",
+        "asteroid",
+        "core_set",
+        "obstruction",
+        "faceup_damage"
+    ],
+    "source_refs": [
+        "Resources/Game_Components/obstacles/obstacles_specs.txt",
+        "RRG 1.5.0 Obstacles, p.12"
+    ]
+}

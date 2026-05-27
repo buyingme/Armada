@@ -17,8 +17,8 @@ Game_Components/
 ├── squadrons/              Squadron JSON, card art, token art, shared base art, rule notes
 ├── upgrades/               Upgrade JSON, card art, and rule notes grouped by upgrade type
 ├── objectives/             Objective JSON, card art, objective token art, rule notes
-├── obstacles/              Obstacle token art and source notes; JSON records arrive in FB3
-├── rules/                  Rules-reference catalog contract; JSON records arrive in FB3
+├── obstacles/              Obstacle JSON, token art, and source notes
+├── rules/                  Generic rules-reference JSON records
 ├── dice/                   Attack dice face PNGs
 ├── defense_tokens/         Defense token PNGs
 ├── command_tokens/         Command dial/token PNGs
@@ -40,9 +40,9 @@ Game_Components/
 | Squadrons | `squadrons/` | 7 squadron JSON records: Core Set squadrons plus Wave 1 generic Imperial squadrons. | FB3 completeness tests distinguish Core Set gate from extra Wave 1 content. |
 | Upgrades | `upgrades/` | 18 Core Set upgrade JSON records under per-type subfolders, with card art and rule notes. | FB2 `UpgradeData.from_dict()` and loader enumeration. |
 | Objectives | `objectives/` | 12 Core Set objective JSON records: 4 Assault, 4 Defense, 4 Navigation. | FB2 `ObjectiveData` and loader enumeration. |
-| Obstacles | `obstacles/` | 6 Core Set obstacle token images and `obstacles_specs.txt`; no obstacle JSON yet. | FB3 obstacle JSON and shape metadata. |
+| Obstacles | `obstacles/` | 6 Core Set obstacle JSON records with token images, source refs, and draft shape metadata. | Future setup/deployment slices replace placeholder shape metadata with measured polygons. |
 | Rules reference | `rules/` | 5 generic squadron keyword rules-reference JSON records for implemented keyword rules. | FB3 broadens generic and component-specific rules. |
-| Schema | `card_data_schema.json` | FB1 schema describes ships, squadrons, upgrades, objectives, obstacles, and rules-reference records. | FB2 loaders and schema contract tests expand with new model parsers. |
+| Schema | `card_data_schema.json` | Schema describes ships, squadrons, upgrades, objectives, obstacles, and rules-reference records. | Future slices tighten validators as setup packages and roster models mature. |
 
 ## Naming Convention
 
@@ -104,7 +104,7 @@ Live gameplay behavior belongs in `src/core/effects/rules/` and is registered by
 - Component JSON must parse as JSON.
 - Fleet-builder component records should match the appropriate definition in
   `card_data_schema.json`.
-- New objective and upgrade cards with pending gameplay text must include
+- New objective, upgrade, and obstacle records with pending gameplay text must include
   `rules_integration.status = "NOT_INTEGRATED"` until their rule slices are
   implemented.
 - Generic keyword-only squadrons can be `INTEGRATED` only when their keyword ids

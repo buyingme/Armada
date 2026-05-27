@@ -731,6 +731,7 @@ test gate is passed.
 | Acceptance | All Core Set cards/components needed for 180-point fleets are loadable; all 12 Core Set objective JSON files exist and declare 4 Assault, 4 Defense, and 4 Navigation cards; every objective points to card art and a source note; each upgrade JSON declares faction/slot/category/restriction fields needed by validators; objectives/upgrades are marked `NOT_INTEGRATED`; generic keyword-only squadron records resolve to integrated keyword rule ids; unique ace abilities without rule files are marked `PARTIAL`. |
 | Tests | Catalog completeness tests for expected Core Set keys; parser tests for representative upgrade/objective/obstacle restrictions; objective category-count tests; rules-reference id resolution tests. |
 | Verification | `godot --headless --import`, targeted data tests, `git diff --check`. |
+| Status | Complete as of 2026-05-27: Core Set obstacle JSON records added for three asteroids, two debris fields, and the station; loader and catalog contract tests now cover obstacle discovery, parsing, setup constraints, draft shape metadata, and `NOT_INTEGRATED` rule status. |
 
 ### FB4 - Serializable Fleet Roster Model
 
@@ -978,18 +979,18 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB2.5 are now the requirements, component-contract, typed-loading, and
-setup-hash baseline. Continue with the remaining FB3 catalog gap before roster
-model work: convert `obstacles/obstacles_specs.txt` into draft obstacle JSON
-records and add catalog completeness tests that cover those obstacle records.
+FB0-FB3 are now the requirements, component-contract, typed-loading,
+setup-hash, and Core Set catalog baseline. Continue with FB4 before any setup UI
+or game-start integration: add the serializable editable roster model separate
+from runtime `PlayerState`.
 
-1. Add draft obstacle JSON records with wave, expansion, token image,
-   setup constraints, shape metadata placeholders, source refs, and
-   `rules_integration.status = "NOT_INTEGRATED"`.
-2. Add catalog completeness tests for Core Set obstacles alongside the existing
-   objective, upgrade, squadron, and rules-reference checks.
-3. Confirm all Core Set card/component JSON remains loadable through
-   `AssetLoader` typed catalog APIs.
+1. Add `FleetRoster`, `FleetShipEntry`, `FleetSquadronEntry`,
+   `FleetUpgradeAssignment`, `FleetObjectiveSelection`, and
+   `FleetValidationResult` in `src/core/fleet/`.
+2. Keep roster serialization deterministic and JSON-safe so FB2.5 setup-package
+   hashing can embed full roster payloads later.
+3. Add round-trip, duplicate-id, unknown-field/default, and canonical ordering
+   tests before validator work begins.
 4. Keep gameplay setup wiring out of scope until FB4-FB6 roster/validation
    contracts exist.
 

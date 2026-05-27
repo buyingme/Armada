@@ -165,10 +165,12 @@ func test_list_rule_reference_keys_uses_data_keys_expected() -> void:
 		"Rules-reference discovery should expose dotted RuleRegistry ids")
 
 
-func test_list_obstacle_keys_returns_empty_without_json_expected() -> void:
+func test_list_obstacle_keys_includes_core_obstacles_expected() -> void:
 	var keys: Array[String] = AssetLoader.list_obstacle_keys()
-	assert_eq(keys.size(), 0,
-		"Obstacle key discovery should tolerate source-only obstacle folder")
+	assert_eq(keys.size(), 6,
+		"Obstacle key discovery should include the six Core Set obstacle records")
+	assert_true(keys.has("asteroid_1"), "Obstacle keys should include asteroid_1")
+	assert_true(keys.has("station"), "Obstacle keys should include the station")
 
 
 # --- Typed Catalog Loading ---
@@ -183,6 +185,14 @@ func test_load_objective_data_key_expected() -> void:
 	var objective: ObjectiveData = AssetLoader.load_objective_data("obj_ass_most_wanted")
 	assert_not_null(objective, "Should load Most Wanted objective")
 	assert_eq(objective.category, "ASSAULT", "Should parse objective category")
+
+
+func test_load_obstacle_data_key_expected() -> void:
+	var obstacle: ObstacleData = AssetLoader.load_obstacle_data("asteroid_1")
+	assert_not_null(obstacle, "Should load Asteroid Field 1 obstacle")
+	assert_eq(obstacle.obstacle_type, "ASTEROID", "Should parse obstacle type")
+	assert_eq(obstacle.rules_integration.get("status", ""), "NOT_INTEGRATED",
+		"Obstacle gameplay rules should remain marked not integrated")
 
 
 func test_load_rule_reference_data_dotted_key_expected() -> void:
@@ -202,6 +212,8 @@ func test_load_missing_catalog_records_return_null_expected() -> void:
 		"Missing upgrade should return null")
 	assert_null(AssetLoader.load_objective_data("missing_objective"),
 		"Missing objective should return null")
+	assert_null(AssetLoader.load_obstacle_data("missing_obstacle"),
+		"Missing obstacle should return null")
 	assert_null(AssetLoader.load_rule_reference_data("missing_rule"),
 		"Missing rules reference should return null")
 

@@ -74,6 +74,7 @@
 | `FleetUpgradeAssignment` | RefCounted | `src/core/fleet/fleet_upgrade_assignment.gd` | Serializable upgrade assignment attached to a ship roster entry |
 | `FleetObjectiveSelection` | RefCounted | `src/core/fleet/fleet_objective_selection.gd` | Serializable Assault/Defense/Navigation objective selection |
 | `FleetValidationResult` | RefCounted | `src/core/fleet/fleet_validation_result.gd` | JSON-safe validation errors and warnings for future fleet construction rules |
+| `FleetCatalog` | RefCounted | `src/core/fleet/fleet_catalog.gd` | Deterministic catalog query helper with metadata filters and linked rules-reference lookup |
 
 ### Additional Core Components
 

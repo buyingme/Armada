@@ -755,6 +755,7 @@ test gate is passed.
 | Acceptance | Queries are deterministic, sorted consistently, and return catalog keys plus typed data resources without UI dependencies; component results can resolve linked generic/component-specific rules for display. |
 | Tests | Filter combinations, empty results, case-insensitive text search, stable sort, missing metadata defaults, rules-reference lookup by component and by generic rule category. |
 | Verification | Targeted GUT, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-27: added `FleetCatalog` with deterministic component queries over `AssetLoader` lists, metadata filters (faction/type/points/upgrade type/wave/expansion/keyword/rules category/status/text/tag), and linked rules-reference lookups for component and category views. |
 
 ### FB6 - Fleet Validator Baseline Rules
 
@@ -980,20 +981,21 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB4 are now the requirements, component-contract, typed-loading,
-setup-hash, Core Set catalog, and editable roster-model baseline. Continue with
-FB5 before validator or UI work: add deterministic catalog query primitives for
-fleet-builder screens and later validation rules.
+FB0-FB5 are now the requirements, component-contract, typed-loading,
+setup-hash, Core Set catalog, editable roster-model, and catalog-query
+baseline. Continue with FB6 before UI work: add baseline fleet-construction
+validator rules that return deterministic structured issues.
 
-1. Add `FleetCatalog` under `src/core/fleet/` as a read-only query helper over
-   the typed `AssetLoader` catalog lists.
-2. Cover faction, component type, point cost range, upgrade slot/type, wave,
-   expansion, keyword, rules-reference category, implementation status, and
-   text/tag search filters.
-3. Return stable sorted result dictionaries or typed resources without UI or
-   scene dependencies.
-4. Keep gameplay setup wiring out of scope until FB6-FB11 validators and setup
-   contracts exist.
+1. Add `FleetValidator` APIs for points total, faction alignment,
+  commander/flagship count, squadron one-third cap, unique names/unique
+  squadrons, and objective-category completeness.
+2. Reuse `FleetValidationResult` issue payloads with stable ordering and rule
+  ids so later UI/import/setup flows render identical errors.
+3. Cover legal and illegal fleet examples for 180/400/custom limits, mixed
+  faction, missing/duplicate commanders, over-cap squadron points, and invalid
+  objective sets.
+4. Keep gameplay setup wiring out of scope until FB7-FB11 validator expansion
+  and setup contracts exist.
 
 This gives later code slices a stable contract, keeps the architecture clean,
 and avoids building UI, validators, or network setup against moving data shapes.

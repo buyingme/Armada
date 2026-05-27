@@ -66,11 +66,17 @@ All serializable classes implement `serialize() -> Dictionary` and
 Serialized classes: `GameState`, `PlayerState`, `ShipInstance`,
 `SquadronInstance`, `DamageDeck`, `DamageCard`, `ShipActivationState`,
 `CommandDialStack`, `CommandTokens`, `GameCommand` (and all 26 subclasses),
-and `FleetSetupPackage` for pre-game roster/setup handoff.
+`FleetSetupPackage` for pre-game roster/setup handoff, and the fleet-builder
+roster payload classes (`FleetRoster`, `FleetShipEntry`,
+`FleetSquadronEntry`, `FleetUpgradeAssignment`, `FleetObjectiveSelection`,
+`FleetValidationResult`).
 
 `FleetSetupPackage.canonical_hash()` uses `CanonicalJson` sorted-key JSON so
 hot-seat, network, replay, and future setup flows can compare embedded roster
 payloads without depending on local fleet-library files or volatile timestamps.
+`FleetRoster.serialize()` orders ships, squadrons, and ship upgrade assignments
+by stable `entry_id` before hashing so equivalent builder actions produce the
+same setup-ready payload shape.
 
 `GameState` also serializes round-scoped rule counters when they affect
 future legality. N7 added `ship_target_attack_counts`, keyed by

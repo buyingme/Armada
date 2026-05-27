@@ -37,6 +37,12 @@ If you are extending an existing class with a new field, update its
 | `CommandTokenManager` | `src/core/command_token_manager.gd` | ✅ |
 | `GameRng` | `src/core/game_rng.gd` | ✅ |
 | `InteractionFlow` (Phase I) | `src/core/state/interaction_flow.gd` | ✅ — see `docs/implementation_plan.md` §3 |
+| `FleetRoster` | `src/core/fleet/fleet_roster.gd` | ✅ |
+| `FleetShipEntry` | `src/core/fleet/fleet_ship_entry.gd` | ✅ |
+| `FleetSquadronEntry` | `src/core/fleet/fleet_squadron_entry.gd` | ✅ |
+| `FleetUpgradeAssignment` | `src/core/fleet/fleet_upgrade_assignment.gd` | ✅ |
+| `FleetObjectiveSelection` | `src/core/fleet/fleet_objective_selection.gd` | ✅ |
+| `FleetValidationResult` | `src/core/fleet/fleet_validation_result.gd` | ✅ |
 
 Any **new** class added to `src/core/` or `src/models/` that holds mutable
 state must be added to this table.

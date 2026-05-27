@@ -75,6 +75,7 @@ src/core/
 ├── damage/          → Damage cards, damage dealing, repair
 ├── effects/         → Upgrade / ability effects
 │   └── keywords/    → Squadron keyword effects (Bomber, Escort, …)
+├── fleet/           → Fleet-builder roster models, catalog queries, validators
 ├── geometry/        → Ship bases, range finding, line of sight, layout math
 ├── movement/        → Maneuver tool, overlap resolution, squadron/token movement
 ├── setup/           → Setup packages, scenario preparation, match handoff

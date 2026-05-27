@@ -743,6 +743,7 @@ test gate is passed.
 | Acceptance | Roster create/add/remove/update APIs are typed, documented, JSON-safe, deterministic when canonicalized for setup hashing, and round-trip through `serialize()`/`deserialize()`. |
 | Tests | Empty roster, populated roster, upgrade assignment, objective selection, unknown future fields/defaults, duplicate entry ids, canonical serialization stability. |
 | Verification | `godot --headless --import`, targeted GUT, full GUT if shared state classes are touched, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-27: added `src/core/fleet/` roster payload classes with typed add/remove/update APIs, deterministic entry ordering, JSON-safe round trips, objective selection, upgrade assignment, and structured validation-result payload tests. |
 
 ### FB5 - Fleet Catalog Queries
 
@@ -979,19 +980,19 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB3 are now the requirements, component-contract, typed-loading,
-setup-hash, and Core Set catalog baseline. Continue with FB4 before any setup UI
-or game-start integration: add the serializable editable roster model separate
-from runtime `PlayerState`.
+FB0-FB4 are now the requirements, component-contract, typed-loading,
+setup-hash, Core Set catalog, and editable roster-model baseline. Continue with
+FB5 before validator or UI work: add deterministic catalog query primitives for
+fleet-builder screens and later validation rules.
 
-1. Add `FleetRoster`, `FleetShipEntry`, `FleetSquadronEntry`,
-   `FleetUpgradeAssignment`, `FleetObjectiveSelection`, and
-   `FleetValidationResult` in `src/core/fleet/`.
-2. Keep roster serialization deterministic and JSON-safe so FB2.5 setup-package
-   hashing can embed full roster payloads later.
-3. Add round-trip, duplicate-id, unknown-field/default, and canonical ordering
-   tests before validator work begins.
-4. Keep gameplay setup wiring out of scope until FB4-FB6 roster/validation
+1. Add `FleetCatalog` under `src/core/fleet/` as a read-only query helper over
+   the typed `AssetLoader` catalog lists.
+2. Cover faction, component type, point cost range, upgrade slot/type, wave,
+   expansion, keyword, rules-reference category, implementation status, and
+   text/tag search filters.
+3. Return stable sorted result dictionaries or typed resources without UI or
+   scene dependencies.
+4. Keep gameplay setup wiring out of scope until FB6-FB11 validators and setup
    contracts exist.
 
 This gives later code slices a stable contract, keeps the architecture clean,

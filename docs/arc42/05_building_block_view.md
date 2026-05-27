@@ -68,6 +68,12 @@
 | `GameReplay` | RefCounted | `src/core/game_replay.gd` | Replay recording/playback — v1 JSON file format, header + command array |
 | `FleetSetupPackage` | RefCounted | `src/core/setup/fleet_setup_package.gd` | Serializable setup-package shell with deterministic canonical hash for embedded roster payloads |
 | `LearningScenarioPreparer` | RefCounted | `src/core/setup/learning_scenario_preparer.gd` | Scene-independent Learning Scenario preparation: instance creation, normalized position seeding, and GameState registration |
+| `FleetRoster` | RefCounted | `src/core/fleet/fleet_roster.gd` | Editable fleet-builder roster payload separate from runtime `PlayerState` |
+| `FleetShipEntry` | RefCounted | `src/core/fleet/fleet_ship_entry.gd` | Serializable ship roster entry with deterministic upgrade-assignment ordering |
+| `FleetSquadronEntry` | RefCounted | `src/core/fleet/fleet_squadron_entry.gd` | Serializable squadron roster entry |
+| `FleetUpgradeAssignment` | RefCounted | `src/core/fleet/fleet_upgrade_assignment.gd` | Serializable upgrade assignment attached to a ship roster entry |
+| `FleetObjectiveSelection` | RefCounted | `src/core/fleet/fleet_objective_selection.gd` | Serializable Assault/Defense/Navigation objective selection |
+| `FleetValidationResult` | RefCounted | `src/core/fleet/fleet_validation_result.gd` | JSON-safe validation errors and warnings for future fleet construction rules |
 
 ### Additional Core Components
 

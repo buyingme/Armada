@@ -76,6 +76,7 @@
 | `FleetValidationResult` | RefCounted | `src/core/fleet/fleet_validation_result.gd` | JSON-safe validation errors and warnings for future fleet construction rules |
 | `FleetCatalog` | RefCounted | `src/core/fleet/fleet_catalog.gd` | Deterministic catalog query helper with metadata filters and linked rules-reference lookup |
 | `FleetValidator` | RefCounted | `src/core/fleet/fleet_validator.gd` | Deterministic fleet-construction validator for baseline rules plus upgrade slot/restriction legality |
+| `FleetLibraryManager` | RefCounted | `src/core/fleet/fleet_library_manager.gd` | Local fleet library persistence with version snapshots and FB8 JSON import/export helpers |
 
 ### Additional Core Components
 

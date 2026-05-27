@@ -791,6 +791,7 @@ test gate is passed.
 | Acceptance | Library can save multiple fleets, create version snapshots, restore older versions, reject invalid JSON with readable errors, preserve unknown future fields where practical, and export rosters in the same shape consumed by match-ready setup packages. |
 | Tests | Save/load/delete/list, version restore, invalid JSON, format migration/defaults, import/export round trip. |
 | Verification | Targeted GUT, full GUT if adding autoload, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-27: added `FleetLibraryManager` under `src/core/fleet/` with file-backed save/list/load/delete/duplicate/version/restore APIs plus import/export helpers for the FB8 JSON contract, readable parse/schema errors, and unknown-field preservation through import/export round trips. |
 
 ### FB9 - Fleet Builder Scene MVP
 
@@ -983,18 +984,18 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB7 are now the requirements, component-contract, typed-loading,
-setup-hash, Core Set catalog, editable roster-model, catalog-query, and
-validator foundation for baseline + upgrade assignment legality. Continue
-with FB8: local fleet JSON import/export and versioned local library services.
+FB0-FB8 are now the requirements, component-contract, typed-loading,
+setup-hash, Core Set catalog, editable roster-model, catalog-query, validator
+foundation, and local library/import-export backend. Continue with FB9: the
+fleet-builder scene MVP that consumes catalog/validator/library services.
 
-1. Add a fleet library service for save/list/load/delete/duplicate/version
-  restore under `src/core/fleet/` or a thin autoload wrapper only if needed.
-2. Implement the fleet JSON import/export contract with readable validation
-  errors and compatibility defaults for future schema bumps.
-3. Preserve deterministic ordering in stored rosters so hashes/replay setup
-  payloads stay stable across save/load/import/export round trips.
-4. Keep setup-package and gameplay wiring out of scope until FB9-FB11.
+1. Add `src/scenes/fleet_builder/fleet_builder.tscn` + controller with
+  roster header, point/status strip, and live validation panel.
+2. Wire catalog search/filter lists to add/remove ships, squadrons, upgrades,
+  and objectives using existing core APIs only.
+3. Add rules-reference browsing affordances from catalog/roster entries while
+  keeping rule logic in core metadata and validators.
+4. Keep setup-package and gameplay wiring out of scope until FB10-FB11.
 
 This gives later code slices a stable contract, keeps the architecture clean,
 and avoids building UI, validators, or network setup against moving data shapes.

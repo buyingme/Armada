@@ -767,6 +767,7 @@ test gate is passed.
 | Acceptance | Validator returns structured JSON-safe errors/warnings with rule ids, affected roster entry ids, source references, severity, and deterministic ordering for UI, import/export, and network setup rejection. |
 | Tests | Legal 180/400/custom fleets, over-limit fleets, mixed faction, zero/two commanders, excessive squadron points, duplicate unique names, invalid objective sets. |
 | Verification | Targeted GUT, full GUT if validator touches shared models, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-27: added `FleetValidator` baseline rules for point limit, faction alignment, commander/flagship count, one-third squadron cap, unique upgrade/squadron limits, and objective-category validation with deterministic `FleetValidationResult` issue payloads. |
 
 ### FB7 - Upgrade Assignment Validation
 
@@ -981,21 +982,18 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB5 are now the requirements, component-contract, typed-loading,
-setup-hash, Core Set catalog, editable roster-model, and catalog-query
-baseline. Continue with FB6 before UI work: add baseline fleet-construction
-validator rules that return deterministic structured issues.
+FB0-FB6 are now the requirements, component-contract, typed-loading,
+setup-hash, Core Set catalog, editable roster-model, catalog-query, and
+baseline validator foundation. Continue with FB7 before UI work: extend
+upgrade assignment legality checks using slot and restriction metadata.
 
-1. Add `FleetValidator` APIs for points total, faction alignment,
-  commander/flagship count, squadron one-third cap, unique names/unique
-  squadrons, and objective-category completeness.
-2. Reuse `FleetValidationResult` issue payloads with stable ordering and rule
-  ids so later UI/import/setup flows render identical errors.
-3. Cover legal and illegal fleet examples for 180/400/custom limits, mixed
-  faction, missing/duplicate commanders, over-cap squadron points, and invalid
-  objective sets.
-4. Keep gameplay setup wiring out of scope until FB7-FB11 validator expansion
-  and setup contracts exist.
+1. Add upgrade slot matching and duplicate-upgrade-per-ship checks.
+2. Enforce title/modification singleton limits and faction/size/ship
+  restrictions from `UpgradeData` metadata.
+3. Keep `FleetValidationResult` rule ids deterministic and payload-compatible
+  with later import/export and setup rejection flows.
+4. Keep gameplay setup wiring out of scope until FB8-FB11 validator expansion,
+  library, and setup contracts exist.
 
 This gives later code slices a stable contract, keeps the architecture clean,
 and avoids building UI, validators, or network setup against moving data shapes.

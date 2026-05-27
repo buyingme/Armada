@@ -75,6 +75,7 @@
 | `FleetObjectiveSelection` | RefCounted | `src/core/fleet/fleet_objective_selection.gd` | Serializable Assault/Defense/Navigation objective selection |
 | `FleetValidationResult` | RefCounted | `src/core/fleet/fleet_validation_result.gd` | JSON-safe validation errors and warnings for future fleet construction rules |
 | `FleetCatalog` | RefCounted | `src/core/fleet/fleet_catalog.gd` | Deterministic catalog query helper with metadata filters and linked rules-reference lookup |
+| `FleetValidator` | RefCounted | `src/core/fleet/fleet_validator.gd` | Baseline fleet-construction validator for points, faction, commander/flagship, squadron cap, unique limits, and objective categories |
 
 ### Additional Core Components
 

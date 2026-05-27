@@ -16,6 +16,11 @@ const RULE_FLAGSHIP_COUNT: String = "fleet.flagship.count"
 const RULE_SQUADRON_CAP: String = "fleet.squadrons.cap"
 const RULE_UNIQUE_UPGRADE: String = "fleet.unique.upgrade"
 const RULE_UNIQUE_SQUADRON: String = "fleet.unique.squadron"
+const RULE_UPGRADE_SLOT: String = "fleet.upgrade.slot"
+const RULE_UPGRADE_DUPLICATE_PER_SHIP: String = "fleet.upgrade.duplicate.per_ship"
+const RULE_UPGRADE_TITLE_LIMIT: String = "fleet.upgrade.title.limit"
+const RULE_UPGRADE_MODIFICATION_LIMIT: String = "fleet.upgrade.modification.limit"
+const RULE_UPGRADE_RESTRICTION: String = "fleet.upgrade.restriction"
 const RULE_OBJECTIVE_REQUIRED: String = "fleet.objective.required"
 const RULE_OBJECTIVE_INVALID: String = "fleet.objective.invalid"
 const RULE_OBJECTIVE_CATEGORY: String = "fleet.objective.category"
@@ -27,6 +32,7 @@ const OBJECTIVE_CATEGORIES: Array[String] = [
 ]
 
 var _ship_cache: Dictionary = {}
+var _ship_record_cache: Dictionary = {}
 var _squadron_cache: Dictionary = {}
 var _upgrade_cache: Dictionary = {}
 var _objective_cache: Dictionary = {}
@@ -41,6 +47,7 @@ func validate(roster: FleetRoster) -> FleetValidationResult:
 	_validate_commander_and_flagship(roster, result)
 	_validate_squadron_cap(roster, result)
 	_validate_unique_constraints(roster, result)
+	_validate_upgrade_assignments(roster, result)
 	_validate_objective_selection(roster, result)
 	return result
 
@@ -126,6 +133,19 @@ func _validate_objective_selection(roster: FleetRoster,
 				"Objective '%s' must be category %s." % [objective_key, category], [], [])
 
 
+func _validate_upgrade_assignments(roster: FleetRoster,
+		result: FleetValidationResult) -> void:
+	for ship_entry: FleetShipEntry in _sorted_ships(roster):
+		var ship_data: ShipData = _load_ship(ship_entry.data_key)
+		if ship_data == null:
+			continue
+		var slots_by_type: Dictionary = _ship_slots_by_type(ship_data)
+		_validate_ship_upgrade_slots(ship_entry, slots_by_type, result)
+		_validate_ship_upgrade_duplicates(ship_entry, result)
+		_validate_ship_upgrade_limits(ship_entry, result)
+		_validate_ship_upgrade_restrictions(ship_entry, ship_data, result)
+
+
 func _validate_ship_faction(roster: FleetRoster,
 		faction_value: int, result: FleetValidationResult) -> void:
 	for ship_entry: FleetShipEntry in _sorted_ships(roster):
@@ -189,6 +209,108 @@ func _validate_unique_squadrons(roster: FleetRoster,
 			[unique_squadrons[unique_key], squadron_entry.entry_id], [])
 
 
+func _validate_ship_upgrade_slots(ship_entry: FleetShipEntry,
+		slots_by_type: Dictionary, result: FleetValidationResult) -> void:
+	var occupied: Dictionary = {}
+	for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
+		var upgrade_data: UpgradeData = _load_upgrade(assignment.data_key)
+		var slot_name: String = _normalized_slot(assignment.slot)
+		if slot_name.is_empty():
+			result.add_error(RULE_UPGRADE_SLOT,
+				"Upgrade '%s' is missing a slot assignment." % assignment.data_key,
+				[ship_entry.entry_id, assignment.entry_id], [])
+			continue
+		_validate_single_upgrade_slot(ship_entry, assignment, upgrade_data,
+			slot_name, slots_by_type, occupied, result)
+
+
+func _validate_single_upgrade_slot(ship_entry: FleetShipEntry,
+		assignment: FleetUpgradeAssignment, upgrade_data: UpgradeData,
+		slot_name: String, slots_by_type: Dictionary, occupied: Dictionary,
+		result: FleetValidationResult) -> void:
+	if not slots_by_type.has(slot_name):
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Ship '%s' has no %s slot for upgrade '%s'." % [
+				ship_entry.data_key,
+				slot_name,
+				assignment.data_key,
+			], [ship_entry.entry_id, assignment.entry_id], [])
+		return
+	if not _assignment_matches_upgrade_slot(slot_name, upgrade_data):
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Upgrade '%s' must be assigned to %s slot." % [
+				assignment.data_key,
+				str(upgrade_data.upgrade_type).to_upper(),
+			], [ship_entry.entry_id, assignment.entry_id], [])
+		return
+	var slot_entries: Array = slots_by_type[slot_name] as Array
+	if assignment.slot_index < 0 or assignment.slot_index >= slot_entries.size():
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Upgrade '%s' uses invalid slot index %d for %s." % [
+				assignment.data_key,
+				assignment.slot_index,
+				slot_name,
+			], [ship_entry.entry_id, assignment.entry_id], [])
+		return
+	var occupancy_key: String = "%s:%d" % [slot_name, assignment.slot_index]
+	if occupied.has(occupancy_key):
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Slot %s[%d] is already occupied." % [slot_name, assignment.slot_index],
+			[ship_entry.entry_id, occupied[occupancy_key], assignment.entry_id], [])
+		return
+	occupied[occupancy_key] = assignment.entry_id
+
+
+func _validate_ship_upgrade_duplicates(ship_entry: FleetShipEntry,
+		result: FleetValidationResult) -> void:
+	var seen: Dictionary = {}
+	for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
+		if assignment.data_key.strip_edges().is_empty():
+			continue
+		if not seen.has(assignment.data_key):
+			seen[assignment.data_key] = assignment.entry_id
+			continue
+		result.add_error(RULE_UPGRADE_DUPLICATE_PER_SHIP,
+			"Upgrade '%s' cannot be assigned multiple times to one ship." %
+			assignment.data_key,
+			[ship_entry.entry_id, seen[assignment.data_key], assignment.entry_id], [])
+
+
+func _validate_ship_upgrade_limits(ship_entry: FleetShipEntry,
+		result: FleetValidationResult) -> void:
+	var title_ids: Array[String] = []
+	var modification_ids: Array[String] = []
+	for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
+		var upgrade_data: UpgradeData = _load_upgrade(assignment.data_key)
+		if upgrade_data == null:
+			continue
+		if str(upgrade_data.upgrade_type).to_upper() == "TITLE":
+			title_ids.append(assignment.entry_id)
+		if upgrade_data.is_modification:
+			modification_ids.append(assignment.entry_id)
+	if title_ids.size() > 1:
+		result.add_error(RULE_UPGRADE_TITLE_LIMIT,
+			"Ship '%s' can equip only one TITLE upgrade." % ship_entry.data_key,
+			_prepend_ship_entry_id(ship_entry.entry_id, title_ids), [])
+	if modification_ids.size() > 1:
+		result.add_error(RULE_UPGRADE_MODIFICATION_LIMIT,
+			"Ship '%s' can equip only one Modification upgrade." % ship_entry.data_key,
+			_prepend_ship_entry_id(ship_entry.entry_id, modification_ids), [])
+
+
+func _validate_ship_upgrade_restrictions(ship_entry: FleetShipEntry,
+		ship_data: ShipData, result: FleetValidationResult) -> void:
+	for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
+		var upgrade_data: UpgradeData = _load_upgrade(assignment.data_key)
+		if _upgrade_allowed_for_ship(upgrade_data, ship_entry.data_key, ship_data):
+			continue
+		result.add_error(RULE_UPGRADE_RESTRICTION,
+			"Upgrade '%s' does not meet ship restrictions for '%s'." % [
+				assignment.data_key,
+				ship_entry.data_key,
+			], [ship_entry.entry_id, assignment.entry_id], [])
+
+
 func _fleet_points(roster: FleetRoster) -> int:
 	return _ship_points(roster) + _squadron_points(roster)
 
@@ -245,6 +367,79 @@ func _upgrade_matches_faction(upgrade_data: UpgradeData,
 	return upgrade_data.faction_restriction.has(faction_value)
 
 
+func _upgrade_allowed_for_ship(upgrade_data: UpgradeData,
+		ship_key: String, ship_data: ShipData) -> bool:
+	if upgrade_data == null:
+		return true
+	if not _upgrade_matches_ship_size(upgrade_data, ship_data):
+		return false
+	if not _upgrade_matches_ship_data_key(upgrade_data, ship_key):
+		return false
+	if not _upgrade_matches_ship_class(upgrade_data, ship_key):
+		return false
+	return true
+
+
+func _upgrade_matches_ship_size(upgrade_data: UpgradeData,
+		ship_data: ShipData) -> bool:
+	if upgrade_data.size_restriction.is_empty():
+		return true
+	return upgrade_data.size_restriction.has(int(ship_data.ship_size))
+
+
+func _upgrade_matches_ship_data_key(upgrade_data: UpgradeData,
+		ship_key: String) -> bool:
+	if upgrade_data.ship_data_key_restriction.is_empty():
+		return true
+	return upgrade_data.ship_data_key_restriction.has(ship_key)
+
+
+func _upgrade_matches_ship_class(upgrade_data: UpgradeData,
+		ship_key: String) -> bool:
+	if upgrade_data.ship_class_restriction.is_empty():
+		return true
+	var ship_class: String = _ship_class(ship_key)
+	if ship_class.is_empty():
+		return false
+	return upgrade_data.ship_class_restriction.has(ship_class)
+
+
+func _assignment_matches_upgrade_slot(slot_name: String,
+		upgrade_data: UpgradeData) -> bool:
+	if upgrade_data == null:
+		return true
+	var upgrade_slot: String = str(upgrade_data.upgrade_type).to_upper()
+	if upgrade_slot.is_empty():
+		return true
+	if upgrade_slot == "COMMANDER" and slot_name == "OFFICER":
+		return true
+	return slot_name == upgrade_slot
+
+
+func _ship_slots_by_type(ship_data: ShipData) -> Dictionary:
+	var slots_by_type: Dictionary = {}
+	for index: int in range(ship_data.upgrade_slots.size()):
+		var slot_name: String = _normalized_slot(str(ship_data.upgrade_slots[index]))
+		if slot_name.is_empty():
+			continue
+		if not slots_by_type.has(slot_name):
+			slots_by_type[slot_name] = []
+		(slots_by_type[slot_name] as Array).append(index)
+	return slots_by_type
+
+
+func _normalized_slot(slot_name: String) -> String:
+	return slot_name.strip_edges().to_upper()
+
+
+func _prepend_ship_entry_id(ship_entry_id: String,
+		upgrade_entry_ids: Array[String]) -> Array[String]:
+	var combined: Array[String] = [ship_entry_id]
+	for entry_id: String in upgrade_entry_ids:
+		combined.append(entry_id)
+	return combined
+
+
 func _upgrade_unique_key(upgrade_data: UpgradeData) -> String:
 	if not upgrade_data.unique_group.is_empty():
 		return upgrade_data.unique_group
@@ -273,6 +468,16 @@ func _load_ship(data_key: String) -> ShipData:
 	return data
 
 
+func _ship_class(data_key: String) -> String:
+	if _ship_record_cache.has(data_key):
+		return _ship_record_cache[data_key]
+	var ship_record: Dictionary = AssetLoader.load_json(AssetLoader.SHIP_FOLDER,
+		data_key + AssetLoader.JSON_EXTENSION)
+	var ship_class: String = str(ship_record.get("ship_class", ""))
+	_ship_record_cache[data_key] = ship_class
+	return ship_class
+
+
 func _load_squadron(data_key: String) -> SquadronData:
 	if _squadron_cache.has(data_key):
 		return _squadron_cache[data_key]
@@ -299,6 +504,7 @@ func _load_objective(data_key: String) -> ObjectiveData:
 
 func _clear_caches() -> void:
 	_ship_cache.clear()
+	_ship_record_cache.clear()
 	_squadron_cache.clear()
 	_upgrade_cache.clear()
 	_objective_cache.clear()

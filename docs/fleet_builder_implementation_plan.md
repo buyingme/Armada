@@ -779,6 +779,7 @@ test gate is passed.
 | Acceptance | Illegal upgrades are blocked by validator and exposed as structured `FleetValidationResult` entries; UI later can render the same entries. |
 | Tests | Matching/mismatched slot, duplicate same upgrade on one ship, commander on non-flotilla, title mismatch, modification limit, faction and size restrictions. |
 | Verification | Targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`. |
+| Status | Complete as of 2026-05-27: `FleetValidator` now enforces upgrade slot matching/index occupancy, duplicate-upgrade-per-ship rejection, per-ship TITLE and Modification singleton limits, and metadata-driven size/ship-class/ship-data-key restrictions with deterministic `FleetValidationResult` rule ids. |
 
 ### FB8 - Fleet JSON Import/Export And Local Library
 
@@ -982,18 +983,18 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB6 are now the requirements, component-contract, typed-loading,
+FB0-FB7 are now the requirements, component-contract, typed-loading,
 setup-hash, Core Set catalog, editable roster-model, catalog-query, and
-baseline validator foundation. Continue with FB7 before UI work: extend
-upgrade assignment legality checks using slot and restriction metadata.
+validator foundation for baseline + upgrade assignment legality. Continue
+with FB8: local fleet JSON import/export and versioned local library services.
 
-1. Add upgrade slot matching and duplicate-upgrade-per-ship checks.
-2. Enforce title/modification singleton limits and faction/size/ship
-  restrictions from `UpgradeData` metadata.
-3. Keep `FleetValidationResult` rule ids deterministic and payload-compatible
-  with later import/export and setup rejection flows.
-4. Keep gameplay setup wiring out of scope until FB8-FB11 validator expansion,
-  library, and setup contracts exist.
+1. Add a fleet library service for save/list/load/delete/duplicate/version
+  restore under `src/core/fleet/` or a thin autoload wrapper only if needed.
+2. Implement the fleet JSON import/export contract with readable validation
+  errors and compatibility defaults for future schema bumps.
+3. Preserve deterministic ordering in stored rosters so hashes/replay setup
+  payloads stay stable across save/load/import/export round trips.
+4. Keep setup-package and gameplay wiring out of scope until FB9-FB11.
 
 This gives later code slices a stable contract, keeps the architecture clean,
 and avoids building UI, validators, or network setup against moving data shapes.

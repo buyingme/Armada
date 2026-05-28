@@ -49,6 +49,13 @@ func test_default_upgrade_slots_is_empty() -> void:
 	assert_eq(ship.upgrade_slots.size(), 0, "Default upgrade slots should be empty")
 
 
+func test_default_catalog_metadata_is_empty() -> void:
+	var ship := ShipData.new()
+	assert_eq(ship.data_key, "", "Default catalog key should be empty")
+	assert_eq(ship.rules_reference_ids.size(), 0,
+		"Default rules-reference ids should be empty")
+
+
 # --- TestFixtures Integration ---
 
 func test_fixture_small_ship_has_valid_name() -> void:
@@ -153,6 +160,54 @@ func test_from_dict_parses_point_cost() -> void:
 	var ship: ShipData = ShipData.from_dict({"point_cost": 57})
 	assert_eq(ship.point_cost, 57,
 		"from_dict should parse point_cost")
+
+
+func test_from_dict_parses_catalog_metadata() -> void:
+	var ship: ShipData = ShipData.from_dict({
+		"data_key": "cr90_corvette_a",
+		"kind": "ship_card",
+		"wave": 0,
+		"expansion": "core_set",
+		"available_through": ["star_wars_armada_core_set"],
+		"card_image": "cr90_corvette_a_card.png",
+		"rules_source": "Resources/Game_Components/ships/cr90_corvette_a_rules.txt",
+		"ship_class": "cr90_corvette",
+		"ship_variant": "a",
+		"title_upgrade_group": "cr90_corvette",
+		"related_ship_data_keys": ["cr90_corvette_b"],
+		"class_specifics": "Adds red dice.",
+		"lore_aliases": ["corellian_corvette"],
+		"rules_reference_ids": ["ship.cr90_corvette_a"],
+		"rules_integration": {"status": "NOT_INTEGRATED"},
+		"search_tags": ["rebel"],
+		"source_refs": ["source.txt"],
+	})
+
+	assert_eq(ship.data_key, "cr90_corvette_a", "Should parse data key")
+	assert_eq(ship.rules_source, "Resources/Game_Components/ships/cr90_corvette_a_rules.txt",
+		"Should parse rules source path")
+	assert_eq(ship.ship_class, "cr90_corvette", "Should parse ship class")
+	assert_eq(ship.title_upgrade_group, "cr90_corvette",
+		"Should parse title group")
+	assert_eq(ship.lore_aliases[0], "corellian_corvette",
+		"Should parse lore aliases")
+	assert_eq(ship.rules_reference_ids[0], "ship.cr90_corvette_a",
+		"Should parse linked rules-reference ids")
+	assert_eq(ship.rules_integration.get("status", ""), "NOT_INTEGRATED",
+		"Should parse rules integration status")
+
+
+func test_asset_loader_loads_ship_catalog_metadata() -> void:
+	var ship: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+
+	assert_eq(ship.data_key, "cr90_corvette_a",
+		"AssetLoader ship data should expose static catalog key")
+	assert_eq(ship.ship_class, "cr90_corvette",
+		"AssetLoader ship data should expose ship class")
+	assert_eq(ship.title_upgrade_group, "cr90_corvette",
+		"AssetLoader ship data should expose title group")
+	assert_eq(ship.available_through[0], "star_wars_armada_core_set",
+		"AssetLoader ship data should expose product availability")
 
 
 func test_from_dict_unknown_size_defaults_to_small_and_errors() -> void:

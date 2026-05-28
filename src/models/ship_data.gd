@@ -6,6 +6,57 @@ class_name ShipData
 extends Resource
 
 
+## Stable catalog key for this ship.
+@export var data_key: String = ""
+
+## Static record kind from the component catalog.
+@export var kind: String = "ship_card"
+
+## Armada release wave. Core Set content is wave 0.
+@export var wave: int = 0
+
+## Source expansion or product key.
+@export var expansion: String = ""
+
+## Product keys that contain this ship.
+@export var available_through: Array[String] = []
+
+## Card art filename in ships/.
+@export var card_image: String = ""
+
+## Local text source path for this ship's extracted rules/card facts.
+@export var rules_source: String = ""
+
+## Ship class key shared by variants of the same chassis.
+@export var ship_class: String = ""
+
+## Variant key within the ship class.
+@export var ship_variant: String = ""
+
+## Title group key used by fleet-builder title restrictions.
+@export var title_upgrade_group: String = ""
+
+## Related ship data keys, usually sibling variants.
+@export var related_ship_data_keys: Array[String] = []
+
+## Human-readable variant distinction notes.
+@export var class_specifics: String = ""
+
+## Alternate lore/name aliases for search.
+@export var lore_aliases: Array[String] = []
+
+## Linked rules-reference record ids.
+@export var rules_reference_ids: Array[String] = []
+
+## RuleRegistry implementation status metadata.
+@export var rules_integration: Dictionary = {}
+
+## Search/filter tags for the fleet builder catalog.
+@export var search_tags: Array[String] = []
+
+## Local source references used to verify this record.
+@export var source_refs: Array[String] = []
+
 ## The display name of the ship.
 @export var ship_name: String = ""
 
@@ -88,6 +139,7 @@ extends Resource
 ## Rules Reference: Resources/Game_Components/card_data_schema.json
 static func from_dict(data: Dictionary) -> ShipData:
 	var s: ShipData = ShipData.new()
+	s._load_catalog_metadata(data)
 	s.ship_name = data.get("ship_name", "")
 	s.faction = _parse_faction(data.get("faction", "REBEL_ALLIANCE"))
 	s.ship_size = _parse_ship_size(data.get("ship_size", "SMALL"))
@@ -112,6 +164,26 @@ static func from_dict(data: Dictionary) -> ShipData:
 	if origin_arr.size() >= 2:
 		s.range_overlay_origin_px = Vector2(float(origin_arr[0]), float(origin_arr[1]))
 	return s
+
+
+func _load_catalog_metadata(data: Dictionary) -> void:
+	data_key = str(data.get("data_key", ""))
+	kind = str(data.get("kind", "ship_card"))
+	wave = int(data.get("wave", 0))
+	expansion = str(data.get("expansion", ""))
+	available_through.assign(data.get("available_through", []))
+	card_image = str(data.get("card_image", ""))
+	rules_source = str(data.get("rules_source", ""))
+	ship_class = str(data.get("ship_class", ""))
+	ship_variant = str(data.get("ship_variant", ""))
+	title_upgrade_group = str(data.get("title_upgrade_group", ""))
+	related_ship_data_keys.assign(data.get("related_ship_data_keys", []))
+	class_specifics = str(data.get("class_specifics", ""))
+	lore_aliases.assign(data.get("lore_aliases", []))
+	rules_reference_ids.assign(data.get("rules_reference_ids", []))
+	rules_integration = data.get("rules_integration", {})
+	search_tags.assign(data.get("search_tags", []))
+	source_refs.assign(data.get("source_refs", []))
 
 
 ## Parses token_label_offsets from the JSON dictionary.

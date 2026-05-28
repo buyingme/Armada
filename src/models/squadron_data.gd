@@ -7,6 +7,54 @@ class_name SquadronData
 extends Resource
 
 
+## Stable catalog key for this squadron.
+@export var data_key: String = ""
+
+## Static record kind from the component catalog.
+@export var kind: String = "squadron_card"
+
+## Armada release wave. Core Set content is wave 0.
+@export var wave: int = 0
+
+## Source expansion or product key.
+@export var expansion: String = ""
+
+## Product keys that contain this squadron.
+@export var available_through: Array[String] = []
+
+## Card art filename in squadrons/.
+@export var card_image: String = ""
+
+## Token art filename in squadrons/.
+@export var token_image: String = ""
+
+## Local text source path for this squadron's extracted rules/card facts.
+@export var rules_source: String = ""
+
+## Squadron family key shared by generic and ace variants.
+@export var squadron_family: String = ""
+
+## Known ace variant keys for catalog browsing.
+@export var ace_variants: Array[String] = []
+
+## Linked rules-reference record ids.
+@export var rules_reference_ids: Array[String] = []
+
+## RuleRegistry implementation status metadata.
+@export var rules_integration: Dictionary = {}
+
+## Rule hook surface metadata used by future integration slices.
+@export var rule_surfaces: Array[Dictionary] = []
+
+## Runtime state needs once this squadron's gameplay rule is implemented.
+@export var runtime_state_requirements: Array[String] = []
+
+## Search/filter tags for the fleet builder catalog.
+@export var search_tags: Array[String] = []
+
+## Local source references used to verify this record.
+@export var source_refs: Array[String] = []
+
 ## The display name of the squadron.
 @export var squadron_name: String = ""
 
@@ -74,6 +122,7 @@ func get_keyword_value(keyword_name: String) -> int:
 ## Rules Reference: Resources/Game_Components/card_data_schema.json
 static func from_dict(data: Dictionary) -> SquadronData:
 	var s: SquadronData = SquadronData.new()
+	s._load_catalog_metadata(data)
 	s.squadron_name = data.get("squadron_name", "")
 	s.faction = _parse_faction(data.get("faction", "REBEL_ALLIANCE"))
 	s.point_cost = int(data.get("point_cost", 0))
@@ -89,6 +138,25 @@ static func from_dict(data: Dictionary) -> SquadronData:
 	s.unique_group = str(data.get("unique_group", ""))
 	s.defense_tokens = data.get("defense_tokens", [])
 	return s
+
+
+func _load_catalog_metadata(data: Dictionary) -> void:
+	data_key = str(data.get("data_key", ""))
+	kind = str(data.get("kind", "squadron_card"))
+	wave = int(data.get("wave", 0))
+	expansion = str(data.get("expansion", ""))
+	available_through.assign(data.get("available_through", []))
+	card_image = str(data.get("card_image", ""))
+	token_image = str(data.get("token_image", ""))
+	rules_source = str(data.get("rules_source", ""))
+	squadron_family = str(data.get("squadron_family", ""))
+	ace_variants.assign(data.get("ace_variants", []))
+	rules_reference_ids.assign(data.get("rules_reference_ids", []))
+	rules_integration = data.get("rules_integration", {})
+	rule_surfaces.assign(data.get("rule_surfaces", []))
+	runtime_state_requirements.assign(data.get("runtime_state_requirements", []))
+	search_tags.assign(data.get("search_tags", []))
+	source_refs.assign(data.get("source_refs", []))
 
 
 ## Parses a faction JSON string into the Faction enum.

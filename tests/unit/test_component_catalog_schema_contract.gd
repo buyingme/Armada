@@ -180,6 +180,47 @@ func test_rule_reference_records_map_to_integrated_rule_ids_expected() -> void:
 			"%s should map to at least one RuleRegistry id" % file_path)
 
 
+func test_all_component_records_load_as_typed_data_expected() -> void:
+	for key: String in AssetLoader.list_ship_keys():
+		assert_not_null(AssetLoader.load_ship_data(key),
+			"Ship '%s' should parse as typed data" % key)
+	for key: String in AssetLoader.list_squadron_keys():
+		assert_not_null(AssetLoader.load_squadron_data(key),
+			"Squadron '%s' should parse as typed data" % key)
+	for key: String in AssetLoader.list_upgrade_keys():
+		assert_not_null(AssetLoader.load_upgrade_data(key),
+			"Upgrade '%s' should parse as typed data" % key)
+	for key: String in AssetLoader.list_objective_keys():
+		assert_not_null(AssetLoader.load_objective_data(key),
+			"Objective '%s' should parse as typed data" % key)
+	for key: String in AssetLoader.list_obstacle_keys():
+		assert_not_null(AssetLoader.load_obstacle_data(key),
+			"Obstacle '%s' should parse as typed data" % key)
+	for key: String in AssetLoader.list_rule_reference_keys():
+		assert_not_null(AssetLoader.load_rule_reference_data(key),
+			"Rule reference '%s' should parse as typed data" % key)
+
+
+func test_objective_catalog_categories_complete_expected() -> void:
+	var category_counts: Dictionary = {
+		"ASSAULT": 0,
+		"DEFENSE": 0,
+		"NAVIGATION": 0,
+	}
+	for key: String in AssetLoader.list_objective_keys():
+		var objective: ObjectiveData = AssetLoader.load_objective_data(key)
+		assert_not_null(objective, "Objective '%s' should load" % key)
+		if objective != null and category_counts.has(objective.category):
+			category_counts[objective.category] = int(category_counts[objective.category]) + 1
+
+	assert_eq(category_counts.get("ASSAULT", 0), 4,
+		"Core Set catalog should include four Assault objectives")
+	assert_eq(category_counts.get("DEFENSE", 0), 4,
+		"Core Set catalog should include four Defense objectives")
+	assert_eq(category_counts.get("NAVIGATION", 0), 4,
+		"Core Set catalog should include four Navigation objectives")
+
+
 func _load_component_record(file_path: String) -> Dictionary:
 	return _load_json(COMPONENT_ROOT + file_path)
 

@@ -39,6 +39,13 @@ func test_default_unique_group_is_empty() -> void:
 	assert_eq(squad.unique_group, "", "Default unique group should be empty")
 
 
+func test_default_catalog_metadata_is_empty() -> void:
+	var squad := SquadronData.new()
+	assert_eq(squad.data_key, "", "Default catalog key should be empty")
+	assert_eq(squad.rules_reference_ids.size(), 0,
+		"Default rules-reference ids should be empty")
+
+
 func test_default_keywords_is_empty() -> void:
 	var squad := SquadronData.new()
 	assert_eq(squad.keywords.size(), 0, "Default keywords should be empty")
@@ -203,6 +210,49 @@ func test_from_dict_parses_unique_group() -> void:
 	var squad: SquadronData = SquadronData.from_dict({"unique_group": "luke_skywalker"})
 	assert_eq(squad.unique_group, "luke_skywalker",
 		"from_dict should parse unique squadron group")
+
+
+func test_from_dict_parses_catalog_metadata() -> void:
+	var squad: SquadronData = SquadronData.from_dict({
+		"data_key": "x_wing_squadron",
+		"kind": "squadron_card",
+		"wave": 0,
+		"expansion": "core_set",
+		"available_through": ["star_wars_armada_core_set"],
+		"card_image": "x_wing_squadron_card.png",
+		"token_image": "x_wing_squadron_token.png",
+		"rules_source": "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
+		"squadron_family": "x_wing",
+		"ace_variants": ["luke_skywalker"],
+		"rules_reference_ids": ["squadron_keyword.bomber"],
+		"rules_integration": {"status": "INTEGRATED"},
+		"rule_surfaces": [{"surface": "attack.resolve_damage.bomber_keyword"}],
+		"runtime_state_requirements": ["bomber_keyword_damage_modifier"],
+		"search_tags": ["rebel"],
+		"source_refs": ["source.txt"],
+	})
+
+	assert_eq(squad.data_key, "x_wing_squadron", "Should parse data key")
+	assert_eq(squad.rules_source, "Resources/Game_Components/squadrons/x_wing_squadron_rules.txt",
+		"Should parse rules source path")
+	assert_eq(squad.squadron_family, "x_wing", "Should parse squadron family")
+	assert_eq(squad.rules_reference_ids[0], "squadron_keyword.bomber",
+		"Should parse linked rules-reference ids")
+	assert_eq(squad.rules_integration.get("status", ""), "INTEGRATED",
+		"Should parse rules integration status")
+
+
+func test_asset_loader_loads_squadron_catalog_metadata() -> void:
+	var squad: SquadronData = AssetLoader.load_squadron_data("x_wing_squadron")
+
+	assert_eq(squad.data_key, "x_wing_squadron",
+		"AssetLoader squadron data should expose static catalog key")
+	assert_eq(squad.squadron_family, "x_wing",
+		"AssetLoader squadron data should expose squadron family")
+	assert_eq(squad.rules_reference_ids[0], "squadron_keyword.bomber",
+		"AssetLoader squadron data should expose rules-reference ids")
+	assert_eq(squad.rules_integration.get("status", ""), "INTEGRATED",
+		"AssetLoader squadron data should expose rules integration")
 
 
 func test_from_dict_unknown_faction_defaults_to_rebel_and_errors() -> void:

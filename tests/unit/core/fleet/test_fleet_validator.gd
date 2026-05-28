@@ -322,6 +322,23 @@ func test_validate_ship_data_restriction_reports_error_expected() -> void:
 		"Title restricted to another ship should report upgrade-restriction error")
 
 
+func test_validate_ship_class_restriction_reports_error_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER", "TITLE"])
+	validator.add_ship_class_override("ship-test", "cr90_corvette")
+	var title: UpgradeData = _create_upgrade_data("nebulon_title", "TITLE")
+	title.ship_class_restriction = ["nebulon_b_frigate"]
+	validator.add_upgrade_override("nebulon_title", title)
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	_add_upgrade_to_ship(roster.get_ship("ship-1"), "title-1", "nebulon_title", "TITLE", 0)
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UPGRADE_RESTRICTION),
+		"Upgrade with unmatched ship-class restriction should report restriction error")
+
+
 func test_validate_size_restriction_reports_error_expected() -> void:
 	var validator: Variant = _create_test_validator("ship-test", [
 		"OFFICER",

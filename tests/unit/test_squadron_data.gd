@@ -34,6 +34,11 @@ func test_default_is_not_unique() -> void:
 	assert_false(squad.is_unique, "Default squadron should not be unique")
 
 
+func test_default_unique_group_is_empty() -> void:
+	var squad := SquadronData.new()
+	assert_eq(squad.unique_group, "", "Default unique group should be empty")
+
+
 func test_default_keywords_is_empty() -> void:
 	var squad := SquadronData.new()
 	assert_eq(squad.keywords.size(), 0, "Default keywords should be empty")
@@ -192,6 +197,12 @@ func test_from_dict_parses_is_unique_false() -> void:
 	var squad: SquadronData = SquadronData.from_dict({"is_unique": false})
 	assert_false(squad.is_unique,
 		"from_dict should parse is_unique false")
+
+
+func test_from_dict_parses_unique_group() -> void:
+	var squad: SquadronData = SquadronData.from_dict({"unique_group": "luke_skywalker"})
+	assert_eq(squad.unique_group, "luke_skywalker",
+		"from_dict should parse unique squadron group")
 
 
 func test_from_dict_unknown_faction_defaults_to_rebel_and_errors() -> void:

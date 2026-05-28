@@ -43,6 +43,9 @@ extends Resource
 ## Whether this is a unique (named) squadron.
 @export var is_unique: bool = false
 
+## Unique-name group used by fleet-building validation.
+@export var unique_group: String = ""
+
 ## The defense tokens available (for unique squadrons).
 @export var defense_tokens: Array = []
 
@@ -83,6 +86,7 @@ static func from_dict(data: Dictionary) -> SquadronData:
 	s.keyword_reminder_text = data.get("keyword_reminder_text", {})
 	s.ability_text = data.get("ability_text", "")
 	s.is_unique = bool(data.get("is_unique", false))
+	s.unique_group = str(data.get("unique_group", ""))
 	s.defense_tokens = data.get("defense_tokens", [])
 	return s
 

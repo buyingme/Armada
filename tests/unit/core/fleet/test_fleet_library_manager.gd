@@ -80,6 +80,35 @@ func test_duplicate_fleet_creates_independent_record_expected() -> void:
 		"Duplicated fleet should use requested name")
 
 
+func test_duplicate_fleet_preserves_unknown_fields_expected() -> void:
+	_import_payload_with_future_field("fleet-source")
+
+	var duplicated: Dictionary = _manager.duplicate_fleet(
+		"fleet-source", "fleet-copy", "Copied Fleet")
+	var exported: Dictionary = _manager.export_roster_json("fleet-copy")
+	var parsed: Dictionary = _parse_json(exported.get("json_text", "") as String)
+	var fleet_payload: Dictionary = parsed.get("fleet", {}) as Dictionary
+
+	assert_true(duplicated.get("ok", false), "Duplicating fleet should succeed")
+	assert_true(fleet_payload.has("future_field"),
+		"Duplicating should preserve unknown future fields")
+
+
+func test_duplicate_fleet_existing_destination_rejected_expected() -> void:
+	_manager.save_roster(_create_roster("fleet-source", "Source Fleet"))
+	_manager.save_roster(_create_roster("fleet-copy", "Existing Fleet"))
+
+	var duplicated: Dictionary = _manager.duplicate_fleet(
+		"fleet-source", "fleet-copy", "Copied Fleet")
+	var versions: Dictionary = _manager.list_versions("fleet-copy")
+
+	assert_false(duplicated.get("ok", false), "Duplicate destination should fail")
+	assert_eq(duplicated.get("reason", ""), "duplicate_fleet_id",
+		"Duplicate destination should report duplicate_fleet_id")
+	assert_eq((versions.get("versions", []) as Array).size(), 1,
+		"Existing destination should not receive an appended snapshot")
+
+
 func test_delete_fleet_removes_record_expected() -> void:
 	var roster: FleetRoster = _create_roster("fleet-alpha", "Alpha Fleet")
 	_manager.save_roster(roster)
@@ -93,6 +122,16 @@ func test_delete_fleet_removes_record_expected() -> void:
 		"Deleted fleet should report missing record")
 
 
+func test_save_roster_rejects_unsafe_fleet_id_expected() -> void:
+	var roster: FleetRoster = _create_roster("../fleet-alpha", "Unsafe Fleet")
+
+	var saved: Dictionary = _manager.save_roster(roster)
+
+	assert_false(saved.get("ok", false), "Unsafe fleet ids should not save")
+	assert_eq(saved.get("reason", ""), "invalid_fleet_id",
+		"Unsafe fleet ids should report invalid_fleet_id")
+
+
 func test_import_invalid_json_returns_readable_error_expected() -> void:
 	var result: Dictionary = _manager.import_roster_json("{ broken")
 
@@ -103,25 +142,24 @@ func test_import_invalid_json_returns_readable_error_expected() -> void:
 		"Invalid JSON should return a readable message")
 
 
-func test_import_export_round_trip_preserves_unknown_fields_expected() -> void:
-	var import_payload: Dictionary = {
+func test_import_unknown_kind_returns_schema_error_expected() -> void:
+	var payload: Dictionary = {
 		"format_version": 1,
-		"kind": "fleet_export",
-		"fleet": {
-			"format_version": 1,
-			"kind": "fleet_roster",
-			"fleet_id": "fleet-imported",
-			"name": "Imported Fleet",
-			"faction": "REBEL_ALLIANCE",
-			"point_format": {"id": "CUSTOM", "limit": 180},
-			"ships": [],
-			"squadrons": [],
-			"objectives": {},
-			"future_field": {"nested": 7},
-		},
+		"kind": "unexpected_payload",
+		"fleet_id": "fleet-imported",
+		"name": "Imported Fleet",
+		"faction": "REBEL_ALLIANCE",
 	}
-	var imported: Dictionary = _manager.import_roster_json(
-		JSON.stringify(import_payload, "\t"))
+
+	var result: Dictionary = _manager.import_roster_json(JSON.stringify(payload, "\t"))
+
+	assert_false(result.get("ok", false), "Unknown import kinds should fail")
+	assert_eq(result.get("reason", ""), "schema_invalid",
+		"Unknown import kinds should report schema_invalid")
+
+
+func test_import_export_round_trip_preserves_unknown_fields_expected() -> void:
+	var imported: Dictionary = _import_payload_with_future_field("fleet-imported")
 	var exported: Dictionary = _manager.export_roster_json("fleet-imported")
 	var parsed: Dictionary = _parse_json(exported.get("json_text", "") as String)
 	var fleet_payload: Dictionary = parsed.get("fleet", {}) as Dictionary
@@ -166,3 +204,23 @@ func _parse_json(json_text: String) -> Dictionary:
 	var json: JSON = JSON.new()
 	assert_eq(json.parse(json_text), OK, "Exported JSON should parse")
 	return json.data as Dictionary
+
+
+func _import_payload_with_future_field(fleet_id: String) -> Dictionary:
+	var import_payload: Dictionary = {
+		"format_version": 1,
+		"kind": "fleet_export",
+		"fleet": {
+			"format_version": 1,
+			"kind": "fleet_roster",
+			"fleet_id": fleet_id,
+			"name": "Imported Fleet",
+			"faction": "REBEL_ALLIANCE",
+			"point_format": {"id": "CUSTOM", "limit": 180},
+			"ships": [],
+			"squadrons": [],
+			"objectives": {},
+			"future_field": {"nested": 7},
+		},
+	}
+	return _manager.import_roster_json(JSON.stringify(import_payload, "\t"))

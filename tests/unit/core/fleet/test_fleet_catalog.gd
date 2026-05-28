@@ -43,6 +43,20 @@ func test_query_components_filters_faction_expected() -> void:
 			"Faction filter should keep only Rebel ships")
 
 
+func test_query_components_faction_filter_includes_neutral_upgrades_expected() -> void:
+	var results: Array[Dictionary] = _catalog.query_components({
+		"component_types": [FleetCatalog.COMPONENT_UPGRADE],
+		"faction": "REBEL_ALLIANCE",
+	})
+
+	assert_true(_contains_key(results, "leia_organa"),
+		"Faction filter should include matching Rebel upgrades")
+	assert_true(_contains_key(results, "h9_turbolasers"),
+		"Faction filter should include unrestricted upgrades")
+	assert_false(_contains_key(results, "grand_moff_tarkin"),
+		"Faction filter should exclude opponent-only upgrades")
+
+
 func test_query_components_filters_point_range_expected() -> void:
 	var results: Array[Dictionary] = _catalog.query_components({
 		"component_types": [FleetCatalog.COMPONENT_UPGRADE],

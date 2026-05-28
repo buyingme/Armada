@@ -117,7 +117,13 @@ func _matches_faction(entry: Dictionary, filters: Dictionary) -> bool:
 	var faction: String = str(filters.get("faction", "")).to_upper()
 	if faction.is_empty():
 		return true
-	return str(entry.get("faction", "")).to_upper() == faction
+	var factions: Array = entry.get("factions", [])
+	if factions.is_empty():
+		return _unrestricted_component_matches_faction(str(entry.get("component_type", "")))
+	for raw_faction: Variant in factions:
+		if str(raw_faction).to_upper() == faction:
+			return true
+	return false
 
 
 func _matches_point_cost(entry: Dictionary, filters: Dictionary) -> bool:
@@ -255,6 +261,7 @@ func _ship_entry_from_data(key: String, record: Dictionary, data: ShipData) -> D
 		"data_key": key,
 		"display_name": data.ship_name,
 		"faction": _faction_to_string(data.faction),
+		"factions": [_faction_to_string(data.faction)],
 		"point_cost": data.point_cost,
 		"wave": int(record.get("wave", -1)),
 		"expansion": str(record.get("expansion", "")),
@@ -279,6 +286,7 @@ func _squadron_entry_from_data(key: String,
 		"data_key": key,
 		"display_name": data.squadron_name,
 		"faction": _faction_to_string(data.faction),
+		"factions": [_faction_to_string(data.faction)],
 		"point_cost": data.point_cost,
 		"wave": int(record.get("wave", -1)),
 		"expansion": str(record.get("expansion", "")),
@@ -300,6 +308,7 @@ func _upgrade_entry_from_data(data: UpgradeData) -> Dictionary:
 		"data_key": data.data_key,
 		"display_name": data.upgrade_name,
 		"faction": _faction_restriction_to_string(data.faction_restriction),
+		"factions": _faction_restrictions_to_strings(data.faction_restriction),
 		"point_cost": data.point_cost,
 		"wave": data.wave,
 		"expansion": data.expansion,
@@ -322,6 +331,7 @@ func _objective_entry_from_data(data: ObjectiveData) -> Dictionary:
 		"data_key": data.data_key,
 		"display_name": data.objective_name,
 		"faction": "",
+		"factions": [],
 		"point_cost": -1,
 		"wave": data.wave,
 		"expansion": data.expansion,
@@ -343,6 +353,7 @@ func _obstacle_entry_from_data(data: ObstacleData) -> Dictionary:
 		"data_key": data.data_key,
 		"display_name": data.obstacle_name,
 		"faction": "",
+		"factions": [],
 		"point_cost": -1,
 		"wave": data.wave,
 		"expansion": data.expansion,
@@ -364,6 +375,7 @@ func _rule_entry_from_data(data: RuleReferenceData) -> Dictionary:
 		"data_key": data.data_key,
 		"display_name": data.display_name,
 		"faction": "",
+		"factions": [],
 		"point_cost": -1,
 		"wave": -1,
 		"expansion": "",
@@ -386,6 +398,9 @@ func _create_entry(fields: Dictionary) -> Dictionary:
 	var keywords: Array[String] = []
 	for raw_keyword: Variant in fields.get("keywords", []):
 		keywords.append(str(raw_keyword))
+	var factions: Array[String] = []
+	for raw_faction: Variant in fields.get("factions", []):
+		factions.append(str(raw_faction))
 	var blob_parts: Array[String] = [
 		str(fields.get("data_key", "")),
 		str(fields.get("display_name", "")),
@@ -393,8 +408,10 @@ func _create_entry(fields: Dictionary) -> Dictionary:
 	]
 	blob_parts.append_array(search_tags)
 	blob_parts.append_array(keywords)
+	blob_parts.append_array(factions)
 	fields["search_tags"] = search_tags
 	fields["keywords"] = keywords
+	fields["factions"] = factions
 	fields["search_blob"] = " ".join(blob_parts).strip_edges()
 	return fields
 
@@ -480,6 +497,20 @@ static func _faction_restriction_to_string(factions: Array) -> String:
 	if factions.is_empty():
 		return ""
 	return _faction_to_string(factions[0] as Constants.Faction)
+
+
+static func _faction_restrictions_to_strings(factions: Array) -> Array[String]:
+	var result: Array[String] = []
+	for faction: Variant in factions:
+		result.append(_faction_to_string(faction as Constants.Faction))
+	return result
+
+
+static func _unrestricted_component_matches_faction(component_type: String) -> bool:
+	return component_type == COMPONENT_UPGRADE \
+			or component_type == COMPONENT_OBJECTIVE \
+			or component_type == COMPONENT_OBSTACLE \
+			or component_type == COMPONENT_RULE_REFERENCE
 
 
 static func _rules_status(record: Dictionary) -> String:

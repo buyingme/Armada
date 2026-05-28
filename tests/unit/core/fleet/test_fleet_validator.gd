@@ -112,6 +112,37 @@ func test_validate_excessive_squadron_points_reports_cap_error_expected() -> voi
 		"Roster over one-third squadron cap should report squadron-cap error")
 
 
+func test_validate_squadron_cap_rounded_up_boundary_allowed_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER"])
+	validator.add_squadron_override("cap_squadron", _create_squadron_data(
+		"cap_squadron", 61))
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 181)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	roster.add_squadron(_create_squadron("squad-1", "cap_squadron"))
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_false(_has_rule_error(result, FleetValidator.RULE_SQUADRON_CAP),
+		"Squadron cap should round one-third up for agreed point limits")
+
+
+func test_validate_unique_squadron_limit_reports_error_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER"])
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	for index: int in range(3):
+		var key: String = "ace_%d" % index
+		validator.add_squadron_override(key, _create_squadron_data(key, 1, true, key, true))
+		roster.add_squadron(_create_squadron("squad-%d" % index, key))
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UNIQUE_SQUADRON_LIMIT),
+		"Too many unique squadrons with defense tokens should report limit error")
+
+
 func test_validate_duplicate_unique_upgrades_reports_error_expected() -> void:
 	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
 	_add_ship_with_upgrade(roster, "ship-1", "cr90_corvette_a", "leia_organa")
@@ -136,6 +167,42 @@ func test_validate_duplicate_unique_squadrons_reports_error_expected() -> void:
 
 	assert_true(_has_rule_error(result, FleetValidator.RULE_UNIQUE_SQUADRON),
 		"Duplicate unique squadrons should report unique-squadron error")
+
+
+func test_validate_duplicate_unique_squadron_group_reports_error_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER"])
+	validator.add_squadron_override("ace_a", _create_squadron_data(
+		"Ace A", 1, true, "shared_ace", true))
+	validator.add_squadron_override("ace_b", _create_squadron_data(
+		"Ace B", 1, true, "shared_ace", true))
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	roster.add_squadron(_create_squadron("squad-1", "ace_a"))
+	roster.add_squadron(_create_squadron("squad-2", "ace_b"))
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UNIQUE_SQUADRON),
+		"Squadrons sharing a unique group should report unique-squadron error")
+
+
+func test_validate_missing_catalog_references_report_errors_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	var ship_entry: FleetShipEntry = _create_ship("ship-1", "missing_ship")
+	_add_upgrade_to_ship(ship_entry, "upgrade-1", "missing_upgrade", "OFFICER")
+	roster.add_ship(ship_entry)
+	roster.add_squadron(_create_squadron("squad-1", "missing_squadron"))
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_SHIP_REFERENCE),
+		"Missing ship catalog references should report ship-reference error")
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UPGRADE_REFERENCE),
+		"Missing upgrade catalog references should report upgrade-reference error")
+	assert_true(_has_rule_error(result, FleetValidator.RULE_SQUADRON_REFERENCE),
+		"Missing squadron catalog references should report squadron-reference error")
 
 
 func test_validate_invalid_objectives_reports_category_error_expected() -> void:
@@ -341,6 +408,20 @@ func _create_upgrade_data(data_key: String, upgrade_type: String,
 	upgrade_data.is_modification = is_modification
 	upgrade_data.size_restriction = size_restriction.duplicate()
 	return upgrade_data
+
+
+func _create_squadron_data(squadron_name: String, point_cost: int,
+		is_unique: bool = false, unique_group: String = "",
+		has_defense_token: bool = false) -> SquadronData:
+	var squadron_data: SquadronData = SquadronData.new()
+	squadron_data.squadron_name = squadron_name
+	squadron_data.faction = Constants.Faction.REBEL_ALLIANCE
+	squadron_data.point_cost = point_cost
+	squadron_data.is_unique = is_unique
+	squadron_data.unique_group = unique_group
+	if has_defense_token:
+		squadron_data.defense_tokens = ["BRACE"]
+	return squadron_data
 
 
 func _create_ship(entry_id: String, data_key: String) -> FleetShipEntry:

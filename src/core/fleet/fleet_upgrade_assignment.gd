@@ -32,8 +32,8 @@ func serialize() -> Dictionary:
 ## Deserializes an upgrade assignment from JSON-safe roster data.
 static func deserialize(data: Dictionary) -> FleetUpgradeAssignment:
 	var assignment: FleetUpgradeAssignment = FleetUpgradeAssignment.new()
-	assignment.entry_id = str(data.get("entry_id", ""))
+	assignment.entry_id = str(data.get("entry_id", data.get("assignment_id", "")))
 	assignment.data_key = str(data.get("data_key", ""))
-	assignment.slot = str(data.get("slot", ""))
+	assignment.slot = str(data.get("slot", data.get("slot_type", "")))
 	assignment.slot_index = int(data.get("slot_index", 0))
 	return assignment

@@ -21,6 +21,9 @@ var fleet_id: String = ""
 ## Human-readable fleet name.
 var name: String = ""
 
+## Optional user-authored fleet notes or description text.
+var description: String = ""
+
 ## Faction key used by catalog records and validators.
 var faction: String = ""
 
@@ -154,6 +157,7 @@ func serialize() -> Dictionary:
 		"kind": kind,
 		"fleet_id": fleet_id,
 		"name": name,
+		"description": description,
 		"faction": faction,
 		"point_format": point_format.duplicate(true),
 		"created_at": created_at,
@@ -173,6 +177,7 @@ static func deserialize(data: Dictionary) -> FleetRoster:
 	roster.kind = str(data.get("kind", KIND))
 	roster.fleet_id = str(data.get("fleet_id", ""))
 	roster.name = str(data.get("name", ""))
+	roster.description = str(data.get("description", ""))
 	roster.faction = str(data.get("faction", ""))
 	roster.point_format = _read_dict(data.get("point_format", {}))
 	roster.created_at = str(data.get("created_at", ""))

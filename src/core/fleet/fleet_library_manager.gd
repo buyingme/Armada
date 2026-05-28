@@ -11,6 +11,7 @@ const RECORD_KIND: String = "fleet_library_record"
 const EXPORT_FORMAT_VERSION: int = 1
 const EXPORT_KIND: String = "fleet_export"
 const FILE_EXT: String = ".json"
+const UNSAFE_FLEET_ID_CHARS: Array[String] = ["/", "\\", ":", "\n", "\r", "\t"]
 
 static var LIBRARY_DIR: String = PathConfig.SAVES_DIR + "/fleets"
 
@@ -58,6 +59,8 @@ func list_fleets() -> Array[Dictionary]:
 
 ## Deletes the fleet record for [param fleet_id].
 func delete_fleet(fleet_id: String) -> Dictionary:
+	if not _fleet_id_is_usable(fleet_id):
+		return _failure("invalid_fleet_id", "Fleet id contains unsupported characters.")
 	var path: String = _record_path(fleet_id)
 	if not FileAccess.file_exists(path):
 		return _failure("missing", "Fleet record does not exist.")
@@ -70,20 +73,24 @@ func delete_fleet(fleet_id: String) -> Dictionary:
 ## Duplicates [param source_fleet_id] to [param new_fleet_id] and name.
 func duplicate_fleet(source_fleet_id: String, new_fleet_id: String,
 		new_name: String) -> Dictionary:
-	if new_fleet_id.strip_edges().is_empty():
+	if not _fleet_id_is_usable(new_fleet_id):
 		return _failure("invalid_fleet_id", "New fleet id is required.")
-	var loaded: Dictionary = load_roster(source_fleet_id)
-	if not bool(loaded.get("ok", false)):
-		return loaded
-	var roster: FleetRoster = loaded.get("roster") as FleetRoster
-	if roster == null:
-		return _failure("invalid_roster", "Source roster could not be read.")
-	roster.fleet_id = new_fleet_id
+	if FileAccess.file_exists(_record_path(new_fleet_id)):
+		return _failure("duplicate_fleet_id", "Destination fleet already exists.")
+	var record_result: Dictionary = _read_record(source_fleet_id)
+	if not bool(record_result.get("ok", false)):
+		return record_result
+	var record: Dictionary = record_result.get("record", {}) as Dictionary
+	var version: Dictionary = _active_or_requested_version(record, "")
+	if version.is_empty():
+		return _failure("version_not_found", "Requested version was not found.")
+	var roster_payload: Dictionary = (version.get("roster", {}) as Dictionary).duplicate(true)
+	roster_payload["fleet_id"] = new_fleet_id
 	if not new_name.strip_edges().is_empty():
-		roster.name = new_name
-	roster.source = "duplicate"
-	roster.updated_at = _iso_timestamp()
-	return save_roster(roster, "duplicate")
+		roster_payload["name"] = new_name
+	roster_payload["source"] = "duplicate"
+	roster_payload["updated_at"] = _iso_timestamp()
+	return _save_payload(roster_payload, "duplicate")
 
 
 ## Lists version snapshots for [param fleet_id].
@@ -168,9 +175,11 @@ func import_roster_json(json_text: String) -> Dictionary:
 
 
 func _save_payload(roster_payload: Dictionary, source: String) -> Dictionary:
-	var fleet_id: String = String(roster_payload.get("fleet_id", "")).strip_edges()
-	if fleet_id.is_empty():
+	var fleet_id: String = String(roster_payload.get("fleet_id", ""))
+	if fleet_id.strip_edges().is_empty():
 		return _failure("invalid_fleet_id", "Fleet id is required.")
+	if not _fleet_id_is_usable(fleet_id):
+		return _failure("invalid_fleet_id", "Fleet id contains unsupported characters.")
 	var record_result: Dictionary = _read_record(fleet_id)
 	var record: Dictionary = _empty_record(fleet_id)
 	if bool(record_result.get("ok", false)):
@@ -219,10 +228,12 @@ func _next_version_id(versions: Array) -> String:
 func _imported_roster_payload(payload: Dictionary) -> Dictionary:
 	if String(payload.get("kind", "")) == EXPORT_KIND:
 		var exported_fleet: Variant = payload.get("fleet", {})
-		if exported_fleet is Dictionary:
+		if exported_fleet is Dictionary and _payload_has_roster_kind(exported_fleet as Dictionary):
 			return (exported_fleet as Dictionary).duplicate(true)
 	if String(payload.get("kind", "")) == FleetRoster.KIND:
 		return payload.duplicate(true)
+	if not String(payload.get("kind", "")).is_empty():
+		return {}
 	if payload.has("fleet_id") and payload.has("name") and payload.has("faction"):
 		return payload.duplicate(true)
 	return {}
@@ -298,6 +309,8 @@ func _summarize_version(version: Dictionary) -> Dictionary:
 func _read_record(fleet_id: String) -> Dictionary:
 	if fleet_id.strip_edges().is_empty():
 		return _failure("invalid_fleet_id", "Fleet id is required.")
+	if not _fleet_id_is_usable(fleet_id):
+		return _failure("invalid_fleet_id", "Fleet id contains unsupported characters.")
 	return _read_record_path(_record_path(fleet_id))
 
 
@@ -387,6 +400,22 @@ func _failure(reason: String, message: String) -> Dictionary:
 		"reason": reason,
 		"message": message,
 	}
+
+
+func _payload_has_roster_kind(roster_payload: Dictionary) -> bool:
+	var kind: String = String(roster_payload.get("kind", ""))
+	return kind.is_empty() or kind == FleetRoster.KIND
+
+
+func _fleet_id_is_usable(fleet_id: String) -> bool:
+	if fleet_id.is_empty() or fleet_id.strip_edges() != fleet_id:
+		return false
+	if fleet_id == "." or fleet_id == "..":
+		return false
+	for unsafe_char: String in UNSAFE_FLEET_ID_CHARS:
+		if fleet_id.contains(unsafe_char):
+			return false
+	return true
 
 
 static func _summary_before(left: Dictionary, right: Dictionary) -> bool:

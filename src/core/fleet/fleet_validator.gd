@@ -8,7 +8,11 @@ extends RefCounted
 
 const DEFAULT_POINT_LIMIT: int = 400
 const SQUADRON_CAP_DIVISOR: float = 3.0
+const UNIQUE_SQUADRON_LIMIT_DIVISOR: float = 100.0
 
+const RULE_SHIP_REFERENCE: String = "fleet.catalog.ship"
+const RULE_SQUADRON_REFERENCE: String = "fleet.catalog.squadron"
+const RULE_UPGRADE_REFERENCE: String = "fleet.catalog.upgrade"
 const RULE_POINTS_LIMIT: String = "fleet.points.limit"
 const RULE_FACTION_ALIGNMENT: String = "fleet.faction.alignment"
 const RULE_COMMANDER_COUNT: String = "fleet.commander.count"
@@ -16,6 +20,7 @@ const RULE_FLAGSHIP_COUNT: String = "fleet.flagship.count"
 const RULE_SQUADRON_CAP: String = "fleet.squadrons.cap"
 const RULE_UNIQUE_UPGRADE: String = "fleet.unique.upgrade"
 const RULE_UNIQUE_SQUADRON: String = "fleet.unique.squadron"
+const RULE_UNIQUE_SQUADRON_LIMIT: String = "fleet.unique.squadron.limit"
 const RULE_UPGRADE_SLOT: String = "fleet.upgrade.slot"
 const RULE_UPGRADE_DUPLICATE_PER_SHIP: String = "fleet.upgrade.duplicate.per_ship"
 const RULE_UPGRADE_TITLE_LIMIT: String = "fleet.upgrade.title.limit"
@@ -42,6 +47,7 @@ var _objective_cache: Dictionary = {}
 func validate(roster: FleetRoster) -> FleetValidationResult:
 	_clear_caches()
 	var result: FleetValidationResult = FleetValidationResult.new()
+	_validate_catalog_references(roster, result)
 	_validate_points_limit(roster, result)
 	_validate_faction_alignment(roster, result)
 	_validate_commander_and_flagship(roster, result)
@@ -97,7 +103,7 @@ func _validate_commander_and_flagship(roster: FleetRoster,
 func _validate_squadron_cap(roster: FleetRoster,
 		result: FleetValidationResult) -> void:
 	var point_limit: int = _point_limit(roster)
-	var squadron_cap: int = int(floor(point_limit / SQUADRON_CAP_DIVISOR))
+	var squadron_cap: int = int(ceil(point_limit / SQUADRON_CAP_DIVISOR))
 	var squadron_points: int = _squadron_points(roster)
 	if squadron_points <= squadron_cap:
 		return
@@ -112,6 +118,26 @@ func _validate_unique_constraints(roster: FleetRoster,
 	var unique_squadrons: Dictionary = {}
 	_validate_unique_upgrades(roster, unique_upgrades, result)
 	_validate_unique_squadrons(roster, unique_squadrons, result)
+	_validate_unique_squadron_limit(roster, result)
+
+
+func _validate_catalog_references(roster: FleetRoster,
+		result: FleetValidationResult) -> void:
+	for ship_entry: FleetShipEntry in _sorted_ships(roster):
+		if _load_ship(ship_entry.data_key) == null:
+			result.add_error(RULE_SHIP_REFERENCE,
+				"Ship '%s' could not be loaded." % ship_entry.data_key,
+				[ship_entry.entry_id], [])
+		for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
+			if _load_upgrade(assignment.data_key) == null:
+				result.add_error(RULE_UPGRADE_REFERENCE,
+					"Upgrade '%s' could not be loaded." % assignment.data_key,
+					[ship_entry.entry_id, assignment.entry_id], [])
+	for squadron_entry: FleetSquadronEntry in _sorted_squadrons(roster):
+		if _load_squadron(squadron_entry.data_key) == null:
+			result.add_error(RULE_SQUADRON_REFERENCE,
+				"Squadron '%s' could not be loaded." % squadron_entry.data_key,
+				[squadron_entry.entry_id], [])
 
 
 func _validate_objective_selection(roster: FleetRoster,
@@ -200,13 +226,31 @@ func _validate_unique_squadrons(roster: FleetRoster,
 		var squadron_data: SquadronData = _load_squadron(squadron_entry.data_key)
 		if squadron_data == null or not squadron_data.is_unique:
 			continue
-		var unique_key: String = squadron_data.squadron_name
+		var unique_key: String = _squadron_unique_key(squadron_data)
 		if not unique_squadrons.has(unique_key):
 			unique_squadrons[unique_key] = squadron_entry.entry_id
 			continue
 		result.add_error(RULE_UNIQUE_SQUADRON,
 			"Unique squadron '%s' appears more than once." % unique_key,
 			[unique_squadrons[unique_key], squadron_entry.entry_id], [])
+
+
+func _validate_unique_squadron_limit(roster: FleetRoster,
+		result: FleetValidationResult) -> void:
+	var unique_ids: Array[String] = []
+	for squadron_entry: FleetSquadronEntry in _sorted_squadrons(roster):
+		var squadron_data: SquadronData = _load_squadron(squadron_entry.data_key)
+		if squadron_data == null or not _counts_against_unique_squadron_limit(squadron_data):
+			continue
+		unique_ids.append(squadron_entry.entry_id)
+	var limit: int = int(ceil(_point_limit(roster) / UNIQUE_SQUADRON_LIMIT_DIVISOR))
+	if unique_ids.size() <= limit:
+		return
+	result.add_error(RULE_UNIQUE_SQUADRON_LIMIT,
+		"Unique squadrons with defense tokens %d exceed limit %d." % [
+			unique_ids.size(),
+			limit,
+		], unique_ids, ["RRG 1.5.0 Fleet Building"])
 
 
 func _validate_ship_upgrade_slots(ship_entry: FleetShipEntry,
@@ -219,6 +263,8 @@ func _validate_ship_upgrade_slots(ship_entry: FleetShipEntry,
 			result.add_error(RULE_UPGRADE_SLOT,
 				"Upgrade '%s' is missing a slot assignment." % assignment.data_key,
 				[ship_entry.entry_id, assignment.entry_id], [])
+			continue
+		if upgrade_data == null:
 			continue
 		_validate_single_upgrade_slot(ship_entry, assignment, upgrade_data,
 			slot_name, slots_by_type, occupied, result)
@@ -266,6 +312,8 @@ func _validate_ship_upgrade_duplicates(ship_entry: FleetShipEntry,
 	var seen: Dictionary = {}
 	for assignment: FleetUpgradeAssignment in _sorted_assignments(ship_entry):
 		if assignment.data_key.strip_edges().is_empty():
+			continue
+		if _load_upgrade(assignment.data_key) == null:
 			continue
 		if not seen.has(assignment.data_key):
 			seen[assignment.data_key] = assignment.entry_id
@@ -444,6 +492,16 @@ func _upgrade_unique_key(upgrade_data: UpgradeData) -> String:
 	if not upgrade_data.unique_group.is_empty():
 		return upgrade_data.unique_group
 	return upgrade_data.data_key
+
+
+func _squadron_unique_key(squadron_data: SquadronData) -> String:
+	if not squadron_data.unique_group.is_empty():
+		return squadron_data.unique_group
+	return squadron_data.squadron_name
+
+
+func _counts_against_unique_squadron_limit(squadron_data: SquadronData) -> bool:
+	return squadron_data.is_unique and not squadron_data.defense_tokens.is_empty()
 
 
 func _faction_value(faction_name: String) -> int:

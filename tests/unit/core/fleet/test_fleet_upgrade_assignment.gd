@@ -28,6 +28,18 @@ func test_deserialize_missing_fields_uses_defaults_expected() -> void:
 	assert_eq(assignment.slot_index, 0, "Missing slot index should default to zero")
 
 
+func test_deserialize_accepts_documented_aliases_expected() -> void:
+	var assignment: FleetUpgradeAssignment = FleetUpgradeAssignment.deserialize({
+		"assignment_id": "upg-3",
+		"data_key": "h9_turbolasers",
+		"slot_type": "TURBOLASERS",
+		"slot_index": 0,
+	})
+
+	assert_eq(assignment.entry_id, "upg-3", "Should accept assignment_id alias")
+	assert_eq(assignment.slot, "TURBOLASERS", "Should accept slot_type alias")
+
+
 func test_deserialize_serialize_round_trip_expected() -> void:
 	var source: Dictionary = {
 		"entry_id": "upg-2",

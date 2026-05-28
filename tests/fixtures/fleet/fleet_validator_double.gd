@@ -6,11 +6,16 @@ extends FleetValidator
 
 
 var _ship_overrides: Dictionary = {}
+var _squadron_overrides: Dictionary = {}
 var _upgrade_overrides: Dictionary = {}
 
 
 func add_ship_override(data_key: String, ship_data: ShipData) -> void:
 	_ship_overrides[data_key] = ship_data
+
+
+func add_squadron_override(data_key: String, squadron_data: SquadronData) -> void:
+	_squadron_overrides[data_key] = squadron_data
 
 
 func add_upgrade_override(data_key: String, upgrade_data: UpgradeData) -> void:
@@ -21,6 +26,12 @@ func _load_ship(data_key: String) -> ShipData:
 	if _ship_overrides.has(data_key):
 		return _ship_overrides[data_key]
 	return super._load_ship(data_key)
+
+
+func _load_squadron(data_key: String) -> SquadronData:
+	if _squadron_overrides.has(data_key):
+		return _squadron_overrides[data_key]
+	return super._load_squadron(data_key)
 
 
 func _load_upgrade(data_key: String) -> UpgradeData:

@@ -9,6 +9,7 @@ func test_create_identity_fields_expected() -> void:
 
 	assert_eq(roster.fleet_id, "fleet-1", "Create should set fleet id")
 	assert_eq(roster.name, "Opening Fleet", "Create should set display name")
+	assert_eq(roster.description, "", "Create should default description empty")
 	assert_eq(roster.faction, "REBEL_ALLIANCE", "Create should set faction")
 
 
@@ -188,6 +189,7 @@ func _create_objectives() -> FleetObjectiveSelection:
 func _create_populated_roster() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create("fleet-1", "Opening Fleet", "REBEL_ALLIANCE")
 	roster.point_format = {"id": "CORE_SET_180", "limit": 180}
+	roster.description = "A compact Core Set test fleet."
 	roster.created_at = "2026-05-27T00:00:00Z"
 	roster.updated_at = "2026-05-27T00:00:00Z"
 	roster.future_sync = {"owner_id": "", "remote_id": "", "revision": 0}
@@ -202,6 +204,7 @@ func _create_populated_roster() -> FleetRoster:
 func _create_populated_roster_reversed() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create("fleet-1", "Opening Fleet", "REBEL_ALLIANCE")
 	roster.point_format = {"limit": 180, "id": "CORE_SET_180"}
+	roster.description = "A compact Core Set test fleet."
 	roster.created_at = "2026-05-27T00:00:00Z"
 	roster.updated_at = "2026-05-27T00:00:00Z"
 	roster.future_sync = {"revision": 0, "remote_id": "", "owner_id": ""}

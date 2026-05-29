@@ -77,6 +77,9 @@
 | `FleetCatalog` | RefCounted | `src/core/fleet/fleet_catalog.gd` | Deterministic catalog query helper with metadata filters and linked rules-reference lookup |
 | `FleetValidator` | RefCounted | `src/core/fleet/fleet_validator.gd` | Deterministic fleet-construction validator for baseline rules plus upgrade slot/restriction legality |
 | `FleetLibraryManager` | RefCounted | `src/core/fleet/fleet_library_manager.gd` | Local fleet library persistence with version snapshots and FB8 JSON import/export helpers |
+| `FleetRosterDraftHelper` | RefCounted | `src/core/fleet/fleet_roster_draft_helper.gd` | UI-facing helper for local fleet draft mutations that keeps roster edits behind core APIs |
+| `FleetRosterSummary` | RefCounted | `src/core/fleet/fleet_roster_summary.gd` | Computes fleet-builder point totals for ships, squadrons, upgrades, and point limits |
+| `FleetUpgradeSlotResolver` | RefCounted | `src/core/fleet/fleet_upgrade_slot_resolver.gd` | Finds first open matching ship upgrade slots for builder assignment flows |
 
 ### Additional Core Components
 
@@ -110,6 +113,7 @@
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
 | `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, activation backbone, delegates to child controllers |
+| `FleetBuilderScene` | Control | `src/scenes/fleet_builder/fleet_builder.gd` | Local fleet-builder MVP with catalog search, grouped upgrade filtering, roster/objective editing, selected card-rule/art rendering, validation rendering, and filtered rules-reference browsing |
 | `UIPanelManager` | Node | `src/scenes/game_board/ui_panel_manager.gd` | Owns all UI panel creation, positioning, resizing, and isolated callbacks (card panels, overlays, modals, HUD) |
 | `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack execution (activation Step 4): dice sequence, defense tokens, damage resolution. Delegates targeting to `TargetSelector` and pure computation to `AttackDiceResolver`, `DefenseTokenResolver`, `DamageDealer` |
 | `TargetSelector` | Node | `src/scenes/game_board/target_selector.gd` | Attacker/target selection pipeline shared by attack simulator and execution. Emits `target_locked` to AE on valid target |

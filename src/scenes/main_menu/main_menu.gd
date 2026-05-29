@@ -10,6 +10,8 @@ extends Control
 const SPLASH_PATH: String = "res://Resources/Game_Components/screen_art/splash.jpg"
 ## Path to the learning-scenario game board scene.
 const GAME_BOARD_PATH: String = "res://src/scenes/game_board/game_board.tscn"
+## Path to the local fleet-builder scene.
+const FLEET_BUILDER_PATH: String = "res://src/scenes/fleet_builder/fleet_builder.tscn"
 ## Default scenario id used by the temporary new-game scenario picker.
 const SCENARIO_LEARNING_ID: String = "learning_scenario"
 ## Debug scenario id used by the temporary new-game scenario picker.
@@ -206,6 +208,10 @@ func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	btn_load_game.pressed.connect(_on_load_game_pressed)
 	vbox.add_child(btn_load_game)
 
+	var btn_fleet_builder: Button = _create_menu_button("Fleet Builder")
+	btn_fleet_builder.pressed.connect(_on_fleet_builder_pressed)
+	vbox.add_child(btn_fleet_builder)
+
 	var btn_host: Button = _create_menu_button("Host Game")
 	btn_host.pressed.connect(_on_host_game_pressed)
 	vbox.add_child(btn_host)
@@ -342,6 +348,12 @@ func _on_load_game_pressed() -> void:
 
 func _on_load_dialog_cancelled() -> void:
 	_menu_panel.visible = true
+
+
+## Opens the local fleet-builder scene.
+func _on_fleet_builder_pressed() -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	get_tree().change_scene_to_file(FLEET_BUILDER_PATH)
 
 
 ## Transitions to the learning scenario game board. UI-031.

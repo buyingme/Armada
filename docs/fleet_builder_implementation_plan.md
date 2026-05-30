@@ -824,10 +824,11 @@ test gate is passed.
 |---|---|
 | Goal | Bridge two validated rosters into a deterministic pre-game setup package usable by hot-seat, network, replay, and bootstrap paths. |
 | Scope | Add `FleetSetupPackage`, `SetupValidationResult`, first-player selection, objective choice from second player's objectives, package serialization, canonical package hashing, match-ready expansion from local fleet ids to full roster payloads, host/client player-index mapping rules, and setup-state scaffolding derived from `ObjectiveData.setup_effects`. |
-| Primary files | New `src/core/setup/*.gd`, setup flow scene/controller skeleton. |
+| Primary files | New `src/core/setup/*.gd`; setup flow scene/controller skeleton remains deferred to the setup/deployment presentation slices. |
 | Acceptance | Two valid fleets produce a match-ready setup package; invalid rosters cannot start setup; selected objective records owner/chosen-by player; objective setup requirements such as objective ships, objective token placements, set-aside units, and deployment-order overrides are represented as JSON-safe setup state; a package containing one host roster and one client roster can be validated and hashed identically on both peers before game start. |
 | Tests | Package round trip, invalid fleet rejection, objective choice ownership, first-player persistence, representative objective setup-state extraction, local-id expansion to embedded rosters, host/client package equality, canonical hash stability. |
 | Verification | `godot --headless --import`, targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` once the package can bootstrap or mirror network state. |
+| Status | Implemented as of 2026-05-30: extended `FleetSetupPackage` with JSON-safe setup state, added `SetupValidationResult`, and added `FleetSetupPackageBuilder` for validated two-roster packages, local fleet-id expansion, objective ownership/chosen-by metadata, objective setup-effect scaffolding, and host/client roster-to-player mapping without peer ids in core JSON. Setup flow UI and runtime bootstrap remain in FB12-FB14. |
 
 ### FB12 - Roster To Runtime Instance Conversion
 

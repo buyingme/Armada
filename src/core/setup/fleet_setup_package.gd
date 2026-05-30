@@ -44,6 +44,9 @@ var obstacles: Array[Dictionary] = []
 ## Normalized ship and squadron deployment placements.
 var deployments: Array[Dictionary] = []
 
+## JSON-safe objective/setup scaffolding derived before runtime bootstrap.
+var setup_state: Dictionary = {}
+
 
 ## Serializes this setup package to a JSON-safe dictionary.
 func serialize() -> Dictionary:
@@ -57,6 +60,7 @@ func serialize() -> Dictionary:
 		"selected_objective": selected_objective.duplicate(true),
 		"obstacles": _copy_dict_array(obstacles),
 		"deployments": _copy_dict_array(deployments),
+		"setup_state": setup_state.duplicate(true),
 	}
 
 
@@ -72,6 +76,7 @@ static func deserialize(data: Dictionary) -> FleetSetupPackage:
 	package.selected_objective = data.get("selected_objective", {})
 	package.obstacles = _read_dict_array(data.get("obstacles", []))
 	package.deployments = _read_dict_array(data.get("deployments", []))
+	package.setup_state = data.get("setup_state", {})
 	return package
 
 

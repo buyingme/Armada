@@ -11,6 +11,8 @@ func test_deserialize_serialize_round_trip_expected() -> void:
 	assert_eq(serialized.get("scenario_id", ""), "standard_3x6", "Should keep scenario id")
 	assert_eq((serialized.get("players", []) as Array).size(), 2,
 		"Should keep embedded player roster entries")
+	assert_eq((serialized.get("setup_state", {}) as Dictionary).get("objective_key", ""),
+		"obj_ass_opening_salvo", "Should keep setup-state scaffolding")
 
 
 func test_validate_basic_accepts_complete_shell_expected() -> void:
@@ -64,6 +66,7 @@ func _create_package_data() -> Dictionary:
 		"selected_objective": {},
 		"obstacles": [],
 		"deployments": [],
+		"setup_state": {"objective_key": "obj_ass_opening_salvo"},
 	}
 
 

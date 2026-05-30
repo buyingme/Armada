@@ -66,14 +66,17 @@ All serializable classes implement `serialize() -> Dictionary` and
 Serialized classes: `GameState`, `PlayerState`, `ShipInstance`,
 `SquadronInstance`, `DamageDeck`, `DamageCard`, `ShipActivationState`,
 `CommandDialStack`, `CommandTokens`, `GameCommand` (and all 26 subclasses),
-`FleetSetupPackage` for pre-game roster/setup handoff, and the fleet-builder
-roster payload classes (`FleetRoster`, `FleetShipEntry`,
+`FleetSetupPackage` and `SetupValidationResult` for pre-game roster/setup
+handoff, and the fleet-builder roster payload classes (`FleetRoster`, `FleetShipEntry`,
 `FleetSquadronEntry`, `FleetUpgradeAssignment`, `FleetObjectiveSelection`,
 `FleetValidationResult`).
 
 `FleetSetupPackage.canonical_hash()` uses `CanonicalJson` sorted-key JSON so
 hot-seat, network, replay, and future setup flows can compare embedded roster
 payloads without depending on local fleet-library files or volatile timestamps.
+`FleetSetupPackageBuilder` maps local fleet ids or host/client roster ownership
+into player-indexed packages without storing transport-specific peer ids in core
+setup JSON.
 `FleetRoster.serialize()` orders ships, squadrons, and ship upgrade assignments
 by stable `entry_id` before hashing so equivalent builder actions produce the
 same setup-ready payload shape.

@@ -66,7 +66,9 @@
 | `GameCommand` | RefCounted | `src/core/game_command.gd` | Abstract base for all player-initiated game actions — serialize, validate, execute |
 | `GameRng` | RefCounted | `src/core/game_rng.gd` | Deterministic seeded RNG wrapper for dice rolls and deck shuffles |
 | `GameReplay` | RefCounted | `src/core/game_replay.gd` | Replay recording/playback — v1 JSON file format, header + command array |
-| `FleetSetupPackage` | RefCounted | `src/core/setup/fleet_setup_package.gd` | Serializable setup-package shell with deterministic canonical hash for embedded roster payloads |
+| `FleetSetupPackage` | RefCounted | `src/core/setup/fleet_setup_package.gd` | Serializable setup-package shell with deterministic canonical hash for embedded roster payloads and objective setup state |
+| `FleetSetupPackageBuilder` | RefCounted | `src/core/setup/fleet_setup_package_builder.gd` | Builds match-ready setup packages from validated player rosters, local fleet ids, or host/client roster mappings |
+| `SetupValidationResult` | RefCounted | `src/core/setup/setup_validation_result.gd` | JSON-safe setup-package validation errors and warnings, including player-scoped fleet-validation issues |
 | `LearningScenarioPreparer` | RefCounted | `src/core/setup/learning_scenario_preparer.gd` | Scene-independent Learning Scenario preparation: instance creation, normalized position seeding, and GameState registration |
 | `FleetRoster` | RefCounted | `src/core/fleet/fleet_roster.gd` | Editable fleet-builder roster payload separate from runtime `PlayerState` |
 | `FleetShipEntry` | RefCounted | `src/core/fleet/fleet_ship_entry.gd` | Serializable ship roster entry with deterministic upgrade-assignment ordering |

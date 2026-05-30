@@ -9,6 +9,11 @@ extends RefCounted
 const CATEGORY_ASSAULT: String = "ASSAULT"
 const CATEGORY_DEFENSE: String = "DEFENSE"
 const CATEGORY_NAVIGATION: String = "NAVIGATION"
+const CATEGORIES: Array[String] = [
+	CATEGORY_ASSAULT,
+	CATEGORY_DEFENSE,
+	CATEGORY_NAVIGATION,
+]
 
 ## Selected Assault objective data key.
 var assault_objective_key: String = ""
@@ -54,6 +59,13 @@ func is_complete() -> bool:
 	return not assault_objective_key.is_empty() \
 			and not defense_objective_key.is_empty() \
 			and not navigation_objective_key.is_empty()
+
+
+## Returns objective categories in fleet-building validation order.
+static func categories() -> Array[String]:
+	var categories_list: Array[String] = []
+	categories_list.assign(CATEGORIES)
+	return categories_list
 
 
 ## Serializes this objective selection to a JSON-safe dictionary.

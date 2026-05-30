@@ -30,12 +30,6 @@ const RULE_OBJECTIVE_REQUIRED: String = "fleet.objective.required"
 const RULE_OBJECTIVE_INVALID: String = "fleet.objective.invalid"
 const RULE_OBJECTIVE_CATEGORY: String = "fleet.objective.category"
 
-const OBJECTIVE_CATEGORIES: Array[String] = [
-	FleetObjectiveSelection.CATEGORY_ASSAULT,
-	FleetObjectiveSelection.CATEGORY_DEFENSE,
-	FleetObjectiveSelection.CATEGORY_NAVIGATION,
-]
-
 var _ship_cache: Dictionary = {}
 var _ship_record_cache: Dictionary = {}
 var _squadron_cache: Dictionary = {}
@@ -142,7 +136,7 @@ func _validate_catalog_references(roster: FleetRoster,
 
 func _validate_objective_selection(roster: FleetRoster,
 		result: FleetValidationResult) -> void:
-	for category: String in OBJECTIVE_CATEGORIES:
+	for category: String in FleetObjectiveSelection.categories():
 		var objective_key: String = roster.objectives.get_objective(category)
 		if objective_key.strip_edges().is_empty():
 			result.add_error(RULE_OBJECTIVE_REQUIRED,

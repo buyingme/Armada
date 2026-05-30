@@ -8,14 +8,13 @@ extends RefCounted
 
 const DEFAULT_FLEET_ID: String = "draft-fleet"
 const DEFAULT_NAME: String = "New Fleet"
-const DEFAULT_FACTION: String = "REBEL_ALLIANCE"
-const FORMAT_CORE_SET_180: String = "CORE_SET_180"
 
 
 ## Creates the default local draft used when opening the fleet-builder scene.
 static func create_default_roster() -> FleetRoster:
-	var roster: FleetRoster = FleetRoster.create(DEFAULT_FLEET_ID, DEFAULT_NAME, DEFAULT_FACTION)
-	roster.point_format = {"id": FORMAT_CORE_SET_180, "limit": 180, "custom_label": ""}
+	var roster: FleetRoster = FleetRoster.create(
+			DEFAULT_FLEET_ID, DEFAULT_NAME, FleetBuilderOptions.default_faction())
+	roster.point_format = FleetBuilderOptions.default_point_format()
 	return roster
 
 

@@ -75,6 +75,7 @@
 | `FleetObjectiveSelection` | RefCounted | `src/core/fleet/fleet_objective_selection.gd` | Serializable Assault/Defense/Navigation objective selection |
 | `FleetValidationResult` | RefCounted | `src/core/fleet/fleet_validation_result.gd` | JSON-safe validation errors and warnings for future fleet construction rules |
 | `FleetCatalog` | RefCounted | `src/core/fleet/fleet_catalog.gd` | Deterministic catalog query helper with metadata filters and linked rules-reference lookup |
+| `FleetBuilderOptions` | RefCounted | `src/core/fleet/fleet_builder_options.gd` | Core-backed option provider for fleet-builder point formats, factions, upgrade groups, objective categories, and rules-reference filters |
 | `FleetValidator` | RefCounted | `src/core/fleet/fleet_validator.gd` | Deterministic fleet-construction validator for baseline rules plus upgrade slot/restriction legality |
 | `FleetLibraryManager` | RefCounted | `src/core/fleet/fleet_library_manager.gd` | Local fleet library persistence with version snapshots and FB8 JSON import/export helpers |
 | `FleetRosterDraftHelper` | RefCounted | `src/core/fleet/fleet_roster_draft_helper.gd` | UI-facing helper for local fleet draft mutations that keeps roster edits behind core APIs |

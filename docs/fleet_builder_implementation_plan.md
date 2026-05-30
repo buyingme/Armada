@@ -804,7 +804,7 @@ test gate is passed.
 | Architecture gate | UI only calls catalog/roster/validator/library APIs. It does not implement fleet rules and adds no PlayMode branches. |
 | Tests | UI construction, search/filter interaction, add/remove flows, validation rendering, rules-reference browsing/navigation, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual create/edit invalid/legal fleet and rules-reference browsing pass. |
-| Status | Implemented as of 2026-05-28 and refined on 2026-05-29: added the local fleet-builder scene, menu entry, core-backed draft mutation helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. Manual UI pass remains the final gate before commit. |
+| Status | Implemented as of 2026-05-28 and refined on 2026-05-29: added the local fleet-builder scene, menu entry, core-backed draft mutation and option helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. Manual UI pass remains the final gate before commit. |
 
 ### FB10 - Library, Import, Export, And Version UI
 

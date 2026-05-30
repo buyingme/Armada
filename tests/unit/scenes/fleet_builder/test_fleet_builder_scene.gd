@@ -59,6 +59,15 @@ func test_catalog_excludes_objectives_and_rules_expected() -> void:
 			"Rules should live in the reference section instead of the catalog")
 
 
+func test_header_options_use_core_provider_expected() -> void:
+	assert_eq(_scene._format_option.item_count,
+		FleetBuilderOptions.available_point_formats().size(),
+		"Point-format option count should come from FleetBuilderOptions")
+	assert_eq(_scene._faction_option.item_count,
+		FleetBuilderOptions.available_factions(FleetCatalog.new()).size(),
+		"Faction option count should come from FleetBuilderOptions")
+
+
 func test_upgrade_type_filter_groups_and_filters_expected() -> void:
 	_select_catalog_type(FleetCatalog.COMPONENT_UPGRADE)
 	assert_true(_scene._catalog_upgrade_type_option.visible,

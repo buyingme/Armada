@@ -1,0 +1,221 @@
+## Fleet Builder Options
+##
+## Read-only provider for fleet-builder option sets that are derived from core
+## rules or catalog metadata rather than owned by presentation code.
+class_name FleetBuilderOptions
+extends RefCounted
+
+
+const FORMAT_CORE_SET_180: String = "CORE_SET_180"
+const FORMAT_STANDARD_400: String = "STANDARD_400"
+const FORMAT_CUSTOM: String = "CUSTOM"
+const CORE_SET_POINT_LIMIT: int = 180
+const CUSTOM_POINT_LIMIT: int = 300
+
+const UPGRADE_TYPE_GROUPS: Array[Dictionary] = [
+	{"group": "Command", "types": ["COMMANDER", "OFFICER"]},
+	{"group": "Teams", "types": ["WEAPONS_TEAM", "SUPPORT_TEAM"]},
+	{"group": "Weapons", "types": ["ORDNANCE", "ION_CANNONS", "TURBOLASERS"]},
+	{"group": "Retrofits", "types": ["DEFENSIVE_RETROFIT", "OFFENSIVE_RETROFIT"]},
+	{"group": "Titles", "types": ["TITLE"]},
+]
+const RULE_STATUS_ORDER: Array[String] = [
+	"INTEGRATED",
+	"PARTIAL",
+	"NOT_INTEGRATED",
+]
+const FACTION_ORDER: Array[Constants.Faction] = [
+	Constants.Faction.REBEL_ALLIANCE,
+	Constants.Faction.GALACTIC_EMPIRE,
+	Constants.Faction.GALACTIC_REPUBLIC,
+	Constants.Faction.SEPARATIST_ALLIANCE,
+]
+
+
+## Returns point-format choices supported by the local fleet-builder flow.
+## Rules Reference: Fleet Building, recommended Core Set 180 and Standard 400.
+static func available_point_formats() -> Array[Dictionary]:
+	return [
+		_point_format("Core Set 180", FORMAT_CORE_SET_180, CORE_SET_POINT_LIMIT),
+		_point_format("Standard 400", FORMAT_STANDARD_400, FleetValidator.DEFAULT_POINT_LIMIT),
+		_point_format("Custom 300", FORMAT_CUSTOM, CUSTOM_POINT_LIMIT),
+	]
+
+
+## Returns the default serialized point-format payload for a new local draft.
+static func default_point_format() -> Dictionary:
+	return _format_payload(FORMAT_CORE_SET_180, CORE_SET_POINT_LIMIT, "")
+
+
+## Returns the default faction key for a new local draft.
+static func default_faction(catalog: FleetCatalog = null) -> String:
+	var factions: Array[String] = available_factions(catalog)
+	if factions.is_empty():
+		return _faction_name(Constants.Faction.REBEL_ALLIANCE)
+	return factions[0]
+
+
+## Returns faction keys currently represented by ship or squadron catalog data.
+static func available_factions(catalog: FleetCatalog = null) -> Array[String]:
+	var faction_set: Dictionary = {}
+	var entries: Array[Dictionary] = _catalog_or_new(catalog).query_components({
+		"component_types": [FleetCatalog.COMPONENT_SHIP, FleetCatalog.COMPONENT_SQUADRON],
+	})
+	for entry: Dictionary in entries:
+		_add_entry_factions(faction_set, entry)
+	return _sorted_faction_keys(faction_set)
+
+
+## Returns objective categories in roster validation and display order.
+static func objective_categories() -> Array[String]:
+	return FleetObjectiveSelection.categories()
+
+
+## Returns upgrade-type display groups containing only catalog-present types.
+static func upgrade_type_groups(catalog: FleetCatalog = null) -> Array[Dictionary]:
+	var available_types: Array[String] = _available_upgrade_types(catalog)
+	var assigned_types: Dictionary = {}
+	var groups: Array[Dictionary] = []
+	for group: Dictionary in UPGRADE_TYPE_GROUPS:
+		_add_upgrade_group(groups, assigned_types, group, available_types)
+	_add_other_upgrade_group(groups, assigned_types, available_types)
+	return groups
+
+
+## Returns rule categories currently present in the rules-reference catalog.
+static func rule_categories(catalog: FleetCatalog = null) -> Array[String]:
+	return _distinct_rule_field(catalog, "rules_category")
+
+
+## Returns implementation statuses currently present in rules-reference records.
+static func rule_statuses(catalog: FleetCatalog = null) -> Array[String]:
+	var statuses: Array[String] = _distinct_rule_field(catalog, "implementation_status")
+	statuses.sort_custom(_status_before)
+	return statuses
+
+
+static func _point_format(label_text: String, id: String, limit: int) -> Dictionary:
+	var payload: Dictionary = _format_payload(id, limit, "")
+	payload["label"] = label_text
+	return payload
+
+
+static func _format_payload(id: String, limit: int, custom_label: String) -> Dictionary:
+	return {"id": id, "limit": limit, "custom_label": custom_label}
+
+
+static func _catalog_or_new(catalog: FleetCatalog) -> FleetCatalog:
+	return FleetCatalog.new() if catalog == null else catalog
+
+
+static func _add_entry_factions(faction_set: Dictionary, entry: Dictionary) -> void:
+	for raw_faction: Variant in entry.get("factions", []):
+		var faction: String = str(raw_faction)
+		if not faction.is_empty():
+			faction_set[faction] = true
+
+
+static func _sorted_faction_keys(faction_set: Dictionary) -> Array[String]:
+	var factions: Array[String] = []
+	for raw_faction: Variant in faction_set.keys():
+		factions.append(str(raw_faction))
+	if factions.is_empty():
+		factions.append(_faction_name(Constants.Faction.REBEL_ALLIANCE))
+	factions.sort_custom(_faction_before)
+	return factions
+
+
+static func _available_upgrade_types(catalog: FleetCatalog) -> Array[String]:
+	var type_set: Dictionary = {}
+	var entries: Array[Dictionary] = _catalog_or_new(catalog).query_components({
+		"component_types": [FleetCatalog.COMPONENT_UPGRADE],
+	})
+	for entry: Dictionary in entries:
+		var upgrade_type: String = str(entry.get("upgrade_type", ""))
+		if not upgrade_type.is_empty():
+			type_set[upgrade_type] = true
+	return _sorted_string_keys(type_set)
+
+
+static func _add_upgrade_group(groups: Array[Dictionary], assigned_types: Dictionary,
+		group: Dictionary, available_types: Array[String]) -> void:
+	var group_types: Array[String] = []
+	for raw_type: Variant in group.get("types", []):
+		var upgrade_type: String = str(raw_type)
+		if available_types.has(upgrade_type):
+			group_types.append(upgrade_type)
+			assigned_types[upgrade_type] = true
+	if not group_types.is_empty():
+		groups.append({"group": str(group.get("group", "")), "types": group_types})
+
+
+static func _add_other_upgrade_group(groups: Array[Dictionary], assigned_types: Dictionary,
+		available_types: Array[String]) -> void:
+	var other_types: Array[String] = []
+	for upgrade_type: String in available_types:
+		if not assigned_types.has(upgrade_type):
+			other_types.append(upgrade_type)
+	if not other_types.is_empty():
+		groups.append({"group": "Other", "types": other_types})
+
+
+static func _distinct_rule_field(catalog: FleetCatalog, field_name: String) -> Array[String]:
+	var value_set: Dictionary = {}
+	var entries: Array[Dictionary] = _catalog_or_new(catalog).query_components({
+		"component_types": [FleetCatalog.COMPONENT_RULE_REFERENCE],
+	})
+	for entry: Dictionary in entries:
+		var value: String = str(entry.get(field_name, ""))
+		if not value.is_empty():
+			value_set[value] = true
+	return _sorted_string_keys(value_set)
+
+
+static func _sorted_string_keys(value_set: Dictionary) -> Array[String]:
+	var values: Array[String] = []
+	for raw_value: Variant in value_set.keys():
+		values.append(str(raw_value))
+	values.sort()
+	return values
+
+
+static func _faction_before(left: String, right: String) -> bool:
+	var left_index: int = _faction_order_index(left)
+	var right_index: int = _faction_order_index(right)
+	if left_index != right_index:
+		return left_index < right_index
+	return left < right
+
+
+static func _status_before(left: String, right: String) -> bool:
+	var left_index: int = _status_order_index(left)
+	var right_index: int = _status_order_index(right)
+	if left_index != right_index:
+		return left_index < right_index
+	return left < right
+
+
+static func _status_order_index(value: String) -> int:
+	var index: int = RULE_STATUS_ORDER.find(value)
+	return RULE_STATUS_ORDER.size() if index < 0 else index
+
+
+static func _faction_order_index(value: String) -> int:
+	for index: int in range(FACTION_ORDER.size()):
+		if _faction_name(FACTION_ORDER[index]) == value:
+			return index
+	return FACTION_ORDER.size()
+
+
+static func _faction_name(faction: Constants.Faction) -> String:
+	match faction:
+		Constants.Faction.REBEL_ALLIANCE:
+			return "REBEL_ALLIANCE"
+		Constants.Faction.GALACTIC_EMPIRE:
+			return "GALACTIC_EMPIRE"
+		Constants.Faction.GALACTIC_REPUBLIC:
+			return "GALACTIC_REPUBLIC"
+		Constants.Faction.SEPARATIST_ALLIANCE:
+			return "SEPARATIST_ALLIANCE"
+		_:
+			return ""

@@ -10,32 +10,6 @@ extends Control
 signal return_to_menu_requested
 
 const MAIN_MENU_PATH: String = "res://src/scenes/main_menu/main_menu.tscn"
-const POINT_FORMATS: Array[Dictionary] = [
-	{"label": "Core Set 180", "id": "CORE_SET_180", "limit": 180},
-	{"label": "Standard 400", "id": "STANDARD_400", "limit": 400},
-	{"label": "Custom 300", "id": "CUSTOM", "limit": 300},
-]
-const FACTIONS: Array[String] = [
-	"REBEL_ALLIANCE",
-	"GALACTIC_EMPIRE",
-]
-const OBJECTIVE_CATEGORIES: Array[String] = [
-	FleetObjectiveSelection.CATEGORY_ASSAULT,
-	FleetObjectiveSelection.CATEGORY_DEFENSE,
-	FleetObjectiveSelection.CATEGORY_NAVIGATION,
-]
-const UPGRADE_TYPE_GROUPS: Array[Dictionary] = [
-	{"group": "Command", "types": ["COMMANDER", "OFFICER"]},
-	{"group": "Teams", "types": ["WEAPONS_TEAM", "SUPPORT_TEAM"]},
-	{"group": "Weapons", "types": ["ORDNANCE", "ION_CANNONS", "TURBOLASERS"]},
-	{"group": "Retrofits", "types": ["DEFENSIVE_RETROFIT", "OFFENSIVE_RETROFIT"]},
-	{"group": "Titles", "types": ["TITLE"]},
-]
-const RULE_STATUSES: Array[String] = [
-	"INTEGRATED",
-	"PARTIAL",
-	"NOT_INTEGRATED",
-]
 const CARD_ART_MIN_SIZE: Vector2 = Vector2(300, 420)
 
 var _catalog: FleetCatalog = FleetCatalog.new()
@@ -153,7 +127,7 @@ func _build_name_input() -> LineEdit:
 func _build_faction_option() -> OptionButton:
 	var option: OptionButton = OptionButton.new()
 	option.custom_minimum_size = Vector2(190, 36)
-	for faction: String in FACTIONS:
+	for faction: String in FleetBuilderOptions.available_factions(_catalog):
 		_add_option(option, _display_key(faction), faction)
 	option.item_selected.connect(_on_faction_selected)
 	return option
@@ -162,7 +136,7 @@ func _build_faction_option() -> OptionButton:
 func _build_format_option() -> OptionButton:
 	var option: OptionButton = OptionButton.new()
 	option.custom_minimum_size = Vector2(160, 36)
-	for format: Dictionary in POINT_FORMATS:
+	for format: Dictionary in FleetBuilderOptions.available_point_formats():
 		_add_option(option, str(format.get("label", "")), format)
 	option.item_selected.connect(_on_format_selected)
 	return option
@@ -216,7 +190,7 @@ func _build_upgrade_type_option() -> OptionButton:
 	var option: OptionButton = OptionButton.new()
 	option.custom_minimum_size.y = 36
 	_add_option(option, "All upgrade types", "")
-	for group: Dictionary in UPGRADE_TYPE_GROUPS:
+	for group: Dictionary in FleetBuilderOptions.upgrade_type_groups(_catalog):
 		_add_disabled_option(option, str(group.get("group", "")))
 		for raw_type: Variant in group.get("types", []):
 			var upgrade_type: String = str(raw_type)
@@ -292,7 +266,7 @@ func _build_objective_selectors() -> VBoxContainer:
 	var box: VBoxContainer = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	box.add_child(_create_body_label("Objectives"))
-	for category: String in OBJECTIVE_CATEGORIES:
+	for category: String in FleetBuilderOptions.objective_categories():
 		var option: OptionButton = OptionButton.new()
 		_populate_objective_option(option, category)
 		option.item_selected.connect(_on_objective_selected.bind(category))
@@ -395,7 +369,7 @@ func _build_rules_category_option() -> OptionButton:
 	var option: OptionButton = OptionButton.new()
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_add_option(option, "All categories", "")
-	for category: String in _rule_categories():
+	for category: String in FleetBuilderOptions.rule_categories(_catalog):
 		_add_option(option, _display_key(category), category)
 	option.item_selected.connect(_on_rules_filter_selected)
 	return option
@@ -405,7 +379,7 @@ func _build_rules_status_option() -> OptionButton:
 	var option: OptionButton = OptionButton.new()
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_add_option(option, "All statuses", "")
-	for status: String in RULE_STATUSES:
+	for status: String in FleetBuilderOptions.rule_statuses(_catalog):
 		_add_option(option, _display_key(status), status)
 	option.item_selected.connect(_on_rules_filter_selected)
 	return option
@@ -563,7 +537,7 @@ func _refresh_squadron_list() -> void:
 
 
 func _refresh_objective_options() -> void:
-	for category: String in OBJECTIVE_CATEGORIES:
+	for category: String in FleetBuilderOptions.objective_categories():
 		var option: OptionButton = _objective_options.get(category, null)
 		if option != null:
 			_select_option_metadata(option, _roster.objectives.get_objective(category))
@@ -1007,19 +981,6 @@ func _refresh_upgrade_type_visibility() -> void:
 	_catalog_upgrade_type_option.visible = is_upgrade_catalog
 	if not is_upgrade_catalog:
 		_catalog_upgrade_type_option.select(0)
-
-
-func _rule_categories() -> Array[String]:
-	var category_set: Dictionary = {}
-	for key: String in AssetLoader.list_rule_reference_keys():
-		var rule: RuleReferenceData = AssetLoader.load_rule_reference_data(key)
-		if rule != null and not rule.category.is_empty():
-			category_set[rule.category] = true
-	var categories: Array[String] = []
-	for raw_category: Variant in category_set.keys():
-		categories.append(str(raw_category))
-	categories.sort()
-	return categories
 
 
 # TODO(refactor): extract selected-component reference/card-art presentation.

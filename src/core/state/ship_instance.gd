@@ -16,8 +16,14 @@ extends RefCounted
 ## The data-key used to look up the ship's static data and token PNG.
 var data_key: String = ""
 
+## Stable roster-local entry id used by setup/deployment package mappings.
+var roster_entry_id: String = ""
+
 ## The static template this instance was created from.
 var ship_data: ShipData = null
+
+## Fleet-point value represented by this runtime ship, including assigned upgrades.
+var fleet_points: int = 0
 
 ## Current shield values per hull zone. Initialised to max from [ShipData].
 ## Rules Reference: SU-022 — shields start at maximum.
@@ -91,6 +97,7 @@ static func create_from_data(
 	var inst: ShipInstance = ShipInstance.new()
 	inst.data_key = key
 	inst.ship_data = data
+	inst.fleet_points = data.point_cost
 	inst.current_hull = data.hull
 	inst.current_speed = initial_speed
 	inst.owner_player = player
@@ -347,6 +354,8 @@ func serialize() -> Dictionary:
 		})
 	return {
 		"data_key": data_key,
+		"roster_entry_id": roster_entry_id,
+		"fleet_points": fleet_points,
 		"current_shields": current_shields.duplicate(),
 		"current_hull": current_hull,
 		"current_speed": current_speed,
@@ -374,6 +383,8 @@ static func deserialize(
 		data: Dictionary, ship_data_ref: ShipData) -> ShipInstance:
 	var inst: ShipInstance = ShipInstance.new()
 	inst.data_key = data.get("data_key", "") as String
+	inst.roster_entry_id = data.get("roster_entry_id", "") as String
+	inst.fleet_points = int(data.get("fleet_points", 0))
 	inst.ship_data = ship_data_ref
 	# JSON round-trips coerce ints to floats; force int back so the
 	# UI ([ShipToken] hull/shield labels) renders "1" rather than "1.0".

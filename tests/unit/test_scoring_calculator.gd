@@ -34,12 +34,12 @@ func _make_state(
 	# Player 0 ships.
 	for cfg: Dictionary in p0_ships:
 		var si: ShipInstance = _make_ship(cfg.get("cost", 0),
-				cfg.get("destroyed", false), 0)
+				cfg.get("destroyed", false), 0, int(cfg.get("fleet_points", -1)))
 		state.player_states[0].ships.append(si)
 	# Player 1 ships.
 	for cfg: Dictionary in p1_ships:
 		var si: ShipInstance = _make_ship(cfg.get("cost", 0),
-				cfg.get("destroyed", false), 1)
+				cfg.get("destroyed", false), 1, int(cfg.get("fleet_points", -1)))
 		state.player_states[1].ships.append(si)
 	# Player 0 squadrons.
 	for cfg: Dictionary in p0_squads:
@@ -56,12 +56,15 @@ func _make_state(
 
 ## Creates a minimal ShipInstance with the given point cost and destruction
 ## state.  Uses a stub ShipData.
-func _make_ship(cost: int, destroyed: bool, owner: int) -> ShipInstance:
+func _make_ship(cost: int, destroyed: bool, owner: int,
+		runtime_points: int = -1) -> ShipInstance:
 	var data: ShipData = ShipData.new()
 	data.point_cost = cost
 	data.hull = 4
 	var si: ShipInstance = ShipInstance.new()
 	si.ship_data = data
+	if runtime_points >= 0:
+		si.fleet_points = runtime_points
 	si.current_hull = data.hull
 	si.owner_player = owner
 	if destroyed:
@@ -100,6 +103,16 @@ func test_score_destroyed_enemy_ship() -> void:
 	var score: int = _calc.calculate_score(0, state)
 	# Assert
 	assert_eq(score, 73, "Should score the destroyed enemy ship's cost")
+
+
+func test_score_destroyed_enemy_ship_uses_runtime_fleet_points_expected() -> void:
+	var state: GameState = _make_state(
+			[], [ {"cost": 73, "fleet_points": 98, "destroyed": true}])
+
+	var score: int = _calc.calculate_score(0, state)
+
+	assert_eq(score, 98,
+			"Destroyed setup-package ships should score roster-derived fleet points")
 
 
 func test_score_destroyed_enemy_squadron() -> void:

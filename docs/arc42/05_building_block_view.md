@@ -68,6 +68,7 @@
 | `GameReplay` | RefCounted | `src/core/game_replay.gd` | Replay recording/playback — v1 JSON file format, header + command array |
 | `FleetSetupPackage` | RefCounted | `src/core/setup/fleet_setup_package.gd` | Serializable setup-package shell with deterministic canonical hash for embedded roster payloads and objective setup state |
 | `FleetSetupPackageBuilder` | RefCounted | `src/core/setup/fleet_setup_package_builder.gd` | Builds match-ready setup packages from validated player rosters, local fleet ids, or host/client roster mappings |
+| `FleetRosterSetupHelper` | RefCounted | `src/core/setup/fleet_roster_setup_helper.gd` | Converts embedded setup-package rosters into runtime player, ship, and squadron state without local fleet-library dependencies |
 | `SetupValidationResult` | RefCounted | `src/core/setup/setup_validation_result.gd` | JSON-safe setup-package validation errors and warnings, including player-scoped fleet-validation issues |
 | `LearningScenarioPreparer` | RefCounted | `src/core/setup/learning_scenario_preparer.gd` | Scene-independent Learning Scenario preparation: instance creation, normalized position seeding, and GameState registration |
 | `FleetRoster` | RefCounted | `src/core/fleet/fleet_roster.gd` | Editable fleet-builder roster payload separate from runtime `PlayerState` |

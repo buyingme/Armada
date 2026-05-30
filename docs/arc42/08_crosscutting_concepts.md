@@ -77,6 +77,15 @@ payloads without depending on local fleet-library files or volatile timestamps.
 `FleetSetupPackageBuilder` maps local fleet ids or host/client roster ownership
 into player-indexed packages without storing transport-specific peer ids in core
 setup JSON.
+`FleetRosterSetupHelper` is the package-to-runtime seam for fleet starts: it
+loads static ship, squadron, and upgrade data from the catalog, creates
+`PlayerState`, `ShipInstance`, and `SquadronInstance` objects, and rejects
+missing catalog records before bootstrap. Runtime ship and squadron instances
+serialize `roster_entry_id` plus roster-derived `fleet_points`, so deployment
+mapping and save/load do not depend on local fleet-library files.
+`ScoringCalculator` reads those runtime fleet-point values for destroyed
+entities, falling back to static card costs for older saves and scenario-only
+instances.
 `FleetRoster.serialize()` orders ships, squadrons, and ship upgrade assignments
 by stable `entry_id` before hashing so equivalent builder actions produce the
 same setup-ready payload shape.

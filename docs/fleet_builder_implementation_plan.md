@@ -840,6 +840,7 @@ test gate is passed.
 | Acceptance | Runtime instances preserve owner player, data key, initial speed policy, fleet points, and roster entry identity for deployment mapping; the conversion depends only on the embedded setup package and static catalog, not a local fleet library. |
 | Tests | Rebel/Imperial roster conversion, duplicate ship instances, squadron conversion, missing data rejection, host/client conversion equality from the same package, save/load of any new runtime fields. |
 | Verification | Targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`. |
+| Status | Implemented as of 2026-05-30: added `FleetRosterSetupHelper` to convert embedded setup-package rosters into runtime `PlayerState`, `ShipInstance`, and `SquadronInstance` data without local library access; `ShipInstance` and `SquadronInstance` now serialize roster entry identity and roster-derived fleet points, and scoring consumes runtime ship/squadron points with static-data fallback. Game bootstrap remains FB13. |
 
 ### FB13 - Game Bootstrap From Setup Package
 

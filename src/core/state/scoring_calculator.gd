@@ -34,11 +34,27 @@ func calculate_score(scorer_index: int, state: GameState) -> int:
 	var total: int = 0
 	for ship: Variant in opponent.ships:
 		if ship is ShipInstance and ship.is_destroyed():
-			total += ship.ship_data.point_cost
+			total += _ship_score_value(ship as ShipInstance)
 	for squad: Variant in opponent.squadrons:
 		if squad is SquadronInstance and squad.is_destroyed():
-			total += squad.squadron_data.point_cost
+			total += _squadron_score_value(squad as SquadronInstance)
 	return total
+
+
+func _ship_score_value(ship: ShipInstance) -> int:
+	if ship.fleet_points > 0:
+		return ship.fleet_points
+	if ship.ship_data == null:
+		return 0
+	return ship.ship_data.point_cost
+
+
+func _squadron_score_value(squadron: SquadronInstance) -> int:
+	if squadron.fleet_points > 0:
+		return squadron.fleet_points
+	if squadron.squadron_data == null:
+		return 0
+	return squadron.squadron_data.point_cost
 
 
 ## Returns true when every ship owned by [param player_index] is destroyed.

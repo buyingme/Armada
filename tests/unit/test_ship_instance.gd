@@ -405,7 +405,8 @@ func test_is_fully_healthy_true_after_shields_restored() -> void:
 func test_serialize_contains_expected_keys() -> void:
 	var data: Dictionary = _instance.serialize()
 	for key: String in ["data_key", "current_shields", "current_hull",
-			"current_speed", "pos_x", "pos_y", "rotation_deg",
+			"roster_entry_id", "fleet_points", "current_speed",
+			"pos_x", "pos_y", "rotation_deg",
 			"defense_tokens", "facedown_damage",
 			"faceup_damage", "activated_this_round", "owner_player",
 			"destroyed", "command_dial_stack", "command_tokens"]:
@@ -430,6 +431,8 @@ func test_deserialize_round_trip_basic_fields() -> void:
 	_instance.set_speed(1)
 	_instance.activated_this_round = true
 	_instance.current_hull = 3
+	_instance.roster_entry_id = "ship-entry-1"
+	_instance.fleet_points = 73
 	var data: Dictionary = _instance.serialize()
 	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
 	assert_eq(restored.data_key, "test_ship",
@@ -442,6 +445,10 @@ func test_deserialize_round_trip_basic_fields() -> void:
 			"Round-trip should preserve activated_this_round")
 	assert_eq(restored.owner_player, 0,
 			"Round-trip should preserve owner_player")
+	assert_eq(restored.roster_entry_id, "ship-entry-1",
+			"Round-trip should preserve roster_entry_id")
+	assert_eq(restored.fleet_points, 73,
+			"Round-trip should preserve fleet_points")
 
 
 func test_deserialize_round_trip_position() -> void:

@@ -7,9 +7,16 @@ extends GutTest
 const MainMenuScript: GDScript = preload("res://src/scenes/main_menu/main_menu.gd")
 
 var _scene: FleetBuilderScene = null
+var _library_manager_script: GDScript = preload(
+		"res://src/core/fleet/fleet_library_manager.gd")
+var _original_library_dir: String = ""
+var _test_library_dir: String = "user://test_fleet_builder_scene_library"
 
 
 func before_each() -> void:
+	_original_library_dir = _library_manager_script.LIBRARY_DIR
+	_library_manager_script.LIBRARY_DIR = _test_library_dir
+	_cleanup_test_dir()
 	_scene = FleetBuilderScene.new()
 	add_child(_scene)
 
@@ -17,19 +24,34 @@ func before_each() -> void:
 func after_each() -> void:
 	_free_node(_scene)
 	_scene = null
+	_cleanup_test_dir()
+	_library_manager_script.LIBRARY_DIR = _original_library_dir
 
 
 func test_ready_builds_required_sections_expected() -> void:
 	assert_not_null(_find_button(_scene, "Add Component"), "Add Component button should exist")
 	assert_null(_find_button(_scene, "Set Objective"), "Catalog should not include Set Objective")
+	assert_not_null(_scene.find_child("FleetDataPanel", true, false),
+		"Fleet builder should include the Fleet Data panel")
+	assert_not_null(_scene.find_child("FleetDataTabs", true, false),
+		"Fleet Data panel should expose Catalog/Fleets tabs")
+	assert_not_null(_scene.find_child("Catalog", true, false),
+		"Fleet Data should include the Catalog tab")
+	assert_not_null(_scene.find_child("Fleets", true, false),
+		"Fleet Data should include the Fleets tab")
+	assert_not_null(_scene.find_child("ReferencePanel", true, false),
+		"Fleet builder should include the Reference side panel")
+	assert_not_null(_scene.find_child("ReferenceTabs", true, false),
+		"Reference panel should expose tab navigation")
 	assert_not_null(_scene.find_child("Standard", true, false), "Reference should include Standard tab")
+	assert_not_null(_scene.find_child("Rules", true, false), "Reference should include Rules tab")
 	assert_not_null(_scene.find_child("Card Art", true, false), "Reference should include Card Art tab")
 	assert_true(_scene._catalog_list.item_count > 0, "Catalog should populate on ready")
 	assert_true(_scene._rules_list.item_count > 0, "Rules reference should populate on ready")
 
 
 func test_section_panels_use_standard_modal_style_expected() -> void:
-	var panel: PanelContainer = _scene.find_child("CatalogPanel", true, false) as PanelContainer
+	var panel: PanelContainer = _scene.find_child("FleetDataPanel", true, false) as PanelContainer
 	var style: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
 
 	assert_not_null(style, "Fleet builder panels should use StyleBoxFlat styling")
@@ -37,6 +59,36 @@ func test_section_panels_use_standard_modal_style_expected() -> void:
 		"Fleet builder panels should use the shared modal background")
 	assert_eq(style.border_color, UIStyleHelper.MODAL_BORDER,
 		"Fleet builder panels should use the shared modal border")
+
+
+func test_reference_panel_fits_default_viewport_expected() -> void:
+	var catalog_panel: PanelContainer = _scene.find_child("FleetDataPanel", true, false) as PanelContainer
+	var roster_panel: PanelContainer = _scene.find_child("RosterPanel", true, false) as PanelContainer
+	var reference_panel: PanelContainer = _scene.find_child("ReferencePanel", true, false) as PanelContainer
+	var total_width: float = catalog_panel.custom_minimum_size.x \
+			+ roster_panel.custom_minimum_size.x + reference_panel.custom_minimum_size.x
+
+	assert_lte(total_width, 960.0,
+		"Primary fleet-builder panels should leave room for spacing on small viewports")
+
+
+func test_status_panel_uses_compact_height_expected() -> void:
+	var status_panel: PanelContainer = _scene.find_child("StatusPanel", true, false) as PanelContainer
+
+	assert_not_null(status_panel, "Fleet builder should include a compact status panel")
+	assert_lte(status_panel.custom_minimum_size.y, 36.0,
+		"Status panel should use the compact half-height layout")
+
+
+func test_standard_tab_expands_selected_rules_text_expected() -> void:
+	assert_eq(_scene._component_rules_text.size_flags_vertical,
+		Control.SIZE_EXPAND_FILL,
+		"Selected component rules text should use spare Standard tab height")
+	assert_eq(_scene._validation_list.size_flags_vertical,
+		Control.SIZE_FILL,
+		"Validation should keep a fixed visible area instead of taking spare height")
+	assert_gte(_scene._component_rules_list.custom_minimum_size.y, 96.0,
+		"Selected rule picker should be tall enough for three rule rows")
 
 
 func test_catalog_search_filters_visible_entries_expected() -> void:
@@ -105,7 +157,96 @@ func test_add_and_remove_roster_components_expected() -> void:
 	assert_true(_scene.current_roster().ships.is_empty(), "Selected ship should be removable")
 
 
+func test_objective_selection_updates_component_rule_and_card_art_expected() -> void:
+	_select_objective_key(FleetObjectiveSelection.CATEGORY_ASSAULT, "obj_ass_most_wanted")
+
+	assert_eq(str(_scene._selected_component_entry.get("component_type", "")),
+		FleetCatalog.COMPONENT_OBJECTIVE,
+		"Selecting a roster objective should make it the active component")
+	assert_true(_scene._component_rules_text.text.contains("Most Wanted"),
+		"Selecting Most Wanted should show its objective card text")
+	assert_true(_scene._component_rules_text.text.contains("add 1 die"),
+		"Objective card text should include the special rule")
+	assert_not_null(_scene._card_art_rect.texture,
+		"Selecting an objective should load its card art")
+
+
+func test_objective_placeholder_clears_selected_component_expected() -> void:
+	_select_objective_key(FleetObjectiveSelection.CATEGORY_ASSAULT, "obj_ass_most_wanted")
+
+	_select_objective_key(FleetObjectiveSelection.CATEGORY_ASSAULT, "")
+
+	assert_true(_scene._selected_component_entry.is_empty(),
+		"Selecting the objective placeholder should clear the active component")
+	assert_true(_scene._component_rules_text.text.contains("No component selected"),
+		"Clearing an objective should clear selected component rules")
+	assert_null(_scene._card_art_rect.texture,
+		"Clearing an objective should clear selected component card art")
+
+
+func test_objective_view_reopens_current_objective_expected() -> void:
+	_select_objective_key(FleetObjectiveSelection.CATEGORY_ASSAULT, "obj_ass_most_wanted")
+	_select_catalog_key(FleetCatalog.COMPONENT_UPGRADE, "redemption")
+
+	_scene._on_objective_view_pressed(FleetObjectiveSelection.CATEGORY_ASSAULT)
+
+	assert_eq(str(_scene._selected_component_entry.get("data_key", "")),
+		"obj_ass_most_wanted",
+		"View should make the currently selected objective inspectable again")
+	assert_true(_scene._component_rules_text.text.contains("Most Wanted"),
+		"View should restore the objective card text")
+
+
+func test_loaded_roster_objective_becomes_inspectable_expected() -> void:
+	var roster: FleetRoster = FleetRosterDraftHelper.create_default_roster()
+	roster.objectives.set_objective(
+		FleetObjectiveSelection.CATEGORY_ASSAULT,
+		"obj_ass_most_wanted")
+
+	_scene._on_library_roster_loaded(roster)
+
+	assert_eq(str(_scene._selected_component_entry.get("data_key", "")),
+		"obj_ass_most_wanted",
+		"Loading a roster should make its first objective inspectable")
+	assert_not_null(_scene._card_art_rect.texture,
+		"Loaded objective reference should include card art")
+
+
+func test_library_tab_saves_and_loads_current_roster_expected() -> void:
+	_select_catalog_key(FleetCatalog.COMPONENT_SHIP, "cr90_corvette_a")
+	_scene._on_add_component_pressed()
+	_scene._on_name_changed("Scene Library Fleet")
+
+	_scene._library_panel._on_save_pressed()
+	_scene.current_roster().name = "Unsaved Local"
+	_scene.current_roster().ships.clear()
+	_scene._library_panel._on_open_pressed()
+
+	assert_eq(_scene.current_roster().name, "Scene Library Fleet",
+		"Library Open should replace the scene roster with the saved snapshot")
+	assert_eq(_scene.current_roster().ships.size(), 1,
+		"Library Open should restore saved roster components")
+
+
+func test_library_loaded_roster_rebuilds_entry_counters_expected() -> void:
+	var roster: FleetRoster = FleetRosterDraftHelper.create_default_roster()
+	FleetRosterDraftHelper.add_ship(roster, "cr90_corvette_a", "ship-5")
+
+	_scene._on_library_roster_loaded(roster)
+	_select_catalog_key(FleetCatalog.COMPONENT_SHIP, "nebulon_b_support_refit")
+	_scene._on_add_component_pressed()
+
+	assert_not_null(_scene.current_roster().get_ship("ship-6"),
+		"Adding after library load should continue from the highest ship entry id")
+	assert_eq(_scene.current_roster().ships.size(), 2,
+		"Loaded roster and new roster entries should coexist")
+
+
 func test_validation_panel_renders_core_errors_expected() -> void:
+	assert_eq(_scene._validation_list.name, "ValidationList",
+		"Validation output should have a stable widget name")
+	assert_gte(_scene._validation_list.custom_minimum_size.y, 120.0,
+		"Validation output should reserve visible vertical space")
 	assert_true(_scene._validation_list.item_count > 0,
 		"Initial draft should render validation issues")
 	assert_true(_scene._validation_list.get_item_text(0).contains("fleet."),
@@ -269,6 +410,22 @@ func _add_roster_ship_and_squadron() -> void:
 	_scene._on_add_component_pressed()
 	_select_catalog_key(FleetCatalog.COMPONENT_SQUADRON, "x_wing_squadron")
 	_scene._on_add_component_pressed()
+
+
+func _cleanup_test_dir() -> void:
+	if not DirAccess.dir_exists_absolute(_test_library_dir):
+		return
+	var dir: DirAccess = DirAccess.open(_test_library_dir)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while not entry.is_empty():
+		if not dir.current_is_dir():
+			DirAccess.remove_absolute("%s/%s" % [_test_library_dir, entry])
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(_test_library_dir)
 
 
 func _find_button(root: Node, label_text: String) -> Button:

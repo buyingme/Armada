@@ -114,7 +114,11 @@
 | Component | Extends | File | Purpose |
 |-----------|---------|------|---------|
 | `GameBoard` | Node2D | `src/scenes/game_board/game_board.gd` | Main play area, ship/token rendering, camera, activation backbone, delegates to child controllers |
-| `FleetBuilderScene` | Control | `src/scenes/fleet_builder/fleet_builder.gd` | Local fleet-builder MVP with catalog search, grouped upgrade filtering, roster/objective editing, selected card-rule/art rendering, validation rendering, and filtered rules-reference browsing |
+| `FleetBuilderScene` | Control | `src/scenes/fleet_builder/fleet_builder.gd` | Local fleet-builder MVP with Fleet Data catalog/fleet tabs, grouped upgrade filtering, roster/objective editing and objective inspection, selected card-rule/art rendering, validation rendering, and filtered rules-reference browsing |
+| `FleetLibraryPanel` | VBoxContainer | `src/ui/fleet_builder/fleet_library_panel.gd` | Reusable fleet-builder library widget for save/open/save-as/duplicate/delete, version restore, and JSON import/export controls backed by `FleetLibraryManager` |
+| `FleetLibraryPanelActions` | RefCounted | `src/ui/fleet_builder/fleet_library_panel_actions.gd` | UI-independent operation adapter for the fleet library panel's save/open/restore/import/export calls |
+| `FleetLibraryPanelView` | RefCounted | `src/ui/fleet_builder/fleet_library_panel_view.gd` | Builder helper that constructs the fleet library panel controls while keeping the coordinator script focused on behavior |
+| `FleetLibraryListPresenter` | RefCounted | `src/ui/fleet_builder/fleet_library_list_presenter.gd` | Presenter helper that formats saved-fleet and version rows for the Fleets tab lists |
 | `UIPanelManager` | Node | `src/scenes/game_board/ui_panel_manager.gd` | Owns all UI panel creation, positioning, resizing, and isolated callbacks (card panels, overlays, modals, HUD) |
 | `AttackExecutor` | Node | `src/scenes/game_board/attack_executor.gd` | Attack execution (activation Step 4): dice sequence, defense tokens, damage resolution. Delegates targeting to `TargetSelector` and pure computation to `AttackDiceResolver`, `DefenseTokenResolver`, `DamageDealer` |
 | `TargetSelector` | Node | `src/scenes/game_board/target_selector.gd` | Attacker/target selection pipeline shared by attack simulator and execution. Emits `target_locked` to AE on valid target |

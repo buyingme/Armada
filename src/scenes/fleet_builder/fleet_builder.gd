@@ -11,9 +11,20 @@ signal return_to_menu_requested
 
 const MAIN_MENU_PATH: String = "res://src/scenes/main_menu/main_menu.tscn"
 const CARD_ART_MIN_SIZE: Vector2 = Vector2(300, 420)
+const STATUS_PANEL_MIN_SIZE: Vector2 = Vector2(0, 36)
+const CATALOG_PANEL_MIN_SIZE: Vector2 = Vector2(300, 0)
+const CATALOG_TABS_MIN_SIZE: Vector2 = Vector2(280, 0)
+const ROSTER_PANEL_MIN_SIZE: Vector2 = Vector2(320, 0)
+const REFERENCE_PANEL_MIN_SIZE: Vector2 = Vector2(340, 0)
+const REFERENCE_TABS_MIN_SIZE: Vector2 = Vector2(320, 0)
+const COMPONENT_RULES_LIST_MIN_SIZE: Vector2 = Vector2(0, 96)
+const COMPONENT_RULES_TEXT_MIN_SIZE: Vector2 = Vector2(0, 150)
+const VALIDATION_LIST_MIN_SIZE: Vector2 = Vector2(0, 128)
+const OBJECTIVE_VIEW_BUTTON_SIZE: Vector2 = Vector2(72, 32)
 
 var _catalog: FleetCatalog = FleetCatalog.new()
 var _validator: FleetValidator = FleetValidator.new()
+var _library_manager: FleetLibraryManager = FleetLibraryManager.new()
 var _roster: FleetRoster = FleetRosterDraftHelper.create_default_roster()
 var _catalog_entries: Array[Dictionary] = []
 var _selected_component_entry: Dictionary = {}
@@ -44,6 +55,7 @@ var _rules_status_option: OptionButton
 var _rules_text: RichTextLabel
 var _card_art_rect: TextureRect
 var _card_art_placeholder_label: Label
+var _library_panel: FleetLibraryPanel
 var _objective_options: Dictionary = {}
 
 
@@ -149,21 +161,34 @@ func _build_status_strip() -> PanelContainer:
 	_status_label = _create_body_label("")
 	row.add_child(_points_label)
 	row.add_child(_status_label)
-	return _section_panel("Status", row, Vector2(0, 72))
+	return _compact_status_panel(row)
 
 
 func _build_main_area() -> HBoxContainer:
 	var body: HBoxContainer = HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 12)
-	body.add_child(_build_catalog_panel())
+	body.add_child(_build_fleet_data_panel())
 	body.add_child(_build_roster_panel())
 	body.add_child(_build_side_panel())
 	return body
 
 
-func _build_catalog_panel() -> PanelContainer:
+func _build_fleet_data_panel() -> PanelContainer:
+	var tabs: TabContainer = TabContainer.new()
+	tabs.name = "FleetDataTabs"
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tabs.custom_minimum_size = CATALOG_TABS_MIN_SIZE
+	tabs.add_child(_build_catalog_tab())
+	tabs.add_child(_build_library_tab())
+	return _section_panel("Fleet Data", tabs, CATALOG_PANEL_MIN_SIZE)
+
+
+func _build_catalog_tab() -> VBoxContainer:
 	var box: VBoxContainer = VBoxContainer.new()
+	box.name = "Catalog"
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 8)
 	_catalog_type_option = _build_catalog_type_option()
 	_catalog_upgrade_type_option = _build_upgrade_type_option()
@@ -174,7 +199,7 @@ func _build_catalog_panel() -> PanelContainer:
 	box.add_child(_catalog_search_input)
 	box.add_child(_catalog_list)
 	box.add_child(_build_catalog_buttons())
-	return _section_panel("Catalog", box, Vector2(320, 0))
+	return box
 
 
 func _build_catalog_type_option() -> OptionButton:
@@ -241,7 +266,7 @@ func _build_roster_panel() -> PanelContainer:
 	box.add_child(_labeled_control("Squadrons", _squadron_list))
 	box.add_child(_button_row(["Remove Squadron"], [_on_remove_squadron_pressed]))
 	box.add_child(_build_objective_selectors())
-	return _section_panel("Roster", box, Vector2(360, 0))
+	return _section_panel("Roster", box, ROSTER_PANEL_MIN_SIZE)
 
 
 func _build_roster_list(node_name: String, height: int) -> ItemList:
@@ -268,45 +293,72 @@ func _build_objective_selectors() -> VBoxContainer:
 	box.add_child(_create_body_label("Objectives"))
 	for category: String in FleetBuilderOptions.objective_categories():
 		var option: OptionButton = OptionButton.new()
+		option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_populate_objective_option(option, category)
 		option.item_selected.connect(_on_objective_selected.bind(category))
 		_objective_options[category] = option
-		box.add_child(option)
+		box.add_child(_build_objective_row(category, option))
 	return box
+
+
+func _build_objective_row(category: String, option: OptionButton) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(option)
+	var view_button: Button = Button.new()
+	view_button.text = "View"
+	view_button.custom_minimum_size = OBJECTIVE_VIEW_BUTTON_SIZE
+	view_button.pressed.connect(_on_objective_view_pressed.bind(category))
+	row.add_child(view_button)
+	return row
 
 
 func _build_side_panel() -> PanelContainer:
 	var tabs: TabContainer = TabContainer.new()
+	tabs.name = "ReferenceTabs"
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tabs.custom_minimum_size = Vector2(360, 0)
+	tabs.custom_minimum_size = REFERENCE_TABS_MIN_SIZE
 	tabs.add_child(_build_standard_tab())
 	tabs.add_child(_build_rules_tab())
 	tabs.add_child(_build_card_art_tab())
-	return _section_panel("Reference", tabs, Vector2(380, 0))
+	return _section_panel("Reference", tabs, REFERENCE_PANEL_MIN_SIZE)
 
 
 func _build_standard_tab() -> VBoxContainer:
 	var box: VBoxContainer = VBoxContainer.new()
 	box.name = "Standard"
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 8)
 	_component_rules_list = ItemList.new()
-	_component_rules_list.custom_minimum_size = Vector2(0, 96)
+	_component_rules_list.custom_minimum_size = COMPONENT_RULES_LIST_MIN_SIZE
 	_component_rules_list.item_selected.connect(_on_component_rule_selected)
 	_component_rules_text = RichTextLabel.new()
-	_component_rules_text.custom_minimum_size = Vector2(0, 150)
+	_component_rules_text.custom_minimum_size = COMPONENT_RULES_TEXT_MIN_SIZE
 	_component_rules_text.fit_content = false
+	_component_rules_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_validation_list = ItemList.new()
-	_validation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_validation_list.name = "ValidationList"
+	_validation_list.custom_minimum_size = VALIDATION_LIST_MIN_SIZE
+	_validation_list.size_flags_vertical = Control.SIZE_FILL
+	box.add_child(_labeled_control("Validation", _validation_list))
+	box.add_child(HSeparator.new())
 	box.add_child(_labeled_control("Selected Component Rules", _component_rules_list))
 	box.add_child(_component_rules_text)
-	box.add_child(HSeparator.new())
-	box.add_child(_labeled_control("Validation", _validation_list))
 	return box
+
+
+func _build_library_tab() -> FleetLibraryPanel:
+	_library_panel = FleetLibraryPanel.new()
+	_library_panel.name = "Fleets"
+	_library_panel.initialize(_library_manager, Callable(self , "current_roster"))
+	_library_panel.roster_loaded.connect(_on_library_roster_loaded)
+	return _library_panel
 
 
 func _build_rules_tab() -> VBoxContainer:
 	var box: VBoxContainer = VBoxContainer.new()
-	box.name = "Rules Reference"
+	box.name = "Rules"
 	box.add_theme_constant_override("separation", 8)
 	_rules_search_input = _build_rules_search_input()
 	_rules_category_option = _build_rules_category_option()
@@ -400,6 +452,21 @@ func _section_panel(title_text: String, content: Control,
 	margin.add_child(box)
 	box.add_child(UIStyleHelper.create_title_label(title_text, UIStyleHelper.GOLD_TITLE))
 	box.add_child(content)
+	return panel
+
+
+func _compact_status_panel(content: Control) -> PanelContainer:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "StatusPanel"
+	panel.custom_minimum_size = STATUS_PANEL_MIN_SIZE
+	panel.add_theme_stylebox_override("panel", UIStyleHelper.create_modal_panel_style(0.0))
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	panel.add_child(margin)
+	margin.add_child(content)
 	return panel
 
 
@@ -723,9 +790,15 @@ func _on_objective_selected(index: int, category: String) -> void:
 		return
 	var data_key: String = str(option.get_item_metadata(index))
 	_roster.objectives.set_objective(category, data_key)
-	_deselect_inactive_component_lists(null)
-	_select_roster_component(FleetCatalog.COMPONENT_OBJECTIVE, data_key)
+	_select_objective_component(data_key)
 	_refresh_after_mutation()
+
+
+func _on_objective_view_pressed(category: String) -> void:
+	var option: OptionButton = _objective_options.get(category, null)
+	if option == null:
+		return
+	_select_objective_component(_selected_option_metadata(option))
 
 
 func _on_rules_item_selected(index: int) -> void:
@@ -794,6 +867,17 @@ func _on_remove_squadron_pressed() -> void:
 	_refresh_after_mutation()
 
 
+func _on_library_roster_loaded(roster: FleetRoster) -> void:
+	if roster == null:
+		return
+	_roster = roster
+	_rebuild_entry_counters()
+	_refresh_all()
+	_select_first_objective_component()
+	if _library_panel != null:
+		_library_panel.sync_current_roster_fields()
+
+
 func _on_back_pressed() -> void:
 	return_to_menu_requested.emit()
 	get_tree().change_scene_to_file(MAIN_MENU_PATH)
@@ -803,6 +887,58 @@ func _refresh_after_mutation() -> void:
 	_refresh_roster_lists()
 	_refresh_status()
 	_refresh_validation()
+
+
+func _select_objective_component(data_key: String) -> void:
+	_deselect_inactive_component_lists(null)
+	_select_roster_component(FleetCatalog.COMPONENT_OBJECTIVE, data_key)
+
+
+func _select_first_objective_component() -> void:
+	for category: String in FleetBuilderOptions.objective_categories():
+		var data_key: String = _roster.objectives.get_objective(category)
+		if not data_key.is_empty():
+			_select_objective_component(data_key)
+			return
+
+
+func _rebuild_entry_counters() -> void:
+	_ship_counter = _max_entry_suffix(_ship_entry_ids(), "ship-")
+	_squadron_counter = _max_entry_suffix(_squadron_entry_ids(), "squadron-")
+	_upgrade_counter = _max_entry_suffix(_upgrade_entry_ids(), "upgrade-")
+
+
+func _ship_entry_ids() -> Array[String]:
+	var entry_ids: Array[String] = []
+	for ship_entry: FleetShipEntry in _roster.ships:
+		entry_ids.append(ship_entry.entry_id)
+	return entry_ids
+
+
+func _squadron_entry_ids() -> Array[String]:
+	var entry_ids: Array[String] = []
+	for squadron_entry: FleetSquadronEntry in _roster.squadrons:
+		entry_ids.append(squadron_entry.entry_id)
+	return entry_ids
+
+
+func _upgrade_entry_ids() -> Array[String]:
+	var entry_ids: Array[String] = []
+	for ship_entry: FleetShipEntry in _roster.ships:
+		for assignment: FleetUpgradeAssignment in ship_entry.upgrades:
+			entry_ids.append(assignment.entry_id)
+	return entry_ids
+
+
+func _max_entry_suffix(entry_ids: Array[String], prefix: String) -> int:
+	var max_value: int = entry_ids.size()
+	for entry_id: String in entry_ids:
+		if not entry_id.begins_with(prefix):
+			continue
+		var suffix: String = entry_id.substr(prefix.length())
+		if suffix.is_valid_int():
+			max_value = max(max_value, int(suffix))
+	return max_value
 
 
 func _selected_catalog_entry() -> Dictionary:

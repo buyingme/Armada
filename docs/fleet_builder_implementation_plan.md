@@ -1,7 +1,7 @@
 # Fleet Builder Implementation Plan
 
-> Status: Proposed
-> Last updated: 2026-05-26
+> Status: Active roadmap
+> Last updated: 2026-05-31
 > Scope: local-first fleet builder, Core Set catalog completion, JSON import/export,
 > fleet validation, rules-reference browsing, and setup/deployment integration
 > with network-ready roster, setup, and rule contracts from the first slice that
@@ -883,12 +883,27 @@ test gate is passed.
 | Verification | Targeted GUT for geometry/runtime files, full GUT, `bash scripts/lint_phase_k.sh`, manual 3x3 and 3x6 board interaction pass before FB14 placement UI. |
 | Status | Implemented as of 2026-05-30: runtime geometry now routes token movement, board drag helpers, deployment-zone geometry, attack-simulator arc clipping, and firing-arc debug extents through rectangular play-area sizing; 3x3 maps use the full play area as setup area while still keeping distance-3 deployment-zone boundaries, and 3x6 maps keep the standard height-based deployment bounds. Focused/full GUT and `bash scripts/lint_phase_k.sh` pass. Manual 3x3 and 3x6 board interaction remains the final gate before FB14 placement UI. |
 
+### FB13B - Rectangular Play-Area And Base-Footprint Hardening
+
+| Field | Plan |
+|---|---|
+| Goal | Prove that selected 3x3 and 3x6 maps, runtime movement, camera/overlay geometry, and setup placement validation agree on the same rectangular play area before deployment/obstacle placement builds on them. |
+| Implementation audit | `GameScale.configure_play_area_for_map_filename()` already maps `map_3x3...` to `Vector2(2160, 2160)` and `map_3x6...` to `Vector2(4320, 2160)`; board drag helpers, squadron movement, camera framing/clamping, deployment-zone overlay drawing, firing-arc debug extents, and attack-simulator clipping mostly consume `GameScale.play_area_size_px`. The remaining gap is base-footprint containment: `TokenMover._clamp_to_play_area()` clamps token centers to `[0,width] x [0,height]`, and push-out candidates reuse that center clamp, so ships and squadrons can end with part of their base outside the selected map. Tests currently verify rectangular width usage but not full footprint containment. |
+| Scope | Harden all runtime/setup geometry to use `GameScale.play_area_size_px` width and height, not square `play_area_side_px`; keep `play_area_side_px` only as a legacy height alias for older square APIs/tests. Add footprint-aware clamping for ships and squadrons, including push-out candidates. Distinguish play area, setup area, and deployment-zone bands in validators so map legality, setup legality, and deployment legality are explicit. |
+| Primary files | `src/core/movement/token_mover.gd`, setup/deployment validators introduced in FB14, `src/autoload/game_scale.gd`, `src/scenes/game_board/game_board.gd`, `src/scenes/game_board/squadron_phase_controller.gd`, `src/scenes/game_board/deployment_zone_overlay.gd`, `src/scenes/game_board/board_camera.gd`, attack/firing overlays, related tests. |
+| Ship-base containment details | Compute ship drag bounds from the rotated base extents: `extent_x = abs(half_w * cos(rot)) + abs(half_l * sin(rot))` and `extent_y = abs(half_w * sin(rot)) + abs(half_l * cos(rot))`; clamp center X to `[extent_x, play_area_size.x - extent_x]` and center Y to `[extent_y, play_area_size.y - extent_y]`. If a base is larger than an axis, use the axis center and report/validate the placement as illegal rather than silently placing outside. Squadron bounds use radius on both axes. Push-out candidates must be re-clamped with the same footprint rules before overlap validation. |
+| Setup/placement validation details | FB14 validators must reject normalized ship/squadron placements whose full footprint crosses the selected map boundary after converting with `play_area_size_px`; positions serialize as `pos_x = pixel_x / play_area_size.x`, `pos_y = pixel_y / play_area_size.y`, and `rotation_deg`, never pixels. 3x3 maps use the full 3x3 play area; 3x6 maps preserve the 6x3 play area, the standard setup region, and distance-band deployment zones. |
+| Acceptance | Ships and squadrons cannot be dragged, pushed out, bootstrapped, or validated as deployed with any part of their footprint outside the selected map; rotated ship extents are respected for drag clamping; x bounds use board width and y bounds use board height; 3x3 maps use the full 3x3 play area; 3x6 maps preserve the intended 6x3 play area and setup/deployment regions; camera and overlays frame/draw the full rectangle. |
+| Tests | `TokenMover` footprint clamping for ships, rotated ships, and squadrons on all edges/corners; push-out candidate clamping near edges; `GameScale` map filename sizing; deployment-zone overlay geometry; board camera framing; setup-package/bootstrap regression for both 3x3 and 3x6 selected maps; placement-validator tests for full-base boundary rejection and normalized coordinate conversion. |
+| Verification | Targeted geometry/setup GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual 3x3/3x6 drag/rotate/pan/zoom and start-from-fleet pass. |
+| Status | Planned: complete this hardening before FB14 so deployment and obstacle placement do not inherit center-only or square-board assumptions. |
+
 ### FB14 - Deployment And Obstacle Placement Flow
 
 | Field | Plan |
 |---|---|
 | Goal | Let setup choose/place obstacles and deploy fleet components using normalized positions. |
-| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. The validators must account for 3x3 maps using the full play area as setup area while ships still deploy within distance 1-3 of their player edge, and 3x6 maps using the standard 3x4 setup area plus distance 1-3 deployment zones from the RRG. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
+| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. Validators must validate full ship/squadron footprints, not just token centers, and serialize normalized positions using `x / play_area_size.x` and `y / play_area_size.y`. The validators must account for 3x3 maps using the full play area as setup area while ships still deploy within distance 1-3 of their player edge, and 3x6 maps using the standard 3x4 setup area plus distance 1-3 deployment zones from the RRG. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
 | Primary files | `src/core/setup/*deployment*.gd`, `src/core/setup/*obstacle*.gd`, setup flow scene/widgets, `src/models/token_placement.gd` reuse. |
 | Acceptance | User can place Core Set obstacles and deploy ships/squadrons, then serialize a setup package with normalized placements that hot-seat and network start paths can consume identically. |
 | Tests | Placement serialization, bounds validation, obstacle set completeness, deployment-zone warnings/errors, no pixel values in payloads, host/client placement package equality. |
@@ -987,6 +1002,7 @@ code-bearing slices.
 | Roster/validation | Build legal and illegal 180, 400, and custom fleets; confirm errors match the violated rules. |
 | Import/export | Export a fleet JSON, import it as a new fleet, compare points/objectives/upgrades, and restore an older version. |
 | UI MVP | Create a fleet from scratch, filter/search components, add upgrades, choose objectives, save, reload, duplicate, and delete. |
+| Rectangular maps | Start 3x3 and 3x6 maps from selected fleets; drag/rotate ships and move squadrons against every board edge; confirm the full base footprint stays inside the visible map and camera/overlays cover the full rectangle. |
 | Setup package | Select two valid fleets, choose first player/objective, confirm invalid fleets cannot advance, and confirm the package embeds both rosters without local-library dependencies. |
 | Deployment | Place obstacles and deploy units; confirm normalized positions survive leaving/reopening setup. |
 | Start match | Start hot-seat and network matches from two fleets and verify correct ships/squadrons, factions, points, objective, obstacle placements, and matching host/client state hashes. |
@@ -1018,18 +1034,23 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB8 are now the requirements, component-contract, typed-loading,
-setup-hash, Core Set catalog, editable roster-model, catalog-query, validator
-foundation, and local library/import-export backend. Continue with FB9: the
-fleet-builder scene MVP that consumes catalog/validator/library services.
+FB0-FB13A are now the requirements, component-contract, typed-loading,
+setup-hash, Core Set catalog, editable roster model, catalog-query, validator
+foundation, local library/import-export UI, setup-package contract, runtime
+instance conversion, setup-package bootstrap, and first rectangular runtime
+support. Continue with FB13B before FB14 so placement work does not build on
+center-only or square-board assumptions.
 
-1. Add `src/scenes/fleet_builder/fleet_builder.tscn` + controller with
-  roster header, point/status strip, and live validation panel.
-2. Wire catalog search/filter lists to add/remove ships, squadrons, upgrades,
-  and objectives using existing core APIs only.
-3. Add rules-reference browsing affordances from catalog/roster entries while
-  keeping rule logic in core metadata and validators.
-4. Keep setup-package and gameplay wiring out of scope until FB10-FB11.
+1. Harden `TokenMover` and any remaining runtime geometry paths so full
+   ship/squadron footprints stay inside 3x3 and 3x6 play areas.
+2. Add focused rectangular regression tests for edge/corner clamping, rotated
+   ships, push-out candidates, camera framing, overlays, and setup-package map
+   starts.
+3. Carry the same full-footprint boundary contract into FB14 deployment and
+   obstacle placement validators, using normalized positions derived from
+   `play_area_size_px`.
+4. Run the full geometry/runtime verification gate, including baseline traces,
+   before beginning FB14 deployment and obstacle placement UI.
 
-This gives later code slices a stable contract, keeps the architecture clean,
-and avoids building UI, validators, or network setup against moving data shapes.
+This keeps FB14 focused on setup placement semantics and prevents rectangular
+board corrections from being mixed into deployment/obstacle rule work.

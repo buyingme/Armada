@@ -935,7 +935,21 @@ Status note:
 | Acceptance | Hot-seat setup can choose two local rosters, choose first player/objective, reject invalid rosters, display deterministic package summary/hash, and hand off a validated package without local-library coupling. Network/lobby reuse remains on the same builder contract. |
 | Tests | Focused setup-flow UI/controller tests with mocked library/builder, invalid roster display, objective ownership rendering, package-summary rendering, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual local setup selection and package-confirmation pass. |
-| Status | Planned: land after FB13B so package-confirmation UI is in place before FB14 adds placement state and validators. |
+| Status | In progress as of 2026-05-31: local setup-package confirmation has a thin `src/scenes/setup_flow/` screen over `FleetLibraryManager` and `FleetSetupPackageBuilder`, with roster selection, point-total-derived first-player display, objective selection from the second player's roster, deterministic package summary/hash, and a `GameManager.set_next_setup_package()` handoff. Legacy fleet records without serialized map payloads now default their map from point format during roster deserialization, so older saved fleets can still build setup packages. Focused roster/setup-flow/package-builder GUT, full GUT, `bash scripts/lint_phase_k.sh`, and `bash scripts/run_baseline_traces.sh --all` pass. Obstacle and deployment placement remain FB14 scope; manual local setup selection/package-confirmation pass is pending. |
+
+### FB13D - Dynamic Player Identity Projection
+
+| Field | Plan |
+|---|---|
+| Goal | Remove the remaining presentation assumptions that player 0 is always Rebel and player 1 is always Imperial, so setup-package starts display the correct active player, faction, and perspective in hot-seat and network play. |
+| Problem statement | FB13C can now build a package where the lower-point Imperial fleet is first player. The core state already preserves this correctly (`GameState.player_states`, `initiative_player`, and active-player logging show `Player 0: Imperial, Player 1: Rebel`), but hot-seat handoff/turn banners and nearby card-panel perspective comments still use static player-index-to-faction labels. This makes the UI tell the wrong player that it is their turn and would make FB14 manual placement hard to trust. |
+| Scope | Add a small player-identity projection surface that resolves display name, faction name, faction enum, and active/initiative markers from `GameState.player_states` for any player index. Route `HandoffOverlay`, `YourTurnBanner`, and the board turn-transition path through that projected identity instead of local `PLAYER_NAMES` arrays. Update card-panel side/perspective logic so the active player's panel is placed by the active player's actual faction, not by a player-index shortcut. Keep all hot-seat and network turn-transition rendering on the existing `UIProjector.project_turn_transition()` path; do not add `PlayMode.is_network()` or `PlayMode.is_hot_seat()` branches under `src/scenes/` or `src/ui/`. |
+| Out of scope | Actual setup placement, obstacle placement, deployment commands, objective setup-step routing, lobby fleet exchange UX, and save/load expansion for objective runtime state remain FB14-FB17 work. This slice may document hardcoded deployment-zone or camera comments discovered during the audit, but only fixes identity surfaces that affect turn ownership and player-facing labels. |
+| Primary files | `src/core/network/ui_projector.gd` or a focused identity formatter under `src/core/state/`, `src/scenes/game_board/game_board.gd`, `src/ui/handoff_overlay.gd`, `src/ui/hud/your_turn_banner.gd`, `src/ui/ship/ship_card_panel.gd` only if side/perspective API changes are needed, and focused tests in `tests/unit/test_ui_projector.gd`, `tests/unit/test_handoff_overlay.gd`, `tests/unit/test_your_turn_banner.gd`, plus any board/panel regression tests already covering perspective. |
+| Acceptance | A setup-package hot-seat start with `Player 0 = Galactic Empire`, `Player 1 = Rebel Alliance`, and `initiative_player = 0` shows the Imperial player in the Command Phase handoff and later turn banner; the opposite mapping still works for legacy scenario starts; network peers stay pinned to their local perspective while seeing correct active-player/waiting labels; card panels continue to put the active viewer's cards on the expected side even when player index and faction order differ; no scenario, save-load, replay, or baseline trace behavior regresses. |
+| Tests | Unit tests for identity projection from `GameState.player_states`; updated handoff/banner tests that pass explicit projected labels instead of asserting `0 == Rebel`; projector tests for shared-screen and network transitions with Imperial player 0/Rebel player 1; card-panel/perspective regression for active player 0 with Imperial faction; setup-package bootstrap regression asserting the projected first-player label follows the package's player-state faction. |
+| Verification | Focused GUT for projector/banner/handoff/perspective tests, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, and a manual hot-seat start from two fleets where Imperial has fewer points and receives first-player banners. If network setup-package UI is still unavailable, run the existing two-process baseline traces and record network manual setup as pending. |
+| Status | Proposed as the next slice after FB13C as of 2026-05-31. It should land before FB14 so deployment/setup manual testing is not confused by incorrect turn-owner labels. |
 
 ### FB14 - Deployment And Obstacle Placement Flow
 
@@ -1043,6 +1057,7 @@ code-bearing slices.
 | UI MVP | Create a fleet from scratch, filter/search components, add upgrades, choose objectives, save, reload, duplicate, and delete. |
 | Rectangular maps | Start 3x3 and 3x6 maps from selected fleets; drag/rotate ships and move squadrons against every board edge; confirm the full base footprint stays inside the visible map and camera/overlays cover the full rectangle. |
 | Setup package | Select two valid fleets, choose first player/objective, confirm invalid fleets cannot advance, and confirm the package embeds both rosters without local-library dependencies. |
+| Dynamic player identity | Start from two fleets where player index and faction order differ from the legacy Rebel-first scenario mapping; confirm hot-seat handoff overlays, turn banners, card-panel perspective, and network/passive status text name the correct active player. |
 | Deployment | Place obstacles and deploy units; confirm normalized positions survive leaving/reopening setup. |
 | Start match | Start hot-seat and network matches from two fleets and verify correct ships/squadrons, factions, points, objective, obstacle placements, and matching host/client state hashes. |
 | Save/load | Save immediately after deployment/start, load, and verify objective/obstacles/deployments/upgrades survive. |
@@ -1058,11 +1073,13 @@ code-bearing slices.
 2. Add a follow-on Rules Reference content slice beyond squadron keywords:
   commands, defense tokens, attack timing, setup, obstacles, and scoring still
   need static catalog records.
-3. Land `src/scenes/setup_flow/` as a thin setup-package
-  selection/confirmation layer after FB13B and before FB14, unless FB14 is
-  explicitly re-scoped to own that UI.
-4. First-player selection remains manual for MVP and recorded in the setup
-  package; bid/initiative automation is later work.
+3. Finish landing `src/scenes/setup_flow/` as the thin setup-package
+  selection/confirmation layer, then keep FB13D focused on dynamic player
+  identity before FB14 owns placement UI.
+4. First-player selection is now derived from fleet points in the setup flow,
+  with a random tie-breaker, and recorded in the setup package. Remaining
+  work is presentation identity and setup placement, not manual first-player
+  selection.
 5. Deployment begins as warning-guided manual placement with normalized
   positions; strict hard enforcement can harden in later setup validators.
 6. `FleetLibraryManager` currently stores fleets under `PathConfig.SAVES_DIR + "/fleets"`.
@@ -1074,28 +1091,29 @@ code-bearing slices.
 
 ## 9. Suggested Next Slice
 
-FB0-FB13A are now code-complete for requirements, component-contract,
+FB0-FB13B are code-complete for requirements, component-contract,
 typed-loading, setup-hash, Core Set catalog, editable roster model,
 catalog-query, validator foundation, local library/import-export UI,
 setup-package contract, runtime instance conversion, setup-package bootstrap,
-and first rectangular runtime support. Manual verification is still pending on
-FB9, FB10, and FB13A. Continue with FB13B before FB13C and FB14 so placement
-work does not build on center-only or square-board assumptions.
+rectangular runtime support, and full-footprint runtime/setup placement
+hardening. FB13C is in progress with local setup-package confirmation,
+point-total-derived first player, objective choice, legacy missing-map fallback,
+and package handoff to the board.
 
-1. Harden `TokenMover` and any remaining runtime geometry paths so full
-   ship/squadron footprints stay inside 3x3 and 3x6 play areas.
-2. Add focused rectangular regression tests for edge/corner clamping, rotated
-   ships, push-out candidates, camera framing, overlays, and setup-package map
-   starts.
-3. Land FB13C as a thin setup-flow/package-confirmation layer for roster
-  selection, first-player selection, objective choice, and validated package
-  summary/hash display before placement UI is added.
-4. Carry the same full-footprint boundary contract into FB14 deployment and
-  obstacle placement validators, using normalized positions derived from
+1. Commit FB13C once the local setup-flow package-confirmation pass is accepted
+  or explicitly deferred.
+2. Implement FB13D before FB14: project player display identity from
+  `GameState.player_states` so hot-seat and network banners, handoff overlays,
+  and card-panel perspective are correct when Imperial or any non-Rebel player
+  occupies player index 0.
+3. Keep FB13D scoped to presentation identity; do not start obstacle placement,
+  deployment placement, or setup-step commands in that slice.
+4. Start FB14 after FB13D, carrying the full-footprint boundary contract into
+  obstacle/deployment validators and using normalized positions derived from
   `play_area_size_px`.
-5. Run the full geometry/runtime verification gate, including baseline traces,
-  before beginning FB14 deployment and obstacle placement UI.
+5. Run the full setup/game-start verification gate, including baseline traces,
+  before treating FB14 placement UI as ready for manual deployment testing.
 
-This keeps FB13C focused on setup-package confirmation, keeps FB14 focused on
-setup placement semantics, and prevents rectangular board corrections from
-being mixed into deployment/obstacle rule work.
+This keeps FB13D focused on turn-owner correctness, keeps FB14 focused on setup
+placement semantics, and prevents banner/perspective bugs from obscuring the
+manual placement pass.

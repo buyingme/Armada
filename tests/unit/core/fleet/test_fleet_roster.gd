@@ -131,7 +131,8 @@ func test_deserialize_missing_fields_uses_defaults_expected() -> void:
 	assert_eq(roster.format_version, FleetRoster.FORMAT_VERSION, "Missing version should default")
 	assert_eq(roster.kind, FleetRoster.KIND, "Missing kind should default")
 	assert_eq(roster.source, "local", "Missing source should default to local")
-	assert_true(roster.map.is_empty(), "Missing map should default empty")
+	assert_eq(roster.map.get("filename", ""), FleetBuilderOptions.DEFAULT_MAP_3X3,
+		"Missing map should default to a playable Core Set map")
 	assert_true(roster.ships.is_empty(), "Missing ships should default empty")
 	assert_true(roster.squadrons.is_empty(), "Missing squadrons should default empty")
 
@@ -142,7 +143,7 @@ func test_deserialize_duplicate_entry_ids_keeps_first_expected() -> void:
 			{"entry_id": "entry-1", "data_key": "cr90_corvette_a"},
 			{"entry_id": "entry-1", "data_key": "nebulon_b_support_refit"},
 		],
-		"squadrons": [{"entry_id": "entry-1", "data_key": "x_wing_squadron"}],
+		"squadrons": [ {"entry_id": "entry-1", "data_key": "x_wing_squadron"}],
 	})
 
 	assert_eq(roster.ships.size(), 1, "Duplicate ship ids should be ignored")

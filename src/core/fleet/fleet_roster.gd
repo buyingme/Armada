@@ -185,6 +185,8 @@ static func deserialize(data: Dictionary) -> FleetRoster:
 	roster.faction = str(data.get("faction", ""))
 	roster.point_format = _read_dict(data.get("point_format", {}))
 	roster.map = _read_dict(data.get("map", {}))
+	if roster.map.is_empty():
+		roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	roster.created_at = str(data.get("created_at", ""))
 	roster.updated_at = str(data.get("updated_at", ""))
 	roster.source = str(data.get("source", "local"))

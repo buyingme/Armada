@@ -81,6 +81,19 @@ static func player_index_for_peer_role(peer_role: String, host_player_index: int
 			return -1
 
 
+## Determines first player from fleet points.
+## Rules Reference: "Setup", first player selection, RRG 1.5.0.
+static func determine_first_player(player_zero_roster: FleetRoster,
+		player_one_roster: FleetRoster, tie_breaker: Callable = Callable()) -> int:
+	var player_zero_points: int = _fleet_total_points(player_zero_roster)
+	var player_one_points: int = _fleet_total_points(player_one_roster)
+	if player_zero_points < player_one_points:
+		return 0
+	if player_one_points < player_zero_points:
+		return 1
+	return _tie_breaker_player(tie_breaker)
+
+
 func _validate_build_inputs(rosters: Array[FleetRoster], first_player: int,
 		selected_objective_key: String) -> SetupValidationResult:
 	var validation: SetupValidationResult = SetupValidationResult.new()
@@ -322,6 +335,17 @@ static func _other_player_static(player_index: int) -> int:
 
 static func _player_index_valid_static(player_index: int) -> bool:
 	return player_index >= 0 and player_index < Constants.PLAYER_COUNT
+
+
+static func _fleet_total_points(roster: FleetRoster) -> int:
+	return int(FleetRosterSummary.calculate(roster).get(
+			FleetRosterSummary.KEY_TOTAL_POINTS, 0))
+
+
+static func _tie_breaker_player(tie_breaker: Callable) -> int:
+	if tie_breaker.is_valid():
+		return clampi(int(tie_breaker.call()), 0, Constants.PLAYER_COUNT - 1)
+	return randi_range(0, Constants.PLAYER_COUNT - 1)
 
 
 static func _copy_dict_array(values: Array[Dictionary]) -> Array[Dictionary]:

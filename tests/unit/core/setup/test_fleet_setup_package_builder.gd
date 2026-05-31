@@ -74,6 +74,22 @@ func test_build_from_rosters_first_player_and_hash_stable_expected() -> void:
 		"Equivalent setup builds should produce a stable canonical hash")
 
 
+func test_determine_first_player_lower_fleet_points_expected() -> void:
+	var first_player: int = FleetSetupPackageBuilder.determine_first_player(
+			_create_imperial_roster(), _create_rebel_roster())
+
+	assert_eq(first_player, 1,
+		"The lower-point fleet should be assigned first player")
+
+
+func test_determine_first_player_tie_uses_tie_breaker_expected() -> void:
+	var first_player: int = FleetSetupPackageBuilder.determine_first_player(
+			_create_rebel_roster(), _create_rebel_roster(), func() -> int: return 1)
+
+	assert_eq(first_player, 1,
+		"Tied fleet totals should use the supplied 50/50 tie-break result")
+
+
 func test_build_from_rosters_invalid_fleet_rejected_expected() -> void:
 	var invalid_roster: FleetRoster = _create_rebel_roster()
 	invalid_roster.get_ship("rebel-ship-1").upgrades.clear()
@@ -161,6 +177,23 @@ func test_build_from_library_expands_local_ids_expected() -> void:
 		"Expanded package should embed the loaded roster payload")
 
 
+func test_build_from_library_legacy_missing_map_defaults_expected() -> void:
+	_write_legacy_rebel_record_without_map()
+	var imperial: FleetRoster = _create_imperial_roster()
+	imperial.point_format = {"id": FleetBuilderOptions.FORMAT_CORE_SET_180, "limit": 180}
+	imperial.map = FleetBuilderOptions.default_map_for_point_format(imperial.point_format)
+	_manager.save_roster(imperial)
+
+	var result: Dictionary = _builder.build_from_library(
+		_manager, ["legacy-rebel-fleet", "imperial-fleet"], 0, "obj_ass_opening_salvo")
+	var package: FleetSetupPackage = result.get("package") as FleetSetupPackage
+
+	assert_true(result.get("ok", false),
+		"Legacy rosters without serialized maps should still build setup packages")
+	assert_eq(package.map.get("filename", ""), FleetBuilderOptions.DEFAULT_MAP_3X3,
+		"Missing legacy maps should default from the roster point format")
+
+
 func test_build_from_peer_rosters_hash_matches_player_indexed_package_expected() -> void:
 	var direct: Dictionary = _builder.build_from_rosters(
 		_create_rebel_roster(), _create_imperial_roster(), 0, "obj_ass_opening_salvo")
@@ -229,6 +262,33 @@ func _set_imperial_objectives(roster: FleetRoster) -> void:
 	objectives.set_objective(FleetObjectiveSelection.CATEGORY_DEFENSE, "obj_def_fleet_ambush")
 	objectives.set_objective(FleetObjectiveSelection.CATEGORY_NAVIGATION, "obj_nav_minefields")
 	roster.set_objectives(objectives)
+
+
+func _write_legacy_rebel_record_without_map() -> void:
+	var roster: FleetRoster = _create_rebel_roster()
+	roster.fleet_id = "legacy-rebel-fleet"
+	roster.point_format = {"id": FleetBuilderOptions.FORMAT_CORE_SET_180, "limit": 180}
+	var roster_payload: Dictionary = roster.serialize()
+	roster_payload.erase("map")
+	var record: Dictionary = {
+		"active_version_id": "v0001",
+		"faction": roster.faction,
+		"fleet_id": roster.fleet_id,
+		"format_version": FleetLibraryManager.RECORD_FORMAT_VERSION,
+		"kind": FleetLibraryManager.RECORD_KIND,
+		"name": roster.name,
+		"versions": [ {
+			"canonical_hash": CanonicalJson.hash(roster_payload),
+			"roster": roster_payload,
+			"source": "legacy",
+			"version_id": "v0001",
+		}],
+	}
+	DirAccess.make_dir_recursive_absolute(_test_library_dir)
+	var file: FileAccess = FileAccess.open("%s/%s.json" % [_test_library_dir, roster.fleet_id],
+			FileAccess.WRITE)
+	file.store_string(JSON.stringify(record, "\t"))
+	file.close()
 
 
 func _create_ship(entry_id: String, data_key: String) -> FleetShipEntry:

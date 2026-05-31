@@ -22,7 +22,7 @@ const LINE_WIDTH: float = 2.0
 ## Returns -1.0 if distance bands are not loaded.
 ## Rules Reference: "Deployment Zone", RRG 1.5.0, p.2.
 static func get_top_line_y() -> float:
-	if not _uses_standard_deployment_zones() or GameScale.distance_bands_px.size() < 3:
+	if GameScale.distance_bands_px.size() < 3:
 		return -1.0
 	return GameScale.distance_bands_px[2]
 
@@ -31,7 +31,7 @@ static func get_top_line_y() -> float:
 ## Returns -1.0 if distance bands are not loaded.
 ## Rules Reference: "Deployment Zone", RRG 1.5.0, p.2.
 static func get_bottom_line_y() -> float:
-	if not _uses_standard_deployment_zones() or GameScale.distance_bands_px.size() < 3:
+	if GameScale.distance_bands_px.size() < 3:
 		return -1.0
 	return GameScale.play_area_size_px.y - GameScale.distance_bands_px[2]
 

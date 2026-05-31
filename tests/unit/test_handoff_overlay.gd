@@ -24,18 +24,18 @@ func test_show_handoff_makes_visible() -> void:
 			"Overlay should be visible after show_handoff")
 
 
-func test_show_handoff_player_zero_rebel() -> void:
-	_overlay.show_handoff(0, "Command Phase")
+func test_show_handoff_uses_projected_player_label_expected() -> void:
+	_overlay.show_handoff(0, "Command Phase", "Galactic Empire Player")
 	var title: Label = _overlay._title_label
-	assert_true(title.text.contains("Rebel"),
-			"Title should contain 'Rebel' for player 0")
+	assert_true(title.text.contains("Galactic Empire Player"),
+			"Title should contain the projected player label")
 
 
-func test_show_handoff_player_one_imperial() -> void:
+func test_show_handoff_without_label_uses_neutral_fallback_expected() -> void:
 	_overlay.show_handoff(1, "Command Phase")
 	var title: Label = _overlay._title_label
-	assert_true(title.text.contains("Imperial"),
-			"Title should contain 'Imperial' for player 1")
+	assert_true(title.text.contains("Player 1"),
+			"Title should fall back to a neutral player-index label")
 
 
 func test_show_handoff_displays_phase_name() -> void:

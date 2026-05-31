@@ -28,6 +28,16 @@ func _make_state_with_flow_step(flow_type: Constants.InteractionFlow,
 	return gs
 
 
+func _make_identity_state(
+		player_zero_faction: Constants.Faction,
+		player_one_faction: Constants.Faction) -> GameState:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	gs.get_player_state(0).faction = player_zero_faction
+	gs.get_player_state(1).faction = player_one_faction
+	return gs
+
+
 # ---------------------------------------------------------------------------
 # Empty / null
 # ---------------------------------------------------------------------------
@@ -58,6 +68,26 @@ func test_controller_viewer_sees_make_your_choices() -> void:
 	assert_eq(intent.hud_status_text, "make your choices")
 	assert_true(intent.is_interactive)
 	assert_eq(intent.controller_player, 0)
+
+
+func test_project_controller_identity_from_state_expected() -> void:
+	var gs: GameState = _make_identity_state(
+			Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.NONE,
+			0,
+			Constants.Visibility.ALL,
+			{})
+
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+
+	assert_eq(intent.controller_player_label, "Galactic Empire Player",
+			"Projected flow identity should use the controller's faction.")
+	assert_eq(intent.controller_player_faction,
+			int(Constants.Faction.GALACTIC_EMPIRE),
+			"Projected flow identity should carry the controller faction enum.")
 
 
 func test_opponent_viewer_sees_waiting() -> void:
@@ -134,6 +164,10 @@ func test_default_intent_values() -> void:
 	assert_eq(intent.payload, {})
 	assert_eq(intent.affordances, {})
 	assert_eq(intent.perspective_player, -1)
+	assert_eq(intent.perspective_player_label, "")
+	assert_eq(intent.perspective_player_faction, -1)
+	assert_eq(intent.controller_player_label, "")
+	assert_eq(intent.controller_player_faction, -1)
 	assert_false(intent.needs_handoff_overlay)
 	assert_false(intent.needs_turn_banner)
 	assert_false(intent.needs_waiting_overlay)
@@ -146,9 +180,19 @@ func test_default_intent_values() -> void:
 # ---------------------------------------------------------------------------
 
 func test_turn_transition_shared_command_projects_handoff() -> void:
+	var gs: GameState = _make_identity_state(
+			Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
 	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
-			Constants.GamePhase.COMMAND, 1, 1, true)
-	assert_eq(intent.perspective_player, 1,
+			Constants.GamePhase.COMMAND, 0, 0, true, gs)
+	assert_eq(intent.controller_player_label, "Galactic Empire Player",
+			"Shared-screen handoff should name the active player's faction.")
+	assert_eq(intent.controller_player_faction,
+			int(Constants.Faction.GALACTIC_EMPIRE),
+			"Shared-screen handoff should carry the active player's faction.")
+	assert_eq(intent.perspective_player_label, "Galactic Empire Player",
+			"Shared-screen perspective label should follow the active player.")
+	assert_eq(intent.perspective_player, 0,
 			"Shared screen should rotate to the active player.")
 	assert_true(intent.needs_handoff_overlay,
 			"Command Phase shared-screen transition should show handoff.")
@@ -159,10 +203,17 @@ func test_turn_transition_shared_command_projects_handoff() -> void:
 
 
 func test_turn_transition_network_command_starts_dial_flow() -> void:
+	var gs: GameState = _make_identity_state(
+			Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
 	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
-			Constants.GamePhase.COMMAND, 0, 1, false)
+			Constants.GamePhase.COMMAND, 0, 1, false, gs)
 	assert_eq(intent.perspective_player, 1,
 			"Network peer should stay pinned to its local perspective.")
+	assert_eq(intent.controller_player_label, "Galactic Empire Player",
+			"Network transition should name the active player from state.")
+	assert_eq(intent.perspective_player_label, "Rebel Alliance Player",
+			"Network perspective label should name the local viewer from state.")
 	assert_false(intent.needs_handoff_overlay,
 			"Network command transition should not show shared-screen handoff.")
 	assert_true(intent.should_begin_command_dial_flow,

@@ -131,6 +131,18 @@ func test_set_network_status_text_triggers_hud_refresh_when_label_exists() -> vo
 	_free_node(label)
 
 
+func test_score_hud_text_uses_player_state_factions_expected() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.get_player_state(0).faction = Constants.Faction.GALACTIC_EMPIRE
+	state.get_player_state(1).faction = Constants.Faction.REBEL_ALLIANCE
+
+	var text: String = _mgr._score_hud_text(state)
+
+	assert_true(text.find("Galactic Empire") < text.find("Rebel Alliance"),
+			"HUD scores should preserve player order but label factions from state.")
+
+
 # -----------------------------------------------------------------------
 # add_ship_to_card_panel — null safety only (no full panel in unit test)
 # -----------------------------------------------------------------------

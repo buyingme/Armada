@@ -239,11 +239,19 @@ func _advance_playlist() -> void:
 func _on_game_ended(details: Dictionary) -> void:
 	_override_active = false
 	var winner_index: int = details.get("winner_index", 0)
-	# Player 0 = Rebel, Player 1 = Imperial.
-	if winner_index == 1:
+	if _winner_faction(winner_index) == int(Constants.Faction.GALACTIC_EMPIRE):
 		play("imperial_march")
 	else:
 		play("rebel_theme")
+
+
+func _winner_faction(winner_index: int) -> int:
+	var faction: int = UIProjector.player_faction(
+			GameManager.current_game_state, winner_index)
+	if faction >= 0:
+		return faction
+	return int(Constants.Faction.GALACTIC_EMPIRE) if winner_index == 1 \
+			else int(Constants.Faction.REBEL_ALLIANCE)
 
 
 ## On game_started, shuffle the in-game playlist and start the first track.

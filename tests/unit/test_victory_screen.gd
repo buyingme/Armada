@@ -6,6 +6,14 @@
 extends GutTest
 
 
+func before_each() -> void:
+	GameManager.current_game_state = null
+
+
+func after_each() -> void:
+	GameManager.current_game_state = null
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -56,6 +64,19 @@ func test_shows_correct_winner_imperial() -> void:
 	var screen: VictoryScreen = _make_screen(_imperial_wins_elimination())
 	assert_string_contains(screen._title_label.text, "Galactic Empire",
 			"Title should contain Imperial faction name")
+
+
+func test_show_results_uses_live_player_state_faction_expected() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.get_player_state(0).faction = Constants.Faction.GALACTIC_EMPIRE
+	state.get_player_state(1).faction = Constants.Faction.REBEL_ALLIANCE
+	GameManager.current_game_state = state
+
+	var screen: VictoryScreen = _make_screen(_rebel_wins_round6())
+
+	assert_string_contains(screen._title_label.text, "Galactic Empire",
+			"Victory title should resolve winner faction from live player state.")
 
 
 func test_shows_scores() -> void:

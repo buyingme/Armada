@@ -9,9 +9,6 @@ class_name YourTurnBanner
 extends ColorRect
 
 
-## Player names for display.
-const PLAYER_NAMES: Array[String] = ["Rebel Player", "Imperial Player"]
-
 ## Banner background colour (semi-transparent).
 const BANNER_COLOR: Color = Color(0.05, 0.05, 0.15, 0.85)
 
@@ -44,12 +41,12 @@ func _ready() -> void:
 ## Shows the banner for the given player.
 ## [param player_index] — the player who should take control.
 ## [param duration] — how long to show (0 = no auto-dismiss).
-func show_banner(player_index: int, duration: float = DEFAULT_DURATION) -> void:
-	var player_name: String = ""
-	if player_index >= 0 and player_index < PLAYER_NAMES.size():
-		player_name = PLAYER_NAMES[player_index]
-	else:
-		player_name = "Player %d" % player_index
+## [param player_label] — projected player identity label from GameState.
+func show_banner(
+		player_index: int,
+		duration: float = DEFAULT_DURATION,
+		player_label: String = "") -> void:
+	var player_name: String = _resolved_player_label(player_index, player_label)
 	_title_label.text = "%s — Your Turn" % player_name
 	visible = true
 
@@ -57,6 +54,15 @@ func show_banner(player_index: int, duration: float = DEFAULT_DURATION) -> void:
 		_timer.start(duration)
 
 	_log.info("Your Turn banner shown for player %d." % player_index)
+
+
+func _resolved_player_label(player_index: int, player_label: String) -> String:
+	var label: String = player_label.strip_edges()
+	if not label.is_empty():
+		return label
+	if player_index < 0:
+		return "Player"
+	return "Player %d" % player_index
 
 
 ## Hides the banner and emits handoff_accepted.

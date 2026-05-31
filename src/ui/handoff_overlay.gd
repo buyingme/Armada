@@ -12,9 +12,6 @@ class_name HandoffOverlay
 extends ColorRect
 
 
-## Player names for display. Index matches player index (0 = Rebel, 1 = Imperial).
-const PLAYER_NAMES: Array[String] = ["Rebel Player", "Imperial Player"]
-
 ## Background colour (opaque dark overlay).
 const OVERLAY_COLOR: Color = Color(0.05, 0.05, 0.15, 0.95)
 
@@ -44,17 +41,27 @@ func _ready() -> void:
 ## Shows the overlay for the given player and phase.
 ## [param player_index] — the player who should take control.
 ## [param phase_name] — human-readable name of the current phase.
-func show_handoff(player_index: int, phase_name: String) -> void:
-	var player_name: String = ""
-	if player_index >= 0 and player_index < PLAYER_NAMES.size():
-		player_name = PLAYER_NAMES[player_index]
-	else:
-		player_name = "Player %d" % player_index
+## [param player_label] — projected player identity label from GameState.
+func show_handoff(
+		player_index: int,
+		phase_name: String,
+		player_label: String = "") -> void:
+	var player_name: String = _resolved_player_label(player_index, player_label)
 	_title_label.text = "%s — Your Turn" % player_name
 	_phase_label.text = phase_name
 	visible = true
 	_log.info("Handoff overlay shown for player %d (%s)." % [
 			player_index, phase_name])
+
+
+## Returns the projected label or a neutral index fallback.
+func _resolved_player_label(player_index: int, player_label: String) -> String:
+	var label: String = player_label.strip_edges()
+	if not label.is_empty():
+		return label
+	if player_index < 0:
+		return "Player"
+	return "Player %d" % player_index
 
 
 ## Hides the overlay.

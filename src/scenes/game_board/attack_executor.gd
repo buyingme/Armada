@@ -2595,7 +2595,10 @@ func _try_open_immediate_choice_handoff(chooser_player: int) -> bool:
 	_camera.rotate_to_player(chooser_player)
 	if _handoff_overlay == null:
 		return false
-	_handoff_overlay.show_handoff(chooser_player, "Damage Card Choice")
+	var player_label: String = UIProjector.player_display_label(
+			GameManager.current_game_state, chooser_player)
+	_handoff_overlay.show_handoff(
+			chooser_player, "Damage Card Choice", player_label)
 	var vp_size: Vector2 = Vector2(1280, 720)
 	if get_viewport():
 		vp_size = get_viewport().get_visible_rect().size

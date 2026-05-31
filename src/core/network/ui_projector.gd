@@ -41,6 +41,12 @@ class UIIntent extends RefCounted:
 	## interaction flow (-1 when there is no flow).
 	var controller_player: int = -1
 
+	## Display label for [member controller_player], derived from GameState.
+	var controller_player_label: String = ""
+
+	## Faction enum value for [member controller_player], or -1 when unknown.
+	var controller_player_faction: int = -1
+
 	## Active flow type (mirrors [member InteractionFlow.flow_type]).
 	## Phase I6b — exposed so consumers can switch on flow without
 	## reaching back into [GameState].
@@ -69,6 +75,12 @@ class UIIntent extends RefCounted:
 	## For shared-screen handoff this follows the active player; for network
 	## peers it stays pinned to the local seat.
 	var perspective_player: int = -1
+
+	## Display label for [member perspective_player], derived from GameState.
+	var perspective_player_label: String = ""
+
+	## Faction enum value for [member perspective_player], or -1 when unknown.
+	var perspective_player_faction: int = -1
 
 	## True when the shared-screen transition should show the full handoff gate.
 	var needs_handoff_overlay: bool = false
@@ -105,6 +117,9 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	var spec: Dictionary = FLOW_SPEC_SCRIPT.get_spec(
 			int(flow.flow_type), int(flow.step_id))
 	intent.controller_player = flow.controller_player
+	intent.controller_player_label = player_display_label(
+			state, flow.controller_player)
+	intent.controller_player_faction = player_faction(state, flow.controller_player)
 	intent.is_interactive = _is_interactive_for(flow, spec, viewer_player)
 	intent.hud_status_text = _hud_status_for(flow, spec, viewer_player)
 	intent.flow_type = flow.flow_type
@@ -125,10 +140,17 @@ static func project_turn_transition(
 		phase: Constants.GamePhase,
 		active_player: int,
 		viewer_player: int,
-		shared_screen: bool) -> UIIntent:
+		shared_screen: bool,
+		state: GameState = null) -> UIIntent:
 	var intent: UIIntent = UIIntent.new()
 	intent.controller_player = active_player
+	intent.controller_player_label = player_display_label(state, active_player)
+	intent.controller_player_faction = player_faction(state, active_player)
 	intent.perspective_player = active_player if shared_screen else viewer_player
+	intent.perspective_player_label = player_display_label(
+			state, intent.perspective_player)
+	intent.perspective_player_faction = player_faction(
+			state, intent.perspective_player)
 	intent.is_interactive = shared_screen or active_player == viewer_player \
 			or phase == Constants.GamePhase.COMMAND
 	intent.hud_status_text = _turn_status_text(
@@ -145,6 +167,31 @@ static func project_turn_transition(
 			and phase == Constants.GamePhase.SQUADRON \
 			and active_player != viewer_player
 	return intent
+
+
+## Returns the player-facing label for [param player_index] from state.
+## Falls back to a neutral player index label when the state has no entry.
+static func player_display_label(state: GameState, player_index: int) -> String:
+	var player_state: PlayerState = _player_state_or_null(state, player_index)
+	if player_state == null:
+		return _fallback_player_label(player_index)
+	return "%s Player" % _faction_display_name(player_state.faction)
+
+
+## Returns the player's faction label from state, or a neutral fallback.
+static func player_faction_label(state: GameState, player_index: int) -> String:
+	var player_state: PlayerState = _player_state_or_null(state, player_index)
+	if player_state == null:
+		return _fallback_player_label(player_index)
+	return _faction_display_name(player_state.faction)
+
+
+## Returns the faction enum value for [param player_index], or -1 if unknown.
+static func player_faction(state: GameState, player_index: int) -> int:
+	var player_state: PlayerState = _player_state_or_null(state, player_index)
+	if player_state == null:
+		return -1
+	return int(player_state.faction)
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +247,39 @@ static func _needs_turn_banner(
 			and phase != Constants.GamePhase.SQUADRON:
 		return false
 	return shared_screen or active_player == viewer_player
+
+
+static func _player_state_or_null(
+		state: GameState,
+		player_index: int) -> PlayerState:
+	if state == null:
+		return null
+	if player_index < 0 or player_index >= state.player_states.size():
+		return null
+	var player_state: Variant = state.player_states[player_index]
+	if player_state is PlayerState:
+		return player_state as PlayerState
+	return null
+
+
+static func _faction_display_name(faction: Constants.Faction) -> String:
+	match faction:
+		Constants.Faction.REBEL_ALLIANCE:
+			return "Rebel Alliance"
+		Constants.Faction.GALACTIC_EMPIRE:
+			return "Galactic Empire"
+		Constants.Faction.GALACTIC_REPUBLIC:
+			return "Galactic Republic"
+		Constants.Faction.SEPARATIST_ALLIANCE:
+			return "Separatist Alliance"
+		_:
+			return "Unknown Faction"
+
+
+static func _fallback_player_label(player_index: int) -> String:
+	if player_index < 0:
+		return "Player"
+	return "Player %d" % player_index
 
 
 ## Maps FlowSpec modal metadata to the primary modal the presentation layer

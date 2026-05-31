@@ -24,18 +24,18 @@ func test_show_banner_makes_visible() -> void:
 			"Banner should be visible after show_banner")
 
 
-func test_show_banner_player_zero_rebel() -> void:
-	_banner.show_banner(0)
+func test_show_banner_uses_projected_player_label_expected() -> void:
+	_banner.show_banner(0, YourTurnBanner.DEFAULT_DURATION, "Galactic Empire Player")
 	var label: Label = _banner._title_label
-	assert_true(label.text.contains("Rebel"),
-			"Label should contain 'Rebel' for player 0")
+	assert_true(label.text.contains("Galactic Empire Player"),
+			"Label should contain the projected player label")
 
 
-func test_show_banner_player_one_imperial() -> void:
+func test_show_banner_without_label_uses_neutral_fallback_expected() -> void:
 	_banner.show_banner(1)
 	var label: Label = _banner._title_label
-	assert_true(label.text.contains("Imperial"),
-			"Label should contain 'Imperial' for player 1")
+	assert_true(label.text.contains("Player 1"),
+			"Label should fall back to a neutral player-index label")
 
 
 func test_dismiss_hides_banner() -> void:

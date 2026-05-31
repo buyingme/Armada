@@ -148,7 +148,7 @@ func on_viewport_resized() -> void:
 
 ## Updates the phase HUD label text and position.
 ## Displays round, phase, and live scores for both players.
-## Format: "Round 3 — Ship Phase  |  Rebel: 42  |  Imperial: 0"
+## Format: "Round 3 — Ship Phase  |  Rebel Alliance: 42  |  Galactic Empire: 0"
 ## Requirements: GF-001–004, UI-003.
 func update_phase_hud() -> void:
 	if phase_hud_label == null:
@@ -161,14 +161,9 @@ func update_phase_hud() -> void:
 		base_text = "Round %d — %s" % [round_num, phase_name]
 	else:
 		base_text = phase_name
-	# Append live scores when a game is in progress.
-	# Player 0 = Rebel Alliance, Player 1 = Galactic Empire.
 	var state: GameState = GameManager.current_game_state
 	if state != null:
-		var rebel_score: int = _scoring.calculate_score(0, state)
-		var imperial_score: int = _scoring.calculate_score(1, state)
-		base_text += "  |  Rebel: %d  |  Imperial: %d" % [
-				rebel_score, imperial_score]
+		base_text += _score_hud_text(state)
 	if not _network_status_text.is_empty():
 		base_text += "  |  %s" % _network_status_text
 	phase_hud_label.text = base_text
@@ -178,6 +173,16 @@ func update_phase_hud() -> void:
 		vp_size = get_viewport().get_visible_rect().size
 	phase_hud_label.position = Vector2(0, 8)
 	phase_hud_label.size = Vector2(vp_size.x, phase_hud_label.size.y)
+
+
+func _score_hud_text(state: GameState) -> String:
+	var player_zero_label: String = UIProjector.player_faction_label(state, 0)
+	var player_one_label: String = UIProjector.player_faction_label(state, 1)
+	var player_zero_score: int = _scoring.calculate_score(0, state)
+	var player_one_score: int = _scoring.calculate_score(1, state)
+	return "  |  %s: %d  |  %s: %d" % [
+			player_zero_label, player_zero_score,
+			player_one_label, player_one_score]
 
 
 ## Toggles the phase / round HUD label visibility.

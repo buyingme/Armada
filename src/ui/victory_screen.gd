@@ -19,9 +19,8 @@ extends ColorRect
 ## Background colour — darker than the handoff overlay for gravitas.
 const OVERLAY_COLOR: Color = Color(0.03, 0.03, 0.10, 0.97)
 
-## Faction display names (index = player_index assuming Learning Scenario
-## mapping:  0 = Rebel, 1 = Imperial).
-const FACTION_NAMES: Array[String] = ["Rebel Alliance", "Galactic Empire"]
+## Legacy faction display fallback for isolated victory-screen tests.
+const FALLBACK_FACTION_NAMES: Array[String] = ["Rebel Alliance", "Galactic Empire"]
 
 ## Human-readable reason strings.
 const REASON_TEXT: Dictionary = {
@@ -189,8 +188,11 @@ func _build_button_row() -> HBoxContainer:
 
 ## Returns a human-readable faction name for the given player index.
 func _get_faction_name(player_index: int) -> String:
-	if player_index >= 0 and player_index < FACTION_NAMES.size():
-		return FACTION_NAMES[player_index]
+	var state: GameState = GameManager.current_game_state
+	if state != null:
+		return UIProjector.player_faction_label(state, player_index)
+	if player_index >= 0 and player_index < FALLBACK_FACTION_NAMES.size():
+		return FALLBACK_FACTION_NAMES[player_index]
 	return "Unknown"
 
 

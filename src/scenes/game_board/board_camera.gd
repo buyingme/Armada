@@ -51,7 +51,7 @@ var _drag_start_screen: Vector2 = Vector2.ZERO
 ## Camera world-space position at the moment a pan drag began.
 var _drag_start_camera: Vector2 = Vector2.ZERO
 
-## The player index the camera currently faces (0 = Rebel, 1 = Imperial).
+## The player index the camera currently faces.
 var _current_player: int = 0
 
 ## Active rotation tween (null when idle).

@@ -639,7 +639,8 @@ func _on_round_started(_round_number: int) -> void:
 func _on_active_player_changed(player_index: int) -> void:
 	var phase: Constants.GamePhase = GameManager.get_current_phase()
 	var intent: UIProjector.UIIntent = UIProjector.project_turn_transition(
-			phase, player_index, _local_viewer(), _is_shared_screen())
+			phase, player_index, _local_viewer(), _is_shared_screen(),
+			GameManager.current_game_state)
 	_apply_turn_transition_intent(intent, phase)
 
 ## Called when the handoff overlay or banner is dismissed by the player.
@@ -668,12 +669,17 @@ func _on_handoff_accepted() -> void:
 ## Swaps card panel sides so the active player's faction panel is on the
 ## left and the opponent's is on the right.
 ## Requirements: BP-003 — active player's cards always on the left.
-func _swap_card_panels(player_index: int) -> void:
-	# Player 0 = Rebel, Player 1 = Imperial (Learning Scenario mapping).
-	var rebel_left: bool = (player_index == 0)
+func _swap_card_panels(player_index: int, player_faction: int) -> void:
+	var rebel_left: bool = _is_rebel_panel_left(player_index, player_faction)
 	_panel_mgr.rebel_card_panel.set_side(rebel_left)
 	_panel_mgr.imperial_card_panel.set_side(not rebel_left)
 	_panel_mgr.update_card_panel_positions()
+
+
+func _is_rebel_panel_left(player_index: int, player_faction: int) -> bool:
+	if player_faction >= 0:
+		return player_faction == int(Constants.Faction.REBEL_ALLIANCE)
+	return player_index == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1301,7 +1307,8 @@ func _spawn_loaded_tokens_for_player(ps: PlayerState) -> void:
 func _apply_turn_transition_intent(
 		intent: UIProjector.UIIntent,
 		phase: Constants.GamePhase) -> void:
-	_apply_turn_perspective(intent.perspective_player)
+	_apply_turn_perspective(
+			intent.perspective_player, intent.perspective_player_faction)
 	_panel_mgr.set_network_status_text(intent.hud_status_text)
 	_ship_activation_controller.update_activation_modal_interactivity()
 	_show_projected_turn_prompt(intent, phase)
@@ -1311,38 +1318,42 @@ func _apply_turn_transition_intent(
 		_squadron_phase_controller.begin_activation_flow()
 
 
-func _apply_turn_perspective(player_index: int) -> void:
+func _apply_turn_perspective(player_index: int, player_faction: int) -> void:
 	if player_index < 0:
 		return
 	_panel_mgr.rebel_card_panel.set_viewer_player(player_index)
 	_panel_mgr.imperial_card_panel.set_viewer_player(player_index)
 	_camera.rotate_to_player(player_index)
-	_swap_card_panels(player_index)
+	_swap_card_panels(player_index, player_faction)
 
 
 func _show_projected_turn_prompt(
 		intent: UIProjector.UIIntent,
 		phase: Constants.GamePhase) -> void:
 	if intent.needs_handoff_overlay:
-		_show_projected_handoff(intent.controller_player, phase)
+		_show_projected_handoff(
+				intent.controller_player, phase, intent.controller_player_label)
 		return
 	if intent.needs_turn_banner:
-		_show_projected_turn_banner(intent.controller_player)
+		_show_projected_turn_banner(
+				intent.controller_player, intent.controller_player_label)
 
 
 func _show_projected_handoff(
 		player_index: int,
-		phase: Constants.GamePhase) -> void:
+		phase: Constants.GamePhase,
+		player_label: String) -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	var phase_name: String = UIPanelManager.PHASE_NAMES.get(
 			phase, "Command Phase")
-	_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name)
+	_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name, player_label)
 	_panel_mgr.handoff_overlay.update_size(vp_size)
 
 
-func _show_projected_turn_banner(player_index: int) -> void:
+func _show_projected_turn_banner(player_index: int, player_label: String) -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_panel_mgr.your_turn_banner.show_banner(player_index)
+	_panel_mgr.your_turn_banner.show_banner(
+			player_index, YourTurnBanner.DEFAULT_DURATION, player_label)
 	_panel_mgr.your_turn_banner.update_size(vp_size)
 
 

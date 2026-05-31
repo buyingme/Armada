@@ -77,6 +77,10 @@ var _scenario_id: String = ""
 ## Not serialized; consumed once by [method consume_next_scenario_id].
 var _next_scenario_id: String = ""
 
+## Transient setup package selected before the game board scene bootstraps.
+## Not serialized; consumed by [method bootstrap_game]. FB13.
+var _next_setup_package: FleetSetupPackage = null
+
 ## Strategy for submitting commands — [LocalCommandSubmitter] for hot-seat
 ## and single-player, [NetworkCommandSubmitter] for network multiplayer.
 ## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
@@ -132,6 +136,13 @@ func get_command_submitter() -> CommandSubmitter:
 ## Stores the scenario id that the next board bootstrap should load.
 func set_next_scenario_id(scenario_id: String) -> void:
 	_next_scenario_id = scenario_id.strip_edges()
+	_next_setup_package = null
+
+
+## Stores the setup package that the next board bootstrap should start.
+func set_next_setup_package(package: FleetSetupPackage) -> void:
+	_next_setup_package = package
+	_next_scenario_id = ""
 
 
 ## Returns and clears the pending scenario id, falling back to [param default_id].
@@ -141,6 +152,13 @@ func consume_next_scenario_id(default_id: String) -> String:
 	if scenario_id.is_empty():
 		return default_id
 	return scenario_id
+
+
+## Returns and clears the setup package selected for the next bootstrap.
+func consume_next_setup_package() -> FleetSetupPackage:
+	var package: FleetSetupPackage = _next_setup_package
+	_next_setup_package = null
+	return package
 
 
 ## Starts a new game in a play-mode-aware way.  Hot-seat passes
@@ -160,7 +178,11 @@ func bootstrap_game(default_scenario_id: String) -> void:
 		if not NetworkManager.is_server():
 			config["client_mode"] = true
 	else:
-		config = {"scenario_id": default_scenario_id}
+		var setup_package: FleetSetupPackage = consume_next_setup_package()
+		if setup_package != null:
+			config = {"setup_package": setup_package.to_hashed_dict()}
+		else:
+			config = {"scenario_id": default_scenario_id}
 	# Phase L0.5b — replay driver may have pre-seeded a deterministic
 	# rng_seed from the replay file header.  Apply it now (hot-seat
 	# only; in network the seed comes from the host via the lobby
@@ -170,6 +192,10 @@ func bootstrap_game(default_scenario_id: String) -> void:
 	if ReplayDriver.pending_replay_seed != 0 and not PlayMode.is_network():
 		config["rng_seed"] = ReplayDriver.pending_replay_seed
 		ReplayDriver.pending_replay_seed = 0
+	var setup_package_from_config: FleetSetupPackage = _setup_package_from_config(config)
+	if setup_package_from_config != null:
+		start_new_game_from_setup_package(setup_package_from_config, config)
+		return
 	start_new_game(config)
 
 
@@ -195,18 +221,28 @@ func start_new_game(config: Dictionary = {}) -> void:
 	fixed_commands_applied = false
 	_scenario_id = config.get("scenario_id", "") as String
 	EventBus.game_started.emit()
-	# Per-instance file logging for network games.  G4.6.5 C1.
-	if PlayMode.is_network():
-		var role: String = "host" if NetworkManager.is_server() else "client"
-		var ts: String = Time.get_datetime_string_from_system() \
-				.replace(":", "").replace("-", "").replace("T", "_")
-		var log_path: String = "res://logs/%s_%s.log" % [role, ts]
-		GameLogger.enable_file_logging(log_path)
+	_enable_network_file_logging_if_needed()
 	# In network client mode, skip _start_round() — the server broadcasts
 	# StartRoundCommand and the client applies it via the handler.  G4.6.5 A1.
 	if not config.get("client_mode", false):
 		_start_round()
 	SaveGameManager.mark_clean()
+
+
+## Starts a new game from a deterministic setup package.
+## The resulting [GameState] is marked preloaded so [GameBoard] can reuse
+## the loaded-state token spawn path instead of duplicating scenario spawn code.
+func start_new_game_from_setup_package(
+		package: FleetSetupPackage,
+		config: Dictionary = {}) -> Dictionary:
+	var result: Dictionary = FleetSetupBootstrapper.build_game_state(
+			package, config)
+	if not bool(result.get("ok", false)):
+		_log.error("Setup-package bootstrap rejected.")
+		return result
+	_install_setup_package_state(
+			result.get("state") as GameState, package, config)
+	return result
 
 
 ## Installs a previously-serialised [param state] as the live game state
@@ -249,6 +285,31 @@ func start_new_game_from_state(
 			current_game_state.current_round,
 			current_game_state.current_phase])
 	EventBus.game_started.emit()
+	SaveGameManager.mark_clean()
+
+
+func _install_setup_package_state(
+		state: GameState,
+		package: FleetSetupPackage,
+		config: Dictionary) -> void:
+	CommandProcessor.reset()
+	current_game_state = state
+	if current_game_state.interaction_flow == null:
+		current_game_state.interaction_flow = InteractionFlow.new()
+	is_game_active = true
+	active_player = current_game_state.initiative_player
+	_activating_ship = null
+	_activating_squadron = null
+	_squadrons_activated_this_turn = 0
+	_command_submitted = [false, false]
+	_command_assigning_player = -1
+	fixed_commands_applied = false
+	_scenario_id = package.scenario_id
+	is_state_preloaded = true
+	_enable_network_file_logging_if_needed()
+	EventBus.game_started.emit()
+	if not bool(config.get("client_mode", false)):
+		_start_round()
 	SaveGameManager.mark_clean()
 
 
@@ -1522,6 +1583,23 @@ func _derive_active_player_from_state(state: GameState) -> int:
 		if ctrl == 0 or ctrl == 1:
 			return ctrl
 	return state.initiative_player
+
+
+func _setup_package_from_config(config: Dictionary) -> FleetSetupPackage:
+	var package_data: Variant = config.get("setup_package", {})
+	if package_data is Dictionary and not (package_data as Dictionary).is_empty():
+		return FleetSetupPackage.deserialize(package_data as Dictionary)
+	return null
+
+
+func _enable_network_file_logging_if_needed() -> void:
+	if not PlayMode.is_network():
+		return
+	var role: String = "host" if NetworkManager.is_server() else "client"
+	var ts: String = Time.get_datetime_string_from_system() \
+			.replace(":", "").replace("-", "").replace("T", "_")
+	var log_path: String = "res://logs/%s_%s.log" % [role, ts]
+	GameLogger.enable_file_logging(log_path)
 
 
 ## Returns true if the given player has at least one unactivated squadron.

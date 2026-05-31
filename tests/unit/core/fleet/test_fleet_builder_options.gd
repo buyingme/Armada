@@ -25,6 +25,34 @@ func test_default_point_format_returns_serialized_core_set_expected() -> void:
 	assert_false(format.has("label"), "Serialized point format should not include UI labels")
 
 
+func test_available_maps_for_core_set_filters_3x3_expected() -> void:
+	var maps: Array[Dictionary] = FleetBuilderOptions.available_maps_for_point_format(
+			{"id": "CORE_SET_180", "limit": 180})
+
+	assert_false(maps.is_empty(), "Core Set maps should be available")
+	assert_true(_all_maps_have_grid(maps, FleetBuilderOptions.MAP_GRID_3X3),
+		"Core Set 180 should only offer 3x3 maps")
+
+
+func test_available_maps_for_300_filters_3x6_expected() -> void:
+	var maps: Array[Dictionary] = FleetBuilderOptions.available_maps_for_point_format(
+			{"id": "CUSTOM", "limit": 300})
+
+	assert_false(maps.is_empty(), "300 point maps should be available")
+	assert_true(_all_maps_have_grid(maps, FleetBuilderOptions.MAP_GRID_3X6),
+		"300 point games should only offer 3x6 maps")
+
+
+func test_default_map_for_standard_400_uses_3x6_expected() -> void:
+	var payload: Dictionary = FleetBuilderOptions.default_map_for_point_format(
+			{"id": "STANDARD_400", "limit": 400})
+
+	assert_eq(payload.get("grid", ""), FleetBuilderOptions.MAP_GRID_3X6,
+		"Standard 400 should default to a 3x6 map")
+	assert_eq(payload.get("filename", ""), FleetBuilderOptions.DEFAULT_MAP_3X6,
+		"Standard 400 should use the default 3x6 map filename")
+
+
 func test_available_factions_derives_from_catalog_expected() -> void:
 	var factions: Array[String] = FleetBuilderOptions.available_factions(FleetCatalog.new())
 
@@ -71,3 +99,10 @@ func _group_names(groups: Array[Dictionary]) -> Array[String]:
 	for group: Dictionary in groups:
 		names.append(str(group.get("group", "")))
 	return names
+
+
+func _all_maps_have_grid(maps: Array[Dictionary], grid: String) -> bool:
+	for payload: Dictionary in maps:
+		if str(payload.get("grid", "")) != grid:
+			return false
+	return true

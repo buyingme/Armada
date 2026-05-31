@@ -152,6 +152,7 @@ func serialize() -> Dictionary:
 		"current_round": current_round,
 		"current_phase": int(current_phase),
 		"initiative_player": initiative_player,
+		"objectives": objectives.duplicate(true),
 		"player_states": [],
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
 		"rng": rng.serialize() if rng else {},
@@ -171,6 +172,9 @@ static func deserialize(data: Dictionary) -> GameState:
 	state.current_round = data.get("current_round", 0)
 	state.current_phase = int(data.get("current_phase", 0)) as Constants.GamePhase
 	state.initiative_player = data.get("initiative_player", 0)
+	var objective_data: Variant = data.get("objectives", {})
+	if objective_data is Dictionary:
+		state.objectives = (objective_data as Dictionary).duplicate(true)
 	for player_state_data: Variant in data.get("player_states", []):
 		state.player_states.append(PlayerState.deserialize(player_state_data))
 	state.ship_target_attack_counts = _deserialize_attack_counts(

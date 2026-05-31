@@ -6,7 +6,7 @@
 > `refactoring_test_strategy.md`, `g4_network_plan.md`, and
 > `architecture_assessment.md` — all archived under [docs/old/](old/).
 >
-> Last updated: 2026-05-24 (Phase M15 closeout complete; Phase N is closed with N0-N24 complete, including the N17-N22 live squadron keyword implementation, post-playtest Counter/Swarm/network follow-ups, ship-phase Squadron command completion, preview-commit Squadron command UX, N23 legacy runtime retirement, and N24 documentation baseline closeout; see §2, [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md), and [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md))
+> Last updated: 2026-05-09 (Phase J11 complete — navigate-token yaw-bonus fix; Phase K **in progress**, K0 + K1 complete — see §6 and [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md))
 
 ---
 
@@ -14,11 +14,11 @@
 
 | Metric | Value |
 |--------|-------|
-| GUT test scripts | 181 |
-| GUT tests | 3 189 |
-| GUT asserts | 6 534 |
+| GUT test scripts | 143 |
+| GUT tests | 2 882 |
+| GUT asserts | 5 432 |
 | Failing tests | 0 |
-| Last completed batch | N24 — Phase N documentation closeout |
+| Last commit | `ef2c84e` (Phase K11 — extract `ToolOverlayController`) |
 
 Runtime invariants:
 - All `GameState` mutations route through `GameCommand.execute()`
@@ -28,94 +28,6 @@ Runtime invariants:
 - Hot-seat and network use the same command path through a `CommandSubmitter`
   strategy; no parallel network channel.
 - Deterministic replay via `GameRng` + `GameReplay` works in both modes.
-- Phase L0.5 replay gate: `bash scripts/run_baseline_traces.sh --all` diffs
-  the committed hot-seat trace/hash and verifies real two-process network
-  host/client final-state-hash equality.  Network JSONL is diagnostic only;
-  no committed network trace/hash fixture until the transport is deterministic
-  across separate runs.
-
-Verification note: N18-N22 code-bearing keyword gate passed 2026-05-23: full
-GUT green (179 / 3 211 / 6 560, 0 failures), Phase K lint 0 violations / 4
-allow-listed branches, baseline traces pass hot-seat trace/state plus real ENet
-network peer equality, and `git diff --check` clean. The network replay fixture
-now omits one pre-existing illegal engaged-squadron move rejected by the new
-Heavy-aware `move_squadron` validator. Godot still reports known shutdown RID
-leak warnings in the runner output; no parse errors or GUT failures were
-reported. Post-playtest Counter lock follow-up passed 2026-05-23: full GUT
-green (181 / 3 239 / 6 616, 0 failures), Phase K lint 0 violations / 4
-allow-listed branches, baseline traces pass with hash
-`50c9edaf428b32bda280a5f7a3104b8bb82066eed4d7fd407087197a8ad6f293`, and
-`git diff --check` clean. The latest follow-up also keeps the network-only
-attack mirror closed in hot-seat Counter/Swarm flows so the real attack panel
-remains interactive after the Counter roll, and treats zero-damage squadron
-attacks as valid Counter triggers because the source rule keys off the attack
-being performed rather than damage being dealt. User MT pass confirmed
-2026-05-23 for the last behaviour-changing N12-N15 batch. Debug scenario
-network-lobby picker follow-up passed 2026-05-23: full GUT green
-(183 / 3 246 / 6 623, 0 failures), Phase K lint 0 violations / 4
-allow-listed branches, baseline traces pass with hash
-`6ad86231d4ae61e542afd17dc02154674f9c6022bb357096bf967a1f4ed1fa21`, and
-`git diff --check` clean. Board-spawn handoff follow-up passed 2026-05-23:
-full GUT green (184 / 3 247 / 6 624, 0 failures), Phase K lint 0 violations
-/ 4 allow-listed branches, baseline traces pass with hash
-`7c292e3db67f2786ed81ac782deec6c534ccab8634a7ff04fd90fb3265632a50`, and
-`git diff --check` clean. Command-backed Counter ownership follow-up passed
-2026-05-23: full GUT green (185 / 3 262 / 6 657, 0 failures), Phase K lint 0
-violations / 4 allow-listed branches, baseline traces pass with network-state
-hash `e00bd2c154663d70b70d95b35230bc9aa128996587b24de935748da265f0d214`, and
-`git diff --check` clean. This follow-up documents and enforces the rule that
-defender/opponent/off-turn choices must start from FlowSpec ownership,
-payload identity, command surfaces, projection, and regression tests before UI
-buttons are wired.
-Squadron no-move activation completion marker follow-up passed 2026-05-23:
-full GUT green (185 / 3 269 / 6 669, 0 failures), Phase K lint 0 violations
-/ 4 allow-listed branches, baseline traces pass with network-state hash
-`1d70beddcb69cee6b956d1725537d4c09b25c87840f1e86ea5964e5c8b58c334`, and
-`git diff --check` clean. This replaces zero-distance `move_squadron` skip
-synchronization with the durable `complete_squadron_activation` marker so
-engaged squadrons blocked by Heavy validation still advance passive network
-modal counters and Squadron Phase turn handoff.
-Network Swarm reroll affordance follow-up passed 2026-05-23: full GUT green
-(185 / 3 272 / 6 676, 0 failures), Phase K lint 0 violations / 4
-allow-listed branches, baseline traces pass with network-state hash
-`7e3725022a42514f9cf9d368670da262e13cc8e2f72f7d2236fdd6c33e9f8580`, and
-`git diff --check` clean. This keeps all dice results, including hit and
-critical faces, selectable for Swarm rerolls and prevents network clients from
-treating `awaiting_remote` command-submit sentinels as empty roll/reroll
-results before the authoritative dice payload arrives.
-User MT pass confirmed 2026-05-23 for the complete N17-N22 keyword foundation
-and live keyword batch.
-N23 legacy runtime retirement passed 2026-05-23: deleted the legacy runtime
-effect classes/factories and obsolete tests, removed `GameState.effect_registry`
-plus resolver hook fallbacks, and extended `scripts/lint_phase_k.sh` with the
-Phase N static guard. Full GUT green (181 / 3 184 / 6 520, 0 failures), Phase
-K/N lint 0 retired legacy surfaces / 0 violations / 4 allow-listed branches,
-baseline traces pass with hot-seat hash
-`26b9d737befabfce469206f77f0007a54ab32c2df1cef5177c38aa0dd94f3167` and
-network-state hash
-`5af18ca87b397fa6ebcc26e35560339f207edc9c59dfe08180bdc1b7c872d808`.
-Ship-phase Squadron command completion follow-up passed 2026-05-23: full GUT
-green (181 / 3 186 / 6 522, 0 failures), Phase K/N lint 0 retired legacy
-surfaces / 0 violations / 4 allow-listed branches, baseline traces pass with
-network-state hash
-`43d373139b1cf5dad5886178dec97a167b46f23e4a643a333d6ac72b01bf6e12`, and
-`git diff --check` clean. This keeps `complete_squadron_activation` legal for
-ship-phase Squadron commands that finish without a movement command.
-Squadron command preview-commit UX follow-up passed 2026-05-24: full GUT green
-(181 / 3 189 / 6 534, 0 failures), Phase K/N lint 0 retired legacy surfaces /
-0 violations / 4 allow-listed branches, baseline traces pass with
-network-state hash
-`901f8ea134d70510ea0c850dabfa79d1a1c4b2684b71d72c64ddc10c1267ab78`. This
-keeps command-mode squadron clicks as transient range/action previews until a
-real move or attack commits the activation slot.
-N24 documentation closeout records the post-N23 end state: `RuleRegistry` is
-the only production rule hook catalogue, active rule status is derived from
-serialized entities, and the legacy runtime effect system remains deleted and
-guarded against production reintroduction. The closeout also promotes the
-bugfix lessons into project instructions and skills: lifecycle marker command
-parity, FlowSpec-first off-turn ownership, and preview-vs-commit separation.
-This was a docs/skill-only slice; no GUT script/test/assert counts changed
-from the preview-commit baseline.
 
 ---
 
@@ -165,421 +77,20 @@ from the preview-commit baseline.
 | G4.5 Lobby System | ✅ |
 | G4.6 Chat System | ✅ |
 | G4.6.5 Network Game Wiring | ✅ (largely subsumed by Phase I) |
-| **G4.7 Spectator Mode** | ⏳ pending — post-K multiplayer hardening |
-| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented |
-| **G4.9 Turn Timers** | ⏳ pending — post-K multiplayer hardening |
+| **G4.7 Spectator Mode** | ⏳ pending — gated on Phase K |
+| **G4.8 Reconnection (runtime)** | ⏳ pending — acceptance test exists (Phase I7); RPC/timer runtime not yet implemented; gated on Phase K |
+| **G4.9 Turn Timers** | ⏳ pending — gated on Phase K |
 | G4.10 Dedicated Server Binary | ✅ |
 
 ### Refactoring — Phase K (Presentation-Layer Hardening)
 
-Completed 2026-05-13. Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
+Proposed 2026-05-08; refined 2026-05-09 (deeper audit). Detailed slice plan: [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Goals:
 - Eliminate the **18** modal-authority `if PlayMode.is_*` branches across 5 files in `src/scenes/game_board/` (Phase I rule §7). 5 further session-mode discriminators in save/load + lobby flow are allow-listed.
 - Decompose `game_board.gd` (3 055 LOC), `attack_executor.gd` (2 475 LOC), `game_manager.gd` (2 241 LOC), `save_game_manager.gd` (1 061 LOC) into focused controllers / RefCounted helpers.
-- Treat LOC ceilings as extraction triggers, not documentation-cutting targets:
-  keep comments that explain contracts, invariants, and replay/network/modal
-  failure modes; extract behaviour when raw file length becomes uncomfortable.
 - Existing `tests/unit/test_interaction_flow.gd` (27 tests) and `tests/unit/test_ui_projector.gd` (23 tests) extended where needed (no new files required by audit).
 - Land `scripts/lint_phase_k.sh` + pre-commit hook (slice K7).
 
-Status: **COMPLETE** — K0 through K15 complete. K10 (`DebugBoardController` extraction, F-key debug damage + replay save trigger) committed `9a1f763`. K11 (`ToolOverlayController` extraction, maneuver/range/targeting overlay + keyboard shortcuts) committed `ef2c84e`. K12 (`CommandRouterAdapter` + command-projection routing + modal overlap fix) committed `e17ff05`. K13 (`game_board.gd` function-size cleanup via helper extraction + dispatch simplification) committed `cf29d8f` (143 / 2887 / 5440, lint 0 violations). K14a committed `454fd0e`: extracted core `AttackFlowExecutor` payload builders and added `test_attack_flow_executor.gd`. K14b committed `c6b4b67`: extracted attack-state init/reset/roll/defense-payload helpers and delegated corresponding `AttackExecutor` call sites. K14c committed `1559fc4`: extracted defense-commit canonical ordering and queue initialization helpers. K14d committed `54df444`: extracted defense-queue polling + faceup-card counting and delegated corresponding scene-layer paths. K14e committed `06438e7`: extracted first-faceup decision + damage-summary construction and delegated corresponding scene-layer helpers. K14f committed `d99ca32`: extracted redirect-continuation decision. K14g committed `33e697f`: extracted faceup-card preparation and immediate-effect flow decision into `AttackFlowExecutor` pure helpers, delegated corresponding `AttackExecutor` call sites, and expanded `test_attack_flow_executor.gd`. K15 completed the remaining `attack_executor.gd` size/nesting cleanup pass.
-
-### Refactoring — Phase L/M (Modal Lifecycle + Flow Authority)
-
-Detailed slice plan: [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Goals:
-- Phase L removes the remaining modal-lifecycle PlayMode branches by routing
-  hot-seat and network through `UIProjector` + `ModalRouter`.
-- Phase M promotes the flow/step model into a declarative `FlowSpec` / rule
-  registry surface.
-- Phase L0.5 adds the replay regression gate used by all L/M slices.
-
-Status: **COMPLETE** — Phase L is complete and Phase M is complete through M15. L0.5 replay
-regression gate is complete and remains the required L/M automated gate:
-- Hot-seat: committed JSONL trace + committed final-state hash.
-- Network: real two-process ENet replay; host/client final-state hashes must
-  match within the same run.  Network command traces and network final hashes
-  are diagnostic only until a deterministic network pump exists.
-- L1 result: [modal_router.gd](../src/scenes/game_board/modal_router.gd)
-  owns the `CommandProcessor.command_executed` projection path; the lint floor
-  dropped from 11 to 10 allow-listed branches.
-- L2 result: [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
-  submits activation-step transitions through commands in both hot-seat and
-  network; [modal_router.gd](../src/scenes/game_board/modal_router.gd) opens
-  closed activation modals from projected lifecycle commands; the lint floor
-  dropped from 10 to 8 allow-listed branches.
-- L3 result: [ui_projector.gd](../src/core/network/ui_projector.gd)
-  projects the activation-sequence button affordance and maps ship-activation
-  `SQUADRON_STEP` to the command-mode squadron modal; [modal_router.gd](../src/scenes/game_board/modal_router.gd)
-  opens the squadron command modal from the authoritative `advance_activation_step`
-  edge; the lint floor dropped from 8 to 7 allow-listed branches.
-- L4 result: [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
-  now only submits the authoritative `start_displacement` command after
-  ship-squadron overlap; [modal_router.gd](../src/scenes/game_board/modal_router.gd)
-  opens the displacement modal from the projected `SQUADRON_DISPLACEMENT /
-  DISPLACEMENT_PLACE` intent in hot-seat and network. The lint floor dropped
-  from 7 to 6 allow-listed branches. MT follow-up fixed a projected
-  `REPAIR_STEP` stall when no repair action was available by deferring the
-  controller peer's Repair-to-Attack advance through the authoritative command
-  path and hiding stale past-step buttons during activation-modal refresh.
-  Additional MT follow-ups now republish CF-token reroll dice through
-  `interaction_flow`, carry final dice into the defense payload, expose
-  Squadron command decline from the activation modal, bind activation
-  auto-skip timers to their original step, and reject maneuver submits from
-  active non-maneuver sub-steps.
-- L5 result: [ui_projector.gd](../src/core/network/ui_projector.gd)
-  projects active-player transition UI as `UIIntent` fields for shared-screen
-  handoff, active-player banner, passive waiting status, command-dial startup,
-  Squadron observer startup, and camera/card perspective. [game_board.gd](../src/scenes/game_board/game_board.gd)
-  now applies that intent through one path; the lint floor dropped from 6 to
-  5 allow-listed branches.
-- L6 result: [load_game_dialog.gd](../src/ui/save/load_game_dialog.gd)
-  centralises its deployment-mode network query in `_is_network_session()` and
-  routes both hot-seat save blocking and host network-load broadcast checks
-  through that helper; the lint floor dropped from 5 to 4 allow-listed branches.
-- L7 result: manual-test sweep passed in hot-seat and network. Automated
-  pre-flight preserved the `148 / 2 956 / 5 629` GUT baseline, Phase K lint
-  reported `0 violations (4 allow-listed branches)`, and baseline traces
-  passed hot-seat trace/state plus network peer-state equality. Network-mode
-  annotations recorded pass evidence for activation auto-skip, brace canonical
-  order, and displacement modal projection; annotation JSON files remain local
-  ignored runtime artifacts under `saves/annotations/`.
-- M0 result: [docs/game_flow.md](game_flow.md) is the human-readable master
-  flow document for Phase M. It inventories every currently projected,
-  produced, or legacy-compatible `(flow_type, step_id)` pair with controller
-  role, modal kind, allowed command surface, transitions, citations, and
-  known gaps for M0.5-M4. No source code changed.
-- M0.5 result: [docs/game_flow.md](game_flow.md) now includes the model-fitness
-  review for the three planned questions. The review found no blocking
-  `InteractionFlow` model defect before `FlowSpec`; it records that M1 must
-  make `controller_role` first-class, with `SQUADRON_DISPLACEMENT /
-  DISPLACEMENT_PLACE` as the worked example for the non-moving-player rule.
-  No source code changed.
-- M0.6 result: [docs/game_flow.md](game_flow.md) defined the historical runtime
-  registry boundary that guided Phase M migration. N23 supersedes that boundary:
-  `RuleRegistry` is now the only production rule hook catalogue, and active
-  rule state comes from serialized entities only. The loaded Blinded Gunners
-  bug remains the save/load acceptance example.
-- M0.7 result: [docs/game_flow.md](game_flow.md) now defines the `GLOBAL` /
-  `PHASE` / `FLOW_STEP` command applicability taxonomy and inventories every
-  currently registered command type with a proposed M3 declaration scope. The
-  findings are reflected in the Phase L/M plan so M3/M4 can add parity tests
-  and gates without misclassifying setup, phase, sync, debug, or legacy-effect
-  commands. No source code changed.
-- M1 result: [flow_spec.gd](../src/core/state/flow_spec.gd) now encodes all
-  25 documented interaction-flow pairs from [docs/game_flow.md](game_flow.md)
-  as static machine-readable metadata, including controller roles, modal
-  metadata, command surfaces, transitions, source tags, and rule citations.
-  [test_flow_spec.gd](../tests/unit/test_flow_spec.gd) adds 20 tests / 125
-  asserts covering pair parity, enum drift, projection-only rows, resolver
-  success/failure paths, and the displacement non-moving-player regression.
-  Automated gates: 149 / 2 976 / 5 754 GUT baseline with 0 failures (known
-  post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
-  branches, and baseline traces passing hot-seat trace/state plus network peer
-  state equality.
-- M2 result: [ui_projector.gd](../src/core/network/ui_projector.gd) now reads
-  FlowSpec modal metadata instead of maintaining a hard-coded flow/step modal
-  switch. Projection also reads FlowSpec controller roles for either-player and
-  system/no-controller surfaces while preserving the resolved
-  `interaction_flow.controller_player` fallback for legacy no-step test rows.
-  `project_turn_transition()` remains explicitly outside FlowSpec because it
-  represents between-flow handoff surfaces, not persisted `InteractionFlow`
-  rows. Automated gates: focused UIProjector + FlowSpec tests 49 / 216, full
-  GUT 149 / 2 976 / 5 754 with 0 failures (known post-summary Godot abort),
-  Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
-  passing hot-seat trace/state plus network peer state equality.
-- M2.5 result: [flow_spec.gd](../src/core/state/flow_spec.gd) now exposes
-  `make_interaction_flow(...)` so producers construct resolved runtime flow
-  snapshots from semantic controller roles. Ship/squadron activation,
-  phase-advance, maneuver, displacement, attack publishing, and
-  [attack_flow_fsm.gd](../src/core/combat/attack_flow_fsm.gd) producers now
-  route controller ownership through FlowSpec context. Displacement derives the
-  non-moving player from `OPPOSING_PLAYER`; attack snapshots derive attacker,
-  defender, and chooser control from identity payloads with legacy fallback.
-  Producer tests cover the displacement payload-regression, attack
-  defender/attacker/chooser fallback, and helper copy semantics. Automated
-  gates: full GUT 149 / 2 982 / 5 761 with 0 failures (known post-summary Godot
-  abort), Phase K lint 0 violations / 4 allow-listed branches, and baseline
-  traces passing hot-seat trace/state plus network peer state equality.
-- M3 result: [command_applicability.gd](../src/core/commands/command_applicability.gd)
-  now declares `GLOBAL`, `PHASE`, and `FLOW_STEP` applicability metadata for
-  every registered production command. [test_command_applicability.gd](../tests/unit/test_command_applicability.gd)
-  isolates the production command registry, fails on missing/stale
-  declarations, validates scope target shape, and cross-checks FLOW_STEP pairs
-  against [flow_spec.gd](../src/core/state/flow_spec.gd). The declaration for
-  `resolve_immediate_effect` remains `PHASE: SHIP, SQUADRON` to preserve both
-  attack-flow immediate effects and debug-deal-damage follow-ups. Automated
-  gates: focused M3 tests 20 / 39, full GUT 150 / 2 992 / 5 774 with 0 failures
-  (known post-summary Godot abort), Phase K lint 0 violations / 4 allow-listed
-  branches, and baseline traces passing hot-seat trace/state plus network peer
-  state equality. M3 adds metadata only; M4 is the runtime command gate.
-- M4 result: [command_processor.gd](../src/autoload/command_processor.gd)
-  now consults [command_applicability.gd](../src/core/commands/command_applicability.gd)
-  before each command-specific `validate()` call. `GLOBAL` commands bypass the
-  flow/phase pre-flight, `PHASE` commands check `GameState.current_phase`, and
-  `FLOW_STEP` commands check their declared pair against
-  [flow_spec.gd](../src/core/state/flow_spec.gd) `allowed_commands` before
-  execution. Rejections emit structured reasons before command validation.
-  Replay verification refined the declarations to preserve existing legality:
-  controller-prevalidated attack commands, ship/squadron activation starters,
-  movement, repair, and activation-end commands remain phase-scoped until a
-  later slice gives every producer a precise step surface. MT annotations also
-  exposed a no-target Attack skip gap: Repair could advance to `ATTACK_STEP`
-  while the visible activation modal only refreshed, so the local modal could
-  advance to Maneuver without submitting the authoritative `maneuver_step`.
-  [ship_activation_controller.gd](../src/scenes/game_board/ship_activation_controller.gd)
-  now auto-advances projected no-target Attack steps through
-  `advance_activation_step`. Automated gates: focused M4 tests 43 / 163,
-  activation-flow regression tests 56 / 105, full GUT 151 / 3 007 / 5 805 with 0 failures,
-  Phase K lint 0 violations / 4 allow-listed branches, `git diff --check`
-  clean, and baseline traces passing hot-seat trace/state plus network peer
-  state equality.
-- M5 result: [flow_hook.gd](../src/core/effects/flow_hook.gd) and
-  [rule_registry.gd](../src/core/effects/rule_registry.gd) add the static
-  Phase M hook catalogue without migrating any production rules out of
-  `EffectRegistry`. Hook descriptors cover validators, modifiers, observers,
-  blockers, and enablers, and [rule_bootstrap.gd](../src/autoload/rule_bootstrap.gd)
-  is registered as an autoload with an intentionally empty rule-script list.
-  New tests prove the empty registry returns no hooks for every FlowSpec pair,
-  that `register_rule(...)` pins canonical rule ids, and that the empty
-  bootstrap clears stale static hooks. Automated gates: focused M5 tests
-  14 / 116, full GUT 154 / 3 021 / 5 921 with 0 failures, Phase K lint
-  0 violations / 4 allow-listed branches, and baseline traces passing
-  hot-seat trace/state plus network peer state equality.
-- M6 result: [command_processor.gd](../src/autoload/command_processor.gd)
-  now runs [RuleRegistry](../src/core/effects/rule_registry.gd) validators
-  after the M4 applicability gate and before command-specific validation,
-  and collects observer follow-up command requests into a deferred FIFO queue.
-  Network authorities drain that queue only after broadcasting the triggering
-  command, while passive client mirrors suppress observer synthesis to avoid
-  duplicate follow-ups. [attack_dice_resolver.gd](../src/core/combat/attack_dice_resolver.gd)
-  now applies static dice-pool modifiers after the legacy `ATTACK_GATHER_DICE`
-  `EffectRegistry` hook, so the empty registry preserves existing behaviour.
-  [test_command_processor_rule_hooks.gd](../tests/unit/test_command_processor_rule_hooks.gd)
-  covers validator ordering, applicability-before-validator ordering,
-  observer queue timing, replay suppression, mirror suppression, synchronous
-  observer-submit rejection, and the rule-file guard. Automated gates: focused
-  M6/M4/M5 regression set 6 scripts / 81 tests / 228 asserts, full GUT
-  155 / 3 031 / 5 947 with 0 failures, Phase K lint 0 violations / 4
-  allow-listed branches, and baseline traces passing hot-seat trace/state plus
-  network peer state equality.
-- M7/N2 result: [faulty_countermeasures.gd](../src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd)
-  registers the first production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  validator and blocker hooks for `ATTACK / ATTACK_DEFENSE_TOKENS` and
-  defense-token commands (`commit_defense` and `spend_defense_token`). The
-  predicates read active state from serialized `ShipInstance.faceup_damage`
-  plus token state, so exhausted tokens are rejected and projected as blocked
-  without a legacy `DEFENSE_VALIDATE_TOKEN` `EffectRegistry` bridge.
-  [test_rule_faulty_countermeasures.gd](../tests/unit/test_rule_faulty_countermeasures.gd)
-  covers rejection, commit rejection, ready-token allowance, other-ship
-  isolation, no-card allowance, and save/load rebuild behaviour. Automated
-  gates: focused M7 regression set 5 scripts / 90 tests / 199 asserts with 0
-  failures, full GUT 156 / 3 040 / 5 982 with 0 failures, Phase K lint 0
-  violations / 4 allow-listed branches, and baseline traces passing hot-seat
-  trace/state plus network peer state equality. M7 manual testing passed after
-  the marker-command parity fix. The reusable rule-integration workflow now
-  lives in [.github/skills/rule-integration/SKILL.md](../.github/skills/rule-integration/SKILL.md),
-  and [src/core/effects/rules/README.md](../src/core/effects/rules/README.md)
-  records the source-first rule folder proposal.
-- M8 result: [compartment_fire.gd](../src/core/effects/rules/damage_cards/ship/compartment_fire.gd)
-  registers the second production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  hook: a `MODIFIER` for `STATUS_CLEANUP / STATUS_CLEANUP_STEP` target
-  `defense_token_readying`. [status_phase_cleanup_command.gd](../src/core/commands/status_phase_cleanup_command.gd)
-  now applies static readying modifiers before any remaining legacy status
-  hooks, and [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Compartment Fire in the transient `EffectRegistry`.
-  [test_rule_compartment_fire.gd](../tests/unit/test_rule_compartment_fire.gd)
-  covers direct modifier behavior, other-ship isolation, cleanup integration,
-  unblocked ships, and save/load plus `EffectFactory.rebuild_runtime_effects()`
-  with zero legacy Compartment Fire bridge effects. The rule folder structure
-  is now source-first under [src/core/effects/rules/](../src/core/effects/rules/).
-  Automated gates: focused M8 regression set 5 scripts / 93 tests / 171 asserts
-  with 0 failures, full GUT 157 / 3 046 / 6 007 with 0 failures, Phase K lint
-  0 violations / 4 allow-listed branches, and baseline traces passing hot-seat
-  trace/state plus network peer state equality.
-- M9 result: [damaged_munitions.gd](../src/core/effects/rules/damage_cards/ship/damaged_munitions.gd)
-  registers the third production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  hook: a `MODIFIER` for `ATTACK / ATTACK_ROLL` target `dice_pool`.
-  [attack_dice_resolver.gd](../src/core/combat/attack_dice_resolver.gd)
-  applies static dice-pool modifiers after remaining legacy gather-dice hooks.
-  Damaged Munitions now exposes available die colours as rule metadata first;
-  [attack_executor.gd](../src/scenes/game_board/attack_executor.gd) publishes
-  the pending choice and applies the attacker-selected colour before rolling.
-  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Damaged Munitions in the transient `EffectRegistry`;
-  Point-Defense Failure remained on the legacy bridge until the M10 migration.
-  [test_rule_damaged_munitions.gd](../tests/unit/test_rule_damaged_munitions.gd)
-  covers direct choice metadata, selected-colour removal, other-ship isolation,
-  squadron-defender exclusion, resolver integration, empty-pool safety, and
-  save/load plus `EffectFactory.rebuild_runtime_effects()` with zero legacy
-  Damaged Munitions bridge effects. Automated gates: focused M9 regression set
-  5 scripts / 169 tests / 254 asserts with 0 failures, full GUT 158 / 3 062 /
-  6 072 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
-  `git diff --check` clean, and baseline traces passing hot-seat trace/state
-  plus network peer state equality, and user MT pass confirmed 2026-05-17.
-- M10 result: [point_defense_failure.gd](../src/core/effects/rules/damage_cards/ship/point_defense_failure.gd)
-  registers the fourth production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  hook: a `MODIFIER` for `ATTACK / ATTACK_ROLL` target `dice_pool`.
-  The predicate reads the attacking ship's serialized `faceup_damage`, applies
-  only when the defender is a squadron, and uses shared `EffectContext`
-  metadata to expose available die colours before applying the attacker-selected
-  colour. [attack_executor.gd](../src/scenes/game_board/attack_executor.gd)
-  now handles pre-roll die-removal choices generically by rule id, so Damaged
-  Munitions and Point-Defense Failure share the same UI/payload surface.
-  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Point-Defense Failure in the transient `EffectRegistry`.
-  [test_rule_point_defense_failure.gd](../tests/unit/test_rule_point_defense_failure.gd)
-  covers direct choice metadata, selected-colour removal, ship-defender
-  exclusion, other-ship isolation, resolver integration, empty-pool safety, and
-  save/load plus `EffectFactory.rebuild_runtime_effects()` with zero legacy
-  Point-Defense Failure bridge effects. Automated gates: focused M10 regression
-  set 4 scripts / 76 tests / 173 asserts with 0 failures, full GUT 159 /
-  3 071 / 6 110 with 0 failures, Phase K lint 0 violations / 4 allow-listed
-  branches, `git diff --check` clean, and baseline traces passing hot-seat
-  trace/state plus network peer state equality, and user MT pass confirmed
-  2026-05-17.
-- M11 result: [crew_panic.gd](../src/core/effects/rules/damage_cards/ship/crew_panic.gd)
-  registers the fifth production [RuleRegistry](../src/core/effects/rule_registry.gd)
-  hook: an `ENABLER` for `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT` target
-  `command_dial_reveal`. The predicate reads the active player's
-  `faceup_damage` and hidden dial state, then projects JSON-safe
-  `crew_panic_choices` through [UIProjector](../src/core/network/ui_projector.gd).
-  [ShipCardPanel](../src/ui/ship/ship_card_panel.gd) now calls a generic
-  pre-reveal handler before `reveal_dial`; [ShipActivationController](../src/scenes/game_board/ship_activation_controller.gd)
-  consumes the projected affordance and opens the choice before the first
-  reveal. Suffer-damage submits `persistent_effect_damage` and then reveals;
-  discard submits `spend_dial(mode=discard)` and `activate_ship(skip_reveal=true)`
-  so the activation still flows through commands. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Crew Panic in the transient `EffectRegistry`.
-  [test_rule_crew_panic.gd](../tests/unit/test_rule_crew_panic.gd) covers
-  enabler registration, choice metadata, active-player/hidden-dial gating,
-  passive viewer exclusion, and save/load plus `EffectFactory.rebuild_runtime_effects()`
-  with zero legacy bridge effects. Automated gates: unit suite 151 scripts /
-  2 947 tests / 5 857 asserts with 0 failures, full GUT 160 / 3 079 / 6 131
-  with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
-  baseline traces passing hot-seat trace/state plus network peer state equality.
-  User MT pass confirmed 2026-05-18.
-- M12 result: [capacitor_failure.gd](../src/core/effects/rules/damage_cards/ship/capacitor_failure.gd)
-  registers Capacitor Failure as the first multi-hook migrated damage-card
-  rule: defense-token validators and blockers for the attack defense-token
-  step, plus repair-action validators and blockers for the ship activation
-  repair step. The attack side blocks Redirect token commits/spends and direct
-  redirect-zone submissions when the defending hull zone has no shields. The
-  repair side blocks `recover_shields` and `move_shields` targets whose current
-  shield value is 0. [DefenseTokenResolver](../src/core/combat/defense_token_resolver.gd)
-  and [RepairResolver](../src/core/damage/repair_resolver.gd) now consume
-  RuleRegistry blocker metadata so UI button eligibility and command safety
-  share the same rule predicate. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Capacitor Failure in the transient `EffectRegistry`.
-  [test_rule_capacitor_failure.gd](../tests/unit/test_rule_capacitor_failure.gd)
-  covers hook registration, defense UI blocking, command validator rejection,
-  repair resolver eligibility, repair command validation, repaired-card
-  re-enabling, and save/load plus `EffectFactory.rebuild_runtime_effects()`
-  with zero legacy bridge effects. Automated verification: focused M12 test 1
-  script / 12 tests / 57 asserts, bridge/helper regressions green, full GUT
-  161 / 3 088 / 6 188 with 0 failures, Phase K lint 0 violations / 4
-  allow-listed branches, baseline traces passing hot-seat trace/state plus
-  network peer state equality, `git diff --check` clean, and user MT pass
-  confirmed 2026-05-18.
-- M13 result: [test_rule_order_replay.gd](../tests/integration/test_rule_order_replay.gd)
-  adds the determinism guard for RuleRegistry observer ordering across replay
-  serialization. The hot-seat scenario triggers three observer hooks on the
-  same `ATTACK / ATTACK_ROLL` step, records hook ids plus generated follow-up
-  command types, asserts `(priority DESC, rule_id ASC)` through both callback
-  order and executed replay history, and canonicalizes the payload to prove
-  repeated local runs are byte-identical. Real ENet host/client equality remains
-  covered by the L0.5 baseline gate without committing network trace/hash
-  fixtures. Automated verification: exact M13 test 1 script / 3 tests / 8
-  asserts, full GUT 162 / 3 091 / 6 196 with 0 failures, Phase K lint 0
-  violations / 4 allow-listed branches, baseline traces passing hot-seat
-  trace/state plus network peer state equality, `git diff --check` clean, and
-  user MT pass confirmed 2026-05-19.
-- M14 result: [dump_flow_coverage.gd](../scripts/dump_flow_coverage.gd)
-  adds a headless debugging aid for inspecting a `(flow, step)` surface. It
-  emits FlowSpec source, controller role, modal metadata, allowed commands,
-  transitions, rule citation, and every registered RuleRegistry hook with hook
-  kind, rule id, priority, and command/target surface. [RuleRegistry](../src/core/effects/rule_registry.gd)
-  now exposes `hooks_for_step()` for read-only tooling without exposing private
-  storage. [test_dump_flow_coverage.gd](../tests/unit/test_dump_flow_coverage.gd)
-  covers positional and named CLI arguments, metadata output, deterministic
-  hook ordering, and invalid-pair diagnostics. Automated verification: focused
-  M14 test 1 script / 5 tests / 13 asserts, headless smoke `ATTACK / ATTACK_ROLL`
-  exits 0 and reports the two dice-pool rule hooks, full GUT 163 / 3 096 /
-  6 209 with 0 failures, Phase K lint 0 violations / 4 allow-listed branches,
-  baseline traces passing hot-seat trace/state plus network peer state equality,
-  `git diff --check` clean, and user MT pass confirmed 2026-05-19.
-- M15 result: Phase M closeout promoted the rule-extension workflow into
-  project instructions. [.github/copilot-instructions.md](../.github/copilot-instructions.md)
-  now includes Non-Negotiable Rule §12, requiring new rules, card effects,
-  keywords, upgrades, objectives, defense-token eligibility rules, and
-  rule-derived UI affordances to go through `RuleRegistry`. [.skills/architecture_patterns.md](../.skills/architecture_patterns.md)
-  now documents Layer 3 rules: FlowSpec owns steps and controller roles,
-  RuleRegistry owns static hook definitions, active state comes from serialized
-  `GameState` entities, and observers must use the deferred follow-up queue.
-  §4 open topics were cleaned up so resolved Phase M
-  rule-file organization work no longer appears as pending. Verification:
-  `git diff --check` clean, full GUT 163 / 3 096 / 6 209 with 0 failures,
-  Phase K lint 0 violations / 4 allow-listed branches, and baseline traces
-  passing hot-seat trace/state plus network peer equality.
-- N3-N5 automated implementation result: [power_failure.gd](../src/core/effects/rules/damage_cards/ship/power_failure.gd), [life_support_failure.gd](../src/core/effects/rules/damage_cards/ship/life_support_failure.gd), and [depowered_armament.gd](../src/core/effects/rules/damage_cards/ship/depowered_armament.gd)
-  migrate three more persistent damage-card behaviours out of
-  `DamageCardEffect`. Power Failure is now a RuleRegistry `engineering_value`
-  modifier for repair engineering; Life Support Failure keeps its immediate
-  token-discard resolver while moving persistent command-token gain blocking
-  to validators/blockers; Depowered Armament is now an `attack_target` blocker
-  plus `publish_attack_flow` validator for long-range target declarations.
-  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers these cards in the transient `EffectRegistry`.
-  [test_rule_power_failure.gd](../tests/unit/test_rule_power_failure.gd),
-  [test_rule_life_support_failure.gd](../tests/unit/test_rule_life_support_failure.gd),
-  [test_rule_depowered_armament.gd](../tests/unit/test_rule_depowered_armament.gd),
-  and legacy absence updates in [test_damage_card_effects.gd](../tests/unit/test_damage_card_effects.gd)
-  cover registration, direct blockers/modifiers, command submission safety,
-  resolver integration, and save/load rebuild with zero legacy effects.
-  [test_attack_sim_panel.gd](../tests/unit/test_attack_sim_panel.gd) covers the
-  N5 MT follow-up where a rule-blocked target keeps the Skip Attack affordance
-  available. User MT pass confirmed 2026-05-22 for the combined N3-N5 batch.
-- N6-N8 automated implementation result: [disengaged_fire_control.gd](../src/core/effects/rules/damage_cards/ship/disengaged_fire_control.gd), [coolant_discharge.gd](../src/core/effects/rules/damage_cards/ship/coolant_discharge.gd), and [blinded_gunners.gd](../src/core/effects/rules/damage_cards/ship/blinded_gunners.gd)
-  migrate three attack-facing persistent damage-card behaviours out of
-  `DamageCardEffect`. Disengaged Fire Control is now an `attack_target`
-  blocker/validator using obstruction metadata; Coolant Discharge now enforces
-  the source-text one ship-targeting attack per round with serialized
-  `GameState.ship_target_attack_counts` recorded by `RollDiceCommand`; Blinded
-  Gunners is now an `accuracy_spend` blocker with a defense-step validator that
-  rejects non-empty `locked_tokens`. [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers these cards in the transient `EffectRegistry`, and the
-  stale Coolant close-range damage bonus was removed. Focused tests
-  [test_rule_disengaged_fire_control.gd](../tests/unit/test_rule_disengaged_fire_control.gd),
-  [test_rule_coolant_discharge.gd](../tests/unit/test_rule_coolant_discharge.gd),
-  [test_rule_blinded_gunners.gd](../tests/unit/test_rule_blinded_gunners.gd),
-  and updated legacy absence/save-load/bootstrap tests cover command safety,
-  resolver integration, serialized counts, and zero legacy rebuilds. Full GUT
-  is green at 170 / 3 160 / 6 438 with 0 failures, Phase K lint reports 0
-  violations / 4 allow-listed branches, baseline traces pass hot-seat
-  trace/state plus network peer-state equality, and `git diff --check` is
-  clean. The hot-seat state-hash fixture was updated for the intentional
-  `GameState.serialize()` addition. User MT pass confirmed 2026-05-22.
-- N9-N11 implementation result: [targeter_disruption.gd](../src/core/effects/rules/damage_cards/ship/targeter_disruption.gd), [bomber.gd](../src/core/effects/rules/squadron_keywords/bomber.gd), and [maneuver_rule_resolver.gd](../src/core/movement/maneuver_rule_resolver.gd)
-  migrate Targeter Disruption and Bomber out of legacy runtime effects while
-  centralising remaining maneuver-rule compatibility in core. Targeter
-  Disruption is now a `critical_effect` blocker for `ATTACK /
-  ATTACK_RESOLVE_DAMAGE`; Bomber is now an `attack_damage` modifier that reads
-  the attacking squadron's serialized keyword data; and maneuver yaw,
-  post-maneuver, and speed-change legacy hooks are invoked through
-  `ManeuverRuleResolver` instead of scene/tool-owned rule predicates.
-  A follow-up usability improvement previews Ruptured Engine, Damaged Controls,
-  and Thruster Fissure damage in the activation modal before the player commits
-  the maneuver.
-  [damage_card_effect_factory.gd](../src/core/effects/damage_card_effect_factory.gd)
-  no longer registers Targeter Disruption, and [effect_factory.gd](../src/core/effects/effect_factory.gd)
-  no longer rebuilds `BomberEffect`. Focused tests
-  [test_rule_targeter_disruption.gd](../tests/unit/test_rule_targeter_disruption.gd),
-  [test_rule_bomber_keyword.gd](../tests/unit/test_rule_bomber_keyword.gd), and
-  [test_maneuver_rule_resolver.gd](../tests/unit/test_maneuver_rule_resolver.gd)
-  cover registration, resolver integration, save/load rebuild absence, and
-  movement-bridge preservation and the pre-commit warning label. Full GUT is
-  green at 173 / 3 179 / 6 470 with
-  0 failures, Phase K lint reports 0 violations / 4 allow-listed branches,
-  baseline traces pass hot-seat trace/state plus network peer-state equality,
-  and `git diff --check` is clean. User MT pass confirmed 2026-05-23.
+Status: **IN PROGRESS** — K0 (`664d368`), K1 (`0e0b3c9`), K2 (`cba7a11`), K3 (`ae774d5`), K4 (`827f75c`), K5 (`4b20607`), K6 (`67885b1`), K7 (`9df414f`) complete. K8 split into K8a/K8b/K8c sub-slices: K8a (`ShipActivationController` extraction — dial drop, activation modal lifecycle, Crew Panic, projection sync) committed `f37ec18`. K8b (maneuver execute + overlap resolution + step handlers) committed `27bfdaf`; game_board.gd 2678 → 2134 LOC, ship_activation_controller.gd 658 → 1282 LOC. K9 (`AttackPanelController` — attack-panel mirror sync, attacker-side defender-response routing, Attack Simulator toggle) committed `108305f`; game_board.gd 2134 → 2054 LOC, attack_panel_controller.gd 0 → 159 LOC. K10 (`DebugBoardController`) is next.
 
 ---
 
@@ -604,8 +115,8 @@ eliminating the parallel `NetworkInteractionState` RPC channel. Outcome:
   `SelectRedirectZoneCommand`, `SelectEvadeDieCommand`,
   `RedirectDoneCommand`).
 - **Squadron displacement** flows through `StartDisplacementCommand` +
-  `CommitDisplacementCommand` so the modal opens for the non-moving
-  player named by `interaction_flow.controller_player` (OV-002 fix).
+  `CommitDisplacementCommand` so the modal opens on the squadron-owner
+  peer (OV-002 fix).
 - **Reconnection acceptance gate** ([tests/integration/test_reconnection_mid_attack.gd](../tests/integration/test_reconnection_mid_attack.gd)):
   pure-function chain `serialize → filter_for_player → deserialize → project`
   validates that any peer can reconstruct the correct UI from a single
@@ -621,18 +132,6 @@ and [docs/old/progress_summary.md](old/progress_summary.md).
 ---
 
 ## 4. Open Topics
-
-Phase N: [docs/refactoring_phase_n_plan.md](refactoring_phase_n_plan.md) is
-closed. N0-N15 migrated the remaining persistent damage-card rule surfaces,
-N16-N22 audited and implemented Heavy, Escort, Counter, Bomber, and Swarm,
-N23 retired the legacy runtime effect system, and N24 recorded the settled
-single rule architecture in the implementation plan, project instructions,
-skills, arc42, risks/technical debt, and rule README. Production rule
-extensions now use `RuleRegistry`,
-`RuleSurface`, serialized active state, command-backed mutations, and
-FlowSpec-owned UI affordances. No production `EffectRegistry`, `GameEffect`,
-`DamageCardEffect`, legacy keyword effect class, runtime rebuild factory, or
-legacy hook-string dispatch remains.
 
 ### 4.1 Network Features Pending
 
@@ -655,6 +154,7 @@ Phase I R2.
 |-----|----------|----------|-------|
 | Activated squadron loses ghosted appearance after ship-overlap displacement | Minor (visual only) | 2026-04-12 | Squadron cannot be re-activated (logic correct); only the dimmed visual state is lost. |
 | Repair effect not visible on ship token | Minor (visual only) | 2026-05-01 | Token's hull/shield pip overlay stale after repair until next refresh. Likely missing `ship_shields_changed` / `ship_hull_changed` emit on repair path. |
+| Network: passive-peer auto-resolve damage cards don't refresh visuals | Minor (visual only) | 2026-05-01 | `GameManager._handle_remote_immediate_effect` emits only `command_dials_changed` + `ship_defense_token_changed`; missing `damage_card_flipped` + shield/hull deltas on passive peer. Closed by extracting `_emit_immediate_signals` into a shared helper. |
 
 ### 4.4 Manual Tests Pending
 
@@ -963,14 +463,14 @@ ignored (treated as no-checkpoint for that mode).
 
 Ordered by dependency:
 
-1. **Phase L/M — Modal Lifecycle + Flow Authority** *(in progress; Phase L and M0-M0.7 complete, M1 next)* — see [docs/refactoring_phase_lm_plan.md](refactoring_phase_lm_plan.md). Removes remaining modal-lifecycle PlayMode branches through `UIProjector` + `ModalRouter`, then promotes flow/step handling into declarative specs.
+1. **Phase K — Presentation-Layer Hardening** *(in progress; K0 + K1 done — commits `664d368`, `0e0b3c9`)* — see [docs/refactoring_phase_k_plan.md](refactoring_phase_k_plan.md). Decomposes `game_board.gd` / `attack_executor.gd` / `game_manager.gd` / `save_game_manager.gd`, eliminates the **18** modal-authority `if PlayMode.is_*` branches in `src/scenes/game_board/` (5 session-mode sites allow-listed), extends `UIProjector` + `InteractionFlow` tests, lands `scripts/lint_phase_k.sh`. **In progress before resuming feature work.**
 2. **Saved Games** — Phase J ✅ done (J1–J11)
 3. **Squadron Cards** — full data loading from JSON (already partially loaded)
 4. **Fleet Builder** — point-based fleet construction UI
-5. **Upgrade Cards** — RuleRegistry hook architecture is ready for upgrade rules
+5. **Upgrade Cards** — effect hook system architecture is ready (`EffectRegistry`)
 6. **Terrain / Obstacles** — geometry system extension
 7. **Objectives** — scenario-variant scoring
-8. **Multiplayer (full release)** — depends on G4.7–G4.9, auto-save, and L/M flow hardening
+8. **Multiplayer (full release)** — depends on G4.7–G4.9 + auto-save (post-K)
 
 ---
 

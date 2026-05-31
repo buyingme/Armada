@@ -121,6 +121,8 @@ func test_serialize_populated_roster_orders_entries_expected() -> void:
 	assert_eq(squadrons[0].get("entry_id", ""), "squad-a", "Squadrons should be sorted by id")
 	assert_eq((serialized.get("objectives", {}) as Dictionary).get("assault", ""),
 		"obj_ass_most_wanted", "Serialized roster should include objectives")
+	assert_eq((serialized.get("map", {}) as Dictionary).get("filename", ""),
+		FleetBuilderOptions.DEFAULT_MAP_3X3, "Serialized roster should include map")
 
 
 func test_deserialize_missing_fields_uses_defaults_expected() -> void:
@@ -129,6 +131,7 @@ func test_deserialize_missing_fields_uses_defaults_expected() -> void:
 	assert_eq(roster.format_version, FleetRoster.FORMAT_VERSION, "Missing version should default")
 	assert_eq(roster.kind, FleetRoster.KIND, "Missing kind should default")
 	assert_eq(roster.source, "local", "Missing source should default to local")
+	assert_true(roster.map.is_empty(), "Missing map should default empty")
 	assert_true(roster.ships.is_empty(), "Missing ships should default empty")
 	assert_true(roster.squadrons.is_empty(), "Missing squadrons should default empty")
 
@@ -189,6 +192,7 @@ func _create_objectives() -> FleetObjectiveSelection:
 func _create_populated_roster() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create("fleet-1", "Opening Fleet", "REBEL_ALLIANCE")
 	roster.point_format = {"id": "CORE_SET_180", "limit": 180}
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	roster.description = "A compact Core Set test fleet."
 	roster.created_at = "2026-05-27T00:00:00Z"
 	roster.updated_at = "2026-05-27T00:00:00Z"
@@ -204,6 +208,7 @@ func _create_populated_roster() -> FleetRoster:
 func _create_populated_roster_reversed() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create("fleet-1", "Opening Fleet", "REBEL_ALLIANCE")
 	roster.point_format = {"limit": 180, "id": "CORE_SET_180"}
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	roster.description = "A compact Core Set test fleet."
 	roster.created_at = "2026-05-27T00:00:00Z"
 	roster.updated_at = "2026-05-27T00:00:00Z"

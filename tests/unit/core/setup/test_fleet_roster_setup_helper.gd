@@ -60,7 +60,7 @@ func test_prepare_runtime_duplicate_ship_instances_preserve_identity_expected() 
 
 
 func test_prepare_runtime_deployment_speed_preserved_expected() -> void:
-	var deployments: Array[Dictionary] = [{
+	var deployments: Array[Dictionary] = [ {
 		"owner_player": 0,
 		"component_type": "ship",
 		"roster_entry_id": "rebel-ship-1",
@@ -79,6 +79,37 @@ func test_prepare_runtime_deployment_speed_preserved_expected() -> void:
 	assert_true(result.get("ok", false), "Deployment speed should be accepted")
 	assert_eq(rebel_ship.current_speed, 2,
 		"Ship instance should preserve setup-package deployment speed")
+	assert_almost_eq(rebel_ship.pos_x, 0.5, 0.001,
+		"Ship instance should preserve setup-package deployment X position")
+	assert_almost_eq(rebel_ship.pos_y, 0.8, 0.001,
+		"Ship instance should preserve setup-package deployment Y position")
+	assert_almost_eq(rebel_ship.rotation_deg, 0.0, 0.001,
+		"Ship instance should preserve setup-package deployment rotation")
+
+
+func test_prepare_runtime_squadron_deployment_position_preserved_expected() -> void:
+	var deployments: Array[Dictionary] = [ {
+		"owner_player": 1,
+		"component_type": "squadron",
+		"roster_entry_id": "imperial-squadron-1",
+		"pos_x": 0.35,
+		"pos_y": 0.22,
+		"rotation_deg": 180.0,
+	}]
+	var package: FleetSetupPackage = _package_from_rosters(
+		_rebel_roster(), _imperial_roster(), deployments)
+
+	var result: Dictionary = FleetRosterSetupHelper.prepare_runtime(package)
+	var imperial_squadron: SquadronInstance = _squadron_by_entry(
+		result.get("squadrons", []) as Array, "imperial-squadron-1")
+
+	assert_true(result.get("ok", false), "Squadron deployment should be accepted")
+	assert_almost_eq(imperial_squadron.pos_x, 0.35, 0.001,
+		"Squadron instance should preserve setup-package deployment X position")
+	assert_almost_eq(imperial_squadron.pos_y, 0.22, 0.001,
+		"Squadron instance should preserve setup-package deployment Y position")
+	assert_almost_eq(imperial_squadron.rotation_deg, 180.0, 0.001,
+		"Squadron instance should preserve setup-package deployment rotation")
 
 
 func test_prepare_runtime_missing_ship_data_rejected_expected() -> void:
@@ -144,6 +175,7 @@ func _package_from_rosters(roster_zero: Dictionary, roster_one: Dictionary,
 		"kind": FleetSetupPackage.KIND,
 		"scenario_id": FleetSetupPackageBuilder.DEFAULT_SCENARIO_ID,
 		"point_format": {"id": "STANDARD_400", "limit": 400},
+		"map": FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg"),
 		"first_player": 0,
 		"players": [
 			_player_entry(0, "REBEL_ALLIANCE", roster_zero),
@@ -190,6 +222,7 @@ func _roster(fleet_id: String, faction: String, ships: Array[Dictionary],
 		"name": fleet_id,
 		"faction": faction,
 		"point_format": {"id": "STANDARD_400", "limit": 400},
+		"map": FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg"),
 		"ships": ships,
 		"squadrons": squadrons,
 		"objectives": {},

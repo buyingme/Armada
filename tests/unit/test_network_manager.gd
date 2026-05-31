@@ -303,6 +303,23 @@ func test_command_result_received_signal_exists() -> void:
 		NetworkManager.command_result_received.disconnect(conn["callable"])
 
 
+func test_receive_setup_package_config_stores_pending_payload() -> void:
+	var previous_config: Dictionary = NetworkManager._pending_game_config.duplicate(true)
+	var package: FleetSetupPackage = _network_setup_package()
+
+	NetworkManager._receive_setup_package_config(4242, package.to_hashed_dict())
+	var config: Dictionary = NetworkManager.get_pending_game_config()
+	var setup_package: Dictionary = config.get("setup_package", {}) as Dictionary
+
+	assert_eq(config.get("rng_seed", 0), 4242,
+		"Setup package config should preserve RNG seed.")
+	assert_eq(config.get("scenario_id", ""), package.scenario_id,
+		"Setup package config should expose scenario id.")
+	assert_eq(setup_package.get("package_hash", ""), package.canonical_hash(),
+		"Setup package config should preserve canonical package hash.")
+	NetworkManager._pending_game_config = previous_config
+
+
 func test_role_name_returns_valid_strings() -> void:
 	assert_eq(NetworkManager._role_name(NetworkManager.Role.NONE), "NONE",
 			"NONE role name should be 'NONE'.")
@@ -379,3 +396,48 @@ func test_get_local_lan_ip_returns_string() -> void:
 			"get_local_lan_ip() should return a String.")
 	assert_false(ip.begins_with("127."),
 			"get_local_lan_ip() should never return a loopback IP.")
+
+
+func _network_setup_package() -> FleetSetupPackage:
+	return FleetSetupPackage.deserialize({
+		"format_version": 1,
+		"kind": FleetSetupPackage.KIND,
+		"scenario_id": FleetSetupPackageBuilder.DEFAULT_SCENARIO_ID,
+		"point_format": {"id": "STANDARD_400", "limit": 400},
+		"map": FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg"),
+		"first_player": 0,
+		"players": [
+			_network_player_entry(0, "REBEL_ALLIANCE",
+					_network_roster("rebel-fleet", "REBEL_ALLIANCE",
+							"cr90_corvette_a")),
+			_network_player_entry(1, "GALACTIC_EMPIRE",
+					_network_roster("imperial-fleet", "GALACTIC_EMPIRE",
+							"victory_ii_class_star_destroyer")),
+		],
+		"selected_objective": {},
+		"obstacles": [],
+		"deployments": [],
+		"setup_state": {},
+	})
+
+
+func _network_player_entry(player_index: int,
+		faction: String, roster: Dictionary) -> Dictionary:
+	return {"player_index": player_index, "faction": faction, "roster": roster}
+
+
+func _network_roster(fleet_id: String,
+		faction: String, ship_key: String) -> Dictionary:
+	return {
+		"format_version": 1,
+		"kind": FleetRoster.KIND,
+		"fleet_id": fleet_id,
+		"name": fleet_id,
+		"faction": faction,
+		"point_format": {"id": "STANDARD_400", "limit": 400},
+		"map": FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg"),
+		"ships": [{"entry_id": "%s-ship" % fleet_id, "data_key": ship_key,
+			"upgrades": []}],
+		"squadrons": [],
+		"objectives": {},
+	}

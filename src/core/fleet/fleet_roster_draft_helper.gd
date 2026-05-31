@@ -15,6 +15,7 @@ static func create_default_roster() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create(
 			DEFAULT_FLEET_ID, DEFAULT_NAME, FleetBuilderOptions.default_faction())
 	roster.point_format = FleetBuilderOptions.default_point_format()
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	return roster
 
 
@@ -61,6 +62,17 @@ static func set_objective(roster: FleetRoster, data_key: String) -> bool:
 	if objective == null:
 		return false
 	return roster.objectives.set_objective(objective.category, data_key)
+
+
+## Sets a roster map by filename when it is known and size-classed.
+static func set_map(roster: FleetRoster, filename: String) -> bool:
+	if roster == null:
+		return false
+	var payload: Dictionary = FleetBuilderOptions.map_payload(filename)
+	if payload.is_empty():
+		return false
+	roster.map = payload
+	return true
 
 
 static func _ship_entry(roster: FleetRoster, ship_entry_id: String) -> FleetShipEntry:

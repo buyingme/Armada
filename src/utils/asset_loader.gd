@@ -18,6 +18,7 @@ const UPGRADE_FOLDER: String = "upgrades/"
 const OBJECTIVE_FOLDER: String = "objectives/"
 const OBSTACLE_FOLDER: String = "obstacles/"
 const RULE_FOLDER: String = "rules/"
+const MAP_FOLDER: String = "maps/"
 const JSON_EXTENSION: String = ".json"
 
 ## Result of a validation run.
@@ -133,6 +134,26 @@ const ASSET_MANIFEST: Array[Dictionary] = [
 			"map_3x3_bluegreen_rift_v3.jpg",
 			"map_3x3_distant_planet_v3.jpg",
 			"map_3x3_purple_nebula_v3.jpg",
+			"map_3x6_azure_v4.jpg",
+			"map_3x6_black_v4.jpg",
+			"map_3x6_bluegreen-rift_v4.jpg",
+			"map_3x6_coruscant_v4.jpg",
+			"map_3x6_death-star2_v4.jpg",
+			"map_3x6_death-star_v4.jpg",
+			"map_3x6_distant-planet_v4.jpg",
+			"map_3x6_felucia_v4.jpg",
+			"map_3x6_galactic-backdrop_v4.jpg",
+			"map_3x6_ghostly_geonosis_v4.jpg",
+			"map_3x6_high-orbit_v4.jpg",
+			"map_3x6_hoth_v4.jpg",
+			"map_3x6_planet-and-moon_v4.jpg",
+			"map_3x6_purple-nebula_v4.jpg",
+			"map_3x6_scarif_shieldgate_v4.jpg",
+			"map_3x6_shadow-dimension_v4.jpg",
+			"map_3x6_singularity_v4.jpg",
+			"map_3x6_starkiller_v4.jpg",
+			"map_3x6_tlj_v4.jpg",
+			"map_3x6_yavin4_v4.jpg",
 		],
 		"optional": false,
 	},
@@ -150,7 +171,8 @@ const ASSET_MANIFEST: Array[Dictionary] = [
 		"path": "scenarios/",
 		"files": [
 			"debug_scenario.json",
-			"learning_scenario.json"
+			"learning_scenario.json",
+			"standard_3x6.json"
 		],
 		"optional": false,
 	},
@@ -179,7 +201,7 @@ static func validate_all() -> Dictionary:
 		var result := ValidationResult.new()
 		for filename: String in files:
 			var full_path: String = BASE_PATH + folder + filename
-			if ResourceLoader.exists(full_path):
+			if _asset_exists(full_path, filename):
 				result.found.append(filename)
 			else:
 				result.missing.append(filename)
@@ -209,7 +231,7 @@ static func validate_category(category_name: String) -> ValidationResult:
 			var files: Array = manifest["files"]
 			for filename: String in files:
 				var full_path: String = BASE_PATH + folder + filename
-				if ResourceLoader.exists(full_path):
+				if _asset_exists(full_path, filename):
 					result.found.append(filename)
 				else:
 					result.missing.append(filename)
@@ -218,20 +240,36 @@ static func validate_category(category_name: String) -> ValidationResult:
 
 
 ## Loads a texture asset and returns it (or null on failure).
-## Falls back to [method Image.load_from_file] for PNGs that have not
-## been imported by the Godot editor yet (e.g. newly-added overlay images).
+## Falls back to [method Image.load_from_file] for textures that have not
+## been imported by the Godot editor yet (e.g. newly-added map images).
 static func load_texture(subfolder: String, filename: String) -> Texture2D:
 	var path: String = BASE_PATH + subfolder + filename
 	if ResourceLoader.exists(path):
 		var resource: Resource = ResourceLoader.load(path)
 		if resource is Texture2D:
 			return resource as Texture2D
-	# Fallback: load PNG directly from the filesystem (bypasses import pipeline).
-	if filename.ends_with(".png") and FileAccess.file_exists(path):
+	if _is_texture_filename(filename) and FileAccess.file_exists(path):
 		var image: Image = Image.load_from_file(path)
 		if image != null:
 			return ImageTexture.create_from_image(image)
 	return null
+
+
+## Returns available map image filenames discovered from the maps folder.
+static func list_map_filenames() -> Array[String]:
+	var filenames: Array[String] = []
+	var dir: DirAccess = DirAccess.open(BASE_PATH + MAP_FOLDER)
+	if dir == null:
+		return filenames
+	dir.list_dir_begin()
+	var entry_name: String = dir.get_next()
+	while not entry_name.is_empty():
+		if not dir.current_is_dir() and _is_texture_filename(entry_name):
+			filenames.append(entry_name)
+		entry_name = dir.get_next()
+	dir.list_dir_end()
+	filenames.sort()
+	return filenames
 
 
 ## Loads and parses a ship JSON data file into a [ShipData] resource.
@@ -319,6 +357,20 @@ static func load_rule_reference_data(key: String) -> RuleReferenceData:
 ## Loads a JSON asset and returns the parsed data as a Dictionary (or empty).
 static func load_json(subfolder: String, filename: String) -> Dictionary:
 	return _load_json_at_path(BASE_PATH + subfolder + filename)
+
+
+static func _asset_exists(path: String, filename: String) -> bool:
+	if ResourceLoader.exists(path):
+		return true
+	return _is_texture_filename(filename) and FileAccess.file_exists(path)
+
+
+static func _is_texture_filename(filename: String) -> bool:
+	var lower: String = filename.to_lower()
+	return lower.ends_with(".png") \
+			or lower.ends_with(".jpg") \
+			or lower.ends_with(".jpeg") \
+			or lower.ends_with(".webp")
 
 
 static func _load_catalog_record(subfolder: String, key: String, recursive: bool) -> Dictionary:

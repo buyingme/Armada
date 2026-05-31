@@ -58,6 +58,7 @@ var _side: float = 0.0
 func before_each() -> void:
 	_mover = TokenMover.new()
 	GameScale.initialise_from_dict(_scale_config)
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
 	_side = GameScale.play_area_side_px
 	_bottom_y = _side - _top_y
 

@@ -12,7 +12,7 @@
 ## it, and Ctrl+S saves all positions to the scenario JSON.
 ##
 ## Coordinate system: world (0,0) = top-left corner of the play area.
-## Play area extends to (play_area_side_px, play_area_side_px).
+## Play area extends to GameScale.play_area_size_px.
 ##
 ## Rules Reference: "Setup", p.11; SU-001/002/027; GC-001.
 ## Requirements: DBG-001–041
@@ -178,19 +178,12 @@ func clear_tokens() -> void:
 		child.queue_free()
 
 func _draw() -> void:
-	var side: float = GameScale.play_area_side_px
-	if side <= 0.0:
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return
-	var area: Rect2 = Rect2(Vector2.ZERO, Vector2(side, side))
+	var area: Rect2 = Rect2(Vector2.ZERO, play_area_size)
 	if _map_texture != null:
-		# The map images contain a white border around the 3×3 ft play area.
-		# Extract the central 2160×2160 px region (matching the play area).
-		var tex_w: float = _map_texture.get_width()
-		var tex_h: float = _map_texture.get_height()
-		var crop: float = side # 2160 — the play area we want
-		var src: Rect2 = Rect2(
-				(tex_w - crop) * 0.5, (tex_h - crop) * 0.5, crop, crop)
-		draw_texture_rect_region(_map_texture, area, src)
+		draw_texture_rect_region(_map_texture, area, _map_source_rect(play_area_size))
 	else:
 		draw_rect(area, PLAY_AREA_COLOUR, true)
 	draw_rect(area, BORDER_COLOUR, false, BORDER_WIDTH_PX)
@@ -303,7 +296,7 @@ func _spawn_learning_scenario_tokens(scenario_id: String) -> void:
 func _spawn_tokens_from_loaded_state() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new(
 			GameManager.get_scenario_id())
-	_load_map_texture(setup.get_map_image_filename())
+	_load_map_texture(_map_image_for_loaded_state(setup))
 	_init_scenario_systems_for_loaded_state()
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
@@ -408,11 +401,39 @@ func _load_map_texture(filename: String) -> void:
 	if filename.is_empty():
 		_log.info("No map_image configured in scenario — using solid background.")
 		return
+	GameScale.configure_play_area_for_map_filename(filename)
 	_map_texture = AssetLoader.load_texture("maps/", filename)
 	if _map_texture != null:
 		_log.info("Loaded map background: %s" % filename)
 	else:
 		_log.warn("Map image not found: maps/%s — using solid background." % filename)
+	if _camera != null:
+		_camera.reset_to_default_view()
+
+
+func _map_source_rect(play_area_size: Vector2) -> Rect2:
+	var texture_size: Vector2 = Vector2(_map_texture.get_width(), _map_texture.get_height())
+	var source_size: Vector2 = Vector2(
+			minf(play_area_size.x, texture_size.x),
+			minf(play_area_size.y, texture_size.y))
+	return Rect2((texture_size - source_size) * 0.5, source_size)
+
+
+func _map_image_for_loaded_state(setup: LearningScenarioSetup) -> String:
+	var payload_filename: String = _state_map_filename()
+	if not payload_filename.is_empty():
+		return payload_filename
+	return setup.get_map_image_filename()
+
+
+func _state_map_filename() -> String:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return ""
+	var payload: Variant = gs.objectives.get(FleetSetupBootstrapper.KEY_MAP, {})
+	if payload is Dictionary:
+		return str((payload as Dictionary).get("filename", "")).strip_edges()
+	return ""
 
 ## Instantiates and configures a SquadronToken for the given placement.
 ## Returns the created token.
@@ -479,18 +500,18 @@ func _move_selected_token_to_mouse() -> void:
 	if token == null:
 		return
 	var mouse_world: Vector2 = get_global_mouse_position()
-	var side: float = GameScale.play_area_side_px
+	var play_area_size: Vector2 = GameScale.play_area_size_px
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
 	var enforce_zones: bool = not DebugMode.enabled
 
 	if token is ShipToken:
 		_move_ship_token(
-				token as ShipToken, mouse_world, side,
+				token as ShipToken, mouse_world, play_area_size,
 				top_y, bottom_y, enforce_zones)
 	elif token is SquadronToken:
 		_move_squadron_token(
-				token as SquadronToken, mouse_world, side,
+				token as SquadronToken, mouse_world, play_area_size,
 				top_y, bottom_y, enforce_zones)
 
 	# Check zone crossing for toast warning (debug mode only).
@@ -500,32 +521,32 @@ func _move_selected_token_to_mouse() -> void:
 ## Resolves and applies position for a ship token.
 ## DBG-032, DBG-034 — enforce_zones=false in debug mode.
 func _move_ship_token(
-		token: ShipToken, desired: Vector2, side: float,
+		token: ShipToken, desired: Vector2, play_area_size: Vector2,
 		top_y: float, bottom_y: float, enforce_zones: bool
 ) -> void:
 	var other_ships: Array = _build_other_ship_rects(token)
 	var other_squads: Array = _build_other_squad_circles(token)
-	var new_pos: Vector2 = _token_mover.resolve_ship_position(
+	var new_pos: Vector2 = _token_mover.resolve_ship_position_in_area(
 			desired, token.position,
 			token.get_ship_size(), token.rotation,
 			token.get_faction(),
 			other_ships, other_squads,
-			top_y, bottom_y, side, enforce_zones)
+			top_y, bottom_y, play_area_size, enforce_zones)
 	token.position = new_pos
 
 ## Resolves and applies position for a squadron token.
 ## DBG-032, DBG-034 — enforce_zones=false in debug mode.
 func _move_squadron_token(
-		token: SquadronToken, desired: Vector2, side: float,
+		token: SquadronToken, desired: Vector2, play_area_size: Vector2,
 		top_y: float, bottom_y: float, enforce_zones: bool
 ) -> void:
 	var other_ships: Array = _build_other_ship_rects(token)
 	var other_squads: Array = _build_other_squad_circles(token)
-	var new_pos: Vector2 = _token_mover.resolve_squadron_position(
+	var new_pos: Vector2 = _token_mover.resolve_squadron_position_in_area(
 			desired, token.position,
 			token.get_radius_px(), token.get_faction(),
 			other_ships, other_squads,
-			top_y, bottom_y, side, enforce_zones)
+			top_y, bottom_y, play_area_size, enforce_zones)
 	token.position = new_pos
 
 ## Builds collision descriptors for all ship tokens except [exclude].
@@ -1169,6 +1190,9 @@ func _bootstrap_or_load_board_state() -> void:
 	var scenario_id: String = GameManager.consume_next_scenario_id(
 			LearningScenarioSetup.DEFAULT_SCENARIO_ID)
 	GameManager.bootstrap_game(scenario_id)
+	if GameManager.consume_preloaded_flag():
+		_spawn_tokens_from_loaded_state()
+		return
 	_spawn_learning_scenario_tokens(_scenario_id_for_spawn(scenario_id))
 
 

@@ -9,6 +9,8 @@ func test_deserialize_serialize_round_trip_expected() -> void:
 	var serialized: Dictionary = package.serialize()
 	assert_eq(serialized.get("kind", ""), FleetSetupPackage.KIND, "Should keep package kind")
 	assert_eq(serialized.get("scenario_id", ""), "standard_3x6", "Should keep scenario id")
+	assert_eq((serialized.get("map", {}) as Dictionary).get("filename", ""),
+		"map_3x6_distant-planet_v4.jpg", "Should keep setup map")
 	assert_eq((serialized.get("players", []) as Array).size(), 2,
 		"Should keep embedded player roster entries")
 	assert_eq((serialized.get("setup_state", {}) as Dictionary).get("objective_key", ""),
@@ -60,7 +62,8 @@ func _create_package_data() -> Dictionary:
 		"format_version": 1,
 		"kind": "fleet_setup_package",
 		"scenario_id": "standard_3x6",
-		"point_format": {"id": "CORE_SET_180", "limit": 180},
+		"point_format": {"id": "STANDARD_400", "limit": 400},
+		"map": _map_payload(),
 		"first_player": 0,
 		"players": [_create_player_entry(0), _create_player_entry(1)],
 		"selected_objective": {},
@@ -86,11 +89,17 @@ func _create_roster(player_index: int) -> Dictionary:
 		"kind": "fleet_roster",
 		"fleet_id": "local-%d" % player_index,
 		"name": "Roster %d" % player_index,
+		"point_format": {"id": "STANDARD_400", "limit": 400},
 		"created_at": "2026-05-26T00:00:00Z",
 		"updated_at": "2026-05-26T00:00:00Z",
 		"source": "local",
 		"future_sync": {"owner_id": "", "remote_id": "", "revision": 0},
+		"map": _map_payload(),
 		"ships": [{"entry_id": "ship-%d" % player_index, "data_key": ship_key}],
 		"squadrons": [],
 		"objectives": {},
 	}
+
+
+func _map_payload() -> Dictionary:
+	return FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg")

@@ -30,6 +30,9 @@ var faction: String = ""
 ## Point-format metadata, for example {"id": "CORE_SET_180", "limit": 180}.
 var point_format: Dictionary = {}
 
+## Map metadata selected for this roster. The filename determines 3x3/3x6 size.
+var map: Dictionary = {}
+
 ## Local creation timestamp metadata; ignored by setup-package gameplay hashes.
 var created_at: String = ""
 
@@ -160,6 +163,7 @@ func serialize() -> Dictionary:
 		"description": description,
 		"faction": faction,
 		"point_format": point_format.duplicate(true),
+		"map": map.duplicate(true),
 		"created_at": created_at,
 		"updated_at": updated_at,
 		"source": source,
@@ -180,6 +184,7 @@ static func deserialize(data: Dictionary) -> FleetRoster:
 	roster.description = str(data.get("description", ""))
 	roster.faction = str(data.get("faction", ""))
 	roster.point_format = _read_dict(data.get("point_format", {}))
+	roster.map = _read_dict(data.get("map", {}))
 	roster.created_at = str(data.get("created_at", ""))
 	roster.updated_at = str(data.get("updated_at", ""))
 	roster.source = str(data.get("source", "local"))

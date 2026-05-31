@@ -11,6 +11,8 @@ func test_create_default_roster_core_set_180_expected() -> void:
 	assert_eq(roster.faction, "REBEL_ALLIANCE", "Default draft should be Rebel")
 	assert_eq(int(roster.point_format.get("limit", 0)), 180,
 		"Default draft should use the Core Set 180 limit")
+	assert_eq(roster.map.get("grid", ""), FleetBuilderOptions.MAP_GRID_3X3,
+		"Default Core Set draft should choose a 3x3 map")
 
 
 func test_add_ship_and_squadron_updates_roster_expected() -> void:
@@ -47,3 +49,14 @@ func test_set_objective_uses_catalog_category_expected() -> void:
 	assert_true(updated, "Draft helper should set a loadable objective")
 	assert_eq(roster.objectives.assault_objective_key, "obj_ass_most_wanted",
 		"Most Wanted should populate the Assault objective slot")
+
+
+func test_set_map_uses_filename_size_prefix_expected() -> void:
+	var roster: FleetRoster = FleetRosterDraftHelper.create_default_roster()
+
+	var updated: bool = FleetRosterDraftHelper.set_map(
+			roster, "map_3x6_distant-planet_v4.jpg")
+
+	assert_true(updated, "Draft helper should accept known map filenames")
+	assert_eq(roster.map.get("grid", ""), FleetBuilderOptions.MAP_GRID_3X6,
+		"Map payload should derive 3x6 grid from filename")

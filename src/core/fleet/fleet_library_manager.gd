@@ -256,6 +256,9 @@ func _normalize_roster_payload(payload: Dictionary, source: String) -> Dictionar
 		normalized["created_at"] = String(normalized.get("updated_at", ""))
 	if not normalized.has("point_format"):
 		normalized["point_format"] = {"id": "CUSTOM", "limit": 400}
+	if _needs_default_map(normalized.get("map", {})):
+		normalized["map"] = FleetBuilderOptions.default_map_for_point_format(
+				normalized.get("point_format", {}) as Dictionary)
 	if not normalized.has("future_sync"):
 		normalized["future_sync"] = {}
 	if not normalized.has("ships"):
@@ -265,6 +268,10 @@ func _normalize_roster_payload(payload: Dictionary, source: String) -> Dictionar
 	if not normalized.has("objectives"):
 		normalized["objectives"] = {}
 	return normalized
+
+
+func _needs_default_map(value: Variant) -> bool:
+	return not value is Dictionary or (value as Dictionary).is_empty()
 
 
 func _active_or_requested_version(record: Dictionary,

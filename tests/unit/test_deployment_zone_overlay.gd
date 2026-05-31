@@ -50,22 +50,35 @@ func before_each() -> void:
 # Top line
 # ---------------------------------------------------------------------------
 
-func test_top_line_y_equals_distance_band_3() -> void:
-	# Assert — distance band 3 = 434 px
+func test_top_line_negative_for_3x3_full_setup_area() -> void:
+	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
+	assert_eq(top_y, -1.0,
+			"3x3 maps should not expose standard deployment-zone lines")
+
+
+func test_top_line_y_equals_distance_band_3_for_3x6() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	assert_almost_eq(top_y, 434.0, 0.1,
-			"Top deployment line should be at distance band 3 (434 px)")
+			"3x6 top deployment line should stay at distance band 3 (434 px)")
 
 
 # ---------------------------------------------------------------------------
 # Bottom line
 # ---------------------------------------------------------------------------
 
-func test_bottom_line_y_equals_play_area_minus_distance_band_3() -> void:
-	var expected: float = GameScale.play_area_side_px - 434.0
+func test_bottom_line_negative_for_3x3_full_setup_area() -> void:
+	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
+	assert_eq(bottom_y, -1.0,
+			"3x3 maps should not expose standard deployment-zone lines")
+
+
+func test_bottom_line_y_equals_play_area_height_minus_distance_band_3_for_3x6() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
+	var expected: float = GameScale.play_area_size_px.y - 434.0
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
 	assert_almost_eq(bottom_y, expected, 0.1,
-			"Bottom deployment line should be at play_area - distance band 3")
+			"3x6 bottom deployment line should use play-area height")
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +101,7 @@ func test_top_line_negative_when_no_bands() -> void:
 		"range_bands": {},
 		"distance_bands_px": [],
 	})
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
 	# Assert
 	assert_eq(DeploymentZoneOverlay.get_top_line_y(), -1.0,
 			"Should return -1 when distance bands are not loaded")
@@ -108,6 +122,7 @@ func test_bottom_line_negative_when_no_bands() -> void:
 		"range_bands": {},
 		"distance_bands_px": [],
 	})
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
 	assert_eq(DeploymentZoneOverlay.get_bottom_line_y(), -1.0,
 			"Should return -1 when distance bands are not loaded")
 
@@ -117,8 +132,9 @@ func test_bottom_line_negative_when_no_bands() -> void:
 # ---------------------------------------------------------------------------
 
 func test_deployment_lines_symmetric() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
-	var centre: float = GameScale.play_area_side_px * 0.5
+	var centre: float = GameScale.play_area_size_px.y * 0.5
 	assert_almost_eq(centre - top_y, bottom_y - centre, 0.1,
 			"Deployment lines should be symmetric around the board centre")

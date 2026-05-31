@@ -89,6 +89,20 @@ func test_serialize_round_trip() -> void:
 	assert_eq(restored.player_states.size(), 2, "Player states should survive serialization")
 
 
+func test_serialize_round_trip_preserves_objectives() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.objectives = {
+		"selected_objective": {"data_key": "obj_ass_opening_salvo"},
+		"setup_package_hash": "abc123",
+	}
+
+	var restored: GameState = GameState.deserialize(state.serialize())
+
+	assert_eq(restored.objectives, state.objectives,
+		"Objectives/setup payload should survive serialization")
+
+
 # --- Player State ---
 
 func test_player_state_default_faction() -> void:

@@ -314,10 +314,10 @@ func process_squadron_movement() -> void:
 	if offset.length() > _squadron_move_max_dist:
 		desired = _squadron_move_original_pos + \
 				offset.normalized() * _squadron_move_max_dist
-	var side: float = GameScale.play_area_side_px
+	var play_area_size: Vector2 = GameScale.play_area_size_px
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
-	_move_squadron_token.call(token, desired, side, top_y, bottom_y, false)
+	_move_squadron_token.call(token, desired, play_area_size, top_y, bottom_y, false)
 	var post_offset: Vector2 = token.global_position - \
 			_squadron_move_original_pos
 	if post_offset.length() > _squadron_move_max_dist:

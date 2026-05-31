@@ -43,6 +43,8 @@ func test_validate_all_maps_finds_jpg_files() -> void:
 	var maps_result: AssetLoader.ValidationResult = results["maps"]
 	assert_true(maps_result.found.has("map_3x3_azure_v3.jpg"),
 		"Should find map_3x3_azure_v3.jpg in maps/")
+	assert_true(maps_result.found.has("map_3x6_distant-planet_v4.jpg"),
+		"Should find unimported 3x6 JPG map files in maps/")
 
 
 func test_validate_all_dice_finds_die_pngs() -> void:
@@ -173,6 +175,15 @@ func test_list_obstacle_keys_includes_core_obstacles_expected() -> void:
 	assert_true(keys.has("station"), "Obstacle keys should include the station")
 
 
+func test_list_map_filenames_includes_size_prefixed_maps_expected() -> void:
+	var filenames: Array[String] = AssetLoader.list_map_filenames()
+
+	assert_true(filenames.has("map_3x3_distant_planet_v3.jpg"),
+		"Map discovery should include 3x3 maps")
+	assert_true(filenames.has("map_3x6_distant-planet_v4.jpg"),
+		"Map discovery should include 3x6 maps")
+
+
 # --- Typed Catalog Loading ---
 
 func test_load_upgrade_data_nested_key_expected() -> void:
@@ -224,6 +235,13 @@ func test_load_texture_existing_png() -> void:
 	var tex: Texture2D = AssetLoader.load_texture("dice/", "die_red_hit.png")
 	assert_not_null(tex,
 		"Should load die_red_hit.png as Texture2D")
+
+
+func test_load_texture_unimported_jpg_map_expected() -> void:
+	var tex: Texture2D = AssetLoader.load_texture("maps/", "map_3x6_distant-planet_v4.jpg")
+
+	assert_not_null(tex,
+		"Should load JPG maps directly when Godot import metadata is absent")
 
 
 func test_load_texture_nonexistent_returns_null() -> void:

@@ -79,6 +79,7 @@ minimum fleet-builder rule set comes from `Resources/SWM-RULES-REFERENCE-GUIDE-1
 | Fleet points | Fleet total cannot exceed the agreed total; Standard is 400 and Core Set recommendation is 180. | `FleetValidator.validate_point_total()` |
 | Faction purity | Fleet aligns with one faction and cannot include cards aligned with another faction, except dual-faction cards. | `FleetValidator.validate_faction_alignment()` |
 | Objectives | Each player chooses three objectives, one per category: Assault, Defense, Navigation. | `FleetValidator.validate_objectives()` |
+| Play area maps | Core Set/180-point matches use 3' x 3' maps; 300- and 400-point matches use 3' x 6' maps. Map size is derived from the `map_3x3...` or `map_3x6...` filename prefix. | `FleetValidator.validate_map_selection()` |
 | Commander/flagship | A fleet must have exactly one flagship; a commander creates the flagship and a fleet cannot have more than one commander. | `FleetValidator.validate_flagship()` |
 | Squadron cap | Squadron points cannot exceed one third of the agreed fleet total, rounded up. | `FleetValidator.validate_squadron_points()` |
 | Unique squadrons | A fleet can contain one unique squadron with defense tokens for each 100 points of agreed fleet total. | `FleetValidator.validate_unique_squadron_limit()` |
@@ -158,7 +159,7 @@ should preserve the user's goals but split MVP from later infrastructure.
 | ID | Requirement |
 |---|---|
 | FB-REQ-001 | Users can create, rename, duplicate, delete, save, and load local fleets. |
-| FB-REQ-002 | A fleet has name, description, faction, point format, point limit, ships, squadrons, upgrades, and three objectives. |
+| FB-REQ-002 | A fleet has name, description, faction, point format, point limit, map, ships, squadrons, upgrades, and three objectives. |
 | FB-REQ-003 | Supported point formats are Standard 400, Core Set 180, and custom agreed totals. |
 | FB-REQ-004 | The catalog supports search/filter by faction, component type, point cost, upgrade slot/type, wave, expansion, keywords, and search tags. |
 | FB-REQ-005 | The builder calculates total points, ship points, squadron points, and upgrade points continuously. |
@@ -171,6 +172,7 @@ should preserve the user's goals but split MVP from later infrastructure.
 | FB-REQ-012 | The fleet builder includes a Rules Reference section where users can browse generic game rules and component-specific rules from the same catalog used by validators and implementation tracking. |
 | FB-REQ-013 | Network setup consumes the host and client's expanded fleet rosters through the same setup package contract used by hot-seat setup; the host validates it and both peers confirm the same package hash before match start. |
 | FB-REQ-014 | Rule integration for objectives, upgrades, obstacles, squadron abilities, and setup effects is hot-seat, replay, save/load, and network safe from the slice that makes the rule live. |
+| FB-REQ-015 | Fleet maps are selected from separate filename-prefixed pools: `map_3x3...` for 180-point matches and `map_3x6...` for 300- and 400-point matches. Setup uses the first player's roster map. |
 
 ### 3.2 Deferred Requirements
 
@@ -227,6 +229,11 @@ first.
     "limit": 180,
     "custom_label": ""
   },
+  "map": {
+    "filename": "map_3x3_distant_planet_v3.jpg",
+    "grid": "3x3",
+    "label": "3x3 Distant Planet"
+  },
   "ships": [
     {
       "entry_id": "ship-1",
@@ -270,6 +277,8 @@ Rules:
 - `validation_snapshot` may be stored for UI convenience later, but it is never
   authoritative. Validators must recompute from catalog data.
 - The roster contract must round-trip unknown future fields without crashing.
+- Map size is derived from the selected filename prefix. The `grid` and `label`
+  fields are convenience metadata and must stay consistent with `filename`.
 - Local fleet ids are storage conveniences. A match-ready setup package must be
   able to embed the full roster payload so network peers and replays do not need
   access to another machine's local fleet library.
@@ -287,6 +296,11 @@ Rules:
   "point_format": {
     "id": "STANDARD_400",
     "limit": 400
+  },
+  "map": {
+    "filename": "map_3x6_distant-planet_v4.jpg",
+    "grid": "3x6",
+    "label": "3x6 Distant Planet"
   },
   "first_player": 0,
   "players": [
@@ -389,6 +403,9 @@ Rules:
   network exchange, replay capture, or game start.
 - All placements use normalized coordinates.
 - Setup package validation must run before it is converted to `GameState`.
+- The setup package map is copied from the first player's embedded roster and is
+  included in the canonical package hash because play-area size affects setup,
+  deployment, and movement geometry.
 - Network setup maps peers to `player_index` outside the core package. Core
   setup JSON stores player indices and owner fields, not transport-specific peer
   ids.
@@ -767,7 +784,7 @@ test gate is passed.
 | Acceptance | Validator returns structured JSON-safe errors/warnings with rule ids, affected roster entry ids, source references, severity, and deterministic ordering for UI, import/export, and network setup rejection. |
 | Tests | Legal 180/400/custom fleets, over-limit fleets, mixed faction, zero/two commanders, excessive squadron points, duplicate unique names, invalid objective sets. |
 | Verification | Targeted GUT, full GUT if validator touches shared models, `bash scripts/lint_phase_k.sh`. |
-| Status | Complete as of 2026-05-27: added `FleetValidator` baseline rules for point limit, faction alignment, commander/flagship count, one-third squadron cap, unique upgrade/squadron limits, and objective-category validation with deterministic `FleetValidationResult` issue payloads. |
+| Status | Complete as of 2026-05-27 and extended on 2026-05-30: added `FleetValidator` baseline rules for point limit, faction alignment, commander/flagship count, one-third squadron cap, unique upgrade/squadron limits, objective-category validation, and filename-driven map size validation with deterministic `FleetValidationResult` issue payloads. |
 
 ### FB7 - Upgrade Assignment Validation
 
@@ -804,7 +821,7 @@ test gate is passed.
 | Architecture gate | UI only calls catalog/roster/validator/library APIs. It does not implement fleet rules and adds no PlayMode branches. |
 | Tests | UI construction, search/filter interaction, add/remove flows, validation rendering, rules-reference browsing/navigation, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual create/edit invalid/legal fleet and rules-reference browsing pass. |
-| Status | Implemented as of 2026-05-28 and refined through 2026-05-30: added the local fleet-builder scene, menu entry, core-backed draft mutation and option helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing with selected-objective inspection, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. Manual UI pass remains the final gate before commit. |
+| Status | Implemented as of 2026-05-28 and refined through 2026-05-30: added the local fleet-builder scene, menu entry, core-backed draft mutation and option helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing with selected-objective inspection, map selection below objectives with point-format filtering, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. Manual UI pass remains the final gate before commit. |
 
 ### FB10 - Library, Import, Export, And Version UI
 
@@ -825,10 +842,10 @@ test gate is passed.
 | Goal | Bridge two validated rosters into a deterministic pre-game setup package usable by hot-seat, network, replay, and bootstrap paths. |
 | Scope | Add `FleetSetupPackage`, `SetupValidationResult`, first-player selection, objective choice from second player's objectives, package serialization, canonical package hashing, match-ready expansion from local fleet ids to full roster payloads, host/client player-index mapping rules, and setup-state scaffolding derived from `ObjectiveData.setup_effects`. |
 | Primary files | New `src/core/setup/*.gd`; setup flow scene/controller skeleton remains deferred to the setup/deployment presentation slices. |
-| Acceptance | Two valid fleets produce a match-ready setup package; invalid rosters cannot start setup; selected objective records owner/chosen-by player; objective setup requirements such as objective ships, objective token placements, set-aside units, and deployment-order overrides are represented as JSON-safe setup state; a package containing one host roster and one client roster can be validated and hashed identically on both peers before game start. |
+| Acceptance | Two valid fleets produce a match-ready setup package; invalid rosters cannot start setup; selected objective records owner/chosen-by player; the first player's roster map is copied into the package; objective setup requirements such as objective ships, objective token placements, set-aside units, and deployment-order overrides are represented as JSON-safe setup state; a package containing one host roster and one client roster can be validated and hashed identically on both peers before game start. |
 | Tests | Package round trip, invalid fleet rejection, objective choice ownership, first-player persistence, representative objective setup-state extraction, local-id expansion to embedded rosters, host/client package equality, canonical hash stability. |
 | Verification | `godot --headless --import`, targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` once the package can bootstrap or mirror network state. |
-| Status | Implemented as of 2026-05-30: extended `FleetSetupPackage` with JSON-safe setup state, added `SetupValidationResult`, and added `FleetSetupPackageBuilder` for validated two-roster packages, local fleet-id expansion, objective ownership/chosen-by metadata, objective setup-effect scaffolding, and host/client roster-to-player mapping without peer ids in core JSON. Setup flow UI and runtime bootstrap remain in FB12-FB14. |
+| Status | Implemented as of 2026-05-30: extended `FleetSetupPackage` with JSON-safe setup state and first-player map payload, added `SetupValidationResult`, and added `FleetSetupPackageBuilder` for validated two-roster packages, local fleet-id expansion, objective ownership/chosen-by metadata, objective setup-effect scaffolding, and host/client roster-to-player mapping without peer ids in core JSON. Setup flow UI and runtime bootstrap remain in FB12-FB14. |
 
 ### FB12 - Roster To Runtime Instance Conversion
 
@@ -840,7 +857,7 @@ test gate is passed.
 | Acceptance | Runtime instances preserve owner player, data key, initial speed policy, fleet points, and roster entry identity for deployment mapping; the conversion depends only on the embedded setup package and static catalog, not a local fleet library. |
 | Tests | Rebel/Imperial roster conversion, duplicate ship instances, squadron conversion, missing data rejection, host/client conversion equality from the same package, save/load of any new runtime fields. |
 | Verification | Targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`. |
-| Status | Implemented as of 2026-05-30: added `FleetRosterSetupHelper` to convert embedded setup-package rosters into runtime `PlayerState`, `ShipInstance`, and `SquadronInstance` data without local library access; `ShipInstance` and `SquadronInstance` now serialize roster entry identity and roster-derived fleet points, and scoring consumes runtime ship/squadron points with static-data fallback. Game bootstrap remains FB13. |
+| Status | Implemented as of 2026-05-30: added `FleetRosterSetupHelper` to convert embedded setup-package rosters into runtime `PlayerState`, `ShipInstance`, and `SquadronInstance` data without local library access; `ShipInstance` and `SquadronInstance` now serialize roster entry identity and roster-derived fleet points, and scoring consumes runtime ship/squadron points with static-data fallback. Deployment positions are consumed by FB13 bootstrap. |
 
 ### FB13 - Game Bootstrap From Setup Package
 
@@ -849,16 +866,29 @@ test gate is passed.
 | Goal | Start hot-seat and network matches from the same setup package without duplicating scenario spawn logic. |
 | Scope | Add a setup-package entry point in `GameManager`, let lobby/start flows provide a package for hot-seat or network, generalize board spawn/bind to accept prepared instances plus placements, keep scenario start path intact. |
 | Primary files | `src/autoload/game_manager.gd`, `src/scenes/game_board/game_board.gd`, setup helpers. |
-| Acceptance | Existing scenario starts still pass; a setup package starts a board with correct player states, damage deck, RNG, map, ships, and squadrons in hot-seat and network modes; host/client final state hashes match after network start. |
+| Acceptance | Existing scenario starts still pass; a setup package starts a board with correct player states, damage deck, RNG, first-player roster map, ships, and squadrons in hot-seat and network modes; host/client final state hashes match after network start. |
 | Tests | Scenario path regression, setup-package bootstrap, network setup-package bootstrap, loaded-state spawn regression, token binding assertions. |
 | Verification | Full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual hot-seat and two-process network start-from-fleet pass. |
+| Status | Implemented as of 2026-05-30: added `FleetSetupBootstrapper` as the core package-to-`GameState` helper, added `GameManager` setup-package start/next-bootstrap entry points, added network pending setup-package config, reused the loaded-state board spawn path for package starts, preserved deployment positions in runtime instances, serialized `GameState.objectives`, carries the first-player roster map through state for board loading, and added a `standard_3x6` map-only scenario shell for package-start fallback map loading. |
+
+### FB13A - Rectangular Play-Area Runtime Support
+
+| Field | Plan |
+|---|---|
+| Goal | Make the runtime geometry, camera, overlays, and token movement honor rectangular 3x3 and 3x6 play areas instead of assuming a square board. |
+| Scope | Replace remaining `play_area_side_px` movement/clamp/deployment call paths with `play_area_size_px`, keep `play_area_side_px` only as a legacy height alias where unavoidable, update board drag/move helpers, deployment-zone overlay geometry, and debug/setup overlays so x bounds use board width and y bounds use board height. |
+| Primary files | `src/core/movement/token_mover.gd`, `src/scenes/game_board/game_board.gd`, `src/scenes/game_board/squadron_phase_controller.gd`, `src/scenes/game_board/deployment_zone_overlay.gd`, `src/scenes/game_board/board_camera.gd`, targeted overlays/controllers still extending by square side. |
+| Acceptance | A 3x3 map clamps/moves exactly within a 3x3 board; a 3x6 map clamps/moves exactly within a 3x6 board; board camera frames the full rectangle; deployment/drag helpers use width for x bounds and height for y bounds; no runtime path silently crops interaction to a square on 3x6 maps. |
+| Tests | `GameScale` rectangular sizing, `TokenMover` width/height clamping, deployment-zone overlay geometry, board camera framing, and targeted board/runtime regressions for 3x6 map payload starts. |
+| Verification | Targeted GUT for geometry/runtime files, full GUT, `bash scripts/lint_phase_k.sh`, manual 3x3 and 3x6 board interaction pass before FB14 placement UI. |
+| Status | Implemented as of 2026-05-30: runtime geometry now routes token movement, board drag helpers, deployment-zone geometry, attack-simulator arc clipping, and firing-arc debug extents through rectangular play-area sizing; 3x3 maps use the full play area as setup area while still keeping distance-3 deployment-zone boundaries, and 3x6 maps keep the standard height-based deployment bounds. Focused/full GUT and `bash scripts/lint_phase_k.sh` pass. Manual 3x3 and 3x6 board interaction remains the final gate before FB14 placement UI. |
 
 ### FB14 - Deployment And Obstacle Placement Flow
 
 | Field | Plan |
 |---|---|
 | Goal | Let setup choose/place obstacles and deploy fleet components using normalized positions. |
-| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
+| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. The validators must account for 3x3 maps using the full play area as setup area while ships still deploy within distance 1-3 of their player edge, and 3x6 maps using the standard 3x4 setup area plus distance 1-3 deployment zones from the RRG. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
 | Primary files | `src/core/setup/*deployment*.gd`, `src/core/setup/*obstacle*.gd`, setup flow scene/widgets, `src/models/token_placement.gd` reuse. |
 | Acceptance | User can place Core Set obstacles and deploy ships/squadrons, then serialize a setup package with normalized placements that hot-seat and network start paths can consume identically. |
 | Tests | Placement serialization, bounds validation, obstacle set completeness, deployment-zone warnings/errors, no pixel values in payloads, host/client placement package equality. |

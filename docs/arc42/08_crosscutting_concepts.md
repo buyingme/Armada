@@ -83,6 +83,11 @@ loads static ship, squadron, and upgrade data from the catalog, creates
 missing catalog records before bootstrap. Runtime ship and squadron instances
 serialize `roster_entry_id` plus roster-derived `fleet_points`, so deployment
 mapping and save/load do not depend on local fleet-library files.
+`FleetSetupBootstrapper` is the setup-package-to-`GameState` seam: it consumes
+that runtime conversion, installs initiative, seeded RNG, shared damage deck,
+and objective/setup payload into `GameState.objectives`. `GameManager` then
+marks package starts as preloaded so `GameBoard` can reuse the existing
+loaded-state token spawn and binding path.
 `ScoringCalculator` reads those runtime fleet-point values for destroyed
 entities, falling back to static card costs for older saves and scenario-only
 instances.

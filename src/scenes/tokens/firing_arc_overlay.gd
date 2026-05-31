@@ -74,8 +74,15 @@ func set_arc_boundaries(local_boundaries: Dictionary) -> void:
 	for bd: Dictionary in boundary_defs:
 		_add_boundary_from_def(bd, local_boundaries)
 	# Set debug extend distance based on play area size.
-	_debug_extend_px = GameScale.play_area_side_px * 2.0
+	_debug_extend_px = _compute_debug_extend_px()
 	queue_redraw()
+
+
+func _compute_debug_extend_px() -> float:
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	if play_area_size.x > 0.0 and play_area_size.y > 0.0:
+		return play_area_size.length() * 2.0
+	return GameScale.play_area_side_px * 2.0
 
 
 ## Returns the 4 boundary line definitions (FL, FR, RL, RR).

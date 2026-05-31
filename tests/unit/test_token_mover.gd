@@ -305,6 +305,37 @@ func test_imperial_squadron_blocked_by_deploy_zone() -> void:
 # Play area clamping
 # ---------------------------------------------------------------------------
 
+func test_resolve_ship_in_rectangular_play_area_preserves_valid_wide_x() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	var desired: Vector2 = Vector2(3200.0, 1000.0)
+	var current: Vector2 = Vector2(1000.0, 1000.0)
+	var result: Vector2 = _mover.resolve_ship_position_in_area(
+			desired, current,
+			Constants.ShipSize.SMALL, 0.0,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], [], -1.0, -1.0, play_area_size)
+	assert_almost_eq(result.x, desired.x, 1.0,
+			"3x6 movement should keep legal X values beyond the square height alias")
+	assert_true(result.x > GameScale.play_area_side_px,
+			"3x6 movement should use rectangular width, not the square-side alias")
+
+
+func test_resolve_squadron_in_rectangular_play_area_clamps_to_width() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var desired: Vector2 = Vector2(play_area_size.x + 250.0, 500.0)
+	var current: Vector2 = Vector2(1000.0, 500.0)
+	var result: Vector2 = _mover.resolve_squadron_position_in_area(
+			desired, current, radius,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], [], -1.0, -1.0, play_area_size)
+	assert_almost_eq(result.x, play_area_size.x, 1.0,
+			"3x6 movement should clamp X against the rectangular board width")
+	assert_almost_eq(result.y, desired.y, 1.0,
+			"Rectangular X clamping should not disturb legal Y values")
+
 func test_resolve_squadron_clamped_to_play_area() -> void:
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
 	var desired: Vector2 = Vector2(-100.0, -100.0)

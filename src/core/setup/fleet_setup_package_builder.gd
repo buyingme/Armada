@@ -147,6 +147,7 @@ func _create_package(rosters: Array[FleetRoster], first_player: int,
 	package.scenario_id = scenario_id
 	package.first_player = first_player
 	package.point_format = rosters[0].point_format.duplicate(true)
+	package.map = rosters[first_player].map.duplicate(true)
 	package.players = [_player_entry(0, rosters[0]), _player_entry(1, rosters[1])]
 	package.selected_objective = _selected_objective_payload(
 			objective_data, owner_player, first_player)

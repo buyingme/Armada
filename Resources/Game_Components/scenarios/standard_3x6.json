@@ -1,0 +1,9 @@
+{
+    "_comment": "Map-only scenario shell for fleet-builder setup-package starts. Runtime ships, squadrons, obstacles, and deployments come from the setup package rather than this JSON file.",
+    "_source": "Fleet builder setup package default",
+    "_status": "SETUP_PACKAGE_MAP_ONLY",
+    "map_image": "map_3x6_distant-planet_v4.jpg",
+    "scenario_name": "Standard 3x6",
+    "tokens": [],
+    "use_fixed_round1_commands": false
+}

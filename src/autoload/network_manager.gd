@@ -143,7 +143,8 @@ var _lobby_password: String = ""
 var _local_player_index: int = -1
 
 ## Pending game configuration received from the server before scene transition.
-## Contains [code]rng_seed[/code] and [code]scenario_id[/code].
+## Contains [code]rng_seed[/code], [code]scenario_id[/code], and optionally
+## a [code]setup_package[/code] dictionary for fleet-builder starts.
 ## Set by [method broadcast_game_config] (server) or [method _receive_game_config]
 ## (client).  Consumed by [GameBoard._ready].  G4.6.5.2/3.
 var _pending_game_config: Dictionary = {}
@@ -706,6 +707,24 @@ func broadcast_game_config(rng_seed: int, scenario_id: String) -> void:
 			rng_seed, scenario_id])
 
 
+## Server: broadcasts deterministic game configuration with a setup package.
+## The package remains player-indexed core JSON; no transport peer ids are added.
+func broadcast_setup_package_config(
+		rng_seed: int,
+		package: FleetSetupPackage) -> void:
+	if role != Role.SERVER:
+		_log.warn("broadcast_setup_package_config() called but not server.")
+		return
+	if package == null:
+		_log.warn("broadcast_setup_package_config() called with null package.")
+		return
+	var package_data: Dictionary = package.to_hashed_dict()
+	_pending_game_config = _setup_package_config(rng_seed, package_data)
+	_receive_setup_package_config.rpc(rng_seed, package_data)
+	_log.info("Broadcast setup package config: seed=%d, hash=%s." % [
+			rng_seed, package.canonical_hash().substr(0, 12)])
+
+
 ## Server → All: delivers game configuration before scene transition.
 ## G4.6.5.3.
 @rpc("authority", "reliable")
@@ -716,6 +735,25 @@ func _receive_game_config(rng_seed: int, scenario_id: String) -> void:
 	}
 	_log.info("Received game config: seed=%d, scenario='%s'." % [
 			rng_seed, scenario_id])
+
+
+## Server -> All: delivers a setup-package start before scene transition.
+@rpc("authority", "reliable")
+func _receive_setup_package_config(
+		rng_seed: int,
+		package_data: Dictionary) -> void:
+	_pending_game_config = _setup_package_config(rng_seed, package_data)
+	_log.info("Received setup package config: seed=%d, hash=%s." % [
+			rng_seed, str(package_data.get("package_hash", "")).substr(0, 12)])
+
+
+func _setup_package_config(rng_seed: int, package_data: Dictionary) -> Dictionary:
+	var package: FleetSetupPackage = FleetSetupPackage.deserialize(package_data)
+	return {
+		"rng_seed": rng_seed,
+		"scenario_id": package.scenario_id,
+		"setup_package": package_data.duplicate(true),
+	}
 
 
 ## Server: notifies all peers that the host has saved the game.  The

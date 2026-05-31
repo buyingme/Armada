@@ -95,7 +95,7 @@ static func _create_instances(package: FleetSetupPackage, entries: Array[Diction
 	for player_index: int in range(Constants.PLAYER_COUNT):
 		var roster: FleetRoster = _roster_from_player_entry(entries[player_index])
 		_append_ship_instances(package, roster, player_index, ships, validation)
-		_append_squadron_instances(roster, player_index, squadrons, validation)
+		_append_squadron_instances(package, roster, player_index, squadrons, validation)
 
 
 static func _append_ship_instances(package: FleetSetupPackage, roster: FleetRoster,
@@ -107,17 +107,21 @@ static func _append_ship_instances(package: FleetSetupPackage, roster: FleetRost
 			_add_entry_error(validation, RULE_SHIP_DATA, player_index, ship_entry.entry_id,
 				"Ship '%s' could not be loaded." % ship_entry.data_key)
 			continue
-		var speed: int = _initial_speed_for_ship(package, player_index, ship_entry,
-			ship_data, validation)
+		var deployment: Dictionary = _deployment_for_component(package, COMPONENT_SHIP,
+			player_index, ship_entry.entry_id)
+		var speed: int = _initial_speed_for_ship(deployment, player_index,
+			ship_entry, ship_data, validation)
 		var ship: ShipInstance = ShipInstance.create_from_data(
 			ship_entry.data_key, ship_data, speed, player_index)
 		ship.roster_entry_id = ship_entry.entry_id
 		ship.fleet_points = _ship_fleet_points(ship_entry, ship_data, player_index,
 			validation)
+		_apply_ship_deployment(ship, deployment)
 		ships.append(ship)
 
 
-static func _append_squadron_instances(roster: FleetRoster, player_index: int,
+static func _append_squadron_instances(package: FleetSetupPackage,
+		roster: FleetRoster, player_index: int,
 		squadrons: Array[SquadronInstance], validation: SetupValidationResult) -> void:
 	for squadron_entry: FleetSquadronEntry in roster.squadrons:
 		var squadron_data: SquadronData = AssetLoader.load_squadron_data(
@@ -131,14 +135,14 @@ static func _append_squadron_instances(roster: FleetRoster, player_index: int,
 			squadron_entry.data_key, squadron_data, player_index)
 		squadron.roster_entry_id = squadron_entry.entry_id
 		squadron.fleet_points = squadron_data.point_cost
+		_apply_squadron_deployment(squadron, _deployment_for_component(
+			package, COMPONENT_SQUADRON, player_index, squadron_entry.entry_id))
 		squadrons.append(squadron)
 
 
-static func _initial_speed_for_ship(package: FleetSetupPackage, player_index: int,
+static func _initial_speed_for_ship(deployment: Dictionary, player_index: int,
 		ship_entry: FleetShipEntry, ship_data: ShipData,
 		validation: SetupValidationResult) -> int:
-	var deployment: Dictionary = _deployment_for_component(package, COMPONENT_SHIP,
-		player_index, ship_entry.entry_id)
 	var requested_speed: int = _read_deployment_speed(deployment)
 	if requested_speed < 0:
 		return _minimum_deployment_speed(ship_data)
@@ -187,6 +191,25 @@ static func _deployment_for_component(package: FleetSetupPackage, component_type
 		if str(deployment.get("roster_entry_id", "")) == roster_entry_id:
 			return deployment.duplicate(true)
 	return {}
+
+
+static func _apply_ship_deployment(
+		ship: ShipInstance, deployment: Dictionary) -> void:
+	if deployment.is_empty():
+		return
+	ship.pos_x = float(deployment.get("pos_x", ship.pos_x))
+	ship.pos_y = float(deployment.get("pos_y", ship.pos_y))
+	ship.rotation_deg = float(deployment.get("rotation_deg", ship.rotation_deg))
+
+
+static func _apply_squadron_deployment(
+		squadron: SquadronInstance, deployment: Dictionary) -> void:
+	if deployment.is_empty():
+		return
+	squadron.pos_x = float(deployment.get("pos_x", squadron.pos_x))
+	squadron.pos_y = float(deployment.get("pos_y", squadron.pos_y))
+	squadron.rotation_deg = float(deployment.get(
+			"rotation_deg", squadron.rotation_deg))
 
 
 static func _read_deployment_speed(deployment: Dictionary) -> int:

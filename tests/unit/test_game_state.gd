@@ -37,6 +37,14 @@ func test_initialize_sets_initiative_to_zero() -> void:
 	assert_eq(state.initiative_player, 0, "Initial initiative player should be 0")
 
 
+func test_initialize_clears_objectives() -> void:
+	var state := GameState.new()
+	state.objectives = {"selected_objective": {"data_key": "opening_salvo"}}
+	state.initialize()
+	assert_true(state.objectives.is_empty(),
+			"Initialize should clear stale setup/objective payloads")
+
+
 # --- Player State Access ---
 
 func test_get_player_state_valid_index() -> void:
@@ -87,6 +95,20 @@ func test_serialize_round_trip() -> void:
 	assert_eq(restored.current_phase, Constants.GamePhase.SHIP, "Phase should survive serialization")
 	assert_eq(restored.initiative_player, 1, "Initiative should survive serialization")
 	assert_eq(restored.player_states.size(), 2, "Player states should survive serialization")
+
+
+func test_serialize_round_trip_preserves_objectives() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.objectives = {
+		"selected_objective": {"data_key": "obj_ass_opening_salvo"},
+		"setup_package_hash": "abc123",
+	}
+
+	var restored: GameState = GameState.deserialize(state.serialize())
+
+	assert_eq(restored.objectives, state.objectives,
+		"Objectives/setup payload should survive serialization")
 
 
 # --- Player State ---

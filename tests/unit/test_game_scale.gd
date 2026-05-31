@@ -126,6 +126,15 @@ func test_play_area_size_px() -> void:
 		"Play area size should be (2160, 2160) for 3×3 board")
 
 
+func test_configure_play_area_for_3x6_map_expected() -> void:
+	_scale.configure_play_area_for_map_filename("map_3x6_distant-planet_v4.jpg")
+
+	assert_eq(_scale.play_area_size_px, Vector2(4320.0, 2160.0),
+		"3x6 maps should double the play-area width")
+	assert_eq(_scale.play_area_side_px, 2160.0,
+		"Legacy side alias should remain the 3-foot board height")
+
+
 # --- Base sizes ---
 
 func test_small_base_width() -> void:

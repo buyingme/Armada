@@ -67,14 +67,15 @@ func _ready() -> void:
 
 ## Resets the camera so the full play area is visible and centred.
 func reset_to_default_view() -> void:
-	if GameScale.play_area_side_px <= 0.0:
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return
-	var side: float = GameScale.play_area_side_px
-	position = Vector2(side * 0.5, side * 0.5)
+	position = play_area_size * 0.5
 	# Fit the entire play area into the viewport while keeping aspect ratio.
 	var vp_size: Vector2 = get_viewport_rect().size
 	if vp_size.x > 0.0 and vp_size.y > 0.0:
-		var fit_zoom: float = minf(vp_size.x / side, vp_size.y / side)
+		var fit_zoom: float = minf(vp_size.x / play_area_size.x,
+				vp_size.y / play_area_size.y)
 		zoom = Vector2(fit_zoom, fit_zoom)
 	else:
 		zoom = Vector2.ONE
@@ -83,6 +84,11 @@ func reset_to_default_view() -> void:
 ## Returns the play-area side length in pixels from [GameScale].
 func get_play_area_side() -> float:
 	return GameScale.play_area_side_px
+
+
+## Returns the play-area size in pixels from [GameScale].
+func get_play_area_size() -> Vector2:
+	return GameScale.play_area_size_px
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -179,8 +185,7 @@ func rotate_to_player(player_index: int) -> void:
 	_current_player = player_index
 
 	var target_rotation: float = 0.0 if player_index == 0 else PI
-	var side: float = GameScale.play_area_side_px
-	var centre: Vector2 = Vector2(side * 0.5, side * 0.5)
+	var centre: Vector2 = GameScale.play_area_size_px * 0.5
 
 	# Kill any running rotation tween.
 	if _rotate_tween != null and _rotate_tween.is_valid():
@@ -204,11 +209,11 @@ func get_current_player() -> int:
 
 ## Clamps [pos] so the camera stays within the play area + margin.
 func _clamp_position(pos: Vector2) -> Vector2:
-	var side: float = GameScale.play_area_side_px
-	if side <= 0.0:
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return pos
 	var m: float = BOUNDARY_MARGIN_PX
 	return Vector2(
-			clampf(pos.x, -m, side + m),
-			clampf(pos.y, -m, side + m)
+			clampf(pos.x, -m, play_area_size.x + m),
+			clampf(pos.y, -m, play_area_size.y + m)
 	)

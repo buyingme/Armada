@@ -29,6 +29,9 @@ const RULE_UPGRADE_RESTRICTION: String = "fleet.upgrade.restriction"
 const RULE_OBJECTIVE_REQUIRED: String = "fleet.objective.required"
 const RULE_OBJECTIVE_INVALID: String = "fleet.objective.invalid"
 const RULE_OBJECTIVE_CATEGORY: String = "fleet.objective.category"
+const RULE_MAP_REQUIRED: String = "fleet.map.required"
+const RULE_MAP_INVALID: String = "fleet.map.invalid"
+const RULE_MAP_GRID: String = "fleet.map.grid"
 
 var _ship_cache: Dictionary = {}
 var _ship_record_cache: Dictionary = {}
@@ -49,6 +52,7 @@ func validate(roster: FleetRoster) -> FleetValidationResult:
 	_validate_unique_constraints(roster, result)
 	_validate_upgrade_assignments(roster, result)
 	_validate_objective_selection(roster, result)
+	_validate_map_selection(roster, result)
 	return result
 
 
@@ -153,6 +157,32 @@ func _validate_objective_selection(roster: FleetRoster,
 				"Objective '%s' must be category %s." % [objective_key, category], [], [])
 
 
+func _validate_map_selection(roster: FleetRoster,
+		result: FleetValidationResult) -> void:
+	var filename: String = _roster_map_filename(roster)
+	if filename.is_empty():
+		result.add_error(RULE_MAP_REQUIRED,
+			"A fleet map must be selected.", [], ["RRG 1.5.0 Play Area"])
+		return
+	var payload: Dictionary = FleetBuilderOptions.map_payload(filename)
+	if payload.is_empty():
+		result.add_error(RULE_MAP_INVALID,
+			"Map '%s' could not be loaded." % filename, [], [])
+		return
+	_validate_map_grid(roster, payload, result)
+
+
+func _validate_map_grid(roster: FleetRoster, payload: Dictionary,
+		result: FleetValidationResult) -> void:
+	var required_grid: String = FleetBuilderOptions.required_map_grid_for_point_format(
+			roster.point_format)
+	if required_grid.is_empty() or str(payload.get("grid", "")) == required_grid:
+		return
+	result.add_error(RULE_MAP_GRID,
+		"Point limit %d requires a %s map." % [_point_limit(roster), required_grid],
+		[], ["RRG 1.5.0 Play Area", "RRG 1.5.0 Setup Area"])
+
+
 func _validate_upgrade_assignments(roster: FleetRoster,
 		result: FleetValidationResult) -> void:
 	for ship_entry: FleetShipEntry in _sorted_ships(roster):
@@ -164,6 +194,10 @@ func _validate_upgrade_assignments(roster: FleetRoster,
 		_validate_ship_upgrade_duplicates(ship_entry, result)
 		_validate_ship_upgrade_limits(ship_entry, result)
 		_validate_ship_upgrade_restrictions(ship_entry, ship_data, result)
+
+
+func _roster_map_filename(roster: FleetRoster) -> String:
+	return str(roster.map.get("filename", roster.map.get("map_image", ""))).strip_edges()
 
 
 func _validate_ship_faction(roster: FleetRoster,

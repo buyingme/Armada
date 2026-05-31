@@ -80,6 +80,36 @@ func test_status_panel_uses_compact_height_expected() -> void:
 		"Status panel should use the compact half-height layout")
 
 
+func test_map_selector_defaults_to_core_3x3_expected() -> void:
+	assert_not_null(_scene._map_option, "Roster panel should include a map selector")
+	assert_true(_scene._map_option.item_count > 0, "Map selector should be populated")
+	assert_eq(_scene.current_roster().map.get("grid", ""), FleetBuilderOptions.MAP_GRID_3X3,
+		"Default Core Set draft should use a 3x3 map")
+	assert_true(_map_options_all_match_grid(FleetBuilderOptions.MAP_GRID_3X3),
+		"Core Set 180 should only show 3x3 maps")
+
+
+func test_format_change_refreshes_map_options_expected() -> void:
+	_select_point_limit(400)
+
+	assert_eq(_scene.current_roster().map.get("grid", ""), FleetBuilderOptions.MAP_GRID_3X6,
+		"Standard 400 should switch the roster map to 3x6")
+	assert_true(_map_options_all_match_grid(FleetBuilderOptions.MAP_GRID_3X6),
+		"Standard 400 should only show 3x6 maps")
+
+
+func test_map_selection_updates_roster_expected() -> void:
+	_select_point_limit(400)
+	var target_index: int = mini(1, _scene._map_option.item_count - 1)
+	var payload: Dictionary = _scene._map_option.get_item_metadata(target_index) as Dictionary
+
+	_scene._map_option.select(target_index)
+	_scene._on_map_selected(target_index)
+
+	assert_eq(_scene.current_roster().map.get("filename", ""), payload.get("filename", ""),
+		"Selecting a map should update the active roster payload")
+
+
 func test_standard_tab_expands_selected_rules_text_expected() -> void:
 	assert_eq(_scene._component_rules_text.size_flags_vertical,
 		Control.SIZE_EXPAND_FILL,
@@ -393,6 +423,24 @@ func _select_objective_key(category: String, data_key: String) -> void:
 			_scene._on_objective_selected(index, category)
 			return
 	fail_test("Objective key not found: %s" % data_key)
+
+
+func _select_point_limit(point_limit: int) -> void:
+	for index: int in range(_scene._format_option.item_count):
+		var format: Dictionary = _scene._format_option.get_item_metadata(index) as Dictionary
+		if int(format.get("limit", 0)) == point_limit:
+			_scene._format_option.select(index)
+			_scene._on_format_selected(index)
+			return
+	fail_test("Point limit not found: %d" % point_limit)
+
+
+func _map_options_all_match_grid(grid: String) -> bool:
+	for index: int in range(_scene._map_option.item_count):
+		var payload: Dictionary = _scene._map_option.get_item_metadata(index) as Dictionary
+		if str(payload.get("grid", "")) != grid:
+			return false
+	return true
 
 
 func _select_rule_key(data_key: String) -> void:

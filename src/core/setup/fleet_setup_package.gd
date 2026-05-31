@@ -29,6 +29,9 @@ var scenario_id: String = ""
 ## Point-format metadata, for example {"id": "STANDARD_400", "limit": 400}.
 var point_format: Dictionary = {}
 
+## Map metadata chosen from the first player's roster.
+var map: Dictionary = {}
+
 ## Player index with initiative.
 var first_player: int = 0
 
@@ -55,6 +58,7 @@ func serialize() -> Dictionary:
 		"kind": kind,
 		"scenario_id": scenario_id,
 		"point_format": point_format.duplicate(true),
+		"map": map.duplicate(true),
 		"first_player": first_player,
 		"players": _copy_dict_array(players),
 		"selected_objective": selected_objective.duplicate(true),
@@ -71,6 +75,7 @@ static func deserialize(data: Dictionary) -> FleetSetupPackage:
 	package.kind = str(data.get("kind", KIND))
 	package.scenario_id = str(data.get("scenario_id", ""))
 	package.point_format = data.get("point_format", {})
+	package.map = data.get("map", {})
 	package.first_player = int(data.get("first_player", 0))
 	package.players = _read_dict_array(data.get("players", []))
 	package.selected_objective = data.get("selected_objective", {})
@@ -87,6 +92,8 @@ func validate_basic() -> Array[String]:
 		errors.append("Setup package kind must be '%s'." % KIND)
 	if scenario_id.strip_edges().is_empty():
 		errors.append("Setup package scenario_id is required.")
+	if map.is_empty():
+		errors.append("Setup package map is required.")
 	if first_player < 0 or first_player >= Constants.PLAYER_COUNT:
 		errors.append("Setup package first_player is out of range.")
 	_validate_players(errors)

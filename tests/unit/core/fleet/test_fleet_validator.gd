@@ -220,6 +220,43 @@ func test_validate_invalid_objectives_reports_category_error_expected() -> void:
 		"Objective category mismatch should report objective-category error")
 
 
+func test_validate_core_set_with_3x6_map_reports_grid_error_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "cr90_corvette_a", "general_dodonna")
+	_set_valid_objectives(roster)
+	roster.map = FleetBuilderOptions.map_payload("map_3x6_distant-planet_v4.jpg")
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_MAP_GRID),
+		"Core Set 180 fleets should require 3x3 maps")
+
+
+func test_validate_standard_with_3x3_map_reports_grid_error_expected() -> void:
+	var roster: FleetRoster = _create_roster("GALACTIC_EMPIRE", 400)
+	_add_ship_with_commander(roster, "ship-1", "victory_ii_class_star_destroyer",
+		"grand_moff_tarkin")
+	_set_valid_objectives(roster)
+	roster.map = FleetBuilderOptions.map_payload("map_3x3_distant_planet_v3.jpg")
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_MAP_GRID),
+		"Standard 400 fleets should require 3x6 maps")
+
+
+func test_validate_missing_map_reports_required_error_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "cr90_corvette_a", "general_dodonna")
+	_set_valid_objectives(roster)
+	roster.map = {}
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_MAP_REQUIRED),
+		"Rosters without a selected map should report map-required")
+
+
 func test_validate_missing_objective_reports_required_error_expected() -> void:
 	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
 	_add_ship_with_commander(roster, "ship-1", "cr90_corvette_a", "general_dodonna")
@@ -362,6 +399,7 @@ func test_validate_size_restriction_reports_error_expected() -> void:
 func _create_roster(faction: String, point_limit: int) -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create("fleet-1", "Validation Fleet", faction)
 	roster.point_format = {"id": "CUSTOM", "limit": point_limit}
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	return roster
 
 

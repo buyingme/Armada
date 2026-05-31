@@ -11,6 +11,12 @@ const FORMAT_STANDARD_400: String = "STANDARD_400"
 const FORMAT_CUSTOM: String = "CUSTOM"
 const CORE_SET_POINT_LIMIT: int = 180
 const CUSTOM_POINT_LIMIT: int = 300
+const MAP_GRID_3X3: String = "3x3"
+const MAP_GRID_3X6: String = "3x6"
+const MAP_PREFIX_3X3: String = "map_3x3"
+const MAP_PREFIX_3X6: String = "map_3x6"
+const DEFAULT_MAP_3X3: String = "map_3x3_distant_planet_v3.jpg"
+const DEFAULT_MAP_3X6: String = "map_3x6_distant-planet_v4.jpg"
 
 const UPGRADE_TYPE_GROUPS: Array[Dictionary] = [
 	{"group": "Command", "types": ["COMMANDER", "OFFICER"]},
@@ -45,6 +51,73 @@ static func available_point_formats() -> Array[Dictionary]:
 ## Returns the default serialized point-format payload for a new local draft.
 static func default_point_format() -> Dictionary:
 	return _format_payload(FORMAT_CORE_SET_180, CORE_SET_POINT_LIMIT, "")
+
+
+## Returns map choices allowed for the given point format.
+## Rules Reference: "Play Area", RRG 1.5.0; "Setup Area", RRG 1.5.0.
+static func available_maps_for_point_format(point_format: Dictionary) -> Array[Dictionary]:
+	return available_maps(required_map_grid_for_point_format(point_format))
+
+
+## Returns all discovered map choices, optionally filtered by 3x3 or 3x6 grid.
+static func available_maps(required_grid: String = "") -> Array[Dictionary]:
+	var maps: Array[Dictionary] = []
+	for filename: String in AssetLoader.list_map_filenames():
+		var grid: String = map_grid_for_filename(filename)
+		if grid.is_empty():
+			continue
+		if not required_grid.is_empty() and grid != required_grid:
+			continue
+		maps.append(_map_payload(filename, grid))
+	maps.sort_custom(_map_before)
+	return maps
+
+
+## Returns the default map payload for the point-format's required map size.
+static func default_map_for_point_format(point_format: Dictionary) -> Dictionary:
+	var required_grid: String = required_map_grid_for_point_format(point_format)
+	var default_filename: String = _default_filename_for_grid(required_grid)
+	var payload: Dictionary = map_payload(default_filename)
+	if not payload.is_empty():
+		return payload
+	var maps: Array[Dictionary] = available_maps(required_grid)
+	return maps[0].duplicate(true) if not maps.is_empty() else {}
+
+
+## Returns the validated map payload for [param filename], or an empty dictionary.
+static func map_payload(filename: String) -> Dictionary:
+	var clean_filename: String = filename.strip_edges()
+	var grid: String = map_grid_for_filename(clean_filename)
+	if clean_filename.is_empty() or grid.is_empty():
+		return {}
+	if not AssetLoader.list_map_filenames().has(clean_filename):
+		return {}
+	return _map_payload(clean_filename, grid)
+
+
+## Derives the map grid from the filename prefix.
+static func map_grid_for_filename(filename: String) -> String:
+	if filename.begins_with(MAP_PREFIX_3X3):
+		return MAP_GRID_3X3
+	if filename.begins_with(MAP_PREFIX_3X6):
+		return MAP_GRID_3X6
+	return ""
+
+
+## Returns the required map grid for a point format, or empty for unknown custom limits.
+static func required_map_grid_for_point_format(point_format: Dictionary) -> String:
+	return required_map_grid_for_point_limit(int(point_format.get("limit", 0)))
+
+
+## Returns the required map grid for point limits with explicit play-area rules.
+static func required_map_grid_for_point_limit(point_limit: int) -> String:
+	match point_limit:
+		CORE_SET_POINT_LIMIT:
+			return MAP_GRID_3X3
+		CUSTOM_POINT_LIMIT, FleetValidator.DEFAULT_POINT_LIMIT:
+			return MAP_GRID_3X6
+		_:
+			return ""
 
 
 ## Returns the default faction key for a new local draft.
@@ -102,6 +175,41 @@ static func _point_format(label_text: String, id: String, limit: int) -> Diction
 
 static func _format_payload(id: String, limit: int, custom_label: String) -> Dictionary:
 	return {"id": id, "limit": limit, "custom_label": custom_label}
+
+
+static func _map_payload(filename: String, grid: String) -> Dictionary:
+	return {"filename": filename, "grid": grid, "label": _map_label(filename, grid)}
+
+
+static func _map_label(filename: String, grid: String) -> String:
+	var stem: String = filename.get_basename()
+	var prefix: String = "map_%s_" % grid
+	var label_key: String = stem.substr(prefix.length()) if stem.begins_with(prefix) else stem
+	var version_index: int = label_key.rfind("_v")
+	if version_index >= 0:
+		label_key = label_key.substr(0, version_index)
+	return "%s %s" % [grid, _title_from_key(label_key)]
+
+
+static func _title_from_key(value: String) -> String:
+	var words: Array[String] = []
+	for raw_word: String in value.replace("-", "_").split("_", false):
+		words.append(raw_word.capitalize())
+	return " ".join(words)
+
+
+static func _default_filename_for_grid(grid: String) -> String:
+	match grid:
+		MAP_GRID_3X3:
+			return DEFAULT_MAP_3X3
+		MAP_GRID_3X6:
+			return DEFAULT_MAP_3X6
+		_:
+			return DEFAULT_MAP_3X3
+
+
+static func _map_before(left: Dictionary, right: Dictionary) -> bool:
+	return str(left.get("label", "")) < str(right.get("label", ""))
 
 
 static func _catalog_or_new(catalog: FleetCatalog) -> FleetCatalog:

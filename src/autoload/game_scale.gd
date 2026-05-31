@@ -15,6 +15,10 @@ extends Node
 
 ## Path to the JSON file containing all scale data.
 const SCALE_CONFIG_PATH: String = "res://Resources/Game_Components/scale/scale_config.json"
+const MAP_PREFIX_3X3: String = "map_3x3"
+const MAP_PREFIX_3X6: String = "map_3x6"
+const PLAY_AREA_3X3_RULERS: Vector2 = Vector2(3.0, 3.0)
+const PLAY_AREA_3X6_RULERS: Vector2 = Vector2(6.0, 3.0)
 
 ## Logger for this system.
 var _log: GameLogger = GameLogger.new("GameScale")
@@ -274,6 +278,25 @@ func initialise_from_dict(config: Dictionary) -> void:
 	_load_maneuver_tool(config)
 
 	is_initialised = true
+
+
+## Applies play-area dimensions based on the map filename size prefix.
+## Rules Reference: "Play Area", RRG 1.5.0; "Setup Area", RRG 1.5.0.
+func configure_play_area_for_map_filename(filename: String) -> void:
+	var rulers: Vector2 = map_play_area_rulers(filename)
+	_play_area_width_rulers = rulers.x
+	_play_area_height_rulers = rulers.y
+	_play_area_ruler_multiplier = rulers.y
+	_compute_derived_values()
+
+
+## Returns play-area dimensions in ruler lengths for a map filename.
+static func map_play_area_rulers(filename: String) -> Vector2:
+	if filename.begins_with(MAP_PREFIX_3X6):
+		return PLAY_AREA_3X6_RULERS
+	if filename.begins_with(MAP_PREFIX_3X3):
+		return PLAY_AREA_3X3_RULERS
+	return PLAY_AREA_3X3_RULERS
 
 
 # --- Private helpers ---

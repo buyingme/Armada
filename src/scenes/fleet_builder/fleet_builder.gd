@@ -57,6 +57,7 @@ var _card_art_rect: TextureRect
 var _card_art_placeholder_label: Label
 var _library_panel: FleetLibraryPanel
 var _objective_options: Dictionary = {}
+var _map_option: OptionButton
 
 
 func _ready() -> void:
@@ -266,6 +267,7 @@ func _build_roster_panel() -> PanelContainer:
 	box.add_child(_labeled_control("Squadrons", _squadron_list))
 	box.add_child(_button_row(["Remove Squadron"], [_on_remove_squadron_pressed]))
 	box.add_child(_build_objective_selectors())
+	box.add_child(_build_map_selector())
 	return _section_panel("Roster", box, ROSTER_PANEL_MIN_SIZE)
 
 
@@ -311,6 +313,17 @@ func _build_objective_row(category: String, option: OptionButton) -> HBoxContain
 	view_button.pressed.connect(_on_objective_view_pressed.bind(category))
 	row.add_child(view_button)
 	return row
+
+
+func _build_map_selector() -> VBoxContainer:
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.add_child(_create_body_label("Map"))
+	_map_option = OptionButton.new()
+	_map_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_option.item_selected.connect(_on_map_selected)
+	box.add_child(_map_option)
+	return box
 
 
 func _build_side_panel() -> PanelContainer:
@@ -569,6 +582,7 @@ func _refresh_roster_lists() -> void:
 	_refresh_upgrade_list()
 	_refresh_squadron_list()
 	_refresh_objective_options()
+	_refresh_map_options()
 
 
 func _refresh_ship_list() -> void:
@@ -608,6 +622,18 @@ func _refresh_objective_options() -> void:
 		var option: OptionButton = _objective_options.get(category, null)
 		if option != null:
 			_select_option_metadata(option, _roster.objectives.get_objective(category))
+
+
+func _refresh_map_options() -> void:
+	if _map_option == null:
+		return
+	var maps: Array[Dictionary] = FleetBuilderOptions.available_maps_for_point_format(
+			_roster.point_format)
+	_ensure_roster_map_allowed(maps)
+	_map_option.clear()
+	for payload: Dictionary in maps:
+		_add_option(_map_option, str(payload.get("label", "")), payload)
+	_select_map_filename(_roster_map_filename())
 
 
 func _refresh_rules_reference() -> void:
@@ -699,6 +725,7 @@ func _on_format_selected(index: int) -> void:
 		"limit": int(format.get("limit", FleetValidator.DEFAULT_POINT_LIMIT)),
 		"custom_label": "",
 	}
+	_roster.map = FleetBuilderOptions.default_map_for_point_format(_roster.point_format)
 	_refresh_all()
 
 
@@ -799,6 +826,14 @@ func _on_objective_view_pressed(category: String) -> void:
 	if option == null:
 		return
 	_select_objective_component(_selected_option_metadata(option))
+
+
+func _on_map_selected(index: int) -> void:
+	if _map_option == null:
+		return
+	var payload: Dictionary = _map_option.get_item_metadata(index) as Dictionary
+	_roster.map = payload.duplicate(true)
+	_refresh_after_mutation()
 
 
 func _on_rules_item_selected(index: int) -> void:
@@ -1092,6 +1127,33 @@ func _select_option_metadata(option: OptionButton, metadata: String) -> void:
 			return
 	if option.item_count > 0:
 		option.select(0)
+
+
+func _ensure_roster_map_allowed(maps: Array[Dictionary]) -> void:
+	if _map_filename_allowed(_roster_map_filename(), maps):
+		return
+	_roster.map = FleetBuilderOptions.default_map_for_point_format(_roster.point_format)
+
+
+func _map_filename_allowed(filename: String, maps: Array[Dictionary]) -> bool:
+	for payload: Dictionary in maps:
+		if str(payload.get("filename", "")) == filename:
+			return true
+	return false
+
+
+func _select_map_filename(filename: String) -> void:
+	for index: int in range(_map_option.item_count):
+		var payload: Dictionary = _map_option.get_item_metadata(index) as Dictionary
+		if str(payload.get("filename", "")) == filename:
+			_map_option.select(index)
+			return
+	if _map_option.item_count > 0:
+		_map_option.select(0)
+
+
+func _roster_map_filename() -> String:
+	return str(_roster.map.get("filename", ""))
 
 
 func _add_option(option: OptionButton, label_text: String, metadata: Variant) -> void:

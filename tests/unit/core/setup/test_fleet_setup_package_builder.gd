@@ -37,7 +37,24 @@ func test_build_from_rosters_valid_creates_match_ready_package_expected() -> voi
 		"Selected objective should belong to the second player")
 	assert_eq(package.selected_objective.get("chosen_by_player", -1), 0,
 		"First player should be recorded as the objective chooser")
+	assert_eq(package.map.get("filename", ""), FleetBuilderOptions.DEFAULT_MAP_3X6,
+		"Setup package should use the first player's roster map")
 	assert_false(package.canonical_hash().is_empty(), "Package hash should be available")
+
+
+func test_build_from_rosters_uses_first_player_map_expected() -> void:
+	var rebel: FleetRoster = _create_rebel_roster()
+	var imperial: FleetRoster = _create_imperial_roster()
+	rebel.map = FleetBuilderOptions.map_payload("map_3x6_azure_v4.jpg")
+	imperial.map = FleetBuilderOptions.map_payload("map_3x6_hoth_v4.jpg")
+
+	var result: Dictionary = _builder.build_from_rosters(
+		rebel, imperial, 1, "obj_ass_most_wanted")
+	var package: FleetSetupPackage = result.get("package") as FleetSetupPackage
+
+	assert_true(result.get("ok", false), "Valid rosters should produce a setup package")
+	assert_eq(package.map.get("filename", ""), "map_3x6_hoth_v4.jpg",
+		"The first player's roster map should drive the setup package map")
 
 
 func test_build_from_rosters_first_player_and_hash_stable_expected() -> void:
@@ -175,6 +192,7 @@ func _create_rebel_roster() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create(
 		"rebel-fleet", "Rebel Setup Fleet", "REBEL_ALLIANCE")
 	roster.point_format = _point_format()
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	var ship: FleetShipEntry = _create_ship("rebel-ship-1", "cr90_corvette_a")
 	_add_upgrade(ship, "rebel-cmd", "general_dodonna", "OFFICER")
 	roster.add_ship(ship)
@@ -187,6 +205,7 @@ func _create_imperial_roster() -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create(
 		"imperial-fleet", "Imperial Setup Fleet", "GALACTIC_EMPIRE")
 	roster.point_format = _point_format()
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	var ship: FleetShipEntry = _create_ship(
 		"imperial-ship-1", "victory_ii_class_star_destroyer")
 	_add_upgrade(ship, "imperial-cmd", "grand_moff_tarkin", "OFFICER")

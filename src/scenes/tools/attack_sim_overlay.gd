@@ -100,7 +100,10 @@ const SPENT_ZONE_RADIUS: float = 3.0
 ## Positions of spent hull zone markers (world space).
 var _spent_zone_positions: Array[Vector2] = []
 
-## Play area side length — lines are clipped to this boundary.
+## Play area size — lines are clipped to this boundary rectangle.
+var _play_area_size: Vector2 = Vector2.ZERO
+
+## Legacy square play area side used by older unit tests.
 var _play_area_side: float = 0.0
 
 # --- Hull zone visuals ---
@@ -164,7 +167,8 @@ var _draw_range_line: bool = false
 func setup_hull_zone(inner_left: Vector2, outer_left: Vector2,
 		inner_right: Vector2, outer_right: Vector2,
 		los_pos: Vector2) -> void:
-	_play_area_side = GameScale.play_area_side_px
+	_play_area_size = _current_play_area_size()
+	_play_area_side = _play_area_size.y
 	_draw_hull_zone = true
 	_draw_squadron = false
 	# Arc boundary lines — suppressed in attack execution mode (AE-VIS-001).
@@ -363,37 +367,53 @@ func _draw_range_line_segment() -> void:
 # =========================================================================
 
 ## Extends a ray from [param origin] through [param through] until it
-## reaches the play area boundary rectangle [0, 0] → [side, side].
+## reaches the play area boundary rectangle [0, 0] → [width, height].
 ## Returns the intersection point on the boundary.
 func _extend_to_boundary(origin: Vector2, through: Vector2) -> Vector2:
 	var direction: Vector2 = (through - origin).normalized()
 	if direction.is_zero_approx():
 		return through
-	var side: float = _play_area_side
-	if side <= 0.0:
+	var play_area_size: Vector2 = _resolved_play_area_size()
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return through
-	# Find the minimum positive t where the ray exits the [0, side] box.
-	var t_min: float = INF
-	# Left edge (x = 0).
-	if direction.x < -1e-6:
-		var t: float = (0.0 - origin.x) / direction.x
-		if t > 0.0:
-			t_min = minf(t_min, t)
-	# Right edge (x = side).
-	if direction.x > 1e-6:
-		var t: float = (side - origin.x) / direction.x
-		if t > 0.0:
-			t_min = minf(t_min, t)
-	# Top edge (y = 0).
-	if direction.y < -1e-6:
-		var t: float = (0.0 - origin.y) / direction.y
-		if t > 0.0:
-			t_min = minf(t_min, t)
-	# Bottom edge (y = side).
-	if direction.y > 1e-6:
-		var t: float = (side - origin.y) / direction.y
-		if t > 0.0:
-			t_min = minf(t_min, t)
+	var t_min: float = _ray_exit_distance(origin, direction, play_area_size)
 	if t_min == INF:
 		return through
 	return origin + direction * t_min
+
+
+func _current_play_area_size() -> Vector2:
+	if GameScale.play_area_size_px.x > 0.0 and GameScale.play_area_size_px.y > 0.0:
+		return GameScale.play_area_size_px
+	var side: float = GameScale.play_area_side_px
+	return Vector2(side, side)
+
+
+func _resolved_play_area_size() -> Vector2:
+	if _play_area_size.x > 0.0 and _play_area_size.y > 0.0:
+		return _play_area_size
+	if _play_area_side <= 0.0:
+		return Vector2.ZERO
+	return Vector2(_play_area_side, _play_area_side)
+
+
+func _ray_exit_distance(
+		origin: Vector2, direction: Vector2, play_area_size: Vector2) -> float:
+	var t_min: float = INF
+	if direction.x < -1e-6:
+		t_min = _update_exit_distance(t_min, (0.0 - origin.x) / direction.x)
+	if direction.x > 1e-6:
+		t_min = _update_exit_distance(
+				t_min, (play_area_size.x - origin.x) / direction.x)
+	if direction.y < -1e-6:
+		t_min = _update_exit_distance(t_min, (0.0 - origin.y) / direction.y)
+	if direction.y > 1e-6:
+		t_min = _update_exit_distance(
+				t_min, (play_area_size.y - origin.y) / direction.y)
+	return t_min
+
+
+func _update_exit_distance(current: float, candidate: float) -> float:
+	if candidate > 0.0:
+		return minf(current, candidate)
+	return current

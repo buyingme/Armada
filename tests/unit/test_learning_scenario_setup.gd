@@ -82,6 +82,16 @@ func test_debug_scenario_uses_learning_map() -> void:
 			"Debug Scenario should use the same map as the Learning Scenario")
 
 
+func test_standard_3x6_scenario_loads_map_without_tokens() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("standard_3x6")
+	assert_eq(setup.get_map_image_filename(), "map_3x6_distant-planet_v4.jpg",
+			"Standard setup-package scenario should provide a board map")
+	assert_eq(setup.get_token_count(), 0,
+			"Standard setup-package scenario should not spawn JSON tokens")
+	assert_false(setup.has_fixed_round1_commands(),
+			"Standard setup-package scenario should use normal command assignment")
+
+
 func test_debug_scenario_contains_requested_squadron_keys() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
 	assert_eq(_count_by_key(setup, "tie_fighter_squadron"), 1,

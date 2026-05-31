@@ -108,6 +108,16 @@ func test_extend_to_boundary_diagonal() -> void:
 			"Diagonal ray should reach y = 0.")
 
 
+func test_extend_to_boundary_rectangular_right_edge_uses_board_width() -> void:
+	_overlay._play_area_size = Vector2(4320.0, 2160.0)
+	var result: Vector2 = _overlay._extend_to_boundary(
+			Vector2(100.0, 500.0), Vector2(200.0, 500.0))
+	assert_almost_eq(result.x, 4320.0, 0.1,
+			"Rectangular boards should extend arc lines to the full board width.")
+	assert_almost_eq(result.y, 500.0, 0.1,
+			"Horizontal rectangular clipping should preserve Y.")
+
+
 # =========================================================================
 # Target marker tests (AS-VIS-020)
 # =========================================================================

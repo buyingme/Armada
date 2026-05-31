@@ -112,6 +112,49 @@ func test_prepare_runtime_squadron_deployment_position_preserved_expected() -> v
 		"Squadron instance should preserve setup-package deployment rotation")
 
 
+func test_prepare_runtime_ship_deployment_outside_map_rejected_expected() -> void:
+	var deployments: Array[Dictionary] = [ {
+		"owner_player": 0,
+		"component_type": "ship",
+		"roster_entry_id": "rebel-ship-1",
+		"speed": 2,
+		"pos_x": 0.99,
+		"pos_y": 0.82,
+		"rotation_deg": 0.0,
+	}]
+	var package: FleetSetupPackage = _package_from_rosters(
+			_rebel_roster(), _imperial_roster(), deployments)
+
+	var result: Dictionary = FleetRosterSetupHelper.prepare_runtime(package)
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+
+	assert_false(result.get("ok", false),
+			"Ship deployments that spill outside the map should reject conversion")
+	assert_true(_has_error(validation, FleetRosterSetupHelper.RULE_DEPLOYMENT_BOUNDS),
+			"Out-of-bounds ship deployments should be reported as setup errors")
+
+
+func test_prepare_runtime_squadron_deployment_outside_map_rejected_expected() -> void:
+	var deployments: Array[Dictionary] = [ {
+		"owner_player": 1,
+		"component_type": "squadron",
+		"roster_entry_id": "imperial-squadron-1",
+		"pos_x": 0.005,
+		"pos_y": 0.24,
+		"rotation_deg": 180.0,
+	}]
+	var package: FleetSetupPackage = _package_from_rosters(
+			_rebel_roster(), _imperial_roster(), deployments)
+
+	var result: Dictionary = FleetRosterSetupHelper.prepare_runtime(package)
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+
+	assert_false(result.get("ok", false),
+			"Squadron deployments that spill outside the map should reject conversion")
+	assert_true(_has_error(validation, FleetRosterSetupHelper.RULE_DEPLOYMENT_BOUNDS),
+			"Out-of-bounds squadron deployments should be reported as setup errors")
+
+
 func test_prepare_runtime_missing_ship_data_rejected_expected() -> void:
 	var rebel_roster: Dictionary = _rebel_roster()
 	var ships: Array = rebel_roster.get("ships", []) as Array

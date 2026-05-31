@@ -9,12 +9,14 @@ extends RefCounted
 const COMPONENT_SHIP: String = "ship"
 const COMPONENT_SQUADRON: String = "squadron"
 const DEFAULT_DEPLOYMENT_SPEED: int = 1
+const GameScaleScript: GDScript = preload("res://src/autoload/game_scale.gd")
 const RULE_PACKAGE: String = "setup.runtime.package"
 const RULE_PLAYER_ENTRY: String = "setup.runtime.player_entry"
 const RULE_SHIP_DATA: String = "setup.runtime.ship_data"
 const RULE_SQUADRON_DATA: String = "setup.runtime.squadron_data"
 const RULE_UPGRADE_DATA: String = "setup.runtime.upgrade_data"
 const RULE_DEPLOYMENT_SPEED: String = "setup.runtime.deployment_speed"
+const RULE_DEPLOYMENT_BOUNDS: String = "setup.runtime.deployment_bounds"
 
 
 ## Converts [param package] into runtime player states and flattened instances.
@@ -116,6 +118,8 @@ static func _append_ship_instances(package: FleetSetupPackage, roster: FleetRost
 		ship.roster_entry_id = ship_entry.entry_id
 		ship.fleet_points = _ship_fleet_points(ship_entry, ship_data, player_index,
 			validation)
+		_validate_ship_deployment_bounds(
+				package, deployment, player_index, ship_entry, ship_data, validation)
 		_apply_ship_deployment(ship, deployment)
 		ships.append(ship)
 
@@ -135,8 +139,11 @@ static func _append_squadron_instances(package: FleetSetupPackage,
 			squadron_entry.data_key, squadron_data, player_index)
 		squadron.roster_entry_id = squadron_entry.entry_id
 		squadron.fleet_points = squadron_data.point_cost
-		_apply_squadron_deployment(squadron, _deployment_for_component(
-			package, COMPONENT_SQUADRON, player_index, squadron_entry.entry_id))
+		var deployment: Dictionary = _deployment_for_component(
+				package, COMPONENT_SQUADRON, player_index, squadron_entry.entry_id)
+		_validate_squadron_deployment_bounds(
+				package, deployment, player_index, squadron_entry, validation)
+		_apply_squadron_deployment(squadron, deployment)
 		squadrons.append(squadron)
 
 
@@ -169,6 +176,38 @@ static func _ship_fleet_points(ship_entry: FleetShipEntry, ship_data: ShipData,
 			continue
 		total += upgrade_data.point_cost
 	return total
+
+
+static func _validate_ship_deployment_bounds(package: FleetSetupPackage,
+		deployment: Dictionary, player_index: int, ship_entry: FleetShipEntry,
+		ship_data: ShipData, validation: SetupValidationResult) -> void:
+	if deployment.is_empty():
+		return
+	var play_area_size: Vector2 = _package_play_area_size(package)
+	var rotation_rad: float = deg_to_rad(float(deployment.get("rotation_deg", 0.0)))
+	var base_size: Vector2 = GameScale.get_base_size(ship_data.ship_size)
+	var extents: Vector2 = _rotated_ship_extents(base_size, rotation_rad)
+	if _deployment_extents_within_play_area(deployment, extents, play_area_size):
+		return
+	_add_entry_error(validation, RULE_DEPLOYMENT_BOUNDS, player_index, ship_entry.entry_id,
+			"Ship deployment for '%s' places part of the base outside the selected map." %
+			ship_entry.entry_id)
+
+
+static func _validate_squadron_deployment_bounds(package: FleetSetupPackage,
+		deployment: Dictionary, player_index: int,
+		squadron_entry: FleetSquadronEntry, validation: SetupValidationResult) -> void:
+	if deployment.is_empty():
+		return
+	var play_area_size: Vector2 = _package_play_area_size(package)
+	var radius: float = GameScale.squadron_base_diameter_px * 0.5
+	var extents: Vector2 = Vector2(radius, radius)
+	if _deployment_extents_within_play_area(deployment, extents, play_area_size):
+		return
+	_add_entry_error(validation, RULE_DEPLOYMENT_BOUNDS, player_index,
+			squadron_entry.entry_id,
+			"Squadron deployment for '%s' places part of the base outside the selected map." %
+			squadron_entry.entry_id)
 
 
 static func _attach_instances(player_states: Array[PlayerState],
@@ -246,6 +285,34 @@ static func _faction_from_player_entry(entry: Dictionary,
 			return Constants.Faction.SEPARATIST_ALLIANCE
 		_:
 			return Constants.Faction.REBEL_ALLIANCE
+
+
+static func _package_play_area_size(package: FleetSetupPackage) -> Vector2:
+	var filename: String = str(package.map.get("filename", ""))
+	var rulers: Vector2 = GameScaleScript.map_play_area_rulers(filename)
+	if GameScale.ruler_length_px > 0.0:
+		return rulers * GameScale.ruler_length_px
+	return GameScale.play_area_size_px
+
+
+static func _rotated_ship_extents(base_size: Vector2, rotation_rad: float) -> Vector2:
+	var half_w: float = base_size.x * 0.5
+	var half_l: float = base_size.y * 0.5
+	return Vector2(
+			absf(half_w * cos(rotation_rad)) + absf(half_l * sin(rotation_rad)),
+			absf(half_w * sin(rotation_rad)) + absf(half_l * cos(rotation_rad)))
+
+
+static func _deployment_extents_within_play_area(
+		deployment: Dictionary, extents: Vector2, play_area_size: Vector2) -> bool:
+	var pixel_pos: Vector2 = Vector2(
+			float(deployment.get("pos_x", 0.0)) * play_area_size.x,
+			float(deployment.get("pos_y", 0.0)) * play_area_size.y)
+	var within_x: bool = pixel_pos.x >= extents.x
+	within_x = within_x and pixel_pos.x <= play_area_size.x - extents.x
+	var within_y: bool = pixel_pos.y >= extents.y
+	within_y = within_y and pixel_pos.y <= play_area_size.y - extents.y
+	return within_x and within_y
 
 
 static func _roster_from_player_entry(entry: Dictionary) -> FleetRoster:

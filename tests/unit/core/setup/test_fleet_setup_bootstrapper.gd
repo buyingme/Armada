@@ -64,6 +64,23 @@ func test_build_game_state_missing_ship_data_rejected_expected() -> void:
 		"Missing ship data should be reported by setup validation")
 
 
+func test_build_game_state_out_of_bounds_deployment_rejected_expected() -> void:
+	var deployments: Array[Dictionary] = _deployments()
+	deployments[0] = _deployment(0, "ship", "rebel-ship-1", 0.99, 0.82, 0.0)
+	var package: FleetSetupPackage = _package_from_rosters(
+			_rebel_roster(), _imperial_roster(), deployments)
+
+	var result: Dictionary = FleetSetupBootstrapper.build_game_state(package)
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+
+	assert_false(result.get("ok", false),
+			"Out-of-bounds deployments should reject bootstrap")
+	assert_null(result.get("state"),
+			"Rejected bootstrap should not return a game state")
+	assert_true(_has_error(validation, FleetRosterSetupHelper.RULE_DEPLOYMENT_BOUNDS),
+			"Bootstrap validation should surface out-of-bounds deployment errors")
+
+
 func _package_with_deployments() -> FleetSetupPackage:
 	return _package_from_rosters(
 		_rebel_roster(), _imperial_roster(), _deployments())
@@ -83,7 +100,7 @@ func _package_from_rosters(roster_zero: Dictionary, roster_one: Dictionary,
 			_player_entry(1, "GALACTIC_EMPIRE", roster_one),
 		],
 		"selected_objective": _selected_objective(),
-		"obstacles": [{"data_key": "asteroid_field", "pos_x": 0.2}],
+		"obstacles": [ {"data_key": "asteroid_field", "pos_x": 0.2}],
 		"deployments": deployments,
 		"setup_state": {"objective_key": "obj_ass_opening_salvo"},
 	})

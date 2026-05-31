@@ -46,28 +46,28 @@ dependency on local fleet files.
 
 | Area | Current state | Plan consequence |
 |---|---|---|
-| Ships | `Resources/Game_Components/ships/` contains 6 ship JSON files and related art. | Extend metadata in place; do not hardcode fleet-builder-only ship facts in GDScript. |
-| Squadrons | `Resources/Game_Components/squadrons/` contains 5 squadron JSON files and related art. | Extend metadata in place; refresh stale docs/manifests that still describe only the earlier MVP subset. |
-| Upgrades | `Resources/Game_Components/upgrades/` now exists with Core Set/Wave 0 card art and some rule notes grouped by upgrade type. `src/models/upgrade_data.gd` exists but is a field stub without `from_dict()`/loader support. | Normalize the arriving upgrade data into structured JSON by type, then add schema, parser, loader, and tests before validator/UI work depends on upgrades. |
-| Objectives | `Resources/Game_Components/objectives/` now contains all 12 Core Set objective card images, source rule notes, objective token art, and one structured JSON catalog file per objective. No `ObjectiveData` model exists yet. | Keep the folder lowercase, add schema/parser/loader support for the JSON shape, and normalize source-note filename typos when convenient. |
-| Obstacles | `Resources/Game_Components/obstacles/obstacles_specs.txt` exists with RRG notes for asteroid field, debris field, and station plus general obstacle rules. | Keep lowercase `obstacles/` as the canonical folder. Convert the text notes into structured JSON and art/shape metadata before deployment validation uses them. |
-| Generic rules | Squadron keyword implementations exist under `src/core/effects/rules/squadron_keywords/`, but there is no static rules-reference catalog yet. Squadron JSON currently duplicates keyword reminder text for display. | Add a rules-reference catalog so generic rules are read from one place by the fleet builder and matched to the same `RuleRegistry` rule ids used by gameplay implementation. Treat duplicated reminder text as transitional data. |
-| Schema | `Resources/Game_Components/card_data_schema.json` currently covers ships and squadrons only. | Extend schema for metadata, upgrades, objectives, obstacles, and future catalog indexes. |
-| Asset loading | `src/utils/asset_loader.gd` uses a hardcoded `ASSET_MANIFEST` and only has `load_ship_data()`, `load_squadron_data()`, and `load_json()`. | Add data-driven enumeration and typed loaders. The builder must not need a manifest edit for every card. |
-| README | `Resources/Game_Components/README.md` documents flat snake_case folders but does not list upgrades, objectives, or obstacles yet. | Update it when the folders are introduced and keep lower_snake_case as binding convention. |
+| Ships | `Resources/Game_Components/ships/` contains the Core Set ship JSON/art set, and `ShipData` exposes fleet-builder metadata from those records. | Keep ship facts in JSON; future catalog additions should extend metadata there rather than in validators or UI. |
+| Squadrons | `Resources/Game_Components/squadrons/` contains the Core Set squadrons plus later generic Imperial entries, and `SquadronData` exposes catalog/rules metadata. | Keep Core Set completeness expectations explicit in tests and docs so extra wave data does not blur MVP gates. |
+| Upgrades | `Resources/Game_Components/upgrades/` contains structured Core Set upgrade JSON and art; `UpgradeData.from_dict()` and typed loader support are implemented. | Keep validator/UI work consuming structured restriction metadata; live gameplay hooks remain later `RuleRegistry` slices. |
+| Objectives | `Resources/Game_Components/objectives/` contains structured Core Set objective JSON, card art, and token/source metadata; `ObjectiveData` and loader support are implemented. | Treat objective JSON as static setup/runtime metadata until individual objectives are made live through `RuleRegistry`. |
+| Obstacles | `Resources/Game_Components/obstacles/` contains Core Set obstacle JSON, art, and draft shape/setup metadata alongside source notes. | Setup/deployment validators can depend on structured obstacle data; expansion and objective-specific additions remain later catalog work. |
+| Generic rules | `Resources/Game_Components/rules/` exists with the initial static rules-reference catalog for implemented squadron keywords. | Add a follow-on content slice for commands, defense tokens, setup, obstacle, attack-timing, and scoring references without duplicating generic text in component JSON. |
+| Schema | `Resources/Game_Components/card_data_schema.json` now covers ships, squadrons, upgrades, objectives, obstacles, and rules-reference metadata. | Future catalog additions should extend the existing schema rather than add ad hoc loader contracts. |
+| Asset loading | `src/utils/asset_loader.gd` now has typed list/load helpers for upgrades, objectives, obstacles, and rules-reference records via data-driven enumeration; `ASSET_MANIFEST` remains for shared asset validation. | Keep fleet-builder catalog discovery data-driven and avoid reintroducing per-card manifest edits outside existence checks. |
+| README | `Resources/Game_Components/README.md` now documents the expanded folder layout, naming rules, and rules-reference catalog. | Keep lower_snake_case conventions and update docs when new catalog areas are added. |
 
 ### 1.2 Existing Runtime/Setup Surfaces
 
 | Surface | Current state | Plan consequence |
 |---|---|---|
-| Main menu | `src/scenes/main_menu/main_menu.gd` opens a scenario picker and starts `GameManager.set_next_scenario_id(...)`. | Add separate Fleet Builder and New Game setup entries without embedding validation logic in the menu script. |
-| Scenario setup | `src/core/state/learning_scenario_setup.gd` loads scenario JSON and creates ship/squadron instances from `AssetLoader`. | Extract reusable setup helpers rather than copy scenario creation logic. |
-| Game bootstrap | `src/autoload/game_manager.gd` bootstraps from scenario id or from loaded `GameState`. | Add a setup-package path after the package contract exists. Avoid broad bootstrap rewrites before tests describe both paths. |
-| Board spawning | `src/scenes/game_board/game_board.gd` has scenario and loaded-state spawn paths. | Generalize token spawn/bind from prepared instances and normalized placements. Keep visual token code in presentation, not fleet validation. |
+| Main menu | `src/scenes/main_menu/main_menu.gd` now includes a Fleet Builder entry alongside the existing scenario-driven start flows. | Add dedicated setup-flow entry points later without moving validation or setup logic into the menu script. |
+| Scenario setup | `src/core/state/learning_scenario_setup.gd` still loads scenario JSON, while shared preparation helpers now support setup-package starts. | Keep scenario bootstrap separate from package-specific setup presentation rather than folding both paths together. |
+| Game bootstrap | `src/autoload/game_manager.gd` bootstraps from scenario id, loaded `GameState`, or a setup package. | Preserve separate scenario and package regression coverage instead of widening one path in place. |
+| Board spawning | `src/scenes/game_board/game_board.gd` reuses the loaded-state spawn path for setup-package starts. | Further setup/deployment work should continue feeding prepared instances and placements through that shared spawn path. |
 | Player state | `src/core/state/player_state.gd` stores runtime ships/squadrons/fleet points. | Do not use `PlayerState` as the editable roster model. Fleet-builder drafts need separate core classes. |
-| Game state objectives | `src/core/state/game_state.gd` declares `objectives: Dictionary` but currently does not serialize it. | When objectives become active game state, add JSON-safe serialization/deserialization and tests in the same slice. |
-| Deployment positions | `src/models/token_placement.gd` and scenario JSON use `pos_x`, `pos_y`, and `rotation_deg`. | Fleet setup and deployment packages must use the same normalized coordinate contract, never pixels. |
-| Network lobby | Lobby currently selects scenario metadata before game start. | Treat fleet selection as a pre-game setup contract as soon as setup packages exist: host and client provide expanded roster payloads, the host validates the package, and both peers confirm the same package hash before bootstrap. |
+| Game state objectives | `src/core/state/game_state.gd` now serializes and deserializes `objectives`, including setup-package metadata carried into runtime state. | Extend the same JSON-safe contract when objective/obstacle runtime state grows in FB15. |
+| Deployment positions | `src/models/token_placement.gd`, scenario JSON, and setup-package deployment payloads all use `pos_x`, `pos_y`, and `rotation_deg`. | Keep full-footprint validation aligned with the same normalized contract in FB13B and FB14. |
+| Network lobby | `NetworkManager` can now broadcast a setup-package start in addition to scenario metadata, but roster/objective selection UI is still deferred. | Build setup-flow/lobby presentation on the same package builder and hash contract; do not invent a second network payload. |
 
 ### 1.3 Rules That Drive Validation
 
@@ -586,35 +586,45 @@ classes.
 
 ### 4.6 Codebase Readiness And Risk Assessment
 
-The codebase is ready for the foundation work in FB0-FB3: requirements,
-catalog contracts, schema cleanup, typed static data models, loader expansion,
-and catalog completeness tests. It is not ready for a direct jump from local
-fleet selection into game bootstrap. The risky area is the boundary between
-editable rosters, setup packages, runtime `GameState`, board spawning, network
-start, save/load, replay, and live `RuleRegistry` effects.
+The codebase is now through FB13A: requirements, catalog contracts, typed
+loaders, editable roster state, local library/import-export UI, setup-package
+building, runtime conversion/bootstrap, and first-pass rectangular runtime
+support are in place. The remaining fleet-builder risk has shifted from
+catalog/bootstrap creation to full-footprint geometry hardening, setup-flow
+presentation layering, placement validators, save/load expansion, and live
+`RuleRegistry` effects.
 
 Current strengths:
-- Static ship and squadron loaders already tolerate extra fleet-builder
-  metadata, so catalog enrichment can continue without breaking existing game
-  imports.
+- Typed catalog models and loader enumeration exist for ships, squadrons,
+  upgrades, objectives, obstacles, and rules-reference records.
+- The local fleet-builder scene and library workflows exist, so later slices
+  can build on established roster/catalog/validator APIs instead of inventing
+  new ones.
+- Setup-package building, canonical hashing, runtime conversion, bootstrap, and
+  network setup-package broadcast paths exist for hot-seat and network starts.
+- `GameState.objectives` now serializes, and setup-package map/objective
+  metadata already survives into runtime bootstrap.
+- Existing rectangular play-area tests already cover board width/height
+  handling across `GameScale`, overlays, camera, and setup-package starts.
 - `RuleRegistry`, `FlowSpec`, `CommandApplicability`, `UIProjector`, and the
   command processor provide the correct architecture for later objective,
   obstacle, upgrade, and named squadron ability rules.
-- Existing scenario JSON uses normalized placement fields, which matches the
-  setup-package coordinate contract.
-- Network save/load already has a full-state broadcast path, which is useful
-  precedent for deterministic package/state exchange.
 
 Current weaknesses:
-- `AssetLoader` still depends on a hardcoded manifest and only has typed ship
-  and squadron loaders.
-- `UpgradeData` is a field stub, and there are no `ObjectiveData`,
-  `ObstacleData`, or `RuleReferenceData` models yet.
-- `GameState.objectives` exists but is not serialized, and there is no runtime
-  state for selected objective, obstacles, objective tokens, or upgrade
-  assignments.
-- Network game start currently exchanges only `rng_seed` and `scenario_id`; it
-  does not exchange embedded rosters, setup package state, or package hashes.
+- `AssetLoader` still carries a hardcoded validation manifest for shared asset
+  existence. Keep fleet-builder discovery on the data-driven list/load helpers
+  and avoid reintroducing per-card manifest edits.
+- `TokenMover` and setup deployment application still operate on token centers
+  rather than full base footprints, so FB14 would inherit false-positive legal
+  placements without FB13B.
+- `src/scenes/setup_flow/` still does not exist. First-player selection,
+  objective choice, and package confirmation need a thin presentation slice
+  before placement UI grows around them.
+- The static rules-reference catalog currently covers the implemented squadron
+  keywords only; commands, defense tokens, setup, obstacle, attack-timing, and
+  scoring records remain content work.
+- Setup/deployment validators for obstacle placement, deployment zones, and
+  full-base bounds do not exist yet.
 - `GameBoard` still owns too much setup translation and token registration
   detail. Adding fleet setup directly there would increase coupling and make
   network/replay regressions harder to isolate.
@@ -642,6 +652,9 @@ Slice risk assessment:
 | FB11 | High | Setup package hashing, embedded rosters, objective choice, and host/client identity must align. |
 | FB12 | High | Roster-to-instance conversion crosses catalog, setup, runtime state, and board placement. |
 | FB13 | Critical | Game bootstrap affects hot-seat, network, loaded state, board spawning, RNG, and traces. |
+| FB13A | High | Rectangular runtime support touches movement, camera, overlays, and board-start regressions. |
+| FB13B | High | Full-footprint clamping must align runtime drag/push-out behavior with later setup validators and bootstrap. |
+| FB13C | Medium-high | Setup-flow UI must stay thin over validated package builders and not absorb placement logic before FB14. |
 | FB14 | High | Deployment/obstacle placement must choose package mutation or command-backed mutation cleanly. |
 | FB15 | High-critical | New runtime state must serialize, filter, replay, save/load, and network-mirror correctly. |
 | FB16 | Critical | Live objective, obstacle, upgrade, and named ability rules touch command legality and UI eligibility. |
@@ -667,6 +680,14 @@ Action advice for high and critical items:
   scenario-only paths in place. Keep scenario bootstrap tests green, add
   setup-package bootstrap tests, and require baseline traces once network or
   replay state is affected.
+- FB13B: replace center-only play-area clamping with footprint-aware ship and
+  squadron bounds shared by drag and push-out logic. Add rectangular edge,
+  corner, and rotated-base regressions before placement validators depend on
+  the same contract.
+- FB13C: build a thin `src/scenes/setup_flow/` coordinator for roster
+  selection, first-player selection, objective choice, package summary/hash
+  confirmation, and validation rendering. Keep obstacle and deployment
+  placement out of this slice so FB14 stays about placement semantics.
 - FB14: decide whether placement edits mutate the pre-bootstrap setup package
   or use `GameCommand`s after `GameState` exists. Do not let scene code mutate
   authoritative setup or runtime state directly.
@@ -690,6 +711,11 @@ Action advice for high and critical items:
 Each slice should be small enough to finish with targeted tests and a clear exit
 condition. Code-bearing slices must not be committed until the relevant manual
 test gate is passed.
+
+Status note:
+- `Complete` means the code and listed automated/manual gates are finished.
+- `Implemented` means code and automated checks landed, but at least one listed manual gate still remains.
+- `Planned` means the slice has not started.
 
 ### FB0 - Requirements And Source Inventory
 
@@ -821,7 +847,7 @@ test gate is passed.
 | Architecture gate | UI only calls catalog/roster/validator/library APIs. It does not implement fleet rules and adds no PlayMode branches. |
 | Tests | UI construction, search/filter interaction, add/remove flows, validation rendering, rules-reference browsing/navigation, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual create/edit invalid/legal fleet and rules-reference browsing pass. |
-| Status | Implemented as of 2026-05-28 and refined through 2026-05-30: added the local fleet-builder scene, menu entry, core-backed draft mutation and option helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing with selected-objective inspection, map selection below objectives with point-format filtering, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. Manual UI pass remains the final gate before commit. |
+| Status | Complete as of 2026-05-31: added the local fleet-builder scene, menu entry, core-backed draft mutation and option helpers, live point/validation rendering, catalog search with grouped upgrade-type filtering, one component-add action, roster objective editing with selected-objective inspection, map selection below objectives with point-format filtering, a Standard reference tab for selected component card rules plus validation, filtered rules-reference browsing, and a Card Art tab for the selected component. The manual UI pass for create/edit invalid/legal fleets and rules-reference browsing is complete. |
 
 ### FB10 - Library, Import, Export, And Version UI
 
@@ -833,7 +859,7 @@ test gate is passed.
 | Acceptance | User can manage multiple fleets, export JSON, import JSON, and restore an older local version from UI. |
 | Tests | Button flows with mocked library, invalid import display, version restore rendering, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual import/export/version pass. |
-| Status | Implemented as of 2026-05-30: added a reusable `FleetLibraryPanel` under the Fleet Data → Fleets tab with extracted action/view/list helpers, save/open/save-as/duplicate/delete confirmation, version restore, and import/export JSON controls; scene load/restore/import actions replace the active draft roster and rebuild local entry counters. Manual import/export/version pass remains the final gate before commit. |
+| Status | Complete as of 2026-05-31: added a reusable `FleetLibraryPanel` under the Fleet Data → Fleets tab with extracted action/view/list helpers, save/open/save-as/duplicate/delete confirmation, version restore, and import/export JSON controls; scene load/restore/import actions replace the active draft roster and rebuild local entry counters. The manual import/export/version pass is complete. |
 
 ### FB11 - Setup Package Model, Objective Choice Flow, And Network Contract
 
@@ -841,11 +867,11 @@ test gate is passed.
 |---|---|
 | Goal | Bridge two validated rosters into a deterministic pre-game setup package usable by hot-seat, network, replay, and bootstrap paths. |
 | Scope | Add `FleetSetupPackage`, `SetupValidationResult`, first-player selection, objective choice from second player's objectives, package serialization, canonical package hashing, match-ready expansion from local fleet ids to full roster payloads, host/client player-index mapping rules, and setup-state scaffolding derived from `ObjectiveData.setup_effects`. |
-| Primary files | New `src/core/setup/*.gd`; setup flow scene/controller skeleton remains deferred to the setup/deployment presentation slices. |
+| Primary files | New `src/core/setup/*.gd`; setup flow scene/controller skeleton remains deferred to FB13C and FB14. |
 | Acceptance | Two valid fleets produce a match-ready setup package; invalid rosters cannot start setup; selected objective records owner/chosen-by player; the first player's roster map is copied into the package; objective setup requirements such as objective ships, objective token placements, set-aside units, and deployment-order overrides are represented as JSON-safe setup state; a package containing one host roster and one client roster can be validated and hashed identically on both peers before game start. |
 | Tests | Package round trip, invalid fleet rejection, objective choice ownership, first-player persistence, representative objective setup-state extraction, local-id expansion to embedded rosters, host/client package equality, canonical hash stability. |
 | Verification | `godot --headless --import`, targeted GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` once the package can bootstrap or mirror network state. |
-| Status | Implemented as of 2026-05-30: extended `FleetSetupPackage` with JSON-safe setup state and first-player map payload, added `SetupValidationResult`, and added `FleetSetupPackageBuilder` for validated two-roster packages, local fleet-id expansion, objective ownership/chosen-by metadata, objective setup-effect scaffolding, and host/client roster-to-player mapping without peer ids in core JSON. Setup flow UI and runtime bootstrap remain in FB12-FB14. |
+| Status | Implemented as of 2026-05-30: extended `FleetSetupPackage` with JSON-safe setup state and first-player map payload, added `SetupValidationResult`, and added `FleetSetupPackageBuilder` for validated two-roster packages, local fleet-id expansion, objective ownership/chosen-by metadata, objective setup-effect scaffolding, and host/client roster-to-player mapping without peer ids in core JSON. Setup-flow presentation and placement UI remain in FB13C-FB14. |
 
 ### FB12 - Roster To Runtime Instance Conversion
 
@@ -881,7 +907,7 @@ test gate is passed.
 | Acceptance | A 3x3 map clamps/moves exactly within a 3x3 board; a 3x6 map clamps/moves exactly within a 3x6 board; board camera frames the full rectangle; deployment/drag helpers use width for x bounds and height for y bounds; no runtime path silently crops interaction to a square on 3x6 maps. |
 | Tests | `GameScale` rectangular sizing, `TokenMover` width/height clamping, deployment-zone overlay geometry, board camera framing, and targeted board/runtime regressions for 3x6 map payload starts. |
 | Verification | Targeted GUT for geometry/runtime files, full GUT, `bash scripts/lint_phase_k.sh`, manual 3x3 and 3x6 board interaction pass before FB14 placement UI. |
-| Status | Implemented as of 2026-05-30: runtime geometry now routes token movement, board drag helpers, deployment-zone geometry, attack-simulator arc clipping, and firing-arc debug extents through rectangular play-area sizing; 3x3 maps use the full play area as setup area while still keeping distance-3 deployment-zone boundaries, and 3x6 maps keep the standard height-based deployment bounds. Focused/full GUT and `bash scripts/lint_phase_k.sh` pass. Manual 3x3 and 3x6 board interaction remains the final gate before FB14 placement UI. |
+| Status | Implemented, manual gate still pending as of 2026-05-31: runtime geometry now routes token movement, board drag helpers, deployment-zone geometry, attack-simulator arc clipping, and firing-arc debug extents through rectangular play-area sizing; 3x3 maps use the full play area as setup area while still keeping distance-3 deployment-zone boundaries, and 3x6 maps keep the standard height-based deployment bounds. Focused/full GUT and `bash scripts/lint_phase_k.sh` pass. The dedicated manual rectangular-map pass is not yet available end to end, so FB13A remains short of complete until that path can be exercised. |
 
 ### FB13B - Rectangular Play-Area And Base-Footprint Hardening
 
@@ -898,13 +924,25 @@ test gate is passed.
 | Verification | Targeted geometry/setup GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual 3x3/3x6 drag/rotate/pan/zoom and start-from-fleet pass. |
 | Status | Planned: complete this hardening before FB14 so deployment and obstacle placement do not inherit center-only or square-board assumptions. |
 
+### FB13C - Setup Flow Selection And Package Confirmation
+
+| Field | Plan |
+|---|---|
+| Goal | Add the thin presentation layer for selecting two rosters, choosing first player and objective, and confirming a validated setup package before placement begins. |
+| Scope | Add `src/scenes/setup_flow/` coordinator/widgets for choosing local rosters, invoking `FleetSetupPackageBuilder`, surfacing `SetupValidationResult`, selecting first player and the second player's objective, previewing package hash/map summary, and handing the validated package to later placement/start flows. Keep obstacle and deployment placement out of this slice. |
+| Primary files | New `src/scenes/setup_flow/*`, minimal additions in `src/scenes/main_menu/main_menu.gd` or lobby entry points, existing core setup classes. |
+| Acceptance | Hot-seat setup can choose two local rosters, choose first player/objective, reject invalid rosters, display deterministic package summary/hash, and hand off a validated package without local-library coupling. Network/lobby reuse remains on the same builder contract. |
+| Tests | Focused setup-flow UI/controller tests with mocked library/builder, invalid roster display, objective ownership rendering, package-summary rendering, no orphan/leak warnings. |
+| Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual local setup selection and package-confirmation pass. |
+| Status | Planned: land after FB13B so package-confirmation UI is in place before FB14 adds placement state and validators. |
+
 ### FB14 - Deployment And Obstacle Placement Flow
 
 | Field | Plan |
 |---|---|
 | Goal | Let setup choose/place obstacles and deploy fleet components using normalized positions. |
 | Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. Validators must validate full ship/squadron footprints, not just token centers, and serialize normalized positions using `x / play_area_size.x` and `y / play_area_size.y`. The validators must account for 3x3 maps using the full play area as setup area while ships still deploy within distance 1-3 of their player edge, and 3x6 maps using the standard 3x4 setup area plus distance 1-3 deployment zones from the RRG. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
-| Primary files | `src/core/setup/*deployment*.gd`, `src/core/setup/*obstacle*.gd`, setup flow scene/widgets, `src/models/token_placement.gd` reuse. |
+| Primary files | `src/core/setup/*deployment*.gd`, `src/core/setup/*obstacle*.gd`, existing `src/scenes/setup_flow/*` widgets/controllers, `src/models/token_placement.gd` reuse. |
 | Acceptance | User can place Core Set obstacles and deploy ships/squadrons, then serialize a setup package with normalized placements that hot-seat and network start paths can consume identically. |
 | Tests | Placement serialization, bounds validation, obstacle set completeness, deployment-zone warnings/errors, no pixel values in payloads, host/client placement package equality. |
 | Verification | Focused setup UI tests, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual deployment pass. |
@@ -1013,44 +1051,50 @@ code-bearing slices.
 
 ## 8. Open Questions And Useful Context
 
-1. Upgrade files are arriving under `Resources/Game_Components/upgrades/`.
-  Confirm whether the current per-type subfolders are the desired long-term
-  layout before FB1 locks the schema and loader behavior.
-2. Confirm the exact Core Set upgrade card list to treat as the
-   MVP completeness checklist.
-3. First-player selection is manual for MVP and recorded in the setup package;
-  bid/initiative automation is later work.
-4. Deployment begins as warning-guided manual placement with normalized
+1. The per-type `Resources/Game_Components/upgrades/` layout is now in use.
+  Revisit it only if tooling or loader ergonomics become a real problem; do
+  not reopen FB1 schema work without a concrete migration reason.
+2. Add a follow-on Rules Reference content slice beyond squadron keywords:
+  commands, defense tokens, attack timing, setup, obstacles, and scoring still
+  need static catalog records.
+3. Land `src/scenes/setup_flow/` as a thin setup-package
+  selection/confirmation layer after FB13B and before FB14, unless FB14 is
+  explicitly re-scoped to own that UI.
+4. First-player selection remains manual for MVP and recorded in the setup
+  package; bid/initiative automation is later work.
+5. Deployment begins as warning-guided manual placement with normalized
   positions; strict hard enforcement can harden in later setup validators.
-5. Confirm whether local fleet files should live beside saves, under a new
-   `fleets/` folder, or in Godot user data only.
-6. Confirm which generic rules beyond squadron keywords belong in the first
-  Rules Reference slice: commands, defense tokens, attack timing, setup,
-  obstacles, scoring, or all Core Set RRG glossary entries.
+6. `FleetLibraryManager` currently stores fleets under `PathConfig.SAVES_DIR + "/fleets"`.
+  Keep setup packages independent from that local library path.
 7. Pick a future backend direction before FB18: self-hosted API, hosted service,
-   file-sync provider, or no cloud for now.
+  file-sync provider, or no cloud for now.
 
 ---
 
 ## 9. Suggested Next Slice
 
-FB0-FB13A are now the requirements, component-contract, typed-loading,
-setup-hash, Core Set catalog, editable roster model, catalog-query, validator
-foundation, local library/import-export UI, setup-package contract, runtime
-instance conversion, setup-package bootstrap, and first rectangular runtime
-support. Continue with FB13B before FB14 so placement work does not build on
-center-only or square-board assumptions.
+FB0-FB13A are now code-complete for requirements, component-contract,
+typed-loading, setup-hash, Core Set catalog, editable roster model,
+catalog-query, validator foundation, local library/import-export UI,
+setup-package contract, runtime instance conversion, setup-package bootstrap,
+and first rectangular runtime support. Manual verification is still pending on
+FB9, FB10, and FB13A. Continue with FB13B before FB13C and FB14 so placement
+work does not build on center-only or square-board assumptions.
 
 1. Harden `TokenMover` and any remaining runtime geometry paths so full
    ship/squadron footprints stay inside 3x3 and 3x6 play areas.
 2. Add focused rectangular regression tests for edge/corner clamping, rotated
    ships, push-out candidates, camera framing, overlays, and setup-package map
    starts.
-3. Carry the same full-footprint boundary contract into FB14 deployment and
-   obstacle placement validators, using normalized positions derived from
-   `play_area_size_px`.
-4. Run the full geometry/runtime verification gate, including baseline traces,
-   before beginning FB14 deployment and obstacle placement UI.
+3. Land FB13C as a thin setup-flow/package-confirmation layer for roster
+  selection, first-player selection, objective choice, and validated package
+  summary/hash display before placement UI is added.
+4. Carry the same full-footprint boundary contract into FB14 deployment and
+  obstacle placement validators, using normalized positions derived from
+  `play_area_size_px`.
+5. Run the full geometry/runtime verification gate, including baseline traces,
+  before beginning FB14 deployment and obstacle placement UI.
 
-This keeps FB14 focused on setup placement semantics and prevents rectangular
-board corrections from being mixed into deployment/obstacle rule work.
+This keeps FB13C focused on setup-package confirmation, keeps FB14 focused on
+setup placement semantics, and prevents rectangular board corrections from
+being mixed into deployment/obstacle rule work.

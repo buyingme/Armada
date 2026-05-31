@@ -20,7 +20,8 @@ const REFERENCE_TABS_MIN_SIZE: Vector2 = Vector2(320, 0)
 const COMPONENT_RULES_LIST_MIN_SIZE: Vector2 = Vector2(0, 96)
 const COMPONENT_RULES_TEXT_MIN_SIZE: Vector2 = Vector2(0, 150)
 const VALIDATION_LIST_MIN_SIZE: Vector2 = Vector2(0, 128)
-const OBJECTIVE_VIEW_BUTTON_SIZE: Vector2 = Vector2(72, 32)
+const COMPONENT_VIEW_BUTTON_SIZE: Vector2 = Vector2(72, 32)
+const COMPONENT_TYPE_MAP: String = "MAP"
 
 var _catalog: FleetCatalog = FleetCatalog.new()
 var _validator: FleetValidator = FleetValidator.new()
@@ -304,13 +305,17 @@ func _build_objective_selectors() -> VBoxContainer:
 
 
 func _build_objective_row(category: String, option: OptionButton) -> HBoxContainer:
+	return _build_component_view_row(option, _on_objective_view_pressed.bind(category))
+
+
+func _build_component_view_row(option: OptionButton, pressed: Callable) -> HBoxContainer:
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.add_child(option)
 	var view_button: Button = Button.new()
 	view_button.text = "View"
-	view_button.custom_minimum_size = OBJECTIVE_VIEW_BUTTON_SIZE
-	view_button.pressed.connect(_on_objective_view_pressed.bind(category))
+	view_button.custom_minimum_size = COMPONENT_VIEW_BUTTON_SIZE
+	view_button.pressed.connect(pressed)
 	row.add_child(view_button)
 	return row
 
@@ -322,7 +327,7 @@ func _build_map_selector() -> VBoxContainer:
 	_map_option = OptionButton.new()
 	_map_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_map_option.item_selected.connect(_on_map_selected)
-	box.add_child(_map_option)
+	box.add_child(_build_component_view_row(_map_option, _on_map_view_pressed))
 	return box
 
 
@@ -392,7 +397,7 @@ func _build_rules_tab() -> VBoxContainer:
 
 func _build_card_art_tab() -> Control:
 	var panel: Control = Control.new()
-	panel.name = "Card Art"
+	panel.name = "Component Art"
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_card_art_rect = TextureRect.new()
 	_card_art_rect.name = "CardArtRect"
@@ -408,7 +413,7 @@ func _build_card_art_tab() -> Control:
 func _build_card_art_placeholder() -> CenterContainer:
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_preset(PRESET_FULL_RECT)
-	_card_art_placeholder_label = _create_body_label("No card art selected")
+	_card_art_placeholder_label = _create_body_label("No component art selected")
 	_card_art_placeholder_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center.add_child(_card_art_placeholder_label)
 	return center
@@ -833,7 +838,12 @@ func _on_map_selected(index: int) -> void:
 		return
 	var payload: Dictionary = _map_option.get_item_metadata(index) as Dictionary
 	_roster.map = payload.duplicate(true)
+	_select_map_component(payload)
 	_refresh_after_mutation()
+
+
+func _on_map_view_pressed() -> void:
+	_select_map_component(_selected_map_payload())
 
 
 func _on_rules_item_selected(index: int) -> void:
@@ -927,6 +937,11 @@ func _refresh_after_mutation() -> void:
 func _select_objective_component(data_key: String) -> void:
 	_deselect_inactive_component_lists(null)
 	_select_roster_component(FleetCatalog.COMPONENT_OBJECTIVE, data_key)
+
+
+func _select_map_component(payload: Dictionary) -> void:
+	_deselect_inactive_component_lists(null)
+	_select_component(_map_component_entry(payload))
 
 
 func _select_first_objective_component() -> void:
@@ -1174,6 +1189,12 @@ func _selected_option_metadata(option: OptionButton) -> String:
 	return str(option.get_item_metadata(option.selected))
 
 
+func _selected_map_payload() -> Dictionary:
+	if _map_option == null or _map_option.selected < 0:
+		return {}
+	return (_map_option.get_item_metadata(_map_option.selected) as Dictionary).duplicate(true)
+
+
 func _refresh_upgrade_type_visibility() -> void:
 	var is_upgrade_catalog: bool = _selected_catalog_type() == FleetCatalog.COMPONENT_UPGRADE
 	_catalog_upgrade_type_option.visible = is_upgrade_catalog
@@ -1193,6 +1214,8 @@ func _add_component_card_rule(entry: Dictionary) -> void:
 func _component_card_rule_payload(entry: Dictionary) -> Dictionary:
 	var resource: Variant = entry.get("resource", null)
 	match str(entry.get("component_type", "")):
+		COMPONENT_TYPE_MAP:
+			return _map_rule_payload(resource as Dictionary)
 		FleetCatalog.COMPONENT_UPGRADE:
 			return _upgrade_rule_payload(resource as UpgradeData)
 		FleetCatalog.COMPONENT_SQUADRON:
@@ -1212,6 +1235,16 @@ func _upgrade_rule_payload(data: UpgradeData) -> Dictionary:
 	_append_text_section(lines, "Clarifications", data.clarifications)
 	_append_status_section(lines, data.rules_integration)
 	return _card_rule_payload("Card Text", lines)
+
+
+func _map_rule_payload(payload: Dictionary) -> Dictionary:
+	var filename: String = str(payload.get("filename", ""))
+	if filename.is_empty():
+		return {}
+	var lines: Array[String] = [str(payload.get("label", filename.get_basename()))]
+	_append_named_text(lines, "Map Size", str(payload.get("grid", "")))
+	_append_named_text(lines, "Filename", filename)
+	return _card_rule_payload("Map Details", lines)
 
 
 func _squadron_rule_payload(data: SquadronData) -> Dictionary:
@@ -1265,6 +1298,8 @@ func _append_status_section(lines: Array[String], integration: Dictionary) -> vo
 func _card_texture_for_entry(entry: Dictionary) -> Texture2D:
 	var resource: Variant = entry.get("resource", null)
 	match str(entry.get("component_type", "")):
+		COMPONENT_TYPE_MAP:
+			return _map_preview_texture(resource as Dictionary)
 		FleetCatalog.COMPONENT_SHIP:
 			return _ship_card_texture(resource as ShipData)
 		FleetCatalog.COMPONENT_SQUADRON:
@@ -1281,6 +1316,13 @@ func _ship_card_texture(data: ShipData) -> Texture2D:
 	if data == null:
 		return null
 	return AssetLoader.load_texture(AssetLoader.SHIP_FOLDER, data.card_image)
+
+
+func _map_preview_texture(payload: Dictionary) -> Texture2D:
+	var filename: String = str(payload.get("filename", ""))
+	if filename.is_empty():
+		return null
+	return AssetLoader.load_texture(AssetLoader.MAP_FOLDER, filename)
 
 
 func _squadron_card_texture(data: SquadronData) -> Texture2D:
@@ -1336,6 +1378,18 @@ func _find_asset_entry_path(dir: DirAccess, subfolder: String,
 	if entry_name == filename:
 		return relative_path
 	return ""
+
+
+func _map_component_entry(payload: Dictionary) -> Dictionary:
+	if payload.is_empty():
+		return {}
+	var selected_payload: Dictionary = payload.duplicate(true)
+	return {
+		"component_type": COMPONENT_TYPE_MAP,
+		"data_key": str(selected_payload.get("filename", "")),
+		"display_name": str(selected_payload.get("label", "")),
+		"resource": selected_payload,
+	}
 
 
 func _set_card_art_anchors(rect: TextureRect) -> void:

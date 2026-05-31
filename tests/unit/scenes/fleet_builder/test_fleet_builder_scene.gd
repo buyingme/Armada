@@ -45,7 +45,8 @@ func test_ready_builds_required_sections_expected() -> void:
 		"Reference panel should expose tab navigation")
 	assert_not_null(_scene.find_child("Standard", true, false), "Reference should include Standard tab")
 	assert_not_null(_scene.find_child("Rules", true, false), "Reference should include Rules tab")
-	assert_not_null(_scene.find_child("Card Art", true, false), "Reference should include Card Art tab")
+	assert_not_null(_scene.find_child("Component Art", true, false),
+		"Reference should include Component Art tab")
 	assert_true(_scene._catalog_list.item_count > 0, "Catalog should populate on ready")
 	assert_true(_scene._rules_list.item_count > 0, "Rules reference should populate on ready")
 
@@ -108,6 +109,38 @@ func test_map_selection_updates_roster_expected() -> void:
 
 	assert_eq(_scene.current_roster().map.get("filename", ""), payload.get("filename", ""),
 		"Selecting a map should update the active roster payload")
+	assert_eq(str(_scene._selected_component_entry.get("data_key", "")),
+		str(payload.get("filename", "")),
+		"Selecting a map should make it the active reference component")
+	assert_true(_scene._component_rules_text.text.contains(str(payload.get("label", ""))),
+		"Selecting a map should show its details in the reference tab")
+	assert_not_null(_scene._card_art_rect.texture,
+		"Selecting a map should load its preview art")
+
+
+func test_map_selector_includes_view_button_expected() -> void:
+	var button: Button = _find_sibling_button(_scene._map_option, "View")
+
+	assert_not_null(button, "Map selector should include a View button")
+
+
+func test_map_view_reopens_current_map_expected() -> void:
+	_select_point_limit(400)
+	var target_index: int = mini(1, _scene._map_option.item_count - 1)
+	var payload: Dictionary = _scene._map_option.get_item_metadata(target_index) as Dictionary
+	_scene._map_option.select(target_index)
+	_scene._on_map_selected(target_index)
+	_select_catalog_key(FleetCatalog.COMPONENT_UPGRADE, "redemption")
+
+	_scene._on_map_view_pressed()
+
+	assert_eq(str(_scene._selected_component_entry.get("data_key", "")),
+		str(payload.get("filename", "")),
+		"View should make the current map inspectable again")
+	assert_true(_scene._component_rules_text.text.contains(str(payload.get("label", ""))),
+		"View should restore the selected map details")
+	assert_not_null(_scene._card_art_rect.texture,
+		"View should restore the selected map preview art")
 
 
 func test_standard_tab_expands_selected_rules_text_expected() -> void:
@@ -478,6 +511,19 @@ func _cleanup_test_dir() -> void:
 
 func _find_button(root: Node, label_text: String) -> Button:
 	for child: Node in root.find_children("*", "Button", true, false):
+		var button: Button = child as Button
+		if button != null and button.text == label_text:
+			return button
+	return null
+
+
+func _find_sibling_button(control: Control, label_text: String) -> Button:
+	if control == null:
+		return null
+	var parent: Node = control.get_parent()
+	if parent == null:
+		return null
+	for child: Node in parent.get_children():
 		var button: Button = child as Button
 		if button != null and button.text == label_text:
 			return button

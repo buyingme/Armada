@@ -714,6 +714,7 @@ test gate is passed.
 
 Status note:
 - `Complete` means the code and listed automated/manual gates are finished.
+- `In progress` means a slice has started and some scoped code or validation has landed, but the slice still has remaining planned work.
 - `Implemented` means code and automated checks landed, but at least one listed manual gate still remains.
 - `Planned` means the slice has not started.
 
@@ -922,7 +923,7 @@ Status note:
 | Acceptance | Ships and squadrons cannot be dragged, pushed out, bootstrapped, or validated as deployed with any part of their footprint outside the selected map; rotated ship extents are respected for drag clamping; x bounds use board width and y bounds use board height; 3x3 maps use the full 3x3 play area; 3x6 maps preserve the intended 6x3 play area and setup/deployment regions; camera and overlays frame/draw the full rectangle. |
 | Tests | `TokenMover` footprint clamping for ships, rotated ships, and squadrons on all edges/corners; push-out candidate clamping near edges; `GameScale` map filename sizing; deployment-zone overlay geometry; board camera framing; setup-package/bootstrap regression for both 3x3 and 3x6 selected maps; placement-validator tests for full-base boundary rejection and normalized coordinate conversion. |
 | Verification | Targeted geometry/setup GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual 3x3/3x6 drag/rotate/pan/zoom and start-from-fleet pass. |
-| Status | Planned: complete this hardening before FB14 so deployment and obstacle placement do not inherit center-only or square-board assumptions. |
+| Status | In progress as of 2026-05-31: `TokenMover` now uses footprint-aware play-area clamps for direct ship/squadron movement and for ship push-out candidate collection, with focused `test_token_mover.gd` FB13B regressions added for squadron radius clamping, direct ship footprint clamping, rotated ship extents, and edge push-out candidates. Focused GUT, full GUT, `bash scripts/lint_phase_k.sh`, and `bash scripts/run_baseline_traces.sh --all` pass. Remaining FB13B work is to carry the same full-footprint contract into later setup/deployment validators and any remaining bootstrap/placement seams before FB14. |
 
 ### FB13C - Setup Flow Selection And Package Confirmation
 

@@ -331,10 +331,12 @@ func test_resolve_squadron_in_rectangular_play_area_clamps_to_width() -> void:
 			desired, current, radius,
 			Constants.Faction.REBEL_ALLIANCE,
 			[], [], -1.0, -1.0, play_area_size)
-	assert_almost_eq(result.x, play_area_size.x, 1.0,
-			"3x6 movement should clamp X against the rectangular board width")
+	assert_almost_eq(result.x, play_area_size.x - radius, 1.0,
+			"3x6 movement should keep the squadron footprint inside the board width")
 	assert_almost_eq(result.y, desired.y, 1.0,
 			"Rectangular X clamping should not disturb legal Y values")
+	assert_true(result.x + radius <= play_area_size.x + 1.0,
+			"Squadron footprint should stay inside the rectangular right edge")
 
 func test_resolve_squadron_clamped_to_play_area() -> void:
 	var radius: float = GameScale.squadron_base_diameter_px * 0.5
@@ -359,10 +361,59 @@ func test_resolve_ship_clamped_to_play_area() -> void:
 			Constants.ShipSize.SMALL, 0.0,
 			Constants.Faction.REBEL_ALLIANCE,
 			[], [], -1.0, -1.0, side)
-	assert_true(result.x <= side,
-			"X should be clamped to play area side")
-	assert_true(result.y <= side,
-			"Y should be clamped to play area side")
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var half_w: float = base_size.x * 0.5
+	var half_l: float = base_size.y * 0.5
+	assert_true(result.x <= side - half_w + 1.0,
+			"Ship width footprint should stay inside the play area")
+	assert_true(result.y <= side - half_l + 1.0,
+			"Ship length footprint should stay inside the play area")
+
+
+func test_resolve_ship_in_rectangular_play_area_clamps_rotated_footprint() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	var rotation_rad: float = PI * 0.25
+	var desired: Vector2 = Vector2(play_area_size.x + 300.0, play_area_size.y + 300.0)
+	var current: Vector2 = Vector2(play_area_size.x * 0.5, play_area_size.y * 0.5)
+	var result: Vector2 = _mover.resolve_ship_position_in_area(
+			desired, current,
+			Constants.ShipSize.SMALL, rotation_rad,
+			Constants.Faction.REBEL_ALLIANCE,
+			[], [], -1.0, -1.0, play_area_size)
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var half_w: float = base_size.x * 0.5
+	var half_l: float = base_size.y * 0.5
+	var extent_x: float = absf(half_w * cos(rotation_rad)) + absf(half_l * sin(rotation_rad))
+	var extent_y: float = absf(half_w * sin(rotation_rad)) + absf(half_l * cos(rotation_rad))
+	assert_true(result.x <= play_area_size.x - extent_x + 1.0,
+			"Rotated ship width extent should stay inside the rectangular board")
+	assert_true(result.y <= play_area_size.y - extent_y + 1.0,
+			"Rotated ship length extent should stay inside the rectangular board")
+
+
+func test_collect_ship_pushouts_clamps_candidates_to_footprint_bounds() -> void:
+	GameScale.configure_play_area_for_map_filename("map_3x6_distant_planet_v4.jpg")
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var half_w: float = base_size.x * 0.5
+	var half_l: float = base_size.y * 0.5
+	var blocker: Dictionary = {
+		"position": Vector2(play_area_size.x - half_w - 20.0, play_area_size.y * 0.5),
+		"rotation": 0.0,
+		"half_w": half_w,
+		"half_l": half_l,
+	}
+	var result: Dictionary = _mover._collect_ship_pushouts(
+			blocker.position + Vector2(half_w * 0.5, 0.0), 0.0, half_w, half_l,
+			[blocker], [], Constants.Faction.REBEL_ALLIANCE,
+			-1.0, -1.0, play_area_size)
+	var invalid: Array = result.get("invalid", []) as Array
+	assert_false(invalid.is_empty(),
+			"Push-out collection should produce an edge candidate for the overlapping ship")
+	var candidate: Vector2 = invalid[0] as Vector2
+	assert_true(candidate.x <= play_area_size.x - half_w + 1.0,
+			"Ship push-out candidates should keep the full base inside the board width")
 
 
 # ---------------------------------------------------------------------------

@@ -124,7 +124,8 @@ func _clamp_ship_candidate(
 		faction: Constants.Faction,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_zones: bool) -> Vector2:
-	var result: Vector2 = _clamp_to_play_area(pos, play_area_size)
+	var result: Vector2 = _clamp_rotated_rect_to_play_area(
+			pos, hw, hl, rot, play_area_size)
 	if enforce_zones:
 		result = _apply_deploy_zone_ship(
 				result, hw, hl, rot, faction, top_y, bottom_y)
@@ -243,7 +244,7 @@ func _clamp_circle_candidate(
 		faction: Constants.Faction,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_zones: bool) -> Vector2:
-	var result: Vector2 = _clamp_to_play_area(pos, play_area_size)
+	var result: Vector2 = _clamp_circle_to_play_area(pos, radius, play_area_size)
 	if enforce_zones:
 		result = _apply_deploy_zone_circle(
 				result, radius, faction, top_y, bottom_y)
@@ -416,12 +417,38 @@ func _apply_deploy_zone_circle(
 # Clamp to play area
 # ---------------------------------------------------------------------------
 
-func _clamp_to_play_area(pos: Vector2, play_area_size: Vector2) -> Vector2:
+func _clamp_rotated_rect_to_play_area(
+		pos: Vector2, hw: float, hl: float, rot: float,
+		play_area_size: Vector2) -> Vector2:
+	var extents: Vector2 = _rotated_rect_extents(hw, hl, rot)
+	return _clamp_to_play_area_with_extents(pos, extents, play_area_size)
+
+
+func _clamp_circle_to_play_area(
+		pos: Vector2, radius: float, play_area_size: Vector2) -> Vector2:
+	return _clamp_to_play_area_with_extents(
+			pos, Vector2(radius, radius), play_area_size)
+
+
+func _clamp_to_play_area_with_extents(
+		pos: Vector2, extents: Vector2, play_area_size: Vector2) -> Vector2:
 	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return pos
 	return Vector2(
-			clampf(pos.x, 0.0, play_area_size.x),
-			clampf(pos.y, 0.0, play_area_size.y))
+			_clamp_axis_with_extent(pos.x, play_area_size.x, extents.x),
+			_clamp_axis_with_extent(pos.y, play_area_size.y, extents.y))
+
+
+func _clamp_axis_with_extent(value: float, axis_size: float, extent: float) -> float:
+	if extent * 2.0 >= axis_size:
+		return axis_size * 0.5
+	return clampf(value, extent, axis_size - extent)
+
+
+func _rotated_rect_extents(hw: float, hl: float, rot: float) -> Vector2:
+	return Vector2(
+			absf(hw * cos(rot)) + absf(hl * sin(rot)),
+			absf(hw * sin(rot)) + absf(hl * cos(rot)))
 
 
 func _square_play_area_size(side: float) -> Vector2:
@@ -447,7 +474,7 @@ func _collect_ship_pushouts(
 		if not _ship_overlaps_any(from_pos, rot, hw, hl, [other], []):
 			continue
 		var pushed: Vector2 = _push_ship_from_ship(from_pos, rot, hw, hl, other)
-		pushed = _clamp_to_play_area(pushed, play_area_size)
+		pushed = _clamp_rotated_rect_to_play_area(pushed, hw, hl, rot, play_area_size)
 		if enforce_deploy_zones:
 			pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
 		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
@@ -458,7 +485,7 @@ func _collect_ship_pushouts(
 		if not _ship_overlaps_any(from_pos, rot, hw, hl, [], [other]):
 			continue
 		var pushed: Vector2 = _push_ship_from_circle(from_pos, rot, hw, hl, other)
-		pushed = _clamp_to_play_area(pushed, play_area_size)
+		pushed = _clamp_rotated_rect_to_play_area(pushed, hw, hl, rot, play_area_size)
 		if enforce_deploy_zones:
 			pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
 		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
@@ -483,7 +510,7 @@ func _collect_circle_pushouts(
 		if not _circle_overlaps_any(from_pos, radius, [other], []):
 			continue
 		var pushed: Vector2 = _push_circle_from_ship(from_pos, radius, other)
-		pushed = _clamp_to_play_area(pushed, play_area_size)
+		pushed = _clamp_circle_to_play_area(pushed, radius, play_area_size)
 		if enforce_deploy_zones:
 			pushed = _apply_deploy_zone_circle(pushed, radius, faction, top_y, bottom_y)
 		if _circle_overlaps_any(pushed, radius, other_ships, other_squads):
@@ -494,7 +521,7 @@ func _collect_circle_pushouts(
 		if not _circle_overlaps_any(from_pos, radius, [], [other]):
 			continue
 		var pushed: Vector2 = _push_circle_from_circle(from_pos, radius, other)
-		pushed = _clamp_to_play_area(pushed, play_area_size)
+		pushed = _clamp_circle_to_play_area(pushed, radius, play_area_size)
 		if enforce_deploy_zones:
 			pushed = _apply_deploy_zone_circle(pushed, radius, faction, top_y, bottom_y)
 		if _circle_overlaps_any(pushed, radius, other_ships, other_squads):

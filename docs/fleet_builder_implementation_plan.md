@@ -869,26 +869,13 @@ test gate is passed.
 | Acceptance | Existing scenario starts still pass; a setup package starts a board with correct player states, damage deck, RNG, first-player roster map, ships, and squadrons in hot-seat and network modes; host/client final state hashes match after network start. |
 | Tests | Scenario path regression, setup-package bootstrap, network setup-package bootstrap, loaded-state spawn regression, token binding assertions. |
 | Verification | Full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual hot-seat and two-process network start-from-fleet pass. |
-| Status | Implemented as of 2026-05-30: added `FleetSetupBootstrapper` as the core package-to-`GameState` helper, added `GameManager` setup-package start/next-bootstrap entry points, added network pending setup-package config, reused the loaded-state board spawn path for package starts, preserved deployment positions in runtime instances, serialized `GameState.objectives`, carries the first-player roster map through state for board loading, and added a `standard_3x6` map-only scenario shell for package-start fallback map loading. |
-
-### FB13A - Rectangular Play-Area Runtime Support
-
-| Field | Plan |
-|---|---|
-| Goal | Make the runtime geometry, camera, overlays, and token movement honor rectangular 3x3 and 3x6 play areas instead of assuming a square board. |
-| Scope | Replace remaining `play_area_side_px` movement/clamp/deployment call paths with `play_area_size_px`, keep `play_area_side_px` only as a legacy height alias where unavoidable, update board drag/move helpers, deployment-zone overlay geometry, and debug/setup overlays so x bounds use board width and y bounds use board height. |
-| Primary files | `src/core/movement/token_mover.gd`, `src/scenes/game_board/game_board.gd`, `src/scenes/game_board/squadron_phase_controller.gd`, `src/scenes/game_board/deployment_zone_overlay.gd`, `src/scenes/game_board/board_camera.gd`, targeted overlays/controllers still extending by square side. |
-| Acceptance | A 3x3 map clamps/moves exactly within a 3x3 board; a 3x6 map clamps/moves exactly within a 3x6 board; board camera frames the full rectangle; deployment/drag helpers use width for x bounds and height for y bounds; no runtime path silently crops interaction to a square on 3x6 maps. |
-| Tests | `GameScale` rectangular sizing, `TokenMover` width/height clamping, deployment-zone overlay geometry, board camera framing, and targeted board/runtime regressions for 3x6 map payload starts. |
-| Verification | Targeted GUT for geometry/runtime files, full GUT, `bash scripts/lint_phase_k.sh`, manual 3x3 and 3x6 board interaction pass before FB14 placement UI. |
-| Status | Implemented as of 2026-05-30: runtime geometry now routes token movement, board drag helpers, deployment-zone geometry, attack-simulator arc clipping, and firing-arc debug extents through rectangular play-area sizing; 3x3 maps disable standard deployment lines while 3x6 maps keep height-based deployment bounds. Focused/full GUT and `bash scripts/lint_phase_k.sh` pass. Manual 3x3 and 3x6 board interaction remains the final gate before FB14 placement UI. |
 
 ### FB14 - Deployment And Obstacle Placement Flow
 
 | Field | Plan |
 |---|---|
 | Goal | Let setup choose/place obstacles and deploy fleet components using normalized positions. |
-| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. The validators must account for 3x3 maps using the full play area as setup area and 3x6 maps using the standard 3x4 setup area/deployment-zone rules from the RRG. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
+| Scope | Add obstacle placement state, deployment placement state, warning-guided manual placement UI first, and validators for normalized bounds/deployment zones/obstacle overlap constraints. If placement remains pre-bootstrap, it updates the setup package; if placement occurs after `GameState` exists, it uses commands so network peers and replays receive the same mutations. |
 | Primary files | `src/core/setup/*deployment*.gd`, `src/core/setup/*obstacle*.gd`, setup flow scene/widgets, `src/models/token_placement.gd` reuse. |
 | Acceptance | User can place Core Set obstacles and deploy ships/squadrons, then serialize a setup package with normalized placements that hot-seat and network start paths can consume identically. |
 | Tests | Placement serialization, bounds validation, obstacle set completeness, deployment-zone warnings/errors, no pixel values in payloads, host/client placement package equality. |

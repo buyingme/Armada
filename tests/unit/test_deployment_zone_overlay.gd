@@ -50,10 +50,10 @@ func before_each() -> void:
 # Top line
 # ---------------------------------------------------------------------------
 
-func test_top_line_negative_for_3x3_full_setup_area() -> void:
+func test_top_line_y_equals_distance_band_3_for_3x3() -> void:
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
-	assert_eq(top_y, -1.0,
-			"3x3 maps should not expose standard deployment-zone lines")
+	assert_almost_eq(top_y, 434.0, 0.1,
+			"3x3 maps still use distance-3 deployment-zone boundaries")
 
 
 func test_top_line_y_equals_distance_band_3_for_3x6() -> void:
@@ -67,10 +67,11 @@ func test_top_line_y_equals_distance_band_3_for_3x6() -> void:
 # Bottom line
 # ---------------------------------------------------------------------------
 
-func test_bottom_line_negative_for_3x3_full_setup_area() -> void:
+func test_bottom_line_y_equals_play_area_height_minus_distance_band_3_for_3x3() -> void:
+	var expected: float = GameScale.play_area_size_px.y - 434.0
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
-	assert_eq(bottom_y, -1.0,
-			"3x3 maps should not expose standard deployment-zone lines")
+	assert_almost_eq(bottom_y, expected, 0.1,
+			"3x3 maps still use height-based deployment-zone boundaries")
 
 
 func test_bottom_line_y_equals_play_area_height_minus_distance_band_3_for_3x6() -> void:

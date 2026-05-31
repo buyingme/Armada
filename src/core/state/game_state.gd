@@ -50,6 +50,7 @@ func initialize() -> void:
 	if rng == null:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
+	objectives.clear()
 	ship_target_attack_counts.clear()
 	player_states.clear()
 	for player_index: int in range(Constants.PLAYER_COUNT):

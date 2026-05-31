@@ -20,6 +20,7 @@ const LINE_WIDTH: float = 2.0
 
 ## Returns the Y coordinate of the top deployment line (Imperial zone boundary).
 ## Returns -1.0 if distance bands are not loaded.
+## Rules Reference: "Deployment Zone", RRG 1.5.0, p.2.
 static func get_top_line_y() -> float:
 	if not _uses_standard_deployment_zones() or GameScale.distance_bands_px.size() < 3:
 		return -1.0
@@ -28,6 +29,7 @@ static func get_top_line_y() -> float:
 
 ## Returns the Y coordinate of the bottom deployment line (Rebel zone boundary).
 ## Returns -1.0 if distance bands are not loaded.
+## Rules Reference: "Deployment Zone", RRG 1.5.0, p.2.
 static func get_bottom_line_y() -> float:
 	if not _uses_standard_deployment_zones() or GameScale.distance_bands_px.size() < 3:
 		return -1.0
@@ -51,12 +53,6 @@ static func is_in_deploy_zone(pos_y: float, faction: Constants.Faction) -> bool:
 			return pos_y >= bottom_y
 		_:
 			return true
-
-
-static func _uses_standard_deployment_zones() -> bool:
-	var play_area_size: Vector2 = GameScale.play_area_size_px
-	return play_area_size.x > play_area_size.y
-
 
 func _draw() -> void:
 	var play_area_size: Vector2 = GameScale.play_area_size_px

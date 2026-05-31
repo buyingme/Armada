@@ -37,6 +37,14 @@ func test_initialize_sets_initiative_to_zero() -> void:
 	assert_eq(state.initiative_player, 0, "Initial initiative player should be 0")
 
 
+func test_initialize_clears_objectives() -> void:
+	var state := GameState.new()
+	state.objectives = {"selected_objective": {"data_key": "opening_salvo"}}
+	state.initialize()
+	assert_true(state.objectives.is_empty(),
+			"Initialize should clear stale setup/objective payloads")
+
+
 # --- Player State Access ---
 
 func test_get_player_state_valid_index() -> void:

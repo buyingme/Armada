@@ -293,11 +293,16 @@ func _find_version(record: Dictionary, version_id: String) -> Dictionary:
 
 func _summarize_record(record: Dictionary) -> Dictionary:
 	var versions: Array = record.get("versions", []) as Array
+	var active_version: Dictionary = _active_or_requested_version(record, "")
+	var active_roster: Dictionary = active_version.get("roster", {}) as Dictionary
 	return {
 		"fleet_id": String(record.get("fleet_id", "")),
 		"name": String(record.get("name", "")),
 		"faction": String(record.get("faction", "")),
 		"active_version_id": String(record.get("active_version_id", "")),
+		"point_format": (active_roster.get("point_format", {}) as Dictionary).duplicate(true),
+		"map": (active_roster.get("map", {}) as Dictionary).duplicate(true),
+		"canonical_hash": String(active_version.get("canonical_hash", "")),
 		"version_count": versions.size(),
 		"updated_at": String(record.get("updated_at", "")),
 	}

@@ -57,6 +57,7 @@ func test_point_format_for_core_set_180_returns_limit_expected() -> void:
 func test_create_setup_package_draft_for_400_has_map_and_state_expected() -> void:
 	var draft: FleetSetupPackage = SETUP_MATCH_OPTIONS_SCRIPT.create_setup_package_draft(
 			SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400)
+	var validation_status: Dictionary = draft.setup_state.get("validation_status", {}) as Dictionary
 
 	assert_eq(draft.scenario_id, SETUP_MATCH_OPTIONS_SCRIPT.SCENARIO_STANDARD_3X6,
 			"400-point setup draft should use the standard map shell scenario.")
@@ -66,6 +67,8 @@ func test_create_setup_package_draft_for_400_has_map_and_state_expected() -> voi
 	assert_eq(draft.setup_state.get("match_type", ""),
 			SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400,
 			"Setup draft should remember the selected match type.")
+	assert_false(bool(validation_status.get("ok", true)),
+			"New setup drafts should start in an unvalidated state.")
 
 
 func test_fixed_scenario_match_types_return_scenario_ids_expected() -> void:

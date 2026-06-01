@@ -10,9 +10,11 @@ const DEFAULT_SCENARIO_ID: String = "standard_3x6"
 const PEER_HOST: String = "HOST"
 const PEER_CLIENT: String = "CLIENT"
 const RULE_FIRST_PLAYER: String = "setup.first_player"
+const RULE_FLEET_FACTION: String = "setup.rosters.faction"
 const RULE_LIBRARY_LOAD: String = "setup.library.load"
 const RULE_OBJECTIVE_CHOICE: String = "setup.objective.choice"
 const RULE_PLAYER_COUNT: String = "setup.player.count"
+const RULE_SELECTED_POINT_FORMAT: String = "setup.selected.point_format"
 const RULE_POINT_FORMAT: String = "setup.point_format"
 
 var _validator: FleetValidator
@@ -27,13 +29,27 @@ func build_from_rosters(player_zero_roster: FleetRoster,
 		player_one_roster: FleetRoster, first_player: int,
 		selected_objective_key: String,
 		scenario_id: String = DEFAULT_SCENARIO_ID) -> Dictionary:
-	var rosters: Array[FleetRoster] = [player_zero_roster, player_one_roster]
-	var validation: SetupValidationResult = _validate_build_inputs(
-			rosters, first_player, selected_objective_key)
+	return _build_from_rosters_with_constraints(
+			[player_zero_roster, player_one_roster], first_player,
+			selected_objective_key, scenario_id, {})
+
+
+## Loads fleet ids, expands them, and validates them against [param draft].
+func build_from_draft(library_manager: FleetLibraryManager,
+		player_fleet_ids: Array[String], first_player: int,
+		selected_objective_key: String, draft: FleetSetupPackage) -> Dictionary:
+	var rosters: Array[FleetRoster] = []
+	var validation: SetupValidationResult = _validate_library_inputs(
+			library_manager, player_fleet_ids)
+	_validate_draft(draft, validation)
 	if not validation.is_valid():
 		return _build_result(false, null, validation)
-	return _build_result(true, _create_package(
-			rosters, first_player, selected_objective_key, scenario_id), validation)
+	rosters = _load_library_rosters(library_manager, player_fleet_ids, validation)
+	if not validation.is_valid():
+		return _build_result(false, null, validation)
+	return _build_from_rosters_with_constraints(
+			rosters, first_player, selected_objective_key,
+			str(draft.scenario_id), draft.point_format)
 
 
 ## Loads two local fleet ids and expands them into an embedded setup package.
@@ -57,6 +73,26 @@ func build_from_library(library_manager: FleetLibraryManager,
 func build_from_peer_rosters(host_roster: FleetRoster, client_roster: FleetRoster,
 		host_player_index: int, first_player: int, selected_objective_key: String,
 		scenario_id: String = DEFAULT_SCENARIO_ID) -> Dictionary:
+	return _build_from_peer_rosters_with_constraints(host_roster, client_roster,
+			host_player_index, first_player, selected_objective_key,
+			scenario_id, {})
+
+
+## Builds a package from peer rosters and validates them against [param draft].
+func build_from_peer_rosters_for_draft(host_roster: FleetRoster,
+		client_roster: FleetRoster, host_player_index: int, first_player: int,
+		selected_objective_key: String, draft: FleetSetupPackage) -> Dictionary:
+	var scenario_id: String = DEFAULT_SCENARIO_ID if draft == null else str(draft.scenario_id)
+	var expected_point_format: Dictionary = {} if draft == null else draft.point_format
+	return _build_from_peer_rosters_with_constraints(host_roster, client_roster,
+			host_player_index, first_player, selected_objective_key,
+			scenario_id, expected_point_format)
+
+
+func _build_from_peer_rosters_with_constraints(host_roster: FleetRoster,
+		client_roster: FleetRoster, host_player_index: int, first_player: int,
+		selected_objective_key: String, scenario_id: String,
+		expected_point_format: Dictionary) -> Dictionary:
 	var validation: SetupValidationResult = SetupValidationResult.new()
 	if not _player_index_valid(host_player_index):
 		validation.add_error(RULE_FIRST_PLAYER, "Host player index is out of range.", [], [])
@@ -64,8 +100,21 @@ func build_from_peer_rosters(host_roster: FleetRoster, client_roster: FleetRoste
 	var rosters: Array[FleetRoster] = [null, null]
 	rosters[host_player_index] = host_roster
 	rosters[_other_player(host_player_index)] = client_roster
-	return build_from_rosters(rosters[0], rosters[1], first_player,
-		selected_objective_key, scenario_id)
+	return _build_from_rosters_with_constraints(rosters, first_player,
+			selected_objective_key, scenario_id, expected_point_format)
+
+
+func _build_from_rosters_with_constraints(rosters: Array[FleetRoster],
+		first_player: int, selected_objective_key: String,
+		scenario_id: String, expected_point_format: Dictionary) -> Dictionary:
+	var validation: SetupValidationResult = _validate_build_inputs(
+			rosters, first_player, selected_objective_key)
+	_validate_selected_point_format(rosters, expected_point_format, validation)
+	if not validation.is_valid():
+		return _build_result(false, null, validation)
+	return _build_result(true, _create_package(
+			rosters, first_player, selected_objective_key,
+			scenario_id, expected_point_format), validation)
 
 
 ## Returns the setup package player index for a transport peer role.
@@ -108,9 +157,20 @@ func _validate_build_inputs(rosters: Array[FleetRoster], first_player: int,
 	var validation: SetupValidationResult = SetupValidationResult.new()
 	_validate_first_player(first_player, validation)
 	_validate_rosters(rosters, validation)
+	_validate_distinct_factions(rosters, validation)
 	_validate_point_format(rosters, validation)
 	_validate_objective_choice(rosters, first_player, selected_objective_key, validation)
 	return validation
+
+
+func _validate_draft(draft: FleetSetupPackage, validation: SetupValidationResult) -> void:
+	if draft == null:
+		validation.add_error(RULE_SELECTED_POINT_FORMAT,
+				"Setup draft is required for the selected match type.", [], [])
+		return
+	if (draft.point_format as Dictionary).is_empty():
+		validation.add_error(RULE_SELECTED_POINT_FORMAT,
+				"Setup draft must define a selected point format.", [], [])
 
 
 func _validate_first_player(first_player: int, validation: SetupValidationResult) -> void:
@@ -131,14 +191,42 @@ func _validate_rosters(rosters: Array[FleetRoster], validation: SetupValidationR
 		validation.add_fleet_validation(player_index, _validator.validate(roster))
 
 
+func _validate_distinct_factions(rosters: Array[FleetRoster],
+		validation: SetupValidationResult) -> void:
+	if rosters.size() != Constants.PLAYER_COUNT or rosters[0] == null or rosters[1] == null:
+		return
+	var player_zero_faction: String = str(rosters[0].faction).strip_edges()
+	var player_one_faction: String = str(rosters[1].faction).strip_edges()
+	if player_zero_faction != "" and player_zero_faction != player_one_faction:
+		return
+	validation.add_error(RULE_FLEET_FACTION,
+		"Setup requires fleets from different factions.", ["players/0", "players/1"], [])
+
+
 func _validate_point_format(rosters: Array[FleetRoster],
 		validation: SetupValidationResult) -> void:
 	if rosters.size() != Constants.PLAYER_COUNT or rosters[0] == null or rosters[1] == null:
 		return
-	if CanonicalJson.stringify(rosters[0].point_format) == CanonicalJson.stringify(rosters[1].point_format):
+	if FleetBuilderOptions.point_formats_match(rosters[0].point_format, rosters[1].point_format):
 		return
 	validation.add_error(RULE_POINT_FORMAT,
 		"Both setup rosters must use the same point format.", ["point_format"], [])
+
+
+func _validate_selected_point_format(rosters: Array[FleetRoster],
+		expected_point_format: Dictionary,
+		validation: SetupValidationResult) -> void:
+	if expected_point_format.is_empty():
+		return
+	for player_index: int in range(rosters.size()):
+		var roster: FleetRoster = rosters[player_index]
+		if roster == null:
+			continue
+		if FleetBuilderOptions.point_formats_match(roster.point_format, expected_point_format):
+			continue
+		validation.add_error(RULE_SELECTED_POINT_FORMAT,
+			"Player %d fleet must match the selected match type point format." %
+				(player_index + 1), ["players/%d/point_format" % player_index], [])
 
 
 func _validate_objective_choice(rosters: Array[FleetRoster], first_player: int,
@@ -162,19 +250,29 @@ func _validate_objective_choice(rosters: Array[FleetRoster], first_player: int,
 
 
 func _create_package(rosters: Array[FleetRoster], first_player: int,
-		selected_objective_key: String, scenario_id: String) -> FleetSetupPackage:
+		selected_objective_key: String, scenario_id: String,
+		package_point_format: Dictionary = {}) -> FleetSetupPackage:
 	var objective_data: ObjectiveData = AssetLoader.load_objective_data(selected_objective_key)
 	var owner_player: int = _other_player(first_player)
 	var package: FleetSetupPackage = FleetSetupPackage.new()
 	package.scenario_id = scenario_id
 	package.first_player = first_player
-	package.point_format = rosters[0].point_format.duplicate(true)
+	package.point_format = _resolved_point_format(rosters, package_point_format)
 	package.map = rosters[first_player].map.duplicate(true)
 	package.players = [_player_entry(0, rosters[0]), _player_entry(1, rosters[1])]
 	package.selected_objective = _selected_objective_payload(
 			objective_data, owner_player, first_player)
 	package.setup_state = _objective_setup_state(objective_data)
 	return package
+
+
+func _resolved_point_format(rosters: Array[FleetRoster],
+		package_point_format: Dictionary) -> Dictionary:
+	if not package_point_format.is_empty():
+		return package_point_format.duplicate(true)
+	if rosters.is_empty() or rosters[0] == null:
+		return {}
+	return rosters[0].point_format.duplicate(true)
 
 
 func _player_entry(player_index: int, roster: FleetRoster) -> Dictionary:

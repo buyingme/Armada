@@ -103,6 +103,17 @@ func test_build_from_rosters_invalid_fleet_rejected_expected() -> void:
 		"Fleet validation errors should be carried into setup validation")
 
 
+func test_build_from_rosters_same_faction_rejected_expected() -> void:
+	var result: Dictionary = _builder.build_from_rosters(
+		_create_rebel_roster(), _create_rebel_roster(), 0, "obj_ass_most_wanted")
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+
+	assert_false(result.get("ok", false),
+		"Setup should reject fleets that share the same faction")
+	assert_true(_has_error(validation, FleetSetupPackageBuilder.RULE_FLEET_FACTION),
+		"Setup validation should report same-faction fleet selections")
+
+
 func test_build_from_rosters_rejects_first_player_objective_expected() -> void:
 	var result: Dictionary = _builder.build_from_rosters(
 		_create_rebel_roster(), _create_imperial_roster(), 0, "obj_ass_most_wanted")
@@ -192,6 +203,22 @@ func test_build_from_library_legacy_missing_map_defaults_expected() -> void:
 		"Legacy rosters without serialized maps should still build setup packages")
 	assert_eq(package.map.get("filename", ""), FleetBuilderOptions.DEFAULT_MAP_3X3,
 		"Missing legacy maps should default from the roster point format")
+
+
+func test_build_from_draft_rejects_selected_point_format_mismatch_expected() -> void:
+	_manager.save_roster(_create_rebel_roster())
+	_manager.save_roster(_create_imperial_roster())
+	var draft: FleetSetupPackage = SetupMatchOptions.create_setup_package_draft(
+			SetupMatchOptions.MATCH_CORE_SET_180)
+
+	var result: Dictionary = _builder.build_from_draft(
+			_manager, ["rebel-fleet", "imperial-fleet"], 0, "obj_ass_opening_salvo", draft)
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+
+	assert_false(result.get("ok", false),
+		"Setup draft should reject fleets that do not match the selected match type")
+	assert_true(_has_error(validation, FleetSetupPackageBuilder.RULE_SELECTED_POINT_FORMAT),
+		"Draft validation should report point-format mismatches against the selected match type")
 
 
 func test_build_from_peer_rosters_hash_matches_player_indexed_package_expected() -> void:

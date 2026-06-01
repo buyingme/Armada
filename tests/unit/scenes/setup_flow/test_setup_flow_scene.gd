@@ -62,6 +62,32 @@ func test_ready_initializes_package_draft_from_selected_match_type_expected() ->
 		"Default setup-flow draft should record Standard 400.")
 
 
+func test_ready_core_set_match_type_filters_fleet_options_expected() -> void:
+	remove_child(_scene)
+	_scene.free()
+	_cleanup_test_dir()
+	_manager = FleetLibraryManager.new()
+	_manager.save_roster(_create_rebel_roster("rebel-180", "Rebel 180"))
+	_manager.save_roster(_create_imperial_roster_for_limit(
+			"imperial-180", "Imperial 180", FleetBuilderOptions.CORE_SET_POINT_LIMIT))
+	_manager.save_roster(_create_imperial_roster_for_limit(
+			"imperial-400", "Imperial 400", FleetValidator.DEFAULT_POINT_LIMIT))
+	GameManager.set_next_setup_match_type(SETUP_MATCH_OPTIONS_SCRIPT.MATCH_CORE_SET_180)
+	_scene = _setup_flow_script.new()
+	_scene.transition_on_confirm = false
+	_scene.initialize(_manager)
+	add_child(_scene)
+
+	var fleet_ids: Array[String] = []
+	for index: int in range(_scene._player_one_option.get_item_count()):
+		fleet_ids.append(str(_scene._player_one_option.get_item_metadata(index)))
+
+	assert_true(fleet_ids.has("imperial-180"),
+		"Core Set setup should include matching 180-point fleets")
+	assert_false(fleet_ids.has("imperial-400"),
+		"Core Set setup should hide fleets that do not match the selected point limit")
+
+
 func test_ready_with_two_valid_fleets_builds_package_expected() -> void:
 	var package: FleetSetupPackage = _scene.current_package()
 
@@ -154,9 +180,15 @@ func _invalid_rebel_roster() -> FleetRoster:
 
 
 func _create_imperial_roster() -> FleetRoster:
+	return _create_imperial_roster_for_limit(
+			"imperial-fleet", "Imperial Setup Fleet", FleetValidator.DEFAULT_POINT_LIMIT)
+
+
+func _create_imperial_roster_for_limit(
+		fleet_id: String, fleet_name: String, point_limit: int) -> FleetRoster:
 	var roster: FleetRoster = FleetRoster.create(
-			"imperial-fleet", "Imperial Setup Fleet", "GALACTIC_EMPIRE")
-	roster.point_format = _point_format()
+			fleet_id, fleet_name, "GALACTIC_EMPIRE")
+	roster.point_format = _point_format(point_limit)
 	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	var ship: FleetShipEntry = _create_ship(
 			"imperial-ship-1", "victory_ii_class_star_destroyer")
@@ -206,8 +238,14 @@ func _add_upgrade(ship_entry: FleetShipEntry, upgrade_id: String,
 	ship_entry.add_upgrade(assignment)
 
 
-func _point_format() -> Dictionary:
-	return {"id": "STANDARD_400", "limit": 400}
+func _point_format(point_limit: int = FleetValidator.DEFAULT_POINT_LIMIT) -> Dictionary:
+	match point_limit:
+		FleetBuilderOptions.CORE_SET_POINT_LIMIT:
+			return {"id": FleetBuilderOptions.FORMAT_CORE_SET_180, "limit": point_limit}
+		FleetBuilderOptions.CUSTOM_POINT_LIMIT:
+			return {"id": FleetBuilderOptions.FORMAT_CUSTOM, "limit": point_limit}
+		_:
+			return {"id": FleetBuilderOptions.FORMAT_STANDARD_400, "limit": point_limit}
 
 
 func _select_fleet(option: OptionButton, fleet_id: String) -> void:

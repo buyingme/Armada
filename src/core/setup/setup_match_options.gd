@@ -87,13 +87,24 @@ static func point_format_for_match_type(match_type_id: String) -> Dictionary:
 ## Builds the empty setup-package draft for a selected fleet-setup match type.
 static func create_setup_package_draft(match_type_id: String) -> FleetSetupPackage:
 	var package: FleetSetupPackage = FleetSetupPackage.new()
+	var normalized_match_type: String = normalize_match_type_id(match_type_id)
 	var point_format: Dictionary = point_format_for_match_type(match_type_id)
 	if point_format.is_empty():
 		return package
 	package.scenario_id = SCENARIO_STANDARD_3X6
 	package.point_format = point_format
 	package.map = FleetBuilderOptions.default_map_for_point_format(point_format)
-	package.setup_state = {"match_type": normalize_match_type_id(match_type_id)}
+	package.setup_state = {
+		"match_type": normalized_match_type,
+		"selected_fleet_ids": ["", ""],
+		"selected_objective_key": "",
+		"validation_status": {
+			"ok": false,
+			"error_count": 0,
+			"warning_count": 0,
+			"package_hash": "",
+		},
+	}
 	return package
 
 

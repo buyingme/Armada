@@ -53,6 +53,22 @@ func test_default_map_for_standard_400_uses_3x6_expected() -> void:
 		"Standard 400 should use the default 3x6 map filename")
 
 
+func test_point_formats_match_ignores_custom_label_expected() -> void:
+	var left: Dictionary = {
+		"id": FleetBuilderOptions.FORMAT_CUSTOM,
+		"limit": FleetBuilderOptions.CUSTOM_POINT_LIMIT,
+		"custom_label": "Intermediate 300",
+	}
+	var right: Dictionary = {
+		"id": FleetBuilderOptions.FORMAT_CUSTOM,
+		"limit": FleetBuilderOptions.CUSTOM_POINT_LIMIT,
+		"custom_label": "",
+	}
+
+	assert_true(FleetBuilderOptions.point_formats_match(left, right),
+		"Point-format matching should ignore presentation-only labels")
+
+
 func test_available_factions_derives_from_catalog_expected() -> void:
 	var factions: Array[String] = FleetBuilderOptions.available_factions(FleetCatalog.new())
 

@@ -937,6 +937,7 @@ test gate is passed.
 | Acceptance | A draft cannot advance until both players have valid embedded rosters, different factions, legal objectives, legal maps for the selected point format, and deterministic package hash input. No setup draft depends on another machine's local fleet-library ids after match-ready expansion. |
 | Tests | Hot-seat two-fleet selection, invalid same-faction rejection, point-format mismatch rejection, network host/client roster payload equality, package hash stability, local-id expansion to embedded rosters. |
 | Verification | Targeted setup/fleet GUT, full GUT if lobby state changes, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` once draft state enters runtime setup. |
+| Status | Implemented as of 2026-06-01: setup drafts now retain selected fleet ids, embedded roster payloads, and validation status; setup flow filters fleet choices to the selected match-type point format; setup-package validation rejects same-faction pairings and point-format mismatches against the selected match type; peer-roster builders still produce deterministic player-indexed package hashes. |
 
 ### FB14C - Initiative And Objective Choice Flow
 

@@ -53,6 +53,18 @@ static func default_point_format() -> Dictionary:
 	return _format_payload(FORMAT_CORE_SET_180, CORE_SET_POINT_LIMIT, "")
 
 
+## Returns true when both payloads describe the same fleet match format.
+## Ignores presentation-only fields such as custom labels.
+static func point_formats_match(left: Dictionary, right: Dictionary) -> bool:
+	var left_id: String = str(left.get("id", "")).strip_edges().to_upper()
+	var right_id: String = str(right.get("id", "")).strip_edges().to_upper()
+	var left_limit: int = int(left.get("limit", 0))
+	var right_limit: int = int(right.get("limit", 0))
+	if left_id.is_empty() or right_id.is_empty():
+		return false
+	return left_id == right_id and left_limit == right_limit
+
+
 ## Returns map choices allowed for the given point format.
 ## Rules Reference: "Play Area", RRG 1.5.0; "Setup Area", RRG 1.5.0.
 static func available_maps_for_point_format(point_format: Dictionary) -> Array[Dictionary]:

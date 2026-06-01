@@ -159,17 +159,30 @@ func _build_buttons() -> HBoxContainer:
 
 
 func _refresh_fleets() -> void:
-	_fleet_options = _library_manager.list_fleets()
-	_populate_fleet_option(_player_zero_option, 0)
-	_populate_fleet_option(_player_one_option, mini(1, _fleet_options.size() - 1))
+	var selected_ids: Array[String] = _selected_fleet_ids()
+	_fleet_options = _matching_fleet_options()
+	_populate_fleet_option(_player_zero_option, selected_ids[0], 0)
+	_populate_fleet_option(_player_one_option, selected_ids[1], mini(1, _fleet_options.size() - 1))
+	_sync_package_draft_state()
 	_resolve_first_player()
 	_refresh_objectives()
 
 
-func _populate_fleet_option(option: OptionButton, selected_index: int) -> void:
+func _matching_fleet_options() -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for summary: Dictionary in _library_manager.list_fleets():
+		var point_format: Dictionary = summary.get("point_format", {}) as Dictionary
+		if FleetBuilderOptions.point_formats_match(point_format, _package_draft.point_format):
+			options.append(summary)
+	return options
+
+
+func _populate_fleet_option(option: OptionButton,
+		selected_fleet_id: String, selected_index: int) -> void:
 	option.clear()
 	if _fleet_options.is_empty():
-		option.add_item("No saved fleets")
+		option.add_item("No saved fleets for %s" %
+				SETUP_MATCH_OPTIONS_SCRIPT.label_for_match_type(_match_type_id))
 		option.set_item_metadata(0, "")
 		option.disabled = true
 		return
@@ -177,6 +190,10 @@ func _populate_fleet_option(option: OptionButton, selected_index: int) -> void:
 	for summary: Dictionary in _fleet_options:
 		option.add_item(UiFactory.fleet_label(summary))
 		option.set_item_metadata(option.get_item_count() - 1, str(summary.get("fleet_id", "")))
+	for option_index: int in range(option.get_item_count()):
+		if str(option.get_item_metadata(option_index)) == selected_fleet_id:
+			option.select(option_index)
+			return
 	option.select(clampi(selected_index, 0, option.get_item_count() - 1))
 
 
@@ -229,7 +246,9 @@ func _rebuild_package() -> void:
 		_show_invalid_state("Select two fleets and an objective.")
 		return
 	var result: Dictionary = _builder.build_from_library(_library_manager, fleet_ids,
-			_resolved_first_player, objective_key)
+			_resolved_first_player, objective_key) if _package_draft == null \
+			else _builder.build_from_draft(_library_manager, fleet_ids,
+					_resolved_first_player, objective_key, _package_draft)
 	_show_build_result(result)
 
 
@@ -259,11 +278,18 @@ func _selected_rosters() -> Array[FleetRoster]:
 
 
 func _show_build_result(result: Dictionary) -> void:
+	_sync_package_draft_state()
 	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
 	if not bool(result.get("ok", false)):
 		_show_validation(validation)
 		return
 	_current_package = result.get("package") as FleetSetupPackage
+	_package_draft.players = _current_package.players.duplicate(true)
+	_package_draft.point_format = _current_package.point_format.duplicate(true)
+	_package_draft.map = _current_package.map.duplicate(true)
+	_package_draft.first_player = _current_package.first_player
+	_package_draft.selected_objective = _current_package.selected_objective.duplicate(true)
+	_set_draft_validation_status(true, validation, _current_package.canonical_hash())
 	_confirm_button.disabled = false
 	_summary_label.text = UiFactory.package_summary(_current_package)
 	_hash_label.text = "Hash: %s" % _current_package.canonical_hash()
@@ -279,14 +305,17 @@ func _show_validation(validation: SetupValidationResult) -> void:
 		_validation_list.add_item(str(issue.get("message", "Setup error")))
 	for issue: Dictionary in validation.warnings:
 		_validation_list.add_item(str(issue.get("message", "Setup warning")))
+	_set_draft_validation_status(false, validation)
 
 
 func _show_invalid_state(message: String) -> void:
+	_sync_package_draft_state()
 	_confirm_button.disabled = true
 	_summary_label.text = "No package"
 	_hash_label.text = ""
 	_status_label.text = message
 	_status_label.add_theme_color_override("font_color", UIStyleHelper.ERROR_RED)
+	_set_draft_validation_status(false, null)
 
 
 func _selected_fleet_ids() -> Array[String]:
@@ -302,6 +331,7 @@ func _selected_option_metadata(option: OptionButton) -> String:
 
 
 func _on_fleet_selected(_index: int) -> void:
+	_sync_package_draft_state()
 	_resolve_first_player()
 	_refresh_objectives()
 
@@ -312,7 +342,47 @@ func _on_objective_selected(_index: int) -> void:
 
 func _on_first_player_selected(index: int) -> void:
 	_resolved_first_player = int(_first_player_option.get_item_metadata(index))
+	_sync_package_draft_state()
 	_refresh_objectives()
+
+
+func _sync_package_draft_state() -> void:
+	if _package_draft == null:
+		return
+	_package_draft.setup_state["selected_fleet_ids"] = _selected_fleet_ids()
+	_package_draft.setup_state["selected_objective_key"] = _selected_objective_key()
+	_package_draft.setup_state["resolved_first_player"] = _resolved_first_player
+	_package_draft.players = _draft_player_entries(_selected_fleet_ids())
+
+
+func _draft_player_entries(fleet_ids: Array[String]) -> Array[Dictionary]:
+	var players: Array[Dictionary] = []
+	for player_index: int in range(fleet_ids.size()):
+		var fleet_id: String = fleet_ids[player_index]
+		if fleet_id.is_empty():
+			continue
+		var result: Dictionary = _library_manager.load_roster(fleet_id)
+		if not bool(result.get("ok", false)):
+			continue
+		var roster: FleetRoster = result.get("roster") as FleetRoster
+		players.append({
+			"player_index": player_index,
+			"faction": roster.faction,
+			"roster": roster.serialize(),
+		})
+	return players
+
+
+func _set_draft_validation_status(ok: bool, validation: SetupValidationResult,
+		package_hash: String = "") -> void:
+	if _package_draft == null:
+		return
+	_package_draft.setup_state["validation_status"] = {
+		"ok": ok,
+		"error_count": 0 if validation == null else validation.errors.size(),
+		"warning_count": 0 if validation == null else validation.warnings.size(),
+		"package_hash": package_hash,
+	}
 
 
 func _on_confirm_pressed() -> void:

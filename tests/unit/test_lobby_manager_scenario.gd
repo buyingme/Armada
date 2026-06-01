@@ -25,6 +25,16 @@ func test_selected_scenario_id_uses_debug_scenario_from_lobby() -> void:
 			"Game start should use the debug scenario selected in the lobby.")
 
 
+func test_selected_scenario_id_uses_setup_match_type_from_lobby() -> void:
+	var lobby: LobbyState = LobbyState.new()
+	lobby.scenario = LobbyState.MATCH_CORE_SET_180_ID
+	LobbyManager.current_lobby = lobby
+
+	assert_eq(LobbyManager._selected_scenario_id(),
+			LobbyState.MATCH_CORE_SET_180_ID,
+			"Lobby selection should preserve setup match types for FB14B handoff.")
+
+
 func test_selected_scenario_id_defaults_to_learning_without_lobby() -> void:
 	LobbyManager.current_lobby = null
 

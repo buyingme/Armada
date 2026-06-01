@@ -31,6 +31,9 @@ const NOT_READY_COLOR: Color = Color(0.6, 0.6, 0.6)
 ## Waiting-for-player text colour.
 const WAITING_COLOR: Color = Color(0.5, 0.5, 0.5)
 
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
+
 
 # ---------------------------------------------------------------------------
 # Signals
@@ -253,10 +256,10 @@ func _build_player_row(index: int) -> PanelContainer:
 	return row_panel
 
 
-## Builds the scenario selection area (host-only dropdown).
+## Builds the New Game match-type selection area (host-only dropdown).
 func _build_scenario_picker(parent: VBoxContainer) -> void:
 	var label: Label = UIStyleHelper.create_section_label(
-			"Scenario", UIStyleHelper.FONT_BODY,
+			"New Game", UIStyleHelper.FONT_BODY,
 			UIStyleHelper.BODY_TEXT)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	parent.add_child(label)
@@ -431,7 +434,7 @@ func _update_empty_player_rows() -> void:
 		_player_ready_labels[i].text = ""
 
 
-## Updates the scenario picker from lobby state.
+## Updates the New Game picker from lobby state.
 func _update_scenario(lobby: LobbyState) -> void:
 	_scenario_option.disabled = not LobbyManager.is_host()
 	var scenario: String = LobbyState.normalize_scenario_id(lobby.scenario)
@@ -444,12 +447,16 @@ func _update_scenario(lobby: LobbyState) -> void:
 
 ## Updates the status label.
 func _update_status(lobby: LobbyState) -> void:
+	var match_label: String = SETUP_MATCH_OPTIONS_SCRIPT.label_for_match_type(lobby.scenario)
+	_status_label.add_theme_color_override("font_color", UIStyleHelper.DIMMED_HINT)
 	if lobby.get_player_count() < LobbyState.MAX_PLAYERS:
-		_status_label.text = "Waiting for opponent to join..."
+		_status_label.text = "Selected: %s. Waiting for opponent to join..." % match_label
 	elif not lobby.is_all_ready():
-		_status_label.text = "Waiting for all players to ready up."
+		_status_label.text = "Selected: %s. Waiting for all players to ready up." % match_label
+	elif SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario):
+		_status_label.text = "Selected: %s. Fleet selection is next." % match_label
 	else:
-		_status_label.text = "All players ready!"
+		_status_label.text = "Selected: %s. All players ready!" % match_label
 		_status_label.add_theme_color_override("font_color",
 				READY_COLOR)
 
@@ -458,12 +465,22 @@ func _update_status(lobby: LobbyState) -> void:
 func _update_buttons(lobby: LobbyState) -> void:
 	_ready_button.text = "Not Ready" if _is_ready else "Ready"
 	_start_button.visible = LobbyManager.is_host()
-	_start_button.disabled = not lobby.can_start()
+	_start_button.disabled = not lobby.can_start() \
+			or SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario)
+	_start_button.tooltip_text = _start_button_tooltip(lobby)
 	# Phase J7: same gate as Start Game — both connected + both Ready.
 	_load_button.visible = LobbyManager.is_host()
 	_load_button.disabled = not lobby.can_start()
 	_load_button.tooltip_text = "" if lobby.can_start() \
 			else "Both players must be connected and Ready."
+
+
+func _start_button_tooltip(lobby: LobbyState) -> String:
+	if not lobby.can_start():
+		return "Both players must be connected and Ready."
+	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario):
+		return "Fleet selection will enable this match type in the next slice."
+	return ""
 
 
 ## Finds a player entry by player_index.

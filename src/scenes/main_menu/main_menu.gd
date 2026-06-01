@@ -14,9 +14,11 @@ const GAME_BOARD_PATH: String = "res://src/scenes/game_board/game_board.tscn"
 const FLEET_BUILDER_PATH: String = "res://src/scenes/fleet_builder/fleet_builder.tscn"
 ## Path to the local setup-package confirmation scene.
 const SETUP_FLOW_PATH: String = "res://src/scenes/setup_flow/setup_flow.tscn"
-## Default scenario id used by the temporary new-game scenario picker.
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
+## Default scenario id used by the New Game window.
 const SCENARIO_LEARNING_ID: String = "learning_scenario"
-## Debug scenario id used by the temporary new-game scenario picker.
+## Debug scenario id used by the New Game window.
 const SCENARIO_DEBUG_ID: String = "debug_scenario"
 ## Delay before the menu modal appears (seconds).
 const SPLASH_DELAY: float = 2.0
@@ -44,9 +46,11 @@ var _join_port_input: LineEdit
 var _join_error_label: Label
 var _prefs_name_input: LineEdit
 var _load_dialog: LoadGameDialog
-var _scenario_option: OptionButton
 ## Whether the menu modal has been shown yet.
 var _menu_shown: bool = false
+
+## Test hook: when false, New Game choices update state without scene changes.
+var transition_on_new_game_choice: bool = true
 
 
 func _ready() -> void:
@@ -214,10 +218,6 @@ func _populate_menu_vbox(vbox: VBoxContainer) -> void:
 	btn_fleet_builder.pressed.connect(_on_fleet_builder_pressed)
 	vbox.add_child(btn_fleet_builder)
 
-	var btn_fleet_setup: Button = _create_menu_button("Fleet Setup")
-	btn_fleet_setup.pressed.connect(_on_fleet_setup_pressed)
-	vbox.add_child(btn_fleet_setup)
-
 	var btn_host: Button = _create_menu_button("Host Game")
 	btn_host.pressed.connect(_on_host_game_pressed)
 	vbox.add_child(btn_host)
@@ -254,6 +254,8 @@ func _build_scenario_dialog() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.set_anchors_preset(PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(360, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.add_theme_stylebox_override("panel",
 			UIStyleHelper.create_modal_panel_style(0.0))
 	var margin: MarginContainer = MarginContainer.new()
@@ -273,27 +275,38 @@ func _populate_scenario_dialog(vbox: VBoxContainer) -> void:
 	vbox.add_child(UIStyleHelper.create_title_label(
 			"New Game", UIStyleHelper.GOLD_TITLE))
 	vbox.add_child(HSeparator.new())
-	_scenario_option = OptionButton.new()
-	_scenario_option.custom_minimum_size = Vector2(260, 36)
-	_add_scenario_option("Learning Scenario", SCENARIO_LEARNING_ID)
-	_add_scenario_option("Debug Scenario", SCENARIO_DEBUG_ID)
-	vbox.add_child(_scenario_option)
-	vbox.add_child(_build_scenario_dialog_buttons())
+	vbox.add_child(_build_new_game_choice_list())
+	vbox.add_child(_build_new_game_cancel_row())
 
 
-func _add_scenario_option(label_text: String, scenario_id: String) -> void:
-	_scenario_option.add_item(label_text)
-	var index: int = _scenario_option.get_item_count() - 1
-	_scenario_option.set_item_metadata(index, scenario_id)
+func _build_new_game_choice_list() -> VBoxContainer:
+	var choices: VBoxContainer = VBoxContainer.new()
+	choices.add_theme_constant_override("separation", 8)
+	for option: Dictionary in SETUP_MATCH_OPTIONS_SCRIPT.get_options():
+		choices.add_child(_build_new_game_choice_button(option))
+	return choices
 
 
-func _build_scenario_dialog_buttons() -> HBoxContainer:
+func _build_new_game_choice_button(option: Dictionary) -> Button:
+	var button: Button = _create_menu_button(str(option.get("label", "")))
+	var match_type_id: String = str(option.get("id", ""))
+	button.pressed.connect(
+			func() -> void: _on_new_game_choice_pressed(match_type_id))
+	button.tooltip_text = _new_game_choice_tooltip(option)
+	return button
+
+
+func _new_game_choice_tooltip(option: Dictionary) -> String:
+	if str(option.get("kind", "")) == SETUP_MATCH_OPTIONS_SCRIPT.KIND_SCENARIO:
+		return "Start a fixed deployed scenario."
+	var point_format: Dictionary = option.get("point_format", {}) as Dictionary
+	return "Open fleet setup for %d points." % int(point_format.get("limit", 0))
+
+
+func _build_new_game_cancel_row() -> HBoxContainer:
 	var buttons: HBoxContainer = HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
-	var start_btn: Button = _create_menu_button("Start")
-	start_btn.pressed.connect(_on_scenario_start_pressed)
-	buttons.add_child(start_btn)
 	var cancel_btn: Button = _create_menu_button("Cancel")
 	cancel_btn.pressed.connect(_on_scenario_cancel_pressed)
 	buttons.add_child(cancel_btn)
@@ -331,11 +344,10 @@ func _show_menu() -> void:
 	_menu_panel.visible = true
 
 
-## Opens the temporary scenario picker for starting a new hot-seat game.
+## Opens the New Game match-type picker for starting a local game.
 func _on_new_game_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_menu_panel.visible = false
-	_scenario_option.select(0)
 	_scenario_dialog.visible = true
 
 
@@ -362,21 +374,10 @@ func _on_fleet_builder_pressed() -> void:
 	get_tree().change_scene_to_file(FLEET_BUILDER_PATH)
 
 
-## Opens the local setup-package confirmation scene.
-func _on_fleet_setup_pressed() -> void:
-	SfxManager.play_sfx("droid_sound_long")
-	get_tree().change_scene_to_file(SETUP_FLOW_PATH)
-
-
 ## Transitions to the learning scenario game board. UI-031.
 func _on_learning_scenario_pressed() -> void:
 	SfxManager.play_sfx("droid_sound_long")
 	_start_scenario(SCENARIO_LEARNING_ID)
-
-
-func _on_scenario_start_pressed() -> void:
-	SfxManager.play_sfx("droid_sound_long")
-	_start_scenario(_selected_scenario_id())
 
 
 func _on_scenario_cancel_pressed() -> void:
@@ -385,19 +386,28 @@ func _on_scenario_cancel_pressed() -> void:
 	_menu_panel.visible = true
 
 
+func _on_new_game_choice_pressed(match_type_id: String) -> void:
+	SfxManager.play_sfx("droid_sound_long")
+	var normalized: String = SETUP_MATCH_OPTIONS_SCRIPT.normalize_match_type_id(
+			match_type_id)
+	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(normalized):
+		_open_setup_match_type(normalized)
+		return
+	_start_scenario(SETUP_MATCH_OPTIONS_SCRIPT.scenario_id_for_match_type(normalized))
+
+
+func _open_setup_match_type(match_type_id: String) -> void:
+	GameManager.set_next_setup_match_type(match_type_id)
+	if transition_on_new_game_choice:
+		get_tree().change_scene_to_file(SETUP_FLOW_PATH)
+
+
 func _start_scenario(scenario_id: String) -> void:
+	if scenario_id.strip_edges().is_empty():
+		return
 	GameManager.set_next_scenario_id(scenario_id)
-	get_tree().change_scene_to_file(GAME_BOARD_PATH)
-
-
-func _selected_scenario_id() -> String:
-	var selected: int = _scenario_option.selected
-	if selected < 0:
-		return SCENARIO_LEARNING_ID
-	var metadata: Variant = _scenario_option.get_item_metadata(selected)
-	if metadata is String:
-		return metadata as String
-	return SCENARIO_LEARNING_ID
+	if transition_on_new_game_choice:
+		get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
 ## Shows the host-game dialog. G4.5.5.

@@ -925,6 +925,7 @@ test gate is passed.
 | Architecture gate | UI delegates match-type legality and package creation to core/application services. No PlayMode authority branch is added under `src/scenes/` or `src/ui/`; lobby state/projected intent decides which controls are enabled. |
 | Tests | Main-menu construction, match-type selection payloads, learning/debug scenario regression, lobby host-only control projection, client read-only display, package draft initialization for 400/300/180. |
 | Verification | Focused UI/lobby GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual local and two-process lobby pass. |
+| Status | Implemented as of 2026-06-01: added a shared New Game match-type contract, replaced the local scenario drop-down with five New Game choices, preserved fixed learning/debug scenario starts, seeded setup-flow drafts for 400/300/180 choices, and expanded lobby state/UI so clients display the host-selected match type while only hosts can change it. Manual local and two-process lobby pass remains the final gate before commit. |
 
 ### FB14B - Fleet Selection And Draft Setup Package
 

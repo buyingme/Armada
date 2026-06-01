@@ -18,6 +18,8 @@ const MAIN_MENU_PATH: String = "res://src/scenes/main_menu/main_menu.tscn"
 const PLAYER_ZERO: int = 0
 const PLAYER_ONE: int = 1
 const UiFactory: GDScript = preload("res://src/scenes/setup_flow/setup_flow_ui_factory.gd")
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
 
 ## Test hook: when false, confirmation stores the package but does not change scene.
 var transition_on_confirm: bool = true
@@ -27,6 +29,8 @@ var _builder: FleetSetupPackageBuilder = null
 var _tie_breaker: Callable = Callable()
 var _initiative_chooser: int = PLAYER_ZERO
 var _resolved_first_player: int = PLAYER_ZERO
+var _match_type_id: String = "standard_400"
+var _package_draft: FleetSetupPackage = null
 var _fleet_options: Array[Dictionary] = []
 var _current_package: FleetSetupPackage = null
 var _player_zero_option: OptionButton
@@ -54,13 +58,25 @@ func current_package() -> FleetSetupPackage:
 	return _current_package
 
 
+## Returns the setup-package draft for the selected New Game match type.
+func current_package_draft() -> FleetSetupPackage:
+	return _package_draft
+
+
 func _ready() -> void:
 	if _library_manager == null:
 		_library_manager = FleetLibraryManager.new()
 	if _builder == null:
 		_builder = FleetSetupPackageBuilder.new()
+	_initialize_match_type()
 	_build_ui()
 	_refresh_fleets()
+
+
+func _initialize_match_type() -> void:
+	_match_type_id = GameManager.consume_next_setup_match_type(
+			SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400)
+	_package_draft = SETUP_MATCH_OPTIONS_SCRIPT.create_setup_package_draft(_match_type_id)
 
 
 func _build_ui() -> void:
@@ -75,7 +91,9 @@ func _build_ui() -> void:
 func _build_content() -> VBoxContainer:
 	var content: VBoxContainer = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 12)
-	content.add_child(UIStyleHelper.create_title_label("Fleet Setup", UIStyleHelper.GOLD_TITLE))
+	content.add_child(UIStyleHelper.create_title_label(
+			"Fleet Setup - %s" % SETUP_MATCH_OPTIONS_SCRIPT.label_for_match_type(_match_type_id),
+			UIStyleHelper.GOLD_TITLE))
 	content.add_child(HSeparator.new())
 	content.add_child(_build_roster_rows())
 	content.add_child(_build_choice_rows())

@@ -21,6 +21,8 @@ static func build_panel() -> PanelContainer:
 	panel.name = "SetupFlowPanel"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(560, 0)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	panel.add_theme_stylebox_override("panel", UIStyleHelper.create_modal_panel_style(0.0))
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 24)

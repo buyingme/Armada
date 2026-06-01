@@ -12,6 +12,10 @@
 extends Node
 
 
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
+
+
 # ---------------------------------------------------------------------------
 # Signals
 # ---------------------------------------------------------------------------
@@ -20,6 +24,7 @@ extends Node
 signal lobby_created(lobby_data: Dictionary)
 
 ## Emitted when this client has joined a lobby (client-side).
+@warning_ignore("unused_signal")
 signal lobby_joined(lobby_data: Dictionary)
 
 ## Emitted when this client has left the lobby.
@@ -104,6 +109,9 @@ func request_start_game() -> void:
 	# Generate shared RNG seed and broadcast config BEFORE scene transition.
 	var rng_seed: int = Time.get_ticks_usec()
 	var scenario_id: String = _selected_scenario_id()
+	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
+		lobby_error.emit("Fleet setup starts after fleet selection is complete.")
+		return
 	NetworkManager.broadcast_game_config(rng_seed, scenario_id)
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
@@ -171,14 +179,14 @@ func leave_lobby() -> void:
 
 
 ## Sets the ready status of the local player.
-func set_ready(ready: bool) -> void:
+func set_ready(is_ready: bool) -> void:
 	if current_lobby == null:
 		return
 	if NetworkManager.is_server():
-		current_lobby.set_player_ready(1, ready)
+		current_lobby.set_player_ready(1, is_ready)
 		_broadcast_lobby_state()
 	else:
-		_request_set_ready.rpc_id(1, ready)
+		_request_set_ready.rpc_id(1, is_ready)
 
 
 ## Returns the lobby code, or empty if no lobby exists.
@@ -193,8 +201,8 @@ func is_host() -> bool:
 	return NetworkManager.is_server()
 
 
-## Updates the selected scenario (host only).
-## G4.5.4 — scenario picker.
+## Updates the selected New Game match type (host only).
+## G4.5.4 / FB14A — scenario and setup picker.
 func update_scenario(scenario_id: String) -> void:
 	if not NetworkManager.is_server():
 		return
@@ -255,15 +263,15 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 ## Client → Server: request to set ready status.
 @rpc("any_peer", "reliable")
-func _request_set_ready(ready: bool) -> void:
+func _request_set_ready(is_ready: bool) -> void:
 	if not NetworkManager.is_server():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if current_lobby == null:
 		return
-	if current_lobby.set_player_ready(sender_id, ready):
+	if current_lobby.set_player_ready(sender_id, is_ready):
 		_log.info("Player (peer %d) ready = %s." % [
-				sender_id, str(ready)])
+				sender_id, str(is_ready)])
 		_broadcast_lobby_state()
 
 

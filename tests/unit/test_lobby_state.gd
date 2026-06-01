@@ -5,6 +5,9 @@
 extends GutTest
 
 
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
+
 # ---------------------------------------------------------------------------
 # Code generation (G4.5.7)
 # ---------------------------------------------------------------------------
@@ -294,8 +297,8 @@ func test_sanitize_name_strips_whitespace() -> void:
 
 
 func test_sanitize_name_custom_max_length() -> void:
-	var name: String = "LongName"
-	var clean: String = LobbyState.sanitize_name(name, 4)
+	var display_name: String = "LongName"
+	var clean: String = LobbyState.sanitize_name(display_name, 4)
 	assert_eq(clean, "Long",
 			"Should respect custom max_length parameter.")
 
@@ -342,13 +345,13 @@ func test_scenario_defaults_to_learning() -> void:
 
 func test_scenario_included_in_serialization() -> void:
 	var lobby: LobbyState = LobbyState.new()
-	lobby.scenario = LobbyState.SCENARIO_DEBUG_ID
+	lobby.scenario = LobbyState.MATCH_STANDARD_400_ID
 	var data: Dictionary = lobby.serialize()
-	assert_eq(data["scenario"], LobbyState.SCENARIO_DEBUG_ID,
-			"Serialized data should contain scenario.")
+	assert_eq(data["scenario"], LobbyState.MATCH_STANDARD_400_ID,
+			"Serialized data should contain selected match type.")
 	var restored: LobbyState = LobbyState.deserialize(data)
-	assert_eq(restored.scenario, LobbyState.SCENARIO_DEBUG_ID,
-			"Deserialized lobby should have scenario.")
+	assert_eq(restored.scenario, LobbyState.MATCH_STANDARD_400_ID,
+			"Deserialized lobby should have selected match type.")
 
 
 func test_deserialize_legacy_learning_scenario_label_uses_id() -> void:
@@ -370,8 +373,23 @@ func test_scenario_options_include_debug_scenario() -> void:
 	var ids: Array[String] = []
 	for option: Dictionary in options:
 		ids.append(str(option.get("id", "")))
+	assert_true(ids.has(LobbyState.MATCH_STANDARD_400_ID),
+			"Lobby New Game options should include Standard 400.")
+	assert_true(ids.has(LobbyState.MATCH_INTERMEDIATE_300_ID),
+			"Lobby New Game options should include Intermediate 300.")
+	assert_true(ids.has(LobbyState.MATCH_CORE_SET_180_ID),
+			"Lobby New Game options should include Core Set 180.")
+	assert_true(ids.has(LobbyState.SCENARIO_LEARNING_ID),
+			"Lobby New Game options should include the learning scenario.")
 	assert_true(ids.has(LobbyState.SCENARIO_DEBUG_ID),
-			"Lobby scenario options should include the debug scenario.")
+			"Lobby New Game options should include the debug scenario.")
+
+
+func test_normalize_standard_400_label_returns_id() -> void:
+	assert_eq(LobbyState.normalize_scenario_id(
+			SETUP_MATCH_OPTIONS_SCRIPT.LABEL_STANDARD_400),
+			LobbyState.MATCH_STANDARD_400_ID,
+			"Standard 400 label should normalize to its match-type id.")
 
 
 # ---------------------------------------------------------------------------

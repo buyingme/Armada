@@ -21,6 +21,8 @@ const CommitSetupObstacleCommandScript = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommandScript = preload(
 		"res://src/core/commands/commit_setup_deployment_command.gd")
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
 
 
 ## The current game state. Null when no game is active.
@@ -87,6 +89,10 @@ var _next_scenario_id: String = ""
 ## Not serialized; consumed by [method bootstrap_game]. FB13.
 var _next_setup_package: FleetSetupPackage = null
 
+## Transient fleet-setup match type selected before setup-flow scene opens.
+## Not serialized; consumed once by [method consume_next_setup_match_type]. FB14A.
+var _next_setup_match_type: String = ""
+
 ## Strategy for submitting commands — [LocalCommandSubmitter] for hot-seat
 ## and single-player, [NetworkCommandSubmitter] for network multiplayer.
 ## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
@@ -143,12 +149,21 @@ func get_command_submitter() -> CommandSubmitter:
 func set_next_scenario_id(scenario_id: String) -> void:
 	_next_scenario_id = scenario_id.strip_edges()
 	_next_setup_package = null
+	_next_setup_match_type = ""
 
 
 ## Stores the setup package that the next board bootstrap should start.
 func set_next_setup_package(package: FleetSetupPackage) -> void:
 	_next_setup_package = package
 	_next_scenario_id = ""
+	_next_setup_match_type = ""
+
+
+## Stores the fleet-setup match type for the next setup-flow scene.
+func set_next_setup_match_type(match_type_id: String) -> void:
+	_next_setup_match_type = SETUP_MATCH_OPTIONS_SCRIPT.normalize_match_type_id(match_type_id)
+	_next_scenario_id = ""
+	_next_setup_package = null
 
 
 ## Returns and clears the pending scenario id, falling back to [param default_id].
@@ -165,6 +180,15 @@ func consume_next_setup_package() -> FleetSetupPackage:
 	var package: FleetSetupPackage = _next_setup_package
 	_next_setup_package = null
 	return package
+
+
+## Returns and clears the selected setup match type.
+func consume_next_setup_match_type(default_match_type_id: String) -> String:
+	var match_type_id: String = _next_setup_match_type
+	_next_setup_match_type = ""
+	if match_type_id.is_empty():
+		return SETUP_MATCH_OPTIONS_SCRIPT.normalize_match_type_id(default_match_type_id)
+	return match_type_id
 
 
 ## Starts a new game in a play-mode-aware way.  Hot-seat passes
@@ -2093,7 +2117,7 @@ func _handle_remote_advance_phase(cmd: GameCommand) -> void:
 
 ## B4: Mirror activate_ship side effects on client.
 func _handle_remote_activate_ship(
-		cmd: GameCommand, result: Dictionary) -> void:
+		cmd: GameCommand, _result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship == null:
 		return
@@ -2443,7 +2467,7 @@ func _handle_remote_status_cleanup() -> void:
 
 ## B25: Mirror destroy_unit side effects on client.
 func _handle_remote_destroy_unit(
-		cmd: GameCommand, result: Dictionary) -> void:
+		cmd: GameCommand, _result: Dictionary) -> void:
 	var unit_type: String = cmd.payload.get("unit_type", "ship")
 	if unit_type == "squadron":
 		var sq: SquadronInstance = _find_squadron_from_command(cmd)

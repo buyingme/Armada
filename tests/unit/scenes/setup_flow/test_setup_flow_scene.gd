@@ -8,6 +8,8 @@ var _library_manager_script: GDScript = preload(
 		"res://src/core/fleet/fleet_library_manager.gd")
 var _setup_flow_script: GDScript = preload(
 		"res://src/scenes/setup_flow/setup_flow.gd")
+const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_match_options.gd")
 var _original_library_dir: String = ""
 var _test_library_dir: String = "user://test_setup_flow_scene_library"
 var _manager: FleetLibraryManager
@@ -15,6 +17,7 @@ var _scene: Variant = null
 
 
 func before_each() -> void:
+	GameManager.consume_next_setup_match_type(SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400)
 	_original_library_dir = _library_manager_script.LIBRARY_DIR
 	_library_manager_script.LIBRARY_DIR = _test_library_dir
 	_cleanup_test_dir()
@@ -28,6 +31,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameManager.consume_next_setup_package()
+	GameManager.consume_next_setup_match_type(SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400)
 	if _scene != null and is_instance_valid(_scene):
 		remove_child(_scene)
 		_scene.free()
@@ -45,6 +49,17 @@ func test_ready_builds_required_controls_expected() -> void:
 		"Setup flow should include a confirm button")
 	assert_not_null(_find_button(_scene, "Cancel"),
 		"Setup flow should include a cancel button")
+
+
+func test_ready_initializes_package_draft_from_selected_match_type_expected() -> void:
+	var draft: FleetSetupPackage = _scene.current_package_draft()
+
+	assert_not_null(draft, "Setup flow should expose the selected match-type draft")
+	assert_eq(int(draft.point_format.get("limit", 0)), FleetValidator.DEFAULT_POINT_LIMIT,
+		"Default setup-flow draft should target Standard 400.")
+	assert_eq(draft.setup_state.get("match_type", ""),
+		SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400,
+		"Default setup-flow draft should record Standard 400.")
 
 
 func test_ready_with_two_valid_fleets_builds_package_expected() -> void:

@@ -935,7 +935,7 @@ Status note:
 | Acceptance | Hot-seat setup can choose two local rosters, choose first player/objective, reject invalid rosters, display deterministic package summary/hash, and hand off a validated package without local-library coupling. Network/lobby reuse remains on the same builder contract. |
 | Tests | Focused setup-flow UI/controller tests with mocked library/builder, invalid roster display, objective ownership rendering, package-summary rendering, no orphan/leak warnings. |
 | Verification | Focused UI GUT, full GUT, `bash scripts/lint_phase_k.sh`, manual local setup selection and package-confirmation pass. |
-| Status | In progress as of 2026-05-31: local setup-package confirmation has a thin `src/scenes/setup_flow/` screen over `FleetLibraryManager` and `FleetSetupPackageBuilder`, with roster selection, point-total-derived first-player display, objective selection from the second player's roster, deterministic package summary/hash, and a `GameManager.set_next_setup_package()` handoff. Legacy fleet records without serialized map payloads now default their map from point format during roster deserialization, so older saved fleets can still build setup packages. Focused roster/setup-flow/package-builder GUT, full GUT, `bash scripts/lint_phase_k.sh`, and `bash scripts/run_baseline_traces.sh --all` pass. Obstacle and deployment placement remain FB14 scope; manual local setup selection/package-confirmation pass is pending. |
+| Status | In progress as of 2026-06-01: local setup-package confirmation has a thin `src/scenes/setup_flow/` screen over `FleetLibraryManager` and `FleetSetupPackageBuilder`, with roster selection, RRG-compliant initiative chooser resolution from fleet points or tie-breaker, selectable first player, objective selection from the second player's roster, deterministic package summary/hash, and a `GameManager.set_next_setup_package()` handoff. Legacy fleet records without serialized map payloads now default their map from point format during roster deserialization, so older saved fleets can still build setup packages. Focused roster/setup-flow/package-builder GUT, full GUT, `bash scripts/lint_phase_k.sh`, and `bash scripts/run_baseline_traces.sh --all` pass. Obstacle and deployment placement remain FB14 scope; manual local setup selection/package-confirmation pass is pending. |
 
 ### FB13D - Dynamic Player Identity Projection
 
@@ -961,6 +961,7 @@ Status note:
 | Acceptance | User can place Core Set obstacles and deploy ships/squadrons, then serialize a setup package with normalized placements that hot-seat and network start paths can consume identically. |
 | Tests | Placement serialization, bounds validation, obstacle set completeness, deployment-zone warnings/errors, no pixel values in payloads, host/client placement package equality. |
 | Verification | Focused setup UI tests, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual deployment pass. |
+| Status | In progress as of 2026-06-01: setup-package starts now remain in `SETUP` instead of immediately entering Command Phase, and round one is gated behind command-backed setup validation in `StartRoundCommand`. Live `GameState.objectives` carries the serialized deployment payload beside obstacles/setup state so after-bootstrap placement completion can validate that six obstacles and every fleet component have normalized placements before `GameManager.complete_setup_and_start_round()` submits round one. Interactive placement UI and full obstacle/deployment validators remain in this slice. |
 
 ### FB15 - GameState Persistence For Objectives, Obstacles, And Upgrades
 
@@ -1076,9 +1077,9 @@ code-bearing slices.
 3. FB13C/FB13D now cover local setup-package confirmation and dynamic player
   identity. FB14 should own setup-step routing, obstacle placement, and fleet
   deployment UI.
-4. First-player selection is now derived from fleet points in the setup flow,
-  with a random tie-breaker, and recorded in the setup package. Remaining
-  work is setup placement, not manual first-player selection.
+4. First-player choice now follows RRG setup step 3: the lower-point player
+  chooses first player, and tied fleets use the tie-breaker to pick the chooser.
+  Remaining work is setup placement, not initiative-choice ownership.
 5. Deployment begins as warning-guided manual placement with normalized
   positions; strict hard enforcement can harden in later setup validators.
 6. `FleetLibraryManager` currently stores fleets under `PathConfig.SAVES_DIR + "/fleets"`.

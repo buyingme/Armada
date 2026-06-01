@@ -1,15 +1,17 @@
 ## Tests for §4.6 P1 game-flow command subclasses.
 ##
-## Covers: AdvancePhaseCommand, StartRoundCommand.
+## Covers: AdvancePhaseCommand and StartRoundCommand.
 ## Each command is tested for validate (happy + rejection), execute,
 ## and serialize/deserialize roundtrip.
 extends GutTest
 
 
 var _state: GameState
+var _saved_registry: Dictionary = {}
 
 
 func before_each() -> void:
+	_saved_registry = GameCommand._registry.duplicate()
 	_state = GameState.new()
 	_state.initialize()
 	_state.current_round = 1
@@ -19,8 +21,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	GameCommand._registry.erase("advance_phase")
-	GameCommand._registry.erase("start_round")
+	GameCommand._registry = _saved_registry
 
 
 # ======================================================================
@@ -173,6 +174,20 @@ func test_start_round_validate_ok_from_setup() -> void:
 			"Should accept starting round 1 from SETUP phase (game start).")
 
 
+func test_start_round_validate_rejects_incomplete_setup_package() -> void:
+	_mark_setup_package_state(false)
+	var cmd := StartRoundCommand.new(0, {})
+	assert_ne(cmd.validate(_state), "",
+			"Setup-package starts should wait for full placement data.")
+
+
+func test_start_round_validate_accepts_complete_setup_package() -> void:
+	_mark_setup_package_state(true)
+	var cmd := StartRoundCommand.new(0, {})
+	assert_eq(cmd.validate(_state), "",
+			"Completed setup-package state should allow round one to start.")
+
+
 func test_start_round_validate_rejects_wrong_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var cmd := StartRoundCommand.new(0, {})
@@ -255,3 +270,94 @@ func test_start_round_deserialize() -> void:
 			"Player index should be 0.")
 	assert_eq(cmd.sequence, 5,
 			"Sequence should be 5.")
+
+
+# ======================================================================
+# StartRoundCommand — setup package completion
+# ======================================================================
+
+func test_start_round_validate_ready_setup_package_expected() -> void:
+	_mark_setup_ready_with_ship()
+	var cmd := StartRoundCommand.new(0, {})
+	assert_eq(cmd.validate(_state), "",
+			"Start round should accept placed obstacles and deployments.")
+
+
+func test_start_round_validate_missing_obstacles_rejected() -> void:
+	_mark_setup_package_state(false)
+	var cmd := StartRoundCommand.new(0, {})
+	assert_ne(cmd.validate(_state), "",
+			"Start round should reject missing obstacle placements.")
+
+
+func test_start_round_validate_missing_unit_deployment_rejected() -> void:
+	_mark_setup_ready_with_ship()
+	_state.objectives[FleetSetupBootstrapper.KEY_DEPLOYMENTS] = []
+	var cmd := StartRoundCommand.new(0, {})
+	assert_ne(cmd.validate(_state), "",
+			"Start round should reject missing unit deployments.")
+
+
+func test_start_round_execute_marks_setup_complete_expected() -> void:
+	_mark_setup_ready_with_ship()
+	var cmd := StartRoundCommand.new(1, {})
+	var result: Dictionary = cmd.execute(_state)
+	var setup_state: Dictionary = _state.objectives.get(
+			FleetSetupBootstrapper.KEY_SETUP_STATE, {}) as Dictionary
+	assert_eq(result.get("new_round", -1), 1,
+			"Start round result should report round one.")
+	assert_eq(setup_state.get("status", ""),
+			StartRoundCommand.SETUP_STATUS_COMPLETE,
+			"Setup state should record completion status.")
+	assert_eq(setup_state.get("completed_by_player", -1), 1,
+			"Setup state should record the command player.")
+
+
+func _mark_setup_package_state(is_complete: bool) -> void:
+	_state.current_phase = Constants.GamePhase.SETUP
+	_state.current_round = 0
+	var setup_state: Dictionary = {}
+	if is_complete:
+		setup_state["status"] = StartRoundCommand.SETUP_STATUS_COMPLETE
+	_state.objectives = {
+		FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH: "hash",
+		FleetSetupBootstrapper.KEY_SETUP_STATE: setup_state,
+		FleetSetupBootstrapper.KEY_OBSTACLES: [],
+		FleetSetupBootstrapper.KEY_DEPLOYMENTS: [],
+	}
+
+
+func _mark_setup_ready_with_ship() -> void:
+	_mark_setup_package_state(false)
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = 0
+	ship.roster_entry_id = "ship-1"
+	_state.get_player_state(0).ships.append(ship)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _six_obstacles()
+	_state.objectives[FleetSetupBootstrapper.KEY_DEPLOYMENTS] = [
+		_deployment(0, "ship", "ship-1"),
+	]
+
+
+func _six_obstacles() -> Array[Dictionary]:
+	var obstacles: Array[Dictionary] = []
+	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT):
+		obstacles.append({
+			"data_key": "obstacle_%d" % index,
+			"pos_x": 0.1 + float(index) * 0.1,
+			"pos_y": 0.5,
+			"rotation_deg": 0.0,
+		})
+	return obstacles
+
+
+func _deployment(owner_player: int,
+		component_type: String, roster_entry_id: String) -> Dictionary:
+	return {
+		"owner_player": owner_player,
+		"component_type": component_type,
+		"roster_entry_id": roster_entry_id,
+		"pos_x": 0.5,
+		"pos_y": 0.5,
+		"rotation_deg": 0.0,
+	}

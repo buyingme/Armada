@@ -74,20 +74,20 @@ func test_build_from_rosters_first_player_and_hash_stable_expected() -> void:
 		"Equivalent setup builds should produce a stable canonical hash")
 
 
-func test_determine_first_player_lower_fleet_points_expected() -> void:
-	var first_player: int = FleetSetupPackageBuilder.determine_first_player(
+func test_determine_first_player_chooser_lower_fleet_points_expected() -> void:
+	var chooser: int = FleetSetupPackageBuilder.determine_first_player_chooser(
 			_create_imperial_roster(), _create_rebel_roster())
 
-	assert_eq(first_player, 1,
-		"The lower-point fleet should be assigned first player")
+	assert_eq(chooser, 1,
+		"The lower-point fleet should choose which player is first")
 
 
-func test_determine_first_player_tie_uses_tie_breaker_expected() -> void:
-	var first_player: int = FleetSetupPackageBuilder.determine_first_player(
+func test_determine_first_player_chooser_tie_uses_tie_breaker_expected() -> void:
+	var chooser: int = FleetSetupPackageBuilder.determine_first_player_chooser(
 			_create_rebel_roster(), _create_rebel_roster(), func() -> int: return 1)
 
-	assert_eq(first_player, 1,
-		"Tied fleet totals should use the supplied 50/50 tie-break result")
+	assert_eq(chooser, 1,
+		"Tied fleet totals should use the supplied 50/50 chooser result")
 
 
 func test_build_from_rosters_invalid_fleet_rejected_expected() -> void:

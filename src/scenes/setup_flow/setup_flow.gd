@@ -1,8 +1,8 @@
 ## Setup Flow Scene
 ##
 ## Hot-seat setup-package confirmation screen. Loads two local rosters,
-## derives first player, chooses objective, then hands a validated package to
-## GameManager for the existing setup-package board bootstrap path.
+## resolves the initiative chooser, chooses first player/objective, then hands
+## a validated package to GameManager for the setup-package board path.
 class_name SetupFlowScene
 extends Control
 
@@ -25,6 +25,7 @@ var transition_on_confirm: bool = true
 var _library_manager: FleetLibraryManager = null
 var _builder: FleetSetupPackageBuilder = null
 var _tie_breaker: Callable = Callable()
+var _initiative_chooser: int = PLAYER_ZERO
 var _resolved_first_player: int = PLAYER_ZERO
 var _fleet_options: Array[Dictionary] = []
 var _current_package: FleetSetupPackage = null
@@ -102,6 +103,7 @@ func _build_choice_rows() -> VBoxContainer:
 	_first_player_option.add_item("Player 2")
 	_first_player_option.set_item_metadata(1, PLAYER_ONE)
 	_first_player_option.disabled = true
+	_first_player_option.item_selected.connect(_on_first_player_selected)
 	_objective_option = UiFactory.build_option_row(rows, "Objective")
 	_objective_option.item_selected.connect(_on_objective_selected)
 	return rows
@@ -216,12 +218,16 @@ func _rebuild_package() -> void:
 func _resolve_first_player() -> void:
 	var rosters: Array[FleetRoster] = _selected_rosters()
 	if rosters.size() != Constants.PLAYER_COUNT:
+		_initiative_chooser = PLAYER_ZERO
 		_resolved_first_player = PLAYER_ZERO
 		_first_player_option.select(_resolved_first_player)
+		_first_player_option.disabled = true
 		return
-	_resolved_first_player = FleetSetupPackageBuilder.determine_first_player(
+	_initiative_chooser = FleetSetupPackageBuilder.determine_first_player_chooser(
 			rosters[0], rosters[1], _tie_breaker)
+	_resolved_first_player = _initiative_chooser
 	_first_player_option.select(_resolved_first_player)
+	_first_player_option.disabled = false
 
 
 func _selected_rosters() -> Array[FleetRoster]:
@@ -284,6 +290,11 @@ func _on_fleet_selected(_index: int) -> void:
 
 func _on_objective_selected(_index: int) -> void:
 	_rebuild_package()
+
+
+func _on_first_player_selected(index: int) -> void:
+	_resolved_first_player = int(_first_player_option.get_item_metadata(index))
+	_refresh_objectives()
 
 
 func _on_confirm_pressed() -> void:

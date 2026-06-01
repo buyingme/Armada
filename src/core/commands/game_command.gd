@@ -111,6 +111,10 @@ static func register_type(type_name: String,
 	_registry[type_name] = factory
 
 
+static func _clear_registry_for_shutdown() -> void:
+	_registry.clear()
+
+
 ## Returns sorted command type names currently registered with the factory.
 static func registered_types() -> Array[String]:
 	var types: Array[String] = []

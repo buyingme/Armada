@@ -81,9 +81,10 @@ static func player_index_for_peer_role(peer_role: String, host_player_index: int
 			return -1
 
 
-## Determines first player from fleet points.
-## Rules Reference: "Setup", first player selection, RRG 1.5.0.
-static func determine_first_player(player_zero_roster: FleetRoster,
+## Determines which player chooses the first player from fleet points.
+## Rules Reference: "Setup", step 3, RRG 1.5.0: the lower-cost player
+## chooses which player is first; tied fleets flip a coin for the chooser.
+static func determine_first_player_chooser(player_zero_roster: FleetRoster,
 		player_one_roster: FleetRoster, tie_breaker: Callable = Callable()) -> int:
 	var player_zero_points: int = _fleet_total_points(player_zero_roster)
 	var player_one_points: int = _fleet_total_points(player_one_roster)
@@ -92,6 +93,14 @@ static func determine_first_player(player_zero_roster: FleetRoster,
 	if player_one_points < player_zero_points:
 		return 1
 	return _tie_breaker_player(tie_breaker)
+
+
+## Compatibility alias for older callers. Returns the RRG setup step 3
+## chooser, not a forced first-player assignment.
+static func determine_first_player(player_zero_roster: FleetRoster,
+		player_one_roster: FleetRoster, tie_breaker: Callable = Callable()) -> int:
+	return determine_first_player_chooser(
+			player_zero_roster, player_one_roster, tie_breaker)
 
 
 func _validate_build_inputs(rosters: Array[FleetRoster], first_player: int,

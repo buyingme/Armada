@@ -60,18 +60,34 @@ func test_ready_with_two_valid_fleets_builds_package_expected() -> void:
 		"Summary should show the selected objective name")
 
 
-func test_ready_derives_first_player_from_lower_fleet_points_expected() -> void:
+func test_ready_lets_lower_fleet_points_player_choose_first_player_expected() -> void:
 	var package: FleetSetupPackage = _scene.current_package()
 
 	assert_not_null(package, "Valid setup should build a package")
-	assert_true(_scene._first_player_option.disabled,
-		"First player should be displayed but not manually selectable")
+	assert_false(_scene._first_player_option.disabled,
+		"First-player choice should be selectable by the initiative chooser")
+	assert_eq(_scene._initiative_chooser, 1,
+		"Lower-point fleet should receive the first-player choice")
 	assert_eq(package.first_player, 1,
-		"Lower-point fleet should become first player")
+		"Chooser should default to choosing themselves as first player")
 	assert_eq(package.selected_objective.get("owner_player", -1), 0,
 		"Objective should come from the second player's roster")
 	assert_true(_objective_options_contain("Opening Salvo"),
 		"Objective picker should use the derived second player's objectives")
+
+
+func test_first_player_selection_rebuilds_objective_owner_expected() -> void:
+	_scene._first_player_option.select(0)
+	_scene._on_first_player_selected(0)
+	var package: FleetSetupPackage = _scene.current_package()
+
+	assert_not_null(package, "Changing first player should rebuild a setup package")
+	assert_eq(package.first_player, 0,
+		"The initiative chooser should be able to choose either player as first")
+	assert_eq(package.selected_objective.get("owner_player", -1), 1,
+		"Objective choices should move to the chosen second player's roster")
+	assert_true(_objective_options_contain("Most Wanted"),
+		"Objective picker should show the new second player's objectives")
 
 
 func test_invalid_fleet_selection_disables_confirmation_expected() -> void:

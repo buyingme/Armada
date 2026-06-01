@@ -116,6 +116,10 @@ func _ready() -> void:
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 
+func _exit_tree() -> void:
+	GameCommand._clear_registry_for_shutdown()
+
+
 ## Submits a command for validation and execution.
 ## Returns the result dictionary from [method GameCommand.execute],
 ## or an empty dictionary if validation fails.

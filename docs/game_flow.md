@@ -152,7 +152,7 @@ Current registered command inventory for M3:
 | Command | Scope | Declaration target | Reason / M-slice note |
 |---|---|---|---|
 | `assign_dials` | `PHASE` | `COMMAND` | Command Phase assignment is phase-gated; current command-phase flow rows are not uniformly command-produced. |
-| `start_round` | `PHASE` | `SETUP`, `STATUS` | Starts the initial or next round, so it intentionally runs outside a concrete interaction step. |
+| `start_round` | `PHASE` | `SETUP`, `STATUS` | Starts the initial or next round. Setup-package games may only use it after obstacle and deployment placement payloads are complete; the command records setup completion before entering round one. |
 | `advance_phase` | `PHASE` | `COMMAND`, `SHIP`, `SQUADRON` | Phase transition command; payload validation enforces the expected next phase and excludes `STATUS -> COMMAND`. |
 | `status_phase_cleanup` | `PHASE` | `STATUS` | Deterministic end-of-round cleanup, including RuleRegistry `defense_token_readying` modifiers and remaining legacy status hooks. |
 | `debug_deal_damage` | `GLOBAL` | Debug harness only | Debug tool is explicitly phase-independent and owns its own target/card validation. |

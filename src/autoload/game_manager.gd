@@ -291,7 +291,7 @@ func start_new_game_from_state(
 func _install_setup_package_state(
 		state: GameState,
 		package: FleetSetupPackage,
-		config: Dictionary) -> void:
+		_config: Dictionary) -> void:
 	CommandProcessor.reset()
 	current_game_state = state
 	if current_game_state.interaction_flow == null:
@@ -308,9 +308,23 @@ func _install_setup_package_state(
 	is_state_preloaded = true
 	_enable_network_file_logging_if_needed()
 	EventBus.game_started.emit()
-	if not bool(config.get("client_mode", false)):
-		_start_round()
 	SaveGameManager.mark_clean()
+
+
+## Completes the active setup-package setup and starts round one.
+## Placement UI must commit normalized obstacle/deployment payloads before
+## calling this method; the command validates that setup is complete.
+func complete_setup_and_start_round() -> Dictionary:
+	if not is_game_active or current_game_state == null:
+		return {"success": false, "reason": "No active game state."}
+	if _is_network_client():
+		return {"success": false, "reason": "Server controls setup completion."}
+	var cmd: GameCommand = StartRoundCommand.new(active_player, {})
+	var result: Dictionary = _submitter.submit(cmd)
+	if not result.has("new_round"):
+		return result
+	_after_start_round_command()
+	return result
 
 
 ## Returns the current value of [member is_state_preloaded] and clears it.
@@ -520,6 +534,10 @@ func _start_round() -> void:
 	var cmd := StartRoundCommand.new(
 			active_player, {})
 	_submitter.submit(cmd)
+	_after_start_round_command()
+
+
+func _after_start_round_command() -> void:
 
 	# Reset submission tracking for the new round.
 	_command_submitted = [false, false]

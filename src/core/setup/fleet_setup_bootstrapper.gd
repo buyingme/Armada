@@ -9,6 +9,7 @@ extends RefCounted
 
 
 const KEY_OBSTACLES: String = "obstacles"
+const KEY_DEPLOYMENTS: String = "deployments"
 const KEY_MAP: String = "map"
 const KEY_POINT_FORMAT: String = "point_format"
 const KEY_SELECTED_OBJECTIVE: String = "selected_objective"
@@ -63,6 +64,7 @@ static func _attach_setup_payload(
 		KEY_SELECTED_OBJECTIVE: package.selected_objective.duplicate(true),
 		KEY_SETUP_STATE: package.setup_state.duplicate(true),
 		KEY_OBSTACLES: _copy_dict_array(package.obstacles),
+		KEY_DEPLOYMENTS: _copy_dict_array(package.deployments),
 		KEY_MAP: package.map.duplicate(true),
 		KEY_POINT_FORMAT: package.point_format.duplicate(true),
 		KEY_SETUP_PACKAGE_HASH: package.canonical_hash(),

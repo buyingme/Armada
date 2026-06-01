@@ -65,15 +65,37 @@ func test_start_new_game_from_setup_package_installs_state_expected() -> void:
 		"Setup-package games should use the preloaded board spawn path")
 	assert_eq(GameManager.get_scenario_id(), FleetSetupPackageBuilder.DEFAULT_SCENARIO_ID,
 		"Scenario id should come from the setup package")
-	assert_eq(state.current_round, 1, "GameManager should start round 1")
-	assert_eq(state.current_phase, Constants.GamePhase.COMMAND,
-		"GameManager should enter the Command Phase")
+	assert_eq(state.current_round, 0, "GameManager should wait in setup")
+	assert_eq(state.current_phase, Constants.GamePhase.SETUP,
+		"GameManager should keep setup-package games in SETUP")
 	assert_eq(GameManager.active_player, 1,
 		"Active player should start with package initiative")
 	assert_eq(state.objectives.get(FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH, ""),
 		package.canonical_hash(), "Live state should carry setup package hash")
 	assert_almost_eq(rebel_ship.pos_y, 0.82, 0.001,
 		"Live ship state should carry deployment position")
+	assert_eq((state.objectives.get(
+			FleetSetupBootstrapper.KEY_DEPLOYMENTS, []) as Array).size(), 2,
+		"Live state should carry setup deployment payloads")
+
+
+func test_complete_setup_and_start_round_enters_command_expected() -> void:
+	var package: FleetSetupPackage = _package_with_completed_placements()
+	GameManager.start_new_game_from_setup_package(package, {"rng_seed": 2468})
+
+	var result: Dictionary = GameManager.complete_setup_and_start_round()
+	var setup_state: Dictionary = GameManager.current_game_state.objectives.get(
+			FleetSetupBootstrapper.KEY_SETUP_STATE, {}) as Dictionary
+
+	assert_eq(result.get("new_round", -1), 1,
+		"Complete setup should accept fully placed setup payloads")
+	assert_eq(GameManager.current_game_state.current_round, 1,
+		"Completing setup should start round one")
+	assert_eq(GameManager.current_game_state.current_phase, Constants.GamePhase.COMMAND,
+		"Completing setup should enter the Command Phase")
+	assert_eq(setup_state.get("status", ""),
+			StartRoundCommand.SETUP_STATUS_COMPLETE,
+		"Setup state should record completion before round one")
 
 
 func test_start_new_game_from_setup_package_client_mode_waits_expected() -> void:
@@ -109,6 +131,24 @@ func _package_with_deployments() -> FleetSetupPackage:
 		"deployments": _deployments(),
 		"setup_state": {},
 	})
+
+
+func _package_with_completed_placements() -> FleetSetupPackage:
+	var package: FleetSetupPackage = _package_with_deployments()
+	package.obstacles = _six_obstacles()
+	return package
+
+
+func _six_obstacles() -> Array[Dictionary]:
+	var obstacles: Array[Dictionary] = []
+	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT):
+		obstacles.append({
+			"data_key": "obstacle_%d" % index,
+			"pos_x": 0.1 + float(index) * 0.1,
+			"pos_y": 0.5,
+			"rotation_deg": 0.0,
+		})
+	return obstacles
 
 
 func _deployments() -> Array[Dictionary]:

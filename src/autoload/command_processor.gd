@@ -25,6 +25,12 @@
 extends Node
 
 
+const CommitSetupObstacleCommand = preload(
+		"res://src/core/commands/commit_setup_obstacle_command.gd")
+const CommitSetupDeploymentCommand = preload(
+		"res://src/core/commands/commit_setup_deployment_command.gd")
+
+
 const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
 		preload("res://src/core/commands/command_applicability.gd")
 
@@ -81,6 +87,8 @@ func _ready() -> void:
 	# Tier 4 — game flow commands.
 	AdvancePhaseCommand.register()
 	StartRoundCommand.register()
+	CommitSetupObstacleCommand.register()
+	CommitSetupDeploymentCommand.register()
 	# Tier 5 — status phase + destruction cleanup.
 	StatusPhaseCleanupCommand.register()
 	DestroyUnitCommand.register()

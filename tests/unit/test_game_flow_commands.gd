@@ -6,6 +6,12 @@
 extends GutTest
 
 
+const CommitSetupObstacleCommandScript = preload(
+		"res://src/core/commands/commit_setup_obstacle_command.gd")
+const CommitSetupDeploymentCommandScript = preload(
+		"res://src/core/commands/commit_setup_deployment_command.gd")
+
+
 var _state: GameState
 var _saved_registry: Dictionary = {}
 
@@ -18,6 +24,8 @@ func before_each() -> void:
 	_state.current_phase = Constants.GamePhase.COMMAND
 	AdvancePhaseCommand.register()
 	StartRoundCommand.register()
+	CommitSetupObstacleCommandScript.register()
+	CommitSetupDeploymentCommandScript.register()
 
 
 func after_each() -> void:
@@ -313,6 +321,81 @@ func test_start_round_execute_marks_setup_complete_expected() -> void:
 			"Setup state should record the command player.")
 
 
+# ======================================================================
+# Setup placement commands
+# ======================================================================
+
+func test_commit_setup_obstacle_validate_outside_board_rejected() -> void:
+	_mark_setup_package_state(false)
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 0, {
+		"data_key": "asteroid_1",
+		"pos_x": 1.2,
+		"pos_y": 0.5,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Obstacle placement should reject positions outside the play area.")
+
+
+func test_commit_setup_obstacle_execute_upserts_payload_expected() -> void:
+	_mark_setup_package_state(false)
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 0, {
+		"data_key": "asteroid_1",
+		"pos_x": 0.25,
+		"pos_y": 0.4,
+		"rotation_deg": 15.0,
+	})
+	var result: Dictionary = cmd.execute(_state)
+	var obstacles: Array = _state.objectives.get(FleetSetupBootstrapper.KEY_OBSTACLES, []) as Array
+	assert_eq(obstacles.size(), 1,
+			"Obstacle placement should append a new setup obstacle entry.")
+	assert_eq(result.get("obstacle_count", -1), 1,
+			"Obstacle result should report the current obstacle count.")
+	assert_almost_eq(float((obstacles[0] as Dictionary).get("pos_x", 0.0)), 0.25, 0.001,
+			"Obstacle placement should persist normalized X.")
+
+
+func test_commit_setup_deployment_validate_missing_target_rejected() -> void:
+	_mark_setup_package_state(false)
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 0, {
+		"owner_player": 0,
+		"component_type": "ship",
+		"roster_entry_id": "missing",
+		"pos_x": 0.5,
+		"pos_y": 0.5,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Deployment placement should reject unknown live targets.")
+
+
+func test_commit_setup_deployment_execute_updates_ship_expected() -> void:
+	_mark_setup_ready_with_ship()
+	var ship: ShipInstance = _state.get_player_state(0).ships[0] as ShipInstance
+	ship.current_speed = 2
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 0, {
+		"owner_player": 0,
+		"component_type": "ship",
+		"roster_entry_id": "ship-1",
+		"pos_x": 0.62,
+		"pos_y": 0.78,
+		"rotation_deg": 180.0,
+		"speed": 3,
+	})
+	var result: Dictionary = cmd.execute(_state)
+	var deployments: Array = _state.objectives.get(FleetSetupBootstrapper.KEY_DEPLOYMENTS, []) as Array
+	assert_almost_eq(ship.pos_x, 0.62, 0.001,
+			"Deployment execute should update the live ship X position.")
+	assert_eq(ship.current_speed, 3,
+			"Deployment execute should update the live ship speed when provided.")
+	assert_eq((result.get("deployment", {}) as Dictionary).get("roster_entry_id", ""), "ship-1",
+			"Deployment result should echo the updated roster entry id.")
+	assert_eq(deployments.size(), 1,
+			"Deployment execute should upsert a single deployment entry for the ship.")
+
+
 func _mark_setup_package_state(is_complete: bool) -> void:
 	_state.current_phase = Constants.GamePhase.SETUP
 	_state.current_round = 0
@@ -361,3 +444,13 @@ func _deployment(owner_player: int,
 		"pos_y": 0.5,
 		"rotation_deg": 0.0,
 	}
+
+
+func _deserialize_setup_command(command_type: String,
+		player_index: int, payload: Dictionary) -> GameCommand:
+	return GameCommand.deserialize({
+		"type": command_type,
+		"player": player_index,
+		"sequence": - 1,
+		"payload": payload,
+	})

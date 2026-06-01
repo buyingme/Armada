@@ -24,6 +24,8 @@ const SHIP_TOKEN_SCENE: PackedScene = preload(
 		"res://src/scenes/tokens/ship_token.tscn")
 const SQUADRON_TOKEN_SCENE: PackedScene = preload(
 		"res://src/scenes/tokens/squadron_token.tscn")
+const SETUP_PLACEMENT_CONTROLLER_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/setup_placement_controller.gd")
 
 ## Fallback background colour when no map image is configured.
 const PLAY_AREA_COLOUR: Color = Color(0.05, 0.07, 0.14)
@@ -150,6 +152,10 @@ var _squadron_phase_controller: SquadronPhaseController = null
 ## Created in [method _create_displacement_controller].
 var _displacement_controller: DisplacementController = null
 
+## Setup placement controller — owns setup obstacle/deployment interaction.
+## Created in [method _create_setup_placement_controller].
+var _setup_placement_controller = null
+
 func _ready() -> void:
 	_create_board_components()
 	_bootstrap_or_load_board_state()
@@ -192,6 +198,8 @@ func _process(_delta: float) -> void:
 	# Phase 7b: Squadron follows mouse during MOVING state.
 	if _squadron_phase_controller:
 		_squadron_phase_controller.process_squadron_movement()
+	if _setup_placement_controller:
+		_setup_placement_controller.process_setup_dragging()
 
 	if not DebugMode.has_selection():
 		return
@@ -220,6 +228,8 @@ func _input(event: InputEvent) -> void:
 ## DBG-003 — must not interfere with camera controls (right-click, scroll).
 func _unhandled_input(event: InputEvent) -> void:
 	if _try_handle_displacement_lock_click(event):
+		return
+	if _setup_placement_controller and _setup_placement_controller.try_handle_input(event):
 		return
 	if _tool_overlay_controller.try_handle_escape(event):
 		return
@@ -447,6 +457,9 @@ func _spawn_squadron_token(
 
 ## Called when a ship token is clicked.
 func _on_token_clicked(token: ShipToken) -> void:
+	if _setup_placement_controller \
+			and _setup_placement_controller.try_handle_ship_click(token):
+		return
 	if _target_selector and _target_selector.handle_ship_click(token):
 		return
 	if _tool_overlay_controller.try_handle_token_click(token):
@@ -462,6 +475,9 @@ func _on_token_clicked(token: ShipToken) -> void:
 
 ## Called when a squadron token is clicked.
 func _on_squadron_clicked(token: SquadronToken) -> void:
+	if _setup_placement_controller \
+			and _setup_placement_controller.try_handle_squadron_click(token):
+		return
 	if _target_selector and _target_selector.handle_squadron_click(token):
 		return
 	# Phase 7b: route to squadron activation modal.
@@ -1168,6 +1184,7 @@ func _is_squadron_token_only(ship_token: Variant) -> bool:
 func _create_board_components() -> void:
 	_create_camera()
 	_create_token_container()
+	_create_setup_placement_controller()
 	_create_debug_controller()
 	_create_command_phase_controller()
 	_create_squadron_phase_controller()
@@ -1185,6 +1202,13 @@ func _create_board_components() -> void:
 	_create_displacement_controller()
 	_create_ship_activation_controller()
 	_create_dial_drag_controller()
+
+
+func _create_setup_placement_controller() -> void:
+	_setup_placement_controller = SETUP_PLACEMENT_CONTROLLER_SCRIPT.new()
+	_setup_placement_controller.name = "SetupPlacementController"
+	add_child(_setup_placement_controller)
+	_setup_placement_controller.initialize(self , _token_container, _token_mover)
 
 
 func _bootstrap_or_load_board_state() -> void:
@@ -1214,6 +1238,8 @@ func _finalize_ready_sequence() -> void:
 	_create_command_router_adapter()
 	_connect_signals()
 	_connect_panel_signals()
+	if _setup_placement_controller:
+		_setup_placement_controller.refresh_from_state()
 	queue_redraw()
 	_on_phase_changed(GameManager.get_current_phase())
 	_on_active_player_changed(GameManager.get_active_player())

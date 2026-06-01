@@ -17,6 +17,12 @@
 extends Node
 
 
+const CommitSetupObstacleCommandScript = preload(
+		"res://src/core/commands/commit_setup_obstacle_command.gd")
+const CommitSetupDeploymentCommandScript = preload(
+		"res://src/core/commands/commit_setup_deployment_command.gd")
+
+
 ## The current game state. Null when no game is active.
 var current_game_state: GameState = null
 
@@ -327,6 +333,50 @@ func complete_setup_and_start_round() -> Dictionary:
 	return result
 
 
+## Submits one normalized obstacle placement during setup.
+func submit_setup_obstacle_placement(data_key: String,
+		pos_x: float, pos_y: float,
+		rotation_deg: float = 0.0) -> Dictionary:
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", {
+		"data_key": data_key,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
+		"rotation_deg": rotation_deg,
+	})
+	return _submitter.submit(cmd)
+
+
+## Submits one normalized ship or squadron deployment placement during setup.
+func submit_setup_deployment_placement(owner_player: int,
+		component_type: String, roster_entry_id: String,
+		pos_x: float, pos_y: float,
+		rotation_deg: float, speed: int = -1) -> Dictionary:
+	var payload: Dictionary = {
+		"owner_player": owner_player,
+		"component_type": component_type,
+		"roster_entry_id": roster_entry_id,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
+		"rotation_deg": rotation_deg,
+	}
+	if speed >= 0:
+		payload["speed"] = speed
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", payload)
+	return _submitter.submit(cmd)
+
+
+func _deserialize_setup_command(command_type: String,
+		payload: Dictionary) -> GameCommand:
+	return GameCommand.deserialize({
+		"type": command_type,
+		"player": active_player,
+		"sequence": - 1,
+		"payload": payload,
+	})
+
+
 ## Returns the current value of [member is_state_preloaded] and clears it.
 ## Called by [code]GameBoard._ready[/code] to take ownership of the
 ## "skip bootstrap, spawn from state" path exactly once.  Phase J5.6.
@@ -538,7 +588,6 @@ func _start_round() -> void:
 
 
 func _after_start_round_command() -> void:
-
 	# Reset submission tracking for the new round.
 	_command_submitted = [false, false]
 
@@ -1822,13 +1871,13 @@ func _on_ship_destroyed(ship: Node) -> void:
 	if not is_game_active or not current_game_state:
 		return
 	# Determine which player owns this ship.
-	var owner: int = -1
+	var owner_player: int = -1
 	var si: ShipInstance = null
 	if ship.has_method("get_ship_instance"):
 		si = ship.get_ship_instance()
 		if si != null:
-			owner = si.owner_player
-	if owner < 0:
+			owner_player = si.owner_player
+	if owner_player < 0:
 		return
 	# Check elimination FIRST — before cleanup changes is_destroyed() result.
 	_check_elimination()
@@ -1836,8 +1885,8 @@ func _on_ship_destroyed(ship: Node) -> void:
 	var idx: int = current_game_state.find_ship_index(si)
 	if idx < 0:
 		return
-	var cmd := DestroyUnitCommand.new(owner, {
-		"owner_player": owner,
+	var cmd := DestroyUnitCommand.new(owner_player, {
+		"owner_player": owner_player,
 		"ship_index": idx,
 	})
 	_submitter.submit(cmd)
@@ -1910,6 +1959,8 @@ func _handle_remote_command_effects(
 	match cmd.command_type:
 		"start_round":
 			_handle_remote_start_round()
+		"commit_setup_obstacle", "commit_setup_deployment":
+			pass
 		"assign_dials":
 			_handle_remote_assign_dials(cmd)
 		"advance_phase":

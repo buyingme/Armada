@@ -4,6 +4,12 @@
 extends GutTest
 
 
+const CommitSetupObstacleCommandScript = preload(
+		"res://src/core/commands/commit_setup_obstacle_command.gd")
+const CommitSetupDeploymentCommandScript = preload(
+		"res://src/core/commands/commit_setup_deployment_command.gd")
+
+
 var _previous_game_state: GameState = null
 var _previous_is_game_active: bool = false
 var _previous_active_player: int = 0
@@ -32,6 +38,8 @@ func before_each() -> void:
 	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
 	NetworkManager.role = NetworkManager.Role.NONE
 	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	CommitSetupObstacleCommandScript.register()
+	CommitSetupDeploymentCommandScript.register()
 	CommandProcessor.reset()
 
 
@@ -112,6 +120,41 @@ func test_start_new_game_from_setup_package_client_mode_waits_expected() -> void
 		"Client mode should remain in SETUP until the server command arrives")
 	assert_true(GameManager.is_state_preloaded,
 		"Client package bootstrap should still use loaded-state board spawn")
+
+
+func test_submit_setup_obstacle_placement_updates_live_state_expected() -> void:
+	GameManager.start_new_game_from_setup_package(_package_with_deployments(), {"rng_seed": 2468})
+
+	var result: Dictionary = GameManager.submit_setup_obstacle_placement(
+			"asteroid_1", 0.22, 0.44, 10.0)
+	var obstacles: Array = GameManager.current_game_state.objectives.get(
+			FleetSetupBootstrapper.KEY_OBSTACLES, []) as Array
+
+	assert_eq((result.get("obstacle", {}) as Dictionary).get("data_key", ""), "asteroid_1",
+		"Obstacle submit should echo the placed obstacle key.")
+	assert_eq(obstacles.size(), 1,
+		"Obstacle submit should update the live setup obstacle payload.")
+	assert_almost_eq(float((obstacles[0] as Dictionary).get("pos_y", 0.0)), 0.44, 0.001,
+		"Obstacle submit should persist normalized Y.")
+
+
+func test_submit_setup_deployment_placement_updates_live_state_expected() -> void:
+	GameManager.start_new_game_from_setup_package(_package_with_deployments(), {"rng_seed": 2468})
+
+	var result: Dictionary = GameManager.submit_setup_deployment_placement(
+			0, "ship", "rebel-ship-1", 0.61, 0.79, 180.0, 3)
+	var ship: ShipInstance = GameManager.current_game_state.get_ship(0, 0)
+	var deployments: Array = GameManager.current_game_state.objectives.get(
+			FleetSetupBootstrapper.KEY_DEPLOYMENTS, []) as Array
+
+	assert_eq((result.get("deployment", {}) as Dictionary).get("roster_entry_id", ""),
+			"rebel-ship-1", "Deployment submit should echo the updated roster entry.")
+	assert_almost_eq(ship.pos_x, 0.61, 0.001,
+		"Deployment submit should update the live ship X position.")
+	assert_eq(ship.current_speed, 3,
+		"Deployment submit should update the live ship speed.")
+	assert_eq(deployments.size(), 2,
+		"Deployment submit should update the existing setup deployment payload.")
 
 
 func _package_with_deployments() -> FleetSetupPackage:

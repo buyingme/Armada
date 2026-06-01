@@ -1,0 +1,47 @@
+In this document I describe the requirements for the setup phase
+
+# Setup Requirements
+
+The setup phase has the following steps:
+1. currently it is started through "fleet setup"
+    - This is not correct. Fleet setup is one step of a new game. Under New game, there should be several options:
+        - 400 points game
+        - 300 points game
+        - 180 points game
+        - learning scenario
+        - debug scenario
+        - The UI should display a window with these options insted of the currently implemented drop down style. The styling should be similar to the main menu.
+        - In Network mode these options should be available for the host in the lobby, not for the client.
+2. learning scenario and debug scenario use fixed already delpoyed fleets. this is fine and should stay as is
+3. 400, 300 and 180 points games should allow the player to choose from a list of fleets that are available in the fleet manager. Each player should be able to choose one fleet. in network mode this is of special relevance. note that the faction of both fleets need to be different.
+** Determine Initiative Step:
+4. After the players have both chosen the fleet from their rosters, the first player needs to be determined. The player who has the lower points value may choose who is the first player.
+** Choose objectives step:
+5. Then the first player may choose one of the second players objectives to be active in the game.
+** Place obstacles step:
+6. Starting with the second player, each player may place one obstacle, until all obstacles have been placed.
+    - In the obstacle placing phase show a list of the available obstacles (the transparent list currently available is fine), only one of each may be placed.
+    - In hot seat rotate the screen just like when turn change and show the banner: "Faction Player place objective"
+    - An object may be placed anywhere so its footprint (defined by its exact pixels) is within the setup area and outside the players deployment zones.
+    - objectives must be further apart than distance 1. That is: Obstacles must be placed within the setup area, beyond distance 3 of the edges of the play area and beyond distance 1 of each other.
+    - after placement of each obstace, rotate the tabe and show the banner, until exactly 6 obstacles are placed.
+    - In network mode, do not rotate the table, use the same flow as in the turn transitions of a network game.
+** Deploy ships step:
+7. After the obstacles have been placed, the ships must be placed.
+    - Again show a list of the available ships of the players roster. only show the ships of the active player. show the banner between the player taking turns. "Faction Player playe ship or squadrons". Make sure that everythink works in network and hot-seat.
+    - Ships must be placed within their players deployment zones. When a player places a ship, they must set its speed dial to a speed available on its speed chart.
+    - Squadrons must be placed within distance 1–2 of a friendly ship and may be placed outside of deployment zones (but within the setup area).
+    - If a player only has one squadron remaining when they must place two, they cannot place it until they have placed all of their ships.
+after that deplyment is complete and the first command phase starts.
+
+absolutely follow the architecture rules. make sure that the setup is serializable. Network commands are there and in network, the inactive player can see what is placed on the board by the other player.
+placing obstacles and ships and squadrons, it must be possible to rotate the component. use the same method as there is in the debug case alreaady.
+
+Definition of Play area:
+- The play area is the shared space occupied by ships, squadrons, obstacle tokens and objective tokens. The recommended play area is 3' x 3' for the core set and 3' x 6' for a 300 and 400 fleet point game.
+- If any portion of a ship's or squadron's base is outside the play area, that ship or squadron is destroyed.
+Definition of setup area:
+- The setup area is the region of the play area in which ships, squadrons, obstacle tokens, and objective tokens are placed during setup.
+- The setup area for a 300 and 400 fleet point game is the 3' x 4' area in the center of the play area. If playing with a 3' x 3' play area, the entire play area is the setup area.
+Definition of deployment zone:
+- A player's deployment zone is the portion of the setup area that is within distance 1–3 of their edge of the play area.

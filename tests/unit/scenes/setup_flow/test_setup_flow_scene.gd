@@ -45,8 +45,8 @@ func test_ready_builds_required_controls_expected() -> void:
 		"Setup flow should build the main panel")
 	assert_not_null(_scene.find_child("PackageSummary", true, false),
 		"Setup flow should build the package summary section")
-	assert_not_null(_find_button(_scene, "Confirm"),
-		"Setup flow should include a confirm button")
+	assert_not_null(_find_button(_scene, "Confirm Initiative"),
+		"Setup flow should include an initiative confirmation button")
 	assert_not_null(_find_button(_scene, "Cancel"),
 		"Setup flow should include a cancel button")
 
@@ -89,6 +89,8 @@ func test_ready_core_set_match_type_filters_fleet_options_expected() -> void:
 
 
 func test_ready_with_two_valid_fleets_builds_package_expected() -> void:
+	_confirm_initiative()
+	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
 
 	assert_not_null(package, "Two valid saved fleets should build a setup package")
@@ -102,24 +104,28 @@ func test_ready_with_two_valid_fleets_builds_package_expected() -> void:
 
 
 func test_ready_lets_lower_fleet_points_player_choose_first_player_expected() -> void:
+	assert_false(_scene._first_player_option.disabled,
+		"First-player choice should be selectable before initiative confirmation")
+	assert_eq(_scene._initiative_chooser, 1,
+		"Lower-point fleet should receive the first-player choice")
+	_confirm_initiative()
+	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
 
 	assert_not_null(package, "Valid setup should build a package")
-	assert_false(_scene._first_player_option.disabled,
-		"First-player choice should be selectable by the initiative chooser")
-	assert_eq(_scene._initiative_chooser, 1,
-		"Lower-point fleet should receive the first-player choice")
 	assert_eq(package.first_player, 1,
 		"Chooser should default to choosing themselves as first player")
 	assert_eq(package.selected_objective.get("owner_player", -1), 0,
 		"Objective should come from the second player's roster")
-	assert_true(_objective_options_contain("Opening Salvo"),
-		"Objective picker should use the derived second player's objectives")
+	assert_true(_objective_keys().has("obj_ass_opening_salvo"),
+		"Objective chooser should use the derived second player's objectives")
 
 
 func test_first_player_selection_rebuilds_objective_owner_expected() -> void:
 	_scene._first_player_option.select(0)
 	_scene._on_first_player_selected(0)
+	_confirm_initiative()
+	_confirm_objective("obj_ass_most_wanted")
 	var package: FleetSetupPackage = _scene.current_package()
 
 	assert_not_null(package, "Changing first player should rebuild a setup package")
@@ -127,8 +133,26 @@ func test_first_player_selection_rebuilds_objective_owner_expected() -> void:
 		"The initiative chooser should be able to choose either player as first")
 	assert_eq(package.selected_objective.get("owner_player", -1), 1,
 		"Objective choices should move to the chosen second player's roster")
-	assert_true(_objective_options_contain("Most Wanted"),
-		"Objective picker should show the new second player's objectives")
+	assert_true(_objective_keys().has("obj_ass_most_wanted"),
+		"Objective chooser should show the new second player's objectives")
+
+
+func test_objective_choice_requires_explicit_confirmation_expected() -> void:
+	assert_null(_scene.current_package(),
+		"Setup flow should not build a package until an objective is confirmed")
+	assert_false(_scene._confirm_button.disabled,
+		"Valid fleets should enable initiative confirmation first")
+	assert_false(_scene._objective_panel.visible,
+		"Objective chooser should stay hidden until initiative is confirmed")
+
+	_confirm_initiative()
+
+	assert_true(_scene._confirm_button.disabled,
+		"Setup confirmation should stay disabled until objective choice is confirmed")
+	assert_true(_scene._objective_panel.visible,
+		"Objective chooser should appear after initiative is confirmed")
+	assert_true(_objective_keys().has("obj_ass_opening_salvo"),
+		"Objective chooser should render the second player's three objective cards")
 
 
 func test_invalid_fleet_selection_disables_confirmation_expected() -> void:
@@ -137,6 +161,8 @@ func test_invalid_fleet_selection_disables_confirmation_expected() -> void:
 	_select_fleet(_scene._player_zero_option, "invalid-rebel-fleet")
 	_select_fleet(_scene._player_one_option, "imperial-fleet")
 	_scene._on_fleet_selected(_scene._player_zero_option.selected)
+	_confirm_initiative()
+	_confirm_objective("obj_ass_opening_salvo")
 
 	assert_null(_scene.current_package(), "Invalid fleet selection should not build a package")
 	assert_true(_scene._confirm_button.disabled,
@@ -146,6 +172,8 @@ func test_invalid_fleet_selection_disables_confirmation_expected() -> void:
 
 
 func test_confirm_stores_next_setup_package_expected() -> void:
+	_confirm_initiative()
+	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
 
 	_scene._on_confirm_pressed()
@@ -255,11 +283,17 @@ func _select_fleet(option: OptionButton, fleet_id: String) -> void:
 			return
 
 
-func _objective_options_contain(text: String) -> bool:
-	for index: int in range(_scene._objective_option.get_item_count()):
-		if _scene._objective_option.get_item_text(index).contains(text):
-			return true
-	return false
+func _objective_keys() -> Array[String]:
+	return _scene._objective_panel.available_objective_keys()
+
+
+func _confirm_objective(objective_key: String) -> void:
+	_scene._objective_panel.choose_objective(objective_key)
+	_scene._objective_panel.confirm_current_selection()
+
+
+func _confirm_initiative() -> void:
+	_scene._on_confirm_pressed()
 
 
 func _find_button(root: Node, text: String) -> Button:

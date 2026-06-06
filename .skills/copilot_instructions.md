@@ -27,6 +27,11 @@ This document provides instructions for AI assistants (GitHub Copilot, etc.) gen
    select candidates, or switch selection, keep that state transient. Spend
    command budget or activation slots only when a command-backed move, attack,
    reroll, choice, or lifecycle marker is committed.
+8. **Apply the setup UI contract gate** — Before any setup-phase UI or
+    presentation edit, read `docs/setup_flow.md`. The exact affected section must
+    be complete and marked `Accepted`. If it is missing, `Draft`, incomplete, or
+    ambiguous, do not edit setup UI code; update the contract and get explicit
+    user approval first.
 
 ### Network Refactor Guardrail (G4.6.6+)
 

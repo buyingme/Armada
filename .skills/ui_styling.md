@@ -4,6 +4,13 @@
 > buttons, and labels in the project.  Every new UI element **must** follow
 > these rules; every existing element already does.
 
+> **Setup UI gate:** Setup-phase UI is contract-first. Before adding or editing
+> setup screens, lobby setup controls, initiative/objective screens, obstacle
+> placement UI, deployment UI, setup banners, or setup toolbars, read
+> `docs/setup_flow.md`. If the relevant section is not complete and marked
+> `Accepted`, stop and resolve the contract with the user before writing UI
+> code.
+
 ---
 
 ## 1. Modal Panel Style (PanelContainer)

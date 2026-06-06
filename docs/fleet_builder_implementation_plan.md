@@ -1,7 +1,7 @@
 # Fleet Builder Implementation Plan
 
 > Status: Proposed
-> Last updated: 2026-06-01
+> Last updated: 2026-06-06
 > Scope: local-first fleet builder, Core Set catalog completion, JSON import/export,
 > fleet validation, rules-reference browsing, and setup/deployment integration
 > with network-ready roster, setup, and rule contracts from the first slice that
@@ -34,7 +34,7 @@ dependency on local fleet files.
 | Local builder mode | Fleet drafting and the local fleet library can run without accounts, backend services, or an active network session. |
 | Game integration | Full setup/deployment path for hot-seat and network handoff, not an isolated list builder. |
 | New game access | Main menu opens a New Game selection window for 400, 300, 180, learning scenario, and debug scenario starts. Network mode exposes the same choice to the lobby host only. |
-| Network game setup | Network lobbies must consume one expanded roster payload from the host and one from the client, validate them through the same core setup package, and confirm the same package hash before match start. |
+| Network game setup | Network lobbies must consume one expanded roster payload from the host and one from the client, validate fleet legality for the selected match type, then start the post-lobby setup flow. Initiative and objective selection do not happen in the lobby, passive peers see committed setup choices, and visible labels use player names rather than `Player 1` or `Player 2`. |
 | Rules reference | Generic rules such as squadron keywords, commands, defense tokens, obstacle rules, and setup rules are cataloged once and referenced by components; component-specific card text is cataloged beside the component and linked to implementation status. |
 | Backend/auth/share links | Deferred until fleet JSON, validation, and setup packages are stable. This does not defer network game setup. |
 | Rule authority | Local RRG/card JSON are implementation sources. External wiki data is manual verification only. |
@@ -82,15 +82,41 @@ but FB14 is too broad and must be split before further implementation.
 |---|---|
 | New Game choices are 400, 300, 180, learning scenario, and debug scenario. | Add a dedicated New Game selection slice. Preserve fixed deployed learning/debug starts. |
 | Network mode exposes New Game choices only to the host in the lobby. | Lobby presentation must consume setup-flow projections and host authority; clients view status and submit only their own roster payload. |
-| 400/300/180 starts select one fleet per player from the fleet manager. | Setup draft state must embed full roster payloads before validation/hash; two fleets must have different factions. |
-| Lower-point fleet chooses first player. | Initiative is a serializable setup step, not a static package default. Ties need an explicit tie-break prompt before objective choice. |
-| First player chooses one objective from the second player's objective set. | Objective choice needs its own command/state step, controller player, and filtered UI payload. |
+| 400/300/180 starts select one fleet per player from the fleet manager. | Setup draft state must embed full roster payloads before validation/hash; two fleets must have different factions, and both players need display names. Hot-seat collects names during fleet selection; network reuses lobby names. |
+| Lower-point fleet chooses first player. | Initiative is a serializable setup step, not a static package default. Ties now use a random tie-break chooser, and that chooser selects first player before both players confirm the initiative screen. |
+| First player chooses one objective from the second player's objective set. | Objective choice needs its own command/state step, controller player, side-by-side card UI, explicit lock/acknowledgement state, and no lobby shortcut. |
 | Obstacles alternate starting with the second player. | Setup flow must track remaining obstacle keys, turn order, active placer, and exactly six committed obstacle placements. |
 | Obstacles must be inside the setup area, outside deployment zones, beyond distance 3 of play-area edges, and beyond distance 1 of each other. | Add core setup geometry validators that use obstacle footprint/shape metadata and normalized coordinates. UI previews may highlight legality but commands enforce it. |
 | Ships alternate with active-player-only roster lists and legal speed selection. | Deployment commands must include component identity, normalized position, rotation, and selected speed for ships. |
 | Squadrons deploy at distance 1-2 of friendly ships, may be outside deployment zones, and single remaining squadrons wait until all ships are deployed. | Add squadron deployment validator and turn sequencing rules before command-phase start. |
-| Hot-seat rotates table and shows handoff banners; network does not rotate and follows normal network turn-transition flow. | Presentation must use `UIProjector.project()`/interaction-flow authority. No scene/UI PlayMode branches for setup decisions. |
+| Hot-seat rotates table and shows handoff banners; network does not rotate and follows normal network turn-transition flow. | Presentation must use `UIProjector.project()`/interaction-flow authority. No scene/UI PlayMode branches for setup decisions. Visible labels use player names only, and passive network peers see committed setup state without live drag authority. |
+| After deployment, setup pauses for a review step before round one starts. | Add a serialized setup-review readiness state and a final transition gate before the first Command Phase. |
 | All placements are serializable and visible to the inactive network peer. | Runtime setup mutations after bootstrap must use `GameCommand`s and filtered `GameState` snapshots. |
+
+### 1.3.1 Accepted Setup Contract Implementation Audit
+
+`docs/setup_flow.md` is the owner-approved setup UI/source contract for FB14
+work. All source work below must keep that document accepted and complete before
+editing setup UI or presentation code. The current implementation is useful but
+not yet compliant with the accepted setup contract. The next work is therefore a
+controlled migration from the existing draft/lobby/setup-board code to a
+serialized, projected setup flow.
+
+| Area | Current implementation | Compliance gap | Planned correction |
+|---|---|---|---|
+| Contract gate | `docs/setup_flow.md` exists and is accepted; instructions now require it for setup UI/source edits. | The FB plan did not yet map the accepted contract to code work. | This section and FB14C-FB14I become the implementation roadmap; future setup UI/source changes must cite the accepted contract. |
+| Lobby scope | `src/scenes/lobby/lobby_room.gd` and `src/autoload/lobby_manager.gd` now keep network setup mostly to match type, local fleet submission, roster status, and host start. | Ready-lock behavior and user-facing status still need explicit test coverage. Lobby labels still use slot prefixes/status wording that must not become setup-step player labels. | Keep lobby limited to match type/fleets. Add Ready-lock tests and ensure post-start initiative/objective/placement cannot be submitted from lobby surfaces. |
+| Display names | Network roster data can read lobby `display_name`; hot-seat setup flow still uses `Player 1 Fleet`, `Player 2 Fleet`, and fallback `Player %d` labels. | Accepted contract requires player display names only, hot-seat name entry during fleet selection, blank-name and duplicate-name validation messages, and no visible `Player 1`/`Player 2` labels in setup. | Add display-name fields to setup draft/player entries, hot-seat name controls, deterministic validation, and package/runtime propagation. Replace setup labels with accepted player names and neutral non-index fallback text only where no player can be rendered. |
+| Fleet validation messages | `FleetSetupPackageBuilder` and `LobbyManager` validate roster presence, point format, and faction mismatch. | Same-faction text does not match the accepted message, and name validation is absent. | Centralize setup fleet-selection validation so hot-seat and network show `Player names must not be blank`, `Player names must be different`, and `Invalid fleet selection. Fleets must have different factions.` |
+| Initiative | `FleetSetupPackageBuilder.determine_first_player_chooser()` documents the correct tie-break chooser concept, but `LobbyManager._resolve_initiative_state()` currently randomizes first player on ties and `_apply_first_player_choice()` blocks tied choices. `SetupFlowScene` mirrors that behavior. | Accepted contract says tied fleet points randomly choose the chooser, and that chooser selects first player; the game must not randomly choose first player. UI must use a segmented control and `confirm choice` text. | Change setup-state fields to store `initiative_chooser_source`, random chooser, selected first player, and per-player confirmations. Permit the tied random chooser to choose. Update local/network UI and tests. |
+| Objective choice | `ObjectiveChoicePanel` supports side-by-side cards, locked dimming, selection confirmation, and passive acknowledgement. `LobbyManager` stores objective candidates, selected key, lock, and confirmations. | Wording and controller details need alignment; objective state currently lives in lobby draft until board transition, not in a general setup flow model. | Keep the panel, but drive it from accepted setup state/projection. Ensure first-player lock counts as acknowledgement, second-player acknowledgement is required, and invalid/wrong-controller submissions are rejected. |
+| Setup package player data | `FleetSetupPackage` serializes players, first player, selected objective, obstacles, deployments, and setup_state. | Player display names are not explicit package/runtime fields, and current package hash/player entry construction can omit them. | Add display-name fields to player entries and setup state, include gameplay-relevant names in deterministic package/state payloads as required by contract, and propagate them to `PlayerState`/projection labels where appropriate. |
+| Flow and projection | Actual files are `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, and `src/core/network/ui_projector.gd`. They currently define command, activation, attack, displacement, status, and game-over flows. | No setup interaction flow, setup modal kinds, setup allowed-command rows, or setup projection affordances exist. Setup authority is still inferred by board/controller UI. | Add setup flow enum/step/modal values, FlowSpec rows, command applicability declarations, projection payloads, and save/load/replay tests before hardening placement UI. |
+| Board placement UI | `src/scenes/game_board/setup_placement_controller.gd` already places obstacles, drags ships/squadrons/obstacles, commits normalized commands, and has a `Start Round` button. | It is a top-left all-in-one panel, not lower-middle obstacle/deployment/review surfaces. It exposes all obstacle buttons and all token dragging whenever SETUP is active, not projection-controlled active-player views. It does not implement speed buttons, pick batching, player-name banners, passive committed-only previews, or review readiness. | Refactor into projection-driven setup widgets/controllers. Reuse token sync/normalized commit code, but make controls visible/enabled only from `UIProjector` intent and accepted setup step payloads. |
+| Obstacle commands | `commit_setup_obstacle` validates setup phase, setup package, obstacle key, and normalized bounds, then upserts by obstacle key. | It does not enforce active placer, alternation starting with second player, exact unique obstacle set, setup-area/deployment-zone/edge-distance/obstacle-distance geometry, or committed-order state. | Add core obstacle placement state/validator using `ObstacleData` footprint metadata and normalized geometry. Commands enforce all legality; UI previews are advisory. |
+| Deployment commands | `commit_setup_deployment` validates setup phase, target existence, normalized bounds, and updates live ship/squadron state. `FleetRosterSetupHelper` checks basic play-area bounds and speed bounds. | It does not enforce first pick ship, one ship/two squadron picks, alternating deployment turns, exhausted-player continuation, legal speed chart values, ship deployment zones, squadron distance 1-2 from friendly ships, or single-squadron restriction. | Add serialized deployment-turn state and core validators. Commands must reject wrong-player/order/geometry/speed submissions and update remaining-pick state deterministically. |
+| Setup completion | `StartRoundCommand` checks six obstacles and all deployments, then marks setup complete and enters Command Phase. | Accepted contract requires a final setup review where both players press `ready to start`; start round must be impossible before both readiness flags are true. | Add a setup-review readiness command/state, project `ready to start`, and gate `StartRoundCommand` on both readiness flags plus legal placements. |
+| Tests | Existing tests cover setup draft happy paths, setup command basic bounds/upsert behavior, and start-round placement completeness. | Tests do not cover accepted messages, display names, random chooser tie flow, setup FlowSpec/projection, strict placement geometry, pick sequencing, passive network visibility, or review readiness. | Expand FB14 targeted unit/UI/integration tests and run full GUT, Phase K lint, and baseline traces for setup/runtime/network slices. |
 
 ### 1.4 Rules That Drive Validation
 
@@ -132,7 +158,7 @@ save/load or network setup fragile.
 | Fleet validation | Pure core validator returning `FleetValidationResult`. UI renders result messages and disabled states. | Scenes/UI deciding faction, point, upgrade, objective, or uniqueness legality. |
 | Local library | Application service that reads/writes fleet JSON files and versions. | Mixing fleet library files with save-game state or scenario JSON. |
 | Setup package | Serializable package containing two validated rosters, selected objective, obstacles, first player, and normalized deployments. The same package is the hot-seat, network, replay, and bootstrap handoff contract. | Passing loose dictionaries through menu/board code without a versioned contract. |
-| Network setup contract | Match-ready packages embed full roster payloads, explicit player indices, and deterministic canonical serialization/hash data before game start. | Building a hot-seat-only setup path first and inventing a second network package later. |
+| Network setup contract | Lobby-start packages embed full roster payloads and selected match type only; post-start setup screens add initiative and objective choice before obstacle placement. | Building a hot-seat-only setup path first and inventing a second network package later. |
 | Game state mutation | Bootstrap creates initial `GameState` from a setup package before gameplay; interactive setup after state creation uses commands. | Scene code directly mutating `GameState` during setup/deployment. |
 | Rule hooks | Gameplay effects from upgrades, objectives, and obstacles go through `RuleRegistry` under `src/core/effects/rules/`. | Special-case card effects in validators, scenes, or board controllers. |
 | Rules reference | Static rules-reference JSON provides browsable text, source refs, tags, and implementation status. Components link to it via `rules_reference_ids`; generic rule text is not copied into each card. | Keeping separate rule text copies in squadron/card JSON or deriving UI reference text from `RuleRegistry` internals. |
@@ -198,10 +224,12 @@ should preserve the user's goals but split MVP from later infrastructure.
 | FB-REQ-015 | Fleet maps are selected from separate filename-prefixed pools: `map_3x3...` for 180-point matches and `map_3x6...` for 300- and 400-point matches. Setup uses the first player's roster map. |
 | FB-REQ-016 | New Game presents 400, 300, 180, learning scenario, and debug scenario options; learning/debug scenarios keep their fixed deployed fleets. |
 | FB-REQ-017 | Network New Game/setup choices are host-authoritative in the lobby; clients observe host selections and submit only their own allowed roster/setup actions. |
-| FB-REQ-018 | After both fleets are selected, the lower-point player chooses first player; tied fleets require an explicit tie-break decision before objective choice. |
-| FB-REQ-019 | The first player chooses one objective from the second player's three objectives before obstacle placement begins. |
-| FB-REQ-020 | Obstacle placement alternates starting with the second player, places exactly six unique obstacles, and enforces setup-area, deployment-zone, edge-distance, and obstacle-distance rules in core validation. |
-| FB-REQ-021 | Deployment alternates by active player, filters visible deployable ships/squadrons to that player, requires legal ship speed selection, enforces ship deployment zones and squadron distance 1-2 from friendly ships, and starts the first Command Phase only after legal completion. |
+| FB-REQ-018 | After both fleets are selected, the lower-point player chooses first player; if fleet points are tied, the game randomly selects which player may make that choice, then both players confirm the initiative screen. |
+| FB-REQ-019 | The first player chooses one objective from the second player's three objectives before obstacle placement begins; the choice locks, the first player's lock counts as acknowledgement, and the second player acknowledges before setup continues. |
+| FB-REQ-020 | Obstacle placement alternates starting with the second player, places exactly six unique obstacles, enforces setup-area, deployment-zone, edge-distance, and obstacle-distance rules in core validation, and exposes committed placements to passive network peers without live drag authority. |
+| FB-REQ-021 | Deployment alternates by deployment pick, filters visible deployable ships/squadrons to the active player, requires the first deployment pick to be a ship, supports one-ship or eligible two-squadron picks, requires legal ship speed selection, enforces ship deployment zones and squadron distance 1-2 from friendly ships, and handles the one-squadron-remaining restriction before setup completes. |
+| FB-REQ-022 | Setup UI must use player display names rather than `Player 1` or `Player 2`; hot-seat collects names during fleet selection, network reuses lobby names, blank hot-seat names are rejected with `Player names must not be blank`, and duplicate hot-seat names are rejected with `Player names must be different`. |
+| FB-REQ-023 | After legal deployment, setup enters a final review step with serialized readiness state; both players must press `ready to start` before round one Command Phase starts. |
 
 ### 3.2 Deferred Requirements
 
@@ -671,7 +699,7 @@ Slice risk assessment:
 | FB11 | High | Setup package hashing, embedded rosters, objective choice, and host/client identity must align. |
 | FB12 | High | Roster-to-instance conversion crosses catalog, setup, runtime state, and board placement. |
 | FB13 | Critical | Game bootstrap affects hot-seat, network, loaded state, board spawning, RNG, and traces. |
-| FB14A-FB14H | Critical | Setup now covers access, fleet selection, initiative, objective choice, obstacle alternation, deployment alternation, authority projection, save/load, replay, and network mirroring. |
+| FB14A-FB14I | Critical | Setup now covers access, fleet selection, initiative, objective choice, obstacle alternation, deployment alternation, setup review, authority projection, save/load, replay, and network mirroring. |
 | FB15 | High-critical | New runtime state must serialize, filter, replay, save/load, and network-mirror correctly. |
 | FB16 | Critical | Live objective, obstacle, upgrade, and named ability rules touch command legality and UI eligibility. |
 | FB17 | High | Network UX must not invent a second setup contract or bypass validation. |
@@ -696,7 +724,7 @@ Action advice for high and critical items:
   scenario-only paths in place. Keep scenario bootstrap tests green, add
   setup-package bootstrap tests, and require baseline traces once network or
   replay state is affected.
-- FB14A-FB14H: treat setup as a command-backed interaction flow once
+- FB14A-FB14I: treat setup as a command-backed interaction flow once
   `GameState` exists. The setup package remains the pre-bootstrap handoff
   contract; obstacle/deployment edits after board entry use commands, update
   serialized setup state, and project authority through the same hot-seat and
@@ -932,34 +960,36 @@ test gate is passed.
 | Field | Plan |
 |---|---|
 | Goal | Let each player choose one fleet from the fleet manager for 400, 300, and 180-point games. |
-| Scope | Add setup-draft state for selected match type, point limit, player roster choices, and package-validation status. Hot-seat selects both fleets locally; network host and client each provide an expanded roster payload through the same package contract. Enforce that the two selected fleets have different factions and match the selected point limit/map pool. |
-| Primary files | `src/core/setup/*`, `src/core/fleet/fleet_validator.gd`, fleet library UI/service adapters, lobby setup DTOs. |
-| Acceptance | A draft cannot advance until both players have valid embedded rosters, different factions, legal objectives, legal maps for the selected point format, and deterministic package hash input. No setup draft depends on another machine's local fleet-library ids after match-ready expansion. |
-| Tests | Hot-seat two-fleet selection, invalid same-faction rejection, point-format mismatch rejection, network host/client roster payload equality, package hash stability, local-id expansion to embedded rosters. |
+| Scope | Add setup-draft state for selected match type, point limit, player display names, player roster choices, and package-validation status. Hot-seat enters both names and selects both fleets locally before the initiative screen; network host and client each provide an expanded roster payload in the lobby through the same package contract and reuse lobby names. Enforce that the two selected fleets have different factions and match the selected point limit/map pool. The lobby does not choose initiative or objectives, and Ready locks the current fleet selection. |
+| Primary files | `src/core/setup/fleet_setup_package.gd`, `src/core/setup/fleet_setup_package_builder.gd`, `src/scenes/setup_flow/setup_flow.gd`, `src/scenes/setup_flow/setup_flow_ui_factory.gd`, `src/autoload/lobby_manager.gd`, `src/scenes/lobby/lobby_room.gd`, `src/core/fleet/fleet_validator.gd`, fleet library UI/service adapters. |
+| Acceptance | A draft cannot advance out of fleet selection until both players have non-blank display names, hot-seat display names differ, both players have valid embedded rosters, factions differ, objectives/maps are legal for the selected point format, and deterministic package hash input exists. No setup draft depends on another machine's local fleet-library ids after match-ready expansion. |
+| Tests | Hot-seat blank-name rejection, duplicate-name rejection, hot-seat two-fleet selection, invalid same-faction rejection with readable message, point-format mismatch rejection, network host/client roster payload equality, Ready-lock behavior, package hash stability, local-id expansion to embedded rosters. |
 | Verification | Targeted setup/fleet GUT, full GUT if lobby state changes, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` once draft state enters runtime setup. |
-| Status | Implemented as of 2026-06-01: setup drafts now retain selected fleet ids, embedded roster payloads, and validation status; setup flow filters fleet choices to the selected match-type point format; setup-package validation rejects same-faction pairings and point-format mismatches against the selected match type; peer-roster builders still produce deterministic player-indexed package hashes. |
+| Status | Implemented foundation as of 2026-06-01, with accepted-contract follow-up required as of 2026-06-06: setup drafts retain selected fleet ids, embedded roster payloads, and validation status; setup-package validation rejects same-faction pairings and point-format mismatches. Remaining compliance work is player display-name capture/serialization, accepted validation messages, name-only labels, and Ready-lock test coverage. |
 
 ### FB14C - Initiative And Objective Choice Flow
 
 | Field | Plan |
 |---|---|
 | Goal | Implement the ordered pre-placement setup choices after fleet selection. |
-| Scope | Add a serializable setup-flow step where the lower-point player chooses first player; if fleet points are tied, require an explicit tie-break choice. Then let the first player choose one objective from the second player's three objectives. Store first player, second player, selected objective key, objective owner, and chosen-by player in the setup package/runtime setup state. |
-| Primary files | `src/core/setup/*initiative*.gd`, `src/core/setup/*objective*.gd`, setup commands if this occurs after bootstrap, `FlowSpec`, `CommandApplicability`, `UIProjector`, setup UI/lobby widgets. |
-| Acceptance | Initiative/objective choices are deterministic, serializable, replayable, and network-safe; clients see the active choice and available legal options according to filtered state; invalid objective keys or wrong-controller submissions are rejected by command validation. |
-| Tests | Lower-point controller selection, tie-break prompt, objective choices limited to second-player objectives, wrong-player command rejection, serialization/hash stability, network filtered-state projection. |
+| Scope | After a setup match starts from local New Game or from the network lobby, show an initiative screen before objective selection. The screen displays player names only, fleet names, fleet point values, the resolved first player, and whether the chooser came from the lower-point rule or from a random tie-break chooser. The choosing control is a segmented control, and both players must press `confirm choice` before objective selection appears. Then let the first player choose one objective from the second player's three objectives in a side-by-side card-preview window. The current objective selection is highlighted before lock; after lock, unchosen objectives are greyed out, the first player's lock counts as acknowledgement, and the second player explicitly acknowledges before setup continues. Store first player, second player, selected objective key, objective owner, chosen-by player, and confirmation state in the setup package/runtime setup state. Initiative and objectives are not selected in the lobby. |
+| Primary files | `src/scenes/setup_flow/setup_flow.gd`, `src/scenes/setup_flow/setup_flow_ui_factory.gd`, `src/ui/objective_choice_panel.gd`, `src/autoload/lobby_manager.gd`, `src/core/setup/fleet_setup_package_builder.gd`, setup commands if this moves after bootstrap, `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `src/core/network/ui_projector.gd`. |
+| Acceptance | Initiative/objective choices are deterministic, serializable, replayable, and network-safe; clients see the active choice and available legal options according to filtered state; invalid objective keys or wrong-controller submissions are rejected by command validation; visible labels never fall back to `Player 1`/`Player 2`. |
+| Tests | Lower-point controller selection, random tie-break chooser, initiative confirm gate, objective choices limited to second-player objectives, wrong-player command rejection, objective acknowledgement gate, serialization/hash stability, network filtered-state projection, name-only labels. |
 | Verification | Targeted setup/flow GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual hot-seat and network choice pass. |
+| Status | Corrected in progress as of 2026-06-06: lobby setup is constrained toward valid fleet selection only, and post-start initiative/objective screens exist. Remaining compliance work is tied-point random chooser selection, segmented first-player control, `confirm choice` wording, player-name-only labels, objective acknowledgement polish, and projection/command hardening if choices are moved fully into runtime setup flow. |
 
 ### FB14D - Setup Interaction Flow And Authority Projection
 
 | Field | Plan |
 |---|---|
 | Goal | Make setup an explicit interaction flow before adding strict obstacle/deployment UI. |
-| Scope | Add setup interaction-flow ids, controller roles, allowed command surfaces, and projection data for fleet selection, initiative, objective choice, obstacle placement, ship deployment, squadron deployment, and setup completion. The flow must drive hot-seat handoff banners/table rotation and network read-only/passive views through `UIProjector.project()`. |
-| Primary files | `src/core/state/interaction_flow.gd`, `src/core/commands/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `src/core/setup/*`, `src/autoload/game_manager.gd`, `src/ui/ui_projector.gd`, `docs/game_flow.md`. |
+| Scope | Add setup interaction-flow ids, setup step ids, setup modal kinds, controller roles, allowed command surfaces, and projection data for obstacle placement, ship deployment, squadron deployment, setup review, and Command Phase start. Fleet selection, initiative, and objective choice can remain in `SetupFlowScene` until board bootstrap, but any step after `GameState` exists must be represented by serialized `GameState.interaction_flow`. The flow must drive hot-seat handoff banners/table rotation and network read-only/passive views through `UIProjector.project()`. |
+| Primary files | `src/autoload/constants.gd`, `src/core/state/interaction_flow.gd`, `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `src/core/setup/*`, `src/core/network/ui_projector.gd`, `src/autoload/game_manager.gd`, `docs/game_flow.md`. |
 | Acceptance | Setup authority is stored in serialized `GameState.interaction_flow`; hot-seat and network use the same projected intent; inactive network peers see placements as they are committed; no setup scene/widget infers controller authority from local UI events. |
 | Tests | FlowSpec allowed commands per setup step, `CommandApplicability` parity, UI projection for hot-seat active/passive players, network host/client projections, replay/save-load restoration of active setup step. |
 | Verification | Targeted flow/projection GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`. |
+| Audit note | As of 2026-06-06, setup placement commands are only phase-scoped in `CommandApplicability`, no setup flow enum or modal kind exists, and `SetupPlacementController` decides interactivity from SETUP phase/package presence. FB14D must land before strict presentation work. |
 
 ### FB14E - Obstacle Placement Validation And Commands
 
@@ -967,43 +997,58 @@ test gate is passed.
 |---|---|
 | Goal | Enforce the official obstacle placement constraints in core commands. |
 | Scope | Add or harden `commit_setup_obstacle` so obstacles alternate starting with the second player, only one of each available obstacle can be placed, exactly six obstacles are required, and every obstacle footprint is fully inside the setup area, outside deployment zones, beyond distance 3 of play-area edges, and beyond distance 1 of every other obstacle. Geometry uses obstacle shape metadata and normalized positions/rotation, not pixel payloads. |
-| Primary files | `src/core/setup/*obstacle*.gd`, `src/core/commands/commit_setup_obstacle_command.gd`, `src/core/geometry/*` or existing `RangeFinder` helpers, `src/models/obstacle_data.gd`, obstacle JSON shape metadata. |
+| Primary files | `src/core/setup/*obstacle*.gd`, `src/core/commands/commit_setup_obstacle_command.gd`, `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `src/core/geometry/*` or existing `RangeFinder` helpers, `src/models/obstacle_data.gd`, obstacle JSON shape metadata. |
 | Acceptance | Invalid obstacle submissions fail in command validation for wrong controller, duplicate obstacle, out-of-area footprint, deployment-zone overlap, edge-distance violation, or obstacle-distance violation; valid placements update serialized setup state and broadcast to passive network peers. |
 | Tests | Alternating placer sequence, duplicate obstacle rejection, exact-count completion, 3x3 setup-area bounds, 3x6 central 3x4 setup area, distance-3 edge rule, distance-1 obstacle separation, rotation-aware footprint validation, network command mirror. |
 | Verification | Targeted setup/geometry/command GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`. |
+| Audit note | As of 2026-06-06, `commit_setup_obstacle` validates only setup phase/package/key/normalized bounds and upserts by `data_key`; strict rules and active-player sequencing are missing. |
 
 ### FB14F - Obstacle Placement Presentation
 
 | Field | Plan |
 |---|---|
 | Goal | Provide the player-facing obstacle placement UX over FB14D/FB14E. |
-| Scope | Show the available obstacle list during the obstacle step, disable already placed obstacles, preview rotation using the same input method as debug token rotation, and commit through `commit_setup_obstacle`. Hot-seat rotates/announces `Faction Player place obstacle` between placements. Network keeps each peer on their own perspective and uses the normal network turn-transition/passive-view pattern. |
-| Primary files | `src/scenes/game_board/setup_placement_controller.gd`, extracted setup UI widgets, `UIProjector`, banner/handoff helpers, obstacle token presentation. |
-| Acceptance | Players can place and rotate all six obstacles in order; rejected previews/commits show core validation errors; inactive network peers see each committed obstacle without gaining control. |
-| Tests | UI construction, obstacle button availability, rotation input, command payload normalization, projection-driven enabled/disabled state, no PlayMode lint violations. |
+| Scope | Refactor the existing board setup panel into a projection-driven lower-middle obstacle modal. Show the available obstacle list during the obstacle step, disable already placed obstacles, preview rotation using the same input method as debug token rotation, and commit through `commit_setup_obstacle`. Hot-seat rotates/announces `Player Name place obstacle` between placements. Network keeps each peer on their own perspective, uses the normal network turn-transition/passive-view pattern, and shows only committed obstacle placements to passive peers. |
+| Primary files | `src/scenes/game_board/setup_placement_controller.gd`, extracted setup UI widgets, `src/core/network/ui_projector.gd`, banner/handoff helpers, `src/scenes/game_board/setup_obstacle_token.gd`. |
+| Acceptance | Players can place and rotate all six obstacles in order; rejected previews/commits show core validation errors with overlap-style legality highlighting; inactive network peers see each committed obstacle without gaining control or live drag authority. |
+| Tests | UI construction, lower-middle obstacle modal, obstacle button availability, rotation input, command payload normalization, legality-highlight projection, passive-peer committed-only visibility, projection-driven enabled/disabled state, no PlayMode lint violations. |
 | Verification | Focused scene/UI GUT where practical, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual hot-seat and two-process obstacle placement pass. |
+| Audit note | As of 2026-06-06, the controller has a top-left all-in-one panel and accepts clicks/drags whenever setup is active. FB14F must reuse normalized commit/sync code while moving visibility and interactivity to projected intent. |
 
 ### FB14G - Ship And Squadron Deployment Validation And Commands
 
 | Field | Plan |
 |---|---|
 | Goal | Enforce deployment legality for ships, squadrons, speed selection, and setup completion. |
-| Scope | Add or harden `commit_setup_deployment` and setup-completion commands so ships deploy in their player's deployment zone and include a legal speed-dial value from the ship's speed chart. Squadrons deploy within the setup area and distance 1-2 of a friendly ship, may be outside deployment zones, and if only one squadron remains when two must be placed, that squadron cannot be placed until all ships are deployed. Track alternating deployment turns and remaining ships/squadrons in serialized setup state. |
-| Primary files | `src/core/setup/*deployment*.gd`, `src/core/commands/commit_setup_deployment_command.gd`, setup completion command, `TokenMover`/`RangeFinder` geometry helpers, `ShipData` speed-chart access. |
-| Acceptance | Wrong-player, wrong-order, out-of-zone ship, illegal speed, squadron out of range, squadron outside setup area, and premature single-squadron placements are rejected by command validation. Setup cannot complete until all required deployments are legal. |
-| Tests | Ship deployment zone for both factions, legal/illegal speed values, squadron distance 1-2 from friendly ship, squadron outside deployment zone accepted, one-squadron-remaining restriction, alternating deployment order, setup-completion gate, save/load and replay after partial deployment. |
+| Scope | Add or harden `commit_setup_deployment` and setup-completion commands so the first deployment pick is a ship, players alternate after each deployment pick, and a legal pick is one ship or an eligible two-squadron batch. Ships deploy in their player's deployment zone and include a legal speed-dial value from the ship's speed chart. Squadrons deploy within the setup area and distance 1-2 of a friendly ship, may be outside deployment zones, and if only one squadron remains when two must be placed, that squadron cannot be placed until all ships are deployed. Track alternating deployment turns, remaining ships/squadrons, current pick contents, and exhausted-player continuation in serialized setup state. |
+| Primary files | `src/core/setup/*deployment*.gd`, `src/core/commands/commit_setup_deployment_command.gd`, setup review/advance command, `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `TokenMover`/`RangeFinder` geometry helpers, `ShipData` speed-chart access. |
+| Acceptance | Wrong-player, wrong-order, non-ship first pick, out-of-zone ship, illegal speed, squadron out of range, squadron outside setup area, and premature single-squadron placements are rejected by command validation. Setup cannot complete until all required deployments are legal. |
+| Tests | First-pick ship requirement, ship deployment zone for both factions, legal/illegal speed values, squadron distance 1-2 from friendly ship, squadron outside deployment zone accepted, two-squadron batch handling, one-squadron-remaining restriction, alternating deployment order, exhausted-player continuation, setup-completion gate, save/load and replay after partial deployment. |
 | Verification | Targeted command/setup/geometry GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`. |
+| Audit note | As of 2026-06-06, `commit_setup_deployment` validates target and normalized bounds and `FleetRosterSetupHelper` validates basic map bounds/speed only. Accepted pick sequencing and distance/deployment-zone rules are missing. |
 
-### FB14H - Deployment Presentation And Start Command Phase
+### FB14H - Deployment Presentation
 
 | Field | Plan |
 |---|---|
-| Goal | Provide the player-facing ship/squadron deployment UX and transition to round one. |
-| Scope | During deployment, show only the active player's remaining ships/squadrons, require speed selection for ships before commit, allow component rotation through the debug-equivalent input path, and display `Faction Player place ship or squadrons` handoff banners. Start the first Command Phase only after the setup-completion command succeeds. |
-| Primary files | `src/scenes/game_board/setup_placement_controller.gd`, extracted setup deployment widgets, speed selector widget, `UIProjector`, `GameManager` setup-completion helper. |
-| Acceptance | Hot-seat and network players can deploy all units legally, passive network peers see committed placements, illegal placements are blocked with validator feedback, and setup completion enters the first command phase with matching host/client state hashes. |
-| Tests | Active-player roster filtering, speed selector requirements, rotation input, normalized deployment command payloads, setup-completion button projection, network passive visibility, no orphan/leak warnings. |
+| Goal | Provide the player-facing ship/squadron deployment UX over FB14D/FB14G. |
+| Scope | During deployment, show only the active player's remaining ships/squadrons, require speed selection for ships before commit, allow component rotation through the debug-equivalent input path, support one-ship and eligible two-squadron pick workflows, and display `Deploy your fleet <Player Name>` handoff banners. After the last legal deployment, transition to the setup-review interaction step; FB14I owns the final `ready to start` gate. |
+| Primary files | `src/scenes/game_board/setup_placement_controller.gd`, extracted setup deployment widgets, speed selector widget, `src/core/network/ui_projector.gd`, banner/handoff helpers. |
+| Acceptance | Hot-seat and network players can deploy all units legally, passive network peers see committed placements only, illegal placements are blocked with validator feedback, and the hot-seat deployment banner uses `Deploy your fleet <Player Name>`. |
+| Tests | Active-player roster filtering, speed selector requirements, one-ship workflow, two-squadron workflow, rotation input, normalized deployment command payloads, deployment-banner projection, network passive committed-only visibility, no orphan/leak warnings. |
 | Verification | Focused UI GUT where practical, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual full setup-to-command hot-seat and network pass. |
+
+### FB14I - Setup Review Readiness And Command Phase Start
+
+| Field | Plan |
+|---|---|
+| Goal | Gate round one behind the accepted final setup review step. |
+| Scope | Add serialized setup-review readiness state and a command-backed `ready to start` action. After all obstacle and deployment requirements are legal, project a final review surface where both players can inspect fleets/cards and press `ready to start`. The first Command Phase starts only after both readiness flags are true. `StartRoundCommand` validates obstacle count, complete legal deployments, setup-review readiness, and setup package presence before marking setup complete and clearing setup flow. |
+| Primary files | New setup review command under `src/core/commands/`, `src/core/setup/*review*.gd`, `src/core/commands/start_round_command.gd`, `src/core/state/flow_spec.gd`, `src/core/commands/command_applicability.gd`, `src/core/network/ui_projector.gd`, `src/autoload/game_manager.gd`, `src/scenes/game_board/setup_placement_controller.gd`. |
+| Acceptance | `StartRoundCommand` rejects attempts before both players are ready; hot-seat and network peers see projected review status; pressing `ready to start` is idempotent per player; save/load and replay preserve partial review readiness; Command Phase starts with matching host/client state hashes only after both players are ready. |
+| Tests | Review step projection, player 0 ready only, player 1 ready only, both ready gate, `StartRoundCommand` rejection before review readiness, replay/save-load partial readiness, network mirror hash after setup completion. |
+| Verification | Targeted command/setup/projection GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual full setup-to-command hot-seat and two-process network pass. |
+| Audit note | As of 2026-06-06, the board exposes a `Start Round` button as soon as six obstacles and all deployments exist. No serialized review-readiness command/state exists. |
 
 ### FB15 - GameState Persistence For Objectives, Obstacles, And Upgrades
 
@@ -1111,10 +1156,10 @@ code-bearing slices.
 | UI MVP | Create a fleet from scratch, filter/search components, add upgrades, choose objectives, save, reload, duplicate, and delete. |
 | New Game access | Open New Game locally and in a network lobby; confirm local users see 400/300/180/learning/debug choices, network host can choose, and network client can only observe the selected mode/status. |
 | Setup package | Select two valid fleets for 400, 300, and 180 games, confirm same-faction or invalid fleets cannot advance, and confirm the package embeds both rosters without local-library dependencies. |
-| Initiative/objective | Use unequal-point fleets to confirm the lower-point player chooses first player, then confirm first player chooses one objective from the second player's objective set. |
+| Initiative/objective | Use unequal-point fleets to confirm the lower-point player chooses first player, use tied-point fleets to confirm a random tie-break chooser selects first player, then confirm first player chooses one objective from the second player's objective set. |
 | Obstacles | Place all six obstacles in alternating order starting with the second player; confirm duplicate, edge-distance, setup-area, deployment-zone, and obstacle-distance violations are blocked. |
 | Deployment | Deploy ships with legal speed values and squadrons at distance 1-2 of friendly ships; confirm rotation works, active-player roster filtering works, and normalized positions survive leaving/reopening setup. |
-| Start match | Start hot-seat and network matches from two fleets and verify correct ships/squadrons, factions, points, objective, obstacle placements, and matching host/client state hashes. |
+| Start match | Start hot-seat and network matches from two fleets only after both players press `ready to start`, then verify correct ships/squadrons, factions, points, objective, obstacle placements, and matching host/client state hashes. |
 | Save/load | Save immediately after deployment/start, load, and verify objective/obstacles/deployments/upgrades survive. |
 | Network setup | Host and client choose/confirm fleets, compare the setup package hash, start game, and verify matching state hashes plus expected local visibility. |
 
@@ -1127,12 +1172,9 @@ code-bearing slices.
   layout before FB1 locks the schema and loader behavior.
 2. Confirm the exact Core Set upgrade card list to treat as the
    MVP completeness checklist.
-3. If fleet points are tied, confirm the desired tie-break rule/UI before
-  FB14C. The unequal-point case is fixed: the lower-point player chooses first
-  player.
-4. Confirm whether local fleet files should live beside saves, under a new
+3. Confirm whether local fleet files should live beside saves, under a new
    `fleets/` folder, or in Godot user data only.
-5. Confirm which generic rules beyond squadron keywords belong in the first
+4. Confirm which generic rules beyond squadron keywords belong in the first
   Rules Reference slice: commands, defense tokens, attack timing, setup,
   obstacles, scoring, or all Core Set RRG glossary entries.
 6. Pick a future backend direction before FB18: self-hosted API, hosted service,
@@ -1143,19 +1185,27 @@ code-bearing slices.
 ## 9. Suggested Next Slice
 
 FB0-FB13A provide the catalog, fleet library, setup-package, runtime bootstrap,
-and rectangular-board foundations. The next setup work should continue with
-FB14A-FB14D before adding more placement UI: access and match-type selection,
-fleet selection/draft package state, initiative/objective choice, and the
-serialized setup interaction-flow/projection contract.
+and rectangular-board foundations. FB14A-FB14C now have partial implementation,
+but the accepted setup contract audit shows they still need compliance follow-up
+before obstacle/deployment work should continue.
 
-1. Implement FB14A so New Game is the entry point for 400/300/180/learning/debug
-  starts, and the network lobby exposes those choices to the host only.
-2. Implement FB14B-FB14C so fleet selection, faction mismatch validation,
-  initiative, and objective choice are serializable before board placement.
-3. Implement FB14D so every later setup action has a `FlowSpec`,
-  `CommandApplicability`, `UIProjector`, and save/load/replay authority seam.
-4. Then harden obstacle and deployment commands/validators in FB14E/FB14G,
-  followed by their presentation slices FB14F/FB14H.
+1. Finish the FB14B/FB14C follow-up: player display-name capture and
+  serialization, accepted validation messages, name-only setup labels, tied-point
+  random chooser selection, segmented initiative control, `confirm choice`
+  wording, objective acknowledgement polish, lobby Ready-lock tests, and no
+  lobby initiative/objective regression.
+2. Implement FB14D so every post-bootstrap setup action has enum values,
+  `FlowSpec`, `CommandApplicability`, `UIProjector`, serialized
+  `InteractionFlow`, and save/load/replay authority seams before presentation
+  depends on it.
+3. Harden obstacle and deployment commands/validators in FB14E/FB14G, including
+  active-player sequencing and geometry rules, with commands as the authority.
+4. Refactor presentation in FB14F/FB14H to render lower-middle obstacle and
+  deployment surfaces from projected intent, reusing existing normalized commit
+  and token-sync code from `SetupPlacementController`.
+5. Complete FB14I so the final setup review has command-backed readiness flags
+  and `StartRoundCommand` cannot enter the first Command Phase before both
+  players press `ready to start`.
 
 This ordering keeps network play possible from the first setup slice and avoids
 letting board UI become the source of setup legality or player authority.

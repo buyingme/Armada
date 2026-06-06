@@ -66,11 +66,17 @@ var _load_button: Button
 var _leave_button: Button
 var _status_label: Label
 var _scenario_option: OptionButton
+var _setup_section: VBoxContainer
+var _setup_local_fleet_option: OptionButton
+var _setup_local_fleet_label: Label
+var _setup_remote_fleet_label: Label
 var _password_label: Label
 var _endpoint_label: Label
 var _diagnostics_label: Label
 var _diagnostics_timer: Timer
 var _chat_panel: ChatPanel
+var _setup_library_manager: FleetLibraryManager = FleetLibraryManager.new()
+var _setup_fleet_options: Array[Dictionary] = []
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +147,7 @@ func _build_background() -> void:
 ## against a zero-sized parent.
 func _build_main_panel() -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(480, 0)
+	panel.custom_minimum_size = Vector2(920, 0)
 	panel.add_theme_stylebox_override("panel",
 			UIStyleHelper.create_modal_panel_style(0.0))
 
@@ -161,6 +167,8 @@ func _build_main_panel() -> PanelContainer:
 	_build_player_list(vbox)
 	vbox.add_child(HSeparator.new())
 	_build_scenario_picker(vbox)
+	vbox.add_child(HSeparator.new())
+	_build_setup_area(vbox)
 	vbox.add_child(HSeparator.new())
 	_build_status_area(vbox)
 	_build_buttons(vbox)
@@ -291,6 +299,41 @@ func _build_chat_area(parent: VBoxContainer) -> void:
 	parent.add_child(_chat_panel)
 
 
+func _build_setup_area(parent: VBoxContainer) -> void:
+	_setup_section = VBoxContainer.new()
+	_setup_section.add_theme_constant_override("separation", 8)
+	var label: Label = UIStyleHelper.create_section_label(
+			"Fleet Setup", UIStyleHelper.FONT_BODY,
+			UIStyleHelper.BODY_TEXT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_setup_section.add_child(label)
+	_setup_local_fleet_option = _build_setup_option_row(
+			_setup_section, "Your Fleet")
+	_setup_local_fleet_option.item_selected.connect(_on_setup_local_fleet_selected)
+	_setup_local_fleet_label = UIStyleHelper.create_section_label(
+			"", UIStyleHelper.FONT_HINT, UIStyleHelper.DIMMED_HINT)
+	_setup_remote_fleet_label = UIStyleHelper.create_section_label(
+			"", UIStyleHelper.FONT_HINT, UIStyleHelper.DIMMED_HINT)
+	_setup_section.add_child(_setup_local_fleet_label)
+	_setup_section.add_child(_setup_remote_fleet_label)
+	parent.add_child(_setup_section)
+
+
+func _build_setup_option_row(parent: VBoxContainer, label_text: String) -> OptionButton:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var label: Label = Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(120, 28)
+	row.add_child(label)
+	var option: OptionButton = OptionButton.new()
+	option.custom_minimum_size = Vector2(360, 32)
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(option)
+	parent.add_child(row)
+	return option
+
+
 ## Builds the status text area.
 func _build_status_area(parent: VBoxContainer) -> void:
 	_status_label = UIStyleHelper.create_section_label(
@@ -361,6 +404,7 @@ func _update_display() -> void:
 			if lobby.has_password() else ""
 	_update_player_rows(lobby)
 	_update_scenario(lobby)
+	_update_setup_area(lobby)
 	_update_status(lobby)
 	_update_buttons(lobby)
 	_update_network_info()
@@ -445,6 +489,118 @@ func _update_scenario(lobby: LobbyState) -> void:
 			return
 
 
+func _update_setup_area(lobby: LobbyState) -> void:
+	var uses_setup: bool = SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario)
+	_setup_section.visible = uses_setup
+	if not uses_setup:
+		return
+	_refresh_setup_fleet_options(lobby)
+	_update_setup_fleet_labels(lobby)
+
+
+func _refresh_setup_fleet_options(lobby: LobbyState) -> void:
+	var point_format: Dictionary = _setup_point_format(lobby)
+	var selected_fleet_id: String = _local_setup_fleet_id(lobby)
+	_setup_fleet_options = _matching_local_fleets(point_format)
+	_setup_local_fleet_option.clear()
+	if _setup_fleet_options.is_empty():
+		_setup_local_fleet_option.add_item("No saved fleets for this match type")
+		_setup_local_fleet_option.set_item_metadata(0, "")
+		_setup_local_fleet_option.disabled = true
+		return
+	_setup_local_fleet_option.disabled = false
+	for summary: Dictionary in _setup_fleet_options:
+		_setup_local_fleet_option.add_item(_fleet_label(summary))
+		_setup_local_fleet_option.set_item_metadata(
+				_setup_local_fleet_option.get_item_count() - 1,
+				str(summary.get("fleet_id", "")))
+	_select_setup_fleet(selected_fleet_id)
+
+
+func _update_setup_fleet_labels(lobby: LobbyState) -> void:
+	var local_player: int = LobbyManager.local_setup_player_index()
+	_setup_local_fleet_label.text = "Your submitted fleet: %s" % _roster_summary_text(
+			_draft_player_entry(lobby, local_player), "waiting for selection")
+	_setup_remote_fleet_label.text = "Opponent fleet: %s" % _roster_summary_text(
+			_draft_player_entry(lobby, 1 - local_player), "waiting for selection")
+
+
+func _setup_point_format(lobby: LobbyState) -> Dictionary:
+	var point_format: Dictionary = (lobby.setup_draft.get("point_format", {}) as Dictionary)
+	if not point_format.is_empty():
+		return point_format
+	var draft: FleetSetupPackage = SETUP_MATCH_OPTIONS_SCRIPT.create_setup_package_draft(lobby.scenario)
+	return {} if draft == null else draft.point_format
+
+
+func _matching_local_fleets(point_format: Dictionary) -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for summary: Dictionary in _setup_library_manager.list_fleets():
+		var summary_point_format: Dictionary = summary.get("point_format", {}) as Dictionary
+		if FleetBuilderOptions.point_formats_match(summary_point_format, point_format):
+			options.append(summary)
+	return options
+
+
+func _local_setup_fleet_id(lobby: LobbyState) -> String:
+	var entry: Dictionary = _draft_player_entry(lobby, LobbyManager.local_setup_player_index())
+	var roster: Dictionary = entry.get("roster", {}) as Dictionary
+	return str(roster.get("fleet_id", ""))
+
+
+func _select_setup_fleet(fleet_id: String) -> void:
+	for index: int in range(_setup_local_fleet_option.item_count):
+		if str(_setup_local_fleet_option.get_item_metadata(index)) == fleet_id:
+			_setup_local_fleet_option.select(index)
+			return
+	if _setup_local_fleet_option.item_count > 0:
+		_setup_local_fleet_option.select(0)
+
+
+func _draft_player_entry(lobby: LobbyState, player_index: int) -> Dictionary:
+	var players: Array = lobby.setup_draft.get("players", []) as Array
+	for raw_player: Variant in players:
+		if raw_player is Dictionary and int((raw_player as Dictionary).get("player_index", -1)) == player_index:
+			return raw_player as Dictionary
+	return {}
+
+
+func _roster_summary_text(entry: Dictionary, fallback_text: String) -> String:
+	if entry.is_empty():
+		return fallback_text
+	var roster: Dictionary = entry.get("roster", {}) as Dictionary
+	if roster.is_empty():
+		return fallback_text
+	return "%s (%s)" % [
+		str(roster.get("name", roster.get("fleet_id", ""))),
+		str(entry.get("faction", "")),
+	]
+
+
+func _setup_state(lobby: LobbyState) -> Dictionary:
+	return (lobby.setup_draft.get("setup_state", {}) as Dictionary).duplicate(true)
+
+
+func _setup_objective_status_text(state: Dictionary, _local_player: int) -> String:
+	var phase: String = str(state.get(LobbyManager.SETUP_KEY_PHASE, ""))
+	match phase:
+		LobbyManager.SETUP_PHASE_FLEET_SELECTION:
+			return "Both players must submit a valid fleet."
+		LobbyManager.SETUP_PHASE_FLEETS_READY:
+			return "Fleets are ready. Host may start the setup flow."
+		_:
+			return "Fleet setup is waiting for both rosters."
+
+
+func _fleet_label(summary: Dictionary) -> String:
+	var limit: int = int((summary.get("point_format", {}) as Dictionary).get("limit", 0))
+	return "%s (%s, %d)" % [
+		str(summary.get("name", summary.get("fleet_id", ""))),
+		str(summary.get("faction", "")),
+		limit,
+	]
+
+
 ## Updates the status label.
 func _update_status(lobby: LobbyState) -> void:
 	var match_label: String = SETUP_MATCH_OPTIONS_SCRIPT.label_for_match_type(lobby.scenario)
@@ -454,7 +610,12 @@ func _update_status(lobby: LobbyState) -> void:
 	elif not lobby.is_all_ready():
 		_status_label.text = "Selected: %s. Waiting for all players to ready up." % match_label
 	elif SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario):
-		_status_label.text = "Selected: %s. Fleet selection is next." % match_label
+		_status_label.text = "Selected: %s. %s" % [
+			match_label,
+			_setup_objective_status_text(_setup_state(lobby), LobbyManager.local_setup_player_index()),
+		]
+		if LobbyManager.can_start_setup_match():
+			_status_label.add_theme_color_override("font_color", READY_COLOR)
 	else:
 		_status_label.text = "Selected: %s. All players ready!" % match_label
 		_status_label.add_theme_color_override("font_color",
@@ -465,8 +626,9 @@ func _update_status(lobby: LobbyState) -> void:
 func _update_buttons(lobby: LobbyState) -> void:
 	_ready_button.text = "Not Ready" if _is_ready else "Ready"
 	_start_button.visible = LobbyManager.is_host()
+	var requires_setup: bool = SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario)
 	_start_button.disabled = not lobby.can_start() \
-			or SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario)
+			or (requires_setup and not LobbyManager.can_start_setup_match())
 	_start_button.tooltip_text = _start_button_tooltip(lobby)
 	# Phase J7: same gate as Start Game — both connected + both Ready.
 	_load_button.visible = LobbyManager.is_host()
@@ -479,7 +641,7 @@ func _start_button_tooltip(lobby: LobbyState) -> String:
 	if not lobby.can_start():
 		return "Both players must be connected and Ready."
 	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(lobby.scenario):
-		return "Fleet selection will enable this match type in the next slice."
+		return "Both players must choose valid fleets before the host starts setup."
 	return ""
 
 
@@ -510,6 +672,12 @@ func _on_scenario_selected(index: int) -> void:
 	var metadata: Variant = _scenario_option.get_item_metadata(index)
 	if metadata is String:
 		LobbyManager.update_scenario(metadata as String)
+
+
+func _on_setup_local_fleet_selected(index: int) -> void:
+	var metadata: Variant = _setup_local_fleet_option.get_item_metadata(index)
+	if metadata is String and not (metadata as String).is_empty():
+		LobbyManager.submit_local_setup_roster(metadata as String)
 
 
 ## Requests the host to start the game.

@@ -56,6 +56,10 @@ var host_peer_id: int = 1
 ## Selected New Game match-type identifier.
 var scenario: String = SCENARIO_LEARNING_ID
 
+## Shared pregame setup draft for setup-match types.
+## Stores JSON-safe roster, initiative, objective-choice, and confirmation state.
+var setup_draft: Dictionary = {}
+
 ## SHA-256 hash of the lobby password, or empty for no password.
 var password_hash: String = ""
 
@@ -183,6 +187,7 @@ func serialize() -> Dictionary:
 		"lobby_name": lobby_name,
 		"host_peer_id": host_peer_id,
 		"scenario": scenario,
+		"setup_draft": setup_draft.duplicate(true),
 		"password_hash": password_hash,
 		"players": serialized_players,
 	}
@@ -197,6 +202,7 @@ static func deserialize(data: Dictionary) -> LobbyState:
 	state.host_peer_id = data.get("host_peer_id", 1)
 	state.scenario = normalize_scenario_id(
 			data.get("scenario", SCENARIO_LEARNING_ID) as String)
+	state.setup_draft = (data.get("setup_draft", {}) as Dictionary).duplicate(true)
 	state.password_hash = data.get("password_hash", "")
 	var raw_players: Array = data.get("players", [])
 	state.players = []

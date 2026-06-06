@@ -29,6 +29,7 @@
 | QS-5 | Frame Rate | Game runs smoothly during normal gameplay | ≥60 FPS at 1080p on mid-range hardware |
 | QS-6 | Extensibility | Adding a new ship type requires only data, no code changes | New ship added in <30 minutes via Resource files |
 | QS-7 | Code Consistency | All code follows the project style guide and passes lint checks | 0 style violations in CI |
+| QS-8 | Setup Usability Contract | Any setup-phase UI change is implemented only after the relevant `docs/setup_flow.md` section is complete and accepted | 100% of setup UI PRs cite the accepted setup-flow section and its tests |
 
 ## 10.3 Test Categories
 

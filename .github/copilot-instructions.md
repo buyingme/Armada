@@ -24,6 +24,11 @@ You **must** read and follow these documents (in `.skills/`):
 7. **`.skills/refactoring_guidelines.md`** — Function size limits, extraction patterns, serialization, god-object prevention, quantified targets
 8. **`.skills/serialization_and_commands.md`** — Serialization contract, command system, normalised positions, replay safety, banned patterns
 
+For any setup-phase UI, lobby setup, initiative, objective choice, obstacle
+placement, deployment, or setup-screen presentation work, also read
+**`docs/setup_flow.md`** before editing. The relevant section must be complete
+and `Accepted`; otherwise stop and ask the user to resolve the contract first.
+
 When adding, migrating, reviewing, or debugging a game rule, card effect,
 keyword, objective, upgrade, defense-token eligibility rule, or UI affordance
 derived from rules, also load **`.github/skills/rule-integration/SKILL.md`**.
@@ -45,6 +50,21 @@ This gate exists to prevent unwanted code changes. It applies before source
 edits, migrations, refactors, generated assets, dependency changes, deletions,
 large documentation rewrites, and commits. Routine read-only exploration and
 verification commands may proceed while gathering context.
+
+### Setup UI Contract Gate: No Contract, No UI Code
+
+For any setup-phase UI or presentation work — including New Game setup choices,
+network lobby setup, fleet selection screens, initiative, objective choice,
+obstacle placement, deployment, setup banners, setup modals, setup toolbars, and
+setup-related scene/autoload wiring — `docs/setup_flow.md` is mandatory. Do not
+edit UI/source files for the affected setup step unless that document contains a
+clear, complete, owner-approved (`Accepted`) contract for the exact step.
+
+If a prompt asks for setup UI implementation with a lazy, incomplete, or missing
+contract, stop before editing UI code. Update or ask to update
+`docs/setup_flow.md` first, covering trigger, controller, visibility, required
+screen information, actions, serialized state/command payloads, validation,
+transitions, and tests.
 
 ### 1. Static Typing Everywhere
 

@@ -354,6 +354,24 @@ func test_scenario_included_in_serialization() -> void:
 			"Deserialized lobby should have selected match type.")
 
 
+func test_setup_draft_round_trips_in_serialization() -> void:
+	var lobby: LobbyState = LobbyState.new()
+	lobby.setup_draft = {
+		"phase": "objective_confirmation",
+		"selected_objective_key": "opening_salvo",
+		"confirmations": {"0": true, "1": false},
+	}
+
+	var restored: LobbyState = LobbyState.deserialize(lobby.serialize())
+
+	assert_eq(str(restored.setup_draft.get("phase", "")), "objective_confirmation",
+			"LobbyState serialization should preserve the setup draft phase.")
+	assert_eq(str(restored.setup_draft.get("selected_objective_key", "")), "opening_salvo",
+			"LobbyState serialization should preserve the selected objective key.")
+	assert_false(bool((restored.setup_draft.get("confirmations", {}) as Dictionary).get("1", true)),
+			"LobbyState serialization should preserve per-player setup confirmations.")
+
+
 func test_deserialize_legacy_learning_scenario_label_uses_id() -> void:
 	var lobby: LobbyState = LobbyState.deserialize({
 		"scenario": LobbyState.SCENARIO_LEARNING_LABEL,

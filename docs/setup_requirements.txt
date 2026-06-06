@@ -1,4 +1,10 @@
-In this document I describe the requirements for the setup phase
+In this document I describe the requirements for the setup phase.
+
+Implementation note: `docs/setup_flow.md` is the mandatory UI contract for this
+phase. Any setup-phase UI implementation must first update that contract and may
+only proceed for sections whose status is `Accepted`. If the contract is missing,
+draft-only, incomplete, or ambiguous, stop and resolve the contract with the
+user before editing UI code.
 
 # Setup Requirements
 

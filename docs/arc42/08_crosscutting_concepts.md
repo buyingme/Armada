@@ -171,6 +171,20 @@ src/
 **Key principle:** Core game logic (`src/core/`) must not depend on scene/UI code.
 This enables testing without the scene tree.
 
+## 8.7.1 Setup UI Contract Gate
+
+Setup-phase UI work has an additional architecture gate. The authoritative
+human-facing contract is `docs/setup_flow.md`. It must describe the affected
+setup step before implementation begins, including controller ownership,
+hot-seat and network visibility, required information on screen, actions,
+serialized state/command payloads, validation, transitions, and tests.
+
+If the relevant section of `docs/setup_flow.md` is missing, marked `Draft`, or
+ambiguous, presentation work under `src/scenes/`, `src/ui/`, or setup-specific
+autoload wiring must not be edited. The correct action is to update the
+contract and get explicit owner approval before implementing UI. This gate
+protects setup usability from implicit design decisions hidden in code.
+
 ## 8.8 Hover Tooltip System
 
 > **Full requirements:** `docs/requirements/hover_tooltip_system.md`

@@ -815,7 +815,16 @@ func _on_lobby_game_start() -> void:
 		GameManager.set_command_submitter(NetworkHostCommandSubmitter.new())
 	else:
 		GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+	if _pending_config_is_setup_package():
+		get_tree().change_scene_to_file(SETUP_FLOW_PATH)
+		return
 	get_tree().change_scene_to_file(GAME_BOARD_PATH)
+
+
+func _pending_config_is_setup_package() -> bool:
+	var config: Dictionary = NetworkManager.get_pending_game_config()
+	return config.get("setup_package", {}) is Dictionary \
+			and not (config.get("setup_package", {}) as Dictionary).is_empty()
 
 
 ## Parses a port string and returns the port if valid (1..65535),

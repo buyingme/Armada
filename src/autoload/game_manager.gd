@@ -205,6 +205,10 @@ func bootstrap_game(default_scenario_id: String) -> void:
 	var config: Dictionary
 	if PlayMode.is_network():
 		config = NetworkManager.get_pending_game_config()
+		var network_setup_package: FleetSetupPackage = consume_next_setup_package()
+		if network_setup_package != null:
+			config["setup_package"] = network_setup_package.to_hashed_dict()
+			config["scenario_id"] = network_setup_package.scenario_id
 		if not NetworkManager.is_server():
 			config["client_mode"] = true
 	else:

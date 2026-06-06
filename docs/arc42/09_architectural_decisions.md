@@ -196,3 +196,28 @@ Each decision follows this structure:
   - (-) One-frame visual flash: panel appears at inflated size for one frame before deferred correction
   - (-) Developers must remember to call `_request_deferred_layout()` in every `show_*()` method
   - (-) Pattern relies on understanding Godot's anchor/offset bidirectional recalculation — documented to mitigate
+
+---
+
+## ADR-013: Contract-First Setup UI
+
+- **Status:** Accepted
+- **Date:** 2026-06-02
+- **Context:** Setup-phase work spans lobby, hot-seat, network, initiative,
+  objective choice, obstacle placement, and deployment. Recent implementation
+  drift showed that technically working UI can still violate the intended player
+  workflow when the screen order and ownership rules are not contracted first.
+- **Decision:** All setup-phase UI implementation is gated by
+  `docs/setup_flow.md`. The affected section must be complete and accepted
+  before editing setup UI or presentation wiring. The contract must specify
+  trigger, controller, visibility, required on-screen information, actions,
+  serialized state/command payloads, validation, transitions, and tests.
+- **Consequences:**
+  - (+) The user/designer is explicitly involved before setup UI decisions are
+    encoded in code.
+  - (+) Hot-seat and network ownership are described before implementation,
+    reducing rework and mode-specific regressions.
+  - (+) Tests and manual checks are derived from a stable user-facing contract.
+  - (-) Small setup UI changes may require a documentation update before code.
+  - (-) Draft contract sections intentionally block implementation until the
+    missing design decisions are resolved.

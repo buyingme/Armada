@@ -18,6 +18,8 @@ const MAIN_MENU_PATH: String = "res://src/scenes/main_menu/main_menu.tscn"
 const PLAYER_ZERO: int = 0
 const PLAYER_ONE: int = 1
 const UiFactory: GDScript = preload("res://src/scenes/setup_flow/setup_flow_ui_factory.gd")
+const OBJECTIVE_CHOICE_PANEL_SCRIPT: GDScript = preload(
+		"res://src/ui/objective_choice_panel.gd")
 const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_match_options.gd")
 
@@ -33,10 +35,16 @@ var _match_type_id: String = "standard_400"
 var _package_draft: FleetSetupPackage = null
 var _fleet_options: Array[Dictionary] = []
 var _current_package: FleetSetupPackage = null
+var _confirmed_objective_key: String = ""
+var _is_network_setup: bool = false
+var _initiative_confirmed: bool = false
+var _initiative_random: bool = false
+var _network_transitioned: bool = false
+var _roster_rows: VBoxContainer
 var _player_zero_option: OptionButton
 var _player_one_option: OptionButton
 var _first_player_option: OptionButton
-var _objective_option: OptionButton
+var _objective_panel: Control
 var _summary_label: Label
 var _hash_label: Label
 var _status_label: Label
@@ -70,13 +78,30 @@ func _ready() -> void:
 		_builder = FleetSetupPackageBuilder.new()
 	_initialize_match_type()
 	_build_ui()
-	_refresh_fleets()
+	if _is_network_setup:
+		_connect_network_setup_signals()
+		_refresh_network_setup()
+	else:
+		_refresh_fleets()
 
 
 func _initialize_match_type() -> void:
+	var config: Dictionary = NetworkManager.get_pending_game_config()
+	var package_data: Dictionary = config.get("setup_package", {}) as Dictionary
+	if not package_data.is_empty():
+		_package_draft = FleetSetupPackage.deserialize(package_data)
+		_match_type_id = str(_package_draft.setup_state.get(
+				"match_type", SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400))
+		_is_network_setup = true
+		return
 	_match_type_id = GameManager.consume_next_setup_match_type(
 			SETUP_MATCH_OPTIONS_SCRIPT.MATCH_STANDARD_400)
 	_package_draft = SETUP_MATCH_OPTIONS_SCRIPT.create_setup_package_draft(_match_type_id)
+
+
+func _connect_network_setup_signals() -> void:
+	if not LobbyManager.lobby_updated.is_connected(_on_network_lobby_updated):
+		LobbyManager.lobby_updated.connect(_on_network_lobby_updated)
 
 
 func _build_ui() -> void:
@@ -95,7 +120,9 @@ func _build_content() -> VBoxContainer:
 			"Fleet Setup - %s" % SETUP_MATCH_OPTIONS_SCRIPT.label_for_match_type(_match_type_id),
 			UIStyleHelper.GOLD_TITLE))
 	content.add_child(HSeparator.new())
-	content.add_child(_build_roster_rows())
+	_roster_rows = _build_roster_rows()
+	_roster_rows.visible = not _is_network_setup
+	content.add_child(_roster_rows)
 	content.add_child(_build_choice_rows())
 	content.add_child(_build_summary_section())
 	content.add_child(_build_buttons())
@@ -122,9 +149,174 @@ func _build_choice_rows() -> VBoxContainer:
 	_first_player_option.set_item_metadata(1, PLAYER_ONE)
 	_first_player_option.disabled = true
 	_first_player_option.item_selected.connect(_on_first_player_selected)
-	_objective_option = UiFactory.build_option_row(rows, "Objective")
-	_objective_option.item_selected.connect(_on_objective_selected)
+	_objective_panel = OBJECTIVE_CHOICE_PANEL_SCRIPT.new()
+	_objective_panel.objective_confirmed.connect(_on_objective_confirmed)
+	_objective_panel.confirmation_acknowledged.connect(_on_objective_acknowledged)
+	rows.add_child(_objective_panel)
 	return rows
+
+
+func _on_network_lobby_updated(_data: Dictionary) -> void:
+	_refresh_network_setup()
+
+
+func _refresh_network_setup() -> void:
+	var draft: FleetSetupPackage = _network_setup_draft()
+	if draft == null:
+		_show_network_wait_state("Waiting for setup data from host.")
+		return
+	_package_draft = draft
+	_current_package = draft
+	var state: Dictionary = draft.setup_state
+	var phase: String = str(state.get(LobbyManager.SETUP_KEY_PHASE, ""))
+	_update_network_first_player_option(state)
+	_summary_label.text = _network_initiative_summary(draft, state)
+	_hash_label.text = ""
+	_validation_list.clear()
+	if phase == LobbyManager.SETUP_PHASE_INITIATIVE_CONFIRMATION:
+		_configure_network_initiative(state)
+	elif phase == LobbyManager.SETUP_PHASE_OBJECTIVE_SELECTION \
+			or phase == LobbyManager.SETUP_PHASE_OBJECTIVE_CONFIRMATION:
+		_configure_network_objective(state)
+	elif phase == LobbyManager.SETUP_PHASE_READY_TO_START:
+		_configure_network_objective(state)
+		_transition_network_setup_to_board(draft)
+	else:
+		_show_network_wait_state("Waiting for both fleets before initiative.")
+
+
+func _network_setup_draft() -> FleetSetupPackage:
+	if LobbyManager.current_lobby != null and not LobbyManager.current_lobby.setup_draft.is_empty():
+		return FleetSetupPackage.deserialize(LobbyManager.current_lobby.setup_draft)
+	var config: Dictionary = NetworkManager.get_pending_game_config()
+	var package_data: Dictionary = config.get("setup_package", {}) as Dictionary
+	if package_data.is_empty():
+		return null
+	return FleetSetupPackage.deserialize(package_data)
+
+
+func _show_network_wait_state(message: String) -> void:
+	_objective_panel.visible = false
+	_confirm_button.text = "Confirm Initiative"
+	_confirm_button.disabled = true
+	_summary_label.text = message
+	_hash_label.text = ""
+	_status_label.text = message
+	_status_label.add_theme_color_override("font_color", UIStyleHelper.DIMMED_HINT)
+
+
+func _update_network_first_player_option(state: Dictionary) -> void:
+	var first_player: int = int(state.get("resolved_first_player", PLAYER_ZERO))
+	if first_player >= PLAYER_ZERO and first_player <= PLAYER_ONE:
+		_first_player_option.select(first_player)
+	var local_player: int = LobbyManager.local_setup_player_index()
+	var chooser: int = int(state.get(LobbyManager.SETUP_KEY_INITIATIVE_CHOOSER, -1))
+	var can_choose: bool = local_player == chooser \
+			and not bool(state.get(LobbyManager.SETUP_KEY_INITIATIVE_TIED, false)) \
+			and str(state.get(LobbyManager.SETUP_KEY_PHASE, "")) \
+					== LobbyManager.SETUP_PHASE_INITIATIVE_CONFIRMATION
+	_first_player_option.disabled = not can_choose
+
+
+func _configure_network_initiative(state: Dictionary) -> void:
+	_objective_panel.visible = false
+	_confirm_button.visible = true
+	_confirm_button.text = "Confirm Initiative"
+	var confirmations: Dictionary = state.get(
+			LobbyManager.SETUP_KEY_INITIATIVE_CONFIRMATIONS, {}) as Dictionary
+	_confirm_button.disabled = bool(confirmations.get(
+			str(LobbyManager.local_setup_player_index()), false))
+	_status_label.text = "Confirm initiative before objective selection."
+	_status_label.add_theme_color_override("font_color", UIStyleHelper.BODY_TEXT)
+
+
+func _configure_network_objective(state: Dictionary) -> void:
+	_confirm_button.visible = false
+	var local_player: int = LobbyManager.local_setup_player_index()
+	var first_player: int = int(state.get("resolved_first_player", -1))
+	var confirmations: Dictionary = state.get(
+			LobbyManager.SETUP_KEY_OBJECTIVE_CONFIRMATIONS, {}) as Dictionary
+	var phase: String = str(state.get(LobbyManager.SETUP_KEY_PHASE, ""))
+	_objective_panel.visible = true
+	_objective_panel.configure({
+		"heading": "Objective Choice",
+		"subtitle": "First Player chooses one of the second player's objectives.",
+		"objectives": state.get(LobbyManager.SETUP_KEY_OBJECTIVE_CANDIDATES, []),
+		"confirmed_key": str(state.get(LobbyManager.SETUP_KEY_SELECTED_OBJECTIVE_KEY, "")),
+		"selection_locked": bool(state.get(LobbyManager.SETUP_KEY_OBJECTIVE_CHOICE_LOCKED, false)),
+		"can_select": phase == LobbyManager.SETUP_PHASE_OBJECTIVE_SELECTION \
+				and local_player == first_player,
+		"can_confirm": phase == LobbyManager.SETUP_PHASE_OBJECTIVE_CONFIRMATION \
+				and not bool(confirmations.get(str(local_player), false)),
+		"status_text": _network_objective_status_text(state),
+		"selection_button_text": "Confirm Objective",
+		"locked_button_text": "Confirmed" \
+				if bool(confirmations.get(str(local_player), false)) else "Confirm",
+	})
+	_status_label.text = _network_objective_status_text(state)
+	_status_label.add_theme_color_override("font_color", UIStyleHelper.BODY_TEXT)
+
+
+func _network_objective_status_text(state: Dictionary) -> String:
+	match str(state.get(LobbyManager.SETUP_KEY_PHASE, "")):
+		LobbyManager.SETUP_PHASE_OBJECTIVE_SELECTION:
+			return "First Player chooses one of the second player's objectives."
+		LobbyManager.SETUP_PHASE_OBJECTIVE_CONFIRMATION:
+			return "Review the locked objective and confirm it."
+		LobbyManager.SETUP_PHASE_READY_TO_START:
+			return "Objective confirmed. Loading setup board."
+		_:
+			return "Waiting for objective selection."
+
+
+func _network_initiative_summary(draft: FleetSetupPackage, state: Dictionary) -> String:
+	var rosters: Array[FleetRoster] = _network_rosters(draft)
+	if rosters.size() != Constants.PLAYER_COUNT:
+		return "Waiting for fleet setup."
+	var points: Array = state.get(LobbyManager.SETUP_KEY_PLAYER_POINTS, []) as Array
+	if points.size() != Constants.PLAYER_COUNT:
+		points = [_fleet_points(rosters[0]), _fleet_points(rosters[1])]
+	var first_player: int = int(state.get("resolved_first_player", PLAYER_ZERO))
+	var method_text: String = "random selection" \
+			if bool(state.get(LobbyManager.SETUP_KEY_INITIATIVE_RANDOM, false)) \
+			else "%s chose" % _network_player_name(
+					int(state.get(LobbyManager.SETUP_KEY_INITIATIVE_CHOOSER, PLAYER_ZERO)))
+	return "%s: %s (%d)\n%s: %s (%d)\nFirst Player: %s by %s" % [
+			_network_player_name(PLAYER_ZERO), rosters[0].name, int(points[0]),
+			_network_player_name(PLAYER_ONE), rosters[1].name, int(points[1]),
+			_network_player_name(first_player), method_text]
+
+
+func _network_rosters(draft: FleetSetupPackage) -> Array[FleetRoster]:
+	var rosters: Array[FleetRoster] = []
+	rosters.resize(Constants.PLAYER_COUNT)
+	for entry: Dictionary in draft.players:
+		var player_index: int = int(entry.get("player_index", -1))
+		if player_index < PLAYER_ZERO or player_index > PLAYER_ONE:
+			continue
+		rosters[player_index] = FleetRoster.deserialize(entry.get("roster", {}) as Dictionary)
+	if rosters[0] == null or rosters[1] == null:
+		return []
+	return rosters
+
+
+func _network_player_name(player_index: int) -> String:
+	if LobbyManager.current_lobby == null:
+		return "Player %d" % (player_index + 1)
+	for player: Dictionary in LobbyManager.current_lobby.players:
+		if int(player.get("player_index", -1)) == player_index:
+			return str(player.get("display_name", "Player %d" % (player_index + 1)))
+	return "Player %d" % (player_index + 1)
+
+
+func _transition_network_setup_to_board(draft: FleetSetupPackage) -> void:
+	if _network_transitioned:
+		return
+	_network_transitioned = true
+	GameManager.set_next_setup_package(draft)
+	setup_confirmed.emit(draft)
+	if transition_on_confirm:
+		get_tree().change_scene_to_file(GAME_BOARD_PATH)
 
 
 func _build_summary_section() -> VBoxContainer:
@@ -198,32 +390,63 @@ func _populate_fleet_option(option: OptionButton,
 
 
 func _refresh_objectives() -> void:
-	_objective_option.clear()
+	var rosters: Array[FleetRoster] = _selected_rosters()
+	if not _initiative_confirmed:
+		_show_initiative_stage(rosters)
+		return
 	var owner_roster: FleetRoster = _load_objective_owner_roster()
 	if owner_roster == null:
-		_set_empty_objective_option()
+		_confirmed_objective_key = ""
+		_configure_objective_panel([], false, "Select two fleets to preview objectives.")
 		_rebuild_package()
 		return
-	_add_objective_options(owner_roster)
+	var objectives: Array[Dictionary] = _objective_entries(owner_roster)
+	if not _objective_key_present(objectives, _confirmed_objective_key):
+		_confirmed_objective_key = ""
+	_configure_objective_panel(objectives, false,
+			"Choose one of the second player's objectives and confirm it.")
 	_rebuild_package()
 
 
-func _set_empty_objective_option() -> void:
-	_objective_option.add_item("No objectives")
-	_objective_option.set_item_metadata(0, "")
-	_objective_option.disabled = true
-
-
-func _add_objective_options(roster: FleetRoster) -> void:
-	_objective_option.disabled = false
+func _objective_entries(roster: FleetRoster) -> Array[Dictionary]:
+	var objectives: Array[Dictionary] = []
 	for category: String in FleetObjectiveSelection.categories():
 		var key: String = roster.objectives.get_objective(category)
 		if key.strip_edges().is_empty():
 			continue
-		_objective_option.add_item(UiFactory.objective_label(category, key))
-		_objective_option.set_item_metadata(_objective_option.get_item_count() - 1, key)
-	if _objective_option.get_item_count() == 0:
-		_set_empty_objective_option()
+		var data: ObjectiveData = AssetLoader.load_objective_data(key)
+		objectives.append({
+			"data_key": key,
+			"category": category,
+			"objective_name": key if data == null else data.objective_name,
+		})
+	return objectives
+
+
+func _configure_objective_panel(objectives: Array[Dictionary],
+		selection_locked: bool, status_text: String) -> void:
+	if _objective_panel == null:
+		return
+	_objective_panel.visible = true
+	var subtitle: String = "Second Player presents three objectives. First Player chooses one."
+	_objective_panel.configure({
+		"heading": "Objective Choice",
+		"subtitle": subtitle,
+		"objectives": objectives,
+		"confirmed_key": _confirmed_objective_key,
+		"selection_locked": selection_locked,
+		"can_select": not selection_locked and not objectives.is_empty(),
+		"can_confirm": false,
+		"status_text": status_text,
+		"selection_button_text": "Confirm Objective",
+	})
+
+
+func _objective_key_present(objectives: Array[Dictionary], objective_key: String) -> bool:
+	for objective: Dictionary in objectives:
+		if str(objective.get("data_key", "")) == objective_key:
+			return true
+	return false
 
 
 func _load_objective_owner_roster() -> FleetRoster:
@@ -240,6 +463,7 @@ func _load_objective_owner_roster() -> FleetRoster:
 func _rebuild_package() -> void:
 	_current_package = null
 	_validation_list.clear()
+	_confirm_button.text = "Start Setup"
 	var fleet_ids: Array[String] = _selected_fleet_ids()
 	var objective_key: String = _selected_objective_key()
 	if not UiFactory.selection_complete(fleet_ids, objective_key):
@@ -257,14 +481,58 @@ func _resolve_first_player() -> void:
 	if rosters.size() != Constants.PLAYER_COUNT:
 		_initiative_chooser = PLAYER_ZERO
 		_resolved_first_player = PLAYER_ZERO
+		_initiative_random = false
 		_first_player_option.select(_resolved_first_player)
 		_first_player_option.disabled = true
 		return
-	_initiative_chooser = FleetSetupPackageBuilder.determine_first_player_chooser(
-			rosters[0], rosters[1], _tie_breaker)
+	var player_zero_points: int = _fleet_points(rosters[0])
+	var player_one_points: int = _fleet_points(rosters[1])
+	_initiative_random = player_zero_points == player_one_points
+	if _initiative_random:
+		_initiative_chooser = -1
+		_resolved_first_player = _random_first_player()
+		_first_player_option.select(_resolved_first_player)
+		_first_player_option.disabled = true
+		return
+	_initiative_chooser = PLAYER_ZERO if player_zero_points < player_one_points else PLAYER_ONE
 	_resolved_first_player = _initiative_chooser
 	_first_player_option.select(_resolved_first_player)
 	_first_player_option.disabled = false
+
+
+func _show_initiative_stage(rosters: Array[FleetRoster]) -> void:
+	_current_package = null
+	_validation_list.clear()
+	_objective_panel.visible = false
+	_confirm_button.text = "Confirm Initiative"
+	_confirm_button.disabled = rosters.size() != Constants.PLAYER_COUNT
+	_summary_label.text = _initiative_summary_text(rosters)
+	_hash_label.text = ""
+	_status_label.text = "Confirm initiative before choosing objectives."
+	_status_label.add_theme_color_override("font_color", UIStyleHelper.BODY_TEXT)
+	_sync_package_draft_state()
+
+
+func _initiative_summary_text(rosters: Array[FleetRoster]) -> String:
+	if rosters.size() != Constants.PLAYER_COUNT:
+		return "Select two fleets before initiative."
+	var points: Array[int] = [_fleet_points(rosters[0]), _fleet_points(rosters[1])]
+	var chooser_text: String = "random selection" if _initiative_random \
+			else "Player %d chooses" % (_initiative_chooser + 1)
+	return "Player 1: %s (%d)\nPlayer 2: %s (%d)\nFirst Player: Player %d by %s" % [
+			rosters[0].name, points[0], rosters[1].name, points[1],
+			_resolved_first_player + 1, chooser_text]
+
+
+func _fleet_points(roster: FleetRoster) -> int:
+	return int(FleetRosterSummary.calculate(roster).get(
+			FleetRosterSummary.KEY_TOTAL_POINTS, 0))
+
+
+func _random_first_player() -> int:
+	if _tie_breaker.is_valid():
+		return clampi(int(_tie_breaker.call()), PLAYER_ZERO, PLAYER_ONE)
+	return randi_range(PLAYER_ZERO, PLAYER_ONE)
 
 
 func _selected_rosters() -> Array[FleetRoster]:
@@ -291,6 +559,7 @@ func _show_build_result(result: Dictionary) -> void:
 	_package_draft.selected_objective = _current_package.selected_objective.duplicate(true)
 	_set_draft_validation_status(true, validation, _current_package.canonical_hash())
 	_confirm_button.disabled = false
+	_confirm_button.text = "Start Setup"
 	_summary_label.text = UiFactory.package_summary(_current_package)
 	_hash_label.text = "Hash: %s" % _current_package.canonical_hash()
 	_status_label.text = "Package ready"
@@ -323,25 +592,43 @@ func _selected_fleet_ids() -> Array[String]:
 
 
 func _selected_objective_key() -> String:
-	return _selected_option_metadata(_objective_option)
-
-
-func _selected_option_metadata(option: OptionButton) -> String:
-	return UiFactory.selected_option_metadata(option)
+	return _confirmed_objective_key
 
 
 func _on_fleet_selected(_index: int) -> void:
+	_confirmed_objective_key = ""
+	_initiative_confirmed = false
 	_sync_package_draft_state()
 	_resolve_first_player()
 	_refresh_objectives()
 
 
-func _on_objective_selected(_index: int) -> void:
+
+func _on_objective_confirmed(objective_key: String) -> void:
+	if _is_network_setup:
+		LobbyManager.confirm_setup_objective(objective_key)
+		return
+	_confirmed_objective_key = objective_key
+	var owner_roster: FleetRoster = _load_objective_owner_roster()
+	var objectives: Array[Dictionary] = [] if owner_roster == null else _objective_entries(owner_roster)
+	_configure_objective_panel(objectives, true,
+			"Objective locked. Review the chosen card, then confirm the setup package.")
 	_rebuild_package()
 
 
+func _on_objective_acknowledged() -> void:
+	if _is_network_setup:
+		LobbyManager.confirm_setup_objective()
+
+
 func _on_first_player_selected(index: int) -> void:
+	if _is_network_setup:
+		LobbyManager.submit_first_player_choice(
+				int(_first_player_option.get_item_metadata(index)))
+		return
 	_resolved_first_player = int(_first_player_option.get_item_metadata(index))
+	_confirmed_objective_key = ""
+	_initiative_confirmed = false
 	_sync_package_draft_state()
 	_refresh_objectives()
 
@@ -351,7 +638,10 @@ func _sync_package_draft_state() -> void:
 		return
 	_package_draft.setup_state["selected_fleet_ids"] = _selected_fleet_ids()
 	_package_draft.setup_state["selected_objective_key"] = _selected_objective_key()
+	_package_draft.setup_state["objective_choice_locked"] = not _confirmed_objective_key.is_empty()
 	_package_draft.setup_state["resolved_first_player"] = _resolved_first_player
+	_package_draft.setup_state["initiative_confirmed"] = _initiative_confirmed
+	_package_draft.setup_state["initiative_random_selection"] = _initiative_random
 	_package_draft.players = _draft_player_entries(_selected_fleet_ids())
 
 
@@ -386,6 +676,14 @@ func _set_draft_validation_status(ok: bool, validation: SetupValidationResult,
 
 
 func _on_confirm_pressed() -> void:
+	if _is_network_setup:
+		LobbyManager.confirm_initiative_screen()
+		return
+	if not _initiative_confirmed:
+		_initiative_confirmed = true
+		_first_player_option.disabled = true
+		_refresh_objectives()
+		return
 	if _current_package == null:
 		return
 	GameManager.set_next_setup_package(_current_package)

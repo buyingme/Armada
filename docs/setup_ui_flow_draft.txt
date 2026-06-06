@@ -1,0 +1,546 @@
+SETUP PHASE UI FLOW DRAFT
+Status: Draft for correction by Alex
+Owner: Alex
+Last updated: 2026-06-04
+
+Purpose
+This is a plain text working document for the setup phase UI flow. It is meant
+to be corrected and completed before the final wording is copied into the formal
+setup contract and before any implementation is added to the FB plan.
+Corrections have been made manually on June 4th.
+
+This document is not an implementation approval. It is a design draft. UI code
+must not be written from this file alone. The final, accepted contract belongs in
+docs/setup_flow.md.
+
+
+GLOBAL SETUP UI RULES
+
+1. The lobby is not a setup decision screen.
+   The lobby may choose match type and fleets only.
+   The lobby must not choose first player.
+   The lobby must not choose objectives.
+   The lobby must not place obstacles.
+   The lobby must not deploy ships or squadrons.
+
+2. Setup choices happen after the setup match starts.
+   The post-start order is:
+   a. initiative screen
+   b. objective selection screen
+   c. obstacle placement
+   d. ship and squadron deployment
+   e. setup review
+   f. command phase start
+
+3. Hot-seat and network use the same logical setup order.
+   Hot-seat may rotate the table and show handoff banners.
+   Network must not rotate the passive player's table.
+   Network must show an active/waiting state similar to normal turn transitions.
+
+4. Public setup choices are visible to both players.
+   The inactive or passive player must see committed fleet summaries, first
+   player result, selected objective, obstacle placements, and deployments.
+
+5. Preview is not commit.
+   Dragging, selecting, rotating, or previewing is temporary until confirmed.
+   Confirmed setup choices must be serialized and replay/network safe.
+
+6. All positions and rotations in setup state or commands use normalized data.
+   Use pos_x, pos_y, and rotation_deg.
+   Do not store pixels in serialized setup data.
+
+Important requirement added by user:
+   Player 1 and Player 2 must not be used for player distinction. Both players must submit a name. In network this is already there. In hot-seat the player name must be specified during fleet selection.
+
+FLOW 1: NEW GAME / MATCH TYPE SELECTION
+
+Status: Draft
+
+Entry point:
+Local hot-seat:
+The player clicks New Game in the main menu.
+
+Network:
+The host chooses the match type in the lobby.
+The client sees the selected match type but cannot change it.
+
+Screen goal:
+Let the game choose between fixed scenarios and fleet-setup matches.
+
+Options shown:
+400 points game
+300 points game
+180 points game
+learning scenario
+debug scenario
+
+Desired UI style:
+Use a window with these options.
+The style should feel like the main menu, not like a small dropdown.
+
+Controller:
+Hot-seat: local user.
+Network: host only.
+
+Passive player view:
+Network client sees the chosen option as read-only lobby information.
+
+Actions:
+Choose one match type.
+
+Validation:
+Only the network host may change match type.
+Unknown or invalid match type should not enter setup.
+
+Transition:
+Learning scenario -> game board with fixed deployed scenario.
+Debug scenario -> game board with fixed deployed scenario.
+400/300/180 -> fleet selection.
+
+Resolved details:
+Network lobby client view uses a compact status row.
+Changing match type clears all fleet selections.
+
+
+
+FLOW 2: FLEET SELECTION
+
+Status: Draft
+
+Entry point:
+The player selected a 400, 300, or 180 point game.
+
+Screen goal:
+Each player selects exactly one legal fleet from the fleet manager.
+
+Important rule:
+The two selected fleets must have different factions.
+Both Players must specify a name.
+
+Controller:
+Hot-seat: one local user selects both fleets and both player names before starting initiative.
+Network: host selects host fleet; client selects client fleet. Names are taken from the lobby information.
+
+Visible information:
+Selected match type.
+Point limit.
+Local fleet list filtered to the selected point format.
+Selected local fleet name.
+Selected local faction.
+Selected local fleet points.
+Opponent selected fleet name after submission.
+Opponent selected faction after submission.
+Opponent selected fleet points after submission.
+Validation status.
+
+Hidden/private information:
+Nothing about the selected public fleet summary is hidden after submission.
+Local fleet library ids should not be required by the other machine.
+
+Actions:
+Select a fleet from the fleet manager.
+Submit selected fleet.
+Network players can still use the lobby Ready button separately.
+
+Validation:
+Player names must not be blank.
+Player names must be different.
+Both players have a Name specified.
+Both players selected a fleet.
+Both fleets are valid.
+Both fleets match the selected point format.
+Factions are different.
+Objectives are present and legal.
+Map data is present and legal.
+Blank-name message: "Player names must not be blank"
+Duplicate-name message: "Player names must be different"
+Same-faction message: "Invalid fleet selection. Fleets must have different factions."
+
+Transition:
+Hot-seat: when both fleets are valid, continue to initiative screen.
+Network: host Start becomes available only when both players are Ready and both
+fleet selections are valid. Start moves both peers to initiative screen.
+
+Things this screen must not do:
+Do not choose first player.
+Do not show objective card choice.
+Do not ask players to confirm objectives.
+
+Resolved details:
+Hot-seat fleet selection is a separate screen from initiative.
+Network Ready locks the fleet selection.
+
+
+FLOW 3: INITIATIVE SCREEN
+
+Status: Draft
+
+Entry point:
+Both players selected valid fleets and the setup match has started.
+
+Screen goal:
+Determine and confirm the first player before objective selection.
+
+Rules:
+The player with the lower fleet point total chooses who is first player.
+If both fleets have equal points, it is determined randomly who makes the choice.
+
+Controller:
+If points differ: lower-points player may choose first player.
+If points are tied: one player chooses; that player is determined randomly. The message is: "Fleet points are tied. Random tie breaker rules: player <name> may choose who is first player."
+
+Visible information:
+First player candidate name.
+First player candidate faction.
+First player candidate fleet name.
+First player candidate fleet point total.
+Second player candidate name.
+Second player candidate faction.
+Second player candidate fleet name.
+Second player candidate fleet point total.
+Who may choose first player, if applicable.
+Who is first player.
+Why that player is first: lower-points choice or random tie result.
+Confirmation status for both players.
+
+The text Player 1 or Player 2 must not be visible at any time. Always refer to player name.
+
+Actions:
+If controller may choose: choose one player name as first player.
+Both players confirm that they have seen the initiative result.
+
+Hot-seat behavior:
+Show a clear confirmation screen.
+If the choosing player is not already viewing their side, rotate or hand off as
+needed before the choice.
+After choice, require confirmation before objective selection.
+
+Network behavior:
+Both peers see the same initiative screen.
+Only the controller can change first-player selection.
+The passive peer sees disabled controls and waiting/confirmation status.
+Both peers must confirm before objective selection.
+
+Validation:
+Either the lower-points player may choose when points differ.
+A randomly determined player may change first player when tied.
+Only valid player indices may be confirmed.
+Objective selection cannot appear until both confirmations are complete.
+
+Transition:
+Both confirmations complete -> objective selection screen.
+
+Resolved details:
+First-player choice uses a segmented control.
+Confirmation button text is "confirm choice".
+Hot-seat requires a handoff screen before the lower-points player chooses.
+The tied random result is generated immediately on screen entry.
+
+
+FLOW 4: OBJECTIVE SELECTION SCREEN
+
+Status: Draft
+
+Entry point:
+Both players confirmed the initiative screen.
+
+Screen goal:
+First player chooses one objective from the second player's three objectives.
+
+Controller:
+First player.
+
+Objective owner:
+Second player.
+
+Visible information:
+First player name and faction.
+Second player name and faction.
+Second player's three objective cards.
+Objective category for each card.
+Objective name for each card.
+Objective card text/art preview.
+Currently selected objective must be clearly highlighted before confirmaition.
+Locked objective after confirmation. Not selected objectives should be greyed out!
+Confirmation status if both players must acknowledge.
+
+Actions:
+First player selects one of the three objective cards.
+First player confirms the selected objective.
+After lock, both players can review the selected objective.
+The non-selecting player may acknowledge the locked objective if required.
+
+Hot-seat behavior:
+Show the objective cards large enough to read.
+If needed, rotate or hand off to the first player before choosing.
+After the objective is locked, show the chosen objective clearly.
+
+Network behavior:
+Both peers see the same objective cards.
+Only first player can select and lock the objective.
+Passive peer sees disabled controls and waiting status.
+
+Validation:
+Selected objective must be one of the second player's three objectives.
+Wrong-player selection is rejected.
+Objective cannot change after it is locked.
+
+Transition:
+Objective locked and required acknowledgements complete -> obstacle placement.
+
+Resolved details:
+The second player explicitly acknowledges after the first player locks the objective.
+The first player counts as acknowledged when locking the objective.
+There is no Back button to initiative.
+Objective cards are shown side by side on one screen with no zoom requirement.
+
+
+FLOW 5: OBSTACLE PLACEMENT
+
+Status: Draft
+
+Entry point:
+Objective selection is complete.
+
+Screen goal:
+Players alternate placing obstacles until exactly six obstacles are placed.
+
+Rules:
+Second player places the first obstacle.
+Players alternate placing one obstacle at a time.
+Only one of each obstacle may be placed.
+Obstacle footprint must be inside the setup area.
+Obstacle footprint must be outside both deployment zones.
+Obstacle must be beyond distance 3 of play-area edges where the 3x6 setup area
+rule applies.
+Obstacle must be beyond distance 1 of every other obstacle.
+
+Controller:
+Current obstacle placer.
+
+Visible information:
+Active placer name.
+Active placer faction.
+Prompt: which player places an obstacle now.
+Remaining unplaced obstacles.
+Already placed obstacles.
+Setup area overlay.
+Deployment zone overlay.
+Placement legality feedback.
+Rotation value or rotation affordance. Rotate by zoom gesture (two finger on trackpad)
+
+Actions:
+Select an unplaced obstacle.
+Drag obstacle preview onto the board.
+Rotate obstacle.
+Confirm legal placement.
+Cancel current preview.
+
+Hot-seat behavior:
+After each confirmed placement, rotate the table like turn change.
+Show a banner before the next placement.
+Banner text is "<Player Name> place obstacle".
+
+Network behavior:
+Do not rotate the passive player's table.
+Use normal network active/waiting state.
+Passive player sees committed placements only.
+
+Validation:
+Reject duplicate obstacle.
+Reject outside setup area.
+Reject inside deployment zone.
+Reject too close to edge.
+Reject too close to another obstacle.
+Reject confirmation with no selected obstacle.
+use same highlighting of objectives if they are in an illegal preview position as with squadron placing after ship overlapp.
+
+Transition:
+After six confirmed obstacles -> deployment screen.
+
+Resolved details:
+Obstacle list uses a lower-middle modal similar to the activation modal position.
+Passive network players see only committed obstacle placements.
+Obstacle rotation uses the same debug rotation method.
+Hot-seat obstacle banner text is "<Player Name> place obstacle".
+
+
+FLOW 6: DEPLOYMENT
+
+Status: Draft
+
+Entry point:
+Exactly six obstacles are placed.
+
+Screen goal:
+Players deploy all ships and squadrons from their selected fleets.
+
+Rules:
+Only show units from the active player's roster.
+Ships must be placed inside their player's deployment zone.
+Ships must choose a legal starting speed from their speed chart.
+Squadrons must be placed within distance 1-2 of a friendly ship.
+Squadrons may be outside deployment zones but must stay inside the play area.
+If a player has only one squadron remaining when they must place two, they
+cannot place it until all of their ships have been placed.
+
+Controller:
+Current deploying player.
+
+Visible information:
+Active deploying player name.
+Active deploying player faction.
+Prompt: deploy ship or squadrons.
+Units remaining for the active player.
+Ships already deployed.
+Squadrons already deployed.
+Deployment zone overlay.
+Selected unit preview.
+Ship speed selector when a ship is selected.
+Placement legality feedback. (similar to squadron placement after overlapp)
+Rotation value or rotation affordance.
+
+Actions:
+Select a ship or squadron from the active player's list.
+Drag selected unit preview onto the board.
+Rotate selected unit.
+For ships: choose legal speed.
+Confirm legal deployment.
+Cancel current preview.
+
+Hot-seat behavior:
+Show a banner between player deployment turns.
+Banner text is "Deploy your fleet <Player Name>".
+Rotate the table between players when appropriate.
+
+Network behavior:
+Do not rotate the passive player's table.
+Use normal network active/waiting state.
+Passive player sees committed deployments.
+
+Validation:
+Reject ship outside owning deployment zone.
+Reject ship speed not on speed chart.
+Reject squadron outside play area.
+Reject squadron not within distance 1-2 of a friendly ship. This means the firstdeployment must be a ship!
+Reject deployment of hidden or wrong-player units.
+Reject illegal one-remaining-squadron timing.
+
+Transition:
+All ships and squadrons deployed -> setup review.
+
+Resolved details:
+The first deployment pick must be a ship.
+Players alternate after each deployment pick.
+A pick may be one ship or two squadrons.
+Only if a player has nothing left but a single squadron may that player place the single squadron.
+If one player runs out of placement options, the other player places the remaining assets.
+Confirmation is per ship or per two squadrons.
+Passive network players see only committed units.
+The speed selector shows "set speed" next to the ship and all legal speed values as buttons.
+
+
+FLOW 7: SETUP REVIEW
+
+Status: Draft
+
+Entry point:
+All obstacle and deployment requirements are complete.
+
+Screen goal:
+Let both players review the final setup before round one Command Phase starts.
+
+Controller:
+Both players review and confirm readiness.
+
+Visible information:
+Setup complete status.
+First player for round one.
+Both fleets fully deployed.
+Selected objective.
+Both players' fleets, cards, and setup results.
+
+Actions:
+Both players press "ready to start".
+
+Validation:
+Exactly six obstacles placed.
+All ships deployed.
+All squadrons deployed.
+All ship speeds valid.
+All serialized setup payloads complete.
+Both players must press "ready to start" before setup can finish.
+
+Transition:
+Both players ready -> round one Command Phase starts.
+
+Resolved details:
+Setup does not jump straight to the Command Phase after deployment.
+There is a final review screen before command dials.
+Both players can look at the other player's fleet, cards, and setup state.
+The review button text is "ready to start".
+
+
+FLOW 8: COMMAND PHASE START
+
+Status: Draft
+
+Entry point:
+Both players completed setup review.
+
+Screen goal:
+Start round one Command Phase.
+
+Controller:
+System/server after validation passes.
+
+Visible information:
+Round one begins.
+Command Phase starts.
+
+Actions:
+No additional setup action.
+
+Validation:
+Setup review is complete.
+
+Transition:
+Start round one Command Phase.
+
+FINAL review
+
+Resolved follow-up questions:
+
+Should hot-seat reject duplicate player names, or only blank names? If duplicates are invalid, what exact validation message should be shown? Answer: duplicates are illegal. Message should be: "Player names must be different". If name is empty: "Player names must not be blank"
+In your draft header, the owner/name changed to Alex in setup_ui_flow_draft.txt. Is that intentional, or should the formal docs continue to treat Katharina as the contract owner? Answer: Replace Katharina by Alex.
+What is the exact hot-seat deployment banner text? I removed the old Faction Player wording from the formal contract, but the final replacement text is still not settled. Answer: "Deploy your fleet Player Name" / Player Name should be replaced by the name of the player.
+For the new setup review step, do both players need to press ready to start, or is there a different final-advance rule you want? Answer: both players need to press ready to start, then commence the first round, command phase.
+
+No unresolved setup behavior remains in this draft revision.
+
+
+DESIGN COMPLETION CHECKLIST
+
+Before this draft can become the accepted setup contract, each flow needs:
+
+1. Final screen layout description.
+2. Final button labels.
+3. Final hot-seat behavior.
+4. Final network behavior.
+5. Final controller ownership.
+6. Final passive-player visibility.
+7. Final validation messages.
+8. Final serialized state or command payload names.
+9. Final transition rules.
+10. Required automated tests.
+11. Required manual tests.
+
+
+PROMOTION RULE
+
+After Alex corrects and completes this draft:
+
+1. Copy the accepted wording into docs/setup_flow.md.
+2. Mark only completed sections as Accepted.
+3. Update the FB plan to reference the accepted setup-flow sections.
+4. Only then implement UI code for the accepted sections.

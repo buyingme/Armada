@@ -35,6 +35,11 @@ const SETUP_KEY_OBJECTIVE_OWNER_PLAYER: String = "objective_owner_player"
 const SETUP_KEY_SELECTED_OBJECTIVE_KEY: String = "selected_objective_key"
 const SETUP_KEY_VALIDATION_STATUS: String = "validation_status"
 
+const VALIDATION_MESSAGE_NAMES_BLANK: String = "Player names must not be blank"
+const VALIDATION_MESSAGE_NAMES_DIFFERENT: String = "Player names must be different"
+const VALIDATION_MESSAGE_FACTIONS_DIFFERENT: String = \
+		"Invalid fleet selection. Fleets must have different factions."
+
 
 # ---------------------------------------------------------------------------
 # Signals
@@ -338,7 +343,7 @@ func _setup_draft_for_match_type(match_type_id: String) -> Dictionary:
 func _default_setup_state() -> Dictionary:
 	return {
 		SETUP_KEY_PHASE: SETUP_PHASE_FLEET_SELECTION,
-		SETUP_KEY_INITIATIVE_CHOOSER: -1,
+		SETUP_KEY_INITIATIVE_CHOOSER: - 1,
 		SETUP_KEY_INITIATIVE_CONFIRMATIONS: {"0": false, "1": false},
 		SETUP_KEY_INITIATIVE_RANDOM: false,
 		SETUP_KEY_INITIATIVE_TIED: false,
@@ -346,7 +351,7 @@ func _default_setup_state() -> Dictionary:
 		SETUP_KEY_OBJECTIVE_CANDIDATES: [],
 		SETUP_KEY_OBJECTIVE_CHOICE_LOCKED: false,
 		SETUP_KEY_OBJECTIVE_CONFIRMATIONS: {"0": false, "1": false},
-		SETUP_KEY_OBJECTIVE_OWNER_PLAYER: -1,
+		SETUP_KEY_OBJECTIVE_OWNER_PLAYER: - 1,
 		SETUP_KEY_SELECTED_OBJECTIVE_KEY: "",
 		SETUP_KEY_VALIDATION_STATUS: {
 			"ok": false,
@@ -631,6 +636,7 @@ func _upsert_roster_entry(draft: FleetSetupPackage, player_index: int,
 	var entries: Array[Dictionary] = draft.players.duplicate(true)
 	var replacement: Dictionary = {
 		"player_index": player_index,
+		"display_name": _setup_player_display_name(player_index),
 		"faction": roster.faction,
 		"roster": roster.serialize(),
 	}
@@ -655,7 +661,7 @@ func _rebuild_setup_draft(draft: FleetSetupPackage) -> void:
 
 func _apply_roster_phase(draft: FleetSetupPackage, rosters: Array,
 		state: Dictionary) -> bool:
-	var messages: Array[String] = _roster_validation_messages(rosters)
+	var messages: Array[String] = _roster_validation_messages(draft, rosters)
 	if messages.is_empty():
 		return false
 	_reset_objective_choice_state(state)
@@ -691,7 +697,7 @@ func _prepare_setup_draft_for_start() -> FleetSetupPackage:
 		return null
 	var rosters: Array = _rosters_from_draft(draft)
 	var state: Dictionary = _draft_state(draft)
-	if not _roster_validation_messages(rosters).is_empty():
+	if not _roster_validation_messages(draft, rosters).is_empty():
 		return null
 	_resolve_initiative_state(rosters, state)
 	_reset_objective_choice_state(state)
@@ -715,8 +721,9 @@ func _rosters_from_draft(draft: FleetSetupPackage) -> Array:
 	return rosters
 
 
-func _roster_validation_messages(rosters: Array) -> Array[String]:
+func _roster_validation_messages(draft: FleetSetupPackage, rosters: Array) -> Array[String]:
 	var messages: Array[String] = []
+	messages.append_array(_display_name_validation_messages(draft))
 	if rosters.size() != Constants.PLAYER_COUNT or rosters[0] == null or rosters[1] == null:
 		messages.append("Both players must choose a fleet.")
 		return messages
@@ -726,12 +733,59 @@ func _roster_validation_messages(rosters: Array) -> Array[String]:
 		if not validation.is_valid():
 			messages.append("Player %d fleet is invalid." % (player_index + 1))
 	if str((rosters[0] as FleetRoster).faction) == str((rosters[1] as FleetRoster).faction):
-		messages.append("Both players must choose fleets from different factions.")
+		messages.append(VALIDATION_MESSAGE_FACTIONS_DIFFERENT)
 	if not FleetBuilderOptions.point_formats_match(
 			(rosters[0] as FleetRoster).point_format,
 			(rosters[1] as FleetRoster).point_format):
 		messages.append("Both fleets must match the selected point format.")
 	return messages
+
+
+func _display_name_validation_messages(draft: FleetSetupPackage) -> Array[String]:
+	var messages: Array[String] = []
+	var names: Array[String] = _setup_player_display_names(draft)
+	if names[0].is_empty() or names[1].is_empty():
+		messages.append(VALIDATION_MESSAGE_NAMES_BLANK)
+		return messages
+	if names[0] == names[1]:
+		messages.append(VALIDATION_MESSAGE_NAMES_DIFFERENT)
+	return messages
+
+
+func _setup_player_display_names(draft: FleetSetupPackage) -> Array[String]:
+	var names: Array[String] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		names.append(_setup_player_display_name_from_draft(draft, player_index))
+	return names
+
+
+func _setup_player_display_name_from_draft(
+		draft: FleetSetupPackage,
+		player_index: int) -> String:
+	var entry_name: String = _draft_player_display_name(draft, player_index)
+	if not entry_name.is_empty():
+		return entry_name
+	return _setup_player_display_name(player_index)
+
+
+func _draft_player_display_name(draft: FleetSetupPackage, player_index: int) -> String:
+	if draft == null:
+		return ""
+	for entry: Dictionary in draft.players:
+		if int(entry.get("player_index", -1)) != player_index:
+			continue
+		return str(entry.get("display_name", "")).strip_edges()
+	return ""
+
+
+func _setup_player_display_name(player_index: int) -> String:
+	if current_lobby == null:
+		return ""
+	for player: Dictionary in current_lobby.players:
+		if int(player.get("player_index", -1)) != player_index:
+			continue
+		return str(player.get("display_name", "")).strip_edges()
+	return ""
 
 
 func _resolve_initiative_state(rosters: Array, state: Dictionary) -> void:

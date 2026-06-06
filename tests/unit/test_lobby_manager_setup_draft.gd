@@ -14,6 +14,10 @@ func before_each() -> void:
 	NetworkManager.role = NetworkManager.Role.SERVER
 	var lobby: LobbyState = LobbyState.new()
 	lobby.scenario = LobbyState.MATCH_STANDARD_400_ID
+	lobby.players = [
+		{"peer_id": 1, "display_name": "Host", "player_index": 0, "ready": false},
+		{"peer_id": 2, "display_name": "Client", "player_index": 1, "ready": false},
+	]
 	lobby.setup_draft = LobbyManager._setup_draft_for_match_type(lobby.scenario)
 	LobbyManager.current_lobby = lobby
 
@@ -38,6 +42,50 @@ func test_apply_setup_roster_data_with_two_valid_rosters_enters_fleets_ready() -
 			"The host should be able to start setup once both fleets are valid.")
 	assert_eq(_objective_candidates().size(), 0,
 			"The lobby draft should not expose objective choices before game start.")
+	assert_eq(str(_player_entry(0).get("display_name", "")), "Host",
+			"Setup draft player entries should preserve the host display name.")
+	assert_eq(str(_player_entry(1).get("display_name", "")), "Client",
+			"Setup draft player entries should preserve the client display name.")
+
+
+func test_apply_setup_roster_data_with_blank_player_name_rejects_draft() -> void:
+	_set_player_display_name(0, "")
+	LobbyManager._apply_setup_roster_data(0, _create_rebel_roster().serialize())
+	LobbyManager._apply_setup_roster_data(1, _create_imperial_roster().serialize())
+	var status: Dictionary = _setup_state().get(
+			LobbyManager.SETUP_KEY_VALIDATION_STATUS, {}) as Dictionary
+	var messages: Array = status.get("messages", []) as Array
+
+	assert_false(bool(status.get("ok", true)),
+			"Blank player names should reject the fleet-selection draft.")
+	assert_true(messages.has(LobbyManager.VALIDATION_MESSAGE_NAMES_BLANK),
+			"Blank player names should use the accepted validation message.")
+
+
+func test_apply_setup_roster_data_with_duplicate_player_names_rejects_draft() -> void:
+	_set_player_display_name(0, "Alex")
+	_set_player_display_name(1, "Alex")
+	LobbyManager._apply_setup_roster_data(0, _create_rebel_roster().serialize())
+	LobbyManager._apply_setup_roster_data(1, _create_imperial_roster().serialize())
+	var status: Dictionary = _setup_state().get(
+			LobbyManager.SETUP_KEY_VALIDATION_STATUS, {}) as Dictionary
+	var messages: Array = status.get("messages", []) as Array
+
+	assert_false(bool(status.get("ok", true)),
+			"Duplicate player names should reject the fleet-selection draft.")
+	assert_true(messages.has(LobbyManager.VALIDATION_MESSAGE_NAMES_DIFFERENT),
+			"Duplicate player names should use the accepted validation message.")
+
+
+func test_apply_setup_roster_data_with_same_faction_uses_accepted_message() -> void:
+	LobbyManager._apply_setup_roster_data(0, _create_rebel_roster().serialize())
+	LobbyManager._apply_setup_roster_data(1, _create_rebel_roster().serialize())
+	var status: Dictionary = _setup_state().get(
+			LobbyManager.SETUP_KEY_VALIDATION_STATUS, {}) as Dictionary
+	var messages: Array = status.get("messages", []) as Array
+
+	assert_true(messages.has(LobbyManager.VALIDATION_MESSAGE_FACTIONS_DIFFERENT),
+			"Same-faction fleets should use the accepted validation message.")
 
 
 func test_prepare_setup_draft_for_start_enters_initiative_confirmation() -> void:
@@ -122,6 +170,23 @@ func _setup_state() -> Dictionary:
 
 func _objective_candidates() -> Array:
 	return _setup_state().get(LobbyManager.SETUP_KEY_OBJECTIVE_CANDIDATES, []) as Array
+
+
+func _player_entry(player_index: int) -> Dictionary:
+	var players: Array = LobbyManager.current_lobby.setup_draft.get("players", []) as Array
+	for raw_player: Variant in players:
+		if raw_player is Dictionary \
+				and int((raw_player as Dictionary).get("player_index", -1)) == player_index:
+			return raw_player as Dictionary
+	return {}
+
+
+func _set_player_display_name(player_index: int, display_name: String) -> void:
+	for player: Dictionary in LobbyManager.current_lobby.players:
+		if int(player.get("player_index", -1)) != player_index:
+			continue
+		player["display_name"] = display_name
+		return
 
 
 func _seed_valid_rosters() -> void:

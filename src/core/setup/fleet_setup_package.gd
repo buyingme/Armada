@@ -118,6 +118,8 @@ func _validate_players(errors: Array[String]) -> void:
 	for player_entry: Dictionary in players:
 		if not player_entry.has("player_index"):
 			errors.append("Player entry is missing player_index.")
+		if str(player_entry.get("display_name", "")).strip_edges().is_empty():
+			errors.append("Player entry is missing display_name.")
 		var roster_data: Variant = player_entry.get("roster", {})
 		if not roster_data is Dictionary or (roster_data as Dictionary).is_empty():
 			errors.append("Player entry is missing embedded roster data.")

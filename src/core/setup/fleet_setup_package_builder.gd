@@ -14,8 +14,14 @@ const RULE_FLEET_FACTION: String = "setup.rosters.faction"
 const RULE_LIBRARY_LOAD: String = "setup.library.load"
 const RULE_OBJECTIVE_CHOICE: String = "setup.objective.choice"
 const RULE_PLAYER_COUNT: String = "setup.player.count"
+const RULE_PLAYER_DISPLAY_NAME: String = "setup.player.display_name"
 const RULE_SELECTED_POINT_FORMAT: String = "setup.selected.point_format"
 const RULE_POINT_FORMAT: String = "setup.point_format"
+
+const VALIDATION_MESSAGE_NAMES_BLANK: String = "Player names must not be blank"
+const VALIDATION_MESSAGE_NAMES_DIFFERENT: String = "Player names must be different"
+const VALIDATION_MESSAGE_FACTIONS_DIFFERENT: String = \
+		"Invalid fleet selection. Fleets must have different factions."
 
 var _validator: FleetValidator
 
@@ -49,7 +55,7 @@ func build_from_draft(library_manager: FleetLibraryManager,
 		return _build_result(false, null, validation)
 	return _build_from_rosters_with_constraints(
 			rosters, first_player, selected_objective_key,
-			str(draft.scenario_id), draft.point_format)
+			str(draft.scenario_id), draft.point_format, draft)
 
 
 ## Loads two local fleet ids and expands them into an embedded setup package.
@@ -86,13 +92,14 @@ func build_from_peer_rosters_for_draft(host_roster: FleetRoster,
 	var expected_point_format: Dictionary = {} if draft == null else draft.point_format
 	return _build_from_peer_rosters_with_constraints(host_roster, client_roster,
 			host_player_index, first_player, selected_objective_key,
-			scenario_id, expected_point_format)
+			scenario_id, expected_point_format, draft)
 
 
 func _build_from_peer_rosters_with_constraints(host_roster: FleetRoster,
 		client_roster: FleetRoster, host_player_index: int, first_player: int,
 		selected_objective_key: String, scenario_id: String,
-		expected_point_format: Dictionary) -> Dictionary:
+		expected_point_format: Dictionary,
+		_draft: FleetSetupPackage = null) -> Dictionary:
 	var validation: SetupValidationResult = SetupValidationResult.new()
 	if not _player_index_valid(host_player_index):
 		validation.add_error(RULE_FIRST_PLAYER, "Host player index is out of range.", [], [])
@@ -106,15 +113,17 @@ func _build_from_peer_rosters_with_constraints(host_roster: FleetRoster,
 
 func _build_from_rosters_with_constraints(rosters: Array[FleetRoster],
 		first_player: int, selected_objective_key: String,
-		scenario_id: String, expected_point_format: Dictionary) -> Dictionary:
+		scenario_id: String, expected_point_format: Dictionary,
+		draft: FleetSetupPackage = null) -> Dictionary:
 	var validation: SetupValidationResult = _validate_build_inputs(
 			rosters, first_player, selected_objective_key)
 	_validate_selected_point_format(rosters, expected_point_format, validation)
+	_validate_player_display_names(draft, validation)
 	if not validation.is_valid():
 		return _build_result(false, null, validation)
 	return _build_result(true, _create_package(
 			rosters, first_player, selected_objective_key,
-			scenario_id, expected_point_format), validation)
+			scenario_id, expected_point_format, draft), validation)
 
 
 ## Returns the setup package player index for a transport peer role.
@@ -200,7 +209,23 @@ func _validate_distinct_factions(rosters: Array[FleetRoster],
 	if player_zero_faction != "" and player_zero_faction != player_one_faction:
 		return
 	validation.add_error(RULE_FLEET_FACTION,
-		"Setup requires fleets from different factions.", ["players/0", "players/1"], [])
+		VALIDATION_MESSAGE_FACTIONS_DIFFERENT, ["players/0", "players/1"], [])
+
+
+func _validate_player_display_names(draft: FleetSetupPackage,
+		validation: SetupValidationResult) -> void:
+	if draft == null:
+		return
+	var names: Array[String] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		names.append(_draft_display_name(draft, player_index))
+	if names[0].is_empty() or names[1].is_empty():
+		validation.add_error(RULE_PLAYER_DISPLAY_NAME,
+				VALIDATION_MESSAGE_NAMES_BLANK, ["players/0", "players/1"], [])
+		return
+	if names[0] == names[1]:
+		validation.add_error(RULE_PLAYER_DISPLAY_NAME,
+				VALIDATION_MESSAGE_NAMES_DIFFERENT, ["players/0", "players/1"], [])
 
 
 func _validate_point_format(rosters: Array[FleetRoster],
@@ -251,7 +276,8 @@ func _validate_objective_choice(rosters: Array[FleetRoster], first_player: int,
 
 func _create_package(rosters: Array[FleetRoster], first_player: int,
 		selected_objective_key: String, scenario_id: String,
-		package_point_format: Dictionary = {}) -> FleetSetupPackage:
+		package_point_format: Dictionary = {},
+		draft: FleetSetupPackage = null) -> FleetSetupPackage:
 	var objective_data: ObjectiveData = AssetLoader.load_objective_data(selected_objective_key)
 	var owner_player: int = _other_player(first_player)
 	var package: FleetSetupPackage = FleetSetupPackage.new()
@@ -259,7 +285,10 @@ func _create_package(rosters: Array[FleetRoster], first_player: int,
 	package.first_player = first_player
 	package.point_format = _resolved_point_format(rosters, package_point_format)
 	package.map = rosters[first_player].map.duplicate(true)
-	package.players = [_player_entry(0, rosters[0]), _player_entry(1, rosters[1])]
+	package.players = [
+		_player_entry(0, rosters[0], _draft_display_name(draft, 0)),
+		_player_entry(1, rosters[1], _draft_display_name(draft, 1)),
+	]
 	package.selected_objective = _selected_objective_payload(
 			objective_data, owner_player, first_player)
 	package.setup_state = _objective_setup_state(objective_data)
@@ -275,12 +304,25 @@ func _resolved_point_format(rosters: Array[FleetRoster],
 	return rosters[0].point_format.duplicate(true)
 
 
-func _player_entry(player_index: int, roster: FleetRoster) -> Dictionary:
-	return {
+func _player_entry(player_index: int, roster: FleetRoster,
+		display_name: String = "") -> Dictionary:
+	var entry: Dictionary = {
 		"player_index": player_index,
+		"display_name": display_name,
 		"faction": roster.faction,
 		"roster": roster.serialize(),
 	}
+	return entry
+
+
+func _draft_display_name(draft: FleetSetupPackage, player_index: int) -> String:
+	if draft == null:
+		return ""
+	for player: Dictionary in draft.players:
+		if int(player.get("player_index", -1)) != player_index:
+			continue
+		return str(player.get("display_name", "")).strip_edges()
+	return ""
 
 
 func _selected_objective_payload(objective_data: ObjectiveData,

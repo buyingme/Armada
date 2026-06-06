@@ -49,6 +49,22 @@ static func build_option_row(parent: VBoxContainer, label_text: String) -> Optio
 	return option
 
 
+## Adds a labelled text-input row to [param parent].
+static func build_text_row(parent: VBoxContainer, label_text: String) -> LineEdit:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var label: Label = Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(120, 28)
+	row.add_child(label)
+	var input: LineEdit = LineEdit.new()
+	input.custom_minimum_size = Vector2(360, 32)
+	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(input)
+	parent.add_child(row)
+	return input
+
+
 ## Creates a standard setup-flow action button.
 static func build_button(text: String) -> Button:
 	var button: Button = Button.new()
@@ -80,11 +96,23 @@ static func objective_label(category: String, objective_key: String) -> String:
 static func package_summary(package: FleetSetupPackage) -> String:
 	var map_label: String = str(package.map.get("label", package.map.get("filename", "")))
 	var objective_name: String = str(package.selected_objective.get("objective_name", ""))
-	return "Map: %s | First Player: Player %d | Objective: %s" % [
+	return "Map: %s | First Player: %s | Objective: %s" % [
 		map_label,
-		package.first_player + 1,
+		player_display_name(package.players, package.first_player),
 		objective_name,
 	]
+
+
+## Returns the display name for [param player_index] from setup package players.
+static func player_display_name(players: Array[Dictionary], player_index: int) -> String:
+	for player: Dictionary in players:
+		if int(player.get("player_index", -1)) != player_index:
+			continue
+		var display_name: String = str(player.get("display_name", "")).strip_edges()
+		if not display_name.is_empty():
+			return display_name
+		return "Fleet %d" % (player_index + 1)
+	return "Fleet %d" % (player_index + 1)
 
 
 ## Returns the selected option metadata as a string.

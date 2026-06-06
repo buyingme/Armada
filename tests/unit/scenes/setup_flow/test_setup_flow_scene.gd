@@ -89,6 +89,7 @@ func test_ready_core_set_match_type_filters_fleet_options_expected() -> void:
 
 
 func test_ready_with_two_valid_fleets_builds_package_expected() -> void:
+	_set_valid_player_names()
 	_confirm_initiative()
 	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
@@ -108,6 +109,7 @@ func test_ready_lets_lower_fleet_points_player_choose_first_player_expected() ->
 		"First-player choice should be selectable before initiative confirmation")
 	assert_eq(_scene._initiative_chooser, 1,
 		"Lower-point fleet should receive the first-player choice")
+	_set_valid_player_names()
 	_confirm_initiative()
 	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
@@ -122,6 +124,7 @@ func test_ready_lets_lower_fleet_points_player_choose_first_player_expected() ->
 
 
 func test_first_player_selection_rebuilds_objective_owner_expected() -> void:
+	_set_valid_player_names()
 	_scene._first_player_option.select(0)
 	_scene._on_first_player_selected(0)
 	_confirm_initiative()
@@ -138,6 +141,7 @@ func test_first_player_selection_rebuilds_objective_owner_expected() -> void:
 
 
 func test_objective_choice_requires_explicit_confirmation_expected() -> void:
+	_set_valid_player_names()
 	assert_null(_scene.current_package(),
 		"Setup flow should not build a package until an objective is confirmed")
 	assert_false(_scene._confirm_button.disabled,
@@ -155,7 +159,19 @@ func test_objective_choice_requires_explicit_confirmation_expected() -> void:
 		"Objective chooser should render the second player's three objective cards")
 
 
+func test_blank_hot_seat_name_disables_initiative_confirmation_expected() -> void:
+	_scene._player_zero_name_input.text = "Darth"
+	_scene._on_player_name_changed("Darth", 0)
+
+	assert_true(_scene._confirm_button.disabled,
+		"Hot-seat setup should require both display names before initiative confirmation")
+	assert_true(_validation_messages().has(
+			FleetSetupPackageBuilder.VALIDATION_MESSAGE_NAMES_BLANK),
+		"Blank display names should use the accepted fleet-selection validation message")
+
+
 func test_invalid_fleet_selection_disables_confirmation_expected() -> void:
+	_set_valid_player_names()
 	_manager.save_roster(_invalid_rebel_roster())
 	_scene._refresh_fleets()
 	_select_fleet(_scene._player_zero_option, "invalid-rebel-fleet")
@@ -172,6 +188,7 @@ func test_invalid_fleet_selection_disables_confirmation_expected() -> void:
 
 
 func test_confirm_stores_next_setup_package_expected() -> void:
+	_set_valid_player_names()
 	_confirm_initiative()
 	_confirm_objective("obj_ass_opening_salvo")
 	var package: FleetSetupPackage = _scene.current_package()
@@ -285,6 +302,20 @@ func _select_fleet(option: OptionButton, fleet_id: String) -> void:
 
 func _objective_keys() -> Array[String]:
 	return _scene._objective_panel.available_objective_keys()
+
+
+func _validation_messages() -> Array[String]:
+	var messages: Array[String] = []
+	for index: int in range(_scene._validation_list.item_count):
+		messages.append(_scene._validation_list.get_item_text(index))
+	return messages
+
+
+func _set_valid_player_names() -> void:
+	_scene._player_zero_name_input.text = "Darth"
+	_scene._on_player_name_changed("Darth", 0)
+	_scene._player_one_name_input.text = "Leia"
+	_scene._on_player_name_changed("Leia", 1)
 
 
 func _confirm_objective(objective_key: String) -> void:

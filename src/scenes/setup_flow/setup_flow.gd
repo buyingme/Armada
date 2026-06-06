@@ -41,6 +41,8 @@ var _initiative_confirmed: bool = false
 var _initiative_random: bool = false
 var _network_transitioned: bool = false
 var _roster_rows: VBoxContainer
+var _player_zero_name_input: LineEdit
+var _player_one_name_input: LineEdit
 var _player_zero_option: OptionButton
 var _player_one_option: OptionButton
 var _first_player_option: OptionButton
@@ -132,8 +134,15 @@ func _build_content() -> VBoxContainer:
 func _build_roster_rows() -> VBoxContainer:
 	var rows: VBoxContainer = VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 8)
-	_player_zero_option = UiFactory.build_option_row(rows, "Player 1 Fleet")
-	_player_one_option = UiFactory.build_option_row(rows, "Player 2 Fleet")
+	_player_zero_name_input = UiFactory.build_text_row(rows, "Display Name")
+	_player_one_name_input = UiFactory.build_text_row(rows, "Opponent Name")
+	_player_zero_name_input.placeholder_text = "Player name"
+	_player_one_name_input.placeholder_text = "Player name"
+	_player_zero_name_input.text = PlayerProfile.get_display_name()
+	_player_zero_name_input.text_changed.connect(_on_player_name_changed.bind(PLAYER_ZERO))
+	_player_one_name_input.text_changed.connect(_on_player_name_changed.bind(PLAYER_ONE))
+	_player_zero_option = UiFactory.build_option_row(rows, _fleet_row_label(PLAYER_ZERO))
+	_player_one_option = UiFactory.build_option_row(rows, _fleet_row_label(PLAYER_ONE))
 	_player_zero_option.item_selected.connect(_on_fleet_selected)
 	_player_one_option.item_selected.connect(_on_fleet_selected)
 	return rows
@@ -143,9 +152,9 @@ func _build_choice_rows() -> VBoxContainer:
 	var rows: VBoxContainer = VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 8)
 	_first_player_option = UiFactory.build_option_row(rows, "First Player")
-	_first_player_option.add_item("Player 1")
+	_first_player_option.add_item(_player_display_name(PLAYER_ZERO))
 	_first_player_option.set_item_metadata(0, PLAYER_ZERO)
-	_first_player_option.add_item("Player 2")
+	_first_player_option.add_item(_player_display_name(PLAYER_ONE))
 	_first_player_option.set_item_metadata(1, PLAYER_ONE)
 	_first_player_option.disabled = true
 	_first_player_option.item_selected.connect(_on_first_player_selected)
@@ -302,11 +311,12 @@ func _network_rosters(draft: FleetSetupPackage) -> Array[FleetRoster]:
 
 func _network_player_name(player_index: int) -> String:
 	if LobbyManager.current_lobby == null:
-		return "Player %d" % (player_index + 1)
+		return UiFactory.player_display_name(_package_draft.players, player_index)
 	for player: Dictionary in LobbyManager.current_lobby.players:
 		if int(player.get("player_index", -1)) == player_index:
-			return str(player.get("display_name", "Player %d" % (player_index + 1)))
-	return "Player %d" % (player_index + 1)
+			return str(player.get("display_name", UiFactory.player_display_name(
+					_package_draft.players, player_index)))
+	return UiFactory.player_display_name(_package_draft.players, player_index)
 
 
 func _transition_network_setup_to_board(draft: FleetSetupPackage) -> void:
@@ -355,6 +365,7 @@ func _refresh_fleets() -> void:
 	_fleet_options = _matching_fleet_options()
 	_populate_fleet_option(_player_zero_option, selected_ids[0], 0)
 	_populate_fleet_option(_player_one_option, selected_ids[1], mini(1, _fleet_options.size() - 1))
+	_refresh_player_labels()
 	_sync_package_draft_state()
 	_resolve_first_player()
 	_refresh_objectives()
@@ -505,9 +516,15 @@ func _show_initiative_stage(rosters: Array[FleetRoster]) -> void:
 	_validation_list.clear()
 	_objective_panel.visible = false
 	_confirm_button.text = "Confirm Initiative"
-	_confirm_button.disabled = rosters.size() != Constants.PLAYER_COUNT
+	for message: String in _fleet_selection_validation_messages(rosters):
+		_validation_list.add_item(message)
+	_confirm_button.disabled = not _fleet_selection_validation_messages(rosters).is_empty()
 	_summary_label.text = _initiative_summary_text(rosters)
 	_hash_label.text = ""
+	if _confirm_button.disabled:
+		_status_label.text = "Resolve fleet selection before initiative."
+		_status_label.add_theme_color_override("font_color", UIStyleHelper.ERROR_RED)
+		return
 	_status_label.text = "Confirm initiative before choosing objectives."
 	_status_label.add_theme_color_override("font_color", UIStyleHelper.BODY_TEXT)
 	_sync_package_draft_state()
@@ -518,10 +535,11 @@ func _initiative_summary_text(rosters: Array[FleetRoster]) -> String:
 		return "Select two fleets before initiative."
 	var points: Array[int] = [_fleet_points(rosters[0]), _fleet_points(rosters[1])]
 	var chooser_text: String = "random selection" if _initiative_random \
-			else "Player %d chooses" % (_initiative_chooser + 1)
-	return "Player 1: %s (%d)\nPlayer 2: %s (%d)\nFirst Player: Player %d by %s" % [
-			rosters[0].name, points[0], rosters[1].name, points[1],
-			_resolved_first_player + 1, chooser_text]
+			else "%s chooses" % _player_display_name(_initiative_chooser)
+	return "%s: %s (%d)\n%s: %s (%d)\nFirst Player: %s by %s" % [
+			_player_display_name(PLAYER_ZERO), rosters[0].name, points[0],
+			_player_display_name(PLAYER_ONE), rosters[1].name, points[1],
+			_player_display_name(_resolved_first_player), chooser_text]
 
 
 func _fleet_points(roster: FleetRoster) -> int:
@@ -603,6 +621,14 @@ func _on_fleet_selected(_index: int) -> void:
 	_refresh_objectives()
 
 
+func _on_player_name_changed(_new_text: String, _player_index: int) -> void:
+	_confirmed_objective_key = ""
+	_initiative_confirmed = false
+	_refresh_player_labels()
+	_sync_package_draft_state()
+	_resolve_first_player()
+	_refresh_objectives()
+
 
 func _on_objective_confirmed(objective_key: String) -> void:
 	if _is_network_setup:
@@ -648,19 +674,88 @@ func _sync_package_draft_state() -> void:
 func _draft_player_entries(fleet_ids: Array[String]) -> Array[Dictionary]:
 	var players: Array[Dictionary] = []
 	for player_index: int in range(fleet_ids.size()):
+		var entry: Dictionary = {
+			"player_index": player_index,
+			"display_name": _player_display_name(player_index),
+		}
 		var fleet_id: String = fleet_ids[player_index]
 		if fleet_id.is_empty():
+			players.append(entry)
 			continue
 		var result: Dictionary = _library_manager.load_roster(fleet_id)
 		if not bool(result.get("ok", false)):
+			players.append(entry)
 			continue
 		var roster: FleetRoster = result.get("roster") as FleetRoster
-		players.append({
-			"player_index": player_index,
-			"faction": roster.faction,
-			"roster": roster.serialize(),
-		})
+		entry["faction"] = roster.faction
+		entry["roster"] = roster.serialize()
+		players.append(entry)
 	return players
+
+
+func _player_display_name(player_index: int) -> String:
+	var input: LineEdit = _player_zero_name_input if player_index == PLAYER_ZERO else _player_one_name_input
+	if input == null:
+		return ""
+	return LobbyState.sanitize_name(input.text)
+
+
+func _refresh_player_labels() -> void:
+	if _player_zero_option != null:
+		_player_zero_option.get_parent().get_child(0).text = _fleet_row_label(PLAYER_ZERO)
+	if _player_one_option != null:
+		_player_one_option.get_parent().get_child(0).text = _fleet_row_label(PLAYER_ONE)
+	_refresh_first_player_options()
+
+
+func _refresh_first_player_options() -> void:
+	if _first_player_option == null or _first_player_option.item_count < Constants.PLAYER_COUNT:
+		return
+	var selected: int = _first_player_option.selected
+	_first_player_option.set_item_text(PLAYER_ZERO, _player_display_name_or_fallback(PLAYER_ZERO))
+	_first_player_option.set_item_text(PLAYER_ONE, _player_display_name_or_fallback(PLAYER_ONE))
+	if selected >= PLAYER_ZERO and selected <= PLAYER_ONE:
+		_first_player_option.select(selected)
+
+
+func _fleet_row_label(player_index: int) -> String:
+	return "%s Fleet" % _player_display_name_or_fallback(player_index)
+
+
+func _player_display_name_or_fallback(player_index: int) -> String:
+	var display_name: String = _player_display_name(player_index)
+	if not display_name.is_empty():
+		return display_name
+	return "Fleet %d" % (player_index + 1)
+
+
+func _fleet_selection_validation_messages(rosters: Array[FleetRoster]) -> Array[String]:
+	var messages: Array[String] = _player_name_validation_messages()
+	if rosters.size() != Constants.PLAYER_COUNT:
+		messages.append("Both players must choose a fleet.")
+		return messages
+	var validator: FleetValidator = FleetValidator.new()
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var validation: FleetValidationResult = validator.validate(rosters[player_index])
+		if not validation.is_valid():
+			messages.append("Player %d fleet is invalid." % (player_index + 1))
+	if str(rosters[0].faction) == str(rosters[1].faction):
+		messages.append(FleetSetupPackageBuilder.VALIDATION_MESSAGE_FACTIONS_DIFFERENT)
+	if not FleetBuilderOptions.point_formats_match(rosters[0].point_format, rosters[1].point_format):
+		messages.append("Both fleets must match the selected point format.")
+	return messages
+
+
+func _player_name_validation_messages() -> Array[String]:
+	var names: Array[String] = [
+		_player_display_name(PLAYER_ZERO),
+		_player_display_name(PLAYER_ONE),
+	]
+	if names[0].is_empty() or names[1].is_empty():
+		return [FleetSetupPackageBuilder.VALIDATION_MESSAGE_NAMES_BLANK]
+	if names[0] == names[1]:
+		return [FleetSetupPackageBuilder.VALIDATION_MESSAGE_NAMES_DIFFERENT]
+	return []
 
 
 func _set_draft_validation_status(ok: bool, validation: SetupValidationResult,

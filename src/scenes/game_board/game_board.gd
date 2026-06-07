@@ -1396,7 +1396,12 @@ func _on_setup_turn_prompt_requested(player_index: int, player_label: String) ->
 			GameManager.current_game_state, player_index)
 	_apply_turn_perspective(player_index, player_faction)
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_panel_mgr.handoff_overlay.show_handoff(player_index, "Setup", player_label)
+	var phase_name: String = "Setup"
+	var modal_kind: Constants.ModalKind = GameManager.current_game_state.interaction_flow.get_primary_modal()
+	if modal_kind == Constants.ModalKind.SETUP_SHIP_DEPLOYMENT \
+			or modal_kind == Constants.ModalKind.SETUP_SQUADRON_DEPLOYMENT:
+		phase_name = "Deploy your fleet"
+	_panel_mgr.handoff_overlay.show_handoff(player_index, phase_name, player_label)
 	_panel_mgr.handoff_overlay.update_size(vp_size)
 
 

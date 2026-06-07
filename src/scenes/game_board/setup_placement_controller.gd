@@ -22,6 +22,8 @@ const SETUP_OBSTACLE_MODAL_SCRIPT: GDScript = preload(
 		"res://src/ui/setup/setup_placement_modal.gd")
 const SETUP_OBSTACLE_TOKEN_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/setup_obstacle_token.gd")
+const SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_interaction_flow_resolver.gd")
 const SETUP_OBSTACLE_VALIDATOR_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_obstacle_validator.gd")
 
@@ -34,6 +36,8 @@ var _modal = null
 var _obstacle_tokens: Dictionary = {}
 var _pending_obstacle_key: String = ""
 var _preview_obstacle_token: Node2D = null
+var _selected_deployment_key: String = ""
+var _selected_ship_original_speed: int = -1
 var _selected_token: Node2D = null
 var _selected_origin: Vector2 = Vector2.ZERO
 var _selected_rotation: float = 0.0
@@ -41,7 +45,7 @@ var _preview_is_moving: bool = false
 var _preview_validation_error: String = ""
 var _status_text: String = ""
 var _status_colour: Color = STATUS_TEXT
-var _last_obstacle_controller: int = -2
+var _last_prompt_signature: String = ""
 
 
 ## Injects board dependencies and creates the setup overlay.
@@ -63,10 +67,12 @@ func refresh_from_state() -> void:
 	_sync_overlay(intent)
 	if not _is_setup_intent(intent):
 		_cancel_obstacle_preview(false)
+		_restore_selected_ship_speed()
 		_clear_selection()
-		_last_obstacle_controller = -2
+		_last_prompt_signature = ""
 		return
 	_sync_obstacles_from_state()
+	_sync_deployment_visibility(intent)
 	_sync_preview_state(intent)
 	_emit_setup_turn_prompt_if_needed(intent)
 	_render_modal(intent)
@@ -106,7 +112,7 @@ func try_handle_input(event: InputEvent) -> bool:
 
 ## Starts setup dragging for a ship token.
 func try_handle_ship_click(token: ShipToken) -> bool:
-	if not _can_deploy():
+	if not _can_select_deployment_token(token):
 		return false
 	_cancel_obstacle_preview(false)
 	_select_token(token)
@@ -115,7 +121,7 @@ func try_handle_ship_click(token: ShipToken) -> bool:
 
 ## Starts setup dragging for a squadron token.
 func try_handle_squadron_click(token: SquadronToken) -> bool:
-	if not _can_deploy():
+	if not _can_select_deployment_token(token):
 		return false
 	_cancel_obstacle_preview(false)
 	_select_token(token)
@@ -154,6 +160,8 @@ func _build_ui() -> void:
 	_modal.name = "SetupPlacementModal"
 	_setup_layer.add_child(_modal)
 	_modal.obstacle_selected.connect(_on_obstacle_button_pressed)
+	_modal.deployment_selected.connect(_on_deployment_button_pressed)
+	_modal.deployment_speed_selected.connect(_on_deployment_speed_selected)
 	_modal.cancel_preview_requested.connect(_on_cancel_preview_requested)
 	_modal.confirm_preview_requested.connect(_on_confirm_preview_requested)
 	_modal.start_round_requested.connect(_on_start_round_pressed)
@@ -297,12 +305,40 @@ func _on_obstacle_button_pressed(obstacle_key: String) -> void:
 	_render_modal(_current_setup_intent())
 
 
+func _on_deployment_button_pressed(deployment_key: String) -> void:
+	if not _can_deploy():
+		return
+	_select_deployment_key(deployment_key)
+	_render_modal(_current_setup_intent())
+
+
+func _on_deployment_speed_selected(speed: int) -> void:
+	if not (_selected_token is ShipToken):
+		return
+	var ship: ShipInstance = (_selected_token as ShipToken).get_ship_instance()
+	if ship == null:
+		return
+	ship.current_speed = speed
+	_set_status("Selected setup speed %d." % speed, STATUS_TEXT)
+	_render_modal(_current_setup_intent())
+
+
 func _on_cancel_preview_requested() -> void:
+	if _selected_token != null and _can_deploy():
+		_restore_selected_ship_speed()
+		_revert_selection()
+		_clear_selection()
+		_render_modal(_current_setup_intent())
+		return
 	_cancel_obstacle_preview(true)
 
 
 func _on_confirm_preview_requested() -> void:
-	_try_commit_obstacle_preview()
+	if _preview_obstacle_token != null:
+		_try_commit_obstacle_preview()
+		return
+	if _selected_token != null and _can_deploy():
+		_try_commit_selected_token()
 
 
 func _on_obstacle_token_clicked(token: Node2D) -> void:
@@ -314,15 +350,25 @@ func _on_obstacle_token_clicked(token: Node2D) -> void:
 
 
 func _select_token(token: Node2D) -> void:
+	_restore_selected_ship_speed()
 	_selected_token = token
 	_selected_origin = token.position
 	_selected_rotation = token.rotation
+	_selected_deployment_key = _deployment_key_for_token(token)
+	if token is ShipToken:
+		var ship: ShipInstance = (token as ShipToken).get_ship_instance()
+		_selected_ship_original_speed = ship.current_speed if ship != null else -1
 	_set_status("", STATUS_TEXT)
 
 
 func _try_handle_cancel_key(event: InputEventKey) -> bool:
 	if not event.pressed or event.keycode != KEY_ESCAPE:
 		return false
+	if _selected_token != null and _can_deploy():
+		_restore_selected_ship_speed()
+		_clear_selection()
+		_render_modal(_current_setup_intent())
+		return true
 	return _cancel_obstacle_preview(true)
 
 
@@ -357,6 +403,7 @@ func _try_commit_selected_token() -> bool:
 	var success: bool = _commit_token(_selected_token)
 	if not success:
 		_revert_selection()
+		_restore_selected_ship_speed()
 	_clear_selection()
 	return true
 
@@ -506,6 +553,8 @@ func _revert_selection() -> void:
 
 func _clear_selection() -> void:
 	_selected_token = null
+	_selected_deployment_key = ""
+	_selected_ship_original_speed = -1
 	_selected_origin = Vector2.ZERO
 	_selected_rotation = 0.0
 
@@ -522,7 +571,7 @@ func _on_command_executed(command: GameCommand, _result: Dictionary) -> void:
 		return
 	if command.command_type == "commit_setup_deployment":
 		_sync_runtime_token(command.payload)
-		_render_modal(_current_setup_intent())
+		refresh_from_state()
 
 
 func _sync_runtime_token(payload: Dictionary) -> void:
@@ -538,16 +587,50 @@ func _sync_preview_state(intent: UIProjector.UIIntent) -> void:
 		_cancel_obstacle_preview(false)
 	if not intent.is_interactive and _preview_obstacle_token != null:
 		_cancel_obstacle_preview(false)
+	if not _can_deploy():
+		_restore_selected_ship_speed()
+		_clear_selection()
+
+
+func _sync_deployment_visibility(intent: UIProjector.UIIntent) -> void:
+	for child: Node in _token_container.get_children():
+		_sync_token_visibility(child, intent)
+
+
+func _sync_token_visibility(child: Node,
+		intent: UIProjector.UIIntent) -> void:
+	if child is ShipToken:
+		(child as ShipToken).visible = _deployment_token_visible(child, intent)
+		return
+	if child is SquadronToken:
+		(child as SquadronToken).visible = _deployment_token_visible(child, intent)
+
+
+func _deployment_token_visible(child: Node,
+		intent: UIProjector.UIIntent) -> bool:
+	var deployment_key: String = _deployment_key_for_token(child)
+	if deployment_key.is_empty() or not _is_deployment_modal(intent.modal_kind):
+		return true
+	var committed: Dictionary = StartRoundCommand._deployment_key_map(GameManager.current_game_state)
+	if committed.has(deployment_key):
+		return true
+	if not intent.is_interactive:
+		return false
+	for entry: Dictionary in _deployment_entries():
+		if str(entry.get("key", "")) == deployment_key:
+			return true
+	return false
 
 
 func _emit_setup_turn_prompt_if_needed(intent: UIProjector.UIIntent) -> void:
-	if intent.modal_kind != Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT:
-		_last_obstacle_controller = -2
+	if intent.modal_kind != Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT \
+			and not _is_deployment_modal(intent.modal_kind):
+		_last_prompt_signature = ""
 		return
-	if intent.controller_player < 0 \
-			or intent.controller_player == _last_obstacle_controller:
+	var signature: String = "%d:%d" % [int(intent.modal_kind), intent.controller_player]
+	if intent.controller_player < 0 or signature == _last_prompt_signature:
 		return
-	_last_obstacle_controller = intent.controller_player
+	_last_prompt_signature = signature
 	setup_turn_prompt_requested.emit(
 			intent.controller_player, intent.controller_player_label)
 
@@ -593,14 +676,25 @@ func _render_review_modal(intent: UIProjector.UIIntent) -> void:
 
 func _render_deployment_modal(intent: UIProjector.UIIntent) -> void:
 	var status: Dictionary = _status_snapshot()
-	_modal.render_setup_summary(
-			"Deployment",
+	_modal.render_deployment_step(
+			_deployment_title(intent),
 			_deployment_prompt(intent),
-			"",
+			_deployment_pending_text(intent),
 			str(status.get("text", "")),
 			status.get("color", STATUS_TEXT) as Color,
-			false,
-			true)
+			_deployment_entries(),
+			_selected_token != null,
+			_selected_token != null,
+			not _can_confirm_deployment(),
+			_selected_token is ShipToken,
+			_selected_ship_speed(),
+			_legal_speed_values())
+
+
+func _deployment_title(intent: UIProjector.UIIntent) -> String:
+	if intent.is_interactive:
+		return "Deploy your fleet %s" % intent.controller_player_label
+	return "%s is deploying" % intent.controller_player_label
 
 
 func _obstacle_title(intent: UIProjector.UIIntent) -> String:
@@ -617,8 +711,50 @@ func _obstacle_prompt(intent: UIProjector.UIIntent) -> String:
 
 func _deployment_prompt(intent: UIProjector.UIIntent) -> String:
 	if intent.is_interactive:
-		return "Drag your eligible setup tokens into position. Deployment validation remains command-backed."
+		if not _available_ship_keys(intent).is_empty() \
+				and not _available_squadron_keys(intent).is_empty():
+			return "Select a remaining ship or eligible squadron pick, position it legally, then confirm deployment."
+		if intent.modal_kind == Constants.ModalKind.SETUP_SHIP_DEPLOYMENT:
+			return "Select a remaining ship, drag it into your deployment zone, choose speed, and confirm."
+		return "Select your squadron pick, drag within distance 1-2 of a friendly ship, and confirm."
 	return "Waiting for %s to continue setup deployment." % intent.controller_player_label
+
+
+func _deployment_pending_text(intent: UIProjector.UIIntent) -> String:
+	var pick: Dictionary = intent.payload.get(
+			SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.KEY_DEPLOYMENT_PICK, {}) as Dictionary
+	if _selected_token is ShipToken:
+		return "Selected ship: %s. Drag, rotate, choose speed, then confirm." \
+				% _selected_deployment_label()
+	if _selected_token is SquadronToken:
+		return "Selected squadron: %s. Drag, rotate, then confirm." \
+				% _selected_deployment_label()
+	if not pick.is_empty():
+		return "Current squadron pick: %d/%d committed. Select the next squadron." % [
+			(pick.get("roster_entry_ids", []) as Array).size(),
+			int(pick.get("required_count", 1)),
+		]
+	return "Select a remaining unit from the list to begin deployment."
+
+
+func _deployment_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var intent: UIProjector.UIIntent = _current_setup_intent()
+	for deployment_key: String in _available_ship_keys(intent):
+		entries.append({
+			"key": deployment_key,
+			"label": _deployment_button_text(deployment_key),
+			"disabled": not intent.is_interactive,
+			"selected": deployment_key == _selected_deployment_key,
+		})
+	for deployment_key: String in _available_squadron_keys(intent):
+		entries.append({
+			"key": deployment_key,
+			"label": _deployment_button_text(deployment_key),
+			"disabled": not intent.is_interactive,
+			"selected": deployment_key == _selected_deployment_key,
+		})
+	return entries
 
 
 func _review_prompt(intent: UIProjector.UIIntent) -> String:
@@ -650,6 +786,11 @@ func _status_snapshot() -> Dictionary:
 
 
 func _setup_progress_text() -> String:
+	if _is_deployment_modal(_current_setup_intent().modal_kind):
+		return "Remaining ships: %d  |  Remaining squadrons: %d" % [
+			_remaining_keys(SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.KEY_REMAINING_SHIP_KEYS).size(),
+			_remaining_keys(SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.KEY_REMAINING_SQUADRON_KEYS).size(),
+		]
 	return "Obstacles: %d/%d  |  Missing deployments: %d" % [
 		_state_obstacles().size(),
 		StartRoundCommand.STANDARD_OBSTACLE_COUNT,
@@ -822,6 +963,170 @@ func _payload_matches_instance(payload: Dictionary,
 
 func _is_setup_obstacle_token(value: Variant) -> bool:
 	return value is Node and value.get_script() == SETUP_OBSTACLE_TOKEN_SCRIPT
+
+
+func _select_deployment_key(deployment_key: String) -> void:
+	if not _deployment_key_is_available(deployment_key):
+		return
+	var token: Node2D = _token_for_deployment_key(deployment_key)
+	if token == null:
+		return
+	_select_token(token)
+
+
+func _token_for_deployment_key(deployment_key: String) -> Node2D:
+	for child: Node in _token_container.get_children():
+		if _deployment_key_for_token(child) == deployment_key:
+			return child as Node2D
+	return null
+
+
+func _deployment_key_for_token(token: Node) -> String:
+	if token is ShipToken:
+		var ship: ShipInstance = (token as ShipToken).get_ship_instance()
+		if ship != null:
+			return StartRoundCommand._deployment_key(ship.owner_player, COMPONENT_SHIP, ship.roster_entry_id)
+	if token is SquadronToken:
+		var squadron: SquadronInstance = (token as SquadronToken).get_squadron_instance()
+		if squadron != null:
+			return StartRoundCommand._deployment_key(squadron.owner_player, COMPONENT_SQUADRON, squadron.roster_entry_id)
+	return ""
+
+
+func _available_ship_keys(intent: UIProjector.UIIntent) -> Array[String]:
+	return _string_payload_keys(intent,
+			SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.KEY_AVAILABLE_SHIP_KEYS)
+
+
+func _available_squadron_keys(intent: UIProjector.UIIntent) -> Array[String]:
+	return _string_payload_keys(intent,
+			SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.KEY_AVAILABLE_SQUADRON_KEYS)
+
+
+func _remaining_keys(key: String) -> Array[String]:
+	var result: Array[String] = []
+	var raw_values: Variant = _current_setup_intent().payload.get(key, [])
+	if not raw_values is Array:
+		return result
+	for raw_value: Variant in raw_values as Array:
+		result.append(str(raw_value))
+	return result
+
+
+func _string_payload_keys(intent: UIProjector.UIIntent,
+		key: String) -> Array[String]:
+	var result: Array[String] = []
+	var raw_values: Variant = intent.payload.get(key, [])
+	if not raw_values is Array:
+		return result
+	for raw_value: Variant in raw_values as Array:
+		result.append(str(raw_value))
+	return result
+
+
+func _remaining_keys_for_player(key: String,
+		owner_player: int) -> Array[String]:
+	var result: Array[String] = []
+	for deployment_key: String in _remaining_keys(key):
+		if int(deployment_key.split(":", false, 1)[0]) == owner_player:
+			result.append(deployment_key)
+	return result
+
+
+func _deployment_button_text(deployment_key: String) -> String:
+	var parts: PackedStringArray = deployment_key.split(":")
+	if parts.size() != 3:
+		return deployment_key
+	if parts[1] == COMPONENT_SHIP:
+		var ship: ShipInstance = _find_ship_instance(int(parts[0]), parts[2])
+		if ship != null and ship.ship_data != null:
+			return ship.ship_data.ship_name
+		return parts[2]
+	var squadron: SquadronInstance = _find_squadron_instance(int(parts[0]), parts[2])
+	if squadron != null and squadron.squadron_data != null:
+		return squadron.squadron_data.squadron_name
+	return parts[2]
+
+
+func _find_ship_instance(owner_player: int, roster_entry_id: String) -> ShipInstance:
+	var player_state: PlayerState = GameManager.current_game_state.get_player_state(owner_player)
+	if player_state == null:
+		return null
+	for raw_ship: Variant in player_state.ships:
+		if raw_ship is ShipInstance and (raw_ship as ShipInstance).roster_entry_id == roster_entry_id:
+			return raw_ship as ShipInstance
+	return null
+
+
+func _find_squadron_instance(owner_player: int,
+		roster_entry_id: String) -> SquadronInstance:
+	var player_state: PlayerState = GameManager.current_game_state.get_player_state(owner_player)
+	if player_state == null:
+		return null
+	for raw_squadron: Variant in player_state.squadrons:
+		if raw_squadron is SquadronInstance \
+				and (raw_squadron as SquadronInstance).roster_entry_id == roster_entry_id:
+			return raw_squadron as SquadronInstance
+	return null
+
+
+func _selected_deployment_label() -> String:
+	return _deployment_button_text(_selected_deployment_key)
+
+
+func _selected_ship_speed() -> int:
+	if not (_selected_token is ShipToken):
+		return -1
+	var ship: ShipInstance = (_selected_token as ShipToken).get_ship_instance()
+	return ship.current_speed if ship != null else -1
+
+
+func _legal_speed_values() -> Array[int]:
+	var values: Array[int] = []
+	if not (_selected_token is ShipToken):
+		return values
+	var ship: ShipInstance = (_selected_token as ShipToken).get_ship_instance()
+	if ship == null or ship.ship_data == null:
+		return values
+	for speed: int in range(FleetRosterSetupHelper.DEFAULT_DEPLOYMENT_SPEED, ship.ship_data.max_speed + 1):
+		values.append(speed)
+	return values
+
+
+func _can_confirm_deployment() -> bool:
+	if _selected_token == null:
+		return false
+	if not _deployment_key_is_available(_selected_deployment_key):
+		return false
+	if _selected_token is ShipToken and _selected_ship_speed() < FleetRosterSetupHelper.DEFAULT_DEPLOYMENT_SPEED:
+		return false
+	return true
+
+
+func _restore_selected_ship_speed() -> void:
+	if not (_selected_token is ShipToken) or _selected_ship_original_speed < 0:
+		return
+	var ship: ShipInstance = (_selected_token as ShipToken).get_ship_instance()
+	if ship != null:
+		ship.current_speed = _selected_ship_original_speed
+
+
+func _is_deployment_modal(modal_kind: Constants.ModalKind) -> bool:
+	return modal_kind == Constants.ModalKind.SETUP_SHIP_DEPLOYMENT \
+			or modal_kind == Constants.ModalKind.SETUP_SQUADRON_DEPLOYMENT
+
+
+func _can_select_deployment_token(token: Node) -> bool:
+	if not _can_deploy():
+		return false
+	return _deployment_key_is_available(_deployment_key_for_token(token))
+
+
+func _deployment_key_is_available(deployment_key: String) -> bool:
+	for entry: Dictionary in _deployment_entries():
+		if str(entry.get("key", "")) == deployment_key:
+			return true
+	return false
 
 
 func _on_start_round_pressed() -> void:

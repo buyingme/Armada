@@ -447,6 +447,56 @@ func test_commit_setup_deployment_validate_missing_target_rejected() -> void:
 			"Deployment placement should reject unknown live targets.")
 
 
+func test_commit_setup_deployment_validate_non_ship_before_ship_phase_rejected() -> void:
+	_mark_setup_package_state(false)
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = 1
+	ship.roster_entry_id = "ship-1"
+	ship.data_key = "victory_ii_class_star_destroyer"
+	ship.ship_data = AssetLoader.load_ship_data(ship.data_key)
+	var squadron: SquadronInstance = SquadronInstance.new()
+	squadron.owner_player = 1
+	squadron.roster_entry_id = "sq-1"
+	squadron.data_key = "tie_fighter_squadron"
+	_state.get_player_state(1).ships.append(ship)
+	_state.get_player_state(1).squadrons.append(squadron)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _six_obstacles()
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 1, {
+		"owner_player": 1,
+		"component_type": "squadron",
+		"roster_entry_id": "sq-1",
+		"pos_x": 0.5,
+		"pos_y": 0.2,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Deployment should reject squadron placement until all ships are deployed.")
+
+
+func test_commit_setup_deployment_validate_ship_speed_required_expected() -> void:
+	_mark_setup_package_state(false)
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = 1
+	ship.roster_entry_id = "ship-1"
+	ship.data_key = "victory_ii_class_star_destroyer"
+	ship.ship_data = AssetLoader.load_ship_data(ship.data_key)
+	_state.get_player_state(1).ships.append(ship)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _six_obstacles()
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 1, {
+		"owner_player": 1,
+		"component_type": "ship",
+		"roster_entry_id": "ship-1",
+		"pos_x": 0.48,
+		"pos_y": 0.12,
+		"rotation_deg": 180.0,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Ship deployment should require an explicit setup speed choice.")
+
+
 func test_commit_setup_deployment_execute_updates_ship_expected() -> void:
 	_mark_setup_ready_with_ship()
 	var ship: ShipInstance = _state.get_player_state(0).ships[0] as ShipInstance
@@ -522,6 +572,45 @@ func test_commit_setup_deployment_execute_ship_then_squadron_flow_expected() -> 
 	assert_eq(_state.interaction_flow.step_id,
 			Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT,
 			"After ships are deployed, setup flow should advance to squadron deployment.")
+
+
+func test_commit_setup_deployment_execute_first_squadron_keeps_same_pick_expected() -> void:
+	_mark_setup_package_state(false)
+	var first_ship: ShipInstance = _setup_ship(0, "ship-1", "cr90_corvette_a", 0.52, 0.82)
+	var second_ship: ShipInstance = _setup_ship(1, "ship-2", "victory_ii_class_star_destroyer", 0.48, 0.18)
+	var first_squadron: SquadronInstance = _setup_squadron(0, "sq-1", "x_wing_squadron")
+	var second_squadron: SquadronInstance = _setup_squadron(0, "sq-2", "x_wing_squadron")
+	_state.get_player_state(0).ships.append(first_ship)
+	_state.get_player_state(1).ships.append(second_ship)
+	_state.get_player_state(0).squadrons.append(first_squadron)
+	_state.get_player_state(0).squadrons.append(second_squadron)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _six_obstacles()
+	_state.objectives[FleetSetupBootstrapper.KEY_DEPLOYMENTS] = [
+		_deployment(0, "ship", "ship-1", 0.52, 0.82),
+		_deployment(1, "ship", "ship-2", 0.48, 0.18),
+	]
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 0, {
+		"owner_player": 0,
+		"component_type": "squadron",
+		"roster_entry_id": "sq-1",
+		"pos_x": 0.44,
+		"pos_y": 0.7,
+		"rotation_deg": 0.0,
+	})
+	cmd.execute(_state)
+	var setup_state: Dictionary = _state.objectives.get(FleetSetupBootstrapper.KEY_SETUP_STATE, {})
+	var pick: Dictionary = setup_state.get("deployment_pick", {})
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT,
+			"The first squadron in a two-squadron pick should stay in squadron deployment.")
+	assert_eq(_state.interaction_flow.controller_player, 0,
+			"The same player should keep control until the two-squadron pick is complete.")
+	assert_eq(int(pick.get("required_count", 0)), 2,
+			"Serialized setup state should track that the current pick needs two squadrons.")
+	assert_eq((pick.get("roster_entry_ids", []) as Array).size(), 1,
+			"Serialized setup state should record the committed squadron in the current pick.")
 
 
 func _mark_setup_package_state(is_complete: bool) -> void:
@@ -603,15 +692,44 @@ func _six_obstacles() -> Array[Dictionary]:
 
 
 func _deployment(owner_player: int,
-		component_type: String, roster_entry_id: String) -> Dictionary:
+		component_type: String,
+		roster_entry_id: String,
+		pos_x: float = 0.5,
+		pos_y: float = 0.5) -> Dictionary:
 	return {
 		"owner_player": owner_player,
 		"component_type": component_type,
 		"roster_entry_id": roster_entry_id,
-		"pos_x": 0.5,
-		"pos_y": 0.5,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
 		"rotation_deg": 0.0,
 	}
+
+
+func _setup_ship(owner_player: int,
+		roster_entry_id: String,
+		data_key: String,
+		pos_x: float,
+		pos_y: float) -> ShipInstance:
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = owner_player
+	ship.roster_entry_id = roster_entry_id
+	ship.data_key = data_key
+	ship.ship_data = AssetLoader.load_ship_data(data_key)
+	ship.pos_x = pos_x
+	ship.pos_y = pos_y
+	return ship
+
+
+func _setup_squadron(owner_player: int,
+		roster_entry_id: String,
+		data_key: String) -> SquadronInstance:
+	var squadron: SquadronInstance = SquadronInstance.new()
+	squadron.owner_player = owner_player
+	squadron.roster_entry_id = roster_entry_id
+	squadron.data_key = data_key
+	squadron.squadron_data = AssetLoader.load_squadron_data(data_key)
+	return squadron
 
 
 func _deserialize_setup_command(command_type: String,

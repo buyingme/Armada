@@ -163,7 +163,7 @@ func test_submit_setup_deployment_placement_updates_live_state_expected() -> voi
 			_package_with_obstacles_and_pending_ship_deployment(), {"rng_seed": 2468})
 
 	var result: Dictionary = GameManager.submit_setup_deployment_placement(
-			0, "ship", "rebel-ship-1", 0.61, 0.79, 180.0, 3)
+			0, "ship", "rebel-ship-1", 0.61, 0.88, 180.0, 3)
 	var ship: ShipInstance = GameManager.current_game_state.get_ship(0, 0)
 	var deployments: Array = GameManager.current_game_state.objectives.get(
 			FleetSetupBootstrapper.KEY_DEPLOYMENTS, []) as Array
@@ -172,6 +172,8 @@ func test_submit_setup_deployment_placement_updates_live_state_expected() -> voi
 			"rebel-ship-1", "Deployment submit should echo the updated roster entry.")
 	assert_almost_eq(ship.pos_x, 0.61, 0.001,
 		"Deployment submit should update the live ship X position.")
+	assert_almost_eq(ship.pos_y, 0.88, 0.001,
+		"Deployment submit should update the live ship Y position within the legal zone.")
 	assert_eq(ship.current_speed, 3,
 		"Deployment submit should update the live ship speed.")
 	assert_eq(deployments.size(), 2,

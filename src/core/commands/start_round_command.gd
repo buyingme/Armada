@@ -23,6 +23,8 @@ const KEY_DEPLOYMENTS: String = "deployments"
 const KEY_OBSTACLES: String = "obstacles"
 const SETUP_STATUS_COMPLETE: String = "COMPLETE"
 const STANDARD_OBSTACLE_COUNT: int = 6
+const SETUP_DEPLOYMENT_VALIDATOR_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_deployment_validator.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -111,6 +113,9 @@ static func _obstacle_error(game_state: GameState) -> String:
 
 
 static func _deployment_error(game_state: GameState) -> String:
+	var completion_error: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.completion_error(game_state)
+	if completion_error != "":
+		return completion_error
 	var placements: Dictionary = _deployment_key_map(game_state)
 	for missing_key: String in _missing_deployment_keys(game_state, placements):
 		return "Setup deployment is missing for %s." % missing_key

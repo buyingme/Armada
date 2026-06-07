@@ -1032,6 +1032,9 @@ test gate is passed.
 
 ### FB14G - Ship And Squadron Deployment Validation And Commands
 
+| Status | Implemented as of 2026-06-07: added `SetupDeploymentValidator` to authoritatively validate setup deployment controller ownership, ship-only-before-squadrons sequencing, ship deployment-zone and speed legality, squadron distance 1-2 from friendly ships, partial two-squadron batch tracking, and setup-completion gating. `commit_setup_deployment`, `SetupInteractionFlowResolver`, and `StartRoundCommand` now sync serialized deployment progress through `setup_state`. Focused deployment-validator/command GUT, full GUT, Phase K lint, and replay/network baseline traces pass. |
+| Audit note | As of 2026-06-07 before implementation, `commit_setup_deployment` only validated target lookup and normalized bounds while `SetupInteractionFlowResolver` alternated by raw deployment count. Accepted deployment sequencing, batch tracking, speed legality, ship-zone legality, squadron range legality, and setup-completion gating were not enforced authoritatively. |
+
 | Field | Plan |
 |---|---|
 | Goal | Enforce deployment legality for ships, squadrons, speed selection, and setup completion. |
@@ -1052,6 +1055,7 @@ test gate is passed.
 | Acceptance | Hot-seat and network players can deploy all units legally, passive network peers see committed placements only, illegal placements are blocked with validator feedback, and the hot-seat deployment banner uses `Deploy your fleet <Player Name>`. |
 | Tests | Active-player roster filtering, speed selector requirements, one-ship workflow, two-squadron workflow, rotation input, normalized deployment command payloads, deployment-banner projection, network passive committed-only visibility, no orphan/leak warnings. |
 | Verification | Focused UI GUT where practical, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual full setup-to-command hot-seat and network pass. |
+| Status | Implemented on 2026-06-07. `SetupPlacementModal` now renders deployment-specific unit lists and ship-speed buttons, `SetupPlacementController` filters deployment visibility to the projected active player's remaining units, and hot-seat handoff copy switches to `Deploy your fleet <Player Name>` during deployment. Focused `test_setup_placement_controller.gd` passed 8/8 before full-suite validation. |
 
 ### FB14I - Setup Review Readiness And Command Phase Start
 

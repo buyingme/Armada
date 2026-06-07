@@ -19,11 +19,17 @@ const KEY_SETUP_STATE: String = "setup_state"
 const KEY_SETUP_STEP: String = "setup_step"
 const KEY_FIRST_PLAYER: String = "first_player"
 const KEY_OBSTACLE_COUNT: String = "obstacle_count"
+const KEY_DEPLOYMENT_CONTROLLER: String = "deployment_controller"
+const KEY_DEPLOYMENT_PICK: String = "deployment_pick"
+const KEY_AVAILABLE_SHIP_KEYS: String = "available_ship_keys"
+const KEY_AVAILABLE_SQUADRON_KEYS: String = "available_squadron_keys"
 const SETUP_STATUS_COMPLETE: String = "COMPLETE"
 const STEP_OBSTACLE_PLACEMENT: String = "obstacle_placement"
 const STEP_SETUP_REVIEW: String = "setup_review"
 const STEP_SHIP_DEPLOYMENT: String = "ship_deployment"
 const STEP_SQUADRON_DEPLOYMENT: String = "squadron_deployment"
+const SETUP_DEPLOYMENT_VALIDATOR_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_deployment_validator.gd")
 
 
 ## Recomputes [member GameState.interaction_flow] from current setup state.
@@ -39,12 +45,22 @@ static func build_for_state(game_state: GameState) -> InteractionFlow:
 		return InteractionFlow.empty()
 	if _obstacle_count(game_state) < StartRoundCommand.STANDARD_OBSTACLE_COUNT:
 		return _obstacle_flow(game_state)
-	var remaining_ships: Array[String] = _remaining_ship_keys(game_state)
-	if not remaining_ships.is_empty():
-		return _ship_flow(game_state, remaining_ships)
-	var remaining_squadrons: Array[String] = _remaining_squadron_keys(game_state)
-	if not remaining_squadrons.is_empty():
-		return _squadron_flow(game_state, remaining_squadrons)
+	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(game_state)
+	var remaining_ships: Array[String] = _tracked_keys(game_state, KEY_REMAINING_SHIP_KEYS)
+	var remaining_squadrons: Array[String] = _tracked_keys(game_state, KEY_REMAINING_SQUADRON_KEYS)
+	if remaining_ships.is_empty() and remaining_squadrons.is_empty():
+		return _review_flow(game_state)
+	var available: Dictionary = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.available_pick_keys(game_state)
+	var available_ship_keys: Array[String] = _string_keys(
+			available.get(KEY_REMAINING_SHIP_KEYS, []))
+	var available_squadron_keys: Array[String] = _string_keys(
+			available.get(KEY_REMAINING_SQUADRON_KEYS, []))
+	if not available_squadron_keys.is_empty() and available_ship_keys.is_empty():
+		return _squadron_flow(game_state, remaining_ships, remaining_squadrons,
+				available_ship_keys, available_squadron_keys)
+	if not available_ship_keys.is_empty() or not available_squadron_keys.is_empty():
+		return _ship_flow(game_state, remaining_ships, remaining_squadrons,
+				available_ship_keys, available_squadron_keys)
 	return _review_flow(game_state)
 
 
@@ -63,11 +79,18 @@ static func _obstacle_flow(game_state: GameState) -> InteractionFlow:
 
 
 static func _ship_flow(game_state: GameState,
-		remaining_keys: Array[String]) -> InteractionFlow:
-	var controller_player: int = _deployment_controller(game_state)
+		remaining_ship_keys: Array[String],
+		remaining_squadron_keys: Array[String],
+		available_ship_keys: Array[String],
+		available_squadron_keys: Array[String]) -> InteractionFlow:
+	var controller_player: int = _tracked_controller(game_state)
 	var payload: Dictionary = _controller_payload(
 			game_state, controller_player, STEP_SHIP_DEPLOYMENT)
-	payload[KEY_REMAINING_SHIP_KEYS] = remaining_keys.duplicate()
+	payload[KEY_REMAINING_SHIP_KEYS] = remaining_ship_keys.duplicate()
+	payload[KEY_REMAINING_SQUADRON_KEYS] = remaining_squadron_keys.duplicate()
+	payload[KEY_AVAILABLE_SHIP_KEYS] = available_ship_keys.duplicate()
+	payload[KEY_AVAILABLE_SQUADRON_KEYS] = available_squadron_keys.duplicate()
+	payload[KEY_DEPLOYMENT_PICK] = _setup_state(game_state).get(KEY_DEPLOYMENT_PICK, {})
 	return InteractionFlow.make(
 			Constants.InteractionFlow.SETUP,
 			Constants.InteractionStep.SETUP_SHIP_DEPLOYMENT,
@@ -77,11 +100,18 @@ static func _ship_flow(game_state: GameState,
 
 
 static func _squadron_flow(game_state: GameState,
-		remaining_keys: Array[String]) -> InteractionFlow:
-	var controller_player: int = _deployment_controller(game_state)
+		remaining_ship_keys: Array[String],
+		remaining_squadron_keys: Array[String],
+		available_ship_keys: Array[String],
+		available_squadron_keys: Array[String]) -> InteractionFlow:
+	var controller_player: int = _tracked_controller(game_state)
 	var payload: Dictionary = _controller_payload(
 			game_state, controller_player, STEP_SQUADRON_DEPLOYMENT)
-	payload[KEY_REMAINING_SQUADRON_KEYS] = remaining_keys.duplicate()
+	payload[KEY_REMAINING_SHIP_KEYS] = remaining_ship_keys.duplicate()
+	payload[KEY_REMAINING_SQUADRON_KEYS] = remaining_squadron_keys.duplicate()
+	payload[KEY_AVAILABLE_SHIP_KEYS] = available_ship_keys.duplicate()
+	payload[KEY_AVAILABLE_SQUADRON_KEYS] = available_squadron_keys.duplicate()
+	payload[KEY_DEPLOYMENT_PICK] = _setup_state(game_state).get(KEY_DEPLOYMENT_PICK, {})
 	return InteractionFlow.make(
 			Constants.InteractionFlow.SETUP,
 			Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT,
@@ -146,13 +176,17 @@ static func _obstacle_controller(game_state: GameState, obstacle_count: int) -> 
 	return first_player
 
 
-static func _deployment_controller(game_state: GameState) -> int:
-	var placement_count: int = _dict_array_from(
-			game_state.objectives.get(KEY_DEPLOYMENTS, [])).size()
-	var first_player: int = game_state.initiative_player
-	if placement_count % 2 == 0:
-		return first_player
-	return _other_player(first_player)
+static func _tracked_controller(game_state: GameState) -> int:
+	return int(_setup_state(game_state).get(KEY_DEPLOYMENT_CONTROLLER, -1))
+
+
+static func _string_keys(raw_values: Variant) -> Array[String]:
+	var values: Array[String] = []
+	if not raw_values is Array:
+		return values
+	for raw_value: Variant in raw_values as Array:
+		values.append(str(raw_value))
+	return values
 
 
 static func _player_display_names(game_state: GameState) -> Array[String]:
@@ -195,6 +229,16 @@ static func _remaining_squadron_keys(game_state: GameState) -> Array[String]:
 								"squadron",
 								(raw_squadron as SquadronInstance).roster_entry_id))
 	return missing
+
+
+static func _tracked_keys(game_state: GameState, key: String) -> Array[String]:
+	var values: Array[String] = []
+	var raw_values: Variant = _setup_state(game_state).get(key, [])
+	if not raw_values is Array:
+		return values
+	for raw_value: Variant in raw_values as Array:
+		values.append(str(raw_value))
+	return values
 
 
 static func _append_if_missing(missing: Array[String],

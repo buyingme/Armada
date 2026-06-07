@@ -19,6 +19,8 @@ const COMPONENT_SHIP: String = "ship"
 const COMPONENT_SQUADRON: String = "squadron"
 const KEY_DEPLOYMENTS: String = "deployments"
 const KEY_SETUP_PACKAGE_HASH: String = "setup_package_hash"
+const SETUP_DEPLOYMENT_VALIDATOR_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_deployment_validator.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -38,14 +40,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	if game_state.current_phase != Constants.GamePhase.SETUP:
-		return "Setup deployment is only legal during SETUP."
-	if not game_state.objectives.has(KEY_SETUP_PACKAGE_HASH):
-		return "No setup-package game is active."
-	var target_error: String = _validate_target(game_state)
-	if target_error != "":
-		return target_error
-	return _validate_normalized_position(payload)
+	var position_error: String = _validate_normalized_position(payload)
+	if position_error != "":
+		return position_error
+	return SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			game_state, player_index, payload)
 
 
 ## Applies the deployment to runtime state and the setup deployment payload.
@@ -56,19 +55,9 @@ func execute(game_state: GameState) -> Dictionary:
 	_apply_runtime_deployment(game_state, deployment)
 	_upsert_deployment(deployments, deployment)
 	game_state.objectives[KEY_DEPLOYMENTS] = deployments
+	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(game_state)
 	SetupInteractionFlowResolver.apply_to_state(game_state)
 	return {"deployment": deployment.duplicate(true)}
-
-
-func _validate_target(game_state: GameState) -> String:
-	var component_type: String = str(payload.get("component_type", "")).strip_edges()
-	if component_type != COMPONENT_SHIP and component_type != COMPONENT_SQUADRON:
-		return "Setup deployment requires component_type ship or squadron."
-	if str(payload.get("roster_entry_id", "")).strip_edges().is_empty():
-		return "Setup deployment requires roster_entry_id."
-	if _find_target(game_state) == null:
-		return "Setup deployment target was not found in the live game state."
-	return ""
 
 
 static func _validate_normalized_position(values: Dictionary) -> String:

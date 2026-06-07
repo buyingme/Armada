@@ -204,6 +204,7 @@ coverage.
 | `SQUADRON_ACTIVATION` | `WAIT_FOR_SQUAD_SELECT`, `ACTION_CHOICE`, `SQUAD_MOVE`, `SQUAD_ATTACK` |
 | `ATTACK` | `ATTACK_DECLARE`, `ATTACK_ROLL`, `ATTACK_MODIFY`, `ATTACK_DEFENSE_TOKENS`, `ATTACK_RESOLVE_DAMAGE`, `ATTACK_COUNTER_CHOICE`, `ATTACK_CRITICAL_CHOICE` |
 | `SQUADRON_DISPLACEMENT` | `DISPLACEMENT_PLACE` |
+| `SETUP` | `SETUP_OBSTACLE_PLACEMENT`, `SETUP_SHIP_DEPLOYMENT`, `SETUP_SQUADRON_DEPLOYMENT`, `SETUP_REVIEW` |
 | `STATUS_CLEANUP` | `STATUS_CLEANUP_STEP` |
 | `GAME_OVER` | `GAME_OVER_STEP` |
 
@@ -223,6 +224,59 @@ coverage.
 
 Notes: Empty flow means no gameplay modal owns input. `GameCommand.validate()`
 remains authoritative until M4 adds command-scope gating.
+
+## 2A. Setup
+
+Rules reference: accepted [docs/setup_flow.md](docs/setup_flow.md) sections 8-10;
+RRG setup obstacle placement and deployment before round one.
+
+### `SETUP / SETUP_OBSTACLE_PLACEMENT`
+
+| Field | Value |
+|---|---|
+| controller_role | `PAYLOAD_CONTROLLER` resolved from serialized setup state; obstacle placement starts with the second player and alternates by committed obstacle count. |
+| controller_player | Concrete setup controller stored on `GameState.interaction_flow.controller_player`. |
+| modal_kind | `SETUP_OBSTACLE_PLACEMENT` |
+| allowed_commands | `commit_setup_obstacle` |
+| transitions | Stays on obstacle placement until six obstacles exist, then advances to ship deployment through setup-flow recomputation. |
+| producer | `SetupInteractionFlowResolver.apply_to_state()` after setup-package bootstrap and each obstacle/deployment command. |
+| rule citation | Accepted setup contract section 8; RRG setup obstacle placement before deployment. |
+
+### `SETUP / SETUP_SHIP_DEPLOYMENT`
+
+| Field | Value |
+|---|---|
+| controller_role | `PAYLOAD_CONTROLLER` resolved from serialized setup state; current implementation infers deployment controller from committed deployment count until FB14G adds strict deployment-order state. |
+| controller_player | Concrete setup controller stored on `GameState.interaction_flow.controller_player`. |
+| modal_kind | `SETUP_SHIP_DEPLOYMENT` |
+| allowed_commands | `commit_setup_deployment` |
+| transitions | Remains on ship deployment while any ships lack committed deployment payloads; otherwise advances to squadron deployment or setup review through setup-flow recomputation. |
+| producer | `SetupInteractionFlowResolver.apply_to_state()` after setup-package bootstrap and each obstacle/deployment command. |
+| rule citation | Accepted setup contract section 9; ship deployment before setup completion. |
+
+### `SETUP / SETUP_SQUADRON_DEPLOYMENT`
+
+| Field | Value |
+|---|---|
+| controller_role | `PAYLOAD_CONTROLLER` resolved from serialized setup state; current implementation infers deployment controller from committed deployment count until FB14G hardens strict pick sequencing. |
+| controller_player | Concrete setup controller stored on `GameState.interaction_flow.controller_player`. |
+| modal_kind | `SETUP_SQUADRON_DEPLOYMENT` |
+| allowed_commands | `commit_setup_deployment` |
+| transitions | Remains on squadron deployment while any squadrons lack committed deployment payloads, then advances to setup review through setup-flow recomputation. |
+| producer | `SetupInteractionFlowResolver.apply_to_state()` after setup-package bootstrap and each obstacle/deployment command. |
+| rule citation | Accepted setup contract section 9; squadron deployment before setup completion. |
+
+### `SETUP / SETUP_REVIEW`
+
+| Field | Value |
+|---|---|
+| controller_role | `EITHER_PLAYER` until FB14I lands the command-backed `ready to start` gate. |
+| controller_player | `-1`; both players may inspect the state, while `start_round` remains phase-scoped to preserve current round-start behavior. |
+| modal_kind | `SETUP_REVIEW` |
+| allowed_commands | `start_round` |
+| transitions | `start_round` advances to `COMMAND_PHASE / SELECT_DIALS`. |
+| producer | `SetupInteractionFlowResolver.apply_to_state()` once all obstacle and deployment payloads are complete. |
+| rule citation | Accepted setup contract section 10; review before Command Phase start. |
 
 ## 3. Command Phase
 

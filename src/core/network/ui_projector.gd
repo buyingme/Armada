@@ -172,6 +172,9 @@ static func project_turn_transition(
 ## Returns the player-facing label for [param player_index] from state.
 ## Falls back to a neutral player index label when the state has no entry.
 static func player_display_label(state: GameState, player_index: int) -> String:
+	var setup_name: String = _setup_player_display_name(state, player_index)
+	if not setup_name.is_empty():
+		return setup_name
 	var player_state: PlayerState = _player_state_or_null(state, player_index)
 	if player_state == null:
 		return _fallback_player_label(player_index)
@@ -280,6 +283,25 @@ static func _fallback_player_label(player_index: int) -> String:
 	if player_index < 0:
 		return "Player"
 	return "Player %d" % player_index
+
+
+static func _setup_player_display_name(state: GameState,
+		player_index: int) -> String:
+	if state == null or state.current_phase != Constants.GamePhase.SETUP:
+		return ""
+	if not state.objectives.has(FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH):
+		return ""
+	var raw_setup_state: Variant = state.objectives.get(
+			FleetSetupBootstrapper.KEY_SETUP_STATE, {})
+	if not raw_setup_state is Dictionary:
+		return ""
+	var raw_names: Variant = (raw_setup_state as Dictionary).get("player_display_names", [])
+	if not raw_names is Array:
+		return ""
+	var names: Array = raw_names as Array
+	if player_index < 0 or player_index >= names.size():
+		return ""
+	return str(names[player_index]).strip_edges()
 
 
 ## Maps FlowSpec modal metadata to the primary modal the presentation layer

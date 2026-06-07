@@ -78,6 +78,13 @@ func test_start_new_game_from_setup_package_installs_state_expected() -> void:
 		"GameManager should keep setup-package games in SETUP")
 	assert_eq(GameManager.active_player, 1,
 		"Active player should start with package initiative")
+	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.SETUP,
+		"Setup-package bootstrap should install the runtime setup interaction flow.")
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT,
+			"Setup-package games should begin at obstacle placement after objective choice.")
+	assert_eq(state.interaction_flow.controller_player, 0,
+			"Obstacle placement should start with the second player.")
 	assert_eq(state.objectives.get(FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH, ""),
 		package.canonical_hash(), "Live state should carry setup package hash")
 	assert_almost_eq(rebel_ship.pos_y, 0.82, 0.001,
@@ -101,6 +108,9 @@ func test_complete_setup_and_start_round_enters_command_expected() -> void:
 		"Completing setup should start round one")
 	assert_eq(GameManager.current_game_state.current_phase, Constants.GamePhase.COMMAND,
 		"Completing setup should enter the Command Phase")
+	assert_eq(GameManager.current_game_state.interaction_flow.flow_type,
+			Constants.InteractionFlow.COMMAND_PHASE,
+			"Round one should publish the Command Phase interaction flow.")
 	assert_eq(setup_state.get("status", ""),
 			StartRoundCommand.SETUP_STATUS_COMPLETE,
 		"Setup state should record completion before round one")
@@ -139,7 +149,8 @@ func test_submit_setup_obstacle_placement_updates_live_state_expected() -> void:
 
 
 func test_submit_setup_deployment_placement_updates_live_state_expected() -> void:
-	GameManager.start_new_game_from_setup_package(_package_with_deployments(), {"rng_seed": 2468})
+	GameManager.start_new_game_from_setup_package(
+			_package_with_obstacles_and_pending_ship_deployment(), {"rng_seed": 2468})
 
 	var result: Dictionary = GameManager.submit_setup_deployment_placement(
 			0, "ship", "rebel-ship-1", 0.61, 0.79, 180.0, 3)
@@ -155,6 +166,15 @@ func test_submit_setup_deployment_placement_updates_live_state_expected() -> voi
 		"Deployment submit should update the live ship speed.")
 	assert_eq(deployments.size(), 2,
 		"Deployment submit should update the existing setup deployment payload.")
+
+
+func _package_with_obstacles_and_pending_ship_deployment() -> FleetSetupPackage:
+	var package: FleetSetupPackage = _package_with_deployments()
+	package.obstacles = _six_obstacles()
+	package.deployments = [
+		_deployment("imperial-ship-1", 1, 0.48, 0.18, 180.0),
+	]
+	return package
 
 
 func _package_with_deployments() -> FleetSetupPackage:

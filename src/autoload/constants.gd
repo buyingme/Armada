@@ -156,6 +156,8 @@ enum InteractionFlow {
 	# Controller is the non-moving player (opposing the maneuvering ship).
 	# Rules Reference: RRG "Overlapping", p.8 — OV-002.
 	SQUADRON_DISPLACEMENT,
+	# Phase FB14D — setup interaction flow after setup-package bootstrap.
+	SETUP,
 }
 
 ## Identifies the specific step within the active [enum InteractionFlow].
@@ -196,6 +198,11 @@ enum InteractionStep {
 	DISPLACEMENT_PLACE,
 	# Phase N — Counter choice appended to avoid shifting legacy enum values.
 	ATTACK_COUNTER_CHOICE,
+	# Phase FB14D — setup-package runtime setup steps.
+	SETUP_OBSTACLE_PLACEMENT,
+	SETUP_SHIP_DEPLOYMENT,
+	SETUP_SQUADRON_DEPLOYMENT,
+	SETUP_REVIEW,
 }
 
 ## Visibility scope of an [InteractionFlow] payload.
@@ -242,6 +249,11 @@ enum ModalKind {
 	DISPLACEMENT,
 	# Phase N — Counter choice appended to avoid shifting legacy modal values.
 	ATTACK_COUNTER_CHOICE,
+	# Phase FB14D — setup-package runtime setup surfaces.
+	SETUP_OBSTACLE_PLACEMENT,
+	SETUP_SHIP_DEPLOYMENT,
+	SETUP_SQUADRON_DEPLOYMENT,
+	SETUP_REVIEW,
 }
 
 ## Mapping from legacy interaction-state flow-type strings to

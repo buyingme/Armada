@@ -350,6 +350,7 @@ func _install_setup_package_state(
 	fixed_commands_applied = false
 	_scenario_id = package.scenario_id
 	is_state_preloaded = true
+	SetupInteractionFlowResolver.apply_to_state(current_game_state)
 	_enable_network_file_logging_if_needed()
 	EventBus.game_started.emit()
 	SaveGameManager.mark_clean()
@@ -409,10 +410,21 @@ func _deserialize_setup_command(command_type: String,
 		payload: Dictionary) -> GameCommand:
 	return GameCommand.deserialize({
 		"type": command_type,
-		"player": active_player,
+		"player": _setup_command_player_index(),
 		"sequence": - 1,
 		"payload": payload,
 	})
+
+
+func _setup_command_player_index() -> int:
+	if current_game_state == null or current_game_state.interaction_flow == null:
+		return active_player
+	var flow: InteractionFlow = current_game_state.interaction_flow
+	if flow.flow_type != Constants.InteractionFlow.SETUP:
+		return active_player
+	if flow.controller_player < 0:
+		return active_player
+	return flow.controller_player
 
 
 ## Returns the current value of [member is_state_preloaded] and clears it.

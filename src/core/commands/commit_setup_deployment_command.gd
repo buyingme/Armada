@@ -56,6 +56,7 @@ func execute(game_state: GameState) -> Dictionary:
 	_apply_runtime_deployment(game_state, deployment)
 	_upsert_deployment(deployments, deployment)
 	game_state.objectives[KEY_DEPLOYMENTS] = deployments
+	SetupInteractionFlowResolver.apply_to_state(game_state)
 	return {"deployment": deployment.duplicate(true)}
 
 

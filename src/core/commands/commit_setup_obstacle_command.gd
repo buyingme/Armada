@@ -51,6 +51,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var obstacle: Dictionary = _payload_obstacle()
 	_upsert_obstacle(obstacles, obstacle)
 	game_state.objectives[KEY_OBSTACLES] = obstacles
+	SetupInteractionFlowResolver.apply_to_state(game_state)
 	return {
 		"obstacle": obstacle.duplicate(true),
 		"obstacle_count": obstacles.size(),

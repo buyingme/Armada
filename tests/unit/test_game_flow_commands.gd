@@ -354,6 +354,9 @@ func test_commit_setup_obstacle_execute_upserts_payload_expected() -> void:
 			"Obstacle result should report the current obstacle count.")
 	assert_almost_eq(float((obstacles[0] as Dictionary).get("pos_x", 0.0)), 0.25, 0.001,
 			"Obstacle placement should persist normalized X.")
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT,
+			"Obstacle placement should keep setup flow on obstacle placement until six are placed.")
 
 
 func test_commit_setup_deployment_validate_missing_target_rejected() -> void:
@@ -394,6 +397,57 @@ func test_commit_setup_deployment_execute_updates_ship_expected() -> void:
 			"Deployment result should echo the updated roster entry id.")
 	assert_eq(deployments.size(), 1,
 			"Deployment execute should upsert a single deployment entry for the ship.")
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_REVIEW,
+			"Completing the last deployment should advance setup flow to review.")
+
+
+func test_commit_setup_obstacle_execute_sixth_obstacle_advances_to_ship_deployment_expected() -> void:
+	_mark_setup_package_state(false)
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = 0
+	ship.roster_entry_id = "ship-1"
+	_state.get_player_state(0).ships.append(ship)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _five_obstacles()
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 1, {
+		"data_key": "obstacle_5",
+		"pos_x": 0.65,
+		"pos_y": 0.5,
+	})
+	cmd.execute(_state)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_SHIP_DEPLOYMENT,
+			"The sixth obstacle should advance setup flow to ship deployment.")
+
+
+func test_commit_setup_deployment_execute_ship_then_squadron_flow_expected() -> void:
+	_mark_setup_package_state(false)
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = 0
+	ship.roster_entry_id = "ship-1"
+	var squadron: SquadronInstance = SquadronInstance.new()
+	squadron.owner_player = 0
+	squadron.roster_entry_id = "sq-1"
+	_state.get_player_state(0).ships.append(ship)
+	_state.get_player_state(0).squadrons.append(squadron)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = _six_obstacles()
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_deployment", 0, {
+		"owner_player": 0,
+		"component_type": "ship",
+		"roster_entry_id": "ship-1",
+		"pos_x": 0.5,
+		"pos_y": 0.75,
+		"rotation_deg": 180.0,
+		"speed": 2,
+	})
+	cmd.execute(_state)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT,
+			"After ships are deployed, setup flow should advance to squadron deployment.")
 
 
 func _mark_setup_package_state(is_complete: bool) -> void:
@@ -404,10 +458,14 @@ func _mark_setup_package_state(is_complete: bool) -> void:
 		setup_state["status"] = StartRoundCommand.SETUP_STATUS_COMPLETE
 	_state.objectives = {
 		FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH: "hash",
-		FleetSetupBootstrapper.KEY_SETUP_STATE: setup_state,
+		FleetSetupBootstrapper.KEY_SETUP_STATE: {
+			"player_display_names": ["Alex", "Blake"],
+			"status": setup_state.get("status", ""),
+		},
 		FleetSetupBootstrapper.KEY_OBSTACLES: [],
 		FleetSetupBootstrapper.KEY_DEPLOYMENTS: [],
 	}
+	_refresh_setup_flow()
 
 
 func _mark_setup_ready_with_ship() -> void:
@@ -420,6 +478,23 @@ func _mark_setup_ready_with_ship() -> void:
 	_state.objectives[FleetSetupBootstrapper.KEY_DEPLOYMENTS] = [
 		_deployment(0, "ship", "ship-1"),
 	]
+	_refresh_setup_flow()
+
+
+func _refresh_setup_flow() -> void:
+	SetupInteractionFlowResolver.apply_to_state(_state)
+
+
+func _five_obstacles() -> Array[Dictionary]:
+	var obstacles: Array[Dictionary] = []
+	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT - 1):
+		obstacles.append({
+			"data_key": "obstacle_%d" % index,
+			"pos_x": 0.1 + float(index) * 0.1,
+			"pos_y": 0.5,
+			"rotation_deg": 0.0,
+		})
+	return obstacles
 
 
 func _six_obstacles() -> Array[Dictionary]:

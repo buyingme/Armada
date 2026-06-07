@@ -256,6 +256,40 @@ const _SPEC: Dictionary = {
 			"rule_citation": "RRG End of Game; Constants.MAX_ROUNDS.",
 		},
 	},
+	Constants.InteractionFlow.SETUP: {
+		Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT: {
+			"controller_role": Constants.ControllerRole.PAYLOAD_CONTROLLER,
+			"modals": [Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT],
+			"allowed_commands": ["commit_setup_obstacle"],
+			"transitions": {"commit_setup_obstacle": "*"},
+			"source": SOURCE_COMMAND_PRODUCED,
+			"rule_citation": "RRG Setup, obstacle placement before deployment.",
+		},
+		Constants.InteractionStep.SETUP_SHIP_DEPLOYMENT: {
+			"controller_role": Constants.ControllerRole.PAYLOAD_CONTROLLER,
+			"modals": [Constants.ModalKind.SETUP_SHIP_DEPLOYMENT],
+			"allowed_commands": ["commit_setup_deployment"],
+			"transitions": {"commit_setup_deployment": "*"},
+			"source": SOURCE_COMMAND_PRODUCED,
+			"rule_citation": "RRG Setup, ship deployment before squadrons.",
+		},
+		Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT: {
+			"controller_role": Constants.ControllerRole.PAYLOAD_CONTROLLER,
+			"modals": [Constants.ModalKind.SETUP_SQUADRON_DEPLOYMENT],
+			"allowed_commands": ["commit_setup_deployment"],
+			"transitions": {"commit_setup_deployment": "*"},
+			"source": SOURCE_COMMAND_PRODUCED,
+			"rule_citation": "RRG Setup, squadron deployment before round one.",
+		},
+		Constants.InteractionStep.SETUP_REVIEW: {
+			"controller_role": Constants.ControllerRole.EITHER_PLAYER,
+			"modals": [Constants.ModalKind.SETUP_REVIEW],
+			"allowed_commands": ["start_round"],
+			"transitions": {"start_round": "COMMAND_PHASE/SELECT_DIALS"},
+			"source": SOURCE_COMMAND_PRODUCED,
+			"rule_citation": "Setup review before Command Phase start.",
+		},
+	},
 }
 
 

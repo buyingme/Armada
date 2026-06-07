@@ -15,6 +15,8 @@ class_name StartRoundCommand
 extends GameCommand
 
 
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
 const KEY_SETUP_PACKAGE_HASH: String = "setup_package_hash"
 const KEY_SETUP_STATE: String = "setup_state"
 const KEY_DEPLOYMENTS: String = "deployments"
@@ -59,6 +61,11 @@ func execute(game_state: GameState) -> Dictionary:
 	_mark_setup_complete_if_needed(game_state)
 	game_state.current_round += 1
 	game_state.current_phase = Constants.GamePhase.COMMAND
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.COMMAND_PHASE,
+			Constants.InteractionStep.SELECT_DIALS,
+			game_state,
+			{"controller_player": game_state.initiative_player})
 	return {
 		"new_round": game_state.current_round,
 		"new_phase": int(Constants.GamePhase.COMMAND),
@@ -89,7 +96,6 @@ func _mark_setup_complete_if_needed(game_state: GameState) -> void:
 	setup_state["status"] = SETUP_STATUS_COMPLETE
 	setup_state["completed_by_player"] = player_index
 	game_state.objectives[KEY_SETUP_STATE] = setup_state
-	game_state.interaction_flow = InteractionFlow.new()
 
 
 static func _has_setup_package(game_state: GameState) -> bool:

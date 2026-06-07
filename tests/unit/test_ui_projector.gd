@@ -90,6 +90,30 @@ func test_project_controller_identity_from_state_expected() -> void:
 			"Projected flow identity should carry the controller faction enum.")
 
 
+func test_setup_projection_uses_setup_display_name_expected() -> void:
+	var gs: GameState = _make_identity_state(
+			Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
+	gs.current_phase = Constants.GamePhase.SETUP
+	gs.objectives = {
+		FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH: "hash",
+		FleetSetupBootstrapper.KEY_SETUP_STATE: {
+			"player_display_names": ["Alex", "Blake"],
+		},
+	}
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SETUP,
+			Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT,
+			1,
+			Constants.Visibility.ALL,
+			{"controller_player": 1})
+
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 1)
+
+	assert_eq(intent.controller_player_label, "Blake",
+			"Setup projection should use serialized setup display names.")
+
+
 func test_opponent_viewer_sees_waiting() -> void:
 	var gs: GameState = _make_state_with_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION, 0)
@@ -376,6 +400,25 @@ func test_status_cleanup_and_game_over_map_correctly() -> void:
 			Constants.InteractionStep.GAME_OVER_STEP, -1)
 	assert_eq(UIProjector.project(gs2, 0).modal_kind,
 			Constants.ModalKind.GAME_OVER)
+
+
+func test_setup_modal_steps_map_correctly() -> void:
+	var pairs: Array = [
+			[Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT,
+					Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT],
+			[Constants.InteractionStep.SETUP_SHIP_DEPLOYMENT,
+					Constants.ModalKind.SETUP_SHIP_DEPLOYMENT],
+			[Constants.InteractionStep.SETUP_SQUADRON_DEPLOYMENT,
+					Constants.ModalKind.SETUP_SQUADRON_DEPLOYMENT],
+			[Constants.InteractionStep.SETUP_REVIEW,
+					Constants.ModalKind.SETUP_REVIEW],
+	]
+	for pair in pairs:
+		var gs: GameState = _make_state_with_flow_step(
+				Constants.InteractionFlow.SETUP, pair[0], 0)
+		var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+		assert_eq(intent.modal_kind, pair[1],
+				"Setup step %d should map to the expected setup modal." % pair[0])
 
 
 func test_payload_is_deep_copied_into_intent() -> void:

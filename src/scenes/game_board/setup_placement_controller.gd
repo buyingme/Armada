@@ -58,26 +58,34 @@ func refresh_from_state() -> void:
 
 ## Updates the selected token during setup dragging.
 func process_setup_dragging() -> void:
-	if not _is_active() or _selected_token == null:
+	if not _is_active() or not _is_interactive() or _selected_token == null:
+		return
+	if _is_setup_obstacle_token(_selected_token) and not _can_place_obstacles():
+		return
+	if not _is_setup_obstacle_token(_selected_token) and not _can_deploy():
 		return
 	_move_selected_token(_board.get_global_mouse_position())
 
 
 ## Handles board clicks for pending obstacle placement and token release.
 func try_handle_input(event: InputEvent) -> bool:
-	if not _is_active() or not (event is InputEventMouseButton):
+	if not _is_active() or not _is_interactive() or not (event is InputEventMouseButton):
 		return false
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
 	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
 		return false
 	if mouse_event.pressed:
-		return _try_place_pending_obstacle()
+		if _can_place_obstacles():
+			return _try_place_pending_obstacle()
+		return false
+	if not _can_place_obstacles() and not _can_deploy():
+		return false
 	return _try_commit_selected_token()
 
 
 ## Starts setup dragging for a ship token.
 func try_handle_ship_click(token: ShipToken) -> bool:
-	if not _is_active():
+	if not _can_deploy():
 		return false
 	_select_token(token)
 	return true
@@ -85,7 +93,7 @@ func try_handle_ship_click(token: ShipToken) -> bool:
 
 ## Starts setup dragging for a squadron token.
 func try_handle_squadron_click(token: SquadronToken) -> bool:
-	if not _is_active():
+	if not _can_deploy():
 		return false
 	_select_token(token)
 	return true
@@ -157,12 +165,46 @@ func _sync_panel_visibility() -> void:
 
 
 func _is_active() -> bool:
+	return _current_setup_intent().flow_type == Constants.InteractionFlow.SETUP
+
+
+func _is_interactive() -> bool:
+	return _current_setup_intent().is_interactive
+
+
+func _can_place_obstacles() -> bool:
+	return _current_setup_intent().modal_kind \
+			== Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT and _is_interactive()
+
+
+func _can_deploy() -> bool:
+	var modal_kind: Constants.ModalKind = _current_setup_intent().modal_kind
+	return _is_interactive() and (
+			modal_kind == Constants.ModalKind.SETUP_SHIP_DEPLOYMENT
+			or modal_kind == Constants.ModalKind.SETUP_SQUADRON_DEPLOYMENT)
+
+
+func _can_start_round() -> bool:
+	return _current_setup_intent().modal_kind == Constants.ModalKind.SETUP_REVIEW \
+			and _is_interactive()
+
+
+func _current_setup_intent() -> UIProjector.UIIntent:
 	var state: GameState = GameManager.current_game_state
 	if state == null:
-		return false
-	if GameManager.get_current_phase() != Constants.GamePhase.SETUP:
-		return false
-	return state.objectives.has(FleetSetupBootstrapper.KEY_SETUP_PACKAGE_HASH)
+		return UIProjector.UIIntent.new()
+	return UIProjector.project(state, _viewer_player())
+
+
+func _viewer_player() -> int:
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player >= 0:
+		return local_player
+	var state: GameState = GameManager.current_game_state
+	if state != null and state.interaction_flow != null:
+		if state.interaction_flow.controller_player >= 0:
+			return state.interaction_flow.controller_player
+	return GameManager.active_player
 
 
 func _sync_obstacles_from_state() -> void:
@@ -217,7 +259,8 @@ func _state_obstacles() -> Array[Dictionary]:
 func _update_obstacle_buttons() -> void:
 	var placed: Dictionary = _placed_obstacle_keys()
 	for obstacle_key: String in _obstacle_buttons.keys():
-		(_obstacle_buttons[obstacle_key] as Button).disabled = placed.has(obstacle_key)
+		(_obstacle_buttons[obstacle_key] as Button).disabled = placed.has(obstacle_key) \
+				or not _can_place_obstacles()
 
 
 func _placed_obstacle_keys() -> Dictionary:
@@ -243,7 +286,7 @@ func _update_status() -> void:
 	]
 	_status_label.add_theme_color_override(
 			"font_color", STATUS_OK if is_ready_for_start else STATUS_TEXT)
-	_start_button.disabled = not is_ready_for_start
+	_start_button.disabled = not is_ready_for_start or not _can_start_round()
 
 
 func _pending_label_text(obstacle_count: int) -> String:
@@ -260,7 +303,7 @@ func _on_obstacle_button_pressed(obstacle_key: String) -> void:
 
 
 func _on_obstacle_token_clicked(token: Node2D) -> void:
-	if not _is_active():
+	if not _can_place_obstacles():
 		return
 	_select_token(token)
 
@@ -508,6 +551,8 @@ func _is_setup_obstacle_token(value: Variant) -> bool:
 
 
 func _on_start_round_pressed() -> void:
+	if not _can_start_round():
+		return
 	var result: Dictionary = GameManager.complete_setup_and_start_round()
 	if result.has("new_round"):
 		refresh_from_state()

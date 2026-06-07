@@ -60,9 +60,11 @@ static func _attach_package_runtime(
 static func _attach_setup_payload(
 		state: GameState,
 		package: FleetSetupPackage) -> void:
+	var setup_state: Dictionary = package.setup_state.duplicate(true)
+	setup_state["player_display_names"] = _player_display_names(package.players)
 	state.objectives = {
 		KEY_SELECTED_OBJECTIVE: package.selected_objective.duplicate(true),
-		KEY_SETUP_STATE: package.setup_state.duplicate(true),
+		KEY_SETUP_STATE: setup_state,
 		KEY_OBSTACLES: _copy_dict_array(package.obstacles),
 		KEY_DEPLOYMENTS: _copy_dict_array(package.deployments),
 		KEY_MAP: package.map.duplicate(true),
@@ -100,6 +102,13 @@ static func _copy_dict_array(values: Array[Dictionary]) -> Array[Dictionary]:
 	for value: Dictionary in values:
 		result.append(value.duplicate(true))
 	return result
+
+
+static func _player_display_names(players: Array[Dictionary]) -> Array[String]:
+	var names: Array[String] = []
+	for player: Dictionary in players:
+		names.append(str(player.get("display_name", "")))
+	return names
 
 
 static func _build_result(ok: bool, state: GameState,

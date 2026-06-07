@@ -272,11 +272,21 @@ func start_new_game_from_setup_package(
 	var result: Dictionary = FleetSetupBootstrapper.build_game_state(
 			package, config)
 	if not bool(result.get("ok", false)):
-		_log.error("Setup-package bootstrap rejected.")
+		_log.error("Setup-package bootstrap rejected. %s" % _setup_bootstrap_error_text(result))
 		return result
 	_install_setup_package_state(
 			result.get("state") as GameState, package, config)
 	return result
+
+
+func _setup_bootstrap_error_text(result: Dictionary) -> String:
+	var validation: SetupValidationResult = result.get("validation") as SetupValidationResult
+	if validation == null or validation.errors.is_empty():
+		return "No validation details returned."
+	var messages: Array[String] = []
+	for issue: Dictionary in validation.errors:
+		messages.append(str(issue.get("message", "Setup bootstrap error")))
+	return "Errors: %s" % "; ".join(messages)
 
 
 ## Installs a previously-serialised [param state] as the live game state

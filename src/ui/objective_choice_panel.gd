@@ -125,7 +125,6 @@ func refresh_card_states() -> void:
 func _build_card_button(objective: Dictionary) -> Button:
 	var objective_key: String = str(objective.get("data_key", ""))
 	var button: Button = Button.new()
-	button.flat = true
 	button.custom_minimum_size = CARD_MIN_SIZE
 	button.focus_mode = Control.FOCUS_NONE
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND

@@ -402,6 +402,7 @@ func _update_display() -> void:
 	_code_label.text = "Code: %s" % lobby.code
 	_password_label.text = "🔒 Password-protected" \
 			if lobby.has_password() else ""
+	_is_ready = _local_ready_state(lobby)
 	_update_player_rows(lobby)
 	_update_scenario(lobby)
 	_update_setup_area(lobby)
@@ -514,6 +515,7 @@ func _refresh_setup_fleet_options(lobby: LobbyState) -> void:
 		_setup_local_fleet_option.set_item_metadata(
 				_setup_local_fleet_option.get_item_count() - 1,
 				str(summary.get("fleet_id", "")))
+	_setup_local_fleet_option.disabled = _is_ready
 	_select_setup_fleet(selected_fleet_id)
 
 
@@ -582,10 +584,14 @@ func _setup_state(lobby: LobbyState) -> Dictionary:
 
 
 func _setup_objective_status_text(state: Dictionary, _local_player: int) -> String:
+	var validation: Dictionary = state.get(
+			LobbyManager.SETUP_KEY_VALIDATION_STATUS, {}) as Dictionary
+	var messages: Array = validation.get("messages", []) as Array
 	var phase: String = str(state.get(LobbyManager.SETUP_KEY_PHASE, ""))
 	match phase:
 		LobbyManager.SETUP_PHASE_FLEET_SELECTION:
-			return "Both players must submit a valid fleet."
+			return " | ".join(PackedStringArray(messages)) if not messages.is_empty() \
+					else "Both players must submit a valid fleet."
 		LobbyManager.SETUP_PHASE_FLEETS_READY:
 			return "Fleets are ready. Host may start the setup flow."
 		_:
@@ -645,6 +651,12 @@ func _start_button_tooltip(lobby: LobbyState) -> String:
 	return ""
 
 
+func _local_ready_state(lobby: LobbyState) -> bool:
+	var local_player: Dictionary = _find_player_by_index(
+			lobby, LobbyManager.local_setup_player_index())
+	return bool(local_player.get("ready", false))
+
+
 ## Finds a player entry by player_index.
 func _find_player_by_index(lobby: LobbyState,
 		index: int) -> Dictionary:
@@ -675,6 +687,8 @@ func _on_scenario_selected(index: int) -> void:
 
 
 func _on_setup_local_fleet_selected(index: int) -> void:
+	if _setup_local_fleet_option.disabled or _is_ready:
+		return
 	var metadata: Variant = _setup_local_fleet_option.get_item_metadata(index)
 	if metadata is String and not (metadata as String).is_empty():
 		LobbyManager.submit_local_setup_roster(metadata as String)

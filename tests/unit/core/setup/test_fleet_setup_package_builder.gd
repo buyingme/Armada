@@ -235,6 +235,29 @@ func test_build_from_peer_rosters_hash_matches_player_indexed_package_expected()
 		"Peer role mapping should keep transport identity outside setup JSON")
 
 
+func test_build_from_peer_rosters_for_draft_preserves_display_names_expected() -> void:
+	var draft: FleetSetupPackage = SetupMatchOptions.create_setup_package_draft(
+			SetupMatchOptions.MATCH_STANDARD_400)
+	draft.players = [
+		{"player_index": 0, "display_name": "Luke"},
+		{"player_index": 1, "display_name": "Darth"},
+	]
+
+	var result: Dictionary = _builder.build_from_peer_rosters_for_draft(
+			_create_imperial_roster(), _create_rebel_roster(), 1, 0,
+			"obj_ass_opening_salvo", draft)
+	var package: FleetSetupPackage = result.get("package") as FleetSetupPackage
+
+	assert_true(result.get("ok", false),
+		"Draft-backed peer-roster builds should still produce a setup package.")
+	assert_eq(str(package.players[0].get("display_name", "")), "Luke",
+		"Finalized peer packages should preserve player 0's draft display name.")
+	assert_eq(str(package.players[1].get("display_name", "")), "Darth",
+		"Finalized peer packages should preserve player 1's draft display name.")
+	assert_eq(package.validate_basic().size(), 0,
+		"Finalized peer packages should remain bootstrap-valid after preserving display names.")
+
+
 func test_build_from_rosters_round_trip_preserves_setup_state_expected() -> void:
 	var result: Dictionary = _builder.build_from_rosters(
 		_create_rebel_roster(), _create_imperial_roster(), 1, "obj_ass_most_wanted")

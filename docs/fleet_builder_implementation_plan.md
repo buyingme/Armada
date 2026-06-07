@@ -977,7 +977,19 @@ test gate is passed.
 | Acceptance | Initiative/objective choices are deterministic, serializable, replayable, and network-safe; clients see the active choice and available legal options according to filtered state; invalid objective keys or wrong-controller submissions are rejected by command validation; visible labels never fall back to `Player 1`/`Player 2`. |
 | Tests | Lower-point controller selection, random tie-break chooser, initiative confirm gate, objective choices limited to second-player objectives, wrong-player command rejection, objective acknowledgement gate, serialization/hash stability, network filtered-state projection, name-only labels. |
 | Verification | Targeted setup/flow GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`, manual hot-seat and network choice pass. |
-| Status | Corrected in progress as of 2026-06-06: lobby setup is constrained toward valid fleet selection only, and post-start initiative/objective screens exist. Remaining compliance work is tied-point random chooser selection, segmented first-player control, `confirm choice` wording, player-name-only labels, objective acknowledgement polish, and projection/command hardening if choices are moved fully into runtime setup flow. |
+| Status | Corrected in progress as of 2026-06-06: lobby setup is constrained toward valid fleet selection only; tied-point initiative now selects a random chooser rather than a random first player; and initiative summaries use player display names. Remaining compliance work is segmented initiative controls, `confirm choice` wording, hot-seat dual-confirm initiative flow, faction/confirmation display polish, hot-seat objective acknowledgement parity, objective selection highlight feedback, and projection/command hardening if choices are moved fully into runtime setup flow. |
+
+### FB14C1 - Setup Contract Compliance Follow-Up (Sections 4-7)
+
+| Field | Plan |
+|---|---|
+| Goal | Close the remaining accepted-contract gaps in match-type selection, fleet selection, initiative, and objective choice before obstacle-placement work starts. |
+| Scope | Audit-backed remediation only for `docs/setup_flow.md` sections 4-7. Keep section 4 limited to regression checks because no new blocking mismatch was found there. For section 5, make lobby fleet selection surface exact validation status and enforce Ready-lock on the submitted fleet selector so Ready remains separate from validity but freezes the selected roster until the player unreadies. For section 6, replace the current `OptionButton` first-player picker with a segmented first-player control, rename initiative actions to `confirm choice`, add visible factions and per-player confirmation state, and require two hot-seat confirmations before objective choice appears. For section 7, add hot-seat second-player acknowledgement after the first player locks the objective, surface first-player and second-player identity plus acknowledgement state in the chooser UI, and fix the objective-card pre-lock highlight bug. |
+| Primary files | `src/scenes/lobby/lobby_room.gd`, `src/autoload/lobby_manager.gd`, `src/scenes/setup_flow/setup_flow.gd`, `src/scenes/setup_flow/setup_flow_ui_factory.gd`, `src/ui/objective_choice_panel.gd`, focused setup-flow/lobby tests, and this plan. |
+| Acceptance | Network lobby shows the current fleet-selection validation messages from setup draft state and prevents fleet changes while the local player is Ready. Initiative UI uses a segmented control, `confirm choice` wording, player names plus factions, and explicit per-player confirmation state; hot-seat requires both confirmations before objective choice. Objective choice shows current controller/owner identity and acknowledgement state in both hot-seat and network, requires the second acknowledgement in hot-seat, and visually highlights the currently clicked objective before lock. |
+| Tests | Lobby Ready-lock behavior, lobby validation-status rendering, no-lobby initiative/objective regression, segmented initiative control interaction, hot-seat dual-confirm initiative gate, network confirmation projection, objective owner/acknowledgement rendering, hot-seat second-player acknowledgement gate, and objective highlight-on-click regression coverage. |
+| Verification | Targeted lobby/setup-flow/objective-panel GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all` if the fix moves further into runtime/projected setup flow, plus manual hot-seat and network initiative/objective pass. |
+| Audit note | Section 4 currently matches the accepted contract at code level closely enough to proceed; the remaining actionable mismatches are in sections 5-7. The largest remaining section-5 gap is that `LobbyRoom` still keeps `_setup_local_fleet_option` editable after Ready and collapses setup validation status to generic copy instead of showing accepted messages from `setup_state.validation_status.messages`. The largest remaining section-6 gap is that `SetupFlowScene` still uses an `OptionButton` dropdown and a single local `_initiative_confirmed` flag rather than a segmented `confirm choice` flow with both hot-seat confirmations and visible confirmation state/factions. The largest remaining section-7 gap is that hot-seat objective choice has no second-player acknowledgement step even though `LobbyManager` already models acknowledgement for network flow. The objective highlight bug root cause is local to `ObjectiveChoicePanel`: `_apply_card_visuals()` writes stylebox overrides, but `_build_card_button()` sets `button.flat = true`, which suppresses the card-style rendering, so clicked objectives do not visually highlight before lock. The fix belongs in this slice: remove the flat-button rendering bypass or move the selection visuals onto a non-flat wrapper, then add a regression test that asserts highlight state changes on click and persists correctly through lock/grey-out transitions. |
 
 ### FB14D - Setup Interaction Flow And Authority Projection
 
@@ -1189,11 +1201,11 @@ and rectangular-board foundations. FB14A-FB14C now have partial implementation,
 but the accepted setup contract audit shows they still need compliance follow-up
 before obstacle/deployment work should continue.
 
-1. Finish the FB14B/FB14C follow-up: player display-name capture and
-  serialization, accepted validation messages, name-only setup labels, tied-point
-  random chooser selection, segmented initiative control, `confirm choice`
-  wording, objective acknowledgement polish, lobby Ready-lock tests, and no
-  lobby initiative/objective regression.
+1. Implement FB14C1 so the remaining sections 5-7 contract gaps are closed:
+  lobby Ready-lock and validation-status rendering, segmented initiative
+  controls, `confirm choice` wording, hot-seat dual initiative confirmations,
+  hot-seat objective acknowledgement parity, and the objective highlight-on-click
+  fix.
 2. Implement FB14D so every post-bootstrap setup action has enum values,
   `FlowSpec`, `CommandApplicability`, `UIProjector`, serialized
   `InteractionFlow`, and save/load/replay authority seams before presentation

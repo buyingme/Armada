@@ -99,7 +99,7 @@ func _build_from_peer_rosters_with_constraints(host_roster: FleetRoster,
 		client_roster: FleetRoster, host_player_index: int, first_player: int,
 		selected_objective_key: String, scenario_id: String,
 		expected_point_format: Dictionary,
-		_draft: FleetSetupPackage = null) -> Dictionary:
+		draft: FleetSetupPackage = null) -> Dictionary:
 	var validation: SetupValidationResult = SetupValidationResult.new()
 	if not _player_index_valid(host_player_index):
 		validation.add_error(RULE_FIRST_PLAYER, "Host player index is out of range.", [], [])
@@ -108,7 +108,7 @@ func _build_from_peer_rosters_with_constraints(host_roster: FleetRoster,
 	rosters[host_player_index] = host_roster
 	rosters[_other_player(host_player_index)] = client_roster
 	return _build_from_rosters_with_constraints(rosters, first_player,
-			selected_objective_key, scenario_id, expected_point_format)
+			selected_objective_key, scenario_id, expected_point_format, draft)
 
 
 func _build_from_rosters_with_constraints(rosters: Array[FleetRoster],

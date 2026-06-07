@@ -108,6 +108,49 @@ func test_prepare_setup_draft_for_start_enters_initiative_confirmation() -> void
 			"Objective candidates should wait until both initiative confirmations.")
 
 
+func test_resolve_initiative_state_tied_points_sets_random_tie_break_chooser() -> void:
+	var state: Dictionary = LobbyManager._default_setup_state()
+	LobbyManager._resolve_initiative_state([
+		_create_rebel_roster(),
+		_create_rebel_roster(),
+	], state)
+	var chooser: int = int(state.get(LobbyManager.SETUP_KEY_INITIATIVE_CHOOSER, -1))
+	var tie_break_chooser: int = int(state.get(
+			LobbyManager.SETUP_KEY_INITIATIVE_TIE_BREAK_CHOOSER, -1))
+
+	assert_true(bool(state.get(LobbyManager.SETUP_KEY_INITIATIVE_TIED, false)),
+			"Equal fleet totals should mark the initiative state as tied.")
+	assert_between(chooser, 0, 1,
+			"Tied fleet totals should assign a valid chooser.")
+	assert_eq(tie_break_chooser, chooser,
+			"The random tie-break chooser should become the initiative chooser.")
+	assert_eq(int(state.get("resolved_first_player", -1)), chooser,
+			"Tied initiative should default first-player selection to the chooser until changed.")
+
+
+func test_apply_first_player_choice_tied_state_rejects_wrong_player() -> void:
+	_seed_valid_rosters()
+	var draft: FleetSetupPackage = LobbyManager._prepare_setup_draft_for_start()
+	var state: Dictionary = draft.setup_state
+	state[LobbyManager.SETUP_KEY_INITIATIVE_TIED] = true
+	state[LobbyManager.SETUP_KEY_INITIATIVE_RANDOM] = true
+	state[LobbyManager.SETUP_KEY_INITIATIVE_CHOOSER] = 1
+	state[LobbyManager.SETUP_KEY_INITIATIVE_TIE_BREAK_CHOOSER] = 1
+	state["resolved_first_player"] = 1
+	draft.setup_state = state
+	LobbyManager.current_lobby.setup_draft = draft.serialize()
+
+	LobbyManager._apply_first_player_choice(0, 0)
+
+	assert_eq(int(_setup_state().get("resolved_first_player", -1)), 1,
+			"Only the random tie-break chooser should be able to choose first player on ties.")
+
+	LobbyManager._apply_first_player_choice(1, 0)
+
+	assert_eq(int(_setup_state().get("resolved_first_player", -1)), 0,
+			"The random tie-break chooser should be able to choose either player as first.")
+
+
 func test_apply_initiative_confirmation_from_both_players_enters_objective_selection() -> void:
 	_seed_valid_rosters()
 	LobbyManager._prepare_setup_draft_for_start()

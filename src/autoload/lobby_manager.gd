@@ -26,6 +26,7 @@ const SETUP_KEY_PHASE: String = "phase"
 const SETUP_KEY_INITIATIVE_CHOOSER: String = "initiative_chooser"
 const SETUP_KEY_INITIATIVE_CONFIRMATIONS: String = "initiative_confirmations"
 const SETUP_KEY_INITIATIVE_RANDOM: String = "initiative_random_selection"
+const SETUP_KEY_INITIATIVE_TIE_BREAK_CHOOSER: String = "initiative_tie_break_chooser"
 const SETUP_KEY_INITIATIVE_TIED: String = "initiative_tied"
 const SETUP_KEY_PLAYER_POINTS: String = "player_points"
 const SETUP_KEY_OBJECTIVE_CANDIDATES: String = "objective_candidates"
@@ -346,6 +347,7 @@ func _default_setup_state() -> Dictionary:
 		SETUP_KEY_INITIATIVE_CHOOSER: - 1,
 		SETUP_KEY_INITIATIVE_CONFIRMATIONS: {"0": false, "1": false},
 		SETUP_KEY_INITIATIVE_RANDOM: false,
+		SETUP_KEY_INITIATIVE_TIE_BREAK_CHOOSER: - 1,
 		SETUP_KEY_INITIATIVE_TIED: false,
 		SETUP_KEY_PLAYER_POINTS: [],
 		SETUP_KEY_OBJECTIVE_CANDIDATES: [],
@@ -546,8 +548,6 @@ func _apply_first_player_choice(player_index: int, first_player: int) -> void:
 		return
 	var state: Dictionary = _draft_state(draft)
 	if player_index != int(state.get(SETUP_KEY_INITIATIVE_CHOOSER, -1)):
-		return
-	if bool(state.get(SETUP_KEY_INITIATIVE_TIED, false)):
 		return
 	state["resolved_first_player"] = first_player
 	state[SETUP_KEY_INITIATIVE_CONFIRMATIONS] = _confirmations_for_player(-1)
@@ -792,15 +792,17 @@ func _resolve_initiative_state(rosters: Array, state: Dictionary) -> void:
 	var player_zero_points: int = _fleet_points(rosters[0] as FleetRoster)
 	var player_one_points: int = _fleet_points(rosters[1] as FleetRoster)
 	var is_tied: bool = player_zero_points == player_one_points
-	var chooser: int = 0 if is_tied else (0 if player_zero_points < player_one_points else 1)
+	var tie_break_chooser: int = -1
+	var chooser: int = 0 if player_zero_points < player_one_points else 1
+	if is_tied:
+		tie_break_chooser = randi_range(0, Constants.PLAYER_COUNT - 1)
+		chooser = tie_break_chooser
 	state[SETUP_KEY_PLAYER_POINTS] = [player_zero_points, player_one_points]
 	state[SETUP_KEY_INITIATIVE_TIED] = is_tied
 	state[SETUP_KEY_INITIATIVE_CHOOSER] = chooser
 	state[SETUP_KEY_INITIATIVE_RANDOM] = is_tied
-	if is_tied:
-		state["resolved_first_player"] = randi_range(0, Constants.PLAYER_COUNT - 1)
-	else:
-		state["resolved_first_player"] = chooser
+	state[SETUP_KEY_INITIATIVE_TIE_BREAK_CHOOSER] = tie_break_chooser
+	state["resolved_first_player"] = chooser
 
 
 func _populate_objective_candidates(rosters: Array, state: Dictionary) -> void:

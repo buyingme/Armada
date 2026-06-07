@@ -6,15 +6,23 @@ extends GutTest
 
 const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_match_options.gd")
+var _library_manager_script: GDScript = preload(
+		"res://src/core/fleet/fleet_library_manager.gd")
 
 var _room: LobbyRoom = null
 var _previous_lobby: LobbyState = null
 var _previous_role: NetworkManager.Role = NetworkManager.Role.NONE
+var _original_library_dir: String = ""
+var _test_library_dir: String = "user://test_lobby_room_library"
 
 
 func before_each() -> void:
 	_previous_lobby = LobbyManager.current_lobby
 	_previous_role = NetworkManager.role
+	_original_library_dir = _library_manager_script.LIBRARY_DIR
+	_library_manager_script.LIBRARY_DIR = _test_library_dir
+	_cleanup_test_dir()
+	_save_valid_roster()
 	NetworkManager.role = NetworkManager.Role.SERVER
 	LobbyManager.current_lobby = null
 	_room = LobbyRoom.new()
@@ -24,6 +32,8 @@ func before_each() -> void:
 func after_each() -> void:
 	LobbyManager.current_lobby = _previous_lobby
 	NetworkManager.role = _previous_role
+	_cleanup_test_dir()
+	_library_manager_script.LIBRARY_DIR = _original_library_dir
 
 
 func test_scenario_picker_contains_debug_scenario() -> void:
@@ -109,6 +119,34 @@ func test_update_display_enables_start_when_fleets_are_valid() -> void:
 			"The host should be able to start once both players are Ready with valid fleets.")
 
 
+func test_update_display_shows_exact_setup_validation_messages_expected() -> void:
+	var lobby: LobbyState = _setup_lobby()
+	var draft_state: Dictionary = (lobby.setup_draft.get("setup_state", {}) as Dictionary)
+	draft_state[LobbyManager.SETUP_KEY_PHASE] = LobbyManager.SETUP_PHASE_FLEET_SELECTION
+	draft_state[LobbyManager.SETUP_KEY_VALIDATION_STATUS] = {
+		"ok": false,
+		"messages": [LobbyManager.VALIDATION_MESSAGE_NAMES_BLANK],
+	}
+	lobby.setup_draft["setup_state"] = draft_state
+	LobbyManager.current_lobby = lobby
+
+	_room._update_display()
+
+	assert_true(_room._status_label.text.contains(LobbyManager.VALIDATION_MESSAGE_NAMES_BLANK),
+			"Lobby status should surface the accepted fleet-selection validation messages.")
+
+
+func test_update_display_with_local_ready_locks_setup_fleet_selector_expected() -> void:
+	var lobby: LobbyState = _setup_lobby()
+	lobby.players[0]["ready"] = true
+	LobbyManager.current_lobby = lobby
+
+	_room._update_display()
+
+	assert_true(_room._setup_local_fleet_option.disabled,
+			"Ready should lock the submitted local fleet selector until the player unreadies.")
+
+
 func _scenario_option_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for i: int in range(_room._scenario_option.item_count):
@@ -126,3 +164,54 @@ func _selected_scenario_id() -> String:
 	if metadata is String:
 		return metadata as String
 	return ""
+
+
+func _setup_lobby() -> LobbyState:
+	var lobby: LobbyState = LobbyState.new()
+	lobby.scenario = LobbyState.MATCH_STANDARD_400_ID
+	lobby.players = [
+		{"peer_id": 1, "display_name": "Host", "player_index": 0, "ready": true},
+		{"peer_id": 2, "display_name": "Client", "player_index": 1, "ready": true},
+	]
+	lobby.setup_draft = LobbyManager._setup_draft_for_match_type(lobby.scenario)
+	return lobby
+
+
+func _save_valid_roster() -> void:
+	var manager: FleetLibraryManager = FleetLibraryManager.new()
+	manager.save_roster(_create_rebel_roster())
+
+
+func _create_rebel_roster() -> FleetRoster:
+	var roster: FleetRoster = FleetRoster.create("rebel-fleet", "Rebel Setup Fleet", "REBEL_ALLIANCE")
+	roster.point_format = {
+		"id": FleetBuilderOptions.FORMAT_STANDARD_400,
+		"limit": FleetValidator.DEFAULT_POINT_LIMIT,
+	}
+	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
+	var ship: FleetShipEntry = FleetShipEntry.new()
+	ship.entry_id = "rebel-ship-1"
+	ship.data_key = "cr90_corvette_a"
+	var assignment: FleetUpgradeAssignment = FleetUpgradeAssignment.new()
+	assignment.entry_id = "rebel-cmd"
+	assignment.data_key = "general_dodonna"
+	assignment.slot = "OFFICER"
+	ship.add_upgrade(assignment)
+	roster.add_ship(ship)
+	return roster
+
+
+func _cleanup_test_dir() -> void:
+	if not DirAccess.dir_exists_absolute(_test_library_dir):
+		return
+	var dir: DirAccess = DirAccess.open(_test_library_dir)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while not entry.is_empty():
+		if not dir.current_is_dir():
+			DirAccess.remove_absolute("%s/%s" % [_test_library_dir, entry])
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(_test_library_dir)

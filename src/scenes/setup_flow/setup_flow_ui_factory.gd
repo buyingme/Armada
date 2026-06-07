@@ -49,6 +49,42 @@ static func build_option_row(parent: VBoxContainer, label_text: String) -> Optio
 	return option
 
 
+## Adds a labelled segmented-button row to [param parent].
+static func build_segmented_row(
+		parent: VBoxContainer,
+		label_text: String,
+		button_texts: Array) -> Array[Button]:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var label: Label = Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(120, 28)
+	row.add_child(label)
+	var buttons_box: HBoxContainer = HBoxContainer.new()
+	buttons_box.add_theme_constant_override("separation", 8)
+	buttons_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(buttons_box)
+	parent.add_child(row)
+	return _build_segmented_buttons(buttons_box, button_texts)
+
+
+static func _build_segmented_buttons(
+		parent: HBoxContainer,
+		button_texts: Array) -> Array[Button]:
+	var buttons: Array[Button] = []
+	var group: ButtonGroup = ButtonGroup.new()
+	for raw_text: Variant in button_texts:
+		var button: Button = Button.new()
+		button.text = str(raw_text)
+		button.toggle_mode = true
+		button.button_group = group
+		button.custom_minimum_size = Vector2(176, 32)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		parent.add_child(button)
+		buttons.append(button)
+	return buttons
+
+
 ## Adds a labelled text-input row to [param parent].
 static func build_text_row(parent: VBoxContainer, label_text: String) -> LineEdit:
 	var row: HBoxContainer = HBoxContainer.new()

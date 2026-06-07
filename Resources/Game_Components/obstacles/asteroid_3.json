@@ -15,10 +15,13 @@
         "objective_cards_may_add_obstacles"
     ],
     "shape_metadata": {
-        "source": "token_image_pending_measurement",
+        "source": "setup_obstacle_token_bounds",
         "token_image": "asteroid_3_token.png",
-        "shape_type": "irregular_polygon",
-        "measurement_status": "PLACEHOLDER"
+        "shape_type": "oriented_box",
+        "measurement_status": "SPRITE_BOUNDS_FACTOR",
+        "size_basis": "squadron_base_diameter_px",
+        "width_factor": 1.35,
+        "height_factor": 0.996207
     },
     "rules_reference_ids": [
         "obstacle.core_obstruction",

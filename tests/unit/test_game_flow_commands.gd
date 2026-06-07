@@ -10,6 +10,16 @@ const CommitSetupObstacleCommandScript = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommandScript = preload(
 		"res://src/core/commands/commit_setup_deployment_command.gd")
+const SetupInteractionFlowResolverScript = preload(
+		"res://src/core/setup/setup_interaction_flow_resolver.gd")
+const OBSTACLE_KEYS: Array[String] = [
+	"asteroid_1",
+	"asteroid_2",
+	"asteroid_3",
+	"debris_1",
+	"debris_2",
+	"station",
+]
 
 
 var _state: GameState
@@ -328,7 +338,7 @@ func test_start_round_execute_marks_setup_complete_expected() -> void:
 func test_commit_setup_obstacle_validate_outside_board_rejected() -> void:
 	_mark_setup_package_state(false)
 	var cmd: GameCommand = _deserialize_setup_command(
-			"commit_setup_obstacle", 0, {
+			"commit_setup_obstacle", 1, {
 		"data_key": "asteroid_1",
 		"pos_x": 1.2,
 		"pos_y": 0.5,
@@ -337,10 +347,10 @@ func test_commit_setup_obstacle_validate_outside_board_rejected() -> void:
 			"Obstacle placement should reject positions outside the play area.")
 
 
-func test_commit_setup_obstacle_execute_upserts_payload_expected() -> void:
+func test_commit_setup_obstacle_execute_appends_payload_expected() -> void:
 	_mark_setup_package_state(false)
 	var cmd: GameCommand = _deserialize_setup_command(
-			"commit_setup_obstacle", 0, {
+			"commit_setup_obstacle", 1, {
 		"data_key": "asteroid_1",
 		"pos_x": 0.25,
 		"pos_y": 0.4,
@@ -354,9 +364,73 @@ func test_commit_setup_obstacle_execute_upserts_payload_expected() -> void:
 			"Obstacle result should report the current obstacle count.")
 	assert_almost_eq(float((obstacles[0] as Dictionary).get("pos_x", 0.0)), 0.25, 0.001,
 			"Obstacle placement should persist normalized X.")
+	assert_eq(int((obstacles[0] as Dictionary).get("placing_player", -1)), 1,
+			"Obstacle placement should record the committing player for replay-safe mirroring.")
+	assert_eq(int((obstacles[0] as Dictionary).get("placement_order", -1)), 0,
+			"Obstacle placement should record the deterministic placement order.")
 	assert_eq(_state.interaction_flow.step_id,
 			Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT,
 			"Obstacle placement should keep setup flow on obstacle placement until six are placed.")
+
+
+func test_commit_setup_obstacle_validate_wrong_controller_rejected() -> void:
+	_mark_setup_package_state(false)
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 0, {
+		"data_key": "asteroid_1",
+		"pos_x": 0.4,
+		"pos_y": 0.4,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Obstacle placement should reject the non-controller player.")
+
+
+func test_commit_setup_obstacle_validate_duplicate_obstacle_rejected() -> void:
+	_mark_setup_package_state(false)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = [
+		_obstacle_entry("asteroid_1", 0.25, 0.4, 1, 0),
+	]
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 0, {
+		"data_key": "asteroid_1",
+		"pos_x": 0.35,
+		"pos_y": 0.6,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Obstacle placement should reject a second placement of the same obstacle key.")
+
+
+func test_commit_setup_obstacle_validate_3x6_deployment_zone_rejected() -> void:
+	_mark_setup_package_state(false)
+	_state.objectives[FleetSetupBootstrapper.KEY_MAP] = {
+		"filename": "map_3x6_distant-planet_v4.jpg",
+	}
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 1, {
+		"data_key": "asteroid_2",
+		"pos_x": 0.5,
+		"pos_y": 0.18,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"3x6 obstacle placement should reject footprints that overlap deployment zones.")
+
+
+func test_commit_setup_obstacle_validate_distance_one_separation_rejected() -> void:
+	_mark_setup_package_state(false)
+	_state.objectives[FleetSetupBootstrapper.KEY_OBSTACLES] = [
+		_obstacle_entry("asteroid_1", 0.5, 0.5, 1, 0),
+	]
+	_refresh_setup_flow()
+	var cmd: GameCommand = _deserialize_setup_command(
+			"commit_setup_obstacle", 0, {
+		"data_key": "debris_1",
+		"pos_x": 0.56,
+		"pos_y": 0.5,
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Obstacle placement should reject placements within distance 1 of another obstacle.")
 
 
 func test_commit_setup_deployment_validate_missing_target_rejected() -> void:
@@ -412,7 +486,7 @@ func test_commit_setup_obstacle_execute_sixth_obstacle_advances_to_ship_deployme
 	_refresh_setup_flow()
 	var cmd: GameCommand = _deserialize_setup_command(
 			"commit_setup_obstacle", 1, {
-		"data_key": "obstacle_5",
+		"data_key": "station",
 		"pos_x": 0.65,
 		"pos_y": 0.5,
 	})
@@ -462,6 +536,9 @@ func _mark_setup_package_state(is_complete: bool) -> void:
 			"player_display_names": ["Alex", "Blake"],
 			"status": setup_state.get("status", ""),
 		},
+		FleetSetupBootstrapper.KEY_MAP: {
+			"filename": "map_3x3_azure_v4.jpg",
+		},
 		FleetSetupBootstrapper.KEY_OBSTACLES: [],
 		FleetSetupBootstrapper.KEY_DEPLOYMENTS: [],
 	}
@@ -482,30 +559,46 @@ func _mark_setup_ready_with_ship() -> void:
 
 
 func _refresh_setup_flow() -> void:
-	SetupInteractionFlowResolver.apply_to_state(_state)
+	SetupInteractionFlowResolverScript.apply_to_state(_state)
 
 
 func _five_obstacles() -> Array[Dictionary]:
 	var obstacles: Array[Dictionary] = []
 	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT - 1):
-		obstacles.append({
-			"data_key": "obstacle_%d" % index,
-			"pos_x": 0.1 + float(index) * 0.1,
-			"pos_y": 0.5,
-			"rotation_deg": 0.0,
-		})
+		obstacles.append(_obstacle_entry(
+				OBSTACLE_KEYS[index],
+				0.12 + float(index) * 0.16,
+				0.16 if index % 2 == 0 else 0.84,
+				1 if index % 2 == 0 else 0,
+				index))
 	return obstacles
+
+
+func _obstacle_entry(data_key: String,
+		pos_x: float,
+		pos_y: float,
+		placing_player: int,
+		placement_order: int,
+		rotation_deg: float = 0.0) -> Dictionary:
+	return {
+		"data_key": data_key,
+		"pos_x": pos_x,
+		"pos_y": pos_y,
+		"rotation_deg": rotation_deg,
+		"placing_player": placing_player,
+		"placement_order": placement_order,
+	}
 
 
 func _six_obstacles() -> Array[Dictionary]:
 	var obstacles: Array[Dictionary] = []
 	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT):
-		obstacles.append({
-			"data_key": "obstacle_%d" % index,
-			"pos_x": 0.1 + float(index) * 0.1,
-			"pos_y": 0.5,
-			"rotation_deg": 0.0,
-		})
+		obstacles.append(_obstacle_entry(
+				OBSTACLE_KEYS[index],
+				0.12 + float(index % 3) * 0.28,
+				0.16 if index < 3 else 0.84,
+				1 if index % 2 == 0 else 0,
+				index))
 	return obstacles
 
 

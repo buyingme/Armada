@@ -7,6 +7,8 @@
 ##
 ## Payload keys: [code]data_key[/code] (String), [code]pos_x[/code]
 ## (float), [code]pos_y[/code] (float), [code]rotation_deg[/code] (float).
+## Committed state also records [code]placing_player[/code] and
+## [code]placement_order[/code] for deterministic setup mirroring.
 ##
 ## Rules Reference: "Setup", step 5, RRG 1.5.0 — players place
 ## obstacle tokens before deployment.
@@ -16,6 +18,10 @@ extends GameCommand
 
 const KEY_SETUP_PACKAGE_HASH: String = "setup_package_hash"
 const KEY_OBSTACLES: String = "obstacles"
+const SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_interaction_flow_resolver.gd")
+const SETUP_OBSTACLE_VALIDATOR_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_obstacle_validator.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -41,17 +47,21 @@ func validate(game_state: GameState) -> String:
 		return "No setup-package game is active."
 	if str(payload.get("data_key", "")).strip_edges().is_empty():
 		return "Setup obstacle placement requires data_key."
-	return _validate_normalized_position(payload)
+	var position_error: String = _validate_normalized_position(payload)
+	if position_error != "":
+		return position_error
+	return SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
+			game_state, player_index, payload)
 
 
 ## Applies the placement to the authoritative setup obstacle payload.
 func execute(game_state: GameState) -> Dictionary:
 	var obstacles: Array[Dictionary] = _dict_array_from(
 			game_state.objectives.get(KEY_OBSTACLES, []))
-	var obstacle: Dictionary = _payload_obstacle()
-	_upsert_obstacle(obstacles, obstacle)
+	var obstacle: Dictionary = _payload_obstacle(obstacles.size())
+	obstacles.append(obstacle.duplicate(true))
 	game_state.objectives[KEY_OBSTACLES] = obstacles
-	SetupInteractionFlowResolver.apply_to_state(game_state)
+	SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.apply_to_state(game_state)
 	return {
 		"obstacle": obstacle.duplicate(true),
 		"obstacle_count": obstacles.size(),
@@ -66,22 +76,15 @@ static func _validate_normalized_position(values: Dictionary) -> String:
 	return ""
 
 
-func _payload_obstacle() -> Dictionary:
+func _payload_obstacle(placement_order: int) -> Dictionary:
 	return {
 		"data_key": str(payload.get("data_key", "")).strip_edges(),
 		"pos_x": float(payload.get("pos_x", 0.0)),
 		"pos_y": float(payload.get("pos_y", 0.0)),
 		"rotation_deg": float(payload.get("rotation_deg", 0.0)),
+		"placing_player": player_index,
+		"placement_order": placement_order,
 	}
-
-
-static func _upsert_obstacle(obstacles: Array[Dictionary], obstacle: Dictionary) -> void:
-	var key: String = str(obstacle.get("data_key", ""))
-	for index: int in range(obstacles.size()):
-		if str(obstacles[index].get("data_key", "")) == key:
-			obstacles[index] = obstacle.duplicate(true)
-			return
-	obstacles.append(obstacle.duplicate(true))
 
 
 static func _dict_array_from(raw_values: Variant) -> Array[Dictionary]:

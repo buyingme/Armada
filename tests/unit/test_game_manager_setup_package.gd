@@ -6,6 +6,14 @@ extends GutTest
 
 const CommitSetupObstacleCommandScript = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
+const OBSTACLE_KEYS: Array[String] = [
+	"asteroid_1",
+	"asteroid_2",
+	"asteroid_3",
+	"debris_1",
+	"debris_2",
+	"station",
+]
 const CommitSetupDeploymentCommandScript = preload(
 		"res://src/core/commands/commit_setup_deployment_command.gd")
 
@@ -146,6 +154,8 @@ func test_submit_setup_obstacle_placement_updates_live_state_expected() -> void:
 		"Obstacle submit should update the live setup obstacle payload.")
 	assert_almost_eq(float((obstacles[0] as Dictionary).get("pos_y", 0.0)), 0.44, 0.001,
 		"Obstacle submit should persist normalized Y.")
+	assert_eq(int((obstacles[0] as Dictionary).get("placing_player", -1)), 0,
+		"Obstacle submit should record the authoritative placing player.")
 
 
 func test_submit_setup_deployment_placement_updates_live_state_expected() -> void:
@@ -206,10 +216,12 @@ func _six_obstacles() -> Array[Dictionary]:
 	var obstacles: Array[Dictionary] = []
 	for index: int in range(StartRoundCommand.STANDARD_OBSTACLE_COUNT):
 		obstacles.append({
-			"data_key": "obstacle_%d" % index,
-			"pos_x": 0.1 + float(index) * 0.1,
-			"pos_y": 0.5,
+			"data_key": OBSTACLE_KEYS[index],
+			"pos_x": 0.12 + float(index % 3) * 0.28,
+			"pos_y": 0.16 if index < 3 else 0.84,
 			"rotation_deg": 0.0,
+			"placing_player": 0 if index % 2 == 0 else 1,
+			"placement_order": index,
 		})
 	return obstacles
 

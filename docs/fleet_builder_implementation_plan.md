@@ -1014,6 +1014,7 @@ test gate is passed.
 | Acceptance | Invalid obstacle submissions fail in command validation for wrong controller, duplicate obstacle, out-of-area footprint, deployment-zone overlap, edge-distance violation, or obstacle-distance violation; valid placements update serialized setup state and broadcast to passive network peers. |
 | Tests | Alternating placer sequence, duplicate obstacle rejection, exact-count completion, 3x3 setup-area bounds, 3x6 central 3x4 setup area, distance-3 edge rule, distance-1 obstacle separation, rotation-aware footprint validation, network command mirror. |
 | Verification | Targeted setup/geometry/command GUT, full GUT, `bash scripts/lint_phase_k.sh`, `bash scripts/run_baseline_traces.sh --all`. |
+| Status | Implemented as of 2026-06-07: added `SetupObstacleValidator`, promoted obstacle `shape_metadata` from placeholders to explicit setup-footprint factors, and hardened `commit_setup_obstacle` to reject wrong-controller, duplicate, over-count, deployment-zone, and distance violations while recording deterministic `placing_player` and `placement_order` fields in serialized obstacle state. Focused obstacle validation, full GUT, Phase K lint, and replay/network baseline traces pass. |
 | Audit note | As of 2026-06-06, `commit_setup_obstacle` validates only setup phase/package/key/normalized bounds and upserts by `data_key`; strict rules and active-player sequencing are missing. |
 
 ### FB14F - Obstacle Placement Presentation

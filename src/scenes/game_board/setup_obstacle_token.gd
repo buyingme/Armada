@@ -16,6 +16,8 @@ const TARGET_SIZE_FACTOR: float = 1.35
 
 var _data_key: String = ""
 var _half_extents: Vector2 = Vector2.ONE * 24.0
+var _click_enabled: bool = true
+var _outline_colour: Color = OUTLINE_COLOUR
 var _sprite: Sprite2D = null
 
 
@@ -29,6 +31,7 @@ func setup(data_key: String,
 	if _sprite == null:
 		_create_sprite()
 	_update_art()
+	reset_outline_colour()
 	queue_redraw()
 
 
@@ -42,6 +45,22 @@ func get_half_extents() -> Vector2:
 	return _half_extents
 
 
+## Enables or disables click handling for this token.
+func set_click_enabled(enabled: bool) -> void:
+	_click_enabled = enabled
+
+
+## Sets the preview outline colour used by setup legality feedback.
+func set_outline_colour(colour: Color) -> void:
+	_outline_colour = colour
+	queue_redraw()
+
+
+## Restores the default outline colour.
+func reset_outline_colour() -> void:
+	set_outline_colour(OUTLINE_COLOUR)
+
+
 ## Applies a new normalized transform to the token.
 func set_normalized_transform(pos_x: float,
 		pos_y: float, rotation_deg: float) -> void:
@@ -51,7 +70,7 @@ func set_normalized_transform(pos_x: float,
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible or not (event is InputEventMouseButton):
+	if not _click_enabled or not visible or not (event is InputEventMouseButton):
 		return
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
 	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_LEFT:
@@ -63,7 +82,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(-_half_extents, _half_extents * 2.0),
-			OUTLINE_COLOUR, false, OUTLINE_WIDTH_PX)
+			_outline_colour, false, OUTLINE_WIDTH_PX)
 
 
 func _create_sprite() -> void:

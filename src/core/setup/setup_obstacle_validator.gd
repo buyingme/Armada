@@ -9,6 +9,7 @@ class_name SetupObstacleValidator
 extends RefCounted
 
 
+const ERROR_DEPLOYMENT_ZONE: String = "Setup obstacle placement cannot overlap a deployment zone."
 const GAME_SCALE_SCRIPT: GDScript = preload("res://src/autoload/game_scale.gd")
 const KEY_FILENAME: String = "filename"
 const KEY_MAP: String = "map"
@@ -107,13 +108,11 @@ static func _board_error(polygon: PackedVector2Array, play_area_size: Vector2) -
 static func _deployment_zone_error(game_state: GameState,
 		polygon: PackedVector2Array,
 		play_area_size: Vector2) -> String:
-	if not _uses_standard_setup_band(game_state):
-		return ""
 	var top_clearance: float = _distance_band_px(3)
 	var bottom_clearance: float = play_area_size.y - _distance_band_px(3)
 	for point: Vector2 in polygon:
 		if point.y <= top_clearance or point.y >= bottom_clearance:
-			return "Setup obstacle placement cannot overlap a deployment zone."
+			return ERROR_DEPLOYMENT_ZONE
 	return ""
 
 
@@ -167,10 +166,6 @@ static func _play_area_size_px(game_state: GameState) -> Vector2:
 		var rulers: Vector2 = GAME_SCALE_SCRIPT.map_play_area_rulers(_map_filename(game_state))
 		return rulers * GameScale.ruler_length_px
 	return GameScale.play_area_size_px
-
-
-static func _uses_standard_setup_band(game_state: GameState) -> bool:
-	return _map_filename(game_state).begins_with(GameScale.MAP_PREFIX_3X6)
 
 
 static func _map_filename(game_state: GameState) -> String:

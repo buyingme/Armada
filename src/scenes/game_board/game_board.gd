@@ -218,6 +218,10 @@ func _input(event: InputEvent) -> void:
 	if _squadron_phase_controller \
 			and _squadron_phase_controller.handle_move_input(event):
 		return
+	if event is InputEventMagnifyGesture and _setup_placement_controller \
+			and _setup_placement_controller.try_handle_rotate_input(
+					event as InputEventMagnifyGesture):
+		return
 
 	if not DebugMode.has_selection():
 		return
@@ -1207,6 +1211,8 @@ func _create_board_components() -> void:
 func _create_setup_placement_controller() -> void:
 	_setup_placement_controller = SETUP_PLACEMENT_CONTROLLER_SCRIPT.new()
 	_setup_placement_controller.name = "SetupPlacementController"
+	_setup_placement_controller.setup_turn_prompt_requested.connect(
+			_on_setup_turn_prompt_requested)
 	add_child(_setup_placement_controller)
 	_setup_placement_controller.initialize(self , _token_container, _token_mover)
 
@@ -1381,6 +1387,17 @@ func _show_projected_turn_banner(player_index: int, player_label: String) -> voi
 	_panel_mgr.your_turn_banner.show_banner(
 			player_index, YourTurnBanner.DEFAULT_DURATION, player_label)
 	_panel_mgr.your_turn_banner.update_size(vp_size)
+
+
+func _on_setup_turn_prompt_requested(player_index: int, player_label: String) -> void:
+	if not _is_shared_screen():
+		return
+	var player_faction: int = UIProjector.player_faction(
+			GameManager.current_game_state, player_index)
+	_apply_turn_perspective(player_index, player_faction)
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_panel_mgr.handoff_overlay.show_handoff(player_index, "Setup", player_label)
+	_panel_mgr.handoff_overlay.update_size(vp_size)
 
 
 func _is_shared_screen() -> bool:

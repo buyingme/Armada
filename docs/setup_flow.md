@@ -130,11 +130,11 @@ If any field is missing or ambiguous, implementation must not proceed.
 | Controller | Second player places first; players alternate one obstacle at a time until six obstacles are placed. |
 | Visibility | Both players see placed obstacles and remaining obstacles. Hot-seat rotates between placements; network uses active/waiting projection. Passive network peers see committed obstacle placements only, not live drag previews. |
 | Required Information | Active placer banner using the active player's display name, remaining obstacle list in a lower-middle modal, selected obstacle preview, legal setup area, deployment-zone exclusion, distance feedback, illegal-preview highlighting matching existing overlap-style feedback, and rotation affordance using the debug-equivalent rotation input. |
-| Actions | Select one remaining obstacle, drag to position, rotate using the debug-equivalent input path, confirm placement, or cancel current preview. |
+| Actions | Select one remaining obstacle from the modal, click once on the board to drop the live preview at the cursor, move or rotate the preview using the debug-equivalent rotation input, click the preview again to resume moving it, press an explicit `confirm placement` button in the modal to commit, or cancel the current preview. The board click that drops or reselects the preview must not commit the obstacle. |
 | State Contract | Command-backed obstacle payload with `data_key`, normalized `pos_x`, `pos_y`, `rotation_deg`, placing player, and placement order. |
-| Validation | One of each obstacle; exactly six total; footprint inside setup area; outside deployment zones; beyond distance 3 of play-area edges for 3x6 setup area; beyond distance 1 of other obstacles; confirm is rejected without a selected obstacle. |
+| Validation | One of each obstacle; exactly six total; footprint inside setup area; always outside deployment zones; beyond distance 3 of play-area edges for 3x6 setup area; beyond distance 1 of other obstacles; confirm is rejected without a selected obstacle. Live preview movement may highlight invalid states, but illegal positions must also be blocked or rejected before commit. |
 | Transition | After six legal placements, deployment starts with the correct player/order. |
-| Tests | Placement order, duplicate rejection, geometry legality, illegal-preview highlight, rotation persistence, lower-middle modal presentation, and hot-seat/network visibility. |
+| Tests | Placement order, duplicate rejection, geometry legality, deployment-zone exclusion on 3x3 and 3x6, live preview drop/reselect flow, explicit confirm button commit, illegal-preview highlight, rotation persistence, lower-middle modal presentation, and hot-seat/network visibility. |
 
 ## 9. Deployment
 

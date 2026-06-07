@@ -7,31 +7,41 @@ class_name SetupPlacementController
 extends Node
 
 
-const BUTTON_WIDTH_PX: float = 184.0
+signal setup_turn_prompt_requested(player_index: int, player_label: String)
+
+
 const COMPONENT_SHIP: String = "ship"
 const COMPONENT_SQUADRON: String = "squadron"
-const PANEL_MARGIN: Vector2 = Vector2(16, 16)
-const PANEL_WIDTH_PX: float = 228.0
+const PREVIEW_ROTATE_SENSITIVITY: float = 2.0
 const STATUS_ERROR: Color = Color(0.92, 0.48, 0.44)
 const STATUS_OK: Color = Color(0.52, 0.88, 0.55)
 const STATUS_TEXT: Color = Color(0.94, 0.94, 0.94)
+const SETUP_AREA_OVERLAY_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/setup_area_overlay.gd")
+const SETUP_OBSTACLE_MODAL_SCRIPT: GDScript = preload(
+		"res://src/ui/setup/setup_placement_modal.gd")
 const SETUP_OBSTACLE_TOKEN_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/setup_obstacle_token.gd")
+const SETUP_OBSTACLE_VALIDATOR_SCRIPT: GDScript = preload(
+		"res://src/core/setup/setup_obstacle_validator.gd")
 
 var _board: Node2D = null
+var _setup_overlay = null
 var _token_container: Node2D = null
 var _token_mover: TokenMover = null
 var _setup_layer: CanvasLayer = null
-var _panel: PanelContainer = null
-var _pending_label: Label = null
-var _status_label: Label = null
-var _start_button: Button = null
-var _obstacle_buttons: Dictionary = {}
+var _modal = null
 var _obstacle_tokens: Dictionary = {}
 var _pending_obstacle_key: String = ""
+var _preview_obstacle_token: Node2D = null
 var _selected_token: Node2D = null
 var _selected_origin: Vector2 = Vector2.ZERO
 var _selected_rotation: float = 0.0
+var _preview_is_moving: bool = false
+var _preview_validation_error: String = ""
+var _status_text: String = ""
+var _status_colour: Color = STATUS_TEXT
+var _last_obstacle_controller: int = -2
 
 
 ## Injects board dependencies and creates the setup overlay.
@@ -48,35 +58,46 @@ func initialize(board: Node2D,
 
 ## Refreshes obstacle visuals and status from the live setup state.
 func refresh_from_state() -> void:
-	_sync_panel_visibility()
-	if not _is_active():
+	var intent: UIProjector.UIIntent = _current_setup_intent()
+	_sync_modal_visibility(intent)
+	_sync_overlay(intent)
+	if not _is_setup_intent(intent):
+		_cancel_obstacle_preview(false)
+		_clear_selection()
+		_last_obstacle_controller = -2
 		return
 	_sync_obstacles_from_state()
-	_update_obstacle_buttons()
-	_update_status()
+	_sync_preview_state(intent)
+	_emit_setup_turn_prompt_if_needed(intent)
+	_render_modal(intent)
 
 
 ## Updates the selected token during setup dragging.
 func process_setup_dragging() -> void:
-	if not _is_active() or not _is_interactive() or _selected_token == null:
+	if not _is_active() or not _is_interactive():
 		return
-	if _is_setup_obstacle_token(_selected_token) and not _can_place_obstacles():
+	if _preview_obstacle_token != null and _preview_is_moving:
+		_move_obstacle_token(_preview_obstacle_token,
+				_board.get_global_mouse_position())
+		_update_obstacle_preview_feedback()
 		return
-	if not _is_setup_obstacle_token(_selected_token) and not _can_deploy():
+	if _selected_token == null or not _can_deploy():
 		return
 	_move_selected_token(_board.get_global_mouse_position())
 
 
 ## Handles board clicks for pending obstacle placement and token release.
 func try_handle_input(event: InputEvent) -> bool:
-	if not _is_active() or not _is_interactive() or not (event is InputEventMouseButton):
+	if not _is_active() or not _is_interactive():
+		return false
+	if event is InputEventKey:
+		return _try_handle_cancel_key(event as InputEventKey)
+	if not (event is InputEventMouseButton):
 		return false
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
-	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
-		return false
-	if mouse_event.pressed:
-		if _can_place_obstacles():
-			return _try_place_pending_obstacle()
+	if _can_place_obstacles():
+		return _try_handle_obstacle_click(mouse_event)
+	if mouse_event.button_index != MOUSE_BUTTON_LEFT or mouse_event.pressed:
 		return false
 	if not _can_place_obstacles() and not _can_deploy():
 		return false
@@ -87,6 +108,7 @@ func try_handle_input(event: InputEvent) -> bool:
 func try_handle_ship_click(token: ShipToken) -> bool:
 	if not _can_deploy():
 		return false
+	_cancel_obstacle_preview(false)
 	_select_token(token)
 	return true
 
@@ -95,7 +117,23 @@ func try_handle_ship_click(token: ShipToken) -> bool:
 func try_handle_squadron_click(token: SquadronToken) -> bool:
 	if not _can_deploy():
 		return false
+	_cancel_obstacle_preview(false)
 	_select_token(token)
+	return true
+
+
+## Reuses the debug magnify-gesture rotation path for setup previews/tokens.
+func try_handle_rotate_input(event: InputEventMagnifyGesture) -> bool:
+	if not _is_active() or not _is_interactive():
+		return false
+	var token: Node2D = _rotatable_setup_token()
+	if token == null:
+		return false
+	token.rotation += (event.factor - 1.0) * PREVIEW_ROTATE_SENSITIVITY
+	token.queue_redraw()
+	if token == _preview_obstacle_token:
+		_update_obstacle_preview_feedback()
+	get_viewport().set_input_as_handled()
 	return true
 
 
@@ -104,54 +142,21 @@ func _build_ui() -> void:
 	_setup_layer.name = "SetupPlacementLayer"
 	_setup_layer.layer = 95
 	add_child(_setup_layer)
-	_panel = PanelContainer.new()
-	_panel.position = PANEL_MARGIN
-	_panel.custom_minimum_size = Vector2(PANEL_WIDTH_PX, 0.0)
-	_setup_layer.add_child(_panel)
-	_panel.add_child(_build_panel_content())
-
-
-func _build_panel_content() -> MarginContainer:
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	margin.add_child(_build_panel_vbox())
-	return margin
-
-
-func _build_panel_vbox() -> VBoxContainer:
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	vbox.add_child(_label("Setup Placement", 18, STATUS_TEXT))
-	vbox.add_child(_label(
-			"Pick an obstacle button, click the board to place it, then drag ships, squadrons, or placed obstacles.",
-			14, STATUS_TEXT))
-	vbox.add_child(_build_obstacle_buttons())
-	_pending_label = _label("No obstacle selected.", 14, STATUS_TEXT)
-	_status_label = _label("", 14, STATUS_TEXT)
-	vbox.add_child(_pending_label)
-	vbox.add_child(_status_label)
-	_start_button = Button.new()
-	_start_button.text = "Start Round"
-	_start_button.custom_minimum_size = Vector2(BUTTON_WIDTH_PX, 0.0)
-	_start_button.pressed.connect(_on_start_round_pressed)
-	vbox.add_child(_start_button)
-	return vbox
-
-
-func _build_obstacle_buttons() -> VBoxContainer:
-	var buttons: VBoxContainer = VBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 6)
-	for obstacle_key: String in AssetLoader.list_obstacle_keys():
-		var button: Button = Button.new()
-		button.text = _obstacle_button_text(obstacle_key)
-		button.custom_minimum_size = Vector2(BUTTON_WIDTH_PX, 0.0)
-		button.pressed.connect(_on_obstacle_button_pressed.bind(obstacle_key))
-		buttons.add_child(button)
-		_obstacle_buttons[obstacle_key] = button
-	return buttons
+	_setup_overlay = SETUP_AREA_OVERLAY_SCRIPT.new()
+	_setup_overlay.name = "SetupAreaOverlay"
+	_setup_overlay.visible = false
+	_setup_overlay.z_index = -1
+	_board.add_child(_setup_overlay)
+	var token_index: int = _board.get_children().find(_token_container)
+	if token_index >= 0:
+		_board.move_child(_setup_overlay, token_index)
+	_modal = SETUP_OBSTACLE_MODAL_SCRIPT.new()
+	_modal.name = "SetupPlacementModal"
+	_setup_layer.add_child(_modal)
+	_modal.obstacle_selected.connect(_on_obstacle_button_pressed)
+	_modal.cancel_preview_requested.connect(_on_cancel_preview_requested)
+	_modal.confirm_preview_requested.connect(_on_confirm_preview_requested)
+	_modal.start_round_requested.connect(_on_start_round_pressed)
 
 
 func _connect_signals() -> void:
@@ -159,9 +164,18 @@ func _connect_signals() -> void:
 	CommandProcessor.command_executed.connect(_on_command_executed)
 
 
-func _sync_panel_visibility() -> void:
-	if _panel != null:
-		_panel.visible = _is_active()
+func _sync_modal_visibility(intent: UIProjector.UIIntent) -> void:
+	if _modal != null:
+		_modal.visible = _is_setup_intent(intent)
+
+
+func _sync_overlay(intent: UIProjector.UIIntent) -> void:
+	if _setup_overlay != null:
+		_setup_overlay.set_modal_kind(intent.modal_kind)
+
+
+func _is_setup_intent(intent: UIProjector.UIIntent) -> bool:
+	return intent.flow_type == Constants.InteractionFlow.SETUP
 
 
 func _is_active() -> bool:
@@ -232,6 +246,7 @@ func _sync_obstacle_token(data_key: String, obstacle: Dictionary) -> void:
 			float(obstacle.get("pos_x", 0.0)),
 			float(obstacle.get("pos_y", 0.0)),
 			float(obstacle.get("rotation_deg", 0.0)))
+	token.reset_outline_colour()
 
 
 func _remove_stale_obstacles(seen: Dictionary) -> void:
@@ -256,13 +271,6 @@ func _state_obstacles() -> Array[Dictionary]:
 	return result
 
 
-func _update_obstacle_buttons() -> void:
-	var placed: Dictionary = _placed_obstacle_keys()
-	for obstacle_key: String in _obstacle_buttons.keys():
-		(_obstacle_buttons[obstacle_key] as Button).disabled = placed.has(obstacle_key) \
-				or not _can_place_obstacles()
-
-
 func _placed_obstacle_keys() -> Dictionary:
 	var placed: Dictionary = {}
 	for obstacle: Dictionary in _state_obstacles():
@@ -270,63 +278,76 @@ func _placed_obstacle_keys() -> Dictionary:
 	return placed
 
 
-func _update_status() -> void:
-	var obstacle_count: int = _state_obstacles().size()
-	var missing: Array[String] = StartRoundCommand._missing_deployment_keys(
-			GameManager.current_game_state,
-			StartRoundCommand._deployment_key_map(GameManager.current_game_state))
-	var is_ready_for_start: bool = \
-			obstacle_count >= StartRoundCommand.STANDARD_OBSTACLE_COUNT \
-			and missing.is_empty()
-	_pending_label.text = _pending_label_text(obstacle_count)
-	_status_label.text = "Obstacles: %d/%d  |  Missing deployments: %d" % [
-		obstacle_count,
-		StartRoundCommand.STANDARD_OBSTACLE_COUNT,
-		missing.size(),
-	]
-	_status_label.add_theme_color_override(
-			"font_color", STATUS_OK if is_ready_for_start else STATUS_TEXT)
-	_start_button.disabled = not is_ready_for_start or not _can_start_round()
-
-
 func _pending_label_text(obstacle_count: int) -> String:
-	if not _pending_obstacle_key.is_empty():
-		return "Pending obstacle: %s" % _obstacle_button_text(_pending_obstacle_key)
+	if _preview_obstacle_token != null and not _pending_obstacle_key.is_empty():
+		if _preview_is_moving:
+			return "Preview: %s. Move it, rotate it, then click once to drop it." \
+					% _obstacle_button_text(_pending_obstacle_key)
+		return "Preview dropped: %s. Click it again to move, or confirm placement." \
+				% _obstacle_button_text(_pending_obstacle_key)
 	if obstacle_count < StartRoundCommand.STANDARD_OBSTACLE_COUNT:
-		return "Select an obstacle, then click the board to place it."
-	return "All six obstacles placed. Drag any token to fine-tune setup."
+		return "Select a remaining obstacle to begin a live placement preview."
+	return "All six obstacles placed. Continue with deployment or setup review."
 
 
 func _on_obstacle_button_pressed(obstacle_key: String) -> void:
-	_pending_obstacle_key = obstacle_key
-	_update_status()
+	if not _can_place_obstacles():
+		return
+	_begin_obstacle_preview(obstacle_key)
+	_render_modal(_current_setup_intent())
+
+
+func _on_cancel_preview_requested() -> void:
+	_cancel_obstacle_preview(true)
+
+
+func _on_confirm_preview_requested() -> void:
+	_try_commit_obstacle_preview()
 
 
 func _on_obstacle_token_clicked(token: Node2D) -> void:
-	if not _can_place_obstacles():
+	if token != _preview_obstacle_token:
 		return
-	_select_token(token)
+	if _preview_is_moving:
+		return
+	_resume_obstacle_preview_move()
 
 
 func _select_token(token: Node2D) -> void:
 	_selected_token = token
 	_selected_origin = token.position
 	_selected_rotation = token.rotation
-	_pending_obstacle_key = ""
-	_update_status()
+	_set_status("", STATUS_TEXT)
 
 
-func _try_place_pending_obstacle() -> bool:
-	if _pending_obstacle_key.is_empty():
+func _try_handle_cancel_key(event: InputEventKey) -> bool:
+	if not event.pressed or event.keycode != KEY_ESCAPE:
 		return false
-	var temp_token: Variant = SETUP_OBSTACLE_TOKEN_SCRIPT.new()
-	_token_container.add_child(temp_token)
-	temp_token.setup(_pending_obstacle_key, 0.5, 0.5, 0.0)
-	_move_obstacle_token(temp_token, _board.get_global_mouse_position())
-	var success: bool = _commit_obstacle_token(temp_token)
-	temp_token.queue_free()
+	return _cancel_obstacle_preview(true)
+
+
+func _try_handle_obstacle_click(mouse_event: InputEventMouseButton) -> bool:
+	if mouse_event.button_index == MOUSE_BUTTON_RIGHT and mouse_event.pressed:
+		return _cancel_obstacle_preview(true)
+	if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
+		return false
+	if _preview_obstacle_token == null:
+		return false
+	if _preview_is_moving:
+		_drop_obstacle_preview()
+		return true
+	return true
+
+
+func _try_commit_obstacle_preview() -> bool:
+	if _preview_obstacle_token == null or _preview_is_moving:
+		return false
+	if not _preview_validation_error.is_empty():
+		_render_modal(_current_setup_intent())
+		return false
+	var success: bool = _commit_obstacle_token(_preview_obstacle_token)
 	if success:
-		_pending_obstacle_key = ""
+		_cancel_obstacle_preview(false)
 	return success
 
 
@@ -381,10 +402,12 @@ func _move_squadron_token(token: SquadronToken, desired: Vector2) -> void:
 
 
 func _move_obstacle_token(token: Node2D, desired: Vector2) -> void:
-	var extents: Vector2 = token.call("get_half_extents") as Vector2
-	token.position = Vector2(
-			clampf(desired.x, extents.x, GameScale.play_area_size_px.x - extents.x),
-			clampf(desired.y, extents.y, GameScale.play_area_size_px.y - extents.y))
+	var candidate: Vector2 = _candidate_obstacle_position(desired, token)
+	if token == _preview_obstacle_token and _would_enter_deployment_zone(candidate):
+		_set_status(SETUP_OBSTACLE_VALIDATOR_SCRIPT.ERROR_DEPLOYMENT_ZONE,
+				STATUS_ERROR)
+		return
+	token.position = candidate
 
 
 func _build_other_ship_rects(exclude: Node) -> Array:
@@ -465,9 +488,11 @@ func _commit_obstacle_token(token: Node2D) -> bool:
 
 func _handle_commit_result(result: Dictionary) -> bool:
 	if result.is_empty() or result.has("reason"):
-		_status_label.text = str(result.get("reason", "Setup placement was rejected."))
-		_status_label.add_theme_color_override("font_color", STATUS_ERROR)
+		_set_status(str(result.get("reason", "Setup placement was rejected.")),
+				STATUS_ERROR)
+		_render_modal(_current_setup_intent())
 		return false
+	_set_status("", STATUS_TEXT)
 	refresh_from_state()
 	return true
 
@@ -497,7 +522,7 @@ func _on_command_executed(command: GameCommand, _result: Dictionary) -> void:
 		return
 	if command.command_type == "commit_setup_deployment":
 		_sync_runtime_token(command.payload)
-		_update_status()
+		_render_modal(_current_setup_intent())
 
 
 func _sync_runtime_token(payload: Dictionary) -> void:
@@ -506,6 +531,255 @@ func _sync_runtime_token(payload: Dictionary) -> void:
 		return
 	if str(payload.get("component_type", "")) == COMPONENT_SQUADRON:
 		_sync_squadron_token(payload)
+
+
+func _sync_preview_state(intent: UIProjector.UIIntent) -> void:
+	if intent.modal_kind != Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT:
+		_cancel_obstacle_preview(false)
+	if not intent.is_interactive and _preview_obstacle_token != null:
+		_cancel_obstacle_preview(false)
+
+
+func _emit_setup_turn_prompt_if_needed(intent: UIProjector.UIIntent) -> void:
+	if intent.modal_kind != Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT:
+		_last_obstacle_controller = -2
+		return
+	if intent.controller_player < 0 \
+			or intent.controller_player == _last_obstacle_controller:
+		return
+	_last_obstacle_controller = intent.controller_player
+	setup_turn_prompt_requested.emit(
+			intent.controller_player, intent.controller_player_label)
+
+
+func _render_modal(intent: UIProjector.UIIntent) -> void:
+	if _modal == null:
+		return
+	_modal.centre_on_screen(get_viewport().get_visible_rect().size)
+	match intent.modal_kind:
+		Constants.ModalKind.SETUP_OBSTACLE_PLACEMENT:
+			_render_obstacle_modal(intent)
+		Constants.ModalKind.SETUP_REVIEW:
+			_render_review_modal(intent)
+		_:
+			_render_deployment_modal(intent)
+
+
+func _render_obstacle_modal(intent: UIProjector.UIIntent) -> void:
+	var status: Dictionary = _status_snapshot()
+	_modal.render_obstacle_step(
+			_obstacle_title(intent),
+			_obstacle_prompt(intent),
+			_pending_label_text(_state_obstacles().size()),
+			str(status.get("text", "")),
+			status.get("color", STATUS_TEXT) as Color,
+			_obstacle_entries(),
+			_preview_obstacle_token != null,
+			_preview_obstacle_token != null,
+			not _can_confirm_preview())
+
+
+func _render_review_modal(intent: UIProjector.UIIntent) -> void:
+	var status: Dictionary = _status_snapshot()
+	_modal.render_setup_summary(
+			"Setup Review",
+			_review_prompt(intent),
+			"",
+			str(status.get("text", "")),
+			status.get("color", STATUS_TEXT) as Color,
+			true,
+			not (_is_ready_for_start() and _can_start_round()))
+
+
+func _render_deployment_modal(intent: UIProjector.UIIntent) -> void:
+	var status: Dictionary = _status_snapshot()
+	_modal.render_setup_summary(
+			"Deployment",
+			_deployment_prompt(intent),
+			"",
+			str(status.get("text", "")),
+			status.get("color", STATUS_TEXT) as Color,
+			false,
+			true)
+
+
+func _obstacle_title(intent: UIProjector.UIIntent) -> String:
+	if intent.is_interactive:
+		return "%s place obstacle" % intent.controller_player_label
+	return "%s is placing obstacle" % intent.controller_player_label
+
+
+func _obstacle_prompt(intent: UIProjector.UIIntent) -> String:
+	if intent.is_interactive:
+		return "Select a remaining obstacle, move the preview, click once to drop it, then confirm placement."
+	return "Waiting for %s to place the next obstacle." % intent.controller_player_label
+
+
+func _deployment_prompt(intent: UIProjector.UIIntent) -> String:
+	if intent.is_interactive:
+		return "Drag your eligible setup tokens into position. Deployment validation remains command-backed."
+	return "Waiting for %s to continue setup deployment." % intent.controller_player_label
+
+
+func _review_prompt(intent: UIProjector.UIIntent) -> String:
+	if intent.is_interactive:
+		return "Inspect the finished setup state before round one begins."
+	return "Both players may inspect the setup before round one begins."
+
+
+func _obstacle_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var placed: Dictionary = _placed_obstacle_keys()
+	for obstacle_key: String in AssetLoader.list_obstacle_keys():
+		entries.append({
+			"key": obstacle_key,
+			"label": _obstacle_button_text(obstacle_key),
+			"disabled": placed.has(obstacle_key) or not _can_place_obstacles(),
+			"selected": obstacle_key == _pending_obstacle_key,
+		})
+	return entries
+
+
+func _status_snapshot() -> Dictionary:
+	if not _status_text.is_empty():
+		return {"text": _status_text, "color": _status_colour}
+	return {
+		"text": _setup_progress_text(),
+		"color": STATUS_OK if _is_ready_for_start() else STATUS_TEXT,
+	}
+
+
+func _setup_progress_text() -> String:
+	return "Obstacles: %d/%d  |  Missing deployments: %d" % [
+		_state_obstacles().size(),
+		StartRoundCommand.STANDARD_OBSTACLE_COUNT,
+		_missing_deployment_keys().size(),
+	]
+
+
+func _missing_deployment_keys() -> Array[String]:
+	return StartRoundCommand._missing_deployment_keys(
+			GameManager.current_game_state,
+			StartRoundCommand._deployment_key_map(GameManager.current_game_state))
+
+
+func _is_ready_for_start() -> bool:
+	return _state_obstacles().size() >= StartRoundCommand.STANDARD_OBSTACLE_COUNT \
+			and _missing_deployment_keys().is_empty()
+
+
+func _set_status(text: String, colour: Color) -> void:
+	_status_text = text
+	_status_colour = colour
+
+
+func _begin_obstacle_preview(obstacle_key: String) -> void:
+	_cancel_obstacle_preview(false)
+	_clear_selection()
+	_pending_obstacle_key = obstacle_key
+	_preview_obstacle_token = SETUP_OBSTACLE_TOKEN_SCRIPT.new()
+	_token_container.add_child(_preview_obstacle_token)
+	_preview_obstacle_token.token_clicked.connect(_on_obstacle_token_clicked)
+	_preview_obstacle_token.setup(obstacle_key, 0.5, 0.5, 0.0)
+	_preview_obstacle_token.set_click_enabled(false)
+	_preview_obstacle_token.modulate = Color(1.0, 1.0, 1.0, 0.86)
+	_preview_is_moving = true
+	_preview_validation_error = ""
+	_move_obstacle_token(_preview_obstacle_token, _board.get_global_mouse_position())
+	_update_obstacle_preview_feedback()
+
+
+func _cancel_obstacle_preview(report_cancel: bool) -> bool:
+	if _preview_obstacle_token == null:
+		return false
+	_preview_obstacle_token.queue_free()
+	_preview_obstacle_token = null
+	_pending_obstacle_key = ""
+	_preview_is_moving = false
+	_preview_validation_error = ""
+	_set_status("Obstacle preview cancelled." if report_cancel else "", STATUS_TEXT)
+	if _is_active():
+		_render_modal(_current_setup_intent())
+	return true
+
+
+func _update_obstacle_preview_feedback() -> void:
+	if _preview_obstacle_token == null:
+		return
+	var validation_error: String = SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
+			GameManager.current_game_state,
+			_current_setup_intent().controller_player,
+			_preview_payload())
+	_preview_validation_error = validation_error
+	if validation_error.is_empty():
+		_preview_obstacle_token.set_outline_colour(STATUS_OK)
+		if _preview_is_moving:
+			_set_status("Legal preview. Click once to drop the obstacle.", STATUS_OK)
+		else:
+			_set_status("Legal preview. Confirm placement or click the obstacle to move it again.", STATUS_OK)
+		return
+	_preview_obstacle_token.set_outline_colour(STATUS_ERROR)
+	_set_status(validation_error, STATUS_ERROR)
+
+
+func _preview_payload() -> Dictionary:
+	return {
+		"data_key": str(_preview_obstacle_token.get_data_key()),
+		"pos_x": _preview_obstacle_token.position.x / GameScale.play_area_size_px.x,
+		"pos_y": _preview_obstacle_token.position.y / GameScale.play_area_size_px.y,
+		"rotation_deg": rad_to_deg(_preview_obstacle_token.rotation),
+	}
+
+
+func _rotatable_setup_token() -> Node2D:
+	if _preview_obstacle_token != null:
+		return _preview_obstacle_token
+	return _selected_token
+
+
+func _can_confirm_preview() -> bool:
+	return _preview_obstacle_token != null \
+			and not _preview_is_moving \
+			and _preview_validation_error.is_empty()
+
+
+func _drop_obstacle_preview() -> void:
+	_preview_is_moving = false
+	_preview_obstacle_token.set_click_enabled(true)
+	_update_obstacle_preview_feedback()
+	_render_modal(_current_setup_intent())
+
+
+func _resume_obstacle_preview_move() -> void:
+	_preview_is_moving = true
+	_preview_obstacle_token.set_click_enabled(false)
+	_set_status("Preview unlocked. Move it, rotate it, then click once to drop it.",
+			STATUS_TEXT)
+	_render_modal(_current_setup_intent())
+
+
+func _candidate_obstacle_position(desired: Vector2, token: Node2D) -> Vector2:
+	var extents: Vector2 = token.call("get_half_extents") as Vector2
+	return Vector2(
+			clampf(desired.x, extents.x, GameScale.play_area_size_px.x - extents.x),
+			clampf(desired.y, extents.y, GameScale.play_area_size_px.y - extents.y))
+
+
+func _preview_payload_for_position(position: Vector2) -> Dictionary:
+	return {
+		"data_key": str(_preview_obstacle_token.get_data_key()),
+		"pos_x": position.x / GameScale.play_area_size_px.x,
+		"pos_y": position.y / GameScale.play_area_size_px.y,
+		"rotation_deg": rad_to_deg(_preview_obstacle_token.rotation),
+	}
+
+
+func _would_enter_deployment_zone(position: Vector2) -> bool:
+	var error: String = SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
+			GameManager.current_game_state,
+			_current_setup_intent().controller_player,
+			_preview_payload_for_position(position))
+	return error == SETUP_OBSTACLE_VALIDATOR_SCRIPT.ERROR_DEPLOYMENT_ZONE
 
 
 func _sync_ship_token(payload: Dictionary) -> void:
@@ -557,8 +831,9 @@ func _on_start_round_pressed() -> void:
 	if result.has("new_round"):
 		refresh_from_state()
 		return
-	_status_label.text = str(result.get("reason", "Setup could not be completed."))
-	_status_label.add_theme_color_override("font_color", STATUS_ERROR)
+	_set_status(str(result.get("reason", "Setup could not be completed.")),
+			STATUS_ERROR)
+	_render_modal(_current_setup_intent())
 
 
 func _obstacle_button_text(obstacle_key: String) -> String:

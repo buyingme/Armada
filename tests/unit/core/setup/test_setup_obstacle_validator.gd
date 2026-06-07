@@ -72,12 +72,20 @@ func test_validate_commit_3x6_deployment_zone_overlap_rejected() -> void:
 			"3x6 obstacle placements should reject footprints that overlap deployment zones.")
 
 
-func test_validate_commit_3x3_full_play_area_allows_near_edge_expected() -> void:
+func test_validate_commit_3x3_deployment_zone_overlap_rejected() -> void:
 	var result: String = SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
-			_state, 1, _payload("asteroid_2", 0.12, 0.12))
+			_state, 1, _payload("asteroid_2", 0.5, 0.12))
+
+	assert_ne(result, "",
+			"3x3 obstacle placements should also reject deployment-zone overlap.")
+
+
+func test_validate_commit_3x3_midfield_position_accepted_expected() -> void:
+	var result: String = SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
+			_state, 1, _payload("asteroid_2", 0.5, 0.5))
 
 	assert_eq(result, "",
-			"3x3 setup should use the full play area instead of the 3x6 setup band.")
+			"3x3 obstacle placements should remain legal in the midfield setup area.")
 
 
 func test_validate_commit_distance_one_separation_rejected() -> void:
@@ -114,7 +122,7 @@ func test_validate_commit_standard_pool_allows_exact_sixth_obstacle_expected() -
 	SETUP_INTERACTION_FLOW_RESOLVER_SCRIPT.apply_to_state(_state)
 
 	var result: String = SETUP_OBSTACLE_VALIDATOR_SCRIPT.validate_commit(
-			_state, 0, _payload("station", 0.82, 0.12))
+			_state, 0, _payload("station", 0.5, 0.5))
 
 	assert_eq(result, "",
 			"The final standard obstacle should remain legal when it satisfies spacing rules.")
@@ -150,11 +158,11 @@ func _obstacle(data_key: String,
 
 func _five_obstacles() -> Array[Dictionary]:
 	return [
-		_obstacle(OBSTACLE_KEYS[0], 0.12, 0.12, 1, 0),
-		_obstacle(OBSTACLE_KEYS[1], 0.28, 0.88, 0, 1),
-		_obstacle(OBSTACLE_KEYS[2], 0.46, 0.16, 1, 2),
-		_obstacle(OBSTACLE_KEYS[3], 0.64, 0.84, 0, 3),
-		_obstacle(OBSTACLE_KEYS[4], 0.82, 0.5, 1, 4),
+		_obstacle(OBSTACLE_KEYS[0], 0.14, 0.5, 1, 0),
+		_obstacle(OBSTACLE_KEYS[1], 0.30, 0.66, 0, 1),
+		_obstacle(OBSTACLE_KEYS[2], 0.48, 0.34, 1, 2),
+		_obstacle(OBSTACLE_KEYS[3], 0.66, 0.66, 0, 3),
+		_obstacle(OBSTACLE_KEYS[4], 0.84, 0.5, 1, 4),
 	]
 
 

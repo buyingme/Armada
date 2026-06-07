@@ -215,7 +215,18 @@ func _deployment(entry_id: String, owner_player: int,
 
 
 func _player_entry(player_index: int, faction: String, roster: Dictionary) -> Dictionary:
-	return {"player_index": player_index, "faction": faction, "roster": roster}
+	return {
+		"player_index": player_index,
+		"display_name": _display_name_for_player(player_index),
+		"faction": faction,
+		"roster": roster,
+	}
+
+
+func _display_name_for_player(player_index: int) -> String:
+	if player_index == 0:
+		return "Player One"
+	return "Player Two"
 
 
 func _rebel_roster() -> Dictionary:

@@ -76,9 +76,16 @@ func _create_package_data() -> Dictionary:
 func _create_player_entry(player_index: int) -> Dictionary:
 	return {
 		"player_index": player_index,
+		"display_name": _display_name_for_player(player_index),
 		"faction": "REBEL_ALLIANCE" if player_index == 0 else "GALACTIC_EMPIRE",
 		"roster": _create_roster(player_index),
 	}
+
+
+func _display_name_for_player(player_index: int) -> String:
+	if player_index == 0:
+		return "Player One"
+	return "Player Two"
 
 
 func _create_roster(player_index: int) -> Dictionary:

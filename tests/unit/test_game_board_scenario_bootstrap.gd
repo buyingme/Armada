@@ -116,7 +116,18 @@ func _setup_package() -> FleetSetupPackage:
 
 
 func _player_entry(player_index: int, faction: String, roster: Dictionary) -> Dictionary:
-	return {"player_index": player_index, "faction": faction, "roster": roster}
+	return {
+		"player_index": player_index,
+		"display_name": _display_name_for_player(player_index),
+		"faction": faction,
+		"roster": roster,
+	}
+
+
+func _display_name_for_player(player_index: int) -> String:
+	if player_index == 0:
+		return "Player One"
+	return "Player Two"
 
 
 func _roster(fleet_id: String, faction: String, ship_key: String) -> Dictionary:

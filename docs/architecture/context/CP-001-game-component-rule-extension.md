@@ -1,9 +1,20 @@
 # CP-001: Game Component Rule Extension Context Pack
 
-Status: Draft  
+Status: Baseline Evidence  
+Purpose:  
+This context pack documents the observed implementation before architecture decisions.  
+It is evidence of current behavior, not an approved future architecture.  
+Supports decisions:  
+ADR-003 Rule and Validation Surface Decision  
 Related task: AT-004  
 Related boundaries: BC-005A, BC-005, BC-011, BC-012  
 Related gaps: RG-005, RG-006, RG-011, RG-013, RG-015
+
+Context Pack lifecycle:
+
+- Draft: Evidence gathering in progress.
+- Under Review: Evidence completeness and correctness are being audited.
+- Baseline Evidence: Current implementation is sufficiently understood to support ADR decisions, even when architecture decisions remain open.
 
 ## 1. Purpose
 
@@ -217,7 +228,11 @@ Damage-card coverage is split by effect type. `damage_cards.json` currently defi
 | Network/reconnect durability | Lobby/network code serializes rosters, setup packages, commands, and state snapshots; projection reconstructs visible intent | `LobbyManager`, `NetworkManager`, `StateFilter`, `UIProjector` | RG-013, RG-015, BC-005A, BC-012, AT-004 |
 | Existing test evidence | Static catalog/schema tests cover component records and typed loading; fleet/setup tests cover roster/package/bootstrap flows; command tests cover validation/history; rule tests cover registry/surface hooks, squadron keywords, and damage-card behavior; save/load tests cover serialized state; replay tests cover command replay/order; network/reconnect tests cover filtering and projection paths. Coverage is not yet mapped as an accepted per-boundary test strategy | `test_component_catalog_schema_contract.gd`, `test_fleet_builder_catalog_data_models.gd`, `test_fleet_catalog.gd`, `test_fleet_roster.gd`, `test_fleet_setup_package_builder.gd`, `test_fleet_roster_setup_helper.gd`, `test_rule_bootstrap.gd`, `test_rule_surface.gd`, `test_squadron_keyword_live_rules.gd`, `test_resolve_immediate_effect_command.gd`, `test_save_load_round_trip.gd`, `test_game_replay.gd`, `test_rule_order_replay.gd`, `test_network_manager.gd`, `test_reconnection_mid_attack.gd` | RG-013, BC-005, BC-005A, BC-012, AT-004 |
 
-## 9. Open Questions For Owner
+## 9. Open Evidence Questions
+
+No unresolved evidence questions remain. This context pack is considered a Baseline Evidence document.
+
+## 10. Architecture Decision Questions (Inputs to ADR-003)
 
 - Should future behavior-changing component rules use RuleRegistry as the primary surface, or should the current hybrid resolver/command/registry model be formalized?
 - Where should active upgrade state live after setup: on `ShipInstance`, in a separate component-state collection, in `GameState`, or somewhere else?
@@ -233,7 +248,7 @@ Damage-card coverage is split by effect type. `damage_cards.json` currently defi
 - Should `rules_integration`, `rule_surfaces`, and `runtime_state_requirements` remain descriptive metadata, or become checked contract fields?
 - Does ADR-003 need to decide all component categories at once, or can it define a minimal accepted path for the next behavior-changing category first?
 
-## 10. Next Recommended Steps
+## 11. Next Recommended Steps
 
 Recommended next step: continue with ADR-003 Rule and Validation Surface Decision using this context pack as evidence.
 

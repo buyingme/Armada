@@ -51,6 +51,101 @@ Architecture-sensitive changes include:
 - New responsibilities in `GameManager`, `EventBus`, autoload services, or
   scene controllers that affect durable state.
 
+## Architecture Evolution Workflow
+
+This workflow is the default path for architecture transformation work. Not
+every architecture task requires every phase. Small documentation corrections or
+low-risk changes may use a reduced process.
+
+### 1. Context Pack Draft
+
+Purpose: gather implementation evidence.
+
+Activities:
+
+- Code tracing.
+- Documentation comparison.
+- Runtime path analysis.
+- Identification of evidence gaps.
+
+Output: initial CP document.
+
+### 2. Evidence Audit
+
+Purpose: validate completeness and correctness.
+
+Activities:
+
+- Verify code evidence.
+- Search for missing paths.
+- Challenge assumptions.
+
+### 3. Evidence Patch
+
+Purpose: close missing evidence.
+
+Activities:
+
+- Add missing traceability.
+- Improve evidence maps.
+- Separate evidence questions from architecture decisions.
+
+### 4. Baseline Evidence
+
+Meaning: the implementation is sufficiently understood to support architecture
+decisions.
+
+Allowed:
+
+- Open architecture decision questions.
+- Known risks.
+
+Not allowed:
+
+- Critical missing implementation evidence.
+
+### 5. ADR Decision Analysis
+
+Purpose: evaluate architecture options.
+
+Activities:
+
+- Compare alternatives.
+- Evaluate migration cost.
+- Evaluate Codex safety.
+- Evaluate save/load, replay, network, and testing impact.
+
+### 6. Owner Architecture Decision
+
+Purpose: select the future direction.
+
+Output: accepted ADR.
+
+### 7. Contract Definition
+
+Purpose: translate accepted architecture into implementation rules and
+invariants.
+
+### 8. Test Protection
+
+Purpose: ensure contracts are verified and future changes are safe.
+
+### 9. Incremental Migration
+
+Purpose: move the implementation toward the accepted architecture in small safe
+slices.
+
+Avoid big-bang rewrites unless explicitly decided.
+
+### 10. Context Pack Supersession
+
+Purpose: preserve historical evidence.
+
+A Context Pack becomes Superseded when it no longer accurately describes the
+implementation after migration.
+
+A new Context Pack may be created for the new architecture.
+
 ## Decision Outcomes
 
 After checking the roadmap and authority rules, classify the work:
@@ -109,4 +204,3 @@ If the authority order still does not produce a clear answer, ask the owner.
 - Prefer existing command, setup, save/load, replay, and network patterns over
   inventing new patterns.
 - When in doubt, document the uncertainty and ask before implementing.
-

@@ -104,7 +104,7 @@ can be achieved cheaply. Current evidence does not support that.
 | Regression risk | Medium. Risk remains in `BC-001`, `BC-003`, `BC-005`, `BC-007`, `BC-008`, and `BC-009`, but can be controlled by contracts and focused tests. |
 | Migration cost | Medium. Work can follow `AT-xxx` sequencing and avoid high-risk areas until decisions exist. |
 | Testability | Good. Existing GUT tests, CI, and baseline trace scripts can be extended rather than replaced. |
-| Codex safety | Medium-high if `DOCUMENT_AUTHORITY.md`, `CODEX_WORKFLOW.md`, and `.ai/instructions/project_status.md` are followed. |
+| Codex safety | Medium-high if `DOCUMENT_AUTHORITY.md`, `CODEX_WORKFLOW.md`, and `.ai/instructions/AI_STARTUP_GUARDRAILS.md` are followed. |
 | Ability to continue feature development | Good. Safe feature areas can proceed while high-risk boundaries are clarified. |
 | Save/load impact | Controlled. Changes can be kept behind current serialization contracts until `CON-xxx` documents exist. |
 | Network impact | Controlled. Network-sensitive work can wait for `TEST-002` and related contracts. |
@@ -315,4 +315,3 @@ Failure criteria:
 
 The project should continue as an incremental architecture transformation
 program, not a rewrite program.
-

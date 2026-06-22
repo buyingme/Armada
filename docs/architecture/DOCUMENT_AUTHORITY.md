@@ -36,7 +36,7 @@ questions.
 | Context Packs (`docs/architecture/context/CP-xxx-*.md`) | Local evidence package for a boundary/topic | Observed implementation evidence. May reference intended architecture only as comparison context. Baseline Evidence means implementation understanding is sufficient to support ADR work; unresolved Architecture Decision Questions do not prevent that status. | High as evidence; not a decision; never an accepted architecture decision | Yes, when requested. Baseline Evidence changes during active ADR work should be explicit and reviewable | Owner approval not required unless it asserts decisions |
 | Contracts (`docs/architecture/contracts/CON-xxx-*.md`, future, plus existing contracts such as `docs/setup_flow.md`) | Defines invariants and allowed behavior for implementation | Accepted behavioral contract | Very high for implementation | No, except draft/update when requested | Yes to create or change accepted contracts |
 | Test Strategies (`docs/architecture/tests/TEST-xxx-*.md`, future) | Defines invariant coverage and test obligations | Required or planned test protection | High for testing expectations after accepted | Yes, when requested or derived from accepted contracts | Required to waive high-risk test obligations |
-| Existing Copilot Instructions (`.github/copilot-instructions.md`) | General AI/coding guidance | Codex and Copilot operating rules; may lag architecture migration | Medium; superseded by accepted ADRs/contracts and `.ai/instructions/project_status.md` for migration safety | No broad rewrite unless requested | Required for persistent policy-level changes |
+| Existing Copilot Instructions (`.github/copilot-instructions.md`) | General AI/coding guidance | Codex and Copilot operating rules; may lag architecture migration | Medium; superseded by accepted ADRs/contracts and `.ai/instructions/AI_STARTUP_GUARDRAILS.md` for migration safety | No broad rewrite unless requested | Required for persistent policy-level changes |
 | Existing Skills (`.skills/*.md`, `.github/skills/*/SKILL.md`) | Specialized AI workflows and implementation rules | Codex operating rules and domain-specific guidance; may contain intended architecture | Medium-high for local workflow; superseded by accepted ADRs/contracts on conflicts | No broad rewrite unless requested | Required for changing normative workflow rules |
 | Future Codex Instructions (`.ai/instructions/*.md`) | Short operational guardrails for AI agents | Codex operating rules during migration | High for AI behavior; does not decide architecture | Yes, when requested to update guardrails | Required if guardrail changes alter risk posture |
 
@@ -50,7 +50,7 @@ questions.
 | What architecture should we choose? | ADR process and Architecture Decision analysis | Context packs as evidence only; not as decisions |
 | What must implementation preserve? | Contracts | Test strategies |
 | What is unresolved? | Reality Gap Register, Boundary Candidates, Decision Triage | Architecture Roadmap |
-| What should Codex do safely today? | `.ai/instructions/project_status.md`, `CODEX_WORKFLOW.md`, Architecture Roadmap | Existing Copilot instructions and skills |
+| What should Codex do safely today? | `.ai/instructions/AI_STARTUP_GUARDRAILS.md`, `CODEX_WORKFLOW.md`, Architecture Roadmap | Existing Copilot instructions and skills |
 
 ## Context Pack Lifecycle
 

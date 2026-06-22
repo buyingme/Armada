@@ -105,7 +105,7 @@ Rules:
 | Priority | Critical |
 | Status | Completed |
 | Inputs | `RG-008`, `RG-009`, `RG-010`, `RG-011`, `RG-012`, `RG-016`; `BC-014`; all current architecture docs |
-| Outputs | `docs/architecture/DOCUMENT_AUTHORITY.md`; `.ai/instructions/project_status.md`; `docs/architecture/CODEX_WORKFLOW.md` |
+| Outputs | `docs/architecture/DOCUMENT_AUTHORITY.md`; `.ai/instructions/AI_STARTUP_GUARDRAILS.md`; `docs/architecture/CODEX_WORKFLOW.md` |
 | Dependencies | None |
 
 ### AT-006 - GameManager Orchestration Context Pack

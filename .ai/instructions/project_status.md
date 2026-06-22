@@ -1,7 +1,19 @@
 # Project Status Guardrail
 
-This project is undergoing architecture clarification. Architecture documents,
-current code, and implementation guidance may temporarily disagree.
+Purpose:
+
+This document provides a lightweight startup checklist for AI agents.
+
+Architecture orientation begins with `ARCHITECTURE.md`.
+
+This document supplements, but does not replace, the architecture documentation.
+
+This project is actively evolving.
+
+Accepted architecture, implementation, and historical documentation may
+temporarily diverge.
+
+Resolve disagreements using `docs/architecture/DOCUMENT_AUTHORITY.md`.
 
 Rules for AI agents:
 
@@ -14,11 +26,20 @@ Rules for AI agents:
 
 Before architecture-sensitive changes:
 
-1. Check `docs/architecture/ARCHITECTURE_ROADMAP.md`.
-2. Check `docs/architecture/DOCUMENT_AUTHORITY.md`.
-3. Read related ADRs, contracts, and context packs if they exist.
-4. Check `docs/REALITY_GAP_REGISTER.md`.
+1. Read `ARCHITECTURE.md`.
+2. Follow the reading guidance provided there.
+3. Read `docs/architecture/DOCUMENT_AUTHORITY.md`.
+4. Read `docs/architecture/ARCHITECTURE_ROADMAP.md`.
+5. Read the relevant accepted ADRs.
+6. Read the relevant accepted Contracts.
+7. Read the relevant Context Packs.
+8. If the area is still under clarification, consult `docs/REALITY_GAP_REGISTER.md`.
 
 If documentation and code conflict and no documented migration path exists,
 stop and ask for owner guidance.
 
+When `ARCHITECTURE.md` and another orientation document differ,
+`ARCHITECTURE.md` is the preferred entry point.
+
+Architecture authority is still determined by
+`docs/architecture/DOCUMENT_AUTHORITY.md`.

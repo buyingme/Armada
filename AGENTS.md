@@ -8,15 +8,22 @@ It is not an architecture document.
 
 Architecture orientation always begins with `ARCHITECTURE.md`.
 
+Development process orientation is provided by
+docs/development/AI_DEVELOPMENT_PRINCIPLES.md
+and
+docs/development/AI_DEVELOPMENT_PROCESS.md.
+
 ## Startup Reading
 
 For architecture-sensitive work, read these first:
 
-1. `ARCHITECTURE.md`
-2. `.ai/instructions/AI_STARTUP_GUARDRAILS.md`
-3. `docs/architecture/DOCUMENT_AUTHORITY.md`
-4. `docs/architecture/ARCHITECTURE_ROADMAP.md`
-5. `docs/architecture/CODEX_WORKFLOW.md`
+1. ARCHITECTURE.md
+2. docs/development/AI_DEVELOPMENT_PRINCIPLES.md
+3. docs/development/AI_DEVELOPMENT_PROCESS.md
+4. .ai/instructions/AI_STARTUP_GUARDRAILS.md
+5. DOCUMENT_AUTHORITY.md
+6. ARCHITECTURE_ROADMAP.md
+7. CODEX_WORKFLOW.md
 
 Then read the accepted ADRs, Contracts, Context Packs, and Rule Capability
 Packages relevant to the files being changed.

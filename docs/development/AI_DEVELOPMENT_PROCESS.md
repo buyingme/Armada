@@ -22,7 +22,22 @@ responsible for all architecture and implementation decisions.
 
 ------------------------------------------------------------------------
 
-## 2. Guiding Principles
+## 2. Authority
+
+This document defines the Development Architecture for the Armada project.
+
+The Development Architecture governs the software development process.
+
+The Software Architecture governs the software system.
+
+Whenever this document conflicts with software architecture documents,
+`DOCUMENT_AUTHORITY.md` determines precedence.
+
+This document never redefines software architecture.
+
+------------------------------------------------------------------------
+
+## 3. Guiding Principles
 
 1.  Requirements before architecture.
 2.  Evidence before decisions.
@@ -33,7 +48,7 @@ responsible for all architecture and implementation decisions.
 
 ------------------------------------------------------------------------
 
-## 3. Roles
+## 4. Roles
 
 ### Project Owner
 
@@ -123,9 +138,19 @@ Never:
 -   redesign architecture
 -   introduce new requirements
 
+### Implementation Note
+
+The roles defined in this document describe responsibilities.
+
+They do not require separate AI agents.
+
+A single AI session may perform different roles depending on the assigned task.
+
+The active role shall always be defined by the task specification.
+
 ------------------------------------------------------------------------
 
-## 4. Development Workflow
+## 5. Development Workflow
 
 ``` text
 Project Goal
@@ -151,7 +176,7 @@ Verification
 
 ------------------------------------------------------------------------
 
-## 5. Tool Usage
+## 6. Tool Usage
 
 ### ChatGPT
 
@@ -187,7 +212,7 @@ Every repository modification shall be based on an explicit task.
 
 ------------------------------------------------------------------------
 
-## 6. Owner Workflow
+## 7. Owner Workflow
 
 The Owner starts every activity by defining:
 
@@ -203,7 +228,7 @@ repository state.
 
 ------------------------------------------------------------------------
 
-## 7. Architecture Philosophy
+## 8. Architecture Philosophy
 
 Requirements describe **what** shall be built.
 
@@ -215,7 +240,7 @@ Implementation never defines architecture.
 
 ------------------------------------------------------------------------
 
-## 8. Success Criteria
+## 9. Success Criteria
 
 The process is successful when:
 

@@ -102,7 +102,24 @@ vendor.
 
 ------------------------------------------------------------------------
 
-# Principle 7 --- Continuous Simplification
+# Principle 7 --- Evolution over Expansion
+
+The Development Architecture shall evolve conservatively.
+
+Existing principles, roles, workflows, and documents shall be reused
+whenever they adequately address a task.
+
+New responsibilities, workflow roles, document types, or governance
+artifacts shall be introduced only when existing concepts cannot
+reasonably accommodate the new requirement and the Project Owner
+explicitly approves the addition.
+
+Prefer specialization of existing responsibilities through task
+instructions over introducing new permanent responsibilities.
+
+------------------------------------------------------------------------
+
+# Principle 8 --- Continuous Simplification
 
 The development process is reviewed regularly.
 

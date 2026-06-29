@@ -2,13 +2,10 @@
 
 Status: Accepted
 Accepted by: Project Owner
-Accepted date: <2026-06-28>
+Accepted date: 2026-06-28
 
 ADR-ID: ADR-004
 Title: Upgrade Runtime Ownership
-
-Accepted by: Not accepted
-Accepted date: Not applicable
 
 Supersedes:
 None

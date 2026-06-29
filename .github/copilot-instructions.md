@@ -202,16 +202,19 @@ When completing a phase task or full phase:
 - See `.skills/copilot_instructions.md` for the exact update procedure and the MT scenario template
 - Archived originals in `docs/old/` for historical reference (per-slice narratives, MT logs, fix follow-ups)
 
-### 12. New Rules Go Through `RuleRegistry`
+### 12. New Rules Identify ADR-003 Rule Surfaces
 
 Every new game rule, card effect, damage card, squadron keyword, upgrade,
 objective, obstacle, token rule, defense-token eligibility rule, and UI
-affordance derived from rules must use `RuleRegistry` hooks under
-`src/core/effects/rules/`.
+affordance derived from rules must identify the appropriate rule surfaces
+defined by ADR-003. `RuleRegistry` is one possible rule surface where
+appropriate.
 
-- Keep one source rule per file and use the source-first folders described in
+- When using `RuleRegistry`, keep one source rule per file and use the
+    source-first folders described in
     `src/core/effects/rules/README.md`.
-- Register static hooks through `RuleBootstrap` and `RuleRegistry.register_rule()`;
+- Register static hooks through `RuleBootstrap` and `RuleRegistry.register_rule()`
+    when `RuleRegistry` is the chosen surface;
     do not scatter rule branches through scenes, UI, command producers, or
     resolver special cases.
 - `RuleRegistry` is a static definition catalogue only. Active rule state must

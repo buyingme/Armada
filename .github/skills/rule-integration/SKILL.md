@@ -12,7 +12,8 @@ Use this skill whenever a change adds, migrates, reviews, or debugs a game rule.
 
 A rule integration is complete only when all surfaces agree:
 
-- Static rule definition: `RuleRegistry` declares which rule exists and where it attaches.
+- Rule surface definition: identify the applicable ADR-003 rule surfaces;
+  `RuleRegistry` declares static hooks where appropriate.
 - Active state source: the predicate reads authoritative serialized state (`GameState`, `ShipInstance.faceup_damage`, squadron keywords, upgrades, objective state), not stale transient caches.
 - Command surface: every command that can express the illegal action is covered, including marker commands such as `commit_defense`, not only the final mutation command.
 - Command applicability: `CommandApplicability`, `FlowSpec.allowed_commands`,
@@ -47,7 +48,8 @@ A rule integration is complete only when all surfaces agree:
    - Add command and projection tests for hot-seat, network, and replay safety before scene/UI wiring.
    - Counter is the reference pattern: the triggering attack pipeline remains with the original executor, but the Counter owner submits `counter_choice`, then owns the Counter roll/modifier/confirm commands.
 
-4. Pick the hook kind and attachment.
+4. Pick the rule surface, and the hook kind and attachment when `RuleRegistry`
+   is appropriate.
    - `VALIDATOR`: rejects a command or selected option.
    - `MODIFIER`: changes a pool/value/context.
    - `OBSERVER`: creates deterministic follow-up commands after an event.
@@ -73,7 +75,8 @@ A rule integration is complete only when all surfaces agree:
      or activation slots when the user is only inspecting candidates.
 
 7. Preserve active-state semantics.
-   - Static rule definitions live in `RuleRegistry` and are bootstrapped.
+   - When `RuleRegistry` is the appropriate surface, static rule definitions
+     live in `RuleRegistry` and are bootstrapped.
    - Active rule status comes from serialized entities only: `GameState`, ships, squadrons, faceup damage cards, upgrades, objectives, obstacles, and tokens.
    - Do not serialize `RuleRegistry` or use it as an active-card store.
 

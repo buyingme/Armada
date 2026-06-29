@@ -2,11 +2,11 @@
 
 Contract ID: CON-004  
 Title: Upgrade Runtime Contract  
-Status: Proposed  
+Status: Accepted
 Derived From: ADR-004
 
-Accepted by: Not accepted  
-Accepted date: Not applicable  
+Accepted by: Project Owner
+Accepted date: 2026-06-29
 Supersedes: None  
 Superseded by: None
 

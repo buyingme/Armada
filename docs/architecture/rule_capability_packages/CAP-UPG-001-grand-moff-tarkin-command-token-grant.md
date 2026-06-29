@@ -1,16 +1,16 @@
 # CAP-UPG-001: Grand Moff Tarkin Command Token Grant
 
-Package ID: CAP-UPG-001  
-Title: Grand Moff Tarkin Command Token Grant  
-Status: Draft  
-Component Type: upgrade  
-Source Component: grand_moff_tarkin  
-Related ADRs: ADR-003  
-Related Contracts: CON-003  
-Related Context Packs: CP-001  
-Related Tests: Required tests listed in this package  
-Created: 2026-06-28  
-Last Updated: 2026-06-28  
+Package ID: CAP-UPG-001
+Title: Grand Moff Tarkin Command Token Grant
+Status: Draft
+Component Type: upgrade
+Source Component: grand_moff_tarkin
+Related ADRs: ADR-003, ADR-004
+Related Contracts: CON-003, CON-004
+Related Context Packs: CP-001
+Related Tests: Required tests listed in this package
+Created: 2026-06-28
+Last Updated: 2026-06-29
 Owner: Project Owner review required
 
 ## Identity
@@ -41,7 +41,7 @@ The purpose of this package is to preserve the completed evidence analysis for
 the Grand Moff Tarkin COMMANDER upgrade as a permanent CON-003 traceability
 artifact.
 
-It identifies the behavior slice, required ownership decisions, affected
+It identifies the behavior slice, accepted ownership constraints, affected
 surfaces, required tests, and known risks before implementation work begins.
 
 ## Scope
@@ -88,46 +88,48 @@ Static metadata alone is not active behavior evidence.
 - `ARCHITECTURE.md`
 - `docs/architecture/DOCUMENT_AUTHORITY.md`
 - `docs/architecture/adr/ADR-003-rule-and-validation-surfaces.md`
+- `docs/architecture/adr/ADR-004-upgrade-runtime-ownership.md`
 - `docs/architecture/contracts/CON-003-rule-capability-contract.md`
+- `docs/architecture/contracts/CON-004-upgrade-runtime-contract.md`
 - `docs/architecture/context/CP-001-game-component-rule-extension.md`
 - `docs/architecture/templates/RULE_CAPABILITY_PACKAGE_TEMPLATE.md`
 
 Authority notes:
 
 - ADR-003 defines the accepted rule and validation surface architecture.
+- ADR-004 defines the accepted runtime ownership model for active upgrade
+  instances and mutable upgrade state.
 - CON-003 defines the Rule Capability Package contract.
+- CON-004 defines the implementation contract for runtime upgrade instances.
 - CP-001 is Baseline Evidence and does not decide future architecture.
 - Codex may recommend readiness but may not mark this package `Integrated`.
 
 ## Runtime Ownership
 
-The runtime ownership question is unresolved.
+Runtime ownership is governed by accepted ADR-004 and CON-004.
 
-Observed evidence from CP-001 and the completed evidence analysis:
+For this package, Grand Moff Tarkin uses the default ownership model:
+the source runtime upgrade instance belongs on the owning ShipInstance and
+references static upgrade data by data_key.
+
+This package does not create an exception to ADR-004 or CON-004.
+If implementation later needs an exception, it must be justified in this
+Rule Capability Package before implementation proceeds.
+
+Evidence from CP-001 and the completed evidence analysis:
 
 - Upgrade assignments are serialized in fleet roster entries.
 - Fleet/setup validation already consumes upgrade assignment data.
 - Fleet setup uses assigned upgrades for fleet-point calculation.
 - No generic active runtime upgrade-state collection was observed on
-  `ShipInstance`.
+  `ShipInstance` before ADR-004 and CON-004.
 - `ShipInstance` serializes ship mutable state and static ship identity, but
-  the completed evidence analysis did not identify serialized runtime upgrade
-  assignments on `ShipInstance`.
+  the completed evidence analysis predated the accepted runtime upgrade
+  instance contract.
 
-Owner decision required:
-
-- Choose the active runtime owner for Grand Moff Tarkin's commander assignment
-  and per-Ship-Phase trigger state before implementation.
-
-Candidate ownership paths identified by evidence, not decided here:
-
-- Derive the commander assignment from serialized setup/roster state if that is
-  accepted as sufficient runtime source state.
-- Add or reuse a serialized runtime upgrade-assignment state surface on ship,
-  player, or game state.
-- Use another owner-approved state path.
-
-This package does not choose among those options.
+This package does not create an exception to ADR-004 or CON-004. If
+implementation later needs an exception for Tarkin, the exception must be
+justified in this Rule Capability Package before implementation proceeds.
 
 ## Surface Traceability
 
@@ -135,7 +137,7 @@ This package does not choose among those options.
 | --- | --- | --- | --- |
 | Static upgrade data | Required | `Resources/Game_Components/upgrades/commander/grand_moff_tarkin.json`; `UpgradeData`; `AssetLoader` | Source exists, but metadata is not active behavior. |
 | Fleet validation | Required | `FleetValidator`; `FleetUpgradeAssignment`; `FleetShipEntry`; commander/upgrade tests identified in evidence analysis | Confirms legal commander assignment before setup. |
-| Runtime state | Required | `GameState`; `PlayerState`; `ShipInstance`; setup package and roster evidence | Active owner unresolved. |
+| Runtime state | Required | ADR-004; CON-004; `GameState`; `PlayerState`; `ShipInstance`; setup package and roster evidence | Source runtime upgrade instance belongs on the owning `ShipInstance` by default. |
 | Command validation | Required | `CommandProcessor`; `CommandApplicability`; command classes | A submitted choice/grant must be legal and phase-scoped. |
 | Command execution | Required | Existing command-token mutation paths and `CommandTokenManager` | Token grant mutates friendly ships. |
 | RuleRegistry | Optional | `RuleRegistry`; `RuleSurface` | May be used only if accepted call sites exist. Not required by ADR-003. |
@@ -160,15 +162,17 @@ Required runtime facts:
 
 Existing state evidence:
 
+- ADR-004 and CON-004 define the runtime upgrade instance ownership model.
 - `ShipInstance.command_tokens` and `CommandTokenManager` already represent
   command tokens.
 - Command tokens serialize with ship state.
 - `InteractionFlow.payload` is JSON-safe and serializes through `GameState`.
 - Command history serializes submitted commands.
 
-Evidence gap:
+Implementation gap:
 
-- The active runtime owner for assigned upgrades after setup is unresolved.
+- No Tarkin-specific runtime upgrade instance materialization or trigger guard
+  implementation exists yet.
 
 ## Validation Surfaces
 
@@ -259,10 +263,10 @@ Existing serialization evidence:
 - `InteractionFlow` payloads are expected to be JSON-safe.
 - Game commands serialize into command history.
 
-Evidence gap:
+Implementation gap:
 
-- Existing evidence does not identify an accepted serialized runtime owner for
-  upgrade assignments after setup.
+- No Tarkin-specific serialized runtime upgrade instance or trigger guard
+  implementation exists yet.
 
 ## Replay Impact
 
@@ -343,7 +347,7 @@ Missing visibility evidence:
 | Fleet assignment | `FleetUpgradeAssignment`; `FleetShipEntry`; `FleetRoster` | Upgrade assignments are represented in roster/setup payloads. |
 | Fleet validation | `FleetValidator`; commander-related fleet tests identified in evidence analysis | Commander legality is currently a fleet/build concern. |
 | Runtime setup | `FleetRosterSetupHelper`; `FleetSetupPackage`; `FleetSetupBootstrapper` | Setup converts roster data to runtime game state and uses upgrades for fleet points. |
-| Runtime state gap | CP-001 Section 3 and completed evidence analysis | No generic active runtime upgrade-state collection was observed on `ShipInstance`. |
+| Runtime ownership | ADR-004; CON-004 | Active equipped upgrades become runtime upgrade instances on the owning `ShipInstance` by default; mutable upgrade state belongs to that instance by default. |
 | Command tokens | `ShipInstance.command_tokens`; `CommandTokenManager` | Command-token state exists and serializes. |
 | Command processing | `CommandProcessor`; `CommandApplicability`; `GameCommand` | Commands provide validation, execution, history, and replay surfaces. |
 | Token-gain rule interaction | `RuleSurface.TARGET_COMMAND_TOKEN_GAIN`; existing token-gain blocker patterns | Tarkin token gain may need to respect existing blockers. |
@@ -352,7 +356,7 @@ Missing visibility evidence:
 | Serialization | `GameState.serialize()`; `PlayerState`; `ShipInstance`; command serialization | Durable state and command history are available surfaces. |
 | Replay | `CommandProcessor.serialize_history()`; `GameReplay` | Replay depends on serialized commands and deterministic state. |
 | Network/reconnect | `NetworkManager`; snapshot/reconnect projection path | Live sync and reconnect require serialized state and filtered projection. |
-| Architecture authority | ADR-003; CON-003; CP-001 | Rule behavior requires capability-backed surface evidence before integration. |
+| Architecture authority | ADR-003; ADR-004; CON-003; CON-004; CP-001 | Rule behavior requires capability-backed surface evidence before integration; active upgrade runtime ownership is decided. |
 
 ## Required Tests
 
@@ -360,7 +364,7 @@ Required before this package can advance beyond Draft/Identified:
 
 - Static/catalog test confirming Tarkin's static upgrade record remains loadable
   and metadata remains a status claim, not active behavior proof.
-- Fleet/setup test proving the selected active runtime ownership path can
+- Fleet/setup test proving the accepted runtime ownership model can
   identify the Tarkin owner after setup and after save/load.
 - Command registration and applicability tests for any new command used by the
   rule.
@@ -387,7 +391,7 @@ coverage is sufficient for any non-Integrated status advancement.
 
 | Risk Area | Impact | Evidence / Rationale | Mitigation or Outstanding Work |
 | --- | --- | --- | --- |
-| Runtime ownership | High | No generic active runtime upgrade state was observed on `ShipInstance`. | Owner must choose active state owner before implementation. |
+| Runtime ownership | Medium | ADR-004 and CON-004 define default ownership, but no Tarkin runtime instance implementation exists yet. | Implement and test the accepted runtime upgrade instance path. |
 | Phase timing | Medium | Existing flow moves into Ship Phase activation; no Tarkin prompt was observed. | Define command/flow timing before implementation. |
 | Token overflow/duplicates | Medium | Tarkin may grant tokens to multiple ships at once. | Tests must cover duplicate and overflow behavior. |
 | Rule interactions | Medium | Existing token-gain blockers may apply. | Validate against `TARGET_COMMAND_TOKEN_GAIN` or owner-approved equivalent. |
@@ -399,7 +403,6 @@ coverage is sufficient for any non-Integrated status advancement.
 
 ## Open Questions
 
-- Where should active runtime upgrade assignment state live for Tarkin?
 - Should the rule be implemented as a direct command, RuleRegistry observer, or
   another owner-approved command/resolver path?
 - How should the start-of-Ship-Phase prompt be inserted into the existing flow?
@@ -414,7 +417,6 @@ coverage is sufficient for any non-Integrated status advancement.
 
 ## Evidence Gaps
 
-- No accepted active runtime owner for upgrade assignments after setup.
 - No Tarkin-specific runtime command, resolver, RuleRegistry hook, or execution
   path.
 - No Tarkin-specific start-of-Ship-Phase interaction flow or projection path.
@@ -428,8 +430,6 @@ coverage is sufficient for any non-Integrated status advancement.
 
 Before implementation, the Project Owner must decide or explicitly delegate:
 
-- Active runtime owner for Tarkin's commander assignment and per-Ship-Phase
-  trigger state.
 - Whether implementation should use a command-only path, RuleRegistry observer
   path, or another accepted path.
 - How the start-of-Ship-Phase choice is represented in `InteractionFlow` or an
@@ -451,13 +451,12 @@ Evidence summary:
 - Fleet/build assignment and validation surfaces exist.
 - Command-token state, serialization, command history, replay, network snapshot,
   reconnect projection, and visibility filtering surfaces exist.
+- ADR-004 and CON-004 define active upgrade runtime ownership.
 - No active Tarkin runtime behavior exists in the evidence collected.
-- Runtime ownership for upgrades remains unresolved.
 
 Outstanding work:
 
 - Owner decisions listed above.
-- Runtime ownership selection.
 - Implementation.
 - Tests across validation, execution, projection, serialization, replay, network,
   and visibility.
@@ -494,30 +493,29 @@ Status constraints:
    network snapshots, reconnect projection, and visibility filtering.
 3. Static metadata and rule-surface declarations are descriptive only and do not
    make the rule active.
-4. Runtime upgrade ownership after setup remains unresolved and must be decided
-   before implementation.
+4. Runtime upgrade ownership after setup is defined by accepted ADR-004 and
+   CON-004.
 
 ## Remaining Evidence Gaps
 
-1. Active runtime owner for Tarkin's upgrade assignment and trigger state.
-2. Tarkin-specific command/flow/projection surface.
-3. Tarkin-specific serialization, replay, network, reconnect, and visibility
+1. Tarkin-specific command/flow/projection surface.
+2. Tarkin-specific serialization, replay, network, reconnect, and visibility
    evidence.
-4. Test sufficiency criteria while TEST-003 remains unavailable.
+3. Test sufficiency criteria while TEST-003 remains unavailable.
 
 ## Owner Decisions Required Before Implementation
 
-1. Choose the runtime ownership model for active upgrade assignments.
-2. Choose the implementation surface for Tarkin's start-of-Ship-Phase choice and
+1. Choose the implementation surface for Tarkin's start-of-Ship-Phase choice and
    token grant.
-3. Decide prompt, decline, duplicate-token, overflow, blocker, and visibility
+2. Decide prompt, decline, duplicate-token, overflow, blocker, and visibility
    behavior.
-4. Decide minimum test coverage required before status advancement.
+3. Decide minimum test coverage required before status advancement.
 
 ## Recommended Implementation Task for VS Code
 
 Implement the CAP-UPG-001 Grand Moff Tarkin command-token grant as a narrow
-behavior slice: add the owner-approved runtime state path, command/flow handling,
+behavior slice: add the ADR-004/CON-004 runtime upgrade instance path,
+command/flow handling,
 projection, serialization, replay, network/reconnect, visibility filtering, and
 focused tests required by this Draft package. Do not update upgrade JSON
 integration status or mark the package `Integrated` until owner review approves

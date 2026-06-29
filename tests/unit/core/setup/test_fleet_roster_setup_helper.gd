@@ -59,6 +59,71 @@ func test_prepare_runtime_duplicate_ship_instances_preserve_identity_expected() 
 		"Duplicate ships should retain distinct roster identities")
 
 
+func test_prepare_runtime_materializes_ship_runtime_upgrades_expected() -> void:
+	var package: FleetSetupPackage = _package_from_rosters(
+		_rebel_roster(), _imperial_roster())
+
+	var result: Dictionary = FleetRosterSetupHelper.prepare_runtime(package)
+	var runtime_ships: Array = result.get("ships", []) as Array
+	var rebel_ship: ShipInstance = _ship_by_entry(runtime_ships, "rebel-ship-1")
+	var runtime_upgrade: Dictionary = rebel_ship.get_runtime_upgrade(
+			"0:ship:rebel-ship-1:upgrade:rebel-cmd")
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+
+	assert_true(result.get("ok", false),
+			"Runtime setup should accept roster upgrades")
+	assert_eq(rebel_ship.runtime_upgrades.size(), 1,
+			"Runtime setup should attach one upgrade instance to the source ship")
+	assert_eq(runtime_upgrade.get("data_key", ""), "general_dodonna",
+			"Runtime upgrade should preserve the static upgrade data key")
+	assert_eq(runtime_upgrade.get("owner_player_id", -1), 0,
+			"Runtime upgrade should preserve owning player")
+	assert_eq(runtime_upgrade.get("source_ship_ref", ""), "0:ship:rebel-ship-1",
+			"Runtime upgrade should preserve source ship reference")
+	assert_eq(runtime_upgrade.get("source_roster_entry_id", ""), "rebel-ship-1",
+			"Runtime upgrade should preserve source roster entry id")
+	assert_eq(runtime_upgrade.get("source_assignment_id", ""), "rebel-cmd",
+			"Runtime upgrade should preserve source assignment id")
+	assert_eq(runtime_upgrade.get("slot", ""), "OFFICER",
+			"Runtime upgrade should preserve assignment slot")
+	assert_false(card_state.get("exhausted", true),
+			"Runtime upgrade should start unexhausted")
+	assert_true(card_state.get("readied", false),
+			"Runtime upgrade should start readied")
+	assert_true((runtime_upgrade.get("trigger_guards", {}) as Dictionary).is_empty(),
+			"Runtime upgrade should start with empty trigger guards")
+	assert_true((runtime_upgrade.get("rule_state", {}) as Dictionary).is_empty(),
+			"Runtime upgrade should start with empty rule state")
+
+
+func test_prepare_runtime_materializes_each_equipped_ship_upgrade_expected() -> void:
+	var rebel_roster: Dictionary = _rebel_roster()
+	var ships: Array = rebel_roster.get("ships", []) as Array
+	var rebel_ship_entry: Dictionary = ships[0] as Dictionary
+	var upgrades: Array = rebel_ship_entry.get("upgrades", []) as Array
+	upgrades.append(_upgrade_entry("rebel-support", "engineering_team",
+			"SUPPORT_TEAM"))
+	var package: FleetSetupPackage = _package_from_rosters(
+			rebel_roster, _imperial_roster())
+
+	var result: Dictionary = FleetRosterSetupHelper.prepare_runtime(package)
+	var runtime_ships: Array = result.get("ships", []) as Array
+	var rebel_ship: ShipInstance = _ship_by_entry(runtime_ships, "rebel-ship-1")
+	var commander: Dictionary = rebel_ship.get_runtime_upgrade(
+			"0:ship:rebel-ship-1:upgrade:rebel-cmd")
+	var support_team: Dictionary = rebel_ship.get_runtime_upgrade(
+			"0:ship:rebel-ship-1:upgrade:rebel-support")
+
+	assert_true(result.get("ok", false),
+			"Runtime setup should accept multiple roster upgrades")
+	assert_eq(rebel_ship.runtime_upgrades.size(), 2,
+			"Runtime setup should create one instance per equipped upgrade")
+	assert_eq(commander.get("data_key", ""), "general_dodonna",
+			"Runtime setup should keep the commander instance")
+	assert_eq(support_team.get("data_key", ""), "engineering_team",
+			"Runtime setup should materialize the support-team instance")
+
+
 func test_prepare_runtime_deployment_speed_preserved_expected() -> void:
 	var deployments: Array[Dictionary] = [ {
 		"owner_player": 0,
@@ -207,6 +272,12 @@ func test_prepare_runtime_player_state_round_trip_preserves_metadata_expected() 
 		"Ship save/load should preserve roster entry identity")
 	assert_eq(restored_ship.fleet_points, original_ship.fleet_points,
 		"Ship save/load should preserve fleet points")
+	assert_eq(restored_ship.runtime_upgrades.size(), 1,
+		"Ship save/load should preserve runtime upgrade instances")
+	assert_eq(restored_ship.get_runtime_upgrade(
+			"0:ship:rebel-ship-1:upgrade:rebel-cmd").get("data_key", ""),
+			"general_dodonna",
+			"Ship save/load should preserve runtime upgrade data_key")
 	assert_eq(restored_squadron.roster_entry_id, "rebel-squadron-1",
 		"Squadron save/load should preserve roster entry identity")
 

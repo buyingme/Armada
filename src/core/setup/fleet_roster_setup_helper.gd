@@ -116,6 +116,7 @@ static func _append_ship_instances(package: FleetSetupPackage, roster: FleetRost
 		var ship: ShipInstance = ShipInstance.create_from_data(
 			ship_entry.data_key, ship_data, speed, player_index)
 		ship.roster_entry_id = ship_entry.entry_id
+		_materialize_ship_runtime_upgrades(ship, ship_entry)
 		ship.fleet_points = _ship_fleet_points(ship_entry, ship_data, player_index,
 			validation)
 		_validate_ship_deployment_bounds(
@@ -176,6 +177,13 @@ static func _ship_fleet_points(ship_entry: FleetShipEntry, ship_data: ShipData,
 			continue
 		total += upgrade_data.point_cost
 	return total
+
+
+static func _materialize_ship_runtime_upgrades(
+		ship: ShipInstance, ship_entry: FleetShipEntry) -> void:
+	for assignment: FleetUpgradeAssignment in ship_entry.upgrades:
+		ship.add_runtime_upgrade(assignment.data_key, assignment.entry_id,
+				assignment.slot, assignment.slot_index)
 
 
 static func _validate_ship_deployment_bounds(package: FleetSetupPackage,

@@ -365,6 +365,80 @@ func test_command_tokens_starts_empty() -> void:
 			"Command tokens should start empty")
 
 
+# --- Runtime upgrades ---
+
+func test_add_runtime_upgrade_materializes_canonical_fields() -> void:
+	_instance.roster_entry_id = "ship-entry-1"
+
+	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
+			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+
+	assert_eq(runtime_upgrade.get("runtime_upgrade_id", ""),
+			"0:ship:ship-entry-1:upgrade:upgrade-1",
+			"Runtime upgrade id should derive from ship and assignment identity")
+	assert_eq(runtime_upgrade.get("data_key", ""), "grand_moff_tarkin",
+			"Runtime upgrade should reference static data by data_key")
+	assert_eq(runtime_upgrade.get("owner_player_id", -1), 0,
+			"Runtime upgrade should preserve owner player")
+	assert_eq(runtime_upgrade.get("source_ship_ref", ""), "0:ship:ship-entry-1",
+			"Runtime upgrade should preserve the source ship reference")
+	assert_eq(runtime_upgrade.get("source_roster_entry_id", ""), "ship-entry-1",
+			"Runtime upgrade should preserve source roster entry id")
+	assert_eq(runtime_upgrade.get("source_assignment_id", ""), "upgrade-1",
+			"Runtime upgrade should preserve source assignment id")
+	assert_eq(runtime_upgrade.get("slot", ""), "OFFICER",
+			"Runtime upgrade should preserve assignment slot")
+	assert_eq(runtime_upgrade.get("slot_index", -1), 0,
+			"Runtime upgrade should preserve assignment slot index")
+
+
+func test_add_runtime_upgrade_initializes_mutable_state() -> void:
+	_instance.roster_entry_id = "ship-entry-1"
+
+	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
+			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+
+	assert_false(card_state.get("exhausted", true),
+			"Runtime upgrade should start unexhausted")
+	assert_false(card_state.get("discarded", true),
+			"Runtime upgrade should start undiscarded")
+	assert_false(card_state.get("disabled", true),
+			"Runtime upgrade should start enabled")
+	assert_true(card_state.get("readied", false),
+			"Runtime upgrade should start readied")
+	assert_true((runtime_upgrade.get("trigger_guards", {}) as Dictionary).is_empty(),
+			"Runtime upgrade should start with no trigger guards")
+	assert_true((runtime_upgrade.get("rule_state", {}) as Dictionary).is_empty(),
+			"Runtime upgrade should start with no rule state")
+
+
+func test_get_runtime_upgrade_by_id_returns_instance() -> void:
+	_instance.roster_entry_id = "ship-entry-1"
+	_instance.add_runtime_upgrade("grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+
+	var runtime_upgrade: Dictionary = _instance.get_runtime_upgrade(
+			"0:ship:ship-entry-1:upgrade:upgrade-1")
+
+	assert_eq(runtime_upgrade.get("data_key", ""), "grand_moff_tarkin",
+			"Ship should look up a runtime upgrade by runtime_upgrade_id")
+
+
+func test_get_runtime_upgrade_duplicate_id_surfaces_invalid_state() -> void:
+	var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+	_instance.runtime_upgrades.clear()
+	_instance.runtime_upgrades.append(runtime_upgrade)
+	_instance.runtime_upgrades.append(runtime_upgrade.duplicate(true))
+
+	var found: Dictionary = _instance.get_runtime_upgrade(
+			"0:ship:ship-entry-1:upgrade:upgrade-1")
+
+	assert_true(found.is_empty(),
+			"Duplicate runtime upgrade ids should not return an arbitrary instance")
+	assert_push_error(1,
+			"Duplicate runtime upgrade lookup should surface invalid state")
+
+
 # --- is_fully_healthy ---
 
 
@@ -409,7 +483,8 @@ func test_serialize_contains_expected_keys() -> void:
 			"pos_x", "pos_y", "rotation_deg",
 			"defense_tokens", "facedown_damage",
 			"faceup_damage", "activated_this_round", "owner_player",
-			"destroyed", "command_dial_stack", "command_tokens"]:
+			"destroyed", "command_dial_stack", "command_tokens",
+			"runtime_upgrades"]:
 		assert_true(data.has(key),
 				"serialize() should include key '%s'" % key)
 
@@ -449,6 +524,138 @@ func test_deserialize_round_trip_basic_fields() -> void:
 			"Round-trip should preserve roster_entry_id")
 	assert_eq(restored.fleet_points, 73,
 			"Round-trip should preserve fleet_points")
+
+
+func test_deserialize_round_trip_runtime_upgrades() -> void:
+	_instance.roster_entry_id = "ship-entry-1"
+	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
+			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+	card_state["exhausted"] = true
+	card_state["readied"] = false
+	(runtime_upgrade.get("trigger_guards", {}) as Dictionary)["ship_phase_start"] = {
+		"round": 2,
+		"phase": int(Constants.GamePhase.SHIP),
+	}
+	(runtime_upgrade.get("rule_state", {}) as Dictionary)["selected_command"] = "NAVIGATE"
+
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+	var restored_upgrade: Dictionary = restored.get_runtime_upgrade(
+			"0:ship:ship-entry-1:upgrade:upgrade-1")
+	var restored_card_state: Dictionary = restored_upgrade.get(
+			"card_state", {}) as Dictionary
+	var restored_guards: Dictionary = restored_upgrade.get(
+			"trigger_guards", {}) as Dictionary
+	var restored_rule_state: Dictionary = restored_upgrade.get(
+			"rule_state", {}) as Dictionary
+
+	assert_eq(restored.runtime_upgrades.size(), 1,
+			"Round-trip should preserve runtime upgrade count")
+	assert_eq(restored_upgrade.get("data_key", ""), "grand_moff_tarkin",
+			"Round-trip should preserve runtime upgrade data_key")
+	assert_true(restored_card_state.get("exhausted", false),
+			"Round-trip should preserve runtime upgrade exhausted state")
+	assert_false(restored_card_state.get("readied", true),
+			"Round-trip should preserve runtime upgrade readied state")
+	assert_eq(restored_guards.get("ship_phase_start", {}) as Dictionary, {
+				"round": 2,
+				"phase": int(Constants.GamePhase.SHIP),
+			}, "Round-trip should preserve runtime upgrade trigger guards")
+	assert_eq(restored_rule_state.get("selected_command", ""), "NAVIGATE",
+			"Round-trip should preserve runtime upgrade rule state")
+
+
+func test_deserialize_rejects_invalid_runtime_upgrade_card_state() -> void:
+	var invalid_states: Array[Dictionary] = [
+		{
+			"exhausted": true,
+			"discarded": false,
+			"disabled": false,
+			"readied": true,
+		},
+		{
+			"exhausted": false,
+			"discarded": true,
+			"disabled": false,
+			"readied": true,
+		},
+		{
+			"exhausted": false,
+			"discarded": false,
+			"disabled": true,
+			"readied": true,
+		},
+	]
+	for card_state: Dictionary in invalid_states:
+		var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+		runtime_upgrade["card_state"] = card_state
+		var data: Dictionary = _instance.serialize()
+		data["runtime_upgrades"] = [runtime_upgrade]
+
+		var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+
+		assert_eq(restored.runtime_upgrades.size(), 0,
+				"Invalid card_state should not deserialize as a runtime upgrade")
+	assert_push_error(3,
+			"Invalid runtime upgrade card states should surface push_errors")
+
+
+func test_deserialize_rejects_unresolved_runtime_upgrade_data_key() -> void:
+	var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+	runtime_upgrade["data_key"] = "missing_runtime_upgrade"
+	var data: Dictionary = _instance.serialize()
+	data["runtime_upgrades"] = [runtime_upgrade]
+
+	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+
+	assert_eq(restored.runtime_upgrades.size(), 0,
+			"Runtime upgrade with unresolved data_key should be rejected")
+	assert_push_error(1,
+			"Unresolved runtime upgrade data_key should surface invalid state")
+
+
+func test_deserialize_rejects_missing_runtime_upgrade_mandatory_field() -> void:
+	var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+	runtime_upgrade.erase("source_assignment_id")
+	var data: Dictionary = _instance.serialize()
+	data["runtime_upgrades"] = [runtime_upgrade]
+
+	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+
+	assert_eq(restored.runtime_upgrades.size(), 0,
+			"Runtime upgrade missing a mandatory field should be rejected")
+	assert_push_error(1,
+			"Missing runtime upgrade fields should surface invalid state")
+
+
+func test_deserialize_rejects_missing_runtime_upgrade_card_state_field() -> void:
+	var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+	card_state.erase("readied")
+	var data: Dictionary = _instance.serialize()
+	data["runtime_upgrades"] = [runtime_upgrade]
+
+	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+
+	assert_eq(restored.runtime_upgrades.size(), 0,
+			"Runtime upgrade missing a card_state field should be rejected")
+	assert_push_error(1,
+			"Missing runtime upgrade card_state fields should surface invalid state")
+
+
+func test_deserialize_preserves_null_runtime_upgrade_slot_index() -> void:
+	var runtime_upgrade: Dictionary = _valid_runtime_upgrade_data()
+	runtime_upgrade["slot_index"] = null
+	var data: Dictionary = _instance.serialize()
+	data["runtime_upgrades"] = [runtime_upgrade]
+
+	var restored: ShipInstance = ShipInstance.deserialize(data, _ship_data)
+
+	assert_eq(restored.runtime_upgrades.size(), 1,
+			"Runtime upgrade with explicit null slot_index should remain valid")
+	assert_null(restored.runtime_upgrades[0].get("slot_index"),
+			"Runtime upgrade slot_index null should not be synthesized as 0")
 
 
 func test_deserialize_round_trip_position() -> void:
@@ -558,3 +765,10 @@ func test_deserialize_round_trip_command_dial_stack() -> void:
 			"Round-trip should restore command_dial_stack")
 	assert_eq(restored.command_dial_stack.command_value, 2,
 			"Round-trip should preserve command_value")
+
+
+func _valid_runtime_upgrade_data() -> Dictionary:
+	_instance.roster_entry_id = "ship-entry-1"
+	_instance.runtime_upgrades.clear()
+	return _instance.add_runtime_upgrade(
+			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0).duplicate(true)

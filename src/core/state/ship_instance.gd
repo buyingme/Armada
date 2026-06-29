@@ -13,6 +13,33 @@ class_name ShipInstance
 extends RefCounted
 
 
+const RUNTIME_UPGRADE_REQUIRED_FIELDS: Array[String] = [
+	"runtime_upgrade_id",
+	"data_key",
+	"owner_player_id",
+	"source_ship_ref",
+	"source_roster_entry_id",
+	"source_assignment_id",
+	"slot",
+	"slot_index",
+	"card_state",
+	"trigger_guards",
+	"rule_state",
+]
+const RUNTIME_UPGRADE_IDENTITY_FIELDS: Array[String] = [
+	"runtime_upgrade_id",
+	"data_key",
+	"source_ship_ref",
+	"source_roster_entry_id",
+	"source_assignment_id",
+]
+const RUNTIME_UPGRADE_CARD_STATE_FIELDS: Array[String] = [
+	"exhausted",
+	"discarded",
+	"disabled",
+	"readied",
+]
+
 ## The data-key used to look up the ship's static data and token PNG.
 var data_key: String = ""
 
@@ -81,6 +108,10 @@ var command_dial_stack: CommandDialStack = null
 ## Command tokens held by this ship.
 ## Rules Reference: CM-004–006 — command token management.
 var command_tokens: CommandTokenManager = null
+
+## Runtime upgrade instances owned by this ship after setup.
+## Static upgrade data is referenced by data_key; full catalog data is not copied.
+var runtime_upgrades: Array[Dictionary] = []
 
 
 ## Creates a ShipInstance from a [ShipData] template and a data key.
@@ -272,6 +303,30 @@ func ready_defense_tokens() -> void:
 			token["state"] = Constants.DefenseTokenState.READY
 
 
+## Adds one equipped upgrade as a runtime upgrade instance on this ship.
+## Returns the serialized runtime instance dictionary that was attached.
+func add_runtime_upgrade(data_key_value: String, source_assignment_id: String,
+		slot: String, slot_index: int) -> Dictionary:
+	var runtime_upgrade: Dictionary = _build_runtime_upgrade_instance(
+			owner_player, roster_entry_id, data_key_value,
+			source_assignment_id, slot, slot_index)
+	runtime_upgrades.append(runtime_upgrade)
+	return runtime_upgrade
+
+
+## Returns the runtime upgrade with [param runtime_upgrade_id], or an empty dictionary.
+func get_runtime_upgrade(runtime_upgrade_id: String) -> Dictionary:
+	var found: Dictionary = {}
+	for runtime_upgrade: Dictionary in runtime_upgrades:
+		if str(runtime_upgrade.get("runtime_upgrade_id", "")) != runtime_upgrade_id:
+			continue
+		if not found.is_empty():
+			push_error("Duplicate runtime upgrade id: %s" % runtime_upgrade_id)
+			return {}
+		found = runtime_upgrade
+	return found
+
+
 ## Resets the activated flag for a new round.
 func reset_activation() -> void:
 	activated_this_round = false
@@ -331,6 +386,39 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 			return Constants.DefenseToken.EVADE
 
 
+static func _build_runtime_upgrade_instance(owner_player_id: int,
+		source_roster_entry_id: String, upgrade_data_key: String,
+		source_assignment_id: String, slot: String, slot_index: int) -> Dictionary:
+	var source_ship_ref: String = _source_ship_ref(
+			owner_player_id, source_roster_entry_id)
+	return {
+		"runtime_upgrade_id": "%s:upgrade:%s" % [source_ship_ref, source_assignment_id],
+		"data_key": upgrade_data_key,
+		"owner_player_id": owner_player_id,
+		"source_ship_ref": source_ship_ref,
+		"source_roster_entry_id": source_roster_entry_id,
+		"source_assignment_id": source_assignment_id,
+		"slot": slot,
+		"slot_index": slot_index,
+		"card_state": _default_runtime_upgrade_card_state(),
+		"trigger_guards": {},
+		"rule_state": {},
+	}
+
+
+static func _source_ship_ref(owner_player_id: int, source_roster_entry_id: String) -> String:
+	return "%d:ship:%s" % [owner_player_id, source_roster_entry_id]
+
+
+static func _default_runtime_upgrade_card_state() -> Dictionary:
+	return {
+		"exhausted": false,
+		"discarded": false,
+		"disabled": false,
+		"readied": true,
+	}
+
+
 # ---------------------------------------------------------------------------
 # Serialization
 # ---------------------------------------------------------------------------
@@ -340,18 +428,6 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 ## The static template data ([member ship_data]) is identified by
 ## [member data_key] and must be re-loaded on deserialization.
 func serialize() -> Dictionary:
-	var fd_cards: Array[Dictionary] = []
-	for card: Variant in facedown_damage:
-		fd_cards.append((card as DamageCard).serialize())
-	var fu_cards: Array[Dictionary] = []
-	for card: Variant in faceup_damage:
-		fu_cards.append((card as DamageCard).serialize())
-	var tokens: Array[Dictionary] = []
-	for token: Dictionary in defense_tokens:
-		tokens.append({
-			"type": int(token["type"]),
-			"state": int(token["state"]),
-		})
 	return {
 		"data_key": data_key,
 		"roster_entry_id": roster_entry_id,
@@ -362,9 +438,9 @@ func serialize() -> Dictionary:
 		"pos_x": pos_x,
 		"pos_y": pos_y,
 		"rotation_deg": rotation_deg,
-		"defense_tokens": tokens,
-		"facedown_damage": fd_cards,
-		"faceup_damage": fu_cards,
+		"defense_tokens": _serialize_defense_tokens(),
+		"facedown_damage": _serialize_damage_cards(facedown_damage),
+		"faceup_damage": _serialize_damage_cards(faceup_damage),
 		"activated_this_round": activated_this_round,
 		"owner_player": owner_player,
 		"destroyed": _destroyed,
@@ -372,6 +448,7 @@ func serialize() -> Dictionary:
 				if command_dial_stack else {},
 		"command_tokens": command_tokens.serialize() \
 				if command_tokens else {},
+		"runtime_upgrades": _serialize_runtime_upgrades(),
 	}
 
 
@@ -402,6 +479,8 @@ static func deserialize(
 			"activated_this_round", false) as bool
 	inst.owner_player = int(data.get("owner_player", 0))
 	inst._destroyed = data.get("destroyed", false) as bool
+	inst.runtime_upgrades = _deserialize_runtime_upgrades(
+			data.get("runtime_upgrades", []))
 	# Defense tokens
 	for t: Variant in data.get("defense_tokens", []):
 		var td: Dictionary = t as Dictionary
@@ -424,3 +503,138 @@ static func deserialize(
 	inst.command_tokens = CommandTokenManager.deserialize(ctm_data) \
 			if not ctm_data.is_empty() else null
 	return inst
+
+
+func _serialize_defense_tokens() -> Array[Dictionary]:
+	var tokens: Array[Dictionary] = []
+	for token: Dictionary in defense_tokens:
+		tokens.append({
+			"type": int(token["type"]),
+			"state": int(token["state"]),
+		})
+	return tokens
+
+
+func _serialize_damage_cards(cards: Array) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for card: Variant in cards:
+		result.append((card as DamageCard).serialize())
+	return result
+
+
+func _serialize_runtime_upgrades() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for runtime_upgrade: Dictionary in runtime_upgrades:
+		result.append(runtime_upgrade.duplicate(true))
+	return result
+
+
+static func _deserialize_runtime_upgrades(raw_upgrades: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if not raw_upgrades is Array:
+		return result
+	for raw_upgrade: Variant in raw_upgrades as Array:
+		if raw_upgrade is Dictionary:
+			var runtime_upgrade: Dictionary = _runtime_upgrade_from_data(
+					raw_upgrade as Dictionary)
+			if not runtime_upgrade.is_empty():
+				result.append(runtime_upgrade)
+	return result
+
+
+static func _runtime_upgrade_from_data(raw_upgrade: Dictionary) -> Dictionary:
+	var missing_fields: Array[String] = _missing_runtime_upgrade_fields(raw_upgrade)
+	if not missing_fields.is_empty():
+		push_error("Invalid runtime upgrade missing fields: %s" % str(missing_fields))
+		return {}
+	if _has_empty_runtime_upgrade_identity(raw_upgrade):
+		push_error("Invalid runtime upgrade identity: %s" % str(raw_upgrade))
+		return {}
+	var upgrade_data_key: String = str(raw_upgrade["data_key"])
+	if AssetLoader.load_upgrade_data(upgrade_data_key) == null:
+		push_error("Invalid runtime upgrade data_key: %s" % upgrade_data_key)
+		return {}
+	var card_state: Dictionary = _runtime_upgrade_card_state_from_data(
+			raw_upgrade["card_state"])
+	if card_state.is_empty():
+		return {}
+	return {
+		"runtime_upgrade_id": str(raw_upgrade["runtime_upgrade_id"]),
+		"data_key": upgrade_data_key,
+		"owner_player_id": int(raw_upgrade["owner_player_id"]),
+		"source_ship_ref": str(raw_upgrade["source_ship_ref"]),
+		"source_roster_entry_id": str(raw_upgrade["source_roster_entry_id"]),
+		"source_assignment_id": str(raw_upgrade["source_assignment_id"]),
+		"slot": str(raw_upgrade["slot"]),
+		"slot_index": raw_upgrade["slot_index"] \
+				if raw_upgrade["slot_index"] == null \
+				else int(raw_upgrade["slot_index"]),
+		"card_state": card_state,
+		"trigger_guards": _read_runtime_upgrade_dict(
+				raw_upgrade["trigger_guards"]),
+		"rule_state": _read_runtime_upgrade_dict(raw_upgrade["rule_state"]),
+	}
+
+
+static func _runtime_upgrade_card_state_from_data(raw_card_state: Variant) -> Dictionary:
+	var source: Dictionary = _read_runtime_upgrade_dict(raw_card_state)
+	var missing_fields: Array[String] = _missing_runtime_upgrade_card_state_fields(
+			source)
+	if not missing_fields.is_empty():
+		push_error("Invalid runtime upgrade card_state missing fields: %s"
+				% str(missing_fields))
+		return {}
+	var card_state: Dictionary = {
+		"exhausted": bool(source["exhausted"]),
+		"discarded": bool(source["discarded"]),
+		"disabled": bool(source["disabled"]),
+		"readied": bool(source["readied"]),
+	}
+	if not _runtime_upgrade_card_state_consistent(card_state):
+		push_error("Invalid runtime upgrade card_state: %s" % str(card_state))
+		return {}
+	return card_state
+
+
+static func _runtime_upgrade_card_state_consistent(card_state: Dictionary) -> bool:
+	var exhausted: bool = bool(card_state.get("exhausted", false))
+	var discarded: bool = bool(card_state.get("discarded", false))
+	var disabled: bool = bool(card_state.get("disabled", false))
+	var readied: bool = bool(card_state.get("readied", false))
+	if readied and exhausted:
+		return false
+	if discarded and (readied or exhausted):
+		return false
+	if disabled and (readied or exhausted or discarded):
+		return false
+	return true
+
+
+static func _missing_runtime_upgrade_fields(raw_upgrade: Dictionary) -> Array[String]:
+	var missing: Array[String] = []
+	for field: String in RUNTIME_UPGRADE_REQUIRED_FIELDS:
+		if not raw_upgrade.has(field):
+			missing.append(field)
+	return missing
+
+
+static func _has_empty_runtime_upgrade_identity(raw_upgrade: Dictionary) -> bool:
+	for field: String in RUNTIME_UPGRADE_IDENTITY_FIELDS:
+		if str(raw_upgrade[field]).is_empty():
+			return true
+	return false
+
+
+static func _missing_runtime_upgrade_card_state_fields(
+		card_state: Dictionary) -> Array[String]:
+	var missing: Array[String] = []
+	for field: String in RUNTIME_UPGRADE_CARD_STATE_FIELDS:
+		if not card_state.has(field):
+			missing.append(field)
+	return missing
+
+
+static func _read_runtime_upgrade_dict(raw_value: Variant) -> Dictionary:
+	if raw_value is Dictionary:
+		return (raw_value as Dictionary).duplicate(true)
+	return {}

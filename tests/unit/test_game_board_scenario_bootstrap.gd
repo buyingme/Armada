@@ -18,6 +18,26 @@ class ScenarioCaptureBoard:
 		loaded_state_spawned = true
 
 
+class SetupPromptBoard:
+	extends GameBoard
+
+	var applied_perspective_player: int = -1
+
+	func _ready() -> void:
+		pass
+
+	func setup_prompt_dependencies() -> void:
+		_panel_mgr = UIPanelManager.new()
+		_panel_mgr.name = "UIPanelManager"
+		add_child(_panel_mgr)
+		_panel_mgr.handoff_overlay = HandoffOverlay.new()
+		_panel_mgr.handoff_overlay.name = "HandoffOverlay"
+		_panel_mgr.add_child(_panel_mgr.handoff_overlay)
+
+	func _apply_turn_perspective(player_index: int, _player_faction: int) -> void:
+		applied_perspective_player = player_index
+
+
 var _previous_game_state: GameState = null
 var _previous_is_game_active: bool = false
 var _previous_active_player: int = 0
@@ -27,6 +47,7 @@ var _previous_next_scenario_id: String = ""
 var _previous_next_setup_package: FleetSetupPackage = null
 var _previous_play_mode: PlayMode.Mode = PlayMode.Mode.HOT_SEAT
 var _previous_network_role: NetworkManager.Role = NetworkManager.Role.NONE
+var _previous_local_player_index: int = -1
 var _previous_pending_config: Dictionary = {}
 var _previous_submitter: CommandSubmitter = null
 
@@ -41,11 +62,13 @@ func before_each() -> void:
 	_previous_next_setup_package = GameManager._next_setup_package
 	_previous_play_mode = PlayMode.current_mode
 	_previous_network_role = NetworkManager.role
+	_previous_local_player_index = NetworkManager._local_player_index
 	_previous_pending_config = NetworkManager._pending_game_config.duplicate(true)
 	_previous_submitter = GameManager.get_command_submitter()
 	GameManager.is_state_preloaded = false
 	GameManager._next_scenario_id = ""
 	GameManager._next_setup_package = null
+	NetworkManager._local_player_index = -1
 
 
 func after_each() -> void:
@@ -58,6 +81,7 @@ func after_each() -> void:
 	GameManager._next_setup_package = _previous_next_setup_package
 	PlayMode.current_mode = _previous_play_mode
 	NetworkManager.role = _previous_network_role
+	NetworkManager._local_player_index = _previous_local_player_index
 	NetworkManager._pending_game_config = _previous_pending_config.duplicate(true)
 	GameManager.set_command_submitter(_previous_submitter)
 	CommandProcessor.reset()
@@ -94,6 +118,38 @@ func test_bootstrap_or_load_board_state_spawns_pending_setup_package() -> void:
 		"Setup-package bootstrap should install the package scenario id.")
 
 
+func test_setup_turn_prompt_ship_deployment_shows_deploy_handoff_expected() -> void:
+	GameManager.current_game_state = _setup_prompt_state(
+			Constants.InteractionStep.SETUP_SHIP_DEPLOYMENT, 0)
+	var board: SetupPromptBoard = SetupPromptBoard.new()
+	add_child_autofree(board)
+	board.setup_prompt_dependencies()
+	await get_tree().process_frame
+
+	board._on_setup_turn_prompt_requested(0, "Alex")
+
+	assert_eq(board.applied_perspective_player, 0,
+			"Setup prompt should apply the active setup player's perspective.")
+	assert_eq(_handoff_phase_label(board), "Deploy your fleet",
+			"Ship deployment prompt should use the deployment handoff phase text.")
+
+
+func test_setup_turn_prompt_obstacle_placement_keeps_setup_handoff_expected() -> void:
+	GameManager.current_game_state = _setup_prompt_state(
+			Constants.InteractionStep.SETUP_OBSTACLE_PLACEMENT, 1)
+	var board: SetupPromptBoard = SetupPromptBoard.new()
+	add_child_autofree(board)
+	board.setup_prompt_dependencies()
+	await get_tree().process_frame
+
+	board._on_setup_turn_prompt_requested(1, "Bianca")
+
+	assert_eq(board.applied_perspective_player, 1,
+			"Setup obstacle prompt should apply the active setup player's perspective.")
+	assert_eq(_handoff_phase_label(board), "Setup",
+			"Obstacle placement prompt should keep the generic setup phase text.")
+
+
 func _setup_package() -> FleetSetupPackage:
 	return FleetSetupPackage.deserialize({
 		"format_version": 1,
@@ -113,6 +169,29 @@ func _setup_package() -> FleetSetupPackage:
 		"deployments": [],
 		"setup_state": {},
 	})
+
+
+func _setup_prompt_state(
+		step_id: Constants.InteractionStep,
+		controller_player: int) -> GameState:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SETUP
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SETUP,
+			step_id,
+			controller_player,
+			Constants.Visibility.ALL,
+			{})
+	return state
+
+
+func _handoff_phase_label(board: SetupPromptBoard) -> String:
+	var label: Label = board._panel_mgr.handoff_overlay.find_child(
+			"PhaseLabel", true, false) as Label
+	if label == null:
+		return ""
+	return label.text
 
 
 func _player_entry(player_index: int, faction: String, roster: Dictionary) -> Dictionary:

@@ -10,7 +10,7 @@ Related Contracts: CON-003, CON-004
 Related Context Packs: CP-001
 Related Tests: Required tests listed in this package
 Created: 2026-06-28
-Last Updated: 2026-06-29
+Last Updated: 2026-07-01
 Owner: Project Owner review required
 
 ## Identity
@@ -83,6 +83,37 @@ The behavior is mixed:
 
 Static metadata alone is not active behavior evidence.
 
+## Accepted Implementation Decisions
+
+The Project Owner has accepted these Tarkin-specific implementation decisions
+before implementation begins:
+
+- The source of the Tarkin rule is the runtime upgrade instance on the ship
+  carrying Grand Moff Tarkin.
+- The rule exists only while that runtime upgrade instance exists in play.
+- If the source ship is destroyed before the Start of Ship Phase trigger
+  resolves, the Tarkin ability is unavailable.
+- If the ability has already resolved, granted command tokens remain.
+- Tarkin uses a command-owned implementation path.
+- Tarkin shall not be implemented as a passive RuleRegistry-only observer.
+- Declining to use Tarkin shall be represented by an explicit replayable
+  command-history entry.
+- The use of Tarkin and the chosen command are public.
+- Both players may observe the Tarkin prompt.
+- After the controlling player makes the choice, the non-controlling player
+  should be able to acknowledge or read the chosen command before play
+  continues where applicable.
+- Tarkin shall use the existing command-token gain path.
+- Existing `RuleSurface.TARGET_COMMAND_TOKEN_GAIN` blockers shall apply.
+- Duplicate granted command tokens shall use the existing automatic
+  duplicate-discard behavior and shall not create a discard prompt.
+- Non-duplicate command-token overflow shall reuse the existing
+  `DiscardTokenCommand` flow.
+- If several ships require overflow resolution, they shall be processed
+  deterministically in `PlayerState.ships` order.
+- The once-per-Ship-Phase trigger guard belongs to the runtime upgrade instance
+  by default.
+
 ## Related Architecture Documents
 
 - `ARCHITECTURE.md`
@@ -112,6 +143,11 @@ For this package, Grand Moff Tarkin uses the default ownership model:
 the source runtime upgrade instance belongs on the owning ShipInstance and
 references static upgrade data by data_key.
 
+The Tarkin rule exists only while that source runtime upgrade instance exists in
+play. If the source ship is destroyed before the Start of Ship Phase trigger
+resolves, the ability is unavailable. If the ability has already resolved,
+granted command tokens remain.
+
 This package does not create an exception to ADR-004 or CON-004.
 If implementation later needs an exception, it must be justified in this
 Rule Capability Package before implementation proceeds.
@@ -139,14 +175,14 @@ justified in this Rule Capability Package before implementation proceeds.
 | Fleet validation | Required | `FleetValidator`; `FleetUpgradeAssignment`; `FleetShipEntry`; commander/upgrade tests identified in evidence analysis | Confirms legal commander assignment before setup. |
 | Runtime state | Required | ADR-004; CON-004; `GameState`; `PlayerState`; `ShipInstance`; setup package and roster evidence | Source runtime upgrade instance belongs on the owning `ShipInstance` by default. |
 | Command validation | Required | `CommandProcessor`; `CommandApplicability`; command classes | A submitted choice/grant must be legal and phase-scoped. |
-| Command execution | Required | Existing command-token mutation paths and `CommandTokenManager` | Token grant mutates friendly ships. |
-| RuleRegistry | Optional | `RuleRegistry`; `RuleSurface` | May be used only if accepted call sites exist. Not required by ADR-003. |
-| RuleSurface | Required if token-gain hooks are used | `RuleSurface.TARGET_COMMAND_TOKEN_GAIN`; existing token-gain blocker patterns | Needed to respect existing token-gain blockers if implementation uses this surface. |
+| Command execution | Required | Existing command-token mutation paths and `CommandTokenManager` | Tarkin uses a command-owned implementation path; token grant mutates friendly ships. |
+| RuleRegistry | Optional | `RuleRegistry`; `RuleSurface` | Tarkin shall not be implemented as a passive RuleRegistry-only observer. RuleRegistry may be used only where appropriate under ADR-003. |
+| RuleSurface | Required | `RuleSurface.TARGET_COMMAND_TOKEN_GAIN`; existing token-gain blocker patterns | Existing command-token-gain blockers shall apply. |
 | Projection | Required | `InteractionFlow`; `FlowSpec`; `UIProjector` | Start-of-Ship-Phase command choice needs a prompt or equivalent affordance. |
 | Serialization | Required | `GameState.serialize`; `PlayerState`; `ShipInstance`; `InteractionFlow`; command serialization | Choice, trigger guard, token state, and active commander source must survive save/load as applicable. |
 | Replay | Required | `CommandProcessor` history; `GameReplay` | Choice and token grant must be command-history deterministic. |
 | Network | Required | `NetworkManager`; snapshots; reconnect path | Host/server authority and reconnect projection must agree. |
-| Visibility | Required | `StateFilter`; `InteractionFlow.visible_to`; `UIProjector` | Prompt visibility and post-choice public token state must be classified. |
+| Visibility | Required | `StateFilter`; `InteractionFlow.visible_to`; `UIProjector` | Tarkin prompt, use, and chosen command are public. |
 | Tests | Required | Required tests listed below | No existing tests prove this rule active. |
 
 ## Runtime State
@@ -155,9 +191,10 @@ Required runtime facts:
 
 - The player who owns Grand Moff Tarkin.
 - The ship or fleet assignment that proves the commander is active.
-- The selected command for the Ship Phase, or an explicit declined choice if the
-  optional trigger is represented by command history.
-- A once-per-Ship-Phase or equivalent trigger guard.
+- The source runtime upgrade instance on the ship carrying Grand Moff Tarkin.
+- The selected command for the Ship Phase, or an explicit declined choice
+  represented by command history.
+- A once-per-Ship-Phase trigger guard on the runtime upgrade instance.
 - Resulting command-token state on each affected friendly ship.
 
 Existing state evidence:
@@ -181,11 +218,12 @@ Validation is required before implementation can be considered safe.
 Required validation checks:
 
 - The submitting player owns Grand Moff Tarkin.
+- The source runtime upgrade instance exists in play.
 - The game is at the start of the Ship Phase.
 - The rule has not already been used for that Ship Phase.
 - The chosen command is one of the valid Armada command types.
 - The command is submitted by the correct player or authority.
-- Token gain respects existing token-gain blockers where applicable.
+- Token gain respects existing `RuleSurface.TARGET_COMMAND_TOKEN_GAIN` blockers.
 - Duplicate-token and command-value overflow behavior is handled consistently
   with existing command-token rules.
 
@@ -206,9 +244,14 @@ Execution is required because the rule mutates ship command-token state.
 Required execution behavior:
 
 - Record or consume the selected command in an authoritative command path.
+- Record an explicit command-history entry when the owning player declines.
 - Grant matching command tokens to friendly ships.
 - Avoid granting tokens to enemy ships.
-- Apply existing token capacity, duplicate, discard, or blocker behavior.
+- Apply existing token-gain blocker behavior.
+- Automatically discard duplicate granted command tokens without creating a
+  discard prompt.
+- Reuse `DiscardTokenCommand` for non-duplicate command-token overflow.
+- Resolve multi-ship overflow deterministically in `PlayerState.ships` order.
 - Preserve deterministic command results for replay and network sync.
 
 Existing execution evidence:
@@ -228,8 +271,12 @@ command at the correct timing point.
 
 Required projection behavior:
 
-- Present a start-of-Ship-Phase Tarkin choice to the owning player.
-- Allow decline if the optional trigger is represented explicitly.
+- Present a public start-of-Ship-Phase Tarkin choice controlled by the owning
+  player.
+- Allow decline through an explicit replayable command.
+- Allow both players to observe the Tarkin prompt.
+- After the controlling player chooses, allow the non-controlling player to
+  acknowledge or read the chosen command before play continues where applicable.
 - Transition back to normal Ship Phase activation after resolution or decline.
 - Show resulting command-token state consistently.
 
@@ -250,8 +297,8 @@ Serialization impact is required.
 State and payloads that may need serialization:
 
 - Active commander source state.
-- Chosen command or decline command.
-- Once-per-Ship-Phase trigger guard, if not fully derived from command history.
+- Chosen command or explicit decline command.
+- Once-per-Ship-Phase trigger guard on the runtime upgrade instance.
 - Mutated command-token state.
 - Active prompt payload, if the game is saved or reconnected during the choice.
 
@@ -275,7 +322,7 @@ change gameplay state.
 
 Required replay behavior:
 
-- The chosen command or decline must be represented in replayable command
+- The chosen command or explicit decline must be represented in replayable command
   history.
 - Token grants must replay deterministically.
 - Any observer follow-up ordering must be deterministic if RuleRegistry observer
@@ -319,11 +366,15 @@ Missing network evidence:
 
 Visibility impact is required.
 
-Visibility classification requiring owner review:
+Accepted visibility classification:
 
-- The pre-choice prompt must be classified as owner/controller-only or public.
-- The chosen command must be classified before and after resolution.
-- The resulting command-token state must be classified according to the accepted
+- The use of Tarkin is public.
+- The chosen command is public.
+- Both players may observe the Tarkin prompt.
+- After the controlling player makes the choice, the non-controlling player
+  should be able to acknowledge or read the chosen command before play continues
+  where applicable.
+- The resulting command-token state remains public according to the accepted
   visibility model for ship command tokens.
 - No private deck, facedown damage identity, or hidden random state is involved.
 
@@ -335,8 +386,7 @@ Existing visibility evidence:
 
 Missing visibility evidence:
 
-- The exact visibility policy for the Tarkin prompt and chosen command has not
-  been decided by the Project Owner.
+- No Tarkin-specific visibility test exists yet.
 
 ## Evidence Map
 
@@ -370,17 +420,26 @@ Required before this package can advance beyond Draft/Identified:
   rule.
 - Validation tests rejecting missing commander, wrong player, wrong phase,
   duplicate use in the same Ship Phase, and invalid command choice.
+- Validation tests rejecting use when the source runtime upgrade instance is no
+  longer in play before the trigger resolves.
 - Execution tests granting the selected command token to friendly ships only.
-- Execution tests for duplicate-token and command-value overflow behavior.
+- Execution tests proving granted tokens remain if the Tarkin ability has
+  already resolved and the source ship is later destroyed.
+- Execution tests proving duplicate granted command tokens are automatically
+  discarded without a discard prompt.
+- Execution tests proving non-duplicate command-token overflow uses the
+  existing `DiscardTokenCommand` flow.
+- Execution tests proving multi-ship overflow resolution is deterministic in
+  `PlayerState.ships` order.
 - Rule interaction tests proving command-token-gain blockers are respected.
 - Projection tests for the start-of-Ship-Phase choice prompt and normal flow
   continuation after resolution or decline.
 - Serialization/save-load tests for active source state, trigger guard,
   command-token results, and active prompt payload if applicable.
-- Replay tests proving deterministic command choice and token grant.
+- Replay tests proving deterministic command choice, explicit decline, and token
+  grant.
 - Network/reconnect tests for reconnect during prompt and after token grant.
-- Visibility tests for owner-only pre-choice payload, if used, and public
-  post-resolution token state.
+- Visibility tests proving the prompt, use, and chosen command are public.
 - Metadata/status regression test if metadata is later advanced from
   `NOT_INTEGRATED`.
 
@@ -393,26 +452,17 @@ coverage is sufficient for any non-Integrated status advancement.
 | --- | --- | --- | --- |
 | Runtime ownership | Medium | ADR-004 and CON-004 define default ownership, but no Tarkin runtime instance implementation exists yet. | Implement and test the accepted runtime upgrade instance path. |
 | Phase timing | Medium | Existing flow moves into Ship Phase activation; no Tarkin prompt was observed. | Define command/flow timing before implementation. |
-| Token overflow/duplicates | Medium | Tarkin may grant tokens to multiple ships at once. | Tests must cover duplicate and overflow behavior. |
-| Rule interactions | Medium | Existing token-gain blockers may apply. | Validate against `TARGET_COMMAND_TOKEN_GAIN` or owner-approved equivalent. |
+| Token overflow/duplicates | Medium | Tarkin may grant tokens to multiple ships at once. | Use accepted duplicate auto-discard, `DiscardTokenCommand` overflow handling, and `PlayerState.ships` order; tests must cover each case. |
+| Rule interactions | Medium | Existing token-gain blockers apply. | Validate against `TARGET_COMMAND_TOKEN_GAIN`. |
 | Replay | Medium | Choice and grant must be command-history deterministic. | Add replay tests. |
 | Network/reconnect | Medium | Prompt and grant affect live peer state and reconnect projection. | Add network/reconnect tests. |
-| Trigger guard | Medium | The rule applies at the start of each Ship Phase and must not be applied more than once for the same timing window. | Decide and test durable guard or command-history-derived guard. |
-| Visibility | Low to medium | Prompt, chosen command, and resulting token state require explicit classification. | Owner must decide prompt/chosen-command/token visibility. |
+| Trigger guard | Medium | The rule applies at the start of each Ship Phase and must not be applied more than once for the same timing window. | Store and test the guard on the runtime upgrade instance. |
+| Visibility | Low | Prompt, use, chosen command, and resulting token state are public. | Add visibility tests for the accepted public behavior. |
 | Metadata drift | Medium | Static JSON currently says `NOT_INTEGRATED`. | Do not update metadata until package evidence and owner approval support it. |
 
 ## Open Questions
 
-- Should the rule be implemented as a direct command, RuleRegistry observer, or
-  another owner-approved command/resolver path?
 - How should the start-of-Ship-Phase prompt be inserted into the existing flow?
-- Should declining Tarkin's optional trigger be recorded as a command?
-- How should duplicate-token and overflow choices be handled when several ships
-  receive tokens at once?
-- Should token-gain blockers apply through `RuleSurface.TARGET_COMMAND_TOKEN_GAIN`
-  or another owner-approved surface?
-- What is the exact visibility policy for the prompt and chosen command before
-  resolution?
 - What test threshold is sufficient while TEST-003 does not exist?
 
 ## Evidence Gaps
@@ -424,21 +474,11 @@ coverage is sufficient for any non-Integrated status advancement.
 - No Tarkin-specific replay test.
 - No Tarkin-specific network/reconnect test.
 - No Tarkin-specific visibility test.
-- No owner decision on optional decline representation.
 
 ## Owner Decisions Required
 
 Before implementation, the Project Owner must decide or explicitly delegate:
 
-- Whether implementation should use a command-only path, RuleRegistry observer
-  path, or another accepted path.
-- How the start-of-Ship-Phase choice is represented in `InteractionFlow` or an
-  equivalent projection surface.
-- Whether decline is represented explicitly in command history.
-- How multi-ship duplicate/overflow token behavior should be resolved.
-- Whether existing command-token-gain blockers apply to Tarkin grants and which
-  surface owns that interaction.
-- Visibility policy for the prompt and chosen command.
 - Minimum sufficient tests before any status advancement.
 
 ## Integration Status
@@ -452,11 +492,14 @@ Evidence summary:
 - Command-token state, serialization, command history, replay, network snapshot,
   reconnect projection, and visibility filtering surfaces exist.
 - ADR-004 and CON-004 define active upgrade runtime ownership.
+- Project Owner decisions for source lifetime, command-owned implementation,
+  decline recording, public visibility, token-gain blockers, duplicate/overflow
+  handling, and runtime-instance trigger guard are recorded.
 - No active Tarkin runtime behavior exists in the evidence collected.
 
 Outstanding work:
 
-- Owner decisions listed above.
+- Remaining owner decisions listed above.
 - Implementation.
 - Tests across validation, execution, projection, serialization, replay, network,
   and visibility.
@@ -482,6 +525,7 @@ Status constraints:
 | Reviewer | Date | Decision | Notes |
 | --- | --- | --- | --- |
 | Codex | 2026-06-28 | Draft prepared | Created from completed Evidence Analysis. No integration approval claimed. |
+| Codex | 2026-07-01 | Owner decisions recorded | Recorded accepted Tarkin-specific implementation decisions. Draft status retained. |
 
 ## Summary of Evidence Captured
 
@@ -495,6 +539,9 @@ Status constraints:
    make the rule active.
 4. Runtime upgrade ownership after setup is defined by accepted ADR-004 and
    CON-004.
+5. Project Owner decisions now define Tarkin-specific source lifetime,
+   command-owned implementation, decline recording, visibility, token-gain
+   blockers, duplicate/overflow handling, and trigger-guard ownership.
 
 ## Remaining Evidence Gaps
 
@@ -505,16 +552,12 @@ Status constraints:
 
 ## Owner Decisions Required Before Implementation
 
-1. Choose the implementation surface for Tarkin's start-of-Ship-Phase choice and
-   token grant.
-2. Decide prompt, decline, duplicate-token, overflow, blocker, and visibility
-   behavior.
-3. Decide minimum test coverage required before status advancement.
+1. Decide minimum test coverage required before status advancement.
 
 ## Recommended Implementation Task for VS Code
 
 Implement the CAP-UPG-001 Grand Moff Tarkin command-token grant as a narrow
-behavior slice: add the ADR-004/CON-004 runtime upgrade instance path,
+behavior slice: use the ADR-004/CON-004 runtime upgrade instance path,
 command/flow handling,
 projection, serialization, replay, network/reconnect, visibility filtering, and
 focused tests required by this Draft package. Do not update upgrade JSON

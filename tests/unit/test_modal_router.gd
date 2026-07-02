@@ -91,25 +91,41 @@ class StubAttackPanelMirror:
 		close_calls += 1
 
 
+class StubCommandSubmitter:
+	extends CommandSubmitter
+
+	var submitted_commands: Array[GameCommand] = []
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		submitted_commands.append(command)
+		return {"submitted": true}
+
+
 var _router: ModalRouter = null
 var _panel_mgr: UIPanelManager = null
 var _ship_activation_controller: StubShipActivationController = null
 var _displacement_controller: StubDisplacementController = null
 var _attack_panel_controller: Node = null
+var _submitter: StubCommandSubmitter = null
 var _ship_token: ShipToken = null
 var _squadron_token: SquadronToken = null
 var _saved_game_state: GameState = null
 var _saved_active_player: int = 0
 var _saved_local_player_index: int = -1
+var _saved_submitter: CommandSubmitter = null
 
 
 func before_each() -> void:
 	_saved_game_state = GameManager.current_game_state
 	_saved_active_player = GameManager.active_player
 	_saved_local_player_index = NetworkManager._local_player_index
+	_saved_submitter = GameManager.get_command_submitter()
 	GameManager.current_game_state = null
 	GameManager.active_player = 0
 	NetworkManager._local_player_index = -1
+	_submitter = StubCommandSubmitter.new()
+	GameManager.set_command_submitter(_submitter)
 
 
 func after_each() -> void:
@@ -131,6 +147,7 @@ func after_each() -> void:
 	GameManager.current_game_state = _saved_game_state
 	GameManager.active_player = _saved_active_player
 	NetworkManager._local_player_index = _saved_local_player_index
+	GameManager.set_command_submitter(_saved_submitter)
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +332,64 @@ func test_route_command_result_displacement_network_non_controller_skips() -> vo
 			"Network non-controller should not open the displacement modal.")
 
 
+func test_route_command_result_tarkin_prompt_opens_choice_modal() -> void:
+	_create_router(Callable())
+	GameManager.active_player = 0
+	GameManager.current_game_state = _state_with_tarkin_flow()
+	var command := AdvancePhaseCommand.new(0, {
+		"next_phase": int(Constants.GamePhase.SHIP),
+	})
+
+	_router.route_command_result(command, {})
+	var modal: TarkinChoiceModal = _tarkin_modal()
+	var button: Button = modal.find_child("CommandButton_0", true, false) as Button
+
+	assert_not_null(modal,
+			"ModalRouter should create a Tarkin choice modal for the prompt.")
+	assert_true(modal.is_open(),
+			"The Tarkin choice modal should be visible while the prompt is active.")
+	assert_false(button.disabled,
+			"Hot-seat should project the Tarkin owner as interactive.")
+
+
+func test_route_command_result_tarkin_modal_submits_choice_command() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_tarkin_flow()
+	_router.route_command_result(null, {})
+	var modal: TarkinChoiceModal = _tarkin_modal()
+
+	(modal.find_child("CommandButton_3", true, false) as Button).pressed.emit()
+
+	assert_eq(_submitter.submitted_commands.size(), 1,
+			"Pressing a Tarkin command button should submit one command.")
+	assert_is(_submitter.submitted_commands[0], TarkinChoiceCommand,
+			"Modal submission should use the replayable TarkinChoiceCommand.")
+	assert_eq(_submitter.submitted_commands[0].player_index, 1,
+			"The Tarkin owner should be the submitting player.")
+	assert_eq(_submitter.submitted_commands[0].payload.get(
+			"runtime_upgrade_id", ""), "tarkin-runtime",
+			"Submitted command should target the projected runtime upgrade id.")
+	assert_eq(_submitter.submitted_commands[0].payload.get("command", -1),
+			int(Constants.CommandType.REPAIR),
+			"Submitted command should preserve the selected command.")
+
+
+func test_route_command_result_non_tarkin_flow_closes_tarkin_modal() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_tarkin_flow()
+	_router.route_command_result(null, {})
+	var modal: TarkinChoiceModal = _tarkin_modal()
+	GameManager.current_game_state = _state_with_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			0)
+
+	_router.route_command_result(null, {})
+
+	assert_false(modal.is_open(),
+			"Leaving the Tarkin prompt should close the Tarkin modal.")
+
+
 func test_route_command_result_hot_seat_counter_attack_closes_mirror() -> void:
 	# Arrange
 	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
@@ -492,6 +567,22 @@ func _state_with_attack_flow(attacker_player: int) -> GameState:
 	return state
 
 
+func _state_with_tarkin_flow() -> GameState:
+	var state: GameState = _state_with_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+			1)
+	state.interaction_flow.payload = {
+			"runtime_upgrade_id": "tarkin-runtime",
+			"owner_player": 1,
+			"available_commands": [
+				int(Constants.CommandType.NAVIGATE),
+				int(Constants.CommandType.REPAIR),
+			],
+	}
+	return state
+
+
 func _start_displacement_command() -> StartDisplacementCommand:
 	return StartDisplacementCommand.new(0, {
 			"ship_index": 0,
@@ -509,6 +600,11 @@ func _displacement_payload() -> Dictionary:
 
 func _displacement_entries() -> Array[Dictionary]:
 	return [ {"owner": 1, "squadron_index": 0}]
+
+
+func _tarkin_modal() -> TarkinChoiceModal:
+	return _panel_mgr.find_child("TarkinChoiceModal", true, false) \
+			as TarkinChoiceModal
 
 
 func _find_test_ship_token(ship: ShipInstance) -> ShipToken:

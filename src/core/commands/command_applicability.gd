@@ -44,6 +44,9 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_PHASES: [Constants.GamePhase.SHIP]},
 	"convert_dial_to_token": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP]},
+	"tarkin_choice": {KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.SHIP_ACTIVATION,
+					Constants.InteractionStep.TARKIN_COMMAND_CHOICE)]},
 	"advance_activation_step": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP]},
 	"spend_dial": {KEY_SCOPE: Constants.CommandScope.PHASE,
@@ -136,6 +139,10 @@ static func check_command(command_type: String,
 	if declaration.is_empty():
 		return _denied_result(
 				"command %s has no applicability declaration" % command_type)
+	if _tarkin_prompt_blocks(command_type, interaction_flow):
+		return _denied_result(
+				"command %s blocked by unresolved Grand Moff Tarkin prompt"
+				% command_type)
 	match int(declaration.get(KEY_SCOPE, -1)):
 		Constants.CommandScope.GLOBAL:
 			return _allowed_result()
@@ -213,6 +220,17 @@ static func _flow_step_result(command_type: String,
 		flow_id,
 		step_id,
 	])
+
+
+static func _tarkin_prompt_blocks(command_type: String,
+		interaction_flow: InteractionFlow) -> bool:
+	if command_type == "tarkin_choice":
+		return false
+	if interaction_flow == null:
+		return false
+	return interaction_flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and interaction_flow.step_id \
+					== Constants.InteractionStep.TARKIN_COMMAND_CHOICE
 
 
 static func _declares_flow_step(command_type: String,

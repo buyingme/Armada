@@ -1,0 +1,381 @@
+## Test: Grand Moff Tarkin command choice
+##
+## Focused CAP-UPG-001 tests for phase-entry prompting, replayable choice/
+## decline, token grants, blocker handling, projection, and persistence.
+extends GutTest
+
+
+const TARKIN_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd")
+const LIFE_SUPPORT_FAILURE_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/damage_cards/ship/life_support_failure.gd")
+
+const TARKIN_RUNTIME_ID: String = \
+		"1:ship:imperial-ship-1:upgrade:imperial-cmd"
+
+var _state: GameState
+var _saved_registry: Dictionary = {}
+
+
+func before_each() -> void:
+	_saved_registry = GameCommand._registry.duplicate()
+	GameCommand._registry.clear()
+	AdvancePhaseCommand.register()
+	TarkinChoiceCommand.register()
+	DiscardTokenCommand.register()
+	RuleRegistry.clear()
+	_state = _make_tarkin_state()
+
+
+func after_each() -> void:
+	GameCommand._registry = _saved_registry
+	RuleBootstrap.bootstrap_rules()
+
+
+# ---------------------------------------------------------------------------
+# Prompt / Projection
+# ---------------------------------------------------------------------------
+
+func test_advance_phase_enters_tarkin_prompt_before_ship_selection() -> void:
+	var result: Dictionary = _advance_to_ship_phase()
+
+	assert_eq(result.get("new_phase", -1), int(Constants.GamePhase.SHIP),
+			"Phase advance should still enter Ship Phase.")
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+			"Tarkin source should prompt before normal ship selection.")
+	assert_eq(_state.interaction_flow.controller_player, 1,
+			"Tarkin owner should control the prompt.")
+	assert_eq(_state.interaction_flow.payload.get("runtime_upgrade_id", ""),
+			TARKIN_RUNTIME_ID,
+			"Prompt payload should bind the runtime upgrade source.")
+
+
+func test_projector_shows_public_tarkin_prompt_to_both_players() -> void:
+	_advance_to_ship_phase()
+
+	var owner_intent: UIProjector.UIIntent = _project_after_reconnect(_state, 1)
+	var opponent_intent: UIProjector.UIIntent = _project_after_reconnect(_state, 0)
+
+	assert_eq(owner_intent.modal_kind, Constants.ModalKind.TARKIN_COMMAND_CHOICE,
+			"Owner should project the Tarkin modal.")
+	assert_eq(opponent_intent.modal_kind, Constants.ModalKind.TARKIN_COMMAND_CHOICE,
+			"Opponent should observe the public Tarkin modal.")
+	assert_true(owner_intent.is_interactive,
+			"Owner should be able to answer the Tarkin prompt.")
+	assert_false(opponent_intent.is_interactive,
+			"Opponent should observe without controlling the prompt.")
+	assert_eq(opponent_intent.payload.get("runtime_upgrade_id", ""),
+			TARKIN_RUNTIME_ID,
+			"Public prompt payload should survive opponent filtering.")
+
+
+# ---------------------------------------------------------------------------
+# Choice Execution
+# ---------------------------------------------------------------------------
+
+func test_choice_grants_selected_token_to_friendly_ships_only() -> void:
+	_add_imperial_ship("imperial-ship-2")
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.REPAIR)
+
+	assert_eq((result.get("grants", []) as Array).size(), 2,
+			"Tarkin should grant once per friendly ship.")
+	assert_true(_ship(1, 0).command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Source friendly ship should gain the chosen token.")
+	assert_true(_ship(1, 1).command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Second friendly ship should gain the chosen token.")
+	assert_false(_ship(0, 0).command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Enemy ship must not gain Tarkin's token.")
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			"Choice should transition to normal ship selection.")
+
+
+func test_granted_tokens_remain_after_tarkin_source_destroyed() -> void:
+	_add_imperial_ship("imperial-ship-2")
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.NAVIGATE)
+	var source_ship: ShipInstance = _ship(1, 0)
+	var other_friendly: ShipInstance = _ship(1, 1)
+	source_ship.mark_destroyed()
+
+	assert_eq(result.get("command", -1), int(Constants.CommandType.NAVIGATE),
+			"Tarkin should resolve with the chosen command.")
+	assert_true(source_ship.command_tokens.has_token(Constants.CommandType.NAVIGATE),
+			"The source ship should keep the already-granted token.")
+	assert_true(other_friendly.command_tokens.has_token(
+			Constants.CommandType.NAVIGATE),
+			"Other friendly ships should keep already-granted tokens.")
+	assert_true(source_ship.is_destroyed(),
+			"The ship carrying Tarkin should be destroyed after resolution.")
+
+
+func test_decline_records_public_guard_without_granting_tokens() -> void:
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_decline()
+	var runtime_upgrade: Dictionary = _runtime_upgrade()
+	var rule_state: Dictionary = runtime_upgrade.get("rule_state", {})
+	var last_choice: Dictionary = rule_state.get(
+			TARKIN_SCRIPT.RULE_STATE_LAST_CHOICE, {})
+
+	assert_true(result.get("declined", false),
+			"Decline should be explicit in the replayable command result.")
+	assert_eq(_ship(1, 0).command_tokens.get_token_count(), 0,
+			"Decline should not grant command tokens.")
+	assert_true(TARKIN_SCRIPT.has_used_this_ship_phase(
+			runtime_upgrade, _state.current_round),
+			"Decline should still consume the once-per-Ship-Phase guard.")
+	assert_true(last_choice.get("declined", false),
+			"Runtime upgrade rule_state should publicly record the decline.")
+
+
+func test_duplicate_granted_token_auto_discards_without_overflow() -> void:
+	_ship(1, 0).command_tokens.force_add_token(Constants.CommandType.NAVIGATE)
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.NAVIGATE)
+	var grant: Dictionary = ((result.get("grants", []) as Array)[0]
+			as Dictionary)
+
+	assert_eq(_ship(1, 0).command_tokens.get_token_count(), 1,
+			"Duplicate grant should auto-discard back to one token.")
+	assert_true(grant.get("duplicate", false),
+			"Grant result should report duplicate auto-discard.")
+	assert_false(grant.get("overflow", true),
+			"Duplicate auto-discard should not create overflow.")
+
+
+func test_non_duplicate_overflow_reuses_discard_token_command() -> void:
+	var source: ShipInstance = _ship(1, 0)
+	source.command_tokens.max_tokens = 1
+	source.command_tokens.force_add_token(Constants.CommandType.NAVIGATE)
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.REPAIR)
+	var discard := DiscardTokenCommand.new(1, {
+		"ship_index": 0,
+		"token_type": int(Constants.CommandType.NAVIGATE),
+	})
+
+	assert_true((((result.get("grants", []) as Array)[0] as Dictionary)
+			).get("overflow", false),
+			"Non-duplicate over-capacity grant should report overflow.")
+	assert_eq(source.command_tokens.get_token_count(), 2,
+			"Overflow token should remain until DiscardTokenCommand resolves it.")
+	assert_eq(discard.validate(_state), "",
+			"Existing DiscardTokenCommand should resolve Tarkin overflow.")
+
+
+func test_token_gain_blocker_prevents_grant_to_blocked_ship() -> void:
+	LIFE_SUPPORT_FAILURE_SCRIPT.register()
+	_add_life_support_failure(_ship(1, 0))
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.SQUADRON)
+	var grant: Dictionary = ((result.get("grants", []) as Array)[0]
+			as Dictionary)
+
+	assert_true(grant.get("token_blocked", false),
+			"Existing token-gain blocker should apply to Tarkin grants.")
+	assert_eq(_ship(1, 0).command_tokens.get_token_count(), 0,
+			"Blocked ship should not gain a Tarkin token.")
+
+
+# ---------------------------------------------------------------------------
+# Validation / Replay / Persistence
+# ---------------------------------------------------------------------------
+
+func test_validate_rejects_wrong_player_wrong_phase_invalid_command_and_duplicate() -> void:
+	_advance_to_ship_phase()
+	assert_ne(_choice_command(0, Constants.CommandType.NAVIGATE).validate(_state), "",
+			"Wrong player should not answer the Tarkin prompt.")
+	assert_ne(_choice_command(1, 99).validate(_state), "",
+			"Invalid command type should be rejected.")
+	_state.current_phase = Constants.GamePhase.COMMAND
+	assert_ne(_choice_command(1, Constants.CommandType.NAVIGATE).validate(_state), "",
+			"Wrong phase should be rejected.")
+	_state.current_phase = Constants.GamePhase.SHIP
+	_submit_choice(Constants.CommandType.NAVIGATE)
+	assert_ne(_choice_command(1, Constants.CommandType.REPAIR).validate(_state), "",
+			"Duplicate Tarkin use in the same Ship Phase should be rejected.")
+
+
+func test_preflight_blocks_prompt_bypass_until_tarkin_choice_resolves() -> void:
+	_advance_to_ship_phase()
+	var advance := AdvancePhaseCommand.new(0, {
+		"next_phase": int(Constants.GamePhase.SQUADRON),
+	})
+	var discard := DiscardTokenCommand.new(1, {
+		"ship_index": 0,
+		"token_type": int(Constants.CommandType.NAVIGATE),
+	})
+	var choice: GameCommand = _choice_command(1, Constants.CommandType.NAVIGATE)
+
+	assert_ne(CommandProcessor.preflight(advance, _state), "",
+			"advance_phase should not bypass an unresolved Tarkin prompt.")
+	assert_ne(CommandProcessor.preflight(discard, _state), "",
+			"Other Ship Phase commands should not resolve the prompt.")
+	assert_eq(CommandProcessor.preflight(choice, _state), "",
+			"The accepted Tarkin choice command should remain legal.")
+	choice.execute(_state)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			"Tarkin choice should be the command path that resolves the prompt.")
+
+
+func test_validate_rejects_missing_or_destroyed_source() -> void:
+	_advance_to_ship_phase()
+	var missing := TarkinChoiceCommand.new(1, {
+		"runtime_upgrade_id": "missing",
+		"command": int(Constants.CommandType.NAVIGATE),
+	})
+	_ship(1, 0).mark_destroyed()
+
+	assert_ne(missing.validate(_state), "",
+			"Unknown runtime_upgrade_id should be rejected.")
+	assert_ne(_choice_command(1, Constants.CommandType.NAVIGATE).validate(_state), "",
+			"Destroyed Tarkin source should be rejected.")
+
+
+func test_choice_command_serializes_and_replays_from_history_payload() -> void:
+	_advance_to_ship_phase()
+	var cmd: GameCommand = _choice_command(1, Constants.CommandType.REPAIR)
+	cmd.sequence = 7
+
+	var restored: GameCommand = GameCommand.deserialize(cmd.serialize())
+	var result: Dictionary = restored.execute(_state)
+
+	assert_is(restored, TarkinChoiceCommand,
+			"Serialized command should deserialize as TarkinChoiceCommand.")
+	assert_eq(restored.sequence, 7,
+			"Command sequence should round-trip for replay history.")
+	assert_eq(result.get("command", -1), int(Constants.CommandType.REPAIR),
+			"Replayed command should preserve chosen command.")
+	assert_true(_ship(1, 0).command_tokens.has_token(Constants.CommandType.REPAIR),
+			"Replayed command should reproduce the token grant.")
+
+
+func test_prompt_and_choice_state_survive_save_load_and_reconnect() -> void:
+	_advance_to_ship_phase()
+	var prompt_intent: UIProjector.UIIntent = _project_after_reconnect(_state, 1)
+
+	_submit_choice(Constants.CommandType.CONCENTRATE_FIRE)
+	var restored: GameState = GameState.deserialize(_state.serialize())
+	var restored_ship: ShipInstance = restored.get_ship(1, 0)
+	var restored_upgrade: Dictionary = restored_ship.get_runtime_upgrade(
+			TARKIN_RUNTIME_ID)
+
+	assert_eq(prompt_intent.step_id,
+			Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+			"Reconnect projection should preserve an unresolved Tarkin prompt.")
+	assert_true(TARKIN_SCRIPT.has_used_this_ship_phase(
+			restored_upgrade, restored.current_round),
+			"Save/load should preserve Tarkin trigger guard.")
+	assert_true(restored_ship.command_tokens.has_token(
+			Constants.CommandType.CONCENTRATE_FIRE),
+			"Save/load should preserve granted Tarkin token.")
+
+
+func test_multi_ship_grant_order_follows_player_state_ship_order() -> void:
+	_add_imperial_ship("imperial-ship-2")
+	_add_imperial_ship("imperial-ship-3")
+	_advance_to_ship_phase()
+
+	var result: Dictionary = _submit_choice(Constants.CommandType.REPAIR)
+	var grants: Array = result.get("grants", []) as Array
+
+	assert_eq((grants[0] as Dictionary).get("ship_index", -1), 0,
+			"First grant should target the first PlayerState ship.")
+	assert_eq((grants[1] as Dictionary).get("ship_index", -1), 1,
+			"Second grant should target the second PlayerState ship.")
+	assert_eq((grants[2] as Dictionary).get("ship_index", -1), 2,
+			"Third grant should target the third PlayerState ship.")
+
+
+func _make_tarkin_state() -> GameState:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.COMMAND
+	state.initiative_player = 0
+	state.get_player_state(0).ships.append(_make_ship(0, "rebel-ship-1", false))
+	state.get_player_state(1).ships.append(_make_ship(1, "imperial-ship-1", true))
+	return state
+
+
+func _make_ship(owner: int, roster_entry_id: String,
+		with_tarkin: bool) -> ShipInstance:
+	var ship_data: ShipData = AssetLoader.load_ship_data(
+			"victory_ii_class_star_destroyer")
+	var ship: ShipInstance = ShipInstance.create_from_data(
+			"victory_ii_class_star_destroyer", ship_data, 2, owner)
+	ship.roster_entry_id = roster_entry_id
+	if with_tarkin:
+		ship.add_runtime_upgrade("grand_moff_tarkin", "imperial-cmd",
+				"COMMANDER", 0)
+	return ship
+
+
+func _add_imperial_ship(roster_entry_id: String) -> void:
+	_state.get_player_state(1).ships.append(
+			_make_ship(1, roster_entry_id, false))
+
+
+func _advance_to_ship_phase() -> Dictionary:
+	var cmd := AdvancePhaseCommand.new(0, {
+		"next_phase": int(Constants.GamePhase.SHIP),
+	})
+	return cmd.execute(_state)
+
+
+func _submit_choice(command: int) -> Dictionary:
+	var cmd: GameCommand = _choice_command(1, command)
+	assert_eq(cmd.validate(_state), "",
+			"Tarkin choice precondition should be valid.")
+	return cmd.execute(_state)
+
+
+func _submit_decline() -> Dictionary:
+	var cmd := TarkinChoiceCommand.new(1, {
+		"runtime_upgrade_id": TARKIN_RUNTIME_ID,
+		"declined": true,
+	})
+	assert_eq(cmd.validate(_state), "",
+			"Tarkin decline precondition should be valid.")
+	return cmd.execute(_state)
+
+
+func _choice_command(player: int,
+		command: int) -> TarkinChoiceCommand:
+	return TarkinChoiceCommand.new(player, {
+		"runtime_upgrade_id": TARKIN_RUNTIME_ID,
+		"command": int(command),
+	})
+
+
+func _runtime_upgrade() -> Dictionary:
+	return _ship(1, 0).get_runtime_upgrade(TARKIN_RUNTIME_ID)
+
+
+func _ship(player: int, ship_index: int) -> ShipInstance:
+	return _state.get_ship(player, ship_index)
+
+
+func _project_after_reconnect(
+		server_state: GameState,
+		viewer: int) -> UIProjector.UIIntent:
+	var raw: Dictionary = server_state.serialize()
+	var filtered: Dictionary = StateFilter.filter_for_player(raw, viewer)
+	var client_state: GameState = GameState.deserialize(filtered)
+	return UIProjector.project(client_state, viewer)
+
+
+func _add_life_support_failure(ship: ShipInstance) -> void:
+	var card: DamageCard = DamageCard.create("Crew", "Life Support Failure")
+	card.effect_id = "life_support_failure"
+	card.flip_faceup()
+	ship.faceup_damage.append(card)

@@ -43,6 +43,14 @@ const _SPEC: Dictionary = {
 		},
 	},
 	Constants.InteractionFlow.SHIP_ACTIVATION: {
+		Constants.InteractionStep.TARKIN_COMMAND_CHOICE: {
+			"controller_role": Constants.ControllerRole.PAYLOAD_CONTROLLER,
+			"modals": [Constants.ModalKind.TARKIN_COMMAND_CHOICE],
+			"allowed_commands": ["tarkin_choice"],
+			"transitions": {"tarkin_choice": "WAIT_FOR_SHIP_SELECT"},
+			"source": SOURCE_COMMAND_PRODUCED,
+			"rule_citation": "Upgrade: Grand Moff Tarkin; start of Ship Phase.",
+		},
 		Constants.InteractionStep.WAIT_FOR_SHIP_SELECT: {
 			"controller_role": Constants.ControllerRole.ACTIVE_PLAYER,
 			"modals": [Constants.ModalKind.NONE],

@@ -139,6 +139,23 @@ func test_flow_step_query_matches_declared_pair() -> void:
 			"Setup deployment should remain legal in the setup squadron-deployment step.")
 
 
+func test_tarkin_prompt_blocks_non_tarkin_commands() -> void:
+	var flow: InteractionFlow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+			1)
+
+	var advance_result: Dictionary = CommandApplicabilityScript.check_command(
+			"advance_phase", Constants.GamePhase.SHIP, flow)
+	var choice_result: Dictionary = CommandApplicabilityScript.check_command(
+			"tarkin_choice", Constants.GamePhase.SHIP, flow)
+
+	assert_false(bool(advance_result.get(CommandApplicabilityScript.KEY_ALLOWED, true)),
+			"advance_phase should not bypass an unresolved Tarkin prompt.")
+	assert_true(bool(choice_result.get(CommandApplicabilityScript.KEY_ALLOWED, false)),
+			"tarkin_choice should remain the only prompt-resolution command.")
+
+
 func _check_scope_targets(command_type: String,
 		declaration: Dictionary,
 		errors: Array[String]) -> void:

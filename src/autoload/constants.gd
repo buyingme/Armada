@@ -203,6 +203,8 @@ enum InteractionStep {
 	SETUP_SHIP_DEPLOYMENT,
 	SETUP_SQUADRON_DEPLOYMENT,
 	SETUP_REVIEW,
+	# CAP-UPG-001 - Grand Moff Tarkin start-of-Ship-Phase choice.
+	TARKIN_COMMAND_CHOICE,
 }
 
 ## Visibility scope of an [InteractionFlow] payload.
@@ -254,6 +256,8 @@ enum ModalKind {
 	SETUP_SHIP_DEPLOYMENT,
 	SETUP_SQUADRON_DEPLOYMENT,
 	SETUP_REVIEW,
+	# CAP-UPG-001 - Grand Moff Tarkin start-of-Ship-Phase choice.
+	TARKIN_COMMAND_CHOICE,
 }
 
 ## Mapping from legacy interaction-state flow-type strings to

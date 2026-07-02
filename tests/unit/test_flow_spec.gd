@@ -252,6 +252,7 @@ func _documented_pairs() -> Array[Dictionary]:
 		_pair(Constants.InteractionFlow.NONE, Constants.InteractionStep.NONE),
 		_pair(Constants.InteractionFlow.COMMAND_PHASE, Constants.InteractionStep.SELECT_DIALS),
 		_pair(Constants.InteractionFlow.COMMAND_PHASE, Constants.InteractionStep.WAIT_FOR_OPPONENT_DIALS),
+		_pair(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.TARKIN_COMMAND_CHOICE),
 		_pair(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.WAIT_FOR_SHIP_SELECT),
 		_pair(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.ACTIVATION_MODAL_OPEN),
 		_pair(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.REVEAL_DIAL),
@@ -299,6 +300,7 @@ func _modal_rows() -> Array[Dictionary]:
 	return [
 		_modal_row(Constants.InteractionFlow.NONE, Constants.InteractionStep.NONE, Constants.ModalKind.NONE),
 		_modal_row(Constants.InteractionFlow.COMMAND_PHASE, Constants.InteractionStep.SELECT_DIALS, Constants.ModalKind.COMMAND_DIALS),
+		_modal_row(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.TARKIN_COMMAND_CHOICE, Constants.ModalKind.TARKIN_COMMAND_CHOICE),
 		_modal_row(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.WAIT_FOR_SHIP_SELECT, Constants.ModalKind.NONE),
 		_modal_row(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.ACTIVATION_MODAL_OPEN, Constants.ModalKind.ACTIVATION),
 		_modal_row(Constants.InteractionFlow.SHIP_ACTIVATION, Constants.InteractionStep.SQUADRON_STEP, Constants.ModalKind.SQUADRON),

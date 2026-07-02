@@ -15,6 +15,7 @@ var _panel_mgr: UIPanelManager = null
 var _attack_panel_controller: AttackPanelController = null
 var _ship_activation_controller: ShipActivationController = null
 var _displacement_controller: DisplacementController = null
+var _tarkin_choice_modal: TarkinChoiceModal = null
 var _activation_ctx: ActivationContext = null
 var _find_ship_token_fn: Callable
 var _find_squadron_token_fn: Callable
@@ -61,7 +62,7 @@ func route_command_result(command: GameCommand, result: Dictionary) -> void:
 	if game_state == null:
 		return
 	_route_to_command_reactions(command, result)
-	var local: int = _local_viewer()
+	var local: int = _local_viewer(game_state)
 	var intent: UIProjector.UIIntent = UIProjector.project(game_state, local)
 	_apply_hud_intent(intent)
 	_dispatch_modal_intent(intent, game_state, local, command)
@@ -91,10 +92,35 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, local: int, command: GameCommand) -> void:
+	_drive_tarkin_choice_modal(intent)
 	_drive_displacement_modal(intent, command)
 	_sync_attack_panel_mirror(game_state, local)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
 	_apply_activation_affordances(intent)
+
+
+func _drive_tarkin_choice_modal(intent: UIProjector.UIIntent) -> void:
+	if intent.modal_kind != Constants.ModalKind.TARKIN_COMMAND_CHOICE:
+		if _tarkin_choice_modal != null:
+			_tarkin_choice_modal.close()
+		return
+	var modal: TarkinChoiceModal = _ensure_tarkin_choice_modal()
+	modal.open_from_intent(intent)
+
+
+func _ensure_tarkin_choice_modal() -> TarkinChoiceModal:
+	if _tarkin_choice_modal != null:
+		return _tarkin_choice_modal
+	_tarkin_choice_modal = TarkinChoiceModal.new()
+	_tarkin_choice_modal.name = "TarkinChoiceModal"
+	_tarkin_choice_modal.choice_submitted.connect(_on_tarkin_choice_submitted)
+	_tarkin_choice_modal.decline_submitted.connect(_on_tarkin_declined)
+	var parent: Node = _panel_mgr.turn_management_layer \
+			if _panel_mgr.turn_management_layer != null else _panel_mgr
+	parent.add_child(_tarkin_choice_modal)
+	_panel_mgr.register_resizable(
+			_tarkin_choice_modal, &"centre_on_screen", true)
+	return _tarkin_choice_modal
 
 
 func _drive_displacement_modal(intent: UIProjector.UIIntent,
@@ -238,7 +264,8 @@ func _resolve_displaced_squadron_tokens(
 
 
 func _resume_after_remote_displacement() -> void:
-	if _local_viewer() != GameManager.get_active_player():
+	if _local_viewer(GameManager.current_game_state) \
+			!= GameManager.get_active_player():
 		return
 	if _activation_ctx == null \
 			or _activation_ctx.ship_activation_state == null:
@@ -246,11 +273,45 @@ func _resume_after_remote_displacement() -> void:
 	_ship_activation_controller.show_end_activation_after_maneuver()
 
 
-func _local_viewer() -> int:
+func _local_viewer(game_state: GameState) -> int:
 	var local_index: int = NetworkManager.get_local_player_index()
 	if local_index < 0:
+		if _is_tarkin_prompt(game_state):
+			return game_state.interaction_flow.controller_player
 		return GameManager.get_active_player()
 	return local_index
+
+
+func _is_tarkin_prompt(game_state: GameState) -> bool:
+	if game_state == null or game_state.interaction_flow == null:
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	return flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
+			and flow.step_id == Constants.InteractionStep.TARKIN_COMMAND_CHOICE
+
+
+func _on_tarkin_choice_submitted(command: int) -> void:
+	_submit_tarkin_choice({"command": command})
+
+
+func _on_tarkin_declined() -> void:
+	_submit_tarkin_choice({"declined": true})
+
+
+func _submit_tarkin_choice(choice_payload: Dictionary) -> void:
+	if _tarkin_choice_modal == null:
+		return
+	choice_payload["runtime_upgrade_id"] = \
+			_tarkin_choice_modal.runtime_upgrade_id()
+	GameManager.get_command_submitter().submit(
+			TarkinChoiceCommand.new(_tarkin_controller(), choice_payload))
+
+
+func _tarkin_controller() -> int:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or game_state.interaction_flow == null:
+		return -1
+	return game_state.interaction_flow.controller_player
 
 
 func _is_network_peer() -> bool:

@@ -153,7 +153,7 @@ Current registered command inventory for M3:
 |---|---|---|---|
 | `assign_dials` | `PHASE` | `COMMAND` | Command Phase assignment is phase-gated; current command-phase flow rows are not uniformly command-produced. |
 | `start_round` | `PHASE` | `SETUP`, `STATUS` | Starts the initial or next round. Setup-package games may only use it after obstacle and deployment placement payloads are complete; the command records setup completion before entering round one. |
-| `advance_phase` | `PHASE` | `COMMAND`, `SHIP`, `SQUADRON` | Phase transition command; payload validation enforces the expected next phase and excludes `STATUS -> COMMAND`. |
+| `advance_phase` | `PHASE` | `COMMAND`, `SHIP`, `SQUADRON` | Phase transition command; payload validation enforces the expected next phase and excludes `STATUS -> COMMAND`. Blocked while `SHIP_ACTIVATION / TARKIN_COMMAND_CHOICE` is unresolved. |
 | `status_phase_cleanup` | `PHASE` | `STATUS` | Deterministic end-of-round cleanup, including RuleRegistry `defense_token_readying` modifiers and remaining legacy status hooks. |
 | `debug_deal_damage` | `GLOBAL` | Debug harness only | Debug tool is explicitly phase-independent and owns its own target/card validation. |
 | `destroy_unit` | `GLOBAL` | Destruction cleanup | Cleanup can follow any damage source; do not tie it to the flow that discovered destruction. |
@@ -161,6 +161,7 @@ Current registered command inventory for M3:
 | `activate_ship` | `FLOW_STEP` | `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT`, `SHIP_ACTIVATION / REVEAL_DIAL` | Ship selection / second-click activation enters the activation modal. |
 | `reveal_dial` | `FLOW_STEP` | `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT`, `SHIP_ACTIVATION / REVEAL_DIAL` | Two-click dial preview/unreveal is part of ship selection. |
 | `convert_dial_to_token` | `FLOW_STEP` | `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT`, `SHIP_ACTIVATION / ACTIVATION_MODAL_OPEN`, `SHIP_ACTIVATION / SPEND_DIAL` | Activation alternative that spends the dial into a token and may trigger token overflow. |
+| `tarkin_choice` | `FLOW_STEP` | `SHIP_ACTIVATION / TARKIN_COMMAND_CHOICE` | Replay-visible Grand Moff Tarkin choice or decline at the start of the Ship Phase. |
 | `advance_activation_step` | `FLOW_STEP` | `SHIP_ACTIVATION / ACTIVATION_MODAL_OPEN`, `SHIP_ACTIVATION / SQUADRON_STEP`, `SHIP_ACTIVATION / REPAIR_STEP`, `SHIP_ACTIVATION / ATTACK_STEP`, `SHIP_ACTIVATION / MANEUVER_STEP`, `SHIP_ACTIVATION / ACTIVATION_DONE` | Authoritative activation sub-step transition marker. |
 | `spend_dial` | `PHASE` | `SHIP` | Used by activation, Concentrate Fire, and Crew Panic's rule-correct hidden-dial discard path. |
 | `spend_token` | `PHASE` | `SHIP` | Command-token utility spans multiple activation and attack-modify surfaces; current token-budget validation is command/UI owned. |
@@ -200,7 +201,7 @@ coverage.
 |---|---|
 | `NONE` | `NONE` |
 | `COMMAND_PHASE` | `SELECT_DIALS`, `WAIT_FOR_OPPONENT_DIALS` |
-| `SHIP_ACTIVATION` | `WAIT_FOR_SHIP_SELECT`, `ACTIVATION_MODAL_OPEN`, `REVEAL_DIAL`, `SPEND_DIAL`, `SQUADRON_STEP`, `REPAIR_STEP`, `ATTACK_STEP`, `MANEUVER_STEP`, `ACTIVATION_DONE` |
+| `SHIP_ACTIVATION` | `TARKIN_COMMAND_CHOICE`, `WAIT_FOR_SHIP_SELECT`, `ACTIVATION_MODAL_OPEN`, `REVEAL_DIAL`, `SPEND_DIAL`, `SQUADRON_STEP`, `REPAIR_STEP`, `ATTACK_STEP`, `MANEUVER_STEP`, `ACTIVATION_DONE` |
 | `SQUADRON_ACTIVATION` | `WAIT_FOR_SQUAD_SELECT`, `ACTION_CHOICE`, `SQUAD_MOVE`, `SQUAD_ATTACK` |
 | `ATTACK` | `ATTACK_DECLARE`, `ATTACK_ROLL`, `ATTACK_MODIFY`, `ATTACK_DEFENSE_TOKENS`, `ATTACK_RESOLVE_DAMAGE`, `ATTACK_COUNTER_CHOICE`, `ATTACK_CRITICAL_CHOICE` |
 | `SQUADRON_DISPLACEMENT` | `DISPLACEMENT_PLACE` |
@@ -318,6 +319,21 @@ flow write.
 
 Rules reference: RRG "Ship Phase", reveal command dial and resolve activation
 steps; command dial/token rules from RRG "Command Dials" and "Command Tokens".
+
+### `SHIP_ACTIVATION / TARKIN_COMMAND_CHOICE`
+
+| Field | Value |
+|---|---|
+| controller_role | Grand Moff Tarkin upgrade owner, resolved from the source runtime upgrade instance. |
+| modal_kind | `TARKIN_COMMAND_CHOICE` |
+| allowed_commands | `tarkin_choice` |
+| transitions | `tarkin_choice` choice or explicit decline -> `WAIT_FOR_SHIP_SELECT`; no `advance_phase` transition is legal while this prompt is active. |
+| producer | `AdvancePhaseCommand` on entry to Ship Phase when an active source runtime upgrade exists and has not used this timing this round. |
+| rule citation | Upgrade: Grand Moff Tarkin; CAP-UPG-001. |
+
+Notes: This prompt is an exclusive gameplay gate. Other gameplay commands,
+including phase advancement, remain blocked until the controlling player submits
+the public Tarkin choice or decline command.
 
 ### `SHIP_ACTIVATION / WAIT_FOR_SHIP_SELECT`
 

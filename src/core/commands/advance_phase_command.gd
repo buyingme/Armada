@@ -16,6 +16,8 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const TARKIN_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/commander/grand_moff_tarkin.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -58,12 +60,7 @@ func execute(game_state: GameState) -> Dictionary:
 	game_state.current_phase = target as Constants.GamePhase
 	match target:
 		Constants.GamePhase.SHIP:
-			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
-					Constants.InteractionFlow.SHIP_ACTIVATION,
-					Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
-					game_state,
-					{"active_player": game_state.initiative_player},
-					Constants.Visibility.ALL)
+			_enter_ship_phase_flow(game_state)
 		Constants.GamePhase.SQUADRON:
 			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 					Constants.InteractionFlow.SQUADRON_ACTIVATION,
@@ -72,6 +69,25 @@ func execute(game_state: GameState) -> Dictionary:
 					{"active_player": game_state.initiative_player},
 					Constants.Visibility.ALL)
 	return {"previous_phase": prev, "new_phase": target}
+
+
+static func _enter_ship_phase_flow(game_state: GameState) -> void:
+	var tarkin_source: Dictionary = TARKIN_SCRIPT.find_prompt_source(game_state)
+	if not tarkin_source.is_empty():
+		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.SHIP_ACTIVATION,
+				Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+				game_state,
+				{"controller_player": int(tarkin_source.get("owner_player", -1))},
+				Constants.Visibility.ALL,
+				TARKIN_SCRIPT.prompt_payload(tarkin_source))
+		return
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			game_state,
+			{"active_player": game_state.initiative_player},
+			Constants.Visibility.ALL)
 
 
 ## Returns the expected next phase for a given current phase.

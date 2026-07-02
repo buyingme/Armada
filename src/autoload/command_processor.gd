@@ -121,6 +121,8 @@ func _ready() -> void:
 	# Tier 14 — squadron-displacement authority (Phase I6b-4).
 	StartDisplacementCommand.register()
 	CommitDisplacementCommand.register()
+	# CAP-UPG-001 - Grand Moff Tarkin command-token choice.
+	TarkinChoiceCommand.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

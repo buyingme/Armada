@@ -294,8 +294,27 @@ func _validate_ship_upgrade_slots(ship_entry: FleetShipEntry,
 			continue
 		if upgrade_data == null:
 			continue
+		if _upgrade_is_commander(upgrade_data):
+			_validate_commander_upgrade_slot(ship_entry, assignment, slot_name, result)
+			continue
 		_validate_single_upgrade_slot(ship_entry, assignment, upgrade_data,
 			slot_name, slots_by_type, occupied, result)
+
+
+func _validate_commander_upgrade_slot(ship_entry: FleetShipEntry,
+		assignment: FleetUpgradeAssignment, slot_name: String,
+		result: FleetValidationResult) -> void:
+	if slot_name != "COMMANDER":
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Commander upgrade '%s' must use COMMANDER slot." % assignment.data_key,
+			[ship_entry.entry_id, assignment.entry_id], [])
+		return
+	if assignment.slot_index != 0:
+		result.add_error(RULE_UPGRADE_SLOT,
+			"Commander upgrade '%s' uses invalid COMMANDER slot index %d." % [
+				assignment.data_key,
+				assignment.slot_index,
+			], [ship_entry.entry_id, assignment.entry_id], [])
 
 
 func _validate_single_upgrade_slot(ship_entry: FleetShipEntry,
@@ -487,9 +506,11 @@ func _assignment_matches_upgrade_slot(slot_name: String,
 	var upgrade_slot: String = str(upgrade_data.upgrade_type).to_upper()
 	if upgrade_slot.is_empty():
 		return true
-	if upgrade_slot == "COMMANDER" and slot_name == "OFFICER":
-		return true
 	return slot_name == upgrade_slot
+
+
+func _upgrade_is_commander(upgrade_data: UpgradeData) -> bool:
+	return upgrade_data != null and str(upgrade_data.upgrade_type).to_upper() == "COMMANDER"
 
 
 func _ship_slots_by_type(ship_data: ShipData) -> Dictionary:

@@ -47,6 +47,48 @@ func test_prepare_game_state_assigns_damage_deck_expected() -> void:
 		"Prepared damage deck should be initialized")
 
 
+func test_prepare_debug_scenario_preserves_runtime_upgrades_through_player_state_serialization() -> void:
+	var game_state: GameState = _create_game_state()
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new("debug_scenario"), game_state)
+	var imperial_state: PlayerState = game_state.get_player_state(1)
+
+	var restored: PlayerState = PlayerState.deserialize(imperial_state.serialize())
+	var restored_ship: ShipInstance = restored.ships[0] as ShipInstance
+	var runtime_upgrade: Dictionary = restored_ship.get_runtime_upgrade(
+			"1:ship:debug-imperial-vsd-1:upgrade:debug-tarkin-commander-0")
+
+	assert_eq(restored_ship.runtime_upgrades.size(), 1,
+			"Scenario-created runtime upgrades should survive PlayerState serialization")
+	assert_eq(runtime_upgrade.get("data_key", ""), "grand_moff_tarkin",
+			"Restored runtime upgrade should preserve static upgrade data_key")
+	assert_eq(runtime_upgrade.get("source_roster_entry_id", ""),
+			"debug-imperial-vsd-1",
+			"Restored runtime upgrade should preserve scenario source identity")
+
+
+func test_debug_scenario_tarkin_runtime_upgrade_prompts_at_ship_phase() -> void:
+	var game_state: GameState = _create_game_state()
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new("debug_scenario"), game_state)
+	game_state.current_round = 1
+	game_state.current_phase = Constants.GamePhase.COMMAND
+	var advance := AdvancePhaseCommand.new(0, {
+		"next_phase": int(Constants.GamePhase.SHIP),
+	})
+
+	advance.execute(game_state)
+
+	assert_eq(game_state.current_phase, Constants.GamePhase.SHIP,
+			"Scenario state should reach Ship Phase")
+	assert_eq(game_state.interaction_flow.step_id,
+			Constants.InteractionStep.TARKIN_COMMAND_CHOICE,
+			"Debug scenario Tarkin runtime upgrade should produce the Tarkin prompt")
+	assert_eq(game_state.interaction_flow.payload.get("runtime_upgrade_id", ""),
+			"1:ship:debug-imperial-vsd-1:upgrade:debug-tarkin-commander-0",
+			"Prompt should bind to the scenario-created runtime upgrade")
+
+
 func test_prepare_game_state_null_inputs_returns_empty_expected() -> void:
 	var prepared: Dictionary = LearningScenarioPreparer.prepare_game_state(null, null)
 	assert_eq((prepared.get("ships", []) as Array).size(), 0,

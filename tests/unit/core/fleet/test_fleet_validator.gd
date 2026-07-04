@@ -147,7 +147,8 @@ func test_validate_duplicate_unique_upgrades_reports_error_expected() -> void:
 	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
 	_add_ship_with_upgrade(roster, "ship-1", "cr90_corvette_a", "leia_organa")
 	_add_ship_with_upgrade(roster, "ship-2", "nebulon_b_support_refit", "leia_organa")
-	_add_upgrade_to_ship(roster.get_ship("ship-1"), "upg-cmd", "general_dodonna", "OFFICER")
+	_add_upgrade_to_ship(roster.get_ship("ship-1"), "upg-cmd", "general_dodonna",
+		"COMMANDER")
 	_set_valid_objectives(roster)
 
 	var result: FleetValidationResult = _validator.validate(roster)
@@ -269,6 +270,72 @@ func test_validate_missing_objective_reports_required_error_expected() -> void:
 
 	assert_true(_has_rule_error(result, FleetValidator.RULE_OBJECTIVE_REQUIRED),
 		"Missing objective category should report objective-required error")
+
+
+func test_validate_commander_uses_commander_slot_without_ship_bar_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER"])
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_false(_has_rule_error(result, FleetValidator.RULE_UPGRADE_SLOT),
+		"Commander assignment should not require a ship COMMANDER upgrade-bar slot")
+
+
+func test_validate_commander_does_not_consume_officer_slot_expected() -> void:
+	var validator: Variant = _create_test_validator("ship-test", ["OFFICER"])
+	validator.add_upgrade_override("officer_copy", _create_upgrade_data(
+		"officer_copy", "OFFICER"))
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "ship-test", "general_dodonna")
+	_add_upgrade_to_ship(roster.get_ship("ship-1"), "officer-1", "officer_copy",
+		"OFFICER")
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = validator.validate(roster)
+
+	assert_false(_has_rule_error(result, FleetValidator.RULE_UPGRADE_SLOT),
+		"Officer slot should remain available after the commander assignment")
+
+
+func test_validate_commander_assigned_to_officer_slot_reports_error_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	var ship_entry: FleetShipEntry = _create_ship("ship-1", "cr90_corvette_a")
+	_add_upgrade_to_ship(ship_entry, "ship-1-cmd", "general_dodonna", "OFFICER")
+	roster.add_ship(ship_entry)
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UPGRADE_SLOT),
+		"Commander assignment to OFFICER should report slot validation error")
+
+
+func test_validate_officer_assigned_to_commander_slot_reports_error_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	_add_ship_with_commander(roster, "ship-1", "cr90_corvette_a", "general_dodonna")
+	_add_upgrade_to_ship(roster.get_ship("ship-1"), "ship-1-officer",
+		"leia_organa", "COMMANDER")
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_true(_has_rule_error(result, FleetValidator.RULE_UPGRADE_SLOT),
+		"Normal officer upgrades should still require an OFFICER ship slot")
+
+
+func test_validate_ship_with_commander_counts_as_flagship_expected() -> void:
+	var roster: FleetRoster = _create_roster("REBEL_ALLIANCE", 180)
+	roster.add_ship(_create_ship("ship-1", "nebulon_b_support_refit"))
+	_add_ship_with_commander(roster, "ship-2", "cr90_corvette_a", "general_dodonna")
+	_set_valid_objectives(roster)
+
+	var result: FleetValidationResult = _validator.validate(roster)
+
+	assert_false(_has_rule_error(result, FleetValidator.RULE_FLAGSHIP_COUNT),
+		"The ship carrying the commander should still count as the flagship")
 
 
 func test_validate_upgrade_slot_mismatch_reports_error_expected() -> void:
@@ -414,7 +481,7 @@ func _set_valid_objectives(roster: FleetRoster) -> void:
 func _add_ship_with_commander(roster: FleetRoster, ship_id: String,
 		ship_key: String, commander_key: String) -> void:
 	var ship_entry: FleetShipEntry = _create_ship(ship_id, ship_key)
-	_add_upgrade_to_ship(ship_entry, "%s-cmd" % ship_id, commander_key, "OFFICER")
+	_add_upgrade_to_ship(ship_entry, "%s-cmd" % ship_id, commander_key, "COMMANDER")
 	roster.add_ship(ship_entry)
 
 

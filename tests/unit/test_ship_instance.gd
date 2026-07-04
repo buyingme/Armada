@@ -371,7 +371,7 @@ func test_add_runtime_upgrade_materializes_canonical_fields() -> void:
 	_instance.roster_entry_id = "ship-entry-1"
 
 	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
-			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+			"grand_moff_tarkin", "upgrade-1", "COMMANDER", 0)
 
 	assert_eq(runtime_upgrade.get("runtime_upgrade_id", ""),
 			"0:ship:ship-entry-1:upgrade:upgrade-1",
@@ -386,7 +386,7 @@ func test_add_runtime_upgrade_materializes_canonical_fields() -> void:
 			"Runtime upgrade should preserve source roster entry id")
 	assert_eq(runtime_upgrade.get("source_assignment_id", ""), "upgrade-1",
 			"Runtime upgrade should preserve source assignment id")
-	assert_eq(runtime_upgrade.get("slot", ""), "OFFICER",
+	assert_eq(runtime_upgrade.get("slot", ""), "COMMANDER",
 			"Runtime upgrade should preserve assignment slot")
 	assert_eq(runtime_upgrade.get("slot_index", -1), 0,
 			"Runtime upgrade should preserve assignment slot index")
@@ -396,7 +396,7 @@ func test_add_runtime_upgrade_initializes_mutable_state() -> void:
 	_instance.roster_entry_id = "ship-entry-1"
 
 	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
-			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+			"grand_moff_tarkin", "upgrade-1", "COMMANDER", 0)
 	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
 
 	assert_false(card_state.get("exhausted", true),
@@ -415,7 +415,7 @@ func test_add_runtime_upgrade_initializes_mutable_state() -> void:
 
 func test_get_runtime_upgrade_by_id_returns_instance() -> void:
 	_instance.roster_entry_id = "ship-entry-1"
-	_instance.add_runtime_upgrade("grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+	_instance.add_runtime_upgrade("grand_moff_tarkin", "upgrade-1", "COMMANDER", 0)
 
 	var runtime_upgrade: Dictionary = _instance.get_runtime_upgrade(
 			"0:ship:ship-entry-1:upgrade:upgrade-1")
@@ -529,7 +529,7 @@ func test_deserialize_round_trip_basic_fields() -> void:
 func test_deserialize_round_trip_runtime_upgrades() -> void:
 	_instance.roster_entry_id = "ship-entry-1"
 	var runtime_upgrade: Dictionary = _instance.add_runtime_upgrade(
-			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0)
+			"grand_moff_tarkin", "upgrade-1", "COMMANDER", 0)
 	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
 	card_state["exhausted"] = true
 	card_state["readied"] = false
@@ -771,4 +771,4 @@ func _valid_runtime_upgrade_data() -> Dictionary:
 	_instance.roster_entry_id = "ship-entry-1"
 	_instance.runtime_upgrades.clear()
 	return _instance.add_runtime_upgrade(
-			"grand_moff_tarkin", "upgrade-1", "OFFICER", 0).duplicate(true)
+			"grand_moff_tarkin", "upgrade-1", "COMMANDER", 0).duplicate(true)

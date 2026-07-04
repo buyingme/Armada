@@ -32,6 +32,8 @@ static func find_first_available_slot(ship_entry: FleetShipEntry,
 		ship_data: ShipData, upgrade_data: UpgradeData) -> Dictionary:
 	if ship_entry == null or ship_data == null or upgrade_data == null:
 		return {}
+	if _normalized(upgrade_data.upgrade_type) == "COMMANDER":
+		return {KEY_SLOT: "COMMANDER", KEY_SLOT_INDEX: 0}
 	var slots_by_type: Dictionary = _slots_by_type(ship_data)
 	var occupied: Dictionary = _occupied_slots(ship_entry)
 	for raw_slot: Variant in slots_by_type.keys():
@@ -44,14 +46,11 @@ static func find_first_available_slot(ship_entry: FleetShipEntry,
 	return {}
 
 
-## Returns true when [param slot_name] can hold [param upgrade_type]. Commander
-## cards use an Officer slot in the Core Set fleet-builder catalog.
+## Returns true when [param slot_name] can hold [param upgrade_type].
 static func assignment_matches_slot(slot_name: String, upgrade_type: String) -> bool:
 	var normalized_slot: String = _normalized(slot_name)
 	var normalized_type: String = _normalized(upgrade_type)
 	if normalized_type.is_empty():
-		return true
-	if normalized_type == "COMMANDER" and normalized_slot == "OFFICER":
 		return true
 	return normalized_slot == normalized_type
 

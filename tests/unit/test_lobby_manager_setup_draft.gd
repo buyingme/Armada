@@ -249,7 +249,7 @@ func _create_rebel_roster() -> FleetRoster:
 	roster.point_format = {"id": FleetBuilderOptions.FORMAT_STANDARD_400, "limit": 400}
 	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	var ship: FleetShipEntry = _create_ship("rebel-ship-1", "cr90_corvette_a")
-	_add_upgrade(ship, "rebel-cmd", "general_dodonna", "OFFICER")
+	_add_upgrade(ship, "rebel-cmd", "general_dodonna", "COMMANDER")
 	roster.add_ship(ship)
 	roster.add_squadron(_create_squadron("rebel-squadron-1", "x_wing_squadron"))
 	var objectives: FleetObjectiveSelection = FleetObjectiveSelection.new()
@@ -267,7 +267,7 @@ func _create_imperial_roster() -> FleetRoster:
 	roster.map = FleetBuilderOptions.default_map_for_point_format(roster.point_format)
 	var ship: FleetShipEntry = _create_ship(
 			"imperial-ship-1", "victory_ii_class_star_destroyer")
-	_add_upgrade(ship, "imperial-cmd", "grand_moff_tarkin", "OFFICER")
+	_add_upgrade(ship, "imperial-cmd", "grand_moff_tarkin", "COMMANDER")
 	roster.add_ship(ship)
 	roster.add_squadron(_create_squadron("imperial-squadron-1", "tie_fighter_squadron"))
 	var objectives: FleetObjectiveSelection = FleetObjectiveSelection.new()

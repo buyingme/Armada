@@ -253,6 +253,54 @@ func _count_by_key(setup: LearningScenarioSetup, key: String) -> int:
 	return count
 
 
+func _ship_by_key(ships: Array[ShipInstance], key: String) -> ShipInstance:
+	for ship: ShipInstance in ships:
+		if ship.data_key == key:
+			return ship
+	return null
+
+
+func _setup_from_tokens(tokens: Array) -> LearningScenarioSetup:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("synthetic")
+	setup._data = {
+		"map_image": "map_3x3_distant_planet_v3.jpg",
+		"scenario_name": "Synthetic Scenario",
+		"tokens": tokens,
+		"use_fixed_round1_commands": false,
+	}
+	return setup
+
+
+func _ship_token(
+		key: String,
+		roster_entry_id: String,
+		upgrades: Array) -> Dictionary:
+	var token: Dictionary = {
+		"key": key,
+		"pos_x": 0.5,
+		"pos_y": 0.2,
+		"rotation_deg": 180.0,
+		"type": "ship",
+		"upgrades": upgrades,
+	}
+	if not roster_entry_id.is_empty():
+		token["roster_entry_id"] = roster_entry_id
+	return token
+
+
+func _upgrade(
+		source_assignment_id: String,
+		data_key: String,
+		slot: String,
+		slot_index: int) -> Dictionary:
+	return {
+		"source_assignment_id": source_assignment_id,
+		"data_key": data_key,
+		"slot": slot,
+		"slot_index": slot_index,
+	}
+
+
 # ---------------------------------------------------------------------------
 # Map image
 # ---------------------------------------------------------------------------
@@ -323,6 +371,128 @@ func test_create_ship_instances_owner_player() -> void:
 		else:
 			assert_eq(inst.owner_player, 0,
 					"Rebel ships should be player 0: %s" % inst.data_key)
+
+
+func test_create_ship_instances_learning_scenario_has_no_runtime_upgrades() -> void:
+	var ships: Array[ShipInstance] = _setup.create_ship_instances()
+	for ship: ShipInstance in ships:
+		assert_eq(ship.runtime_upgrades.size(), 0,
+				"Learning Scenario ships should still load without upgrades")
+		assert_eq(ship.roster_entry_id, "",
+				"Learning Scenario no-upgrade ships should keep legacy identity shape")
+
+
+func test_debug_scenario_materializes_grand_moff_tarkin_runtime_upgrade() -> void:
+	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	var ships: Array[ShipInstance] = setup.create_ship_instances()
+	var victory: ShipInstance = _ship_by_key(
+			ships, "victory_ii_class_star_destroyer")
+
+	assert_not_null(victory, "Debug Scenario should include the Victory II")
+	if victory == null:
+		return
+
+	var runtime_upgrade: Dictionary = victory.get_runtime_upgrade(
+			"1:ship:debug-imperial-vsd-1:upgrade:debug-tarkin-commander-0")
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+
+	assert_eq(victory.runtime_upgrades.size(), 1,
+			"Debug Victory II should materialize exactly one runtime upgrade")
+	assert_eq(runtime_upgrade.get("data_key", ""), "grand_moff_tarkin",
+			"Runtime upgrade should reference Grand Moff Tarkin by data_key")
+	assert_eq(runtime_upgrade.get("owner_player_id", -1), 1,
+			"Runtime upgrade should preserve the Imperial owner")
+	assert_eq(runtime_upgrade.get("source_ship_ref", ""),
+			"1:ship:debug-imperial-vsd-1",
+			"Runtime upgrade should preserve scenario source ship identity")
+	assert_eq(runtime_upgrade.get("source_roster_entry_id", ""),
+			"debug-imperial-vsd-1",
+			"Runtime upgrade should preserve scenario roster-equivalent identity")
+	assert_eq(runtime_upgrade.get("source_assignment_id", ""),
+			"debug-tarkin-commander-0",
+			"Runtime upgrade should preserve assignment identity")
+	assert_eq(runtime_upgrade.get("slot", ""), "COMMANDER",
+			"Runtime upgrade should preserve assignment slot")
+	assert_eq(runtime_upgrade.get("slot_index", -1), 0,
+			"Runtime upgrade should preserve assignment slot index")
+	assert_false(card_state.get("exhausted", true),
+			"Scenario runtime upgrade should start unexhausted")
+	assert_false(card_state.get("discarded", true),
+			"Scenario runtime upgrade should start undiscarded")
+	assert_false(card_state.get("disabled", true),
+			"Scenario runtime upgrade should start enabled")
+	assert_true(card_state.get("readied", false),
+			"Scenario runtime upgrade should start readied")
+	assert_true((runtime_upgrade.get("trigger_guards", {}) as Dictionary).is_empty(),
+			"Scenario runtime upgrade should start with empty trigger guards")
+	assert_true((runtime_upgrade.get("rule_state", {}) as Dictionary).is_empty(),
+			"Scenario runtime upgrade should start with empty rule state")
+
+
+func test_scenario_multiple_upgrades_materialize_deterministically() -> void:
+	var setup: LearningScenarioSetup = _setup_from_tokens([
+		_ship_token("victory_ii_class_star_destroyer", "scenario-vsd-1", [
+			_upgrade("scenario-tarkin", "grand_moff_tarkin", "COMMANDER", 0),
+			_upgrade("scenario-dominator", "dominator", "TITLE", 0),
+		]),
+	])
+
+	var ship: ShipInstance = setup.create_ship_instances()[0]
+	var first: Dictionary = ship.runtime_upgrades[0] as Dictionary
+	var second: Dictionary = ship.runtime_upgrades[1] as Dictionary
+
+	assert_eq(ship.runtime_upgrades.size(), 2,
+			"Scenario setup should create one runtime instance per assigned upgrade")
+	assert_eq(first.get("runtime_upgrade_id", ""),
+			"1:ship:scenario-vsd-1:upgrade:scenario-tarkin",
+			"First runtime upgrade id should be deterministic")
+	assert_eq(second.get("runtime_upgrade_id", ""),
+			"1:ship:scenario-vsd-1:upgrade:scenario-dominator",
+			"Second runtime upgrade id should be deterministic")
+	assert_eq(first.get("data_key", ""), "grand_moff_tarkin",
+			"First runtime upgrade should preserve input order")
+	assert_eq(second.get("data_key", ""), "dominator",
+			"Second runtime upgrade should preserve input order")
+
+
+func test_scenario_duplicate_ship_cards_get_distinct_source_identities() -> void:
+	var setup: LearningScenarioSetup = _setup_from_tokens([
+		_ship_token("victory_ii_class_star_destroyer", "", [
+			_upgrade("scenario-tarkin", "grand_moff_tarkin", "COMMANDER", 0),
+		]),
+		_ship_token("victory_ii_class_star_destroyer", "", [
+			_upgrade("scenario-tarkin", "grand_moff_tarkin", "COMMANDER", 0),
+		]),
+	])
+
+	var ships: Array[ShipInstance] = setup.create_ship_instances()
+	var first: ShipInstance = ships[0]
+	var second: ShipInstance = ships[1]
+	var first_upgrade: Dictionary = first.runtime_upgrades[0] as Dictionary
+	var second_upgrade: Dictionary = second.runtime_upgrades[0] as Dictionary
+
+	assert_eq(first.data_key, second.data_key,
+			"Duplicate scenario ships should keep the same static data key")
+	assert_ne(first.roster_entry_id, second.roster_entry_id,
+			"Duplicate scenario ships should get distinct source identities")
+	assert_ne(first_upgrade.get("runtime_upgrade_id", ""),
+			second_upgrade.get("runtime_upgrade_id", ""),
+			"Duplicate scenario ships should get distinct runtime upgrade ids")
+
+
+func test_scenario_invalid_upgrade_data_key_is_rejected() -> void:
+	var setup: LearningScenarioSetup = _setup_from_tokens([
+		_ship_token("victory_ii_class_star_destroyer", "scenario-vsd-1", [
+			_upgrade("scenario-missing", "missing_upgrade_data", "OFFICER", 0),
+		]),
+	])
+
+	var ship: ShipInstance = setup.create_ship_instances()[0]
+
+	assert_eq(ship.runtime_upgrades.size(), 0,
+			"Scenario setup should skip unresolved runtime upgrade data_key")
+	assert_push_error(1,
+			"Invalid scenario upgrade data_key should surface invalid state")
 
 
 func test_create_squadron_instances_returns_ten() -> void:

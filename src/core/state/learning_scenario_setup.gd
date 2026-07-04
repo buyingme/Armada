@@ -18,6 +18,7 @@ extends RefCounted
 ## Rules Reference: Resources/Game_Components/scenarios/learning_scenario.json
 const SCENARIO_SUBFOLDER: String = "scenarios/"
 const DEFAULT_SCENARIO_ID: String = "learning_scenario"
+const GENERATED_SHIP_ID_PREFIX: String = "scenario-ship"
 
 ## Learning Scenario initial speed for all ships (SU-021).
 ## Rules Reference: "Learning Scenario Setup", step 4, p.5:
@@ -177,12 +178,14 @@ func populate_game_state(game_state: GameState) -> void:
 	rebel_state.faction = Constants.Faction.REBEL_ALLIANCE
 	imperial_state.faction = Constants.Faction.GALACTIC_EMPIRE
 	var tokens: Array = _data.get("tokens", [])
+	var ship_index: int = 0
 	for entry: Variant in tokens:
 		var d: Dictionary = entry as Dictionary
 		var key: String = d.get("key", "")
 		var is_ship: bool = (d.get("type", "ship") == "ship")
 		if is_ship:
-			_create_ship_instance(key, rebel_state, imperial_state)
+			_create_ship_instance(d, ship_index, rebel_state, imperial_state)
+			ship_index += 1
 		else:
 			_create_squadron_instance(key, rebel_state, imperial_state)
 
@@ -193,19 +196,15 @@ func create_ship_instances() -> Array[ShipInstance]:
 	_ensure_loaded()
 	var result: Array[ShipInstance] = []
 	var tokens: Array = _data.get("tokens", [])
+	var ship_index: int = 0
 	for entry: Variant in tokens:
 		var d: Dictionary = entry as Dictionary
 		if d.get("type", "ship") != "ship":
 			continue
-		var key: String = d.get("key", "")
-		var ship_data: ShipData = AssetLoader.load_ship_data(key)
-		if ship_data == null:
-			push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
-			continue
-		var player: int = _player_for_faction(ship_data.faction)
-		var inst: ShipInstance = ShipInstance.create_from_data(
-				key, ship_data, LEARNING_SCENARIO_SPEED, player)
-		result.append(inst)
+		var inst: ShipInstance = _ship_instance_from_entry(d, ship_index)
+		if inst != null:
+			result.append(inst)
+		ship_index += 1
 	return result
 
 
@@ -299,19 +298,78 @@ static func _parse_command_name(command_name: String) -> int:
 
 ## Creates a ShipInstance and adds it to the correct PlayerState.
 func _create_ship_instance(
-		key: String, rebel_state: PlayerState,
+		entry: Dictionary, ship_index: int, rebel_state: PlayerState,
 		imperial_state: PlayerState) -> void:
-	var ship_data: ShipData = AssetLoader.load_ship_data(key)
-	if ship_data == null:
-		push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
+	var inst: ShipInstance = _ship_instance_from_entry(entry, ship_index)
+	if inst == null:
 		return
-	var player: int = _player_for_faction(ship_data.faction)
-	var inst: ShipInstance = ShipInstance.create_from_data(
-			key, ship_data, LEARNING_SCENARIO_SPEED, player)
-	if player == REBEL_PLAYER:
+	if inst.owner_player == REBEL_PLAYER:
 		rebel_state.ships.append(inst)
 	else:
 		imperial_state.ships.append(inst)
+
+
+func _ship_instance_from_entry(entry: Dictionary, ship_index: int) -> ShipInstance:
+	var key: String = str(entry.get("key", ""))
+	var ship_data: ShipData = AssetLoader.load_ship_data(key)
+	if ship_data == null:
+		push_error("LearningScenarioSetup: missing ship data for '%s'" % key)
+		return null
+	var player: int = _player_for_faction(ship_data.faction)
+	var inst: ShipInstance = ShipInstance.create_from_data(
+			key, ship_data, LEARNING_SCENARIO_SPEED, player)
+	inst.roster_entry_id = _scenario_ship_identity(entry, ship_index)
+	_materialize_scenario_runtime_upgrades(inst, entry)
+	return inst
+
+
+func _scenario_ship_identity(entry: Dictionary, ship_index: int) -> String:
+	var explicit_id: String = str(entry.get("roster_entry_id", "")).strip_edges()
+	if not explicit_id.is_empty():
+		return explicit_id
+	if not entry.has("upgrades"):
+		return ""
+	return "%s-%02d-%s" % [
+		GENERATED_SHIP_ID_PREFIX,
+		ship_index,
+		str(entry.get("key", "")).strip_edges(),
+	]
+
+
+func _materialize_scenario_runtime_upgrades(
+		ship: ShipInstance, entry: Dictionary) -> void:
+	var raw_upgrades: Variant = entry.get("upgrades", [])
+	if not raw_upgrades is Array:
+		push_error("LearningScenarioSetup: upgrades for '%s' must be an Array"
+				% ship.roster_entry_id)
+		return
+	for upgrade_index: int in range((raw_upgrades as Array).size()):
+		var raw_upgrade: Variant = (raw_upgrades as Array)[upgrade_index]
+		if not raw_upgrade is Dictionary:
+			push_error("LearningScenarioSetup: upgrade %d for '%s' must be a Dictionary"
+					% [upgrade_index, ship.roster_entry_id])
+			continue
+		var upgrade_data: Dictionary = raw_upgrade as Dictionary
+		_materialize_scenario_runtime_upgrade(ship, upgrade_data, upgrade_index)
+
+
+func _materialize_scenario_runtime_upgrade(
+		ship: ShipInstance, upgrade: Dictionary, upgrade_index: int) -> void:
+	var data_key: String = str(upgrade.get("data_key", "")).strip_edges()
+	var assignment_id: String = str(
+			upgrade.get("source_assignment_id", "")).strip_edges()
+	var slot: String = str(upgrade.get("slot", "")).strip_edges()
+	if data_key.is_empty() or assignment_id.is_empty() or slot.is_empty() \
+			or not upgrade.has("slot_index"):
+		push_error("LearningScenarioSetup: upgrade %d for '%s' is missing identity fields"
+				% [upgrade_index, ship.roster_entry_id])
+		return
+	if AssetLoader.load_upgrade_data(data_key) == null:
+		push_error("LearningScenarioSetup: upgrade '%s' for '%s' could not be loaded"
+				% [data_key, ship.roster_entry_id])
+		return
+	ship.add_runtime_upgrade(data_key, assignment_id, slot,
+			int(upgrade.get("slot_index", 0)))
 
 
 ## Creates a SquadronInstance and adds it to the correct PlayerState.

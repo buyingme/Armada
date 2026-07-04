@@ -195,7 +195,7 @@ func _create_rebel_roster() -> FleetRoster:
 	var assignment: FleetUpgradeAssignment = FleetUpgradeAssignment.new()
 	assignment.entry_id = "rebel-cmd"
 	assignment.data_key = "general_dodonna"
-	assignment.slot = "OFFICER"
+	assignment.slot = "COMMANDER"
 	ship.add_upgrade(assignment)
 	roster.add_ship(ship)
 	return roster

@@ -84,7 +84,7 @@ func test_prepare_runtime_materializes_ship_runtime_upgrades_expected() -> void:
 			"Runtime upgrade should preserve source roster entry id")
 	assert_eq(runtime_upgrade.get("source_assignment_id", ""), "rebel-cmd",
 			"Runtime upgrade should preserve source assignment id")
-	assert_eq(runtime_upgrade.get("slot", ""), "OFFICER",
+	assert_eq(runtime_upgrade.get("slot", ""), "COMMANDER",
 			"Runtime upgrade should preserve assignment slot")
 	assert_false(card_state.get("exhausted", true),
 			"Runtime upgrade should start unexhausted")
@@ -278,6 +278,10 @@ func test_prepare_runtime_player_state_round_trip_preserves_metadata_expected() 
 			"0:ship:rebel-ship-1:upgrade:rebel-cmd").get("data_key", ""),
 			"general_dodonna",
 			"Ship save/load should preserve runtime upgrade data_key")
+	assert_eq(restored_ship.get_runtime_upgrade(
+			"0:ship:rebel-ship-1:upgrade:rebel-cmd").get("slot", ""),
+			"COMMANDER",
+			"Ship save/load should preserve runtime upgrade assignment slot")
 	assert_eq(restored_squadron.roster_entry_id, "rebel-squadron-1",
 		"Squadron save/load should preserve roster entry identity")
 
@@ -319,7 +323,7 @@ func _display_name_for_player(player_index: int) -> String:
 
 func _rebel_roster() -> Dictionary:
 	var ships: Array[Dictionary] = [_ship_entry("rebel-ship-1", "cr90_corvette_a", [
-		_upgrade_entry("rebel-cmd", "general_dodonna", "OFFICER"),
+		_upgrade_entry("rebel-cmd", "general_dodonna", "COMMANDER"),
 	])]
 	var squadrons: Array[Dictionary] = [
 		_squadron_entry("rebel-squadron-1", "x_wing_squadron"),
@@ -330,7 +334,7 @@ func _rebel_roster() -> Dictionary:
 func _imperial_roster() -> Dictionary:
 	var ships: Array[Dictionary] = [_ship_entry(
 		"imperial-ship-1", "victory_ii_class_star_destroyer", [
-			_upgrade_entry("imperial-cmd", "grand_moff_tarkin", "OFFICER"),
+			_upgrade_entry("imperial-cmd", "grand_moff_tarkin", "COMMANDER"),
 		])]
 	var squadrons: Array[Dictionary] = [
 		_squadron_entry("imperial-squadron-1", "tie_fighter_squadron"),

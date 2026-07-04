@@ -36,9 +36,9 @@ func test_add_upgrade_assigns_first_matching_slot_expected() -> void:
 	var added: bool = FleetRosterDraftHelper.add_upgrade(
 			roster, "ship-1", "general_dodonna", "upgrade-1")
 
-	assert_true(added, "Draft helper should assign a commander to an officer slot")
-	assert_eq(roster.get_ship("ship-1").upgrades[0].slot, "OFFICER",
-		"Commander should be stored against the ship's officer slot")
+	assert_true(added, "Draft helper should assign a commander")
+	assert_eq(roster.get_ship("ship-1").upgrades[0].slot, "COMMANDER",
+		"Commander should be stored against the commander slot")
 
 
 func test_set_objective_uses_catalog_category_expected() -> void:

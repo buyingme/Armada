@@ -9,8 +9,17 @@
             "key": "victory_ii_class_star_destroyer",
             "pos_x": 0.5,
             "pos_y": 0.145,
+            "roster_entry_id": "debug-imperial-vsd-1",
             "rotation_deg": 180.0,
-            "type": "ship"
+            "type": "ship",
+            "upgrades": [
+                {
+                    "data_key": "grand_moff_tarkin",
+                    "slot": "COMMANDER",
+                    "slot_index": 0,
+                    "source_assignment_id": "debug-tarkin-commander-0"
+                }
+            ]
         },
         {
             "key": "cr90_corvette_a",

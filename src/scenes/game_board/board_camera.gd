@@ -172,11 +172,11 @@ func _screen_to_world(screen_pos: Vector2) -> Vector2:
 
 
 ## Smoothly rotates the camera so the board faces the given player.
-## Player 0 (Rebel) = 0° rotation, Player 1 (Imperial) = 180° rotation.
+## Player 0 = 0° rotation, Player 1 = 180° rotation.
 ## The camera rotates around the centre of the play area.
 ## Emits [signal EventBus.perspective_change_complete] when finished.
 ## Requirements: BP-001, BP-002.
-## [param player_index] — 0 for Rebel perspective, 1 for Imperial.
+## [param player_index] — 0 for the not-rotated side, 1 for the rotated side.
 func rotate_to_player(player_index: int) -> void:
 	if player_index == _current_player:
 		EventBus.perspective_change_complete.emit()

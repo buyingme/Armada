@@ -179,24 +179,23 @@ static func _ship_geometry_error(game_state: GameState,
 			deg_to_rad(float(payload.get("rotation_deg", 0.0))))
 	if not _extents_within_play_area(pixel_pos, extents, play_area_size):
 		return "Setup ship deployment must stay within the play area."
-	return _deployment_zone_error(pixel_pos, extents,
-			game_state.get_player_state(ship.owner_player))
+	return _deployment_zone_error(pixel_pos, extents, ship.owner_player)
 
 
 static func _deployment_zone_error(pixel_pos: Vector2,
 		extents: Vector2,
-		player_state: PlayerState) -> String:
-	if player_state == null:
-		return "Setup deployment player state was not found."
+		owner_player: int) -> String:
 	var top_y: float = DeploymentZoneOverlay.get_top_line_y()
 	var bottom_y: float = DeploymentZoneOverlay.get_bottom_line_y()
-	match player_state.faction:
-		Constants.Faction.GALACTIC_EMPIRE:
-			if pixel_pos.y + extents.y > top_y:
-				return "Setup ship deployment must stay inside the owning deployment zone."
-		Constants.Faction.REBEL_ALLIANCE:
+	match owner_player:
+		0:
 			if pixel_pos.y - extents.y < bottom_y:
 				return "Setup ship deployment must stay inside the owning deployment zone."
+		1:
+			if pixel_pos.y + extents.y > top_y:
+				return "Setup ship deployment must stay inside the owning deployment zone."
+		_:
+			return "Setup deployment player state was not found."
 	return ""
 
 

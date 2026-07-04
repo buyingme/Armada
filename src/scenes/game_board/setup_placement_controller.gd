@@ -420,12 +420,14 @@ func _move_selected_token(mouse_world: Vector2) -> void:
 
 
 func _move_ship_token(token: ShipToken, desired: Vector2) -> void:
-	token.position = _token_mover.resolve_ship_position_in_area(
+	var ship: ShipInstance = token.get_ship_instance()
+	var owner_player: int = ship.owner_player if ship != null else -1
+	token.position = _token_mover.resolve_ship_position_for_player_in_area(
 			desired,
 			token.position,
 			token.get_ship_size(),
 			token.rotation,
-			token.get_faction(),
+			owner_player,
 			_build_other_ship_rects(token),
 			_build_other_squad_circles(token),
 			DeploymentZoneOverlay.get_top_line_y(),

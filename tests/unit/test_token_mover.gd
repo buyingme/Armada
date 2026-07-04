@@ -283,6 +283,50 @@ func test_rebel_ship_blocked_by_deploy_zone() -> void:
 			"Rebel ship should be clamped below the bottom deployment line")
 
 
+func test_resolve_ship_for_player_zero_uses_bottom_deployment_zone() -> void:
+	var top_y: float = 434.0
+	var bottom_y: float = GameScale.play_area_side_px - 434.0
+	var desired: Vector2 = Vector2(500.0, 400.0)
+	var current: Vector2 = Vector2(500.0, 1900.0)
+	var result: Vector2 = _mover.resolve_ship_position_for_player_in_area(
+			desired,
+			current,
+			Constants.ShipSize.SMALL,
+			0.0,
+			0,
+			[],
+			[],
+			top_y,
+			bottom_y,
+			GameScale.play_area_size_px)
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var extent_y: float = base_size.y * 0.5
+	assert_true(result.y - extent_y >= bottom_y - 1.0,
+			"Player 0 should be clamped to the bottom deployment zone.")
+
+
+func test_resolve_ship_for_player_one_uses_top_deployment_zone() -> void:
+	var top_y: float = 434.0
+	var bottom_y: float = GameScale.play_area_side_px - 434.0
+	var desired: Vector2 = Vector2(500.0, 800.0)
+	var current: Vector2 = Vector2(500.0, 200.0)
+	var result: Vector2 = _mover.resolve_ship_position_for_player_in_area(
+			desired,
+			current,
+			Constants.ShipSize.SMALL,
+			0.0,
+			1,
+			[],
+			[],
+			top_y,
+			bottom_y,
+			GameScale.play_area_size_px)
+	var base_size: Vector2 = GameScale.get_base_size(Constants.ShipSize.SMALL)
+	var extent_y: float = base_size.y * 0.5
+	assert_true(result.y + extent_y <= top_y + 1.0,
+			"Player 1 should be clamped to the top deployment zone.")
+
+
 # ---------------------------------------------------------------------------
 # Deployment zone — squadron blocked
 # ---------------------------------------------------------------------------

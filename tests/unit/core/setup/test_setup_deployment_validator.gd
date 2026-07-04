@@ -53,6 +53,60 @@ func test_validate_commit_ship_outside_own_deployment_zone_rejected() -> void:
 			"Ship deployment should reject placements outside the owning deployment zone.")
 
 
+func test_validate_commit_imperial_host_rebel_client_uses_player_one_top_zone_expected() -> void:
+	_state.initiative_player = 1
+	_set_player_factions(Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
+	_add_ship(1, "ship-1", "cr90_corvette_a", 0.48, 0.18)
+	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(_state)
+
+	var legal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 1, _ship_payload(1, "ship-1", 0.48, 0.12, 180.0, 2))
+	var illegal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 1, _ship_payload(1, "ship-1", 0.48, 0.88, 180.0, 2))
+
+	assert_eq(legal, "",
+			"Rebel player 1 should deploy legally in the player 1 top zone.")
+	assert_ne(illegal, "",
+			"Rebel player 1 should be rejected from the player 0 bottom zone.")
+
+
+func test_validate_commit_rebel_host_imperial_client_uses_player_zero_bottom_zone_expected() -> void:
+	_state.initiative_player = 0
+	_set_player_factions(Constants.Faction.REBEL_ALLIANCE,
+			Constants.Faction.GALACTIC_EMPIRE)
+	_add_ship(0, "ship-1", "cr90_corvette_a", 0.48, 0.82)
+	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(_state)
+
+	var legal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 0, _ship_payload(0, "ship-1", 0.48, 0.88, 0.0, 2))
+	var illegal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 0, _ship_payload(0, "ship-1", 0.48, 0.12, 0.0, 2))
+
+	assert_eq(legal, "",
+			"Rebel player 0 should deploy legally in the player 0 bottom zone.")
+	assert_ne(illegal, "",
+			"Rebel player 0 should be rejected from the player 1 top zone.")
+
+
+func test_validate_commit_imperial_player_zero_still_uses_bottom_zone_expected() -> void:
+	_state.initiative_player = 0
+	_set_player_factions(Constants.Faction.GALACTIC_EMPIRE,
+			Constants.Faction.REBEL_ALLIANCE)
+	_add_ship(0, "ship-1", "victory_ii_class_star_destroyer", 0.48, 0.82)
+	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(_state)
+
+	var legal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 0, _ship_payload(0, "ship-1", 0.48, 0.88, 0.0, 2))
+	var illegal: String = SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.validate_commit(
+			_state, 0, _ship_payload(0, "ship-1", 0.48, 0.12, 0.0, 2))
+
+	assert_eq(legal, "",
+			"Imperial player 0 should use the player 0 bottom zone.")
+	assert_ne(illegal, "",
+			"Imperial player 0 should not be allowed to deploy in the player 1 top zone.")
+
+
 func test_validate_commit_ship_illegal_speed_rejected() -> void:
 	_add_ship(1, "ship-1", "victory_ii_class_star_destroyer", 0.48, 0.18)
 	SETUP_DEPLOYMENT_VALIDATOR_SCRIPT.apply_to_state(_state)
@@ -182,6 +236,12 @@ func _add_squadron(owner_player: int,
 	squadron.data_key = data_key
 	squadron.squadron_data = AssetLoader.load_squadron_data(data_key)
 	_state.get_player_state(owner_player).squadrons.append(squadron)
+
+
+func _set_player_factions(player_zero: Constants.Faction,
+		player_one: Constants.Faction) -> void:
+	_state.get_player_state(0).faction = player_zero
+	_state.get_player_state(1).faction = player_one
 
 
 func _ship_payload(owner_player: int,

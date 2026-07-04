@@ -218,6 +218,23 @@ func test_select_ship_deployment_enables_speed_selector_expected() -> void:
 			"Deployment modal should acknowledge the currently selected ship.")
 
 
+func test_move_ship_token_clamps_by_owner_player_not_token_faction_expected() -> void:
+	GameScale.configure_play_area_for_map_filename(MAP_3X3)
+	var ship: ShipInstance = _add_ship(0, "ship_alpha", "victory_ii_class_star_destroyer")
+	GameManager.current_game_state = _make_deployment_state([ship], [], [])
+	var token: ShipToken = _add_ship_token_with_faction(
+			ship, Constants.Faction.GALACTIC_EMPIRE)
+	_controller.initialize(_board, _token_container, TokenMover.new())
+	await get_tree().process_frame
+
+	_controller._move_ship_token(token, Vector2(GameScale.play_area_size_px.x * 0.5, 100.0))
+
+	var base_size: Vector2 = GameScale.get_base_size(ship.ship_data.ship_size)
+	var extent_y: float = base_size.y * 0.5
+	assert_true(token.position.y - extent_y >= DeploymentZoneOverlay.get_bottom_line_y() - 1.0,
+			"Setup dragging should clamp player 0 to bottom zone regardless of token faction.")
+
+
 func test_passive_peer_hides_undeployed_tokens_during_deployment_expected() -> void:
 	NetworkManager._local_player_index = 1
 	var ship: ShipInstance = _add_ship(0, "ship_alpha", "cr90_corvette_a")
@@ -446,6 +463,22 @@ func _add_ship(owner_player: int,
 	return ship
 
 
+func _add_ship_token_with_faction(ship: ShipInstance,
+		faction: Constants.Faction) -> ShipToken:
+	var token: ShipToken = ShipToken.new()
+	token.setup(TokenPlacement.new(
+			ship.data_key,
+			true,
+			faction,
+			ship.pos_x,
+			ship.pos_y,
+			deg_to_rad(ship.rotation_deg),
+			ship.ship_data.ship_size))
+	token.bind_instance(ship)
+	_token_container.add_child(token)
+	return token
+
+
 func _add_squadron(owner_player: int,
 		roster_entry_id: String,
 		data_key: String) -> SquadronInstance:
@@ -460,18 +493,7 @@ func _add_squadron(owner_player: int,
 
 
 func _add_ship_token(ship: ShipInstance) -> ShipToken:
-	var token: ShipToken = ShipToken.new()
-	token.setup(TokenPlacement.new(
-			ship.data_key,
-			true,
-			state_faction(ship.owner_player),
-			ship.pos_x,
-			ship.pos_y,
-			deg_to_rad(ship.rotation_deg),
-			ship.ship_data.ship_size))
-	token.bind_instance(ship)
-	_token_container.add_child(token)
-	return token
+	return _add_ship_token_with_faction(ship, state_faction(ship.owner_player))
 
 
 func _add_squadron_token(squadron: SquadronInstance) -> SquadronToken:

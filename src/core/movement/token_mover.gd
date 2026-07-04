@@ -36,6 +36,10 @@ const MAX_BINARY_STEPS: int = 20
 ## Small epsilon for overlap tolerance (pixels).
 const OVERLAP_EPSILON: float = 1.0
 
+const DEPLOYMENT_SIDE_TOP: int = 0
+const DEPLOYMENT_SIDE_BOTTOM: int = 1
+const DEPLOYMENT_SIDE_NONE: int = -1
+
 
 ## Resolves a desired position for a ship token, accounting for collisions
 ## with other tokens and (optionally) deployment zone boundaries.
@@ -95,13 +99,68 @@ func resolve_ship_position_in_area(
 		play_area_size: Vector2,
 		enforce_deploy_zones: bool = true
 ) -> Vector2:
+	return _resolve_ship_position_for_side_in_area(
+			desired_pos,
+			current_pos,
+			ship_size,
+			rotation_rad,
+			_deployment_side_for_faction(faction),
+			other_ship_rects,
+			other_squad_circles,
+			deploy_line_y_top,
+			deploy_line_y_bottom,
+			play_area_size,
+			enforce_deploy_zones)
+
+
+## Resolves a desired setup ship position using owner-player board side.
+func resolve_ship_position_for_player_in_area(
+		desired_pos: Vector2,
+		current_pos: Vector2,
+		ship_size: Constants.ShipSize,
+		rotation_rad: float,
+		owner_player: int,
+		other_ship_rects: Array,
+		other_squad_circles: Array,
+		deploy_line_y_top: float,
+		deploy_line_y_bottom: float,
+		play_area_size: Vector2,
+		enforce_deploy_zones: bool = true
+) -> Vector2:
+	return _resolve_ship_position_for_side_in_area(
+			desired_pos,
+			current_pos,
+			ship_size,
+			rotation_rad,
+			_deployment_side_for_player(owner_player),
+			other_ship_rects,
+			other_squad_circles,
+			deploy_line_y_top,
+			deploy_line_y_bottom,
+			play_area_size,
+			enforce_deploy_zones)
+
+
+func _resolve_ship_position_for_side_in_area(
+		desired_pos: Vector2,
+		current_pos: Vector2,
+		ship_size: Constants.ShipSize,
+		rotation_rad: float,
+		deployment_side: int,
+		other_ship_rects: Array,
+		other_squad_circles: Array,
+		deploy_line_y_top: float,
+		deploy_line_y_bottom: float,
+		play_area_size: Vector2,
+		enforce_deploy_zones: bool = true
+) -> Vector2:
 	var base_size: Vector2 = GameScale.get_base_size(ship_size)
 	var half_w: float = base_size.x * 0.5
 	var half_l: float = base_size.y * 0.5
 
 	# Step 1 — apply boundary constraints to the desired position.
 	var candidate: Vector2 = _clamp_ship_candidate(
-			desired_pos, half_w, half_l, rotation_rad, faction,
+			desired_pos, half_w, half_l, rotation_rad, deployment_side,
 			deploy_line_y_top, deploy_line_y_bottom, play_area_size,
 			enforce_deploy_zones)
 
@@ -113,7 +172,7 @@ func resolve_ship_position_in_area(
 	# Steps 3+4 — primary push-out, then cascade fallback.
 	return _resolve_ship_pushout(
 			desired_pos, current_pos, candidate, rotation_rad,
-			half_w, half_l, faction, other_ship_rects, other_squad_circles,
+			half_w, half_l, deployment_side, other_ship_rects, other_squad_circles,
 			deploy_line_y_top, deploy_line_y_bottom, play_area_size,
 			enforce_deploy_zones)
 
@@ -121,14 +180,14 @@ func resolve_ship_position_in_area(
 ## Clamps a desired position to play-area and (optionally) deployment zone.
 func _clamp_ship_candidate(
 		pos: Vector2, hw: float, hl: float, rot: float,
-		faction: Constants.Faction,
+		deployment_side: int,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_zones: bool) -> Vector2:
 	var result: Vector2 = _clamp_rotated_rect_to_play_area(
 			pos, hw, hl, rot, play_area_size)
 	if enforce_zones:
 		result = _apply_deploy_zone_ship(
-				result, hw, hl, rot, faction, top_y, bottom_y)
+				result, hw, hl, rot, deployment_side, top_y, bottom_y)
 	return result
 
 
@@ -137,13 +196,13 @@ func _clamp_ship_candidate(
 func _resolve_ship_pushout(
 		desired_pos: Vector2, current_pos: Vector2,
 		candidate: Vector2, rot: float, hw: float, hl: float,
-		faction: Constants.Faction,
+		deployment_side: int,
 		other_ships: Array, other_squads: Array,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_zones: bool) -> Vector2:
 	var primary: Dictionary = _collect_ship_pushouts(
 			candidate, rot, hw, hl, other_ships, other_squads,
-			faction, top_y, bottom_y, play_area_size, enforce_zones)
+			deployment_side, top_y, bottom_y, play_area_size, enforce_zones)
 	var best: Vector2 = _pick_closest(primary.valid, candidate)
 	if best != Vector2.INF:
 		_log.debug("Ship resolved (primary): mouse=(%.0f,%.0f) result=(%.0f,%.0f) v=%d i=%d" % [
@@ -152,7 +211,7 @@ func _resolve_ship_pushout(
 		return best
 	best = _cascade_ship_pushout(
 			primary.invalid, rot, hw, hl, other_ships, other_squads,
-			faction, top_y, bottom_y, play_area_size, enforce_zones, candidate)
+			deployment_side, top_y, bottom_y, play_area_size, enforce_zones, candidate)
 	if best != Vector2.INF:
 		_log.debug("Ship resolved (cascade): mouse=(%.0f,%.0f) result=(%.0f,%.0f)" % [
 				desired_pos.x, desired_pos.y, best.x, best.y])
@@ -166,14 +225,14 @@ func _resolve_ship_pushout(
 func _cascade_ship_pushout(
 		invalid: Array, rot: float, hw: float, hl: float,
 		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
+		deployment_side: int,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_zones: bool, candidate: Vector2) -> Vector2:
 	var all_secondary: Array = []
 	for pos: Vector2 in invalid:
 		var secondary: Dictionary = _collect_ship_pushouts(
 				pos, rot, hw, hl, other_ships, other_squads,
-				faction, top_y, bottom_y, play_area_size, enforce_zones)
+				deployment_side, top_y, bottom_y, play_area_size, enforce_zones)
 		all_secondary.append_array(secondary.valid)
 	return _pick_closest(all_secondary, candidate)
 
@@ -365,12 +424,32 @@ func _circle_overlaps_any(
 # Deployment zone enforcement
 # ---------------------------------------------------------------------------
 
+func _deployment_side_for_faction(faction: Constants.Faction) -> int:
+	match faction:
+		Constants.Faction.GALACTIC_EMPIRE:
+			return DEPLOYMENT_SIDE_TOP
+		Constants.Faction.REBEL_ALLIANCE:
+			return DEPLOYMENT_SIDE_BOTTOM
+		_:
+			return DEPLOYMENT_SIDE_NONE
+
+
+func _deployment_side_for_player(owner_player: int) -> int:
+	match owner_player:
+		0:
+			return DEPLOYMENT_SIDE_BOTTOM
+		1:
+			return DEPLOYMENT_SIDE_TOP
+		_:
+			return DEPLOYMENT_SIDE_NONE
+
+
 ## Clamps a ship position so its rotated bounding box stays within the
-## faction's deployment zone (does not cross the deployment line).
+## selected deployment side (does not cross the deployment line).
 ## DBG-032 — deployment line acts as wall.
 func _apply_deploy_zone_ship(
 		pos: Vector2, hw: float, hl: float, rot: float,
-		faction: Constants.Faction,
+		deployment_side: int,
 		top_line_y: float, bottom_line_y: float
 ) -> Vector2:
 	if top_line_y < 0.0 and bottom_line_y < 0.0:
@@ -378,12 +457,12 @@ func _apply_deploy_zone_ship(
 	# Compute the worst-case Y extent of the rotated rectangle from centre.
 	var extent_y: float = absf(hw * sin(rot)) + absf(hl * cos(rot))
 	var result: Vector2 = pos
-	match faction:
-		Constants.Faction.GALACTIC_EMPIRE:
+	match deployment_side:
+		DEPLOYMENT_SIDE_TOP:
 			# Must stay above top_line_y.
 			if top_line_y >= 0.0 and (result.y + extent_y) > top_line_y:
 				result.y = top_line_y - extent_y
-		Constants.Faction.REBEL_ALLIANCE:
+		DEPLOYMENT_SIDE_BOTTOM:
 			# Must stay below bottom_line_y.
 			if bottom_line_y >= 0.0 and (result.y - extent_y) < bottom_line_y:
 				result.y = bottom_line_y + extent_y
@@ -464,7 +543,7 @@ func _square_play_area_size(side: float) -> Vector2:
 func _collect_ship_pushouts(
 		from_pos: Vector2, rot: float, hw: float, hl: float,
 		other_ships: Array, other_squads: Array,
-		faction: Constants.Faction,
+		deployment_side: int,
 		top_y: float, bottom_y: float, play_area_size: Vector2,
 		enforce_deploy_zones: bool = true
 ) -> Dictionary:
@@ -476,7 +555,8 @@ func _collect_ship_pushouts(
 		var pushed: Vector2 = _push_ship_from_ship(from_pos, rot, hw, hl, other)
 		pushed = _clamp_rotated_rect_to_play_area(pushed, hw, hl, rot, play_area_size)
 		if enforce_deploy_zones:
-			pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
+			pushed = _apply_deploy_zone_ship(
+					pushed, hw, hl, rot, deployment_side, top_y, bottom_y)
 		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
 			invalid.append(pushed)
 		else:
@@ -487,7 +567,8 @@ func _collect_ship_pushouts(
 		var pushed: Vector2 = _push_ship_from_circle(from_pos, rot, hw, hl, other)
 		pushed = _clamp_rotated_rect_to_play_area(pushed, hw, hl, rot, play_area_size)
 		if enforce_deploy_zones:
-			pushed = _apply_deploy_zone_ship(pushed, hw, hl, rot, faction, top_y, bottom_y)
+			pushed = _apply_deploy_zone_ship(
+					pushed, hw, hl, rot, deployment_side, top_y, bottom_y)
 		if _ship_overlaps_any(pushed, rot, hw, hl, other_ships, other_squads):
 			invalid.append(pushed)
 		else:

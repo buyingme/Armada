@@ -303,6 +303,52 @@ func test_command_result_received_signal_exists() -> void:
 		NetworkManager.command_result_received.disconnect(conn["callable"])
 
 
+func test_sync_gate_player_one_multiple_dials_reach_authority_expected() -> void:
+	var previous_state: GameState = GameManager.current_game_state
+	var previous_active: bool = GameManager.is_game_active
+	var previous_gate: CommandSyncGate = NetworkManager._sync_gate
+	var state: GameState = _command_phase_state_with_player_one_ships()
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	NetworkManager._sync_gate = CommandSyncGate.new()
+	NetworkManager.activate_sync_gate()
+
+	var first := AssignDialCommand.new(1, {
+		"ship_index": 0,
+		"commands": [int(Constants.CommandType.NAVIGATE)],
+	})
+	var second := AssignDialCommand.new(1, {
+		"ship_index": 1,
+		"commands": [int(Constants.CommandType.REPAIR)],
+	})
+	var first_result: Dictionary = CommandProcessor.submit_deferred_followups(first)
+	NetworkManager._sync_gate.hold(first.serialize(), first_result)
+	assert_false(NetworkManager._all_dials_assigned(1),
+			"Player 1 should not be ready after only one ship assignment.")
+
+	var second_result: Dictionary = CommandProcessor.submit_deferred_followups(second)
+	NetworkManager._sync_gate.hold(second.serialize(), second_result)
+	if NetworkManager._all_dials_assigned(1):
+		NetworkManager._sync_gate.mark_ready(1)
+	NetworkManager._sync_gate.mark_ready(0)
+	var advance := AdvancePhaseCommand.new(0, {
+		"next_phase": int(Constants.GamePhase.SHIP),
+	})
+
+	assert_eq(NetworkManager._sync_gate.get_held_count(), 2,
+			"Both player-1 dial assignments should be held by the sync gate.")
+	assert_true(NetworkManager._sync_gate.is_player_ready(1),
+			"Player 1 should become ready after both ship dials reach authority.")
+	assert_true(NetworkManager._sync_gate.is_open(),
+			"Sync gate should open once both players are ready.")
+	assert_eq(advance.validate(state), "",
+			"Ship Phase advancement should be legal after dial assignment.")
+
+	NetworkManager._sync_gate = previous_gate
+	GameManager.current_game_state = previous_state
+	GameManager.is_game_active = previous_active
+
+
 func test_receive_setup_package_config_stores_pending_payload() -> void:
 	var previous_config: Dictionary = NetworkManager._pending_game_config.duplicate(true)
 	var package: FleetSetupPackage = _network_setup_package()
@@ -419,6 +465,31 @@ func _network_setup_package() -> FleetSetupPackage:
 		"deployments": [],
 		"setup_state": {},
 	})
+
+
+func _command_phase_state_with_player_one_ships() -> GameState:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.COMMAND
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.COMMAND_PHASE,
+			Constants.InteractionStep.SELECT_DIALS,
+			1)
+	state.get_player_state(1).ships.append(
+			_command_ship(1, "Imperial One"))
+	state.get_player_state(1).ships.append(
+			_command_ship(1, "Imperial Two"))
+	return state
+
+
+func _command_ship(owner: int, ship_name: String) -> ShipInstance:
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = owner
+	ship.ship_data = ShipData.new()
+	ship.ship_data.ship_name = ship_name
+	ship.command_dial_stack = CommandDialStack.create(1)
+	return ship
 
 
 func _network_player_entry(player_index: int,

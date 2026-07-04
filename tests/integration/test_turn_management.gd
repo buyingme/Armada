@@ -9,11 +9,13 @@ extends GutTest
 
 var _active_player_changes: Array[int] = []
 var _command_phase_complete_count: int = 0
+var _saved_submitter: CommandSubmitter = null
 
 
 func before_each() -> void:
 	_active_player_changes.clear()
 	_command_phase_complete_count = 0
+	_saved_submitter = GameManager.get_command_submitter()
 	EventBus.active_player_changed.connect(_on_active_player_changed)
 	EventBus.command_phase_complete.connect(_on_command_phase_complete)
 	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
@@ -30,6 +32,7 @@ func after_each() -> void:
 				_on_command_phase_complete)
 	GameManager.is_game_active = false
 	GameManager.current_game_state = null
+	GameManager.set_command_submitter(_saved_submitter)
 	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
 
 
@@ -142,6 +145,23 @@ func test_picker_confirmed_path_does_not_double_advance_phase() -> void:
 			+"(not Squadron)")
 	assert_eq(_command_phase_complete_count, 1,
 			"command_phase_complete should fire exactly once")
+
+
+func test_picker_confirmed_accepts_network_pending_result() -> void:
+	GameManager.start_new_game()
+	var submitter := _AwaitingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	var ship: ShipInstance = _add_command_ship(1, "NetworkPending")
+
+	EventBus.command_picker_confirmed.emit(
+			ship, [Constants.CommandType.NAVIGATE])
+
+	assert_eq(submitter.submitted.size(), 1,
+			"Picker confirmation should submit one assign_dials command.")
+	assert_eq(_command_phase_complete_count, 0,
+			"Network-pending submit should wait for authoritative result.")
+	assert_false(GameManager._command_submitted[1],
+			"Pending network submit should not mark local player ready.")
 
 
 # --- Ship Phase Turn Management ---
@@ -470,3 +490,24 @@ func _mark_all_ships_activated() -> void:
 		for s: Variant in ps.ships:
 			if s is ShipInstance:
 				(s as ShipInstance).activated_this_round = true
+
+
+func _add_command_ship(owner: int, ship_name: String) -> ShipInstance:
+	var ship: ShipInstance = ShipInstance.new()
+	ship.owner_player = owner
+	ship.activated_this_round = false
+	ship.ship_data = ShipData.new()
+	ship.ship_data.ship_name = ship_name
+	ship.command_dial_stack = CommandDialStack.create(1)
+	GameManager.current_game_state.get_player_state(owner).ships.append(ship)
+	return ship
+
+
+class _AwaitingSubmitter:
+	extends CommandSubmitter
+
+	var submitted: Array[GameCommand] = []
+
+	func submit(command: GameCommand) -> Dictionary:
+		submitted.append(command)
+		return {"awaiting_remote": true}

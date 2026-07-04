@@ -187,6 +187,73 @@ func test_network_clear_awaiting_flushes_next_queued_command() -> void:
 			"Both sends should warn about role in this test setup.")
 
 
+func test_network_sends_multiple_assign_dials_while_held() -> void:
+	_enter_command_dial_context()
+	var submitter := NetworkCommandSubmitter.new()
+	var cmd1 := AssignDialCommand.new(1, {
+		"ship_index": 0,
+		"commands": [int(Constants.CommandType.NAVIGATE)],
+	})
+	var cmd2 := AssignDialCommand.new(1, {
+		"ship_index": 1,
+		"commands": [int(Constants.CommandType.REPAIR)],
+	})
+
+	submitter.submit(cmd1)
+	var result: Dictionary = submitter.submit(cmd2)
+
+	assert_true(result.get("awaiting_remote", false),
+			"Second dial submit should still return awaiting_remote.")
+	assert_eq(submitter._pending_payloads.size(), 0,
+			"Second dial submit should be sent, not queued.")
+	assert_eq(submitter._in_flight_count, 2,
+			"Both held dial assignments should remain in flight.")
+	assert_engine_error(2,
+			"Both network sends should warn in this non-client test setup.")
+
+
+func test_network_assign_dials_queues_outside_command_dial_context() -> void:
+	var submitter := NetworkCommandSubmitter.new()
+	var cmd1 := AssignDialCommand.new(1, {
+		"ship_index": 0,
+		"commands": [int(Constants.CommandType.NAVIGATE)],
+	})
+	var cmd2 := AssignDialCommand.new(1, {
+		"ship_index": 1,
+		"commands": [int(Constants.CommandType.REPAIR)],
+	})
+
+	submitter.submit(cmd1)
+	submitter.submit(cmd2)
+
+	assert_eq(submitter._pending_payloads.size(), 1,
+			"Dial submit should keep normal queueing outside the dial context.")
+	assert_eq(submitter._in_flight_count, 1,
+			"Only the first dial assignment should be in flight.")
+	assert_engine_error(1,
+			"Only the first network send should warn before the second queues.")
+
+
+func test_network_non_assign_command_still_queues_behind_held_assign_dials() -> void:
+	_enter_command_dial_context()
+	var submitter := NetworkCommandSubmitter.new()
+	var dial_cmd := AssignDialCommand.new(1, {
+		"ship_index": 0,
+		"commands": [int(Constants.CommandType.NAVIGATE)],
+	})
+	var noop_cmd := _TestNoopCmd.new(1, {})
+
+	submitter.submit(dial_cmd)
+	submitter.submit(noop_cmd)
+
+	assert_eq(submitter._pending_payloads.size(), 1,
+			"Non-dial command should not bypass the awaiting queue.")
+	assert_eq(submitter._in_flight_count, 1,
+			"Only the dial assignment should be in flight.")
+	assert_engine_error(1,
+			"Only the first network send should warn before the non-dial queues.")
+
+
 # ---------------------------------------------------------------------------
 # GameManager submitter integration
 # ---------------------------------------------------------------------------
@@ -251,6 +318,14 @@ func test_normal_submit_emits_command_executed() -> void:
 	CommandProcessor.submit(cmd)
 	assert_eq(_executed_cmds.size(), 1,
 			"Normal submit should emit command_executed.")
+
+
+func _enter_command_dial_context() -> void:
+	GameManager.current_game_state.current_phase = Constants.GamePhase.COMMAND
+	GameManager.current_game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.COMMAND_PHASE,
+			Constants.InteractionStep.SELECT_DIALS,
+			1)
 
 
 # ---------------------------------------------------------------------------

@@ -725,9 +725,11 @@ func _on_command_picker_confirmed(ship: ShipInstance,
 			"ship_index": ship_index,
 			"commands": typed_commands})
 	var result: Dictionary = _submitter.submit(assign_cmd)
-	if not result.get("success", false):
+	if not _submit_result_accepted(result):
 		_log.warn("assign_dials failed for '%s'" % [
 				ship.ship_data.ship_name if ship.ship_data else "?"])
+		return
+	if _submit_result_pending(result):
 		return
 	EventBus.command_dials_changed.emit(ship)
 
@@ -759,6 +761,14 @@ func _check_player_all_assigned(player_index: int) -> void:
 	if all_assigned:
 		_command_submitted[player_index] = true
 		EventBus.command_dials_submitted.emit(player_index)
+
+
+func _submit_result_accepted(result: Dictionary) -> bool:
+	return bool(result.get("success", false)) or _submit_result_pending(result)
+
+
+func _submit_result_pending(result: Dictionary) -> bool:
+	return bool(result.get("awaiting_remote", false))
 
 
 ## Checks whether both players have submitted and, if so, ends the Command

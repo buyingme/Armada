@@ -98,6 +98,13 @@ var _next_setup_match_type: String = ""
 ## G4 Network Plan: §1.5 — CommandSubmitter Strategy.
 var _submitter: CommandSubmitter = LocalCommandSubmitter.new()
 
+## Transient client-side buffer for authoritative network command results that
+## arrive ahead of earlier server sequence numbers.
+var _pending_network_results: Dictionary = {}
+
+## Next server-assigned command sequence this client mirror must apply.
+var _next_network_result_sequence: int = 0
+
 
 ## Returns true when this instance is a network client (not the server/host).
 ## Used to suppress game-flow commands that the server drives.  G4.6.5 fix.
@@ -241,6 +248,7 @@ func bootstrap_game(default_scenario_id: String) -> void:
 ##       for replay headers (default: [code]""[/code]).
 func start_new_game(config: Dictionary = {}) -> void:
 	CommandProcessor.reset()
+	_reset_network_result_ordering()
 	current_game_state = GameState.new()
 	# Inject a deterministic seed before initialize() if provided.
 	var seed_value: int = config.get("rng_seed", 0) as int
@@ -309,6 +317,7 @@ func start_new_game_from_state(
 		_log.error("start_new_game_from_state called with null state.")
 		return
 	CommandProcessor.reset()
+	_reset_network_result_ordering()
 	current_game_state = state
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
@@ -337,6 +346,7 @@ func _install_setup_package_state(
 		package: FleetSetupPackage,
 		_config: Dictionary) -> void:
 	CommandProcessor.reset()
+	_reset_network_result_ordering()
 	current_game_state = state
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
@@ -2004,6 +2014,48 @@ func _on_network_command_result(
 				or remote_authored:
 			_handle_remote_command_effects(cmd, result)
 		return
+	_queue_network_command_result(cmd, result)
+
+
+func _reset_network_result_ordering() -> void:
+	_pending_network_results.clear()
+	_next_network_result_sequence = CommandProcessor.get_command_count()
+
+
+func _queue_network_command_result(
+		cmd: GameCommand,
+		result: Dictionary) -> void:
+	var sequence: int = cmd.sequence
+	if sequence < 0:
+		_apply_network_command_result(cmd, result)
+		return
+	if sequence < _next_network_result_sequence:
+		_log.warn("Ignoring duplicate or stale network command seq=%d." %
+				sequence)
+		return
+	_pending_network_results[sequence] = {
+		"command": cmd,
+		"result": result.duplicate(true),
+	}
+	_flush_ordered_network_results()
+
+
+func _flush_ordered_network_results() -> void:
+	while _pending_network_results.has(_next_network_result_sequence):
+		var entry: Dictionary = _pending_network_results[
+				_next_network_result_sequence] as Dictionary
+		_pending_network_results.erase(_next_network_result_sequence)
+		_apply_network_command_result(
+				entry.get("command") as GameCommand,
+				entry.get("result") as Dictionary)
+		_next_network_result_sequence += 1
+
+
+func _apply_network_command_result(
+		cmd: GameCommand,
+		result: Dictionary) -> void:
+	if cmd == null:
+		return
 	CommandProcessor.submit_mirror(cmd)
 	_handle_remote_command_effects(cmd, result)
 	if _submitter is NetworkCommandSubmitter:
@@ -2084,6 +2136,8 @@ func _handle_remote_command_effects(
 			# Marker commands — the attack pipeline reacts through
 			# CommandProcessor.command_executed on the peer that owns it.
 			pass
+		"tarkin_choice":
+			_handle_remote_tarkin_choice(result)
 		"resolve_damage":
 			_handle_remote_resolve_damage(cmd, result)
 		"overlap_damage":
@@ -2186,6 +2240,41 @@ func _handle_remote_convert_dial_to_token(
 	if result.get("duplicate", false):
 		EventBus.duplicate_token_discarded.emit(ship, cmd_type)
 	elif result.get("overflow", false):
+		EventBus.token_discard_required.emit(ship)
+
+
+## Mirrors CAP-UPG-001 token side effects on remote peers after the
+## authoritative TarkinChoiceCommand result has already mutated GameState.
+func _handle_remote_tarkin_choice(result: Dictionary) -> void:
+	if current_game_state == null:
+		return
+	var owner_player: int = int(result.get("owner_player", -1))
+	var command: int = int(result.get("command", -1))
+	var raw_grants: Variant = result.get("grants", [])
+	if not (raw_grants is Array):
+		return
+	for entry: Variant in raw_grants as Array:
+		if not (entry is Dictionary):
+			continue
+		_emit_remote_tarkin_grant(owner_player, command, entry as Dictionary)
+
+
+func _emit_remote_tarkin_grant(
+		owner_player: int,
+		command: int,
+		grant: Dictionary) -> void:
+	if bool(grant.get("token_blocked", false)):
+		return
+	if not bool(grant.get("token_added", false)):
+		return
+	var ship_index: int = int(grant.get("ship_index", -1))
+	var ship: ShipInstance = current_game_state.get_ship(owner_player, ship_index)
+	if ship == null:
+		return
+	EventBus.command_tokens_changed.emit(ship)
+	if bool(grant.get("duplicate", false)):
+		EventBus.duplicate_token_discarded.emit(ship, command)
+	elif bool(grant.get("overflow", false)):
 		EventBus.token_discard_required.emit(ship)
 
 

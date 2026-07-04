@@ -15,6 +15,9 @@ const TARKIN_RUNTIME_ID: String = \
 
 var _state: GameState
 var _saved_registry: Dictionary = {}
+var _token_changed_ships: Array[ShipInstance] = []
+var _duplicate_events: Array[Dictionary] = []
+var _discard_required_ships: Array[ShipInstance] = []
 
 
 func before_each() -> void:
@@ -25,9 +28,23 @@ func before_each() -> void:
 	DiscardTokenCommand.register()
 	RuleRegistry.clear()
 	_state = _make_tarkin_state()
+	GameManager.current_game_state = _state
+	_token_changed_ships.clear()
+	_duplicate_events.clear()
+	_discard_required_ships.clear()
+	EventBus.command_tokens_changed.connect(_on_command_tokens_changed)
+	EventBus.duplicate_token_discarded.connect(_on_duplicate_token_discarded)
+	EventBus.token_discard_required.connect(_on_token_discard_required)
 
 
 func after_each() -> void:
+	if EventBus.command_tokens_changed.is_connected(_on_command_tokens_changed):
+		EventBus.command_tokens_changed.disconnect(_on_command_tokens_changed)
+	if EventBus.duplicate_token_discarded.is_connected(_on_duplicate_token_discarded):
+		EventBus.duplicate_token_discarded.disconnect(_on_duplicate_token_discarded)
+	if EventBus.token_discard_required.is_connected(_on_token_discard_required):
+		EventBus.token_discard_required.disconnect(_on_token_discard_required)
+	GameManager.current_game_state = null
 	GameCommand._registry = _saved_registry
 	RuleBootstrap.bootstrap_rules()
 
@@ -296,6 +313,89 @@ func test_multi_ship_grant_order_follows_player_state_ship_order() -> void:
 			"Third grant should target the third PlayerState ship.")
 
 
+# ---------------------------------------------------------------------------
+# Remote Side Effects
+# ---------------------------------------------------------------------------
+
+func test_remote_tarkin_choice_grant_emits_token_refresh_for_granted_ships() -> void:
+	_add_imperial_ship("imperial-ship-2")
+	_advance_to_ship_phase()
+	var result: Dictionary = _submit_choice(Constants.CommandType.REPAIR)
+
+	GameManager._handle_remote_command_effects(
+			_choice_command(1, Constants.CommandType.REPAIR), result)
+
+	assert_eq(_token_changed_ships.size(), 2,
+			"Remote Tarkin grant should refresh each granted friendly ship.")
+	assert_true(_token_changed_ships.has(_ship(1, 0)),
+			"Remote side effects should refresh the Tarkin source ship.")
+	assert_true(_token_changed_ships.has(_ship(1, 1)),
+			"Remote side effects should refresh the second friendly ship.")
+	assert_eq(_duplicate_events.size(), 0,
+			"Plain grants should not emit duplicate feedback.")
+	assert_eq(_discard_required_ships.size(), 0,
+			"Plain grants should not request overflow discard.")
+
+
+func test_remote_tarkin_choice_duplicate_emits_duplicate_feedback_only() -> void:
+	_ship(1, 0).command_tokens.force_add_token(Constants.CommandType.NAVIGATE)
+	_advance_to_ship_phase()
+	var result: Dictionary = _submit_choice(Constants.CommandType.NAVIGATE)
+
+	GameManager._handle_remote_command_effects(
+			_choice_command(1, Constants.CommandType.NAVIGATE), result)
+
+	assert_eq(_token_changed_ships.size(), 1,
+			"Remote duplicate grant should still refresh token display.")
+	assert_eq(_duplicate_events.size(), 1,
+			"Remote duplicate grant should emit duplicate discard feedback.")
+	assert_eq(_duplicate_events[0].get("ship", null), _ship(1, 0),
+			"Duplicate feedback should identify the granted ship.")
+	assert_eq(_duplicate_events[0].get("token_type", -1),
+			int(Constants.CommandType.NAVIGATE),
+			"Duplicate feedback should identify the chosen command token.")
+	assert_eq(_discard_required_ships.size(), 0,
+			"Duplicate auto-discard must not request manual discard.")
+
+
+func test_remote_tarkin_choice_overflow_emits_discard_required() -> void:
+	var source: ShipInstance = _ship(1, 0)
+	source.command_tokens.max_tokens = 1
+	source.command_tokens.force_add_token(Constants.CommandType.NAVIGATE)
+	_advance_to_ship_phase()
+	var result: Dictionary = _submit_choice(Constants.CommandType.REPAIR)
+
+	GameManager._handle_remote_command_effects(
+			_choice_command(1, Constants.CommandType.REPAIR), result)
+
+	assert_eq(_token_changed_ships.size(), 1,
+			"Remote overflow grant should refresh token display.")
+	assert_eq(_discard_required_ships.size(), 1,
+			"Remote overflow grant should request manual token discard.")
+	assert_eq(_discard_required_ships[0], source,
+			"Discard request should identify the overflowing ship.")
+	assert_eq(_duplicate_events.size(), 0,
+			"Non-duplicate overflow should not emit duplicate feedback.")
+
+
+func test_remote_tarkin_choice_decline_emits_no_token_side_effects() -> void:
+	_advance_to_ship_phase()
+	var result: Dictionary = _submit_decline()
+
+	GameManager._handle_remote_command_effects(
+			TarkinChoiceCommand.new(1, {
+				"runtime_upgrade_id": TARKIN_RUNTIME_ID,
+				"declined": true,
+			}), result)
+
+	assert_eq(_token_changed_ships.size(), 0,
+			"Remote decline should not refresh command tokens.")
+	assert_eq(_duplicate_events.size(), 0,
+			"Remote decline should not emit duplicate feedback.")
+	assert_eq(_discard_required_ships.size(), 0,
+			"Remote decline should not request token discard.")
+
+
 func _make_tarkin_state() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
@@ -379,3 +479,20 @@ func _add_life_support_failure(ship: ShipInstance) -> void:
 	card.effect_id = "life_support_failure"
 	card.flip_faceup()
 	ship.faceup_damage.append(card)
+
+
+func _on_command_tokens_changed(ship: RefCounted) -> void:
+	_token_changed_ships.append(ship as ShipInstance)
+
+
+func _on_duplicate_token_discarded(
+		ship: RefCounted,
+		token_type: int) -> void:
+	_duplicate_events.append({
+		"ship": ship,
+		"token_type": token_type,
+	})
+
+
+func _on_token_discard_required(ship: RefCounted) -> void:
+	_discard_required_ships.append(ship as ShipInstance)

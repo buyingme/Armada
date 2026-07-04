@@ -413,6 +413,13 @@ Hidden dial contents must never be present in opponent-facing payloads. Add
 negative tests for leakage in snapshots, command result payloads, and UI event
 payload dictionaries.
 
+Network clients must apply authoritative `command_result` entries in server
+`GameCommand.sequence` order before projecting later `InteractionFlow` state.
+If a later result arrives first, buffer it until every earlier sequence has
+been mirrored; applying `advance_phase` or another flow-changing command before
+held earlier commands can produce locally inconsistent UI even when the server
+state is correct.
+
 ---
 
 ## 5. Replay System

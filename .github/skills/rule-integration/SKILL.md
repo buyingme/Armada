@@ -79,6 +79,15 @@ A rule integration is complete only when all surfaces agree:
      live in `RuleRegistry` and are bootstrapped.
    - Active rule status comes from serialized entities only: `GameState`, ships, squadrons, faceup damage cards, upgrades, objectives, obstacles, and tokens.
    - Do not serialize `RuleRegistry` or use it as an active-card store.
+   - For upgrade cards, follow the Runtime Upgrade Pattern proven by Grand Moff
+     Tarkin: static upgrade JSON and catalog data remain metadata referenced by
+     `data_key`; fleet rosters store `FleetUpgradeAssignment` records; setup
+     materializes equipped upgrades into `ShipInstance.runtime_upgrades`;
+     command-owned behavior reads the source `runtime_upgrade_id` and writes
+     mutable card/trigger/rule state on that runtime upgrade instance; UI state
+     is projected through `InteractionFlow`/`UIProjector`; serialization,
+     replay, reconnect, and network mirrors carry the runtime upgrade instance
+     and command history, not copied static card data or local UI state.
 
 8. Test the full surface.
    - Unit-test the rule predicate for allow/reject cases and other-entity isolation.

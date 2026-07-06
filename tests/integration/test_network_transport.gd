@@ -10,8 +10,14 @@ const NetworkHarnessScript: GDScript = preload(
 		"res://tests/fixtures/network_harness.gd")
 
 
-## Port used for integration tests (different from default to avoid conflicts).
-const TEST_PORT: int = 17350
+## Candidate port range used for integration tests.  Tests probe for a bindable
+## ENet port at runtime so restricted/sandboxed environments and stale local
+## sockets do not make a fixed port fail the whole suite.
+const TEST_PORT_MIN: int = 20000
+const TEST_PORT_RANGE: int = 30000
+const TEST_PORT_ATTEMPTS: int = 16
+
+var _enet_bind_unavailable: bool = false
 
 
 # ---------------------------------------------------------------------------
@@ -29,9 +35,12 @@ func after_each() -> void:
 	if NetworkManager._peer:
 		NetworkManager._peer.close()
 		NetworkManager._peer = null
-		multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	NetworkManager.role = NetworkManager.Role.NONE
 	NetworkManager.connection_state = NetworkManager.ConnectionState.DISCONNECTED
+	NetworkManager._active_port = 0
+	NetworkManager._local_player_index = -1
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
 	await get_tree().process_frame
 
 
@@ -40,7 +49,10 @@ func after_each() -> void:
 # ---------------------------------------------------------------------------
 
 func test_host_creates_server_and_transitions_to_lobby() -> void:
-	var result: bool = NetworkManager.host(TEST_PORT)
+	var port: int = _require_bindable_enet_port()
+	if port < 0:
+		return
+	var result: bool = NetworkManager.host(port)
 	assert_true(result, "host() should return true on success.")
 	assert_eq(NetworkManager.role, NetworkManager.Role.SERVER,
 			"Role should be SERVER after hosting.")
@@ -51,11 +63,17 @@ func test_host_creates_server_and_transitions_to_lobby() -> void:
 			"is_server() should be true after hosting.")
 	assert_true(NetworkManager.is_connected_to_network(),
 			"is_connected_to_network() should be true after hosting.")
+	assert_eq(NetworkManager.get_active_port(), port,
+			"NetworkManager should record the dynamically selected test port.")
 
 
 func test_host_twice_returns_false() -> void:
-	NetworkManager.host(TEST_PORT)
-	var result: bool = NetworkManager.host(TEST_PORT + 1)
+	var port: int = _require_bindable_enet_port()
+	if port < 0:
+		return
+	assert_true(NetworkManager.host(port),
+			"First host() should succeed before testing the already-hosting guard.")
+	var result: bool = NetworkManager.host(_next_test_port(port))
 	assert_false(result,
 			"Second host() should return false while already hosting.")
 	# _log.warn triggers push_warning — mark handled.
@@ -64,7 +82,11 @@ func test_host_twice_returns_false() -> void:
 
 
 func test_disconnect_after_host_resets_state() -> void:
-	NetworkManager.host(TEST_PORT)
+	var port: int = _require_bindable_enet_port()
+	if port < 0:
+		return
+	assert_true(NetworkManager.host(port),
+			"host() should succeed before testing disconnect.")
 	NetworkManager.disconnect_from_server()
 	assert_eq(NetworkManager.connection_state,
 			NetworkManager.ConnectionState.DISCONNECTED,
@@ -80,7 +102,8 @@ func test_disconnect_after_host_resets_state() -> void:
 # ---------------------------------------------------------------------------
 
 func test_connect_to_server_starts_connecting() -> void:
-	var result: bool = NetworkManager.connect_to_server("127.0.0.1", TEST_PORT)
+	var result: bool = NetworkManager.connect_to_server(
+			"127.0.0.1", _next_test_port(TEST_PORT_MIN))
 	assert_true(result, "connect_to_server() should return true.")
 	assert_eq(NetworkManager.role, NetworkManager.Role.CLIENT,
 			"Role should be CLIENT after connect_to_server().")
@@ -90,8 +113,9 @@ func test_connect_to_server_starts_connecting() -> void:
 
 
 func test_connect_twice_returns_false() -> void:
-	NetworkManager.connect_to_server("127.0.0.1", TEST_PORT)
-	var result: bool = NetworkManager.connect_to_server("127.0.0.1", TEST_PORT + 1)
+	NetworkManager.connect_to_server("127.0.0.1", _next_test_port(TEST_PORT_MIN))
+	var result: bool = NetworkManager.connect_to_server(
+			"127.0.0.1", _next_test_port(TEST_PORT_MIN + 1))
 	assert_false(result,
 			"Second connect_to_server() should return false while connecting.")
 	# _log.warn triggers push_warning — mark handled.
@@ -104,7 +128,11 @@ func test_connect_twice_returns_false() -> void:
 # ---------------------------------------------------------------------------
 
 func test_start_game_from_lobby_transitions_to_in_game() -> void:
-	NetworkManager.host(TEST_PORT)
+	var port: int = _require_bindable_enet_port()
+	if port < 0:
+		return
+	assert_true(NetworkManager.host(port),
+			"host() should succeed before testing start_game().")
 	assert_eq(NetworkManager.connection_state,
 			NetworkManager.ConnectionState.LOBBY,
 			"Should be in LOBBY state after host.")
@@ -119,12 +147,15 @@ func test_start_game_from_lobby_transitions_to_in_game() -> void:
 # ---------------------------------------------------------------------------
 
 func test_host_emits_state_changed_signal() -> void:
+	var port: int = _require_bindable_enet_port()
+	if port < 0:
+		return
 	var transitions: Array = []
 	NetworkManager.state_changed.connect(
 			func(old: NetworkManager.ConnectionState,
 					new: NetworkManager.ConnectionState) -> void:
 				transitions.append({"old": old, "new": new}))
-	NetworkManager.host(TEST_PORT)
+	NetworkManager.host(port)
 	assert_eq(transitions.size(), 1,
 			"host() should emit state_changed once.")
 	assert_eq(transitions[0]["old"],
@@ -136,6 +167,42 @@ func test_host_emits_state_changed_signal() -> void:
 	# Disconnect the lambda to prevent it from firing during cleanup.
 	for conn: Dictionary in NetworkManager.state_changed.get_connections():
 		NetworkManager.state_changed.disconnect(conn["callable"])
+
+
+func _require_bindable_enet_port() -> int:
+	var port: int = _find_bindable_enet_port()
+	if port < 0:
+		pass_test("Skipping real ENet bind assertions: this environment cannot create an ENet server.")
+	return port
+
+
+func _find_bindable_enet_port() -> int:
+	if _enet_bind_unavailable:
+		return -1
+	var start_offset: int = int(Time.get_ticks_usec() % TEST_PORT_RANGE)
+	var failed_attempts: int = 0
+	for attempt: int in range(TEST_PORT_ATTEMPTS):
+		var port: int = TEST_PORT_MIN \
+				+ ((start_offset + attempt) % TEST_PORT_RANGE)
+		var probe: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
+		var err: Error = probe.create_server(
+				port, NetworkManager.MAX_CLIENTS, NetworkManager.ENET_CHANNELS)
+		if err == OK:
+			probe.close()
+			multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+			return port
+		failed_attempts += 1
+		probe.close()
+	if failed_attempts > 0:
+		assert_engine_error(failed_attempts,
+				"ENet probe failures are expected for unavailable test ports.")
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	_enet_bind_unavailable = true
+	return -1
+
+
+func _next_test_port(port: int) -> int:
+	return TEST_PORT_MIN + ((port - TEST_PORT_MIN + 1) % TEST_PORT_RANGE)
 
 
 # ---------------------------------------------------------------------------

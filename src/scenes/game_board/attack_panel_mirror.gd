@@ -51,6 +51,10 @@ var _defense_section_active: bool = false
 ## independently so [method close] can disconnect cleanly.
 var _defense_signal_connected: bool = false
 
+var _ecm_signal_connected: bool = false
+
+var _last_ecm_payload_key: String = ""
+
 ## Phase I6b-3 R1b follow-up: cache of the last `dice_pool` we rendered
 ## via [code]show_dice_count[/code] so we only refresh on change.
 ## Reset on [method close] and on the next-attack transition.
@@ -291,6 +295,7 @@ func apply_flow(payload: Dictionary, step_id: int) -> void:
 	# Phase I6b-3 R3 follow-up: refresh the defense-section damage
 	# readout when an evade-die selection mutates `modified_damage`.
 	_apply_modified_damage_update(payload)
+	_refresh_defense_ecm_state(payload, step_id)
 
 
 ## Renders the dice-pool count label and the rolled-dice strip from
@@ -372,13 +377,22 @@ func _apply_defense_section(payload: Dictionary,
 		blocked.append(int(raw_idx))
 	var modified_damage: int = int(payload.get("modified_damage", 0))
 	var defender_speed: int = int(payload.get("defender_speed", 1))
+	var ecm_choice: Dictionary = _dict_payload(payload, "ecm_choice")
 	_panel.show_defense_section(
 			tokens, locked, modified_damage, defender_speed,
-			{"blocked_indices": blocked})
+			{"blocked_indices": blocked,
+					"ecm_choice": ecm_choice,
+					"ecm_authorized_indices": _int_array(
+							payload.get("ecm_authorized_indices", []))})
 	_last_modified_damage = modified_damage
+	_last_ecm_payload_key = _ecm_payload_key(payload)
 	if not _defense_signal_connected:
 		_panel.defense_tokens_done.connect(_on_defense_tokens_done)
 		_defense_signal_connected = true
+	if not _ecm_signal_connected:
+		_panel.ecm_use_requested.connect(_on_ecm_use_requested)
+		_panel.ecm_decline_requested.connect(_on_ecm_decline_requested)
+		_ecm_signal_connected = true
 	_defense_section_active = true
 
 
@@ -427,6 +441,19 @@ func _apply_modified_damage_update(payload: Dictionary) -> void:
 	_last_modified_damage = damage
 	if _panel.has_method("update_defense_damage"):
 		_panel.update_defense_damage(damage)
+
+
+func _refresh_defense_ecm_state(payload: Dictionary,
+		step_id: int) -> void:
+	if _panel == null or not _defense_section_active:
+		return
+	if step_id != Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		return
+	var key: String = _ecm_payload_key(payload)
+	if key == _last_ecm_payload_key:
+		return
+	_defense_section_active = false
+	_apply_defense_section(payload, step_id)
 
 
 func _apply_counter_choice_section(payload: Dictionary,
@@ -890,6 +917,40 @@ func _on_defense_tokens_done() -> void:
 	_panel.disable_all_defense_buttons()
 
 
+func _on_ecm_use_requested(runtime_upgrade_id: String) -> void:
+	var def_inst: ShipInstance = _current_defender_ship()
+	if def_inst == null:
+		return
+	var result: Dictionary = GameManager.submit_use_ecm(
+			def_inst, runtime_upgrade_id)
+	if result.is_empty():
+		_log.warn("Electronic Countermeasures use rejected.")
+
+
+func _on_ecm_decline_requested(runtime_upgrade_id: String) -> void:
+	var def_inst: ShipInstance = _current_defender_ship()
+	if def_inst == null:
+		return
+	var result: Dictionary = GameManager.submit_decline_ecm(
+			def_inst, runtime_upgrade_id)
+	if result.is_empty():
+		_log.warn("Electronic Countermeasures decline rejected.")
+
+
+func _current_defender_ship() -> ShipInstance:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null:
+		return null
+	var flow: InteractionFlow = gs.interaction_flow
+	if flow == null:
+		return null
+	var def_player: int = int(flow.payload.get("defender_player", -1))
+	var def_index: int = int(flow.payload.get("defender_ship_index", -1))
+	if def_player < 0 or def_index < 0:
+		return null
+	return gs.get_ship(def_player, def_index)
+
+
 ## Hides the mirror panel.  Idempotent.
 func close() -> void:
 	if _panel == null:
@@ -898,6 +959,12 @@ func close() -> void:
 		if _panel.defense_tokens_done.is_connected(_on_defense_tokens_done):
 			_panel.defense_tokens_done.disconnect(_on_defense_tokens_done)
 		_defense_signal_connected = false
+	if _ecm_signal_connected:
+		if _panel.ecm_use_requested.is_connected(_on_ecm_use_requested):
+			_panel.ecm_use_requested.disconnect(_on_ecm_use_requested)
+		if _panel.ecm_decline_requested.is_connected(_on_ecm_decline_requested):
+			_panel.ecm_decline_requested.disconnect(_on_ecm_decline_requested)
+		_ecm_signal_connected = false
 	if _evade_signal_connected:
 		if _panel.evade_die_confirmed.is_connected(_on_evade_die_confirmed):
 			_panel.evade_die_confirmed.disconnect(_on_evade_die_confirmed)
@@ -962,6 +1029,30 @@ func close() -> void:
 	_last_dice_pool_text = ""
 	_last_dice_results_payload = []
 	_last_modified_damage = -1
+	_last_ecm_payload_key = ""
+
+
+func _dict_payload(payload: Dictionary, key: String) -> Dictionary:
+	var raw: Variant = payload.get(key, {})
+	if raw is Dictionary:
+		return raw as Dictionary
+	return {}
+
+
+func _int_array(value: Variant) -> Array[int]:
+	var result: Array[int] = []
+	if not value is Array:
+		return result
+	for raw: Variant in value as Array:
+		result.append(int(raw))
+	return result
+
+
+func _ecm_payload_key(payload: Dictionary) -> String:
+	return "%s|%s" % [
+		JSON.stringify(payload.get("ecm_choice", {})),
+		JSON.stringify(payload.get("ecm_authorized_indices", [])),
+	]
 
 
 ## Returns a display string for the given [enum Constants.HullZone]

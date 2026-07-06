@@ -14,6 +14,10 @@ class_name SpendDefenseTokenCommand
 extends GameCommand
 
 
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("spend_defense_token", func(player: int,
@@ -50,6 +54,10 @@ func validate(game_state: GameState) -> String:
 	var method: String = payload.get("spend_method", "")
 	if method != "exhaust" and method != "discard":
 		return "Invalid spend method: '%s'." % method
+	var ecm_error: String = ECM_SCRIPT.validate_authorized_token_spend(
+			game_state, ship, int(payload.get("ship_index", -1)), token_index)
+	if ecm_error != "":
+		return ecm_error
 	return ""
 
 
@@ -65,10 +73,30 @@ func execute(game_state: GameState) -> Dictionary:
 		ship.discard_defense_token(token_index)
 	else:
 		ship.exhaust_defense_token(token_index)
+	var ecm_runtime_upgrade_id: String = ECM_SCRIPT.consume_authorization_for_spend(
+			game_state, ship, token_index)
 	var token: Dictionary = ship.defense_tokens[token_index]
+	_record_spent_token_type(game_state, int(token.get("type", -1)))
 	return {
 		"token_type": token.get("type", -1),
 		"spend_method": method,
 		"ship_index": payload.get("ship_index", -1),
 		"token_index": token_index,
+		"ecm_runtime_upgrade_id": ecm_runtime_upgrade_id,
+		"ecm_authorized": not ecm_runtime_upgrade_id.is_empty(),
 	}
+
+
+func _record_spent_token_type(game_state: GameState,
+		token_type: int) -> void:
+	if game_state == null or game_state.interaction_flow == null:
+		return
+	if game_state.interaction_flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or game_state.interaction_flow.step_id \
+					!= Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		return
+	var spent: Array = game_state.interaction_flow.payload.get(
+			"spent_defense_token_types", []) as Array
+	if not spent.has(token_type):
+		spent.append(token_type)
+	game_state.interaction_flow.payload["spent_defense_token_types"] = spent

@@ -293,7 +293,6 @@ func test_sort_defense_tokens_canonical_orders_by_rrg_sequence() -> void:
 func test_begin_defense_commit_with_empty_selection_clears_step() -> void:
 	var state: AttackState = AttackState.new()
 	state.defense_step = true
-	state.defense_commit_queue = [3, 4]
 	var selected: Array[int] = []
 
 	var has_queue: bool = _executor.begin_defense_commit(state, selected)
@@ -304,6 +303,22 @@ func test_begin_defense_commit_with_empty_selection_clears_step() -> void:
 			"defense step should end on empty commit")
 	assert_true(state.defense_commit_queue.is_empty(),
 			"commit queue should be cleared")
+
+
+func test_begin_defense_commit_with_empty_selection_does_not_clear_unresolved_queue() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	state.defense_commit_queue = [3, 4]
+	var selected: Array[int] = []
+
+	var has_queue: bool = _executor.begin_defense_commit(state, selected)
+
+	assert_false(has_queue,
+			"duplicate empty commit should not start queue processing")
+	assert_true(state.defense_step,
+			"defense step should remain active for the unresolved queue")
+	assert_eq(state.defense_commit_queue, [3, 4],
+			"duplicate empty commit should not clear unresolved tokens")
 
 
 func test_begin_defense_commit_with_selection_sets_queue() -> void:
@@ -317,6 +332,41 @@ func test_begin_defense_commit_with_selection_sets_queue() -> void:
 			"non-empty selection should start queue processing")
 	assert_eq(state.defense_commit_queue, [5, 1],
 			"selected indices should be copied into commit queue")
+
+
+func test_begin_defense_commit_does_not_replace_unresolved_queue() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	state.defense_commit_queue = [3]
+	var selected: Array[int] = [5, 1]
+
+	var has_queue: bool = _executor.begin_defense_commit(state, selected)
+
+	assert_false(has_queue,
+			"second commit should not start while a queue is unresolved")
+	assert_eq(state.defense_commit_queue, [3],
+			"unresolved defense queue should not be replaced")
+	assert_true(state.defense_step,
+			"defense step should remain active for the existing queue")
+
+
+func test_begin_defense_commit_waits_for_evade_or_redirect_substep() -> void:
+	var state: AttackState = AttackState.new()
+	state.defense_step = true
+	state.evade_step = true
+	var selected: Array[int] = [1]
+
+	assert_false(_executor.begin_defense_commit(state, selected),
+			"Evade sub-step should block a new defense commit.")
+	assert_true(state.defense_commit_queue.is_empty(),
+			"Blocked commit should not create a new queue.")
+
+	state.evade_step = false
+	state.redirect_step = true
+	assert_false(_executor.begin_defense_commit(state, selected),
+			"Redirect sub-step should block a new defense commit.")
+	assert_true(state.defense_commit_queue.is_empty(),
+			"Blocked redirect commit should not create a queue.")
 
 
 func test_poll_next_defense_commit_empty_queue_ends_step() -> void:

@@ -9,7 +9,7 @@
             "key": "victory_ii_class_star_destroyer",
             "pos_x": 0.5,
             "pos_y": 0.145,
-            "roster_entry_id": "debug-imperial-vsd-1",
+            "roster_entry_id": "debug-imperial-vsd-2",
             "rotation_deg": 180.0,
             "type": "ship",
             "upgrades": [
@@ -26,50 +26,18 @@
             "pos_x": 0.5,
             "pos_y": 0.845,
             "rotation_deg": 0.0,
-            "type": "ship"
-        },
-        {
-            "key": "tie_advanced_squadron",
-            "pos_x": 0.44,
-            "pos_y": 0.45,
-            "rotation_deg": 180.0,
-            "type": "squadron"
-        },
-        {
-            "key": "tie_fighter_squadron",
-            "pos_x": 0.485,
-            "pos_y": 0.45,
-            "rotation_deg": 180.0,
-            "type": "squadron"
-        },
-        {
-            "key": "tie_interceptor_squadron",
-            "pos_x": 0.53,
-            "pos_y": 0.45,
-            "rotation_deg": 180.0,
-            "type": "squadron"
-        },
-        {
-            "key": "tie_bomber_squadron",
-            "pos_x": 0.575,
-            "pos_y": 0.45,
-            "rotation_deg": 180.0,
-            "type": "squadron"
-        },
-        {
-            "key": "x_wing_squadron",
-            "pos_x": 0.485,
-            "pos_y": 0.505,
-            "rotation_deg": 0.0,
-            "type": "squadron"
-        },
-        {
-            "key": "x_wing_squadron",
-            "pos_x": 0.575,
-            "pos_y": 0.505,
-            "rotation_deg": 0.0,
-            "type": "squadron"
+            "type": "ship",
+            "upgrades": [
+
+                {
+                    "data_key": "electronic_countermeasures",
+                    "slot": "DEFENSIVE_RETROFIT",
+                    "slot_index": 0,
+                    "source_assignment_id": "electronic_countermeasures-defensive_retrofit-0"
+                }
+            ]
         }
+
     ],
     "use_fixed_round1_commands": false
 }

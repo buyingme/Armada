@@ -77,6 +77,12 @@ signal defense_token_selected(token_index: int, spend_method: String)
 ## Requirements: AE-DEF-003.
 signal defense_tokens_done()
 
+## Emitted when the defender accepts Electronic Countermeasures.
+signal ecm_use_requested(runtime_upgrade_id: String)
+
+## Emitted when the defender declines Electronic Countermeasures.
+signal ecm_decline_requested(runtime_upgrade_id: String)
+
 ## Emitted when the player clicks "Done Redirecting" to finish the
 ## redirect sub-step early.
 signal redirect_done_pressed()
@@ -192,10 +198,19 @@ var _defense_token_buttons: HBoxContainer = null
 var _defense_done_button: Button = null
 ## Info label showing current damage after modifications.
 var _defense_info_label: Label = null
+## Public Electronic Countermeasures choice controls.
+var _defense_ecm_container: HBoxContainer = null
+var _defense_ecm_use_button: Button = null
+var _defense_ecm_decline_button: Button = null
+var _defense_ecm_runtime_upgrade_id: String = ""
 ## Tracks defense token indices currently selected (not yet committed).
 var _defense_selected_indices: Array[int] = []
 ## Tracks defense token indices blocked by current attack rules/effects.
 var _defense_blocked_indices: Array[int] = []
+## Accuracy-locked token indices currently authorized by ECM.
+var _defense_ecm_authorized_indices: Array[int] = []
+## Whether defense-token buttons are currently interactive.
+var _defense_interactive: bool = true
 
 ## --- Phase 6c-2: Redirect zone selection UI ---
 
@@ -747,6 +762,19 @@ func _build_defense_section() -> VBoxContainer:
 			Color(1.0, 0.6, 0.3))
 	_defense_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_defense_container.add_child(_defense_info_label)
+	_defense_ecm_container = HBoxContainer.new()
+	_defense_ecm_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_defense_ecm_container.add_theme_constant_override("separation", 6)
+	_defense_ecm_container.visible = false
+	_defense_ecm_use_button = Button.new()
+	_defense_ecm_use_button.text = "Use Electronic Countermeasures"
+	_defense_ecm_use_button.pressed.connect(_on_ecm_use_pressed)
+	_defense_ecm_container.add_child(_defense_ecm_use_button)
+	_defense_ecm_decline_button = Button.new()
+	_defense_ecm_decline_button.text = "Decline"
+	_defense_ecm_decline_button.pressed.connect(_on_ecm_decline_pressed)
+	_defense_ecm_container.add_child(_defense_ecm_decline_button)
+	_defense_container.add_child(_defense_ecm_container)
 	_defense_token_buttons = HBoxContainer.new()
 	_defense_token_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_defense_token_buttons.add_theme_constant_override("separation", 6)
@@ -1371,6 +1399,8 @@ func _update_accuracy_button_visuals() -> void:
 ## [param options] — optional keys:
 ##   "interactive" (bool): false renders a read-only section.
 ##   "blocked_indices" (Array[int]): rule/effect-blocked token indices.
+##   "ecm_choice" (Dictionary): public ECM accept/decline prompt payload.
+##   "ecm_authorized_indices" (Array[int]): locked tokens ECM may spend.
 func show_defense_section(tokens: Array[Dictionary],
 		locked_indices: Array[int], damage: int,
 		defender_speed: int,
@@ -1380,9 +1410,15 @@ func show_defense_section(tokens: Array[Dictionary],
 	var interactive: bool = bool(options.get("interactive", true))
 	var blocked_indices: Array[int] = _defense_option_indices(
 			options, "blocked_indices")
+	var ecm_authorized: Array[int] = _defense_option_indices(
+			options, "ecm_authorized_indices")
+	var ecm_choice: Dictionary = options.get("ecm_choice", {}) as Dictionary
 	# Reset selection state.
 	_defense_selected_indices.clear()
+	_defense_interactive = interactive
 	_defense_blocked_indices = blocked_indices.duplicate()
+	_defense_ecm_authorized_indices = ecm_authorized.duplicate()
+	_apply_ecm_choice(ecm_choice, interactive)
 	# Clear old buttons.
 	for child: Node in _defense_token_buttons.get_children():
 		child.queue_free()
@@ -1422,13 +1458,16 @@ func _populate_defense_token_buttons(tokens: Array[Dictionary],
 		if state == Constants.DefenseTokenState.DISCARDED:
 			continue
 		var btn: Button = _create_token_button(token, i)
-		if i in locked_indices:
+		if i in locked_indices and not _defense_ecm_authorized_indices.has(i):
 			# Show locked token (greyed out, not clickable).
 			btn.disabled = true
 			btn.modulate = Color(0.4, 0.4, 0.4, 1.0)
 			btn.text = btn.get_meta("base_text", "") + " [LOCKED]"
 			_defense_token_buttons.add_child(btn)
 			continue
+		if i in locked_indices and _defense_ecm_authorized_indices.has(i):
+			btn.text = btn.get_meta("base_text", "") + " [ECM]"
+			btn.modulate = Color(0.3, 0.8, 1.0, 1.0)
 		if i in blocked_indices:
 			btn.disabled = true
 			btn.modulate = Color(0.45, 0.45, 0.45, 1.0)
@@ -1443,6 +1482,32 @@ func _populate_defense_token_buttons(tokens: Array[Dictionary],
 		_defense_token_buttons.add_child(btn)
 
 
+func _apply_ecm_choice(ecm_choice: Dictionary,
+		interactive: bool) -> void:
+	_defense_ecm_runtime_upgrade_id = str(
+			ecm_choice.get("runtime_upgrade_id", ""))
+	if _defense_ecm_container == null:
+		return
+	var has_choice: bool = not _defense_ecm_runtime_upgrade_id.is_empty()
+	_defense_ecm_container.visible = has_choice
+	if _defense_ecm_use_button:
+		_defense_ecm_use_button.disabled = not interactive
+	if _defense_ecm_decline_button:
+		_defense_ecm_decline_button.disabled = not interactive
+
+
+func _on_ecm_use_pressed() -> void:
+	if _defense_ecm_runtime_upgrade_id.is_empty():
+		return
+	ecm_use_requested.emit(_defense_ecm_runtime_upgrade_id)
+
+
+func _on_ecm_decline_pressed() -> void:
+	if _defense_ecm_runtime_upgrade_id.is_empty():
+		return
+	ecm_decline_requested.emit(_defense_ecm_runtime_upgrade_id)
+
+
 func _defense_option_indices(options: Dictionary,
 		key: String) -> Array[int]:
 	var result: Array[int] = []
@@ -1452,6 +1517,47 @@ func _defense_option_indices(options: Dictionary,
 	for raw_idx: Variant in raw_value as Array:
 		result.append(int(raw_idx))
 	return result
+
+
+func _is_selected_ecm_locked_token(token_index: int) -> bool:
+	return _defense_ecm_authorized_indices.has(token_index)
+
+
+func _deselect_other_ecm_locked_tokens(token_index: int) -> void:
+	for sel_i: int in _defense_selected_indices.duplicate():
+		if sel_i != token_index and _is_selected_ecm_locked_token(sel_i):
+			_defense_selected_indices.erase(sel_i)
+			_set_defense_token_highlight(sel_i, false)
+
+
+func _selected_ecm_locked_token_index() -> int:
+	for sel_i: int in _defense_selected_indices:
+		if _is_selected_ecm_locked_token(sel_i):
+			return sel_i
+	return -1
+
+
+func _refresh_ecm_locked_button_states() -> void:
+	if _defense_token_buttons == null:
+		return
+	var selected_ecm: int = _selected_ecm_locked_token_index()
+	for child: Node in _defense_token_buttons.get_children():
+		var btn: Button = child as Button
+		if btn == null:
+			continue
+		var token_index: int = int(btn.get_meta("token_index", -1))
+		if not _defense_ecm_authorized_indices.has(token_index):
+			continue
+		if _defense_selected_indices.has(token_index):
+			continue
+		if selected_ecm >= 0:
+			btn.disabled = true
+			btn.modulate = Color(0.4, 0.4, 0.4, 1.0)
+			btn.text = btn.get_meta("base_text", "") + " [LOCKED]"
+		else:
+			btn.disabled = not _defense_interactive
+			btn.modulate = Color(0.3, 0.8, 1.0, 1.0)
+			btn.text = btn.get_meta("base_text", "") + " [ECM]"
 
 
 ## Hides the defense section.
@@ -1495,7 +1601,10 @@ func _on_defense_token_pressed(token_index: int) -> void:
 	if token_index in _defense_selected_indices:
 		_defense_selected_indices.erase(token_index)
 		_set_defense_token_highlight(token_index, false)
+		_refresh_ecm_locked_button_states()
 	else:
+		if _is_selected_ecm_locked_token(token_index):
+			_deselect_other_ecm_locked_tokens(token_index)
 		# Enforce one token per type: deselect any same-type token.
 		var new_type: int = _get_defense_token_type(token_index)
 		for sel_i: int in _defense_selected_indices.duplicate():
@@ -1504,6 +1613,7 @@ func _on_defense_token_pressed(token_index: int) -> void:
 				_set_defense_token_highlight(sel_i, false)
 		_defense_selected_indices.append(token_index)
 		_set_defense_token_highlight(token_index, true)
+		_refresh_ecm_locked_button_states()
 
 
 ## Returns the token type for a defense button by its token index.

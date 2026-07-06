@@ -8,6 +8,7 @@ extends GutTest
 
 
 var _state: GameState
+var _remote_log_path: String = "user://logs/_test_remote_command_effects.log"
 
 
 ## Creates a minimal ShipData with defense tokens and shields.
@@ -37,6 +38,8 @@ func before_each() -> void:
 	_state.initialize()
 	_state.current_round = 1
 	_state.current_phase = Constants.GamePhase.SHIP
+	GameLogger.disable_file_logging()
+	_remove_remote_log()
 	# Register command types.
 	RollDiceCommand.register()
 	SpendDefenseTokenCommand.register()
@@ -49,6 +52,8 @@ func after_each() -> void:
 	GameCommand._registry.erase("spend_defense_token")
 	GameCommand._registry.erase("select_redirect_zone")
 	GameCommand._registry.erase("skip_attack")
+	GameLogger.disable_file_logging()
+	_remove_remote_log()
 
 
 # ======================================================================
@@ -701,6 +706,19 @@ func test_select_evade_die_serialize_roundtrip() -> void:
 	GameCommand._registry.erase("select_evade_die")
 
 
+func test_remote_select_evade_die_effect_is_handled_noop() -> void:
+	var idx: int = _add_ship(1)
+	var cmd := SelectEvadeDieCommand.new(1, {
+		"ship_index": idx,
+		"die_index": 3,
+	})
+	var content: String = _capture_remote_effect_log(
+			cmd, cmd.execute(_state))
+	assert_false(content.contains(
+			"Unhandled remote command type: select_evade_die"),
+			"select_evade_die should not fall through to unhandled remote warning.")
+
+
 # ======================================================================
 # RedirectDoneCommand (Phase I6b-3 R4)
 # ======================================================================
@@ -757,3 +775,38 @@ func test_redirect_done_serialize_roundtrip() -> void:
 	assert_eq(restored.sequence, 77,
 			"Restored sequence should match.")
 	GameCommand._registry.erase("redirect_done")
+
+
+func test_remote_redirect_done_effect_is_handled_noop() -> void:
+	var idx: int = _add_ship(1)
+	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	var content: String = _capture_remote_effect_log(
+			cmd, cmd.execute(_state))
+	assert_false(content.contains(
+			"Unhandled remote command type: redirect_done"),
+			"redirect_done should not fall through to unhandled remote warning.")
+
+
+func _capture_remote_effect_log(cmd: GameCommand, result: Dictionary) -> String:
+	DirAccess.make_dir_recursive_absolute("user://logs")
+	_remove_remote_log()
+	var previous_log_level: int = GameLogger.min_level
+	var previous_file_level: int = GameLogger.min_file_level
+	GameLogger.disable_file_logging()
+	GameLogger.min_level = GameLogger.Level.ERROR + 1
+	GameLogger.min_file_level = GameLogger.Level.DEBUG
+	assert_true(GameLogger.enable_file_logging(_remote_log_path),
+			"Remote command-effect log capture should enable file logging.")
+	GameManager._handle_remote_command_effects(cmd, result)
+	GameLogger.disable_file_logging()
+	GameLogger.min_level = previous_log_level
+	GameLogger.min_file_level = previous_file_level
+	if not FileAccess.file_exists(_remote_log_path):
+		return ""
+	return FileAccess.get_file_as_string(_remote_log_path)
+
+
+func _remove_remote_log() -> void:
+	if FileAccess.file_exists(_remote_log_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(
+				_remote_log_path))

@@ -9,6 +9,9 @@ class_name AttackFlowExecutor
 extends RefCounted
 
 
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+
 const _DEFENSE_RESOLVE_ORDER: Dictionary = {
 	Constants.DefenseToken.SCATTER: 0,
 	Constants.DefenseToken.EVADE: 1,
@@ -88,7 +91,7 @@ func build_defense_payload(state: AttackState,
 		gs: GameState,
 		defense_resolver: DefenseTokenResolver = null) -> Dictionary:
 	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
-	return {
+	var payload: Dictionary = {
 		"blocked_defense_token_indices": build_blocked_defense_token_indices(
 				state, def_inst, defense_resolver),
 		"locked_tokens": state.locked_tokens.duplicate(true),
@@ -99,7 +102,9 @@ func build_defense_payload(state: AttackState,
 		"defender_speed": def_inst.current_speed,
 		"defender_zone": state.defender_zone,
 		"defense_tokens": def_inst.defense_tokens.duplicate(true),
+		"spent_defense_token_types": _spent_defense_token_types(state),
 	}
+	return ECM_SCRIPT.decorate_projection_payload(gs, payload)
 
 
 ## Returns token indices blocked by persistent defense-token effects.
@@ -122,6 +127,15 @@ func build_blocked_defense_token_indices(state: AttackState,
 	return blocked
 
 
+func _spent_defense_token_types(state: AttackState) -> Array[int]:
+	var result: Array[int] = []
+	if state == null:
+		return result
+	for token_type: Variant in state.spent_tokens.keys():
+		result.append(int(token_type))
+	return result
+
+
 ## Sorts selected defense token indices into canonical RRG resolve order.
 func sort_defense_tokens_canonical(selected: Array[int],
 		defense_tokens: Array[Dictionary]) -> Array[int]:
@@ -138,12 +152,24 @@ func sort_defense_tokens_canonical(selected: Array[int],
 ## Returns true when there are queued tokens to process.
 func begin_defense_commit(state: AttackState,
 		selected: Array[int]) -> bool:
+	if has_unresolved_defense_commit(state):
+		return false
 	if selected.is_empty():
 		state.defense_step = false
 		state.defense_commit_queue.clear()
 		return false
 	state.defense_commit_queue = selected.duplicate()
 	return true
+
+
+## Returns true while a previously committed defense-token queue is still
+## resolving through token sub-steps such as Evade or Redirect.
+func has_unresolved_defense_commit(state: AttackState) -> bool:
+	if state == null:
+		return false
+	return not state.defense_commit_queue.is_empty() \
+			or state.evade_step \
+			or state.redirect_step
 
 
 ## Polls the next queued defense-token index.

@@ -18,6 +18,8 @@ extends Node
 const ConstantsScript := preload("res://src/autoload/constants.gd")
 const AttackFlowExecutorScript := preload(
 		"res://src/core/combat/attack_flow_executor.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 ## Hull-zone index → display name mapping.
 const _ZONE_NAMES: Dictionary = {
@@ -153,6 +155,12 @@ func _fsm_advance(next_step: AttackFlowFSM.Step) -> void:
 func _fsm_patch_payload(patch: Dictionary) -> void:
 	var gs: GameState = GameManager.current_game_state
 	_flow_fsm.patch_payload(gs, patch)
+	if gs and gs.interaction_flow \
+			and gs.interaction_flow.step_id \
+					== Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		var decorated: Dictionary = ECM_SCRIPT.decorate_projection_payload(
+				gs, gs.interaction_flow.payload)
+		_flow_fsm.patch_payload(gs, decorated)
 	if gs:
 		GameManager.submit_publish_attack_flow(gs.interaction_flow)
 
@@ -455,6 +463,10 @@ func _connect_defense_phase_signals() -> void:
 	if not p.defense_tokens_done.is_connected(
 			_on_attack_defense_done):
 		p.defense_tokens_done.connect(_on_attack_defense_done)
+	if not p.ecm_use_requested.is_connected(_on_ecm_use_requested):
+		p.ecm_use_requested.connect(_on_ecm_use_requested)
+	if not p.ecm_decline_requested.is_connected(_on_ecm_decline_requested):
+		p.ecm_decline_requested.connect(_on_ecm_decline_requested)
 	if not p.redirect_zone_selected.is_connected(
 			_on_attack_redirect_zone_selected):
 		p.redirect_zone_selected.connect(
@@ -1227,6 +1239,8 @@ func _show_defense_section(def_inst: ShipInstance) -> void:
 			{
 				"interactive": NetworkManager.get_local_player_index() < 0,
 				"blocked_indices": _get_blocked_defense_token_indices(def_inst),
+				"ecm_choice": _ecm_choice_payload(),
+				"ecm_authorized_indices": _ecm_authorized_token_indices(),
 			})
 
 ## Returns true if the defender has spendable tokens and speed > 0.
@@ -1234,12 +1248,39 @@ func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 	var result: bool = _defense_resolver.can_spend_tokens(
 			def_inst, _state.locked_tokens,
 			_state.defender_zone)
+	if not result and _can_defender_use_ecm(def_inst):
+		return true
 	if not result:
 		if def_inst.current_speed == 0:
 			_log.info("Defender speed 0 — cannot spend defense tokens.")
 		else:
 			_log.info("No spendable defense tokens — skipping defense step.")
 	return result
+
+
+func _can_defender_use_ecm(def_inst: ShipInstance) -> bool:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or def_inst == null:
+		return false
+	var defender_ship_index: int = gs.find_ship_index(def_inst)
+	var payload: Dictionary = {
+		"attacker_player": _get_attacker_player(),
+		"attacker_ship_index": int(gs.find_ship_index(
+				_state.attacker_ship.get_ship_instance())
+				if _state.attacker_ship != null else -1),
+		"defender_player": def_inst.owner_player,
+		"defender_ship_index": defender_ship_index,
+		"defender_zone": _state.defender_zone,
+		"locked_tokens": _state.locked_tokens.duplicate(true),
+		"spent_defense_token_types": [],
+	}
+	var flow: InteractionFlow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			def_inst.owner_player,
+			Constants.Visibility.ALL,
+			payload)
+	return not ECM_SCRIPT.choice_payload(gs, flow).is_empty()
 
 ## Returns the number of spendable, non-discarded, non-locked tokens that are
 ## not blocked by RuleRegistry defense-token blockers.
@@ -1283,6 +1324,7 @@ func _on_attack_defense_token_spent(token_index: int,
 		_log.warn("Defense token spend command rejected — skipping effects.")
 		return false
 	_state.spent_tokens[token_type] = actual_method
+	_publish_spent_defense_token_types()
 	EventBus.ship_defense_token_changed.emit(def_inst)
 	EventBus.defense_token_spent.emit(
 			_state.defender_ship, token_type)
@@ -1302,9 +1344,49 @@ func _is_defense_token_spendable(token_index: int,
 			token_index, token, _state.spent_tokens,
 			_state.locked_tokens, _get_defender_instance(),
 			_state.defender_zone)
+	if not result and _ecm_token_authorized(token_index):
+		return true
 	if not result:
 		_log.info("Token %d not spendable — ignoring." % token_index)
 	return result
+
+
+func _publish_spent_defense_token_types() -> void:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or gs.interaction_flow == null:
+		return
+	var spent: Array[int] = []
+	for token_type: Variant in _state.spent_tokens.keys():
+		spent.append(int(token_type))
+	gs.interaction_flow.payload["spent_defense_token_types"] = spent
+
+
+func _ecm_choice_payload() -> Dictionary:
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or gs.interaction_flow == null:
+		return {}
+	return ECM_SCRIPT.choice_payload(gs, gs.interaction_flow)
+
+
+func _ecm_authorized_token_indices() -> Array[int]:
+	var result: Array[int] = []
+	var gs: GameState = GameManager.current_game_state
+	if gs == null or gs.interaction_flow == null:
+		return result
+	return ECM_SCRIPT.authorized_token_indices(gs, gs.interaction_flow)
+
+
+func _ecm_token_authorized(token_index: int) -> bool:
+	if not _state.locked_tokens.has(token_index):
+		return false
+	if not _ecm_authorized_token_indices().has(token_index):
+		return false
+	var spent_types: Array[int] = []
+	for token_type: Variant in _state.spent_tokens.keys():
+		spent_types.append(int(token_type))
+	return ECM_SCRIPT.is_token_otherwise_spendable(
+			_get_defender_instance(), token_index, spent_types,
+			_state.defender_zone)
 
 ## Resolves the actual spend method: exhausted tokens must be discarded.
 func _resolve_spend_method(spend_method: String,
@@ -1735,6 +1817,30 @@ func _on_attack_defense_done() -> void:
 		_get_panel().disable_all_defense_buttons()
 
 
+func _on_ecm_use_requested(runtime_upgrade_id: String) -> void:
+	var def_inst: ShipInstance = _get_defender_instance()
+	if def_inst == null:
+		return
+	var result: Dictionary = GameManager.submit_use_ecm(
+			def_inst, runtime_upgrade_id)
+	if result.is_empty():
+		_log.warn("Electronic Countermeasures use rejected.")
+		return
+	_show_defense_section(def_inst)
+
+
+func _on_ecm_decline_requested(runtime_upgrade_id: String) -> void:
+	var def_inst: ShipInstance = _get_defender_instance()
+	if def_inst == null:
+		return
+	var result: Dictionary = GameManager.submit_decline_ecm(
+			def_inst, runtime_upgrade_id)
+	if result.is_empty():
+		_log.warn("Electronic Countermeasures decline rejected.")
+		return
+	_show_defense_section(def_inst)
+
+
 ## Builds and submits the [CommitDefenseCommand] for the current
 ## defender.  Side effects (queueing, spend submissions, FSM advance)
 ## happen on the attacker peer when [method apply_defender_commit] is
@@ -1773,6 +1879,9 @@ func apply_defender_commit(selected: Array[int]) -> void:
 	if not is_in_exec_mode():
 		return
 	if not _state.defense_step:
+		return
+	if _flow_executor.has_unresolved_defense_commit(_state):
+		_log.warn("Defense commit ignored — token queue already resolving.")
 		return
 	var canonical_selected: Array[int] = _canonicalise_committed_tokens(
 			selected)

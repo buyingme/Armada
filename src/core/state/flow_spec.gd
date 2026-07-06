@@ -200,9 +200,9 @@ const _SPEC: Dictionary = {
 		Constants.InteractionStep.ATTACK_DEFENSE_TOKENS: {
 			"controller_role": Constants.ControllerRole.DEFENDER_OR_ATTACKER,
 			"modals": [Constants.ModalKind.ATTACK_DEFENSE_TOKENS],
-			"allowed_commands": ["spend_defense_token", "commit_defense",
-					"select_evade_die", "select_redirect_zone", "redirect_done",
-					"publish_attack_flow"],
+			"allowed_commands": ["spend_defense_token", "use_ecm",
+					"decline_ecm", "commit_defense", "select_evade_die",
+					"select_redirect_zone", "redirect_done", "publish_attack_flow"],
 			"transitions": {"commit_defense": "ATTACK_RESOLVE_DAMAGE"},
 			"source": SOURCE_COMMAND_PRODUCED,
 			"rule_citation": "RRG Defense Tokens, p.4; Attack spend defense tokens.",

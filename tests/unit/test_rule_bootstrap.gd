@@ -103,9 +103,9 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 22,
-			"Bootstrap should invoke all twenty-two production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 39,
+	assert_eq(registered, 23,
+			"Bootstrap should invoke all twenty-three production rule scripts.")
+	assert_eq(RuleRegistry.registered_hook_count(), 40,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")

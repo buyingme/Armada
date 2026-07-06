@@ -50,36 +50,78 @@ func test_get_squadron_placements_returns_ten_squadrons() -> void:
 
 # --- Debug Scenario ---
 
-func test_debug_scenario_get_token_count_returns_eight() -> void:
+func test_debug_scenario_token_count_matches_resolved_placements() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_eq(setup.get_token_count(), 8,
-			"Debug Scenario has 8 tokens (2 ships + 6 squadrons)")
+	assert_eq(setup.get_token_count(),
+			setup.get_ship_placements().size() + setup.get_squadron_placements().size(),
+			"Debug Scenario token count should match resolved ship + squadron placements")
 
 
-func test_debug_scenario_get_ship_placements_returns_two() -> void:
+func test_debug_scenario_json_is_structurally_valid() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_eq(setup.get_ship_placements().size(), 2,
-			"Debug Scenario should include the VSD and CR90")
+	var data: Dictionary = _debug_scenario_data()
+	assert_false(data.is_empty(),
+			"Debug Scenario JSON should load as a non-empty dictionary")
+	assert_true(data.has("tokens"),
+			"Debug Scenario JSON should include a tokens array")
+	assert_true(data.get("tokens", []) is Array,
+			"Debug Scenario tokens should be an array")
+	for token_index: int in range((data.get("tokens", []) as Array).size()):
+		_assert_debug_token_entry_valid(
+				(data.get("tokens", []) as Array)[token_index], token_index)
+	assert_eq(setup.get_token_count(), (data.get("tokens", []) as Array).size(),
+			"Every debug token should resolve to a runtime placement")
 
 
-func test_debug_scenario_get_squadron_placements_returns_six() -> void:
+func test_debug_scenario_fixed_round1_commands_are_valid_when_enabled() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_eq(setup.get_squadron_placements().size(), 6,
-			"Debug Scenario should include four Imperial and two Rebel squadrons")
+	var data: Dictionary = _debug_scenario_data()
+	var use_fixed: bool = bool(data.get("use_fixed_round1_commands", false))
+	assert_eq(setup.has_fixed_round1_commands(), use_fixed,
+			"Debug Scenario fixed-command toggle should be read from JSON")
+	if not use_fixed:
+		assert_eq(setup.get_fixed_round1_commands().size(), 0,
+				"Disabled debug fixed commands should resolve to an empty dictionary")
+		return
+	var raw_commands: Variant = data.get("fixed_round1_commands", {})
+	assert_true(raw_commands is Dictionary,
+			"Enabled debug fixed commands should be a dictionary")
+	var ship_keys: Dictionary = _debug_ship_keys(data)
+	for ship_key: Variant in raw_commands:
+		assert_true(ship_keys.has(str(ship_key)),
+				"Fixed commands should reference a debug scenario ship key")
+		var commands: Variant = (raw_commands as Dictionary)[ship_key]
+		assert_true(commands is Array,
+				"Fixed command entries should be arrays")
+		for command_name: Variant in (commands as Array):
+			assert_ne(LearningScenarioSetup._parse_command_name(str(command_name)), -1,
+					"Fixed command name should be supported: %s" % str(command_name))
 
 
-func test_debug_scenario_has_no_fixed_round1_commands() -> void:
+func test_debug_scenario_fixed_round1_command_resolution_is_consistent() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_false(setup.has_fixed_round1_commands(),
-			"Debug Scenario should use normal command-dial assignment")
-	assert_eq(setup.get_fixed_round1_commands().size(), 0,
-			"Debug Scenario should not pre-assign round-1 commands")
+	if not setup.has_fixed_round1_commands():
+		assert_eq(setup.get_fixed_round1_commands().size(), 0,
+				"Disabled debug fixed commands should resolve to empty")
+		return
+	var commands: Dictionary = setup.get_fixed_round1_commands()
+	assert_false(commands.is_empty(),
+			"Enabled debug fixed commands should resolve at least one ship")
+	for ship_key: Variant in commands:
+		assert_false(str(ship_key).is_empty(),
+				"Resolved fixed command ship keys should be non-empty")
+		assert_true(commands[ship_key] is Array,
+				"Resolved fixed command stacks should be arrays")
 
 
-func test_debug_scenario_uses_learning_map() -> void:
+func test_debug_scenario_referenced_map_asset_loads_when_present() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_eq(setup.get_map_image_filename(), "map_3x3_distant_planet_v3.jpg",
-			"Debug Scenario should use the same map as the Learning Scenario")
+	var filename: String = setup.get_map_image_filename()
+	if filename.is_empty():
+		pass_test("Debug Scenario does not reference a map image.")
+		return
+	assert_not_null(AssetLoader.load_texture("maps/", filename),
+			"Debug Scenario referenced map image should load: %s" % filename)
 
 
 func test_standard_3x6_scenario_loads_map_without_tokens() -> void:
@@ -92,33 +134,34 @@ func test_standard_3x6_scenario_loads_map_without_tokens() -> void:
 			"Standard setup-package scenario should use normal command assignment")
 
 
-func test_debug_scenario_contains_requested_squadron_keys() -> void:
+func test_debug_scenario_all_card_keys_resolve() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
-	assert_eq(_count_by_key(setup, "tie_fighter_squadron"), 1,
-			"Debug Scenario should include one TIE Fighter squadron")
-	assert_eq(_count_by_key(setup, "tie_bomber_squadron"), 1,
-			"Debug Scenario should include one TIE Bomber squadron")
-	assert_eq(_count_by_key(setup, "tie_advanced_squadron"), 1,
-			"Debug Scenario should include one TIE Advanced squadron")
-	assert_eq(_count_by_key(setup, "tie_interceptor_squadron"), 1,
-			"Debug Scenario should include one TIE Interceptor squadron")
-	assert_eq(_count_by_key(setup, "x_wing_squadron"), 2,
-			"Debug Scenario should include two X-wing squadrons")
+	for placement: TokenPlacement in setup.get_all_placements():
+		if placement.is_ship:
+			assert_not_null(AssetLoader.load_ship_data(placement.data_key),
+					"Debug ship data_key should resolve: %s" % placement.data_key)
+		else:
+			assert_not_null(AssetLoader.load_squadron_data(placement.data_key),
+					"Debug squadron data_key should resolve: %s" % placement.data_key)
 
 
-func test_debug_scenario_populate_game_state_sets_requested_forces() -> void:
+func test_debug_scenario_populate_game_state_matches_resolved_instances() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
+	var expected_ships: Array[ShipInstance] = setup.create_ship_instances()
+	var expected_squadrons: Array[SquadronInstance] = setup.create_squadron_instances()
 	var gs: GameState = GameState.new()
 	gs.initialize()
 	setup.populate_game_state(gs)
-	assert_eq(gs.get_player_state(0).ships.size(), 1,
-			"Debug Scenario Rebel player should have one ship")
-	assert_eq(gs.get_player_state(0).squadrons.size(), 2,
-			"Debug Scenario Rebel player should have two squadrons")
-	assert_eq(gs.get_player_state(1).ships.size(), 1,
-			"Debug Scenario Imperial player should have one ship")
-	assert_eq(gs.get_player_state(1).squadrons.size(), 4,
-			"Debug Scenario Imperial player should have four squadrons")
+	assert_eq(_total_ship_count(gs), expected_ships.size(),
+			"Debug Scenario should register every resolved ship instance")
+	assert_eq(_total_squadron_count(gs), expected_squadrons.size(),
+			"Debug Scenario should register every resolved squadron instance")
+	for ship: ShipInstance in expected_ships:
+		assert_true(gs.get_player_state(ship.owner_player).ships.size() > 0,
+				"Debug Scenario should register ships on their owning player")
+	for squadron: SquadronInstance in expected_squadrons:
+		assert_true(gs.get_player_state(squadron.owner_player).squadrons.size() > 0,
+				"Debug Scenario should register squadrons on their owning player")
 
 
 # --- Factions ---
@@ -301,6 +344,163 @@ func _upgrade(
 	}
 
 
+func _debug_scenario_data() -> Dictionary:
+	return AssetLoader.load_json("scenarios/", "debug_scenario.json")
+
+
+func _debug_ship_keys(data: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	var tokens: Array = data.get("tokens", []) as Array
+	for token: Variant in tokens:
+		if not (token is Dictionary):
+			continue
+		var entry: Dictionary = token as Dictionary
+		if str(entry.get("type", "")).strip_edges() == "ship":
+			result[str(entry.get("key", "")).strip_edges()] = true
+	return result
+
+
+func _assert_debug_token_entry_valid(token: Variant, token_index: int) -> void:
+	assert_true(token is Dictionary,
+			"Debug token %d should be a dictionary" % token_index)
+	if not (token is Dictionary):
+		return
+	var entry: Dictionary = token as Dictionary
+	var type_name: String = str(entry.get("type", "")).strip_edges()
+	var key: String = str(entry.get("key", "")).strip_edges()
+	assert_false(key.is_empty(),
+			"Debug token %d should include a card key" % token_index)
+	assert_true(type_name == "ship" or type_name == "squadron",
+			"Debug token %d should use a supported type" % token_index)
+	_assert_numeric_field_in_range(entry, "pos_x", 0.0, 1.0, token_index)
+	_assert_numeric_field_in_range(entry, "pos_y", 0.0, 1.0, token_index)
+	_assert_numeric_field(entry, "rotation_deg", token_index)
+	if type_name == "ship":
+		assert_not_null(AssetLoader.load_ship_data(key),
+				"Debug ship key should resolve: %s" % key)
+		_assert_debug_ship_upgrades_valid(entry, token_index)
+	elif type_name == "squadron":
+		assert_not_null(AssetLoader.load_squadron_data(key),
+				"Debug squadron key should resolve: %s" % key)
+		assert_false(entry.has("upgrades"),
+				"Debug squadron token %d should not declare ship upgrades" % token_index)
+
+
+func _assert_numeric_field_in_range(entry: Dictionary, field: String,
+		minimum: float, maximum: float, token_index: int) -> void:
+	_assert_numeric_field(entry, field, token_index)
+	if not _is_number(entry.get(field, null)):
+		return
+	var value: float = float(entry[field])
+	assert_true(value >= minimum and value <= maximum,
+			"Debug token %d %s should be within %.1f..%.1f" % [
+				token_index, field, minimum, maximum])
+
+
+func _assert_numeric_field(entry: Dictionary, field: String,
+		token_index: int) -> void:
+	assert_true(entry.has(field),
+			"Debug token %d should include %s" % [token_index, field])
+	if not entry.has(field):
+		return
+	assert_true(_is_number(entry[field]),
+			"Debug token %d %s should be numeric" % [token_index, field])
+
+
+func _assert_debug_ship_upgrades_valid(entry: Dictionary, token_index: int) -> void:
+	if not entry.has("upgrades"):
+		return
+	assert_true(entry["upgrades"] is Array,
+			"Debug ship token %d upgrades should be an array" % token_index)
+	if not (entry["upgrades"] is Array):
+		return
+	var upgrades: Array = entry["upgrades"] as Array
+	for upgrade_index: int in range(upgrades.size()):
+		_assert_debug_upgrade_entry_valid(upgrades[upgrade_index],
+				token_index, upgrade_index)
+
+
+func _assert_debug_upgrade_entry_valid(upgrade: Variant,
+		token_index: int, upgrade_index: int) -> void:
+	assert_true(upgrade is Dictionary,
+			"Debug upgrade %d on token %d should be a dictionary" % [
+				upgrade_index, token_index])
+	if not (upgrade is Dictionary):
+		return
+	var entry: Dictionary = upgrade as Dictionary
+	for field: String in ["data_key", "source_assignment_id", "slot"]:
+		assert_false(str(entry.get(field, "")).strip_edges().is_empty(),
+				"Debug upgrade %d on token %d should include %s" % [
+					upgrade_index, token_index, field])
+	assert_true(entry.has("slot_index"),
+			"Debug upgrade %d on token %d should include slot_index" % [
+				upgrade_index, token_index])
+	assert_true(_is_number(entry.get("slot_index", null)),
+			"Debug upgrade %d on token %d slot_index should be numeric" % [
+				upgrade_index, token_index])
+	if _is_number(entry.get("slot_index", null)):
+		assert_true(int(entry["slot_index"]) >= 0,
+				"Debug upgrade %d on token %d slot_index should be non-negative" % [
+					upgrade_index, token_index])
+	var data_key: String = str(entry.get("data_key", "")).strip_edges()
+	if not data_key.is_empty():
+		assert_not_null(AssetLoader.load_upgrade_data(data_key),
+				"Debug upgrade data_key should resolve: %s" % data_key)
+
+
+func _assert_runtime_upgrade_canonical(ship: ShipInstance,
+		runtime_upgrade: Dictionary, seen_ids: Dictionary) -> void:
+	for field: String in ShipInstance.RUNTIME_UPGRADE_REQUIRED_FIELDS:
+		assert_true(runtime_upgrade.has(field),
+				"Runtime upgrade should include mandatory field: %s" % field)
+	var runtime_upgrade_id: String = str(
+			runtime_upgrade.get("runtime_upgrade_id", "")).strip_edges()
+	assert_false(runtime_upgrade_id.is_empty(),
+			"Runtime upgrade id should be non-empty")
+	assert_false(seen_ids.has(runtime_upgrade_id),
+			"Runtime upgrade ids should be unique: %s" % runtime_upgrade_id)
+	seen_ids[runtime_upgrade_id] = true
+	assert_eq(int(runtime_upgrade.get("owner_player_id", -1)), ship.owner_player,
+			"Runtime upgrade owner should match owning ship")
+	assert_eq(str(runtime_upgrade.get("source_roster_entry_id", "")),
+			ship.roster_entry_id,
+			"Runtime upgrade source roster id should match owning ship")
+	assert_eq(str(runtime_upgrade.get("source_ship_ref", "")),
+			"%d:ship:%s" % [ship.owner_player, ship.roster_entry_id],
+			"Runtime upgrade source ship ref should match owning ship")
+	assert_not_null(AssetLoader.load_upgrade_data(
+			str(runtime_upgrade.get("data_key", ""))),
+			"Runtime upgrade data_key should resolve")
+	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
+	assert_false(card_state.get("exhausted", true),
+			"Scenario runtime upgrade should start unexhausted")
+	assert_false(card_state.get("discarded", true),
+			"Scenario runtime upgrade should start undiscarded")
+	assert_false(card_state.get("disabled", true),
+			"Scenario runtime upgrade should start enabled")
+	assert_true(card_state.get("readied", false),
+			"Scenario runtime upgrade should start readied")
+	assert_true((runtime_upgrade.get("trigger_guards", {}) as Dictionary).is_empty(),
+			"Scenario runtime upgrade should start with empty trigger guards")
+	assert_true((runtime_upgrade.get("rule_state", {}) as Dictionary).is_empty(),
+			"Scenario runtime upgrade should start with empty rule state")
+
+
+func _total_ship_count(game_state: GameState) -> int:
+	return game_state.get_player_state(0).ships.size() \
+			+ game_state.get_player_state(1).ships.size()
+
+
+func _total_squadron_count(game_state: GameState) -> int:
+	return game_state.get_player_state(0).squadrons.size() \
+			+ game_state.get_player_state(1).squadrons.size()
+
+
+func _is_number(value: Variant) -> bool:
+	var value_type: int = typeof(value)
+	return value_type == TYPE_INT or value_type == TYPE_FLOAT
+
+
 # ---------------------------------------------------------------------------
 # Map image
 # ---------------------------------------------------------------------------
@@ -382,51 +582,13 @@ func test_create_ship_instances_learning_scenario_has_no_runtime_upgrades() -> v
 				"Learning Scenario no-upgrade ships should keep legacy identity shape")
 
 
-func test_debug_scenario_materializes_grand_moff_tarkin_runtime_upgrade() -> void:
+func test_debug_scenario_runtime_upgrades_satisfy_canonical_invariants() -> void:
 	var setup: LearningScenarioSetup = LearningScenarioSetup.new("debug_scenario")
 	var ships: Array[ShipInstance] = setup.create_ship_instances()
-	var victory: ShipInstance = _ship_by_key(
-			ships, "victory_ii_class_star_destroyer")
-
-	assert_not_null(victory, "Debug Scenario should include the Victory II")
-	if victory == null:
-		return
-
-	var runtime_upgrade: Dictionary = victory.get_runtime_upgrade(
-			"1:ship:debug-imperial-vsd-1:upgrade:debug-tarkin-commander-0")
-	var card_state: Dictionary = runtime_upgrade.get("card_state", {}) as Dictionary
-
-	assert_eq(victory.runtime_upgrades.size(), 1,
-			"Debug Victory II should materialize exactly one runtime upgrade")
-	assert_eq(runtime_upgrade.get("data_key", ""), "grand_moff_tarkin",
-			"Runtime upgrade should reference Grand Moff Tarkin by data_key")
-	assert_eq(runtime_upgrade.get("owner_player_id", -1), 1,
-			"Runtime upgrade should preserve the Imperial owner")
-	assert_eq(runtime_upgrade.get("source_ship_ref", ""),
-			"1:ship:debug-imperial-vsd-1",
-			"Runtime upgrade should preserve scenario source ship identity")
-	assert_eq(runtime_upgrade.get("source_roster_entry_id", ""),
-			"debug-imperial-vsd-1",
-			"Runtime upgrade should preserve scenario roster-equivalent identity")
-	assert_eq(runtime_upgrade.get("source_assignment_id", ""),
-			"debug-tarkin-commander-0",
-			"Runtime upgrade should preserve assignment identity")
-	assert_eq(runtime_upgrade.get("slot", ""), "COMMANDER",
-			"Runtime upgrade should preserve assignment slot")
-	assert_eq(runtime_upgrade.get("slot_index", -1), 0,
-			"Runtime upgrade should preserve assignment slot index")
-	assert_false(card_state.get("exhausted", true),
-			"Scenario runtime upgrade should start unexhausted")
-	assert_false(card_state.get("discarded", true),
-			"Scenario runtime upgrade should start undiscarded")
-	assert_false(card_state.get("disabled", true),
-			"Scenario runtime upgrade should start enabled")
-	assert_true(card_state.get("readied", false),
-			"Scenario runtime upgrade should start readied")
-	assert_true((runtime_upgrade.get("trigger_guards", {}) as Dictionary).is_empty(),
-			"Scenario runtime upgrade should start with empty trigger guards")
-	assert_true((runtime_upgrade.get("rule_state", {}) as Dictionary).is_empty(),
-			"Scenario runtime upgrade should start with empty rule state")
+	var seen_ids: Dictionary = {}
+	for ship: ShipInstance in ships:
+		for runtime_upgrade: Dictionary in ship.runtime_upgrades:
+			_assert_runtime_upgrade_canonical(ship, runtime_upgrade, seen_ids)
 
 
 func test_scenario_multiple_upgrades_materialize_deterministically() -> void:

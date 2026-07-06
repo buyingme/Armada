@@ -21,6 +21,10 @@ const CommitSetupObstacleCommandScript = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommandScript = preload(
 		"res://src/core/commands/commit_setup_deployment_command.gd")
+const UseECMCommandScript: GDScript = preload(
+		"res://src/core/commands/use_ecm_command.gd")
+const DeclineECMCommandScript: GDScript = preload(
+		"res://src/core/commands/decline_ecm_command.gd")
 const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_match_options.gd")
 
@@ -1242,6 +1246,26 @@ func submit_spend_defense_token(ship: ShipInstance, token_index: int,
 	return _submitter.submit(cmd)
 
 
+## Submits a [UseECMCommand] for the defender's active ECM prompt.
+func submit_use_ecm(ship: ShipInstance,
+		runtime_upgrade_id: String) -> Dictionary:
+	if not current_game_state or ship == null:
+		return {}
+	var cmd: GameCommand = UseECMCommandScript.new(ship.owner_player,
+			{"runtime_upgrade_id": runtime_upgrade_id})
+	return _submitter.submit(cmd)
+
+
+## Submits a [DeclineECMCommand] for the defender's active ECM prompt.
+func submit_decline_ecm(ship: ShipInstance,
+		runtime_upgrade_id: String) -> Dictionary:
+	if not current_game_state or ship == null:
+		return {}
+	var cmd: GameCommand = DeclineECMCommandScript.new(ship.owner_player,
+			{"runtime_upgrade_id": runtime_upgrade_id})
+	return _submitter.submit(cmd)
+
+
 ## Submits a [CommitDefenseCommand] from the defender peer when the
 ## player presses [i]Commit Defense[/i] on the [AttackPanelMirror].
 ## Phase I6b-3 R2 — closes NW-006.
@@ -2126,10 +2150,18 @@ func _handle_remote_command_effects(
 			pass
 		"spend_defense_token":
 			_handle_remote_spend_defense_token(cmd)
+		"use_ecm":
+			_handle_remote_use_ecm(result)
+		"decline_ecm":
+			pass
 		"commit_defense":
 			# Phase I6b-3 R2: marker command — attacker peer's
 			# AttackExecutor reacts via command_executed.  No
 			# additional GameManager-side handling required.
+			pass
+		"select_evade_die", "redirect_done":
+			# Phase I6b-3 R3/R4: marker commands. AttackPanelController
+			# routes them into AttackExecutor from command_executed.
 			pass
 		"reroll_attack_die", "skip_attack_modifier", "confirm_attack_dice", \
 				"counter_choice":
@@ -2430,6 +2462,16 @@ func _handle_remote_discard_token(cmd: GameCommand) -> void:
 ## B16: Mirror spend_defense_token side effects on client.
 func _handle_remote_spend_defense_token(cmd: GameCommand) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
+	if ship:
+		EventBus.ship_defense_token_changed.emit(ship)
+
+
+func _handle_remote_use_ecm(result: Dictionary) -> void:
+	if current_game_state == null:
+		return
+	var ship: ShipInstance = current_game_state.get_ship(
+			int(result.get("defender_player", -1)),
+			int(result.get("defender_ship_index", -1)))
 	if ship:
 		EventBus.ship_defense_token_changed.emit(ship)
 

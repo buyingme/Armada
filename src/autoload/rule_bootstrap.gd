@@ -29,6 +29,7 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/squadron_keywords/counter.gd"),
 	preload("res://src/core/effects/rules/squadron_keywords/swarm.gd"),
 	preload("res://src/core/effects/rules/squadron_keywords/bomber.gd"),
+	preload("res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd"),
 ]
 
 var _log: GameLogger = GameLogger.new("RuleBootstrap")

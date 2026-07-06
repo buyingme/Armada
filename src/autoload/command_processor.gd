@@ -29,6 +29,10 @@ const CommitSetupObstacleCommand = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommand = preload(
 		"res://src/core/commands/commit_setup_deployment_command.gd")
+const UseECMCommandScript: GDScript = preload(
+		"res://src/core/commands/use_ecm_command.gd")
+const DeclineECMCommandScript: GDScript = preload(
+		"res://src/core/commands/decline_ecm_command.gd")
 
 
 const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
@@ -123,6 +127,9 @@ func _ready() -> void:
 	CommitDisplacementCommand.register()
 	# CAP-UPG-001 - Grand Moff Tarkin command-token choice.
 	TarkinChoiceCommand.register()
+	# CAP-ECM-001 - Electronic Countermeasures defense-token override.
+	UseECMCommandScript.register()
+	DeclineECMCommandScript.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 

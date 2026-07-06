@@ -148,6 +148,53 @@ func test_show_defense_section_locked_tokens_disabled() -> void:
 			"Locked token button should be disabled")
 
 
+func test_show_defense_section_exposes_all_ecm_candidates_before_selection() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.REDIRECT,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [0, 1], 3, 2, {
+		"ecm_authorized_indices": [0, 1],
+	})
+	var ecm_count: int = 0
+	for child: Node in _panel._defense_token_buttons.get_children():
+		var button: Button = child as Button
+		if button != null and "[ECM]" in button.text:
+			ecm_count += 1
+
+	assert_eq(ecm_count, 2,
+			"Defense UI should let the defender choose either ECM candidate.")
+
+
+func test_defense_selection_blocks_other_ecm_candidates_after_choice() -> void:
+	var tokens: Array[Dictionary] = [
+		{"type": Constants.DefenseToken.BRACE,
+				"state": Constants.DefenseTokenState.READY},
+		{"type": Constants.DefenseToken.REDIRECT,
+				"state": Constants.DefenseTokenState.READY},
+	]
+	_panel.show_defense_section(tokens, [0, 1], 3, 2, {
+		"ecm_authorized_indices": [0, 1],
+	})
+
+	_panel._on_defense_token_pressed(1)
+	var first_btn: Button = (
+			_panel._defense_token_buttons.get_child(0) as Button)
+	var second_btn: Button = (
+			_panel._defense_token_buttons.get_child(1) as Button)
+
+	assert_eq(_panel.get_defense_selected_indices(), [1],
+			"Selected ECM token should be preserved for commit_defense.")
+	assert_true(first_btn.disabled,
+			"Unchosen locked ECM candidate should remain blocked.")
+	assert_true("[LOCKED]" in first_btn.text,
+			"Unchosen ECM candidate should be visibly locked.")
+	assert_false(second_btn.disabled,
+			"Chosen ECM candidate should remain selected.")
+
+
 func test_show_defense_section_blocked_tokens_disabled() -> void:
 	var tokens: Array[Dictionary] = [
 		{"type": Constants.DefenseToken.BRACE,

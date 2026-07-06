@@ -40,6 +40,8 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -63,13 +65,29 @@ func validate(game_state: GameState) -> String:
 ## receiving peer.
 func execute(game_state: GameState) -> Dictionary:
 	if bool(payload.get("final", false)):
+		var cleared_final: Array[String] = ECM_SCRIPT.clear_window_state(
+				game_state)
 		game_state.interaction_flow = InteractionFlow.empty()
-		return {"applied": true, "final": true}
+		return {"applied": true, "final": true,
+				"ecm_cleared_runtime_upgrade_ids": cleared_final}
 	var step_id: Constants.InteractionStep = (int(
 			payload.get("step_id",
 			int(Constants.InteractionStep.NONE)))
 			as Constants.InteractionStep)
-	var flow_payload: Dictionary = payload.get("flow_payload", {})
+	var flow_payload: Dictionary = (payload.get("flow_payload", {})
+			as Dictionary).duplicate(true)
+	flow_payload.erase("ecm_pending_authorization")
+	if step_id == Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		flow_payload = ECM_SCRIPT.decorate_projection_payload(
+				game_state, flow_payload)
+	var cleared: Array[String] = []
+	if game_state.interaction_flow != null \
+			and game_state.interaction_flow.flow_type \
+					== Constants.InteractionFlow.ATTACK \
+			and game_state.interaction_flow.step_id \
+					== Constants.InteractionStep.ATTACK_DEFENSE_TOKENS \
+			and step_id != Constants.InteractionStep.ATTACK_DEFENSE_TOKENS:
+		cleared = ECM_SCRIPT.clear_window_state(game_state)
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.ATTACK,
 			step_id,
@@ -77,7 +95,8 @@ func execute(game_state: GameState) -> Dictionary:
 			_attack_controller_context(flow_payload),
 			Constants.Visibility.ALL,
 			flow_payload)
-	return {"applied": true, "step_id": int(step_id)}
+	return {"applied": true, "step_id": int(step_id),
+			"ecm_cleared_runtime_upgrade_ids": cleared}
 
 
 func _attack_controller_context(flow_payload: Dictionary) -> Dictionary:

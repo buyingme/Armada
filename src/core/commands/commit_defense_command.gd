@@ -3,7 +3,8 @@
 ## Marker command submitted by the [b]defender peer[/b] in network mode
 ## when the player presses [i]Commit Defense[/i] on the
 ## [AttackPanelMirror].  It carries the canonical-order list of
-## defense-token indices the defender chose to spend.
+## defense-token indices the defender chose to spend and records the
+## chosen ECM-authorized locked token when ECM is pending.
 ##
 ## Phase I6b-3 R2: closes NW-006 — defense-token authority moves from
 ## the attacker peer to the defender peer.  The attacker peer's
@@ -27,6 +28,10 @@
 ## Rules Reference: "Defense Tokens", DT-001/DT-002, p.5.
 class_name CommitDefenseCommand
 extends GameCommand
+
+
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -62,16 +67,23 @@ func validate(game_state: GameState) -> String:
 		var idx: int = int(raw_idx)
 		if idx < 0 or idx >= ship.defense_tokens.size():
 			return "Token index %d out of range." % idx
+	var ecm_error: String = ECM_SCRIPT.validate_authorized_token_selection(
+			game_state, ship, int(payload.get("ship_index", -1)), selected)
+	if ecm_error != "":
+		return ecm_error
 	return ""
 
 
-## Marker — no game-state mutation here.  The selected indices are
-## echoed in the result so the attacker peer's [AttackExecutor] can
-## drive the spend pipeline from the
-## [signal CommandProcessor.command_executed] signal.
-func execute(_game_state: GameState) -> Dictionary:
+## Records any ECM-authorized locked token choice and echoes the selected
+## indices so the attacker peer's [AttackExecutor] can drive the spend
+## pipeline from the [signal CommandProcessor.command_executed] signal.
+func execute(game_state: GameState) -> Dictionary:
 	var selected: Array = payload.get("selected_indices", []) as Array
+	var ecm_pending: Dictionary = ECM_SCRIPT.commit_authorized_token_selection(
+			game_state, int(payload.get("ship_index", -1)), selected)
 	return {
 		"ship_index": payload.get("ship_index", -1),
 		"selected_indices": selected.duplicate(),
+		"ecm_selected_token_index": int(ecm_pending.get(
+				ECM_SCRIPT.PENDING_SELECTED_TOKEN_INDEX, -1)),
 	}

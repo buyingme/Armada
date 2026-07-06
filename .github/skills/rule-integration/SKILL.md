@@ -97,6 +97,18 @@ A rule integration is complete only when all surfaces agree:
    - Test UI panels render blocked/available options without owning rule logic.
    - For command submission, run baseline traces as required by Phase L/M.
 
+### Interactive Rule Audit
+
+For interactive upgrades or rule prompts, include a command-sequence audit:
+compare the expected sequence against observed hot-seat, network host, and
+network client sequences, then identify the first divergence. When logs are
+available, compare host/client/game logs, command history, mirror application,
+and deferred follow-ups. For temporary interactive-rule state, verify the single
+authoritative owner, creation point, mutation path, and cleanup/removal point;
+after each important command, name the state owner, verify projection is derived
+rather than authoritative, and confirm remote command handlers classify every
+mirrored command.
+
 9. Update docs.
    - Update `docs/game_flow.md` for new payload fields, allowed commands, or rule-boundary decisions.
    - Update `docs/refactoring_phase_lm_plan.md` for phase status and lessons.

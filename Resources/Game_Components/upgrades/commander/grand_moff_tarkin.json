@@ -34,13 +34,13 @@
         "upgrade.grand_moff_tarkin"
     ],
     "rules_integration": {
-        "status": "NOT_INTEGRATED",
-        "implemented_rule_ids": [],
-        "pending_rule_surfaces": [
-            "phase.ship.start.command_choice",
-            "phase.ship.start.grant_tokens"
+        "status": "INTEGRATED",
+        "implemented_rule_ids": [
+            "upgrade.grand_moff_tarkin.command_choice",
+            "upgrade.grand_moff_tarkin.grant_tokens"
         ],
-        "notes": "Static catalog metadata only; gameplay rule integration is deferred to RuleRegistry."
+        "pending_rule_surfaces": [],
+        "notes": "Implemented by CAP-UPG-001 via TarkinChoiceCommand and the GrandMoffTarkin runtime upgrade rule."
     },
     "rule_surfaces": [
         {

@@ -10,7 +10,7 @@ Related Contracts: CON-003, CON-004
 Related Context Packs: CP-001
 Related Tests: Required tests listed in this package
 Created: 2026-07-05
-Last Updated: 2026-07-05
+Last Updated: 2026-07-08
 Owner: Project Owner review required
 
 ## Identity
@@ -75,9 +75,12 @@ Excluded behavior:
 - Marking this package `Integrated`.
 - Any production implementation.
 
-The non-recur Status Phase ready-cost that uses a Repair command token is
-explicitly deferred to a later capability package or implementation slice. This
-package implements only attack-time ECM behavior.
+The non-recur Status Phase ready-cost that uses a Repair command token remains
+a deferred implementation slice. This package now records the accepted
+Project Owner decisions required to make that slice implementation-ready.
+
+Those decisions do not advance CAP status, upgrade JSON status, or
+implementation status.
 
 ## Rules Summary
 
@@ -146,8 +149,41 @@ this package:
 - ECM is completely public. Both players shall observe ECM availability, use,
   decline, selected defense token, and ECM exhaustion.
 - Replay and reconnect shall reproduce the same public sequence.
-- This package implements only attack-time ECM behavior; the non-recur Status
-  Phase ready-cost using a Repair command token is deferred.
+- Attack-time ECM behavior and the deferred Status Phase ready-cost are separate
+  implementation slices within this package.
+- The deferred Status Phase ready-cost uses an ECM-specific command-owned
+  implementation. It does not introduce a generic optional-rule framework or a
+  generic upgrade-ready framework.
+- During a timing window with multiple optional rules, the controlling player
+  chooses the order in which to resolve available optional rules.
+- One optional rule resolves completely before availability is recalculated.
+- Declining one optional rule does not prevent using another optional rule in
+  the same timing window.
+- The available optional-rule list is recalculated after every accepted or
+  declined optional rule.
+- Permanent/passive effects continue to apply automatically and are not
+  presented as optional choices.
+- Unresolved optional Status Phase choices block advancement to the next Status
+  Phase command.
+- The ECM ready-cost timing location is immediately before `StartRoundCommand`,
+  after `StatusPhaseCleanupCommand` has completed.
+- ECM Status Phase ready-cost use is represented by a replayable
+  `ReadyECMCommand`.
+- ECM Status Phase ready-cost decline is represented by a replayable
+  `DeclineECMReadyCommand`.
+- `ReadyECMCommand` spends one Repair command token from the source ship
+  carrying ECM and readies the source ECM runtime upgrade instance.
+- ECM Status Phase ready-cost temporary guards live in the ECM runtime upgrade
+  instance `rule_state` until the ready-cost window exits.
+- The ECM-specific command-owned ready-cost implementation surface owns cleanup
+  of `rule_state.status_ready_cost`.
+- `ReadyECMCommand` and `DeclineECMReadyCommand` update the authoritative
+  `rule_state.status_ready_cost` guard and do not remove it.
+- The authoritative `rule_state.status_ready_cost` guard survives until the
+  optional-rule window exits.
+- ECM Status Phase ready-cost projection is derived from authoritative state and
+  never owns gameplay state.
+- The Status Phase ready-cost is public.
 
 ## Related Architecture Documents
 
@@ -496,6 +532,519 @@ Missing network evidence:
 
 - No ECM-specific network, reconnect, or remote side-effect test exists.
 
+## Deferred Status Phase Ready-Cost Slice
+
+This section records evidence for the printed Electronic Countermeasures
+non-recur ready cost:
+
+> During the Status Phase, you may spend 1 Repair token to ready this card.
+
+The attack-time ECM behavior and the deferred Status Phase ready-cost are
+separate implementation slices. This section records the accepted Project Owner
+answers that make the Status Phase ready-cost slice implementation-ready.
+
+### Existing Architecture Evidence
+
+Status Phase command flow:
+
+- `StatusPhaseCleanupCommand` is the existing replayable command for Status
+  Phase cleanup.
+- `StatusPhaseCleanupCommand.validate()` requires
+  `Constants.GamePhase.STATUS`.
+- `StatusPhaseCleanupCommand.execute()` readies exhausted defense tokens,
+  resets activation flags, and clears spent command-dial history.
+- `StatusPhaseCleanupCommand` does not ready runtime upgrade cards and does not
+  spend command tokens.
+- `StartRoundCommand` is the existing replayable command that transitions from
+  Status Phase to Command Phase.
+- `AdvancePhaseCommand` rejects `STATUS -> COMMAND` advancement and directs
+  that `StartRoundCommand` be used.
+- `GameManager._begin_status_phase()` currently performs status cleanup and
+  then advances the phase on the authoritative peer.
+- Network clients do not perform local Status Phase cleanup; they receive the
+  authoritative cleanup and phase results.
+
+Command-token evidence:
+
+- `CommandTokenManager` supports checking, removing, spending, serializing, and
+  deserializing command tokens.
+- `SpendTokenCommand` removes one command token from a ship and is currently
+  applicable in Ship Phase only.
+- `DiscardTokenCommand` handles command-token overflow discard and is currently
+  applicable in Ship Phase only.
+- No existing command represents spending a Repair command token during Status
+  Phase to ready an upgrade card.
+
+Runtime upgrade evidence:
+
+- CON-004 runtime upgrade instances live on the owning `ShipInstance` by
+  default.
+- ECM exhaustion/readiness is represented by the source runtime upgrade
+  instance `card_state`.
+- `ShipInstance` serialization preserves runtime upgrade `card_state` and
+  `rule_state`.
+- No generic upgrade-card readying command or helper is required by existing
+  architecture.
+
+Flow, projection, and save evidence:
+
+- `FlowSpec` contains `STATUS_CLEANUP / STATUS_CLEANUP_STEP` with allowed
+  commands `status_phase_cleanup` and `start_round`.
+- `UIProjector` can project flow-specific modal intent and rule affordances, but
+  no ECM Status Phase affordance exists.
+- `SaveGameManager` treats `STATUS_CLEANUP_STEP` as a safe save point.
+- Existing remote status-cleanup handling refreshes defense-token and command
+  dial visuals; it does not refresh runtime upgrade card readiness.
+
+RuleSurface evidence:
+
+- `RuleSurface.TARGET_DEFENSE_TOKEN_READYING` exists for Status Phase defense
+  token readying.
+- `CompartmentFire` uses a Status Phase cleanup modifier to block defense-token
+  readying.
+- No existing `RuleSurface` target specifically represents upgrade-card readying
+  or command-token payment for upgrade ready costs.
+
+### Architecture Support Assessment
+
+Existing architecture partially supports the ready-cost slice:
+
+- Runtime ownership is already supported by ADR-004 and CON-004.
+- The source ECM runtime upgrade instance is the authoritative owner of
+  `card_state.exhausted` and `card_state.readied`.
+- Command-token state and runtime upgrade state are both serialized through
+  existing state owners.
+- Existing command history, replay, network, and reconnect architecture can
+  carry a narrow replayable command if one is added.
+
+Existing architecture does not yet fully support the ready-cost slice:
+
+- There is no existing Status Phase command that spends a Repair token and
+  readies a runtime upgrade card.
+- Existing Status Phase cleanup is automatic on the authoritative peer, so the
+  ECM ready-cost prompt must be inserted after cleanup and before
+  `StartRoundCommand`.
+- Existing `FlowSpec` does not include a player-controlled Status Phase
+  upgrade-ready choice.
+- Existing remote status-cleanup side effects do not refresh runtime upgrade
+  card readiness.
+
+### Accepted Project Owner Answers
+
+The Project Owner has accepted the following answers for the deferred ECM
+Status Phase ready-cost slice:
+
+1. If multiple optional Status Phase rules are simultaneously available, the
+   controlling player chooses the order in which to resolve them.
+2. Resolve one optional rule completely, recalculate the available optional
+   rules, and repeat until no optional rules remain or the player declines all
+   remaining optional rules.
+3. Declining one optional rule does not prevent using another optional rule.
+4. The available optional-rule list is recalculated after every accepted or
+   declined optional rule.
+5. Permanent/passive effects continue to apply automatically and never appear as
+   optional choices.
+6. Unresolved optional Status Phase decisions block advancement to the next
+   Status Phase command.
+7. The ECM ready-cost timing location is immediately before
+   `StartRoundCommand`, after `StatusPhaseCleanupCommand` has completed.
+8. The ECM ready-cost implementation remains ECM-specific and shall not create a
+   generic optional-rule framework or generic upgrade-ready framework.
+
+### Timing Location Decision
+
+The ECM ready-cost opportunity occurs immediately before `StartRoundCommand`,
+after `StatusPhaseCleanupCommand` has completed.
+
+Rejected locations:
+
+- Before `StatusPhaseCleanupCommand`: this would delay existing automatic
+  cleanup and make optional upgrade readying precede established Status Phase
+  cleanup.
+- Inside `StatusPhaseCleanupCommand`: this would mix optional player choice into
+  a system cleanup command and obscure replayable choice history.
+- After `StatusPhaseCleanupCommand` without blocking `StartRoundCommand`: this
+  would allow the Status Phase to advance before unresolved optional choices are
+  resolved.
+
+Consequences:
+
+- Replay remains ordered as explicit commands:
+  `advance_phase -> status_phase_cleanup -> ready/decline commands ->
+  start_round`.
+- Serialization can preserve a pending ready-cost prompt at a Status Phase
+  safe point after cleanup and before `start_round`.
+- Reconnect can reconstruct the ready-cost prompt from authoritative runtime
+  upgrade state, command-token state, and temporary guards.
+- Network mirrors apply status cleanup before any ECM ready-cost decision and
+  apply `start_round` only after ready-cost choices are resolved.
+- Command sequencing remains narrow: cleanup stays system-owned, ECM ready-cost
+  stays command-owned, and `start_round` remains the transition to Command
+  Phase.
+
+### Expected Command Protocol
+
+The command protocol below is the accepted protocol shape for the ECM
+Status Phase ready-cost slice.
+
+`ReadyECMCommand` and `DeclineECMReadyCommand` are ECM-specific replayable
+commands for this slice.
+
+Expected hot-seat sequence:
+
+1. `advance_phase` enters `STATUS`.
+2. `status_phase_cleanup` executes as the existing system cleanup command.
+3. Projection presents the current public list of available optional Status
+   Phase rules. For ECM, availability is derived from the source ECM runtime
+   upgrade instance and source ship command-token state.
+4. The controlling player chooses one available optional rule.
+5. For ECM, the controlling player submits exactly one of:
+   - `ReadyECMCommand`, referencing the ECM `runtime_upgrade_id`, or
+   - `DeclineECMReadyCommand`, referencing the ECM `runtime_upgrade_id`.
+6. `ReadyECMCommand` validates, spends one Repair token from the source ship,
+   sets ECM `card_state.exhausted = false`, sets
+   `card_state.readied = true`, and records a temporary resolved guard in the
+   ECM runtime upgrade instance `rule_state`. It does not remove the
+   authoritative `rule_state.status_ready_cost` guard.
+7. `DeclineECMReadyCommand` validates and records a temporary declined guard in
+   the ECM runtime upgrade instance `rule_state` without spending a token or
+   readying ECM. It does not remove the authoritative
+   `rule_state.status_ready_cost` guard.
+8. Projection clears or recalculates the derived optional-rule list.
+9. Repeat steps 3-8 until no optional Status Phase rules remain available or
+   the player has declined all remaining optional rules.
+10. `start_round` executes and transitions to Command Phase.
+11. The authoritative `rule_state.status_ready_cost` guard survives until the
+   optional-rule window exits. The ECM-specific command-owned ready-cost
+   implementation surface clears it when the ready-cost window exits through
+   `start_round`, flow replacement, cancellation, load/reconnect reconstruction
+   outside the window, or another explicit exit from that Status Phase window.
+
+Expected network host sequence:
+
+1. The authoritative peer enters `STATUS` through `advance_phase`.
+2. The authoritative peer executes and broadcasts `status_phase_cleanup`.
+3. The authoritative peer projects the current public optional Status Phase rule
+   list.
+4. The controlling peer submits `ReadyECMCommand` or
+   `DeclineECMReadyCommand` for the chosen ECM source when ECM is selected.
+5. The authoritative peer validates, executes, records, and broadcasts the ECM
+   command in `GameCommand.sequence` order.
+6. Remote peers mirror the accepted command, update command-token state,
+   runtime upgrade card state, authoritative guard state, and derived
+   projection. `ReadyECMCommand` and `DeclineECMReadyCommand` update the guard
+   and do not remove it.
+7. The authoritative peer recalculates available optional rules.
+8. Steps 3-7 repeat until no optional Status Phase rules remain available or the
+   player has declined all remaining optional rules.
+9. The authoritative peer executes and broadcasts `start_round`.
+10. Remote peers mirror `start_round`; the ECM-specific command-owned
+   ready-cost implementation surface clears ECM Status Phase ready-cost
+   temporary guards for that window.
+
+Expected network client sequence:
+
+1. The client mirrors authoritative `advance_phase`.
+2. The client mirrors authoritative `status_phase_cleanup`.
+3. The client receives the projected public optional Status Phase rule list.
+4. If the client controls the chosen ECM source, the client submits
+   `ReadyECMCommand` or `DeclineECMReadyCommand` to the authoritative peer.
+5. The client does not locally synthesize ECM ready-cost execution.
+6. The client mirrors authoritative ECM command results in
+   `GameCommand.sequence` order.
+7. The client recalculates derived projection from mirrored authoritative state.
+8. Steps 3-7 repeat until no optional Status Phase rules remain available or the
+   player has declined all remaining optional rules.
+9. The client mirrors authoritative `start_round`.
+10. Reconnect reconstructs the same pending opportunity, ready/decline result,
+   command-token state, runtime upgrade `card_state`, and
+   `status_phase_cleanup` / `start_round` sequence from serialized state and
+   command history.
+
+### Runtime Ownership
+
+The ECM runtime upgrade instance on the source `ShipInstance` remains the
+authoritative owner of ECM card readiness:
+
+- `card_state.exhausted = true` and `card_state.readied = false` means the ECM
+  card is exhausted and may be eligible for the printed ready cost.
+- The ready-cost command, if accepted, must mutate only the source runtime
+  upgrade instance `card_state`.
+- Static upgrade data remains referenced by `data_key` only.
+- No fleet-level, player-level, projection-level, or UI-level owner of ECM
+  readiness is introduced.
+
+The source ship's `CommandTokenManager` remains the authoritative owner of the
+Repair command token spent for the ready cost.
+
+Temporary authoritative state:
+
+- `rule_state.status_ready_cost` on the ECM runtime upgrade instance records
+  ready-cost window facts needed to reject duplicate ready/decline and suppress
+  repeated prompts during the same Status Phase window.
+- `ReadyECMCommand` and `DeclineECMReadyCommand` update the authoritative
+  `rule_state.status_ready_cost` guard and do not remove it.
+- The authoritative `rule_state.status_ready_cost` guard survives until the
+  optional-rule window exits.
+- The ECM-specific command-owned ready-cost implementation surface owns cleanup
+  of `rule_state.status_ready_cost`.
+- The cleanup triggers are: `start_round` succeeds, the Status Phase ready-cost
+  window is replaced, the flow is cancelled or replaced, save/load
+  reconstruction determines the window is no longer active, reconnect
+  reconstruction determines the window is no longer active, or another explicit
+  exit from that Status Phase window occurs.
+- Cleanup responsibility is limited to removing the temporary
+  `rule_state.status_ready_cost` guard for the exited window. It does not change
+  the already authoritative `card_state` result of `ReadyECMCommand` or the
+  command-token result of `ReadyECMCommand`.
+
+Derived projection state:
+
+- `InteractionFlow.payload` may contain the currently projected optional-rule
+  list, ECM source references, and UI copy.
+- This projection state is derived from current phase/window, runtime upgrade
+  `card_state`, runtime upgrade `rule_state`, and command-token state.
+- Projection state is not authoritative for ECM readiness, Repair-token payment,
+  duplicate rejection, or command legality.
+
+### Validation And Execution Surfaces
+
+Required validation for a future implementation:
+
+- The game is in the Status Phase ready-cost window after
+  `status_phase_cleanup` and before `start_round`.
+- The command is submitted by the player who owns the source ship.
+- The source ship exists, is controlled by the submitting player, and is not in
+  an invalid state for using upgrade text.
+- The source runtime upgrade instance exists on that ship.
+- The source runtime upgrade instance has `data_key =
+  "electronic_countermeasures"`.
+- The source runtime upgrade instance is exhausted and not readied.
+- The source runtime upgrade instance is not discarded.
+- The source runtime upgrade instance is not disabled.
+- The source ship has a Repair command token available to spend.
+- The Repair token is spent from the source ship carrying ECM.
+- A ready command cannot ready an already ready ECM card.
+- A decline command cannot be submitted for an unavailable or already resolved
+  ECM ready-cost opportunity.
+- Repeated ready or decline commands for the same ready-cost opportunity are
+  rejected.
+- `start_round` is rejected while unresolved optional Status Phase choices
+  remain available.
+
+Required execution behavior for a future implementation:
+
+- Accepted ready-cost execution spends exactly one Repair command token from
+  the authoritative command-token owner.
+- Accepted ready-cost execution sets ECM `card_state.exhausted = false` and
+  `card_state.readied = true`.
+- Accepted ready-cost execution must not copy static upgrade data into runtime
+  state.
+- Decline records an explicit replayable `DeclineECMReadyCommand`.
+- `ReadyECMCommand` and `DeclineECMReadyCommand` update the authoritative ECM
+  runtime upgrade `rule_state.status_ready_cost` guard for the current Status
+  Phase ready-cost window and do not remove it.
+- The authoritative `rule_state.status_ready_cost` guard survives until the
+  optional-rule window exits and is cleaned only by the ECM-specific
+  command-owned ready-cost implementation surface.
+- The implementation must not create a generic upgrade-ready framework.
+
+FlowSpec and CommandApplicability obligations:
+
+- `FlowSpec` shall allow `ReadyECMCommand` and `DeclineECMReadyCommand` only in
+  the Status Phase ready-cost window.
+- `CommandApplicability` shall classify both commands as Status Phase
+  ready-cost commands.
+- `start_round` remains the Command Phase transition command but shall be
+  blocked while available optional Status Phase rules remain unresolved.
+- `status_phase_cleanup` remains the cleanup command and shall not own ECM
+  optional player choice.
+
+RuleSurface responsibility:
+
+- RuleRegistry/RuleSurface is not required for ECM Status Phase ready-cost
+  execution.
+- If implementation uses an existing accepted RuleSurface call site to advertise
+  ECM availability, that surface remains an affordance/enabler only.
+- ECM command validation remains authoritative and shall not trust RuleSurface
+  metadata or UI projection alone.
+
+### Projection, Visibility, And Cleanup
+
+Projection:
+
+- The ECM ready-cost affordance must be derived from authoritative runtime
+  upgrade state and command-token state.
+- UI must not be the authority for ECM readiness, Repair token ownership, or
+  payment legality.
+- No affordance should appear when the ready cost cannot have legal effect.
+- Projection must present all currently available optional Status Phase rules
+  during the ready-cost window.
+- Projection must recalculate after every accepted or declined optional rule.
+- Projection must not present permanent/passive effects as choices.
+- UI is responsible only for displaying the derived rule list and submitting the
+  selected ECM ready or decline command.
+
+Visibility:
+
+- ECM readiness, exhaustion, Repair command tokens, ready-cost use, and
+  ready-cost decline are public state.
+
+Cleanup:
+
+- Any projected Status Phase ECM ready-cost opportunity must be cleared after
+  ready, decline, loss of the ready-cost window, flow replacement, save/load
+  reconstruction, reconnect reconstruction, or transition out of the relevant
+  Status Phase point.
+- Runtime upgrade `card_state` remains authoritative after projection cleanup.
+- `ReadyECMCommand` and `DeclineECMReadyCommand` update the authoritative
+  `rule_state.status_ready_cost` guard and do not remove it.
+- The authoritative `rule_state.status_ready_cost` guard survives until the
+  optional-rule window exits.
+- The ECM-specific command-owned ready-cost implementation surface owns cleanup
+  of `rule_state.status_ready_cost`.
+- The cleanup triggers are: `start_round` succeeds, the Status Phase ready-cost
+  window is replaced, the flow is cancelled or replaced, save/load
+  reconstruction determines the window is no longer active, reconnect
+  reconstruction determines the window is no longer active, or another explicit
+  exit from that Status Phase window occurs.
+- Cleanup responsibility is limited to removing the temporary
+  `rule_state.status_ready_cost` guard for the exited window. Projection
+  cleanup does not own authoritative guard cleanup.
+
+### Serialization, Replay, Reconnect, And Network
+
+Serialization requirements for a future implementation:
+
+- Runtime upgrade `card_state` must serialize after ECM is readied.
+- Source ship command-token state must serialize after the Repair token is
+  spent.
+- Any pending ECM ready-cost prompt must serialize through existing
+  `InteractionFlow` payload conventions if the game can be saved while the
+  prompt is active.
+- Runtime upgrade `rule_state.status_ready_cost` must serialize while the
+  Status Phase ready-cost window is active.
+- Save/load after `DeclineECMReadyCommand` must preserve the authoritative
+  declined `rule_state.status_ready_cost` guard while the Status Phase
+  ready-cost window remains active.
+- Save/load while the prompt is open must reconstruct the same available
+  optional-rule list from authoritative runtime upgrade state, command-token
+  state, and temporary guards.
+- Save/load after ECM is readied must preserve spent Repair token state, ECM
+  `card_state.readied = true`, and absence of the resolved ECM source from the
+  remaining optional-rule list.
+
+Replay requirements for a future implementation:
+
+- Ready and decline outcomes must be represented by replayable command history.
+- `ReadyECMCommand` and `DeclineECMReadyCommand` update the authoritative
+  `rule_state.status_ready_cost` guard and do not remove it; replay must retain
+  the guard until the optional-rule window exits.
+- Replay must reproduce Repair token payment, ECM card readiness, and the
+  following Status Phase cleanup/start-round sequence.
+- Replay must not infer ready-cost use from projection-only state.
+- Replay evidence must include both accepted ready and explicit decline paths.
+- Replay must preserve the accepted command order:
+  `advance_phase -> status_phase_cleanup -> ready/decline commands ->
+  start_round`.
+
+Reconnect and network requirements for a future implementation:
+
+- Reconnect during a pending ready-cost opportunity must reconstruct the same
+  opportunity from serialized authoritative state.
+- Reconnect after readying must reconstruct spent Repair token state and ECM
+  ready `card_state`.
+- Reconnect after `DeclineECMReadyCommand` must reconstruct the authoritative
+  declined `rule_state.status_ready_cost` guard while the Status Phase
+  ready-cost window remains active.
+- Network mirrors must apply ready-cost results in authoritative command
+  sequence order.
+- Remote side effects must refresh both command-token display and runtime
+  upgrade card readiness display.
+- Network command handling must classify `ReadyECMCommand` and
+  `DeclineECMReadyCommand` so remote peers update projection after each
+  authoritative result.
+- Network clients must not synthesize ready-cost execution locally.
+- Out-of-order network command results must not allow `start_round` to apply
+  before prior authoritative ready/decline results.
+
+### Future Production Surfaces
+
+A future implementation is expected to inspect or touch the following existing
+surfaces:
+
+- `src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd`
+- `src/core/commands/status_phase_cleanup_command.gd`
+- `src/core/commands/start_round_command.gd`
+- `src/core/commands/spend_token_command.gd`
+- `src/core/commands/command_applicability.gd`
+- `src/core/state/flow_spec.gd`
+- `src/core/network/ui_projector.gd`
+- `src/autoload/game_manager.gd`
+- `src/core/state/ship_instance.gd`
+- `src/core/state/command_token_manager.gd`
+- Status Phase modal/router/UI surfaces, if a player prompt is required.
+- Replay, save/load, network, and reconnect tests covering Status Phase command
+  history.
+
+### Remaining Owner Decisions For Ready Cost
+
+No remaining Project Owner decisions.
+
+### Required Tests For Ready Cost
+
+Required automated tests for a future implementation:
+
+- Static/catalog test confirming ECM metadata exposes the Status Phase ready
+  surface without treating metadata as active behavior.
+- Runtime validation tests for correct phase/window, wrong player, missing
+  source ship, missing runtime upgrade, wrong `data_key`, already ready ECM,
+  discarded ECM, disabled ECM, missing Repair token, and duplicate ready/decline.
+- Execution test proving a valid ready command spends exactly one Repair token
+  from the source ship and sets ECM `card_state.exhausted = false` and
+  `card_state.readied = true`.
+- Decline test proving explicit decline is replayable.
+- Guard lifecycle tests proving the authoritative
+  `rule_state.status_ready_cost` guard is retained after `ReadyECMCommand`.
+- Guard lifecycle tests proving the authoritative
+  `rule_state.status_ready_cost` guard is retained after
+  `DeclineECMReadyCommand`.
+- Cleanup tests proving the ECM-specific command-owned ready-cost implementation
+  surface clears `rule_state.status_ready_cost` on `start_round`.
+- Cleanup tests proving the ECM-specific command-owned ready-cost implementation
+  surface clears `rule_state.status_ready_cost` on flow replacement.
+- Cleanup tests proving the ECM-specific command-owned ready-cost implementation
+  surface clears `rule_state.status_ready_cost` on cancellation.
+- Projection tests proving the affordance appears only for eligible ECM ready
+  costs and disappears after ready, decline, or leaving the ready-cost window.
+- Projection tests proving all currently available optional Status Phase rules
+  are presented, one resolves at a time, and availability is recalculated after
+  each accepted or declined rule.
+- FlowSpec and CommandApplicability tests for any new ready/decline commands or
+  Status Phase allowed-command changes.
+- Tests proving `start_round` is blocked while optional Status Phase choices
+  remain unresolved and allowed after all choices are resolved or declined.
+- Serialization/save-load tests during a pending ready-cost prompt and after a
+  successful ready payment.
+- Save/load tests after `DeclineECMReadyCommand` proving the declined
+  `rule_state.status_ready_cost` guard is preserved while the Status Phase
+  ready-cost window remains active.
+- Replay tests for ready and decline sequences through `status_phase_cleanup`
+  and `start_round`.
+- Network mirror tests proving command-token state and ECM card readiness update
+  on remote peers.
+- Network ordering tests proving `start_round` cannot mirror before prior
+  authoritative ready/decline results.
+- Reconnect tests during pending ready-cost opportunity and after readying.
+- Reconnect tests after `DeclineECMReadyCommand` proving the declined
+  `rule_state.status_ready_cost` guard is reconstructed while the Status Phase
+  ready-cost window remains active.
+- Public visibility tests for ready-cost availability, Repair token spend, ECM
+  ready state, and explicit decline.
+- Regression tests proving existing Status Phase defense-token cleanup,
+  `CompartmentFire`, `SpendTokenCommand` Ship Phase behavior, and attack-time
+  ECM behavior remain unchanged.
+
 ## Visibility
 
 Visibility impact is required.
@@ -523,7 +1072,7 @@ Accepted visibility policy:
 | Defense-token legality | High | ECM overrides Accuracy targeting only; it must not bypass speed-0, already-spent, discarded, or blocker rules. | Reuse existing spend-defense-token infrastructure and add regression tests. |
 | Replay | Medium | ECM choice changes attack outcome and card state. | Add replay tests for decline and use. |
 | Network/reconnect | Medium | Prompt and command results affect live peer state and reconnect projection. | Add network/reconnect tests. |
-| Deferred ready cost | Medium | Static metadata includes Repair-token ready cost, but this package implements only attack-time ECM behavior. | Track the non-recur Status Phase ready-cost in a later capability package or implementation slice. |
+| Deferred ready cost | Medium | Static metadata includes Repair-token ready cost, and this package now records accepted decisions and evidence for the deferred Status Phase slice. | Keep attack-time behavior and Status Phase ready-cost tests separate. |
 | Metadata drift | Medium | Static JSON currently says `NOT_INTEGRATED`. | Do not update metadata until evidence and owner approval support it. |
 
 ## Required Automated Tests
@@ -570,6 +1119,8 @@ Required before this package can advance beyond Draft/Identified:
 - Reconnect tests during ECM prompt and after ECM resolution.
 - Visibility tests proving both players observe ECM availability, use, decline,
   selected defense token, and exhaustion.
+- Status Phase ready-cost tests listed in the deferred ready-cost section before
+  implementing the printed Repair-token ready cost.
 - Metadata/status regression test if metadata is later advanced from
   `NOT_INTEGRATED`.
 
@@ -590,6 +1141,9 @@ Required before owner review of an implementation:
   at that point.
 - Network attack where the remote defender uses ECM and both peers agree on ECM
   card state, spent defense-token state, and attack flow continuation.
+- Status Phase manual test, after the ready-cost slice is implemented, proving
+  an exhausted ECM can be readied by spending a Repair token and both peers
+  agree on command-token and runtime upgrade card state.
 
 Manual tests supplement automated tests. They do not replace required automated
 coverage unless the Project Owner explicitly accepts a temporary exception.
@@ -597,6 +1151,8 @@ coverage unless the Project Owner explicitly accepts a temporary exception.
 ## Open Questions
 
 - What test threshold is sufficient while TEST-003 does not exist?
+- No remaining Project Owner decisions are required before implementing the
+  deferred Status Phase ready-cost slice.
 
 These questions do not reopen ADR-003, ADR-004, CON-003, or CON-004.
 
@@ -609,6 +1165,9 @@ delegate:
 
    Rationale: TEST-003 remains unavailable, so the Project Owner determines test
    sufficiency for any status beyond Draft/Identified.
+
+No remaining Project Owner decisions are required before implementing the
+deferred Status Phase ready-cost slice.
 
 ## Evidence Summary
 
@@ -628,9 +1187,15 @@ delegate:
    existing `SpendDefenseTokenCommand` as the replayable command shape.
 7. The Project Owner has accepted fully public ECM visibility.
 8. The Project Owner has deferred the non-recur Status Phase Repair-token
-   ready-cost to a later capability package or implementation slice.
-9. Existing replay, network, reconnect, and projection surfaces can be reused,
-   but ECM-specific behavior is not implemented.
+   ready-cost to a later implementation slice.
+9. Status Phase evidence shows existing cleanup, start-round, command-token,
+   runtime-upgrade serialization, replay, network, and projection surfaces can
+   support a narrow ready-cost implementation.
+10. Existing replay, network, reconnect, and projection surfaces can be reused,
+   but deferred Status Phase ready-cost behavior is not implemented.
+11. The Project Owner has accepted the ECM Status Phase ready-cost timing,
+   command protocol, state ownership, public visibility, optional-rule ordering,
+   recalculation, and advancement-blocking decisions recorded in this package.
 
 ## Evidence Gaps
 
@@ -642,6 +1207,7 @@ delegate:
 - No ECM-specific replay test.
 - No ECM-specific network/reconnect test.
 - No ECM-specific visibility test.
+- No Status Phase ready-cost implementation or tests.
 - No TEST-003-backed test sufficiency threshold.
 
 ## Integration Status
@@ -657,14 +1223,18 @@ Evidence summary:
 - Project Owner decisions for ECM runtime ownership, command-owned execution,
   explicit `UseECMCommand` and `DeclineECMCommand`, existing infrastructure
   reuse, public visibility, no-effect prompt suppression, ready-cost deferral,
-  and no new framework are recorded.
-- No active ECM runtime behavior exists in the evidence collected.
+  Status Phase ready-cost timing/protocol, and no new framework are recorded.
+- Deferred Status Phase ready-cost evidence and accepted owner answers are
+  recorded.
+- No active Status Phase ECM Repair-token ready-cost behavior exists in the
+  evidence collected for that slice.
 
 Outstanding work:
 
 - Implementation.
 - Tests across validation, execution, projection, serialization, replay,
   network, reconnect, and visibility.
+- Implementation and tests for the deferred Status Phase ready-cost slice.
 - Owner determination of test sufficiency before status advancement while
   TEST-003 is unavailable.
 - Metadata/status alignment after evidence exists.
@@ -690,6 +1260,8 @@ Status constraints:
 | --- | --- | --- | --- |
 | Codex | 2026-07-05 | Draft prepared | Created from completed evidence analysis. No integration approval claimed. |
 | Codex | 2026-07-05 | Owner decisions recorded | Added accepted ECM command, visibility, runtime ownership, replay/network, and ready-cost scope decisions. Status remains Draft. |
+| Codex | 2026-07-08 | Ready-cost evidence added | Recorded Status Phase ready-cost evidence, protocol options, owner questions, and tests. Status remains Draft. |
+| Codex | 2026-07-08 | Ready-cost owner Q&A resolved | Recorded accepted timing, command protocol, state ownership, replay/network, and test obligations for the deferred Status Phase ready-cost slice. Status remains Draft. |
 
 ## Recommended Implementation Task
 
@@ -703,3 +1275,8 @@ network, reconnect, visibility, and regression tests.
 
 Do not update upgrade JSON integration status or mark this package `Integrated`
 until owner review approves the evidence.
+
+Implement the deferred Status Phase ready-cost slice as narrow ECM behavior
+using the existing Status Phase, command-token, runtime upgrade, serialization,
+replay, network, and projection surfaces. Do not introduce a generic
+optional-rule framework or generic upgrade-ready framework.

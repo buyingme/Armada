@@ -7,6 +7,10 @@ extends GutTest
 
 const ATTACK_PANEL_CONTROLLER_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/attack_panel_controller.gd")
+const COMMAND_ROUTER_ADAPTER_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/command_router_adapter.gd")
+const MODAL_ROUTER_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/modal_router.gd")
 
 
 class StubShipActivationController:
@@ -111,6 +115,7 @@ var _submitter: StubCommandSubmitter = null
 var _ship_token: ShipToken = null
 var _squadron_token: SquadronToken = null
 var _saved_game_state: GameState = null
+var _saved_is_game_active: bool = false
 var _saved_active_player: int = 0
 var _saved_local_player_index: int = -1
 var _saved_submitter: CommandSubmitter = null
@@ -118,10 +123,12 @@ var _saved_submitter: CommandSubmitter = null
 
 func before_each() -> void:
 	_saved_game_state = GameManager.current_game_state
+	_saved_is_game_active = GameManager.is_game_active
 	_saved_active_player = GameManager.active_player
 	_saved_local_player_index = NetworkManager._local_player_index
 	_saved_submitter = GameManager.get_command_submitter()
 	GameManager.current_game_state = null
+	GameManager.is_game_active = false
 	GameManager.active_player = 0
 	NetworkManager._local_player_index = -1
 	_submitter = StubCommandSubmitter.new()
@@ -145,6 +152,7 @@ func after_each() -> void:
 	_ship_token = null
 	_squadron_token = null
 	GameManager.current_game_state = _saved_game_state
+	GameManager.is_game_active = _saved_is_game_active
 	GameManager.active_player = _saved_active_player
 	NetworkManager._local_player_index = _saved_local_player_index
 	GameManager.set_command_submitter(_saved_submitter)
@@ -162,6 +170,28 @@ func test_initialize_connects_command_executed_signal() -> void:
 	var route_callable: Callable = Callable(_router, "_on_command_executed")
 	assert_true(CommandProcessor.command_executed.is_connected(route_callable),
 			"ModalRouter should own the command_executed subscription.")
+
+
+func test_command_router_adapter_initializes_modal_router_from_script_preload() -> void:
+	var panel_mgr := UIPanelManager.new()
+	panel_mgr.name = "AdapterPanelManager"
+	add_child_autofree(panel_mgr)
+	var adapter: Variant = COMMAND_ROUTER_ADAPTER_SCRIPT.new()
+	adapter.name = "AdapterUnderTest"
+	add_child_autofree(adapter as Node)
+
+	adapter.initialize(
+			panel_mgr,
+			null,
+			null,
+			null,
+			null,
+			null,
+			Callable(self, "_find_test_ship_token"),
+			Callable(self, "_find_test_squadron_token"))
+
+	assert_not_null(adapter.get_node_or_null("ModalRouter"),
+			"CommandRouterAdapter should construct ModalRouter through its script preload.")
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +404,87 @@ func test_route_command_result_tarkin_modal_submits_choice_command() -> void:
 			"Submitted command should preserve the selected command.")
 
 
+func test_route_command_result_ecm_ready_cost_opens_status_modal() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
+
+	_router.route_command_result(null, {})
+	var modal: Variant = _ecm_ready_cost_modal()
+	var ready_button: Button = modal.find_child(
+			"ReadyButton_0", true, false) as Button
+
+	assert_not_null(modal,
+			"ModalRouter should create an ECM ready-cost modal.")
+	assert_true(modal.is_open(),
+			"The ECM ready-cost modal should open from projected choices.")
+	assert_eq(modal.choice_count(), 1,
+			"The modal should consume one projected ECM ready-cost choice.")
+	assert_false(ready_button.disabled,
+			"Hot-seat should allow the ECM owner to choose ready or decline.")
+
+
+func test_route_command_result_ecm_ready_modal_submits_ready_command() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
+	GameManager.is_game_active = true
+	_router.route_command_result(null, {})
+	var modal: Variant = _ecm_ready_cost_modal()
+
+	(modal.find_child("ReadyButton_0", true, false) as Button).pressed.emit()
+
+	assert_eq(_submitter.submitted_commands.size(), 2,
+			"Pressing Ready should submit the choice then start_round.")
+	assert_eq(_submitter.submitted_commands[0].command_type, "ready_ecm",
+			"Modal ready submission should use ReadyECMCommand.")
+	assert_eq(_submitter.submitted_commands[1].command_type, "start_round",
+			"Modal ready submission should route through GameManager continuation.")
+	assert_eq(_submitter.submitted_commands[0].player_index, 1,
+			"The ECM owner should be the submitting player.")
+	assert_eq(_submitter.submitted_commands[0].payload.get(
+			"runtime_upgrade_id", ""), "ecm-runtime",
+			"Ready command should target the projected runtime upgrade id.")
+
+
+func test_route_command_result_ecm_ready_modal_submits_decline_command() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
+	GameManager.is_game_active = true
+	_router.route_command_result(null, {})
+	var modal: Variant = _ecm_ready_cost_modal()
+
+	(modal.find_child("DeclineButton_0", true, false) as Button).pressed.emit()
+
+	assert_eq(_submitter.submitted_commands.size(), 2,
+			"Pressing Decline should submit the choice then start_round.")
+	assert_eq(_submitter.submitted_commands[0].command_type, "decline_ecm_ready",
+			"Modal decline submission should use DeclineECMReadyCommand.")
+	assert_eq(_submitter.submitted_commands[1].command_type, "start_round",
+			"Modal decline submission should route through GameManager continuation.")
+	assert_eq(_submitter.submitted_commands[0].player_index, 1,
+			"The ECM owner should be the submitting player.")
+	assert_eq(_submitter.submitted_commands[0].payload.get(
+			"runtime_upgrade_id", ""), "ecm-runtime",
+			"Decline command should target the projected runtime upgrade id.")
+
+
+func test_route_command_result_ecm_ready_modal_disables_non_owner() -> void:
+	_create_router(Callable())
+	NetworkManager._local_player_index = 0
+	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
+
+	_router.route_command_result(null, {})
+	var modal: Variant = _ecm_ready_cost_modal()
+	var ready_button: Button = modal.find_child(
+			"ReadyButton_0", true, false) as Button
+	var decline_button: Button = modal.find_child(
+			"DeclineButton_0", true, false) as Button
+
+	assert_true(ready_button.disabled,
+			"Network non-owner should not be able to ready ECM.")
+	assert_true(decline_button.disabled,
+			"Network non-owner should not be able to decline ECM.")
+
+
 func test_route_command_result_non_tarkin_flow_closes_tarkin_modal() -> void:
 	_create_router(Callable())
 	GameManager.current_game_state = _state_with_tarkin_flow()
@@ -465,7 +576,7 @@ func _create_router(command_reaction_fn: Callable,
 		attack_panel_controller._panel_mgr = _panel_mgr
 		_attack_panel_controller = attack_panel_controller as Node
 		add_child(_attack_panel_controller)
-	_router = ModalRouter.new()
+	_router = MODAL_ROUTER_SCRIPT.new()
 	_router.name = "TestModalRouter"
 	add_child(_router)
 	_router.initialize(
@@ -583,6 +694,41 @@ func _state_with_tarkin_flow() -> GameState:
 	return state
 
 
+func _state_with_ecm_ready_cost_flow() -> GameState:
+	var state: GameState = _state_with_flow(
+			Constants.InteractionFlow.STATUS_CLEANUP,
+			Constants.InteractionStep.STATUS_CLEANUP_STEP,
+			-1)
+	state.current_phase = Constants.GamePhase.STATUS
+	state.interaction_flow.payload = {
+			"ecm_ready_cost_choices": [
+				{
+					"runtime_upgrade_id": "ecm-runtime",
+					"source_data_key": "electronic_countermeasures",
+					"owner_player": 1,
+					"ship_index": 0,
+					"source_ship_ref": "ship:ecm",
+					"prompt": "Spend 1 Repair token to ready Electronic Countermeasures?",
+					"accepted_command": "ready_ecm",
+					"decline_command": "decline_ecm_ready",
+				},
+			],
+			"optional_status_rules": [
+				{
+					"runtime_upgrade_id": "ecm-runtime",
+					"source_data_key": "electronic_countermeasures",
+					"owner_player": 1,
+					"ship_index": 0,
+					"source_ship_ref": "ship:ecm",
+					"prompt": "Spend 1 Repair token to ready Electronic Countermeasures?",
+					"accepted_command": "ready_ecm",
+					"decline_command": "decline_ecm_ready",
+				},
+			],
+	}
+	return state
+
+
 func _start_displacement_command() -> StartDisplacementCommand:
 	return StartDisplacementCommand.new(0, {
 			"ship_index": 0,
@@ -605,6 +751,10 @@ func _displacement_entries() -> Array[Dictionary]:
 func _tarkin_modal() -> TarkinChoiceModal:
 	return _panel_mgr.find_child("TarkinChoiceModal", true, false) \
 			as TarkinChoiceModal
+
+
+func _ecm_ready_cost_modal() -> Variant:
+	return _panel_mgr.find_child("ECMReadyCostModal", true, false)
 
 
 func _find_test_ship_token(ship: ShipInstance) -> ShipToken:

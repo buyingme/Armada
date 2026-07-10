@@ -25,6 +25,8 @@ const SETUP_STATUS_COMPLETE: String = "COMPLETE"
 const STANDARD_OBSTACLE_COUNT: int = 6
 const SETUP_DEPLOYMENT_VALIDATOR_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_deployment_validator.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -52,6 +54,9 @@ func validate(game_state: GameState) -> String:
 	var setup_error: String = _setup_package_error(game_state, phase)
 	if setup_error != "":
 		return setup_error
+	if phase == Constants.GamePhase.STATUS \
+			and ECM_SCRIPT.has_unresolved_status_ready_cost_choices(game_state):
+		return "Resolve optional Status Phase rules before starting a new round."
 	if game_state.current_round >= Constants.MAX_ROUNDS:
 		return "Already at maximum rounds (%d)." % Constants.MAX_ROUNDS
 	return ""
@@ -61,6 +66,8 @@ func validate(game_state: GameState) -> String:
 ## Returns {"new_round": int, "new_phase": int}.
 func execute(game_state: GameState) -> Dictionary:
 	_mark_setup_complete_if_needed(game_state)
+	var cleared_ready_cost: Array[String] = \
+			ECM_SCRIPT.clear_status_ready_cost_window_state(game_state)
 	game_state.current_round += 1
 	game_state.current_phase = Constants.GamePhase.COMMAND
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
@@ -71,6 +78,7 @@ func execute(game_state: GameState) -> Dictionary:
 	return {
 		"new_round": game_state.current_round,
 		"new_phase": int(Constants.GamePhase.COMMAND),
+		"ecm_status_ready_cost_cleared": cleared_ready_cost,
 	}
 
 

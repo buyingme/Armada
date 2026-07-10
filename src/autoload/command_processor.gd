@@ -33,6 +33,10 @@ const UseECMCommandScript: GDScript = preload(
 		"res://src/core/commands/use_ecm_command.gd")
 const DeclineECMCommandScript: GDScript = preload(
 		"res://src/core/commands/decline_ecm_command.gd")
+const ReadyECMCommandScript: GDScript = preload(
+		"res://src/core/commands/ready_ecm_command.gd")
+const DeclineECMReadyCommandScript: GDScript = preload(
+		"res://src/core/commands/decline_ecm_ready_command.gd")
 
 
 const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
@@ -130,6 +134,9 @@ func _ready() -> void:
 	# CAP-ECM-001 - Electronic Countermeasures defense-token override.
 	UseECMCommandScript.register()
 	DeclineECMCommandScript.register()
+	# CAP-ECM-001 - Electronic Countermeasures Status Phase ready cost.
+	ReadyECMCommandScript.register()
+	DeclineECMReadyCommandScript.register()
 	_log.info("Registered %d command types." % GameCommand._registry.size())
 
 
@@ -303,9 +310,10 @@ func _check_applicability(command: GameCommand,
 			COMMAND_APPLICABILITY_SCRIPT.KEY_REASON: "No active game state.",
 		}
 	return COMMAND_APPLICABILITY_SCRIPT.check_command(
-			command.command_type,
-			game_state.current_phase,
-			game_state.interaction_flow)
+		command.command_type,
+		game_state.current_phase,
+		game_state.interaction_flow,
+		game_state)
 
 
 func _snapshot_flow(game_state: GameState) -> InteractionFlow:

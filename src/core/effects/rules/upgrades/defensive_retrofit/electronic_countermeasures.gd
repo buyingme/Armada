@@ -10,8 +10,10 @@ extends RefCounted
 const DATA_KEY: String = "electronic_countermeasures"
 const RULE_ID: String = "upgrade.electronic_countermeasures"
 const AFFORDANCE_KEY: String = "ecm_choice"
+const READY_COST_AFFORDANCE_KEY: String = "ecm_ready_cost_choices"
 const RULE_STATE_PENDING_AUTHORIZATION: String = "pending_ecm_authorization"
 const RULE_STATE_DECLINED_ATTACK: String = "declined_ecm_attack"
+const RULE_STATE_STATUS_READY_COST: String = "status_ready_cost"
 const PENDING_SELECTED_TOKEN_INDEX: String = "selected_token_index"
 
 static var _rule_instance: RefCounted = null
@@ -27,6 +29,11 @@ static func register() -> void:
 				Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
 				RuleSurface.TARGET_DEFENSE_TOKEN_SPEND,
 				Callable(_rule_instance, "project_ecm_choice")),
+		FlowHook.enabler(RULE_ID,
+				Constants.InteractionFlow.STATUS_CLEANUP,
+				Constants.InteractionStep.STATUS_CLEANUP_STEP,
+				"status_ready_upgrade_card",
+				Callable(_rule_instance, "project_status_ready_cost")),
 	])
 
 
@@ -37,6 +44,18 @@ func project_ecm_choice(state: GameState,
 	if choice.is_empty():
 		return {}
 	return {AFFORDANCE_KEY: choice}
+
+
+func project_status_ready_cost(state: GameState,
+		_flow: InteractionFlow,
+		_viewer_player: int) -> Dictionary:
+	var choices: Array[Dictionary] = status_ready_cost_choices(state)
+	if choices.is_empty():
+		return {}
+	return {
+		READY_COST_AFFORDANCE_KEY: choices,
+		"optional_status_rules": choices,
+	}
 
 
 static func choice_payload(game_state: GameState,
@@ -426,6 +445,168 @@ static func decorate_projection_payload(game_state: GameState,
 	return clean
 
 
+static func decorate_status_ready_cost_payload(game_state: GameState,
+		payload: Dictionary = {}) -> Dictionary:
+	var clean: Dictionary = payload.duplicate(true)
+	var choices: Array[Dictionary] = status_ready_cost_choices(game_state)
+	clean[READY_COST_AFFORDANCE_KEY] = choices
+	clean["optional_status_rules"] = choices
+	return clean
+
+
+static func status_ready_cost_choices(game_state: GameState) -> Array[Dictionary]:
+	var choices: Array[Dictionary] = []
+	if not _is_status_ready_cost_window(game_state):
+		return choices
+	for source: Dictionary in _status_ready_cost_sources(game_state):
+		choices.append(_status_ready_cost_choice_payload(source))
+	return choices
+
+
+static func has_unresolved_status_ready_cost_choices(
+		game_state: GameState) -> bool:
+	return not status_ready_cost_choices(game_state).is_empty()
+
+
+static func validate_status_ready_cost(game_state: GameState,
+		player_index: int,
+		runtime_upgrade_id: String) -> String:
+	var source_result: Dictionary = _validate_status_ready_cost_source(
+			game_state, player_index, runtime_upgrade_id)
+	if not source_result.get("reason", "").is_empty():
+		return str(source_result.get("reason", ""))
+	var source: Dictionary = source_result.get("source", {})
+	var ship: ShipInstance = source.get("ship", null)
+	if ship == null or ship.command_tokens == null \
+			or not ship.command_tokens.has_token(Constants.CommandType.REPAIR):
+		return "Electronic Countermeasures ready cost requires a Repair token."
+	return ""
+
+
+static func validate_decline_status_ready_cost(game_state: GameState,
+		player_index: int,
+		runtime_upgrade_id: String) -> String:
+	var source_result: Dictionary = _validate_status_ready_cost_source(
+			game_state, player_index, runtime_upgrade_id)
+	if not source_result.get("reason", "").is_empty():
+		return str(source_result.get("reason", ""))
+	var source: Dictionary = source_result.get("source", {})
+	var ship: ShipInstance = source.get("ship", null)
+	if ship == null or ship.command_tokens == null \
+			or not ship.command_tokens.has_token(Constants.CommandType.REPAIR):
+		return "Electronic Countermeasures ready cost is not available."
+	return ""
+
+
+static func ready_status_cost(game_state: GameState,
+		runtime_upgrade_id: String) -> Dictionary:
+	var source: Dictionary = _status_ready_cost_source_by_id(
+			game_state, runtime_upgrade_id)
+	var ship: ShipInstance = source.get("ship", null)
+	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+	var spent: bool = ship.command_tokens.spend_token(Constants.CommandType.REPAIR)
+	var card_state: Dictionary = _dict_from(runtime_upgrade.get("card_state", {}))
+	card_state["exhausted"] = false
+	card_state["readied"] = true
+	runtime_upgrade["card_state"] = card_state
+	var guard: Dictionary = _status_ready_cost_guard(
+			game_state, source, "ready")
+	guard["spent_token"] = int(Constants.CommandType.REPAIR)
+	_write_status_ready_cost_guard(runtime_upgrade, guard)
+	_refresh_status_ready_cost_projection(game_state)
+	return {
+		"runtime_upgrade_id": runtime_upgrade_id,
+		"owner_player": int(source.get("owner_player", -1)),
+		"ship_index": int(source.get("ship_index", -1)),
+		"spent_token": int(Constants.CommandType.REPAIR),
+		"token_spent": spent,
+		"readied": true,
+		"status_ready_cost": guard,
+	}
+
+
+static func decline_status_ready_cost(game_state: GameState,
+		runtime_upgrade_id: String) -> Dictionary:
+	var source: Dictionary = _status_ready_cost_source_by_id(
+			game_state, runtime_upgrade_id)
+	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+	var guard: Dictionary = _status_ready_cost_guard(
+			game_state, source, "declined")
+	_write_status_ready_cost_guard(runtime_upgrade, guard)
+	_refresh_status_ready_cost_projection(game_state)
+	return {
+		"runtime_upgrade_id": runtime_upgrade_id,
+		"owner_player": int(source.get("owner_player", -1)),
+		"ship_index": int(source.get("ship_index", -1)),
+		"declined": true,
+		"status_ready_cost": guard,
+	}
+
+
+static func status_ready_cost_guard(runtime_upgrade: Dictionary) -> Dictionary:
+	var rule_state: Dictionary = _dict_from(runtime_upgrade.get("rule_state", {}))
+	return _dict_from(rule_state.get(RULE_STATE_STATUS_READY_COST, {}))
+
+
+static func clear_status_ready_cost_window_state(
+		game_state: GameState) -> Array[String]:
+	var cleared: Array[String] = []
+	if game_state == null:
+		return cleared
+	for player_index: int in range(game_state.player_states.size()):
+		var player_state: PlayerState = game_state.get_player_state(player_index)
+		if player_state == null:
+			continue
+		for ship_var: Variant in player_state.ships:
+			var ship: ShipInstance = ship_var as ShipInstance
+			if ship == null:
+				continue
+			for runtime_upgrade: Dictionary in ship.runtime_upgrades:
+				if str(runtime_upgrade.get("data_key", "")) != DATA_KEY:
+					continue
+				var rule_state: Dictionary = _dict_from(
+						runtime_upgrade.get("rule_state", {}))
+				if rule_state.has(RULE_STATE_STATUS_READY_COST):
+					rule_state.erase(RULE_STATE_STATUS_READY_COST)
+					runtime_upgrade["rule_state"] = rule_state
+					cleared.append(str(runtime_upgrade.get(
+							"runtime_upgrade_id", "")))
+	if game_state.interaction_flow != null:
+		game_state.interaction_flow.payload.erase(READY_COST_AFFORDANCE_KEY)
+		game_state.interaction_flow.payload.erase("optional_status_rules")
+	return cleared
+
+
+static func clear_stale_status_ready_cost_window_state(
+		game_state: GameState) -> Array[String]:
+	var cleared: Array[String] = []
+	if game_state == null:
+		return cleared
+	for player_index: int in range(game_state.player_states.size()):
+		var player_state: PlayerState = game_state.get_player_state(player_index)
+		if player_state == null:
+			continue
+		for ship_var: Variant in player_state.ships:
+			var ship: ShipInstance = ship_var as ShipInstance
+			if ship == null:
+				continue
+			for runtime_upgrade: Dictionary in ship.runtime_upgrades:
+				if str(runtime_upgrade.get("data_key", "")) != DATA_KEY:
+					continue
+				var guard: Dictionary = status_ready_cost_guard(runtime_upgrade)
+				if guard.is_empty():
+					continue
+				if int(guard.get("round", -1)) == game_state.current_round:
+					continue
+				var rule_state: Dictionary = _dict_from(
+						runtime_upgrade.get("rule_state", {}))
+				rule_state.erase(RULE_STATE_STATUS_READY_COST)
+				runtime_upgrade["rule_state"] = rule_state
+				cleared.append(str(runtime_upgrade.get(
+						"runtime_upgrade_id", "")))
+	return cleared
+
+
 static func clear_pending_authorization(runtime_upgrade: Dictionary) -> void:
 	var rule_state: Dictionary = _dict_from(runtime_upgrade.get("rule_state", {}))
 	rule_state.erase(RULE_STATE_PENDING_AUTHORIZATION)
@@ -535,6 +716,179 @@ static func _runtime_upgrade_ready(runtime_upgrade: Dictionary) -> bool:
 	var card_state: Dictionary = _dict_from(runtime_upgrade.get("card_state", {}))
 	return bool(card_state.get("readied", false)) \
 			and not bool(card_state.get("exhausted", false))
+
+
+static func _status_ready_cost_sources(game_state: GameState) -> Array[Dictionary]:
+	var sources: Array[Dictionary] = []
+	if game_state == null:
+		return sources
+	for player_index: int in range(game_state.player_states.size()):
+		var player_state: PlayerState = game_state.get_player_state(player_index)
+		if player_state == null:
+			continue
+		for ship_index: int in range(player_state.ships.size()):
+			var ship: ShipInstance = player_state.ships[ship_index] \
+					as ShipInstance
+			if ship == null or ship.is_destroyed():
+				continue
+			for runtime_upgrade: Dictionary in ship.runtime_upgrades:
+				if _is_status_ready_cost_available(
+						game_state, ship, runtime_upgrade):
+					sources.append({
+						"ship": ship,
+						"ship_index": ship_index,
+						"owner_player": player_index,
+						"runtime_upgrade": runtime_upgrade,
+					})
+	return sources
+
+
+static func _status_ready_cost_source_by_id(game_state: GameState,
+		runtime_upgrade_id: String) -> Dictionary:
+	for source: Dictionary in _status_ready_cost_sources(game_state):
+		var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+		if str(runtime_upgrade.get("runtime_upgrade_id", "")) \
+				== runtime_upgrade_id:
+			return source
+	return {}
+
+
+static func _find_status_ready_cost_source_by_id(game_state: GameState,
+		runtime_upgrade_id: String) -> Dictionary:
+	if game_state == null or runtime_upgrade_id.is_empty():
+		return {}
+	for player_index: int in range(game_state.player_states.size()):
+		var player_state: PlayerState = game_state.get_player_state(player_index)
+		if player_state == null:
+			continue
+		for ship_index: int in range(player_state.ships.size()):
+			var ship: ShipInstance = player_state.ships[ship_index] \
+					as ShipInstance
+			if ship == null or ship.is_destroyed():
+				continue
+			for runtime_upgrade: Dictionary in ship.runtime_upgrades:
+				if str(runtime_upgrade.get("runtime_upgrade_id", "")) \
+						== runtime_upgrade_id:
+					return {
+						"ship": ship,
+						"ship_index": ship_index,
+						"owner_player": player_index,
+						"runtime_upgrade": runtime_upgrade,
+					}
+	return {}
+
+
+static func _validate_status_ready_cost_source(game_state: GameState,
+		player_index: int,
+		runtime_upgrade_id: String) -> Dictionary:
+	if game_state == null:
+		return {"reason": "No active game state."}
+	if not _is_status_ready_cost_window(game_state):
+		return {"reason": "Electronic Countermeasures ready cost is not available now."}
+	if runtime_upgrade_id.is_empty():
+		return {"reason": "Missing Electronic Countermeasures source."}
+	var source: Dictionary = _find_status_ready_cost_source_by_id(
+			game_state, runtime_upgrade_id)
+	if source.is_empty():
+		return {"reason": "Electronic Countermeasures source not found."}
+	if int(source.get("owner_player", -1)) != player_index:
+		return {"reason": "Only the ECM owner may resolve the ready cost."}
+	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+	if str(runtime_upgrade.get("data_key", "")) != DATA_KEY:
+		return {"reason": "Electronic Countermeasures source mismatch."}
+	if not _runtime_upgrade_active(runtime_upgrade):
+		return {"reason": "Electronic Countermeasures is not active."}
+	var card_state: Dictionary = _dict_from(runtime_upgrade.get("card_state", {}))
+	if bool(card_state.get("readied", false)) \
+			or not bool(card_state.get("exhausted", false)):
+		return {"reason": "Electronic Countermeasures is already ready."}
+	if _has_status_ready_cost_guard_for_current_window(
+			game_state, runtime_upgrade):
+		return {"reason": "Electronic Countermeasures ready cost already resolved."}
+	return {"source": source, "reason": ""}
+
+
+static func _is_status_ready_cost_available(game_state: GameState,
+		ship: ShipInstance,
+		runtime_upgrade: Dictionary) -> bool:
+	if not _runtime_upgrade_active(runtime_upgrade):
+		return false
+	var card_state: Dictionary = _dict_from(runtime_upgrade.get("card_state", {}))
+	if bool(card_state.get("readied", false)) \
+			or not bool(card_state.get("exhausted", false)):
+		return false
+	if _has_status_ready_cost_guard_for_current_window(
+			game_state, runtime_upgrade):
+		return false
+	return ship.command_tokens != null \
+			and ship.command_tokens.has_token(Constants.CommandType.REPAIR)
+
+
+static func _has_status_ready_cost_guard_for_current_window(
+		game_state: GameState,
+		runtime_upgrade: Dictionary) -> bool:
+	var guard: Dictionary = status_ready_cost_guard(runtime_upgrade)
+	if guard.is_empty():
+		return false
+	return int(guard.get("round", -1)) == game_state.current_round
+
+
+static func _status_ready_cost_choice_payload(source: Dictionary) -> Dictionary:
+	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+	return {
+		"rule_id": "%s.status_ready_cost" % RULE_ID,
+		"runtime_upgrade_id": str(runtime_upgrade.get("runtime_upgrade_id", "")),
+		"source_data_key": DATA_KEY,
+		"owner_player": int(source.get("owner_player", -1)),
+		"ship_index": int(source.get("ship_index", -1)),
+		"source_ship_ref": str(runtime_upgrade.get("source_ship_ref", "")),
+		"prompt": "Spend 1 Repair token to ready Electronic Countermeasures?",
+		"accepted_command": "ready_ecm",
+		"decline_command": "decline_ecm_ready",
+	}
+
+
+static func _status_ready_cost_guard(game_state: GameState,
+		source: Dictionary,
+		status: String) -> Dictionary:
+	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
+	return {
+		"runtime_upgrade_id": str(runtime_upgrade.get("runtime_upgrade_id", "")),
+		"round": game_state.current_round,
+		"owner_player": int(source.get("owner_player", -1)),
+		"ship_index": int(source.get("ship_index", -1)),
+		"source_ship_ref": str(runtime_upgrade.get("source_ship_ref", "")),
+		"status": status,
+	}
+
+
+static func _write_status_ready_cost_guard(runtime_upgrade: Dictionary,
+		guard: Dictionary) -> void:
+	var rule_state: Dictionary = _dict_from(runtime_upgrade.get("rule_state", {}))
+	rule_state[RULE_STATE_STATUS_READY_COST] = guard.duplicate(true)
+	runtime_upgrade["rule_state"] = rule_state
+
+
+static func _refresh_status_ready_cost_projection(game_state: GameState) -> void:
+	if game_state == null or game_state.interaction_flow == null:
+		return
+	if game_state.interaction_flow.flow_type \
+			!= Constants.InteractionFlow.STATUS_CLEANUP:
+		return
+	if game_state.interaction_flow.step_id \
+			!= Constants.InteractionStep.STATUS_CLEANUP_STEP:
+		return
+	game_state.interaction_flow.payload = decorate_status_ready_cost_payload(
+			game_state, game_state.interaction_flow.payload)
+
+
+static func _is_status_ready_cost_window(game_state: GameState) -> bool:
+	if game_state == null or game_state.current_phase != Constants.GamePhase.STATUS:
+		return false
+	var flow: InteractionFlow = game_state.interaction_flow
+	return flow != null \
+			and flow.flow_type == Constants.InteractionFlow.STATUS_CLEANUP \
+			and flow.step_id == Constants.InteractionStep.STATUS_CLEANUP_STEP
 
 
 static func _runtime_upgrade_active(runtime_upgrade: Dictionary) -> bool:

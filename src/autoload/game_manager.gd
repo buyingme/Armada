@@ -25,6 +25,12 @@ const UseECMCommandScript: GDScript = preload(
 		"res://src/core/commands/use_ecm_command.gd")
 const DeclineECMCommandScript: GDScript = preload(
 		"res://src/core/commands/decline_ecm_command.gd")
+const ReadyECMCommandScript: GDScript = preload(
+		"res://src/core/commands/ready_ecm_command.gd")
+const DeclineECMReadyCommandScript: GDScript = preload(
+		"res://src/core/commands/decline_ecm_ready_command.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 const SETUP_MATCH_OPTIONS_SCRIPT: GDScript = preload(
 		"res://src/core/setup/setup_match_options.gd")
 
@@ -1266,6 +1272,47 @@ func submit_decline_ecm(ship: ShipInstance,
 	return _submitter.submit(cmd)
 
 
+## Submits a [ReadyECMCommand] for the Status Phase ECM ready cost.
+func submit_ready_ecm(ship: ShipInstance,
+		runtime_upgrade_id: String) -> Dictionary:
+	if not current_game_state or ship == null:
+		return {}
+	return submit_ready_ecm_runtime(ship.owner_player, runtime_upgrade_id)
+
+
+## Submits a [ReadyECMCommand] for a projected Status Phase ECM choice.
+func submit_ready_ecm_runtime(owner_player: int,
+		runtime_upgrade_id: String) -> Dictionary:
+	var cmd: GameCommand = ReadyECMCommandScript.new(owner_player,
+			{"runtime_upgrade_id": runtime_upgrade_id})
+	return _submit_status_ready_cost_choice(cmd)
+
+
+## Submits a [DeclineECMReadyCommand] for the Status Phase ECM ready cost.
+func submit_decline_ecm_ready(ship: ShipInstance,
+		runtime_upgrade_id: String) -> Dictionary:
+	if not current_game_state or ship == null:
+		return {}
+	return submit_decline_ecm_ready_runtime(
+			ship.owner_player, runtime_upgrade_id)
+
+
+## Submits a [DeclineECMReadyCommand] for a projected Status Phase ECM choice.
+func submit_decline_ecm_ready_runtime(owner_player: int,
+		runtime_upgrade_id: String) -> Dictionary:
+	var cmd: GameCommand = DeclineECMReadyCommandScript.new(owner_player,
+			{"runtime_upgrade_id": runtime_upgrade_id})
+	return _submit_status_ready_cost_choice(cmd)
+
+
+func _submit_status_ready_cost_choice(command: GameCommand) -> Dictionary:
+	if not current_game_state or command == null:
+		return {}
+	var result: Dictionary = _submitter.submit(command)
+	_maybe_start_round_after_status_ready_cost(result)
+	return result
+
+
 ## Submits a [CommitDefenseCommand] from the defender peer when the
 ## player presses [i]Commit Defense[/i] on the [AttackPanelMirror].
 ## Phase I6b-3 R2 — closes NW-006.
@@ -1895,6 +1942,9 @@ func _begin_status_phase() -> void:
 	if _is_network_client():
 		return
 	_perform_status_phase_cleanup()
+	if ECM_SCRIPT.has_unresolved_status_ready_cost_choices(current_game_state):
+		_log.info("Status Phase: waiting for optional ECM ready-cost choices.")
+		return
 	advance_phase()
 
 
@@ -1929,6 +1979,20 @@ func _perform_status_phase_cleanup() -> void:
 
 	_log.info("Status Phase: cleanup complete. Initiative stays with player %d." % [
 			current_game_state.initiative_player])
+
+
+func _maybe_start_round_after_status_ready_cost(result: Dictionary) -> void:
+	if result.is_empty() or not current_game_state:
+		return
+	if bool(result.get("awaiting_remote", false)):
+		return
+	if current_game_state.current_phase != Constants.GamePhase.STATUS:
+		return
+	if ECM_SCRIPT.has_unresolved_status_ready_cost_choices(current_game_state):
+		return
+	if _is_network_client():
+		return
+	advance_phase()
 
 
 ## Returns true if a RuleRegistry command-token gain blocker rejects
@@ -2154,6 +2218,8 @@ func _handle_remote_command_effects(
 			_handle_remote_use_ecm(result)
 		"decline_ecm":
 			pass
+		"ready_ecm", "decline_ecm_ready":
+			_handle_remote_ecm_ready_cost(result)
 		"commit_defense":
 			# Phase I6b-3 R2: marker command — attacker peer's
 			# AttackExecutor reacts via command_executed.  No
@@ -2474,6 +2540,19 @@ func _handle_remote_use_ecm(result: Dictionary) -> void:
 			int(result.get("defender_ship_index", -1)))
 	if ship:
 		EventBus.ship_defense_token_changed.emit(ship)
+
+
+func _handle_remote_ecm_ready_cost(result: Dictionary) -> void:
+	if current_game_state == null:
+		return
+	var ship: ShipInstance = current_game_state.get_ship(
+			int(result.get("owner_player", -1)),
+			int(result.get("ship_index", -1)))
+	if ship == null:
+		return
+	if bool(result.get("token_spent", false)):
+		EventBus.command_tokens_changed.emit(ship)
+	EventBus.ship_defense_token_changed.emit(ship)
 
 
 ## Phase I6b-3 R4 follow-up: refresh the defender's shield pip overlay

@@ -14,6 +14,8 @@ const KEY_ALLOWED: String = "allowed"
 const KEY_REASON: String = "reason"
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 static var _DECLARATIONS: Dictionary = {
 	"assign_dials": {KEY_SCOPE: Constants.CommandScope.PHASE,
@@ -35,6 +37,12 @@ static var _DECLARATIONS: Dictionary = {
 					Constants.GamePhase.SQUADRON]},
 	"status_phase_cleanup": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.STATUS]},
+	"ready_ecm": {KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.STATUS_CLEANUP,
+					Constants.InteractionStep.STATUS_CLEANUP_STEP)]},
+	"decline_ecm_ready": {KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.STATUS_CLEANUP,
+					Constants.InteractionStep.STATUS_CLEANUP_STEP)]},
 	"debug_deal_damage": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
 	"destroy_unit": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
 	"publish_attack_flow": {KEY_SCOPE: Constants.CommandScope.GLOBAL},
@@ -140,7 +148,8 @@ static func all_command_types() -> Array[String]:
 ## The result is structured for CommandProcessor rejection diagnostics.
 static func check_command(command_type: String,
 		phase: Constants.GamePhase,
-		interaction_flow: InteractionFlow) -> Dictionary:
+		interaction_flow: InteractionFlow,
+		game_state: GameState = null) -> Dictionary:
 	var declaration: Dictionary = get_declaration(command_type)
 	if declaration.is_empty():
 		return _denied_result(
@@ -148,6 +157,10 @@ static func check_command(command_type: String,
 	if _tarkin_prompt_blocks(command_type, interaction_flow):
 		return _denied_result(
 				"command %s blocked by unresolved Grand Moff Tarkin prompt"
+				% command_type)
+	if _status_ready_cost_blocks(command_type, phase, game_state):
+		return _denied_result(
+				"command %s blocked by unresolved ECM ready-cost choice"
 				% command_type)
 	match int(declaration.get(KEY_SCOPE, -1)):
 		Constants.CommandScope.GLOBAL:
@@ -237,6 +250,18 @@ static func _tarkin_prompt_blocks(command_type: String,
 	return interaction_flow.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION \
 			and interaction_flow.step_id \
 					== Constants.InteractionStep.TARKIN_COMMAND_CHOICE
+
+
+static func _status_ready_cost_blocks(command_type: String,
+		phase: Constants.GamePhase,
+		game_state: GameState) -> bool:
+	if command_type != "start_round":
+		return false
+	if phase != Constants.GamePhase.STATUS:
+		return false
+	if game_state == null:
+		return false
+	return ECM_SCRIPT.has_unresolved_status_ready_cost_choices(game_state)
 
 
 static func _declares_flow_step(command_type: String,

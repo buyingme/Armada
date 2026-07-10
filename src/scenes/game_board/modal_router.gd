@@ -10,12 +10,15 @@
 class_name ModalRouter
 extends Node
 
+const ECM_READY_COST_MODAL_SCRIPT: GDScript = preload(
+		"res://src/ui/upgrades/ecm_ready_cost_modal.gd")
 
 var _panel_mgr: UIPanelManager = null
 var _attack_panel_controller: AttackPanelController = null
 var _ship_activation_controller: ShipActivationController = null
 var _displacement_controller: DisplacementController = null
 var _tarkin_choice_modal: TarkinChoiceModal = null
+var _ecm_ready_cost_modal: Variant = null
 var _activation_ctx: ActivationContext = null
 var _find_ship_token_fn: Callable
 var _find_squadron_token_fn: Callable
@@ -93,6 +96,7 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, local: int, command: GameCommand) -> void:
 	_drive_tarkin_choice_modal(intent)
+	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
 	_sync_attack_panel_mirror(game_state, local)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
@@ -121,6 +125,50 @@ func _ensure_tarkin_choice_modal() -> TarkinChoiceModal:
 	_panel_mgr.register_resizable(
 			_tarkin_choice_modal, &"centre_on_screen", true)
 	return _tarkin_choice_modal
+
+
+func _drive_ecm_ready_cost_modal(intent: UIProjector.UIIntent) -> void:
+	if intent.modal_kind != Constants.ModalKind.STATUS_CLEANUP \
+			or not _has_ecm_ready_cost_choices(intent):
+		if _ecm_ready_cost_modal != null:
+			_ecm_ready_cost_modal.close()
+		return
+	var modal: Variant = _ensure_ecm_ready_cost_modal()
+	modal.open_from_intent(intent, NetworkManager.get_local_player_index())
+
+
+func _has_ecm_ready_cost_choices(intent: UIProjector.UIIntent) -> bool:
+	var raw: Variant = intent.payload.get("ecm_ready_cost_choices",
+			intent.payload.get("optional_status_rules", []))
+	if raw is Array and not (raw as Array).is_empty():
+		return _has_ready_ecm_choice(raw as Array)
+	raw = intent.affordances.get("ecm_ready_cost_choices",
+			intent.affordances.get("optional_status_rules", []))
+	return raw is Array and _has_ready_ecm_choice(raw as Array)
+
+
+func _has_ready_ecm_choice(raw_choices: Array) -> bool:
+	for entry: Variant in raw_choices:
+		if entry is Dictionary \
+				and str((entry as Dictionary).get("accepted_command", "")) \
+						== "ready_ecm":
+			return true
+	return false
+
+
+func _ensure_ecm_ready_cost_modal() -> Variant:
+	if _ecm_ready_cost_modal != null:
+		return _ecm_ready_cost_modal
+	_ecm_ready_cost_modal = ECM_READY_COST_MODAL_SCRIPT.new()
+	_ecm_ready_cost_modal.name = "ECMReadyCostModal"
+	_ecm_ready_cost_modal.ready_submitted.connect(_on_ecm_ready_submitted)
+	_ecm_ready_cost_modal.decline_submitted.connect(_on_ecm_ready_declined)
+	var parent: Node = _panel_mgr.turn_management_layer \
+			if _panel_mgr.turn_management_layer != null else _panel_mgr
+	parent.add_child(_ecm_ready_cost_modal)
+	_panel_mgr.register_resizable(
+			_ecm_ready_cost_modal, &"centre_on_screen", true)
+	return _ecm_ready_cost_modal
 
 
 func _drive_displacement_modal(intent: UIProjector.UIIntent,
@@ -312,6 +360,21 @@ func _tarkin_controller() -> int:
 	if game_state == null or game_state.interaction_flow == null:
 		return -1
 	return game_state.interaction_flow.controller_player
+
+
+func _on_ecm_ready_submitted(runtime_upgrade_id: String,
+		owner_player: int) -> void:
+	if owner_player < 0:
+		return
+	GameManager.submit_ready_ecm_runtime(owner_player, runtime_upgrade_id)
+
+
+func _on_ecm_ready_declined(runtime_upgrade_id: String,
+		owner_player: int) -> void:
+	if owner_player < 0:
+		return
+	GameManager.submit_decline_ecm_ready_runtime(owner_player,
+			runtime_upgrade_id)
 
 
 func _is_network_peer() -> bool:

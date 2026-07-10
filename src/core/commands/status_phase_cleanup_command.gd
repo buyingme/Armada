@@ -18,6 +18,9 @@ extends GameCommand
 
 
 const TARGET_DEFENSE_TOKEN_READYING: String = "defense_token_readying"
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -59,8 +62,26 @@ func execute(game_state: GameState) -> Dictionary:
 			continue
 		_cleanup_ships(game_state, ps, result)
 		_cleanup_squadrons(ps, result)
+	ECM_SCRIPT.clear_stale_status_ready_cost_window_state(game_state)
+	_enter_status_ready_cost_flow(game_state, result)
 
 	return result
+
+
+func _enter_status_ready_cost_flow(game_state: GameState,
+		result: Dictionary) -> void:
+	var payload: Dictionary = ECM_SCRIPT.decorate_status_ready_cost_payload(
+			game_state, {"status_phase_cleanup_complete": true})
+	result["optional_status_rules"] = payload.get("optional_status_rules", [])
+	result[ECM_SCRIPT.READY_COST_AFFORDANCE_KEY] = payload.get(
+			ECM_SCRIPT.READY_COST_AFFORDANCE_KEY, [])
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.STATUS_CLEANUP,
+			Constants.InteractionStep.STATUS_CLEANUP_STEP,
+			game_state,
+			{},
+			Constants.Visibility.ALL,
+			payload)
 
 
 ## Process ships for one player.  Mutates [param result] counters.

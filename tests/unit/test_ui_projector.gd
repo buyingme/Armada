@@ -123,13 +123,13 @@ func test_opponent_viewer_sees_waiting() -> void:
 	assert_eq(intent.controller_player, 0)
 
 
-func test_controller_minus_one_returns_empty_status() -> void:
-	# Some flows (e.g. STATUS_CLEANUP) have no human controller.
-	var gs: GameState = _make_state_with_flow(
-			Constants.InteractionFlow.STATUS_CLEANUP, -1)
+func test_status_cleanup_either_player_surface_is_interactive() -> void:
+	var gs: GameState = _make_state_with_flow_step(
+			Constants.InteractionFlow.STATUS_CLEANUP,
+			Constants.InteractionStep.STATUS_CLEANUP_STEP, -1)
 	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
-	assert_eq(intent.hud_status_text, "")
-	assert_false(intent.is_interactive)
+	assert_eq(intent.hud_status_text, "make your choices")
+	assert_true(intent.is_interactive)
 
 
 # ---------------------------------------------------------------------------

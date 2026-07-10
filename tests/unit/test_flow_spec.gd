@@ -191,19 +191,23 @@ func test_resolve_controller_player_either_player_context_returns_player() -> vo
 			"EITHER_PLAYER should resolve when the caller supplies a local player.")
 
 
-func test_resolve_controller_player_none_and_system_return_unresolved() -> void:
+func test_resolve_controller_player_none_returns_unresolved() -> void:
 	var none_controller: int = FlowSpecScript.resolve_controller_player(
 			Constants.InteractionFlow.NONE,
 			Constants.InteractionStep.NONE,
 			null,
 			{"active_player": 0})
-	var system_controller: int = FlowSpecScript.resolve_controller_player(
+	assert_eq(none_controller, -1, "NONE role should resolve to -1.")
+
+
+func test_resolve_controller_player_status_cleanup_accepts_either_player_context() -> void:
+	var controller: int = FlowSpecScript.resolve_controller_player(
 			Constants.InteractionFlow.STATUS_CLEANUP,
 			Constants.InteractionStep.STATUS_CLEANUP_STEP,
 			null,
-			{"active_player": 0})
-	assert_eq(none_controller, -1, "NONE role should resolve to -1.")
-	assert_eq(system_controller, -1, "SYSTEM role should resolve to -1.")
+			{"viewer_player": 1})
+	assert_eq(controller, 1,
+			"STATUS_CLEANUP should resolve an either-player controller context.")
 
 
 func test_resolve_controller_player_missing_context_returns_minus_one() -> void:

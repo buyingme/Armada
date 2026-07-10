@@ -65,6 +65,10 @@ const UPGRADE_FILES: Array[String] = [
 	"upgrades/weapon_team/gunnery_team.json",
 ]
 
+const UPGRADE_STATUS_OVERRIDES: Dictionary = {
+	"upgrades/commander/grand_moff_tarkin.json": "INTEGRATED",
+}
+
 const OBSTACLE_FILES: Array[String] = [
 	"obstacles/asteroid_1.json",
 	"obstacles/asteroid_2.json",
@@ -133,8 +137,10 @@ func test_upgrade_records_have_required_fb1_metadata_expected() -> void:
 		assert_eq(record.get("kind", ""), "upgrade_card",
 			"%s should be an upgrade_card record" % file_path)
 		var rules_integration: Dictionary = record.get("rules_integration", {})
-		assert_eq(rules_integration.get("status", ""), "NOT_INTEGRATED",
-			"%s upgrade rules should remain marked not integrated" % file_path)
+		var expected_status: String = str(UPGRADE_STATUS_OVERRIDES.get(
+				file_path, "NOT_INTEGRATED"))
+		assert_eq(rules_integration.get("status", ""), expected_status,
+			"%s upgrade rules should match the accepted integration status" % file_path)
 
 
 func test_obstacle_records_have_required_fb3_metadata_expected() -> void:

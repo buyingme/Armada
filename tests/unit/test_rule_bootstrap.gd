@@ -5,6 +5,7 @@ extends GutTest
 
 
 const RuleBootstrapScript: GDScript = preload("res://src/autoload/rule_bootstrap.gd")
+const ECM_RULE_ID: String = "upgrade.electronic_countermeasures"
 
 
 func before_each() -> void:
@@ -100,12 +101,16 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.MANEUVER_STEP,
 			RuleSurface.COMMAND_EXECUTE_MANEUVER)
+	var ecm_status_enablers: Array[FlowHook] = RuleRegistry.enablers_for(
+			Constants.InteractionFlow.STATUS_CLEANUP,
+			Constants.InteractionStep.STATUS_CLEANUP_STEP,
+			"status_ready_upgrade_card")
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
 	assert_eq(registered, 23,
 			"Bootstrap should invoke all twenty-three production rule scripts.")
-	assert_eq(RuleRegistry.registered_hook_count(), 40,
+	assert_eq(RuleRegistry.registered_hook_count(), 41,
 			"Bootstrap should clear stale hooks before registering rules.")
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
@@ -155,3 +160,7 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 			"Thrust Control Malfunction should expose one yaw modifier.")
 	assert_eq(maneuver_observers.size(), 3,
 			"Three movement damage cards should observe execute_maneuver.")
+	assert_eq(ecm_status_enablers.size(), 1,
+			"Electronic Countermeasures should expose one status ready-cost enabler.")
+	assert_eq(ecm_status_enablers[0].rule_id, ECM_RULE_ID,
+			"ECM status ready-cost enabler should carry the ECM rule id.")

@@ -17,13 +17,16 @@
 class_name CommandRouterAdapter
 extends Node
 
+const MODAL_ROUTER_SCRIPT: GDScript = preload(
+		"res://src/scenes/game_board/modal_router.gd")
+
 # ---------------------------------------------------------------------------
 # Injected dependencies
 # ---------------------------------------------------------------------------
 
 var _attack_panel_controller: AttackPanelController = null
 var _debug_controller: DebugController = null
-var _modal_router: ModalRouter = null
+var _modal_router: Node = null
 var _find_ship_token_fn: Callable = Callable()
 
 
@@ -65,7 +68,7 @@ func _create_modal_router(
 		activation_ctx: ActivationContext,
 		find_ship_token_fn: Callable,
 		find_squadron_token_fn: Callable) -> void:
-	_modal_router = ModalRouter.new()
+	_modal_router = MODAL_ROUTER_SCRIPT.new()
 	_modal_router.name = "ModalRouter"
 	add_child(_modal_router)
 	_modal_router.initialize(

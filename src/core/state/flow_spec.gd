@@ -246,9 +246,10 @@ const _SPEC: Dictionary = {
 	},
 	Constants.InteractionFlow.STATUS_CLEANUP: {
 		Constants.InteractionStep.STATUS_CLEANUP_STEP: {
-			"controller_role": Constants.ControllerRole.SYSTEM,
+			"controller_role": Constants.ControllerRole.EITHER_PLAYER,
 			"modals": [Constants.ModalKind.STATUS_CLEANUP],
-			"allowed_commands": ["status_phase_cleanup", "start_round"],
+			"allowed_commands": ["status_phase_cleanup", "ready_ecm",
+					"decline_ecm_ready", "start_round"],
 			"transitions": {"start_round": "COMMAND_PHASE/SELECT_DIALS"},
 			"source": SOURCE_PROJECTION_ONLY,
 			"rule_citation": "RRG Status Phase, p.6; ST-001/ST-004.",

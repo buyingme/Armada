@@ -162,7 +162,7 @@ func can_spend_defense_token(defender_speed: int) -> bool:
 After editing source or test files, always run the full suite **and** the Phase K lint, and confirm both the script count and the pass count, plus zero lint violations:
 
 ```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+./scripts/run_tests.sh
 bash scripts/lint_phase_k.sh
 ```
 
@@ -255,7 +255,7 @@ When asked to implement a feature or fix a bug:
 8. **Wire up the presentation** — `src/scenes/` connects to core via EventBus
 9. **Verify** — Run tests **and** the Phase K lint and confirm: 0 failures, expected script count, no parse errors, lint exit 0:
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+   ./scripts/run_tests.sh
    bash scripts/lint_phase_k.sh
    ```
    The lint must report `0 violations` (allow-listed branches are fine). If it fails, fix before continuing — never silence it by editing the allow-list count without explicit approval.

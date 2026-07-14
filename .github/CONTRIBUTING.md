@@ -93,13 +93,16 @@ A feature/fix is considered done when:
 
 ```bash
 # Run all tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
+./scripts/run_tests.sh
 
 # Run only unit tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit
+./scripts/run_tests.sh unit
 
 # Run only integration tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
+./scripts/run_tests.sh integration
+
+# Run a single test file
+./scripts/run_tests.sh -f tests/unit/test_dice.gd
 ```
 
 ---

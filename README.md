@@ -73,13 +73,16 @@ godot project.godot
 
 ```bash
 # All tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
+./scripts/run_tests.sh
 
 # Unit tests only
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit
+./scripts/run_tests.sh unit
 
 # Integration tests only
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
+./scripts/run_tests.sh integration
+
+# Single test file
+./scripts/run_tests.sh -f tests/unit/test_dice.gd
 ```
 
 Or use the GUT panel in the Godot editor.

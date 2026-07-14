@@ -181,18 +181,24 @@ stub(dice_double, "roll_die").to_return(Constants.DiceFace.HIT)
 
 ## Running Tests
 
+Use `./scripts/run_tests.sh` as the canonical CLI entry point for the GUT
+suite. `./scripts/test.sh` remains available as a compatibility alias.
+
 ```bash
 # All tests
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+./scripts/run_tests.sh
 
 # Unit tests only
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit
+./scripts/run_tests.sh unit
 
 # Integration tests only
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit
+./scripts/run_tests.sh integration
 
 # Single test file
-godot --headless -s addons/gut/gut_cmdln.gd -gtest=res://tests/unit/test_dice.gd -gexit
+./scripts/run_tests.sh -f tests/unit/test_dice.gd
+
+# Replay/baseline verification is a separate gate, not part of GUT
+./scripts/run_baseline_traces.sh --all
 ```
 
 ## Test Count Verification (Critical)
@@ -226,7 +232,7 @@ Symptom: Test total drops unexpectedly (e.g. 274 → 260 with "0 failed").
 Run the full test suite **and** the Phase K lint, and check both outputs:
 
 ```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | tail -20
+./scripts/run_tests.sh
 bash scripts/lint_phase_k.sh
 ```
 

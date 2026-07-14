@@ -39,7 +39,7 @@
 {"command_type":"activate_squadron","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":37}
 {"command_type":"move_squadron","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":38}
 {"command_type":"advance_phase","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":39}
-{"command_type":"status_phase_cleanup","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":40}
+{"command_type":"status_phase_cleanup","flow_controller":-1,"flow_flow_type":5,"flow_step_id":22,"seq":40}
 {"command_type":"start_round","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":41}
 {"command_type":"assign_dials","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":42}
 {"command_type":"assign_dials","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":43}
@@ -101,7 +101,7 @@
 {"command_type":"activate_squadron","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":99}
 {"command_type":"move_squadron","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":100}
 {"command_type":"advance_phase","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":101}
-{"command_type":"status_phase_cleanup","flow_controller":1,"flow_flow_type":3,"flow_step_id":13,"seq":102}
+{"command_type":"status_phase_cleanup","flow_controller":-1,"flow_flow_type":5,"flow_step_id":22,"seq":102}
 {"command_type":"start_round","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":103}
 {"command_type":"assign_dials","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":104}
 {"command_type":"assign_dials","flow_controller":0,"flow_flow_type":1,"flow_step_id":1,"seq":105}

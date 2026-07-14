@@ -1,6 +1,6 @@
 # MA-TW-001: Cross-Consumer Timing-Window Implementation Synthesis
 
-Status: Draft
+Status: Accepted
 Purpose: Migration Synthesis
 Consumer: ECM, Grand Moff Tarkin, and H9 timing-window consumers
 Authority:

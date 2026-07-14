@@ -1,4 +1,4 @@
-Status: Draft
+Status: Accepted
 Purpose: Migration Assessment
 Consumer: Electronic Countermeasures
 Authority:

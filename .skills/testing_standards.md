@@ -185,7 +185,7 @@ Use `./scripts/run_tests.sh` as the canonical CLI entry point for the GUT
 suite. `./scripts/test.sh` remains available as a compatibility alias.
 
 ```bash
-# All tests
+# All tests, normal local development
 ./scripts/run_tests.sh
 
 # Unit tests only
@@ -199,6 +199,24 @@ suite. `./scripts/test.sh` remains available as a compatibility alias.
 
 # Replay/baseline verification is a separate gate, not part of GUT
 ./scripts/run_baseline_traces.sh --all
+```
+
+Restricted Codex sandbox environments may need an isolated repository-local
+`HOME` so Godot can write `user://` data without using the real user directory.
+Use this only for restricted automation; normal local development should not
+need it. Do not use `HOME="$PWD"` because that can write generated user-data
+artifacts into the repository root. The `.codex-home/` directory is ignored by
+Git.
+
+```bash
+mkdir -p .codex-home && HOME="$PWD/.codex-home" ./scripts/run_tests.sh
+```
+
+When restricted automation also needs the replay baseline gate, use the same
+isolated `HOME` pattern:
+
+```bash
+mkdir -p .codex-home && HOME="$PWD/.codex-home" ./scripts/run_baseline_traces.sh --all
 ```
 
 ## Test Count Verification (Critical)

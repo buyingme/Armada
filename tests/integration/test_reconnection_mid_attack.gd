@@ -16,6 +16,9 @@
 extends GutTest
 
 
+const TimingWindowStateScript: GDScript = preload(
+		"res://src/core/state/timing_window_state.gd")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -159,3 +162,37 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 			"No active flow: no modal renders.")
 	assert_false(intent.is_interactive,
 			"No active flow: nothing is interactive.")
+
+
+func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
+	var server_state: GameState = _server_state_mid_attack()
+	assert_true(server_state.set_timing_window_state(_make_active_timing_window(
+			"attack_defense_tokens",
+			"spend_defense_tokens",
+			"tw-reconnect-001",
+			1,
+			{"continuation_id": "commit_defense"})),
+			"GameState should accept valid timing-window lifecycle state")
+
+	var raw: Dictionary = server_state.serialize()
+	var filtered: Dictionary = StateFilter.filter_for_player(raw, 1)
+	var client_state: GameState = GameState.deserialize(filtered)
+
+	assert_not_null(client_state,
+			"Filtered reconnect snapshot should deserialize")
+	assert_true(client_state.timing_window_state.equals(
+			server_state.timing_window_state),
+			"Reconnect snapshot should preserve timing-window lifecycle state")
+
+
+func _make_active_timing_window(
+		window_id: String,
+		stage: String,
+		lifecycle_id: String,
+		controller: int,
+		continuation: Dictionary):
+	var state = TimingWindowStateScript.new()
+	assert_true(state.configure_active(
+			window_id, stage, lifecycle_id, controller, continuation),
+			"Test helper should build valid timing-window state")
+	return state

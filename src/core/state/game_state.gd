@@ -7,6 +7,9 @@ class_name GameState
 extends RefCounted
 
 
+const TIMING_WINDOW_STATE: GDScript = preload(
+		"res://src/core/state/timing_window_state.gd")
+
 ## The current round number (1-based, max defined by Constants.MAX_ROUNDS).
 var current_round: int = 0
 
@@ -36,10 +39,23 @@ var rng: GameRng = null
 ## [method initialize].  See [code]docs/refactoring_phase_i_plan.md[/code].
 var interaction_flow: InteractionFlow = InteractionFlow.new()
 
+## Authoritative timing-window lifecycle state.
+## Slice 1 stores lifecycle identity only. InteractionFlow remains a
+## non-authoritative legacy/presentation surface for timing-window lifecycle.
+var _timing_window_state: TimingWindowState = null
+
+var timing_window_state: TimingWindowState:
+	get:
+		return _timing_window_state
+
 ## Per-round count of ship-targeting attacks performed by each ship.
 ## Keys are `round:owner_player:ship_index`; values are ints.
 ## Used by Coolant Discharge and serialized for save/replay determinism.
 var ship_target_attack_counts: Dictionary = {}
+
+
+func _init() -> void:
+	_timing_window_state = _new_timing_window_state()
 
 
 ## Initializes a new game state with default values.
@@ -50,6 +66,7 @@ func initialize() -> void:
 	if rng == null:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
+	_timing_window_state = _new_timing_window_state()
 	objectives.clear()
 	ship_target_attack_counts.clear()
 	player_states.clear()
@@ -158,6 +175,8 @@ func serialize() -> Dictionary:
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
 		"rng": rng.serialize() if rng else {},
 		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
+		"timing_window_state": _timing_window_state.serialize()
+				if _timing_window_state else _new_timing_window_state().serialize(),
 		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
 	}
 	for player_state: PlayerState in player_states:
@@ -191,7 +210,29 @@ static func deserialize(data: Dictionary) -> GameState:
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
 	else:
 		state.interaction_flow = InteractionFlow.new()
+	if data.has("timing_window_state"):
+		var timing_state = _new_timing_window_state()
+		if not timing_state.load_from_serialized(
+				data.get("timing_window_state")):
+			return null
+		state._timing_window_state = timing_state
+	else:
+		state._timing_window_state = _new_timing_window_state()
 	return state
+
+
+func set_timing_window_state(value: TimingWindowState) -> bool:
+	if value == null or not value.is_valid():
+		return false
+	var replacement: TimingWindowState = _new_timing_window_state()
+	if not replacement.load_from_serialized(value.serialize()):
+		return false
+	_timing_window_state = replacement
+	return true
+
+
+static func _new_timing_window_state():
+	return TIMING_WINDOW_STATE.new()
 
 
 static func _deserialize_attack_counts(raw_counts: Variant) -> Dictionary:

@@ -8,6 +8,8 @@ extends GutTest
 
 const SaveManagerScript: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
+const TimingWindowStateScript: GDScript = preload(
+		"res://src/core/state/timing_window_state.gd")
 const TEST_SAVE: String = "_gut_j2_round_trip"
 
 const SHIP_KEY_CR90: String = "cr90_corvette_a"
@@ -164,6 +166,48 @@ func test_save_load_round_trip_preserves_fleet() -> void:
 	for ship: Variant in loaded.player_states[0].ships:
 		assert_not_null((ship as ShipInstance).ship_data,
 				"Loaded ship template should be re-resolved")
+
+
+func test_timing_window_state_does_not_absorb_runtime_upgrade_rule_state() -> void:
+	var gs: GameState = _make_populated_state()
+	assert_true(gs.set_timing_window_state(_make_active_timing_window(
+			"attack_defense_tokens",
+			"spend_defense_tokens",
+			"tw-runtime-001",
+			1,
+			{"continuation_id": "commit_defense"})),
+			"GameState should accept valid timing-window lifecycle state")
+	var ship: ShipInstance = gs.player_states[0].ships[0] as ShipInstance
+	ship.roster_entry_id = "p0-cr90"
+	var runtime_upgrade: Dictionary = ship.add_runtime_upgrade(
+			"electronic_countermeasures",
+			"upgrade-ecm-1",
+			"DEFENSIVE_RETROFIT",
+			0)
+	runtime_upgrade["rule_state"] = {"pending_authorization": {"token": 1}}
+
+	var restored: GameState = GameState.deserialize(gs.serialize())
+	var restored_ship: ShipInstance = restored.player_states[0].ships[0]
+	var restored_upgrade: Dictionary = restored_ship.runtime_upgrades[0]
+
+	assert_eq(restored_upgrade["rule_state"],
+			{"pending_authorization": {"token": 1}},
+			"Runtime upgrade rule_state should round-trip on its owner")
+	assert_false(restored.timing_window_state.serialize().has("rule_state"),
+			"TimingWindowState must not copy rule-specific mutable state")
+
+
+func _make_active_timing_window(
+		window_id: String,
+		stage: String,
+		lifecycle_id: String,
+		controller: int,
+		continuation: Dictionary):
+	var state = TimingWindowStateScript.new()
+	assert_true(state.configure_active(
+			window_id, stage, lifecycle_id, controller, continuation),
+			"Test helper should build valid timing-window state")
+	return state
 
 
 # ---------------------------------------------------------------------------

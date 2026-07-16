@@ -32,3 +32,11 @@ func test_autoload_inert_when_no_replay_flag() -> void:
 			"ReplayDriver must be inert when no --replay CLI flag")
 	assert_eq(ReplayDriver.pending_replay_seed, 0,
 			"pending_replay_seed must be 0 in normal sessions")
+
+
+func test_replay_bootstrap_game_state_defaults_timing_window_inactive() -> void:
+	var state := GameState.new()
+	state.initialize()
+
+	assert_true(state.timing_window_state.is_inactive(),
+			"Replay bootstrap state should default timing-window state inactive")

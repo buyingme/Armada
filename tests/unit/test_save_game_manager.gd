@@ -8,6 +8,8 @@ extends GutTest
 const TEST_SAVE: String = "_gut_test_save"
 const SaveManagerScript: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
+const TimingWindowStateScript: GDScript = preload(
+		"res://src/core/state/timing_window_state.gd")
 
 var _manager: Node = null
 
@@ -40,6 +42,14 @@ func _make_game_state() -> GameState:
 	gs.damage_deck = DamageDeck.new()
 	gs.damage_deck.initialize()
 	return gs
+
+
+func _write_signed_state(body: Dictionary) -> void:
+	var meta: SaveGameMetadata = _manager.build_metadata_for(
+			_make_game_state(), TEST_SAVE)
+	var header: Dictionary = meta.to_dict()
+	IntegritySigner.sign(header, body, _manager._get_or_create_signing_key())
+	_manager._write_payload(TEST_SAVE, header, body)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +93,73 @@ func test_round_trip_preserves_damage_deck() -> void:
 	assert_eq(loaded.damage_deck.get_draw_count(),
 			DamageDeck.DECK_SIZE - 5,
 			"Round-trip should preserve draw count")
+
+
+func test_round_trip_preserves_timing_window_state() -> void:
+	var gs: GameState = _make_game_state()
+	assert_true(gs.set_timing_window_state(_make_active_timing_window(
+			"status_cleanup",
+			"ready_cost",
+			"tw-save-001",
+			0,
+			{"continuation_id": "start_round"})),
+			"GameState should accept valid timing-window lifecycle state")
+
+	assert_true(_manager.save_game(gs, TEST_SAVE),
+			"save_game should succeed for active timing-window lifecycle state")
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	var loaded: GameState = result["state"]
+
+	assert_true(result["ok"], "load_game should succeed")
+	assert_true(loaded.timing_window_state.equals(gs.timing_window_state),
+			"Save/load should preserve timing-window lifecycle state")
+
+
+func test_load_schema_invalid_for_malformed_timing_window_state() -> void:
+	var body: Dictionary = _make_game_state().serialize()
+	body["timing_window_state"] = "not a dictionary"
+	_write_signed_state(body)
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+
+	assert_false(result["ok"],
+			"Save with malformed timing-window state should fail")
+	assert_eq(result["reason"], "schema_invalid",
+			"Malformed timing-window state should surface schema_invalid")
+
+
+func test_load_schema_invalid_for_unsupported_timing_window_state() -> void:
+	var body: Dictionary = _make_game_state().serialize()
+	body["timing_window_state"] = {
+		"active": true,
+		"timing_window_id": "status_cleanup",
+		"lifecycle_stage": "ready_cost",
+		"lifecycle_id": "tw-save-unsupported",
+		"controller_player": 0,
+		"continuation_context": {},
+		"status": "unsupported",
+	}
+	_write_signed_state(body)
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+
+	assert_false(result["ok"],
+			"Save with unsupported timing-window state should fail")
+	assert_eq(result["reason"], "schema_invalid",
+			"Unsupported timing-window state should surface schema_invalid")
+
+
+func _make_active_timing_window(
+		window_id: String,
+		stage: String,
+		lifecycle_id: String,
+		controller: int,
+		continuation: Dictionary):
+	var state = TimingWindowStateScript.new()
+	assert_true(state.configure_active(
+			window_id, stage, lifecycle_id, controller, continuation),
+			"Test helper should build valid timing-window state")
+	return state
 
 
 # ---------------------------------------------------------------------------

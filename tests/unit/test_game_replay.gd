@@ -81,6 +81,11 @@ func test_capture_header_stores_format_version() -> void:
 			"Header should include format_version.")
 
 
+func test_timing_window_state_slice_does_not_change_replay_format_version() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 1,
+			"Slice 1 changes GameState reconstruction, not replay-file format")
+
+
 func test_capture_header_stores_timestamp() -> void:
 	var replay := GameReplay.new()
 	replay.capture_header("test", 1, [], 0)

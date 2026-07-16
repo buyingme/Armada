@@ -171,13 +171,19 @@ For Phase L/M work or any change touching modal lifecycle, replay,
 network flow, also run:
 
 ```bash
-bash scripts/run_baseline_traces.sh --all
+./scripts/run_baseline_traces.sh --all
 ```
 
 This gate diffs the committed hot-seat trace/hash and verifies that a real
 two-process network replay ends with matching host/client state hashes. Do
 not add committed network command-trace or network state-hash fixtures until
 the network command pump is deterministic across separate runs.
+
+For OpenAI Codex in VS Code with Ask for approval, follow
+`.skills/testing_standards.md` for the sandbox approval workflow: run the normal
+repository command first, request approval only for sandbox/resource failures,
+then rerun the unchanged command without HOME overrides or repository-local
+workarounds. The approved rerun is the verification result.
 
 GUT **silently drops test files that contain parse errors** — you see fewer tests with 0 failures. If the count drops unexpectedly, find the parse error before committing. The most common cause is mixed tab/space indentation.
 
@@ -259,7 +265,7 @@ When asked to implement a feature or fix a bug:
    bash scripts/lint_phase_k.sh
    ```
    The lint must report `0 violations` (allow-listed branches are fine). If it fails, fix before continuing — never silence it by editing the allow-list count without explicit approval.
-10. **Replay baseline gate** — For Phase L/M, modal lifecycle, replay, command-submission, or network-flow changes, run `bash scripts/run_baseline_traces.sh --all` and require it to pass.
+10. **Replay baseline gate** — For Phase L/M, modal lifecycle, replay, command-submission, or network-flow changes, run `./scripts/run_baseline_traces.sh --all` and require it to pass.
 11. **Manual test gate** — Prompt the user with concrete manual test steps (what to run, click, observe). **Wait for explicit user approval before committing.** See `.skills/copilot_instructions.md` § "Mandatory Manual Test Gate".
 12. **Update progress** — Update `docs/implementation_plan.md` (§1 baseline, §2 phase status, §4 open topics) and include in commit
 

@@ -201,23 +201,39 @@ suite. `./scripts/test.sh` remains available as a compatibility alias.
 ./scripts/run_baseline_traces.sh --all
 ```
 
-Restricted Codex sandbox environments may need an isolated repository-local
-`HOME` so Godot can write `user://` data without using the real user directory.
-Use this only for restricted automation; normal local development should not
-need it. Do not use `HOME="$PWD"` because that can write generated user-data
-artifacts into the repository root. The `.codex-home/` directory is ignored by
-Git.
+### OpenAI Codex VS Code Approval Workflow
+
+When OpenAI Codex runs in VS Code with **Ask for approval**, use the normal
+repository commands first:
 
 ```bash
-mkdir -p .codex-home && HOME="$PWD/.codex-home" ./scripts/run_tests.sh
+./scripts/run_tests.sh
+./scripts/run_baseline_traces.sh --all
 ```
 
-When restricted automation also needs the replay baseline gate, use the same
-isolated `HOME` pattern:
+Codex initially executes commands in the workspace sandbox. Godot and baseline
+verification may fail there only because the sandbox blocks access to standard
+Godot `user://` data, macOS Application Support, network socket binding, or
+other resources outside the workspace. That initial sandbox-only failure is an
+environment limitation, not an implementation or test failure.
 
-```bash
-mkdir -p .codex-home && HOME="$PWD/.codex-home" ./scripts/run_baseline_traces.sh --all
-```
+If the failure is sandbox/resource related, Codex must request approval and
+rerun the exact same normal command outside the sandbox. Do not use:
+
+- `HOME` overrides;
+- `.codex-home`;
+- repository-local sandbox workarounds;
+- command substitutions or altered test commands.
+
+The approved rerun is the authoritative verification result. Codex must not
+claim verification is blocked before requesting approval, and must not replace
+the full GUT suite or replay/baseline suite with focused tests when full
+verification is required.
+
+If the approved rerun itself fails, report that failure normally and distinguish
+the likely class of failure: implementation defect, stale fixture, tooling
+defect, or environment limitation. Do not request permanent Full access merely
+to run ordinary repository verification.
 
 ## Test Count Verification (Critical)
 
@@ -259,7 +275,7 @@ For Phase L/M work, or any change touching modal lifecycle, replay,
 network flow, also run the replay baseline gate:
 
 ```bash
-bash scripts/run_baseline_traces.sh --all
+./scripts/run_baseline_traces.sh --all
 ```
 
 This gate has two parts:

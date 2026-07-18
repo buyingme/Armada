@@ -9,14 +9,18 @@
 > does not assume the documented architecture is correct, and it does not assume
 > the current implementation is wrong. Statuses below are triage states, not
 > accepted architecture decisions.
+>
+> Accepted ADRs govern decided sub-scopes. `ADR-001` is the normative authority
+> for current-attack state and semantic attack mutation; broader concerns under
+> the related boundary candidates remain in triage.
 
 ## Summary
 
 | Boundary | Decision status | Risk | Codex risk | Recommended next step |
 |---|---|---|---|---|
-| Live Game State Authority | Ready for contract | High | Medium | create contract |
+| Live Game State Authority | Current-attack scope accepted; broader scope remains | High | Medium | follow `ADR-001`; continue remaining boundary work |
 | Command Processing and Applicability | Needs tests first | High | High | add tests |
-| Interaction Flow and UI Projection | Needs owner decision | High | High | create contract |
+| Interaction Flow and UI Projection | Current-attack scope accepted; broader scope needs owner decision | High | High | follow `ADR-001`; continue remaining boundary work |
 | Setup Flow and Setup Package | Needs context pack first | High | Medium | create context pack first |
 | Rule and Validation Surfaces | Needs owner decision | High | High | create contract |
 | Game Component Rule Extension | Ready for contract | High | High | create contract |
@@ -39,13 +43,13 @@
 | Boundary name | Live Game State Authority |
 | Related reality gaps | RG-001, RG-003, RG-014 |
 | Current implementation summary | `GameManager.current_game_state` holds the live `GameState`; durable state lives mainly under `src/core/state`; most durable mutations are command-mediated. The current-state map records `GameState` as the serialized source for saves, network snapshots, and replay-related state. |
-| Intended/documented architecture summary | Docs intend domain/core state plus `GameCommand.execute()` to own durable mutation. They also describe `InteractionFlow` as command-mutated domain state. |
-| Main discrepancy | The main game-state boundary is stable, but `GameManager` owns process authority around it and attack flow has direct/local `InteractionFlow` writes before network publication. |
+| Intended/documented architecture summary | `ADR-001` makes `GameState` the owner of one canonical `CurrentAttackState` and replayable commands the owner of semantic attack mutation. Broader domain/core state and `GameManager` process authority remain under this boundary. |
+| Main discrepancy | Current scene-owned attack state and local attack-flow writes are migration gaps against `ADR-001`, not unresolved architecture. Broader `GameManager` process authority remains open. |
 | Risk level | High |
 | Codex risk | Medium: Codex may add mutable state in runtime services or scene controllers instead of serialized state. |
 | Network/save/load/replay impact | Highest. This boundary is the source for save/load payloads, filtered snapshots, replay determinism, and active rule-state reconstruction. |
-| Recommended next step | create contract |
-| Reasoning | The observed state ownership is concrete enough to contract now, while preserving open decisions about `InteractionFlow` exceptions as separate clauses. |
+| Recommended next step | follow `ADR-001`; continue remaining boundary work |
+| Reasoning | Current-attack ownership and mutation are settled. Any further work under this broad boundary must preserve `ADR-001` while addressing only the remaining live-state concerns. |
 
 ### Command Processing and Applicability
 
@@ -69,13 +73,13 @@
 | Boundary name | Interaction Flow and UI Projection |
 | Related reality gaps | RG-003, RG-004, RG-014 |
 | Current implementation summary | `GameState.interaction_flow`, `FlowSpec`, `UIProjector`, `StateFilter`, `ModalRouter`, and scene controllers collaborate to drive modal authority. Attack flow currently includes `AttackFlowFSM` and `PublishAttackFlowCommand`, with scene-owned writes recorded in the current-state map. |
-| Intended/documented architecture summary | Docs intend `InteractionFlow` to be command-mutated domain state and `UIProjector` to be the authority for modal/HUD/sidebar decisions. |
-| Main discrepancy | Current attack workflow writes/patches `InteractionFlow` from scene-owned workflow before publication, while docs describe command-only mutation. |
+| Intended/documented architecture summary | For current attacks, `ADR-001` makes `InteractionFlow`, `FlowSpec`, `UIProjector`, scene controllers, modal routers, and UI derived and non-authoritative; replayable commands own semantic attack mutation. |
+| Main discrepancy | Current scene-owned attack workflow and flow publication remain migration gaps against `ADR-001`. Ownership of non-attack interaction and projection surfaces remains broader unresolved scope. |
 | Risk level | High |
 | Codex risk | High: Codex may spread direct flow writes, local modal authority, or UI-driven step inference. |
 | Network/save/load/replay impact | High. Reconnect, network mirrors, save/load UI reconstruction, and replay determinism depend on clear flow ownership. |
-| Recommended next step | create contract |
-| Reasoning | This boundary needs an owner decision inside the contract: either direct attack writes are accepted exceptions, temporary bridge behavior, or to be contained by commands. |
+| Recommended next step | follow `ADR-001`; continue remaining boundary work |
+| Reasoning | Direct scene ownership of current-attack facts is no longer an open option. Further triage must address only non-attack flow and projection concerns without reopening `ADR-001`. |
 
 ### Setup Flow and Setup Package
 
@@ -260,14 +264,14 @@
 ## Top 5 Architecture Decisions Owner Must Make
 
 1. Is the accepted long-term architecture a strict layered model, the current autoload/scene/command hybrid, or an explicit hybrid with named exceptions?
-2. Is direct `InteractionFlow` mutation by attack workflow accepted, temporary, or prohibited outside command execution?
+2. Outside the current-attack scope governed by `ADR-001`, which direct `InteractionFlow` mutation paths are accepted, temporary, or prohibited?
 3. Should future special-rule work use `RuleRegistry` as the only extension path, or should resolver/command-owned rule surfaces remain first-class?
 4. What is the accepted responsibility boundary for `GameManager`: lifecycle facade or broad application orchestration hub?
 5. What is the authoritative expansion path for upgrades, objectives, obstacles, tokens, and special ship/squadron rules from static component data to active serialized rule state?
 
 ## Top 5 Areas Where Codex Must Be Constrained
 
-1. Do not add new direct `GameState.interaction_flow` writers outside established flow surfaces.
+1. Follow `ADR-001` for current-attack authority and do not add new direct `GameState.interaction_flow` writers outside established non-attack flow surfaces.
 2. Do not add rule predicates only in UI/presentation code; commands/resolvers/projection payloads must own legality.
 3. Do not add new `GameManager` responsibility categories without owner direction or an existing matching wrapper family.
 4. Do not treat static component JSON as sufficient for behavior-changing content; special rules need active state, validation, projection, and tests.
@@ -284,7 +288,7 @@
 ## Top 5 Areas Not To Touch Without A Contract
 
 1. Game Component Rule Extension for upgrades, objectives, obstacles, tokens, and special ship/squadron rules.
-2. Interaction Flow and UI Projection ownership, especially attack flow publication and direct `InteractionFlow` writes.
+2. Interaction Flow and UI Projection ownership outside the current-attack scope already governed by `ADR-001`.
 3. Rule and Validation Surfaces when adding or migrating rules across hooks, commands, resolvers, payloads, and UI affordances.
 4. GameManager Orchestration responsibility boundaries and new command-wrapper families.
 5. EventBus vs direct-call communication rules for cross-system workflows.

@@ -1,5 +1,12 @@
 # 9. Architectural Decisions
 
+> Authority note: the ADR labels in this Arc42 chapter are historical local
+> identifiers. They are not the identifier registry for accepted ADR files
+> under `docs/architecture/adr/`. In particular,
+> `docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md`
+> is the current normative `ADR-001` under `DOCUMENT_AUTHORITY.md`; the
+> historical engine decision below remains context only.
+
 ## ADR Template
 
 Each decision follows this structure:

@@ -24,13 +24,17 @@ already implemented and protected by tests. The current-state map records
 existing GUT tests, CI workflows, phase/lint gates, baseline traces, save/load,
 replay, network, command processing, setup, rules, and presentation systems.
 
-The architecture discovery documents identify high-risk unresolved boundaries:
+The architecture discovery documents identify high-risk boundaries. `ADR-001`
+now resolves the current-attack ownership and semantic-mutation sub-scope of
+`BC-001` and `BC-003`; their broader concerns remain open:
 
-- `BC-001` Live Game State Authority: mostly known but high impact.
+- `BC-001` Live Game State Authority: current-attack scope accepted in
+  `ADR-001`; broader scope is mostly known but high impact.
 - `BC-002` Command Processing and Applicability: command spine exists, tests
   need explicit mapping.
-- `BC-003` Interaction Flow and UI Projection: owner decision needed around
-  command-only flow mutation versus attack-flow direct writes.
+- `BC-003` Interaction Flow and UI Projection: `ADR-001` prohibits
+  current-attack scene/projection authority; broader non-attack ownership
+  remains unresolved.
 - `BC-005` / `BC-005A` Rule and Game Component Rule Extension: expansion path
   is not fully accepted.
 - `BC-006` GameManager Orchestration: actual responsibility is broader than

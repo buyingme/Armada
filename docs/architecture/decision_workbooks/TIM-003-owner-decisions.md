@@ -7,12 +7,16 @@ Decision status: Accepted by the Project Owner
 Companion workbook:
 `docs/architecture/decision_workbooks/TIM-003-authoritative-attack-state-and-transition-ownership.md`
 
+Normative architectural extraction:
+`docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md`
+
 ## 1. Document Role
 
 This companion record preserves the repository-backed reasoning behind the
-three accepted TIM-003 Owner decisions. TIM-003 contains the concise decision
-boundary; this record retains the investigated alternatives, rejection
-reasons, consequences, and migration implications.
+three accepted TIM-003 Owner decisions. `ADR-001` is the normative
+architectural authority; TIM-003 contains the concise historical decision
+boundary, and this record retains the investigated alternatives, rejection
+reasons, consequences, and migration implications as supporting evidence.
 
 This document is architecture decision evidence. It is not an ADR, Contract,
 implementation specification, migration plan, API definition, or JSON schema.
@@ -372,10 +376,15 @@ attack legality and mutation without broadening `TimingWindowState`, moving
 rule-specific state, or granting authority to projection and scene workflow.
 
 No further Project Owner architecture question remains within TIM-003's
-scope. Downstream documents must extract the accepted architecture and define
-implementation obligations without reopening these decisions.
+scope. `ADR-001` has extracted the accepted architecture. Downstream documents
+must consume that ADR and define implementation obligations without reopening
+these decisions.
 
-## 8. Required Downstream Document Updates
+## 8. Downstream Document Updates Recorded At Acceptance
+
+The ADR extraction and architecture-governance synchronization in this list
+are now complete through `ADR-001` and the current governance records. The
+remaining entries are retained as the historical downstream checklist.
 
 After formal acceptance of TIM-003 documentation:
 

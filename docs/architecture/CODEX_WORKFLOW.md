@@ -187,8 +187,14 @@ If the authority order still does not produce a clear answer, ask the owner.
 
 - If the feature touches `BC-001`, `BC-003`, `BC-005`, `BC-005A`, `BC-006`,
   `BC-007`, `BC-008`, or `BC-009`, check the related `AT-xxx` task first.
-- Do not add new direct durable state mutation paths while `AT-001` and
-  `AT-002` are unresolved.
+- For current-attack state, semantic attack transitions, and current-attack
+  projection or routing boundaries, follow `ADR-001`. Use `TIM-003` and its
+  companion decision record only as historical decision evidence.
+- `AT-001` and `AT-002` remain unresolved only outside the current-attack scope
+  accepted in `ADR-001`. Do not use their broader status to reopen `ADR-001`.
+- Do not add new direct durable state mutation paths in the unresolved portions
+  of `AT-001` and `AT-002`, or add current-attack authority outside the
+  `ADR-001` boundary.
 - Do not add new behavior-changing rules without checking `AT-003` and
   `AT-004`.
 - Do not add new `GameManager` responsibility categories without checking

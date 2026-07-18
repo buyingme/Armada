@@ -8,14 +8,18 @@
 > does not create contracts, refactor code, or rewrite Arc42. It does not assume
 > the documented architecture is correct, and it does not assume the actual
 > implementation is wrong.
+>
+> Accepted ADRs govern any decided sub-scope. In particular, `ADR-001` is the
+> normative authority for current-attack state and semantic attack mutation;
+> the related candidate rows below remain open only for their broader scope.
 
 ## Summary
 
 | Boundary | Stability | Risk | Related gaps | Recommended next step |
 |---|---|---|---|---|
-| Live Game State Authority | Mostly stable | High | RG-001, RG-003, RG-014 | create contract |
+| Live Game State Authority | Current-attack scope accepted; broader scope mostly stable | High | RG-001, RG-003, RG-014 | follow `ADR-001`; continue remaining boundary work |
 | Command Processing and Applicability | Mostly stable | High | RG-003, RG-005, RG-012, RG-013 | add tests |
-| Interaction Flow and UI Projection | Needs owner decision | High | RG-003, RG-004, RG-014 | create contract |
+| Interaction Flow and UI Projection | Current-attack scope accepted; broader scope needs owner decision | High | RG-003, RG-004, RG-014 | follow `ADR-001`; continue remaining boundary work |
 | Setup Flow and Setup Package | Mostly stable | High | RG-015, RG-001, RG-004 | create context pack first |
 | Rule and Validation Surfaces | Needs owner decision | High | RG-005, RG-006, RG-012, RG-013 | create contract |
 | Game Component Rule Extension | Needs owner decision | High | RG-005, RG-006, RG-011, RG-013, RG-015 | create contract |
@@ -37,16 +41,16 @@
 |---|---|
 | Boundary name | Live Game State Authority |
 | Current owner subsystem | `GameManager.current_game_state` holds the live `GameState`; durable entities live under `src/core/state/`; mutations mostly flow through `GameCommand.execute()`. |
-| Intended owner subsystem if different | Docs imply domain/core state plus command execution as the authoritative mutation boundary. The current owner is close, but `GameManager` also owns process-level authority around the state. |
-| State owned by this boundary | `GameState`, `PlayerState`, `ShipInstance`, `SquadronInstance`, `DamageDeck`, `GameRng`, `InteractionFlow`, setup state in `GameState.objectives`, command history references, and round/phase/initiative fields. |
+| Intended owner subsystem if different | For the current-attack sub-scope, `ADR-001` accepts `GameState` ownership of one canonical `CurrentAttackState` and replayable-command ownership of semantic mutation. Broader live-state and `GameManager` process authority remain candidate concerns. |
+| State owned by this boundary | `GameState`, including the accepted `CurrentAttackState` boundary; `PlayerState`; `ShipInstance`; `SquadronInstance`; `DamageDeck`; `GameRng`; `InteractionFlow`; setup state in `GameState.objectives`; command history references; and round/phase/initiative fields. |
 | Validation owned by this boundary | Structural state validity, deserialize defaults, entity lookup consistency, and command-level mutation preconditions when concrete commands touch state. |
 | Serialization responsibility | Full save/network/replay-safe serialization of mutable game state. Static rules are not serialized; active rule source state is serialized through owning entities. |
 | UI responsibility | None directly. UI should read state through projections, controllers, or wrappers and should not own durable game state. |
 | Network/save/load/replay impact | Highest impact. This boundary is the source for filtered network snapshots, saves, load rebuilds, and replay determinism. |
 | Related reality gaps | RG-001, RG-003, RG-014 |
 | Risk level | High |
-| Stability rating | Mostly stable |
-| Recommended next step | create contract |
+| Stability rating | Current-attack scope accepted in `ADR-001`; broader scope mostly stable |
+| Recommended next step | Apply `ADR-001` to current-attack work; continue broader `BC-001` governance separately. |
 
 ### B-002 - Command Processing and Applicability
 
@@ -71,16 +75,16 @@
 |---|---|
 | Boundary name | Interaction Flow and UI Projection |
 | Current owner subsystem | `GameState.interaction_flow`, `InteractionFlow`, `FlowSpec`, `UIProjector`, `StateFilter`, `ModalRouter`, and selected scene controllers. Attack flow currently includes `AttackFlowFSM` and `PublishAttackFlowCommand`. |
-| Intended owner subsystem if different | Docs intend `InteractionFlow` to be domain state mutated only by commands, with projection through `UIProjector`. Current implementation also has scene-owned attack workflow writes before publication. |
-| State owned by this boundary | Active flow type, step id, controller player, visibility, JSON-safe payload, projected modal kind, projected authority, and flow-specific UI payload metadata. |
+| Intended owner subsystem if different | For current attacks, `ADR-001` makes `InteractionFlow`, projection, scene controllers, and UI non-authoritative consumers or mirrors; replayable commands own semantic attack mutation. Ownership outside that current-attack sub-scope remains a candidate concern. |
+| State owned by this boundary | Active interaction-routing and projection data: flow type, step id, controller player, visibility, JSON-safe payload, projected modal kind, projected authority, and flow-specific UI metadata. Under `ADR-001`, this boundary does not own current-attack gameplay facts. |
 | Validation owned by this boundary | Flow-step command applicability, controller ownership checks, visibility/payload filtering, and modal authority decisions. |
 | Serialization responsibility | `InteractionFlow.serialize()` / `deserialize()` as part of `GameState`; payloads must remain JSON-safe and filterable. |
 | UI responsibility | Render projected `UIIntent`; use payload metadata for affordances; avoid independent authority decisions where projection already exists. |
 | Network/save/load/replay impact | High. A single state snapshot should rebuild modal state; network mirrors depend on published flow payloads; replay depends on deterministic flow transitions. |
 | Related reality gaps | RG-003, RG-004, RG-014 |
 | Risk level | High |
-| Stability rating | Needs owner decision |
-| Recommended next step | create contract |
+| Stability rating | Current-attack scope accepted in `ADR-001`; broader scope needs owner decision |
+| Recommended next step | Apply `ADR-001` to current-attack work; continue broader `BC-003` governance separately. |
 
 ### B-004 - Setup Flow and Setup Package
 

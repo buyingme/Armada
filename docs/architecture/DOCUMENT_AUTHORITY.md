@@ -11,6 +11,9 @@ questions.
 
 - Accepted ADRs outrank older intended architecture descriptions for the topic
   they decide.
+- Decision Workbooks preserve decision preparation and Owner reasoning. After
+  an accepted ADR extracts their enduring decisions, they remain historical
+  evidence rather than normative architecture.
 - Contracts define behavioral invariants for implementation work.
 - Current-state maps describe observed implementation reality; they do not by
   themselves approve that reality as long-term architecture.
@@ -32,7 +35,8 @@ questions.
 | Boundary Candidates (`docs/ARCHITECTURE_BOUNDARY_CANDIDATES.md`) | Candidate ownership boundaries for future decisions/contracts | Temporary migration state; candidate boundaries | Medium-high for triage; not accepted architecture | Yes, when explicitly asked to update candidates | Required to mark a boundary accepted |
 | Architecture Decision Triage (`docs/ARCHITECTURE_DECISION_TRIAGE.md`) | Classifies boundary candidates by next action | Temporary migration state; work prioritization | High for current triage status | Yes, when explicitly asked to update triage | Required to change decision status after owner decision |
 | Architecture Roadmap (`docs/architecture/ARCHITECTURE_ROADMAP.md`) | Single entry point for transformation work | Temporary migration state; architecture program backlog; Codex operating priorities | High for work sequencing and task IDs | Yes, for task tracking and status updates when requested | Required for priority changes, new critical tasks, or completed decision claims |
-| ADRs (`docs/architecture/adr/ADR-xxx-*.md`, future) | Records accepted architecture decisions | Accepted decisions | Very high for decided topics | No, except creating drafts when requested | Yes to accept, supersede, or reject |
+| ADRs (`docs/architecture/adr/ADR-xxx-*.md`) | Records accepted architecture decisions | Accepted decisions | Very high for decided topics | No, except creating drafts when requested | Yes to accept, supersede, or reject |
+| Decision Workbooks (`docs/architecture/decision_workbooks/`) | Gathers evidence, compares options, and preserves Owner reasoning | Decision preparation; historical evidence after normative ADR extraction | High as decision evidence; not normative architecture after ADR extraction | Yes, when explicitly requested | Required to accept Owner decisions or change an accepted decision record |
 | Context Packs (`docs/architecture/context/CP-xxx-*.md`) | Local evidence package for a boundary/topic | Observed implementation evidence. May reference intended architecture only as comparison context. Baseline Evidence means implementation understanding is sufficient to support ADR work; unresolved Architecture Decision Questions do not prevent that status. | High as evidence; not a decision; never an accepted architecture decision | Yes, when requested. Baseline Evidence changes during active ADR work should be explicit and reviewable | Owner approval not required unless it asserts decisions |
 | Contracts (`docs/architecture/contracts/CON-xxx-*.md`, future, plus existing contracts such as `docs/setup_flow.md`) | Defines invariants and allowed behavior for implementation | Accepted behavioral contract | Very high for implementation | No, except draft/update when requested | Yes to create or change accepted contracts |
 | Test Strategies (`docs/architecture/tests/TEST-xxx-*.md`, future) | Defines invariant coverage and test obligations | Required or planned test protection | High for testing expectations after accepted | Yes, when requested or derived from accepted contracts | Required to waive high-risk test obligations |
@@ -47,6 +51,7 @@ questions.
 | What does the code currently do? | Current State Architecture Map, Baseline Evidence Context Packs, relevant code | Context packs under review |
 | What did the project intend historically? | Arc42, existing plans, existing skills | Reality Gap Register |
 | What is accepted architecture now? | Accepted ADRs | Contracts |
+| What owns current-attack state and semantic attack mutation? | `ADR-001` | `TIM-003` and `TIM-003-owner-decisions.md` as historical decision evidence |
 | What architecture should we choose? | ADR process and Architecture Decision analysis | Context packs as evidence only; not as decisions |
 | What must implementation preserve? | Contracts | Test strategies |
 | What is unresolved? | Reality Gap Register, Boundary Candidates, Decision Triage | Architecture Roadmap |
@@ -122,6 +127,8 @@ as the primary input for new ADRs or implementation work.
   decided whether the implementation is intended architecture.
 - Do not create contracts unless requested.
 - Do not treat context packs as decisions.
+- Do not treat Decision Workbooks as normative architecture after an accepted
+  ADR has extracted their enduring decisions.
 - Do not keep a Context Pack in Draft or Under Review because architecture
   decisions are unresolved. A Context Pack becomes Baseline Evidence when
   implementation evidence is sufficient.

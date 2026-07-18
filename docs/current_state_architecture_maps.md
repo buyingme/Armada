@@ -7,6 +7,11 @@
 > This document records the current state only. It intentionally does not
 > propose improvements, refactors, or target architecture changes.
 >
+> `ADR-001` now defines the accepted target for current-attack state ownership
+> and semantic attack mutation. The scene-owned attack and `InteractionFlow`
+> paths recorded here remain current implementation evidence and migration-gap
+> evidence; they are not unresolved architecture or normative authority.
+>
 > Important current-state distinction: project guidance describes
 > `RuleRegistry` as the production rule-extension architecture, but the
 > implemented rules system is currently hybrid. Some rules are implemented as

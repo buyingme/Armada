@@ -14,7 +14,8 @@ work needed to make architecture decisions safely.
 | `RG-xxx` | Reality Gap | `docs/REALITY_GAP_REGISTER.md` |
 | `BC-xxx` | Boundary Candidate | `docs/ARCHITECTURE_BOUNDARY_CANDIDATES.md` |
 | `AT-xxx` | Architecture Task | This roadmap |
-| `ADR-xxx` | Architecture Decision | Future ADR files |
+| `ADR-xxx` | Architecture Decision | `docs/architecture/adr/` |
+| `TIM-xxx` | Decision Workbook | `docs/architecture/decision_workbooks/` |
 | `CP-xxx` | Context Pack | Future context-pack files |
 | `CON-xxx` | Contract | Future contract files |
 | `TEST-xxx` | Test Strategy | Future test-strategy files |
@@ -35,9 +36,9 @@ Rules:
 
 | Area | Current Status | Risk | Codex Risk | Current Phase | Next Action |
 | --- | --- | --- | --- | --- | --- |
-| Live Game State Authority (`BC-001`) | Current implementation mostly known; decision options analyzed; no accepted ADR yet | High | Medium | ANALYZED | Create ADR for `RG-001`, `RG-003`, `RG-014` |
+| Live Game State Authority (`BC-001`) | Current-attack ownership and semantic mutation are accepted in `ADR-001`; broader live-state scope remains open | High | Medium | ADR ACCEPTED (CURRENT-ATTACK SCOPE) | Use `ADR-001` for current-attack work; continue remaining `BC-001` analysis separately |
 | Command Processing and Applicability (`BC-002`) | Command spine exists; invariant coverage needs to be mapped | High | High | TRIAGED | Add test coverage plan before broad changes |
-| Interaction Flow and UI Projection (`BC-003`) | Key contradiction remains around command-only flow mutation vs attack workflow writes | High | High | TRIAGED | Owner decision, then ADR/contract |
+| Interaction Flow and UI Projection (`BC-003`) | `ADR-001` resolves current-attack authority and prohibits scene/projection authority; broader non-attack flow scope remains open | High | High | ADR ACCEPTED (CURRENT-ATTACK SCOPE) | Use `ADR-001` for current-attack work; continue remaining `BC-003` analysis separately |
 | Setup Flow and Setup Package (`BC-004`) | Existing step-level setup contract exists; architecture context still spread across docs/code | High | Medium | TRIAGED | Create setup context pack |
 | Rule and Validation Surfaces (`BC-005`) | Hybrid rule behavior exists; intended rule ownership unresolved | High | High | TRIAGED | Owner decision before new broad rule patterns |
 | Game Component Rule Extension (`BC-005A`) | Expansion path for upgrades/objectives/special rules is not fully accepted | High | High | TRIAGED | Create ADR or context pack before feature work that adds behavior-changing rules |
@@ -51,6 +52,21 @@ Rules:
 | EventBus Integration Boundary (`BC-013`) | EventBus is important but not exclusive in current code | Medium | Medium | TRIAGED | Owner decision before enforcing exclusivity |
 | Documentation Authority Boundary (`BC-014`) | Authority hierarchy was unclear; this roadmap and `DOCUMENT_AUTHORITY.md` establish migration rules | Medium | High | CONTEXT UNDERSTOOD | Keep authority docs current during architecture work |
 
+## Accepted Current-Attack Ownership Milestone
+
+- `TIM-003` is an accepted historical Decision Workbook.
+- `TIM-003-owner-decisions.md` preserves the supporting repository evidence and
+  Owner reasoning.
+- `ADR-001` is the normative architectural authority for current-attack state
+  ownership, semantic attack mutation, the `CurrentAttackState` boundary, and
+  its interaction with timing-window, runtime-rule, projection, and migration
+  boundaries.
+- This milestone resolves the current-attack Owner-decision scope of `AT-001`,
+  `AT-002`, `BC-001`, `BC-003`, `RG-003`, `RG-004`, and `RG-014`.
+- Existing scene-owned attack behavior is a migration gap against `ADR-001`,
+  not an unresolved ownership decision. Broader non-attack concerns grouped
+  under `BC-001` and `BC-003` remain open.
+
 ## Architecture Work Backlog
 
 ### AT-001 - Live Game State Authority ADR
@@ -59,9 +75,9 @@ Rules:
 | --- | --- |
 | Type | ADR |
 | Priority | Critical |
-| Status | Backlog |
+| Status | Partially completed - current-attack scope accepted in `ADR-001`; broader live-state scope remains open |
 | Inputs | `RG-001`, `RG-003`, `RG-014`; `BC-001`; `BC-003`; `BC-006`; `docs/ARCHITECTURE_DECISION_TRIAGE.md`; `docs/current_state_architecture_maps.md`; relevant Arc42 sections |
-| Outputs | `ADR-001` candidate; follow-up `CON-001` candidate |
+| Outputs | `ADR-001` accepted for current-attack ownership and mutation; remaining `BC-001` outputs must not reopen that decision |
 | Dependencies | None |
 
 ### AT-002 - Interaction Flow and UI Projection Decision
@@ -70,10 +86,10 @@ Rules:
 | --- | --- |
 | Type | ADR |
 | Priority | Critical |
-| Status | Backlog |
+| Status | Partially completed - current-attack scope accepted in `ADR-001`; broader interaction-flow scope remains open |
 | Inputs | `RG-003`, `RG-004`, `RG-014`; `BC-003`; `BC-010`; `BC-007`; `docs/game_flow.md`; `FlowSpec`; `UIProjector`; attack-flow code |
-| Outputs | `ADR-002` candidate; `CON-002` candidate |
-| Dependencies | `AT-001` may constrain this task |
+| Outputs | `ADR-001` accepted for current-attack projection and routing boundaries; remaining `BC-003` outputs must not reopen that decision |
+| Dependencies | `ADR-001` constrains all current-attack work; remaining `AT-001` scope may constrain other flow topics |
 
 ### AT-003 - Rule and Validation Surface Decision
 
@@ -117,7 +133,7 @@ Rules:
 | Status | Backlog |
 | Inputs | `RG-001`, `RG-002`, `RG-007`; `BC-006`; `BC-013`; `src/autoload/game_manager.gd`; `project.godot`; current-state maps |
 | Outputs | `CP-002` candidate; inputs for future `ADR-004` |
-| Dependencies | `AT-001` may constrain state ownership conclusions |
+| Dependencies | `ADR-001` constrains current-attack ownership conclusions; remaining `AT-001` scope may constrain other state ownership conclusions |
 
 ### AT-007 - Command Processing Test Strategy
 
@@ -139,7 +155,7 @@ Rules:
 | Status | Backlog |
 | Inputs | `RG-002`, `RG-003`, `RG-004`, `RG-013`; `BC-007`; `BC-009`; `StateFilter`; `UIProjector`; replay/baseline scripts |
 | Outputs | `TEST-002` candidate |
-| Dependencies | `AT-002` may change flow invariants |
+| Dependencies | `ADR-001` defines current-attack flow authority; remaining `AT-002` scope may change non-attack flow invariants |
 
 ### AT-009 - Save/Load and Checkpoint Test Strategy
 
@@ -150,7 +166,7 @@ Rules:
 | Status | Backlog |
 | Inputs | `RG-001`, `RG-013`, `RG-016`; `BC-008`; `SaveGameManager`; `GameState.serialize()` / `deserialize()` |
 | Outputs | `TEST-003` candidate |
-| Dependencies | `AT-001` may define live-state ownership rules |
+| Dependencies | `ADR-001` defines current-attack state ownership; remaining `AT-001` scope may define other live-state ownership rules |
 
 ### AT-010 - Setup Flow Context Pack
 
@@ -204,8 +220,8 @@ Rules:
 | Priority | High |
 | Status | Backlog |
 | Inputs | `RG-004`, `RG-005`, `RG-014`; `BC-010`; scene-owned preview and attack workflow code |
-| Outputs | Codex instruction update; optional `CON-005` candidate after owner decision |
-| Dependencies | `AT-002` should define flow authority first |
+| Outputs | Codex instruction update for presentation-preview boundaries not already governed by `ADR-001` |
+| Dependencies | `ADR-001` defines current-attack authority; remaining `AT-002` scope should define other flow authority first |
 
 ### AT-015 - Documentation Authority Cleanup Pass
 
@@ -284,15 +300,16 @@ State definitions:
 | COMPLETED | No known governance work remains for this topic. |
 
 Not every topic needs every state. For example, a stale inventory count may move
-from TRIAGED to DOCUMENTATION UPDATE without an ADR. A high-risk boundary such
-as `BC-003` should not skip owner decision and contract work.
+from TRIAGED to DOCUMENTATION UPDATE without an ADR. High-risk portions of
+`BC-003` outside the current-attack scope accepted in `ADR-001` should not skip
+owner decision and contract work.
 
 ## Architecture Kanban
 
 ### Backlog
 
-- `AT-001` - Live Game State Authority ADR
-- `AT-002` - Interaction Flow and UI Projection Decision
+- `AT-001` - Live Game State Authority ADR (current-attack scope completed by `ADR-001`; broader scope remains)
+- `AT-002` - Interaction Flow and UI Projection Decision (current-attack scope completed by `ADR-001`; broader scope remains)
 - `AT-003` - Rule and Validation Surface Decision
 - `AT-004` - Game Component Rule Extension Context Pack
 - `AT-006` - GameManager Orchestration Context Pack
@@ -316,9 +333,12 @@ as `BC-003` should not skip owner decision and contract work.
 ### Blocked
 
 - None blocked by external conditions yet.
-- `AT-018` is intentionally waiting for accepted ADRs and contracts before it
-  becomes actionable.
+- `AT-018` now has accepted ADR and Contract inputs available; it remains in
+  the backlog until explicitly scheduled.
 
 ### Completed
 
 - `AT-005` - Architecture Document Authority Rules
+- Current-attack ownership milestone - `TIM-003` accepted and enduring
+  architecture extracted into `ADR-001` for the current-attack scope of
+  `AT-001` and `AT-002`

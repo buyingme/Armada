@@ -7,7 +7,7 @@ Accepted date: 2026-07-17
 Decision topic: Authoritative ownership of current-attack gameplay state and
 attack lifecycle transitions
 
-Prepared for: Project Owner acceptance
+Governance role: Historical Decision Workbook supporting `ADR-001`
 Date: 2026-07-16
 
 Related roadmap boundaries: BC-001, BC-003, AT-001, AT-002
@@ -17,11 +17,13 @@ Related implementation planning: MA-TW-001, MA-H9-001, TWI-002
 Companion decision record:
 `docs/architecture/decision_workbooks/TIM-003-owner-decisions.md`
 
+Normative architectural extraction:
+`docs/architecture/adr/ADR-001-authoritative-current-attack-state-and-transition-ownership.md`
+
 This workbook consolidates three accepted Project Owner decisions. It remains
-a Decision Workbook rather than an ADR, Contract, implementation
-specification, or authorization to change runtime code. Normative extraction
-and implementation planning remain downstream work under
-`docs/architecture/DOCUMENT_AUTHORITY.md`.
+historical decision evidence rather than an ADR, Contract, implementation
+specification, or authorization to change runtime code. `ADR-001` is the
+normative architecture under `docs/architecture/DOCUMENT_AUTHORITY.md`.
 
 ## 1. Purpose
 
@@ -221,7 +223,12 @@ change its semantic gameplay facts.
 - Tarkin remains outside attack-state ownership but uses the same timing-window
   and replayable-command principles.
 
-## 10. Required Downstream Updates After Acceptance
+## 10. Downstream Updates Recorded At Acceptance
+
+The ADR extraction and architecture-governance synchronization in this list
+are now complete through `ADR-001` and the current governance records. The
+remaining entries are retained as the historical downstream checklist and do
+not make TIM-003 normative.
 
 After TIM-003 is formally accepted:
 
@@ -257,6 +264,6 @@ TIM-003 does not define:
 - ECM or Tarkin migration sequencing; or
 - a generic attack, rule, timing, or effect framework.
 
-Those details remain downstream ADR extraction, Contract definition,
-implementation workbooks, or implementation work according to document
-authority.
+Those details remain governed by `ADR-001` where it defines architecture, and
+by downstream Contracts, implementation workbooks, or implementation according
+to document authority.

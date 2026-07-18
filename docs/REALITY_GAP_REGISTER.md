@@ -5,8 +5,9 @@
 > recorded in `docs/current_state_architecture_maps.md`.
 >
 > This register does not assume that the documented architecture is correct, and
-> it does not assume that the implementation is wrong. Each discrepancy is an
-> architectural decision candidate. This document does not propose refactorings,
+> it does not assume that the implementation is wrong. A discrepancy may be an
+> architectural decision candidate or, where an accepted ADR now defines the
+> target, a tracked migration gap. This document does not propose refactorings,
 > rewrite contracts, or modify code.
 
 ## Classification Key
@@ -24,7 +25,7 @@
 
 | Risk | Source gaps | Current concern |
 |---|---|---|
-| Divergent authority for interaction flow | RG-003, RG-004, RG-014 | Some docs require command-only `InteractionFlow` mutation, while the code-derived map records scene-owned attack flow writes and publication snapshots. |
+| Current attack implementation differs from accepted authority | RG-003, RG-004, RG-014 | `ADR-001` resolves current-attack ownership and semantic mutation; the code-derived map still records scene-owned attack state, flow writes, and publication snapshots that require governed migration. |
 | Rule behavior split across multiple surfaces | RG-005, RG-006, RG-012 | New rules can be implemented inconsistently if Codex assumes `RuleRegistry` is already the only effective rule surface. |
 | Accidental spread of orchestration hubs | RG-001, RG-002, RG-007 | `GameManager`, direct wrapper calls, and scene-owned workflow are real current architecture, but may or may not be intended as the long-term norm. |
 | Stale architectural reference material | RG-008, RG-009, RG-010, RG-011 | Arc42/runtime docs contain obsolete paths, component names, counts, and behavior descriptions that can mislead implementation work. |
@@ -36,15 +37,23 @@
 |---|---|
 | Is the long-term architecture clean layered, autoload-centered, scene-orchestrated, or an explicit hybrid? | RG-001 |
 | Is EventBus intended to be the exclusive cross-system communication mechanism, or one integration mechanism beside `GameManager` wrappers and downward calls? | RG-002 |
-| Is direct `InteractionFlow` mutation by attack workflow accepted, temporary, or to be contained behind commands only? | RG-003, RG-014 |
 | Should all future rule work go through `RuleRegistry`, or should resolver/command-owned rule surfaces remain first-class for core rules? | RG-005, RG-006 |
 | What is the accepted responsibility boundary for `GameManager`? | RG-007 |
 | Which Arc42 sections are authoritative after the directory reorganization and Phase M/N rule work? | RG-008, RG-009, RG-010, RG-011, RG-012 |
 | Which architectural invariants must have explicit regression tests before related work continues? | RG-013 |
 
+## Resolved Owner Decisions
+
+| Resolved scope | Related gaps | Normative authority | Supporting evidence |
+|---|---|---|---|
+| Current-attack state ownership, semantic attack mutation, current-attack projection/routing authority, and staged one-owner migration | RG-003, current-attack portion of RG-004, RG-014 | `ADR-001` | `TIM-003` and `TIM-003-owner-decisions.md` |
+
 ## Areas Where Codex Must Not Spread Legacy Patterns
 
-- Do not add new direct `GameState.interaction_flow` writers outside existing attack/setup/flow surfaces without recording the gap and using an explicit command or existing local pattern.
+- For current attacks, follow `ADR-001`: do not add authoritative scene,
+  `InteractionFlow`, projection, or UI state, and do not add semantic mutation
+  outside replayable commands. For unresolved non-attack flows, do not add new
+  direct `GameState.interaction_flow` writers outside established surfaces.
 - Do not add new rule predicates in UI panels when a command/resolver/projection payload can own the decision.
 - Do not add new `GameManager` wrapper responsibilities unless the surrounding code already uses that wrapper path for the same command family.
 - Do not add new `PlayMode.is_network()` / `PlayMode.is_hot_seat()` branches in `src/scenes/` or `src/ui/` except where already allowed by current lint/contracts.
@@ -84,26 +93,26 @@
 | Field | Value |
 |---|---|
 | Classification | 4 - Temporary legacy gap |
-| Documented/intended behavior | `InteractionFlow` is a serializable field of `GameState` mutated only inside `GameCommand.execute()`. This appears in `docs/arc42/04_solution_strategy.md` lines 34-36, `.skills/architecture_patterns.md` lines 54-94, `.github/copilot-instructions.md` lines 136 and 140, and `docs/game_flow.md` lines 62-87. |
+| Documented/intended behavior | `ADR-001` is the normative authority: `GameState` owns one canonical `CurrentAttackState`, replayable commands own every semantic attack transition, and `InteractionFlow` remains non-authoritative. Older guidance also describes `InteractionFlow` as command-mutated serialized state. |
 | Actual/observed behavior | The current-state map records the attack workflow path as `AttackExecutor` / `TargetSelector` sequencing, combat resolver calculation, local `AttackFlowFSM` patching of `GameState.interaction_flow`, command persistence, and network snapshot publication. See `docs/current_state_architecture_maps.md` lines 215, 287, and 330. |
-| Evidence from both documents | Intended: Arc42 solution strategy lines 34-36; architecture skill lines 68-94; Copilot lines 136 and 140. Actual: current-state map lines 215 and 330. |
+| Evidence from both documents | Accepted target: `ADR-001` sections 2.1, 2.2, 2.6, and 2.7. Historical intent: Arc42 solution strategy lines 34-36; architecture skill lines 68-94; Copilot lines 136 and 140. Actual: current-state map lines 215 and 330. |
 | Risk | Save/replay/network determinism can be harder to reason about because some flow changes are local first and command-published later, not exclusively command-produced. |
-| Blocks current work? | Partially. It does not block using the current attack path, but it should block adding new non-command flow writers outside established surfaces. |
-| Decision needed later | Decide whether attack flow publication is an accepted special case, a temporary bridge, or should be converted to command-only mutation. |
-| Temporary rule for future Codex work | Do not introduce new direct `InteractionFlow` mutation surfaces. If attack flow work must touch this area, preserve existing publication behavior and document any new writer explicitly. |
+| Blocks current work? | It no longer blocks architecture decisions. Current-attack implementation work must consume `ADR-001` and follow its Model C-S migration constraint. |
+| Decision needed later | None for current-attack ownership or mutation. `ADR-001` prohibits permanent split ownership and direct scene/projection authority. |
+| Temporary rule for future Codex work | Follow `ADR-001`. Treat existing direct attack-flow writes as migration evidence, do not expand them, and preserve one authoritative owner for each migrated fact. |
 
 ### RG-004 - UI Projection Contract vs Scene-Owned Workflow State
 
 | Field | Value |
 |---|---|
 | Classification | 3 - Both may be valid, owner decision needed |
-| Documented/intended behavior | Docs describe `UIProjector.project(state, local_player_index)` as the single source of modal/HUD/sidebar decisions, with no mode/authority branching in presentation. See `docs/arc42/04_solution_strategy.md` lines 35-36 and `.skills/architecture_patterns.md` lines 70-80 and 96-105. |
+| Documented/intended behavior | For current attacks, `ADR-001` makes projection, interaction routing, scene mirrors, modal state, and UI non-authoritative. Broader docs describe `UIProjector.project(state, local_player_index)` as the source of modal/HUD/sidebar decisions, with no mode/authority branching in presentation. |
 | Actual/observed behavior | The current-state map records scene-owned workflow state and rule-relevant option assembly in presentation: `AttackExecutor`, `AttackPanelController`, `TargetSelector`, setup placement, squadron modal state, and local previews. See `docs/current_state_architecture_maps.md` lines 42, 73-74, 98, 128, 215, 251-252, and 323-333. |
-| Evidence from both documents | Intended: Arc42 solution strategy lines 35-36; architecture skill lines 70-80 and 96-105. Actual: current-state map lines 73-74, 215, and 330. |
+| Evidence from both documents | Accepted target: `ADR-001` sections 2.1, 2.2, and 2.6. Historical intent: Arc42 solution strategy lines 35-36; architecture skill lines 70-80 and 96-105. Actual: current-state map lines 73-74, 215, and 330. |
 | Risk | Presentation code can become an alternate rule/authority layer unless payload/projection boundaries are kept explicit. |
 | Blocks current work? | No, but it affects any work touching modal authority, attack panels, defender choices, setup previews, or network/hot-seat projection. |
-| Decision needed later | Decide which scene-owned states are acceptable transient preview state and which should be moved into command/projector contracts later. |
-| Temporary rule for future Codex work | Keep preview-only state transient. Rule-derived choices that affect legality must be validated by commands/resolvers and, where UI choice lists are involved, represented in JSON-safe payload metadata. |
+| Decision needed later | Current-attack authority is resolved by `ADR-001`. Decide only the remaining non-attack question of which scene-owned states are acceptable transient preview state and which require later command/projector contracts. |
+| Temporary rule for future Codex work | For current attacks, follow `ADR-001`. Elsewhere, keep preview-only state transient. Rule-derived choices that affect legality must be validated by commands/resolvers and, where UI choice lists are involved, represented in JSON-safe payload metadata. |
 
 ### RG-005 - RuleRegistry-Only Rule Architecture vs Hybrid Rule Implementation
 
@@ -226,14 +235,14 @@
 
 | Field | Value |
 |---|---|
-| Classification | 5 - Missing contract |
-| Documented/intended behavior | The intended docs define `InteractionFlow` as domain state mutated by command execution only. See `.skills/architecture_patterns.md` lines 54-94 and `.github/copilot-instructions.md` lines 136 and 140. |
-| Actual/observed behavior | The current-state map has two descriptions that need an ownership decision: line 287 says active interaction flow is mutated by command execution and attack-flow publishing, while line 330 says attack execution workflow writes/patches `GameState.interaction_flow`. |
-| Evidence from both documents | Intended: architecture skill lines 54-94; Copilot lines 136 and 140. Actual: current-state map lines 287 and 330. |
-| Risk | Future work may cite either row to justify different mutation paths, creating ambiguous authority. |
-| Blocks current work? | No for using current attack behavior. Yes for introducing a new flow owner or changing flow publication semantics. |
-| Decision needed later | Decide and document whether attack FSM writes are command-equivalent publication details, accepted direct writes, or legacy exceptions. |
-| Temporary rule for future Codex work | Treat `InteractionFlow` ownership as unresolved. Preserve existing behavior in narrow fixes and avoid expanding direct-write ownership. |
+| Classification | 4 - Temporary legacy gap |
+| Documented/intended behavior | `ADR-001` makes the canonical `GameState`-owned `CurrentAttackState` authoritative for current-attack facts, replayable commands authoritative for semantic attack mutation, and `InteractionFlow` non-authoritative. |
+| Actual/observed behavior | The current-state map records command and attack-flow publication in line 287 and scene-owned attack workflow writes/patches in line 330. These rows describe current implementation surfaces, not competing target authorities. |
+| Evidence from both documents | Accepted target: `ADR-001` sections 2.1, 2.2, 2.6, and 2.7. Actual: current-state map lines 287 and 330. |
+| Risk | Current implementation can drift from the accepted one-owner model if the legacy scene and flow surfaces are expanded during migration. |
+| Blocks current work? | It does not block architecture work. Current-attack implementation must follow `ADR-001` and its Model C-S constraint. |
+| Decision needed later | None for current-attack ownership, mutation, or projection authority. |
+| Temporary rule for future Codex work | Follow `ADR-001`; treat both current-state-map rows as implementation evidence and do not infer authority from either legacy write path. |
 
 ### RG-015 - Setup Contract Detail vs Architecture Map Abstraction
 

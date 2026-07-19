@@ -26,6 +26,8 @@
 ##   - [code]created_at: String[/code] — ISO-8601 UTC timestamp.
 ##   - [code]app_version: String[/code] — engine version string.
 ##   - [code]display_name: String[/code] — user-visible save name.
+##   - [code]next_command_sequence: int[/code] — synchronized reconstruction
+##     cursor owned by CommandProcessor.
 ##
 ## Rules Reference: Phase J1 — save game header schema.
 class_name SaveGameMetadata
@@ -53,6 +55,9 @@ var phase: String = ""
 var created_at: String = ""
 var app_version: String = ""
 var display_name: String = ""
+var next_command_sequence: int = 0
+var has_next_command_sequence: bool = true
+var _next_command_sequence_valid: bool = true
 
 
 ## Builds a default save-name template of the form
@@ -99,6 +104,7 @@ func to_dict() -> Dictionary:
 		"created_at": created_at,
 		"app_version": app_version,
 		"display_name": display_name,
+		"next_command_sequence": next_command_sequence,
 	}
 
 
@@ -116,7 +122,35 @@ static func from_dict(data: Dictionary) -> SaveGameMetadata:
 	meta.created_at = String(data.get("created_at", ""))
 	meta.app_version = String(data.get("app_version", ""))
 	meta.display_name = String(data.get("display_name", ""))
+	meta.has_next_command_sequence = data.has("next_command_sequence")
+	if meta.has_next_command_sequence:
+		var raw_sequence: Variant = data.get("next_command_sequence")
+		meta._next_command_sequence_valid = (
+				typeof(raw_sequence) == TYPE_INT \
+				or (typeof(raw_sequence) == TYPE_FLOAT \
+						and is_finite(float(raw_sequence)) \
+						and float(raw_sequence) == floor(float(raw_sequence)))) \
+				and int(raw_sequence) >= 0
+		if meta._next_command_sequence_valid:
+			meta.next_command_sequence = int(raw_sequence)
+		else:
+			meta.next_command_sequence = -1
+	else:
+		meta.next_command_sequence = 0
 	return meta
+
+
+func set_next_command_sequence(value: int) -> bool:
+	if value < 0:
+		return false
+	next_command_sequence = value
+	has_next_command_sequence = true
+	_next_command_sequence_valid = true
+	return true
+
+
+func is_next_command_sequence_valid() -> bool:
+	return not has_next_command_sequence or _next_command_sequence_valid
 
 
 ## Validates the header.  Returns a result dictionary
@@ -140,6 +174,8 @@ func validate() -> Dictionary:
 		return {"ok": false, "reason": "mode_invalid"}
 	if not is_display_name_valid(display_name):
 		return {"ok": false, "reason": "display_name_invalid"}
+	if not is_next_command_sequence_valid():
+		return {"ok": false, "reason": "schema_invalid"}
 	return {"ok": true, "reason": ""}
 
 

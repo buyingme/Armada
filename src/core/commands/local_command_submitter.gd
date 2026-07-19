@@ -12,3 +12,7 @@ extends CommandSubmitter
 ## Returns the execution result, or [code]{}[/code] on validation failure.
 func submit(command: GameCommand) -> Dictionary:
 	return CommandProcessor.submit(command)
+
+
+func submit_replay(command: GameCommand) -> Dictionary:
+	return CommandProcessor.submit_replay(command)

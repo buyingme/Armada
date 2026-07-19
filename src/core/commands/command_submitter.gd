@@ -16,6 +16,11 @@ func submit(command: GameCommand) -> Dictionary:
 	return {}
 
 
+## Submits a replay-recorded command with its authoritative sequence intact.
+func submit_replay(command: GameCommand) -> Dictionary:
+	return submit(command)
+
+
 ## Returns [code]true[/code] when waiting for server confirmation (network only).
 func is_awaiting_response() -> bool:
 	return false

@@ -112,13 +112,39 @@ func serialize() -> Dictionary:
 static func deserialize(data: Dictionary) -> GameReplay:
 	if not data.has("header") or not data.has("commands"):
 		return null
+	if not data.get("header") is Dictionary \
+			or not data.get("commands") is Array:
+		return null
+	var raw_commands: Array = data.get("commands") as Array
+	if not _has_contiguous_full_game_sequences(raw_commands):
+		return null
 	var replay := GameReplay.new()
-	replay.header = data["header"]
-	var raw_commands: Array = data.get("commands", [])
+	replay.header = (data["header"] as Dictionary).duplicate(true)
 	for cmd_dict: Variant in raw_commands:
-		if cmd_dict is Dictionary:
-			replay.commands.append(cmd_dict as Dictionary)
+		replay.commands.append((cmd_dict as Dictionary).duplicate(true))
 	return replay
+
+
+static func _has_contiguous_full_game_sequences(raw_commands: Array) -> bool:
+	for expected_sequence: int in range(raw_commands.size()):
+		var raw_command: Variant = raw_commands[expected_sequence]
+		if not raw_command is Dictionary:
+			return false
+		var raw_sequence: Variant = (raw_command as Dictionary).get("sequence")
+		var sequence: int = _integral_sequence(raw_sequence)
+		if sequence != expected_sequence:
+			return false
+	return true
+
+
+static func _integral_sequence(raw: Variant) -> int:
+	if typeof(raw) == TYPE_INT:
+		return int(raw)
+	if typeof(raw) == TYPE_FLOAT \
+			and is_finite(float(raw)) \
+			and float(raw) == floor(float(raw)):
+		return int(raw)
+	return -1
 
 
 ## Saves the replay to a JSON file on disk.

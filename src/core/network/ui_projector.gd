@@ -23,6 +23,14 @@ extends RefCounted
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+const TIMING_WINDOW_DEFINITIONS: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_definitions.gd")
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const TIMING_WINDOW_OPPORTUNITY: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_opportunity.gd")
+
+const TIMING_PROJECTION_METHOD: String = "project_timing_window_opportunity"
 
 
 ## Result of projecting a [GameState] for a single local viewer.
@@ -97,6 +105,10 @@ class UIIntent extends RefCounted:
 	## True when a passive peer should observe the Squadron Phase modal state.
 	var should_begin_passive_squadron_observer: bool = false
 
+	## Fresh, viewer-filtered timing-window display data. This projection is
+	## derived on every call and never owns legality, lifecycle, or completion.
+	var timing_window: Dictionary = {}
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -111,6 +123,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	var intent: UIIntent = UIIntent.new()
 	if state == null:
 		return intent
+	intent.timing_window = _project_timing_window(state, viewer_player)
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return intent
@@ -373,3 +386,138 @@ static func _merge_affordance_payload(
 	for key_var: Variant in payload.keys():
 		var key: String = str(key_var)
 		affordances[key] = payload[key_var]
+
+
+static func _project_timing_window(
+		state: GameState,
+		viewer_player: int) -> Dictionary:
+	if state.timing_window_state == null \
+			or not state.timing_window_state.active:
+		return {}
+	var derivation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.derive_current_opportunities(
+			state)
+	if not bool(derivation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		return {}
+	var definition: Dictionary = TIMING_WINDOW_DEFINITIONS.get_definition(
+			state.timing_window_state.timing_window_id)
+	var participant_key: String = str(definition.get(
+			TIMING_WINDOW_DEFINITIONS.KEY_PARTICIPANT_KEY, ""))
+	var query: Dictionary = RuleRegistry.timing_window_participants_for(
+			participant_key)
+	if not bool(query.get("ok", false)):
+		return {}
+	var projected_opportunities: Array[Dictionary] = []
+	for raw_opportunity: Variant in derivation.get(
+			TIMING_WINDOW_ORCHESTRATOR.KEY_OPPORTUNITIES, []):
+		if not raw_opportunity is Dictionary:
+			continue
+		var opportunity: Dictionary = raw_opportunity as Dictionary
+		var descriptor: Dictionary = _timing_descriptor_for_opportunity(
+				query.get("candidates", []), opportunity)
+		var projected: Dictionary = _project_timing_opportunity(
+				state, opportunity, descriptor, viewer_player)
+		if not projected.is_empty():
+			projected_opportunities.append(projected)
+	return {
+		"timing_window_id": state.timing_window_state.timing_window_id,
+		"lifecycle_id": state.timing_window_state.lifecycle_id,
+		"controller_player": state.timing_window_state.controller_player,
+		"is_interactive": viewer_player \
+				== state.timing_window_state.controller_player,
+		"opportunities": projected_opportunities,
+	}
+
+
+static func _timing_descriptor_for_opportunity(
+		raw_candidates: Variant,
+		opportunity: Dictionary) -> Dictionary:
+	if not raw_candidates is Array:
+		return {}
+	for raw_descriptor: Variant in raw_candidates as Array:
+		if not raw_descriptor is Dictionary:
+			continue
+		var descriptor: Dictionary = raw_descriptor as Dictionary
+		if str(descriptor.get(
+				RuleRegistry.PARTICIPANT_KEY_CAPABILITY_ID, "")) \
+					!= str(opportunity.get(
+						TIMING_WINDOW_OPPORTUNITY.KEY_CAPABILITY_ID, "")):
+			continue
+		if str(descriptor.get(
+				RuleRegistry.PARTICIPANT_KEY_SOURCE_OWNER_KIND, "")) \
+					!= str(opportunity.get(
+						TIMING_WINDOW_OPPORTUNITY.KEY_SOURCE_OWNER_KIND, "")):
+			continue
+		return descriptor
+	return {}
+
+
+static func _project_timing_opportunity(
+		state: GameState,
+		opportunity: Dictionary,
+		descriptor: Dictionary,
+		viewer_player: int) -> Dictionary:
+	var rule_script: GDScript = descriptor.get(
+			RuleRegistry.PARTICIPANT_KEY_RULE_SCRIPT) as GDScript
+	if rule_script == null or not rule_script.has_method(TIMING_PROJECTION_METHOD):
+		return {}
+	var raw_policy: Variant = rule_script.call(
+			TIMING_PROJECTION_METHOD,
+			state,
+			state.timing_window_state,
+			opportunity.duplicate(true),
+			viewer_player)
+	if not raw_policy is Dictionary:
+		return {}
+	var policy: Dictionary = raw_policy as Dictionary
+	if not _valid_timing_projection_policy(policy) \
+			or not bool(policy.get("visible", false)):
+		return {}
+	var controller: int = int(opportunity.get(
+			TIMING_WINDOW_OPPORTUNITY.KEY_CONTROLLER_PLAYER, -1))
+	var is_interactive: bool = viewer_player == controller
+	var projected: Dictionary = {
+		"capability_id": str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_CAPABILITY_ID, "")),
+		"display_key": str(policy.get("display_key", "")),
+		"resolution_kind": str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_RESOLUTION_KIND, "")),
+		"blocking": bool(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_BLOCKING, false)),
+		"is_interactive": is_interactive,
+		"can_decline": is_interactive \
+				and not (opportunity.get(
+						TIMING_WINDOW_OPPORTUNITY.KEY_DECLINE_INTENT, {}) \
+						as Dictionary).is_empty(),
+	}
+	if bool(policy.get("source_visible", false)):
+		projected["opportunity_id"] = str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_ID, ""))
+		projected["source_owner_kind"] = str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_SOURCE_OWNER_KIND, ""))
+		projected["runtime_source_id"] = str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_RUNTIME_SOURCE_ID, ""))
+		projected["semantic_key"] = str(opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_SEMANTIC_KEY, ""))
+	if is_interactive:
+		projected["use_intent"] = (opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_USE_INTENT, {}) \
+				as Dictionary).duplicate(true)
+		projected["decline_intent"] = (opportunity.get(
+				TIMING_WINDOW_OPPORTUNITY.KEY_DECLINE_INTENT, {}) \
+				as Dictionary).duplicate(true)
+	return projected
+
+
+static func _valid_timing_projection_policy(policy: Dictionary) -> bool:
+	var allowed_keys: Array[String] = [
+		"visible",
+		"source_visible",
+		"display_key",
+	]
+	for raw_key: Variant in policy.keys():
+		if typeof(raw_key) != TYPE_STRING or not allowed_keys.has(str(raw_key)):
+			return false
+	return typeof(policy.get("visible")) == TYPE_BOOL \
+			and typeof(policy.get("source_visible")) == TYPE_BOOL \
+			and typeof(policy.get("display_key")) == TYPE_STRING \
+			and not str(policy.get("display_key", "")).is_empty()

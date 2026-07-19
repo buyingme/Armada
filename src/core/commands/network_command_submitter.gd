@@ -57,6 +57,10 @@ func submit(command: GameCommand) -> Dictionary:
 	return AWAITING_REMOTE_RESULT.duplicate()
 
 
+func submit_replay(command: GameCommand) -> Dictionary:
+	return submit(command)
+
+
 ## Returns [code]true[/code] when waiting for the server's response.
 func is_awaiting_response() -> bool:
 	return _awaiting

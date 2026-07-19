@@ -19,6 +19,10 @@ extends Node
 
 const MODAL_ROUTER_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/modal_router.gd")
+const TIMING_WINDOW_DEFINITIONS: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_definitions.gd")
+const TIMING_WINDOW_OPPORTUNITY: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_opportunity.gd")
 
 # ---------------------------------------------------------------------------
 # Injected dependencies
@@ -60,6 +64,32 @@ func initialize(
 			find_squadron_token_fn)
 
 
+## Dispatches one derived use/decline intent through the active submitter.
+## The submitted command still owns all applicability and authorization checks.
+func submit_timing_window_intent(intent: Dictionary) -> Dictionary:
+	if not _is_structured_timing_window_intent(intent):
+		return {}
+	var command_type: String = str(intent.get(
+			TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_COMMAND_TYPE, ""))
+	if _is_timing_window_continuation(command_type):
+		return {}
+	var command: GameCommand = GameCommand.deserialize({
+		"type": command_type,
+		"player": int(intent.get(
+				TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PLAYER, -1)),
+		"sequence": -1,
+		"payload": (intent.get(
+				TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PAYLOAD) \
+				as Dictionary).duplicate(true),
+	})
+	if command == null:
+		return {}
+	var submitter: CommandSubmitter = GameManager.get_command_submitter()
+	if submitter == null:
+		return {}
+	return submitter.submit(command)
+
+
 func _create_modal_router(
 		panel_mgr: UIPanelManager,
 		attack_panel_controller: AttackPanelController,
@@ -79,7 +109,8 @@ func _create_modal_router(
 			activation_ctx,
 			find_ship_token_fn,
 			find_squadron_token_fn,
-			Callable(self, "_route_to_controllers"))
+			Callable(self, "_route_to_controllers"),
+			Callable(self, "submit_timing_window_intent"))
 
 
 # ---------------------------------------------------------------------------
@@ -138,3 +169,46 @@ func _destroyed_ship_signal_target(ship: ShipInstance) -> Node:
 		if token is Node:
 			return token as Node
 	return null
+
+
+func _is_structured_timing_window_intent(intent: Dictionary) -> bool:
+	var expected_keys: Array[String] = [
+		TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_COMMAND_TYPE,
+		TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PLAYER,
+		TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PAYLOAD,
+	]
+	for raw_key: Variant in intent.keys():
+		if typeof(raw_key) != TYPE_STRING \
+				or not expected_keys.has(str(raw_key)):
+			return false
+	if typeof(intent.get(
+			TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_COMMAND_TYPE)) != TYPE_STRING \
+			or str(intent.get(
+				TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_COMMAND_TYPE, "")).is_empty():
+		return false
+	var player: Variant = intent.get(
+			TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PLAYER)
+	if typeof(player) != TYPE_INT \
+			or int(player) < 0 or int(player) >= Constants.PLAYER_COUNT:
+		return false
+	var payload: Variant = intent.get(
+			TIMING_WINDOW_OPPORTUNITY.INTENT_KEY_PAYLOAD)
+	if not payload is Dictionary:
+		return false
+	for key: String in ["lifecycle_id", "source_owner_kind",
+			"runtime_source_id", "semantic_key"]:
+		if typeof((payload as Dictionary).get(key)) != TYPE_STRING \
+				or str((payload as Dictionary).get(key, "")).is_empty():
+			return false
+	return true
+
+
+func _is_timing_window_continuation(command_type: String) -> bool:
+	for timing_window_id: String in \
+			TIMING_WINDOW_DEFINITIONS.all_timing_window_ids():
+		var definition: Dictionary = TIMING_WINDOW_DEFINITIONS.get_definition(
+				timing_window_id)
+		if command_type == str(definition.get(
+				TIMING_WINDOW_DEFINITIONS.KEY_CONTINUATION_COMMAND_TYPE, "")):
+			return true
+	return false

@@ -135,6 +135,79 @@ func test_network_tarkin_command_phase_mirrors_all_imperial_dials_expected() -> 
 			"Second Imperial ship should have its mirrored command dial.")
 
 
+func test_negative_network_sequence_is_rejected_without_mutation() -> void:
+	_install_client_state(false)
+	var command: AssignDialCommand = _assign_cmd(
+			0, 0, Constants.CommandType.NAVIGATE, -1)
+
+	GameManager._on_network_command_result(
+			command.serialize(), _assign_result(0))
+
+	assert_eq(CommandProcessor.get_next_sequence(), 0)
+	assert_eq(CommandProcessor.get_command_count(), 0)
+	assert_eq(GameManager._pending_network_results.size(), 0)
+	assert_engine_error(1,
+			"Unsequenced authoritative result should produce one diagnostic.")
+
+
+func test_failed_mirror_keeps_both_cursors_and_buffer_position() -> void:
+	_install_client_state(false)
+	var invalid: AssignDialCommand = _assign_cmd(
+			0, 99, Constants.CommandType.NAVIGATE, 0)
+	var later: AssignDialCommand = _assign_cmd(
+			1, 0, Constants.CommandType.REPAIR, 1)
+	GameManager._on_network_command_result(
+			later.serialize(), _assign_result(0))
+
+	GameManager._on_network_command_result(
+			invalid.serialize(), _assign_result(99))
+
+	assert_eq(CommandProcessor.get_next_sequence(), 0,
+			"Rejected mirror command must not advance CommandProcessor.")
+	assert_eq(GameManager._next_network_result_sequence, 0,
+			"Rejected mirror command must not advance network ordering.")
+	assert_eq(GameManager._pending_network_results.size(), 2,
+			"Failed position and later buffered result must remain fail-closed.")
+	assert_engine_error(2,
+			"Command rejection and stopped mirror application should diagnose.")
+
+
+func test_duplicate_buffered_result_cannot_replace_first_payload() -> void:
+	_install_client_state(false)
+	var first_later: AssignDialCommand = _assign_cmd(
+			1, 0, Constants.CommandType.NAVIGATE, 1)
+	var duplicate_later: AssignDialCommand = _assign_cmd(
+			1, 1, Constants.CommandType.REPAIR, 1)
+	GameManager._on_network_command_result(
+			first_later.serialize(), _assign_result(0))
+	GameManager._on_network_command_result(
+			duplicate_later.serialize(), _assign_result(1))
+	GameManager._on_network_command_result(
+			_assign_cmd(0, 0, Constants.CommandType.SQUADRON, 0).serialize(),
+			_assign_result(0))
+
+	assert_eq(CommandProcessor.get_command_count(), 2)
+	assert_eq(CommandProcessor.get_history()[1].payload.get("ship_index"), 0,
+			"First buffered authoritative payload must win deterministically.")
+	assert_engine_error(1,
+			"Duplicate buffered result should produce one diagnostic.")
+
+
+func test_reconstructed_cursor_initializes_network_result_ordering() -> void:
+	var state: GameState = _install_client_state(false)
+	assert_true(CommandProcessor.restore_next_sequence(4))
+	GameManager._reset_network_result_ordering()
+	assert_eq(GameManager._next_network_result_sequence, 4)
+
+	GameManager._on_network_command_result(
+			_assign_cmd(0, 0, Constants.CommandType.NAVIGATE, 4).serialize(),
+			_assign_result(0))
+
+	assert_eq(CommandProcessor.get_next_sequence(), 5)
+	assert_eq(GameManager._next_network_result_sequence, 5)
+	assert_eq(_ship(state, 0, 0).command_dial_stack.get_dial_count(), 1)
+
+
 func _install_client_state(with_tarkin: bool) -> GameState:
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()

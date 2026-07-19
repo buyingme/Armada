@@ -111,6 +111,14 @@ signal obstruction_die_selected(colour_key: String)
 ## attack-pool removal prompt.
 signal attack_pool_die_selected(reason_id: String, colour_key: String)
 
+## Emitted with the exact derived command intent selected from the shared
+## timing-window opportunity list.
+signal timing_window_use_requested(intent: Dictionary)
+
+## Emitted with the exact derived decline intent selected from the shared
+## timing-window opportunity list.
+signal timing_window_decline_requested(intent: Dictionary)
+
 
 ## Logger.
 var _log: GameLogger = GameLogger.new("AttackSimPanel")
@@ -235,6 +243,11 @@ var _counter_container: VBoxContainer = null
 var _counter_attack_button: Button = null
 ## Button that skips the Counter attack.
 var _counter_skip_button: Button = null
+
+## Shared timing-window opportunity section. Its rows contain derived
+## presentation data only and are rebuilt after every authoritative result.
+var _timing_window_container: VBoxContainer = null
+var _timing_window_rows: VBoxContainer = null
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -429,6 +442,50 @@ func get_body_text() -> String:
 	return ""
 
 
+## Renders all currently projected timing-window choices in stable order.
+## Projected command intents remain transient button data; command validation
+## and mutation still occur through the normal authoritative command path.
+func show_timing_window_opportunities(
+		opportunities: Array,
+		interactive: bool) -> void:
+	if _content == null:
+		_attack_execution_mode = true
+		_build_ui()
+		_set_prompt("Attack", "Resolve available modifiers.")
+		visible = true
+	if _timing_window_container == null or _timing_window_rows == null:
+		return
+	_clear_timing_window_rows()
+	for index: int in range(opportunities.size()):
+		var raw: Variant = opportunities[index]
+		if not raw is Dictionary:
+			continue
+		_timing_window_rows.add_child(_build_timing_window_row(
+				raw as Dictionary, index, interactive))
+	_timing_window_container.visible = not _timing_window_rows.get_children().is_empty()
+	_request_deferred_layout()
+
+
+func hide_timing_window_opportunities() -> void:
+	if _timing_window_container == null:
+		return
+	_clear_timing_window_rows()
+	_timing_window_container.visible = false
+
+
+## Prevents duplicate local selection while the authoritative result is pending.
+func disable_timing_window_actions() -> void:
+	if _timing_window_rows == null:
+		return
+	for node: Node in _timing_window_rows.find_children("*", "Button", true, false):
+		(node as Button).disabled = true
+
+
+func timing_window_choice_count() -> int:
+	return _timing_window_rows.get_child_count() \
+			if _timing_window_rows != null else 0
+
+
 # =========================================================================
 # UI Construction
 # =========================================================================
@@ -495,6 +552,7 @@ func _build_ui() -> void:
 	_content.add_child(_build_redirect_section())
 	_content.add_child(_build_damage_info_section())
 	_content.add_child(_build_counter_section())
+	_content.add_child(_build_timing_window_section())
 
 
 ## Creates and applies the standard modal panel StyleBox.
@@ -830,6 +888,78 @@ func _build_damage_info_section() -> VBoxContainer:
 	return _damage_info_container
 
 
+func _build_timing_window_section() -> VBoxContainer:
+	_timing_window_container = VBoxContainer.new()
+	_timing_window_container.name = "TimingWindowChoices"
+	_timing_window_container.add_theme_constant_override("separation", 6)
+	_timing_window_container.visible = false
+	var heading: Label = Label.new()
+	heading.text = "Available modifiers"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", 13)
+	heading.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+	_timing_window_container.add_child(heading)
+	_timing_window_rows = VBoxContainer.new()
+	_timing_window_rows.name = "TimingWindowRows"
+	_timing_window_rows.add_theme_constant_override("separation", 4)
+	_timing_window_container.add_child(_timing_window_rows)
+	return _timing_window_container
+
+
+func _build_timing_window_row(
+		opportunity: Dictionary,
+		index: int,
+		interactive: bool) -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.name = "TimingWindowRow_%d" % index
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	var display_key: String = str(opportunity.get("display_key", "modifier"))
+	var label: Label = Label.new()
+	label.text = display_key.replace(".", " ").capitalize()
+	label.tooltip_text = display_key
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var can_interact: bool = interactive \
+			and bool(opportunity.get("is_interactive", false))
+	if can_interact and opportunity.get("use_intent") is Dictionary:
+		var use_button: Button = Button.new()
+		use_button.name = "TimingUseButton_%d" % index
+		use_button.text = "Use"
+		use_button.tooltip_text = display_key
+		use_button.pressed.connect(_on_timing_window_use.bind(
+				(opportunity.get("use_intent") as Dictionary).duplicate(true)))
+		row.add_child(use_button)
+	if can_interact and bool(opportunity.get("can_decline", false)) \
+			and opportunity.get("decline_intent") is Dictionary:
+		var decline_button: Button = Button.new()
+		decline_button.name = "TimingDeclineButton_%d" % index
+		decline_button.text = "Decline"
+		decline_button.tooltip_text = display_key
+		decline_button.pressed.connect(_on_timing_window_decline.bind(
+				(opportunity.get("decline_intent") as Dictionary).duplicate(true)))
+		row.add_child(decline_button)
+	return row
+
+
+func _clear_timing_window_rows() -> void:
+	if _timing_window_rows == null:
+		return
+	for child: Node in _timing_window_rows.get_children():
+		_timing_window_rows.remove_child(child)
+		child.queue_free()
+
+
+func _on_timing_window_use(intent: Dictionary) -> void:
+	disable_timing_window_actions()
+	timing_window_use_requested.emit(intent.duplicate(true))
+
+
+func _on_timing_window_decline(intent: Dictionary) -> void:
+	disable_timing_window_actions()
+	timing_window_decline_requested.emit(intent.duplicate(true))
+
+
 ## Updates the title and body text.
 func _set_prompt(title: String, body: String) -> void:
 	if _title_label:
@@ -902,6 +1032,8 @@ func _null_defense_step_refs() -> void:
 	_counter_container = null
 	_counter_attack_button = null
 	_counter_skip_button = null
+	_timing_window_container = null
+	_timing_window_rows = null
 
 
 ## Resets selection/state tracking variables.

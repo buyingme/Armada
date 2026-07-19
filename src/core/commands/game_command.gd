@@ -124,6 +124,13 @@ static func registered_types() -> Array[String]:
 	return types
 
 
+## Returns whether [param type_name] resolves through the canonical command
+## registry. Timing-window projections use this without creating another
+## command catalogue.
+static func is_type_registered(type_name: String) -> bool:
+	return not type_name.is_empty() and _registry.has(type_name)
+
+
 ## Creates a command by type name via the registry.
 ## Returns null if the type is not registered.
 static func _create_by_type(type_name: String, player: int,

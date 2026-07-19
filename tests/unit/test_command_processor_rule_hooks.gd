@@ -131,7 +131,9 @@ func test_replay_commands_do_not_synthesize_observer_followups() -> void:
 func test_submit_mirror_suppresses_observer_followups_but_emits() -> void:
 	RuleRegistry.register_observer(_observer(
 			"spawn_followup", Callable(self, "_observer_followup")))
-	_processor.submit_mirror(_HookCommand.new(TEST_TYPE, 0, {"source": "root"}))
+	var mirrored := _HookCommand.new(TEST_TYPE, 0, {"source": "root"})
+	mirrored.sequence = 0
+	_processor.submit_mirror(mirrored)
 	assert_eq(_processor.get_command_count(), 1,
 			"Mirrored commands should not synthesize observer follow-ups.")
 	assert_eq(_executed_sources, ["root"],

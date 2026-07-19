@@ -166,12 +166,25 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 
 func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
 	var server_state: GameState = _server_state_mid_attack()
+	server_state.current_phase = Constants.GamePhase.SHIP
+	server_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0,
+			Constants.Visibility.ALL,
+			{"attacker_player": 0})
 	assert_true(server_state.set_timing_window_state(_make_active_timing_window(
-			"attack_defense_tokens",
-			"spend_defense_tokens",
-			"tw-reconnect-001",
-			1,
-			{"continuation_id": "commit_defense"})),
+			"attack_modify",
+			"attack_modify",
+			"attack_modify:1",
+			0,
+			{
+				"continuation_id": "confirm_attack_dice",
+				"resume_point": "attack_after_modify",
+				"source_id": "fixture-attack",
+				"source_type": "current_attack",
+				"owner_player": 0,
+			})),
 			"GameState should accept valid timing-window lifecycle state")
 
 	var raw: Dictionary = server_state.serialize()

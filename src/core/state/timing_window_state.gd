@@ -129,6 +129,10 @@ func configure_active(
 		controller: int = -1,
 		continuation: Dictionary = {},
 		window_status: String = STATUS_OPEN) -> bool:
+	if continuation.has(CONTINUATION_KEY_OWNER_PLAYER) \
+			and typeof(continuation.get(
+					CONTINUATION_KEY_OWNER_PLAYER)) != TYPE_INT:
+		return false
 	var data: Dictionary = {
 		SERIALIZED_KEY_ACTIVE: true,
 		SERIALIZED_KEY_WINDOW_ID: window_id,
@@ -312,7 +316,12 @@ static func _normalized_continuation_context(context: Dictionary) -> Variant:
 			return null
 		var value: Variant = context[key]
 		if key_string == CONTINUATION_KEY_OWNER_PLAYER:
-			if typeof(value) != TYPE_INT or not _is_valid_controller(int(value)):
+			if typeof(value) != TYPE_INT \
+					and (typeof(value) != TYPE_FLOAT \
+							or not is_finite(float(value)) \
+							or float(value) != floor(float(value))):
+				return null
+			if not _is_valid_controller(int(value)):
 				return null
 			normalized[key_string] = int(value)
 			continue

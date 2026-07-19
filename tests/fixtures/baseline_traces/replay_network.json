@@ -2859,7 +2859,7 @@
 				"squadron_index": 2
 			},
 			"player": 1,
-			"sequence": 151,
+			"sequence": 150,
 			"type": "activate_squadron"
 		},
 		{
@@ -2869,7 +2869,7 @@
 				"squadron_index": 2
 			},
 			"player": 1,
-			"sequence": 152,
+			"sequence": 151,
 			"type": "move_squadron"
 		},
 		{
@@ -2877,7 +2877,7 @@
 				"squadron_index": 4
 			},
 			"player": 1,
-			"sequence": 153,
+			"sequence": 152,
 			"type": "activate_squadron"
 		},
 		{
@@ -2887,7 +2887,7 @@
 				"squadron_index": 4
 			},
 			"player": 1,
-			"sequence": 154,
+			"sequence": 153,
 			"type": "move_squadron"
 		},
 		{
@@ -2895,7 +2895,7 @@
 				"squadron_index": 3
 			},
 			"player": 1,
-			"sequence": 155,
+			"sequence": 154,
 			"type": "activate_squadron"
 		},
 		{
@@ -2905,7 +2905,7 @@
 				"squadron_index": 3
 			},
 			"player": 1,
-			"sequence": 156,
+			"sequence": 155,
 			"type": "move_squadron"
 		},
 		{
@@ -2913,7 +2913,7 @@
 				"squadron_index": 5
 			},
 			"player": 1,
-			"sequence": 157,
+			"sequence": 156,
 			"type": "activate_squadron"
 		},
 		{
@@ -2923,7 +2923,7 @@
 				"squadron_index": 5
 			},
 			"player": 1,
-			"sequence": 158,
+			"sequence": 157,
 			"type": "move_squadron"
 		},
 		{
@@ -2931,19 +2931,19 @@
 				"next_phase": 4
 			},
 			"player": 1,
-			"sequence": 159,
+			"sequence": 158,
 			"type": "advance_phase"
 		},
 		{
 			"payload": {},
 			"player": 1,
-			"sequence": 160,
+			"sequence": 159,
 			"type": "status_phase_cleanup"
 		},
 		{
 			"payload": {},
 			"player": 1,
-			"sequence": 161,
+			"sequence": 160,
 			"type": "start_round"
 		}
 	],

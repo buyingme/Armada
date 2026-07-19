@@ -26,6 +26,7 @@ extends Node
 var _attack_executor: AttackExecutor = null
 var _panel_mgr: UIPanelManager = null
 var _target_selector: TargetSelector = null
+var _timing_window_submit_fn: Callable = Callable()
 
 
 ## Initialises the controller with the references it needs to drive the
@@ -172,6 +173,62 @@ func close_mirror() -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
 		return
 	_panel_mgr.attack_panel_mirror.close()
+
+
+## Applies one fresh viewer-specific timing-window projection to the existing
+## attack-panel composition. The panel retains only transient projected intent;
+## authoritative legality and lifecycle remain command-side.
+func sync_timing_window_projection(
+		timing_window: Dictionary,
+		submit_fn: Callable) -> void:
+	_timing_window_submit_fn = submit_fn
+	var primary_panel: AttackSimPanel = _target_selector.get_panel() \
+			if _target_selector != null else null
+	var mirror_panel: AttackSimPanel = null
+	if _panel_mgr != null and _panel_mgr.attack_panel_mirror != null:
+		mirror_panel = _panel_mgr.attack_panel_mirror.get_panel()
+	_hide_timing_projection(primary_panel)
+	if mirror_panel != primary_panel:
+		_hide_timing_projection(mirror_panel)
+	if timing_window.is_empty():
+		return
+	var interactive: bool = bool(timing_window.get("is_interactive", false))
+	var panel: AttackSimPanel = primary_panel if interactive else mirror_panel
+	if panel == null:
+		panel = mirror_panel if mirror_panel != null else primary_panel
+	if panel == null:
+		return
+	_connect_timing_panel(panel)
+	panel.show_timing_window_opportunities(
+			timing_window.get("opportunities", []) as Array,
+			interactive)
+
+
+func _hide_timing_projection(panel: AttackSimPanel) -> void:
+	if panel != null:
+		panel.hide_timing_window_opportunities()
+
+
+func _connect_timing_panel(panel: AttackSimPanel) -> void:
+	var use_callable: Callable = Callable(self, "_on_timing_window_use")
+	if not panel.timing_window_use_requested.is_connected(use_callable):
+		panel.timing_window_use_requested.connect(use_callable)
+	var decline_callable: Callable = Callable(self, "_on_timing_window_decline")
+	if not panel.timing_window_decline_requested.is_connected(decline_callable):
+		panel.timing_window_decline_requested.connect(decline_callable)
+
+
+func _on_timing_window_use(intent: Dictionary) -> void:
+	_submit_timing_window_intent(intent)
+
+
+func _on_timing_window_decline(intent: Dictionary) -> void:
+	_submit_timing_window_intent(intent)
+
+
+func _submit_timing_window_intent(intent: Dictionary) -> void:
+	if _timing_window_submit_fn.is_valid():
+		_timing_window_submit_fn.call(intent.duplicate(true))
 
 
 # ---------------------------------------------------------------------------

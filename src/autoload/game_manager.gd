@@ -17,6 +17,10 @@
 extends Node
 
 
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+
+
 const CommitSetupObstacleCommandScript = preload(
 		"res://src/core/commands/commit_setup_obstacle_command.gd")
 const CommitSetupDeploymentCommandScript = preload(
@@ -322,11 +326,23 @@ func _setup_bootstrap_error_text(result: Dictionary) -> String:
 ## [member active_player], clears per-round trackers, and emits
 ## [signal EventBus.game_started] so the board can rebuild.
 func start_new_game_from_state(
-		state: GameState, scenario_id: String) -> void:
+		state: GameState,
+		scenario_id: String,
+		next_command_sequence: int = 0) -> bool:
 	if state == null:
 		_log.error("start_new_game_from_state called with null state.")
-		return
+		return false
+	if next_command_sequence < 0:
+		_log.error("Loaded command sequence cursor is invalid.")
+		return false
+	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
+	if not bool(reconciliation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		_log.error("Loaded timing-window lifecycle is inconsistent.")
+		return false
 	CommandProcessor.reset()
+	if not CommandProcessor.restore_next_sequence(next_command_sequence):
+		_log.error("Loaded command sequence cursor is invalid.")
+		return false
 	_reset_network_result_ordering()
 	current_game_state = state
 	if current_game_state.interaction_flow == null:
@@ -349,6 +365,7 @@ func start_new_game_from_state(
 			current_game_state.current_phase])
 	EventBus.game_started.emit()
 	SaveGameManager.mark_clean()
+	return true
 
 
 func _install_setup_package_state(
@@ -2107,7 +2124,7 @@ func _on_network_command_result(
 
 func _reset_network_result_ordering() -> void:
 	_pending_network_results.clear()
-	_next_network_result_sequence = CommandProcessor.get_command_count()
+	_next_network_result_sequence = CommandProcessor.get_next_sequence()
 
 
 func _queue_network_command_result(
@@ -2115,10 +2132,14 @@ func _queue_network_command_result(
 		result: Dictionary) -> void:
 	var sequence: int = cmd.sequence
 	if sequence < 0:
-		_apply_network_command_result(cmd, result)
+		_log.warn("Rejecting unsequenced network command result.")
 		return
 	if sequence < _next_network_result_sequence:
 		_log.warn("Ignoring duplicate or stale network command seq=%d." %
+				sequence)
+		return
+	if _pending_network_results.has(sequence):
+		_log.warn("Ignoring duplicate buffered network command seq=%d." %
 				sequence)
 		return
 	_pending_network_results[sequence] = {
@@ -2132,22 +2153,30 @@ func _flush_ordered_network_results() -> void:
 	while _pending_network_results.has(_next_network_result_sequence):
 		var entry: Dictionary = _pending_network_results[
 				_next_network_result_sequence] as Dictionary
-		_pending_network_results.erase(_next_network_result_sequence)
-		_apply_network_command_result(
+		if not _apply_network_command_result(
 				entry.get("command") as GameCommand,
-				entry.get("result") as Dictionary)
+				entry.get("result") as Dictionary):
+			return
+		_pending_network_results.erase(_next_network_result_sequence)
 		_next_network_result_sequence += 1
 
 
 func _apply_network_command_result(
 		cmd: GameCommand,
-		result: Dictionary) -> void:
+		result: Dictionary) -> bool:
 	if cmd == null:
-		return
+		return false
+	var cursor_before: int = CommandProcessor.get_next_sequence()
 	CommandProcessor.submit_mirror(cmd)
+	if CommandProcessor.get_next_sequence() != cursor_before + 1 \
+			or CommandProcessor.get_next_sequence() != cmd.sequence + 1:
+		_log.warn("Failed to apply authoritative network command seq=%d." %
+				cmd.sequence)
+		return false
 	_handle_remote_command_effects(cmd, result)
 	if _submitter is NetworkCommandSubmitter:
 		(_submitter as NetworkCommandSubmitter).clear_awaiting()
+	return true
 
 
 ## Emits the appropriate EventBus signals after a remotely-received command

@@ -613,7 +613,11 @@ func _submit_command_to_server(data: Dictionary) -> void:
 					sender_id, cmd.player_index, expected_player,
 					cmd.command_type])
 			return
-	var result: Dictionary = CommandProcessor.submit_deferred_followups(cmd)
+	var result: Dictionary
+	if ReplayDriver.enabled:
+		result = CommandProcessor.submit_replay_deferred_followups(cmd)
+	else:
+		result = CommandProcessor.submit_deferred_followups(cmd)
 	if result.is_empty():
 		_log.info("Command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])

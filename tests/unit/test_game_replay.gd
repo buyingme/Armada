@@ -202,6 +202,39 @@ func test_deserialize_null_on_empty_dict() -> void:
 			"Should return null on empty dictionary.")
 
 
+func test_deserialize_rejects_missing_command_sequence() -> void:
+	var data: Dictionary = _make_replay(1).serialize()
+	(data["commands"] as Array)[0].erase("sequence")
+	assert_null(GameReplay.deserialize(data),
+			"Full-game replay must reject a missing sequence before playback.")
+
+
+func test_deserialize_rejects_negative_command_sequence() -> void:
+	var data: Dictionary = _make_replay(1).serialize()
+	(data["commands"] as Array)[0]["sequence"] = -1
+	assert_null(GameReplay.deserialize(data),
+			"Full-game replay must reject a negative sequence.")
+
+
+func test_deserialize_rejects_duplicate_or_gapped_command_sequence() -> void:
+	var duplicate: Dictionary = _make_replay(3).serialize()
+	(duplicate["commands"] as Array)[1]["sequence"] = 0
+	assert_null(GameReplay.deserialize(duplicate),
+			"Full-game replay must reject duplicate sequence values.")
+	var gap: Dictionary = _make_replay(3).serialize()
+	(gap["commands"] as Array)[1]["sequence"] = 2
+	assert_null(GameReplay.deserialize(gap),
+			"Full-game replay must reject sequence gaps.")
+
+
+func test_deserialize_accepts_integral_json_float_sequences() -> void:
+	var data: Dictionary = _make_replay(2).serialize()
+	(data["commands"] as Array)[0]["sequence"] = 0.0
+	(data["commands"] as Array)[1]["sequence"] = 1.0
+	assert_not_null(GameReplay.deserialize(data),
+			"JSON-parsed integral numbers should preserve contiguous sequences.")
+
+
 # ======================================================================
 # File I/O — save and load
 # ======================================================================

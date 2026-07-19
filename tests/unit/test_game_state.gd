@@ -144,15 +144,7 @@ func test_serialize_round_trip_preserves_inactive_timing_window_state() -> void:
 
 
 func test_serialize_round_trip_preserves_active_timing_window_state() -> void:
-	var state := GameState.new()
-	state.initialize()
-	assert_true(state.set_timing_window_state(_make_active_timing_window(
-			"attack_modify",
-			"modify_attack_dice",
-			"tw-0001",
-			0,
-			{"continuation_id": "confirm_attack_dice"})),
-			"GameState should accept a valid timing-window lifecycle state")
+	var state: GameState = _make_active_attack_game_state(1)
 
 	var restored := GameState.deserialize(state.serialize())
 
@@ -419,46 +411,28 @@ func test_active_terminal_timing_window_statuses_are_rejected() -> void:
 
 
 func test_same_type_timing_windows_have_distinct_lifecycle_identities() -> void:
-	var first = _make_active_timing_window(
-			"attack_modify",
-			"modify_attack_dice",
-			"tw-same-type-001",
-			0,
-			{"continuation_id": "confirm_attack_dice"})
-	var second = _make_active_timing_window(
-			"attack_modify",
-			"modify_attack_dice",
-			"tw-same-type-002",
-			0,
-			{"continuation_id": "confirm_attack_dice"})
+	var first_state: GameState = _make_active_attack_game_state(11)
+	var second_state: GameState = _make_active_attack_game_state(12)
+	var first: TimingWindowState = first_state.timing_window_state
+	var second: TimingWindowState = second_state.timing_window_state
 
-	var restored_first := GameState.deserialize(
-			{"timing_window_state": first.serialize()})
-	var restored_second := GameState.deserialize(
-			{"timing_window_state": second.serialize()})
+	var restored_first := GameState.deserialize(first_state.serialize())
+	var restored_second := GameState.deserialize(second_state.serialize())
 
 	assert_false(first.equals(second),
 			"Same-type windows should remain distinct by lifecycle identity")
 	assert_eq(
 			restored_first.timing_window_state.lifecycle_id,
-			"tw-same-type-001",
+			"attack_modify:11",
 			"First same-type lifecycle identity should round-trip")
 	assert_eq(
 			restored_second.timing_window_state.lifecycle_id,
-			"tw-same-type-002",
+			"attack_modify:12",
 			"Second same-type lifecycle identity should round-trip")
 
 
 func test_timing_window_state_nested_dictionary_does_not_alias() -> void:
-	var state := GameState.new()
-	state.initialize()
-	assert_true(state.set_timing_window_state(_make_active_timing_window(
-			"attack_modify",
-			"modify_attack_dice",
-			"tw-0004",
-			0,
-			{"continuation_id": "confirm_attack_dice"})),
-			"GameState should accept valid timing-window state")
+	var state: GameState = _make_active_attack_game_state(4)
 	var data := state.serialize()
 
 	var restored := GameState.deserialize(data)
@@ -562,6 +536,31 @@ func _make_active_timing_window(
 	assert_true(state.configure_active(
 			window_id, stage, lifecycle_id, controller, continuation),
 			"Test helper should build valid timing-window state")
+	return state
+
+
+func _make_active_attack_game_state(sequence: int) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0,
+			Constants.Visibility.ALL,
+			{"attacker_player": 0})
+	assert_true(state.set_timing_window_state(_make_active_timing_window(
+			"attack_modify",
+			"attack_modify",
+			"attack_modify:%d" % sequence,
+			0,
+			{
+				"continuation_id": "confirm_attack_dice",
+				"resume_point": "attack_after_modify",
+				"source_id": "fixture-attack",
+				"source_type": "current_attack",
+				"owner_player": 0,
+			})), "Fixture should install a reconstructable attack lifecycle")
 	return state
 
 

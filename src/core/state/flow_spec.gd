@@ -191,7 +191,8 @@ const _SPEC: Dictionary = {
 		Constants.InteractionStep.ATTACK_MODIFY: {
 			"controller_role": Constants.ControllerRole.ATTACKER,
 			"modals": [Constants.ModalKind.ATTACK_MODIFY],
-			"allowed_commands": ["spend_dial", "spend_token", "publish_attack_flow",
+			"allowed_commands": ["spend_dial", "spend_token", "reroll_attack_die",
+					"publish_attack_flow",
 					"skip_attack", "skip_attack_modifier", "confirm_attack_dice"],
 			"transitions": {"publish_attack_flow": "ATTACK_DEFENSE_TOKENS"},
 			"source": SOURCE_COMMAND_PRODUCED,

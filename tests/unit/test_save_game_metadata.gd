@@ -18,6 +18,7 @@ func test_round_trip_preserves_all_fields() -> void:
 	meta.created_at = "2026-05-02T10:00:00"
 	meta.app_version = "4.5.1.stable"
 	meta.display_name = "MySave"
+	meta.set_next_command_sequence(42)
 	var restored: SaveGameMetadata = SaveGameMetadata.from_dict(meta.to_dict())
 	assert_eq(restored.scenario_id, meta.scenario_id)
 	assert_eq(restored.scenario_name, meta.scenario_name)
@@ -27,6 +28,8 @@ func test_round_trip_preserves_all_fields() -> void:
 	assert_eq(restored.created_at, meta.created_at)
 	assert_eq(restored.app_version, meta.app_version)
 	assert_eq(restored.display_name, meta.display_name)
+	assert_true(restored.has_next_command_sequence)
+	assert_eq(restored.next_command_sequence, 42)
 	assert_eq(restored.save_format_version,
 			SaveGameMetadata.CURRENT_VERSION)
 
@@ -76,6 +79,22 @@ func test_validate_rejects_invalid_display_name() -> void:
 	var m: SaveGameMetadata = _valid_meta()
 	m.display_name = ""
 	assert_eq(m.validate()["reason"], "display_name_invalid")
+
+
+func test_from_dict_distinguishes_missing_legacy_cursor() -> void:
+	var data: Dictionary = _valid_meta().to_dict()
+	data.erase("next_command_sequence")
+	var restored: SaveGameMetadata = SaveGameMetadata.from_dict(data)
+	assert_false(restored.has_next_command_sequence)
+	assert_eq(restored.next_command_sequence, 0)
+
+
+func test_validate_rejects_fractional_negative_or_non_numeric_cursor() -> void:
+	for invalid_value: Variant in [-1, 1.5, "2"]:
+		var data: Dictionary = _valid_meta().to_dict()
+		data["next_command_sequence"] = invalid_value
+		var restored: SaveGameMetadata = SaveGameMetadata.from_dict(data)
+		assert_eq(restored.validate().get("reason"), "schema_invalid")
 
 
 # ---------------------------------------------------------------------------

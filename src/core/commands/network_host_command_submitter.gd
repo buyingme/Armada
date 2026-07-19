@@ -27,3 +27,14 @@ func submit(command: GameCommand) -> Dictionary:
 		return result
 	NetworkManager.handle_host_command(command, result)
 	return result
+
+
+func submit_replay(command: GameCommand) -> Dictionary:
+	var result: Dictionary = CommandProcessor.submit_replay_deferred_followups(
+			command)
+	if result.is_empty():
+		_log.warn("Replay command [%s] rejected by validation." %
+				command.command_type)
+		return result
+	NetworkManager.handle_host_command(command, result)
+	return result

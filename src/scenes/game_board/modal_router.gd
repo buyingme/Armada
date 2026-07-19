@@ -23,6 +23,7 @@ var _activation_ctx: ActivationContext = null
 var _find_ship_token_fn: Callable
 var _find_squadron_token_fn: Callable
 var _command_reaction_fn: Callable
+var _timing_window_submit_fn: Callable
 var _log: GameLogger = GameLogger.new("ModalRouter")
 
 
@@ -38,7 +39,8 @@ func initialize(
 		activation_ctx: ActivationContext,
 		find_ship_token_fn: Callable,
 		find_squadron_token_fn: Callable,
-		command_reaction_fn: Callable = Callable()) -> void:
+		command_reaction_fn: Callable = Callable(),
+		timing_window_submit_fn: Callable = Callable()) -> void:
 	_panel_mgr = panel_mgr
 	_attack_panel_controller = attack_panel_controller
 	_ship_activation_controller = ship_activation_controller
@@ -47,6 +49,7 @@ func initialize(
 	_find_ship_token_fn = find_ship_token_fn
 	_find_squadron_token_fn = find_squadron_token_fn
 	_command_reaction_fn = command_reaction_fn
+	_timing_window_submit_fn = timing_window_submit_fn
 	_connect_command_signal()
 
 
@@ -99,6 +102,7 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
 	_sync_attack_panel_mirror(game_state, local)
+	_drive_timing_window_panel(intent.timing_window)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
 	_apply_activation_affordances(intent)
 
@@ -198,6 +202,13 @@ func _sync_attack_panel_mirror(game_state: GameState, local: int) -> void:
 		return
 	_attack_panel_controller.sync_mirror_from_flow(
 			game_state.interaction_flow, local)
+
+
+func _drive_timing_window_panel(timing_window: Dictionary) -> void:
+	if _attack_panel_controller == null:
+		return
+	_attack_panel_controller.sync_timing_window_projection(
+			timing_window, _timing_window_submit_fn)
 
 
 func _drive_activation_modal(intent: UIProjector.UIIntent,

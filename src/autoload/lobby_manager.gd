@@ -183,14 +183,16 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 		lobby_error.emit("All players must be connected and Ready.")
 		return
 	_log.info("Host loading save '%s'." % meta.display_name)
-	# Broadcast the serialised state to the client BEFORE installing on
-	# the host, so both peers see the toast at roughly the same moment.
+	# Install and reconcile on the host before the snapshot can be broadcast.
+	# GameManager.start_new_game_from_state sets
+	# is_state_preloaded so the GameBoard skips its bootstrap path.
+	if not GameManager.start_new_game_from_state(
+			state, meta.scenario_id, meta.next_command_sequence):
+		lobby_error.emit("Loaded game state is inconsistent.")
+		return
 	var state_dict: Dictionary = state.serialize()
 	_receive_loaded_state.rpc(
 			state_dict, meta.scenario_id, meta.to_dict())
-	# Install on host.  GameManager.start_new_game_from_state sets
-	# is_state_preloaded so the GameBoard skips its bootstrap path.
-	GameManager.start_new_game_from_state(state, meta.scenario_id)
 	NetworkManager.start_game()
 	game_starting.emit()
 	# Phase J7 in-session: when called mid-game the host is already on
@@ -482,7 +484,7 @@ func _notify_game_start() -> void:
 func _receive_loaded_state(
 		state_dict: Dictionary,
 		scenario_id: String,
-		_meta_dict: Dictionary) -> void:
+		meta_dict: Dictionary) -> void:
 	_log.info("Received loaded state from host (scenario='%s')." %
 			scenario_id)
 	if is_instance_valid(TooltipManager):
@@ -493,7 +495,20 @@ func _receive_loaded_state(
 		_log.error("Failed to deserialise host's loaded state.")
 		lobby_error.emit("Failed to deserialise loaded game from host.")
 		return
-	GameManager.start_new_game_from_state(state, scenario_id)
+	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(meta_dict)
+	var cursor_result: Dictionary = SaveGameManager.reconstruction_cursor_for(
+			meta, state)
+	if not bool(cursor_result.get("ok", false)):
+		_log.error("Loaded host snapshot has an invalid command cursor.")
+		lobby_error.emit("Loaded game command sequence is invalid.")
+		return
+	if not GameManager.start_new_game_from_state(
+			state,
+			scenario_id,
+			int(cursor_result.get("next_command_sequence", -1))):
+		_log.error("Loaded host snapshot failed lifecycle reconciliation.")
+		lobby_error.emit("Loaded game state is inconsistent.")
+		return
 	load_state_received.emit()
 	game_starting.emit()
 	# Phase J7 in-session: same reasoning as host_load_save — when the

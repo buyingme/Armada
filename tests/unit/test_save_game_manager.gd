@@ -10,6 +10,8 @@ const SaveManagerScript: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
 const TimingWindowStateScript: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 
 var _manager: Node = null
 
@@ -19,12 +21,14 @@ func before_each() -> void:
 	# (Saves still write to the shared res://saves/ dir; we use a unique
 	# TEST_SAVE filename to avoid collisions and clean up in after_each.)
 	_manager = SaveManagerScript.new()
+	CommandProcessor.reset()
 
 
 func after_each() -> void:
 	_manager.delete_save(TEST_SAVE)
 	_manager.delete_save(TEST_SAVE + "_b")
 	_manager.free()
+	CommandProcessor.reset()
 
 
 # --- Helpers ---
@@ -48,6 +52,10 @@ func _write_signed_state(body: Dictionary) -> void:
 	var meta: SaveGameMetadata = _manager.build_metadata_for(
 			_make_game_state(), TEST_SAVE)
 	var header: Dictionary = meta.to_dict()
+	_write_signed_payload(header, body)
+
+
+func _write_signed_payload(header: Dictionary, body: Dictionary) -> void:
 	IntegritySigner.sign(header, body, _manager._get_or_create_signing_key())
 	_manager._write_payload(TEST_SAVE, header, body)
 
@@ -97,22 +105,63 @@ func test_round_trip_preserves_damage_deck() -> void:
 
 func test_round_trip_preserves_timing_window_state() -> void:
 	var gs: GameState = _make_game_state()
-	assert_true(gs.set_timing_window_state(_make_active_timing_window(
-			"status_cleanup",
-			"ready_cost",
-			"tw-save-001",
-			0,
-			{"continuation_id": "start_round"})),
-			"GameState should accept valid timing-window lifecycle state")
+	_configure_attack_modify(gs, 0, TimingWindowState.STATUS_CLOSING)
+	assert_true(CommandProcessor.restore_next_sequence(1),
+			"Save cursor should follow the opening command sequence.")
+	var reconstructed: GameState = GameState.deserialize(gs.serialize())
+	assert_not_null(reconstructed,
+			"Fixture must be semantically reconstructable before save.")
+	var preflight: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(reconstructed)
+	assert_true(bool(preflight.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)),
+			"Fixture reconciliation should succeed, reason=%s" % preflight.get(
+					TIMING_WINDOW_ORCHESTRATOR.KEY_REASON, ""))
+	var meta: SaveGameMetadata = _manager.build_metadata_for(gs, TEST_SAVE)
+	assert_true(bool(_manager.reconstruction_cursor_for(
+			meta, reconstructed).get("ok", false)),
+			"Fixture cursor should be reconstructable before save.")
 
 	assert_true(_manager.save_game(gs, TEST_SAVE),
 			"save_game should succeed for active timing-window lifecycle state")
+	var payload: Dictionary = _manager._read_payload(TEST_SAVE)
+	var disk_state: GameState = GameState.deserialize(
+			payload.get("state") as Dictionary)
+	assert_not_null(disk_state,
+			"Signed JSON payload should reconstruct before manager loading.")
+	var disk_meta: SaveGameMetadata = SaveGameMetadata.from_dict(
+			payload.get("header") as Dictionary)
+	assert_true(bool(_manager.reconstruction_cursor_for(
+			disk_meta, disk_state).get("ok", false)),
+			"Signed JSON payload cursor should reconstruct.")
+	var disk_reconciliation: Dictionary = \
+			TIMING_WINDOW_ORCHESTRATOR.reconcile(disk_state)
+	assert_true(bool(disk_reconciliation.get(
+			TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)),
+			"Signed JSON payload reconciliation should succeed, reason=%s" \
+			% disk_reconciliation.get(
+					TIMING_WINDOW_ORCHESTRATOR.KEY_REASON, ""))
 	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(result["ok"],
+			"load_game should succeed, reason=%s" % result.get("reason", ""))
 	var loaded: GameState = result["state"]
-
-	assert_true(result["ok"], "load_game should succeed")
+	if loaded == null:
+		return
 	assert_true(loaded.timing_window_state.equals(gs.timing_window_state),
 			"Save/load should preserve timing-window lifecycle state")
+
+
+func test_load_schema_invalid_for_cross_owner_timing_window_state() -> void:
+	var state: GameState = _make_game_state()
+	_configure_attack_modify(state, 0)
+	var body: Dictionary = state.serialize()
+	body["interaction_flow"]["step_id"] = int(
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	_write_signed_state(body)
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+
+	assert_false(bool(result.get("ok", true)))
+	assert_eq(result.get("reason"), "schema_invalid",
+			"Cross-owner lifecycle inconsistency must fail closed.")
 
 
 func test_load_schema_invalid_for_malformed_timing_window_state() -> void:
@@ -149,17 +198,90 @@ func test_load_schema_invalid_for_unsupported_timing_window_state() -> void:
 			"Unsupported timing-window state should surface schema_invalid")
 
 
+func test_save_round_trip_preserves_next_command_sequence() -> void:
+	assert_true(CommandProcessor.restore_next_sequence(7))
+	assert_true(_manager.save_game(_make_game_state(), TEST_SAVE))
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(bool(result.get("ok", false)))
+	assert_eq((result.get("meta") as SaveGameMetadata).next_command_sequence, 7)
+
+
+func test_old_save_without_cursor_restores_zero_only_when_window_inactive() -> void:
+	var body: Dictionary = _make_game_state().serialize()
+	var header: Dictionary = _manager.build_metadata_for(
+			_make_game_state(), TEST_SAVE).to_dict()
+	header.erase("next_command_sequence")
+	_write_signed_payload(header, body)
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(bool(result.get("ok", false)))
+	var meta: SaveGameMetadata = result.get("meta") as SaveGameMetadata
+	assert_false(meta.has_next_command_sequence)
+	assert_eq(meta.next_command_sequence, 0)
+
+
+func test_old_save_without_cursor_rejects_active_window() -> void:
+	var state: GameState = _make_game_state()
+	_configure_attack_modify(state, 3)
+	var header: Dictionary = _manager.build_metadata_for(
+			state, TEST_SAVE).to_dict()
+	header.erase("next_command_sequence")
+	_write_signed_payload(header, state.serialize())
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_false(bool(result.get("ok", true)))
+	assert_eq(result.get("reason"), "schema_invalid")
+
+
+func test_present_cursor_must_follow_active_lifecycle_sequence() -> void:
+	var state: GameState = _make_game_state()
+	_configure_attack_modify(state, 3)
+	var meta: SaveGameMetadata = _manager.build_metadata_for(state, TEST_SAVE)
+	meta.set_next_command_sequence(3)
+	_write_signed_payload(meta.to_dict(), state.serialize())
+
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_false(bool(result.get("ok", true)))
+	assert_eq(result.get("reason"), "schema_invalid")
+
+
 func _make_active_timing_window(
 		window_id: String,
 		stage: String,
 		lifecycle_id: String,
 		controller: int,
-		continuation: Dictionary):
+		continuation: Dictionary,
+		status: String = TimingWindowState.STATUS_OPEN):
 	var state = TimingWindowStateScript.new()
 	assert_true(state.configure_active(
-			window_id, stage, lifecycle_id, controller, continuation),
+			window_id, stage, lifecycle_id, controller, continuation, status),
 			"Test helper should build valid timing-window state")
 	return state
+
+
+func _configure_attack_modify(game_state: GameState,
+		sequence: int,
+		status: String = TimingWindowState.STATUS_OPEN) -> void:
+	game_state.current_phase = Constants.GamePhase.SHIP
+	game_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0,
+			Constants.Visibility.ALL,
+			{"attacker_player": 0})
+	assert_true(game_state.set_timing_window_state(_make_active_timing_window(
+			"attack_modify",
+			"attack_modify",
+			"attack_modify:%d" % sequence,
+			0,
+			{
+				"continuation_id": "confirm_attack_dice",
+				"resume_point": "attack_after_modify",
+				"source_id": "fixture-attack",
+				"source_type": "current_attack",
+				"owner_player": 0,
+			},
+			status)), "Fixture should install a reconstructable lifecycle")
 
 
 # ---------------------------------------------------------------------------

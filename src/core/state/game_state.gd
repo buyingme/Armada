@@ -9,6 +9,8 @@ extends RefCounted
 
 const TIMING_WINDOW_STATE: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 
 ## The current round number (1-based, max defined by Constants.MAX_ROUNDS).
 var current_round: int = 0
@@ -218,6 +220,9 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._timing_window_state = timing_state
 	else:
 		state._timing_window_state = _new_timing_window_state()
+	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
+			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		return null
 	return state
 
 

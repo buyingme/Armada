@@ -170,12 +170,24 @@ func test_save_load_round_trip_preserves_fleet() -> void:
 
 func test_timing_window_state_does_not_absorb_runtime_upgrade_rule_state() -> void:
 	var gs: GameState = _make_populated_state()
-	assert_true(gs.set_timing_window_state(_make_active_timing_window(
-			"attack_defense_tokens",
-			"spend_defense_tokens",
-			"tw-runtime-001",
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
 			1,
-			{"continuation_id": "commit_defense"})),
+			Constants.Visibility.ALL,
+			{"attacker_player": 1})
+	assert_true(gs.set_timing_window_state(_make_active_timing_window(
+			"attack_modify",
+			"attack_modify",
+			"attack_modify:1",
+			1,
+			{
+				"continuation_id": "confirm_attack_dice",
+				"resume_point": "attack_after_modify",
+				"source_id": "fixture-attack",
+				"source_type": "current_attack",
+				"owner_player": 1,
+			})),
 			"GameState should accept valid timing-window lifecycle state")
 	var ship: ShipInstance = gs.player_states[0].ships[0] as ShipInstance
 	ship.roster_entry_id = "p0-cr90"

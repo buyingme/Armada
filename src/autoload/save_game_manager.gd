@@ -18,6 +18,10 @@
 extends Node
 
 
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+
+
 ## Directory under the project root where save files are stored.
 ## Resolved via [PathConfig]: project folder in editor, user folder in exports.
 static var SAVE_DIR: String = PathConfig.SAVES_DIR
@@ -144,13 +148,16 @@ func save_game(
 		return _save_from_checkpoint(file_name)
 	if meta == null:
 		meta = build_metadata_for(game_state, file_name)
+	var body: Dictionary = game_state.serialize()
+	if not meta.set_next_command_sequence(_current_command_sequence()):
+		_log.error("save_game command cursor invalid.")
+		return false
 	var validation: Dictionary = meta.validate()
 	if not bool(validation.get("ok", false)):
 		_log.error("save_game header invalid: %s" %
 				validation.get("reason", "unknown"))
 		return false
 	var header: Dictionary = meta.to_dict()
-	var body: Dictionary = game_state.serialize()
 	# Sign the {header, state} payload.  The signature lives inside header.
 	if not IntegritySigner.sign(header, body, _get_or_create_signing_key()):
 		_log.error("save_game failed to sign payload.")
@@ -220,6 +227,12 @@ func load_game(file_name: String = "quicksave") -> Dictionary:
 	var state: GameState = GameState.deserialize(body)
 	if state == null:
 		return _load_failure("schema_invalid", null, meta)
+	var cursor_result: Dictionary = reconstruction_cursor_for(meta, state)
+	if not bool(cursor_result.get("ok", false)):
+		return _load_failure("schema_invalid", null, meta)
+	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
+	if not bool(reconciliation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		return _load_failure("schema_invalid", null, meta)
 	_log.info("Game loaded from %s (%s)" % [file_path, meta.display_name])
 	return {
 		"ok": true,
@@ -250,7 +263,32 @@ func build_metadata_for(
 	meta.created_at = Time.get_datetime_string_from_system(true)
 	meta.app_version = String(Engine.get_version_info().get("string", ""))
 	meta.display_name = display_name
+	meta.set_next_command_sequence(_current_command_sequence())
 	return meta
+
+
+## Resolves the sole reconstruction cursor, including the accepted old-save case.
+func reconstruction_cursor_for(
+		meta: SaveGameMetadata,
+		state: GameState) -> Dictionary:
+	if meta == null or state == null or not meta.is_next_command_sequence_valid():
+		return {"ok": false, "next_command_sequence": -1}
+	if not meta.has_next_command_sequence:
+		if state.timing_window_state != null \
+				and state.timing_window_state.active:
+			return {"ok": false, "next_command_sequence": -1}
+		meta.next_command_sequence = 0
+		return {"ok": true, "next_command_sequence": 0}
+	var next_sequence: int = meta.next_command_sequence
+	if next_sequence < 0:
+		return {"ok": false, "next_command_sequence": -1}
+	if state.timing_window_state != null \
+			and state.timing_window_state.active:
+		var lifecycle_sequence: int = _timing_lifecycle_sequence(
+				state.timing_window_state.lifecycle_id)
+		if lifecycle_sequence < 0 or next_sequence <= lifecycle_sequence:
+			return {"ok": false, "next_command_sequence": -1}
+	return {"ok": true, "next_command_sequence": next_sequence}
 
 
 ## Builds the default save-name template for the current state.
@@ -499,12 +537,20 @@ func _load_failure(
 
 func _load_from_payload(header: Dictionary, body: Dictionary) -> Dictionary:
 	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(header)
+	if meta.save_format_version != SaveGameMetadata.CURRENT_VERSION:
+		return _load_failure("version_unsupported", null, meta)
 	if not IntegritySigner.is_signed(header):
 		return _load_failure("signature_invalid", null, meta)
 	if not IntegritySigner.verify(header, body, _get_or_create_signing_key()):
 		return _load_failure("signature_invalid", null, meta)
 	var state: GameState = GameState.deserialize(body)
 	if state == null:
+		return _load_failure("schema_invalid", null, meta)
+	var cursor_result: Dictionary = reconstruction_cursor_for(meta, state)
+	if not bool(cursor_result.get("ok", false)):
+		return _load_failure("schema_invalid", null, meta)
+	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
+	if not bool(reconciliation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
 		return _load_failure("schema_invalid", null, meta)
 	return {"ok": true, "state": state, "meta": meta, "reason": ""}
 
@@ -529,6 +575,23 @@ func _current_command_count() -> int:
 	if not is_instance_valid(CommandProcessor):
 		return 0
 	return CommandProcessor.get_command_count()
+
+
+func _current_command_sequence() -> int:
+	if not is_instance_valid(CommandProcessor):
+		return 0
+	return CommandProcessor.get_next_sequence()
+
+
+func _timing_lifecycle_sequence(lifecycle_id: String) -> int:
+	var separator: int = lifecycle_id.rfind(":")
+	if separator <= 0 or separator == lifecycle_id.length() - 1:
+		return -1
+	var raw_sequence: String = lifecycle_id.substr(separator + 1)
+	if not raw_sequence.is_valid_int():
+		return -1
+	var sequence: int = raw_sequence.to_int()
+	return sequence if sequence >= 0 else -1
 
 
 ## Reads the current game mode from [PlayMode].  Defaults to hot-seat.

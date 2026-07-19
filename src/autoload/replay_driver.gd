@@ -39,6 +39,10 @@
 extends Node
 
 
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+
+
 ## Default per-step timeout in milliseconds.  Only consulted in
 ## network mode where command_executed fires asynchronously.
 const DEFAULT_STEP_TIMEOUT_MS: int = 5000
@@ -179,6 +183,13 @@ func _flag_value(args: PackedStringArray, flag: String) -> String:
 ## the step loop on the next idle frame so the game-board scene has
 ## a chance to finish wiring its controllers before commands arrive.
 func _on_game_started() -> void:
+	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(
+			GameManager.current_game_state,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_REPLAY)
+	if not bool(reconciliation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		_log.error("ReplayDriver: reconstructed lifecycle is inconsistent.")
+		_quit(EXIT_LOAD_FAIL)
+		return
 	call_deferred("_run_step_loop")
 
 
@@ -270,7 +281,7 @@ func _submit_local_step(cmd_data: Dictionary,
 		_log.error("ReplayDriver: deserialize failed: %s" % cmd_data)
 		_quit(EXIT_DESERIALIZE_FAIL)
 		return false
-	GameManager.get_command_submitter().submit(cmd)
+	GameManager.get_command_submitter().submit_replay(cmd)
 	return true
 
 

@@ -516,9 +516,13 @@ func _on_load_pressed() -> void:
 		loaded.emit(meta)
 		return
 	SfxManager.play_sfx("droid_sound")
+	if not GameManager.start_new_game_from_state(
+			loaded_state, meta.scenario_id, meta.next_command_sequence):
+		push_warning("LoadGameDialog: loaded state reconciliation failed.")
+		_refresh_entries()
+		_render_list()
+		return
 	hide_modal()
-	GameManager.start_new_game_from_state(
-			loaded_state, meta.scenario_id)
 	loaded.emit(meta)
 	if transition_to_board_on_load:
 		get_tree().change_scene_to_file(GAME_BOARD_PATH)

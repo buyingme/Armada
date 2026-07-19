@@ -180,11 +180,11 @@ func test_replay_skips_unknown_types() -> void:
 				"payload": {}},
 	]
 	_processor.replay_commands(serialized)
-	assert_eq(_processor.get_command_count(), 1,
-			"Only known commands should be replayed.")
-	# push_warning from _create_by_type + _log.warn — mark handled.
-	assert_engine_error(2,
-			"Should warn about unknown command type.")
+	assert_eq(_processor.get_command_count(), 0,
+			"A replay sequence gap should fail closed before mutation.")
+	# Unknown-type warning, skip warning, and sequence rejection warning.
+	assert_engine_error(3,
+			"Unknown replay data should fail with deterministic diagnostics.")
 
 
 # ------------------------------------------------------------------

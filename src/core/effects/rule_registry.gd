@@ -12,6 +12,17 @@ static var _modifiers: Array[FlowHook] = []
 static var _observers: Array[FlowHook] = []
 static var _blockers: Array[FlowHook] = []
 static var _enablers: Array[FlowHook] = []
+static var _timing_window_participants: Array[Dictionary] = []
+static var _invalid_timing_window_participant_keys: Dictionary = {}
+
+const PARTICIPANT_KEY_CAPABILITY_ID: String = "capability_id"
+const PARTICIPANT_KEY_WINDOW: String = "participant_key"
+const PARTICIPANT_KEY_SOURCE_OWNER_KIND: String = "source_owner_kind"
+const PARTICIPANT_KEY_RULE_SCRIPT: String = "rule_script"
+const PARTICIPANT_KEY_DIAGNOSTIC_ID: String = "diagnostic_id"
+
+const SOURCE_ENUMERATION_METHOD: String = "enumerate_timing_window_sources"
+const OPPORTUNITY_DERIVATION_METHOD: String = "derive_timing_window_opportunities"
 
 
 ## Removes all static hook declarations.
@@ -21,6 +32,8 @@ static func clear() -> void:
 	_observers.clear()
 	_blockers.clear()
 	_enablers.clear()
+	_timing_window_participants.clear()
+	_invalid_timing_window_participant_keys.clear()
 
 
 ## Registers every hook for one rule identifier.
@@ -125,6 +138,40 @@ static func registered_hook_count() -> int:
 			+ _observers.size() + _blockers.size() + _enablers.size()
 
 
+## Registers static candidate metadata only. Runtime sources are never stored.
+static func register_timing_window_participant(descriptor: Dictionary) -> bool:
+	var participant_key: String = str(descriptor.get(
+			PARTICIPANT_KEY_WINDOW, ""))
+	if not _is_valid_timing_window_participant(descriptor):
+		_invalid_timing_window_participant_keys[
+				participant_key if not participant_key.is_empty() else "*"] = true
+		return false
+	_timing_window_participants.append(descriptor.duplicate(true))
+	return true
+
+
+## Returns deterministic static candidates or one fail-closed diagnostic.
+static func timing_window_participants_for(participant_key: String) -> Dictionary:
+	if bool(_invalid_timing_window_participant_keys.get("*", false)) \
+			or bool(_invalid_timing_window_participant_keys.get(
+					participant_key, false)):
+		return {
+			"ok": false,
+			"reason": "Invalid timing-window participant registration.",
+			"candidates": [],
+		}
+	var candidates: Array[Dictionary] = []
+	for descriptor: Dictionary in _timing_window_participants:
+		if str(descriptor.get(PARTICIPANT_KEY_WINDOW, "")) == participant_key:
+			candidates.append(descriptor.duplicate(true))
+	candidates.sort_custom(_timing_window_participant_before)
+	return {"ok": true, "reason": "", "candidates": candidates}
+
+
+static func registered_timing_window_participant_count() -> int:
+	return _timing_window_participants.size()
+
+
 static func _register_hook(targets: Array[FlowHook],
 		hook: FlowHook,
 		expected_kind: FlowHook.HookKind) -> void:
@@ -186,3 +233,45 @@ static func _hook_before(left_hook: FlowHook, right_hook: FlowHook) -> bool:
 	if left_hook.priority == right_hook.priority:
 		return left_hook.rule_id < right_hook.rule_id
 	return left_hook.priority > right_hook.priority
+
+
+static func _is_valid_timing_window_participant(descriptor: Dictionary) -> bool:
+	var expected_keys: Array[String] = [
+		PARTICIPANT_KEY_CAPABILITY_ID,
+		PARTICIPANT_KEY_WINDOW,
+		PARTICIPANT_KEY_SOURCE_OWNER_KIND,
+		PARTICIPANT_KEY_RULE_SCRIPT,
+		PARTICIPANT_KEY_DIAGNOSTIC_ID,
+	]
+	for raw_key: Variant in descriptor.keys():
+		if typeof(raw_key) != TYPE_STRING or not expected_keys.has(str(raw_key)):
+			return false
+	for key: String in [
+		PARTICIPANT_KEY_CAPABILITY_ID,
+		PARTICIPANT_KEY_WINDOW,
+		PARTICIPANT_KEY_SOURCE_OWNER_KIND,
+		PARTICIPANT_KEY_DIAGNOSTIC_ID,
+	]:
+		if typeof(descriptor.get(key)) != TYPE_STRING \
+				or str(descriptor.get(key, "")).is_empty():
+			return false
+	var rule_script: Variant = descriptor.get(PARTICIPANT_KEY_RULE_SCRIPT)
+	if not rule_script is GDScript:
+		return false
+	return (rule_script as GDScript).has_method(SOURCE_ENUMERATION_METHOD) \
+			and (rule_script as GDScript).has_method(OPPORTUNITY_DERIVATION_METHOD)
+
+
+static func _timing_window_participant_before(
+		left: Dictionary, right: Dictionary) -> bool:
+	var left_key: String = "%s|%s|%s" % [
+		str(left.get(PARTICIPANT_KEY_CAPABILITY_ID, "")),
+		str(left.get(PARTICIPANT_KEY_SOURCE_OWNER_KIND, "")),
+		str(left.get(PARTICIPANT_KEY_DIAGNOSTIC_ID, "")),
+	]
+	var right_key: String = "%s|%s|%s" % [
+		str(right.get(PARTICIPANT_KEY_CAPABILITY_ID, "")),
+		str(right.get(PARTICIPANT_KEY_SOURCE_OWNER_KIND, "")),
+		str(right.get(PARTICIPANT_KEY_DIAGNOSTIC_ID, "")),
+	]
+	return left_key < right_key

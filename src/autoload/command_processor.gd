@@ -41,6 +41,8 @@ const DeclineECMReadyCommandScript: GDScript = preload(
 
 const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
 		preload("res://src/core/commands/command_applicability.gd")
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 
 
 ## Emitted after a command has been successfully validated and executed.
@@ -148,14 +150,16 @@ func _exit_tree() -> void:
 ## Returns the result dictionary from [method GameCommand.execute],
 ## or an empty dictionary if validation fails.
 func submit(command: GameCommand) -> Dictionary:
-	return _submit(command, true, true)
+	return _submit(command, true, true,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY)
 
 
 ## Submits an authoritative command while leaving observer follow-ups queued.
 ## Network authorities use this so they can broadcast the triggering command
 ## before draining follow-ups through their submitter/broadcast path.
 func submit_deferred_followups(command: GameCommand) -> Dictionary:
-	return _submit(command, false, true)
+	return _submit(command, false, true,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY)
 
 
 ## Applies an already-authoritative network mirror command locally.
@@ -163,7 +167,20 @@ func submit_deferred_followups(command: GameCommand) -> Dictionary:
 ## observer follow-ups are suppressed so passive peers do not synthesize
 ## duplicate commands.
 func submit_mirror(command: GameCommand) -> Dictionary:
-	return _submit(command, true, false)
+	return _submit(command, true, false,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR)
+
+
+## Applies one recorded replay command while preserving its sequence.
+func submit_replay(command: GameCommand) -> Dictionary:
+	return _submit(command, true, false,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_REPLAY)
+
+
+## Replay-mode authority submission with deferred follow-up draining.
+func submit_replay_deferred_followups(command: GameCommand) -> Dictionary:
+	return _submit(command, false, false,
+			TIMING_WINDOW_ORCHESTRATOR.MODE_REPLAY)
 
 
 ## Runs command preflight checks before command-specific validation.
@@ -199,26 +216,50 @@ func get_pending_observer_followup_count() -> int:
 
 func _submit(command: GameCommand,
 		drain_followups: bool,
-		collect_observers: bool) -> Dictionary:
+		collect_observers: bool,
+		execution_mode: String) -> Dictionary:
 	if _is_collecting_observer_followups:
 		return _reject_command(command,
 				"Observer hooks must return follow-up commands instead of "
 				+"submitting.")
 	var game_state: GameState = _get_game_state()
+	var sequence_reason: String = _validate_sequence_for_mode(
+			command, execution_mode)
+	if sequence_reason != "":
+		return _reject_command(command, sequence_reason, game_state, execution_mode)
 	var flow_snapshot: InteractionFlow = _snapshot_flow(game_state)
 	var preflight_reason: String = preflight(command, game_state)
 	if preflight_reason != "":
-		return _reject_command(command, preflight_reason)
+		return _reject_command(command, preflight_reason, game_state, execution_mode)
 	var reason: String = command.validate(game_state)
 	if reason != "":
-		return _reject_command(command, reason)
-	var result: Dictionary = _execute_and_record(command, game_state)
-	if not is_replaying:
-		if collect_observers:
+		return _reject_command(command, reason, game_state, execution_mode)
+	var result: Dictionary = _execute_and_record(
+			command, game_state, execution_mode)
+	if collect_observers \
+			and execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			and not is_replaying:
 			_collect_observer_followups(
 					command, result, game_state, flow_snapshot)
+	var timing_result: Dictionary = TIMING_WINDOW_ORCHESTRATOR \
+			.process_successful_command(
+					game_state, command, result, execution_mode)
+	if not bool(timing_result.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		_log.warn("Timing-window orchestration failed after [%s]: %s" % [
+				command.command_type,
+				str(timing_result.get(
+						TIMING_WINDOW_ORCHESTRATOR.KEY_REASON,
+						"unknown failure")),
+		])
+	var continuation: GameCommand = timing_result.get(
+			TIMING_WINDOW_ORCHESTRATOR.KEY_CONTINUATION) as GameCommand
+	if continuation != null:
+		_observer_followups.append(continuation)
+	if not is_replaying:
 		command_executed.emit(command, result)
-		if drain_followups:
+		if drain_followups \
+				and execution_mode \
+						== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
 			drain_observer_followups()
 	return result
 
@@ -231,6 +272,22 @@ func get_history() -> Array[GameCommand]:
 ## Returns the number of commands executed so far.
 func get_command_count() -> int:
 	return _history.size()
+
+
+## Returns the sole next-command sequence cursor.
+func get_next_sequence() -> int:
+	return _next_sequence
+
+
+## Restores the sole cursor at an accepted reconstruction boundary.
+func restore_next_sequence(next_sequence: int) -> bool:
+	if next_sequence < 0:
+		return false
+	if not _history.is_empty() \
+			and next_sequence != _history[-1].sequence + 1:
+		return false
+	_next_sequence = next_sequence
+	return true
 
 
 ## Clears history and resets the sequence counter.
@@ -287,7 +344,7 @@ func replay_commands(commands: Array[Dictionary]) -> void:
 			_log.warn("Skipping unknown command: %s" %
 					cmd_data.get("type", "?"))
 			continue
-		submit(cmd)
+		submit_replay(cmd)
 	is_replaying = false
 
 
@@ -329,15 +386,36 @@ func _snapshot_flow(game_state: GameState) -> InteractionFlow:
 
 
 func _execute_and_record(command: GameCommand,
-		game_state: GameState) -> Dictionary:
-	command.sequence = _next_sequence
-	_next_sequence += 1
+		game_state: GameState,
+		execution_mode: String) -> Dictionary:
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
+		command.sequence = _next_sequence
 	var result: Dictionary = command.execute(game_state)
 	_log.info("Executed [%s] seq=%d player=%d." % [
 			command.command_type, command.sequence,
 			command.player_index])
 	_history.append(command)
+	_next_sequence += 1
 	return result
+
+
+func _validate_sequence_for_mode(command: GameCommand,
+		execution_mode: String) -> String:
+	if command == null:
+		return "Command is null."
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
+		if command.sequence != -1:
+			return "Live command must not claim an authoritative sequence."
+		return ""
+	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_NETWORK_MIRROR \
+			or execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_REPLAY:
+		if command.sequence < 0:
+			return "Mirrored or replayed command requires a sequence."
+		if command.sequence != _next_sequence:
+			return "Expected command sequence %d, received %d." % [
+				_next_sequence, command.sequence]
+		return ""
+	return "Unknown command execution mode."
 
 
 func _check_rule_validators(command: GameCommand,
@@ -423,7 +501,13 @@ func _submit_followup(followup: GameCommand, submitter: Callable) -> void:
 	submit(followup)
 
 
-func _reject_command(command: GameCommand, reason: String) -> Dictionary:
+func _reject_command(command: GameCommand,
+		reason: String,
+		game_state: GameState = null,
+		execution_mode: String = TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY
+		) -> Dictionary:
+	TIMING_WINDOW_ORCHESTRATOR.process_rejected_command(
+			game_state, command, execution_mode)
 	_log.warn("Command rejected [%s]: %s" % [
 			command.command_type, reason])
 	command_rejected.emit(command, reason)

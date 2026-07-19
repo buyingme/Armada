@@ -513,8 +513,28 @@ completed Slice 1 lifecycle state
   -> Concentrate Fire Readiness Gate
   -> Slice 8B-2 H9 commands/rule with production opening disabled
   -> Production Coexistence And H9 Pre-Activation Gate
-  -> ship-attacker ATTACK_MODIFY production trigger and unique evidence
+  -> atomic ship-attacker ATTACK_MODIFY production activation and unique evidence
 ```
+
+Slice 8A uses one bounded Model C-S compatibility posture while production
+`ATTACK_MODIFY` opening is intentionally disabled. In that repository state,
+`ConfirmAttackDiceCommand` permits direct replayable semantic confirmation for
+both ship and squadron attackers only when `TimingWindowState` is inactive. It
+also accepts the mutually exclusive active-lifecycle context used by the
+existing shared test opener, but only as the matching orchestrator-derived
+continuation. Authoritative timing state selects the context; no caller flag or
+payload mode may select it. This is not a second owner or permanent split path:
+the later production-activation checkpoint removes inactive direct
+ship-attacker confirmation when it connects the production opener. Squadron
+confirmation remains the accepted inactive post-Swarm path.
+
+For this governed tranche, artifacts produced by the bounded Slice 8A
+pre-activation state are supported only while that checkpoint is current. The
+later production-activation checkpoint is an explicit compatibility boundary:
+it advances the repository's existing save and replay format owners and rejects
+incompatible pre-activation artifacts fail-closed. It does not convert a direct
+confirmation into a timing-window continuation or preserve a permanent legacy
+execution mode.
 
 No later item begins until the preceding checkpoint passes. Slices 2-7 are the
 largest safe multi-slice implementation tranche: they may be carried by one
@@ -793,11 +813,14 @@ Apply exactly these rules:
    below it are stale; results above it remain buffered; the equal result is the
    only next applicable result.
 5. Slice 7 full-game replay initializes the cursor to `0` and requires every
-   recorded command to carry the exact next contiguous sequence. Slice 8A replay
-   format 3 additionally records `initial_command_sequence` in the signed or
-   unsigned header. `ReplayDriver` restores that value before applying format-3
-   commands; full-game capture writes `0`, while replay initialized from an
-   accepted reconstructed state uses the cursor paired with that initial state.
+   recorded command to carry the exact next contiguous sequence. Slice 8A
+   pre-activation replay format 3 additionally records
+   `initial_command_sequence` in the signed or unsigned header. The production
+   activation checkpoint advances the same format to 4 without changing cursor
+   ownership. `ReplayDriver` restores the recorded value before applying
+   commands of the currently supported format; full-game capture writes `0`,
+   while replay initialized from an accepted reconstructed state uses the cursor
+   paired with that initial state.
 
 The save/reconnect/replay cursor is synchronization metadata for the existing
 `CommandProcessor` sequence owner. It is not a UUID, attack counter, timing
@@ -1129,10 +1152,13 @@ continuation command that:
 - leaves the lifecycle active and rule-owned fixture state unchanged when it
   rejects.
 
-The production `ATTACK_MODIFY` mapping remains present but behavior-inert. Its
-`confirm_attack_dice` continuation is not queued until Slice 8A has made that
-command an authoritative CON-001 semantic attack transaction and Slice 8B-2 has
-activated the production lifecycle after both gates.
+The production `ATTACK_MODIFY` mapping remains present but behavior-inert. Slice
+8A makes `confirm_attack_dice` an authoritative CON-001 semantic attack
+transaction. Production uses its inactive-window compatibility context, while
+the existing shared test opener may exercise its matching CON-005 continuation
+context. No production continuation is queued until Slice 8B-2 has passed both
+later gates and the atomic production-activation checkpoint has connected the
+production opener.
 
 ### 12.6 Shared Opening And Cancellation Fixtures
 
@@ -1382,6 +1408,11 @@ or network harness if the existing surfaces can prove the obligation.
 - `GameReplay.FORMAT_VERSION` remains the replay-file compatibility owner.
 - Do not bump replay format merely because command types or canonical
   `GameState` serialized shape change compatibly.
+- The Section 15.5.4 activation cutover is not compatible: the same ship attack
+  state changes from permitting inactive direct confirmation to requiring a
+  matching active timing lifecycle. Section 17 therefore advances both existing
+  compatibility owners at that checkpoint rather than adding a local timing or
+  attack compatibility mechanism.
 - An older command or lifecycle payload that lacks authoritative identity
   required for safe validation is unsupported. Section 17.2 defines the exact
   new replay-format rejection required by the Model C-S attack-history change;
@@ -1393,8 +1424,9 @@ or network harness if the existing surfaces can prove the obligation.
 Replay evidence must prove:
 
 - shared full-game replay initializes the expected command cursor to `0` and
-  preserves every recorded command sequence; Section 17.2 format 3 adds the
-  explicit `initial_command_sequence` needed for reconstructed initial state;
+  preserves every recorded command sequence; Section 17.2 formats 3 and 4 use
+  the explicit `initial_command_sequence` needed for reconstructed initial
+  state within their respective compatibility boundaries;
 - a missing, negative, duplicate, or gapped sequence fails before command
   mutation;
 - opening, use, decline, effect, cleanup, and continuation commands occur in
@@ -1689,12 +1721,26 @@ Use these replayable atomic transactions:
    `RerollAttackDieCommand`, reads and writes canonical current dice. Swarm
    routing remains procedural in this tranche, but it cannot retain a second
    writable dice owner.
-5. `ConfirmAttackDiceCommand` always validates current-attack identity. For a
-   ship attacker it additionally requires the matching active timing lifecycle
-   and is the sole normal CON-005 continuation. For a squadron attacker in this
-   tranche it requires `TimingWindowState` to be inactive and remains the
-   existing post-Swarm semantic confirmation command. These cases are selected
-   only from canonical attacker kind; callers cannot choose the mode.
+5. `ConfirmAttackDiceCommand` always validates current-attack identity and the
+   canonical attacker, stage, and current dice. During Slice 8A, it has exactly
+   two mutually exclusive validation outcomes derived from authoritative timing
+   state, never from a caller-selected mode:
+   - when `TimingWindowState` is inactive, ship and squadron attackers may use
+     it as the direct replayable semantic confirmation after the existing
+     procedural modifier choices have resolved; this context rejects any
+     timing-window lifecycle identity in the command payload; and
+   - when the existing shared test opener has created a matching active
+     `ATTACK_MODIFY` lifecycle in `closing` status, only the
+     orchestrator-derived continuation with the matching timing-window type,
+     timing lifecycle identity, current-attack identity, controller, and
+     canonical continuation context is legal.
+   The command advances canonical attack state in either context; UI, scene
+   callbacks, `InteractionFlow`, and submission callers do not decide or
+   perform that transition. Production opening remains disabled, so the active
+   context is reachable only through the shared test-opening seam before the
+   later activation checkpoint. The inactive ship-attacker context is removed
+   atomically when production opening is connected in Section 15.5.4;
+   squadron-attacker confirmation continues to require inactive timing state.
 6. Add one replayable Accuracy-lock commit command. Migrate
    `CommitDefenseCommand`, `SpendDefenseTokenCommand`,
    `SelectEvadeDieCommand`, `SelectRedirectZoneCommand`,
@@ -1730,6 +1776,18 @@ Slice 8B does not begin until focused evidence proves:
   Accuracy locks, defense progression, damage resolution, cancellation,
   replacement/termination cleanup, and completion execute as replayable atomic
   semantic commands;
+- production `ATTACK_MODIFY` opening remains inactive throughout this gate;
+  direct ship and squadron confirmation requires inactive timing state, while
+  a lifecycle-bearing confirmation succeeds only as the matching continuation
+  of an explicitly shared-test-opened lifecycle, and neither path synthesizes a
+  lifecycle;
+- local authority, host authority, mirror, replay, save/load, and reconnect
+  prove the same deterministic result independently for the inactive direct
+  context and the shared-test-opened active continuation context;
+- Slice 8A saves using `SaveGameMetadata.CURRENT_VERSION == 1`, replay format 3,
+  and reconnect snapshots round-trip only within the pre-activation checkpoint;
+  evidence labels them as pre-activation artifacts and does not claim
+  compatibility across the later production-activation boundary;
 - hot-seat, host, client mirror, replay, save/load, and reconnect use the same
   semantic command order and canonical state;
 - scene `AttackState`, `AttackFlowFSM`, `InteractionFlow`, projection, and UI
@@ -1832,14 +1890,56 @@ Do not connect the production opening hook until focused evidence proves:
 - no squadron-attacker timing opening and passing Swarm regression evidence.
 
 This is the Production Coexistence And H9 Pre-Activation Gate. After it passes,
-connect the single
-Section 10.4 post-success hook: successful `RollDiceCommand` progression opens
-the production shared window only when canonical attacker kind is ship. This
-includes ship anti-ship and ship anti-squadron attacks; it excludes
-squadron-attacker attacks, whose Swarm route remains procedural in this
-tranche. The hook opens one fresh timing lifecycle from canonical current-attack
-identity and derives attacker control from the static definition. Scene flow
-publication does not open or reopen the window.
+perform one atomic production-activation and compatibility checkpoint. In the
+same checkpoint:
+
+1. connect the single Section 10.4 post-success hook so successful
+   `RollDiceCommand` progression opens the production shared window only when
+   canonical attacker kind is ship; and
+2. remove the Slice 8A inactive direct ship-attacker confirmation context so
+   `ConfirmAttackDiceCommand` requires the matching active timing lifecycle and
+   can be submitted only as the orchestrator-derived continuation;
+3. advance `SaveGameMetadata.CURRENT_VERSION` from 1 to 2 and reject version-1
+   pre-activation saves through the existing `version_unsupported` result; and
+4. advance `GameReplay.FORMAT_VERSION` from 3 to 4, retain
+   `SIGNED_FORMAT_VERSION := FORMAT_VERSION`, and reject format-3
+   pre-activation replays before command deserialization or application.
+
+The checkpoint must not leave an intermediate repository state in which the
+production opener is connected while direct ship confirmation is still legal,
+or in which direct ship confirmation has been removed while the opener is not
+connected. It also must not expose the new production semantics while either old
+format remains accepted. This includes ship anti-ship and ship anti-squadron
+attacks; it excludes squadron-attacker attacks, whose inactive-window post-Swarm
+semantic confirmation remains procedural in this tranche. The hook opens one
+fresh timing lifecycle from canonical current-attack identity and derives
+attacker control from the static definition. Scene flow publication does not
+open or reopen the window.
+
+After activation, an authoritative reconstructed ship attack at semantic stage
+`ATTACK_MODIFY` with inactive `TimingWindowState` is incompatible cross-owner
+state and fails closed before command submission, projection, or routing. This
+is the reconnect/state-snapshot rejection seam for a stale pre-activation
+snapshot. Reconstruction does not open a lifecycle, invent a continuation, or
+convert the prior direct confirmation. A fresh reconnect snapshot from a
+post-activation authoritative host contains the matching active lifecycle and
+continues normally. Compatible squadron and non-`ATTACK_MODIFY` states retain
+their accepted reconstruction behavior.
+
+Focused activation evidence must reject a directly submitted inactive-window
+ship confirmation, accept only the orchestrator-produced matching continuation,
+and preserve the existing inactive-window squadron confirmation. The same
+classification and command order must hold for local authority, host authority,
+mirror, replay, save/load, and reconnect paths. It must additionally prove:
+
+- a version-1 pre-activation save rejects as `version_unsupported`, while a
+  version-2 post-activation save round-trips;
+- a format-3 pre-activation replay rejects before command deserialization or
+  application, while a format-4 post-activation replay reproduces the
+  authoritative command sequence; and
+- a stale pre-activation reconnect snapshot in the incompatible ship
+  `ATTACK_MODIFY`/inactive-timing state fails closed, while a fresh
+  post-activation host snapshot reconstructs before projection or routing.
 
 `ConfirmAttackDiceCommand` is the sole normal shared continuation. The
 orchestrator queues it through the existing deferred FIFO only after
@@ -2189,7 +2289,7 @@ Before Slice 8B acceptance, exact tests must cover:
 | Cleanup | all shared trigger/failure categories | guard clears on confirm/complete/cancel/replace/terminate |
 | Serialization | lifecycle round-trip, no opportunities, signed next-sequence cursor | per-attack identity/dice/Accuracy/defense state and H9 guard round-trip |
 | Save/load | active/post/closed states plus cursor restoration | before choice; after use/decline/confirm; during Accuracy and defense |
-| Replay | preserved contiguous full-game sequence from cursor 0, no duplicate synthesis | format 3 plus initial cursor; use/decline/continuation/terminal histories; old-format rejection |
+| Replay | preserved contiguous full-game sequence from cursor 0, no duplicate synthesis | pre-activation format 3 and post-activation format 4 plus initial cursor; use/decline/continuation/terminal histories; unsupported-format rejection |
 | Reconnect | lifecycle, synchronized cursor, derived projection | matching guard before confirm; no guard after confirm; canonical Accuracy/defense resume |
 | Networking | host assignment, preserved ordered mirror, no client synthesis | H9 command classification and host/client identity/dice equality |
 | Projection/live route | derived, stale intent rejected | public H9 list, attacker-only interaction, tooltip |
@@ -2243,9 +2343,10 @@ terminal transaction for steps 7-8 and no next begin occurs before it succeeds.
 
 ### 17.1 GameState And Saves
 
-Reuse Slice 1 and `SaveGameMetadata.CURRENT_VERSION` behavior. Adding
-authoritative current-attack serialization uses that same compatibility owner.
-New saves and checkpoints add the backward-compatible signed header field
+Reuse Slice 1 and `SaveGameMetadata.CURRENT_VERSION` behavior. Slice 8A
+pre-activation keeps `CURRENT_VERSION == 1`; adding authoritative
+current-attack serialization uses that same compatibility owner. New saves and
+checkpoints add the backward-compatible signed header field
 `next_command_sequence`, captured from the sole `CommandProcessor` cursor at the
 same save boundary as `GameState.serialize()`. A present value must be an
 integral non-negative value greater than every sequence embedded in an active
@@ -2254,13 +2355,14 @@ with the validated load result, and the existing
 `GameManager.start_new_game_from_state()` installation path restores
 `CommandProcessor` to that value before command submission or projection resumes.
 
-An older accepted save without `next_command_sequence` selects exactly one
-compatibility outcome: it restores cursor `0` only when canonical current-attack
-and timing-window state are both inactive and no serialized rule guard refers to
-either lifecycle. This is safe because such a save predates command-sequence-
-derived production lifecycle identity. If any such lifecycle or guard is
-present, the missing cursor is `schema_invalid`; it is not inferred from scene,
-flow, projection, or local history.
+Within Slice 8A pre-activation, an older accepted version-1 save without
+`next_command_sequence` selects exactly one compatibility outcome: it restores
+cursor `0` only when canonical current-attack and timing-window state are both
+inactive and no serialized rule guard refers to either lifecycle. This is safe
+because such a save predates command-sequence-derived production lifecycle
+identity. If any such lifecycle or guard is present, the missing cursor is
+`schema_invalid`; it is not inferred from scene, flow, projection, or local
+history.
 
 An older save with no `CurrentAttackState` reconstructs the inactive
 representation only when the rest of authoritative state contains no active
@@ -2268,6 +2370,24 @@ attack. If legacy flow/projection data indicates an in-progress attack but
 canonical current-attack facts are absent, loading rejects through
 `schema_invalid`; it does not reconstruct authority from that legacy data.
 Invalid present current-attack or timing-window state also fails closed.
+
+Within the bounded pre-activation repository state, save/load and reconnect
+preserve the serialized confirmation context rather than selecting one by
+execution mode. An inactive timing state resumes the direct semantic
+confirmation context; a valid shared-test-opened active lifecycle resumes
+opportunity derivation and accepts only its recorded matching continuation.
+Reconstruction never converts one context into the other, opens a lifecycle,
+or synthesizes confirmation. Cross-owner inconsistency rejects through
+`schema_invalid`.
+
+The Section 15.5.4 activation checkpoint advances
+`SaveGameMetadata.CURRENT_VERSION` to 2 because inactive ship confirmation at
+`ATTACK_MODIFY` is no longer a supported semantic state. `SaveGameManager`
+accepts version 2 after activation and rejects every version-1 pre-activation
+save as `version_unsupported` before body reconstruction. It does not migrate
+the body, open a timing lifecycle, or synthesize confirmation. Version-2
+post-activation saves round-trip the matching active lifecycle for a ship at
+`ATTACK_MODIFY`; the accepted inactive squadron path remains valid.
 
 ### 17.2 Replay
 
@@ -2277,14 +2397,19 @@ Repository evidence is explicit: current unsigned replays emit
 `ReplayDriver` currently rejects a version before command application. Slice 8A
 must therefore add, not assume, the compatibility boundary.
 
-Use replay format value `3`, the first value that does not collide with either
-current emitted format. Set `GameReplay.FORMAT_VERSION` to `3`; retain
-`SIGNED_FORMAT_VERSION` only as the source-compatible alias
-`SIGNED_FORMAT_VERSION := FORMAT_VERSION`. `sign_replay()` adds/verifies the
-signature but writes the same semantic format value `3`; signing no longer
-changes replay semantics to a second format number.
+Use replay format value `3` for Slice 8A pre-activation, the first value that
+does not collide with either current emitted format. Set
+`GameReplay.FORMAT_VERSION` to `3`; retain `SIGNED_FORMAT_VERSION` only as the
+source-compatible alias `SIGNED_FORMAT_VERSION := FORMAT_VERSION`.
+`sign_replay()` adds/verifies the signature but writes the same semantic format
+value; signing no longer changes replay semantics to a second format number.
 
-Every format-3 header also carries integral non-negative
+The Section 15.5.4 activation checkpoint advances `FORMAT_VERSION` to `4` and
+the signed alias follows it. Format 4 is the sole post-activation replay format.
+This is the existing replay compatibility boundary, not a timing-window-specific
+version or a legacy execution mode.
+
+Every format-3 and format-4 header also carries integral non-negative
 `initial_command_sequence`. Full-game replay capture writes `0`. Replay capture
 from an accepted reconstructed initial state writes the cursor paired with that
 state. Before applying the first recorded command, `ReplayDriver` restores that
@@ -2293,13 +2418,14 @@ next contiguous value. Replay application preserves the serialized value rather
 than replacing it with a newly allocated local sequence.
 
 `GameReplay.deserialize()` owns the check. After JSON/header shape validation
-and before any command is deserialized or applied, it accepts exactly format
-`3` and returns failure for every other value. `ReplayDriver` maps that failure
-to its normal replay load-failure result and applies zero commands. Pre-migration
-unsigned format `1`, signed format `2`, missing, non-integer, and unknown future
-versions are therefore deterministically rejected. This rejection behavior and
-its focused tests are implementation work in Slice 8A; no existing
-unsupported-format path is claimed.
+and before any command is deserialized or applied, it accepts exactly the
+current format and returns failure for every other value. During Slice 8A that
+means exactly format 3. After activation that means exactly format 4, so formats
+1, 2, and the pre-activation format 3 all reject before command
+deserialization/application and `ReplayDriver` applies zero commands. Missing,
+non-integer, and unknown future versions reject through the same path. These
+rejection paths and focused tests are implementation work in their respective
+checkpoints; no existing unsupported-format path is claimed.
 
 At that same pre-application boundary, `GameReplay.deserialize()` validates
 `initial_command_sequence` and the complete serialized command-sequence column.
@@ -2308,14 +2434,28 @@ returns the same replay load failure and applies zero commands. Runtime replay
 application still checks each preserved value against the restored
 `CommandProcessor` cursor so state divergence fails closed at the command seam.
 
+Format-3 replay applies the Slice 8A pre-activation authoritative-state
+classification. Inactive timing state permits only the direct confirmation
+form; active timing state permits only the recorded matching continuation form.
+Replay does not choose a form, open a missing lifecycle, or rewrite one form
+into the other.
+
+Format-4 replay applies only the post-activation classification. A ship attack
+at `ATTACK_MODIFY` has the matching active lifecycle and accepts only its
+recorded orchestrator-derived continuation. A format-3 history containing an
+inactive direct ship confirmation is rejected as an unsupported replay before
+its commands can execute under format-4 semantics; it is never reinterpreted.
+
 In particular, pre-migration `publish_attack_flow`, `confirm_attack_dice`,
 `skip_attack`, roll, or reroll history is not used to reconstruct missing
 current-attack or timing lifecycle identity.
 
 There is no command-by-command legacy attack-history migration, no inference
 from `InteractionFlow` or scene snapshots, and no timing-window replay version.
-Format-3 replays record the accepted semantic attack commands and the
-orchestrator-produced continuation in authoritative order.
+Format-3 replays record the accepted pre-activation semantic commands;
+format-4 replays record the accepted post-activation semantic commands. Each
+format has one command model and neither executes the other's incompatible ship
+confirmation history.
 
 ### 17.3 Baselines
 
@@ -2324,11 +2464,14 @@ hashes without changing command traces. Do not preserve obsolete hashes. Update
 fixtures only in an explicitly authorized baseline-maintenance task after the
 implementation and semantic trace have been accepted.
 
-Committed replay fixtures with format `1` or `2` are expected to fail the new
-format check until that authorized maintenance updates their headers and command
+Committed replay fixtures with format `1` or `2` are expected to fail the Slice
+8A format check until authorized maintenance updates their headers and command
 histories to format `3`. Slice 8A focused version/replay tests and semantic trace
-review must pass before fixture maintenance; full baseline acceptance then
-requires regenerated format-3 fixtures and no unexplained command drift.
+review must pass before that maintenance. The production-activation checkpoint
+then requires a second explicit maintenance review: pre-activation format-3
+fixtures reject, and accepted post-activation fixtures are regenerated as format
+4 with no unexplained command drift. A header-only rewrite of incompatible
+format-3 ship history is prohibited.
 
 ### 17.4 Networking
 
@@ -2336,6 +2479,15 @@ No transport/version architecture is added here. Existing command serialization
 and host/client state reconstruction carry the new fields and commands. Any
 wire compatibility gap beyond existing command/state handling is outside
 CON-005 and must be reported rather than solved with a timing-window transport.
+
+Reconnect remains a live authoritative-host reconstruction path, not a durable
+cross-checkpoint artifact format. Within Slice 8A, a reconnect snapshot preserves
+the pre-activation context. After activation, a reconnecting client receives a
+fresh post-activation snapshot from the authoritative host. An injected or
+delayed pre-activation snapshot containing the incompatible ship
+`ATTACK_MODIFY`/inactive-timing combination fails canonical reconstruction before
+projection or routing; it is not converted. This tranche does not support a
+mixed pre-activation/post-activation network session.
 
 ## 18. Risks And Stop Conditions
 
@@ -2352,9 +2504,11 @@ CON-005 and must be reported rather than solved with a timing-window transport.
 | One attack identity spans a second attack/target | Complete and retire before `_attack_exec_finalize_attack()` or `_finalize_squadron_attack()` advances; assert a fresh begin sequence. |
 | Downstream Accuracy/defense state remains scene-owned | Gate Slice 8A on canonical locks, defense progression, damage continuation, save/load, and reconnect evidence. |
 | Automatic continuation bypasses Concentrate Fire | Keep production opening disabled until the Concentrate Fire Readiness Gate and later H9 coexistence gate pass. |
+| Slice 8A ship confirmation requires a lifecycle whose production opener is still disabled | Permit direct confirmation only with inactive timing state and permit active-lifecycle confirmation only as the matching shared-test-opened continuation; authoritative state, never a caller mode, selects the context. After the Production Coexistence And H9 Pre-Activation Gate, atomically connect the opener and remove inactive direct ship confirmation. |
+| Pre-activation saves or replays execute under incompatible post-activation confirmation semantics | Treat production activation as an explicit compatibility boundary: advance the existing save and replay format owners, reject old artifacts before execution, and reject an incompatible stale reconnect snapshot without conversion or synthesized lifecycle. |
 | Shared opening captures squadron Swarm prematurely | Gate the production trigger on canonical attacker kind ship and retain Swarm regression traces. |
 | H9 intent acts on a changed die | Carry and validate selected index plus expected source color/face before all mutation. |
-| Replay accepts pre-Model-C-S history | Detect exact format 3 in `GameReplay.deserialize()` before command deserialization/application. |
+| Replay accepts history from the wrong semantic checkpoint | Accept exactly format 3 during Slice 8A and exactly format 4 after activation in `GameReplay.deserialize()` before command deserialization/application. |
 | RuleRegistry grows into runtime engine | Store only static candidate identity and participant key. |
 | Opportunity cache becomes authority | Return fresh records each pass; never serialize/store mutable queue. |
 | UI emptiness triggers confirm | UI submits only selected use/decline; orchestrator owns continuation. |
@@ -2381,7 +2535,11 @@ Stop the implementation tranche when any of the following occurs:
   targets;
 - Accuracy, defense, damage, or reconnect requires writable scene-only attack
   state;
-- replay format 3 is not rejected before command application when unsupported;
+- Slice 8A accepts a replay format other than 3, or production activation accepts
+  a replay format other than 4, before command application;
+- production activation leaves save version 1 accepted, fails to emit save
+  version 2, or permits incompatible pre-activation reconnect state to reach
+  projection/routing;
 - the Concentrate Fire Readiness Gate cannot represent Concentrate Fire without
   bypass or duplicate mutation;
 - a squadron-attacker roll enters shared `ATTACK_MODIFY` before Swarm migration;
@@ -2444,6 +2602,8 @@ Before the H9 criteria apply:
 - [ ] `GameReplay.deserialize()` accepts format 3 only, rejects prior unsigned
       format 1 and signed format 2 before command application, and no legacy
       attack history is reinterpreted.
+- [ ] Slice 8A save/replay/reconnect evidence is explicitly pre-activation
+      evidence and makes no cross-cutover compatibility claim.
 - [ ] CON-001 save/load, replay, reconnect, network, atomicity, and migration
       evidence passes.
 
@@ -2470,6 +2630,13 @@ Before the H9 criteria apply:
 - [ ] Hot-seat, replay, host, client, reconnect, save/load, projection, and
       visibility evidence passes.
 - [ ] Existing Swarm and attack behavior remains passing.
+- [ ] The activation checkpoint advances save format 1 to 2 and replay format 3
+      to 4 atomically with connecting the ship opener and removing inactive
+      direct ship confirmation.
+- [ ] Post-activation loading rejects version-1 saves as
+      `version_unsupported`, replay loading rejects format 3 before command
+      application, and incompatible stale reconnect state fails before
+      projection or routing; no conversion or legacy confirmation mode exists.
 
 ### 19.3 Scope And Authority
 
@@ -2530,6 +2697,8 @@ The architecture is sufficient to plan Slices 2-8 because:
 - discovery and opportunity identity are fixed;
 - cleanup, replay, save/load, reconnect, network, projection, and evidence
   boundaries are fixed;
+- the production-activation compatibility boundary uses the existing save and
+  replay version owners and one fail-closed reconnect invariant;
 - H9 rule behavior and runtime-upgrade ownership are fixed;
 - repository seams exist for definitions, registry registration, command
   processing, projection, filtering, replay, networking, and attack flow.
@@ -2543,6 +2712,22 @@ Coexistence And H9 Pre-Activation Gate precedes production activation. Failure
 at any gate stops later edits; it does not reopen
 ownership or permit `InteractionFlow.payload` or scene state to become
 authoritative.
+
+Slice 8A is independently implementable with production timing behavior still
+inactive: direct `ConfirmAttackDiceCommand` is one authoritative CON-001
+semantic transaction requiring inactive timing state, while the existing shared
+test opener can exercise the same command only as its matching CON-005
+continuation. The later production-activation checkpoint atomically connects
+the ship opener and removes inactive direct ship confirmation after Concentrate
+Fire and H9 coexistence evidence passes. This resolves the implementation stop
+without moving H9, participant activation, or the production opener into Slice
+8A.
+
+Slice 8A artifacts are supported within that pre-activation checkpoint. The
+later activation checkpoint deterministically rejects incompatible version-1
+saves, format-3 replays, and stale incompatible reconnect state instead of
+executing them under the post-activation command model. No migration command,
+fictional timing lifecycle, or permanent compatibility path is introduced.
 
 After Owner acceptance, implement Slices 2-7 as the largest safe shared-core
 tranche, preserving each focused checkpoint and the Shared Core Gate. Then
@@ -2566,7 +2751,7 @@ audit and the required refinement input. No finding is removed by omission.
 | M-2 | Medium | Runtime-source enumeration had multiple possible participant kinds or entry points and no single ownership boundary. | Resolved | Sections 11.3-11.5 define one RuleRegistry descriptor and one registered-rule source-enumeration/derivation boundary from authoritative state. |
 | M-3 | Medium | Command-result/orchestrator integration allowed `CommandProcessor` and/or submitter placement and did not fix local/network follow-up order. | Resolved | Section 10.4 fixes one `CommandProcessor._submit()` seam and the existing deferred FIFO/broadcast order for all execution modes. |
 | M-4 | Medium | Stale or inconsistent timing-window/H9 state could be rejected or cleared, leaving recovery and cleanup implementation-defined. | Resolved | Sections 14.6, 14.8, and 15.10 require invalid-state rejection on reconstruction, state preservation on live inconsistency, and command-owned terminal cleanup. |
-| M-5 | Medium | Legacy replay entries could be reconstructed or rejected, leaving current-attack and lifecycle compatibility undefined. | Resolved | Section 17.2 selects format 3, adds exact validation in `GameReplay.deserialize()`, aliases signed format to the same value, and rejects every older format before command application. |
+| M-5 | Medium | Legacy replay entries could be reconstructed or rejected, leaving current-attack and lifecycle compatibility undefined. | Resolved | Section 17.2 selects format 3 for Slice 8A, adds exact validation in `GameReplay.deserialize()`, aliases signed format to the same value, and rejects every older format before command application. |
 | M-6 | Medium | H9 use payload allowed a selected Accuracy face or another deterministic equivalent. | Resolved | Section 15.7 selects one payload: semantic target `DiceFace.ACCURACY` plus selected index and expected source color/face; no physical face index or alternate target representation is allowed. |
 | M-7 | Medium | Production H9 could begin before canonical attack identity/dice and command-owned attack progression existed. | Resolved | Sections 15.3-15.5 prohibit H9 edits until the Model C-S and Concentrate Fire Readiness Gates pass, and prohibit production opening until the later H9 coexistence gate proves all production blockers. |
 | L-1 | Low | Orchestrator shape and canonical opportunity-helper placement were left as alternatives. | Resolved | Sections 10.3 and 11.4 select a stateless `RefCounted` orchestrator module and one adjacent plain-Dictionary validation helper. |
@@ -2582,7 +2767,7 @@ No previous finding remains unresolved.
 | B-1 | Blocking | One current-attack identity could span a ship's two attacks or multiple anti-squadron targets because retirement was tied to enclosing attack-execution teardown. | Resolved | Sections 10.4.1 and 15.3.1 require one preserved authoritative sequence and a begin/complete pair per target, with retirement before `_attack_exec_finalize_attack()` / `_finalize_squadron_attack()` advances. |
 | B-2 | Blocking | Production shared opening could bypass Concentrate Fire token reroll or Swarm before automatic confirmation. | Resolved | Sections 15.5.1-15.5.4 require the pre-H9 Concentrate Fire Readiness Gate, then H9/Concentrate Fire coexistence evidence before production opening; squadron-attacker Swarm remains reachable and mandatory regression evidence. |
 | B-3 | Blocking | Slice 8A covered attack identity/dice but left downstream Accuracy, defense, and resume-critical facts potentially authoritative only in scene state. | Resolved | Sections 15.3.2-15.3.3 define the canonical membership and semantic command boundary through Accuracy, defense, damage, reconstruction, and per-target terminal cleanup without copying legacy `AttackState` wholesale. |
-| M-1 | Medium | Replay planning assumed an existing unsupported-version rejection path and ignored the signed-format value. | Resolved | Section 17.2 records current values 1/2, selects non-colliding format 3, makes signed format an alias, and adds exact pre-application validation in `GameReplay.deserialize()`. |
+| M-1 | Medium | Replay planning assumed an existing unsupported-version rejection path and ignored the signed-format value. | Resolved | Section 17.2 records current values 1/2, selects non-colliding format 3 for Slice 8A, makes signed format an alias, and adds exact pre-application validation in `GameReplay.deserialize()`. |
 | M-2 | Medium | H9 selected die index alone could act on a changed authoritative die after another modifier. | Resolved | Section 15.7 carries expected source color/face with attack identity and index, validates exact canonical equality, and specifies identical rejection for local, network, and replay execution. |
 | M-3 | Medium | CAP-H9 evidence did not explicitly cover ship anti-squadron attacks, flow replacement/cancellation/termination cleanup, per-attack guard reset, or reconnect. | Resolved | Sections 15.3.1, 15.10, 15.12-15.14, 16.2, and 19.2 add each behavior as a binary checkpoint and evidence obligation. |
 
@@ -2598,3 +2783,25 @@ unresolved.
 | The H9 decline oracle referenced step 3 instead of the H9 step. | Resolved | Section 16.3 substitutes `DeclineH9Command` at step 4. |
 
 No final acceptance finding remains partially resolved or unresolved.
+
+### 23.4 Slice 8A Implementation-Stop Refinement
+
+| Finding | Classification | Closure in this workbook |
+| --- | --- | --- |
+| Slice 8A required ship-attacker `ConfirmAttackDiceCommand` to validate a matching active timing lifecycle while the only production `ATTACK_MODIFY` opener remained prohibited until after the later H9 coexistence gate. The repository had no production opener, so Slice 8A could not satisfy both obligations independently. | Resolved | Sections 8, 12.5, 15.3.3, 15.4, 15.5.4, 18.1, and 22 define two mutually exclusive authoritative-state contexts for the same semantic command: inactive direct confirmation for production before activation, and matching active continuation for the existing shared test opener. The later activation checkpoint atomically connects the production opener and removes inactive direct ship confirmation. No architecture decision is reopened and no production participant is activated early. |
+
+The stopped implementation correctly made no production changes. This
+refinement preserves that stop as evidence that the former dependency sequence
+was not executable and records the deterministic correction required before
+Slice 8A resumes.
+
+### 23.5 Cross-Cutover Compatibility Refinement
+
+| Finding | Classification | Closure in this workbook |
+| --- | --- | --- |
+| A Slice 8A version-1 save or format-3 replay can contain inactive direct ship confirmation. After production activation, replaying or resuming that artifact under the new opener and active-lifecycle-only confirmation rule would reject mid-protocol or strand the attack. | Resolved | Sections 8, 10.4.1, 14.4-14.6, 15.4-15.5.4, 17, 18.1-18.2, 19.2, and 22 make activation an explicit compatibility boundary. Slice 8A artifacts are supported only within pre-activation. Activation atomically advances save version 1 to 2 and replay format 3 to 4, rejects prior artifacts through the existing compatibility owners, and rejects an incompatible stale reconnect snapshot before projection/routing. No history conversion, synthesized lifecycle, or permanent direct ship-confirm path is introduced. |
+
+This is an implementation compatibility choice already permitted by
+CON-001-SER-011 through SER-014 and CON-005-SER-008 through SER-009. It does not
+establish a project-wide release policy or reopen an Owner architecture
+decision.

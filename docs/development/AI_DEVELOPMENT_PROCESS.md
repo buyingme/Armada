@@ -168,11 +168,29 @@ Owner Decision
 Architecture Update
         │
         ▼
+Forensic Analysis (when required)
+        │
+        ▼
 Implementation
         │
         ▼
 Verification
 ```
+
+## 5.1 Forensic Analysis
+
+When a reported defect affects lifecycle boundaries, interaction flow,
+presentation ownership, multiplayer ownership, timing windows, or state
+machines, implementation shall not begin immediately.
+
+First perform a forensic analysis to identify:
+
+- the authoritative boundary,
+- the neighboring lifecycle states, and
+- the intended ownership transition.
+
+The implementation shall then be scoped to the smallest authoritative
+boundary capable of correcting the defect.
 
 ------------------------------------------------------------------------
 
@@ -249,3 +267,37 @@ The process is successful when:
 -   new features integrate without architectural degradation
 -   development remains efficient over the lifetime of the project
 -   the Project Owner retains architectural control
+
+------------------------------------------------------------------------
+
+## 10. Lifecycle-Boundary Verification
+
+### Lifecycle Neighbor Verification
+
+When an implementation affects interaction flow, presentation lifecycle,
+multiplayer ownership, timing windows, or UI state machines, its implementation
+review shall explicitly analyze:
+
+``` text
+Previous lifecycle state
+        ↓
+Corrected lifecycle state
+        ↓
+Next lifecycle state
+```
+
+The review shall verify entry conditions, exit conditions, ownership, authority,
+and regression coverage across those neighboring states and transitions.
+
+### Boundary Expansion Rule
+
+When a regression is repaired at a lifecycle boundary, regression coverage
+shall expand beyond the originally failing state. It shall verify:
+
+-   the repaired state
+-   the immediately preceding lifecycle transition
+-   the immediately following lifecycle transition
+
+A documented justification is required when any of this coverage is omitted.
+This prevents a correction at one state from introducing an adjacent-state
+regression.

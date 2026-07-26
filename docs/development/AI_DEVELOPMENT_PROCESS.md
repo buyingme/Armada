@@ -192,6 +192,68 @@ First perform a forensic analysis to identify:
 The implementation shall then be scoped to the smallest authoritative
 boundary capable of correcting the defect.
 
+## 5.2 Architecture Development Workflow
+
+Once sufficient evidence has been collected, architecture work proceeds through a structured refinement process.
+
+Not every architecture task requires every step.
+
+The process shall include only those steps necessary to eliminate architectural uncertainty before implementation.
+
+Typical architecture workflow after evidence collection:
+
+```text
+Forensic Analysis (when required)
+        │
+        ▼
+Draft Architecture
+        │
+        ▼
+Architecture Review
+        │
+        ▼
+Revision Workbook (if additional architectural analysis is required)
+        │
+        ▼
+Project Owner Decisions
+        │
+        ▼
+Authority Assessment (only if document authority or governance boundaries are uncertain)
+        │
+        ▼
+Authoritative Draft
+        │
+        ▼
+Translation / Acceptance Review
+        │
+        ▼
+Project Owner Acceptance
+```
+
+### Revision Workbook
+
+A Revision Workbook is optional.
+
+It is created only when the Architecture Review identifies architectural questions that require structured investigation before the Project Owner can make an informed decision.
+
+If the review already provides sufficient evidence, the process proceeds directly to Project Owner Decisions.
+
+### Authority Assessment
+
+An Authority Assessment is optional.
+
+It is performed only when uncertainty exists regarding the architectural authority of the target document.
+
+Its purpose is to determine whether the proposed content:
+
+- is already derivable from accepted architecture,
+- belongs within the authority of the target document type,
+- or requires additional architectural governance before drafting.
+
+The Authority Assessment does not redesign the architecture.
+
+It verifies that the authoritative document can be drafted within the governance established by the accepted architecture.
+
 ------------------------------------------------------------------------
 
 ## 6. Tool Usage

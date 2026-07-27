@@ -430,6 +430,32 @@ func test_confirm_signal_emitted() -> void:
 			"confirm_pressed should be emitted.")
 
 
+func test_declaration_confirm_is_distinct_from_dice_confirm() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	_panel.show_declaration_confirm_button()
+	watch_signals(_panel)
+
+	_panel._on_confirm_pressed()
+
+	assert_signal_emitted(_panel, "declaration_confirm_pressed")
+	assert_signal_not_emitted(_panel, "confirm_pressed")
+	assert_eq(_panel._confirm_button.text, "Confirm Attack")
+
+
+func test_declaration_pending_disables_and_restores_controls() -> void:
+	_panel.show_initial_attack_exec("Test Ship")
+	_panel.show_declaration_confirm_button()
+	_panel.show_skip_attack_button()
+
+	_panel.set_declaration_submission_pending(true)
+	assert_true(_panel._confirm_button.disabled)
+	assert_true(_panel._skip_attack_button.disabled)
+
+	_panel.set_declaration_submission_pending(false)
+	assert_false(_panel._confirm_button.disabled)
+	assert_false(_panel._skip_attack_button.disabled)
+
+
 func test_show_skip_attack_button_makes_visible() -> void:
 	_panel.show_initial_attack_exec("Test Ship")
 	_panel.show_skip_attack_button()

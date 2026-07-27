@@ -675,6 +675,19 @@ func close_modal_from_interaction_state() -> void:
 	_on_board_activation_ended()
 
 
+## Hides only the activation presentation while an authoritative attack flow is
+## active. The enclosing activation context remains intact so deterministic
+## continuation can return to the activation sequence after the attack.
+func dismiss_activation_modal_for_attack() -> void:
+	if _panel_mgr == null:
+		return
+	if _panel_mgr.activation_modal != null \
+			and _panel_mgr.activation_modal.visible:
+		_panel_mgr.activation_modal.close()
+	if _panel_mgr.show_activation_button != null:
+		_panel_mgr.show_activation_button.hide_button()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers — modal lifecycle
 # ---------------------------------------------------------------------------

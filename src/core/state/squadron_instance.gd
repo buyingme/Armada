@@ -137,6 +137,21 @@ func get_active_token_count() -> int:
 	return count
 
 
+## Exhausts one ready defense token.
+func exhaust_defense_token(index: int) -> void:
+	if index < 0 or index >= defense_tokens.size():
+		return
+	if defense_tokens[index]["state"] == Constants.DefenseTokenState.READY:
+		defense_tokens[index]["state"] = Constants.DefenseTokenState.EXHAUSTED
+
+
+## Discards one defense token permanently.
+func discard_defense_token(index: int) -> void:
+	if index < 0 or index >= defense_tokens.size():
+		return
+	defense_tokens[index]["state"] = Constants.DefenseTokenState.DISCARDED
+
+
 ## Readies all non-discarded defense tokens (Status Phase).
 ## Rules Reference: "Status Phase", p.6.
 func ready_defense_tokens() -> void:

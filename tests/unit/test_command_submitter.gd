@@ -152,6 +152,19 @@ func test_network_clear_awaiting() -> void:
 			"Should warn about send_command_to_server with wrong role.")
 
 
+func test_network_rejection_clears_only_matching_awaiting_command() -> void:
+	var submitter := NetworkCommandSubmitter.new()
+	var cmd := _TestNoopCmd.new(0, {})
+	submitter.submit(cmd)
+
+	assert_false(submitter.reject_awaiting({"type": "assign_dials"}))
+	assert_true(submitter.is_awaiting_response())
+	assert_true(submitter.reject_awaiting(cmd.serialize()))
+	assert_false(submitter.is_awaiting_response())
+	assert_engine_error(1,
+			"Initial send should warn about role in this test setup.")
+
+
 func test_network_queues_while_awaiting() -> void:
 	var submitter := NetworkCommandSubmitter.new()
 	var cmd1 := _TestNoopCmd.new(0, {})

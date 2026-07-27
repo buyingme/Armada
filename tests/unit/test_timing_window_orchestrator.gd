@@ -8,6 +8,8 @@ const DEFINITIONS: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_definitions.gd")
 const PROCESSOR_SCRIPT: GDScript = preload(
 		"res://src/autoload/command_processor.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 const TEST_COMMAND_TYPE: String = "debug_deal_damage"
 const CONTINUATION_TYPE: String = "confirm_attack_dice"
@@ -28,9 +30,21 @@ func before_each() -> void:
 		return FixtureCommand.new(player, CONTINUATION_TYPE, payload))
 	_state = GameState.new()
 	_state.initialize()
+	_configure_attack_context()
 	GameManager.current_game_state = _state
 	_processor = PROCESSOR_SCRIPT.new()
 	add_child_autofree(_processor)
+
+
+func _configure_attack_context() -> void:
+	_state.current_phase = Constants.GamePhase.SHIP
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0)
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Orchestrator fixture requires canonical current-attack state.")
 
 
 func after_each() -> void:
@@ -131,6 +145,7 @@ func test_mirror_replay_and_reconstruction_never_synthesize_continuation() -> vo
 		ORCHESTRATOR.MODE_RECONSTRUCTION,
 	]:
 		_state.initialize()
+		_configure_attack_context()
 		_open(9)
 		var result: Dictionary = ORCHESTRATOR._apply_derivation_result(
 				_state,
@@ -189,7 +204,8 @@ func _context() -> Dictionary:
 	return {
 		TimingWindowState.CONTINUATION_KEY_ID: CONTINUATION_TYPE,
 		TimingWindowState.CONTINUATION_KEY_RESUME_POINT: "attack_after_modify",
-		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: "fixture-attack",
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID:
+				_state.current_attack_state.attack_id,
 		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
 		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
 	}

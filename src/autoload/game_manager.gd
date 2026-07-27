@@ -17,6 +17,11 @@
 extends Node
 
 
+## Client-local notification that an authoritative server rejected one
+## submitted command. It carries no accepted command result.
+signal network_command_rejected(command: GameCommand, reason: String)
+
+
 const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 
@@ -139,6 +144,8 @@ func _ready() -> void:
 	# G4.6.5.6 — client-side command result handler.
 	NetworkManager.command_result_received.connect(
 			_on_network_command_result)
+	NetworkManager.command_rejection_received.connect(
+			_on_network_command_rejection)
 
 
 func _notification(what: int) -> void:
@@ -1186,31 +1193,72 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 ## [param dice_pool] — Dictionary mapping colour string to count.
 ## [param attack_context] — optional JSON-safe attack identity metadata.
 func submit_roll_dice(player: int,
-		dice_pool: Dictionary,
-		attack_context: Dictionary = {}) -> Dictionary:
+		_dice_pool: Dictionary = {},
+		_attack_context: Dictionary = {}) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var payload: Dictionary = {"dice_pool": dice_pool.duplicate()}
-	for context_key: String in attack_context.keys():
-		payload[context_key] = attack_context[context_key]
+	var payload: Dictionary = {
+		"attack_id": current_game_state.current_attack_state.attack_id,
+	}
 	var cmd := RollDiceCommand.new(player, payload)
 	return _submitter.submit(cmd)
+
+
+func submit_begin_attack(player: int, attack_context: Dictionary) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(BeginAttackCommand.new(
+			player, attack_context.duplicate(true)))
+
+
+func submit_attack_pool_choice(player: int, choice_kind: String,
+		color: String, rule_id: String = "") -> Dictionary:
+	if not current_game_state:
+		return {}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	return _submitter.submit(ResolveAttackPoolChoiceCommand.new(player, {
+		"attack_id": attack.attack_id,
+		"choice_kind": choice_kind,
+		"rule_id": rule_id,
+		"color": color,
+	}))
+
+
+func submit_use_concentrate_fire_dial(player: int,
+		color: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(UseConcentrateFireDialCommand.new(player, {
+		"attack_id": current_game_state.current_attack_state.attack_id,
+		"color": color,
+	}))
+
+
+func submit_decline_concentrate_fire_dial(player: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(DeclineConcentrateFireDialCommand.new(player, {
+		"attack_id": current_game_state.current_attack_state.attack_id,
+	}))
 
 
 ## Submits a [RerollAttackDieCommand] for optional attack die rerolls.
 ## Uses [member GameState.rng] for deterministic replay/network outcomes.
 func submit_reroll_attack_die(player: int,
 		die_index: int,
-		dice_results: Array[Dictionary],
+		_dice_results: Array[Dictionary],
 		source_rule_id: String) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var payload_results: Array[Dictionary] = []
-	for result: Dictionary in dice_results:
-		payload_results.append(result.duplicate(true))
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	if die_index < 0 or die_index >= attack.dice_results.size():
+		return {}
+	var selected: Dictionary = attack.dice_results[die_index]
 	var cmd := RerollAttackDieCommand.new(player, {
+		"attack_id": attack.attack_id,
 		"die_index": die_index,
-		"dice_results": payload_results,
+		"expected_color": int(selected.get("color", -1)),
+		"expected_face": int(selected.get("face", -1)),
 		"source_rule_id": source_rule_id,
 	})
 	return _submitter.submit(cmd)
@@ -1225,6 +1273,7 @@ func submit_skip_attack_modifier(player: int,
 	if not current_game_state:
 		return {}
 	var payload: Dictionary = attack_context.duplicate(true)
+	payload["attack_id"] = current_game_state.current_attack_state.attack_id
 	payload["source_rule_id"] = source_rule_id
 	var cmd := SkipAttackModifierCommand.new(player, payload)
 	return _submitter.submit(cmd)
@@ -1236,6 +1285,9 @@ func submit_confirm_attack_dice(player: int,
 		attack_context: Dictionary = {}) -> Dictionary:
 	if not current_game_state:
 		return {}
+	if not attack_context.has("attack_id"):
+		attack_context["attack_id"] = \
+				current_game_state.current_attack_state.attack_id
 	var cmd := ConfirmAttackDiceCommand.new(player,
 			attack_context.duplicate(true))
 	return _submitter.submit(cmd)
@@ -1258,13 +1310,23 @@ func submit_counter_choice(player: int,
 ## [param ship] — the defending ShipInstance.
 ## [param token_index] — index in defense_tokens array.
 ## [param spend_method] — "exhaust" or "discard".
-func submit_spend_defense_token(ship: ShipInstance, token_index: int,
+func submit_spend_defense_token(defender: RefCounted, token_index: int,
 		spend_method: String) -> Dictionary:
-	if not current_game_state:
+	if not current_game_state or defender == null:
 		return {}
-	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := SpendDefenseTokenCommand.new(ship.owner_player,
-			{"ship_index": ship_index, "token_index": token_index,
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	var tokens: Array = defender.get("defense_tokens") as Array
+	if token_index < 0 or token_index >= tokens.size():
+		return {}
+	var cmd := SpendDefenseTokenCommand.new(attack.defender_player,
+			{"attack_id": attack.attack_id,
+			"defender_kind": attack.defender_kind,
+			"defender_index": attack.defender_index,
+			"ship_index": attack.defender_index \
+					if attack.defender_kind == CurrentAttackState.KIND_SHIP else -1,
+			"token_index": token_index,
+			"expected_token_type": int(
+					(tokens[token_index] as Dictionary).get("type", -1)),
 			"spend_method": spend_method})
 	return _submitter.submit(cmd)
 
@@ -1274,8 +1336,10 @@ func submit_use_ecm(ship: ShipInstance,
 		runtime_upgrade_id: String) -> Dictionary:
 	if not current_game_state or ship == null:
 		return {}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
 	var cmd: GameCommand = UseECMCommandScript.new(ship.owner_player,
-			{"runtime_upgrade_id": runtime_upgrade_id})
+			{"attack_id": attack.attack_id,
+				"runtime_upgrade_id": runtime_upgrade_id})
 	return _submitter.submit(cmd)
 
 
@@ -1284,8 +1348,10 @@ func submit_decline_ecm(ship: ShipInstance,
 		runtime_upgrade_id: String) -> Dictionary:
 	if not current_game_state or ship == null:
 		return {}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
 	var cmd: GameCommand = DeclineECMCommandScript.new(ship.owner_player,
-			{"runtime_upgrade_id": runtime_upgrade_id})
+			{"attack_id": attack.attack_id,
+				"runtime_upgrade_id": runtime_upgrade_id})
 	return _submitter.submit(cmd)
 
 
@@ -1336,18 +1402,32 @@ func _submit_status_ready_cost_choice(command: GameCommand) -> Dictionary:
 ## [param ship] — the defending ShipInstance.
 ## [param selected_indices] — token indices in canonical resolution
 ##                            order; may be empty.
-func submit_commit_defense(ship: ShipInstance,
+func submit_commit_defense(defender: RefCounted,
 		selected_indices: Array[int]) -> Dictionary:
-	if not current_game_state:
+	if not current_game_state or defender == null:
 		return {}
-	var ship_index: int = current_game_state.find_ship_index(ship)
+	var attack: CurrentAttackState = current_game_state.current_attack_state
 	var indices_payload: Array = []
 	for idx: int in selected_indices:
 		indices_payload.append(idx)
-	var cmd := CommitDefenseCommand.new(ship.owner_player,
-			{"ship_index": ship_index,
+	var cmd := CommitDefenseCommand.new(attack.defender_player,
+			{"attack_id": attack.attack_id,
+			"defender_kind": attack.defender_kind,
+			"defender_index": attack.defender_index,
+			"ship_index": attack.defender_index \
+					if attack.defender_kind == CurrentAttackState.KIND_SHIP else -1,
 			"selected_indices": indices_payload})
 	return _submitter.submit(cmd)
+
+
+func submit_commit_accuracy(player: int,
+		locked_tokens: Array[int]) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(CommitAccuracyCommand.new(player, {
+		"attack_id": current_game_state.current_attack_state.attack_id,
+		"locked_tokens": locked_tokens.duplicate(),
+	}))
 
 
 ## Submits a [SelectEvadeDieCommand] from the defender peer when the
@@ -1355,13 +1435,25 @@ func submit_commit_defense(ship: ShipInstance,
 ## [AttackPanelMirror].  Phase I6b-3 R3.
 ## [param ship] — the defending ShipInstance.
 ## [param die_index] — index into the attacker's dice-results buffer.
-func submit_select_evade_die(ship: ShipInstance,
+func submit_select_evade_die(defender: RefCounted,
 		die_index: int) -> Dictionary:
-	if not current_game_state:
+	if not current_game_state or defender == null:
 		return {}
-	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := SelectEvadeDieCommand.new(ship.owner_player,
-			{"ship_index": ship_index, "die_index": die_index})
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	if die_index < 0 or die_index >= attack.dice_results.size():
+		return {}
+	var die: Dictionary = attack.dice_results[die_index]
+	var cmd := SelectEvadeDieCommand.new(attack.defender_player,
+			{"attack_id": attack.attack_id,
+			"defender_kind": attack.defender_kind,
+			"defender_index": attack.defender_index,
+			"ship_index": attack.defender_index \
+					if attack.defender_kind == CurrentAttackState.KIND_SHIP else -1,
+			"token_index": _next_unresolved_defense_token(
+					attack, defender, Constants.DefenseToken.EVADE),
+			"die_index": die_index,
+			"expected_color": int(die.get("color", -1)),
+			"expected_face": int(die.get("face", -1))})
 	return _submitter.submit(cmd)
 
 
@@ -1373,8 +1465,16 @@ func submit_select_redirect_zone(ship: ShipInstance,
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	var zone_name: String = Constants.hull_zone_to_string(
+			zone as Constants.HullZone)
 	var cmd := SelectRedirectZoneCommand.new(ship.owner_player,
-			{"ship_index": ship_index, "zone": zone})
+			{"attack_id": attack.attack_id,
+			"ship_index": ship_index,
+			"token_index": _next_unresolved_defense_token(
+					attack, ship, Constants.DefenseToken.REDIRECT),
+			"zone": zone,
+			"expected_shields": int(ship.current_shields.get(zone_name, 0))})
 	return _submitter.submit(cmd)
 
 
@@ -1386,8 +1486,12 @@ func submit_redirect_done(ship: ShipInstance) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
+	var attack: CurrentAttackState = current_game_state.current_attack_state
 	var cmd := RedirectDoneCommand.new(ship.owner_player,
-			{"ship_index": ship_index})
+			{"attack_id": attack.attack_id,
+			"ship_index": ship_index,
+			"token_index": _next_unresolved_defense_token(
+					attack, ship, Constants.DefenseToken.REDIRECT)})
 	return _submitter.submit(cmd)
 
 
@@ -1397,8 +1501,43 @@ func submit_redirect_done(ship: ShipInstance) -> Dictionary:
 func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary:
 	if not current_game_state:
 		return {}
-	var cmd := SkipAttackCommand.new(player, {"reason": reason})
+	var payload: Dictionary = {"reason": reason}
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	if attack.active:
+		payload["attack_id"] = attack.attack_id
+		if reason not in SkipAttackCommand.TERMINAL_REASONS:
+			payload["reason"] = "cancelled"
+		if current_game_state.timing_window_state.active:
+			payload[TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID] = \
+					current_game_state.timing_window_state.lifecycle_id
+	var cmd := SkipAttackCommand.new(player, payload)
 	return _submitter.submit(cmd)
+
+
+func submit_complete_attack(player: int) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(CompleteAttackCommand.new(player, {
+		"attack_id": current_game_state.current_attack_state.attack_id,
+	}))
+
+
+func _next_unresolved_defense_token(attack: CurrentAttackState,
+		defender: RefCounted, token_type: int) -> int:
+	if attack == null or defender == null:
+		return -1
+	var tokens: Array = defender.get("defense_tokens") as Array
+	var resolved: Dictionary = {}
+	for effect: Dictionary in attack.resolved_defense_effects:
+		resolved[int(effect.get("token_index", -1))] = true
+	for token_index: int in attack.committed_defense_tokens:
+		if resolved.has(token_index):
+			continue
+		if token_index < 0 or token_index >= tokens.size():
+			return -1
+		return token_index if int((tokens[token_index] as Dictionary).get(
+				"type", -1)) == token_type else -1
+	return -1
 
 
 ## Submits the current attack [InteractionFlow] snapshot to network peers.
@@ -1452,20 +1591,14 @@ func submit_advance_activation_step(ship: ShipInstance,
 ## [param shield_damage] — shields absorbed (pre-computed).
 ## [param damage_cards] — Array of serialized card dicts.
 ## [param destroyed] — whether the ship is destroyed.
-func submit_resolve_ship_damage(ship: ShipInstance, hull_zone: String,
-		shield_damage: int, damage_cards: Array,
-		destroyed: bool) -> Dictionary:
+func submit_resolve_ship_damage(_ship: ShipInstance, _hull_zone: String = "",
+		_shield_damage: int = 0, _damage_cards: Array = [],
+		_destroyed: bool = false) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := ResolveDamageCommand.new(ship.owner_player, {
-		"target_type": "ship",
-		"owner_player": ship.owner_player,
-		"ship_index": ship_index,
-		"hull_zone": hull_zone,
-		"shield_damage": shield_damage,
-		"damage_cards": damage_cards,
-		"target_destroyed": destroyed,
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	var cmd := ResolveDamageCommand.new(attack.attacker_player, {
+		"attack_id": attack.attack_id,
 	})
 	return _submitter.submit(cmd)
 
@@ -1475,19 +1608,14 @@ func submit_resolve_ship_damage(ship: ShipInstance, hull_zone: String,
 ## [param hull_damage] — total damage to apply.
 ## [param actual_damage] — damage actually applied (capped by hull).
 ## [param destroyed] — whether the squadron is destroyed.
-func submit_resolve_squadron_damage(squadron: SquadronInstance,
-		hull_damage: int, actual_damage: int,
-		destroyed: bool) -> Dictionary:
+func submit_resolve_squadron_damage(_squadron: SquadronInstance,
+		_hull_damage: int = 0, _actual_damage: int = 0,
+		_destroyed: bool = false) -> Dictionary:
 	if not current_game_state:
 		return {}
-	var sq_index: int = current_game_state.find_squadron_index(squadron)
-	var cmd := ResolveDamageCommand.new(squadron.owner_player, {
-		"target_type": "squadron",
-		"owner_player": squadron.owner_player,
-		"squadron_index": sq_index,
-		"hull_damage": hull_damage,
-		"actual_damage": actual_damage,
-		"target_destroyed": destroyed,
+	var attack: CurrentAttackState = current_game_state.current_attack_state
+	var cmd := ResolveDamageCommand.new(attack.attacker_player, {
+		"attack_id": attack.attack_id,
 	})
 	return _submitter.submit(cmd)
 
@@ -2122,6 +2250,21 @@ func _on_network_command_result(
 	_queue_network_command_result(cmd, result)
 
 
+## Releases the client submission gate and forwards the rejection to the
+## current interaction coordinator without adding history or applying state.
+func _on_network_command_rejection(
+		command_data: Dictionary, reason: String) -> void:
+	if not PlayMode.is_network() or NetworkManager.is_server():
+		return
+	if _submitter is NetworkCommandSubmitter:
+		(_submitter as NetworkCommandSubmitter).reject_awaiting(command_data)
+	var cmd: GameCommand = GameCommand.deserialize(command_data)
+	if cmd == null:
+		_log.warn("Failed to deserialize rejected remote command.")
+		return
+	network_command_rejected.emit(cmd, reason)
+
+
 func _reset_network_result_ordering() -> void:
 	_pending_network_results.clear()
 	_next_network_result_sequence = CommandProcessor.get_next_sequence()
@@ -2228,6 +2371,13 @@ func _handle_remote_command_effects(
 			# Network client: forward dice results to attack executor.
 			if not NetworkManager.is_server():
 				EventBus.network_dice_result.emit(result)
+		"begin_attack", "resolve_attack_pool_choice", \
+				"use_concentrate_fire_dial", \
+				"decline_concentrate_fire_dial", "commit_accuracy", \
+				"complete_attack":
+			# Canonical mutation already ran in submit_mirror(). The attack
+			# presentation route consumes command_executed on each peer.
+			pass
 		"advance_activation_step":
 			pass # UI consumes authoritative interaction-state broadcast.
 		"select_redirect_zone":
@@ -2605,14 +2755,14 @@ func _handle_remote_select_redirect_zone(
 
 ## B19: Mirror resolve_damage side effects on client.
 func _handle_remote_resolve_damage(
-		cmd: GameCommand, result: Dictionary) -> void:
+		_cmd: GameCommand, result: Dictionary) -> void:
 	var target_type: String = result.get("target_type", "ship")
 	if target_type == "squadron":
-		var sq: SquadronInstance = _find_squadron_from_command(cmd)
+		var sq: SquadronInstance = _find_squadron_from_damage_result(result)
 		if sq and result.get("destroyed", false):
 			EventBus.squadron_destroyed.emit(sq)
 		return
-	var ship: ShipInstance = _find_ship_from_command(cmd)
+	var ship: ShipInstance = _find_ship_from_damage_result(result)
 	if ship == null:
 		return
 	EventBus.ship_defense_token_changed.emit(ship)
@@ -2649,7 +2799,7 @@ func _handle_remote_resolve_damage(
 		# shape the attacker peer's AttackExecutor uses.
 		var faceup_cards: Array[DamageCard] = []
 		var facedown_count: int = 0
-		var cards_payload: Array = cmd.payload.get(
+		var cards_payload: Array = result.get(
 				"damage_cards", []) as Array
 		for entry: Variant in cards_payload:
 			if not (entry is Dictionary):
@@ -2665,6 +2815,33 @@ func _handle_remote_resolve_damage(
 	if result.get("destroyed", false):
 		EventBus.ship_destroyed.emit(ship)
 	_check_elimination()
+
+
+## Resolves the target from the authoritative ResolveDamage result. The command
+## payload intentionally contains only current-attack intent and is not a
+## second target-identity authority.
+func _find_ship_from_damage_result(result: Dictionary) -> ShipInstance:
+	if not current_game_state:
+		return null
+	var owner: int = int(result.get("owner_player", -1))
+	var ship_index: int = int(result.get("ship_index", -1))
+	var player_state: PlayerState = current_game_state.get_player_state(owner)
+	if player_state == null or ship_index < 0 \
+			or ship_index >= player_state.ships.size():
+		return null
+	return player_state.ships[ship_index] as ShipInstance
+
+
+func _find_squadron_from_damage_result(result: Dictionary) -> SquadronInstance:
+	if not current_game_state:
+		return null
+	var owner: int = int(result.get("owner_player", -1))
+	var squadron_index: int = int(result.get("squadron_index", -1))
+	var player_state: PlayerState = current_game_state.get_player_state(owner)
+	if player_state == null or squadron_index < 0 \
+			or squadron_index >= player_state.squadrons.size():
+		return null
+	return player_state.squadrons[squadron_index] as SquadronInstance
 
 
 ## B20–B21: Mirror overlap/persistent damage side effects on client.

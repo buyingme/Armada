@@ -8,6 +8,8 @@ extends GutTest
 const SHIP_KEY_CR90: String = "cr90_corvette_a"
 const ATTACKER_PLAYER: int = 0
 const SHIP_INDEX: int = 0
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _state: GameState = null
 var _resolver: DefenseTokenResolver = null
@@ -58,13 +60,34 @@ func test_defense_resolver_uses_rule_without_legacy_registry() -> void:
 
 func test_resolve_damage_command_does_not_register_legacy_effect() -> void:
 	var attacker: ShipInstance = _attacker_ship()
+	var card_data: Dictionary = _targeter_card_data()
+	_state.damage_deck = DamageDeck.deserialize({
+		"draw_pile": [card_data],
+		"discard_pile": [],
+	})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"attacker_player": ATTACKER_PLAYER,
+		"defender_player": ATTACKER_PLAYER,
+		"defender_index": SHIP_INDEX,
+		"dice_results": [
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.CRITICAL)},
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+		],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	}), "Targeter Disruption fixture requires canonical attack state.")
 	var cmd := ResolveDamageCommand.new(ATTACKER_PLAYER, {
+		"attack_id": _state.current_attack_state.attack_id,
 		"target_type": "ship",
 		"owner_player": ATTACKER_PLAYER,
 		"ship_index": SHIP_INDEX,
 		"hull_zone": "FRONT",
 		"shield_damage": 0,
-		"damage_cards": [_targeter_card_data()],
+		"damage_cards": [card_data],
 		"target_destroyed": false,
 	})
 	var result: Dictionary = cmd.execute(_state)

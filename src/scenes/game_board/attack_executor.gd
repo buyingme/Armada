@@ -4,9 +4,8 @@
 ## (Phases 6b/6c): dice rolling, defense tokens, damage resolution.
 ##
 ## Target selection (attacker, hull zone, target) is delegated to
-## [TargetSelector], which emits [signal TargetSelector.target_locked]
-## when a valid target is confirmed. AE connects to that signal and
-## begins the dice sequence.
+## [TargetSelector], which owns the transient declaration candidate. AE
+## submits Begin only after the panel emits explicit declaration confirmation.
 ##
 ## Requirements: AE-*, AT-001–007.
 ## Rules Reference: "Attack", Steps 2–6, pp.2–3.
@@ -20,6 +19,27 @@ const AttackFlowExecutorScript := preload(
 		"res://src/core/combat/attack_flow_executor.gd")
 const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+
+const RESUME_KEY_OK: String = "ok"
+const RESUME_KEY_REASON: String = "reason"
+const RESUME_KEY_ATTACK_ID: String = "attack_id"
+const RESUME_KEY_TRANSITION: String = "transition"
+const RESUME_KEY_REQUIRES_INPUT: String = "requires_input"
+const RESUME_KEY_FLOW: String = "projection_flow"
+
+const RESUME_RULE_CHOICE: String = "resolve_attack_pool_choice"
+const RESUME_CF_DIAL: String = "resolve_concentrate_fire_dial"
+const RESUME_ROLL: String = "roll_dice"
+const RESUME_TIMING_WINDOW: String = "timing_window"
+const RESUME_CF_TOKEN: String = "resolve_concentrate_fire_token"
+const RESUME_CONFIRM: String = "confirm_attack_dice"
+const RESUME_ACCURACY: String = "commit_accuracy"
+const RESUME_DEFENSE: String = "commit_defense"
+const RESUME_SPEND_DEFENSE: String = "spend_defense_token"
+const RESUME_EVADE: String = "select_evade_die"
+const RESUME_REDIRECT: String = "select_redirect_zone"
+const RESUME_DAMAGE: String = "resolve_damage"
+const RESUME_AWAIT_RECORDED_COMPLETION: String = "await_recorded_completion"
 
 ## Hull-zone index → display name mapping.
 const _ZONE_NAMES: Dictionary = {
@@ -110,6 +130,34 @@ var _pending_counter_target: SquadronToken = null
 
 ## Squadron that may perform the pending Counter attack.
 var _pending_counter_attacker: SquadronToken = null
+
+## Range remembered while BeginAttackCommand is awaiting network authority.
+var _pending_begin_range: String = ""
+
+## The one semantic declaration command awaiting an authoritative result.
+## Empty when Confirm/Skip/candidate replacement are interactive.
+var _pending_declaration_command: String = ""
+
+## True only while a standard squadron target selection has not yet produced
+## an accepted BeginAttackCommand. The local FSM may render DECLARE, but the
+## canonical InteractionFlow remains owned by the enclosing activation.
+var _pre_begin_squadron_selection: bool = false
+
+## Prevents duplicate presentation reactions to one resolved attack.
+var _applied_damage_attack_id: String = ""
+
+var _pending_finalize_after_completion: bool = false
+var _pending_counter_begin: bool = false
+var _pending_finish_after_skip: bool = false
+var _pending_zero_squad_skip: bool = false
+var _defense_command_pending: bool = false
+var _defense_submit_in_progress: bool = false
+
+## Reconstruction restores only the active individual attack. Enclosing
+## activation iteration state is intentionally excluded from CurrentAttackState,
+## so a reconstructed attack returns to its enclosing controller after this
+## individual attack instead of inventing prior hull-zone/target history.
+var _reconstructed_current_attack: bool = false
 
 # ---------------------------------------------------------------------------
 # Null-safe accessors for TargetSelector sub-objects
@@ -216,10 +264,6 @@ func initialize(target_selector: TargetSelector,
 	_state = target_selector.get_state()
 	_camera = camera
 	_dice_resolver = AttackDiceResolver.new()
-	# Connect target_locked so the dice sequence starts automatically.
-	if not _target_selector.target_locked.is_connected(
-			_on_target_locked):
-		_target_selector.target_locked.connect(_on_target_locked)
 	# Network: receive dice results from broadcast.  G4.6.5.
 	if not EventBus.network_dice_result.is_connected(
 			_on_network_dice_result):
@@ -233,13 +277,506 @@ func set_damage_deck(deck: DamageDeck) -> void:
 func set_handoff_overlay(overlay: HandoffOverlay) -> void:
 	_handoff_overlay = overlay
 
-## Called by TargetSelector when a valid target is confirmed in exec mode.
-## Begins the dice sequence.
-func _on_target_locked(range_band: String, _dice_text: String) -> void:
-	if _state.attack_kind == SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
-		_log.info("Counter attack target is locked; ignoring target selector event.")
+
+## Rebuilds the smallest production consumer needed for one validated active
+## CurrentAttackState. Stable model references are resolved before any scene or
+## InteractionFlow projection is changed. The returned plan is derived only
+## from canonical current-attack facts and accepted model/runtime owners.
+func resume_current_attack(
+		ship_token_for_instance: Callable,
+		squadron_token_for_instance: Callable) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return _resume_failure("Missing canonical game state.")
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return _resume_failure("No active canonical attack to resume.")
+	if not ship_token_for_instance.is_valid() \
+			or not squadron_token_for_instance.is_valid():
+		return _resume_failure("Attack token resolvers are unavailable.")
+	var refs: Dictionary = _resolve_resume_references(
+			game_state, attack, ship_token_for_instance,
+			squadron_token_for_instance)
+	if not bool(refs.get(RESUME_KEY_OK, false)):
+		return refs
+	_reset_exec_state()
+	_install_resume_scene_references(attack, refs)
+	_sync_scene_from_current_attack()
+	var plan: Dictionary = _derive_resume_plan(game_state, attack)
+	if not bool(plan.get(RESUME_KEY_OK, false)):
+		_reset_exec_state()
+		return plan
+	var projection: Dictionary = _build_resume_projection(
+			game_state, attack, plan)
+	var flow_step: AttackFlowFSM.Step = int(
+			plan.get("flow_step", AttackFlowFSM.Step.IDLE)) as AttackFlowFSM.Step
+	if not _flow_fsm.restore_projection(
+			flow_step, attack.attacker_player, attack.defender_player,
+			projection):
+		_reset_exec_state()
+		return _resume_failure("Canonical attack stage has no projection step.")
+	var flow: InteractionFlow = FlowSpec.make_interaction_flow(
+			Constants.InteractionFlow.ATTACK,
+			_flow_fsm.get_interaction_step(),
+			game_state,
+			{
+				"attacker_player": attack.attacker_player,
+				"defender_player": attack.defender_player,
+				"controller_player": int(plan.get(
+						"controller_player", attack.attacker_player)),
+			},
+			Constants.Visibility.ALL,
+			projection)
+	game_state.interaction_flow = flow
+	_reconstructed_current_attack = true
+	_render_resume_projection(plan)
+	plan[RESUME_KEY_FLOW] = flow
+	return plan
+
+
+## Authors only a deterministic next command for live authority. User choices,
+## timing continuations, replay/mirror steps, BeginAttack and CompleteAttack are
+## never synthesized by reconstruction.
+func resume_live_progression(plan: Dictionary) -> bool:
+	if not bool(plan.get(RESUME_KEY_OK, false)) \
+			or bool(plan.get(RESUME_KEY_REQUIRES_INPUT, true)) \
+			or not _is_live_defense_authority():
+		return false
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active \
+			or attack.attack_id != str(plan.get(RESUME_KEY_ATTACK_ID, "")) \
+			or attack.stage != str(plan.get("stage", "")) \
+			or attack.defense_stage != str(plan.get("defense_stage", "")):
+		return false
+	match str(plan.get(RESUME_KEY_TRANSITION, "")):
+		RESUME_RULE_CHOICE:
+			var colours: Array[String] = _string_values(
+					plan.get("available_colours", []))
+			if colours.size() != 1:
+				return false
+			var choice_kind: String = str(plan.get("choice_kind", ""))
+			var rule_id: String = str(plan.get("rule_id", ""))
+			var result: Dictionary = GameManager.submit_attack_pool_choice(
+					attack.attacker_player, choice_kind, colours[0], rule_id)
+			return not result.is_empty()
+		RESUME_ACCURACY:
+			var result: Dictionary = GameManager.submit_commit_accuracy(
+					attack.attacker_player, [])
+			return not result.is_empty()
+		RESUME_DEFENSE:
+			return _submit_commit_defense([])
+		RESUME_SPEND_DEFENSE:
+			var cursor_before: int = CommandProcessor.get_next_sequence()
+			_process_next_defense_commit()
+			return CommandProcessor.get_next_sequence() > cursor_before
+		RESUME_DAMAGE:
+			var cursor_before: int = CommandProcessor.get_next_sequence()
+			_attack_exec_resolve_damage()
+			return CommandProcessor.get_next_sequence() > cursor_before
+	return false
+
+
+func _resolve_resume_references(
+		game_state: GameState,
+		attack: CurrentAttackState,
+		ship_token_for_instance: Callable,
+		squadron_token_for_instance: Callable) -> Dictionary:
+	var attacker: RefCounted = _resume_entity(
+			game_state, attack.attacker_kind,
+			attack.attacker_player, attack.attacker_index)
+	var defender: RefCounted = _resume_entity(
+			game_state, attack.defender_kind,
+			attack.defender_player, attack.defender_index)
+	if attacker == null or defender == null:
+		return _resume_failure("Canonical attack entity reference is missing.")
+	var attacker_token: Variant = ship_token_for_instance.call(attacker) \
+			if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
+			else squadron_token_for_instance.call(attacker)
+	var defender_token: Variant = ship_token_for_instance.call(defender) \
+			if attack.defender_kind == CurrentAttackState.KIND_SHIP \
+			else squadron_token_for_instance.call(defender)
+	if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
+			and not attacker_token is ShipToken:
+		return _resume_failure("Canonical attacking ship has no board token.")
+	if attack.attacker_kind == CurrentAttackState.KIND_SQUADRON \
+			and not attacker_token is SquadronToken:
+		return _resume_failure("Canonical attacking squadron has no board token.")
+	if attack.defender_kind == CurrentAttackState.KIND_SHIP \
+			and not defender_token is ShipToken:
+		return _resume_failure("Canonical defending ship has no board token.")
+	if attack.defender_kind == CurrentAttackState.KIND_SQUADRON \
+			and not defender_token is SquadronToken:
+		return _resume_failure("Canonical defending squadron has no board token.")
+	return {
+		RESUME_KEY_OK: true,
+		"attacker": attacker,
+		"defender": defender,
+		"attacker_token": attacker_token,
+		"defender_token": defender_token,
+	}
+
+
+func _resume_entity(game_state: GameState, kind: String,
+		owner: int, index: int) -> RefCounted:
+	if kind == CurrentAttackState.KIND_SHIP:
+		return game_state.get_ship(owner, index)
+	if kind == CurrentAttackState.KIND_SQUADRON:
+		return game_state.get_squadron(owner, index)
+	return null
+
+
+func _install_resume_scene_references(
+		attack: CurrentAttackState, refs: Dictionary) -> void:
+	_clear_projected_participants()
+	_state.exec_mode = true
+	_state.squad_exec_mode = \
+			attack.attacker_kind == CurrentAttackState.KIND_SQUADRON
+	_state.attack_kind = attack.attack_kind
+	_state.attacker_zone = attack.attacker_zone
+	_state.defender_zone = attack.defender_zone
+	if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+		_state.exec_ship_token = refs.get("attacker_token") as ShipToken
+		_state.attacker_ship = _state.exec_ship_token
+		_state.attacker_name = _ship_instance_name(
+				refs.get("attacker") as ShipInstance)
+		_state.attacker_zone_name = str(_ZONE_NAMES.get(
+				attack.attacker_zone, ""))
+	else:
+		_state.exec_squad_token = refs.get("attacker_token") as SquadronToken
+		_state.attacker_squadron = _state.exec_squad_token
+		_state.attacker_name = _squadron_instance_name(
+				refs.get("attacker") as SquadronInstance)
+	if attack.defender_kind == CurrentAttackState.KIND_SHIP:
+		_state.defender_ship = refs.get("defender_token") as ShipToken
+		_state.defender_name = _ship_instance_name(
+				refs.get("defender") as ShipInstance)
+		_state.defender_zone_name = str(_ZONE_NAMES.get(
+				attack.defender_zone, ""))
+	else:
+		_state.defender_squadron = refs.get("defender_token") as SquadronToken
+		_state.defender_name = _squadron_instance_name(
+				refs.get("defender") as SquadronInstance)
+
+
+func _clear_projected_participants() -> void:
+	_state.exec_ship_token = null
+	_state.exec_squad_token = null
+	_state.attacker_ship = null
+	_state.attacker_squadron = null
+	_state.defender_ship = null
+	_state.defender_squadron = null
+	_state.attacker_name = ""
+	_state.attacker_zone_name = ""
+	_state.defender_name = ""
+	_state.defender_zone_name = ""
+
+
+func _derive_resume_plan(game_state: GameState,
+		attack: CurrentAttackState) -> Dictionary:
+	var plan: Dictionary = {
+		RESUME_KEY_OK: true,
+		RESUME_KEY_REASON: "",
+		RESUME_KEY_ATTACK_ID: attack.attack_id,
+		RESUME_KEY_REQUIRES_INPUT: true,
+		"stage": attack.stage,
+		"defense_stage": attack.defense_stage,
+		"controller_player": attack.attacker_player,
+	}
+	match attack.stage:
+		CurrentAttackState.STAGE_PRE_ROLL:
+			plan["flow_step"] = AttackFlowFSM.Step.ROLL
+			return _derive_pre_roll_resume_plan(attack, plan)
+		CurrentAttackState.STAGE_ATTACK_MODIFY:
+			plan["flow_step"] = AttackFlowFSM.Step.MODIFY
+			if game_state.timing_window_state.active:
+				plan[RESUME_KEY_TRANSITION] = RESUME_TIMING_WINDOW
+				return plan
+			if attack.cf_token_resolution == CurrentAttackState.RESOLUTION_PENDING:
+				plan[RESUME_KEY_TRANSITION] = RESUME_CF_TOKEN
+				return plan
+			plan[RESUME_KEY_TRANSITION] = RESUME_CONFIRM
+			return plan
+		CurrentAttackState.STAGE_ACCURACY:
+			plan["flow_step"] = AttackFlowFSM.Step.MODIFY
+			plan[RESUME_KEY_TRANSITION] = RESUME_ACCURACY
+			plan[RESUME_KEY_REQUIRES_INPUT] = _accuracy_resume_requires_input()
+			return plan
+		CurrentAttackState.STAGE_DEFENSE:
+			plan["flow_step"] = AttackFlowFSM.Step.DEFENSE_TOKENS
+			return _derive_defense_resume_plan(game_state, attack, plan)
+		CurrentAttackState.STAGE_RESOLVED:
+			plan["flow_step"] = AttackFlowFSM.Step.RESOLVE_DAMAGE
+			plan[RESUME_KEY_TRANSITION] = RESUME_AWAIT_RECORDED_COMPLETION
+			plan[RESUME_KEY_REQUIRES_INPUT] = true
+			return plan
+		CurrentAttackState.STAGE_DAMAGE:
+			return _resume_failure(
+					"Current attack has no command-owned transition from damage stage.")
+	return _resume_failure("Unsupported canonical current-attack stage.")
+
+
+func _derive_pre_roll_resume_plan(
+		attack: CurrentAttackState, plan: Dictionary) -> Dictionary:
+	var context: EffectContext = _derive_gather_dice_context()
+	var rule_id: String = str(context.get_meta_value(
+			EffectContext.META_PENDING_DIE_REMOVAL_RULE_ID, ""))
+	if not rule_id.is_empty() and not attack.resolved_pool_choices.has(rule_id):
+		var available: Array[String] = _metadata_die_colours(
+				context.get_meta_value(
+						EffectContext.META_AVAILABLE_DIE_COLOURS, []))
+		if not available.is_empty():
+			plan[RESUME_KEY_TRANSITION] = RESUME_RULE_CHOICE
+			plan[RESUME_KEY_REQUIRES_INPUT] = available.size() > 1
+			plan["choice_kind"] = "rule"
+			plan["rule_id"] = rule_id
+			plan["choice_title"] = str(context.get_meta_value(
+					EffectContext.META_PENDING_DIE_REMOVAL_TITLE,
+					"Remove 1 die:"))
+			plan["available_colours"] = available
+			return plan
+	if attack.obstructed and not attack.obstruction_resolved:
+		var obstruction_colours: Array[String] = _pool_colours(attack.dice_pool)
+		if obstruction_colours.is_empty():
+			return _resume_failure("Obstructed attack has no removable die.")
+		plan[RESUME_KEY_TRANSITION] = RESUME_RULE_CHOICE
+		plan[RESUME_KEY_REQUIRES_INPUT] = obstruction_colours.size() > 1
+		plan["choice_kind"] = ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION
+		plan["rule_id"] = ""
+		plan["available_colours"] = obstruction_colours
+		return plan
+	if attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING:
+		plan[RESUME_KEY_TRANSITION] = RESUME_CF_DIAL
+		plan["available_colours"] = _get_cf_dial_colours(attack.dice_pool)
+		return plan
+	plan[RESUME_KEY_TRANSITION] = RESUME_ROLL
+	return plan
+
+
+func _derive_defense_resume_plan(game_state: GameState,
+		attack: CurrentAttackState, plan: Dictionary) -> Dictionary:
+	plan["controller_player"] = attack.defender_player
+	_state.defense_step = true
+	if attack.defense_stage == CurrentAttackState.DEFENSE_PENDING:
+		plan[RESUME_KEY_TRANSITION] = RESUME_DEFENSE
+		var defender: RefCounted = _get_canonical_defender()
+		plan[RESUME_KEY_REQUIRES_INPUT] = defender != null \
+				and (_defense_resolver.can_spend_tokens(
+						defender, attack.accuracy_locked_tokens,
+						attack.defender_zone) \
+					or (defender is ShipInstance \
+						and _resume_has_ecm_choice(game_state, attack)))
+		return plan
+	if attack.defense_stage == CurrentAttackState.DEFENSE_COMPLETE:
+		plan["controller_player"] = attack.attacker_player
+		plan[RESUME_KEY_TRANSITION] = RESUME_DAMAGE
+		plan[RESUME_KEY_REQUIRES_INPUT] = false
+		return plan
+	if attack.defense_stage != CurrentAttackState.DEFENSE_RESOLVING:
+		return _resume_failure("Unsupported canonical defense stage.")
+	var token_index: int = _next_canonical_defense_token(attack)
+	var defender: RefCounted = _get_canonical_defender()
+	var tokens: Array[Dictionary] = _defense_tokens(defender)
+	if defender == null or token_index < 0 \
+			or token_index >= tokens.size():
+		return _resume_failure("Canonical defense queue is inconsistent.")
+	var token: Dictionary = tokens[token_index]
+	var token_type: int = int(token.get("type", -1))
+	var token_state: int = int(token.get("state", -1))
+	plan["token_index"] = token_index
+	plan["token_type"] = token_type
+	if token_type == int(Constants.DefenseToken.EVADE) \
+			and token_state != int(Constants.DefenseTokenState.READY):
+		_state.evade_step = true
+		plan[RESUME_KEY_TRANSITION] = RESUME_EVADE
+		return plan
+	if token_type == int(Constants.DefenseToken.REDIRECT) \
+			and token_state != int(Constants.DefenseTokenState.READY):
+		_state.redirect_step = true
+		_state.redirect_remaining = attack.derive_damage(game_state)
+		plan[RESUME_KEY_TRANSITION] = RESUME_REDIRECT
+		plan["redirect_remaining"] = _state.redirect_remaining
+		plan["redirect_adjacent_zones"] = _adjacent_zone_ints(
+				attack.defender_zone)
+		return plan
+	if token_state == int(Constants.DefenseTokenState.DISCARDED):
+		return _resume_failure("Unresolved simple defense token is discarded.")
+	plan[RESUME_KEY_TRANSITION] = RESUME_SPEND_DEFENSE
+	plan[RESUME_KEY_REQUIRES_INPUT] = false
+	return plan
+
+
+func _accuracy_resume_requires_input() -> bool:
+	var parts: CombatParticipants = _build_current_participants()
+	var result: Dictionary = _dice_resolver.resolve_accuracy_spend(
+			_state.dice_results, parts)
+	if int(result.get("spendable_accuracy_count", 0)) <= 0:
+		return false
+	var defender: RefCounted = _get_canonical_defender()
+	return defender != null and _count_lockable_tokens(defender) > 0
+
+
+func _resume_has_ecm_choice(game_state: GameState,
+		attack: CurrentAttackState) -> bool:
+	var payload: Dictionary = {
+		"attacker_player": attack.attacker_player,
+		"attacker_ship_index": attack.attacker_index \
+				if attack.attacker_kind == CurrentAttackState.KIND_SHIP else -1,
+		"attacker_squadron_index": attack.attacker_index \
+				if attack.attacker_kind == CurrentAttackState.KIND_SQUADRON else -1,
+		"defender_player": attack.defender_player,
+		"defender_ship_index": attack.defender_index,
+		"defender_zone": attack.defender_zone,
+	}
+	var flow: InteractionFlow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			attack.defender_player,
+			Constants.Visibility.ALL,
+			payload)
+	return not ECM_SCRIPT.choice_payload(game_state, flow).is_empty()
+
+
+func _build_resume_projection(game_state: GameState,
+		attack: CurrentAttackState, plan: Dictionary) -> Dictionary:
+	var payload: Dictionary = _compute_attack_identity_patch()
+	payload["attack_id"] = attack.attack_id
+	payload["range_band"] = attack.range_band
+	payload["dice_pool"] = attack.dice_pool
+	payload["dice_results"] = attack.dice_results
+	payload["is_obstructed"] = attack.obstructed
+	payload["locked_tokens"] = attack.accuracy_locked_tokens
+	payload["modified_damage"] = attack.derive_damage(game_state)
+	var defender: RefCounted = _get_canonical_defender()
+	if defender != null:
+		payload.merge(_flow_executor.build_defense_payload(
+				_state, defender, game_state, _defense_resolver), true)
+	if str(plan.get(RESUME_KEY_TRANSITION, "")) == RESUME_RULE_CHOICE:
+		payload["pending_die_removal"] = {
+			"rule_id": str(plan.get("rule_id", "")),
+			"title": str(plan.get("choice_title", "Remove 1 die:")),
+			"available_colours": _string_values(
+					plan.get("available_colours", [])),
+			"controller_player": attack.attacker_player,
+		}
+	if str(plan.get(RESUME_KEY_TRANSITION, "")) == RESUME_EVADE:
+		payload["evade_active"] = true
+		payload["evade_range_band"] = attack.range_band
+	if str(plan.get(RESUME_KEY_TRANSITION, "")) == RESUME_REDIRECT:
+		payload["redirect_active"] = true
+		payload["redirect_adjacent_zones"] = plan.get(
+				"redirect_adjacent_zones", [])
+		payload["redirect_remaining"] = int(plan.get(
+				"redirect_remaining", 0))
+	return payload
+
+
+func _render_resume_projection(plan: Dictionary) -> void:
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player >= 0 and local_player != _get_attacker_player():
 		return
-	_attack_exec_begin_sequence(range_band)
+	var panel: AttackSimPanel = _target_selector.ensure_panel_for_projection()
+	if panel == null:
+		return
+	_connect_attack_panel_signals()
+	if _state.squad_exec_mode:
+		panel.show_initial_squadron_exec(_state.attacker_name)
+	else:
+		panel.show_initial_attack_exec(_state.attacker_name)
+	panel.show_target_selected(
+			_state.attacker_name, _state.attacker_zone_name,
+			_state.defender_name, _state.defender_zone_name,
+			DicePool.format_pool(_state.dice_pool), _state.range_band)
+	panel.show_skip_attack_button()
+	if not _state.dice_results.is_empty():
+		panel.show_dice_results(_state.dice_results)
+	match str(plan.get(RESUME_KEY_TRANSITION, "")):
+		RESUME_RULE_CHOICE:
+			var colours: Array[String] = _string_values(
+					plan.get("available_colours", []))
+			if str(plan.get("choice_kind", "")) \
+					== ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
+				_state.obstruction_step = true
+				panel.show_obstruction_die_choice(colours)
+			else:
+				_attack_pool_die_choice_rule_id = str(plan.get("rule_id", ""))
+				panel.show_attack_pool_die_choice(
+						_attack_pool_die_choice_rule_id,
+						str(plan.get("choice_title", "Remove 1 die:")), colours)
+		RESUME_CF_DIAL:
+			panel.show_cf_dial_section(_string_values(
+					plan.get("available_colours", [])))
+		RESUME_ROLL:
+			panel.show_roll_button()
+		RESUME_CF_TOKEN:
+			_pending_reroll_rule_id = \
+					RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN
+			panel.show_cf_token_section()
+		RESUME_CONFIRM:
+			panel.show_confirm_button()
+		RESUME_ACCURACY:
+			_state.accuracy_step = true
+			if bool(plan.get(RESUME_KEY_REQUIRES_INPUT, false)):
+				var defender: RefCounted = _get_canonical_defender()
+				var parts: CombatParticipants = _build_current_participants()
+				var result: Dictionary = _dice_resolver.resolve_accuracy_spend(
+						_state.dice_results, parts)
+				panel.show_accuracy_section(
+						_defense_tokens(defender),
+						int(result.get("spendable_accuracy_count", 0)))
+		RESUME_DEFENSE, RESUME_SPEND_DEFENSE, RESUME_EVADE, RESUME_REDIRECT:
+			var defender: RefCounted = _get_canonical_defender()
+			if defender != null:
+				_show_defense_section(defender)
+			if str(plan.get(RESUME_KEY_TRANSITION, "")) == RESUME_EVADE:
+				panel.show_evade_die_selection(
+						_state.range_band, local_player < 0)
+			elif str(plan.get(RESUME_KEY_TRANSITION, "")) == RESUME_REDIRECT:
+				panel.show_redirect_section(
+						plan.get("redirect_adjacent_zones", []) as Array,
+						int(plan.get("redirect_remaining", 0)), local_player < 0)
+
+
+func _pool_colours(pool: Dictionary) -> Array[String]:
+	var result: Array[String] = []
+	for key: String in [DicePool.RED_KEY, DicePool.BLUE_KEY, DicePool.BLACK_KEY]:
+		if int(pool.get(key, 0)) > 0:
+			result.append(key)
+	return result
+
+
+func _adjacent_zone_ints(zone: int) -> Array[int]:
+	var result: Array[int] = []
+	for raw_zone: Variant in ConstantsScript.get_adjacent_hull_zones(
+			zone as Constants.HullZone):
+		result.append(int(raw_zone))
+	return result
+
+
+func _string_values(raw: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if raw is Array:
+		for value: Variant in raw as Array:
+			result.append(str(value))
+	return result
+
+
+func _ship_instance_name(ship: ShipInstance) -> String:
+	if ship != null and ship.ship_data != null:
+		return ship.ship_data.ship_name
+	return "Ship"
+
+
+func _squadron_instance_name(squadron: SquadronInstance) -> String:
+	if squadron != null and squadron.squadron_data != null:
+		return squadron.squadron_data.squadron_name
+	return "Squadron"
+
+
+func _resume_failure(reason: String) -> Dictionary:
+	return {
+		RESUME_KEY_OK: false,
+		RESUME_KEY_REASON: reason,
+	}
 
 ## Starts the attack execution flow from the activation modal.
 ## Requirements: AE-FLOW-001, AE-ACT-001.
@@ -308,9 +845,12 @@ func start_squadron_attack(squadron_token: SquadronToken) -> void:
 	_target_selector.dismiss_other_tools_requested.emit()
 	_target_selector.dismiss()
 	_init_squadron_attack_state(squadron_token)
-	_flow_fsm.begin(GameManager.current_game_state,
+	_pre_begin_squadron_selection = true
+	# Target choice is transient until BeginAttackCommand succeeds. Advance the
+	# local FSM only; do not publish an ATTACK InteractionFlow that contradicts
+	# inactive CurrentAttackState.
+	_flow_fsm.begin(null,
 			_get_attacker_player(), -1, {})
-	_publish_flow_snapshot()
 	_target_selector.enter_squadron_target_selection(squadron_token)
 	_wire_attack_done_and_panel_signals()
 	var panel: AttackSimPanel = _get_panel()
@@ -330,6 +870,23 @@ func _init_squadron_attack_state(
 func dismiss() -> void:
 	_target_selector.dismiss()
 	_log.info("Attack executor dismissed.")
+
+
+## Removes the primary attacker presentation without mutating canonical attack
+## or interaction-flow state. Used when this peer does not own the canonical
+## attacker role. Attacker-only panel callbacks are disconnected before the
+## transient executor state is cleared.
+func deactivate_primary_presentation() -> void:
+	_disconnect_attack_panel_signals()
+	var panel: AttackSimPanel = _get_panel()
+	if panel != null and panel.attack_done_pressed.is_connected(
+			_finish_attack_execution):
+		panel.attack_done_pressed.disconnect(_finish_attack_execution)
+	if _target_selector != null and _target_selector.is_active():
+		dismiss()
+	_reset_exec_state()
+	_flow_fsm.reset()
+
 
 ## Whether the executor has any active UI.
 func is_active() -> bool:
@@ -362,6 +919,17 @@ func has_any_attack_target(ship_token: ShipToken) -> bool:
 ## Resets all attack execution state variables.
 func _reset_exec_state() -> void:
 	_attack_pool_die_choice_rule_id = ""
+	_pending_begin_range = ""
+	_pending_declaration_command = ""
+	_pre_begin_squadron_selection = false
+	_applied_damage_attack_id = ""
+	_pending_finalize_after_completion = false
+	_pending_counter_begin = false
+	_pending_finish_after_skip = false
+	_pending_zero_squad_skip = false
+	_defense_command_pending = false
+	_defense_submit_in_progress = false
+	_reconstructed_current_attack = false
 	_state.clear_all()
 
 ## Resets deferred damage card state.
@@ -371,13 +939,23 @@ func _reset_deferred_damage_state() -> void:
 ## Completes the attack execution step. Cleans up and signals GameBoard.
 ## Requirements: AE-FLOW-003, AE-CONF-002.
 func _finish_attack_execution() -> void:
+	var game_state: GameState = GameManager.current_game_state
+	var was_pre_begin_squadron_selection: bool = \
+			_pre_begin_squadron_selection
+	assert(game_state == null or not game_state.current_attack_state.active,
+			"Attack execution cannot end while CurrentAttackState is active.")
+	assert(game_state == null or not game_state.timing_window_state.active,
+			"Attack execution cannot end while TimingWindowState is active.")
 	_log.info("Attack execution done — completing attack step.")
 	dismiss()
 	_reset_exec_state()
-	# Phase I3: end the attack flow and clear interaction_flow.
-	_flow_fsm.end(GameManager.current_game_state)
+	# A pre-Begin squadron skip completes the enclosing procedural action but
+	# never owned canonical attack flow, so it must not clear that flow.
+	if not was_pre_begin_squadron_selection:
+		_flow_fsm.end(GameManager.current_game_state)
 	_flow_fsm.reset()
-	_publish_flow_snapshot()
+	if not was_pre_begin_squadron_selection:
+		_publish_flow_snapshot()
 	attack_exec_completed.emit()
 
 ## Builds a [CombatParticipants] from the current attacker/target state.
@@ -408,6 +986,121 @@ func _should_show_local_attack_controls() -> bool:
 	if local_player < 0:
 		return true
 	return local_player == _get_attacker_player()
+
+
+func _current_attack() -> CurrentAttackState:
+	var game_state: GameState = GameManager.current_game_state
+	return game_state.current_attack_state if game_state != null else null
+
+
+## Refreshes legacy scene state as a one-way presentation mirror.
+func _sync_scene_from_current_attack() -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active:
+		return
+	_sync_projected_participants(attack)
+	_state.range_band = attack.range_band
+	_state.obstructed = attack.obstructed
+	_state.dice_pool = attack.dice_pool
+	_state.dice_results = attack.dice_results
+	_state.cf_dial_used = attack.cf_dial_resolution in [
+		CurrentAttackState.RESOLUTION_USED,
+		CurrentAttackState.RESOLUTION_DECLINED,
+	]
+	_state.cf_token_used = attack.cf_token_resolution in [
+		CurrentAttackState.RESOLUTION_USED,
+		CurrentAttackState.RESOLUTION_DECLINED,
+	]
+	_state.locked_tokens = attack.accuracy_locked_tokens
+	_state.modified_damage = attack.derive_damage(GameManager.current_game_state)
+	_state.scatter_used = _has_resolved_defense_effect(
+			attack, Constants.DefenseToken.SCATTER)
+	_state.brace_used = _has_resolved_defense_effect(
+			attack, Constants.DefenseToken.BRACE)
+	_state.contain_used = _has_resolved_defense_effect(
+			attack, Constants.DefenseToken.CONTAIN)
+	_state.redirect_remaining = _state.modified_damage
+	_state.accuracy_step = attack.stage == CurrentAttackState.STAGE_ACCURACY \
+			and not attack.accuracy_complete
+	_state.defense_step = attack.stage == CurrentAttackState.STAGE_DEFENSE \
+			and attack.defense_stage != CurrentAttackState.DEFENSE_COMPLETE
+	_state.obstruction_step = attack.stage == CurrentAttackState.STAGE_PRE_ROLL \
+			and attack.obstructed and not attack.obstruction_resolved
+
+
+func _sync_projected_participants(attack: CurrentAttackState) -> void:
+	if _target_selector == null:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	var refs: Dictionary = _resolve_resume_references(
+			game_state, attack,
+			Callable(_target_selector, "ship_token_for_instance"),
+			Callable(_target_selector, "squadron_token_for_instance"))
+	if bool(refs.get(RESUME_KEY_OK, false)):
+		_install_resume_scene_references(attack, refs)
+	else:
+		_log.warn("Canonical participant projection failed: %s" % [
+				str(refs.get(RESUME_KEY_REASON, "unknown reason"))])
+
+
+func _has_resolved_defense_effect(attack: CurrentAttackState,
+		token_type: int) -> bool:
+	for effect: Dictionary in attack.resolved_defense_effects:
+		if int(effect.get("token_type", -1)) == token_type:
+			return true
+	return false
+
+
+func _build_begin_attack_payload(
+		range_band: String,
+		declaration_candidate: Dictionary = {}) -> Dictionary:
+	if not declaration_candidate.is_empty():
+		return {
+			"attacker_player": int(declaration_candidate.get(
+					"attacker_player", -1)),
+			"attacker_kind": str(declaration_candidate.get(
+					"attacker_kind", "")),
+			"attacker_index": int(declaration_candidate.get(
+					"attacker_index", -1)),
+			"attacker_zone": int(declaration_candidate.get(
+					"attacker_zone", -1)),
+			"defender_player": int(declaration_candidate.get(
+					"defender_player", -1)),
+			"defender_kind": str(declaration_candidate.get(
+					"defender_kind", "")),
+			"defender_index": int(declaration_candidate.get(
+					"defender_index", -1)),
+			"defender_zone": int(declaration_candidate.get(
+					"defender_zone", -1)),
+			"attack_kind": str(declaration_candidate.get(
+					"attack_kind",
+					SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD)),
+			"range_band": range_band,
+			"obstructed": bool(declaration_candidate.get(
+					"obstructed", false)),
+		}
+	var identity: Dictionary = _compute_attack_identity_patch()
+	var attacker_kind: String = str(identity.get("attacker_kind", ""))
+	var defender_kind: String = str(identity.get("target_kind", ""))
+	return {
+		"attacker_player": int(identity.get("attacker_player", -1)),
+		"attacker_kind": attacker_kind,
+		"attacker_index": int(identity.get(
+				"attacker_ship_index" if attacker_kind == "ship" \
+				else "attacker_squadron_index", -1)),
+		"attacker_zone": int(identity.get("attacker_zone", -1)),
+		"defender_player": int(identity.get("defender_player", -1)),
+		"defender_kind": defender_kind,
+		"defender_index": int(identity.get(
+				"target_ship_index" if defender_kind == "ship" \
+				else "target_squadron_index", -1)),
+		"defender_zone": int(identity.get("defender_zone", -1)),
+		"attack_kind": str(identity.get(
+				SquadronKeywordRuleHelper.PAYLOAD_ATTACK_KIND,
+				SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD)),
+		"range_band": range_band,
+		"obstructed": _state.obstructed,
+	}
 
 # ===========================================================================
 # Phase 6b-2 — Attack Sequence Orchestration
@@ -446,6 +1139,9 @@ func _connect_attack_sequence_signals() -> void:
 		p.counter_attack_requested.connect(_on_counter_attack_requested)
 	if not p.counter_attack_skipped.is_connected(_on_counter_attack_skipped):
 		p.counter_attack_skipped.connect(_on_counter_attack_skipped)
+	if not p.declaration_confirm_pressed.is_connected(
+			_on_declaration_confirm):
+		p.declaration_confirm_pressed.connect(_on_declaration_confirm)
 	if not p.confirm_pressed.is_connected(_on_attack_confirm):
 		p.confirm_pressed.connect(_on_attack_confirm)
 	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
@@ -478,14 +1174,88 @@ func _connect_defense_phase_signals() -> void:
 			_on_redirect_done_early):
 		p.redirect_done_pressed.connect(_on_redirect_done_early)
 
-## Begins the Phase 6b-2 attack sequence after target and range are known.
+
+func _disconnect_attack_panel_signals() -> void:
+	var panel: AttackSimPanel = _get_panel()
+	if panel == null:
+		return
+	_disconnect_attack_sequence_signals(panel)
+	_disconnect_defense_phase_signals(panel)
+
+
+func _disconnect_attack_sequence_signals(panel: AttackSimPanel) -> void:
+	_disconnect_panel_signal(panel.cf_dial_colour_selected,
+			_on_attack_cf_dial_colour)
+	_disconnect_panel_signal(panel.cf_dial_skipped, _on_attack_cf_dial_skipped)
+	_disconnect_panel_signal(panel.obstruction_die_selected,
+			_on_obstruction_die_selected)
+	_disconnect_panel_signal(panel.attack_pool_die_selected,
+			_on_attack_pool_die_selected)
+	_disconnect_panel_signal(panel.roll_dice_pressed, _on_attack_roll_dice)
+	_disconnect_panel_signal(panel.cf_token_reroll_requested,
+			_on_attack_cf_token_reroll)
+	_disconnect_panel_signal(panel.cf_token_reroll_skipped,
+			_on_attack_cf_token_skipped)
+	_disconnect_panel_signal(panel.counter_attack_requested,
+			_on_counter_attack_requested)
+	_disconnect_panel_signal(panel.counter_attack_skipped,
+			_on_counter_attack_skipped)
+	_disconnect_panel_signal(panel.declaration_confirm_pressed,
+			_on_declaration_confirm)
+	_disconnect_panel_signal(panel.confirm_pressed, _on_attack_confirm)
+	_disconnect_panel_signal(panel.skip_attack_pressed, _on_attack_skip)
+
+
+func _disconnect_defense_phase_signals(panel: AttackSimPanel) -> void:
+	_disconnect_panel_signal(panel.accuracy_confirmed,
+			_on_attack_accuracy_confirmed)
+	_disconnect_panel_signal(panel.defense_token_selected,
+			_on_attack_defense_token_spent)
+	_disconnect_panel_signal(panel.defense_tokens_done, _on_attack_defense_done)
+	_disconnect_panel_signal(panel.ecm_use_requested, _on_ecm_use_requested)
+	_disconnect_panel_signal(panel.ecm_decline_requested,
+			_on_ecm_decline_requested)
+	_disconnect_panel_signal(panel.redirect_zone_selected,
+			_on_attack_redirect_zone_selected)
+	_disconnect_panel_signal(panel.evade_die_confirmed, _on_evade_die_selected)
+	_disconnect_panel_signal(panel.redirect_done_pressed,
+			_on_redirect_done_early)
+
+
+func _disconnect_panel_signal(panel_signal: Signal,
+		callback: Callable) -> void:
+	if panel_signal.is_connected(callback):
+		panel_signal.disconnect(callback)
+
+
+## Explicitly confirms the current transient declaration candidate.
+func _on_declaration_confirm() -> void:
+	if not is_in_exec_mode() or _state.attack_kind \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return
+	if not _pending_declaration_command.is_empty():
+		return
+	var current: CurrentAttackState = _current_attack()
+	if current != null and current.active:
+		return
+	var candidate: Dictionary = _target_selector.get_declaration_candidate()
+	if candidate.is_empty():
+		return
+	_attack_exec_begin_sequence(
+			str(candidate.get("range_band", "")), candidate)
+
+
+## Begins the Phase 6b-2 attack sequence after explicit declaration Confirm,
+## or from the separate rule-owned Counter path.
 ## Checks for a CF dial and starts the appropriate step.
 ## For squadron attackers, CF dials are not available — skip straight to roll.
 ## Requirements: AE-CF-001, AE-CF-002, SQA-ATK-001.
 ## Rules Reference: "Concentrate Fire", p.3 — "While attacking, the ship
 ## may add 1 die to its attack pool of a color that is already in its
 ## attack pool."
-func _attack_exec_begin_sequence(range_band: String) -> void:
+func _attack_exec_begin_sequence(
+		range_band: String,
+		declaration_candidate: Dictionary = {}) -> void:
 	if _get_panel() == null:
 		return
 	if _state.exec_ship_token == null and _state.exec_squad_token == null:
@@ -496,8 +1266,36 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	# Rules Reference: RRG "Damage Cards", p.4; ET-001.
 	if _is_attack_blocked_by_damage(range_band):
 		return
-	_state.dice_pool = _compute_attack_pool_dict(range_band)
-	var gather_context: EffectContext = _apply_gather_dice_hook()
+	if not declaration_candidate.is_empty():
+		_pending_declaration_command = "begin_attack"
+		_target_selector.set_declaration_submission_pending(true)
+	_pending_begin_range = range_band
+	var begin_result: Dictionary = GameManager.submit_begin_attack(
+			_get_attacker_player(), _build_begin_attack_payload(
+					range_band, declaration_candidate))
+	if _is_waiting_for_remote_command_result(begin_result):
+		return
+	if begin_result.is_empty():
+		_pending_begin_range = ""
+		if _pending_declaration_command == "begin_attack":
+			_restore_declaration_after_rejection(
+					"Begin attack was rejected.")
+		return
+	# A live CommandRouter may already have consumed the synchronous result.
+	if not _pending_begin_range.is_empty():
+		apply_begin_attack_result(begin_result)
+
+
+func apply_begin_attack_result(_result: Dictionary) -> void:
+	if _pending_begin_range.is_empty():
+		return
+	var range_band: String = _pending_begin_range
+	_pending_begin_range = ""
+	if _pending_declaration_command == "begin_attack":
+		_complete_declaration_submission()
+	_pre_begin_squadron_selection = false
+	_sync_scene_from_current_attack()
+	var gather_context: EffectContext = _derive_gather_dice_context()
 	_publish_attack_declare_patch(range_band)
 	_get_panel().show_skip_attack_button()
 	if _handle_attack_pool_die_choice(gather_context):
@@ -518,6 +1316,34 @@ func _attack_exec_begin_sequence(range_band: String) -> void:
 	if _try_offer_cf_dial():
 		return
 	_attack_exec_show_roll_button()
+
+
+## Applies a targeted network rejection without synthesizing a fallback
+## transition. The prior transient candidate and declaration presentation stay
+## available.
+func apply_declaration_command_rejection(
+		command: GameCommand, reason: String) -> void:
+	if command == null \
+			or command.command_type != _pending_declaration_command \
+			or command.player_index != _get_attacker_player():
+		return
+	if command.command_type == "begin_attack":
+		_pending_begin_range = ""
+	elif command.command_type == "skip_attack":
+		_pending_finish_after_skip = false
+	_restore_declaration_after_rejection(reason)
+
+
+func _restore_declaration_after_rejection(reason: String) -> void:
+	_pending_declaration_command = ""
+	_target_selector.set_declaration_submission_pending(false)
+	_log.info("Declaration command rejected — %s" % reason)
+
+
+func _complete_declaration_submission() -> void:
+	_pending_declaration_command = ""
+	_target_selector.set_declaration_submission_pending(false)
+	_target_selector.clear_declaration_candidate()
 
 
 ## Builds and publishes the DECLARE-step patch (range band + dice pool +
@@ -564,13 +1390,11 @@ func _try_offer_cf_dial() -> bool:
 	_log.info("CF dial available — offering colours: %s." % [str(available)])
 	return true
 
-## Applies RuleRegistry dice-pool modifiers to the pool.
-func _apply_gather_dice_hook() -> EffectContext:
+## Re-derives gather metadata for presentation; BeginAttackCommand owns pool.
+func _derive_gather_dice_context() -> EffectContext:
 	var parts: CombatParticipants = _build_current_participants()
-	var context: EffectContext = _dice_resolver.apply_gather_context(
+	return _dice_resolver.apply_gather_context(
 			_state.dice_pool, parts)
-	_state.dice_pool = context.dice_pool
-	return context
 
 
 ## Handles mandatory pre-roll die-removal choices exposed by RuleRegistry.
@@ -587,8 +1411,9 @@ func _handle_attack_pool_die_choice(context: EffectContext) -> bool:
 	if available.is_empty():
 		return false
 	if available.size() == 1:
+		_attack_pool_die_choice_rule_id = rule_id
 		_apply_attack_pool_die_choice(rule_id, available[0])
-		return false
+		return true
 	var title: String = str(context.get_meta_value(
 			EffectContext.META_PENDING_DIE_REMOVAL_TITLE, "Remove 1 die:"))
 	_attack_pool_die_choice_rule_id = rule_id
@@ -626,19 +1451,28 @@ func _publish_attack_pool_die_pending_choice(rule_id: String,
 
 
 func _apply_attack_pool_die_choice(rule_id: String, colour_key: String) -> bool:
-	var parts: CombatParticipants = _build_current_participants()
-	var metadata: Dictionary = {
-		EffectContext.META_CHOSEN_DIE_COLOUR: colour_key,
-	}
-	var context: EffectContext = _dice_resolver.apply_rule_pool_modifier(
-			_state.dice_pool, parts, rule_id, metadata)
-	var removed: String = str(context.get_meta_value(
-			EffectContext.META_REMOVED_DIE_COLOUR, ""))
-	if removed == "":
+	var result: Dictionary = GameManager.submit_attack_pool_choice(
+			_get_attacker_player(), "rule", colour_key, rule_id)
+	if _is_waiting_for_remote_command_result(result):
+		return true
+	if result.is_empty():
 		return false
-	_state.dice_pool = context.dice_pool
-	_update_pool_after_attack_pool_die_choice(rule_id, removed)
+	apply_attack_pool_choice_result(result)
 	return true
+
+
+func apply_attack_pool_choice_result(result: Dictionary) -> void:
+	var choice_kind: String = str(result.get("choice_kind", ""))
+	if choice_kind != "rule":
+		return
+	var rule_id: String = str(result.get("rule_id", ""))
+	if _attack_pool_die_choice_rule_id != rule_id:
+		return
+	_sync_scene_from_current_attack()
+	var removed: String = str(result.get("color", ""))
+	_update_pool_after_attack_pool_die_choice(rule_id, removed)
+	_attack_pool_die_choice_rule_id = ""
+	_attack_exec_continue_after_attack_pool_die_choice()
 
 
 func _update_pool_after_attack_pool_die_choice(rule_id: String,
@@ -665,8 +1499,6 @@ func _on_attack_pool_die_selected(reason_id: String, colour_key: String) -> void
 		return
 	if not _apply_attack_pool_die_choice(reason_id, colour_key):
 		return
-	_attack_pool_die_choice_rule_id = ""
-	_attack_exec_continue_after_attack_pool_die_choice()
 
 
 func _attack_exec_continue_after_attack_pool_die_choice() -> void:
@@ -757,8 +1589,21 @@ func _attack_exec_show_roll_button() -> void:
 ## Requirements: AE-OBS-001, AE-OBS-002.
 ## Rules Reference: "Obstructed", RRG v1.5.0, p.10.
 func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
-	_state.dice_pool = _dice_resolver.remove_obstruction_die(
-			_state.dice_pool, colour_key)
+	_state.obstruction_step = true
+	var result: Dictionary = GameManager.submit_attack_pool_choice(
+			_get_attacker_player(),
+			ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION, colour_key)
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_obstruction_choice_result(result)
+
+
+func apply_obstruction_choice_result(result: Dictionary) -> void:
+	if not _state.obstruction_step:
+		return
+	_state.obstruction_step = false
+	_sync_scene_from_current_attack()
+	var colour_key: String = str(result.get("color", ""))
 	_log.info("Obstruction: removed 1 %s die. Pool: %s." % [
 			colour_key, DicePool.format_pool(_state.dice_pool)])
 	# Update dice count display.
@@ -781,7 +1626,6 @@ func _attack_exec_remove_obstruction_die(colour_key: String) -> void:
 func _on_obstruction_die_selected(colour_key: String) -> void:
 	if not _state.obstruction_step:
 		return
-	_state.obstruction_step = false
 	_attack_exec_remove_obstruction_die(colour_key)
 
 ## Continues the attack sequence after the obstruction die has been removed.
@@ -802,15 +1646,18 @@ func _attack_exec_continue_after_obstruction() -> void:
 ## Called when the player selects a colour for the CF dial extra die.
 ## Requirements: AE-CF-003, AE-CF-004.
 func _on_attack_cf_dial_colour(colour_key: String) -> void:
-	_log.info("CF dial: adding 1 %s die." % colour_key)
-	# Add die to the pool.
-	var current: int = int(_state.dice_pool.get(colour_key, 0))
-	_state.dice_pool[colour_key] = current + 1
-	# Spend the dial via command system.
-	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
-	if inst and inst.command_dial_stack:
-		GameManager.submit_spend_dial(inst)
-	_state.cf_dial_used = true
+	var result: Dictionary = GameManager.submit_use_concentrate_fire_dial(
+			_get_attacker_player(), colour_key)
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_concentrate_fire_dial_result(result)
+
+
+func apply_concentrate_fire_dial_result(result: Dictionary) -> void:
+	if _state.cf_dial_used:
+		return
+	_sync_scene_from_current_attack()
+	_log.info("CF dial resolved: %s." % str(result.get("resolution", "")))
 	# Update dice count display.
 	if _get_panel():
 		var dice_text: String = DicePool.format_pool(_state.dice_pool)
@@ -821,8 +1668,11 @@ func _on_attack_cf_dial_colour(colour_key: String) -> void:
 ## Called when the player skips the CF dial.
 ## Requirements: AE-CF-005.
 func _on_attack_cf_dial_skipped() -> void:
-	_log.info("CF dial skipped.")
-	_attack_exec_show_roll_button()
+	var result: Dictionary = GameManager.submit_decline_concentrate_fire_dial(
+			_get_attacker_player())
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_concentrate_fire_dial_result(result)
 
 ## Called when the player presses "Roll Dice".
 ## Requirements: AE-DICE-001, AE-DICE-003, SFX-004, SFX-005, SFX-006.
@@ -850,7 +1700,7 @@ func _on_attack_roll_dice() -> void:
 ## Called inline for host/hot-seat or from the network broadcast handler.
 func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 	_fsm_advance(AttackFlowFSM.Step.MODIFY)
-	_state.dice_results = _flow_executor.extract_roll_results(roll_result)
+	_sync_scene_from_current_attack()
 	# Phase I3b: publish dice results to interaction_flow.
 	_fsm_patch_payload({
 		"dice_results": _state.dice_results.duplicate(true),
@@ -865,6 +1715,8 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 			_state.dice_results.size(), damage])
 	# Check CF token for reroll.
 	if _attack_exec_has_cf_token():
+		_pending_reroll_rule_id = \
+				RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN
 		if _get_panel():
 			_get_panel().show_cf_token_section()
 		_log.info("CF token available — offering reroll.")
@@ -878,7 +1730,8 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 ## Network callback: receives dice results from server broadcast.
 ## G4.6.5 — async dice resolution for network clients.
 func _on_network_dice_result(result: Dictionary) -> void:
-	if _state == null or not _state.dice_results.is_empty():
+	if _state == null or not is_in_exec_mode() \
+			or not _state.dice_results.is_empty():
 		return # Already have results or no active attack.
 	_apply_dice_roll_result(result)
 
@@ -975,43 +1828,29 @@ func _on_attack_cf_token_reroll(die_index: int) -> void:
 		return
 	if die_index < 0 or die_index >= _state.dice_results.size():
 		return
-	var old_result: Dictionary = _state.dice_results[die_index]
-	var color: Constants.DiceColor = (
-			old_result["color"] as Constants.DiceColor)
-	# Reroll the die.
-	var new_face: Constants.DiceFace = Dice.roll_die(color)
-	var new_result: Dictionary = {"color": color, "face": new_face}
-	_state.dice_results[die_index] = new_result
-	_log.info("CF token: rerolled die %d (%s) → %s." % [
-			die_index, str(old_result["face"]), str(new_face)])
-	# Spend the token via command system.
-	var inst: ShipInstance = _state.exec_ship_token.get_ship_instance()
-	if inst and inst.command_tokens:
-		GameManager.submit_spend_token(inst, int(Constants.CommandType.CONCENTRATE_FIRE))
-	# Update display.
-	if _get_panel():
-		_get_panel().update_die_result(die_index, new_result)
-		_get_panel().hide_cf_token_section()
-	_fsm_patch_payload({
-		"dice_results": _state.dice_results.duplicate(true),
-	})
-	# Show confirm.
-	_attack_exec_show_confirm()
+	var result: Dictionary = GameManager.submit_reroll_attack_die(
+			_get_attacker_player(), die_index, _state.dice_results,
+			RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN)
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	_apply_attack_modifier_result(result)
 
 ## Called when the player skips the CF token reroll.
 ## Requirements: AE-CF-013.
 func _on_attack_cf_token_skipped() -> void:
 	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
-		_pending_reroll_rule_id = ""
-		_publish_swarm_payload(false)
-		if _get_panel():
-			_get_panel().hide_cf_token_section()
-		_attack_exec_show_confirm()
+		var swarm_result: Dictionary = GameManager.submit_skip_attack_modifier(
+				_get_attacker_player(), SwarmKeyword.RULE_ID)
+		if not _is_waiting_for_remote_command_result(swarm_result) \
+				and not swarm_result.is_empty():
+			_apply_attack_modifier_result(swarm_result)
 		return
-	_log.info("CF token reroll skipped.")
-	if _get_panel():
-		_get_panel().hide_cf_token_section()
-	_attack_exec_show_confirm()
+	var result: Dictionary = GameManager.submit_skip_attack_modifier(
+			_get_attacker_player(),
+			RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN)
+	if not _is_waiting_for_remote_command_result(result) \
+			and not result.is_empty():
+		_apply_attack_modifier_result(result)
 
 
 func _on_attack_swarm_reroll(die_index: int) -> void:
@@ -1024,13 +1863,23 @@ func _on_attack_swarm_reroll(die_index: int) -> void:
 		return
 	if result.is_empty():
 		return
-	_state.dice_results = _flow_executor.extract_roll_results(result)
-	var new_result: Dictionary = result.get("new_result", {})
+	_apply_attack_modifier_result(result)
+
+
+func _apply_attack_modifier_result(result: Dictionary) -> void:
+	var source: String = str(result.get("source_rule_id", ""))
+	if source.is_empty() or _pending_reroll_rule_id != source:
+		return
+	_sync_scene_from_current_attack()
+	var die_index: int = int(result.get("die_index", -1))
+	var new_result: Dictionary = result.get("new_result", {}) as Dictionary
 	if _get_panel():
-		_get_panel().update_die_result(die_index, new_result)
+		if die_index >= 0 and not new_result.is_empty():
+			_get_panel().update_die_result(die_index, new_result)
 		_get_panel().hide_cf_token_section()
 	_pending_reroll_rule_id = ""
-	_publish_swarm_payload(false)
+	if source == SwarmKeyword.RULE_ID:
+		_publish_swarm_payload(false)
 	_fsm_patch_payload({"dice_results": _state.dice_results.duplicate(true)})
 	_attack_exec_show_confirm()
 
@@ -1052,6 +1901,19 @@ func _is_waiting_for_remote_command_result(result: Dictionary) -> bool:
 ## Requirements: AE-CONF-002, AE-ACC-001, AE-DEF-001, AE-DMG-001.
 ## Rules Reference: "Attack", Steps 3–5.
 func _on_attack_confirm() -> void:
+	var result: Dictionary = GameManager.submit_confirm_attack_dice(
+			_get_attacker_player())
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_attack_confirm_result(result)
+
+
+func apply_attack_confirm_result(_result: Dictionary) -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or attack.stage != CurrentAttackState.STAGE_ACCURACY \
+			or _state.accuracy_step:
+		return
+	_sync_scene_from_current_attack()
 	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info(
 			"Attack confirmed: %d damage. Starting Step 3 (accuracy)."
@@ -1059,15 +1921,6 @@ func _on_attack_confirm() -> void:
 	if _get_panel():
 		_get_panel().hide_confirm_button()
 	_flow_executor.reset_for_confirm(_state, damage)
-	# Zero damage — skip accuracy and defense entirely since there is
-	# nothing to mitigate.  Go straight to damage resolution which will
-	# show "No damage dealt." and advance to the next attack.
-	if damage == 0:
-		_log.info("No damage in roll — skipping accuracy & defense.")
-		_state.accuracy_step = false
-		_state.defense_step = false
-		_attack_exec_resolve_damage()
-		return
 	_attack_exec_start_accuracy()
 
 # ===========================================================================
@@ -1084,29 +1937,22 @@ func _on_attack_confirm() -> void:
 func _attack_exec_start_accuracy() -> void:
 	_state.accuracy_step = true
 	var acc_count: int = _resolve_accuracy_count()
-	# Only ships have defense tokens; squadrons skip accuracy step.
-	if _state.defender_ship == null or acc_count == 0:
-		_log.info("No accuracy icons or squadron defender — skipping "
+	var def_inst: RefCounted = _get_canonical_defender()
+	if def_inst == null or acc_count == 0:
+		_log.info("No accuracy icons or canonical defender — skipping "
 				+"accuracy step.")
-		_state.accuracy_step = false
-		_attack_exec_start_defense()
-		return
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
-	if def_inst == null:
-		_state.accuracy_step = false
-		_attack_exec_start_defense()
+		_commit_accuracy_selection([])
 		return
 	var lockable: int = _count_lockable_tokens(def_inst)
 	if lockable == 0:
 		_log.info("Defender has no lockable tokens — skipping accuracy.")
-		_state.accuracy_step = false
-		_attack_exec_start_defense()
+		_commit_accuracy_selection([])
 		return
 	_log.info("Accuracy step: %d icons, %d lockable tokens." % [
 			acc_count, lockable])
 	if _get_panel():
 		_get_panel().show_accuracy_section(
-				def_inst.defense_tokens, acc_count)
+				_defense_tokens(def_inst), acc_count)
 		_get_panel().hide_confirm_button()
 
 ## Counts accuracy icons, applying RuleRegistry accuracy blockers.
@@ -1151,18 +1997,33 @@ func _build_roll_attack_context() -> Dictionary:
 				SquadronKeywordRuleHelper.attack_kind_from_payload(identity),
 	}
 
-## Counts non-discarded defense tokens on a ship instance.
-func _count_lockable_tokens(def_inst: ShipInstance) -> int:
+## Counts non-discarded defense tokens on the canonical defender.
+func _count_lockable_tokens(def_inst: RefCounted) -> int:
 	return _defense_resolver.count_lockable_tokens(def_inst)
 
 ## Called when the player confirms accuracy spending.
 ## Stores the locked token indices and proceeds to defense step.
 ## Requirements: AE-ACC-006.
 func _on_attack_accuracy_confirmed() -> void:
+	var locked_tokens: Array[int] = []
 	if _get_panel():
-		_state.locked_tokens = (
-				_get_panel().get_accuracy_locked_indices())
+		locked_tokens = _get_panel().get_accuracy_locked_indices()
 		_get_panel().hide_accuracy_section()
+	_commit_accuracy_selection(locked_tokens)
+
+
+func _commit_accuracy_selection(locked_tokens: Array[int]) -> void:
+	var result: Dictionary = GameManager.submit_commit_accuracy(
+			_get_attacker_player(), locked_tokens)
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_accuracy_result(result)
+
+
+func apply_accuracy_result(_result: Dictionary) -> void:
+	if not _state.accuracy_step:
+		return
+	_sync_scene_from_current_attack()
 	_state.accuracy_step = false
 	_log.info("Accuracy confirmed: locked tokens %s." % [
 			str(_state.locked_tokens)])
@@ -1173,7 +2034,8 @@ func _on_attack_accuracy_confirmed() -> void:
 # ===========================================================================
 
 ## Starts the defense token spending step.
-## If the defender is a ship with spendable tokens, show the defense UI.
+## If the canonical defender has spendable defense-token capabilities, show
+## the defense UI.
 ## Otherwise, skip to damage resolution.
 ## Requirements: AE-DEF-001–016.
 ## Rules Reference: "Spend Defense Tokens", p.5 — "The defender can spend
@@ -1182,13 +2044,18 @@ func _attack_exec_start_defense() -> void:
 	_state.defense_step = true
 	_state.spent_tokens.clear()
 	_state.defense_commit_queue.clear()
-	var def_inst: ShipInstance = _resolve_defense_step_defender()
+	var def_inst: RefCounted = _resolve_defense_step_defender()
 	if def_inst == null:
 		_state.defense_step = false
-		_attack_exec_resolve_damage()
+		var attack: CurrentAttackState = _current_attack()
+		if attack != null \
+				and attack.defense_stage == CurrentAttackState.DEFENSE_PENDING:
+			_submit_commit_defense([])
+		else:
+			_attack_exec_resolve_damage()
 		return
 	# Phase I3: record defender so FSM knows who controls DEFENSE_TOKENS.
-	_flow_fsm.defender_player = def_inst.owner_player
+	_flow_fsm.defender_player = int(def_inst.get("owner_player"))
 	_fsm_advance(AttackFlowFSM.Step.DEFENSE_TOKENS)
 	# Phase I3b / I6b slice 2: publish defender identity + locked tokens
 	# + modified damage so the defender client can render the defense UI
@@ -1202,21 +2069,16 @@ func _attack_exec_start_defense() -> void:
 	# its own seat, so the rotate-to-defender behaviour is hot-seat-
 	# only.
 	if _camera and NetworkManager.get_local_player_index() < 0:
-		_camera.rotate_to_player(def_inst.owner_player)
+		_camera.rotate_to_player(int(def_inst.get("owner_player")))
 	_log.info("Defense step: %d spendable tokens, %d damage." % [
 			_count_spendable_defense_tokens(def_inst),
 			_state.modified_damage])
 	_show_defense_section(def_inst)
 
 
-## Resolves the defender [ShipInstance] for the defense step or returns
-## [code]null[/code] when the defense step cannot run (no defender ship,
-## missing instance, or no spendable tokens).  Pure lookup — callers
-## handle the null-branch and fall through to damage resolution.
-func _resolve_defense_step_defender() -> ShipInstance:
-	if _state.defender_ship == null:
-		return null
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+## Resolves a canonical defender with an applicable token interaction.
+func _resolve_defense_step_defender() -> RefCounted:
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
 		return null
 	if not _can_defender_spend_tokens(def_inst):
@@ -1228,14 +2090,14 @@ func _resolve_defense_step_defender() -> ShipInstance:
 ## the attacker peer renders the section in read-only mode so it can
 ## watch the defender's input without authoring it; in hot-seat the
 ## attacker panel is interactive.  Phase I6b-3 R6 / Phase K4.
-func _show_defense_section(def_inst: ShipInstance) -> void:
+func _show_defense_section(def_inst: RefCounted) -> void:
 	if _get_panel() == null:
 		return
 	_get_panel().show_defense_section(
-			def_inst.defense_tokens,
+			_defense_tokens(def_inst),
 			_state.locked_tokens,
 			_state.modified_damage,
-			def_inst.current_speed,
+			_defender_speed(def_inst),
 			{
 				"interactive": NetworkManager.get_local_player_index() < 0,
 				"blocked_indices": _get_blocked_defense_token_indices(def_inst),
@@ -1244,14 +2106,16 @@ func _show_defense_section(def_inst: ShipInstance) -> void:
 			})
 
 ## Returns true if the defender has spendable tokens and speed > 0.
-func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
+func _can_defender_spend_tokens(def_inst: RefCounted) -> bool:
 	var result: bool = _defense_resolver.can_spend_tokens(
 			def_inst, _state.locked_tokens,
 			_state.defender_zone)
-	if not result and _can_defender_use_ecm(def_inst):
+	if not result and def_inst is ShipInstance \
+			and _can_defender_use_ecm(def_inst as ShipInstance):
 		return true
 	if not result:
-		if def_inst.current_speed == 0:
+		if def_inst is ShipInstance \
+				and (def_inst as ShipInstance).current_speed == 0:
 			_log.info("Defender speed 0 — cannot spend defense tokens.")
 		else:
 			_log.info("No spendable defense tokens — skipping defense step.")
@@ -1260,14 +2124,14 @@ func _can_defender_spend_tokens(def_inst: ShipInstance) -> bool:
 
 func _can_defender_use_ecm(def_inst: ShipInstance) -> bool:
 	var gs: GameState = GameManager.current_game_state
-	if gs == null or def_inst == null:
+	var attack: CurrentAttackState = _current_attack()
+	if gs == null or def_inst == null or attack == null:
 		return false
 	var defender_ship_index: int = gs.find_ship_index(def_inst)
 	var payload: Dictionary = {
-		"attacker_player": _get_attacker_player(),
-		"attacker_ship_index": int(gs.find_ship_index(
-				_state.attacker_ship.get_ship_instance())
-				if _state.attacker_ship != null else -1),
+		"attacker_player": attack.attacker_player,
+		"attacker_ship_index": attack.attacker_index \
+				if attack.attacker_kind == CurrentAttackState.KIND_SHIP else -1,
 		"defender_player": def_inst.owner_player,
 		"defender_ship_index": defender_ship_index,
 		"defender_zone": _state.defender_zone,
@@ -1285,7 +2149,7 @@ func _can_defender_use_ecm(def_inst: ShipInstance) -> bool:
 ## Returns the number of spendable, non-discarded, non-locked tokens that are
 ## not blocked by RuleRegistry defense-token blockers.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
-func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
+func _count_spendable_defense_tokens(inst: RefCounted) -> int:
 	return _defense_resolver.count_spendable_tokens(
 			inst, _state.locked_tokens,
 			_state.defender_zone)
@@ -1293,7 +2157,7 @@ func _count_spendable_defense_tokens(inst: ShipInstance) -> int:
 
 ## Returns non-discarded token indices blocked by RuleRegistry.
 func _get_blocked_defense_token_indices(
-		inst: ShipInstance) -> Array[int]:
+		inst: RefCounted) -> Array[int]:
 	return _flow_executor.build_blocked_defense_token_indices(
 			_state, inst, _defense_resolver)
 
@@ -1304,35 +2168,55 @@ func _get_blocked_defense_token_indices(
 ## Rules Reference: "Defense Tokens", p.5 — each token type at most once.
 func _on_attack_defense_token_spent(token_index: int,
 		spend_method: String) -> bool:
-	if _state.defender_ship == null:
-		return false
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
 		return false
-	if token_index < 0 or token_index >= def_inst.defense_tokens.size():
+	var tokens: Array[Dictionary] = _defense_tokens(def_inst)
+	if token_index < 0 or token_index >= tokens.size():
 		return false
-	var token: Dictionary = def_inst.defense_tokens[token_index]
+	var token: Dictionary = tokens[token_index]
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
 	if not _is_defense_token_spendable(token_index, token):
 		return false
 	var actual_method: String = _resolve_spend_method(spend_method, token)
 	# Route through command system for replay determinism.
+	_defense_command_pending = true
+	_defense_submit_in_progress = true
 	var result: Dictionary = GameManager.submit_spend_defense_token(
 			def_inst, token_index, actual_method)
+	if _is_waiting_for_remote_command_result(result):
+		_defense_submit_in_progress = false
+		return true
 	if result.is_empty():
+		_defense_submit_in_progress = false
+		_defense_command_pending = false
 		_log.warn("Defense token spend command rejected — skipping effects.")
 		return false
+	apply_defense_token_result(result)
+	_defense_submit_in_progress = false
+	return true
+
+
+func apply_defense_token_result(result: Dictionary) -> void:
+	var token_type: int = int(result.get("token_type", -1))
+	if token_type < 0 or _state.spent_tokens.has(token_type):
+		return
+	_defense_command_pending = false
+	var actual_method: String = str(result.get("spend_method", ""))
 	_state.spent_tokens[token_type] = actual_method
+	_sync_scene_from_current_attack()
+	var def_inst: RefCounted = _get_canonical_defender()
+	if def_inst == null:
+		return
 	_publish_spent_defense_token_types()
 	EventBus.ship_defense_token_changed.emit(def_inst)
 	EventBus.defense_token_spent.emit(
-			_state.defender_ship, token_type)
+			_get_defender_token(), token_type)
 	_log.info("Defense token spent: %s (%s)." % [
 			Constants.DEFENSE_TOKEN_NAMES.get(token_type, "?"),
 			actual_method])
 	_apply_defense_token_effect(token_type, def_inst)
-	return true
 
 ## Returns true if the token at the given index can be spent.
 ## Checks discard state, one-per-type limit, accuracy locks, and
@@ -1342,7 +2226,7 @@ func _is_defense_token_spendable(token_index: int,
 		token: Dictionary) -> bool:
 	var result: bool = _defense_resolver.is_token_spendable(
 			token_index, token, _state.spent_tokens,
-			_state.locked_tokens, _get_defender_instance(),
+			_state.locked_tokens, _get_canonical_defender(),
 			_state.defender_zone)
 	if not result and _ecm_token_authorized(token_index):
 		return true
@@ -1393,16 +2277,47 @@ func _resolve_spend_method(spend_method: String,
 		token: Dictionary) -> String:
 	return _defense_resolver.resolve_spend_method(spend_method, token)
 
-## Returns the current defender's ShipInstance, or null.
-func _get_defender_instance() -> ShipInstance:
-	if _state.defender_ship == null:
+## Resolves the current defender from canonical owner-local identity.
+func _get_canonical_defender() -> RefCounted:
+	var attack: CurrentAttackState = _current_attack()
+	var game_state: GameState = GameManager.current_game_state
+	if attack == null or not attack.active or game_state == null:
 		return null
-	return _state.defender_ship.get_ship_instance()
+	return _resume_entity(game_state, attack.defender_kind,
+			attack.defender_player, attack.defender_index)
+
+
+func _defense_tokens(defender: RefCounted) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if defender != null:
+		result.assign(defender.get("defense_tokens") as Array)
+	return result
+
+
+func _defender_speed(defender: RefCounted) -> int:
+	return (defender as ShipInstance).current_speed \
+			if defender is ShipInstance else -1
+
+
+## Returns the canonical defender as a ship, or null for another kind.
+func _get_defender_instance() -> ShipInstance:
+	return _get_canonical_defender() as ShipInstance
+
+
+func _get_defender_token() -> Node:
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null:
+		return null
+	return _state.defender_ship if attack.defender_kind \
+			== CurrentAttackState.KIND_SHIP else _state.defender_squadron
 
 
 ## Returns the attacker's owner_player index.
 ## Works for both ship and squadron attack modes.
 func _get_attacker_player() -> int:
+	var attack: CurrentAttackState = _current_attack()
+	if attack != null and attack.active:
+		return attack.attacker_player
 	if _state.attacker_squadron:
 		var current_sq: SquadronInstance = \
 				_state.attacker_squadron.get_squadron_instance()
@@ -1422,7 +2337,7 @@ func _get_attacker_player() -> int:
 
 ## Returns true if a RuleRegistry blocker prevents spending this token.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
-func _is_token_blocked_by_effect(inst: ShipInstance,
+func _is_token_blocked_by_effect(inst: RefCounted,
 		token: Dictionary) -> bool:
 	return _defense_resolver.is_token_blocked_by_effect(
 			inst, token, _state.defender_zone)
@@ -1431,7 +2346,7 @@ func _is_token_blocked_by_effect(inst: ShipInstance,
 ## Requirements: AE-DEF-006–016.
 ## Rules Reference: "Defense Tokens", p.5; individual token entries.
 func _apply_defense_token_effect(token_type: Constants.DefenseToken,
-		def_inst: ShipInstance) -> void:
+		def_inst: RefCounted) -> void:
 	match token_type:
 		Constants.DefenseToken.SCATTER:
 			_apply_scatter_effect()
@@ -1441,8 +2356,9 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 		Constants.DefenseToken.BRACE:
 			_apply_brace_effect()
 		Constants.DefenseToken.REDIRECT:
-			_attack_exec_start_redirect(def_inst)
-			return # Redirect step handles button disable
+			if def_inst is ShipInstance:
+				_attack_exec_start_redirect(def_inst as ShipInstance)
+				return # Redirect step handles button disable
 		Constants.DefenseToken.CONTAIN:
 			_state.contain_used = true
 			_log.info("Contain: standard critical effect prevented.")
@@ -1457,8 +2373,8 @@ func _apply_defense_token_effect(token_type: Constants.DefenseToken,
 ## Rules Reference: "Scatter", p.11.
 func _apply_scatter_effect() -> void:
 	_state.scatter_used = true
-	_state.modified_damage = _defense_resolver.apply_scatter(
-			_state.modified_damage)
+	# CurrentAttackState already applied the semantic effect. Scene state only
+	# projects the canonical derived damage.
 	_log.info("Scatter: all damage cancelled.")
 	if _get_panel():
 		_get_panel().update_defense_damage(0)
@@ -1468,8 +2384,8 @@ func _apply_scatter_effect() -> void:
 ## Rules Reference: "Brace", RRG v1.5.0, p.3.
 func _apply_brace_effect() -> void:
 	_state.brace_used = true
-	_state.modified_damage = _defense_resolver.apply_brace(
-			_state.modified_damage)
+	# CurrentAttackState already applied Brace in derive_damage(). Reapplying it
+	# here would halve the canonical damage a second time.
 	_log.info("Brace: damage halved to %d." % [
 			_state.modified_damage])
 	if _get_panel():
@@ -1479,13 +2395,11 @@ func _apply_brace_effect() -> void:
 ## Returns the button index for a given token type in the current attack.
 func _get_token_button_index_for_type(
 		token_type: Constants.DefenseToken) -> int:
-	if _state.defender_ship == null:
-		return -1
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
 		return -1
 	return _defense_resolver.get_token_button_index(
-			token_type, def_inst.defense_tokens,
+			token_type, _defense_tokens(def_inst),
 			_state.spent_tokens)
 
 ## Starts the Evade die-selection sub-step.
@@ -1537,12 +2451,9 @@ func _on_evade_die_selected(die_index: int) -> void:
 ## [method apply_defender_evade_die] is triggered from the
 ## [signal CommandProcessor.command_executed] broadcast.
 func _submit_select_evade_die(die_index: int) -> void:
-	if _state.defender_ship == null:
-		_log.warn("Evade-die submit with no defender — ignoring.")
-		return
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
+		_log.warn("Evade-die submit with no canonical defender — ignoring.")
 		return
 	GameManager.submit_select_evade_die(def_inst, die_index)
 
@@ -1563,16 +2474,10 @@ func apply_defender_evade_die(die_index: int) -> void:
 		return
 	if not _state.evade_step:
 		return
-	if die_index < 0 or die_index >= _state.dice_results.size():
-		_log.info("Evade: invalid die index %d on apply." % die_index)
-		return
 	_state.evade_step = false
+	_sync_scene_from_current_attack()
 	if _get_panel():
 		_get_panel().hide_evade_die_selection()
-	if _state.range_band == Constants.RANGE_BAND_LONG:
-		_apply_evade_remove(die_index)
-	else:
-		_apply_evade_reroll(die_index)
 	# Phase I6b-3 R3 follow-up: clear evade sub-step flags + publish
 	# the post-modification dice strip + modified damage in one
 	# broadcast so the defender mirror hides the section and
@@ -1584,7 +2489,6 @@ func apply_defender_evade_die(die_index: int) -> void:
 		"modified_damage": _state.modified_damage,
 	})
 	_refresh_post_evade_panel()
-	_process_next_defense_commit()
 
 
 ## Refreshes the local attack panel after an evade die-modification:
@@ -1685,10 +2589,7 @@ func _publish_redirect_substep_patch(adjacent: Array) -> void:
 func _on_attack_redirect_zone_selected(zone: int) -> void:
 	if not _state.redirect_step:
 		return
-	if _state.defender_ship == null:
-		return
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: ShipInstance = _get_defender_instance()
 	if def_inst == null:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
@@ -1716,17 +2617,13 @@ func apply_defender_redirect_zone(zone: int) -> void:
 		return
 	if not _state.redirect_step:
 		return
-	if _state.defender_ship == null:
-		return
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: ShipInstance = _get_defender_instance()
 	if def_inst == null:
 		return
 	var zone_enum: Constants.HullZone = zone as Constants.HullZone
 	var zone_str: String = ConstantsScript.hull_zone_to_string(zone_enum)
 	_emit_redirect_shield_refresh(def_inst, zone_str)
-	_state.redirect_remaining -= 1
-	_state.modified_damage -= 1
+	_sync_scene_from_current_attack()
 	_log.info("Redirect: 1 damage to %s shield. Remaining: %d/%d." % [
 			zone_str, _state.redirect_remaining,
 			_state.modified_damage])
@@ -1738,7 +2635,11 @@ func apply_defender_redirect_zone(zone: int) -> void:
 		"redirect_remaining": _state.redirect_remaining,
 		"modified_damage": _state.modified_damage,
 	})
-	if not _check_redirect_continuation(def_inst):
+	var attack: CurrentAttackState = _current_attack()
+	var redirect_pending: bool = attack != null \
+			and not _has_resolved_defense_effect(
+					attack, Constants.DefenseToken.REDIRECT)
+	if not redirect_pending or not _check_redirect_continuation(def_inst):
 		_finish_redirect_substep()
 
 
@@ -1765,7 +2666,6 @@ func _finish_redirect_substep() -> void:
 		"redirect_adjacent_zones": [],
 		"redirect_remaining": 0,
 	})
-	_process_next_defense_commit()
 
 
 ## Applies the [i]Done Redirecting[/i] cleanup on the attacker peer
@@ -1777,6 +2677,7 @@ func apply_defender_redirect_done() -> void:
 	if not _state.redirect_step:
 		return
 	_log.info("Redirect ended early by player.")
+	_sync_scene_from_current_attack()
 	_state.redirect_step = false
 	_fsm_patch_payload({
 		"redirect_active": false,
@@ -1785,7 +2686,6 @@ func apply_defender_redirect_done() -> void:
 	})
 	if _get_panel():
 		_get_panel().hide_redirect_section()
-	_process_next_defense_commit()
 
 ## Checks if redirect can continue. Returns true if more redirect is
 ## possible and the UI was updated; false if redirect is done.
@@ -1848,17 +2748,14 @@ func _on_ecm_decline_requested(runtime_upgrade_id: String) -> void:
 ## broadcast.
 ## Returns false when command validation rejects the commit.
 func _submit_commit_defense(selected: Array[int]) -> bool:
-	if _state.defender_ship == null:
-		_log.warn("Commit defense with no defender — ignoring.")
-		return false
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
+		_log.warn("Commit defense with no canonical defender — ignoring.")
 		return false
 	# Sort into canonical resolution order before sending so all peers
 	# process tokens deterministically.
 	var canonical: Array[int] = _flow_executor.sort_defense_tokens_canonical(
-			selected, def_inst.defense_tokens)
+			selected, _defense_tokens(def_inst))
 	var result: Dictionary = GameManager.submit_commit_defense(def_inst, canonical)
 	if result.is_empty():
 		_log.warn("Defense commit command rejected — controls remain enabled.")
@@ -1880,21 +2777,17 @@ func apply_defender_commit(selected: Array[int]) -> void:
 		return
 	if not _state.defense_step:
 		return
-	if _flow_executor.has_unresolved_defense_commit(_state):
-		_log.warn("Defense commit ignored — token queue already resolving.")
+	_sync_scene_from_current_attack()
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or attack.committed_defense_tokens != selected:
+		_log.warn("Defense commit projection does not match canonical state.")
 		return
-	var canonical_selected: Array[int] = _canonicalise_committed_tokens(
-			selected)
-	if not _flow_executor.begin_defense_commit(
-			_state, canonical_selected):
+	if selected.is_empty():
 		_log.info("No defense tokens selected — proceeding to damage.")
 		if _get_panel():
 			_get_panel().hide_defense_section()
-		_attack_exec_resolve_damage()
 		return
-	_log.info("Defense commit: %d tokens queued." %
-			_state.defense_commit_queue.size())
-	_process_next_defense_commit()
+	_log.info("Defense commit: %d canonical tokens." % selected.size())
 
 
 ## Re-sorts the committed token indices into canonical RRG resolve
@@ -1909,13 +2802,11 @@ func apply_defender_commit(selected: Array[int]) -> void:
 ## Rules Reference: "Defense Tokens", p.5.
 func _canonicalise_committed_tokens(
 		selected: Array[int]) -> Array[int]:
-	if _state.defender_ship == null:
-		return selected
-	var def_inst: ShipInstance = _state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
 	if def_inst == null:
 		return selected
 	return _flow_executor.sort_defense_tokens_canonical(
-			selected, def_inst.defense_tokens)
+			selected, _defense_tokens(def_inst))
 
 ## Canonical defense token resolution order.
 ## Rules Reference: \"Defense Tokens\", p.5 — effects resolve in a
@@ -1936,39 +2827,69 @@ const _DEFENSE_RESOLVE_ORDER: Dictionary = {
 ## directly; production code delegates through AttackFlowExecutor.
 func _sort_defense_tokens_canonical(
 		indices: Array[int]) -> Array[int]:
-	if _state.defender_ship == null:
-		return indices
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: RefCounted = _get_canonical_defender()
+	# This method is retained only as a compatibility seam for isolated tests
+	# that predate CurrentAttackState. Production commitment sorting calls the
+	# helper directly with the canonical defender resolved above.
+	if def_inst == null and _state.defender_ship != null:
+		def_inst = _state.defender_ship.get_ship_instance()
+	if def_inst == null and _state.defender_squadron != null:
+		def_inst = _state.defender_squadron.get_squadron_instance()
 	if def_inst == null:
 		return indices
 	return _flow_executor.sort_defense_tokens_canonical(
-			indices, def_inst.defense_tokens)
+			indices, _defense_tokens(def_inst))
 
-## Processes the next defense token in the commit queue.
-## When the queue is empty, hides the defense UI and resolves damage.
+## Derives the next unresolved token from CurrentAttackState. Only the live
+## authority authors the deterministic SpendDefenseToken follow-up; mirrors
+## consume the recorded commands and render their results.
 func _process_next_defense_commit() -> void:
-	var poll: Dictionary = _flow_executor.poll_next_defense_commit(_state)
-	if not bool(poll.get("has_token", false)):
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active:
+		return
+	var token_index: int = _next_canonical_defense_token(attack)
+	if token_index < 0:
 		_log.info("Defense commit complete. Modified damage: %d." % [
 				_state.modified_damage])
 		if _get_panel():
 			_get_panel().hide_defense_section()
-		_attack_exec_resolve_damage()
+		if _is_live_defense_authority():
+			_attack_exec_resolve_damage()
 		return
-	var token_index: int = int(poll.get("token_index", -1))
+	if not _is_live_defense_authority():
+		return
 	_log.info("Processing committed token index %d." % token_index)
 	# Reuse the existing spending logic (validates, applies, starts
 	# sub-steps for Evade/Redirect).
 	var spent: bool = _on_attack_defense_token_spent(token_index, "exhaust")
 	if not spent:
-		_process_next_defense_commit()
+		_log.warn("Canonical defense follow-up was rejected; progression stopped.")
 		return
-	# For simple tokens (Scatter, Brace, Contain) the method returns
-	# synchronously. For Evade/Redirect, sub-steps will call
-	# _process_next_defense_commit() when they finish.
+	if _defense_command_pending:
+		return
+	# For a synchronous live submit, CommandProcessor may already have drained
+	# the canonical continuation chain. Re-reading the attack makes this
+	# compatibility path inert in that case; decision sub-steps resume through
+	# the authoritative post-success seam after their explicit command.
 	if not _state.evade_step and not _state.redirect_step:
 		_process_next_defense_commit()
+
+
+func _next_canonical_defense_token(attack: CurrentAttackState) -> int:
+	var resolved: Dictionary = {}
+	for effect: Dictionary in attack.resolved_defense_effects:
+		resolved[int(effect.get("token_index", -1))] = true
+	for token_index: int in attack.committed_defense_tokens:
+		if not resolved.has(token_index):
+			return token_index
+	return -1
+
+
+func _is_live_defense_authority() -> bool:
+	if CommandProcessor.is_replaying:
+		return false
+	return NetworkManager.role == NetworkManager.Role.NONE \
+			or NetworkManager.is_server()
 
 ## Called when the player presses "Done Redirecting" in the redirect
 ## section, ending the redirect sub-step early.  Submits a
@@ -1978,10 +2899,7 @@ func _process_next_defense_commit() -> void:
 func _on_redirect_done_early() -> void:
 	if not _state.redirect_step:
 		return
-	if _state.defender_ship == null:
-		return
-	var def_inst: ShipInstance = \
-			_state.defender_ship.get_ship_instance()
+	var def_inst: ShipInstance = _get_defender_instance()
 	if def_inst == null:
 		return
 	GameManager.submit_redirect_done(def_inst)
@@ -2001,8 +2919,34 @@ func _attack_exec_resolve_damage() -> void:
 	# Phase I3: MODIFY/DEFENSE_TOKENS -> RESOLVE_DAMAGE is always legal.
 	if _flow_fsm.current_step != AttackFlowFSM.Step.RESOLVE_DAMAGE:
 		_fsm_advance(AttackFlowFSM.Step.RESOLVE_DAMAGE)
-	var final_damage: int = _damage_dealer.calculate_final_damage(
-			_state.modified_damage, _state.scatter_used)
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active:
+		return
+	var result: Dictionary
+	if attack.defender_kind == CurrentAttackState.KIND_SHIP:
+		result = GameManager.submit_resolve_ship_damage(
+				_get_defender_instance())
+	else:
+		var squadron: SquadronInstance = \
+				_get_canonical_defender() as SquadronInstance
+		result = GameManager.submit_resolve_squadron_damage(squadron)
+	if _is_waiting_for_remote_command_result(result) or result.is_empty():
+		return
+	apply_damage_result(result)
+
+
+func apply_damage_result(result: Dictionary) -> void:
+	var attack_id: String = str(result.get("attack_id", ""))
+	if attack_id.is_empty() or _applied_damage_attack_id == attack_id:
+		return
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or attack.attack_id != attack_id \
+			or attack.stage != CurrentAttackState.STAGE_RESOLVED:
+		return
+	_applied_damage_attack_id = attack_id
+	_sync_scene_from_current_attack()
+	var final_damage: int = int(result.get("final_damage",
+			result.get("hull_damage", 0)))
 	# Phase I3c: publish final damage so UIProjector can render the
 	# damage summary on the defender's screen.
 	_fsm_patch_payload({"final_damage": final_damage})
@@ -2012,14 +2956,14 @@ func _attack_exec_resolve_damage() -> void:
 	if final_damage <= 0:
 		_resolve_zero_damage()
 		return
-	if _state.defender_squadron:
-		_resolve_squadron_damage(final_damage)
+	if str(result.get("target_type", "")) == "squadron":
+		_apply_squadron_damage_result(result)
 		if _pending_counter_attacker != null:
 			return
 		_attack_exec_finalize_after_delay()
 		return
-	if _state.defender_ship:
-		_continue_ship_damage_resolution(final_damage)
+	if str(result.get("target_type", "")) == "ship":
+		_continue_ship_damage_resolution(result)
 		return
 	_log.error("No defender found for damage resolution!")
 	_attack_exec_finalize_attack()
@@ -2042,8 +2986,8 @@ func _resolve_zero_damage() -> void:
 ## Ship-defender damage resolution: deals damage cards then either
 ## defers finalisation (waiting on the damage summary overlay) or
 ## proceeds into the immediate-effect choice flow / standard delay.
-func _continue_ship_damage_resolution(final_damage: int) -> void:
-	_resolve_ship_damage(final_damage)
+func _continue_ship_damage_resolution(result: Dictionary) -> void:
+	_apply_ship_damage_result(result)
 	# If the damage summary overlay is being shown, wait for the player
 	# to dismiss it before resolving immediate effects and finalising.
 	if _state.awaiting_damage_summary:
@@ -2064,17 +3008,25 @@ func _continue_ship_damage_resolution(final_damage: int) -> void:
 ## Squadrons have no shields — damage goes directly to hull.
 ## Routes through [ResolveDamageCommand] for replay determinism.
 ## Requirements: AE-DMG-002.
-func _resolve_squadron_damage(damage: int) -> void:
-	var sq_inst: SquadronInstance = (
-			_state.defender_squadron.get_squadron_instance())
+func _resolve_squadron_damage(_damage: int) -> void:
+	var sq_inst: SquadronInstance = \
+			_get_canonical_defender() as SquadronInstance
 	if sq_inst == null:
 		_log.error("Squadron instance is null — cannot resolve damage.")
 		return
-	var actual: int = mini(damage, sq_inst.current_hull)
-	var destroyed: bool = (sq_inst.current_hull - actual) <= 0
-	# All mutations happen inside the command.
-	GameManager.submit_resolve_squadron_damage(
-			sq_inst, damage, actual, destroyed)
+	var result: Dictionary = GameManager.submit_resolve_squadron_damage(sq_inst)
+	if result.is_empty():
+		return
+	apply_damage_result(result)
+
+
+func _apply_squadron_damage_result(result: Dictionary) -> void:
+	var sq_inst: SquadronInstance = \
+			_get_canonical_defender() as SquadronInstance
+	if sq_inst == null:
+		return
+	var actual: int = int(result.get("actual_damage", 0))
+	var destroyed: bool = bool(result.get("destroyed", false))
 	# Post-command: emit UI events from post-mutation state.
 	EventBus.squadron_hull_changed.emit(sq_inst, sq_inst.current_hull)
 	_log.info("Squadron took %d damage. Hull: %d/%d." % [
@@ -2211,7 +3163,7 @@ func apply_counter_choice_result(result: Dictionary) -> void:
 		_get_panel().hide_counter_section()
 	_publish_counter_payload(false)
 	if bool(result.get("accepted", false)):
-		_begin_counter_attack()
+		_pending_counter_begin = true
 		return
 	_pending_counter_attacker = null
 	_pending_counter_target = null
@@ -2231,11 +3183,9 @@ func apply_remote_counter_roll_result(command: GameCommand,
 ## Applies a remote optional attack-modifier skip to the attack pipeline.
 func apply_remote_attack_modifier_skip(command: GameCommand,
 		result: Dictionary) -> void:
-	if not _is_counter_pipeline_command(command):
+	if not _is_attack_pipeline_command(command):
 		return
-	if str(result.get("source_rule_id", "")) != SwarmKeyword.RULE_ID:
-		return
-	_on_attack_cf_token_skipped()
+	_apply_attack_modifier_result(result)
 
 
 ## Applies a broadcast Swarm reroll result to the attack pipeline.
@@ -2243,22 +3193,18 @@ func apply_remote_counter_reroll_result(command: GameCommand,
 		result: Dictionary) -> void:
 	if not _is_attack_pipeline_command(command):
 		return
-	if str(command.payload.get("source_rule_id", "")) != SwarmKeyword.RULE_ID:
-		return
-	if _pending_reroll_rule_id != SwarmKeyword.RULE_ID:
-		return
-	_apply_swarm_reroll_result(result)
+	_apply_attack_modifier_result(result)
 
 
 ## Applies a remote dice-confirm marker to the attack pipeline.
 func apply_remote_attack_confirm(command: GameCommand,
-		_result: Dictionary) -> void:
-	if not _is_counter_pipeline_command(command):
+		result: Dictionary) -> void:
+	if not _is_attack_pipeline_command(command):
 		return
 	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
 		_pending_reroll_rule_id = ""
 		_publish_swarm_payload(false)
-	_on_attack_confirm()
+	apply_attack_confirm_result(result)
 
 
 func _is_counter_pipeline_command(command: GameCommand) -> bool:
@@ -2276,16 +3222,7 @@ func _is_attack_pipeline_command(command: GameCommand) -> bool:
 
 
 func _apply_swarm_reroll_result(result: Dictionary) -> void:
-	_state.dice_results = _flow_executor.extract_roll_results(result)
-	var new_result: Dictionary = result.get("new_result", {})
-	var die_index: int = int(result.get("die_index", -1))
-	if _get_panel() and _should_show_local_attack_controls():
-		_get_panel().update_die_result(die_index, new_result)
-		_get_panel().hide_cf_token_section()
-	_pending_reroll_rule_id = ""
-	_publish_swarm_payload(false)
-	_fsm_patch_payload({"dice_results": _state.dice_results.duplicate(true)})
-	_attack_exec_show_confirm()
+	_apply_attack_modifier_result(result)
 
 
 func _begin_counter_attack() -> void:
@@ -2294,22 +3231,17 @@ func _begin_counter_attack() -> void:
 	_pending_counter_attacker = null
 	_pending_counter_target = null
 	_reset_for_counter_attack(counter_attacker, counter_target)
-	_state.dice_pool = _counter_dice_pool_for_state()
 	_state.range_band = Constants.RANGE_BAND_CLOSE
 	_target_selector.lock_current_target_selection()
 	var game_state: GameState = GameManager.current_game_state
 	_flow_fsm.begin(game_state, _get_attacker_player(), -1, {})
-	_publish_attack_declare_patch(Constants.RANGE_BAND_CLOSE)
-	_fsm_advance(AttackFlowFSM.Step.ROLL)
 	if _should_show_local_attack_controls():
 		_reset_panel_for_counter_attack()
 	elif _get_panel():
 		_get_panel().close()
-	_log.info("Counter accepted: %s attacks %s with %s." % [
-			_state.attacker_name, _state.defender_name,
-			DicePool.format_pool(_state.dice_pool)])
-	if _should_show_local_attack_controls():
-		_attack_exec_show_roll_button()
+	_log.info("Counter accepted: %s attacks %s." % [
+			_state.attacker_name, _state.defender_name])
+	_attack_exec_begin_sequence(Constants.RANGE_BAND_CLOSE)
 
 
 func _reset_for_counter_attack(attacker: SquadronToken,
@@ -2356,31 +3288,25 @@ func _squadron_name(token: SquadronToken) -> String:
 ## Routes through [ResolveDamageCommand] for replay determinism.
 ## Requirements: AE-DMG-003–014.
 ## Rules Reference: "Damage", p.4.
-func _resolve_ship_damage(damage: int) -> void:
-	var def_inst: ShipInstance = (
-			_state.defender_ship.get_ship_instance())
+func _resolve_ship_damage(_damage: int) -> void:
+	var def_inst: ShipInstance = _get_defender_instance()
 	if def_inst == null:
 		_log.error("Ship instance is null — cannot resolve damage.")
 		return
-	var def_zone_str: String = ConstantsScript.hull_zone_to_string(
-			_state.defender_zone as Constants.HullZone)
-	# Pre-compute shield absorption.
-	var shield_budget: int = int(
-			def_inst.current_shields.get(def_zone_str, 0))
-	var shield_damage: int = mini(shield_budget, damage)
-	var remaining: int = damage - shield_damage
-	# Pre-draw damage cards and serialize for the command payload.
-	var first_card_faceup: bool = _determine_first_card_faceup()
-	var card_data: Array = _pre_draw_damage_cards(
-			remaining, first_card_faceup)
-	# Determine destruction.
-	var destroyed: bool = (
-			def_inst.get_total_damage() + card_data.size()
-			>= def_inst.ship_data.hull)
-	# Submit — all mutations happen inside the command.
-	GameManager.submit_resolve_ship_damage(
-			def_inst, def_zone_str, shield_damage, card_data, destroyed)
-	# Post-command: emit events from post-mutation state.
+	var result: Dictionary = GameManager.submit_resolve_ship_damage(def_inst)
+	if result.is_empty():
+		return
+	apply_damage_result(result)
+
+
+func _apply_ship_damage_result(result: Dictionary) -> void:
+	var def_inst: ShipInstance = _get_defender_instance()
+	if def_inst == null:
+		return
+	var def_zone_str: String = str(result.get("hull_zone", ""))
+	var shield_damage: int = int(result.get("shield_absorbed", 0))
+	var card_data: Array = result.get("damage_cards", []) as Array
+	var destroyed: bool = bool(result.get("destroyed", false))
 	_emit_post_resolve_events(
 			def_inst, def_zone_str, shield_damage,
 			card_data, destroyed)
@@ -2810,12 +3736,10 @@ func _emit_immediate_signals(card: DamageCard,
 ## Returns the player index for the given chooser role relative to the
 ## current attack's defender.
 func _get_chooser_player_index(chooser: String) -> int:
-	if _state.defender_ship:
-		var def_inst: ShipInstance = (
-				_state.defender_ship.get_ship_instance())
-		if def_inst:
-			return _damage_dealer.get_chooser_player_index(
-					chooser, def_inst.owner_player)
+	var def_inst: ShipInstance = _get_defender_instance()
+	if def_inst:
+		return _damage_dealer.get_chooser_player_index(
+				chooser, def_inst.owner_player)
 	return 0
 
 ## Lazily creates the OpponentChoiceModal on a high CanvasLayer.
@@ -2842,12 +3766,40 @@ func _attack_exec_finalize_after_delay() -> void:
 ## AE-SQ-003, AE-SQ-004.
 ## Rules Reference: "Attack", Step 6, p.2.
 func _attack_exec_finalize_attack() -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack != null and attack.active:
+		_pending_finalize_after_completion = true
+		var result: Dictionary = GameManager.submit_complete_attack(
+				attack.attacker_player)
+		if not _is_waiting_for_remote_command_result(result) \
+				and not result.is_empty() \
+				and _pending_finalize_after_completion:
+			apply_complete_attack_result(result)
+		return
+	_finalize_completed_attack()
+
+
+func apply_complete_attack_result(_result: Dictionary) -> void:
+	if _pending_counter_begin:
+		_pending_counter_begin = false
+		_begin_counter_attack()
+		return
+	if not _pending_finalize_after_completion:
+		return
+	_pending_finalize_after_completion = false
+	_finalize_completed_attack()
+
+
+func _finalize_completed_attack() -> void:
 	if _get_panel():
 		_get_panel().hide_damage_info()
 		_get_panel().hide_defense_section()
 		_get_panel().hide_accuracy_section()
 		_get_panel().hide_redirect_section()
 	_rotate_camera_to_attacker()
+	if _reconstructed_current_attack:
+		_finish_attack_execution()
+		return
 	if _state.squad_exec_mode:
 		_finish_attack_execution()
 		return
@@ -2901,6 +3853,23 @@ func _finalize_squadron_attack() -> void:
 ## Rules Reference: "Attack", Step 1, p.2 — "The attacker must be
 ## able to add at least one die to the attack pool."
 func _auto_skip_zero_dice_squadron() -> void:
+	var attack: CurrentAttackState = _current_attack()
+	if attack != null and attack.active:
+		_pending_zero_squad_skip = true
+		var result: Dictionary = GameManager.submit_skip_attack(
+				attack.attacker_player, "cancelled")
+		if _is_waiting_for_remote_command_result(result):
+			return
+		if result.is_empty():
+			_pending_zero_squad_skip = false
+			return
+		if _pending_zero_squad_skip:
+			apply_skip_attack_result(result)
+		return
+	_finish_zero_dice_squadron()
+
+
+func _finish_zero_dice_squadron() -> void:
 	_log.info("Auto-skipping squadron (0 dice at this range).")
 	_state.attacked_squads.append(_state.defender_squadron)
 	_target_selector.clear_target_state()
@@ -3110,6 +4079,8 @@ func _show_next_attack_panel() -> void:
 ## the next hull zone (or finishes if both are done).
 ## Requirements: AE-SKIP-001, AE-SKIP-002, AE-SQ-006.
 func _on_attack_skip() -> void:
+	if not _pending_declaration_command.is_empty():
+		return
 	# If we're in the Step 6 squadron loop (attacked >=1 squadron and
 	# still target-selecting for the next one), treat as "done with
 	# this hull zone's anti-squadron attacks."
@@ -3117,13 +4088,43 @@ func _on_attack_skip() -> void:
 			_target_selector.is_target_selecting():
 		_log.info(
 				"Squadron loop skipped — moving to next hull zone.")
-		GameManager.submit_skip_attack(
+		var loop_skip: Dictionary = GameManager.submit_skip_attack(
 				_get_attacker_player(), "squadron_done")
+		if _is_waiting_for_remote_command_result(loop_skip):
+			return
 		_end_squadron_loop()
 		return
 	_log.info("Attack skipped by player.")
-	GameManager.submit_skip_attack(
+	var attack: CurrentAttackState = _current_attack()
+	var declaration_skip: bool = attack == null or not attack.active
+	if declaration_skip:
+		_pending_declaration_command = "skip_attack"
+		_target_selector.set_declaration_submission_pending(true)
+	_pending_finish_after_skip = true
+	var result: Dictionary = GameManager.submit_skip_attack(
 			_get_attacker_player(), "voluntary")
+	if _is_waiting_for_remote_command_result(result):
+		return
+	if result.is_empty():
+		_pending_finish_after_skip = false
+		if declaration_skip:
+			_restore_declaration_after_rejection(
+					"Skip attack was rejected.")
+		return
+	if _pending_finish_after_skip:
+		apply_skip_attack_result(result)
+
+
+func apply_skip_attack_result(result: Dictionary) -> void:
+	if _pending_zero_squad_skip:
+		_pending_zero_squad_skip = false
+		_finish_zero_dice_squadron()
+		return
+	if not _pending_finish_after_skip:
+		return
+	_pending_finish_after_skip = false
+	if _pending_declaration_command == "skip_attack":
+		_complete_declaration_submission()
 	_finish_attack_execution()
 
 ## Fades out a destroyed token over 0.8 seconds, then hides it.

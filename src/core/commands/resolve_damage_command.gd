@@ -6,10 +6,8 @@
 ## faceup damage-card effects, and marks destruction.
 ## For squadrons: applies hull damage and marks destruction.
 ##
-## The presentation layer (AttackExecutor) pre-computes shield absorption,
-## draws cards from the DamageDeck, and determines faceup/facedown status
-## BEFORE submitting this command. The command's [method execute] applies
-## the recorded mutations to [GameState]-owned objects.
+## Damage, shield absorption, and card draws are derived inside the command
+## from canonical current-attack and target state.
 ##
 ## Payload (ship target):
 ##   "target_type"      — "ship"
@@ -55,29 +53,33 @@ func validate(game_state: GameState) -> String:
 	var phase: Constants.GamePhase = game_state.current_phase
 	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
 		return "Not in Ship or Squadron Phase."
-	var target_type: String = payload.get("target_type", "")
-	if target_type != "ship" and target_type != "squadron":
-		return "Invalid target_type: '%s'." % target_type
-	var owner: int = payload.get("owner_player", -1)
-	if owner < 0 or owner >= Constants.PLAYER_COUNT:
-		return "Invalid owner_player."
-	match target_type:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return "No current attack."
+	if attack.attack_id != str(payload.get("attack_id", "")):
+		return "Stale current-attack identity."
+	if player_index != attack.attacker_player:
+		return "Damage resolution belongs to the attacker."
+	if attack.stage != CurrentAttackState.STAGE_DEFENSE \
+			or attack.defense_stage != CurrentAttackState.DEFENSE_COMPLETE:
+		return "Defense resolution is not complete."
+	match attack.defender_kind:
 		"ship":
-			return _validate_ship(game_state, owner)
+			return _validate_ship(game_state, attack)
 		"squadron":
-			return _validate_squadron(game_state, owner)
-	return ""
+			return _validate_squadron(game_state, attack)
+	return "Invalid current-attack defender."
 
 
 ## Executes all damage mutations atomically.
 ## Returns a result dictionary describing what changed.
 func execute(game_state: GameState) -> Dictionary:
-	var target_type: String = payload.get("target_type", "")
-	match target_type:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	match attack.defender_kind:
 		"ship":
-			return _execute_ship(game_state)
+			return _execute_ship(game_state, attack)
 		"squadron":
-			return _execute_squadron(game_state)
+			return _execute_squadron(game_state, attack)
 	return {}
 
 
@@ -87,34 +89,59 @@ func execute(game_state: GameState) -> Dictionary:
 
 
 ## Validates ship-specific payload fields.
-func _validate_ship(game_state: GameState, owner: int) -> String:
-	var ship_index: int = payload.get("ship_index", -1)
-	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
+func _validate_ship(game_state: GameState,
+		attack: CurrentAttackState) -> String:
+	var ship: ShipInstance = game_state.get_ship(
+			attack.defender_player, attack.defender_index)
 	if ship == null:
 		return "Ship not found."
-	var hull_zone: String = payload.get("hull_zone", "")
-	if hull_zone == "":
-		return "Missing hull_zone."
+	var hull_zone: String = Constants.hull_zone_to_string(
+			attack.defender_zone as Constants.HullZone)
 	if not ship.current_shields.has(hull_zone):
 		return "Invalid hull_zone: '%s'." % hull_zone
-	var shield_damage: int = payload.get("shield_damage", -1)
-	if shield_damage < 0:
-		return "Invalid shield_damage."
+	var cards_required: int = maxi(0, attack.derive_damage(game_state) \
+			- int(ship.current_shields.get(hull_zone, 0)))
+	if game_state.damage_deck == null and cards_required > 0:
+		return "Damage deck is unavailable."
+	if game_state.damage_deck != null \
+			and game_state.damage_deck.get_total_count() < cards_required:
+		return "Damage deck does not contain enough cards."
 	return ""
 
 
 ## Applies ship damage: shield absorption, damage cards, destruction.
-func _execute_ship(game_state: GameState) -> Dictionary:
-	var owner: int = payload.get("owner_player", 0)
-	var ship_index: int = payload.get("ship_index", 0)
+func _execute_ship(game_state: GameState,
+		attack: CurrentAttackState) -> Dictionary:
+	var owner: int = attack.defender_player
+	var ship_index: int = attack.defender_index
 	var ship: ShipInstance = game_state.get_ship(owner, ship_index)
-	var hull_zone: String = payload.get("hull_zone", "")
-	var shield_damage: int = payload.get("shield_damage", 0)
-	var card_data_array: Array = payload.get("damage_cards", [])
-	var destroyed: bool = payload.get("target_destroyed", false)
-	# Step 1: Absorb shields.
+	var hull_zone: String = Constants.hull_zone_to_string(
+			attack.defender_zone as Constants.HullZone)
+	var damage: int = attack.derive_damage(game_state)
+	var shield_damage: int = mini(
+			int(ship.current_shields.get(hull_zone, 0)), damage)
+	var remaining: int = damage - shield_damage
+	var deck_snapshot: Dictionary = game_state.damage_deck.serialize() \
+			if remaining > 0 else {}
+	var card_data_array: Array[Dictionary] = _draw_damage_cards(
+			game_state, attack, remaining)
+	if card_data_array.size() != remaining:
+		_restore_damage_deck(game_state, deck_snapshot)
+		return {}
+	var destroyed: bool = ship.get_total_damage() + card_data_array.size() \
+			>= ship.ship_data.hull
+	var replacement: CurrentAttackState = attack.with_patch({
+		"stage": CurrentAttackState.STAGE_RESOLVED,
+		"damage_stage": CurrentAttackState.DAMAGE_RESOLVED,
+	})
+	if replacement == null:
+		_restore_damage_deck(game_state, deck_snapshot)
+		return {}
+	if not game_state.set_current_attack_state(replacement):
+		_restore_damage_deck(game_state, deck_snapshot)
+		return {}
+	# Remaining steps are non-fallible after validation and CAS install.
 	var shield_absorbed: int = ship.reduce_shields(hull_zone, shield_damage)
-	# Step 2: Deal damage cards.
 	var cards_added: Array[Dictionary] = []
 	for card_dict: Variant in card_data_array:
 		var card: DamageCard = DamageCard.deserialize(
@@ -124,10 +151,10 @@ func _execute_ship(game_state: GameState) -> Dictionary:
 		else:
 			ship.add_facedown_damage(card)
 		cards_added.append(card.serialize())
-	# Step 3: Mark destroyed if applicable.
 	if destroyed:
 		ship.mark_destroyed()
 	return {
+		"attack_id": attack.attack_id,
 		"target_type": "ship",
 		"owner_player": owner,
 		"ship_index": ship_index,
@@ -135,6 +162,8 @@ func _execute_ship(game_state: GameState) -> Dictionary:
 		"shield_absorbed": shield_absorbed,
 		"new_shields": int(ship.current_shields.get(hull_zone, 0)),
 		"cards_added": cards_added.size(),
+		"damage_cards": cards_added,
+		"final_damage": damage,
 		"persistent_registered": 0,
 		"destroyed": destroyed,
 	}
@@ -146,30 +175,39 @@ func _execute_ship(game_state: GameState) -> Dictionary:
 
 
 ## Validates squadron-specific payload fields.
-func _validate_squadron(game_state: GameState, owner: int) -> String:
-	var sq_index: int = payload.get("squadron_index", -1)
-	var sq: SquadronInstance = game_state.get_squadron(owner, sq_index)
+func _validate_squadron(game_state: GameState,
+		attack: CurrentAttackState) -> String:
+	var sq: SquadronInstance = game_state.get_squadron(
+			attack.defender_player, attack.defender_index)
 	if sq == null:
 		return "Squadron not found."
-	var hull_damage: int = payload.get("hull_damage", -1)
-	if hull_damage < 0:
-		return "Invalid hull_damage."
 	return ""
 
 
 ## Applies squadron damage: hull reduction and destruction.
-func _execute_squadron(game_state: GameState) -> Dictionary:
-	var owner: int = payload.get("owner_player", 0)
-	var sq_index: int = payload.get("squadron_index", 0)
+func _execute_squadron(game_state: GameState,
+		attack: CurrentAttackState) -> Dictionary:
+	var owner: int = attack.defender_player
+	var sq_index: int = attack.defender_index
 	var sq: SquadronInstance = game_state.get_squadron(owner, sq_index)
-	var hull_damage: int = payload.get("hull_damage", 0)
-	var destroyed: bool = payload.get("target_destroyed", false)
-	# Apply hull damage.
+	var hull_damage: int = attack.derive_damage(game_state)
+	var actual_damage: int = mini(hull_damage, sq.current_hull)
+	var destroyed: bool = sq.current_hull - actual_damage <= 0
+	var replacement: CurrentAttackState = attack.with_patch({
+		"stage": CurrentAttackState.STAGE_RESOLVED,
+		"damage_stage": CurrentAttackState.DAMAGE_RESOLVED,
+	})
+	if replacement == null:
+		return {}
+	if not game_state.set_current_attack_state(replacement):
+		return {}
+	# Remaining steps are non-fallible after validation and CAS install.
 	var actual: int = sq.suffer_damage(hull_damage)
 	# Mark destroyed if applicable.
 	if destroyed:
 		sq.mark_destroyed()
 	return {
+		"attack_id": attack.attack_id,
 		"target_type": "squadron",
 		"owner_player": owner,
 		"squadron_index": sq_index,
@@ -178,3 +216,44 @@ func _execute_squadron(game_state: GameState) -> Dictionary:
 		"new_hull": sq.current_hull,
 		"destroyed": destroyed,
 	}
+
+
+func _draw_damage_cards(game_state: GameState,
+		attack: CurrentAttackState, count: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var first_faceup: bool = _first_card_faceup(game_state, attack)
+	for index: int in range(count):
+		var card: DamageCard = game_state.damage_deck.draw_card()
+		if card == null:
+			break
+		card.is_faceup = index == 0 and first_faceup
+		result.append(card.serialize())
+	return result
+
+
+func _restore_damage_deck(game_state: GameState,
+		deck_snapshot: Dictionary) -> void:
+	if not deck_snapshot.is_empty():
+		game_state.damage_deck = DamageDeck.deserialize(deck_snapshot)
+
+
+func _first_card_faceup(game_state: GameState,
+		attack: CurrentAttackState) -> bool:
+	if attack.attacker_kind != CurrentAttackState.KIND_SHIP \
+			or attack.defender_kind != CurrentAttackState.KIND_SHIP \
+			or not Dice.has_any_critical(attack.dice_results):
+		return false
+	for effect: Dictionary in attack.resolved_defense_effects:
+		if int(effect.get("token_type", -1)) == Constants.DefenseToken.CONTAIN:
+			return false
+	var context := EffectContext.new()
+	context.attacker = game_state.get_ship(
+			attack.attacker_player, attack.attacker_index)
+	context.defender = game_state.get_ship(
+			attack.defender_player, attack.defender_index)
+	context.critical_allowed = true
+	return not RuleSurface.is_blocked(
+			context,
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			RuleSurface.TARGET_CRITICAL_EFFECT)

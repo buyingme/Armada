@@ -10,6 +10,8 @@ const SHIP_KEY_CR90: String = "cr90_corvette_a"
 const ATTACKER_PLAYER: int = 0
 const DEFENDER_PLAYER: int = 1
 const SHIP_INDEX: int = 0
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _processor: Node = null
 var _state: GameState = null
@@ -140,6 +142,7 @@ func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	var attacker: ShipInstance = _attacker_ship()
 	_add_coolant_discharge(attacker)
 	_state.record_ship_target_attack(attacker)
+	_state.interaction_flow = InteractionFlow.new()
 	var restored: GameState = GameState.deserialize(_state.serialize())
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
@@ -200,8 +203,14 @@ func _make_ship_token(instance: ShipInstance) -> ShipToken:
 
 
 func _make_roll_command(target_kind: String) -> RollDiceCommand:
-	return RollDiceCommand.new(ATTACKER_PLAYER, {
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"defender_kind": target_kind,
+		"defender_zone": Constants.HullZone.FRONT \
+				if target_kind == CurrentAttackState.KIND_SHIP else -1,
 		"dice_pool": {"RED": 1},
+	}), "Coolant Discharge fixture requires canonical attack state.")
+	return RollDiceCommand.new(ATTACKER_PLAYER, {
+		"attack_id": _state.current_attack_state.attack_id,
 		"attacker_kind": "ship",
 		"attacker_player": ATTACKER_PLAYER,
 		"attacker_ship_index": SHIP_INDEX,

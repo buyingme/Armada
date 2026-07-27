@@ -120,6 +120,13 @@ var _target_selector: TargetSelector = null
 ## Write: _create_attack_executor() only. Already extracted as child Node.
 var _attack_executor: AttackExecutor = null
 
+## Fail-closed guard for an active canonical attack that could not be rebuilt.
+## No board activation, routing, input, or semantic continuation is installed
+## after this guard is raised.
+var _active_attack_reconstruction_blocked: bool = false
+var _active_attack_reconstruction_failure: String = ""
+var _scheduled_attack_resume_key: String = ""
+
 ## Attack panel controller — owns the attack-panel mirror sync, the
 ## attacker-side defender-response routing into [AttackExecutor], and
 ## the Attack Simulator toolbar / keyboard toggle.  Created in
@@ -159,7 +166,8 @@ var _setup_placement_controller = null
 func _ready() -> void:
 	_create_board_components()
 	_bootstrap_or_load_board_state()
-	_finalize_ready_sequence()
+	if not _finalize_ready_sequence():
+		return
 	_show_fixed_round1_toast_if_needed()
 
 ## Returns all current ship tokens on the board.
@@ -195,6 +203,8 @@ func _draw() -> void:
 	draw_rect(area, BORDER_COLOUR, false, BORDER_WIDTH_PX)
 
 func _process(_delta: float) -> void:
+	if _active_attack_reconstruction_blocked:
+		return
 	# Phase 7b: Squadron follows mouse during MOVING state.
 	if _squadron_phase_controller:
 		_squadron_phase_controller.process_squadron_movement()
@@ -214,6 +224,8 @@ func _process(_delta: float) -> void:
 ## _unhandled_input (which would eat the click since the token follows
 ## the mouse).
 func _input(event: InputEvent) -> void:
+	if _active_attack_reconstruction_blocked:
+		return
 	# Phase 7b: Squadron movement — intercept before GUI / token can consume.
 	if _squadron_phase_controller \
 			and _squadron_phase_controller.handle_move_input(event):
@@ -978,7 +990,7 @@ func _create_attack_panel_controller() -> void:
 	_attack_panel_controller.name = "AttackPanelController"
 	add_child(_attack_panel_controller)
 	_attack_panel_controller.initialize(
-			_attack_executor, _panel_mgr, _target_selector)
+			_attack_executor, _panel_mgr, _target_selector, _activation_ctx)
 
 ## Creates the [ToolOverlayController] child node which owns the
 ## maneuver / range / targeting sub-controllers (Phase K11).
@@ -1239,8 +1251,21 @@ func _scenario_id_for_spawn(fallback_scenario_id: String) -> String:
 	return active_scenario_id
 
 
-func _finalize_ready_sequence() -> void:
+func _finalize_ready_sequence() -> bool:
+	if _active_attack_reconstruction_blocked:
+		return false
+	var game_state: GameState = GameManager.current_game_state
+	var attack: CurrentAttackState = game_state.current_attack_state \
+			if game_state != null else null
+	var has_active_attack: bool = attack != null and attack.active
+	var attack_resume: Dictionary = _resume_active_attack_from_state()
+	if has_active_attack \
+			and not bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
+		_block_after_active_attack_reconstruction_failure(attack_resume)
+		return false
 	_initialize_ship_activation_controller()
+	if has_active_attack:
+		_ship_activation_controller.dismiss_activation_modal_for_attack()
 	_create_command_router_adapter()
 	_connect_signals()
 	_connect_panel_signals()
@@ -1249,6 +1274,67 @@ func _finalize_ready_sequence() -> void:
 	queue_redraw()
 	_on_phase_changed(GameManager.get_current_phase())
 	_on_active_player_changed(GameManager.get_active_player())
+	if bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
+		_attack_panel_controller.sync_mirror_from_flow(
+				attack_resume.get(AttackExecutor.RESUME_KEY_FLOW) as InteractionFlow)
+		var intent: UIProjector.UIIntent = UIProjector.project(
+				GameManager.current_game_state, _local_viewer())
+		_attack_panel_controller.sync_timing_window_projection(
+				intent.timing_window,
+				Callable(_command_router_adapter,
+						"submit_timing_window_intent"))
+		_schedule_active_attack_resume(attack_resume)
+	return true
+
+
+func _block_after_active_attack_reconstruction_failure(
+		result: Dictionary) -> void:
+	_active_attack_reconstruction_blocked = true
+	_active_attack_reconstruction_failure = str(result.get(
+			AttackExecutor.RESUME_KEY_REASON, "unknown reason"))
+	set_process(false)
+	set_process_input(false)
+	set_process_unhandled_input(false)
+	process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func _schedule_active_attack_resume(plan: Dictionary) -> bool:
+	if _active_attack_reconstruction_blocked \
+			or _attack_executor == null \
+			or not bool(plan.get(AttackExecutor.RESUME_KEY_OK, false)) \
+			or bool(plan.get(AttackExecutor.RESUME_KEY_REQUIRES_INPUT, true)):
+		return false
+	var resume_key: String = "%s|%s|%s|%s" % [
+		str(plan.get(AttackExecutor.RESUME_KEY_ATTACK_ID, "")),
+		str(plan.get("stage", "")),
+		str(plan.get("defense_stage", "")),
+		str(plan.get(AttackExecutor.RESUME_KEY_TRANSITION, "")),
+	]
+	if resume_key.is_empty() or resume_key == _scheduled_attack_resume_key:
+		return false
+	_scheduled_attack_resume_key = resume_key
+	_attack_executor.call_deferred("resume_live_progression", plan)
+	return true
+
+
+## Reconstructs one active individual attack after loaded/reconnected state and
+## synchronized cursors have already been installed. The executor resolves
+## stable model-to-token references, derives the projection from canonical
+## state, and never reads the serialized scene/InteractionFlow mirror as input.
+func _resume_active_attack_from_state() -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return {}
+	var result: Dictionary = _attack_executor.resume_current_attack(
+			_find_ship_token_for_instance,
+			_find_squadron_token_for_instance)
+	if not bool(result.get(AttackExecutor.RESUME_KEY_OK, false)):
+		push_error("Active attack reconstruction failed: %s" % str(
+				result.get(AttackExecutor.RESUME_KEY_REASON, "unknown reason")))
+	return result
 
 
 func _show_fixed_round1_toast_if_needed() -> void:
@@ -1285,6 +1371,14 @@ func _connect_board_damage_and_remote_signals() -> void:
 			_on_ship_repositioned_remotely)
 	EventBus.squadron_repositioned_remotely.connect(
 			_on_squadron_repositioned_remotely)
+	GameManager.network_command_rejected.connect(
+			_on_network_command_rejected)
+
+
+func _on_network_command_rejected(
+		command: GameCommand, reason: String) -> void:
+	if _attack_panel_controller != null:
+		_attack_panel_controller.react_to_command_rejection(command, reason)
 
 
 func _connect_board_passive_peer_visual_signals() -> void:

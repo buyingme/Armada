@@ -109,6 +109,7 @@ func test_publish_attack_flow_validator_allows_medium_range_target() -> void:
 
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_depowered_armament(_attacker_ship())
+	_state.interaction_flow = InteractionFlow.new()
 	var restored: GameState = GameState.deserialize(_state.serialize())
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)

@@ -2,6 +2,10 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 const DEFINITIONS: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_definitions.gd")
 const ORCHESTRATOR: GDScript = preload(
@@ -251,6 +255,10 @@ func _make_active_state(public_source_ids: Array[String],
 			})
 	state.objectives[PARTICIPANT.SOURCES_KEY] = public_source_ids.duplicate()
 	state.objectives[PARTICIPANT.RESOLVED_KEY] = {}
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"attack_id": "attack:6",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Projection fixture requires canonical current-attack state.")
 	var opened: Dictionary = ORCHESTRATOR.open_window(
 			state,
 			DEFINITIONS.ATTACK_MODIFY,
@@ -261,7 +269,7 @@ func _make_active_state(public_source_ids: Array[String],
 				TimingWindowState.CONTINUATION_KEY_RESUME_POINT:
 						"attack_after_modify",
 				TimingWindowState.CONTINUATION_KEY_SOURCE_ID:
-						"fixture-attack",
+						state.current_attack_state.attack_id,
 				TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE:
 						"current_attack",
 				TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,

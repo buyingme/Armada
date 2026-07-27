@@ -208,6 +208,30 @@ func test_reconstructed_cursor_initializes_network_result_ordering() -> void:
 	assert_eq(_ship(state, 0, 0).command_dial_stack.get_dial_count(), 1)
 
 
+func test_network_rejection_releases_gate_without_entering_ordered_history() -> void:
+	_install_client_state(false)
+	var submitter := NetworkCommandSubmitter.new()
+	submitter._awaiting = true
+	submitter._in_flight_count = 1
+	submitter._awaiting_command_type = "assign_dials"
+	GameManager.set_command_submitter(submitter)
+	var rejected: AssignDialCommand = _assign_cmd(
+			1, 0, Constants.CommandType.NAVIGATE, -1)
+	watch_signals(GameManager)
+
+	GameManager._on_network_command_rejection(
+			rejected.serialize(), "Controlled authoritative rejection.")
+
+	assert_false(submitter.is_awaiting_response())
+	assert_eq(CommandProcessor.get_command_count(), 0)
+	assert_eq(GameManager._pending_network_results.size(), 0)
+	assert_signal_emitted(GameManager, "network_command_rejected")
+	var args: Array = get_signal_parameters(
+			GameManager, "network_command_rejected")
+	assert_eq((args[0] as GameCommand).command_type, "assign_dials")
+	assert_eq(args[1], "Controlled authoritative rejection.")
+
+
 func _install_client_state(with_tarkin: bool) -> GameState:
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()

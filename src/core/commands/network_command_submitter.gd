@@ -66,8 +66,8 @@ func is_awaiting_response() -> bool:
 	return _awaiting
 
 
-## Clears the awaiting flag.  Called by [GameManager] when the server's
-## [code]command_result[/code] RPC is received.
+## Clears the awaiting flag. Called by [GameManager] when the server returns
+## either an accepted command result or a targeted rejection acknowledgement.
 func clear_awaiting() -> void:
 	if _in_flight_count > 0:
 		_in_flight_count -= 1
@@ -76,6 +76,17 @@ func clear_awaiting() -> void:
 	_awaiting = false
 	_awaiting_command_type = ""
 	_flush_next_pending()
+
+
+## Releases the matching awaiting slot after server-side rejection. Returns
+## false for a stale or unrelated acknowledgement.
+func reject_awaiting(command_data: Dictionary) -> bool:
+	if not _awaiting:
+		return false
+	if str(command_data.get("type", "")) != _awaiting_command_type:
+		return false
+	clear_awaiting()
+	return true
 
 
 ## Sends one serialized command and marks this submitter as awaiting.

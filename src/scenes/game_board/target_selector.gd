@@ -6,8 +6,9 @@
 ## and the AttackTargetResolver for LOS/range/arc computation.
 ##
 ## In simulator mode (exec_mode == false), selection ends at the info panel.
-## In execution mode (exec_mode == true), selection emits [signal target_locked]
-## so the AttackExecutor can begin the dice sequence.
+## In execution mode (exec_mode == true), selection establishes a transient
+## declaration candidate. The AttackExecutor begins only after explicit
+## declaration confirmation.
 ##
 ## Extracted from AttackExecutor as part of refactoring phase F5d (Option B).
 ## Requirements: AS-*, AE-TGT-*, AE-FLOW-002.
@@ -22,12 +23,6 @@ const ConstantsScript := preload("res://src/autoload/constants.gd")
 ## Emitted when the executor needs GameBoard to dismiss other tools
 ## (range overlay, targeting list, maneuver tool) before activating.
 signal dismiss_other_tools_requested
-
-## Emitted when a valid target is selected in execution mode.
-## The AttackExecutor connects to this to begin the dice sequence.
-## [param range_band] — the computed range band string.
-## [param dice_text] — human-readable dice pool description.
-signal target_locked(range_band: String, dice_text: String)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -87,8 +82,9 @@ var _token_container: Node2D = null
 ## Camera node reference.
 var _camera: BoardCamera = null
 
-## Shared mutable state for the current attack flow.
-## Owned by AttackExecutor; passed by reference.
+## Derived scene projection for the current attack presentation.
+## TargetSelector owns the transient declaration candidate separately; this
+## legacy scene state is never command intent or gameplay authority.
 var _state: AttackState = null
 
 ## Pure-computation resolver for dice pool text display.
@@ -121,6 +117,21 @@ var _overlay: AttackSimOverlay = null
 
 ## Range overlay shown as part of the attack simulator.
 var _range_overlay: RangeOverlayScene = null
+
+## Transient authoritative candidate for the currently selected target of a
+## standard squadron attack.  This is derived from canonical GameState and is
+## cleared with target presentation; it is never serialized or authoritative.
+var _authoritative_squadron_candidate: Dictionary = {}
+
+## The sole mutable transient declaration candidate. It contains stable
+## owner-local entity references plus derived preview facts, is never
+## serialized, and is cleared only by deselection, dismissal, or an accepted
+## terminal declaration result.
+var _declaration_candidate: Dictionary = {}
+
+## Prevents candidate churn while BeginAttackCommand or declaration
+## SkipAttackCommand awaits its authoritative result.
+var _declaration_submission_pending: bool = false
 
 
 # ===========================================================================
@@ -167,6 +178,13 @@ func get_panel() -> AttackSimPanel:
 	return _panel
 
 
+## Ensures the panel exists for one-way reconstruction projection without
+## entering attacker or target selection modes.
+func ensure_panel_for_projection() -> AttackSimPanel:
+	_ensure_panel()
+	return _panel
+
+
 ## Returns the selection flag.
 func is_selecting() -> bool:
 	return _selecting
@@ -175,6 +193,30 @@ func is_selecting() -> bool:
 ## Returns the target-selection flag.
 func is_target_selecting() -> bool:
 	return _target_selecting
+
+
+## Returns whether one complete transient declaration candidate exists.
+func has_declaration_candidate() -> bool:
+	return not _declaration_candidate.is_empty()
+
+
+## Returns a copy of the current stable declaration intent and preview facts.
+func get_declaration_candidate() -> Dictionary:
+	return _declaration_candidate.duplicate(true)
+
+
+## Blocks or restores declaration interaction while a semantic command is
+## awaiting its authoritative result.
+func set_declaration_submission_pending(pending: bool) -> void:
+	_declaration_submission_pending = pending
+	if _panel:
+		_panel.set_declaration_submission_pending(pending)
+
+
+## Clears transient declaration intent after an accepted terminal result.
+func clear_declaration_candidate() -> void:
+	_declaration_candidate = {}
+	_authoritative_squadron_candidate = {}
 
 
 ## Whether the selector has any active UI.
@@ -240,6 +282,8 @@ func _ensure_panel() -> void:
 
 ## Routes a ship token click. Returns true if handled.
 func handle_ship_click(token: ShipToken) -> bool:
+	if _state.exec_mode and _declaration_submission_pending:
+		return _selecting or _target_selecting
 	if _target_selecting:
 		_handle_target_ship_click(token)
 		return true
@@ -251,6 +295,8 @@ func handle_ship_click(token: ShipToken) -> bool:
 
 ## Routes a squadron token click. Returns true if handled.
 func handle_squadron_click(token: SquadronToken) -> bool:
+	if _state.exec_mode and _declaration_submission_pending:
+		return _selecting or _target_selecting
 	if _target_selecting:
 		_handle_target_squadron_click(token)
 		return true
@@ -265,6 +311,7 @@ func handle_squadron_click(token: SquadronToken) -> bool:
 func dismiss() -> void:
 	_selecting = false
 	_target_selecting = false
+	_declaration_submission_pending = false
 	_clear_attacker_state()
 	_clear_target_state()
 	# Remove info panel.
@@ -338,6 +385,22 @@ func get_overlay() -> AttackSimOverlay:
 ## Returns the squadron-token callable for exec-mode iteration.
 func get_squadron_tokens_callable() -> Callable:
 	return _get_squadron_tokens
+
+
+## Resolves a canonical ship model reference to its presentation token.
+func ship_token_for_instance(instance: ShipInstance) -> ShipToken:
+	for token: ShipToken in _get_ship_tokens.call():
+		if token.get_ship_instance() == instance:
+			return token
+	return null
+
+
+## Resolves a canonical squadron model reference to its presentation token.
+func squadron_token_for_instance(instance: SquadronInstance) -> SquadronToken:
+	for token: SquadronToken in _get_squadron_tokens.call():
+		if token.get_squadron_instance() == instance:
+			return token
+	return null
 
 
 ## Clears defender state. Used by exec code during auto-skip flows.
@@ -552,15 +615,30 @@ func _handle_target_ship_click(token: ShipToken) -> void:
 	if zone < 0:
 		_log.debug("Target click outside ship base — ignored.")
 		return
-	# Post-roll guard: once dice have actually been rolled, the attack is
-	# committed — block all target clicks.  Before rolling, the normal
-	# selection / deselection path handles target changes.
-	if _state.exec_mode and _state.dice_results.size() > 0:
+	_try_select_target_ship_zone(token, zone)
+
+
+func _active_current_attack() -> CurrentAttackState:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return null
+	var attack: CurrentAttackState = game_state.current_attack_state
+	return attack if attack != null and attack.active else null
+
+
+## Runs the production ship-target selection after pointer hit-testing has
+## resolved a concrete hull zone. Kept separate so keyboard/controller input
+## and tests exercise the identical legality-to-preview path.
+func _try_select_target_ship_zone(token: ShipToken, zone: int) -> void:
+	if _declaration_submission_pending or _active_current_attack() != null:
 		return
 	var reject: String = _validate_target_ship_click(token, zone)
 	if reject != "":
 		return
-	# New target selected.
+	_select_ship_target(token, zone)
+
+
+func _select_ship_target(token: ShipToken, zone: int) -> void:
 	var zone_name: String = _ZONE_NAMES.get(zone, "UNKNOWN")
 	var ship_name: String = ""
 	if token.get_ship_data():
@@ -638,6 +716,15 @@ func _validate_target_ship_click(token: ShipToken,
 				arc_parts, token, zone):
 			return _reject_target("Target rejected: not in arc.",
 					"Defender is not in arc.", "not_in_arc")
+	if _is_standard_squadron_execution():
+		var candidate: Dictionary = _resolve_authoritative_squadron_candidate(
+				token, null, zone)
+		if candidate.is_empty():
+			return _reject_target(
+					"Attack exec: ship hull zone is not an authoritative candidate.",
+					"That hull zone is not a legal target.",
+					"not_authoritative_candidate")
+		_authoritative_squadron_candidate = candidate
 	return ""
 
 
@@ -714,15 +801,15 @@ func _get_attacker_faction() -> Constants.Faction:
 ## Requirements: AS-TGT-010–012, AS-TGT-020–021, AS-ARC-001–002.
 func _handle_target_squadron_click(
 		token: SquadronToken) -> void:
-	# Post-roll guard: once dice have actually been rolled, the attack is
-	# committed — block all target clicks.  Before rolling, the normal
-	# selection / deselection path handles target changes.
-	if _state.exec_mode and _state.dice_results.size() > 0:
+	if _declaration_submission_pending or _active_current_attack() != null:
 		return
 	var reject: String = _validate_target_squadron_click(token)
 	if reject != "":
 		return
-	# New target selected.
+	_select_squadron_target(token)
+
+
+func _select_squadron_target(token: SquadronToken) -> void:
 	var inst: SquadronInstance = token.get_squadron_instance()
 	var squad_name: String = "Squadron"
 	if inst and inst.squadron_data:
@@ -798,7 +885,70 @@ func _validate_target_squadron_click(
 	# Already-attacked guard (Step 6, AE-SQ-002).
 	if _state.exec_mode and token in _state.attacked_squads:
 		return _reject_already_attacked_squad(token)
+	if _is_standard_squadron_execution():
+		var candidate: Dictionary = _resolve_authoritative_squadron_candidate(
+				null, token, -1)
+		if candidate.is_empty():
+			return _reject_target(
+					"Attack exec: squadron is not an authoritative candidate.",
+					"That squadron is not a legal target.",
+					"not_authoritative_candidate")
+		_authoritative_squadron_candidate = candidate
 	return ""
+
+
+func _is_standard_squadron_execution() -> bool:
+	return _state.exec_mode and _state.squad_exec_mode \
+			and _state.attack_kind \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD \
+			and _state.exec_squad_token != null
+
+
+## Resolves one clicked scene token back to exact canonical owner-local
+## identities, then asks the same authoritative targeting surface used by
+## BeginAttackCommand for the candidate. Display names and child ordering are
+## deliberately excluded from the lookup.
+func _resolve_authoritative_squadron_candidate(
+		ship_target: ShipToken,
+		squadron_target: SquadronToken,
+		defender_zone: int) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or _state.exec_squad_token == null:
+		return {}
+	var attacker: SquadronInstance = \
+			_state.exec_squad_token.get_squadron_instance()
+	if attacker == null:
+		return {}
+	var attacker_index: int = game_state.find_squadron_index(attacker)
+	if attacker_index < 0:
+		return {}
+	var defender: RefCounted = null
+	var defender_kind: String = ""
+	if ship_target != null:
+		defender = ship_target.get_ship_instance()
+		defender_kind = CurrentAttackState.KIND_SHIP
+	elif squadron_target != null:
+		defender = squadron_target.get_squadron_instance()
+		defender_kind = CurrentAttackState.KIND_SQUADRON
+	if defender == null:
+		return {}
+	var defender_index: int = -1
+	var defender_player: int = -1
+	if defender is ShipInstance:
+		var ship: ShipInstance = defender as ShipInstance
+		defender_index = game_state.find_ship_index(ship)
+		defender_player = ship.owner_player
+	elif defender is SquadronInstance:
+		var squadron: SquadronInstance = defender as SquadronInstance
+		defender_index = game_state.find_squadron_index(squadron)
+		defender_player = squadron.owner_player
+	if defender_index < 0:
+		return {}
+	return TargetingListBuilder.authoritative_attack_entry(
+			game_state,
+			attacker.owner_player, CurrentAttackState.KIND_SQUADRON,
+			attacker_index, -1,
+			defender_player, defender_kind, defender_index, defender_zone)
 
 
 func _attacker_must_target_engaged_squadron(
@@ -881,6 +1031,8 @@ func _clear_attacker_state() -> void:
 
 ## Clears stored target state.
 func _clear_target_state() -> void:
+	_declaration_candidate = {}
+	_authoritative_squadron_candidate = {}
 	_state.clear_defender()
 
 
@@ -907,6 +1059,8 @@ func _deselect_target() -> void:
 					_state.attacker_name, _state.attacker_zone_name)
 		else:
 			_panel.show_squadron_selected(_state.attacker_name)
+		if _state.exec_mode:
+			_panel.show_skip_attack_button()
 
 
 ## Deselects both attacker and target; returns to initial prompt.
@@ -940,6 +1094,8 @@ func _deselect_both() -> void:
 			_panel.show_initial_attack_exec(ship_name)
 		else:
 			_panel.show_initial()
+		if _state.exec_mode:
+			_panel.show_skip_attack_button()
 
 
 # ===========================================================================
@@ -964,14 +1120,35 @@ func _compute_and_show_los() -> void:
 	var range_band: String = Constants.RANGE_BAND_BEYOND
 	if range_distance < INF:
 		range_band = GameScale.get_range_band(range_distance)
+	# A standard squadron execution was admitted only through the canonical
+	# targeting candidate. Use that same derived range/obstruction output for
+	# presentation and Begin payload construction; live geometry remains only
+	# for drawing endpoints.
+	if _is_standard_squadron_execution() \
+			and not _authoritative_squadron_candidate.is_empty():
+		range_band = str(_authoritative_squadron_candidate.get(
+				"range_band", Constants.RANGE_BAND_BEYOND))
+		_state.obstructed = bool(_authoritative_squadron_candidate.get(
+				"obstructed", false))
+		if _state.obstructed:
+			status = AttackSimOverlay.LOSStatus.OBSTRUCTED
+			var obstructed_by: Array = _authoritative_squadron_candidate.get(
+					"obstructed_by", []) as Array
+			los_text = "Obstructed"
+			if not obstructed_by.is_empty():
+				los_text += " by %s" % ", ".join(obstructed_by)
+		else:
+			status = AttackSimOverlay.LOSStatus.CLEAR
+			los_text = "Clear"
 	_log.info("Range: %s (%.0f px)." % [range_band, range_distance])
 	_update_los_overlay_and_panel(
 			los_info["atk_pt"], los_info["def_pt"], status, los_text,
 			range_data, range_distance, range_band)
 
 
-## Updates overlay visuals and panel with LOS/range results.
-## In execution mode, emits [signal target_locked] so AE can begin dice.
+## Updates overlay visuals and panel with LOS/range results. In execution mode,
+## installs the complete transient declaration candidate and presents explicit
+## declaration confirmation without submitting a command.
 func _update_los_overlay_and_panel(atk_pt: Vector2, def_pt: Vector2,
 		status: int, los_text: String, range_data: Dictionary,
 		range_distance: float, range_band: String) -> void:
@@ -995,7 +1172,69 @@ func _update_los_overlay_and_panel(atk_pt: Vector2, def_pt: Vector2,
 		var dice_text: String = _compute_dice_text(range_band)
 		_panel.show_dice_count(dice_text)
 		_log.info("Dice pool: %s." % dice_text)
-		target_locked.emit(range_band, dice_text)
+		_declaration_candidate = _build_declaration_candidate(range_band)
+		if not _declaration_candidate.is_empty():
+			_panel.show_declaration_confirm_button()
+
+
+## Builds stable owner-local declaration intent from the selected model
+## participants. Preview range and obstruction remain advisory and are
+## revalidated by BeginAttackCommand.
+func _build_declaration_candidate(range_band: String) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return {}
+	var attacker_player: int = -1
+	var attacker_kind: String = ""
+	var attacker_index: int = -1
+	if _state.attacker_ship:
+		var attacker_ship: ShipInstance = _state.attacker_ship.get_ship_instance()
+		if attacker_ship == null:
+			return {}
+		attacker_player = attacker_ship.owner_player
+		attacker_kind = CurrentAttackState.KIND_SHIP
+		attacker_index = game_state.find_ship_index(attacker_ship)
+	elif _state.attacker_squadron:
+		var attacker_squadron: SquadronInstance = \
+				_state.attacker_squadron.get_squadron_instance()
+		if attacker_squadron == null:
+			return {}
+		attacker_player = attacker_squadron.owner_player
+		attacker_kind = CurrentAttackState.KIND_SQUADRON
+		attacker_index = game_state.find_squadron_index(attacker_squadron)
+	var defender_player: int = -1
+	var defender_kind: String = ""
+	var defender_index: int = -1
+	if _state.defender_ship:
+		var defender_ship: ShipInstance = _state.defender_ship.get_ship_instance()
+		if defender_ship == null:
+			return {}
+		defender_player = defender_ship.owner_player
+		defender_kind = CurrentAttackState.KIND_SHIP
+		defender_index = game_state.find_ship_index(defender_ship)
+	elif _state.defender_squadron:
+		var defender_squadron: SquadronInstance = \
+				_state.defender_squadron.get_squadron_instance()
+		if defender_squadron == null:
+			return {}
+		defender_player = defender_squadron.owner_player
+		defender_kind = CurrentAttackState.KIND_SQUADRON
+		defender_index = game_state.find_squadron_index(defender_squadron)
+	if attacker_index < 0 or defender_index < 0:
+		return {}
+	return {
+		"attacker_player": attacker_player,
+		"attacker_kind": attacker_kind,
+		"attacker_index": attacker_index,
+		"attacker_zone": _state.attacker_zone,
+		"defender_player": defender_player,
+		"defender_kind": defender_kind,
+		"defender_index": defender_index,
+		"defender_zone": _state.defender_zone,
+		"attack_kind": _state.attack_kind,
+		"range_band": range_band,
+		"obstructed": _state.obstructed,
+	}
 
 
 ## Computes the dice pool text for the current attacker/target pair at the

@@ -5,6 +5,10 @@
 extends GutTest
 
 
+const CurrentAttackFixture: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 func before_each() -> void:
 	RuleRegistry.clear()
 	HeavyKeyword.register()
@@ -146,23 +150,36 @@ func test_swarm_reroll_command_updates_flow_payload() -> void:
 	state.current_phase = Constants.GamePhase.SQUADRON
 	state.rng = GameRng.new(7)
 	state.interaction_flow = _modify_flow(_one_blue_critical())
-	var command := RerollAttackDieCommand.new(0, {
-		"die_index": 0,
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:7",
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 1,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
 		"dice_results": _one_blue_critical(),
+	}), "Fixture should install canonical Swarm state")
+	var command := RerollAttackDieCommand.new(0, {
+		"attack_id": "attack:7",
+		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.BLUE),
+		"expected_face": int(Constants.DiceFace.CRITICAL),
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 	var result: Dictionary = command.execute(state)
 	assert_eq((result.get("dice_results", []) as Array).size(), 1,
 			"Reroll should preserve the dice-result count.")
-	assert_eq((state.interaction_flow.payload.get("dice_results", []) as Array).size(), 1,
-			"Reroll should update interaction-flow dice results.")
+	assert_eq(state.current_attack_state.dice_results.size(), 1,
+			"Reroll should update canonical current-attack dice results.")
 
 
 func test_swarm_reroll_validate_unobstructed_partner_allows() -> void:
 	var state: GameState = _state_with_swarm_partner(false)
 	var command := RerollAttackDieCommand.new(1, {
+		"attack_id": state.current_attack_state.attack_id,
 		"die_index": 0,
-		"dice_results": _one_blue_critical(),
+		"expected_color": int(Constants.DiceColor.BLUE),
+		"expected_face": int(Constants.DiceFace.CRITICAL),
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 	assert_eq(command.validate(state), "",
@@ -172,8 +189,10 @@ func test_swarm_reroll_validate_unobstructed_partner_allows() -> void:
 func test_swarm_reroll_validate_obstructed_partner_rejects() -> void:
 	var state: GameState = _state_with_swarm_partner(true)
 	var command := RerollAttackDieCommand.new(1, {
+		"attack_id": state.current_attack_state.attack_id,
 		"die_index": 0,
-		"dice_results": _one_blue_critical(),
+		"expected_color": int(Constants.DiceColor.BLUE),
+		"expected_face": int(Constants.DiceFace.CRITICAL),
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 	assert_eq(command.validate(state), "Swarm reroll is not eligible.",
@@ -215,6 +234,15 @@ func _state_with_swarm_partner(obstructed: bool) -> GameState:
 	if obstructed:
 		_add_obstructing_ship_pixels(state, _midpoint(target_pos, friendly_pos))
 	state.interaction_flow = _swarm_modify_flow()
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:11",
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 0,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": _one_blue_critical(),
+	}), "Fixture should install canonical Swarm state")
 	return state
 
 

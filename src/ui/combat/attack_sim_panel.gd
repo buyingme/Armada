@@ -54,6 +54,10 @@ signal counter_attack_skipped()
 ## Requirements: AE-CONF-001.
 signal confirm_pressed()
 
+## Emitted when the player explicitly confirms the current transient
+## declaration candidate. Distinct from later dice confirmation.
+signal declaration_confirm_pressed()
+
 ## Emitted when the player presses "Skip Attack".
 ## Requirements: AE-SKIP-001.
 signal skip_attack_pressed()
@@ -174,6 +178,8 @@ var _cf_token_reroll_button: Button = null
 var _cf_token_skip_button: Button = null
 ## "Confirm" button — finalises the attack.
 var _confirm_button: Button = null
+## Whether the shared visual button currently represents declaration Confirm.
+var _confirm_is_declaration: bool = false
 ## "Skip Attack" button — skips the entire attack.
 var _skip_attack_button: Button = null
 ## Confirmation prompt shown after pressing "Skip Attack".
@@ -1038,6 +1044,7 @@ func _null_defense_step_refs() -> void:
 
 ## Resets selection/state tracking variables.
 func _reset_selection_state() -> void:
+	_confirm_is_declaration = false
 	_accuracy_locked_indices.clear()
 	_accuracy_budget = 0
 	_defense_selected_indices.clear()
@@ -1361,6 +1368,19 @@ func _on_counter_skip() -> void:
 ## Requirements: AE-CONF-001.
 func show_confirm_button() -> void:
 	if _confirm_button:
+		_confirm_is_declaration = false
+		_confirm_button.text = "Confirm"
+		_confirm_button.disabled = false
+		_confirm_button.visible = true
+
+
+## Shows the explicit declaration Confirm without conflating it with later
+## attack-dice confirmation.
+func show_declaration_confirm_button() -> void:
+	if _confirm_button:
+		_confirm_is_declaration = true
+		_confirm_button.text = "Confirm Attack"
+		_confirm_button.disabled = false
 		_confirm_button.visible = true
 
 
@@ -1368,6 +1388,21 @@ func show_confirm_button() -> void:
 func hide_confirm_button() -> void:
 	if _confirm_button:
 		_confirm_button.visible = false
+		_confirm_button.disabled = false
+	_confirm_is_declaration = false
+
+
+## Disables or restores declaration controls while Begin or declaration Skip
+## awaits its authoritative result.
+func set_declaration_submission_pending(pending: bool) -> void:
+	if _confirm_button and _confirm_is_declaration:
+		_confirm_button.disabled = pending
+	if _skip_attack_button:
+		_skip_attack_button.disabled = pending
+		if not pending and _attack_execution_mode:
+			_skip_attack_button.visible = true
+	if pending:
+		_hide_skip_confirm()
 
 
 ## Shows the "Skip Attack" button (resets any pending confirmation).
@@ -1375,6 +1410,7 @@ func hide_confirm_button() -> void:
 func show_skip_attack_button() -> void:
 	_hide_skip_confirm()
 	if _skip_attack_button:
+		_skip_attack_button.disabled = false
 		_skip_attack_button.visible = true
 
 
@@ -1383,11 +1419,15 @@ func hide_skip_attack_button() -> void:
 	_hide_skip_confirm()
 	if _skip_attack_button:
 		_skip_attack_button.visible = false
+		_skip_attack_button.disabled = false
 
 
 func _on_confirm_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
-	confirm_pressed.emit()
+	if _confirm_is_declaration:
+		declaration_confirm_pressed.emit()
+	else:
+		confirm_pressed.emit()
 
 
 ## Shows the "Really skip attack?" confirmation instead of

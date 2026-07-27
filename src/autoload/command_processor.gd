@@ -43,6 +43,8 @@ const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
 		preload("res://src/core/commands/command_applicability.gd")
 const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const CURRENT_ATTACK_CONTINUATION: GDScript = preload(
+		"res://src/core/state/current_attack_continuation.gd")
 
 
 ## Emitted after a command has been successfully validated and executed.
@@ -87,10 +89,16 @@ func _ready() -> void:
 	SpendTokenCommand.register()
 	SpendDialCommand.register()
 	# Tier 2 — attack commands.
+	BeginAttackCommand.register()
+	ResolveAttackPoolChoiceCommand.register()
+	UseConcentrateFireDialCommand.register()
+	DeclineConcentrateFireDialCommand.register()
 	RollDiceCommand.register()
+	CommitAccuracyCommand.register()
 	SpendDefenseTokenCommand.register()
 	SelectRedirectZoneCommand.register()
 	SkipAttackCommand.register()
+	CompleteAttackCommand.register()
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
 	ExecuteManeuverCommand.register()
@@ -236,25 +244,17 @@ func _submit(command: GameCommand,
 		return _reject_command(command, reason, game_state, execution_mode)
 	var result: Dictionary = _execute_and_record(
 			command, game_state, execution_mode)
+	var execution_failure: String = _execution_failure_reason(result)
+	if not execution_failure.is_empty():
+		return _reject_command(
+				command, execution_failure, game_state, execution_mode)
 	if collect_observers \
 			and execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
 			and not is_replaying:
 			_collect_observer_followups(
 					command, result, game_state, flow_snapshot)
-	var timing_result: Dictionary = TIMING_WINDOW_ORCHESTRATOR \
-			.process_successful_command(
-					game_state, command, result, execution_mode)
-	if not bool(timing_result.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
-		_log.warn("Timing-window orchestration failed after [%s]: %s" % [
-				command.command_type,
-				str(timing_result.get(
-						TIMING_WINDOW_ORCHESTRATOR.KEY_REASON,
-						"unknown failure")),
-		])
-	var continuation: GameCommand = timing_result.get(
-			TIMING_WINDOW_ORCHESTRATOR.KEY_CONTINUATION) as GameCommand
-	if continuation != null:
-		_observer_followups.append(continuation)
+	_enqueue_post_success_continuation(
+			game_state, command, result, execution_mode)
 	if not is_replaying:
 		command_executed.emit(command, result)
 		if drain_followups \
@@ -262,6 +262,59 @@ func _submit(command: GameCommand,
 						== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
 			drain_observer_followups()
 	return result
+
+
+func _enqueue_post_success_continuation(game_state: GameState,
+		command: GameCommand,
+		result: Dictionary,
+		execution_mode: String) -> void:
+	var timing: GameCommand = _timing_continuation(
+			game_state, command, result, execution_mode)
+	var attack: GameCommand = _attack_continuation(
+			game_state, command, result, execution_mode)
+	if timing != null and attack != null:
+		_log.warn("Conflicting post-success continuations after [%s]." %
+				command.command_type)
+	elif timing != null:
+		_observer_followups.append(timing)
+	elif attack != null:
+		_observer_followups.append(attack)
+
+
+func _timing_continuation(game_state: GameState,
+		command: GameCommand,
+		result: Dictionary,
+		execution_mode: String) -> GameCommand:
+	var processed: Dictionary = TIMING_WINDOW_ORCHESTRATOR \
+			.process_successful_command(
+					game_state, command, result, execution_mode)
+	if not bool(processed.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
+		_log.warn("Timing-window orchestration failed after [%s]: %s" % [
+			command.command_type,
+			str(processed.get(
+					TIMING_WINDOW_ORCHESTRATOR.KEY_REASON,
+					"unknown failure")),
+		])
+	return processed.get(
+			TIMING_WINDOW_ORCHESTRATOR.KEY_CONTINUATION) as GameCommand
+
+
+func _attack_continuation(game_state: GameState,
+		command: GameCommand,
+		result: Dictionary,
+		execution_mode: String) -> GameCommand:
+	var processed: Dictionary = CURRENT_ATTACK_CONTINUATION \
+			.process_successful_command(
+					game_state, command, result, execution_mode)
+	if not bool(processed.get(CURRENT_ATTACK_CONTINUATION.KEY_OK, false)):
+		_log.warn("Current-attack continuation failed after [%s]: %s" % [
+			command.command_type,
+			str(processed.get(
+					CURRENT_ATTACK_CONTINUATION.KEY_REASON,
+					"unknown failure")),
+		])
+	return processed.get(
+			CURRENT_ATTACK_CONTINUATION.KEY_CONTINUATION) as GameCommand
 
 
 ## Returns the complete ordered history of executed commands.
@@ -316,6 +369,14 @@ func create_replay() -> GameReplay:
 	if game_state == null:
 		_log.warn("create_replay: no active game state.")
 		return null
+	# Slice 8A only has a production reconstruction seam for full-history
+	# replay capture. A non-zero history start requires an accepted canonical
+	# initial state paired with the cursor; do not emit an unpaired artifact.
+	if (_history.is_empty() and _next_sequence > 0) \
+			or (not _history.is_empty() and _history[0].sequence != 0):
+		_log.warn("create_replay: reconstructed-state capture is unsupported " \
+				+ "without a paired initial GameState.")
+		return null
 	var replay := GameReplay.new()
 	var rng_seed: int = 0
 	if game_state.rng:
@@ -328,7 +389,8 @@ func create_replay() -> GameReplay:
 			GameManager.get_scenario_id(),
 			rng_seed,
 			factions,
-			game_state.initiative_player)
+			game_state.initiative_player,
+			0)
 	replay.set_commands(serialize_history())
 	return replay
 
@@ -388,15 +450,32 @@ func _snapshot_flow(game_state: GameState) -> InteractionFlow:
 func _execute_and_record(command: GameCommand,
 		game_state: GameState,
 		execution_mode: String) -> Dictionary:
-	if execution_mode == TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY:
+	var allocated_live_sequence: bool = execution_mode \
+			== TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY
+	if allocated_live_sequence:
 		command.sequence = _next_sequence
 	var result: Dictionary = command.execute(game_state)
+	if not _execution_failure_reason(result).is_empty():
+		if allocated_live_sequence:
+			command.sequence = -1
+		return result
 	_log.info("Executed [%s] seq=%d player=%d." % [
 			command.command_type, command.sequence,
 			command.player_index])
 	_history.append(command)
 	_next_sequence += 1
 	return result
+
+
+func _execution_failure_reason(result: Dictionary) -> String:
+	if result.is_empty():
+		return "Command execution returned no result."
+	for key: String in ["ok", "success", "accepted"]:
+		if result.has(key) and typeof(result.get(key)) == TYPE_BOOL \
+				and not bool(result.get(key)):
+			return str(result.get(
+					"reason", "Command execution reported failure."))
+	return ""
 
 
 func _validate_sequence_for_mode(command: GameCommand,

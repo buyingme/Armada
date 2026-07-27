@@ -5,6 +5,10 @@
 extends GutTest
 
 
+const CurrentAttackFixture: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 func test_counter_choice_validate_accepts_controller() -> void:
 	var state: GameState = _counter_choice_state()
 	var command := CounterChoiceCommand.new(1, _counter_choice_payload(true))
@@ -34,6 +38,7 @@ func test_counter_choice_validate_rejects_missing_identity() -> void:
 func test_skip_attack_modifier_validate_rejects_non_attacker() -> void:
 	var state: GameState = _swarm_modify_state(true)
 	var command := SkipAttackModifierCommand.new(0, {
+		"attack_id": state.current_attack_state.attack_id,
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 
@@ -44,6 +49,7 @@ func test_skip_attack_modifier_validate_rejects_non_attacker() -> void:
 func test_skip_attack_modifier_validate_rejects_no_pending_swarm() -> void:
 	var state: GameState = _swarm_modify_state(false)
 	var command := SkipAttackModifierCommand.new(1, {
+		"attack_id": state.current_attack_state.attack_id,
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 
@@ -51,17 +57,19 @@ func test_skip_attack_modifier_validate_rejects_no_pending_swarm() -> void:
 			"Swarm skip command requires the projected Swarm affordance.")
 
 
-func test_confirm_attack_dice_validate_requires_dice_results() -> void:
-	var state: GameState = _confirm_state([])
+func test_confirm_attack_dice_validate_requires_current_attack() -> void:
+	var state: GameState = _base_state()
 	var command := ConfirmAttackDiceCommand.new(1, {})
 
-	assert_eq(command.validate(state), "No attack dice results to confirm.",
-			"Confirm command should reject an empty dice-result payload.")
+	assert_eq(command.validate(state), "No current attack.",
+			"Confirm command should reject when canonical attack state is absent.")
 
 
 func test_confirm_attack_dice_validate_rejects_non_attacker() -> void:
 	var state: GameState = _confirm_state(_one_blue_hit())
-	var command := ConfirmAttackDiceCommand.new(0, {})
+	var command := ConfirmAttackDiceCommand.new(0, {
+		"attack_id": state.current_attack_state.attack_id,
+	})
 
 	assert_eq(command.validate(state),
 			"Attack dice confirmation belongs to player 1.",
@@ -97,6 +105,16 @@ func _counter_choice_payload(accepted: bool) -> Dictionary:
 
 func _swarm_modify_state(available: bool) -> GameState:
 	var state: GameState = _base_state()
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:8",
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 0,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON \
+				if available else CurrentAttackState.KIND_SHIP,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": _one_blue_hit(),
+	}), "Fixture should install canonical Swarm state")
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
@@ -109,6 +127,15 @@ func _swarm_modify_state(available: bool) -> GameState:
 
 func _confirm_state(dice_results: Array[Dictionary]) -> GameState:
 	var state: GameState = _base_state()
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:9",
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 0,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": dice_results,
+	}), "Fixture should install canonical confirmation state")
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,

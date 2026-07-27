@@ -13,9 +13,15 @@ var _executor: AttackExecutor = null
 var _ship_data: ShipData = null
 var _ship_instance: ShipInstance = null
 var _ship_token: ShipToken = null
+var _saved_play_mode: PlayMode.Mode = PlayMode.Mode.HOT_SEAT
+var _saved_network_role: NetworkManager.Role = NetworkManager.Role.NONE
+var _saved_is_replaying: bool = false
 
 
 func before_each() -> void:
+	_saved_play_mode = PlayMode.current_mode
+	_saved_network_role = NetworkManager.role
+	_saved_is_replaying = CommandProcessor.is_replaying
 	_executor = AttackExecutor.new()
 	add_child_autofree(_executor)
 	_ship_data = ShipData.new()
@@ -26,6 +32,12 @@ func before_each() -> void:
 	_ship_data.command_value = 2
 	_ship_token = ShipToken.new()
 	add_child_autofree(_ship_token)
+
+
+func after_each() -> void:
+	PlayMode.current_mode = _saved_play_mode
+	NetworkManager.role = _saved_network_role
+	CommandProcessor.is_replaying = _saved_is_replaying
 
 
 ## Helper: creates a ShipInstance from the current _ship_data and binds it.
@@ -172,63 +184,78 @@ func test_sort_null_defender_returns_original() -> void:
 
 
 # =========================================================================
-# Brace Immediate Application
+# Brace Canonical Projection
 # =========================================================================
 
-func test_brace_halves_even_damage() -> void:
-	## 4 damage → Brace → 2.
+func test_brace_projection_preserves_even_canonical_damage() -> void:
+	## Canonical state already derived 4 damage; scene must not halve again.
 	_setup_tokens(["Brace"])
 	_executor._state.modified_damage = 4
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._state.modified_damage, 2,
-			"Brace should halve 4 damage to 2")
+	assert_eq(_executor._state.modified_damage, 4,
+			"Scene projection must not apply Brace a second time")
 	assert_true(_executor._state.brace_used,
 			"Brace used flag should be set")
 
 
-func test_brace_halves_odd_damage_rounds_up() -> void:
-	## 5 damage → Brace → 3 (ceil(2.5)).
+func test_brace_projection_preserves_odd_canonical_damage() -> void:
+	## Canonical state already derived 5 damage; scene must not halve again.
 	_setup_tokens(["Brace"])
 	_executor._state.modified_damage = 5
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._state.modified_damage, 3,
-			"Brace should halve 5 damage to 3 (rounded up)")
+	assert_eq(_executor._state.modified_damage, 5,
+			"Scene projection must preserve canonical derived damage")
 
 
-func test_brace_on_one_damage() -> void:
-	## 1 damage → Brace → 1 (ceil(0.5)).
+func test_brace_projection_preserves_one_canonical_damage() -> void:
+	## The canonical projection has already resolved Brace.
 	_setup_tokens(["Brace"])
 	_executor._state.modified_damage = 1
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
 	assert_eq(_executor._state.modified_damage, 1,
-			"Brace should halve 1 damage to 1 (rounded up)")
+			"Scene projection must preserve canonical derived damage")
 
 
-func test_brace_on_zero_damage() -> void:
-	## 0 damage → Brace → 0.
+func test_brace_projection_preserves_zero_canonical_damage() -> void:
+	## The canonical projection has already resolved Brace.
 	_setup_tokens(["Brace"])
 	_executor._state.modified_damage = 0
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
 	assert_eq(_executor._state.modified_damage, 0,
-			"Brace on 0 damage should remain 0")
+			"Scene projection must preserve canonical derived damage")
 
 
-func test_brace_then_redirect_sees_halved_total() -> void:
-	## Bug reproduction: 4 damage, Brace + Redirect.
-	## Brace should halve to 2 first; Redirect operates on 2.
+func test_brace_then_redirect_preserves_canonical_total() -> void:
+	## The projected total is already canonical before scene effects render.
 	_setup_tokens(["Brace", "Redirect"])
 	_executor._state.modified_damage = 4
-	# Apply Brace first (canonical order).
+	# Render Brace without recalculating it.
 	_executor._apply_defense_token_effect(
 			Constants.DefenseToken.BRACE, _ship_instance)
-	assert_eq(_executor._state.modified_damage, 2,
-			"After Brace, damage should be 2")
-	# The Redirect would now operate on 2, not 4.
-	# (Redirect itself is interactive, so we just verify the starting total.)
+	assert_eq(_executor._state.modified_damage, 4,
+			"Redirect must consume the canonical projected total unchanged")
+
+
+func test_only_live_authority_may_resume_canonical_defense_state() -> void:
+	PlayMode.current_mode = PlayMode.Mode.HOT_SEAT
+	CommandProcessor.is_replaying = false
+	assert_true(_executor._is_live_defense_authority(),
+			"Live hot-seat play may resume a canonical deterministic step")
+	CommandProcessor.is_replaying = true
+	assert_false(_executor._is_live_defense_authority(),
+			"Replay must only consume recorded commands")
+	CommandProcessor.is_replaying = false
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	assert_false(_executor._is_live_defense_authority(),
+			"A network mirror must only consume server-authored commands")
+	NetworkManager.role = NetworkManager.Role.SERVER
+	assert_true(_executor._is_live_defense_authority(),
+			"The live network authority should author follow-ups")
 
 
 func test_resolve_damage_no_deferred_brace() -> void:

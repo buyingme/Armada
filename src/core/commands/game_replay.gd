@@ -29,10 +29,10 @@ extends RefCounted
 
 
 ## Current replay file format version. Increment when the schema changes.
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 3
 
 ## Format version that introduced HMAC signing support.
-const SIGNED_FORMAT_VERSION: int = 2
+const SIGNED_FORMAT_VERSION: int = FORMAT_VERSION
 
 ## Default directory for replay files.
 ## Resolved via [PathConfig]: in the editor it points at
@@ -66,13 +66,15 @@ func _init() -> void:
 ## [param factions] — array of faction identifiers per player index.
 ## [param initiative_player] — which player has initiative (0 or 1).
 func capture_header(scenario_id: String, rng_seed: int,
-		factions: Array, initiative_player: int = 0) -> void:
+		factions: Array, initiative_player: int = 0,
+		initial_command_sequence: int = 0) -> void:
 	header = {
 		"format_version": FORMAT_VERSION,
 		"scenario_id": scenario_id,
 		"rng_seed": rng_seed,
 		"factions": factions,
 		"initiative_player": initiative_player,
+		"initial_command_sequence": initial_command_sequence,
 		"timestamp": Time.get_datetime_string_from_system(true),
 		"app_version": ProjectSettings.get_setting(
 				"application/config/version", "unknown"),
@@ -101,7 +103,7 @@ func is_valid() -> bool:
 ## suitable for JSON encoding.
 func serialize() -> Dictionary:
 	return {
-		"header": header,
+		"header": _serialized_header(),
 		"commands": commands,
 	}
 
@@ -115,36 +117,111 @@ static func deserialize(data: Dictionary) -> GameReplay:
 	if not data.get("header") is Dictionary \
 			or not data.get("commands") is Array:
 		return null
-	var raw_commands: Array = data.get("commands") as Array
-	if not _has_contiguous_full_game_sequences(raw_commands):
+	var raw_header: Dictionary = data.get("header") as Dictionary
+	var format_value: Variant = _integral_json_integer(
+			raw_header.get("format_version"))
+	if format_value == null or int(format_value) != FORMAT_VERSION:
 		return null
+	var initial_value: Variant = _integral_json_integer(
+			raw_header.get("initial_command_sequence"))
+	var exact_seed: Variant = _exact_decimal_integer(raw_header.get("rng_seed"))
+	if initial_value == null or int(initial_value) < 0 or exact_seed == null:
+		return null
+	var initial_sequence: int = int(initial_value)
+	var raw_commands: Array = data.get("commands") as Array
 	var replay := GameReplay.new()
-	replay.header = (data["header"] as Dictionary).duplicate(true)
+	replay.header = raw_header.duplicate(true)
+	replay.header["format_version"] = int(format_value)
+	replay.header["initial_command_sequence"] = initial_sequence
+	replay.header["rng_seed"] = int(exact_seed)
+	if not _canonicalize_header_integer(replay.header, "initiative_player") \
+			or not _canonicalize_header_integer_array(replay.header, "factions"):
+		return null
 	for cmd_dict: Variant in raw_commands:
-		replay.commands.append((cmd_dict as Dictionary).duplicate(true))
+		if not cmd_dict is Dictionary:
+			return null
+		var canonical: Dictionary = GameCommand.canonicalize_serialized(
+				cmd_dict as Dictionary)
+		if canonical.is_empty():
+			return null
+		replay.commands.append(canonical)
+	if not _has_contiguous_sequences(replay.commands, initial_sequence):
+		return null
 	return replay
 
 
-static func _has_contiguous_full_game_sequences(raw_commands: Array) -> bool:
-	for expected_sequence: int in range(raw_commands.size()):
-		var raw_command: Variant = raw_commands[expected_sequence]
+static func _has_contiguous_sequences(raw_commands: Array,
+		initial_sequence: int) -> bool:
+	for offset: int in range(raw_commands.size()):
+		var raw_command: Variant = raw_commands[offset]
 		if not raw_command is Dictionary:
 			return false
 		var raw_sequence: Variant = (raw_command as Dictionary).get("sequence")
-		var sequence: int = _integral_sequence(raw_sequence)
-		if sequence != expected_sequence:
+		var sequence_value: Variant = _integral_json_integer(raw_sequence)
+		if sequence_value == null:
+			return false
+		var sequence: int = int(sequence_value)
+		if sequence != initial_sequence + offset:
 			return false
 	return true
 
 
-static func _integral_sequence(raw: Variant) -> int:
+static func _integral_json_integer(raw: Variant) -> Variant:
 	if typeof(raw) == TYPE_INT:
 		return int(raw)
 	if typeof(raw) == TYPE_FLOAT \
 			and is_finite(float(raw)) \
-			and float(raw) == floor(float(raw)):
+			and float(raw) == floor(float(raw)) \
+			and absf(float(raw)) <= 9007199254740991.0:
 		return int(raw)
-	return -1
+	return null
+
+
+static func _exact_decimal_integer(raw: Variant) -> Variant:
+	if typeof(raw) != TYPE_STRING:
+		return null
+	var encoded: String = raw as String
+	if not encoded.is_valid_int():
+		return null
+	var value: int = encoded.to_int()
+	if str(value) != encoded:
+		return null
+	return value
+
+
+static func _canonicalize_header_integer(values: Dictionary,
+		field: String) -> bool:
+	if not values.has(field):
+		return true
+	var canonical: Variant = _integral_json_integer(values.get(field))
+	if canonical == null:
+		return false
+	values[field] = canonical
+	return true
+
+
+static func _canonicalize_header_integer_array(values: Dictionary,
+		field: String) -> bool:
+	if not values.has(field):
+		return true
+	var raw: Variant = values.get(field)
+	if not raw is Array:
+		return false
+	var canonical_values: Array = (raw as Array).duplicate()
+	for index: int in range(canonical_values.size()):
+		var canonical: Variant = _integral_json_integer(canonical_values[index])
+		if canonical == null:
+			return false
+		canonical_values[index] = canonical
+	values[field] = canonical_values
+	return true
+
+
+func _serialized_header() -> Dictionary:
+	var result: Dictionary = header.duplicate(true)
+	if typeof(result.get("rng_seed")) == TYPE_INT:
+		result["rng_seed"] = str(result.get("rng_seed"))
+	return result
 
 
 ## Saves the replay to a JSON file on disk.
@@ -248,17 +325,17 @@ func is_signed() -> bool:
 ## representation of the replay data with the [code]hmac[/code] field
 ## removed from the header (so the signature does not cover itself).
 ## Uses sorted keys for deterministic output across save/load cycles.
-## Normalises via a JSON round-trip so that int/float representation
-## differences (Godot's JSON parser converts all numbers to float)
-## do not affect the digest.
+## Normalises via a JSON round-trip so dictionary ordering and JSON-safe
+## numeric representation do not affect the digest.  Exact large integers
+## have already been encoded as decimal strings by their owning boundary.
 func _build_signing_payload() -> String:
-	var header_copy: Dictionary = header.duplicate()
+	var header_copy: Dictionary = _serialized_header()
 	header_copy.erase("hmac")
 	var payload: Dictionary = {
 		"header": header_copy,
 		"commands": commands,
 	}
-	# Round-trip through JSON to normalise number types (int → float).
+	# Round-trip through JSON to normalise the persisted representation.
 	var raw: String = JSON.stringify(payload, "", true)
 	var json := JSON.new()
 	json.parse(raw)

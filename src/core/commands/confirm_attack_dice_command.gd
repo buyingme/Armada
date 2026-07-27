@@ -1,8 +1,6 @@
 ## ConfirmAttackDiceCommand
 ##
-## Marker command submitted by the attacking controller after attack dice and
-## optional attack modifiers are final. The attack pipeline reacts to the
-## broadcast result and advances to accuracy/defense/damage resolution.
+## Commits canonical attack dice after optional attack modifiers are final.
 ##
 ## Rules Reference: RRG "Attack", Steps 3-5, p.2.
 class_name ConfirmAttackDiceCommand
@@ -29,32 +27,75 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	var flow_error: String = _validate_attack_modify_flow(game_state)
-	if flow_error != "":
-		return flow_error
-	var dice_results: Array = game_state.interaction_flow.payload.get(
-			"dice_results", []) as Array
-	if dice_results.is_empty():
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return "No current attack."
+	var payload_attack_id: String = str(payload.get("attack_id",
+			payload.get(TimingWindowOrchestrator.COMMAND_KEY_SOURCE_ID, "")))
+	if attack.attack_id != payload_attack_id:
+		return "Stale current-attack identity."
+	if attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return "Current attack is not in Attack Modify."
+	if player_index != attack.attacker_player:
+		return "Attack dice confirmation belongs to player %d." \
+				% attack.attacker_player
+	if attack.dice_results.is_empty():
 		return "No attack dice results to confirm."
-	return ""
+	if attack.cf_token_resolution == CurrentAttackState.RESOLUTION_PENDING:
+		return "Concentrate Fire token choice is unresolved."
+	if game_state.timing_window_state.active:
+		return _validate_active_continuation(game_state, attack)
+	return _validate_inactive_direct_context()
 
 
 ## Echoes the attack identity for the attack pipeline reaction.
-func execute(_game_state: GameState) -> Dictionary:
-	return payload.duplicate(true)
+func execute(game_state: GameState) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var replacement: CurrentAttackState = attack.with_patch({
+		"stage": CurrentAttackState.STAGE_ACCURACY,
+	})
+	if replacement == null or not game_state.set_current_attack_state(replacement):
+		return {}
+	return {"attack_id": attack.attack_id, "dice_results": attack.dice_results}
 
 
-func _validate_attack_modify_flow(game_state: GameState) -> String:
-	var phase: Constants.GamePhase = game_state.current_phase
-	if phase != Constants.GamePhase.SHIP \
-			and phase != Constants.GamePhase.SQUADRON:
-		return "Not in Ship or Squadron Phase."
-	var flow: InteractionFlow = game_state.interaction_flow
-	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
-		return "No active attack flow."
-	if flow.step_id != Constants.InteractionStep.ATTACK_MODIFY:
-		return "Not in attack modify step."
-	var attacker: int = int(flow.payload.get("attacker_player", -1))
-	if player_index != attacker:
-		return "Attack dice confirmation belongs to player %d." % attacker
+func _validate_inactive_direct_context() -> String:
+	for key: String in [
+		TimingWindowOrchestrator.COMMAND_KEY_TIMING_WINDOW_ID,
+		TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID,
+		TimingWindowOrchestrator.COMMAND_KEY_SOURCE_ID,
+		TimingWindowOrchestrator.COMMAND_KEY_SOURCE_TYPE,
+	]:
+		if payload.has(key):
+			return "Inactive confirmation cannot carry timing lifecycle context."
+	return ""
+
+
+func _validate_active_continuation(game_state: GameState,
+		attack: CurrentAttackState) -> String:
+	var timing: TimingWindowState = game_state.timing_window_state
+	if timing.status != TimingWindowState.STATUS_CLOSING:
+		return "Timing lifecycle is not awaiting continuation."
+	if timing.timing_window_id != TimingWindowDefinitions.ATTACK_MODIFY \
+			or str(payload.get(
+					TimingWindowOrchestrator.COMMAND_KEY_TIMING_WINDOW_ID, "")) \
+					!= timing.timing_window_id:
+		return "Timing-window type does not match Attack Modify."
+	if str(payload.get(TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID, "")) \
+			!= timing.lifecycle_id:
+		return "Stale timing-window lifecycle identity."
+	if str(payload.get(TimingWindowOrchestrator.COMMAND_KEY_SOURCE_ID, "")) \
+			!= attack.attack_id \
+			or str(payload.get(
+					TimingWindowOrchestrator.COMMAND_KEY_SOURCE_TYPE, "")) \
+					!= "current_attack":
+		return "Timing continuation source does not match the current attack."
+	var context: Dictionary = timing.continuation_context
+	if str(context.get(TimingWindowState.CONTINUATION_KEY_SOURCE_ID, "")) \
+			!= attack.attack_id \
+			or int(context.get(
+					TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER, -1)) \
+					!= attack.attacker_player \
+			or timing.controller_player != attack.attacker_player:
+		return "Timing continuation context conflicts with the current attack."
 	return ""

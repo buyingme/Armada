@@ -26,6 +26,7 @@ extends Node
 var _attack_executor: AttackExecutor = null
 var _panel_mgr: UIPanelManager = null
 var _target_selector: TargetSelector = null
+var _activation_ctx: ActivationContext = null
 var _timing_window_submit_fn: Callable = Callable()
 
 
@@ -35,10 +36,12 @@ var _timing_window_submit_fn: Callable = Callable()
 func initialize(
 		attack_executor: AttackExecutor,
 		panel_mgr: UIPanelManager,
-		target_selector: TargetSelector) -> void:
+		target_selector: TargetSelector,
+		activation_ctx: ActivationContext = null) -> void:
 	_attack_executor = attack_executor
 	_panel_mgr = panel_mgr
 	_target_selector = target_selector
+	_activation_ctx = activation_ctx
 	EventBus.attack_simulator_requested.connect(
 			_on_attack_simulator_requested)
 
@@ -58,7 +61,32 @@ func initialize(
 func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
 		return
-	if _attack_executor == null or not _attack_executor.is_in_exec_mode():
+	if not _is_attack_pipeline_command(command):
+		return
+	if _attack_executor == null:
+		return
+	if not _owns_active_canonical_attack() \
+			and not _owns_terminal_attack_reaction(command):
+		_attack_executor.deactivate_primary_presentation()
+		return
+	if not _attack_executor.is_in_exec_mode():
+		return
+	if command.command_type == "begin_attack":
+		_attack_executor.apply_begin_attack_result(result)
+		return
+	if command.command_type == "resolve_attack_pool_choice":
+		if str(result.get("choice_kind", "")) \
+				== ResolveAttackPoolChoiceCommand.REASON_OBSTRUCTION:
+			_attack_executor.apply_obstruction_choice_result(result)
+		else:
+			_attack_executor.apply_attack_pool_choice_result(result)
+		return
+	if command.command_type in ["use_concentrate_fire_dial",
+			"decline_concentrate_fire_dial"]:
+		_attack_executor.apply_concentrate_fire_dial_result(result)
+		return
+	if command.command_type == "commit_accuracy":
+		_attack_executor.apply_accuracy_result(result)
 		return
 	# Phase I6b-3 R2: [CommitDefenseCommand] — drive the attacker peer
 	# through the spend pipeline.
@@ -69,6 +97,9 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		for raw_idx: Variant in indices_raw:
 			indices.append(int(raw_idx))
 		_attack_executor.apply_defender_commit(indices)
+		return
+	if command.command_type == "spend_defense_token":
+		_attack_executor.apply_defense_token_result(result)
 		return
 	# Phase I6b-3 R3: [SelectEvadeDieCommand] — drive the attacker peer
 	# through the remove-die / reroll-die pipeline.
@@ -110,31 +141,49 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		return
 	if command.command_type == "confirm_attack_dice":
 		_attack_executor.apply_remote_attack_confirm(command, result)
+		return
+	if command.command_type == "resolve_damage":
+		_attack_executor.apply_damage_result(result)
+		return
+	if command.command_type == "complete_attack":
+		_attack_executor.apply_complete_attack_result(result)
+		return
+	if command.command_type == "skip_attack":
+		_attack_executor.apply_skip_attack_result(result)
+
+
+## Routes a targeted authoritative rejection back to the transient declaration
+## coordinator. No projection or modal transition is synthesized.
+func react_to_command_rejection(
+		command: GameCommand, reason: String) -> void:
+	if command == null or _attack_executor == null:
+		return
+	if command.command_type not in ["begin_attack", "skip_attack"]:
+		return
+	if not _attack_executor.is_in_exec_mode():
+		return
+	_attack_executor.apply_declaration_command_rejection(command, reason)
 
 
 # ---------------------------------------------------------------------------
-# Read-only attack panel mirror (Phase I6b-3 R1b)
+# Attack panel mirror (Phase I6b-3)
 # ---------------------------------------------------------------------------
 
-## Opens or closes the read-only [AttackPanelMirror] on the non-attacker
-## peer based on the authoritative [InteractionFlow].
+## Opens or closes the [AttackPanelMirror] on the non-attacker peer based on
+## canonical attack ownership and the authoritative [InteractionFlow].
 ##
-## The same [AttackSimPanel] UI is rendered on the passive peer,
-## populated entirely from [member InteractionFlow.payload].  Input
-## signals are NEVER connected on the mirror — the panel is
-## informational.  Defender-driven input (defense-token toggle, evade
-## target, redirect zone) is migrated to commands separately.
+## The same [AttackSimPanel] UI is rendered on the non-attacker peer,
+## populated entirely from [member InteractionFlow.payload]. Only
+## defender-owned command inputs are connected on that mirror.
 ##
-## The mirror is shown when:
-##   * [code]flow.flow_type == Constants.InteractionFlow.ATTACK[/code]
-##   * the local viewer is **not** the attacker
-##     (either the published [code]attacker_player[/code] differs from
-##     [param local], or — defensively — the local executor is not in
-##     exec mode).
+## The mirror is the sole interactive attack presentation when the
+## authenticated local player differs from
+## [member CurrentAttackState.attacker_player]. The primary executor is
+## deactivated before the mirror is opened.
 ##
 ## Hot-seat is filtered out by the network-peer guard at the call site in
 ## [ModalRouter].
-func sync_mirror_from_flow(flow: InteractionFlow, local: int) -> void:
+func sync_mirror_from_flow(flow: InteractionFlow) -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
 		return
 	var is_attack: bool = (flow != null
@@ -142,30 +191,88 @@ func sync_mirror_from_flow(flow: InteractionFlow, local: int) -> void:
 	if not is_attack:
 		_panel_mgr.attack_panel_mirror.close()
 		return
-	var attacker_player: int = int(
-			flow.payload.get("attacker_player", -1))
-	var local_is_attacker: bool = _local_is_published_attacker(
-			attacker_player, local)
-	# Defensive fall-back when the identity patch hasn't been applied yet
-	# (very early in the flow): treat the local executor's exec-mode as
-	# the source of truth.
-	if attacker_player < 0 and _attack_executor != null \
-			and _attack_executor.is_in_exec_mode():
-		local_is_attacker = true
-	if local_is_attacker and _local_executor_owns_attack():
+	if not _has_active_canonical_attack():
+		if _owns_pre_begin_ship_attack_presentation(flow):
+			_panel_mgr.attack_panel_mirror.close()
+			return
+		if _attack_executor != null:
+			_attack_executor.deactivate_primary_presentation()
 		_panel_mgr.attack_panel_mirror.close()
 		return
+	if _owns_active_canonical_attack():
+		_panel_mgr.attack_panel_mirror.close()
+		return
+	if _attack_executor != null:
+		_attack_executor.deactivate_primary_presentation()
 	_panel_mgr.attack_panel_mirror.apply_flow(
 			flow.payload, int(flow.step_id))
 
 
-func _local_is_published_attacker(attacker_player: int,
-		local: int) -> bool:
-	return attacker_player >= 0 and attacker_player == local
+func _owns_active_canonical_attack() -> bool:
+	if not _has_active_canonical_attack():
+		return false
+	var attack: CurrentAttackState = \
+			GameManager.current_game_state.current_attack_state
+	var local: int = NetworkManager.get_local_player_index()
+	return local < 0 or local == attack.attacker_player
 
 
-func _local_executor_owns_attack() -> bool:
-	return _attack_executor != null and _attack_executor.is_in_exec_mode()
+func _has_active_canonical_attack() -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return false
+	var attack: CurrentAttackState = game_state.current_attack_state
+	return attack != null and attack.active
+
+
+## Returns whether this peer owns the transient ship target-selection
+## presentation before BeginAttack creates canonical CurrentAttackState.
+## This gates presentation lifecycle only; semantic command authority remains
+## on authoritative command validation.
+func _owns_pre_begin_ship_attack_presentation(
+		flow: InteractionFlow) -> bool:
+	if flow == null \
+			or flow.flow_type != Constants.InteractionFlow.ATTACK \
+			or flow.step_id != Constants.InteractionStep.ATTACK_DECLARE:
+		return false
+	if _activation_ctx == null or not _activation_ctx.is_active():
+		return false
+	var activation: ShipActivationState = \
+			_activation_ctx.ship_activation_state
+	if activation == null \
+			or not activation.is_at_step(ShipActivationState.Step.ATTACK):
+		return false
+	var token: ShipToken = _activation_ctx.activating_ship_token
+	var ship: ShipInstance = token.get_ship_instance() \
+			if token != null else null
+	if ship == null or activation.get_ship() != ship:
+		return false
+	if GameManager.get_activating_ship() != ship \
+			or GameManager.get_active_player() != ship.owner_player:
+		return false
+	var local: int = NetworkManager.get_local_player_index()
+	return local >= 0 \
+			and local == ship.owner_player \
+			and flow.controller_player == ship.owner_player
+
+
+func _owns_terminal_attack_reaction(command: GameCommand) -> bool:
+	if command.command_type not in ["complete_attack", "skip_attack"]:
+		return false
+	var local: int = NetworkManager.get_local_player_index()
+	return local < 0 or local == command.player_index
+
+
+func _is_attack_pipeline_command(command: GameCommand) -> bool:
+	return command.command_type in [
+		"begin_attack", "resolve_attack_pool_choice",
+		"use_concentrate_fire_dial", "decline_concentrate_fire_dial",
+		"commit_accuracy", "commit_defense", "spend_defense_token",
+		"select_evade_die", "select_redirect_zone", "redirect_done",
+		"resolve_immediate_effect", "counter_choice", "roll_dice",
+		"reroll_attack_die", "skip_attack_modifier", "confirm_attack_dice",
+		"resolve_damage", "complete_attack", "skip_attack",
+	]
 
 
 ## Closes the read-only [AttackPanelMirror] if it exists.
@@ -193,7 +300,11 @@ func sync_timing_window_projection(
 	if timing_window.is_empty():
 		return
 	var interactive: bool = bool(timing_window.get("is_interactive", false))
-	var panel: AttackSimPanel = primary_panel if interactive else mirror_panel
+	var panel: AttackSimPanel = null
+	if _has_active_canonical_attack():
+		panel = primary_panel if _owns_active_canonical_attack() else mirror_panel
+	else:
+		panel = primary_panel if interactive else mirror_panel
 	if panel == null:
 		panel = mirror_panel if mirror_panel != null else primary_panel
 	if panel == null:

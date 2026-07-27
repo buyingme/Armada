@@ -1,7 +1,8 @@
 ## AttackState
 ##
-## Shared [RefCounted] context that holds mutable state for the current
-## attack flow — analogous to [ActivationContext] for ship activations.
+## Shared [RefCounted] scene projection for the current attack presentation
+## and post-Begin interaction flow. It is not the transient declaration
+## candidate owner and is never command or gameplay authority.
 ##
 ## [b]F5a[/b] creates this class; [b]F5b[/b] migrates [AttackExecutor]
 ## member variables here.  Controllers and sub-systems receive a reference

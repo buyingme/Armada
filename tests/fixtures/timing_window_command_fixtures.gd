@@ -94,11 +94,12 @@ class OpenFixtureWindowCommand extends GameCommand:
 		return ""
 
 	func execute(game_state: GameState) -> Dictionary:
+		var attack: CurrentAttackState = game_state.current_attack_state
 		var context: Dictionary = {
 			TimingWindowState.CONTINUATION_KEY_ID: CONTINUATION_TYPE,
 			TimingWindowState.CONTINUATION_KEY_RESUME_POINT:
 					"attack_after_modify",
-			TimingWindowState.CONTINUATION_KEY_SOURCE_ID: "fixture-attack",
+			TimingWindowState.CONTINUATION_KEY_SOURCE_ID: attack.attack_id,
 			TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
 			TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: player_index,
 		}

@@ -11,12 +11,15 @@ const COMMAND_ROUTER_ADAPTER_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/command_router_adapter.gd")
 const MODAL_ROUTER_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/modal_router.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 
 class StubShipActivationController:
 	extends "res://src/scenes/game_board/ship_activation_controller.gd"
 
 	var close_calls: int = 0
+	var dismiss_for_attack_calls: int = 0
 	var affordance_values: Array[bool] = []
 	var interactivity_calls: int = 0
 	var modal_open: bool = false
@@ -36,6 +39,11 @@ class StubShipActivationController:
 
 	func close_modal_from_interaction_state() -> void:
 		close_calls += 1
+		modal_open = false
+
+
+	func dismiss_activation_modal_for_attack() -> void:
+		dismiss_for_attack_calls += 1
 		modal_open = false
 
 
@@ -235,6 +243,47 @@ func test_route_command_result_invokes_command_reaction_callback() -> void:
 			"Callback should receive the command result dictionary.")
 
 
+func test_route_command_result_preserves_declaration_pending_and_rejection_ui() -> void:
+	_create_router(Callable())
+	var primary := AttackSimPanel.new()
+	add_child_autofree(primary)
+	primary.show_initial_attack_exec("CR90")
+	primary.show_declaration_confirm_button()
+	primary.show_skip_attack_button()
+	var selector := TargetSelector.new()
+	add_child_autofree(selector)
+	selector._panel = primary
+	var controller := AttackPanelController.new()
+	add_child_autofree(controller)
+	controller._panel_mgr = _panel_mgr
+	controller._target_selector = selector
+	_router._attack_panel_controller = controller
+	GameManager.current_game_state = _state_with_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP,
+			0)
+
+	primary.set_declaration_submission_pending(true)
+	_router.route_command_result(null, {})
+
+	assert_true(primary.visible,
+			"Projection refresh must retain the primary declaration panel.")
+	assert_true(primary._confirm_button.visible)
+	assert_true(primary._confirm_button.disabled,
+			"Projection refresh must retain pending declaration gating.")
+
+	primary.set_declaration_submission_pending(false)
+	_router.route_command_result(null, {})
+
+	assert_true(primary.visible,
+			"Projection refresh after rejection must retain the declaration panel.")
+	assert_true(primary._confirm_button.visible)
+	assert_false(primary._confirm_button.disabled,
+			"Projection refresh after rejection must retain restored interaction.")
+	assert_true(primary._skip_attack_button.visible)
+	assert_false(primary._skip_attack_button.disabled)
+
+
 func test_route_command_result_activation_substep_opens_closed_modal() -> void:
 	# Arrange
 	var controller: StubShipActivationController = _create_activation_controller(false)
@@ -294,6 +343,25 @@ func test_route_command_result_wait_for_ship_select_closes_modal() -> void:
 			"WAIT_FOR_SHIP_SELECT should close the activation modal.")
 	assert_eq(controller.affordance_values, [false],
 			"WAIT_FOR_SHIP_SELECT should clear the sequence-button affordance.")
+
+
+func test_route_command_result_attack_dismisses_stale_activation_modal() -> void:
+	var controller: StubShipActivationController = \
+			_create_activation_controller(true)
+	var dismissed_before_reaction: Array[bool] = []
+	var reaction: Callable = func(_command: GameCommand,
+			_result: Dictionary) -> void:
+		dismissed_before_reaction.append(not controller.modal_open)
+	_create_router(reaction, controller)
+	GameManager.current_game_state = _state_with_attack_flow(0)
+
+	_router.route_command_result(null, {})
+
+	assert_eq(controller.dismiss_for_attack_calls, 1)
+	assert_eq(dismissed_before_reaction, [true],
+			"Stale activation UI must close before attack presentation reacts.")
+	assert_false(controller.modal_open,
+			"Attack presentation must not overlap a stale activation modal.")
 
 
 func test_route_command_result_squadron_step_opens_command_modal() -> void:
@@ -664,7 +732,18 @@ func _state_with_displacement_flow(ship: ShipInstance,
 
 
 func _state_with_attack_flow(attacker_player: int) -> GameState:
-	var state: GameState = _state_with_flow(
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	var defender_player: int = 1 - attacker_player
+	CURRENT_ATTACK_FIXTURE.install(state, {
+		"attacker_player": attacker_player,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": defender_player,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"attack_kind": "counter",
+	})
+	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_ROLL,
 			attacker_player)

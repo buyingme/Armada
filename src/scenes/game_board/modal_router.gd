@@ -67,11 +67,12 @@ func route_command_result(command: GameCommand, result: Dictionary) -> void:
 	var game_state: GameState = GameManager.current_game_state
 	if game_state == null:
 		return
+	_dismiss_activation_before_attack_reaction(game_state)
 	_route_to_command_reactions(command, result)
 	var local: int = _local_viewer(game_state)
 	var intent: UIProjector.UIIntent = UIProjector.project(game_state, local)
 	_apply_hud_intent(intent)
-	_dispatch_modal_intent(intent, game_state, local, command)
+	_dispatch_modal_intent(intent, game_state, command)
 
 
 func _connect_command_signal() -> void:
@@ -90,6 +91,17 @@ func _route_to_command_reactions(command: GameCommand, result: Dictionary) -> vo
 	_command_reaction_fn.call(command, result)
 
 
+func _dismiss_activation_before_attack_reaction(game_state: GameState) -> void:
+	if _ship_activation_controller == null:
+		return
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var flow: InteractionFlow = game_state.interaction_flow
+	if (attack != null and attack.active) \
+			or (flow != null \
+					and flow.flow_type == Constants.InteractionFlow.ATTACK):
+		_ship_activation_controller.dismiss_activation_modal_for_attack()
+
+
 func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 	if intent.hud_status_text.is_empty():
 		return
@@ -97,13 +109,13 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
-		game_state: GameState, local: int, command: GameCommand) -> void:
+		game_state: GameState, command: GameCommand) -> void:
 	_drive_tarkin_choice_modal(intent)
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
-	_sync_attack_panel_mirror(game_state, local)
-	_drive_timing_window_panel(intent.timing_window)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
+	_sync_attack_panel_mirror(game_state)
+	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
 
 
@@ -194,14 +206,13 @@ func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
 			and intent.modal_kind == Constants.ModalKind.DISPLACEMENT
 
 
-func _sync_attack_panel_mirror(game_state: GameState, local: int) -> void:
+func _sync_attack_panel_mirror(game_state: GameState) -> void:
 	if _attack_panel_controller == null:
 		return
 	if not _is_network_peer():
 		_attack_panel_controller.close_mirror()
 		return
-	_attack_panel_controller.sync_mirror_from_flow(
-			game_state.interaction_flow, local)
+	_attack_panel_controller.sync_mirror_from_flow(game_state.interaction_flow)
 
 
 func _drive_timing_window_panel(timing_window: Dictionary) -> void:
@@ -213,9 +224,11 @@ func _drive_timing_window_panel(timing_window: Dictionary) -> void:
 
 func _drive_activation_modal(intent: UIProjector.UIIntent,
 		flow: InteractionFlow, command: GameCommand) -> void:
-	if flow == null or intent.flow_type == Constants.InteractionFlow.NONE:
-		return
 	if _ship_activation_controller == null:
+		return
+	if intent.flow_type == Constants.InteractionFlow.ATTACK:
+		return
+	if flow == null or intent.flow_type == Constants.InteractionFlow.NONE:
 		return
 	_ship_activation_controller.sync_activation_step_from_flow(flow)
 	if intent.flow_type == Constants.InteractionFlow.SHIP_ACTIVATION:

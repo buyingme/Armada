@@ -15,6 +15,14 @@ class_name SkipAttackCommand
 extends GameCommand
 
 
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+const TERMINAL_REASONS: Array[String] = [
+	"cancelled",
+	"flow_terminated",
+]
+
+
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("skip_attack", func(player: int,
@@ -36,12 +44,44 @@ func validate(game_state: GameState) -> String:
 	var phase: Constants.GamePhase = game_state.current_phase
 	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
 		return "Not in Ship or Squadron Phase."
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if not attack.active:
+		return ""
+	if attack.attack_id != str(payload.get("attack_id", "")):
+		return "Stale current-attack identity."
+	if player_index != attack.attacker_player:
+		return "Attack cancellation belongs to the attacker."
+	if not TERMINAL_REASONS.has(str(payload.get("reason", ""))):
+		return "Invalid active-attack terminal reason."
+	if game_state.timing_window_state.active:
+		var context: Dictionary = game_state.timing_window_state.continuation_context
+		if str(context.get(TimingWindowState.CONTINUATION_KEY_SOURCE_ID, "")) \
+				!= attack.attack_id \
+				or str(payload.get(
+						TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID, "")) \
+						!= game_state.timing_window_state.lifecycle_id:
+			return "Timing lifecycle does not match the current attack."
 	return ""
 
 
-## No-op execution — returns the skip reason for logging/replay.
-func execute(_game_state: GameState) -> Dictionary:
+## Retires an active cancelled attack, or records a non-attack skip.
+func execute(game_state: GameState) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var attack_id: String = attack.attack_id
+	var cleared: Array[String] = []
+	if attack.active:
+		if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
+			return {}
+		if game_state.timing_window_state.active:
+			var cancelled: Dictionary = TimingWindowOrchestrator.cancel_window(
+					game_state, game_state.timing_window_state.lifecycle_id)
+			if not bool(cancelled.get(TimingWindowOrchestrator.KEY_OK, false)):
+				game_state.set_current_attack_state(attack)
+				return {}
+		cleared = ECM_SCRIPT.clear_attack_state(game_state, attack_id)
 	return {
+		"attack_id": attack_id,
 		"skipped": true,
 		"reason": payload.get("reason", "voluntary"),
+		"ecm_cleared_runtime_upgrade_ids": cleared,
 	}

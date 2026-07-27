@@ -10,6 +10,8 @@ const SaveManagerScript: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
 const TimingWindowStateScript: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
+const CurrentAttackFixture: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 const TEST_SAVE: String = "_gut_j2_round_trip"
 
 const SHIP_KEY_CR90: String = "cr90_corvette_a"
@@ -168,8 +170,38 @@ func test_save_load_round_trip_preserves_fleet() -> void:
 				"Loaded ship template should be re-resolved")
 
 
+func test_local_attack_preview_does_not_enter_saved_authoritative_state() -> void:
+	var gs: GameState = _make_populated_state()
+	var canonical_before: Dictionary = gs.serialize()
+	var scene_preview := AttackState.new()
+	scene_preview.defender_name = "Local preview target"
+	scene_preview.defender_zone = int(Constants.HullZone.FRONT)
+	scene_preview.range_band = Constants.RANGE_BAND_CLOSE
+	scene_preview.dice_pool = {"red": 2}
+	assert_eq(gs.serialize(), canonical_before,
+			"Local preview projection must not alter authoritative state.")
+
+	assert_true(_manager.save_game(gs, TEST_SAVE),
+			"Saving canonical state while a local preview exists should succeed.")
+	var result: Dictionary = _manager.load_game(TEST_SAVE)
+	assert_true(bool(result.get("ok", false)))
+	var loaded: GameState = result.get("state") as GameState
+
+	assert_not_null(loaded)
+	assert_true(loaded.current_attack_state.is_inactive(),
+			"Save/load before accepted Begin must restore no active attack.")
+	assert_false(loaded.serialize().has("declaration_candidate"),
+			"Transient declaration candidate must not enter save data.")
+
+
 func test_timing_window_state_does_not_absorb_runtime_upgrade_rule_state() -> void:
 	var gs: GameState = _make_populated_state()
+	assert_not_null(CurrentAttackFixture.install(gs, {
+		"attack_id": "attack:1",
+		"attacker_player": 1,
+		"defender_player": 0,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Fixture should install the matching canonical current attack")
 	gs.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
@@ -179,12 +211,12 @@ func test_timing_window_state_does_not_absorb_runtime_upgrade_rule_state() -> vo
 	assert_true(gs.set_timing_window_state(_make_active_timing_window(
 			"attack_modify",
 			"attack_modify",
-			"attack_modify:1",
+			"attack_modify:2",
 			1,
 			{
 				"continuation_id": "confirm_attack_dice",
 				"resume_point": "attack_after_modify",
-				"source_id": "fixture-attack",
+				"source_id": "attack:1",
 				"source_type": "current_attack",
 				"owner_player": 1,
 			})),

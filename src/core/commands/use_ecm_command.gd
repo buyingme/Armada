@@ -27,7 +27,7 @@ func validate(game_state: GameState) -> String:
 	if base != "":
 		return base
 	return ECM_SCRIPT.validate_use(
-			game_state, player_index, _runtime_upgrade_id())
+			game_state, player_index, _runtime_upgrade_id(), _attack_id())
 
 
 func execute(game_state: GameState) -> Dictionary:
@@ -49,3 +49,7 @@ func execute(game_state: GameState) -> Dictionary:
 
 func _runtime_upgrade_id() -> String:
 	return str(payload.get("runtime_upgrade_id", ""))
+
+
+func _attack_id() -> String:
+	return str(payload.get("attack_id", ""))

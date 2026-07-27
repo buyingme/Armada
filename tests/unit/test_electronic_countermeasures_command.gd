@@ -15,6 +15,8 @@ const FLOW_SPEC_SCRIPT: GDScript = preload(
 		"res://src/core/state/flow_spec.gd")
 const FAULTY_COUNTERMEASURES_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/damage_cards/ship/faulty_countermeasures.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 const ECM_ASSIGNMENT_ID: String = "ecm-1"
 const ECM_RUNTIME_ID: String = "1:ship:defender:upgrade:ecm-1"
@@ -32,6 +34,8 @@ func before_each() -> void:
 	SpendDefenseTokenCommand.register()
 	CommitDefenseCommand.register()
 	PublishAttackFlowCommand.register()
+	CompleteAttackCommand.register()
+	SkipAttackCommand.register()
 	RuleRegistry.clear()
 	ECM_SCRIPT.register()
 	_state = _make_state()
@@ -84,11 +88,11 @@ func test_projector_publicly_offers_ecm_when_locked_token_is_legal() -> void:
 
 
 func test_no_ecm_prompt_when_no_legal_effect_exists() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = []
+	_set_locked_tokens([])
 	assert_true(ECM_SCRIPT.choice_payload(
 			_state, _state.interaction_flow).is_empty(),
 			"No Accuracy-targeted token means no ECM prompt.")
-	_state.interaction_flow.payload["locked_tokens"] = [0]
+	_set_locked_tokens([0])
 	_defender().current_speed = 0
 	assert_true(ECM_SCRIPT.choice_payload(
 			_state, _state.interaction_flow).is_empty(),
@@ -103,9 +107,11 @@ func test_no_ecm_prompt_when_no_legal_effect_exists() -> void:
 
 func test_use_and_decline_reject_wrong_player_wrong_phase_and_missing_source() -> void:
 	assert_ne(USE_ECM_COMMAND_SCRIPT.new(0, {
+		"attack_id": _attack_id(),
 		"runtime_upgrade_id": ECM_RUNTIME_ID,
 	}).validate(_state), "", "Wrong player should not use ECM.")
 	assert_ne(DECLINE_ECM_COMMAND_SCRIPT.new(0, {
+		"attack_id": _attack_id(),
 		"runtime_upgrade_id": ECM_RUNTIME_ID,
 	}).validate(_state), "", "Wrong player should not decline ECM.")
 
@@ -121,6 +127,129 @@ func test_use_and_decline_reject_wrong_player_wrong_phase_and_missing_source() -
 			"Missing ECM source should reject use.")
 	assert_ne(_decline_ecm().validate(_state), "",
 			"Missing ECM source should reject decline.")
+
+
+func test_canonical_defense_allows_ecm_when_flow_is_missing_or_stale() -> void:
+	_state.interaction_flow = InteractionFlow.empty()
+	assert_eq(_use_ecm().validate(_state), "",
+			"Missing projection flow cannot invalidate canonical ECM use.")
+	assert_eq(_decline_ecm().validate(_state), "",
+			"Missing projection flow cannot invalidate canonical ECM decline.")
+
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0, Constants.Visibility.ALL, {
+				"defender_player": 0,
+				"defender_ship_index": 99,
+			})
+	assert_eq(_use_ecm().validate(_state), "",
+			"Stale projection flow cannot invalidate canonical ECM use.")
+	assert_eq(_decline_ecm().validate(_state), "",
+			"Stale projection flow cannot invalidate canonical ECM decline.")
+
+
+func test_stale_defense_flow_cannot_grant_ecm_semantic_authority() -> void:
+	var stale_defense_flow: InteractionFlow = _state.interaction_flow
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"attack_id": "attack:41",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+	}))
+	_state.interaction_flow = stale_defense_flow
+	var command: UseECMCommand = USE_ECM_COMMAND_SCRIPT.new(1, {
+		"attack_id": "attack:41",
+		"runtime_upgrade_id": ECM_RUNTIME_ID,
+	})
+	assert_eq(command.validate(_state),
+			"Electronic Countermeasures is not available at the canonical defense stage.",
+			"A stale defense flow must not grant ECM use.")
+	assert_true(ECM_SCRIPT.choice_payload(
+			_state, stale_defense_flow).is_empty(),
+			"A stale defense flow must not project a semantic ECM choice.")
+
+
+func test_ecm_commands_reject_stale_attack_identity_exactly() -> void:
+	var stale_use: UseECMCommand = USE_ECM_COMMAND_SCRIPT.new(1, {
+		"attack_id": "attack:999",
+		"runtime_upgrade_id": ECM_RUNTIME_ID,
+	})
+	var stale_decline: DeclineECMCommand = DECLINE_ECM_COMMAND_SCRIPT.new(1, {
+		"attack_id": "attack:999",
+		"runtime_upgrade_id": ECM_RUNTIME_ID,
+	})
+	assert_eq(stale_use.validate(_state),
+			"Electronic Countermeasures attack identity is stale.")
+	assert_eq(stale_decline.validate(_state),
+			"Electronic Countermeasures attack identity is stale.")
+
+
+func test_pending_authorization_rejects_cross_attack_spend_exactly() -> void:
+	var first_attack_id: String = _attack_id()
+	_use_ecm().execute(_state)
+	assert_false(ECM_SCRIPT.pending_authorization(
+			_ecm_upgrade()).is_empty())
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"attack_id": "attack:43",
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+		"accuracy_locked_tokens": [0],
+		"defense_stage": CurrentAttackState.DEFENSE_RESOLVING,
+		"committed_defense_tokens": [0],
+	}))
+	var attack: CurrentAttackState = _state.current_attack_state
+	var ship: ShipInstance = _defender()
+	var token: Dictionary = ship.defense_tokens[0]
+	assert_ne(first_attack_id, attack.attack_id)
+	assert_true(attack.active)
+	assert_eq(attack.stage, CurrentAttackState.STAGE_DEFENSE)
+	assert_eq(attack.defense_stage, CurrentAttackState.DEFENSE_RESOLVING)
+	assert_eq(attack.defender_player, 1)
+	assert_eq(attack.defender_index, 0)
+	assert_true(attack.committed_defense_tokens.has(0))
+	assert_eq(int(token.get("state", -1)),
+			int(Constants.DefenseTokenState.READY))
+	assert_gt(ship.current_speed, 0)
+	assert_eq(ECM_SCRIPT.validate_authorized_token_spend(
+			_state, ship, 0, 0),
+			"Electronic Countermeasures authorization is stale.")
+	var spend := SpendDefenseTokenCommand.new(1, {
+		"attack_id": attack.attack_id,
+		"ship_index": 0,
+		"token_index": 0,
+		"expected_token_type": int(token.get("type", -1)),
+		"spend_method": "exhaust",
+	})
+	assert_eq(spend.validate(_state),
+			"Electronic Countermeasures authorization is stale.",
+			"Cross-attack rejection must come from canonical ECM identity.")
+
+
+func test_decline_scope_is_canonical_attack_identity_not_flow_identity() -> void:
+	var stale_flow: InteractionFlow = _state.interaction_flow
+	var first_attack_id: String = _attack_id()
+	var decline_result: Dictionary = _decline_ecm().execute(_state)
+	assert_eq((decline_result.get("decline_scope", {}) as Dictionary).get(
+			"attack_id", ""), first_attack_id)
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"attack_id": "attack:44",
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+		"accuracy_locked_tokens": [0],
+		"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+	}))
+	_state.interaction_flow = stale_flow
+	assert_eq(_decline_ecm().validate(_state), "",
+			"A decline from one attack must not suppress a later attack.")
 
 
 func test_discarded_or_disabled_ecm_is_unavailable() -> void:
@@ -187,9 +316,12 @@ func test_decline_records_decline_without_exhausting_or_authorizing() -> void:
 
 func test_spend_defense_token_consumes_pending_authorization() -> void:
 	_use_ecm().execute(_state)
+	_set_defense_resolution([0])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "exhaust",
 	})
 
@@ -207,9 +339,10 @@ func test_spend_defense_token_consumes_pending_authorization() -> void:
 
 
 func test_evade_then_ecm_redirect_resolve_in_correct_order() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [1]
+	_set_locked_tokens([1])
 	_use_ecm().execute(_state)
 	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [2, 1],
 	})
@@ -217,8 +350,10 @@ func test_evade_then_ecm_redirect_resolve_in_correct_order() -> void:
 			"Commit should choose Evade plus the ECM-locked Redirect.")
 	commit.execute(_state)
 	var evade := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 2,
+		"expected_token_type": int(Constants.DefenseToken.EVADE),
 		"spend_method": "exhaust",
 	})
 	assert_eq(evade.validate(_state), "",
@@ -226,10 +361,22 @@ func test_evade_then_ecm_redirect_resolve_in_correct_order() -> void:
 	evade.execute(_state)
 	assert_false(ECM_SCRIPT.pending_authorization(_ecm_upgrade()).is_empty(),
 			"Evade should not consume the pending ECM authorization.")
+	var evade_die := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": 0,
+		"token_index": 2,
+		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
+	})
+	assert_eq(evade_die.validate(_state), "")
+	evade_die.execute(_state)
 
 	var redirect := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 1,
+		"expected_token_type": int(Constants.DefenseToken.REDIRECT),
 		"spend_method": "exhaust",
 	})
 	assert_eq(redirect.validate(_state), "",
@@ -242,9 +389,10 @@ func test_evade_then_ecm_redirect_resolve_in_correct_order() -> void:
 
 
 func test_hot_seat_protocol_preserves_ecm_redirect_through_evade() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [1]
+	_set_locked_tokens([1])
 	_use_ecm().execute(_state)
 	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [2, 1],
 	})
@@ -255,16 +403,22 @@ func test_hot_seat_protocol_preserves_ecm_redirect_through_evade() -> void:
 			"Commit should preserve Redirect as the chosen ECM token.")
 
 	var evade := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 2,
+		"expected_token_type": int(Constants.DefenseToken.EVADE),
 		"spend_method": "exhaust",
 	})
 	assert_eq(evade.validate(_state), "",
 			"Queued Evade spend should resolve before Redirect.")
 	evade.execute(_state)
 	var evade_die := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
+		"token_index": 2,
 		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
 	})
 	assert_eq(evade_die.validate(_state), "",
 			"Evade die selection should remain legal in the attack phase.")
@@ -274,16 +428,21 @@ func test_hot_seat_protocol_preserves_ecm_redirect_through_evade() -> void:
 			"Evade resolution should leave only the chosen Redirect authorized.")
 
 	var redirect := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 1,
+		"expected_token_type": int(Constants.DefenseToken.REDIRECT),
 		"spend_method": "exhaust",
 	})
 	assert_eq(redirect.validate(_state), "",
 			"Chosen locked Redirect should remain spendable after Evade.")
 	redirect.execute(_state)
 	var redirect_zone := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
+		"token_index": 1,
 		"zone": int(Constants.HullZone.LEFT),
+		"expected_shields": 2,
 	})
 	assert_eq(redirect_zone.validate(_state), "",
 			"Redirect zone selection should remain legal after ECM spend.")
@@ -296,6 +455,7 @@ func test_hot_seat_protocol_preserves_ecm_redirect_through_evade() -> void:
 
 func test_commit_defense_rejects_locked_token_without_ecm_authorization() -> void:
 	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [0],
 	})
@@ -308,9 +468,10 @@ func test_commit_defense_rejects_locked_token_without_ecm_authorization() -> voi
 
 
 func test_commit_defense_rejects_multiple_ecm_locked_tokens() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [0, 1],
 	})
@@ -318,6 +479,7 @@ func test_commit_defense_rejects_multiple_ecm_locked_tokens() -> void:
 			"CommitDefenseCommand should reject multiple ECM locked tokens.")
 
 	var one_locked := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [2, 1],
 	})
@@ -333,13 +495,14 @@ func test_commit_defense_rejects_multiple_ecm_locked_tokens() -> void:
 
 
 func test_multi_locked_tokens_allow_either_one_but_not_both() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	assert_eq(ECM_SCRIPT.authorized_token_indices(
 			_state, _state.interaction_flow), [0, 1],
 			"Before commit, both eligible locked tokens should be selectable.")
 
 	var choose_brace := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [0],
 	})
@@ -348,9 +511,10 @@ func test_multi_locked_tokens_allow_either_one_but_not_both() -> void:
 
 	_state = _make_state()
 	GameManager.current_game_state = _state
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	var choose_redirect := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [1],
 	})
@@ -363,9 +527,10 @@ func test_multi_locked_tokens_allow_either_one_but_not_both() -> void:
 
 	_state = _make_state()
 	GameManager.current_game_state = _state
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	var choose_both := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [0, 1],
 	})
@@ -374,9 +539,10 @@ func test_multi_locked_tokens_allow_either_one_but_not_both() -> void:
 
 
 func test_use_ecm_requires_commit_to_choose_one_locked_token() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	var commit_none := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [2],
 	})
@@ -386,6 +552,7 @@ func test_use_ecm_requires_commit_to_choose_one_locked_token() -> void:
 
 func test_locked_token_without_pending_authorization_is_rejected() -> void:
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 0,
 		"spend_method": "exhaust",
@@ -396,19 +563,17 @@ func test_locked_token_without_pending_authorization_is_rejected() -> void:
 
 
 func test_already_spent_type_keeps_ecm_unavailable_and_rejects_pending_spend() -> void:
-	_state.interaction_flow.payload["spent_defense_token_types"] = [
-		int(Constants.DefenseToken.BRACE),
-	]
+	_set_resolved_token_types([int(Constants.DefenseToken.BRACE)])
 	assert_true(ECM_SCRIPT.choice_payload(
 			_state, _state.interaction_flow).is_empty(),
 			"Already-spent token type should prevent an ECM prompt.")
 
 	_state = _make_state()
+	GameManager.current_game_state = _state
 	_use_ecm().execute(_state)
-	_state.interaction_flow.payload["spent_defense_token_types"] = [
-		int(Constants.DefenseToken.BRACE),
-	]
+	_set_resolved_token_types([int(Constants.DefenseToken.BRACE)])
 	var spend := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 0,
 		"spend_method": "exhaust",
@@ -482,7 +647,7 @@ func test_pending_authorization_is_attack_scoped_serialized_and_reconnect_safe()
 
 
 func test_reconnect_projection_preserves_pending_choice_without_reoffer() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [0, 1]
+	_set_locked_tokens([0, 1])
 	_use_ecm().execute(_state)
 	var filtered: Dictionary = StateFilter.filter_for_player(
 			_state.serialize(), 1)
@@ -601,8 +766,10 @@ func test_publish_attack_flow_payload_cannot_resurrect_stale_ecm_state() -> void
 			"Stale flow payload must not authorize token spending.")
 
 
-func test_publish_attack_flow_clears_pending_authorization_on_window_loss() -> void:
+func test_publish_attack_flow_never_clears_semantic_ecm_state() -> void:
 	_use_ecm().execute(_state)
+	var pending_before: Dictionary = ECM_SCRIPT.pending_authorization(
+			_ecm_upgrade())
 	var cmd := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE),
 		"controller_player": 0,
@@ -613,11 +780,125 @@ func test_publish_attack_flow_clears_pending_authorization_on_window_loss() -> v
 	})
 	var result: Dictionary = cmd.execute(_state)
 
+	assert_eq(ECM_SCRIPT.pending_authorization(_ecm_upgrade()), pending_before,
+			"Leaving a projected window must not mutate runtime ECM state.")
+	assert_false(result.has("ecm_cleared_runtime_upgrade_ids"),
+			"Projection publication must not report semantic cleanup.")
+	var final_result: Dictionary = PublishAttackFlowCommand.new(0, {
+		"final": true,
+	}).execute(_state)
+	assert_eq(ECM_SCRIPT.pending_authorization(_ecm_upgrade()), pending_before,
+			"Final projection publication must not mutate runtime ECM state.")
+	assert_false(final_result.has("ecm_cleared_runtime_upgrade_ids"))
+
+
+func test_complete_attack_clears_only_matching_ecm_attack_state() -> void:
+	var completed_attack_id: String = _attack_id()
+	_use_ecm().execute(_state)
+	var primary_rule_state: Dictionary = _ecm_upgrade().get("rule_state", {})
+	primary_rule_state[ECM_SCRIPT.RULE_STATE_STATUS_READY_COST] = {
+		"round": _state.current_round,
+		"resolution": "declined",
+	}
+	_ecm_upgrade()["rule_state"] = primary_rule_state
+	var unrelated_upgrade: Dictionary = _state.get_ship(0, 0).add_runtime_upgrade(
+			"electronic_countermeasures", "ecm-unrelated",
+			"DEFENSIVE_RETROFIT", 0)
+	var unrelated_pending: Dictionary = {
+		"runtime_upgrade_id": str(unrelated_upgrade.get(
+				"runtime_upgrade_id", "")),
+		"attack_scope": {"attack_id": "attack:unrelated"},
+	}
+	unrelated_upgrade["rule_state"] = {
+		ECM_SCRIPT.RULE_STATE_PENDING_AUTHORIZATION: unrelated_pending,
+	}
+	_install_attack(completed_attack_id, CurrentAttackState.STAGE_RESOLVED,
+			CurrentAttackState.DEFENSE_COMPLETE)
+	var command := CompleteAttackCommand.new(0, {
+		"attack_id": completed_attack_id,
+	})
+
+	assert_eq(command.validate(_state), "")
+	var result: Dictionary = command.execute(_state)
+
+	assert_true(_state.current_attack_state.is_inactive())
 	assert_true(ECM_SCRIPT.pending_authorization(_ecm_upgrade()).is_empty(),
-			"Leaving the defense-token window should clear pending ECM.")
+			"Completion must clear the matching pending authorization.")
+	assert_true((_ecm_upgrade().get("rule_state", {}) as Dictionary).has(
+			ECM_SCRIPT.RULE_STATE_STATUS_READY_COST),
+			"Attack cleanup must preserve unrelated Status Phase rule state.")
+	assert_eq(ECM_SCRIPT.pending_authorization(unrelated_upgrade),
+			unrelated_pending,
+			"Completion must not clear authorization for another attack id.")
 	assert_true((result.get("ecm_cleared_runtime_upgrade_ids", []) as Array
-			).has(ECM_RUNTIME_ID),
-			"Cleanup result should report the cleared runtime upgrade.")
+			).has(ECM_RUNTIME_ID))
+
+
+func test_skip_attack_clears_matching_pending_and_decline_state() -> void:
+	var pending_attack_id: String = _attack_id()
+	_use_ecm().execute(_state)
+	var pending_skip := SkipAttackCommand.new(0, {
+		"attack_id": pending_attack_id,
+		"reason": "cancelled",
+	})
+	assert_eq(pending_skip.validate(_state), "")
+	var pending_result: Dictionary = pending_skip.execute(_state)
+	assert_true(ECM_SCRIPT.pending_authorization(_ecm_upgrade()).is_empty())
+	assert_true((pending_result.get(
+			"ecm_cleared_runtime_upgrade_ids", []) as Array).has(
+				ECM_RUNTIME_ID))
+
+	_state = _make_state()
+	GameManager.current_game_state = _state
+	var declined_attack_id: String = _attack_id()
+	_decline_ecm().execute(_state)
+	var declined_skip := SkipAttackCommand.new(0, {
+		"attack_id": declined_attack_id,
+		"reason": "flow_terminated",
+	})
+	assert_eq(declined_skip.validate(_state), "")
+	declined_skip.execute(_state)
+	assert_false((_ecm_upgrade().get("rule_state", {}) as Dictionary).has(
+			ECM_SCRIPT.RULE_STATE_DECLINED_ATTACK),
+			"Terminal cancellation must clear its matching decline guard.")
+
+
+func test_non_attack_skip_does_not_clean_ecm_runtime_state() -> void:
+	_use_ecm().execute(_state)
+	var pending_before: Dictionary = ECM_SCRIPT.pending_authorization(
+			_ecm_upgrade())
+	assert_true(_state.set_current_attack_state(CurrentAttackState.inactive()))
+	var result: Dictionary = SkipAttackCommand.new(0, {
+		"reason": "voluntary",
+	}).execute(_state)
+
+	assert_eq(ECM_SCRIPT.pending_authorization(_ecm_upgrade()), pending_before,
+			"A skip without an active attack must not clean attack guards.")
+	assert_true((result.get(
+			"ecm_cleared_runtime_upgrade_ids", []) as Array).is_empty())
+
+
+func test_terminal_cleanup_allows_later_ecm_without_flow_publication() -> void:
+	var first_attack_id: String = _attack_id()
+	_use_ecm().execute(_state)
+	_install_attack(first_attack_id, CurrentAttackState.STAGE_RESOLVED,
+			CurrentAttackState.DEFENSE_COMPLETE)
+	var completion := CompleteAttackCommand.new(0, {
+		"attack_id": first_attack_id,
+	})
+	assert_eq(completion.validate(_state), "")
+	completion.execute(_state)
+	var card_state: Dictionary = _ecm_card_state()
+	card_state["exhausted"] = false
+	card_state["readied"] = true
+	_install_attack("attack:45", CurrentAttackState.STAGE_DEFENSE,
+			CurrentAttackState.DEFENSE_PENDING)
+
+	assert_false(ECM_SCRIPT.choice_payload(
+			_state, _state.interaction_flow).is_empty(),
+			"A readied ECM must be available in a later canonical attack.")
+	assert_eq(_use_ecm().validate(_state), "",
+			"Later availability must not depend on flow publication cleanup.")
 
 
 func test_commands_serialize_and_replay_decline_and_use() -> void:
@@ -659,13 +940,23 @@ func test_remote_ecm_use_refreshes_public_ship_state_but_decline_does_not() -> v
 			"Remote ECM decline should not emit token/card refresh events.")
 
 
-func test_remote_spend_and_cleanup_mirror_ecm_state() -> void:
+func test_remote_spend_and_terminal_cleanup_mirror_ecm_state() -> void:
 	_use_ecm().execute(_state)
+	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": 0,
+		"selected_indices": [0],
+	})
+	assert_eq(commit.validate(_state), "")
+	assert_false(commit.execute(_state).is_empty())
 	var spend := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "exhaust",
 	})
+	assert_eq(spend.validate(_state), "")
 	var spend_result: Dictionary = spend.execute(_state)
 	_changed_ships.clear()
 	GameManager._handle_remote_command_effects(spend, spend_result)
@@ -677,31 +968,42 @@ func test_remote_spend_and_cleanup_mirror_ecm_state() -> void:
 	_state = _make_state()
 	GameManager.current_game_state = _state
 	_use_ecm().execute(_state)
-	var publish := PublishAttackFlowCommand.new(0, {
-		"step_id": int(Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE),
-		"controller_player": 0,
-		"flow_payload": {"attacker_player": 0, "defender_player": 1},
+	var skip := SkipAttackCommand.new(0, {
+		"attack_id": _attack_id(),
+		"reason": "cancelled",
 	})
-	publish.execute(_state)
-	GameManager._handle_remote_command_effects(publish, {})
+	var skip_result: Dictionary = skip.execute(_state)
+	GameManager._handle_remote_command_effects(skip, skip_result)
 	assert_true(ECM_SCRIPT.pending_authorization(_ecm_upgrade()).is_empty(),
-			"Remote mirrored flow cleanup should clear pending authorization.")
+			"Remote mirrored terminal cancellation should clear pending ECM.")
 
 
 func test_network_mirror_preserves_ecm_authorization_through_evade_to_redirect() -> void:
-	_state.interaction_flow.payload["locked_tokens"] = [1]
+	_set_locked_tokens([1])
 	_use_ecm().execute(_state)
 	var commit := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"selected_indices": [2, 1],
 	})
 	commit.execute(_state)
 	var evade := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 2,
+		"expected_token_type": int(Constants.DefenseToken.EVADE),
 		"spend_method": "exhaust",
 	})
 	evade.execute(_state)
+	var evade_die := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": 0,
+		"token_index": 2,
+		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
+	})
+	evade_die.execute(_state)
 	var publish := PublishAttackFlowCommand.new(0, {
 		"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
 		"controller_player": 1,
@@ -729,8 +1031,10 @@ func test_network_mirror_preserves_ecm_authorization_through_evade_to_redirect()
 			"ecm_authorized_indices", []) as Array, [1],
 			"Mirror payload should derive Redirect authorization from runtime.")
 	var redirect := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": 0,
 		"token_index": 1,
+		"expected_token_type": int(Constants.DefenseToken.REDIRECT),
 		"spend_method": "exhaust",
 	})
 	assert_eq(redirect.validate(_state), "",
@@ -760,6 +1064,19 @@ func _make_state() -> GameState:
 			"electronic_countermeasures", ECM_ASSIGNMENT_ID,
 			"DEFENSIVE_RETROFIT", 0)
 	state.interaction_flow = _defense_flow(state)
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"dice_results": [
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+		],
+		"accuracy_locked_tokens": [0],
+		"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+	}), "ECM fixture requires canonical current-attack state.")
 	var choice: Dictionary = ECM_SCRIPT.choice_payload(
 			state, state.interaction_flow)
 	state.interaction_flow.payload[ECM_SCRIPT.AFFORDANCE_KEY] = choice
@@ -828,14 +1145,73 @@ func _ecm_card_state() -> Dictionary:
 
 func _use_ecm() -> GameCommand:
 	return USE_ECM_COMMAND_SCRIPT.new(1, {
+		"attack_id": _attack_id(),
 		"runtime_upgrade_id": ECM_RUNTIME_ID,
 	})
 
 
 func _decline_ecm() -> GameCommand:
 	return DECLINE_ECM_COMMAND_SCRIPT.new(1, {
+		"attack_id": _attack_id(),
 		"runtime_upgrade_id": ECM_RUNTIME_ID,
 	})
+
+
+func _set_defense_resolution(committed: Array[int]) -> void:
+	assert_true(_state.set_current_attack_state(
+			_state.current_attack_state.with_patch({
+				"committed_defense_tokens": committed,
+				"defense_stage": CurrentAttackState.DEFENSE_RESOLVING,
+			})), "ECM fixture should enter defense-token resolution.")
+
+
+func _set_locked_tokens(indices: Array[int]) -> void:
+	assert_true(_state.set_current_attack_state(
+			_state.current_attack_state.with_patch({
+				"accuracy_locked_tokens": indices,
+			})), "ECM fixture should update canonical Accuracy locks.")
+	_state.interaction_flow.payload["locked_tokens"] = indices.duplicate()
+
+
+func _set_resolved_token_types(token_types: Array[int]) -> void:
+	var committed: Array[int] = []
+	var effects: Array[Dictionary] = []
+	for token_type: int in token_types:
+		for token_index: int in range(_defender().defense_tokens.size()):
+			if int(_defender().defense_tokens[token_index].get("type", -1)) \
+					== token_type:
+				committed.append(token_index)
+				effects.append({
+					"token_index": token_index,
+					"token_type": token_type,
+				})
+				break
+	assert_true(_state.set_current_attack_state(
+			_state.current_attack_state.with_patch({
+				"committed_defense_tokens": committed,
+				"resolved_defense_effects": effects,
+				"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+			})), "ECM fixture should update canonical resolved token effects.")
+	_state.interaction_flow.payload["spent_defense_token_types"] = \
+			token_types.duplicate()
+
+
+func _attack_id() -> String:
+	return _state.current_attack_state.attack_id
+
+
+func _install_attack(attack_id: String, stage: String,
+		defense_stage: String) -> void:
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"attack_id": attack_id,
+		"stage": stage,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+		"accuracy_locked_tokens": [0],
+		"defense_stage": defense_stage,
+	}), "ECM terminal fixture should install canonical attack state.")
 
 
 func _add_faulty_countermeasures(ship: ShipInstance) -> DamageCard:

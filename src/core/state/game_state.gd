@@ -11,6 +11,8 @@ const TIMING_WINDOW_STATE: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
 const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const CURRENT_ATTACK_STATE: GDScript = preload(
+		"res://src/core/state/current_attack_state.gd")
 
 ## The current round number (1-based, max defined by Constants.MAX_ROUNDS).
 var current_round: int = 0
@@ -50,6 +52,13 @@ var timing_window_state: TimingWindowState:
 	get:
 		return _timing_window_state
 
+## Canonical authoritative state for one individual attack.
+var _current_attack_state: CurrentAttackState = null
+
+var current_attack_state: CurrentAttackState:
+	get:
+		return _clone_current_attack_state(_current_attack_state)
+
 ## Per-round count of ship-targeting attacks performed by each ship.
 ## Keys are `round:owner_player:ship_index`; values are ints.
 ## Used by Coolant Discharge and serialized for save/replay determinism.
@@ -58,6 +67,7 @@ var ship_target_attack_counts: Dictionary = {}
 
 func _init() -> void:
 	_timing_window_state = _new_timing_window_state()
+	_current_attack_state = _new_current_attack_state()
 
 
 ## Initializes a new game state with default values.
@@ -69,6 +79,7 @@ func initialize() -> void:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
 	_timing_window_state = _new_timing_window_state()
+	_current_attack_state = _new_current_attack_state()
 	objectives.clear()
 	ship_target_attack_counts.clear()
 	player_states.clear()
@@ -178,7 +189,9 @@ func serialize() -> Dictionary:
 		"rng": rng.serialize() if rng else {},
 		"interaction_flow": interaction_flow.serialize() if interaction_flow else {},
 		"timing_window_state": _timing_window_state.serialize()
-				if _timing_window_state else _new_timing_window_state().serialize(),
+					if _timing_window_state else _new_timing_window_state().serialize(),
+		"current_attack_state": _current_attack_state.serialize()
+					if _current_attack_state else _new_current_attack_state().serialize(),
 		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
 	}
 	for player_state: PlayerState in player_states:
@@ -212,6 +225,18 @@ static func deserialize(data: Dictionary) -> GameState:
 		state.interaction_flow = InteractionFlow.deserialize(flow_data)
 	else:
 		state.interaction_flow = InteractionFlow.new()
+	var had_current_attack_state: bool = data.has("current_attack_state")
+	if had_current_attack_state:
+		var current_attack = _new_current_attack_state()
+		if not current_attack.load_from_serialized(data.get("current_attack_state")):
+			return null
+		state._current_attack_state = current_attack
+	else:
+		state._current_attack_state = _new_current_attack_state()
+	if state.interaction_flow != null \
+			and state.interaction_flow.flow_type == Constants.InteractionFlow.ATTACK \
+			and not state._current_attack_state.active:
+		return null
 	if data.has("timing_window_state"):
 		var timing_state = _new_timing_window_state()
 		if not timing_state.load_from_serialized(
@@ -220,6 +245,8 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._timing_window_state = timing_state
 	else:
 		state._timing_window_state = _new_timing_window_state()
+	if not state.validate_current_attack_references():
+		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
 		return null
@@ -236,8 +263,93 @@ func set_timing_window_state(value: TimingWindowState) -> bool:
 	return true
 
 
+func set_current_attack_state(value: CurrentAttackState) -> bool:
+	if value == null or not value.is_valid():
+		return false
+	var replacement: CurrentAttackState = _new_current_attack_state()
+	if not replacement.load_from_serialized(value.serialize()):
+		return false
+	if not _validate_current_attack_references_for(replacement):
+		return false
+	_current_attack_state = replacement
+	return true
+
+
+func validate_current_attack_references() -> bool:
+	return _validate_current_attack_references_for(_current_attack_state)
+
+
+func _validate_current_attack_references_for(value: CurrentAttackState) -> bool:
+	if value == null or not value.is_valid():
+		return false
+	if not value.active:
+		return true
+	if current_phase != Constants.GamePhase.SHIP \
+			and current_phase != Constants.GamePhase.SQUADRON:
+		return false
+	if not _current_attack_entity_exists(
+			value.attacker_kind, value.attacker_player, value.attacker_index):
+		return false
+	if not _current_attack_entity_exists(
+			value.defender_kind, value.defender_player, value.defender_index):
+		return false
+	var defender: RefCounted = _current_attack_entity(
+			value.defender_kind, value.defender_player, value.defender_index)
+	if defender == null:
+		return false
+	var defense_tokens: Array = defender.get("defense_tokens") as Array
+	for token_index: int in value.accuracy_locked_tokens:
+		if token_index < 0 or token_index >= defense_tokens.size():
+			return false
+	for token_index: int in value.committed_defense_tokens:
+		if token_index < 0 or token_index >= defense_tokens.size():
+			return false
+	for effect: Dictionary in value.resolved_defense_effects:
+		var token_index: int = int(effect.get("token_index", -1))
+		if not value.committed_defense_tokens.has(token_index) \
+				or token_index < 0 or token_index >= defense_tokens.size() \
+				or int(effect.get("token_type", -1)) \
+						!= int((defense_tokens[token_index] as Dictionary).get(
+								"type", -1)):
+			return false
+	var evade: Dictionary = value.pending_evade
+	if not evade.is_empty():
+		var die_index: int = int(evade.get("die_index", -1))
+		var dice: Array[Dictionary] = value.dice_results
+		if die_index < 0 or die_index >= dice.size():
+			return false
+		var die: Dictionary = dice[die_index]
+		if int(evade.get("expected_color", -1)) != int(die.get("color", -2)) \
+				or int(evade.get("expected_face", -1)) != int(die.get("face", -2)):
+			return false
+	return true
+
+
+func _current_attack_entity_exists(kind: String, owner: int, index: int) -> bool:
+	return _current_attack_entity(kind, owner, index) != null
+
+
+func _current_attack_entity(kind: String, owner: int, index: int) -> RefCounted:
+	if kind == CurrentAttackState.KIND_SHIP:
+		return get_ship(owner, index)
+	if kind == CurrentAttackState.KIND_SQUADRON:
+		return get_squadron(owner, index)
+	return null
+
+
 static func _new_timing_window_state():
 	return TIMING_WINDOW_STATE.new()
+
+
+static func _new_current_attack_state():
+	return CURRENT_ATTACK_STATE.new()
+
+
+static func _clone_current_attack_state(value: CurrentAttackState):
+	var clone = _new_current_attack_state()
+	if value != null:
+		clone.load_from_serialized(value.serialize())
+	return clone
 
 
 static func _deserialize_attack_counts(raw_counts: Variant) -> Dictionary:

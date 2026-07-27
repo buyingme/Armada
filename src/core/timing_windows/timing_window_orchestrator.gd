@@ -51,6 +51,11 @@ static func open_window(game_state: GameState,
 		return _failure(context_reason)
 	var controller: int = int(continuation_context.get(
 			TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER, -1))
+	if timing_window_id == DEFINITIONS.ATTACK_MODIFY:
+		var attack_reason: String = _attack_modify_owner_reason(
+				game_state, continuation_context, controller)
+		if not attack_reason.is_empty():
+			return _failure(attack_reason)
 	var lifecycle_id: String = "%s:%d" % [
 		timing_window_id, opening_command_sequence]
 	var next_state = TIMING_WINDOW_STATE.new()
@@ -514,7 +519,12 @@ static func _has_canonical_lifecycle_identity(
 
 static func _attack_modify_context_reason(game_state: GameState,
 		timing_state: TimingWindowState) -> String:
-	var context: Dictionary = timing_state.continuation_context
+	return _attack_modify_owner_reason(game_state,
+			timing_state.continuation_context, timing_state.controller_player)
+
+
+static func _attack_modify_owner_reason(game_state: GameState,
+		context: Dictionary, controller_player: int) -> String:
 	if str(context.get(TimingWindowState.CONTINUATION_KEY_RESUME_POINT, "")) \
 			!= "attack_after_modify" \
 			or str(context.get(
@@ -524,12 +534,15 @@ static func _attack_modify_context_reason(game_state: GameState,
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return "Attack Modify lifecycle is outside an attack phase."
-	var flow: InteractionFlow = game_state.interaction_flow
-	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK \
-			or flow.step_id != Constants.InteractionStep.ATTACK_MODIFY:
-		return "Attack Modify lifecycle conflicts with the enclosing flow."
-	if flow.controller_player != timing_state.controller_player:
-		return "Attack Modify controller conflicts with the enclosing flow."
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return "Attack Modify lifecycle has no matching current attack."
+	if str(context.get(TimingWindowState.CONTINUATION_KEY_SOURCE_ID, "")) \
+			!= attack.attack_id:
+		return "Attack Modify lifecycle source conflicts with the current attack."
+	if controller_player != attack.attacker_player:
+		return "Attack Modify controller conflicts with the current attack."
 	return ""
 
 

@@ -97,6 +97,11 @@ signal chat_received(sender: String, text: String, timestamp: int)
 ## [param result] — execution result dictionary.
 signal command_result_received(command_data: Dictionary, result: Dictionary)
 
+## Emitted only on the submitting client when the server rejects a command.
+## Rejections are not broadcast and do not enter accepted command history.
+signal command_rejection_received(
+		command_data: Dictionary, reason: String)
+
 ## Emitted on the client after the host has saved the game.  The UI
 ## listens for this and shows a toast.  Phase J6.
 signal save_notification_received(display_name: String)
@@ -111,6 +116,11 @@ var connection_state: ConnectionState = ConnectionState.DISCONNECTED
 
 ## This instance's network role.
 var role: Role = Role.NONE
+
+## Synchronous capture for the command currently submitted through the
+## authoritative processor on the server.
+var _captured_rejection_command: GameCommand = null
+var _captured_rejection_reason: String = ""
 
 ## Map of connected peer IDs → peer info dictionaries.
 ## Each entry: [code]{peer_id: int, display_name: String, player_index: int,
@@ -598,29 +608,23 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	# Verify the command's player_index matches the peer's assigned slot.
 	var expected_player: int = peers[sender_id].get("player_index", -1)
 	if cmd.player_index != expected_player:
-		# Phase I6b-3 R2 follow-up: during an active attack flow the
-		# attacker peer is the de-facto controller for defense-side
-		# follow-ups (token spending, redirect, damage resolution).
-		# Allow these commands when the sender is the attacker
-		# (the [code]controller_player[/code] of the attack flow) and
-		# the command's [code]player_index[/code] is the defender's
-		# slot.  Without this exception, any client-as-attacker /
-		# host-as-defender attack stalls when the client tries to
-		# submit a [SpendDefenseTokenCommand] / [ResolveDamageCommand]
-		# for the host-owned defender.
-		if not _is_attacker_authored_defense_command(cmd, expected_player):
-			_log.warn("Peer %d claims player %d but is assigned %d — rejecting [%s]." % [
-					sender_id, cmd.player_index, expected_player,
-					cmd.command_type])
-			return
+		_log.warn("Peer %d claims player %d but is assigned %d — rejecting [%s]." % [
+				sender_id, cmd.player_index, expected_player,
+				cmd.command_type])
+		_send_command_rejection(sender_id, data,
+				"Submitting player does not match the authenticated peer.")
+		return
+	_begin_rejection_capture(cmd)
 	var result: Dictionary
 	if ReplayDriver.enabled:
 		result = CommandProcessor.submit_replay_deferred_followups(cmd)
 	else:
 		result = CommandProcessor.submit_deferred_followups(cmd)
+	var rejection_reason: String = _end_rejection_capture()
 	if result.is_empty():
 		_log.info("Command [%s] from peer %d rejected by validation." % [
 				cmd.command_type, sender_id])
+		_send_command_rejection(sender_id, data, rejection_reason)
 		return
 	# Phase I6b-3 R2 follow-up: tag remote-authored commands so the host's
 	# [_on_network_command_result] runs side effects even when
@@ -660,6 +664,49 @@ func _submit_command_to_server(data: Dictionary) -> void:
 func _broadcast_command_result(command_data: Dictionary,
 		result: Dictionary) -> void:
 	command_result_received.emit(command_data, result)
+
+
+func _begin_rejection_capture(command: GameCommand) -> void:
+	_captured_rejection_command = command
+	_captured_rejection_reason = ""
+	if not CommandProcessor.command_rejected.is_connected(
+			_capture_submitted_command_rejection):
+		CommandProcessor.command_rejected.connect(
+				_capture_submitted_command_rejection)
+
+
+func _end_rejection_capture() -> String:
+	if CommandProcessor.command_rejected.is_connected(
+			_capture_submitted_command_rejection):
+		CommandProcessor.command_rejected.disconnect(
+				_capture_submitted_command_rejection)
+	var reason: String = _captured_rejection_reason
+	_captured_rejection_command = null
+	_captured_rejection_reason = ""
+	return reason
+
+
+func _capture_submitted_command_rejection(
+		command: GameCommand, reason: String) -> void:
+	if command == _captured_rejection_command:
+		_captured_rejection_reason = reason
+
+
+func _send_command_rejection(
+		peer_id: int, command_data: Dictionary, reason: String) -> void:
+	var deterministic_reason: String = reason
+	if deterministic_reason.is_empty():
+		deterministic_reason = "Command rejected by authoritative validation."
+	_receive_command_rejection.rpc_id(
+			peer_id, command_data, deterministic_reason)
+
+
+## Server → submitting client only: acknowledges authoritative rejection
+## without creating an accepted command result or broadcast.
+@rpc("authority", "reliable")
+func _receive_command_rejection(
+		command_data: Dictionary, reason: String) -> void:
+	command_rejection_received.emit(command_data, reason)
 
 
 ## Server-side observer follow-up submitter.
@@ -847,48 +894,6 @@ func _all_dials_assigned(player_index: int) -> bool:
 			if si.command_dial_stack.get_dials_needed() > 0:
 				return false
 	return true
-
-
-## Phase I6b-3 R2 follow-up: command-types the attacker peer may
-## author against the defender's [code]player_index[/code] during an
-## active attack flow.  These are the post-hand-off submissions the
-## [AttackExecutor] makes after the defender's
-## [CommitDefenseCommand] has been broadcast — the attacker peer
-## still drives [code]_state.modified_damage[/code] / sub-step UI
-## (Evade / Redirect) and resolves damage at the end.
-const _ATTACKER_DEFENSE_COMMANDS: PackedStringArray = [
-	"spend_defense_token",
-	"select_redirect_zone",
-	"resolve_damage",
-]
-
-
-## Returns [code]true[/code] when [param cmd] is a defense-side
-## follow-up authored by the current attack flow's attacker peer
-## against the defender's [code]player_index[/code].
-## Used to relax the strict peer/player check in
-## [method _submit_command_to_server].
-func _is_attacker_authored_defense_command(cmd: GameCommand,
-		sender_player: int) -> bool:
-	if not _ATTACKER_DEFENSE_COMMANDS.has(cmd.command_type):
-		return false
-	var gs: GameState = GameManager.current_game_state if GameManager else null
-	if gs == null or gs.interaction_flow == null:
-		return false
-	var flow: InteractionFlow = gs.interaction_flow
-	if flow.flow_type != Constants.InteractionFlow.ATTACK:
-		return false
-	# The flow's [code]controller_player[/code] is the attacker only
-	# during DECLARE/ROLL/MODIFY/RESOLVE_DAMAGE; during DEFENSE_TOKENS
-	# and CRITICAL_CHOICE it is the [b]defender[/b].  Read the attacker
-	# from the flow payload, which is populated by [AttackExecutor]
-	# when the target is locked in.
-	var attacker_player: int = int(flow.payload.get("attacker_player", -1))
-	if attacker_player < 0:
-		return false
-	# The sender must be the attacker peer (the one driving the
-	# [AttackExecutor] sub-step pipeline).
-	return attacker_player == sender_player
 
 
 # ---------------------------------------------------------------------------

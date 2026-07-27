@@ -5,6 +5,10 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 var _state: GameState
 
 
@@ -91,7 +95,9 @@ func after_each() -> void:
 
 func test_validate_ship_ok() -> void:
 	var idx: int = _add_ship(1)
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 2)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -107,7 +113,9 @@ func test_validate_ship_ok() -> void:
 func test_validate_ship_ok_squadron_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var idx: int = _add_ship(1)
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 1)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -189,7 +197,9 @@ func test_validate_ship_negative_shield() -> void:
 
 func test_validate_squadron_ok() -> void:
 	var idx: int = _add_squadron(1)
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("squadron", 1, idx, -1, 2)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "squadron",
 		"owner_player": 1,
 		"squadron_index": idx,
@@ -232,7 +242,9 @@ func test_execute_ship_shields_absorbed() -> void:
 	var ship: ShipInstance = _state.get_ship(1, idx)
 	assert_eq(int(ship.current_shields.get("FRONT", 0)), 3,
 			"FRONT shields should start at 3.")
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 2)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -254,7 +266,9 @@ func test_execute_ship_shields_capped() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
 	ship.current_shields["REAR"] = 1
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.REAR, 1)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -281,7 +295,10 @@ func test_execute_ship_facedown_cards() -> void:
 		_make_card("Test Card 1"),
 		_make_card("Test Card 2"),
 	]
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 5,
+			false, cards)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -301,7 +318,10 @@ func test_execute_ship_faceup_card() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
 	var cards: Array = [_make_card("Structural Damage", true)]
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 4,
+			true, cards)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -323,7 +343,10 @@ func test_execute_ship_faceup_card() -> void:
 func test_execute_ship_faceup_movement_card_records_no_persistent_runtime() -> void:
 	_state.initiative_player = 1
 	var idx: int = _add_ship(1)
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 4,
+			true, [_make_ruptured_engine_card()])
 	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -345,7 +368,10 @@ func test_execute_ship_mixed_cards() -> void:
 		_make_card("Generic Card 1"),
 		_make_card("Generic Card 2"),
 	]
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.LEFT, 5,
+			true, cards)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -373,7 +399,10 @@ func test_execute_ship_destroyed() -> void:
 	var cards: Array = []
 	for i: int in range(5):
 		cards.append(_make_card("Card %d" % i))
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 8,
+			false, cards)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -393,7 +422,10 @@ func test_execute_ship_not_destroyed() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
 	var cards: Array = [_make_card("Minor Hit")]
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("ship", 1, idx, Constants.HullZone.FRONT, 4,
+			false, cards)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "ship",
 		"owner_player": 1,
 		"ship_index": idx,
@@ -416,7 +448,9 @@ func test_execute_squadron_damage() -> void:
 	var sq: SquadronInstance = _state.get_squadron(1, idx)
 	assert_eq(sq.current_hull, 3,
 			"Squadron hull should start at 3.")
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("squadron", 1, idx, -1, 2)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "squadron",
 		"owner_player": 1,
 		"squadron_index": idx,
@@ -435,7 +469,9 @@ func test_execute_squadron_damage() -> void:
 func test_execute_squadron_destroyed() -> void:
 	var idx: int = _add_squadron(1)
 	var sq: SquadronInstance = _state.get_squadron(1, idx)
-	var cmd := ResolveDamageCommand.new(1, {
+	_install_damage_attack("squadron", 1, idx, -1, 4)
+	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "squadron",
 		"owner_player": 1,
 		"squadron_index": idx,
@@ -456,7 +492,9 @@ func test_execute_squadron_destroyed() -> void:
 func test_execute_squadron_not_destroyed() -> void:
 	var idx: int = _add_squadron(0)
 	var sq: SquadronInstance = _state.get_squadron(0, idx)
+	_install_damage_attack("squadron", 0, idx, -1, 1)
 	var cmd := ResolveDamageCommand.new(0, {
+		"attack_id": _attack_id(),
 		"target_type": "squadron",
 		"owner_player": 0,
 		"squadron_index": idx,
@@ -468,6 +506,30 @@ func test_execute_squadron_not_destroyed() -> void:
 			"Squadron hull should be 2 after 1 damage.")
 	assert_false(sq.is_destroyed(),
 			"Squadron should NOT be destroyed.")
+
+
+func test_remote_damage_target_resolution_uses_authoritative_result() -> void:
+	var ship_index: int = _add_ship(1)
+	var squadron_index: int = _add_squadron(1)
+	var previous_state: GameState = GameManager.current_game_state
+	GameManager.current_game_state = _state
+
+	assert_same(GameManager._find_ship_from_damage_result({
+		"owner_player": 1,
+		"ship_index": ship_index,
+	}), _state.get_ship(1, ship_index),
+			"Remote ship identity must come from the authoritative result")
+	assert_same(GameManager._find_squadron_from_damage_result({
+		"owner_player": 1,
+		"squadron_index": squadron_index,
+	}), _state.get_squadron(1, squadron_index),
+			"Remote squadron identity must come from the authoritative result")
+	assert_null(GameManager._find_ship_from_damage_result({
+		"owner_player": 0,
+		"ship_index": ship_index,
+	}), "A result cannot resolve a target under the wrong authoritative owner")
+
+	GameManager.current_game_state = previous_state
 
 
 # ======================================================================
@@ -522,3 +584,40 @@ func test_serialize_roundtrip_squadron() -> void:
 			"Restored hull_damage should match.")
 	assert_true(restored.payload.get("target_destroyed", false),
 			"Restored target_destroyed should be true.")
+
+
+func _install_damage_attack(defender_kind: String,
+		defender_player: int,
+		defender_index: int,
+		defender_zone: int,
+		damage: int,
+		critical: bool = false,
+		deck_cards: Array = []) -> void:
+	var dice_results: Array[Dictionary] = []
+	for index: int in range(damage):
+		dice_results.append({
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.CRITICAL) \
+					if critical and index == 0 \
+					else int(Constants.DiceFace.HIT),
+		})
+	if not deck_cards.is_empty():
+		var draw_pile: Array = deck_cards.duplicate(true)
+		draw_pile.reverse()
+		_state.damage_deck = DamageDeck.deserialize({
+			"draw_pile": draw_pile,
+			"discard_pile": [],
+		})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defender_player": defender_player,
+		"defender_kind": defender_kind,
+		"defender_index": defender_index,
+		"defender_zone": defender_zone,
+		"dice_results": dice_results,
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	}), "Damage fixture should install canonical current-attack state.")
+
+
+func _attack_id() -> String:
+	return _state.current_attack_state.attack_id

@@ -274,8 +274,10 @@ func reconstruction_cursor_for(
 	if meta == null or state == null or not meta.is_next_command_sequence_valid():
 		return {"ok": false, "next_command_sequence": -1}
 	if not meta.has_next_command_sequence:
-		if state.timing_window_state != null \
-				and state.timing_window_state.active:
+		if (state.timing_window_state != null \
+				and state.timing_window_state.active) \
+				or (state.current_attack_state != null \
+				and state.current_attack_state.active):
 			return {"ok": false, "next_command_sequence": -1}
 		meta.next_command_sequence = 0
 		return {"ok": true, "next_command_sequence": 0}
@@ -287,6 +289,12 @@ func reconstruction_cursor_for(
 		var lifecycle_sequence: int = _timing_lifecycle_sequence(
 				state.timing_window_state.lifecycle_id)
 		if lifecycle_sequence < 0 or next_sequence <= lifecycle_sequence:
+			return {"ok": false, "next_command_sequence": -1}
+	if state.current_attack_state != null \
+			and state.current_attack_state.active:
+		var attack_sequence: int = _current_attack_sequence(
+				state.current_attack_state.attack_id)
+		if attack_sequence < 0 or next_sequence <= attack_sequence:
 			return {"ok": false, "next_command_sequence": -1}
 	return {"ok": true, "next_command_sequence": next_sequence}
 
@@ -592,6 +600,16 @@ func _timing_lifecycle_sequence(lifecycle_id: String) -> int:
 		return -1
 	var sequence: int = raw_sequence.to_int()
 	return sequence if sequence >= 0 else -1
+
+
+func _current_attack_sequence(attack_id: String) -> int:
+	if not attack_id.begins_with("attack:"):
+		return -1
+	var raw_sequence: String = attack_id.trim_prefix("attack:")
+	if not raw_sequence.is_valid_int():
+		return -1
+	var sequence: int = raw_sequence.to_int()
+	return sequence if sequence >= 0 and str(sequence) == raw_sequence else -1
 
 
 ## Reads the current game mode from [PlayMode].  Defaults to hot-seat.

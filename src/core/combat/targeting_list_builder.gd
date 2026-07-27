@@ -20,6 +20,10 @@ class TargetEntry:
 	extends RefCounted
 	## Name of the target.
 	var target_name: String = ""
+	## Stable authoritative target identity when built from GameState.
+	var target_owner: int = -1
+	var target_kind: String = ""
+	var target_index: int = -1
 	## The attacking hull zone.
 	var arc: Constants.HullZone = Constants.HullZone.FRONT
 	## The defending hull zone (ship targets only).
@@ -29,6 +33,8 @@ class TargetEntry:
 	var has_target_zone: bool = false
 	## Range band string ("close", "medium", "long").
 	var range_band: String = ""
+	## Canonical range band even when [member range_band] contains UI copy.
+	var canonical_range_band: String = ""
 	## Dice available at this range.
 	var dice: Dictionary = {}
 	## Whether the attack is obstructed.
@@ -57,6 +63,8 @@ class ShipTargetingResult:
 	extends RefCounted
 	## The friendly ship's display name.
 	var ship_name: String = ""
+	var owner_player: int = -1
+	var entity_index: int = -1
 	## Outgoing targets grouped by hull zone.
 	var outgoing: Array = [] # Array[TargetEntry]
 	## Incoming threats.
@@ -69,6 +77,8 @@ class SquadTargetingResult:
 	extends RefCounted
 	## The friendly squadron's display name.
 	var squad_name: String = ""
+	var owner_player: int = -1
+	var entity_index: int = -1
 	## Outgoing targets (ships at distance 1 + enemy squadrons at distance 1).
 	var outgoing: Array = [] # Array[TargetEntry]
 	## Incoming threats from enemy ships and squadrons.
@@ -94,6 +104,10 @@ class ShipInfo:
 	var data_key: String = ""
 	## Owning player index.
 	var owner_player: int = 0
+	## Fleet-local index when built from authoritative state.
+	var entity_index: int = -1
+	## Whether the authoritative ship instance has been destroyed.
+	var destroyed: bool = false
 	## World position.
 	var pos: Vector2 = Vector2.ZERO
 	## World rotation (radians).
@@ -119,6 +133,8 @@ class SquadInfo:
 	var squad_name: String = ""
 	## Owning player index.
 	var owner_player: int = 0
+	## Fleet-local index when built from authoritative state.
+	var entity_index: int = -1
 	## World position.
 	var pos: Vector2 = Vector2.ZERO
 	## Base radius in pixels.
@@ -134,6 +150,169 @@ class SquadInfo:
 # =========================================================================
 # Public API
 # =========================================================================
+
+## Resolves one declared attack from serialized authoritative model state by
+## reusing the same deterministic targeting calculations as the targeting UI.
+## Stable entity identity is intent; range, obstruction, and dice are output.
+static func authoritative_attack_entry(game_state: GameState,
+		attacker_player: int, attacker_kind: String, attacker_index: int,
+		attacker_zone: int, defender_player: int, defender_kind: String,
+		defender_index: int, defender_zone: int) -> Dictionary:
+	if game_state == null:
+		return {}
+	var facts: Dictionary = _infos_from_state(game_state)
+	var built: BuildResult = build(
+			facts.get("ships", []), facts.get("squadrons", []), attacker_player)
+	var outgoing: Array = []
+	if attacker_kind == CurrentAttackState.KIND_SHIP:
+		for result_var: Variant in built.ship_results:
+			var result: ShipTargetingResult = result_var as ShipTargetingResult
+			if result.owner_player == attacker_player \
+					and result.entity_index == attacker_index:
+				outgoing = result.outgoing
+				break
+	elif attacker_kind == CurrentAttackState.KIND_SQUADRON:
+		for result_var: Variant in built.squad_results:
+			var result: SquadTargetingResult = result_var as SquadTargetingResult
+			if result.owner_player == attacker_player \
+					and result.entity_index == attacker_index:
+				outgoing = result.outgoing
+				break
+	for entry_var: Variant in outgoing:
+		var entry: TargetEntry = entry_var as TargetEntry
+		if entry.target_owner != defender_player \
+				or entry.target_kind != defender_kind \
+				or entry.target_index != defender_index:
+			continue
+		if attacker_kind == CurrentAttackState.KIND_SHIP \
+				and int(entry.arc) != attacker_zone:
+			continue
+		if defender_kind == CurrentAttackState.KIND_SHIP \
+				and int(entry.target_zone) != defender_zone:
+			continue
+		return {
+			"range_band": entry.canonical_range_band,
+			"obstructed": entry.obstructed,
+			"obstructed_by": entry.obstructed_by.duplicate(),
+			"dice": entry.dice.duplicate(true),
+		}
+	return {}
+
+
+## Returns the authoritative outgoing candidates for one exact, owner-local
+## squadron identity.  The dictionaries are a read-only derived presentation
+## view of the same [TargetEntry] values used by [method
+## authoritative_attack_entry]; no scene-token ordering or display-name
+## lookup participates in identity resolution.
+static func authoritative_squadron_target_entries(game_state: GameState,
+		attacker_player: int, attacker_index: int) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	if game_state == null:
+		return candidates
+	var facts: Dictionary = _infos_from_state(game_state)
+	var built: BuildResult = build(
+			facts.get("ships", []), facts.get("squadrons", []),
+			attacker_player)
+	for result_var: Variant in built.squad_results:
+		var result: SquadTargetingResult = result_var as SquadTargetingResult
+		if result.owner_player != attacker_player \
+				or result.entity_index != attacker_index:
+			continue
+		for entry_var: Variant in result.outgoing:
+			var entry: TargetEntry = entry_var as TargetEntry
+			candidates.append({
+				"target_owner": entry.target_owner,
+				"target_kind": entry.target_kind,
+				"target_index": entry.target_index,
+				"target_zone": int(entry.target_zone) \
+						if entry.has_target_zone else -1,
+				"range_band": entry.canonical_range_band,
+				"obstructed": entry.obstructed,
+				"obstructed_by": entry.obstructed_by.duplicate(),
+				"dice": entry.dice.duplicate(true),
+			})
+		break
+	return candidates
+
+
+static func _infos_from_state(game_state: GameState) -> Dictionary:
+	var ships: Array = []
+	var squadrons: Array = []
+	var play_area_size: Vector2 = GameScale.play_area_size_px
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
+		play_area_size = Vector2(1000.0, 1000.0)
+	for player_state: PlayerState in game_state.player_states:
+		if player_state == null:
+			continue
+		for index: int in range(player_state.ships.size()):
+			var ship: ShipInstance = player_state.ships[index] as ShipInstance
+			var info: ShipInfo = _ship_info_from_state(
+					ship, index, play_area_size)
+			if info != null:
+				ships.append(info)
+		for index: int in range(player_state.squadrons.size()):
+			var squadron: SquadronInstance = \
+					player_state.squadrons[index] as SquadronInstance
+			var info: SquadInfo = _squad_info_from_state(
+					squadron, index, play_area_size)
+			if info != null:
+				squadrons.append(info)
+	return {"ships": ships, "squadrons": squadrons}
+
+
+static func _ship_info_from_state(ship: ShipInstance, index: int,
+		play_area_size: Vector2) -> ShipInfo:
+	if ship == null or ship.ship_data == null:
+		return null
+	var info := ShipInfo.new()
+	info.ship_name = ship.ship_data.ship_name
+	info.data_key = ship.data_key
+	info.owner_player = ship.owner_player
+	info.entity_index = index
+	info.destroyed = ship.is_destroyed()
+	info.pos = ship.get_pixel_position(play_area_size)
+	info.rot = ship.get_rotation_rad()
+	var base_size: Vector2 = GameScale.get_base_size(ship.ship_data.ship_size)
+	info.half_w = base_size.x * 0.5
+	info.half_l = base_size.y * 0.5
+	info.battery_armament = ship.ship_data.battery_armament
+	info.anti_squadron_armament = ship.ship_data.anti_squadron_armament
+	var texture: Texture2D = AssetLoader.load_texture(
+			"ships/", ship.data_key + "_token.png")
+	if texture != null:
+		var texture_size := Vector2(texture.get_width(), texture.get_height())
+		var sprite_scale: Vector2 = GameScale.get_base_sprite_scale(
+				ship.ship_data.ship_size, texture_size)
+		info.arc_pts = _points_to_world(ship.ship_data.firing_arc_boundaries,
+				texture_size, sprite_scale, info.pos, info.rot)
+		info.los_pts = _points_to_world(ship.ship_data.line_of_sight_origins,
+				texture_size, sprite_scale, info.pos, info.rot)
+	return info
+
+
+static func _squad_info_from_state(squadron: SquadronInstance, index: int,
+		play_area_size: Vector2) -> SquadInfo:
+	if squadron == null or squadron.squadron_data == null:
+		return null
+	var info := SquadInfo.new()
+	info.squad_name = squadron.squadron_data.squadron_name
+	info.owner_player = squadron.owner_player
+	info.entity_index = index
+	info.pos = squadron.get_pixel_position(play_area_size)
+	info.radius = GameScale.squadron_base_diameter_px * 0.5
+	info.battery_armament = squadron.squadron_data.battery_armament
+	info.anti_squadron_armament = squadron.squadron_data.anti_squadron_armament
+	return info
+
+
+static func _points_to_world(points: Dictionary, texture_size: Vector2,
+		sprite_scale: Vector2, position: Vector2, rotation: float) -> Dictionary:
+	var result: Dictionary = {}
+	for key: String in points:
+		var source_point: Vector2 = points[key] as Vector2
+		var local: Vector2 = (source_point - texture_size * 0.5) * sprite_scale
+		result[key] = local.rotated(rotation) + position
+	return result
 
 ## Builds the full targeting list for the active player.
 ## [param ships]         — all ships on the board.
@@ -182,12 +361,16 @@ static func _sort_into_fleets(ships: Array, squadrons: Array,
 	var enemy_squads: Array = []
 	for ship: Variant in ships:
 		var s: ShipInfo = ship as ShipInfo
+		if s == null:
+			continue
 		if s.owner_player == active_player:
 			friendly_ships.append(s)
 		else:
 			enemy_ships.append(s)
 	for squad: Variant in squadrons:
 		var sq: SquadInfo = squad as SquadInfo
+		if sq == null:
+			continue
 		if sq.owner_player == active_player:
 			friendly_squads.append(sq)
 		else:
@@ -205,6 +388,8 @@ static func _build_all_ship_bodies(ships: Array) -> Array:
 	var bodies: Array = []
 	for ship: Variant in ships:
 		var s: ShipInfo = ship as ShipInfo
+		if s.destroyed:
+			continue
 		bodies.append({
 			"info": s,
 			"body": LineOfSightChecker.ObstructionBody.from_ship_base(
@@ -304,6 +489,8 @@ static func _build_ship_entry(
 		all_ship_bodies: Array) -> ShipTargetingResult:
 	var result: ShipTargetingResult = ShipTargetingResult.new()
 	result.ship_name = friendly.ship_name
+	result.owner_player = friendly.owner_player
+	result.entity_index = friendly.entity_index
 	var zones: Array = [
 		Constants.HullZone.FRONT,
 		Constants.HullZone.LEFT,
@@ -410,10 +597,14 @@ static func _validate_ship_zone(
 		return null
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = defender.ship_name
+	entry.target_owner = defender.owner_player
+	entry.target_kind = CurrentAttackState.KIND_SHIP
+	entry.target_index = defender.entity_index
 	entry.arc = atk_zone
 	entry.target_zone = def_hz
 	entry.has_target_zone = true
 	entry.range_band = band
+	entry.canonical_range_band = band
 	entry.dice = RangeFinder.dice_at_range(armament, band)
 	entry.obstructed = los_result.obstructed
 	entry.obstructed_by = los_result.obstructed_by
@@ -518,7 +709,7 @@ static func _check_squad_los(
 	for entry: Variant in all_ship_bodies:
 		var d: Dictionary = entry as Dictionary
 		var info: ShipInfo = d["info"] as ShipInfo
-		if info.ship_name == atk.ship_name:
+		if _same_ship_info(info, atk):
 			continue
 		bodies.append(d["body"])
 	return LineOfSightChecker.trace_los_ship_to_squadron(
@@ -534,9 +725,13 @@ static func _make_squad_target_entry(
 		los_result: LineOfSightChecker.LOSResult) -> TargetEntry:
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = squad.squad_name
+	entry.target_owner = squad.owner_player
+	entry.target_kind = CurrentAttackState.KIND_SQUADRON
+	entry.target_index = squad.entity_index
 	entry.arc = atk_zone
 	entry.dice = RangeFinder.dice_at_range(anti_sq_armament, band)
 	entry.range_band = "in range"
+	entry.canonical_range_band = band
 	entry.obstructed = los_result.obstructed
 	entry.obstructed_by = los_result.obstructed_by
 	return entry
@@ -668,9 +863,12 @@ static func _build_squad_entry(
 		all_ship_bodies: Array) -> SquadTargetingResult:
 	var result: SquadTargetingResult = SquadTargetingResult.new()
 	result.squad_name = squad.squad_name
+	result.owner_player = squad.owner_player
+	result.entity_index = squad.entity_index
 	_collect_squad_vs_ships(log, squad, enemy_ships,
 			all_ship_bodies, result.outgoing)
-	_collect_squad_vs_squads(log, squad, enemy_squads, result.outgoing)
+	_collect_squad_vs_squads(log, squad, enemy_squads,
+			all_ship_bodies, result.outgoing)
 	return result
 
 
@@ -743,10 +941,14 @@ static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
 		return null
 	var entry: TargetEntry = TargetEntry.new()
 	entry.target_name = es.ship_name
+	entry.target_owner = es.owner_player
+	entry.target_kind = CurrentAttackState.KIND_SHIP
+	entry.target_index = es.entity_index
 	entry.arc = Constants.HullZone.FRONT
 	entry.target_zone = def_hz
 	entry.has_target_zone = true
 	entry.range_band = "in range"
+	entry.canonical_range_band = band
 	entry.dice = RangeFinder.dice_at_range(squad.battery_armament, band)
 	entry.obstructed = los_result.obstructed
 	entry.obstructed_by = los_result.obstructed_by
@@ -758,7 +960,7 @@ static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
 ## Collects outgoing targets from a friendly squadron vs enemy squadrons.
 ## Appends TargetEntry items to [param out].
 static func _collect_squad_vs_squads(log: GameLogger, squad: SquadInfo,
-		enemy_squads: Array, out: Array) -> void:
+		enemy_squads: Array, all_ship_bodies: Array, out: Array) -> void:
 	if squad.anti_squadron_armament.is_empty():
 		return
 	for enemy_sq: Variant in enemy_squads:
@@ -769,13 +971,27 @@ static func _collect_squad_vs_squads(log: GameLogger, squad: SquadInfo,
 				squad.squad_name, esq.squad_name, dist, band])
 		if band != Constants.RANGE_BAND_CLOSE:
 			continue
+		var bodies: Array = []
+		for body_entry: Variant in all_ship_bodies:
+			bodies.append((body_entry as Dictionary)["body"])
+		var los_result: LineOfSightChecker.LOSResult = \
+				LineOfSightChecker.trace_los_squad_to_squad(
+					squad.pos, squad.radius, esq.pos, esq.radius, bodies, [])
+		if not los_result.has_los:
+			continue
 		var entry: TargetEntry = TargetEntry.new()
 		entry.target_name = esq.squad_name
+		entry.target_owner = esq.owner_player
+		entry.target_kind = CurrentAttackState.KIND_SQUADRON
+		entry.target_index = esq.entity_index
 		entry.arc = Constants.HullZone.FRONT
 		entry.has_target_zone = false
 		entry.range_band = "in range"
+		entry.canonical_range_band = band
 		entry.dice = RangeFinder.dice_at_range(
 				squad.anti_squadron_armament, band)
+		entry.obstructed = los_result.obstructed
+		entry.obstructed_by = los_result.obstructed_by
 		out.append(entry)
 		log.debug("    -> HIT squad '%s'" % esq.squad_name)
 
@@ -936,9 +1152,9 @@ static func _get_intervening_bodies(
 	for entry: Variant in all_ship_bodies:
 		var d: Dictionary = entry as Dictionary
 		var info: ShipInfo = d["info"] as ShipInfo
-		if info.ship_name == atk.ship_name:
+		if _same_ship_info(info, atk):
 			continue
-		if info.ship_name == defender.ship_name:
+		if _same_ship_info(info, defender):
 			continue
 		bodies.append(d["body"])
 	return bodies
@@ -954,10 +1170,19 @@ static func _get_intervening_squad_bodies(
 	for entry: Variant in all_ship_bodies:
 		var d: Dictionary = entry as Dictionary
 		var info: ShipInfo = d["info"] as ShipInfo
-		if info.ship_name == defender.ship_name:
+		if _same_ship_info(info, defender):
 			continue
 		bodies.append(d["body"])
 	return bodies
+
+
+static func _same_ship_info(left: ShipInfo, right: ShipInfo) -> bool:
+	if left == right:
+		return true
+	if left.entity_index >= 0 and right.entity_index >= 0:
+		return left.owner_player == right.owner_player \
+				and left.entity_index == right.entity_index
+	return left.ship_name == right.ship_name
 
 
 ## Formats a Vector2 compactly for log output.

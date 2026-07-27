@@ -86,9 +86,12 @@ static func find_available_source(game_state: GameState,
 	var runtime_upgrade: Dictionary = source.get("runtime_upgrade", {})
 	if not _runtime_upgrade_ready(runtime_upgrade):
 		return {}
-	if has_pending_authorization(runtime_upgrade):
+	var pending: Dictionary = pending_authorization(runtime_upgrade)
+	if not pending.is_empty() \
+			and _authorization_matches_current_attack(
+					pending, game_state, flow):
 		return {}
-	if has_declined_current_attack(runtime_upgrade, flow):
+	if has_declined_current_attack(runtime_upgrade, game_state):
 		return {}
 	if eligible_token_indices(game_state, flow, source).is_empty():
 		return {}
@@ -96,12 +99,17 @@ static func find_available_source(game_state: GameState,
 
 
 static func find_defender_source(game_state: GameState,
-		flow: InteractionFlow) -> Dictionary:
-	if game_state == null or not _is_defense_step(flow):
+		_flow: InteractionFlow) -> Dictionary:
+	if game_state == null:
 		return {}
-	var defender_player: int = int(flow.payload.get("defender_player", -1))
-	var defender_ship_index: int = int(
-			flow.payload.get("defender_ship_index", -1))
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var canonical_defense: bool = attack != null and attack.active \
+			and attack.stage == CurrentAttackState.STAGE_DEFENSE \
+			and attack.defender_kind == CurrentAttackState.KIND_SHIP
+	if not canonical_defense:
+		return {}
+	var defender_player: int = attack.defender_player
+	var defender_ship_index: int = attack.defender_index
 	if defender_player < 0 or defender_player >= game_state.player_states.size() \
 			or defender_ship_index < 0:
 		return {}
@@ -148,18 +156,21 @@ static func find_active_source_by_id(game_state: GameState,
 
 
 static func eligible_token_indices(game_state: GameState,
-		flow: InteractionFlow,
+		_flow: InteractionFlow,
 		source: Dictionary) -> Array[int]:
 	var result: Array[int] = []
-	if game_state == null or not _is_defense_step(flow):
+	if game_state == null:
+		return result
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_DEFENSE:
 		return result
 	var ship: ShipInstance = source.get("ship", null)
 	if ship == null or ship.current_speed == 0:
 		return result
-	var locked: Array[int] = _int_array(flow.payload.get("locked_tokens", []))
-	var spent_types: Array[int] = _int_array(
-			flow.payload.get("spent_defense_token_types", []))
-	var defender_zone: int = int(flow.payload.get("defender_zone", -1))
+	var locked: Array[int] = attack.accuracy_locked_tokens
+	var spent_types: Array[int] = _resolved_token_types(attack)
+	var defender_zone: int = attack.defender_zone
 	for token_index: int in locked:
 		if _token_otherwise_spendable(
 				ship, token_index, spent_types, defender_zone):
@@ -169,14 +180,19 @@ static func eligible_token_indices(game_state: GameState,
 
 static func validate_use(game_state: GameState,
 		player_index: int,
-		runtime_upgrade_id: String) -> String:
+		runtime_upgrade_id: String,
+		attack_id: String) -> String:
+	if game_state == null:
+		return "Electronic Countermeasures requires a game state."
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return "Electronic Countermeasures can only be used during an attack."
-	var flow: InteractionFlow = game_state.interaction_flow
-	if not _is_defense_step(flow):
-		return "Electronic Countermeasures is not available now."
-	var source: Dictionary = find_available_source(game_state, flow)
+	var identity_error: String = _validate_canonical_attack_identity(
+			game_state, attack_id)
+	if identity_error != "":
+		return identity_error
+	var source: Dictionary = find_available_source(
+			game_state, game_state.interaction_flow)
 	if source.is_empty():
 		return "Electronic Countermeasures has no legal effect."
 	return _validate_source_player_and_id(
@@ -185,14 +201,19 @@ static func validate_use(game_state: GameState,
 
 static func validate_decline(game_state: GameState,
 		player_index: int,
-		runtime_upgrade_id: String) -> String:
+		runtime_upgrade_id: String,
+		attack_id: String) -> String:
+	if game_state == null:
+		return "Electronic Countermeasures requires a game state."
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return "Electronic Countermeasures can only be declined during an attack."
-	var flow: InteractionFlow = game_state.interaction_flow
-	if not _is_defense_step(flow):
-		return "Electronic Countermeasures is not available now."
-	var source: Dictionary = find_available_source(game_state, flow)
+	var identity_error: String = _validate_canonical_attack_identity(
+			game_state, attack_id)
+	if identity_error != "":
+		return identity_error
+	var source: Dictionary = find_available_source(
+			game_state, game_state.interaction_flow)
 	if source.is_empty():
 		return "Electronic Countermeasures has no legal effect."
 	return _validate_source_player_and_id(
@@ -213,23 +234,26 @@ static func use_ecm(game_state: GameState,
 	rule_state[RULE_STATE_PENDING_AUTHORIZATION] = _authorization_payload(
 			game_state, flow, runtime_upgrade, eligible)
 	runtime_upgrade["rule_state"] = rule_state
-	flow.payload.erase(AFFORDANCE_KEY)
-	flow.payload["ecm_authorized_indices"] = authorized_token_indices(
-			game_state, flow)
+	if flow != null:
+		flow.payload.erase(AFFORDANCE_KEY)
+		flow.payload["ecm_authorized_indices"] = authorized_token_indices(
+				game_state, flow)
 	return rule_state[RULE_STATE_PENDING_AUTHORIZATION].duplicate(true)
 
 
 static func decline_ecm(game_state: GameState,
 		runtime_upgrade: Dictionary) -> Dictionary:
 	var flow: InteractionFlow = game_state.interaction_flow
+	var attack: CurrentAttackState = game_state.current_attack_state
 	var rule_state: Dictionary = _dict_from(runtime_upgrade.get("rule_state", {}))
 	rule_state.erase(RULE_STATE_PENDING_AUTHORIZATION)
-	rule_state[RULE_STATE_DECLINED_ATTACK] = _attack_scope_from_flow(
-			game_state, flow)
+	rule_state[RULE_STATE_DECLINED_ATTACK] = _attack_scope_from_current_attack(
+			game_state, attack)
 	runtime_upgrade["rule_state"] = rule_state
-	flow.payload.erase("ecm_pending_authorization")
-	flow.payload.erase("ecm_authorized_indices")
-	flow.payload.erase(AFFORDANCE_KEY)
+	if flow != null:
+		flow.payload.erase("ecm_pending_authorization")
+		flow.payload.erase("ecm_authorized_indices")
+		flow.payload.erase(AFFORDANCE_KEY)
 	return rule_state[RULE_STATE_DECLINED_ATTACK].duplicate(true)
 
 
@@ -237,11 +261,13 @@ static func validate_authorized_token_selection(game_state: GameState,
 		ship: ShipInstance,
 		ship_index: int,
 		selected_indices: Array) -> String:
-	if game_state == null or game_state.interaction_flow == null:
+	if game_state == null:
+		return ""
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
 		return ""
 	var locked_count: int = 0
-	var locked: Array[int] = _int_array(
-			game_state.interaction_flow.payload.get("locked_tokens", []))
+	var locked: Array[int] = attack.accuracy_locked_tokens
 	var source: Dictionary = find_defender_source(
 			game_state, game_state.interaction_flow)
 	var pending: Dictionary = {}
@@ -271,10 +297,12 @@ static func validate_authorized_token_spend(game_state: GameState,
 		ship: ShipInstance,
 		ship_index: int,
 		token_index: int) -> String:
-	var flow: InteractionFlow = game_state.interaction_flow
-	if not _is_defense_step(flow):
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_DEFENSE:
 		return ""
-	var locked: Array[int] = _int_array(flow.payload.get("locked_tokens", []))
+	var flow: InteractionFlow = game_state.interaction_flow
+	var locked: Array[int] = attack.accuracy_locked_tokens
 	if not locked.has(token_index):
 		return ""
 	var source: Dictionary = find_defender_source(game_state, flow)
@@ -298,8 +326,7 @@ static func validate_authorized_token_spend(game_state: GameState,
 	if selected_token_index >= 0 and selected_token_index != token_index:
 		return "Token was not selected for Electronic Countermeasures."
 	if not _token_otherwise_spendable(ship, token_index,
-			_int_array(flow.payload.get("spent_defense_token_types", [])),
-			int(flow.payload.get("defender_zone", -1))):
+			_resolved_token_types(attack), attack.defender_zone):
 		return "Token cannot be spent with Electronic Countermeasures."
 	return ""
 
@@ -307,7 +334,10 @@ static func validate_authorized_token_spend(game_state: GameState,
 static func commit_authorized_token_selection(game_state: GameState,
 		ship_index: int,
 		selected_indices: Array) -> Dictionary:
-	if game_state == null or game_state.interaction_flow == null:
+	if game_state == null:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
 		return {}
 	var source: Dictionary = find_defender_source(
 			game_state, game_state.interaction_flow)
@@ -318,8 +348,8 @@ static func commit_authorized_token_selection(game_state: GameState,
 	if pending.is_empty() or not _authorization_matches_current_attack(
 			pending, game_state, game_state.interaction_flow):
 		return {}
-	var chosen: int = _selected_locked_token_index(
-			game_state.interaction_flow, selected_indices)
+	var chosen: int = _selected_locked_token_index_from_attack(
+			attack, selected_indices)
 	if chosen < 0:
 		return {}
 	pending[PENDING_SELECTED_TOKEN_INDEX] = chosen
@@ -334,10 +364,12 @@ static func commit_authorized_token_selection(game_state: GameState,
 static func consume_authorization_for_spend(game_state: GameState,
 		ship: ShipInstance,
 		token_index: int) -> String:
-	var flow: InteractionFlow = game_state.interaction_flow
-	if not _is_defense_step(flow) or ship == null:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_DEFENSE or ship == null:
 		return ""
-	var locked: Array[int] = _int_array(flow.payload.get("locked_tokens", []))
+	var flow: InteractionFlow = game_state.interaction_flow
+	var locked: Array[int] = attack.accuracy_locked_tokens
 	if not locked.has(token_index):
 		return ""
 	var source: Dictionary = find_defender_source(game_state, flow)
@@ -359,9 +391,13 @@ static func is_token_otherwise_spendable(ship: ShipInstance,
 			ship, token_index, spent_types, defender_zone)
 
 
-static func clear_window_state(game_state: GameState) -> Array[String]:
+## Clears ECM runtime guards owned by one terminal canonical attack.
+## The enclosing replayable attack command supplies the attack identity;
+## InteractionFlow is intentionally not consulted for semantic cleanup.
+static func clear_attack_state(game_state: GameState,
+		attack_id: String) -> Array[String]:
 	var cleared: Array[String] = []
-	if game_state == null:
+	if game_state == null or attack_id.is_empty():
 		return cleared
 	for player_index: int in range(game_state.player_states.size()):
 		var player_state: PlayerState = game_state.get_player_state(player_index)
@@ -376,10 +412,20 @@ static func clear_window_state(game_state: GameState) -> Array[String]:
 					continue
 				var rule_state: Dictionary = _dict_from(
 						runtime_upgrade.get("rule_state", {}))
-				if rule_state.has(RULE_STATE_PENDING_AUTHORIZATION) \
-						or rule_state.has(RULE_STATE_DECLINED_ATTACK):
+				var pending: Dictionary = _dict_from(rule_state.get(
+						RULE_STATE_PENDING_AUTHORIZATION, {}))
+				var pending_scope: Dictionary = _dict_from(
+						pending.get("attack_scope", {}))
+				var declined: Dictionary = _dict_from(rule_state.get(
+						RULE_STATE_DECLINED_ATTACK, {}))
+				var changed: bool = false
+				if _scope_has_attack_id(pending_scope, attack_id):
 					rule_state.erase(RULE_STATE_PENDING_AUTHORIZATION)
+					changed = true
+				if _scope_has_attack_id(declined, attack_id):
 					rule_state.erase(RULE_STATE_DECLINED_ATTACK)
+					changed = true
+				if changed:
 					runtime_upgrade["rule_state"] = rule_state
 					cleared.append(str(runtime_upgrade.get(
 							"runtime_upgrade_id", "")))
@@ -398,6 +444,11 @@ static func pending_authorization(runtime_upgrade: Dictionary) -> Dictionary:
 static func authorized_token_indices(game_state: GameState,
 		flow: InteractionFlow) -> Array[int]:
 	var result: Array[int] = []
+	var attack: CurrentAttackState = game_state.current_attack_state \
+			if game_state != null else null
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_DEFENSE:
+		return result
 	var source: Dictionary = find_defender_source(game_state, flow)
 	if source.is_empty():
 		return result
@@ -416,8 +467,7 @@ static func authorized_token_indices(game_state: GameState,
 		if selected_token_index >= 0 and token_index != selected_token_index:
 			continue
 		if _token_otherwise_spendable(ship, token_index,
-				_int_array(flow.payload.get("spent_defense_token_types", [])),
-				int(flow.payload.get("defender_zone", -1))):
+				_resolved_token_types(attack), attack.defender_zone):
 			result.append(token_index)
 	return result
 
@@ -614,13 +664,29 @@ static func clear_pending_authorization(runtime_upgrade: Dictionary) -> void:
 
 
 static func has_declined_current_attack(runtime_upgrade: Dictionary,
-		flow: InteractionFlow) -> bool:
+		game_state: GameState) -> bool:
+	if game_state == null:
+		return false
 	var rule_state: Dictionary = _dict_from(runtime_upgrade.get("rule_state", {}))
 	var declined: Dictionary = _dict_from(
 			rule_state.get(RULE_STATE_DECLINED_ATTACK, {}))
 	if declined.is_empty():
 		return false
-	return _scope_matches_flow(declined, flow)
+	return int(declined.get("round", -1)) == game_state.current_round \
+			and _scope_matches_current_attack(
+					declined, game_state.current_attack_state)
+
+
+static func _validate_canonical_attack_identity(game_state: GameState,
+		attack_id: String) -> String:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_DEFENSE \
+			or attack.defender_kind != CurrentAttackState.KIND_SHIP:
+		return "Electronic Countermeasures is not available at the canonical defense stage."
+	if attack_id != attack.attack_id:
+		return "Electronic Countermeasures attack identity is stale."
+	return ""
 
 
 static func _validate_source_player_and_id(source: Dictionary,
@@ -635,57 +701,90 @@ static func _validate_source_player_and_id(source: Dictionary,
 
 
 static func _authorization_payload(game_state: GameState,
-		flow: InteractionFlow,
+		_flow: InteractionFlow,
 		runtime_upgrade: Dictionary,
 		eligible: Array[int]) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
 	return {
 		"runtime_upgrade_id": str(runtime_upgrade.get("runtime_upgrade_id", "")),
 		"round": game_state.current_round,
-		"defender_player": int(flow.payload.get("defender_player", -1)),
-			"defender_ship_index": int(flow.payload.get("defender_ship_index", -1)),
-			"defender_zone": int(flow.payload.get("defender_zone", -1)),
+		"defender_player": attack.defender_player,
+		"defender_ship_index": attack.defender_index,
+		"defender_zone": attack.defender_zone,
 			"eligible_token_indices": eligible.duplicate(),
 			PENDING_SELECTED_TOKEN_INDEX: -1,
-			"attack_scope": _attack_scope_from_flow(game_state, flow),
+			"attack_scope": _attack_scope_from_current_attack(
+					game_state, attack),
 	}
 
 
 static func _authorization_matches_current_attack(
 		pending: Dictionary,
 		game_state: GameState,
-		flow: InteractionFlow) -> bool:
+		_flow: InteractionFlow) -> bool:
 	if int(pending.get("round", -1)) != game_state.current_round:
 		return false
 	var scope: Dictionary = _dict_from(pending.get("attack_scope", {}))
-	return _scope_matches_flow(scope, flow)
+	return _scope_matches_current_attack(
+			scope, game_state.current_attack_state)
 
 
-static func _attack_scope_from_flow(game_state: GameState,
-		flow: InteractionFlow) -> Dictionary:
-	var payload: Dictionary = flow.payload if flow != null else {}
+static func _attack_scope_from_current_attack(game_state: GameState,
+		attack: CurrentAttackState) -> Dictionary:
 	return {
 		"round": game_state.current_round if game_state != null else -1,
-		"attacker_player": int(payload.get("attacker_player", -1)),
-		"attacker_ship_index": int(payload.get("attacker_ship_index", -1)),
-		"attacker_squadron_index": int(payload.get(
-				"attacker_squadron_index", -1)),
-		"defender_player": int(payload.get("defender_player", -1)),
-		"defender_ship_index": int(payload.get("defender_ship_index", -1)),
-		"defender_zone": int(payload.get("defender_zone", -1)),
+		"attack_id": attack.attack_id if attack != null else "",
+		"attacker_player": attack.attacker_player if attack != null else -1,
+		"attacker_kind": attack.attacker_kind if attack != null else "",
+		"attacker_index": attack.attacker_index if attack != null else -1,
+		"defender_player": attack.defender_player if attack != null else -1,
+		"defender_kind": attack.defender_kind if attack != null else "",
+		"defender_index": attack.defender_index if attack != null else -1,
+		"defender_zone": attack.defender_zone if attack != null else -1,
 	}
 
 
-static func _scope_matches_flow(scope: Dictionary,
-		flow: InteractionFlow) -> bool:
-	if flow == null:
+static func _scope_matches_current_attack(scope: Dictionary,
+		attack: CurrentAttackState) -> bool:
+	if attack == null or not attack.active:
 		return false
-	var current: Dictionary = _attack_scope_from_flow(null, flow)
-	for key: String in ["attacker_player", "attacker_ship_index",
-			"attacker_squadron_index", "defender_player",
-			"defender_ship_index", "defender_zone"]:
+	var current: Dictionary = _attack_scope_from_current_attack(null, attack)
+	for key: String in ["attack_id", "attacker_kind", "defender_kind"]:
+		if str(scope.get(key, "")) != str(current.get(key, "")):
+			return false
+	for key: String in ["attacker_player", "attacker_index",
+			"defender_player", "defender_index", "defender_zone"]:
 		if int(scope.get(key, -1)) != int(current.get(key, -1)):
 			return false
 	return true
+
+
+static func _scope_has_attack_id(scope: Dictionary,
+		attack_id: String) -> bool:
+	return not attack_id.is_empty() \
+			and str(scope.get("attack_id", "")) == attack_id
+
+
+static func _resolved_token_types(attack: CurrentAttackState) -> Array[int]:
+	var result: Array[int] = []
+	if attack == null:
+		return result
+	for effect: Dictionary in attack.resolved_defense_effects:
+		var token_type: int = int(effect.get("token_type", -1))
+		if token_type >= 0 and not result.has(token_type):
+			result.append(token_type)
+	return result
+
+
+static func _selected_locked_token_index_from_attack(
+		attack: CurrentAttackState, selected_indices: Array) -> int:
+	if attack == null:
+		return -1
+	for raw_index: Variant in selected_indices:
+		var index: int = int(raw_index)
+		if attack.accuracy_locked_tokens.has(index):
+			return index
+	return -1
 
 
 static func _token_otherwise_spendable(ship: ShipInstance,

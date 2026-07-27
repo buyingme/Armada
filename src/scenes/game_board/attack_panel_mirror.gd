@@ -896,19 +896,16 @@ func _on_defense_tokens_done() -> void:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return
-	var def_player: int = -1
-	var def_index: int = -1
-	var flow: InteractionFlow = gs.interaction_flow
-	if flow:
-		def_player = int(flow.payload.get("defender_player", -1))
-		def_index = int(flow.payload.get("defender_ship_index", -1))
-	if def_player < 0 or def_index < 0:
+	var attack: CurrentAttackState = gs.current_attack_state
+	if attack == null or not attack.active:
 		_log.warn("Defense commit with no defender identity — ignoring.")
 		return
-	var def_inst: ShipInstance = gs.get_ship(def_player, def_index)
+	var def_inst: RefCounted = gs.get_ship(
+			attack.defender_player, attack.defender_index) \
+			if attack.defender_kind == CurrentAttackState.KIND_SHIP \
+			else gs.get_squadron(attack.defender_player, attack.defender_index)
 	if def_inst == null:
-		_log.warn("Defense commit: ship %d/%d not found." %
-				[def_player, def_index])
+		_log.warn("Defense commit: canonical defender not found.")
 		return
 	var result: Dictionary = GameManager.submit_commit_defense(def_inst, selected)
 	if result.is_empty():

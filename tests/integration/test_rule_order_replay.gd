@@ -186,6 +186,7 @@ func _make_replay(commands: Array[Dictionary]) -> GameReplay:
 			int(Constants.Faction.GALACTIC_EMPIRE),
 		],
 		"initiative_player": 0,
+		"initial_command_sequence": 0,
 	}
 	replay.set_commands(commands)
 	return replay

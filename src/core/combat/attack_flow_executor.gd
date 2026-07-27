@@ -87,36 +87,45 @@ func reset_for_confirm(state: AttackState, damage: int) -> void:
 
 ## Builds the DEFENSE_TOKENS payload patch for interaction flow.
 func build_defense_payload(state: AttackState,
-		def_inst: ShipInstance,
+		def_inst: RefCounted,
 		gs: GameState,
 		defense_resolver: DefenseTokenResolver = null) -> Dictionary:
-	var defender_ship_index: int = gs.find_ship_index(def_inst) if gs else -1
+	var is_ship: bool = def_inst is ShipInstance
+	var defender_index: int = _defender_index(gs, def_inst)
+	var tokens: Array[Dictionary] = _defense_tokens(def_inst)
 	var payload: Dictionary = {
 		"blocked_defense_token_indices": build_blocked_defense_token_indices(
 				state, def_inst, defense_resolver),
 		"locked_tokens": state.locked_tokens.duplicate(true),
 		"modified_damage": state.modified_damage,
 		"dice_results": state.dice_results.duplicate(true),
-		"defender_player": def_inst.owner_player,
-		"defender_ship_index": defender_ship_index,
-		"defender_speed": def_inst.current_speed,
+		"defender_player": int(def_inst.get("owner_player")),
+		"defender_kind": CurrentAttackState.KIND_SHIP if is_ship \
+				else CurrentAttackState.KIND_SQUADRON,
+		"defender_index": defender_index,
+		"defender_ship_index": defender_index if is_ship else -1,
+		"defender_squadron_index": -1 if is_ship else defender_index,
+		"defender_speed": (def_inst as ShipInstance).current_speed \
+				if is_ship else -1,
 		"defender_zone": state.defender_zone,
-		"defense_tokens": def_inst.defense_tokens.duplicate(true),
+		"defense_tokens": tokens.duplicate(true),
 		"spent_defense_token_types": _spent_defense_token_types(state),
 	}
-	return ECM_SCRIPT.decorate_projection_payload(gs, payload)
+	return ECM_SCRIPT.decorate_projection_payload(gs, payload) \
+			if is_ship else payload
 
 
 ## Returns token indices blocked by persistent defense-token effects.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
 func build_blocked_defense_token_indices(state: AttackState,
-		def_inst: ShipInstance,
+		def_inst: RefCounted,
 		defense_resolver: DefenseTokenResolver) -> Array[int]:
 	var blocked: Array[int] = []
 	if state == null or def_inst == null or defense_resolver == null:
 		return blocked
-	for i: int in range(def_inst.defense_tokens.size()):
-		var token: Dictionary = def_inst.defense_tokens[i]
+	var tokens: Array[Dictionary] = _defense_tokens(def_inst)
+	for i: int in range(tokens.size()):
+		var token: Dictionary = tokens[i]
 		var token_state: Constants.DefenseTokenState = (
 				token["state"] as Constants.DefenseTokenState)
 		if token_state == Constants.DefenseTokenState.DISCARDED:
@@ -125,6 +134,23 @@ func build_blocked_defense_token_indices(state: AttackState,
 				def_inst, token, state.defender_zone):
 			blocked.append(i)
 	return blocked
+
+
+func _defender_index(gs: GameState, defender: RefCounted) -> int:
+	if gs == null or defender == null:
+		return -1
+	if defender is ShipInstance:
+		return gs.find_ship_index(defender as ShipInstance)
+	if defender is SquadronInstance:
+		return gs.find_squadron_index(defender as SquadronInstance)
+	return -1
+
+
+func _defense_tokens(defender: RefCounted) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if defender != null:
+		result.assign(defender.get("defense_tokens") as Array)
+	return result
 
 
 func _spent_defense_token_types(state: AttackState) -> Array[int]:

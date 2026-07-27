@@ -10,6 +10,8 @@ const PARTICIPANT: GDScript = preload(
 		"res://tests/fixtures/timing_window_participant_fixture.gd")
 const ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _processor: Node = null
 var _state: GameState = null
@@ -239,4 +241,7 @@ func _make_state(source_ids: Array[String]) -> GameState:
 			{"attacker_player": 0})
 	state.objectives[PARTICIPANT.SOURCES_KEY] = source_ids.duplicate()
 	state.objectives[PARTICIPANT.RESOLVED_KEY] = {}
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Command protocol fixture requires canonical current-attack state.")
 	return state

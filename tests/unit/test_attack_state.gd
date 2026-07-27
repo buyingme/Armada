@@ -204,6 +204,21 @@ func test_clear_defender_resets_defender_fields() -> void:
 	assert_eq(s.defender_zone_name, "", "defender_zone_name should be empty after clear_defender")
 
 
+func test_clear_defender_removes_every_stale_target_identity_field() -> void:
+	var s: AttackState = _dirty_state()
+
+	s.clear_defender()
+
+	assert_false(s.has_defender(),
+			"Clearing the projection must leave no selected defender.")
+	assert_eq(s.defender_zone, -1,
+			"Clearing the projection must remove the prior hull zone.")
+	assert_eq(s.defender_name, "",
+			"Clearing the projection must remove the prior display name.")
+	assert_eq(s.defender_zone_name, "",
+			"Clearing the projection must remove the prior zone label.")
+
+
 func test_clear_defender_preserves_attacker() -> void:
 	var s: AttackState = _dirty_state()
 	s.clear_defender()

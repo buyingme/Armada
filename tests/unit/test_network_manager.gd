@@ -303,6 +303,22 @@ func test_command_result_received_signal_exists() -> void:
 		NetworkManager.command_result_received.disconnect(conn["callable"])
 
 
+func test_command_rejection_received_is_targeted_result_shape() -> void:
+	var received: Array = []
+	var capture: Callable = func(
+			cmd_data: Dictionary, reason: String) -> void:
+				received.append({"cmd": cmd_data, "reason": reason})
+	NetworkManager.command_rejection_received.connect(capture)
+
+	NetworkManager._receive_command_rejection(
+			{"type": "begin_attack"}, "Controlled rejection.")
+
+	assert_eq(received.size(), 1)
+	assert_eq(received[0]["cmd"]["type"], "begin_attack")
+	assert_eq(received[0]["reason"], "Controlled rejection.")
+	NetworkManager.command_rejection_received.disconnect(capture)
+
+
 func test_sync_gate_player_one_multiple_dials_reach_authority_expected() -> void:
 	var previous_state: GameState = GameManager.current_game_state
 	var previous_active: bool = GameManager.is_game_active

@@ -12,6 +12,8 @@ const TimingWindowStateScript: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
 const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _manager: Node = null
 
@@ -269,6 +271,10 @@ func _configure_attack_modify(game_state: GameState,
 			0,
 			Constants.Visibility.ALL,
 			{"attacker_player": 0})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(game_state, {
+		"attack_id": "attack:0",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Save fixture requires canonical current-attack state.")
 	assert_true(game_state.set_timing_window_state(_make_active_timing_window(
 			"attack_modify",
 			"attack_modify",
@@ -277,7 +283,7 @@ func _configure_attack_modify(game_state: GameState,
 			{
 				"continuation_id": "confirm_attack_dice",
 				"resume_point": "attack_after_modify",
-				"source_id": "fixture-attack",
+				"source_id": game_state.current_attack_state.attack_id,
 				"source_type": "current_attack",
 				"owner_player": 0,
 			},

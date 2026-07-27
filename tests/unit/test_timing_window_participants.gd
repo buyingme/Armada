@@ -14,6 +14,8 @@ const FIXTURE_RULE: GDScript = preload(
 		"res://tests/fixtures/timing_window_participant_fixture.gd")
 const INVALID_RULE: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_definitions.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _state: GameState = null
 var _saved_command_registry: Dictionary = {}
@@ -26,6 +28,14 @@ func before_each() -> void:
 	FIXTURE_RULE.reset_calls()
 	_state = GameState.new()
 	_state.initialize()
+	_state.current_phase = Constants.GamePhase.SHIP
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0)
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Participant fixture requires canonical current-attack state.")
 	assert_true(ORCHESTRATOR.open_window(
 			_state, DEFINITIONS.ATTACK_MODIFY, 3, _context()).get(
 					ORCHESTRATOR.KEY_OK, false),
@@ -210,7 +220,8 @@ func _context() -> Dictionary:
 	return {
 		TimingWindowState.CONTINUATION_KEY_ID: "confirm_attack_dice",
 		TimingWindowState.CONTINUATION_KEY_RESUME_POINT: "attack_after_modify",
-		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: "fixture-attack",
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID:
+				_state.current_attack_state.attack_id,
 		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
 		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
 	}

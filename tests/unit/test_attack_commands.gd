@@ -7,6 +7,10 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 var _state: GameState
 var _remote_log_path: String = "user://logs/_test_remote_command_effects.log"
 
@@ -61,8 +65,9 @@ func after_each() -> void:
 # ======================================================================
 
 func test_roll_dice_validate_ok() -> void:
+	_install_roll_attack({"RED": 2, "BLUE": 1})
 	var cmd := RollDiceCommand.new(0, {
-		"dice_pool": {"red": 2, "blue": 1},
+		"attack_id": _attack_id(),
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid dice pool in Ship Phase.")
@@ -79,8 +84,9 @@ func test_roll_dice_validate_wrong_phase() -> void:
 
 func test_roll_dice_validate_ok_squadron_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
+	_install_roll_attack({"BLUE": 1})
 	var cmd := RollDiceCommand.new(0, {
-		"dice_pool": {"blue": 1},
+		"attack_id": _attack_id(),
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid dice pool in Squadron Phase.")
@@ -101,8 +107,9 @@ func test_roll_dice_validate_no_pool_key() -> void:
 
 
 func test_roll_dice_execute_returns_results() -> void:
+	_install_roll_attack({"RED": 1, "BLUE": 2})
 	var cmd := RollDiceCommand.new(0, {
-		"dice_pool": {"red": 1, "blue": 2},
+		"attack_id": _attack_id(),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	var results: Array = result.get("dice_results", [])
@@ -115,14 +122,16 @@ func test_roll_dice_execute_returns_results() -> void:
 
 func test_roll_dice_execute_deterministic_with_rng() -> void:
 	_state.rng = GameRng.new(42)
+	_install_roll_attack({"RED": 2, "BLACK": 1})
 	var cmd1 := RollDiceCommand.new(0, {
-		"dice_pool": {"red": 2, "black": 1},
+		"attack_id": _attack_id(),
 	})
 	var result1: Dictionary = cmd1.execute(_state)
 	# Re-create state with same seed.
 	_state.rng = GameRng.new(42)
+	_install_roll_attack({"RED": 2, "BLACK": 1})
 	var cmd2 := RollDiceCommand.new(0, {
-		"dice_pool": {"red": 2, "black": 1},
+		"attack_id": _attack_id(),
 	})
 	var result2: Dictionary = cmd2.execute(_state)
 	assert_eq(result1["dice_results"].size(), result2["dice_results"].size(),
@@ -157,9 +166,12 @@ func test_roll_dice_serialize_roundtrip() -> void:
 
 func test_spend_defense_token_validate_ok_exhaust() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [0])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "exhaust",
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -168,9 +180,12 @@ func test_spend_defense_token_validate_ok_exhaust() -> void:
 
 func test_spend_defense_token_validate_ok_discard() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [0])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "discard",
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -192,9 +207,12 @@ func test_spend_defense_token_validate_wrong_phase() -> void:
 func test_spend_defense_token_validate_ok_squadron_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [0])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "exhaust",
 	})
 	assert_eq(cmd.validate(_state), "",
@@ -246,11 +264,44 @@ func test_spend_defense_token_validate_invalid_method() -> void:
 			"Should reject invalid spend method.")
 
 
-func test_spend_defense_token_execute_exhaust() -> void:
+func test_spend_defense_token_rejects_out_of_order_commit() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [2, 0])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
+		"spend_method": "exhaust",
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Only the next unresolved committed token may be spent.")
+
+
+func test_spend_defense_token_requires_discard_for_exhausted_token() -> void:
+	var idx: int = _add_ship(1)
+	var ship: ShipInstance = _state.get_ship(1, idx)
+	ship.defense_tokens[0]["state"] = Constants.DefenseTokenState.EXHAUSTED
+	_install_defense_attack(idx, [0])
+	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
+		"spend_method": "exhaust",
+	})
+	assert_ne(cmd.validate(_state), "",
+			"An exhausted token's authoritative spend method is discard.")
+
+
+func test_spend_defense_token_execute_exhaust() -> void:
+	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [0])
+	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 0,
+		"expected_token_type": int(Constants.DefenseToken.BRACE),
 		"spend_method": "exhaust",
 	})
 	var result: Dictionary = cmd.execute(_state)
@@ -267,9 +318,12 @@ func test_spend_defense_token_execute_exhaust() -> void:
 
 func test_spend_defense_token_execute_discard() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [1])
 	var cmd := SpendDefenseTokenCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"token_index": 1,
+		"expected_token_type": int(Constants.DefenseToken.REDIRECT),
 		"spend_method": "discard",
 	})
 	var result: Dictionary = cmd.execute(_state)
@@ -327,9 +381,13 @@ func test_spend_defense_token_serialize_roundtrip() -> void:
 
 func test_redirect_zone_validate_ok() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [1])
 	var cmd := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.LEFT,
+		"expected_shields": 2,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid redirect zone selection.")
@@ -349,9 +407,13 @@ func test_redirect_zone_validate_wrong_phase() -> void:
 func test_redirect_zone_validate_ok_squadron_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SQUADRON
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [1])
 	var cmd := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.LEFT,
+		"expected_shields": 2,
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept redirect zone in Squadron Phase.")
@@ -379,11 +441,15 @@ func test_redirect_zone_validate_bad_zone() -> void:
 func test_redirect_zone_execute_reduces_shields() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
+	_install_defense_attack(idx, [1])
 	assert_eq(int(ship.current_shields.get("LEFT", 0)), 2,
 			"LEFT shields should start at 2.")
 	var cmd := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.LEFT,
+		"expected_shields": 2,
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("shields_reduced", 0), 1,
@@ -394,36 +460,44 @@ func test_redirect_zone_execute_reduces_shields() -> void:
 			"Ship current_shields should reflect reduction.")
 
 
-func test_redirect_zone_execute_at_zero_shields() -> void:
+func test_redirect_zone_validate_rejects_zero_shields() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
 	ship.current_shields["REAR"] = 0
+	_install_defense_attack(idx, [1], Constants.HullZone.LEFT)
 	var cmd := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.REAR,
+		"expected_shields": 0,
 	})
-	var result: Dictionary = cmd.execute(_state)
-	assert_eq(result.get("shields_reduced", -1), 0,
-			"Should reduce 0 when shields already at 0.")
-	assert_eq(result.get("new_shields", -1), 0,
-			"Shields should remain at 0.")
+	assert_ne(cmd.validate(_state), "",
+			"Redirect cannot select a hull zone with no shields.")
 
 
 func test_redirect_zone_execute_multiple_redirects() -> void:
 	var idx: int = _add_ship(1)
 	var ship: ShipInstance = _state.get_ship(1, idx)
+	_install_defense_attack(idx, [1])
 	assert_eq(int(ship.current_shields.get("RIGHT", 0)), 2,
 			"RIGHT shields should start at 2.")
 	# First redirect.
 	var cmd1 := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.RIGHT,
+		"expected_shields": 2,
 	})
 	cmd1.execute(_state)
 	# Second redirect.
 	var cmd2 := SelectRedirectZoneCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 1,
 		"zone": Constants.HullZone.RIGHT,
+		"expected_shields": 1,
 	})
 	var result: Dictionary = cmd2.execute(_state)
 	assert_eq(result.get("new_shields", -1), 0,
@@ -509,14 +583,21 @@ func test_skip_attack_serialize_roundtrip() -> void:
 			"Restored reason should match.")
 
 
+func test_active_skip_no_longer_accepts_flow_replaced_reason() -> void:
+	assert_false(SkipAttackCommand.TERMINAL_REASONS.has("flow_replaced"))
+
+
 # ======================================================================
 # CommitDefenseCommand (Phase I6b-3 R2)
 # ======================================================================
 
 func test_commit_defense_validate_ok_empty() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [], Constants.HullZone.FRONT,
+			CurrentAttackState.DEFENSE_PENDING)
 	CommitDefenseCommand.register()
 	var cmd := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
 		"selected_indices": [],
 	})
@@ -527,10 +608,13 @@ func test_commit_defense_validate_ok_empty() -> void:
 
 func test_commit_defense_validate_ok_with_indices() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [], Constants.HullZone.FRONT,
+			CurrentAttackState.DEFENSE_PENDING)
 	CommitDefenseCommand.register()
 	var cmd := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
-		"selected_indices": [0, 2],
+		"selected_indices": [2, 0],
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid token indices.")
@@ -573,12 +657,47 @@ func test_commit_defense_validate_bad_token_index() -> void:
 	GameCommand._registry.erase("commit_defense")
 
 
+func test_commit_defense_rejects_speed_zero_selection() -> void:
+	var idx: int = _add_ship(1)
+	_state.get_ship(1, idx).current_speed = 0
+	_install_defense_attack(idx, [], Constants.HullZone.FRONT,
+			CurrentAttackState.DEFENSE_PENDING)
+	var cmd := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"selected_indices": [0],
+	})
+	assert_ne(cmd.validate(_state), "",
+			"A speed-0 defender cannot commit token spends.")
+
+
+func test_commit_defense_rejects_duplicate_token_type() -> void:
+	var idx: int = _add_ship(1)
+	var ship: ShipInstance = _state.get_ship(1, idx)
+	ship.defense_tokens.append({
+		"type": int(Constants.DefenseToken.BRACE),
+		"state": int(Constants.DefenseTokenState.READY),
+	})
+	_install_defense_attack(idx, [], Constants.HullZone.FRONT,
+			CurrentAttackState.DEFENSE_PENDING)
+	var cmd := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"selected_indices": [0, 3],
+	})
+	assert_ne(cmd.validate(_state), "",
+			"Only one defense token of a type may be committed.")
+
+
 func test_commit_defense_execute_echoes_indices() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [], Constants.HullZone.FRONT,
+			CurrentAttackState.DEFENSE_PENDING)
 	CommitDefenseCommand.register()
 	var cmd := CommitDefenseCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
-		"selected_indices": [0, 2],
+		"selected_indices": [2, 0],
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("ship_index", -1), idx,
@@ -586,10 +705,10 @@ func test_commit_defense_execute_echoes_indices() -> void:
 	var echoed: Array = result.get("selected_indices", []) as Array
 	assert_eq(echoed.size(), 2,
 			"Result should echo two selected indices.")
-	assert_eq(int(echoed[0]), 0,
-			"Result should preserve order of indices.")
-	assert_eq(int(echoed[1]), 2,
-			"Result should preserve order of indices.")
+	assert_eq(int(echoed[0]), 2,
+			"Result should preserve canonical order of indices.")
+	assert_eq(int(echoed[1]), 0,
+			"Result should preserve canonical order of indices.")
 	GameCommand._registry.erase("commit_defense")
 
 
@@ -623,10 +742,15 @@ func test_commit_defense_serialize_roundtrip() -> void:
 
 func test_select_evade_die_validate_ok() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [2])
 	SelectEvadeDieCommand.register()
 	var cmd := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 2,
 		"die_index": 2,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
 	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid ship + die index.")
@@ -671,10 +795,15 @@ func test_select_evade_die_validate_bad_die_index() -> void:
 
 func test_select_evade_die_execute_echoes_index() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [2])
 	SelectEvadeDieCommand.register()
 	var cmd := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 2,
 		"die_index": 3,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
 	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(int(result.get("ship_index", -1)), idx,
@@ -708,9 +837,14 @@ func test_select_evade_die_serialize_roundtrip() -> void:
 
 func test_remote_select_evade_die_effect_is_handled_noop() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [2])
 	var cmd := SelectEvadeDieCommand.new(1, {
+		"attack_id": _attack_id(),
 		"ship_index": idx,
+		"token_index": 2,
 		"die_index": 3,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
 	})
 	var content: String = _capture_remote_effect_log(
 			cmd, cmd.execute(_state))
@@ -725,8 +859,13 @@ func test_remote_select_evade_die_effect_is_handled_noop() -> void:
 
 func test_redirect_done_validate_ok() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [1])
 	RedirectDoneCommand.register()
-	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	var cmd := RedirectDoneCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 1,
+	})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid ship in Ship Phase.")
 	GameCommand._registry.erase("redirect_done")
@@ -752,8 +891,13 @@ func test_redirect_done_validate_bad_ship() -> void:
 
 func test_redirect_done_execute_echoes_ship_index() -> void:
 	var idx: int = _add_ship(1)
+	_install_defense_attack(idx, [1])
 	RedirectDoneCommand.register()
-	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	var cmd := RedirectDoneCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 1,
+	})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(int(result.get("ship_index", -1)), idx,
 			"Result should echo ship_index.")
@@ -779,7 +923,12 @@ func test_redirect_done_serialize_roundtrip() -> void:
 
 func test_remote_redirect_done_effect_is_handled_noop() -> void:
 	var idx: int = _add_ship(1)
-	var cmd := RedirectDoneCommand.new(1, {"ship_index": idx})
+	_install_defense_attack(idx, [1])
+	var cmd := RedirectDoneCommand.new(1, {
+		"attack_id": _attack_id(),
+		"ship_index": idx,
+		"token_index": 1,
+	})
 	var content: String = _capture_remote_effect_log(
 			cmd, cmd.execute(_state))
 	assert_false(content.contains(
@@ -810,3 +959,34 @@ func _remove_remote_log() -> void:
 	if FileAccess.file_exists(_remote_log_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(
 				_remote_log_path))
+
+
+func _install_roll_attack(pool: Dictionary) -> void:
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"dice_pool": pool,
+	}), "Roll fixture should install a pre-roll current attack.")
+
+
+func _install_defense_attack(defender_index: int,
+		committed: Array[int],
+		defender_zone: int = Constants.HullZone.FRONT,
+		defense_stage: String = CurrentAttackState.DEFENSE_RESOLVING) -> void:
+	var dice_results: Array[Dictionary] = []
+	for _index: int in range(5):
+		dice_results.append({
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defender_player": 1,
+		"defender_index": defender_index,
+		"defender_zone": defender_zone,
+		"dice_results": dice_results,
+		"defense_stage": defense_stage,
+		"committed_defense_tokens": committed,
+	}), "Defense fixture should install canonical attack state.")
+
+
+func _attack_id() -> String:
+	return _state.current_attack_state.attack_id

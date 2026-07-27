@@ -5,6 +5,10 @@
 extends GutTest
 
 
+const CurrentAttackFixture: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 var _previous_game_state: GameState = null
 
 
@@ -35,11 +39,35 @@ func test_resolve_damage_zero_damage_squadron_attack_offers_counter() -> void:
 	executor._state.attacker_squadron = attacker
 	executor._state.defender_squadron = defender
 	executor._state.modified_damage = 0
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.player_states[0].squadrons.append(
+			attacker.get_squadron_instance())
+	state.player_states[1].squadrons.append(
+			defender.get_squadron_instance())
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:20",
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 1,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+		"dice_results": [{"color": int(Constants.DiceColor.BLUE),
+			"face": int(Constants.DiceFace.BLANK)}],
+	}), "Fixture should install the canonical zero-damage attack")
+	GameManager.current_game_state = state
 	executor._flow_fsm.begin(null, 0, -1, {})
 	executor._flow_fsm.advance(null, AttackFlowFSM.Step.ROLL)
 	executor._flow_fsm.advance(null, AttackFlowFSM.Step.MODIFY)
+	executor._flow_fsm.advance(null, AttackFlowFSM.Step.RESOLVE_DAMAGE)
 
-	executor._attack_exec_resolve_damage()
+	var command := ResolveDamageCommand.new(0, {"attack_id": "attack:20"})
+	assert_eq(command.validate(state), "",
+			"Canonical zero-damage resolution should validate")
+	executor.apply_damage_result(command.execute(state))
 
 	assert_same(executor._pending_counter_attacker, defender,
 			"Zero-damage squadron attacks should still offer defender Counter.")
@@ -81,8 +109,23 @@ func test_standard_swarm_reroll_echo_updates_attack_results() -> void:
 		"color": Constants.DiceColor.BLUE,
 		"face": Constants.DiceFace.HIT,
 	}]
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	assert_not_null(CurrentAttackFixture.install(state, {
+		"attack_id": "attack:21",
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_player": 0,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": [{"color": int(Constants.DiceColor.BLUE),
+			"face": int(Constants.DiceFace.CRITICAL)}],
+	}), "Fixture should install canonical rerolled dice")
+	GameManager.current_game_state = state
 	executor._pending_reroll_rule_id = SwarmKeyword.RULE_ID
 	var command := RerollAttackDieCommand.new(1, {
+		"attack_id": "attack:21",
 		"source_rule_id": SwarmKeyword.RULE_ID,
 	})
 	var result: Dictionary = {

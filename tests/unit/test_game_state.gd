@@ -4,6 +4,10 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 const TimingWindowStateScript: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
 
@@ -484,7 +488,7 @@ func test_game_state_clones_timing_window_state_replacements() -> void:
 			"Rejected replacement must leave authoritative lifecycle state unchanged")
 
 
-func test_legacy_interaction_flow_does_not_create_active_timing_window() -> void:
+func test_active_attack_flow_with_explicit_inactive_current_attack_rejects() -> void:
 	var state := GameState.new()
 	state.initialize()
 	state.interaction_flow = InteractionFlow.make(
@@ -494,13 +498,26 @@ func test_legacy_interaction_flow_does_not_create_active_timing_window() -> void
 			Constants.Visibility.ALL,
 			{"legacy_payload": true})
 	var data := state.serialize()
-	data.erase("timing_window_state")
-
 	var restored := GameState.deserialize(data)
 
-	assert_not_null(restored, "Legacy InteractionFlow state should still load")
-	assert_true(restored.timing_window_state.is_inactive(),
-			"InteractionFlow must not become timing-window lifecycle authority")
+	assert_null(restored,
+			"Attack flow cannot reconstruct authority when canonical attack is inactive")
+
+
+func test_legacy_attack_flow_without_current_attack_state_rejects() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
+			1,
+			Constants.Visibility.ALL,
+			{"legacy_payload": true})
+	var data := state.serialize()
+	data.erase("current_attack_state")
+
+	assert_null(GameState.deserialize(data),
+			"Legacy attack flow without canonical current attack must fail closed")
 
 
 # --- Player State ---
@@ -549,6 +566,10 @@ func _make_active_attack_game_state(sequence: int) -> GameState:
 			0,
 			Constants.Visibility.ALL,
 			{"attacker_player": 0})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"attack_id": "attack:%d" % maxi(0, sequence - 1),
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Timing lifecycle fixture requires canonical current-attack state.")
 	assert_true(state.set_timing_window_state(_make_active_timing_window(
 			"attack_modify",
 			"attack_modify",
@@ -557,7 +578,7 @@ func _make_active_attack_game_state(sequence: int) -> GameState:
 			{
 				"continuation_id": "confirm_attack_dice",
 				"resume_point": "attack_after_modify",
-				"source_id": "fixture-attack",
+				"source_id": state.current_attack_state.attack_id,
 				"source_type": "current_attack",
 				"owner_player": 0,
 			})), "Fixture should install a reconstructable attack lifecycle")

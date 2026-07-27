@@ -29,39 +29,49 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
-	var flow_error: String = _validate_attack_modify_flow(game_state)
-	if flow_error != "":
-		return flow_error
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active:
+		return "No current attack."
+	if attack.attack_id != str(payload.get("attack_id", "")):
+		return "Stale current-attack identity."
+	if attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return "Not in attack modify step."
+	if player_index != attack.attacker_player:
+		return "Attack modifier belongs to player %d." % attack.attacker_player
 	var source_rule_id: String = str(payload.get("source_rule_id", ""))
 	if source_rule_id.is_empty():
 		return "Missing source_rule_id."
 	if source_rule_id == SwarmKeyword.RULE_ID:
-		return _validate_swarm_skip(game_state.interaction_flow.payload)
+		return _validate_swarm_skip(game_state, attack)
+	if source_rule_id == RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN:
+		return "" if attack.cf_token_resolution \
+				== CurrentAttackState.RESOLUTION_PENDING \
+				else "No Concentrate Fire token reroll is pending."
 	return "Unsupported attack modifier skip: %s." % source_rule_id
 
 
 ## Echoes the skipped modifier source for the attack pipeline reaction.
-func execute(_game_state: GameState) -> Dictionary:
-	return {"source_rule_id": str(payload.get("source_rule_id", ""))}
+func execute(game_state: GameState) -> Dictionary:
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var source_rule_id: String = str(payload.get("source_rule_id", ""))
+	if source_rule_id == RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN:
+		var replacement: CurrentAttackState = attack.with_patch({
+			"cf_token_resolution": CurrentAttackState.RESOLUTION_DECLINED,
+		})
+		if replacement == null or not game_state.set_current_attack_state(replacement):
+			return {}
+	return {"attack_id": attack.attack_id, "source_rule_id": source_rule_id}
 
 
-func _validate_attack_modify_flow(game_state: GameState) -> String:
-	var phase: Constants.GamePhase = game_state.current_phase
-	if phase != Constants.GamePhase.SHIP \
-			and phase != Constants.GamePhase.SQUADRON:
-		return "Not in Ship or Squadron Phase."
-	var flow: InteractionFlow = game_state.interaction_flow
-	if flow == null or flow.flow_type != Constants.InteractionFlow.ATTACK:
-		return "No active attack flow."
-	if flow.step_id != Constants.InteractionStep.ATTACK_MODIFY:
-		return "Not in attack modify step."
-	var attacker: int = int(flow.payload.get("attacker_player", -1))
-	if player_index != attacker:
-		return "Attack modifier belongs to player %d." % attacker
-	return ""
-
-
-func _validate_swarm_skip(flow_payload: Dictionary) -> String:
-	if not bool(flow_payload.get(SwarmKeyword.PAYLOAD_AVAILABLE, false)):
+func _validate_swarm_skip(game_state: GameState,
+		attack: CurrentAttackState) -> String:
+	if attack.attacker_kind != CurrentAttackState.KIND_SQUADRON \
+			or attack.defender_kind != CurrentAttackState.KIND_SQUADRON:
+		return "No Swarm reroll is pending."
+	var attacker: SquadronInstance = game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index)
+	var target: SquadronInstance = game_state.get_squadron(
+			attack.defender_player, attack.defender_index)
+	if attacker == null or target == null:
 		return "No Swarm reroll is pending."
 	return ""

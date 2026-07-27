@@ -183,6 +183,13 @@ func _flag_value(args: PackedStringArray, flag: String) -> String:
 ## the step loop on the next idle frame so the game-board scene has
 ## a chance to finish wiring its controllers before commands arrive.
 func _on_game_started() -> void:
+	var initial_sequence: int = int(_replay.header.get(
+			"initial_command_sequence", -1))
+	if initial_sequence < 0 \
+			or not CommandProcessor.restore_next_sequence(initial_sequence):
+		_log.error("ReplayDriver: invalid initial command sequence.")
+		_quit(EXIT_LOAD_FAIL)
+		return
 	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(
 			GameManager.current_game_state,
 			TIMING_WINDOW_ORCHESTRATOR.MODE_REPLAY)

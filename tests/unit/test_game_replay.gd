@@ -7,6 +7,9 @@
 extends GutTest
 
 
+const EXACT_REPLAY_SEED: int = 8707258039180871004
+
+
 # ======================================================================
 # Helpers
 # ======================================================================
@@ -81,9 +84,34 @@ func test_capture_header_stores_format_version() -> void:
 			"Header should include format_version.")
 
 
-func test_timing_window_state_slice_does_not_change_replay_format_version() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 1,
-			"Slice 1 changes GameState reconstruction, not replay-file format")
+func test_capture_header_stores_reconstructed_initial_sequence() -> void:
+	var replay := GameReplay.new()
+	replay.capture_header("checkpoint", 1, [], 0, 14)
+	assert_eq(replay.header["initial_command_sequence"], 14)
+
+
+func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
+	var previous_state: GameState = GameManager.current_game_state
+	var state := GameState.new()
+	state.initialize()
+	GameManager.current_game_state = state
+	CommandProcessor.reset()
+	assert_true(CommandProcessor.restore_next_sequence(14))
+
+	assert_null(CommandProcessor.create_replay(),
+			"Nonzero replay capture requires a paired reconstructed initial state")
+	assert_engine_error(1,
+			"Unsupported reconstructed replay capture should diagnose once")
+
+	CommandProcessor.reset()
+	GameManager.current_game_state = previous_state
+
+
+func test_current_attack_migration_uses_pre_activation_replay_format() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 3,
+			"Slice 8A pre-activation histories use replay format 3")
+	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
+			"Signing must not create a second semantic replay format")
 
 
 func test_capture_header_stores_timestamp() -> void:
@@ -235,6 +263,23 @@ func test_deserialize_accepts_integral_json_float_sequences() -> void:
 			"JSON-parsed integral numbers should preserve contiguous sequences.")
 
 
+func test_deserialize_accepts_contiguous_reconstructed_sequence_column() -> void:
+	var replay: GameReplay = _make_replay(3)
+	replay.header["initial_command_sequence"] = 14
+	for index: int in range(replay.commands.size()):
+		replay.commands[index]["sequence"] = 14 + index
+	assert_not_null(GameReplay.deserialize(replay.serialize()))
+
+
+func test_deserialize_rejects_every_non_current_semantic_format() -> void:
+	for format: int in [1, 2, 4, 99]:
+		var data: Dictionary = _make_replay(1).serialize()
+		(data["header"] as Dictionary)["format_version"] = format
+		(data["commands"] as Array)[0]["type"] = "unknown_before_apply"
+		assert_null(GameReplay.deserialize(data),
+				"Unsupported format %d must reject before playback." % format)
+
+
 # ======================================================================
 # File I/O — save and load
 # ======================================================================
@@ -262,6 +307,177 @@ func test_load_from_file_roundtrip() -> void:
 	assert_eq(loaded.get_command_count(), 4,
 			"File roundtrip should preserve command count.")
 	_cleanup_file(path)
+
+
+func test_disk_roundtrip_preserves_exact_seed_and_declared_numeric_types() -> void:
+	var original := GameReplay.new()
+	original.capture_header("slice-8a-numeric-schema", EXACT_REPLAY_SEED,
+			[Constants.Faction.REBEL_ALLIANCE,
+			Constants.Faction.GALACTIC_EMPIRE], 0)
+	original.set_commands([
+		{
+			"type": "begin_attack",
+			"player": 0,
+			"sequence": 0,
+			"payload": {
+				"attacker_player": 0,
+				"attacker_index": 1,
+				"attacker_zone": 2,
+				"defender_player": 1,
+				"defender_index": 3,
+				"defender_zone": 0,
+			},
+		},
+		{
+			"type": "execute_maneuver",
+			"player": 0,
+			"sequence": 1,
+			"payload": {
+				"ship_index": 1,
+				"speed": 3,
+				"yaw_clicks": [0, 1, 2],
+				"yaw_bonus_joint": -1,
+				"speed_delta": 0,
+				"pos_x": 0.375,
+				"pos_y": 0.625,
+				"rotation_deg": 90.0,
+			},
+		},
+		{
+			"type": "commit_accuracy",
+			"player": 0,
+			"sequence": 2,
+			"payload": {"locked_tokens": [0, 2]},
+		},
+		{
+			"type": "commit_defense",
+			"player": 1,
+			"sequence": 3,
+			"payload": {"ship_index": 3, "selected_indices": [1, 4]},
+		},
+		{
+			"type": "publish_attack_flow",
+			"player": 0,
+			"sequence": 4,
+			"payload": {
+				"step_id": int(Constants.InteractionStep.ATTACK_DEFENSE_TOKENS),
+				"controller_player": 1,
+				"flow_payload": {
+					"attacker_player": 0,
+					"defender_zone": "front",
+					"dice_pool": {"RED": 3},
+					"dice_results": [
+						{"color": 0, "face": 4},
+						{"color": 1, "face": "hit"},
+					],
+					"defense_tokens": [{"type": 2, "state": 0}],
+					"locked_tokens": [2],
+				},
+			},
+		},
+		{
+			"type": "roll_dice",
+			"player": 0,
+			"sequence": 5,
+			"payload": {"dice_pool": {"RED": 2, "BLUE": 1}},
+		},
+	])
+	var path: String = _temp_path("numeric_schema_roundtrip")
+	assert_eq(original.save_to_file(path), OK)
+	var raw_file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	var raw_json: String = raw_file.get_as_text()
+	raw_file.close()
+	assert_true(raw_json.contains(
+			'"rng_seed": "8707258039180871004"'),
+			"Exact replay seed must use its canonical decimal representation.")
+	var raw_decoder := JSON.new()
+	assert_eq(raw_decoder.parse(raw_json), OK)
+	var json_commands: Array = (raw_decoder.data as Dictionary)["commands"]
+	assert_typeof(json_commands[0]["payload"]["attacker_player"], TYPE_FLOAT,
+			"Godot JSON exposes the persisted numeric type mismatch.")
+	assert_typeof(json_commands[1]["payload"]["pos_x"], TYPE_FLOAT)
+
+	var loaded: GameReplay = GameReplay.load_from_file(path)
+	assert_not_null(loaded)
+	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
+	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED)
+	assert_typeof(loaded.header["format_version"], TYPE_INT)
+	assert_typeof(loaded.header["initial_command_sequence"], TYPE_INT)
+	assert_typeof(loaded.commands[0]["player"], TYPE_INT)
+	assert_typeof(loaded.commands[0]["sequence"], TYPE_INT)
+	var begin_payload: Dictionary = loaded.commands[0]["payload"]
+	for field: String in [
+			"attacker_player", "attacker_index", "attacker_zone",
+			"defender_player", "defender_index", "defender_zone"]:
+		assert_typeof(begin_payload[field], TYPE_INT,
+				"%s must be restored to int." % field)
+	var maneuver_payload: Dictionary = loaded.commands[1]["payload"]
+	for field: String in [
+			"ship_index", "speed", "yaw_bonus_joint", "speed_delta"]:
+		assert_typeof(maneuver_payload[field], TYPE_INT,
+				"%s must be restored to int." % field)
+	for yaw: Variant in maneuver_payload["yaw_clicks"]:
+		assert_typeof(yaw, TYPE_INT, "Yaw entries must be restored to int.")
+	for field: String in ["pos_x", "pos_y", "rotation_deg"]:
+		assert_typeof(maneuver_payload[field], TYPE_FLOAT,
+				"%s is a legitimate float and must remain float." % field)
+	var accuracy_payload: Dictionary = loaded.commands[2]["payload"]
+	for token_index: Variant in accuracy_payload["locked_tokens"]:
+		assert_typeof(token_index, TYPE_INT)
+	var defense_payload: Dictionary = loaded.commands[3]["payload"]
+	for token_index: Variant in defense_payload["selected_indices"]:
+		assert_typeof(token_index, TYPE_INT)
+	var flow_payload: Dictionary = loaded.commands[4]["payload"]["flow_payload"]
+	assert_typeof(flow_payload["attacker_player"], TYPE_INT)
+	assert_typeof(flow_payload["dice_pool"]["RED"], TYPE_INT)
+	assert_typeof(flow_payload["dice_results"][0]["color"], TYPE_INT)
+	assert_typeof(flow_payload["dice_results"][0]["face"], TYPE_INT)
+	assert_eq(flow_payload["dice_results"][1]["face"], "hit",
+			"Known structured string identity must remain unchanged.")
+	assert_eq(flow_payload["defender_zone"], "front",
+			"Known structured string zone identity must remain unchanged.")
+	assert_typeof(flow_payload["defense_tokens"][0]["type"], TYPE_INT)
+	assert_typeof(flow_payload["defense_tokens"][0]["state"], TYPE_INT)
+	assert_typeof(flow_payload["locked_tokens"][0], TYPE_INT)
+	var roll_payload: Dictionary = loaded.commands[5]["payload"]
+	assert_typeof(roll_payload["dice_pool"]["RED"], TYPE_INT)
+	assert_typeof(roll_payload["dice_pool"]["BLUE"], TYPE_INT)
+	_cleanup_file(path)
+
+
+func test_deserialize_rejects_noncanonical_exact_seed_representation() -> void:
+	var numeric_seed: Dictionary = _make_replay(1).serialize()
+	(numeric_seed["header"] as Dictionary)["rng_seed"] = 42.0
+	assert_null(GameReplay.deserialize(numeric_seed),
+			"Persisted numeric seeds must not be accepted after JSON decoding.")
+	var padded_seed: Dictionary = _make_replay(1).serialize()
+	(padded_seed["header"] as Dictionary)["rng_seed"] = "00042"
+	assert_null(GameReplay.deserialize(padded_seed),
+			"Noncanonical decimal seed strings must be rejected.")
+
+
+func test_command_reconstruction_rejects_noncanonical_integer_payloads() -> void:
+	var base: Dictionary = {
+		"type": "begin_attack",
+		"player": 0.0,
+		"sequence": 0.0,
+		"payload": {"attacker_player": 0.0},
+	}
+	var canonical: Dictionary = GameCommand.canonicalize_serialized(base)
+	assert_typeof(canonical["player"], TYPE_INT)
+	assert_typeof(canonical["sequence"], TYPE_INT)
+	assert_typeof(canonical["payload"]["attacker_player"], TYPE_INT)
+
+	var fractional: Dictionary = base.duplicate(true)
+	(fractional["payload"] as Dictionary)["attacker_player"] = 0.5
+	assert_true(GameCommand.canonicalize_serialized(fractional).is_empty())
+	var string_value: Dictionary = base.duplicate(true)
+	(string_value["payload"] as Dictionary)["attacker_player"] = "0"
+	assert_true(GameCommand.canonicalize_serialized(string_value).is_empty())
+	var unsafe_value: Dictionary = base.duplicate(true)
+	(unsafe_value["payload"] as Dictionary)["attacker_player"] = \
+			9007199254740992.0
+	assert_true(GameCommand.canonicalize_serialized(unsafe_value).is_empty())
 
 
 func test_load_from_file_nonexistent_returns_null() -> void:

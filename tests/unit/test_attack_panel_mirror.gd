@@ -188,6 +188,8 @@ func test_no_signal_connections_on_panel() -> void:
 			"defense_token_selected must not be connected on the mirror.")
 	assert_eq(panel.confirm_pressed.get_connections().size(), 0,
 			"confirm_pressed must not be connected on the mirror.")
+	assert_eq(panel.declaration_confirm_pressed.get_connections().size(), 0,
+			"declaration_confirm_pressed must not be connected on the mirror.")
 	assert_eq(panel.skip_attack_pressed.get_connections().size(), 0,
 			"skip_attack_pressed must not be connected on the mirror.")
 	assert_eq(panel.defense_tokens_done.get_connections().size(), 0,

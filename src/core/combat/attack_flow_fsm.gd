@@ -1,14 +1,15 @@
 ## AttackFlowFSM
 ##
-## Authoritative state machine for the attack interaction flow.
-## Tracks the current attack step and writes it into
+## Derived state machine for the attack interaction flow.
+## Tracks the current projected attack step and writes it into
 ## [GameState.interaction_flow] so that both clients (and reconnecting
-## spectators) can render the correct UI from a single state snapshot.
+## spectators) can render the correct UI from a single state snapshot. It
+## does not own declaration candidates or authoritative attack state.
 ##
 ## Steps and legal transitions:
 ## [codeblock]
 ##   IDLE
-##     -> DECLARE             (attack target locked)
+##     -> DECLARE             (declaration interaction entered)
 ##     -> END                 (attack cancelled / no target)
 ##   DECLARE
 ##     -> ROLL                (player presses Roll Dice)
@@ -124,6 +125,19 @@ func reset() -> void:
 	attacker_player = -1
 	defender_player = -1
 	payload = {}
+
+
+## Restores this non-authoritative scene/flow mirror from a canonical attack
+## projection without writing back to [GameState].
+func restore_projection(step: Step, attacker: int, defender: int,
+		projection_payload: Dictionary) -> bool:
+	if not STEP_TO_INTERACTION.has(step) or step in [Step.IDLE, Step.END]:
+		return false
+	current_step = step
+	attacker_player = attacker
+	defender_player = defender
+	payload = projection_payload.duplicate(true)
+	return true
 
 
 ## Starts a new attack flow.  Sets attacker / defender / payload and

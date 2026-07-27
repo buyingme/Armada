@@ -782,22 +782,35 @@ func _build_obstruction_bodies() -> Array:
 
 ## Returns true if the squadron has at least one valid attack target.
 ## When engaged, only engaged enemy squadrons count as valid targets.
-## Engagement is computed freshly from live positions to avoid stale flags.
+## Geometry, LOS, range-path, and stable target identity come from the
+## authoritative deterministic targeting surface. Engagement is computed
+## freshly from live positions to avoid stale flags.
 ## Rules Reference: "Squadron Attacks", RRG p.19; "Engagement" p.4.
 func _squadron_has_valid_targets(
 		instance: SquadronInstance,
 		token: SquadronToken,
 		all_squads: Array[Dictionary],
 		obstruction_bodies: Array) -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or instance == null:
+		return false
+	var squadron_index: int = game_state.find_squadron_index(instance)
+	if squadron_index < 0:
+		return false
+	var candidates: Array[Dictionary] = \
+			TargetingListBuilder.authoritative_squadron_target_entries(
+					game_state, instance.owner_player, squadron_index)
 	var must_attack_squadron: bool = \
 			SquadronKeywordRuleHelper.is_engaged_by_non_heavy(
-				instance, token.global_position,
-				all_squads, obstruction_bodies)
+					instance, token.global_position,
+					all_squads, obstruction_bodies)
 	if must_attack_squadron:
-		return _any_enemy_squadron_in_range(instance, token, all_squads)
-	if _any_enemy_squadron_in_range(instance, token, all_squads):
-		return true
-	return _any_enemy_ship_in_range(instance, token)
+		for candidate: Dictionary in candidates:
+			if str(candidate.get("target_kind", "")) \
+					== CurrentAttackState.KIND_SQUADRON:
+				return true
+		return false
+	return not candidates.is_empty()
 
 
 ## Returns true if any enemy squadron is within distance 1 of [param token].

@@ -13,6 +13,8 @@ const COMMANDS: GDScript = preload(
 		"res://tests/fixtures/timing_window_command_fixtures.gd")
 const PARTICIPANT: GDScript = preload(
 		"res://tests/fixtures/timing_window_participant_fixture.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _saved_registry: Dictionary = {}
 var _saved_state: GameState = null
@@ -106,12 +108,12 @@ func test_active_reconnect_restores_state_cursor_visibility_and_projection() -> 
 func test_invalid_reconstruction_install_fails_before_live_state_changes() -> void:
 	var invalid: GameState = _make_state(["source-a"])
 	assert_true(bool(ORCHESTRATOR.open_window(
-			invalid, DEFINITIONS.ATTACK_MODIFY, 4, _context()).get(
+			invalid, DEFINITIONS.ATTACK_MODIFY, 4, _context(invalid)).get(
 					ORCHESTRATOR.KEY_OK, false)))
-	invalid.interaction_flow = InteractionFlow.make(
-			Constants.InteractionFlow.ATTACK,
-			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
-			1)
+	assert_true(invalid.set_current_attack_state(
+			invalid.current_attack_state.with_patch({
+				"stage": CurrentAttackState.STAGE_ACCURACY,
+			})), "Fixture should create a cross-owner stage mismatch.")
 	var installed_before: GameState = GameState.new()
 	installed_before.initialize()
 	GameManager.current_game_state = installed_before
@@ -337,14 +339,18 @@ func _make_state(public_source_ids: Array[String],
 			})
 	state.objectives[PARTICIPANT.SOURCES_KEY] = public_source_ids.duplicate()
 	state.objectives[PARTICIPANT.RESOLVED_KEY] = {}
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Shared timing fixture requires canonical current-attack state.")
 	return state
 
 
-func _context() -> Dictionary:
+func _context(state: GameState) -> Dictionary:
 	return {
 		TimingWindowState.CONTINUATION_KEY_ID: COMMANDS.CONTINUATION_TYPE,
 		TimingWindowState.CONTINUATION_KEY_RESUME_POINT: "attack_after_modify",
-		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: "fixture-attack",
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID:
+				state.current_attack_state.attack_id,
 		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
 		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
 	}

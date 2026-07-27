@@ -104,7 +104,11 @@ func test_publish_attack_flow_validator_allows_empty_locked_tokens() -> void:
 
 func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	_add_blinded_gunners(_attacker_ship())
+	# This test exercises rule registration persistence, not active-attack recovery.
+	# Keep the serialized state valid under the current-attack consistency invariant.
+	_state.interaction_flow = InteractionFlow.empty()
 	var restored: GameState = GameState.deserialize(_state.serialize())
+	assert_not_null(restored)
 	var restored_attacker: ShipInstance = restored.get_ship(
 			ATTACKER_PLAYER, SHIP_INDEX)
 	assert_true(_accuracy_spend_blocked(restored_attacker),

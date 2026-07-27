@@ -52,7 +52,7 @@ func test_build_report_includes_flowspec_metadata() -> void:
 	assert_true(_has_line(lines, "controller_role: ATTACKER"),
 			"Report should include controller-role metadata.")
 	assert_true(_has_line(lines,
-			"allowed_commands: roll_dice, publish_attack_flow, skip_attack"),
+			"allowed_commands: resolve_attack_pool_choice, use_concentrate_fire_dial, decline_concentrate_fire_dial, roll_dice, publish_attack_flow, skip_attack"),
 			"Report should include allowed command metadata.")
 
 

@@ -10,6 +10,8 @@ const SHIP_KEY_CR90: String = "cr90_corvette_a"
 const ATTACKER_PLAYER: int = 0
 const DEFENDER_PLAYER: int = 1
 const SHIP_INDEX: int = 0
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _processor: Node = null
 var _state: GameState = null
@@ -229,6 +231,14 @@ func _make_attack_state() -> GameState:
 			_make_ship(ATTACKER_PLAYER))
 	state.get_player_state(DEFENDER_PLAYER).ships.append(
 			_make_ship(DEFENDER_PLAYER))
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"dice_results": [
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+		],
+		"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+	}), "Capacitor Failure fixture requires canonical attack state.")
 	return state
 
 
@@ -251,6 +261,8 @@ func _defense_payload() -> Dictionary:
 
 
 func _make_repair_flow() -> void:
+	assert_true(_state.set_current_attack_state(CurrentAttackState.inactive()),
+			"Repair fixture should not retain an active attack.")
 	_state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REPAIR_STEP,
@@ -310,18 +322,35 @@ func _blocked_defense_indices(ship: ShipInstance) -> Array[int]:
 
 
 func _make_spend_command(token_index: int) -> SpendDefenseTokenCommand:
+	var state: GameState = GameManager.current_game_state
+	var token_type: int = int(state.get_ship(
+			DEFENDER_PLAYER, SHIP_INDEX).defense_tokens[token_index].get("type", -1))
+	assert_true(state.set_current_attack_state(
+			state.current_attack_state.with_patch({
+				"committed_defense_tokens": [token_index],
+				"defense_stage": CurrentAttackState.DEFENSE_RESOLVING,
+			})), "Spend fixture should enter defense resolution.")
 	return SpendDefenseTokenCommand.new(DEFENDER_PLAYER, {
+		"attack_id": state.current_attack_state.attack_id,
 		"ship_index": SHIP_INDEX,
 		"token_index": token_index,
+		"expected_token_type": token_type,
 		"spend_method": "exhaust",
 	})
 
 
 func _make_commit_command(selected_indices: Array[int]) -> CommitDefenseCommand:
+	var state: GameState = GameManager.current_game_state
+	assert_true(state.set_current_attack_state(
+			state.current_attack_state.with_patch({
+				"committed_defense_tokens": [],
+				"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+			})), "Commit fixture should enter defense commitment.")
 	var payload_indices: Array = []
 	for idx: int in selected_indices:
 		payload_indices.append(idx)
 	return CommitDefenseCommand.new(DEFENDER_PLAYER, {
+		"attack_id": state.current_attack_state.attack_id,
 		"ship_index": SHIP_INDEX,
 		"selected_indices": payload_indices,
 	})

@@ -16,6 +16,10 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
+
 const TimingWindowStateScript: GDScript = preload(
 		"res://src/core/state/timing_window_state.gd")
 
@@ -30,6 +34,20 @@ const TimingWindowStateScript: GDScript = preload(
 func _server_state_mid_attack() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"attack_id": "attack:0",
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+		"dice_results": [
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.HIT)},
+			{"color": int(Constants.DiceColor.RED),
+				"face": int(Constants.DiceFace.CRITICAL)},
+			{"color": int(Constants.DiceColor.BLUE),
+				"face": int(Constants.DiceFace.HIT)},
+		],
+	}), "Reconnect fixture requires canonical current-attack state")
 	var payload: Dictionary = {
 		"attacker_player": 0,
 		"defender_player": 1,
@@ -164,6 +182,30 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 			"No active flow: nothing is interactive.")
 
 
+func test_reconnect_before_begin_restores_no_preview_or_active_attack() -> void:
+	var state: GameState = GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP,
+			0)
+
+	var raw: Dictionary = state.serialize()
+	var filtered: Dictionary = StateFilter.filter_for_player(raw, 0)
+	var reconnected: GameState = GameState.deserialize(filtered)
+
+	assert_not_null(reconnected)
+	assert_true(reconnected.current_attack_state.is_inactive(),
+			"Reconnect before accepted Begin must restore no active attack.")
+	assert_false(filtered.has("declaration_candidate"),
+			"Transient declaration candidates must not enter reconnect state.")
+	assert_false(filtered.has("attack_preview"),
+			"Transient declaration presentation must not enter reconnect state.")
+	assert_true(reconnected.timing_window_state.is_inactive(),
+			"Preview-only declaration must not create reconnectable timing state.")
+
+
 func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
 	var server_state: GameState = _server_state_mid_attack()
 	server_state.current_phase = Constants.GamePhase.SHIP
@@ -173,6 +215,10 @@ func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
 			0,
 			Constants.Visibility.ALL,
 			{"attacker_player": 0})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(server_state, {
+		"attack_id": "attack:0",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+	}), "Reconnect fixture requires canonical current-attack state.")
 	assert_true(server_state.set_timing_window_state(_make_active_timing_window(
 			"attack_modify",
 			"attack_modify",
@@ -181,7 +227,7 @@ func test_reconnect_snapshot_preserves_timing_window_lifecycle_state() -> void:
 			{
 				"continuation_id": "confirm_attack_dice",
 				"resume_point": "attack_after_modify",
-				"source_id": "fixture-attack",
+				"source_id": server_state.current_attack_state.attack_id,
 				"source_type": "current_attack",
 				"owner_player": 0,
 			})),

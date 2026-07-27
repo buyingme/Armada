@@ -40,10 +40,14 @@ func validate(game_state: GameState) -> String:
 	return _validate_identity(game_state.interaction_flow.payload)
 
 
-## Echoes the choice payload for the attack pipeline reaction.
-func execute(_game_state: GameState) -> Dictionary:
+## Echoes the choice payload and records the accepted existing Counter
+## lifecycle decision so BeginAttackCommand can validate attack kind/identity.
+func execute(game_state: GameState) -> Dictionary:
 	var result: Dictionary = payload.duplicate(true)
 	result["accepted"] = bool(payload.get("accepted", false))
+	if game_state != null and game_state.interaction_flow != null:
+		game_state.interaction_flow.payload["counter_choice_accepted"] = \
+				bool(result["accepted"])
 	return result
 
 

@@ -4,7 +4,8 @@
 ## Spend Defense Tokens step of an attack (Step 4).
 ##
 ## Every public method is stateless: callers pass the defender's
-## [ShipInstance] and the current attack state (locked tokens, spent tokens,
+## canonical defender instance and the current attack state (locked tokens,
+## spent tokens,
 ## redirect remaining, etc.) so the resolver never stores mutable references.
 ## UI side-effects (panel updates, button disabling, camera rotation) stay in
 ## [AttackExecutor].
@@ -30,17 +31,24 @@ const DEFENSE_RESOLVE_ORDER: Dictionary = {
 }
 
 
+func _defense_tokens(defender: RefCounted) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if defender != null:
+		result.assign(defender.get("defense_tokens") as Array)
+	return result
+
+
 # ---------------------------------------------------------------------------
 # Token availability checks
 # ---------------------------------------------------------------------------
 
 
-## Counts non-discarded defense tokens on a ship instance.
+## Counts non-discarded defense tokens on a defender instance.
 ## Used by the accuracy step to decide whether to enter the sub-step.
 ## Rules Reference: "Accuracy", RRG v1.5.0, p.2.
-func count_lockable_tokens(def_inst: ShipInstance) -> int:
+func count_lockable_tokens(def_inst: RefCounted) -> int:
 	var lockable: int = 0
-	for token: Dictionary in def_inst.defense_tokens:
+	for token: Dictionary in _defense_tokens(def_inst):
 		if token["state"] != Constants.DefenseTokenState.DISCARDED:
 			lockable += 1
 	return lockable
@@ -49,14 +57,15 @@ func count_lockable_tokens(def_inst: ShipInstance) -> int:
 ## Returns true if the defender has spendable tokens and speed > 0.
 ## Rules Reference: "Defense Tokens", bullet 4, p.5 —
 ## "If the defender's speed is 0, he cannot spend any defense tokens."
-func can_spend_tokens(def_inst: ShipInstance,
+func can_spend_tokens(def_inst: RefCounted,
 		locked_tokens: Array[int],
 		def_zone: int) -> bool:
 	var spendable: int = count_spendable_tokens(
 			def_inst, locked_tokens, def_zone)
 	if spendable == 0:
 		return false
-	if def_inst.current_speed == 0:
+	if def_inst is ShipInstance \
+			and (def_inst as ShipInstance).current_speed == 0:
 		return false
 	return true
 
@@ -64,14 +73,15 @@ func can_spend_tokens(def_inst: ShipInstance,
 ## Returns the number of spendable (non-discarded, non-locked, not
 ## blocked by RuleRegistry defense-token blockers) tokens.
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
-func count_spendable_tokens(def_inst: ShipInstance,
+func count_spendable_tokens(def_inst: RefCounted,
 		locked_tokens: Array[int],
 		def_zone: int) -> int:
 	var count: int = 0
-	for i: int in range(def_inst.defense_tokens.size()):
+	var tokens: Array[Dictionary] = _defense_tokens(def_inst)
+	for i: int in range(tokens.size()):
 		if i in locked_tokens:
 			continue
-		var token: Dictionary = def_inst.defense_tokens[i]
+		var token: Dictionary = tokens[i]
 		var state: Constants.DefenseTokenState = (
 				token["state"] as Constants.DefenseTokenState)
 		if state == Constants.DefenseTokenState.DISCARDED:
@@ -88,7 +98,7 @@ func count_spendable_tokens(def_inst: ShipInstance,
 ## Rules Reference: "Defense Tokens", p.5; "Faulty Countermeasures".
 func is_token_spendable(token_index: int, token: Dictionary,
 		spent_tokens: Dictionary, locked_tokens: Array[int],
-		def_inst: ShipInstance,
+		def_inst: RefCounted,
 		def_zone: int) -> bool:
 	var token_type: Constants.DefenseToken = (
 			token["type"] as Constants.DefenseToken)
@@ -107,7 +117,7 @@ func is_token_spendable(token_index: int, token: Dictionary,
 
 ## Returns true if a RuleRegistry blocker prevents spending this token.
 ## Rules Reference: "Faulty Countermeasures"; "Capacitor Failure".
-func is_token_blocked_by_effect(inst: ShipInstance,
+func is_token_blocked_by_effect(inst: RefCounted,
 		token: Dictionary, def_zone: int) -> bool:
 	if inst == null:
 		return false
@@ -119,7 +129,7 @@ func is_token_blocked_by_effect(inst: ShipInstance,
 			RuleSurface.TARGET_DEFENSE_TOKEN_SPEND)
 
 
-func _make_defense_token_context(inst: ShipInstance,
+func _make_defense_token_context(inst: RefCounted,
 		token: Dictionary,
 		def_zone: int) -> EffectContext:
 	var ctx: EffectContext = EffectContext.new()
@@ -136,16 +146,17 @@ func _make_defense_token_context(inst: ShipInstance,
 
 
 func _add_defending_zone_shields(ctx: EffectContext,
-		inst: ShipInstance,
+		inst: RefCounted,
 		def_zone: int) -> void:
-	if def_zone < 0:
+	if def_zone < 0 or not inst is ShipInstance:
 		return
+	var ship: ShipInstance = inst as ShipInstance
 	var zone_key: String = ConstantsScript.hull_zone_to_string(
 			def_zone as Constants.HullZone)
-	if zone_key == "" or not inst.current_shields.has(zone_key):
+	if zone_key == "" or not ship.current_shields.has(zone_key):
 		return
 	ctx.set_meta_value("target_zone_shields",
-			int(inst.current_shields[zone_key]))
+			int(ship.current_shields[zone_key]))
 
 
 # ---------------------------------------------------------------------------

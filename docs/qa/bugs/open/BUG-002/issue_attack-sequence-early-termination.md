@@ -6,7 +6,13 @@ Layer: Command Flow
 
 ## Expected
 
-Attack flow is according to the rules. A ship can make a total of two attacks, each one from a different hull zone. attacks against squadrons should be handeled correctly. Multiple attacks should be possible if multiple squadrons are within a single hull zone. The rules are presented here: SWM-RULES-REFERENCE-GUIDE-150.md
+A ship may normally perform up to two attacks during its activation, using a different hull zone for each attack.
+
+When a hull zone performs an anti-squadron attack, that attack must be resolvable against every eligible enemy squadron in that hull zone's firing arc, one squadron at a time.
+
+After that anti-squadron attack finishes, the ship must retain the opportunity to perform its second legal attack from another hull zone.
+
+ The rules are presented here: SWM-RULES-REFERENCE-GUIDE-150.md
 
 ## Actual
 
@@ -14,7 +20,14 @@ Attack flow terminates after one attack from a ship. The second attack cannot co
 
 ## Reproduction
 
-Always
+1. Activate a ship with at least two legal attacks.
+2. Select a hull zone containing multiple enemy squadrons.
+3. Resolve and confirm the attack against the first squadron.
+4. Attempt to attack another eligible squadron or begin the ship's second attack.
+
+Result: no further attack can be initiated.
+
+Reproduced with both the Nebulon-B and Victory II.
 
 ## Evidence
 

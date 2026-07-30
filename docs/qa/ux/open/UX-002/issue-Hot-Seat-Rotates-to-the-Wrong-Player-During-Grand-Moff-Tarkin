@@ -1,0 +1,44 @@
+# UX-002 — Hot Seat Rotates to the Wrong Player During Grand Moff Tarkin
+
+Category: High
+Area: Hot Seat
+Layer: Command Flow
+
+## Problem
+
+During the Grand Moff Tarkin command selection step, the hot seat rotates to the wrong player position.
+
+The interaction is controlled by the Imperial player, therefore the hot seat should rotate to the Imperial side before the command selection begins.
+
+## Impact
+
+The active player is presented on the wrong side of the table, making the interaction confusing and breaking the expected hot-seat flow.
+
+## Evidence
+
+annotation_20260730_064813_001.json
+
+The captured state shows:
+
+- Grand Moff Tarkin command selection is active;
+- interaction flow step 30;
+- controller player is the Imperial player;
+- the hot seat is rotated to the incorrect side.
+
+## Investigation hint
+
+Inspect the hot-seat rotation logic when entering the Grand Moff Tarkin command-selection interaction.
+
+Verify that the rotation is derived from the authoritative controller player.
+
+## Resolution
+
+Improvement:
+
+Rotate the hot seat to the controlling player's side before presenting the Grand Moff Tarkin command selection.
+
+Verification:
+
+- Enter the Grand Moff Tarkin command-selection step.
+- Verify that the hot seat rotates to the Imperial player's side.
+- Verify that the rotation remains correct when the interaction is reopened or restored.

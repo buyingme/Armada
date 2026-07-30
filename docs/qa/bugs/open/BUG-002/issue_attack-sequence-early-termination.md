@@ -1,6 +1,6 @@
 # BUG-002 — Attack Sequence Early Termination
 
-Severity: Critical
+Severity: High
 Area: Ship Phase / Attack Execution
 Layer: Command Flow
 

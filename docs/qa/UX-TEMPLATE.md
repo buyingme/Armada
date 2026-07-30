@@ -12,6 +12,8 @@ Layer: Presentation | Projection | Command Flow | Architecture | Rules | Animati
 
 annotation.json
 
+## Investigation hint
+
 ## Resolution
 
 Improvement:

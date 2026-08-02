@@ -1259,12 +1259,14 @@ func _finalize_ready_sequence() -> bool:
 			if game_state != null else null
 	var has_active_attack: bool = attack != null and attack.active
 	var attack_resume: Dictionary = _resume_active_attack_from_state()
-	if has_active_attack \
+	var has_attack_reconstruction: bool = has_active_attack \
+			or not attack_resume.is_empty()
+	if has_attack_reconstruction \
 			and not bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
 		_block_after_active_attack_reconstruction_failure(attack_resume)
 		return false
 	_initialize_ship_activation_controller()
-	if has_active_attack:
+	if has_attack_reconstruction:
 		_ship_activation_controller.dismiss_activation_modal_for_attack()
 	_create_command_router_adapter()
 	_connect_signals()
@@ -1274,6 +1276,15 @@ func _finalize_ready_sequence() -> bool:
 	queue_redraw()
 	_on_phase_changed(GameManager.get_current_phase())
 	_on_active_player_changed(GameManager.get_active_player())
+	# Phase setup intentionally clears stale activation UI/context. Restore the
+	# serialized enclosing Attack step only after that generic cleanup.
+	if not has_active_attack and has_attack_reconstruction \
+			and not _restore_inactive_attack_activation_context(attack_resume):
+		_block_after_active_attack_reconstruction_failure({
+			AttackExecutor.RESUME_KEY_REASON:
+					"Enclosing ship activation reconstruction failed.",
+		})
+		return false
 	if bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
 		_attack_panel_controller.sync_mirror_from_flow(
 				attack_resume.get(AttackExecutor.RESUME_KEY_FLOW) as InteractionFlow)
@@ -1283,7 +1294,8 @@ func _finalize_ready_sequence() -> bool:
 				intent.timing_window,
 				Callable(_command_router_adapter,
 						"submit_timing_window_intent"))
-		_schedule_active_attack_resume(attack_resume)
+		if has_active_attack:
+			_schedule_active_attack_resume(attack_resume)
 	return true
 
 
@@ -1317,24 +1329,48 @@ func _schedule_active_attack_resume(plan: Dictionary) -> bool:
 	return true
 
 
-## Reconstructs one active individual attack after loaded/reconnected state and
-## synchronized cursors have already been installed. The executor resolves
-## stable model-to-token references, derives the projection from canonical
-## state, and never reads the serialized scene/InteractionFlow mirror as input.
+## Reconstructs either one active individual attack or the declaration route
+## for an inactive individual attack whose serialized ShipInstance proves an
+## enclosing Step 6 / second-normal-attack continuation. The executor never
+## reads the serialized scene/InteractionFlow mirror as gameplay input.
 func _resume_active_attack_from_state() -> Dictionary:
 	var game_state: GameState = GameManager.current_game_state
 	if game_state == null:
 		return {}
 	var attack: CurrentAttackState = game_state.current_attack_state
-	if attack == null or not attack.active:
-		return {}
-	var result: Dictionary = _attack_executor.resume_current_attack(
-			_find_ship_token_for_instance,
-			_find_squadron_token_for_instance)
+	var result: Dictionary = {}
+	if attack != null and attack.active:
+		result = _attack_executor.resume_current_attack(
+				_find_ship_token_for_instance,
+				_find_squadron_token_for_instance)
+	else:
+		result = _attack_executor.resume_inactive_ship_attack_continuation(
+				_find_ship_token_for_instance)
 	if not bool(result.get(AttackExecutor.RESUME_KEY_OK, false)):
-		push_error("Active attack reconstruction failed: %s" % str(
-				result.get(AttackExecutor.RESUME_KEY_REASON, "unknown reason")))
+		if not result.is_empty():
+			push_error("Attack reconstruction failed: %s" % str(result.get(
+					AttackExecutor.RESUME_KEY_REASON, "unknown reason")))
 	return result
+
+
+## Rebuilds only the runtime activation context required to consume a
+## reconstructed declaration. The ShipInstance remains the serialized owner of
+## progress; this context is a scene projection and submits no command.
+func _restore_inactive_attack_activation_context(
+		plan: Dictionary) -> bool:
+	var ship: ShipInstance = plan.get(
+			AttackExecutor.RESUME_KEY_ACTIVATING_SHIP) as ShipInstance
+	var token: ShipToken = plan.get(
+			AttackExecutor.RESUME_KEY_ACTIVATING_SHIP_TOKEN) as ShipToken
+	if ship == null or token == null or token.get_ship_instance() != ship:
+		return false
+	var activation := ShipActivationState.create(ship)
+	activation.set_current_step(ShipActivationState.Step.ATTACK)
+	_activation_ctx.set_active(token, activation)
+	GameManager._activating_ship = ship
+	if _panel_mgr.activation_sidebar != null:
+		_panel_mgr.activation_sidebar.highlight_active(ship)
+	return true
 
 
 func _show_fixed_round1_toast_if_needed() -> void:

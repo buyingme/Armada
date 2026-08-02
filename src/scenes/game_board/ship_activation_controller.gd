@@ -42,6 +42,9 @@ var _crew_panic_modal: OpponentChoiceModal = null
 ## Transient guard for projected Repair auto-advance command submission.
 var _repair_auto_advance_pending: bool = false
 
+## Transient guard for the initial unavailable Squadron command submission.
+var _squadron_auto_advance_pending: bool = false
+
 ## Transient guard for projected no-target Attack auto-advance submission.
 var _attack_auto_advance_pending: bool = false
 
@@ -445,6 +448,7 @@ func sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
+	_queue_unavailable_squadron_auto_advance(flow)
 	var target_step: int = -1
 	match flow.step_id:
 		Constants.InteractionStep.SQUADRON_STEP:
@@ -477,6 +481,44 @@ func submit_activation_step(step_id: String) -> void:
 	GameManager.submit_advance_activation_step(ship, step_id)
 
 
+## Prevents the activation modal's scene-local auto-skip chain from bypassing
+## the command-backed Repair and Attack-step transitions when Squadron is not
+## available at activation entry.
+func _queue_unavailable_squadron_auto_advance(flow: InteractionFlow) -> void:
+	if flow.step_id != Constants.InteractionStep.ACTIVATION_MODAL_OPEN:
+		_squadron_auto_advance_pending = false
+		return
+	if _squadron_auto_advance_pending:
+		return
+	if not _should_auto_advance_unavailable_squadron(flow):
+		return
+	_squadron_auto_advance_pending = true
+	call_deferred("_auto_advance_unavailable_squadron_if_current")
+
+
+func _auto_advance_unavailable_squadron_if_current() -> void:
+	_squadron_auto_advance_pending = false
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var flow: InteractionFlow = game_state.interaction_flow
+	if flow == null:
+		return
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return
+	if flow.step_id != Constants.InteractionStep.ACTIVATION_MODAL_OPEN:
+		return
+	if not _should_auto_advance_unavailable_squadron(flow):
+		return
+	if _panel_mgr.activation_modal and _panel_mgr.activation_modal.is_open():
+		# Cancels the modal's pending scene-local auto-skip timer. The next
+		# presentation step is projected only after the command is accepted.
+		_panel_mgr.activation_modal.refresh()
+	_log.info("No Squadron command available at activation entry — " \
+			+ "advancing through the authoritative activation flow.")
+	submit_activation_step("repair_step")
+
+
 ## Defers projected Repair skips so follow-up commands preserve network order.
 func _queue_unavailable_repair_auto_advance(flow: InteractionFlow) -> void:
 	if flow.step_id != Constants.InteractionStep.REPAIR_STEP:
@@ -504,6 +546,10 @@ func _auto_advance_unavailable_repair_if_current() -> void:
 		return
 	if not _should_auto_advance_unavailable_repair(flow):
 		return
+	if _panel_mgr.activation_modal and _panel_mgr.activation_modal.is_open():
+		# A newly opened projected Repair modal may have queued its legacy
+		# scene-local auto-skip. Keep it on Repair until Attack is accepted.
+		_panel_mgr.activation_modal.refresh()
 	_log.info("No repair available in projected Repair step — auto-advancing.")
 	_on_repair_done()
 
@@ -549,6 +595,27 @@ func _should_auto_advance_unavailable_repair(flow: InteractionFlow) -> bool:
 	if not _has_repair_resources.is_valid():
 		return false
 	if bool(_has_repair_resources.call(_activation_ctx.activating_ship_token)):
+		return false
+	var ship: ShipInstance = _current_activating_ship()
+	if ship == null or flow.controller_player != ship.owner_player:
+		return false
+	var flow_ship_index: int = int(flow.payload.get("ship_index", -1))
+	if flow_ship_index < 0:
+		return false
+	return flow_ship_index == _current_activating_ship_index(ship)
+
+
+func _should_auto_advance_unavailable_squadron(flow: InteractionFlow) -> bool:
+	if flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
+		return false
+	if not _is_local_activation_modal_controller():
+		return false
+	if _activation_ctx.activating_ship_token == null:
+		return false
+	if not _has_squadron_resources.is_valid():
+		return false
+	if bool(_has_squadron_resources.call(
+			_activation_ctx.activating_ship_token)):
 		return false
 	var ship: ShipInstance = _current_activating_ship()
 	if ship == null or flow.controller_player != ship.owner_player:

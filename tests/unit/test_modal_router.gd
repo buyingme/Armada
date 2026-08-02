@@ -103,6 +103,21 @@ class StubAttackPanelMirror:
 		close_calls += 1
 
 
+class StubAttackExecutor:
+	extends AttackExecutor
+
+	var owns_ship_attack_step: bool = false
+	var deactivate_calls: int = 0
+
+
+	func owns_authoritative_ship_attack_presentation() -> bool:
+		return owns_ship_attack_step
+
+
+	func deactivate_primary_presentation() -> void:
+		deactivate_calls += 1
+
+
 class StubCommandSubmitter:
 	extends CommandSubmitter
 
@@ -626,6 +641,29 @@ func test_close_mirror_delegates_to_attack_panel_mirror() -> void:
 	# Assert
 	assert_eq(mirror.close_calls, 1,
 			"close_mirror() should delegate to the owned AttackPanelMirror.")
+
+
+func test_inactive_individual_attack_preserves_authoritative_ship_continuation() -> void:
+	var panel_mgr := UIPanelManager.new()
+	add_child_autofree(panel_mgr)
+	var mirror := StubAttackPanelMirror.new()
+	panel_mgr.attack_panel_mirror = mirror
+	var executor := StubAttackExecutor.new()
+	executor.owns_ship_attack_step = true
+	add_child_autofree(executor)
+	var controller := AttackPanelController.new()
+	add_child_autofree(controller)
+	controller.initialize(executor, panel_mgr, null)
+	var state: GameState = _state_with_flow(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE, 0)
+	GameManager.current_game_state = state
+
+	controller.sync_mirror_from_flow(state.interaction_flow)
+
+	assert_eq(executor.deactivate_calls, 0,
+			"Projection teardown cannot consume a canonical ship continuation.")
+	assert_eq(mirror.close_calls, 1)
 
 
 func _create_router(command_reaction_fn: Callable,

@@ -26,6 +26,9 @@ const RESUME_KEY_ATTACK_ID: String = "attack_id"
 const RESUME_KEY_TRANSITION: String = "transition"
 const RESUME_KEY_REQUIRES_INPUT: String = "requires_input"
 const RESUME_KEY_FLOW: String = "projection_flow"
+const RESUME_KEY_ACTIVATING_SHIP: String = "activating_ship"
+const RESUME_KEY_ACTIVATING_SHIP_TOKEN: String = "activating_ship_token"
+const RESUME_KEY_ENCLOSING_CONTINUATION: String = "enclosing_continuation"
 
 const RESUME_RULE_CHOICE: String = "resolve_attack_pool_choice"
 const RESUME_CF_DIAL: String = "resolve_concentrate_fire_dial"
@@ -149,14 +152,13 @@ var _applied_damage_attack_id: String = ""
 var _pending_finalize_after_completion: bool = false
 var _pending_counter_begin: bool = false
 var _pending_finish_after_skip: bool = false
+var _pending_squadron_done_after_skip: bool = false
 var _pending_zero_squad_skip: bool = false
 var _defense_command_pending: bool = false
 var _defense_submit_in_progress: bool = false
 
-## Reconstruction restores only the active individual attack. Enclosing
-## activation iteration state is intentionally excluded from CurrentAttackState,
-## so a reconstructed attack returns to its enclosing controller after this
-## individual attack instead of inventing prior hull-zone/target history.
+## Reconstruction restores the active individual attack from CurrentAttackState
+## and derives enclosing ship-attack progress from its ShipInstance owner.
 var _reconstructed_current_attack: bool = false
 
 # ---------------------------------------------------------------------------
@@ -301,6 +303,7 @@ func resume_current_attack(
 		return refs
 	_reset_exec_state()
 	_install_resume_scene_references(attack, refs)
+	_sync_ship_attack_progress_from_authority()
 	_sync_scene_from_current_attack()
 	var plan: Dictionary = _derive_resume_plan(game_state, attack)
 	if not bool(plan.get(RESUME_KEY_OK, false)):
@@ -332,6 +335,120 @@ func resume_current_attack(
 	_render_resume_projection(plan)
 	plan[RESUME_KEY_FLOW] = flow
 	return plan
+
+
+## Rebuilds a declaration presentation after an individual attack has been
+## retired while its serialized ShipInstance still proves that the enclosing
+## Attack step has a legal continuation. No command or Preview is synthesized.
+## An empty result means that no inactive continuation exists.
+func resume_inactive_ship_attack_continuation(
+		ship_token_for_instance: Callable) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack != null and attack.active:
+		return {}
+	if not ship_token_for_instance.is_valid():
+		return _resume_failure("Attack token resolver is unavailable.")
+	var candidates: Array[ShipInstance] = \
+			_inactive_ship_attack_continuations(game_state)
+	if candidates.is_empty():
+		return {}
+	if candidates.size() != 1:
+		return _resume_failure(
+				"Canonical ship attack continuation is ambiguous.")
+	var ship: ShipInstance = candidates[0]
+	var ship_token: ShipToken = \
+			ship_token_for_instance.call(ship) as ShipToken
+	if ship_token == null:
+		return _resume_failure(
+				"Canonical ship attack continuation token is missing.")
+	var continuation: String = \
+			CompleteAttackCommand.CONTINUATION_SQUADRON \
+			if ship.anti_squadron_attack_zone >= 0 \
+			else CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK
+	var projection: Dictionary = {}
+	if not _flow_fsm.restore_projection(
+			AttackFlowFSM.Step.DECLARE, ship.owner_player, -1, projection):
+		return _resume_failure(
+				"Canonical ship attack continuation has no declaration route.")
+	var prior_flow: InteractionFlow = game_state.interaction_flow
+	var flow: InteractionFlow = FlowSpec.make_interaction_flow(
+			Constants.InteractionFlow.ATTACK,
+			_flow_fsm.get_interaction_step(),
+			game_state,
+			{
+				"attacker_player": ship.owner_player,
+				"defender_player": -1,
+				"controller_player": ship.owner_player,
+			},
+			Constants.Visibility.ALL,
+			projection)
+	game_state.interaction_flow = flow
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player < 0 or local_player == ship.owner_player:
+		var presentation: Dictionary = _render_inactive_ship_continuation(
+				ship_token, continuation)
+		if not bool(presentation.get(RESUME_KEY_OK, false)):
+			_flow_fsm.reset()
+			game_state.interaction_flow = prior_flow
+			return presentation
+	return {
+		RESUME_KEY_OK: true,
+		RESUME_KEY_REASON: "",
+		RESUME_KEY_ATTACK_ID: "",
+		RESUME_KEY_TRANSITION: continuation,
+		RESUME_KEY_REQUIRES_INPUT: true,
+		RESUME_KEY_FLOW: flow,
+		RESUME_KEY_ACTIVATING_SHIP: ship,
+		RESUME_KEY_ACTIVATING_SHIP_TOKEN: ship_token,
+		RESUME_KEY_ENCLOSING_CONTINUATION: continuation,
+	}
+
+
+func _inactive_ship_attack_continuations(
+		game_state: GameState) -> Array[ShipInstance]:
+	var result: Array[ShipInstance] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var player: PlayerState = game_state.get_player_state(player_index)
+		if player == null:
+			continue
+		for ship: ShipInstance in player.ships:
+			if not ship.attack_step_active \
+					or ship.committed_attack_count <= 0:
+				continue
+			if ship.anti_squadron_attack_zone >= 0 \
+					or ship.committed_attack_count < 2:
+				result.append(ship)
+	return result
+
+
+func _render_inactive_ship_continuation(
+		ship_token: ShipToken, continuation: String) -> Dictionary:
+	_target_selector.dismiss_other_tools_requested.emit()
+	_target_selector.dismiss()
+	_reset_exec_state()
+	_init_ship_attack_state(ship_token)
+	_wire_attack_done_and_panel_signals()
+	if continuation == CompleteAttackCommand.CONTINUATION_SQUADRON:
+		_target_selector._select_attacker_ship_zone(
+				ship_token, _state.attacker_zone)
+		if _state.attacker_ship != ship_token \
+				or not _target_selector.is_target_selecting():
+			_target_selector.dismiss()
+			_reset_exec_state()
+			return _resume_failure(
+					"Canonical Step 6 continuation has no eligible target.")
+		_target_selector.prepare_next_squadron_target()
+		_show_next_squadron_panel_prompt()
+	else:
+		_target_selector.enter_attacker_selection(true, _get_ship_name())
+		var panel: AttackSimPanel = _get_panel()
+		if panel != null:
+			panel.show_skip_attack_button()
+		_target_selector.show_ship_range_overlay(_state.exec_ship_token)
+	return {RESUME_KEY_OK: true}
 
 
 ## Authors only a deterministic next command for live authority. User choices,
@@ -833,6 +950,7 @@ func _auto_skip_ship_attack(panel: AttackSimPanel) -> void:
 ## Initialises attack execution state for a ship attacker.
 func _init_ship_attack_state(ship_token: ShipToken) -> void:
 	_flow_executor.init_ship_exec_state(_state, ship_token)
+	_sync_ship_attack_progress_from_authority()
 
 ## Starts the squadron attack execution flow from the Squadron Activation
 ## Modal. Pre-selects the squadron as attacker; enters target selection.
@@ -904,6 +1022,13 @@ func is_target_selecting() -> bool:
 func is_in_exec_mode() -> bool:
 	return _state.exec_mode
 
+
+## Whether this executor is presenting a canonical ship Attack step. This is a
+## projection-lifecycle query only; command validation retains gameplay authority.
+func owns_authoritative_ship_attack_presentation() -> bool:
+	var ship: ShipInstance = _authoritative_attack_ship()
+	return _state.exec_mode and ship != null and ship.attack_step_active
+
 ## Returns true if the given ship has at least one valid attack target
 ## from any of its four hull zones. Unlike [method _attack_exec_has_any_valid_target]
 ## this does NOT exclude fired zones — it is used before the attack step
@@ -926,6 +1051,7 @@ func _reset_exec_state() -> void:
 	_pending_finalize_after_completion = false
 	_pending_counter_begin = false
 	_pending_finish_after_skip = false
+	_pending_squadron_done_after_skip = false
 	_pending_zero_squad_skip = false
 	_defense_command_pending = false
 	_defense_submit_in_progress = false
@@ -999,6 +1125,7 @@ func _sync_scene_from_current_attack() -> void:
 	if attack == null or not attack.active:
 		return
 	_sync_projected_participants(attack)
+	_sync_ship_attack_progress_from_authority()
 	_state.range_band = attack.range_band
 	_state.obstructed = attack.obstructed
 	_state.dice_pool = attack.dice_pool
@@ -1026,6 +1153,38 @@ func _sync_scene_from_current_attack() -> void:
 			and attack.defense_stage != CurrentAttackState.DEFENSE_COMPLETE
 	_state.obstruction_step = attack.stage == CurrentAttackState.STAGE_PRE_ROLL \
 			and attack.obstructed and not attack.obstruction_resolved
+
+
+## Refreshes scene-local attack counters and token references as a one-way
+## projection of the activating ShipInstance's serialized progress.
+func _sync_ship_attack_progress_from_authority() -> void:
+	var ship: ShipInstance = _authoritative_attack_ship()
+	if ship == null or not ship.attack_step_active:
+		return
+	_state.fired_zones.assign(ship.used_attack_hull_zones)
+	_state.current_attack = ship.committed_attack_count
+	_state.attacked_squads.clear()
+	var game_state: GameState = GameManager.current_game_state
+	if game_state != null and _target_selector != null:
+		for target: Dictionary in ship.anti_squadron_target_history:
+			var squadron: SquadronInstance = game_state.get_squadron(
+					int(target.get("owner", -1)), int(target.get("index", -1)))
+			if squadron == null:
+				continue
+			var token: SquadronToken = \
+					_target_selector.squadron_token_for_instance(squadron)
+			if token != null:
+				_state.attacked_squads.append(token)
+	if ship.anti_squadron_attack_zone >= 0:
+		_state.attacker_zone = ship.anti_squadron_attack_zone
+		_state.attacker_zone_name = str(_ZONE_NAMES.get(
+				ship.anti_squadron_attack_zone, ""))
+
+
+func _authoritative_attack_ship() -> ShipInstance:
+	if _state.exec_ship_token == null:
+		return null
+	return _state.exec_ship_token.get_ship_instance()
 
 
 func _sync_projected_participants(attack: CurrentAttackState) -> void:
@@ -1323,6 +1482,11 @@ func apply_begin_attack_result(_result: Dictionary) -> void:
 ## available.
 func apply_declaration_command_rejection(
 		command: GameCommand, reason: String) -> void:
+	if command != null and command.command_type == "skip_attack" \
+			and _pending_squadron_done_after_skip:
+		_pending_squadron_done_after_skip = false
+		_log.info("Step 6 decline was rejected — %s" % reason)
+		return
 	if command == null \
 			or command.command_type != _pending_declaration_command \
 			or command.player_index != _get_attacker_player():
@@ -3784,6 +3948,10 @@ func apply_complete_attack_result(_result: Dictionary) -> void:
 		_pending_counter_begin = false
 		_begin_counter_attack()
 		return
+	if _reconstructed_current_attack \
+			and not _pending_finalize_after_completion:
+		_finalize_completed_attack()
+		return
 	if not _pending_finalize_after_completion:
 		return
 	_pending_finalize_after_completion = false
@@ -3797,7 +3965,13 @@ func _finalize_completed_attack() -> void:
 		_get_panel().hide_accuracy_section()
 		_get_panel().hide_redirect_section()
 	_rotate_camera_to_attacker()
-	if _reconstructed_current_attack:
+	_sync_ship_attack_progress_from_authority()
+	var projected_ship: ShipInstance = _authoritative_attack_ship()
+	if projected_ship != null:
+		_log.debug("Post-Complete projection from authoritative progress: %s" %
+				JSON.stringify(projected_ship.attack_progress_snapshot()))
+	if _reconstructed_current_attack \
+			and not owns_authoritative_ship_attack_presentation():
 		_finish_attack_execution()
 		return
 	if _state.squad_exec_mode:
@@ -3808,14 +3982,7 @@ func _finalize_completed_attack() -> void:
 		_finalize_squadron_attack()
 		return
 	# --- Ship defender: two-hull-zone logic ---
-	if _state.attacker_zone >= 0:
-		_state.fired_zones.append(_state.attacker_zone)
-	_attack_exec_mark_spent_zone()
-	_state.current_attack += 1
-	if _state.current_attack < 2:
-		_attack_exec_prepare_next_attack()
-		return
-	_finish_attack_execution()
+	_continue_after_normal_attack()
 
 ## Rotates the camera back to the attacker’s perspective (AE-DEF-011).
 ## Phase K4: hot-seat detected via `local_player_index < 0`.  In
@@ -3837,11 +4004,12 @@ func _rotate_camera_to_attacker() -> void:
 
 ## Handles the Step 6 squadron loop finalisation.
 func _finalize_squadron_attack() -> void:
-	_state.attacked_squads.append(_state.defender_squadron)
 	if _get_overlay():
 		_get_overlay().add_spent_zone_marker(
 				_state.defender_squadron.global_position)
-	if _attack_exec_has_more_squad_targets():
+	_sync_ship_attack_progress_from_authority()
+	var ship: ShipInstance = _authoritative_attack_ship()
+	if ship != null and ship.anti_squadron_attack_zone >= 0:
 		_attack_exec_prepare_next_squadron()
 		return
 	_end_squadron_loop()
@@ -3881,12 +4049,17 @@ func _finish_zero_dice_squadron() -> void:
 ## Ends the Step 6 squadron loop: marks the zone as fired and either
 ## prepares the next hull-zone attack or finishes the attack step.
 func _end_squadron_loop() -> void:
-	if _state.attacker_zone >= 0:
-		_state.fired_zones.append(_state.attacker_zone)
+	_sync_ship_attack_progress_from_authority()
+	_continue_after_normal_attack()
+
+
+## Continues after one committed normal ship attack using only the activating
+## ShipInstance's authoritative progress. Scene teardown cannot consume it.
+func _continue_after_normal_attack() -> void:
 	_attack_exec_mark_spent_zone()
-	_state.current_attack += 1
-	if _state.current_attack < 2:
-		_state.attacked_squads.clear()
+	var ship: ShipInstance = _authoritative_attack_ship()
+	if ship != null and ship.attack_step_active \
+			and ship.committed_attack_count < 2:
 		_attack_exec_prepare_next_attack()
 		return
 	_finish_attack_execution()
@@ -4084,15 +4257,24 @@ func _on_attack_skip() -> void:
 	# If we're in the Step 6 squadron loop (attacked >=1 squadron and
 	# still target-selecting for the next one), treat as "done with
 	# this hull zone's anti-squadron attacks."
-	if _state.attacked_squads.size() > 0 and \
+	var ship: ShipInstance = _authoritative_attack_ship()
+	if ship != null and ship.anti_squadron_attack_zone >= 0 and \
 			_target_selector.is_target_selecting():
 		_log.info(
 				"Squadron loop skipped — moving to next hull zone.")
+		var game_state: GameState = GameManager.current_game_state
+		var ship_index: int = game_state.find_ship_index(ship) \
+				if game_state != null else -1
+		_pending_squadron_done_after_skip = true
 		var loop_skip: Dictionary = GameManager.submit_skip_attack(
-				_get_attacker_player(), "squadron_done")
+				_get_attacker_player(), "squadron_done", ship_index)
 		if _is_waiting_for_remote_command_result(loop_skip):
 			return
-		_end_squadron_loop()
+		if loop_skip.is_empty():
+			_pending_squadron_done_after_skip = false
+			return
+		if _pending_squadron_done_after_skip:
+			apply_skip_attack_result(loop_skip)
 		return
 	_log.info("Attack skipped by player.")
 	var attack: CurrentAttackState = _current_attack()
@@ -4119,6 +4301,10 @@ func apply_skip_attack_result(result: Dictionary) -> void:
 	if _pending_zero_squad_skip:
 		_pending_zero_squad_skip = false
 		_finish_zero_dice_squadron()
+		return
+	if _pending_squadron_done_after_skip:
+		_pending_squadron_done_after_skip = false
+		_end_squadron_loop()
 		return
 	if not _pending_finish_after_skip:
 		return

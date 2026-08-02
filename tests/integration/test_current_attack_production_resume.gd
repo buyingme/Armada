@@ -468,6 +468,80 @@ func test_save_load_restores_cursor_before_production_resume() -> void:
 	manager.free()
 
 
+func test_save_load_reconstructs_inactive_step_six_continuation() -> void:
+	var source: GameState = _inactive_ship_continuation_state(true)
+	GameManager.current_game_state = source
+	assert_true(CommandProcessor.restore_next_sequence(41))
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	assert_true(manager.save_game(source, TEST_SAVE))
+	var loaded: Dictionary = manager.load_game(TEST_SAVE)
+	assert_true(bool(loaded.get("ok", false)))
+	var restored: GameState = loaded.get("state") as GameState
+	assert_not_null(restored)
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 41))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = restored.get_ship(1, 0)
+
+	assert_true(restored.current_attack_state.is_inactive())
+	assert_true(ship.attack_step_active)
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.anti_squadron_attack_zone, Constants.HullZone.FRONT)
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._activation_ctx.is_active())
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.ATTACK))
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(board._attack_executor.is_target_selecting())
+	assert_eq(board._attack_executor._state.attacker_zone,
+			Constants.HullZone.FRONT)
+	assert_eq(board._attack_executor._state.attacked_squads.size(), 1)
+	assert_eq(restored.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(CommandProcessor.get_next_sequence(), 41)
+	assert_true(_history_types().is_empty())
+	manager.delete_save(TEST_SAVE)
+	manager.free()
+
+
+func test_save_load_reconstructs_inactive_second_normal_attack() -> void:
+	var source: GameState = _inactive_ship_continuation_state(false)
+	GameManager.current_game_state = source
+	assert_true(CommandProcessor.restore_next_sequence(43))
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	assert_true(manager.save_game(source, TEST_SAVE))
+	var loaded: Dictionary = manager.load_game(TEST_SAVE)
+	assert_true(bool(loaded.get("ok", false)))
+	var restored: GameState = loaded.get("state") as GameState
+	assert_not_null(restored)
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 43))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = restored.get_ship(1, 0)
+
+	assert_true(restored.current_attack_state.is_inactive())
+	assert_true(ship.attack_step_active)
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.anti_squadron_attack_zone, -1)
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.ATTACK))
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(board._attack_executor.is_selecting())
+	assert_false(board._attack_executor.is_target_selecting())
+	assert_eq(board._attack_executor._state.fired_zones,
+			[Constants.HullZone.FRONT])
+	assert_eq(board._attack_executor._state.current_attack, 1)
+	assert_eq(restored.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_eq(CommandProcessor.get_next_sequence(), 43)
+	assert_true(_history_types().is_empty())
+	manager.delete_save(TEST_SAVE)
+	manager.free()
+
+
 func test_reconnect_resume_is_passive_and_uses_filtered_canonical_state() -> void:
 	var server_state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
 		"attack_id": "attack:14",
@@ -505,6 +579,61 @@ func test_reconnect_resume_is_passive_and_uses_filtered_canonical_state() -> voi
 			"A reconnecting mirror must never author the deterministic follow-up.")
 	assert_eq(CommandProcessor.get_next_sequence(), 15)
 	assert_eq(CommandProcessor.get_command_count(), 0)
+
+
+func test_reconnect_reconstructs_inactive_step_six_continuation() -> void:
+	var server_state: GameState = _inactive_ship_continuation_state(true)
+	var filtered: Dictionary = StateFilter.filter_for_player(
+			server_state.serialize(), 1)
+	var client_state: GameState = GameState.deserialize(filtered)
+	assert_not_null(client_state)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 45))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = client_state.get_ship(1, 0)
+
+	assert_true(client_state.current_attack_state.is_inactive())
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(board._attack_executor.is_target_selecting())
+	assert_eq(board._attack_executor._state.attacker_zone,
+			Constants.HullZone.FRONT)
+	assert_eq(board._attack_executor._state.attacked_squads.size(), 1)
+	assert_eq(client_state.interaction_flow.controller_player, 1)
+	assert_eq(CommandProcessor.get_next_sequence(), 45)
+	assert_true(_history_types().is_empty())
+
+
+func test_reconnect_reconstructs_inactive_second_normal_attack() -> void:
+	var server_state: GameState = _inactive_ship_continuation_state(false)
+	var filtered: Dictionary = StateFilter.filter_for_player(
+			server_state.serialize(), 1)
+	var client_state: GameState = GameState.deserialize(filtered)
+	assert_not_null(client_state)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 47))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = client_state.get_ship(1, 0)
+
+	assert_true(client_state.current_attack_state.is_inactive())
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(board._attack_executor.is_selecting())
+	assert_false(board._attack_executor.is_target_selecting())
+	assert_eq(board._attack_executor._state.fired_zones,
+			[Constants.HullZone.FRONT])
+	assert_eq(board._attack_executor._state.current_attack, 1)
+	assert_eq(client_state.interaction_flow.controller_player, 1)
+	assert_eq(CommandProcessor.get_next_sequence(), 47)
+	assert_true(_history_types().is_empty())
 
 
 func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
@@ -732,6 +861,41 @@ func _player_one_ship_attack_state() -> GameState:
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
 			1, Constants.Visibility.ALL, {})
 	return state
+
+
+func _inactive_ship_continuation_state(step_six: bool) -> GameState:
+	var state: GameState = _player_one_ship_attack_state()
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	attacker.begin_attack_step()
+	if step_six:
+		_add_rebel_squadron(state, 0.49, 0.55, "step-six-a")
+		_add_rebel_squadron(state, 0.51, 0.55, "step-six-b")
+		attacker.commit_attack(
+				Constants.HullZone.FRONT,
+				0,
+				CurrentAttackState.KIND_SQUADRON,
+				0)
+	else:
+		attacker.commit_attack(
+				Constants.HullZone.FRONT,
+				0,
+				CurrentAttackState.KIND_SHIP,
+				0)
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	state.interaction_flow = InteractionFlow.empty()
+	return state
+
+
+func _add_rebel_squadron(state: GameState, pos_x: float, pos_y: float,
+		roster_id: String) -> void:
+	var squadron := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY),
+			0)
+	squadron.roster_entry_id = roster_id
+	squadron.pos_x = pos_x
+	squadron.pos_y = pos_y
+	state.get_player_state(0).squadrons.append(squadron)
 
 
 func _board_ship_token(board: GameBoard,

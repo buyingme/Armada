@@ -1498,10 +1498,14 @@ func submit_redirect_done(ship: ShipInstance) -> Dictionary:
 ## Submits a [SkipAttackCommand] for replay recording.
 ## [param player] — the active player index.
 ## [param reason] — skip reason string.
-func submit_skip_attack(player: int, reason: String = "voluntary") -> Dictionary:
+## [param ship_index] — stable attacker identity for a Step 6 decline.
+func submit_skip_attack(player: int, reason: String = "voluntary",
+		ship_index: int = -1) -> Dictionary:
 	if not current_game_state:
 		return {}
 	var payload: Dictionary = {"reason": reason}
+	if reason == "squadron_done":
+		payload["ship_index"] = ship_index
 	var attack: CurrentAttackState = current_game_state.current_attack_state
 	if attack.active:
 		payload["attack_id"] = attack.attack_id

@@ -321,9 +321,79 @@ func test_discard_invalid_index_no_crash() -> void:
 
 func test_reset_activation() -> void:
 	_instance.activated_this_round = true
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
 	_instance.reset_activation()
 	assert_false(_instance.activated_this_round,
 			"Activation flag should be reset")
+	assert_false(_instance.attack_step_active)
+	assert_eq(_instance.committed_attack_count, 0)
+	assert_true(_instance.used_attack_hull_zones.is_empty())
+	assert_true(_instance.anti_squadron_target_history.is_empty())
+
+
+func test_anti_squadron_repetitions_share_one_normal_attack() -> void:
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	assert_eq(_instance.validate_attack_commit(
+			Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 1), "")
+	_instance.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 1)
+
+	assert_eq(_instance.committed_attack_count, 1)
+	assert_eq(_instance.used_attack_hull_zones,
+			[int(Constants.HullZone.FRONT)])
+	assert_eq(_instance.anti_squadron_target_history.size(), 2)
+	assert_ne(_instance.validate_attack_commit(
+			Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0), "",
+			"One squadron cannot be targeted twice in the same attack.")
+	assert_ne(_instance.validate_attack_commit(
+			Constants.HullZone.LEFT, 1,
+			CurrentAttackState.KIND_SQUADRON, 2), "",
+			"Step 6 must retain the original attacking hull zone.")
+
+
+func test_second_attack_uses_another_zone_and_can_repeat_surviving_target() -> void:
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	_instance.end_anti_squadron_attack()
+
+	assert_ne(_instance.validate_attack_commit(
+			Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0), "")
+	assert_eq(_instance.validate_attack_commit(
+			Constants.HullZone.LEFT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0), "",
+			"A new attack may target the same survivor from another zone.")
+	_instance.commit_attack(Constants.HullZone.LEFT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	_instance.end_anti_squadron_attack()
+	assert_eq(_instance.committed_attack_count, 2)
+	assert_ne(_instance.validate_attack_commit(
+			Constants.HullZone.RIGHT, 1,
+			CurrentAttackState.KIND_SHIP, 0), "",
+			"A ship cannot commit a third normal attack.")
+
+
+func test_attack_progress_serialization_round_trip() -> void:
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.REAR, 1,
+			CurrentAttackState.KIND_SQUADRON, 3)
+	var restored: ShipInstance = ShipInstance.deserialize(
+			_instance.serialize(), _ship_data)
+
+	assert_true(restored.attack_step_active)
+	assert_eq(restored.committed_attack_count, 1)
+	assert_eq(restored.used_attack_hull_zones,
+			[int(Constants.HullZone.REAR)])
+	assert_eq(restored.anti_squadron_attack_zone,
+			int(Constants.HullZone.REAR))
+	assert_true(restored.has_anti_squadron_target(1, 3))
 
 # --- Command Dial Stack ---
 
@@ -483,6 +553,9 @@ func test_serialize_contains_expected_keys() -> void:
 			"pos_x", "pos_y", "rotation_deg",
 			"defense_tokens", "facedown_damage",
 			"faceup_damage", "activated_this_round", "owner_player",
+			"attack_step_active", "committed_attack_count",
+			"used_attack_hull_zones", "anti_squadron_attack_zone",
+			"anti_squadron_target_history",
 			"destroyed", "command_dial_stack", "command_tokens",
 			"runtime_upgrades"]:
 		assert_true(data.has(key),

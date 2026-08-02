@@ -235,6 +235,41 @@ static func authoritative_squadron_target_entries(game_state: GameState,
 	return candidates
 
 
+## Returns the authoritative outgoing candidates for one exact, owner-local
+## ship identity. These are derived values from the same calculation used by
+## [method authoritative_attack_entry].
+static func authoritative_ship_target_entries(game_state: GameState,
+		attacker_player: int, attacker_index: int) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	if game_state == null:
+		return candidates
+	var facts: Dictionary = _infos_from_state(game_state)
+	var built: BuildResult = build(
+			facts.get("ships", []), facts.get("squadrons", []),
+			attacker_player)
+	for result_var: Variant in built.ship_results:
+		var result: ShipTargetingResult = result_var as ShipTargetingResult
+		if result.owner_player != attacker_player \
+				or result.entity_index != attacker_index:
+			continue
+		for entry_var: Variant in result.outgoing:
+			var entry: TargetEntry = entry_var as TargetEntry
+			candidates.append({
+				"attacker_zone": int(entry.arc),
+				"target_owner": entry.target_owner,
+				"target_kind": entry.target_kind,
+				"target_index": entry.target_index,
+				"target_zone": int(entry.target_zone) \
+						if entry.has_target_zone else -1,
+				"range_band": entry.canonical_range_band,
+				"obstructed": entry.obstructed,
+				"obstructed_by": entry.obstructed_by.duplicate(),
+				"dice": entry.dice.duplicate(true),
+			})
+		break
+	return candidates
+
+
 static func _infos_from_state(game_state: GameState) -> Dictionary:
 	var ships: Array = []
 	var squadrons: Array = []

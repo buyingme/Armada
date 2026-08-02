@@ -192,7 +192,9 @@ func sync_mirror_from_flow(flow: InteractionFlow) -> void:
 		_panel_mgr.attack_panel_mirror.close()
 		return
 	if not _has_active_canonical_attack():
-		if _owns_pre_begin_ship_attack_presentation(flow):
+		if _owns_pre_begin_ship_attack_presentation(flow) \
+				or (_attack_executor != null \
+						and _attack_executor.owns_authoritative_ship_attack_presentation()):
 			_panel_mgr.attack_panel_mirror.close()
 			return
 		if _attack_executor != null:

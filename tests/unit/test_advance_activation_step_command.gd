@@ -69,15 +69,44 @@ func test_validate_rejects_invalid_step_id() -> void:
 
 
 func test_execute_returns_step_payload_for_timeline() -> void:
+	var ship_index: int = _add_ship(0)
 	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": 0,
+		"ship_index": ship_index,
 		"step_id": "attack_step",
 	})
 	var result: Dictionary = cmd.execute(_state)
-	assert_eq(result.get("ship_index", -1), 0,
+	assert_eq(result.get("ship_index", -1), ship_index,
 			"Execute should echo ship_index for timeline consumers.")
 	assert_eq(result.get("step_id", ""), "attack_step",
 			"Execute should echo step_id for timeline consumers.")
+	assert_true(_state.get_ship(0, ship_index).attack_step_active,
+			"Attack-step entry should open activation-local attack progress.")
+	assert_eq(_state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SHIP_ACTIVATION)
+	assert_eq(_state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_STEP,
+			"The command must publish Attack only after opening ship progress.")
+	assert_eq(_state.interaction_flow.controller_player, 0)
+	assert_eq(int(_state.interaction_flow.payload.get("ship_index", -1)),
+			ship_index)
+
+
+func test_maneuver_step_closes_attack_progress_without_erasing_history() -> void:
+	var ship_index: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	ship.begin_attack_step()
+	ship.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SHIP, 0)
+	var cmd := AdvanceActivationStepCommand.new(0, {
+		"ship_index": ship_index,
+		"step_id": "maneuver_step",
+	})
+	cmd.execute(_state)
+
+	assert_false(ship.attack_step_active)
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.used_attack_hull_zones,
+			[int(Constants.HullZone.FRONT)])
 
 
 func test_serialize_deserialize_roundtrip() -> void:

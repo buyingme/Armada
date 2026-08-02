@@ -568,7 +568,10 @@ func test_skip_attack_execute_default_reason() -> void:
 
 
 func test_skip_attack_serialize_roundtrip() -> void:
-	var cmd := SkipAttackCommand.new(0, {"reason": "squadron_done"})
+	var cmd := SkipAttackCommand.new(0, {
+		"reason": "squadron_done",
+		"ship_index": 2,
+	})
 	cmd.sequence = 15
 	var data: Dictionary = cmd.serialize()
 	var restored: GameCommand = GameCommand.deserialize(data)
@@ -581,6 +584,39 @@ func test_skip_attack_serialize_roundtrip() -> void:
 			"Restored sequence should match.")
 	assert_eq(restored.payload.get("reason", ""), "squadron_done",
 			"Restored reason should match.")
+	assert_eq(restored.payload.get("ship_index", -1), 2,
+			"Stable Step 6 attacker identity should round-trip.")
+
+
+func test_squadron_done_skip_closes_iteration_and_retains_second_attack() -> void:
+	var ship_index: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	ship.begin_attack_step()
+	ship.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	var cmd := SkipAttackCommand.new(0, {
+		"reason": "squadron_done",
+		"ship_index": ship_index,
+	})
+	assert_eq(cmd.validate(_state), "")
+	var result: Dictionary = cmd.execute(_state)
+
+	assert_eq(result.get("continuation", ""),
+			CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK)
+	assert_eq(ship.anti_squadron_attack_zone, -1)
+	assert_true(ship.anti_squadron_target_history.is_empty())
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.used_attack_hull_zones,
+			[int(Constants.HullZone.FRONT)])
+
+
+func test_squadron_done_skip_requires_authoritative_iteration_identity() -> void:
+	var ship_index: int = _add_ship(0)
+	var cmd := SkipAttackCommand.new(0, {
+		"reason": "squadron_done",
+		"ship_index": ship_index,
+	})
+	assert_ne(cmd.validate(_state), "")
 
 
 func test_active_skip_no_longer_accepts_flow_replaced_reason() -> void:

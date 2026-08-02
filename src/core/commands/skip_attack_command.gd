@@ -8,6 +8,7 @@
 ## Payload:
 ##   "reason" — optional human-readable reason for the skip
 ##              (e.g. "no_targets", "voluntary", "squadron_done").
+##   "ship_index" — required stable attacker identity for "squadron_done".
 ##
 ## Rules Reference: "Attack", p.2 —
 ## "A ship can perform up to two attacks during its activation."
@@ -46,6 +47,10 @@ func validate(game_state: GameState) -> String:
 		return "Not in Ship or Squadron Phase."
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if not attack.active:
+		if str(payload.get("reason", "")) == "squadron_done":
+			var ship: ShipInstance = _squadron_iteration_ship(game_state)
+			if ship == null:
+				return "No active anti-squadron continuation."
 		return ""
 	if attack.attack_id != str(payload.get("attack_id", "")):
 		return "Stale current-attack identity."
@@ -69,6 +74,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var attack: CurrentAttackState = game_state.current_attack_state
 	var attack_id: String = attack.attack_id
 	var cleared: Array[String] = []
+	var continuation: String = ""
 	if attack.active:
 		if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
 			return {}
@@ -79,9 +85,31 @@ func execute(game_state: GameState) -> Dictionary:
 				game_state.set_current_attack_state(attack)
 				return {}
 		cleared = ECM_SCRIPT.clear_attack_state(game_state, attack_id)
-	return {
+	elif str(payload.get("reason", "")) == "squadron_done":
+		var ship: ShipInstance = _squadron_iteration_ship(game_state)
+		if ship == null:
+			return {}
+		ship.end_anti_squadron_attack()
+		continuation = CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK \
+				if ship.committed_attack_count < 2 \
+				else CompleteAttackCommand.CONTINUATION_ATTACK_STEP_COMPLETE
+	var result: Dictionary = {
 		"attack_id": attack_id,
 		"skipped": true,
 		"reason": payload.get("reason", "voluntary"),
 		"ecm_cleared_runtime_upgrade_ids": cleared,
 	}
+	if not continuation.is_empty():
+		result["continuation"] = continuation
+	return result
+
+
+func _squadron_iteration_ship(game_state: GameState) -> ShipInstance:
+	if typeof(payload.get("ship_index")) != TYPE_INT:
+		return null
+	var ship: ShipInstance = game_state.get_ship(
+			player_index, int(payload.get("ship_index", -1)))
+	if ship == null or not ship.attack_step_active \
+			or ship.anti_squadron_attack_zone < 0:
+		return null
+	return ship

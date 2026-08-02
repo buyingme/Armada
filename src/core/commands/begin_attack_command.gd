@@ -4,6 +4,8 @@ extends GameCommand
 
 const TYPE: String = "begin_attack"
 
+var _log: GameLogger = GameLogger.new("BeginAttackCommand")
+
 static func register() -> void:
 	GameCommand.register_type(TYPE, func(player: int, pl: Dictionary) -> GameCommand:
 		return BeginAttackCommand.new(player, pl))
@@ -23,6 +25,9 @@ func validate(game_state: GameState) -> String:
 	var identity_error: String = _validate_identity(game_state)
 	if identity_error != "":
 		return identity_error
+	var progress_error: String = _validate_ship_attack_progress(game_state)
+	if progress_error != "":
+		return progress_error
 	var entry: Dictionary = _authoritative_entry(game_state)
 	if entry.is_empty():
 		return "Attack target is not legal from authoritative board state."
@@ -41,19 +46,25 @@ func validate(game_state: GameState) -> String:
 	return ""
 
 func execute(game_state: GameState) -> Dictionary:
+	var ship: ShipInstance = _tracked_attacker_ship(game_state)
+	if _coordinates_ship_attack_progress() and ship == null:
+		_log.debug("Rejected execution without an active authoritative ship " \
+				+ "Attack-step opportunity.")
+		return {}
 	var state := CurrentAttackState.new()
 	var entry: Dictionary = _authoritative_entry(game_state)
 	var pool: Dictionary = _derive_initial_pool(game_state, entry)
 	var cf_dial: String = CurrentAttackState.RESOLUTION_UNAVAILABLE
 	var cf_token: String = CurrentAttackState.RESOLUTION_UNAVAILABLE
 	if str(payload.get("attacker_kind", "")) == CurrentAttackState.KIND_SHIP:
-		var ship: ShipInstance = game_state.get_ship(
+		var cf_ship: ShipInstance = game_state.get_ship(
 				int(payload.get("attacker_player", -1)),
 				int(payload.get("attacker_index", -1)))
-		if _has_cf_dial(ship):
+		if _has_cf_dial(cf_ship):
 			cf_dial = CurrentAttackState.RESOLUTION_PENDING
-		if ship != null and ship.command_tokens != null \
-				and ship.command_tokens.has_token(Constants.CommandType.CONCENTRATE_FIRE):
+		if cf_ship != null and cf_ship.command_tokens != null \
+				and cf_ship.command_tokens.has_token(
+						Constants.CommandType.CONCENTRATE_FIRE):
 			cf_token = CurrentAttackState.RESOLUTION_PENDING
 	var values: Dictionary = {
 		"attacker_player": int(payload.get("attacker_player", -1)),
@@ -73,10 +84,55 @@ func execute(game_state: GameState) -> Dictionary:
 		"cf_token_resolution": cf_token,
 	}
 	var attack_id: String = "attack:%d" % sequence
-	if not state.configure_active(attack_id, values) \
-			or not game_state.set_current_attack_state(state):
+	if not state.configure_active(attack_id, values):
 		return {}
+	var progress_snapshot: Dictionary = {}
+	if ship != null:
+		_log.debug("Begin before authoritative progress commit: %s" %
+				JSON.stringify(ship.attack_progress_snapshot()))
+		progress_snapshot = ship.attack_progress_snapshot()
+		ship.commit_attack(
+				int(payload.get("attacker_zone", -1)),
+				int(payload.get("defender_player", -1)),
+				str(payload.get("defender_kind", "")),
+				int(payload.get("defender_index", -1)))
+	if not game_state.set_current_attack_state(state):
+		if ship != null:
+			ship.restore_attack_progress(progress_snapshot)
+		return {}
+	if ship != null:
+		_log.debug("Begin after authoritative progress commit: %s" %
+				JSON.stringify(ship.attack_progress_snapshot()))
 	return {"attack_id": attack_id, "dice_pool": pool.duplicate(true)}
+
+
+func _validate_ship_attack_progress(game_state: GameState) -> String:
+	if not _coordinates_ship_attack_progress():
+		return ""
+	var ship: ShipInstance = _tracked_attacker_ship(game_state)
+	if ship == null:
+		return "No active authoritative ship Attack-step opportunity."
+	return ship.validate_attack_commit(
+			int(payload.get("attacker_zone", -1)),
+			int(payload.get("defender_player", -1)),
+			str(payload.get("defender_kind", "")),
+			int(payload.get("defender_index", -1)))
+
+
+func _tracked_attacker_ship(game_state: GameState) -> ShipInstance:
+	if not _coordinates_ship_attack_progress():
+		return null
+	var ship: ShipInstance = game_state.get_ship(
+			int(payload.get("attacker_player", -1)),
+			int(payload.get("attacker_index", -1)))
+	return ship if ship != null and ship.attack_step_active else null
+
+
+func _coordinates_ship_attack_progress() -> bool:
+	return _canonical_attack_kind() \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD \
+			and str(payload.get("attacker_kind", "")) \
+					== CurrentAttackState.KIND_SHIP
 
 func _validate_identity(game_state: GameState) -> String:
 	for key: String in ["attacker_player", "attacker_index", "attacker_zone",

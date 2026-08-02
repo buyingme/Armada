@@ -101,6 +101,19 @@ func test_local_semantic_sequence_is_atomic_and_production_timing_inert() -> voi
 	assert_true(state.current_attack_state.is_inactive())
 
 
+func test_standard_ship_begin_fails_without_enclosing_attack_opportunity() -> void:
+	var state: GameState = _make_state()
+	state.get_ship(0, 0).end_attack_step()
+	var command := BeginAttackCommand.new(0, _ship_attack_payload())
+
+	assert_eq(command.validate(state),
+			"No active authoritative ship Attack-step opportunity.")
+	assert_true(command.execute(state).is_empty(),
+			"Direct execution must also fail closed without the owner state.")
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(state.get_ship(0, 0).committed_attack_count, 0)
+
+
 func test_distinct_attacks_and_squadron_targets_use_fresh_sequence_identity() -> void:
 	var state: GameState = _make_state()
 	var processor: Node = _make_processor(state)
@@ -112,6 +125,9 @@ func test_distinct_attacks_and_squadron_targets_use_fresh_sequence_identity() ->
 	]
 	var identities: Array[String] = []
 	for payload: Dictionary in payloads:
+		var ship: ShipInstance = state.get_ship(0, 0)
+		ship.end_attack_step()
+		ship.begin_attack_step()
 		var result: Dictionary = processor.submit(BeginAttackCommand.new(0, payload))
 		identities.append(str(result.get("attack_id", "")))
 		var cancelled: Dictionary = processor.submit(SkipAttackCommand.new(0, {
@@ -121,6 +137,178 @@ func test_distinct_attacks_and_squadron_targets_use_fresh_sequence_identity() ->
 		assert_true(bool(cancelled.get("skipped", false)))
 	assert_eq(identities, ["attack:0", "attack:2", "attack:4", "attack:6"])
 	assert_true(state.current_attack_state.is_inactive())
+
+
+func test_bug_002_step6_uses_authoritative_history_without_consuming_second_attack() -> void:
+	var state: GameState = _make_state()
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.begin_attack_step()
+	var same_zone: Array[Dictionary] = _two_same_zone_squadron_candidates(state)
+	assert_eq(same_zone.size(), 2,
+			"Fixture must expose two same-zone anti-squadron targets.")
+	if same_zone.size() < 2:
+		return
+	var processor: Node = _make_processor(state)
+	var first: Dictionary = _payload_from_ship_candidate(same_zone[0])
+	var second: Dictionary = _payload_from_ship_candidate(same_zone[1])
+
+	_submit_resolved_attack(processor, state, first)
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.anti_squadron_attack_zone,
+			int(first.get("attacker_zone", -1)))
+	assert_true(ship.has_anti_squadron_target(
+			int(first.get("defender_player", -1)),
+			int(first.get("defender_index", -1))))
+	assert_ne(BeginAttackCommand.new(0, first).validate(state), "",
+			"The first Step 6 target cannot be declared twice.")
+
+	_submit_resolved_attack(processor, state, second)
+	assert_eq(ship.committed_attack_count, 1,
+			"A Step 6 repetition remains part of one normal attack.")
+	assert_eq(ship.used_attack_hull_zones,
+			[int(first.get("attacker_zone", -1))])
+	assert_eq(ship.anti_squadron_attack_zone, -1,
+			"Exhausting eligible same-zone targets closes Step 6.")
+	assert_true(ship.anti_squadron_target_history.is_empty())
+
+
+func test_bug_002_step6_decline_retains_legal_different_zone_attack() -> void:
+	var state: GameState = _make_state()
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.begin_attack_step()
+	var sequence: Dictionary = _step6_and_different_zone_ship_candidates(state)
+	var same_zone: Array[Dictionary] = []
+	same_zone.assign(sequence.get("squadrons", []))
+	assert_eq(same_zone.size(), 2)
+	if same_zone.size() < 2:
+		return
+	var processor: Node = _make_processor(state)
+	var first: Dictionary = _payload_from_ship_candidate(same_zone[0])
+	_submit_resolved_attack(processor, state, first)
+	var first_zone: int = int(first.get("attacker_zone", -1))
+
+	var declined: Dictionary = processor.submit(SkipAttackCommand.new(0, {
+		"reason": "squadron_done",
+		"ship_index": 0,
+	}))
+	assert_eq(declined.get("continuation", ""),
+			CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK)
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.anti_squadron_attack_zone, -1)
+	assert_ne(BeginAttackCommand.new(0, first).validate(state), "",
+			"The used hull zone remains unavailable after Step 6 ends.")
+
+	var second_candidate: Dictionary = sequence.get("ship", {}) as Dictionary
+	assert_false(second_candidate.is_empty(),
+			"Fixture must expose a legal different-zone ship target.")
+	if second_candidate.is_empty():
+		return
+	_submit_resolved_attack(processor, state,
+			_payload_from_ship_candidate(second_candidate))
+	assert_eq(ship.committed_attack_count, 2)
+	assert_eq(ship.used_attack_hull_zones.size(), 2)
+	assert_ne(ship.used_attack_hull_zones[0], ship.used_attack_hull_zones[1])
+	var third: Dictionary = _different_zone_candidate(
+			state, first_zone, "")
+	if not third.is_empty():
+		assert_ne(BeginAttackCommand.new(0,
+				_payload_from_ship_candidate(third)).validate(state), "",
+				"No third normal ship attack remains.")
+
+
+func test_bug_002_progress_matches_hotseat_host_client_replay_and_restore() -> void:
+	var initial: GameState = _make_state()
+	initial.get_ship(0, 0).begin_attack_step()
+	var candidates: Array[Dictionary] = _two_same_zone_squadron_candidates(initial)
+	assert_eq(candidates.size(), 2)
+	if candidates.size() < 2:
+		return
+	var payload: Dictionary = _payload_from_ship_candidate(candidates[0])
+	var initial_data: Dictionary = initial.serialize()
+
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+	NetworkManager.role = NetworkManager.Role.NONE
+	var hotseat_state: GameState = GameState.deserialize(initial_data)
+	var hotseat: Node = _make_processor(hotseat_state)
+	_submit_resolved_attack(hotseat, hotseat_state, payload)
+	var hotseat_history: Array[Dictionary] = hotseat.serialize_history()
+	var hotseat_final: Dictionary = hotseat_state.serialize()
+
+	var authority_state: GameState = GameState.deserialize(initial_data)
+	GameManager.current_game_state = authority_state
+	GameManager.is_game_active = true
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	CommandProcessor.reset()
+	GameManager._reset_network_result_ordering()
+	_broadcast_results.clear()
+	var host := NetworkHostCommandSubmitter.new()
+	GameManager.set_command_submitter(host)
+	NetworkManager.command_result_received.connect(_capture_network_result)
+	_submit_resolved_attack(host, authority_state, payload)
+	var authority_history: Array[Dictionary] = _broadcast_command_data()
+	var authority_final: Dictionary = authority_state.serialize()
+	assert_eq(authority_history, hotseat_history)
+	assert_eq(authority_final, hotseat_final)
+
+	var client_state: GameState = GameState.deserialize(initial_data)
+	GameManager.current_game_state = client_state
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	CommandProcessor.reset()
+	GameManager._reset_network_result_ordering()
+	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+	for index: int in range(_broadcast_results.size()):
+		_apply_broadcast_to_client(index)
+	assert_eq(client_state.serialize(), authority_final)
+	assert_eq(CommandProcessor.serialize_history(), authority_history)
+
+	var replay_state: GameState = GameState.deserialize(initial_data)
+	var replay: Node = _make_processor(replay_state)
+	for command_data: Dictionary in authority_history:
+		assert_false(replay.submit_replay(
+				GameCommand.deserialize(command_data)).is_empty())
+	assert_eq(replay_state.serialize(), authority_final)
+	assert_eq(replay.serialize_history(), authority_history)
+
+	var restored: GameState = GameState.deserialize(
+			JSON.parse_string(JSON.stringify(authority_final)))
+	assert_not_null(restored)
+	assert_eq(restored.get_ship(0, 0).attack_progress_snapshot(),
+			authority_state.get_ship(0, 0).attack_progress_snapshot())
+
+
+func test_bug_002_second_anti_squadron_attack_can_repeat_surviving_target() -> void:
+	var state: GameState = _make_state()
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.begin_attack_step()
+	var pair: Array[Dictionary] = \
+			_same_squadron_different_zone_candidates(state)
+	assert_eq(pair.size(), 2,
+			"Fixture must expose one squadron to two attacking hull zones.")
+	if pair.size() < 2:
+		return
+	var processor: Node = _make_processor(state)
+	var first: Dictionary = _payload_from_ship_candidate(pair[0])
+	var second: Dictionary = _payload_from_ship_candidate(pair[1])
+	_submit_resolved_attack(processor, state, first)
+	var target: SquadronInstance = state.get_squadron(
+			int(first.get("defender_player", -1)),
+			int(first.get("defender_index", -1)))
+	assert_false(target.is_destroyed(),
+			"The selected target must survive for the second-attack regression.")
+	if ship.anti_squadron_attack_zone >= 0:
+		assert_false(processor.submit(SkipAttackCommand.new(0, {
+			"reason": "squadron_done",
+			"ship_index": 0,
+		})).is_empty())
+
+	assert_eq(BeginAttackCommand.new(0, second).validate(state), "",
+			"A different-zone attack may target the same surviving squadron.")
+	_submit_resolved_attack(processor, state, second)
+	assert_eq(ship.committed_attack_count, 2)
+	assert_ne(ship.used_attack_hull_zones[0], ship.used_attack_hull_zones[1])
 
 
 func test_production_composed_cross_kind_matrix_uses_canonical_capabilities() -> void:
@@ -681,6 +869,35 @@ func _submit_through_accuracy(processor: Node, state: GameState) -> void:
 	})).is_empty())
 
 
+func _submit_resolved_attack(processor: Variant, state: GameState,
+		payload: Dictionary) -> void:
+	var begin: Dictionary = processor.submit(BeginAttackCommand.new(0, payload))
+	assert_false(begin.is_empty())
+	if begin.is_empty():
+		return
+	var attack_id: String = str(begin.get("attack_id", ""))
+	assert_false(processor.submit(RollDiceCommand.new(0, {
+		"attack_id": attack_id,
+	})).is_empty())
+	assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
+		"attack_id": attack_id,
+	})).is_empty())
+	assert_false(processor.submit(CommitAccuracyCommand.new(0, {
+		"attack_id": attack_id,
+		"locked_tokens": [],
+	})).is_empty())
+	if str(payload.get("defender_kind", "")) == CurrentAttackState.KIND_SHIP:
+		assert_false(processor.submit(CommitDefenseCommand.new(
+				int(payload.get("defender_player", -1)), {
+			"attack_id": attack_id,
+			"defender_kind": CurrentAttackState.KIND_SHIP,
+			"defender_index": int(payload.get("defender_index", -1)),
+			"ship_index": int(payload.get("defender_index", -1)),
+			"selected_indices": [],
+		})).is_empty())
+	assert_true(state.current_attack_state.is_inactive())
+
+
 func _submit_standard_attack(submitter: Variant, payload: Dictionary,
 		commit_ship_defense: bool) -> void:
 	var begin: Dictionary = submitter.submit(BeginAttackCommand.new(0, payload))
@@ -926,6 +1143,8 @@ func _make_state() -> GameState:
 			var ship: ShipInstance = _make_ship(owner)
 			var squadron: SquadronInstance = _make_squadron(owner)
 			_set_protocol_position(ship, squadron, owner, index)
+			if owner == 0 and index == 0:
+				ship.begin_attack_step()
 			state.player_states[owner].ships.append(ship)
 			state.player_states[owner].squadrons.append(squadron)
 	return state
@@ -954,6 +1173,7 @@ func _make_cross_kind_state(attacker_kind: String,
 		var ship: ShipInstance = _make_ship_with_key(ATTACKER_SHIP_KEY, 0)
 		ship.pos_x = 0.50
 		ship.pos_y = 0.65
+		ship.begin_attack_step()
 		state.get_player_state(0).ships.append(ship)
 	else:
 		var squadron: SquadronInstance = _make_squadron_with_key(
@@ -994,6 +1214,7 @@ func _make_network_topology_state(
 			ATTACKER_SHIP_KEY, attacker_player)
 	attacker.pos_x = 0.50
 	attacker.pos_y = 0.65
+	attacker.begin_attack_step()
 	var defender: ShipInstance = _make_ship_with_key(
 			SHIP_KEY, defender_player)
 	defender.pos_x = 0.50
@@ -1112,6 +1333,114 @@ func _authoritative_payload_for(state: GameState, attacker_kind: String,
 		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
 		"range_band": str(entry.get("range_band", "")),
 		"obstructed": bool(entry.get("obstructed", false)),
+	}
+
+
+func _two_same_zone_squadron_candidates(
+		state: GameState) -> Array[Dictionary]:
+	var by_zone: Dictionary = {}
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 0, 0):
+		if str(candidate.get("target_kind", "")) \
+				!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		var zone: int = int(candidate.get("attacker_zone", -1))
+		if not by_zone.has(zone):
+			by_zone[zone] = []
+		var group: Array = by_zone[zone] as Array
+		group.append(candidate)
+		if group.size() >= 2:
+			var result: Array[Dictionary] = []
+			result.append((group[0] as Dictionary).duplicate(true))
+			result.append((group[1] as Dictionary).duplicate(true))
+			return result
+	return []
+
+
+func _step6_and_different_zone_ship_candidates(state: GameState) -> Dictionary:
+	var attacker: ShipInstance = state.get_ship(0, 0)
+	var target: ShipInstance = state.get_ship(1, 0)
+	var other_ship: ShipInstance = state.get_ship(1, 1)
+	other_ship.pos_x = 0.95
+	other_ship.pos_y = 0.05
+	var offsets: Array[Vector2] = [
+		Vector2(0.0, -0.14), Vector2(-0.14, 0.0),
+		Vector2(0.14, 0.0), Vector2(0.0, 0.14),
+	]
+	for offset: Vector2 in offsets:
+		target.pos_x = attacker.pos_x + offset.x
+		target.pos_y = attacker.pos_y + offset.y
+		target.rotation_deg = 180.0
+		var squadrons: Array[Dictionary] = \
+				_two_same_zone_squadron_candidates(state)
+		if squadrons.size() < 2:
+			continue
+		var used_zone: int = int(squadrons[0].get("attacker_zone", -1))
+		var ship_candidate: Dictionary = _different_zone_candidate(
+				state, used_zone, CurrentAttackState.KIND_SHIP)
+		if not ship_candidate.is_empty():
+			return {"squadrons": squadrons, "ship": ship_candidate}
+	return {}
+
+
+func _same_squadron_different_zone_candidates(
+		state: GameState) -> Array[Dictionary]:
+	var first_by_target: Dictionary = {}
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 0, 0):
+		if str(candidate.get("target_kind", "")) \
+				!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		var key: String = "%d:%d" % [
+			int(candidate.get("target_owner", -1)),
+			int(candidate.get("target_index", -1)),
+		]
+		if not first_by_target.has(key):
+			first_by_target[key] = candidate
+			continue
+		var first: Dictionary = first_by_target[key] as Dictionary
+		if int(first.get("attacker_zone", -1)) \
+				== int(candidate.get("attacker_zone", -1)):
+			continue
+		return [first.duplicate(true), candidate.duplicate(true)]
+	return []
+
+
+func _different_zone_candidate(state: GameState, used_zone: int,
+		target_kind: String) -> Dictionary:
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 0, 0):
+		if int(candidate.get("attacker_zone", -1)) == used_zone:
+			continue
+		if not target_kind.is_empty() \
+				and str(candidate.get("target_kind", "")) != target_kind:
+			continue
+		var target: RefCounted = state.get_ship(
+				int(candidate.get("target_owner", -1)),
+				int(candidate.get("target_index", -1))) \
+				if str(candidate.get("target_kind", "")) \
+						== CurrentAttackState.KIND_SHIP \
+				else state.get_squadron(
+						int(candidate.get("target_owner", -1)),
+						int(candidate.get("target_index", -1)))
+		if target != null and not bool(target.call("is_destroyed")):
+			return candidate.duplicate(true)
+	return {}
+
+
+func _payload_from_ship_candidate(candidate: Dictionary) -> Dictionary:
+	return {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"attacker_index": 0,
+		"attacker_zone": int(candidate.get("attacker_zone", -1)),
+		"defender_player": int(candidate.get("target_owner", -1)),
+		"defender_kind": str(candidate.get("target_kind", "")),
+		"defender_index": int(candidate.get("target_index", -1)),
+		"defender_zone": int(candidate.get("target_zone", -1)),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate.get("range_band", "")),
+		"obstructed": bool(candidate.get("obstructed", false)),
 	}
 
 

@@ -532,6 +532,7 @@ func _make_forensic_state() -> GameState:
 func _make_replacement_state(unique_target: bool) -> GameState:
 	var state: GameState = _make_forensic_state()
 	state.current_phase = Constants.GamePhase.SHIP
+	state.get_ship(0, 1).begin_attack_step()
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT, 0)

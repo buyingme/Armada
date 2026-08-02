@@ -3,8 +3,8 @@
 ## Records a ship-activation step transition in network mode so both peers can
 ## mirror modal progress from authoritative command results.
 ##
-## This command does not mutate [GameState] directly; it is a flow-control
-## command used for replay/network timeline parity.
+## This command coordinates the canonical enclosing activation step and its
+## activation-local ship state for replay/network parity.
 ##
 ## Payload:
 ##   "ship_index" - index of the activating ship in the player's fleet.
@@ -16,6 +16,8 @@ extends GameCommand
 
 
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
+
+var _log: GameLogger = GameLogger.new("AdvanceActivationStepCommand")
 
 
 const _ALLOWED_STEP_IDS: Array[String] = [
@@ -63,6 +65,15 @@ func validate(game_state: GameState) -> String:
 ## Flow-control no-op execution.
 func execute(game_state: GameState) -> Dictionary:
 	var step_id_str: String = payload.get("step_id", "")
+	var ship: ShipInstance = game_state.get_ship(
+			player_index, int(payload.get("ship_index", -1)))
+	var progress_before: Dictionary = ship.attack_progress_snapshot() \
+			if ship != null else {}
+	if ship != null:
+		if step_id_str == "attack_step":
+			ship.begin_attack_step()
+		elif step_id_str in ["maneuver_step", "activation_done"]:
+			ship.end_attack_step()
 	var step_enum: int = int(Constants.LEGACY_STEP_ID_MAP.get(
 			step_id_str, Constants.InteractionStep.NONE))
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
@@ -72,6 +83,15 @@ func execute(game_state: GameState) -> Dictionary:
 			{"active_player": player_index},
 			Constants.Visibility.ALL,
 			{"ship_index": payload.get("ship_index", -1)})
+	if step_id_str in ["attack_step", "maneuver_step", "activation_done"]:
+		_log.debug(("Activation transition '%s': progress %s -> %s; " \
+				+ "projected step=%s") % [
+			step_id_str,
+			JSON.stringify(progress_before),
+			JSON.stringify(ship.attack_progress_snapshot()) \
+					if ship != null else "{}",
+			str(game_state.interaction_flow.step_id),
+		])
 	return {
 		"ship_index": payload.get("ship_index", -1),
 		"step_id": step_id_str,

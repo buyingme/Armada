@@ -93,6 +93,16 @@ var faceup_damage: Array = []
 ## Rules Reference: SP-001 — each ship activates once per round.
 var activated_this_round: bool = false
 
+## Authoritative, activation-local progress for this ship's Attack step.
+## BeginAttackCommand commits these facts; scene attack state only projects them.
+var attack_step_active: bool = false
+var committed_attack_count: int = 0
+var used_attack_hull_zones: Array[int] = []
+var anti_squadron_attack_zone: int = -1
+var anti_squadron_target_history: Array[Dictionary] = []
+
+var _attack_progress_log: GameLogger = GameLogger.new("ShipAttackProgress")
+
 ## The player index that controls this ship (0 or 1).
 var owner_player: int = 0
 
@@ -327,9 +337,137 @@ func get_runtime_upgrade(runtime_upgrade_id: String) -> Dictionary:
 	return found
 
 
-## Resets the activated flag for a new round.
+## Opens this ship's Attack step. Repeated projection of the same step is
+## idempotent and cannot erase already-committed attack progress.
+func begin_attack_step() -> void:
+	if attack_step_active:
+		return
+	attack_step_active = true
+	committed_attack_count = 0
+	used_attack_hull_zones.clear()
+	anti_squadron_attack_zone = -1
+	anti_squadron_target_history.clear()
+	_log_attack_progress("begin_attack_step")
+
+
+## Closes this ship's Attack step without discarding its activation history.
+func end_attack_step() -> void:
+	attack_step_active = false
+	end_anti_squadron_attack()
+	_log_attack_progress("end_attack_step")
+
+
+## Validates the active, activation-local progress affected by one standard
+## ship Begin. The command boundary rejects an inactive owner before calling.
+func validate_attack_commit(attacker_zone: int, defender_player: int,
+		defender_kind: String, defender_index: int) -> String:
+	if not attack_step_active:
+		return ""
+	if anti_squadron_attack_zone >= 0:
+		if attacker_zone != anti_squadron_attack_zone:
+			return "Anti-squadron continuation must use the same attacking hull zone."
+		if defender_kind != CurrentAttackState.KIND_SQUADRON:
+			return "Anti-squadron continuation must target a squadron."
+		if has_anti_squadron_target(defender_player, defender_index):
+			return "Squadron was already targeted during this attack."
+		return ""
+	if committed_attack_count >= 2:
+		return "Ship has already committed two attacks this activation."
+	if attacker_zone in used_attack_hull_zones:
+		return "Attacking hull zone was already used this activation."
+	return ""
+
+
+## Commits one accepted standard ship Begin exactly once to this owner.
+func commit_attack(attacker_zone: int, defender_player: int,
+		defender_kind: String, defender_index: int) -> void:
+	if not attack_step_active:
+		return
+	if anti_squadron_attack_zone >= 0:
+		anti_squadron_target_history.append(
+				_make_squadron_target_ref(defender_player, defender_index))
+		_log_attack_progress("commit_attack_step6")
+		return
+	committed_attack_count += 1
+	used_attack_hull_zones.append(attacker_zone)
+	if defender_kind == CurrentAttackState.KIND_SQUADRON:
+		anti_squadron_attack_zone = attacker_zone
+		anti_squadron_target_history = [
+			_make_squadron_target_ref(defender_player, defender_index),
+		]
+	else:
+		end_anti_squadron_attack()
+	_log_attack_progress("commit_attack")
+
+
+## Returns whether one squadron is already in the current Step 6 history.
+func has_anti_squadron_target(owner: int, index: int) -> bool:
+	for target: Dictionary in anti_squadron_target_history:
+		if int(target.get("owner", -1)) == owner \
+				and int(target.get("index", -1)) == index:
+			return true
+	return false
+
+
+## Ends the current Step 6 iteration while retaining the committed normal
+## attack and its used hull zone.
+func end_anti_squadron_attack() -> void:
+	var changed: bool = anti_squadron_attack_zone >= 0 \
+			or not anti_squadron_target_history.is_empty()
+	anti_squadron_attack_zone = -1
+	anti_squadron_target_history.clear()
+	if changed:
+		_log_attack_progress("end_anti_squadron_attack")
+
+
+## Returns a JSON-safe snapshot used for atomic command rollback.
+func attack_progress_snapshot() -> Dictionary:
+	return {
+		"attack_step_active": attack_step_active,
+		"committed_attack_count": committed_attack_count,
+		"used_attack_hull_zones": used_attack_hull_zones.duplicate(),
+		"anti_squadron_attack_zone": anti_squadron_attack_zone,
+		"anti_squadron_target_history":
+				anti_squadron_target_history.duplicate(true),
+	}
+
+
+## Restores a snapshot produced by [method attack_progress_snapshot].
+func restore_attack_progress(snapshot: Dictionary) -> void:
+	attack_step_active = bool(snapshot.get("attack_step_active", false))
+	committed_attack_count = int(snapshot.get("committed_attack_count", 0))
+	used_attack_hull_zones.clear()
+	for zone: Variant in snapshot.get("used_attack_hull_zones", []):
+		used_attack_hull_zones.append(int(zone))
+	anti_squadron_attack_zone = int(snapshot.get(
+			"anti_squadron_attack_zone", -1))
+	anti_squadron_target_history.clear()
+	for target: Variant in snapshot.get("anti_squadron_target_history", []):
+		if target is Dictionary:
+			var target_data: Dictionary = target as Dictionary
+			anti_squadron_target_history.append(_make_squadron_target_ref(
+					int(target_data.get("owner", -1)),
+					int(target_data.get("index", -1))))
+	_log_attack_progress("restore_attack_progress")
+
+
+## Resets activation-local state for a new round.
 func reset_activation() -> void:
 	activated_this_round = false
+	attack_step_active = false
+	committed_attack_count = 0
+	used_attack_hull_zones.clear()
+	end_anti_squadron_attack()
+	_log_attack_progress("reset_activation")
+
+
+func _log_attack_progress(transition: String) -> void:
+	_attack_progress_log.debug("%s ship=%s owner=%d progress=%s" % [
+		transition,
+		data_key,
+		owner_player,
+		JSON.stringify(attack_progress_snapshot()),
+	])
 
 
 ## Returns the number of non-discarded defense tokens.
@@ -384,6 +522,10 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 		_:
 			push_error("ShipInstance: unknown defense token '%s'" % name)
 			return Constants.DefenseToken.EVADE
+
+
+static func _make_squadron_target_ref(owner: int, index: int) -> Dictionary:
+	return {"owner": owner, "index": index}
 
 
 static func _build_runtime_upgrade_instance(owner_player_id: int,
@@ -442,6 +584,12 @@ func serialize() -> Dictionary:
 		"facedown_damage": _serialize_damage_cards(facedown_damage),
 		"faceup_damage": _serialize_damage_cards(faceup_damage),
 		"activated_this_round": activated_this_round,
+		"attack_step_active": attack_step_active,
+		"committed_attack_count": committed_attack_count,
+		"used_attack_hull_zones": used_attack_hull_zones.duplicate(),
+		"anti_squadron_attack_zone": anti_squadron_attack_zone,
+		"anti_squadron_target_history":
+				anti_squadron_target_history.duplicate(true),
 		"owner_player": owner_player,
 		"destroyed": _destroyed,
 		"command_dial_stack": command_dial_stack.serialize() \
@@ -476,8 +624,22 @@ static func deserialize(
 	inst.pos_y = float(data.get("pos_y", 0.0))
 	inst.rotation_deg = float(data.get("rotation_deg", 0.0))
 	inst.activated_this_round = data.get(
-			"activated_this_round", false) as bool
+		"activated_this_round", false) as bool
+	inst.attack_step_active = bool(data.get("attack_step_active", false))
+	inst.committed_attack_count = int(data.get("committed_attack_count", 0))
+	for zone: Variant in data.get("used_attack_hull_zones", []):
+		inst.used_attack_hull_zones.append(int(zone))
+	inst.anti_squadron_attack_zone = int(data.get(
+			"anti_squadron_attack_zone", -1))
+	for target: Variant in data.get("anti_squadron_target_history", []):
+		if target is Dictionary:
+			var target_data: Dictionary = target as Dictionary
+			inst.anti_squadron_target_history.append(
+					_make_squadron_target_ref(
+							int(target_data.get("owner", -1)),
+							int(target_data.get("index", -1))))
 	inst.owner_player = int(data.get("owner_player", 0))
+	inst._log_attack_progress("deserialize")
 	inst._destroyed = data.get("destroyed", false) as bool
 	inst.runtime_upgrades = _deserialize_runtime_upgrades(
 			data.get("runtime_upgrades", []))

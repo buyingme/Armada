@@ -33,12 +33,15 @@ Reproduced with both the Nebulon-B and Victory II.
 
 annotation_20260727_195551_001.json
 annotation_20260727_195741_001.json
+evidence after first fix attempt:
+annotation_20260801_075338_001.json
+annotation_20260801_075833_003.json
 
 ## Resolution
 
 Root cause:
 Fix:
-Verification:
+Verification: 20260801, verified by user in both network and hotseat mode.
 
 ## Layer Definition
 

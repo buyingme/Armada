@@ -82,6 +82,51 @@ func test_sync_activation_step_from_flow_unavailable_repair_submits_attack_step(
 			"Local activation state should advance to ATTACK after deferred repair skip.")
 
 
+func test_activation_entry_without_commands_reaches_attack_by_commands_only() -> void:
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship)
+	_attack_executor.has_targets = true
+	var flow: InteractionFlow = _activation_open_flow(0, 0)
+	GameManager.current_game_state.interaction_flow = flow
+
+	_controller.sync_activation_step_from_flow(flow)
+	_controller.configure_and_open_activation_modal()
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 1,
+			"Unavailable Squadron should submit one authoritative transition.")
+	var repair_command: GameCommand = _submitter.submitted_commands[0]
+	assert_eq(repair_command.payload.get("step_id", ""), "repair_step")
+	assert_false(ship.attack_step_active,
+			"Attack progress must remain inactive before attack_step is accepted.")
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.SQUADRON,
+			"The modal auto-skip timer must not advance scene state to Attack.")
+
+	repair_command.execute(GameManager.current_game_state)
+	_controller.sync_activation_step_from_flow(
+			GameManager.current_game_state.interaction_flow)
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 2,
+			"Unavailable Repair should submit the existing attack-step transition.")
+	var attack_command: GameCommand = _submitter.submitted_commands[1]
+	assert_eq(attack_command.payload.get("step_id", ""), "attack_step")
+	attack_command.execute(GameManager.current_game_state)
+	_controller.sync_activation_step_from_flow(
+			GameManager.current_game_state.interaction_flow)
+
+	assert_eq(GameManager.current_game_state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_STEP)
+	assert_true(ship.attack_step_active,
+			"Canonical Attack projection and ShipInstance progress must agree.")
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.ATTACK)
+	await get_tree().create_timer(0.35).timeout
+	assert_eq(_submitter.submitted_commands.size(), 2,
+			"Cancelled scene-local auto-skip timers must not submit extra work.")
+
+
 func test_sync_activation_step_from_flow_passive_peer_does_not_submit() -> void:
 	NetworkManager._local_player_index = 1
 	var ship: ShipInstance = _create_ship(0)
@@ -178,6 +223,16 @@ func _repair_flow(controller_player: int, ship_index: int) -> InteractionFlow:
 	return InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REPAIR_STEP,
+			controller_player,
+			Constants.Visibility.ALL,
+			{"ship_index": ship_index})
+
+
+func _activation_open_flow(
+		controller_player: int, ship_index: int) -> InteractionFlow:
+	return InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
 			controller_player,
 			Constants.Visibility.ALL,
 			{"ship_index": ship_index})

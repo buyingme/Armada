@@ -44,6 +44,9 @@ func validate(game_state: GameState) -> String:
 	if source_rule_id == SwarmKeyword.RULE_ID:
 		return _validate_swarm_skip(game_state, attack)
 	if source_rule_id == RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN:
+		if game_state.timing_window_state != null \
+				and game_state.timing_window_state.active:
+			return "Active timing lifecycle requires the shared Concentrate Fire command."
 		return "" if attack.cf_token_resolution \
 				== CurrentAttackState.RESOLUTION_PENDING \
 				else "No Concentrate Fire token reroll is pending."

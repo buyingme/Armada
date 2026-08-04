@@ -82,6 +82,9 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"spend_token": ["ship_index", "token_type"],
 	"start_displacement": ["ship_index", "controller_player"],
 	"tarkin_choice": ["command"],
+	"use_concentrate_fire_token_reroll": [
+		"die_index", "expected_color", "expected_face",
+	],
 }
 
 ## Integer arrays have their entries restored independently.  An integral

@@ -12,6 +12,10 @@ const DEFINITIONS: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_definitions.gd")
 const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+const CF_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CF_USE_COMMAND: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
 
 
 var _state: FaultInjectGameState = null
@@ -127,6 +131,59 @@ func test_reroll_failure_restores_rng_token_and_attack() -> void:
 		"expected_color": int(Constants.DiceColor.RED),
 		"expected_face": int(Constants.DiceFace.HIT),
 		"source_rule_id": RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN,
+	})
+
+	assert_eq(_processor.submit(command), {})
+	assert_eq(_attack_snapshot(), before_attack)
+	assert_eq(_state.rng.get_state(), before_rng)
+	assert_eq(attacker.command_tokens.serialize(), before_tokens)
+	_assert_stream_unchanged(command)
+	assert_engine_error(1)
+
+
+func test_shared_concentrate_fire_failure_restores_rng_token_and_attack() -> void:
+	var attacker: ShipInstance = _add_ship(0)
+	_add_ship(1)
+	assert_true(attacker.command_tokens.add_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	_install_attack({
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": [_red_hit()],
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
+	})
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0)
+	var context: Dictionary = {
+		TimingWindowState.CONTINUATION_KEY_ID: ConfirmAttackDiceCommand.TYPE,
+		TimingWindowState.CONTINUATION_KEY_RESUME_POINT: "attack_after_modify",
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: _attack_id(),
+		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
+		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
+	}
+	assert_true(bool(ORCHESTRATOR.open_window(
+			_state, DEFINITIONS.ATTACK_MODIFY, 1, context).get(
+					ORCHESTRATOR.KEY_OK, false)))
+	CF_RULE.register()
+	var before_attack: Dictionary = _attack_snapshot()
+	var before_rng: int = _state.rng.get_state()
+	var before_tokens: Dictionary = attacker.command_tokens.serialize()
+	_state.reject_current_attack_updates = true
+	var ship_id: String = CF_RULE.attacking_ship_identity(
+			_state.current_attack_state)
+	var command: GameCommand = CF_USE_COMMAND.new(0, {
+		"timing_window_id": TimingWindowDefinitions.ATTACK_MODIFY,
+		"lifecycle_id": _state.timing_window_state.lifecycle_id,
+		"source_owner_kind": CF_RULE.SOURCE_OWNER_KIND,
+		"runtime_source_id":
+				CF_RULE.token_source_identity(ship_id),
+		"semantic_key": CF_RULE.SEMANTIC_KEY,
+		"attack_id": _attack_id(),
+		"attacking_ship_id": ship_id,
+		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
 	})
 
 	assert_eq(_processor.submit(command), {})

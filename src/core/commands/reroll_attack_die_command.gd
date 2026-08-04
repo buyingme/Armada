@@ -125,6 +125,9 @@ func _validate_swarm_reroll(game_state: GameState) -> String:
 
 func _validate_concentrate_fire_token(game_state: GameState,
 		attack: CurrentAttackState) -> String:
+	if game_state.timing_window_state != null \
+			and game_state.timing_window_state.active:
+		return "Active timing lifecycle requires the shared Concentrate Fire command."
 	if attack.attacker_kind != CurrentAttackState.KIND_SHIP \
 			or attack.cf_token_resolution != CurrentAttackState.RESOLUTION_PENDING:
 		return "Concentrate Fire token reroll is not pending."

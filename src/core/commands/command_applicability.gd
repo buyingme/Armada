@@ -112,6 +112,14 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"skip_attack_modifier": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
+	"use_concentrate_fire_token_reroll": {
+			KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.ATTACK,
+					Constants.InteractionStep.ATTACK_MODIFY)]},
+	"decline_concentrate_fire_token_reroll": {
+			KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.ATTACK,
+					Constants.InteractionStep.ATTACK_MODIFY)]},
 	"confirm_attack_dice": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"counter_choice": {KEY_SCOPE: Constants.CommandScope.FLOW_STEP,

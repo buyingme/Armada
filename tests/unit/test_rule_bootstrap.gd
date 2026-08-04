@@ -108,10 +108,16 @@ func test_bootstrap_rules_registers_production_rules() -> void:
 	var dice_rule_ids: Array[String] = []
 	for dice_hook: FlowHook in dice_hooks:
 		dice_rule_ids.append(dice_hook.rule_id)
-	assert_eq(registered, 23,
-			"Bootstrap should invoke all twenty-three production rule scripts.")
+	assert_eq(registered, 24,
+			"Bootstrap should invoke all twenty-four production rule scripts.")
 	assert_eq(RuleRegistry.registered_hook_count(), 41,
 			"Bootstrap should clear stale hooks before registering rules.")
+	assert_eq(RuleRegistry.registered_timing_window_participant_count(), 1,
+			"Bootstrap should register the Concentrate Fire timing participant.")
+	var timing_query: Dictionary = RuleRegistry.timing_window_participants_for(
+			TimingWindowDefinitions.ATTACK_MODIFY)
+	assert_true(bool(timing_query.get("ok", false)))
+	assert_eq((timing_query.get("candidates", []) as Array).size(), 1)
 	assert_eq(hooks.size(), 2,
 			"Faulty Countermeasures and Capacitor Failure should validate spends.")
 	assert_eq(commit_hooks.size(), 2,

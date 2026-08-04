@@ -2412,7 +2412,10 @@ func _handle_remote_command_effects(
 			# Phase I6b-3 R3/R4: marker commands. AttackPanelController
 			# routes them into AttackExecutor from command_executed.
 			pass
-		"reroll_attack_die", "skip_attack_modifier", "confirm_attack_dice", \
+		"reroll_attack_die", "skip_attack_modifier", \
+				"use_concentrate_fire_token_reroll", \
+				"decline_concentrate_fire_token_reroll", \
+				"confirm_attack_dice", \
 				"counter_choice":
 			# Marker commands — the attack pipeline reacts through
 			# CommandProcessor.command_executed on the peer that owns it.

@@ -50,6 +50,9 @@ var _previous_network_role: NetworkManager.Role = NetworkManager.Role.NONE
 var _previous_local_player_index: int = -1
 var _previous_pending_config: Dictionary = {}
 var _previous_submitter: CommandSubmitter = null
+var _previous_replay_enabled: bool = false
+var _previous_replay_seed: int = 0
+var _previous_replay_connect_target: String = ""
 
 
 func before_each() -> void:
@@ -65,6 +68,9 @@ func before_each() -> void:
 	_previous_local_player_index = NetworkManager._local_player_index
 	_previous_pending_config = NetworkManager._pending_game_config.duplicate(true)
 	_previous_submitter = GameManager.get_command_submitter()
+	_previous_replay_enabled = ReplayDriver.enabled
+	_previous_replay_seed = ReplayDriver.pending_replay_seed
+	_previous_replay_connect_target = ReplayDriver._connect_target
 	GameManager.is_state_preloaded = false
 	GameManager._next_scenario_id = ""
 	GameManager._next_setup_package = null
@@ -84,6 +90,9 @@ func after_each() -> void:
 	NetworkManager._local_player_index = _previous_local_player_index
 	NetworkManager._pending_game_config = _previous_pending_config.duplicate(true)
 	GameManager.set_command_submitter(_previous_submitter)
+	ReplayDriver.enabled = _previous_replay_enabled
+	ReplayDriver.pending_replay_seed = _previous_replay_seed
+	ReplayDriver._connect_target = _previous_replay_connect_target
 	CommandProcessor.reset()
 
 
@@ -98,6 +107,52 @@ func test_bootstrap_or_load_board_state_spawns_network_pending_scenario() -> voi
 
 	assert_eq(board.spawned_scenario_id, LobbyState.SCENARIO_DEBUG_ID,
 			"Network board spawn should use the scenario from pending game config.")
+	assert_eq(GameManager.current_game_state.rng.initial_seed, 12345,
+			"Normal network bootstrap should retain the host-selected seed.")
+
+
+func test_network_replay_bootstrap_installs_exact_rng_and_consumes_seed() -> void:
+	const REPLAY_SEED: int = 30671017
+	PlayMode.current_mode = PlayMode.Mode.NETWORK
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._receive_game_config(
+			REPLAY_SEED, LobbyState.SCENARIO_DEBUG_ID)
+	ReplayDriver.enabled = true
+	ReplayDriver._connect_target = "127.0.0.1:7350"
+	ReplayDriver.pending_replay_seed = REPLAY_SEED
+
+	GameManager.bootstrap_game(LobbyState.SCENARIO_LEARNING_ID)
+
+	assert_not_null(GameManager.current_game_state,
+			"Valid replay bootstrap should install a GameState.")
+	assert_not_null(GameManager.current_game_state.rng,
+			"Valid replay bootstrap should install authoritative RNG.")
+	assert_eq(GameManager.current_game_state.rng.initial_seed, REPLAY_SEED,
+			"GameState RNG must use the exact distributed replay seed.")
+	assert_eq(GameManager.current_game_state.rng.serialize(),
+			GameRng.new(REPLAY_SEED).serialize(),
+			"Installed RNG must begin at the exact recorded initial state.")
+	assert_eq(ReplayDriver.pending_replay_seed, 0,
+			"Successful GameState installation should consume seed once.")
+
+
+func test_network_replay_bootstrap_rejects_invalid_received_seed_config() -> void:
+	const REPLAY_SEED: int = 30671017
+	ReplayDriver.enabled = true
+	ReplayDriver._connect_target = "127.0.0.1:7350"
+	ReplayDriver.pending_replay_seed = REPLAY_SEED
+
+	for invalid_config: Dictionary in [
+		{},
+		{"rng_seed": 0},
+		{"rng_seed": REPLAY_SEED + 1},
+	]:
+		var validation: Dictionary = (
+				GameManager._validate_network_replay_rng_config(invalid_config))
+		assert_false(bool(validation.get("ok", true)),
+				"Missing, zero, and mismatched peer seed must fail closed.")
+	assert_eq(ReplayDriver.pending_replay_seed, REPLAY_SEED,
+			"Rejected peer configuration must not consume accepted seed.")
 
 
 func test_bootstrap_or_load_board_state_spawns_pending_setup_package() -> void:

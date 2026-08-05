@@ -6,16 +6,25 @@ extends GutTest
 
 var _previous_lobby: LobbyState = null
 var _previous_role: int = NetworkManager.Role.NONE
+var _previous_replay_enabled: bool = false
+var _previous_replay_seed: int = 0
+var _previous_replay_connect_target: String = ""
 
 
 func before_each() -> void:
 	_previous_lobby = LobbyManager.current_lobby
 	_previous_role = NetworkManager.role
+	_previous_replay_enabled = ReplayDriver.enabled
+	_previous_replay_seed = ReplayDriver.pending_replay_seed
+	_previous_replay_connect_target = ReplayDriver._connect_target
 
 
 func after_each() -> void:
 	LobbyManager.current_lobby = _previous_lobby
 	NetworkManager.role = _previous_role
+	ReplayDriver.enabled = _previous_replay_enabled
+	ReplayDriver.pending_replay_seed = _previous_replay_seed
+	ReplayDriver._connect_target = _previous_replay_connect_target
 
 
 func test_selected_scenario_id_uses_debug_scenario_from_lobby() -> void:
@@ -72,3 +81,49 @@ func test_update_scenario_clears_setup_draft_for_fixed_scenario() -> void:
 
 	assert_true(lobby.setup_draft.is_empty(),
 			"Fixed-scenario lobby updates should clear any pending setup draft.")
+
+
+func test_network_replay_start_selects_exact_header_seed_without_consuming() -> void:
+	ReplayDriver.enabled = true
+	ReplayDriver._connect_target = "127.0.0.1:7350"
+	ReplayDriver.pending_replay_seed = 30671017
+
+	var selection: Dictionary = LobbyManager._select_start_rng_seed()
+
+	assert_true(bool(selection.get("ok", false)),
+			"Valid network replay seed selection should succeed.")
+	assert_eq(int(selection.get("rng_seed", 0)), 30671017,
+			"Lobby start should select the exact accepted replay seed.")
+	assert_eq(ReplayDriver.pending_replay_seed, 30671017,
+			"Lobby selection must not consume before GameState installation.")
+
+
+func test_network_replay_start_fails_closed_without_header_seed() -> void:
+	ReplayDriver.enabled = true
+	ReplayDriver._connect_target = "127.0.0.1:7350"
+	ReplayDriver.pending_replay_seed = 0
+
+	var selection: Dictionary = LobbyManager._select_start_rng_seed()
+
+	assert_false(bool(selection.get("ok", true)),
+			"Missing network replay seed must stop lobby bootstrap.")
+	assert_false(selection.has("rng_seed"),
+			"Failed replay bootstrap must not provide a fallback seed.")
+
+
+func test_normal_network_start_retains_fresh_seed_selection() -> void:
+	ReplayDriver.enabled = false
+	ReplayDriver._connect_target = "127.0.0.1:7350"
+	ReplayDriver.pending_replay_seed = -9223372036854775807
+
+	var selection: Dictionary = LobbyManager._select_start_rng_seed()
+
+	assert_true(bool(selection.get("ok", false)),
+			"Normal network start should retain fresh seed selection.")
+	assert_ne(int(selection.get("rng_seed", 0)), 0,
+			"Normal network start should select a non-zero fresh seed.")
+	assert_ne(int(selection.get("rng_seed", 0)),
+			ReplayDriver.pending_replay_seed,
+			"Normal network start must not consume a replay seed.")
+	assert_eq(ReplayDriver.pending_replay_seed, -9223372036854775807,
+			"Normal network start must leave replay-bootstrap state untouched.")

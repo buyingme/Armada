@@ -245,12 +245,9 @@ func bootstrap_game(default_scenario_id: String) -> void:
 			config = {"setup_package": setup_package.to_hashed_dict()}
 		else:
 			config = {"scenario_id": default_scenario_id}
-	# Phase L0.5b — replay driver may have pre-seeded a deterministic
-	# rng_seed from the replay file header.  Apply it now (hot-seat
-	# only; in network the seed comes from the host via the lobby
-	# game-config RPC and the replay driver runs in tandem rather than
-	# overriding).  Cleared on consumption so the next bootstrap is
-	# random again.
+	# Phase L0.5b — hot-seat replay injects its accepted header seed directly.
+	# Network replay receives the same accepted seed through the existing lobby
+	# game-config path and validates it inside the game-state start boundary.
 	if ReplayDriver.pending_replay_seed != 0 and not PlayMode.is_network():
 		config["rng_seed"] = ReplayDriver.pending_replay_seed
 		ReplayDriver.pending_replay_seed = 0
@@ -268,6 +265,11 @@ func bootstrap_game(default_scenario_id: String) -> void:
 ##   [code]"scenario_id"[/code] (String) — scenario identifier stored
 ##       for replay headers (default: [code]""[/code]).
 func start_new_game(config: Dictionary = {}) -> void:
+	var replay_bootstrap: Dictionary = _validate_network_replay_rng_config(config)
+	if not bool(replay_bootstrap.get("ok", false)):
+		_fail_network_replay_rng_bootstrap(str(replay_bootstrap.get(
+				"reason", "Network replay RNG configuration is invalid.")))
+		return
 	CommandProcessor.reset()
 	_reset_network_result_ordering()
 	current_game_state = GameState.new()
@@ -276,6 +278,10 @@ func start_new_game(config: Dictionary = {}) -> void:
 	if seed_value != 0:
 		current_game_state.rng = GameRng.new(seed_value)
 	current_game_state.initialize()
+	if not _complete_network_replay_rng_bootstrap(
+			current_game_state, replay_bootstrap):
+		current_game_state = null
+		return
 	is_game_active = true
 	active_player = current_game_state.initiative_player
 	_activating_ship = null
@@ -298,14 +304,69 @@ func start_new_game(config: Dictionary = {}) -> void:
 func start_new_game_from_setup_package(
 		package: FleetSetupPackage,
 		config: Dictionary = {}) -> Dictionary:
+	var replay_bootstrap: Dictionary = _validate_network_replay_rng_config(config)
+	if not bool(replay_bootstrap.get("ok", false)):
+		var reason: String = str(replay_bootstrap.get(
+				"reason", "Network replay RNG configuration is invalid."))
+		_fail_network_replay_rng_bootstrap(reason)
+		return {"ok": false, "reason": reason}
 	var result: Dictionary = FleetSetupBootstrapper.build_game_state(
 			package, config)
 	if not bool(result.get("ok", false)):
 		_log.error("Setup-package bootstrap rejected. %s" % _setup_bootstrap_error_text(result))
 		return result
-	_install_setup_package_state(
-			result.get("state") as GameState, package, config)
+	var built_state: GameState = result.get("state") as GameState
+	current_game_state = built_state
+	if not _complete_network_replay_rng_bootstrap(
+			built_state, replay_bootstrap):
+		current_game_state = null
+		return {"ok": false, "reason": "Network replay RNG installation failed."}
+	_install_setup_package_state(built_state, package, config)
 	return result
+
+
+## Validates the received network game configuration against the replay header
+## before any game-state or setup-time RNG initialization begins.
+func _validate_network_replay_rng_config(config: Dictionary) -> Dictionary:
+	if not ReplayDriver.is_network_replay_bootstrap_active():
+		return {"ok": true, "required": false, "rng_seed": 0}
+	var seed_value: Variant = config.get("rng_seed", null)
+	if not ReplayDriver.validate_network_replay_seed(seed_value):
+		return {
+			"ok": false,
+			"required": true,
+			"reason": "Received network RNG seed does not match replay header.",
+		}
+	return {
+		"ok": true,
+		"required": true,
+		"rng_seed": int(seed_value),
+	}
+
+
+## Verifies authoritative RNG construction and consumes replay-bootstrap state
+## before game-start projection or replay command execution can begin.
+func _complete_network_replay_rng_bootstrap(
+		state: GameState,
+		bootstrap: Dictionary) -> bool:
+	if not bool(bootstrap.get("required", false)):
+		return true
+	var expected_seed: int = int(bootstrap.get("rng_seed", 0))
+	if state == null or state.rng == null \
+			or state.rng.initial_seed != expected_seed:
+		_fail_network_replay_rng_bootstrap(
+				"Authoritative RNG was not installed from the replay header.")
+		return false
+	if not ReplayDriver.consume_network_replay_seed(expected_seed):
+		_fail_network_replay_rng_bootstrap(
+				"Accepted replay RNG seed was not consumable exactly once.")
+		return false
+	return true
+
+
+func _fail_network_replay_rng_bootstrap(reason: String) -> void:
+	_log.error("Network replay RNG bootstrap rejected: %s" % reason)
+	ReplayDriver.fail_network_replay_bootstrap(reason)
 
 
 func _setup_bootstrap_error_text(result: Dictionary) -> String:

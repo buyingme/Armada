@@ -69,8 +69,9 @@ var enabled: bool = false
 
 ## RNG seed to inject into the next [GameManager.bootstrap_game] call.
 ## Pre-seeded from the replay file header.  Cleared on consumption so
-## subsequent bootstraps revert to random seeding.  Hot-seat only —
-## network seeding flows through the lobby game-config RPC.
+## subsequent bootstraps revert to random seeding.  Hot-seat consumes it
+## directly; network replay uses it as one-shot input to the existing lobby
+## game-config path and consumes it after authoritative RNG installation.
 var pending_replay_seed: int = 0
 
 ## Loaded replay payload.  Null until [method _ready] succeeds.
@@ -116,10 +117,9 @@ func _ready() -> void:
 		return
 	_log.info("ReplayDriver: loaded %d commands from %s" % [
 			_replay.commands.size(), replay_path])
-	# Pre-seed the RNG and the trace output path before any scene
-	# loads its first frame.  Network host receives its seed via the
-	# lobby game-config RPC, so only hot-seat consumes
-	# pending_replay_seed (see GameManager.bootstrap_game).
+	# Pre-seed the RNG and the trace output path before any scene loads its
+	# first frame.  Hot-seat consumes the value directly; network replay
+	# supplies the same accepted value through the lobby game-config path.
 	pending_replay_seed = int(_replay.header.get("rng_seed", 0))
 	LoggingMode.enabled = true
 	BaselineTrace.output_path_override = _baseline_output
@@ -171,6 +171,51 @@ func _is_server_session() -> bool:
 ## standard [signal LobbyManager.game_starting] path).
 func is_network_session() -> bool:
 	return _is_server_session() or not _connect_target.is_empty()
+
+
+## Returns whether this driver is coordinating a network replay bootstrap.
+## Normal network sessions remain outside this one-shot reconstruction path.
+func is_network_replay_bootstrap_active() -> bool:
+	return enabled and is_network_session()
+
+
+## Returns the accepted replay-header seed only while network replay bootstrap
+## is active.  A zero result is invalid bootstrap input, never a fresh-seed
+## fallback.
+func get_pending_network_replay_seed() -> int:
+	if not is_network_replay_bootstrap_active():
+		return 0
+	return pending_replay_seed
+
+
+## Validates one received network game-config seed against the accepted replay
+## header.  Validation is non-consuming so lobby selection and peer bootstrap
+## can verify the same one-shot input at their respective boundaries.
+func validate_network_replay_seed(seed_value: Variant) -> bool:
+	if not is_network_replay_bootstrap_active():
+		return false
+	if typeof(seed_value) != TYPE_INT:
+		return false
+	var candidate: int = int(seed_value)
+	return candidate != 0 \
+			and pending_replay_seed != 0 \
+			and candidate == pending_replay_seed
+
+
+## Clears the accepted replay-header seed exactly once after authoritative RNG
+## installation.  Missing, mismatched, or already-consumed input is rejected.
+func consume_network_replay_seed(seed_value: Variant) -> bool:
+	if not validate_network_replay_seed(seed_value):
+		return false
+	pending_replay_seed = 0
+	return true
+
+
+## Terminates a replay whose network RNG bootstrap cannot complete atomically.
+## The accepted pending seed is deliberately retained on failure for evidence.
+func fail_network_replay_bootstrap(reason: String) -> void:
+	_log.error("ReplayDriver: network RNG bootstrap failed: %s" % reason)
+	_quit(EXIT_LOAD_FAIL)
 
 
 ## Instance wrapper around [method parse_flag] for the

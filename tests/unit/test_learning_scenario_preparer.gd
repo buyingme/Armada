@@ -47,6 +47,33 @@ func test_prepare_game_state_assigns_damage_deck_expected() -> void:
 		"Prepared damage deck should be initialized")
 
 
+func test_same_bootstrap_seed_preserves_setup_and_later_rng_sequence() -> void:
+	const REPLAY_SEED: int = 30671017
+	var state_a: GameState = GameState.new()
+	state_a.rng = GameRng.new(REPLAY_SEED)
+	state_a.initialize()
+	var state_b: GameState = GameState.new()
+	state_b.rng = GameRng.new(REPLAY_SEED)
+	state_b.initialize()
+
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new(), state_a)
+	LearningScenarioPreparer.prepare_game_state(
+			LearningScenarioSetup.new(), state_b)
+
+	assert_eq(state_a.damage_deck.serialize(), state_b.damage_deck.serialize(),
+			"Equal replay seeds should produce identical setup damage decks.")
+	assert_eq(state_a.rng.serialize(), state_b.rng.serialize(),
+			"Setup-time RNG consumption should leave both peers identical.")
+	var later_a: Array[int] = []
+	var later_b: Array[int] = []
+	for _index: int in range(8):
+		later_a.append(state_a.rng.randi_range(0, 7))
+		later_b.append(state_b.rng.randi_range(0, 7))
+	assert_eq(later_a, later_b,
+			"Later deterministic dice consumption should remain identical.")
+
+
 func test_prepare_debug_scenario_preserves_runtime_upgrades_through_player_state_serialization() -> void:
 	var game_state: GameState = _create_game_state()
 	LearningScenarioPreparer.prepare_game_state(

@@ -120,7 +120,7 @@ func create_lobby(lobby_name: String, password: String = "") -> void:
 
 
 ## Starts the game (host only).
-## Validates that the lobby is ready, generates the shared RNG seed,
+## Validates that the lobby is ready, selects the shared RNG seed,
 ## broadcasts game configuration, then notifies all peers to transition.
 ## G4.6.5.2 — server-side game initialisation.
 func request_start_game() -> void:
@@ -132,8 +132,18 @@ func request_start_game() -> void:
 		lobby_error.emit("All players must be ready to start.")
 		return
 	_log.info("Starting game from lobby.")
-	# Generate shared RNG seed and broadcast config BEFORE scene transition.
-	var rng_seed: int = Time.get_ticks_usec()
+	# Select shared RNG seed and broadcast config BEFORE scene transition.
+	# Normal games retain fresh host selection.  Network replay reconstructs
+	# from the already accepted replay header and never falls back to fresh RNG.
+	var seed_selection: Dictionary = _select_start_rng_seed()
+	if not bool(seed_selection.get("ok", false)):
+		var reason: String = str(seed_selection.get(
+				"reason", "Network replay RNG seed is unavailable."))
+		_log.error(reason)
+		lobby_error.emit(reason)
+		ReplayDriver.fail_network_replay_bootstrap(reason)
+		return
+	var rng_seed: int = int(seed_selection.get("rng_seed", 0))
 	var scenario_id: String = _selected_scenario_id()
 	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
 		if not can_start_setup_match():
@@ -152,6 +162,21 @@ func request_start_game() -> void:
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
 	game_starting.emit()
+
+
+## Selects the existing fresh seed for a normal lobby start or the accepted
+## replay-header seed for network replay.  Selection does not consume replay
+## state; each peer consumes only after installing its authoritative RNG.
+func _select_start_rng_seed() -> Dictionary:
+	if ReplayDriver.is_network_replay_bootstrap_active():
+		var replay_seed: int = ReplayDriver.get_pending_network_replay_seed()
+		if replay_seed == 0:
+			return {
+				"ok": false,
+				"reason": "Network replay header RNG seed is missing or zero.",
+			}
+		return {"ok": true, "rng_seed": replay_seed}
+	return {"ok": true, "rng_seed": Time.get_ticks_usec()}
 
 
 ## Loads a saved game and starts it for both peers (host only).

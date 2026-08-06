@@ -85,6 +85,9 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"use_concentrate_fire_token_reroll": [
 		"die_index", "expected_color", "expected_face",
 	],
+	"use_h9": [
+		"die_index", "expected_color", "expected_face", "target_face",
+	],
 }
 
 ## Integer arrays have their entries restored independently.  An integral

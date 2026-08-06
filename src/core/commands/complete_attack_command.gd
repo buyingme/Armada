@@ -8,6 +8,8 @@ const CONTINUATION_NORMAL_ATTACK: String = "normal_attack"
 const CONTINUATION_ATTACK_STEP_COMPLETE: String = "attack_step_complete"
 const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+const H9_RULE: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 
 var _log: GameLogger = GameLogger.new("CompleteAttackCommand")
 
@@ -49,10 +51,13 @@ func execute(game_state: GameState) -> Dictionary:
 		ship.end_anti_squadron_attack()
 	var cleared: Array[String] = ECM_SCRIPT.clear_attack_state(
 			game_state, attack_id)
+	var h9_cleared: Array[String] = H9_RULE.clear_attack_guards(
+			game_state, attack_id)
 	var result: Dictionary = {
 		"attack_id": attack_id,
 		"completed": true,
 		"ecm_cleared_runtime_upgrade_ids": cleared,
+		"h9_cleared_runtime_upgrade_ids": h9_cleared,
 	}
 	if ship != null:
 		result["continuation"] = _derive_ship_continuation(ship)

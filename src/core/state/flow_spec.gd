@@ -198,6 +198,7 @@ const _SPEC: Dictionary = {
 					"skip_attack", "skip_attack_modifier",
 					"use_concentrate_fire_token_reroll",
 					"decline_concentrate_fire_token_reroll",
+					"use_h9", "decline_h9",
 					"confirm_attack_dice"],
 			"transitions": {"publish_attack_flow": "ATTACK_DEFENSE_TOKENS"},
 			"source": SOURCE_COMMAND_PRODUCED,

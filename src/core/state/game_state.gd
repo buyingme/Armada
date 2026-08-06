@@ -250,6 +250,13 @@ static func deserialize(data: Dictionary) -> GameState:
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
 		return null
+	var h9_rule: GDScript = load(
+			"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd") \
+			as GDScript
+	if h9_rule == null \
+			or not str(h9_rule.call(
+					"validate_reconstructed_state", state)).is_empty():
+		return null
 	return state
 
 

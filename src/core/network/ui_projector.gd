@@ -499,9 +499,13 @@ static func _project_timing_opportunity(
 		projected["semantic_key"] = str(opportunity.get(
 				TIMING_WINDOW_OPPORTUNITY.KEY_SEMANTIC_KEY, ""))
 	if is_interactive:
-		projected["use_intent"] = (opportunity.get(
-				TIMING_WINDOW_OPPORTUNITY.KEY_USE_INTENT, {}) \
-				as Dictionary).duplicate(true)
+		var use_choices: Array = policy.get("use_choices", []) as Array
+		if use_choices.is_empty():
+			projected["use_intent"] = (opportunity.get(
+					TIMING_WINDOW_OPPORTUNITY.KEY_USE_INTENT, {}) \
+					as Dictionary).duplicate(true)
+		else:
+			projected["use_choices"] = use_choices.duplicate(true)
 		projected["decline_intent"] = (opportunity.get(
 				TIMING_WINDOW_OPPORTUNITY.KEY_DECLINE_INTENT, {}) \
 				as Dictionary).duplicate(true)
@@ -513,11 +517,34 @@ static func _valid_timing_projection_policy(policy: Dictionary) -> bool:
 		"visible",
 		"source_visible",
 		"display_key",
+		"use_choices",
 	]
 	for raw_key: Variant in policy.keys():
 		if typeof(raw_key) != TYPE_STRING or not allowed_keys.has(str(raw_key)):
 			return false
+	if policy.has("use_choices") \
+			and not _valid_timing_use_choices(policy.get("use_choices")):
+		return false
 	return typeof(policy.get("visible")) == TYPE_BOOL \
 			and typeof(policy.get("source_visible")) == TYPE_BOOL \
 			and typeof(policy.get("display_key")) == TYPE_STRING \
 			and not str(policy.get("display_key", "")).is_empty()
+
+
+static func _valid_timing_use_choices(raw_choices: Variant) -> bool:
+	if not raw_choices is Array or (raw_choices as Array).is_empty():
+		return false
+	for raw_choice: Variant in raw_choices as Array:
+		if not raw_choice is Dictionary:
+			return false
+		var choice: Dictionary = raw_choice as Dictionary
+		if choice.size() != 2 \
+				or typeof(choice.get("label")) != TYPE_STRING \
+				or str(choice.get("label", "")).is_empty() \
+				or not choice.get("intent") is Dictionary:
+			return false
+		for raw_key: Variant in choice.keys():
+			if typeof(raw_key) != TYPE_STRING \
+					or not ["label", "intent"].has(str(raw_key)):
+				return false
+	return true

@@ -2476,6 +2476,7 @@ func _handle_remote_command_effects(
 		"reroll_attack_die", "skip_attack_modifier", \
 				"use_concentrate_fire_token_reroll", \
 				"decline_concentrate_fire_token_reroll", \
+				"use_h9", "decline_h9", \
 				"confirm_attack_dice", \
 				"counter_choice":
 			# Marker commands — the attack pipeline reacts through

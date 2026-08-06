@@ -928,7 +928,21 @@ func _build_timing_window_row(
 	row.add_child(label)
 	var can_interact: bool = interactive \
 			and bool(opportunity.get("is_interactive", false))
-	if can_interact and opportunity.get("use_intent") is Dictionary:
+	var use_choices: Array = opportunity.get("use_choices", []) as Array
+	if can_interact and not use_choices.is_empty():
+		for choice_index: int in range(use_choices.size()):
+			var choice: Dictionary = use_choices[choice_index] as Dictionary
+			var choice_intent: Variant = choice.get("intent")
+			if not choice_intent is Dictionary:
+				continue
+			var choice_button: Button = Button.new()
+			choice_button.name = "TimingUseButton_%d_%d" % [index, choice_index]
+			choice_button.text = str(choice.get("label", "Use"))
+			choice_button.tooltip_text = display_key
+			choice_button.pressed.connect(_on_timing_window_use.bind(
+					(choice_intent as Dictionary).duplicate(true)))
+			row.add_child(choice_button)
+	elif can_interact and opportunity.get("use_intent") is Dictionary:
 		var use_button: Button = Button.new()
 		use_button.name = "TimingUseButton_%d" % index
 		use_button.text = "Use"

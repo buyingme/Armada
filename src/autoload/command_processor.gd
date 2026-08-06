@@ -41,6 +41,10 @@ const UseConcentrateFireTokenRerollCommandScript: GDScript = preload(
 		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
 const DeclineConcentrateFireTokenRerollCommandScript: GDScript = preload(
 		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+const UseH9CommandScript: GDScript = preload(
+		"res://src/core/commands/use_h9_command.gd")
+const DeclineH9CommandScript: GDScript = preload(
+		"res://src/core/commands/decline_h9_command.gd")
 
 
 const COMMAND_APPLICABILITY_SCRIPT: GDScript = \
@@ -140,6 +144,8 @@ func _ready() -> void:
 	SkipAttackModifierCommand.register()
 	UseConcentrateFireTokenRerollCommandScript.register()
 	DeclineConcentrateFireTokenRerollCommandScript.register()
+	UseH9CommandScript.register()
+	DeclineH9CommandScript.register()
 	ConfirmAttackDiceCommand.register()
 	CounterChoiceCommand.register()
 	# Tier 14 — squadron-displacement authority (Phase I6b-4).

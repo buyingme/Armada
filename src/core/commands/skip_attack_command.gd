@@ -18,8 +18,11 @@ extends GameCommand
 
 const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+const H9_RULE: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 const TERMINAL_REASONS: Array[String] = [
 	"cancelled",
+	"flow_replaced",
 	"flow_terminated",
 ]
 
@@ -74,6 +77,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var attack: CurrentAttackState = game_state.current_attack_state
 	var attack_id: String = attack.attack_id
 	var cleared: Array[String] = []
+	var h9_cleared: Array[String] = []
 	var continuation: String = ""
 	if attack.active:
 		if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
@@ -85,6 +89,7 @@ func execute(game_state: GameState) -> Dictionary:
 				game_state.set_current_attack_state(attack)
 				return {}
 		cleared = ECM_SCRIPT.clear_attack_state(game_state, attack_id)
+		h9_cleared = H9_RULE.clear_attack_guards(game_state, attack_id)
 	elif str(payload.get("reason", "")) == "squadron_done":
 		var ship: ShipInstance = _squadron_iteration_ship(game_state)
 		if ship == null:
@@ -98,6 +103,7 @@ func execute(game_state: GameState) -> Dictionary:
 		"skipped": true,
 		"reason": payload.get("reason", "voluntary"),
 		"ecm_cleared_runtime_upgrade_ids": cleared,
+		"h9_cleared_runtime_upgrade_ids": h9_cleared,
 	}
 	if not continuation.is_empty():
 		result["continuation"] = continuation

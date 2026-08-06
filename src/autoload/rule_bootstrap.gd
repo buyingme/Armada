@@ -30,6 +30,7 @@ const RULE_SCRIPTS: Array[GDScript] = [
 	preload("res://src/core/effects/rules/squadron_keywords/swarm.gd"),
 	preload("res://src/core/effects/rules/squadron_keywords/bomber.gd"),
 	preload("res://src/core/effects/rules/concentrate_fire_token.gd"),
+	preload("res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd"),
 	preload("res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd"),
 ]
 

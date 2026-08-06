@@ -16,6 +16,10 @@ const CF_RULE: GDScript = preload(
 		"res://src/core/effects/rules/concentrate_fire_token.gd")
 const CF_USE_COMMAND: GDScript = preload(
 		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
+const H9_RULE: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
+const H9_USE_COMMAND: GDScript = preload(
+		"res://src/core/commands/use_h9_command.gd")
 
 
 var _state: FaultInjectGameState = null
@@ -190,6 +194,58 @@ func test_shared_concentrate_fire_failure_restores_rng_token_and_attack() -> voi
 	assert_eq(_attack_snapshot(), before_attack)
 	assert_eq(_state.rng.get_state(), before_rng)
 	assert_eq(attacker.command_tokens.serialize(), before_tokens)
+	_assert_stream_unchanged(command)
+	assert_engine_error(1)
+
+
+func test_h9_failure_restores_rule_guard_and_attack() -> void:
+	var attacker: ShipInstance = _add_ship(0)
+	_add_ship(1)
+	attacker.roster_entry_id = "atomic-attacker"
+	var runtime_upgrade: Dictionary = attacker.add_runtime_upgrade(
+			H9_RULE.DATA_KEY, "atomic-h9", "TURBOLASERS", 0)
+	_install_attack({
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": [_red_hit()],
+	})
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0)
+	var context: Dictionary = {
+		TimingWindowState.CONTINUATION_KEY_ID: ConfirmAttackDiceCommand.TYPE,
+		TimingWindowState.CONTINUATION_KEY_RESUME_POINT: "attack_after_modify",
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: _attack_id(),
+		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE: "current_attack",
+		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER: 0,
+	}
+	assert_true(bool(ORCHESTRATOR.open_window(
+			_state, DEFINITIONS.ATTACK_MODIFY, 1, context).get(
+					ORCHESTRATOR.KEY_OK, false)))
+	H9_RULE.register()
+	var before_attack: Dictionary = _attack_snapshot()
+	var before_rule_state: Dictionary = (runtime_upgrade.get(
+			"rule_state", {}) as Dictionary).duplicate(true)
+	_state.reject_current_attack_updates = true
+	var runtime_upgrade_id: String = str(runtime_upgrade.get(
+			"runtime_upgrade_id", ""))
+	var command: GameCommand = H9_USE_COMMAND.new(0, {
+		"timing_window_id": TimingWindowDefinitions.ATTACK_MODIFY,
+		"lifecycle_id": _state.timing_window_state.lifecycle_id,
+		"source_owner_kind": H9_RULE.SOURCE_OWNER_KIND,
+		"runtime_source_id": runtime_upgrade_id,
+		"semantic_key": H9_RULE.SEMANTIC_KEY,
+		"attack_id": _attack_id(),
+		"runtime_upgrade_id": runtime_upgrade_id,
+		"die_index": 0,
+		"expected_color": int(Constants.DiceColor.RED),
+		"expected_face": int(Constants.DiceFace.HIT),
+		"target_face": int(Constants.DiceFace.ACCURACY),
+	})
+
+	assert_eq(_processor.submit(command), {})
+	assert_eq(_attack_snapshot(), before_attack)
+	assert_eq(runtime_upgrade.get("rule_state"), before_rule_state)
 	_assert_stream_unchanged(command)
 	assert_engine_error(1)
 

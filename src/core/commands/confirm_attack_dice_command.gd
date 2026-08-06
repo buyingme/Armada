@@ -8,6 +8,8 @@ extends GameCommand
 
 
 const TYPE: String = "confirm_attack_dice"
+const H9_RULE: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -56,7 +58,13 @@ func execute(game_state: GameState) -> Dictionary:
 	})
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		return {}
-	return {"attack_id": attack.attack_id, "dice_results": attack.dice_results}
+	var cleared: Array[String] = H9_RULE.clear_attack_guards(
+			game_state, attack.attack_id)
+	return {
+		"attack_id": attack.attack_id,
+		"dice_results": attack.dice_results,
+		"h9_cleared_runtime_upgrade_ids": cleared,
+	}
 
 
 func _validate_inactive_direct_context() -> String:

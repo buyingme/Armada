@@ -120,6 +120,14 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
 			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.ATTACK,
 					Constants.InteractionStep.ATTACK_MODIFY)]},
+	"use_h9": {
+			KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.ATTACK,
+					Constants.InteractionStep.ATTACK_MODIFY)]},
+	"decline_h9": {
+			KEY_SCOPE: Constants.CommandScope.FLOW_STEP,
+			KEY_FLOW_STEPS: [_pair(Constants.InteractionFlow.ATTACK,
+					Constants.InteractionStep.ATTACK_MODIFY)]},
 	"confirm_attack_dice": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"counter_choice": {KEY_SCOPE: Constants.CommandScope.FLOW_STEP,

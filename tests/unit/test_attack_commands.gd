@@ -619,8 +619,8 @@ func test_squadron_done_skip_requires_authoritative_iteration_identity() -> void
 	assert_ne(cmd.validate(_state), "")
 
 
-func test_active_skip_no_longer_accepts_flow_replaced_reason() -> void:
-	assert_false(SkipAttackCommand.TERMINAL_REASONS.has("flow_replaced"))
+func test_active_skip_accepts_authoritative_flow_replaced_reason() -> void:
+	assert_true(SkipAttackCommand.TERMINAL_REASONS.has("flow_replaced"))
 
 
 # ======================================================================

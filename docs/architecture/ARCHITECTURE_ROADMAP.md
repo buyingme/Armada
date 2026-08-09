@@ -67,6 +67,31 @@ Rules:
   not an unresolved ownership decision. Broader non-attack concerns grouped
   under `BC-001` and `BC-003` remain open.
 
+## Incremental C# Migration Direction
+
+The Armada project intends to adopt C# incrementally where stronger typing, clearer domain boundaries, improved static reasoning, and better AI-assisted implementation quality provide sufficient value.
+
+This is a migration direction, not a rewrite mandate.
+
+Existing working GDScript shall not be converted merely for language consistency. C# adoption should follow accepted architectural boundaries and should normally occur when a domain boundary is newly introduced, substantially revised, or already requires significant implementation work.
+
+Priority candidates include:
+
+- authoritative domain state;
+- deterministic gameplay logic;
+- semantic commands and validation;
+- rule and mechanic resolution;
+- serialization boundaries; and
+- other logic-heavy components where explicit types and narrow interfaces improve correctness and AI reasoning.
+
+Presentation-heavy Godot code, scene orchestration, and stable GDScript may remain in GDScript where migration provides insufficient value.
+
+C# migration shall not redefine ownership or architecture implicitly. Architecture remains language-independent unless an accepted architecture decision explicitly requires otherwise.
+
+Where practical, new or substantially revised domain boundaries should be designed so that later C# migration does not require architectural redesign. Prefer explicit state, narrow APIs, deterministic behavior, clear serialization boundaries, and minimal coupling to scene/UI state.
+
+C# migration should not normally be combined with an unrelated architectural migration unless the combined change is explicitly justified by reduced total risk or implementation effort.
+
 ## Architecture Work Backlog
 
 ### AT-001 - Live Game State Authority ADR
@@ -267,6 +292,17 @@ Rules:
 | Outputs | Future refactoring task list |
 | Dependencies | At least one accepted ADR and related contract |
 
+### AT-019 - Incremental C# Migration Strategy
+
+| Field | Value |
+| --- | --- |
+| Type | Architecture / Migration Strategy |
+| Priority | Medium |
+| Status | Backlog |
+| Inputs | Accepted ADRs and contracts; current GDScript/C# boundaries; future implementation work that introduces or substantially revises domain-state or deterministic gameplay boundaries |
+| Outputs | Prioritized C# migration candidates and migration guidance that preserves accepted ownership and behavior |
+| Dependencies | Accepted architecture for each candidate boundary; migration must not establish architecture implicitly |
+
 ## Architecture Workflow State Machine
 
 Standard lifecycle:
@@ -325,6 +361,7 @@ owner decision and contract work.
 - `AT-016` - Setup Contract Test Mapping
 - `AT-017` - Command/Rule Inventory Documentation Update
 - `AT-018` - Architecture Refactoring Candidate Register
+- `AT-019` - Incremental C# Migration Strategy
 
 ### In Progress
 

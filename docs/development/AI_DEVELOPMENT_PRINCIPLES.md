@@ -130,6 +130,23 @@ simpler process shall be preferred.
 
 ------------------------------------------------------------------------
 
+# Principle 9 --- Explicit Boundaries Improve AI Leverage
+
+New or substantially revised domain boundaries should favor structures that are easy for both humans and AI agents to reason about correctly.
+
+Prefer:
+
+- explicit state and ownership,
+- narrow and well-defined interfaces,
+- deterministic behavior,
+- clear serialization boundaries,
+- strong type information where practical, and
+- minimal coupling between domain logic and presentation/framework state.
+
+Implementation technology may evolve over time. Architecture should therefore avoid unnecessary coupling to a language, scene structure, or transient framework mechanism when the same responsibility can be represented as a clear domain boundary.
+
+------------------------------------------------------------------------
+
 # Success Criteria
 
 The development process is successful when it:

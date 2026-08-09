@@ -14,7 +14,7 @@
 ## [/codeblock]
 ##
 ## Fields:
-##   - [code]save_format_version: int[/code] — schema version (currently 1).
+##   - [code]save_format_version: int[/code] — schema version (currently 2).
 ##   - [code]scenario_id: String[/code] — the scenario JSON key (e.g.
 ##     [code]"learning_scenario"[/code]).
 ##   - [code]scenario_name: String[/code] — human-readable scenario name
@@ -36,7 +36,7 @@ extends RefCounted
 
 ## Current header schema version.  Bump on any breaking change to the
 ## header or to [method GameState.serialize] / [method GameState.deserialize].
-const CURRENT_VERSION: int = 1
+const CURRENT_VERSION: int = 2
 
 ## Allowed values for [member game_mode].
 const MODE_HOT_SEAT: String = "hot_seat"

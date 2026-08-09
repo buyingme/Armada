@@ -93,6 +93,9 @@ func test_save_load_and_reconnect_preserve_h9_guard_and_remaining_blocker() -> v
 	assert_eq(_opportunity_capabilities(state), [CF_RULE.CAPABILITY_ID])
 	var expected_projection: Dictionary = UIProjector.project(
 			state, 0).timing_window
+	var expected_dice_projection: Array[Dictionary] = UIProjector.project(
+			state, 0).attack_dice_results
+	assert_eq(expected_dice_projection, state.current_attack_state.dice_results)
 
 	var manager: Node = SAVE_MANAGER_SCRIPT.new()
 	assert_true(manager.save_game(state, TEST_SAVE))
@@ -102,11 +105,13 @@ func test_save_load_and_reconnect_preserve_h9_guard_and_remaining_blocker() -> v
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 1)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 1)
-	assert_eq(GameReplay.FORMAT_VERSION, 3)
+	assert_eq(metadata.save_format_version, 2)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
+	assert_eq(GameReplay.FORMAT_VERSION, 4)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
+	assert_eq(UIProjector.project(restored, 0).attack_dice_results,
+			expected_dice_projection)
 	assert_eq(_opportunity_capabilities(restored), [CF_RULE.CAPABILITY_ID])
 	assert_eq(H9_RULE.resolution_guard(_h9_source(restored)), {
 		H9_RULE.GUARD_ATTACK_ID: "attack:0",
@@ -118,6 +123,8 @@ func test_save_load_and_reconnect_preserve_h9_guard_and_remaining_blocker() -> v
 	assert_not_null(reconnect)
 	assert_eq(UIProjector.project(reconnect, 0).timing_window,
 			expected_projection)
+	assert_eq(UIProjector.project(reconnect, 0).attack_dice_results,
+			expected_dice_projection)
 	assert_eq(_opportunity_capabilities(reconnect), [CF_RULE.CAPABILITY_ID])
 	assert_eq(H9_RULE.resolution_guard(_h9_source(reconnect)), {
 		H9_RULE.GUARD_ATTACK_ID: "attack:0",
@@ -191,9 +198,9 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 1)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 1)
-	assert_eq(GameReplay.FORMAT_VERSION, 3)
+	assert_eq(metadata.save_format_version, 2)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
+	assert_eq(GameReplay.FORMAT_VERSION, 4)
 	_assert_declined_h9_state(restored, initial_dice)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			controller_projection)
@@ -237,7 +244,7 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 3)
+			"format_version"), 4)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize(initial_data)
@@ -268,6 +275,9 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 			UIProjector.project(authority_state, 0).timing_window)
 	assert_eq(UIProjector.project(client_state, 1).timing_window,
 			UIProjector.project(authority_state, 1).timing_window)
+	assert_eq(UIProjector.project(client_state, 1).attack_dice_results,
+			UIProjector.project(authority_state, 1).attack_dice_results,
+			"Passive network projection must show authoritative dice after decline.")
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
 	var replay_processor: Node = _make_processor(replay_state)
@@ -290,7 +300,7 @@ func test_decline_round_trips_through_save_reconnect_network_and_replay() -> voi
 	manager.free()
 
 
-func test_h9_then_concentrate_fire_matches_host_client_and_format_three_replay() -> void:
+func test_h9_then_concentrate_fire_matches_host_client_and_format_four_replay() -> void:
 	var result: Dictionary = _run_network_replay_order(true)
 	assert_eq(result.get("history_types"), [
 		H9_USE.TYPE,
@@ -361,11 +371,11 @@ func _run_network_replay_order(h9_first: bool) -> Dictionary:
 
 	var replay_file := GameReplay.new()
 	replay_file.capture_header(
-			"slice-8b2-pre-activation", 7419, [0, 1], 0, 0)
+			"twi-002-production", 7419, [0, 1], 0, 0)
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 3)
+			"format_version"), 4)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize(initial_data)
@@ -381,6 +391,9 @@ func _run_network_replay_order(h9_first: bool) -> Dictionary:
 	assert_eq(CanonicalJson.hash(client_state.serialize()), authority_hash)
 	assert_eq(UIProjector.project(client_state, 1).timing_window,
 			UIProjector.project(authority_state, 1).timing_window)
+	assert_eq(UIProjector.project(client_state, 1).attack_dice_results,
+			UIProjector.project(authority_state, 1).attack_dice_results,
+			"Passive network projection must show post-H9 modified dice.")
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
 	var replay_processor: Node = _make_processor(replay_state)
@@ -389,6 +402,9 @@ func _run_network_replay_order(h9_first: bool) -> Dictionary:
 				GameCommand.deserialize(command_data)).is_empty())
 	assert_eq(replay_processor.serialize_history(), authoritative_history)
 	assert_eq(CanonicalJson.hash(replay_state.serialize()), authority_hash)
+	assert_eq(UIProjector.project(replay_state, 0).attack_dice_results,
+			UIProjector.project(authority_state, 0).attack_dice_results,
+			"Replay must derive the same post-H9 dice projection.")
 	assert_eq(replay_processor.get_pending_observer_followup_count(), 0)
 	return {
 		"history_types": _history_types(authoritative_history),

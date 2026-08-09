@@ -46,6 +46,7 @@ func before_each() -> void:
 	RULE.register()
 	USE_COMMAND.register()
 	DECLINE_COMMAND.register()
+	ConfirmAttackDiceCommand.register()
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 
@@ -69,7 +70,7 @@ func after_each() -> void:
 	GameManager._reset_network_result_ordering()
 
 
-func test_save_load_and_reconnect_rederive_pending_choice_at_version_one() -> void:
+func test_save_load_and_reconnect_rederive_pending_choice_at_version_two() -> void:
 	var state: GameState = _make_pending_state()
 	GameManager.current_game_state = state
 	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
@@ -87,9 +88,9 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_one() -> vo
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 1)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 1)
-	assert_eq(GameReplay.FORMAT_VERSION, 3)
+	assert_eq(metadata.save_format_version, 2)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
+	assert_eq(GameReplay.FORMAT_VERSION, 4)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq((ORCHESTRATOR.derive_current_opportunities(restored).get(
@@ -104,7 +105,7 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_one() -> vo
 			ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).size(), 1)
 
 	assert_true(GameManager.start_new_game_from_state(
-			restored, "slice-8b1-pre-activation",
+			restored, "twi-002-production",
 			metadata.next_command_sequence))
 	assert_false(CommandProcessor.submit(DECLINE_COMMAND.new(
 			0, _identity_payload(restored))).is_empty())
@@ -118,7 +119,7 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_one() -> vo
 	manager.free()
 
 
-func test_host_client_and_format_three_replay_preserve_use_and_continuation() -> void:
+func test_host_client_and_format_four_replay_preserve_use_and_continuation() -> void:
 	var initial: GameState = _make_pending_state()
 	var initial_data: Dictionary = initial.serialize()
 	var authority_state: GameState = GameState.deserialize(initial_data)
@@ -146,11 +147,11 @@ func test_host_client_and_format_three_replay_preserve_use_and_continuation() ->
 
 	var replay_file := GameReplay.new()
 	replay_file.capture_header(
-			"slice-8b1-pre-activation", 9917, [0, 1], 0, 0)
+			"twi-002-production", 9917, [0, 1], 0, 0)
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 3)
+			"format_version"), 4)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize(initial_data)
@@ -166,6 +167,9 @@ func test_host_client_and_format_three_replay_preserve_use_and_continuation() ->
 	assert_eq(client_state.serialize(), authority_final)
 	assert_eq(UIProjector.project(client_state, 1).timing_window,
 			UIProjector.project(authority_state, 1).timing_window)
+	assert_eq(UIProjector.project(client_state, 1).attack_dice_results,
+			UIProjector.project(authority_state, 1).attack_dice_results,
+			"Passive network projection must show the authoritative reroll.")
 
 	var replay_state: GameState = GameState.deserialize(initial_data)
 	var replay_processor: Node = _make_processor(replay_state)
@@ -174,6 +178,9 @@ func test_host_client_and_format_three_replay_preserve_use_and_continuation() ->
 				GameCommand.deserialize(command_data)).is_empty())
 	assert_eq(replay_processor.serialize_history(), authoritative_history)
 	assert_eq(replay_state.serialize(), authority_final)
+	assert_eq(UIProjector.project(replay_state, 0).attack_dice_results,
+			UIProjector.project(authority_state, 0).attack_dice_results,
+			"Replay must derive the same Concentrate Fire result projection.")
 	assert_eq(replay_processor.get_pending_observer_followup_count(), 0)
 
 

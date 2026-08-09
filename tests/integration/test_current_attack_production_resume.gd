@@ -1,4 +1,4 @@
-## Slice 8A production-composition evidence for canonical active-attack resume.
+## Production-composition evidence for canonical active-attack resume.
 extends GutTest
 
 
@@ -6,6 +6,20 @@ const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
 const SAVE_MANAGER_SCRIPT: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
+const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
+		"res://src/core/timing_windows/timing_window_orchestrator.gd")
+const CF_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CF_USE: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
+const CF_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
+const H9_RULE: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
+const H9_USE: GDScript = preload(
+		"res://src/core/commands/use_h9_command.gd")
+const H9_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_h9_command.gd")
 const TEST_SAVE: String = "_gut_slice_8a_production_resume"
 const GAME_BOARD_SCENE: PackedScene = preload(
 		"res://src/scenes/game_board/game_board.tscn")
@@ -14,6 +28,7 @@ const DECOY_SHIP_KEY: String = "cr90_corvette_a"
 const DECOY_SQUADRON_KEY: String = "x_wing_squadron"
 
 var _saved_state: GameState = null
+var _saved_registry: Dictionary = {}
 var _saved_active: bool = false
 var _saved_submitter: CommandSubmitter = null
 var _saved_play_mode: PlayMode.Mode
@@ -68,6 +83,7 @@ class AuthenticatedExecutingSubmitter:
 
 
 func before_each() -> void:
+	_saved_registry = GameCommand._registry.duplicate()
 	_saved_state = GameManager.current_game_state
 	_saved_active = GameManager.is_game_active
 	_saved_submitter = GameManager.get_command_submitter()
@@ -80,6 +96,15 @@ func before_each() -> void:
 	_saved_activating_ship = GameManager._activating_ship
 	_ship_tokens.clear()
 	_squadron_tokens.clear()
+	RuleRegistry.clear()
+	CF_RULE.register()
+	H9_RULE.register()
+	CF_USE.register()
+	CF_DECLINE.register()
+	H9_USE.register()
+	H9_DECLINE.register()
+	RollDiceCommand.register()
+	ConfirmAttackDiceCommand.register()
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	GameManager.set_command_submitter(LocalCommandSubmitter.new())
@@ -92,6 +117,8 @@ func after_each() -> void:
 	var manager: Node = SAVE_MANAGER_SCRIPT.new()
 	manager.delete_save(TEST_SAVE)
 	manager.free()
+	RuleRegistry.clear()
+	GameCommand._registry = _saved_registry
 	CommandProcessor.reset()
 	CommandProcessor.is_replaying = _saved_replaying
 	GameManager.current_game_state = _saved_state
@@ -129,7 +156,7 @@ func test_resume_before_confirmation_ignores_stale_flow_authority() -> void:
 
 	assert_true(bool(plan.get(AttackExecutor.RESUME_KEY_OK, false)))
 	assert_eq(plan.get(AttackExecutor.RESUME_KEY_TRANSITION),
-			AttackExecutor.RESUME_CONFIRM)
+			AttackExecutor.RESUME_TIMING_WINDOW)
 	assert_true(bool(plan.get(AttackExecutor.RESUME_KEY_REQUIRES_INPUT, false)))
 	assert_eq(state.current_attack_state.serialize(), before,
 			"Scene reconstruction must not write canonical attack facts.")
@@ -224,6 +251,10 @@ func test_real_game_board_ready_reconstructs_before_routing_or_activation() -> v
 			Constants.InteractionStep.ATTACK_DECLARE,
 			1, Constants.Visibility.ALL, {"fictional": true})
 	var before: Dictionary = state.current_attack_state.serialize()
+	var reconstruction: Dictionary = \
+			TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
+	assert_true(bool(reconstruction.get(
+			TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)), str(reconstruction))
 	assert_true(GameManager.start_new_game_from_state(
 			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 31))
 	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
@@ -449,7 +480,7 @@ func test_save_load_restores_cursor_before_production_resume() -> void:
 	var restored: GameState = loaded.get("state") as GameState
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_true(GameManager.start_new_game_from_state(
-			restored, "slice-8a-pre-activation",
+			restored, "twi-002-production",
 			metadata.next_command_sequence))
 	assert_eq(CommandProcessor.get_next_sequence(), 13)
 	var executor: AttackExecutor = _make_composition(restored)
@@ -459,7 +490,7 @@ func test_save_load_restores_cursor_before_production_resume() -> void:
 
 	assert_true(bool(plan.get(AttackExecutor.RESUME_KEY_OK, false)))
 	assert_eq(plan.get(AttackExecutor.RESUME_KEY_TRANSITION),
-			AttackExecutor.RESUME_CONFIRM)
+			AttackExecutor.RESUME_TIMING_WINDOW)
 	assert_eq(CommandProcessor.get_next_sequence(), 13)
 	assert_eq(CommandProcessor.get_command_count(), 0)
 	assert_false(restored.interaction_flow.payload.has("fictional"))
@@ -560,7 +591,7 @@ func test_reconnect_resume_is_passive_and_uses_filtered_canonical_state() -> voi
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
 	assert_true(GameManager.start_new_game_from_state(
-			client_state, "slice-8a-pre-activation", 15))
+			client_state, "twi-002-production", 15))
 	var executor: AttackExecutor = _make_composition(client_state)
 
 	var plan: Dictionary = executor.resume_current_attack(
@@ -716,6 +747,72 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 				"Every command from this authenticated peer must be player 1.")
 
 
+func test_network_roll_mirror_completes_projection_handoff_once() -> void:
+	var context: Dictionary = _network_roll_context()
+	var state: GameState = context.get("state") as GameState
+	var executor: AttackExecutor = context.get("executor") as AttackExecutor
+	var panel: AttackSimPanel = context.get("panel") as AttackSimPanel
+	var submitter: AuthenticatedRecordingSubmitter = \
+			context.get("submitter") as AuthenticatedRecordingSubmitter
+
+	assert_eq(state.current_attack_state.stage,
+			CurrentAttackState.STAGE_ATTACK_MODIFY)
+	assert_true(state.timing_window_state.active)
+	assert_eq(executor._flow_fsm.current_step, AttackFlowFSM.Step.MODIFY,
+			"The ordered mirror must complete Roll -> Modify after projection.")
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_MODIFY)
+	assert_false(panel._roll_button.visible,
+			"The completed presentation handoff must retire Roll Dice.")
+	assert_eq(panel.timing_window_choice_count(), 2)
+	assert_false(executor._state.dice_results.is_empty())
+	var publish_count: int = _command_count(
+			submitter.submitted_commands, "publish_attack_flow")
+	assert_eq(publish_count, 2,
+			"One derived handoff publishes its step and canonical dice payload.")
+
+	EventBus.network_dice_result.emit({})
+
+	assert_eq(executor._flow_fsm.current_step, AttackFlowFSM.Step.MODIFY)
+	assert_eq(_command_count(
+			submitter.submitted_commands, "publish_attack_flow"), publish_count,
+			"A duplicate network result must not repeat the derived handoff.")
+
+
+func test_hotseat_and_network_roll_reach_same_derived_interaction() -> void:
+	var hotseat: Dictionary = _hotseat_roll_context()
+	var hotseat_snapshot: Dictionary = _roll_interaction_snapshot(hotseat)
+	var hotseat_board: GameBoard = hotseat.get("board") as GameBoard
+	hotseat_board.queue_free()
+	await get_tree().process_frame
+	CommandProcessor.reset()
+	GameManager._reset_network_result_ordering()
+
+	var network: Dictionary = _network_roll_context()
+	var network_snapshot: Dictionary = _roll_interaction_snapshot(network)
+
+	assert_eq(network_snapshot, hotseat_snapshot,
+			"Accepted RollDice must derive the same actionable next interaction.")
+
+
+func test_network_client_real_panel_constructs_h9_use() -> void:
+	_assert_network_timing_intent(H9_RULE.CAPABILITY_ID, H9_USE.TYPE, false)
+
+
+func test_network_client_real_panel_constructs_h9_decline() -> void:
+	_assert_network_timing_intent(
+			H9_RULE.CAPABILITY_ID, H9_DECLINE.TYPE, true)
+
+
+func test_network_client_real_panel_constructs_concentrate_fire_use() -> void:
+	_assert_network_timing_intent(CF_RULE.CAPABILITY_ID, CF_USE.TYPE, false)
+
+
+func test_network_client_real_panel_constructs_concentrate_fire_decline() -> void:
+	_assert_network_timing_intent(
+			CF_RULE.CAPABILITY_ID, CF_DECLINE.TYPE, true)
+
+
 func test_defender_peer_has_only_interactive_mirror_in_real_board() -> void:
 	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
 		"attack_id": "attack:15",
@@ -812,6 +909,153 @@ func test_live_authority_resume_drains_one_deterministic_terminal_chain() -> voi
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
 
 
+func _network_roll_context() -> Dictionary:
+	var state: GameState = _roll_state()
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 0
+	var submitter := AuthenticatedRecordingSubmitter.new()
+	submitter.authenticated_player = 0
+	GameManager.set_command_submitter(submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var executor: AttackExecutor = board._attack_executor
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_true(executor.is_in_exec_mode())
+	assert_eq(executor._flow_fsm.current_step, AttackFlowFSM.Step.ROLL)
+	assert_true(panel._roll_button.visible)
+	assert_true(executor._state.dice_results.is_empty())
+
+	var roll := RollDiceCommand.new(0, {"attack_id": "attack:0"})
+	roll.sequence = 0
+	assert_true(GameManager._apply_network_command_result(
+			roll, {"attack_id": "attack:0"}))
+	assert_eq(_history_types(), ["roll_dice"])
+	return {
+		"state": state,
+		"board": board,
+		"executor": executor,
+		"panel": panel,
+		"submitter": submitter,
+	}
+
+
+func _hotseat_roll_context() -> Dictionary:
+	var state: GameState = _roll_state()
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+	NetworkManager.role = NetworkManager.Role.NONE
+	NetworkManager._local_player_index = -1
+	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var executor: AttackExecutor = board._attack_executor
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_true(executor.is_in_exec_mode())
+	assert_eq(executor._flow_fsm.current_step, AttackFlowFSM.Step.ROLL)
+	assert_true(panel._roll_button.visible)
+	panel._roll_button.pressed.emit()
+	return {
+		"state": state,
+		"board": board,
+		"executor": executor,
+		"panel": panel,
+	}
+
+
+func _roll_state() -> GameState:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_PRE_ROLL, {
+		"attack_id": "attack:0",
+		"dice_pool": {"RED": 2, "BLUE": 1},
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
+	})
+	var attacker: ShipInstance = state.get_ship(0, 0)
+	attacker.roster_entry_id = "bug-015-network-attacker"
+	attacker.begin_attack_step()
+	attacker.commit_attack(
+			Constants.HullZone.FRONT, 1, CurrentAttackState.KIND_SHIP, 0)
+	attacker.add_runtime_upgrade(
+			H9_RULE.DATA_KEY, "bug-015-h9", "TURBOLASERS", 0)
+	assert_true(attacker.command_tokens.add_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
+	return state
+
+
+func _roll_interaction_snapshot(context: Dictionary) -> Dictionary:
+	var state: GameState = context.get("state") as GameState
+	var executor: AttackExecutor = context.get("executor") as AttackExecutor
+	var panel: AttackSimPanel = context.get("panel") as AttackSimPanel
+	var projected: Dictionary = UIProjector.project(state, 0).timing_window
+	var capability_ids: Array[String] = []
+	for opportunity: Dictionary in projected.get("opportunities", []) as Array:
+		capability_ids.append(str(opportunity.get("capability_id", "")))
+	return {
+		"stage": state.current_attack_state.stage,
+		"flow_step": state.interaction_flow.step_id,
+		"fsm_step": executor._flow_fsm.current_step,
+		"canonical_dice": state.current_attack_state.dice_results.duplicate(true),
+		"scene_dice": executor._state.dice_results.duplicate(true),
+		"roll_visible": panel._roll_button.visible,
+		"choice_count": panel.timing_window_choice_count(),
+		"capability_ids": capability_ids,
+		"controller_player": int(projected.get("controller_player", -1)),
+	}
+
+
+func _assert_network_timing_intent(
+		capability_id: String,
+		expected_command_type: String,
+		decline: bool) -> void:
+	var context: Dictionary = _network_roll_context()
+	var state: GameState = context.get("state") as GameState
+	var panel: AttackSimPanel = context.get("panel") as AttackSimPanel
+	var submitter: AuthenticatedRecordingSubmitter = \
+			context.get("submitter") as AuthenticatedRecordingSubmitter
+	var projected: Dictionary = UIProjector.project(state, 0).timing_window
+	var opportunities: Array = projected.get("opportunities", []) as Array
+	var opportunity_index: int = -1
+	for index: int in range(opportunities.size()):
+		var opportunity: Dictionary = opportunities[index] as Dictionary
+		if str(opportunity.get("capability_id", "")) == capability_id:
+			opportunity_index = index
+			break
+	assert_gte(opportunity_index, 0)
+	var submitted_before: int = submitter.submitted_commands.size()
+	if decline:
+		var decline_button: Button = panel.find_child(
+				"TimingDeclineButton_%d" % opportunity_index,
+				true, false) as Button
+		assert_not_null(decline_button)
+		decline_button.pressed.emit()
+	else:
+		var use_button: Button = panel.find_child(
+				"TimingUseButton_%d" % opportunity_index,
+				true, false) as Button
+		assert_not_null(use_button)
+		use_button.pressed.emit()
+		assert_eq(submitter.submitted_commands.size(), submitted_before,
+				"Use without a die must remain local and non-authoritative.")
+		assert_false(panel._timing_window_die_intents.is_empty())
+		var die_index: int = int(panel._timing_window_die_intents.keys()[0])
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = true
+		panel._dice_textures[die_index].gui_input.emit(click)
+	assert_eq(submitter.submitted_commands.size(), submitted_before + 1)
+	var submitted: GameCommand = submitter.submitted_commands[-1]
+	assert_eq(submitted.command_type, expected_command_type)
+	assert_eq(submitted.player_index, 0)
+	assert_eq(submitted.payload.get("attack_id"), "attack:0")
+	assert_eq(submitted.payload.get("lifecycle_id"),
+			state.timing_window_state.lifecycle_id)
+	if not decline:
+		assert_typeof(submitted.payload.get("die_index"), TYPE_INT)
+
+
 func _state_at(stage: String, options: Dictionary) -> GameState:
 	var state := GameState.new()
 	state.initialize()
@@ -822,7 +1066,35 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 	state.damage_deck.initialize()
 	var configured: Dictionary = options.duplicate(true)
 	configured["stage"] = stage
+	var attacker_kind: String = str(configured.get(
+			"attacker_kind", CurrentAttackState.KIND_SHIP))
+	if stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
+			and attacker_kind == CurrentAttackState.KIND_SHIP:
+		configured["cf_token_resolution"] = \
+				CurrentAttackState.RESOLUTION_PENDING
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, configured))
+	if stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
+			and attacker_kind == CurrentAttackState.KIND_SHIP:
+		assert_true(state.get_ship(0, 0).command_tokens.add_token(
+				Constants.CommandType.CONCENTRATE_FIRE))
+		var attack_id: String = state.current_attack_state.attack_id
+		var opening_sequence: int = int(attack_id.get_slice(":", 1))
+		assert_true(bool(TIMING_WINDOW_ORCHESTRATOR.open_window(
+				state,
+				TimingWindowDefinitions.ATTACK_MODIFY,
+				opening_sequence,
+				{
+					TimingWindowState.CONTINUATION_KEY_ID:
+							ConfirmAttackDiceCommand.TYPE,
+					TimingWindowState.CONTINUATION_KEY_RESUME_POINT:
+							"attack_after_modify",
+					TimingWindowState.CONTINUATION_KEY_SOURCE_ID:
+							attack_id,
+					TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE:
+							"current_attack",
+					TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER:
+							state.current_attack_state.attacker_player,
+				}).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)))
 	return state
 
 

@@ -34,7 +34,6 @@ const RESUME_RULE_CHOICE: String = "resolve_attack_pool_choice"
 const RESUME_CF_DIAL: String = "resolve_concentrate_fire_dial"
 const RESUME_ROLL: String = "roll_dice"
 const RESUME_TIMING_WINDOW: String = "timing_window"
-const RESUME_CF_TOKEN: String = "resolve_concentrate_fire_token"
 const RESUME_CONFIRM: String = "confirm_attack_dice"
 const RESUME_ACCURACY: String = "commit_accuracy"
 const RESUME_DEFENSE: String = "commit_defense"
@@ -608,9 +607,9 @@ func _derive_resume_plan(game_state: GameState,
 			if game_state.timing_window_state.active:
 				plan[RESUME_KEY_TRANSITION] = RESUME_TIMING_WINDOW
 				return plan
-			if attack.cf_token_resolution == CurrentAttackState.RESOLUTION_PENDING:
-				plan[RESUME_KEY_TRANSITION] = RESUME_CF_TOKEN
-				return plan
+			if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+				return _resume_failure(
+						"Ship Attack Modify has no timing lifecycle.")
 			plan[RESUME_KEY_TRANSITION] = RESUME_CONFIRM
 			return plan
 		CurrentAttackState.STAGE_ACCURACY:
@@ -824,10 +823,6 @@ func _render_resume_projection(plan: Dictionary) -> void:
 					plan.get("available_colours", [])))
 		RESUME_ROLL:
 			panel.show_roll_button()
-		RESUME_CF_TOKEN:
-			_pending_reroll_rule_id = \
-					RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN
-			panel.show_cf_token_section()
 		RESUME_CONFIRM:
 			panel.show_confirm_button()
 		RESUME_ACCURACY:
@@ -1153,6 +1148,22 @@ func _sync_scene_from_current_attack() -> void:
 			and attack.defense_stage != CurrentAttackState.DEFENSE_COMPLETE
 	_state.obstruction_step = attack.stage == CurrentAttackState.STAGE_PRE_ROLL \
 			and attack.obstructed and not attack.obstruction_resolved
+
+
+## Re-renders canonical current-attack dice through the existing scene mirror.
+## This is presentation-only: the canonical state remains owned and mutated by
+## semantic commands on CurrentAttackState.
+func refresh_current_attack_dice_projection() -> void:
+	if not is_in_exec_mode():
+		return
+	_sync_scene_from_current_attack()
+	var panel: AttackSimPanel = _get_panel()
+	if panel == null:
+		return
+	if _state.dice_results.is_empty():
+		panel.hide_dice_results()
+	else:
+		panel.show_dice_results(_state.dice_results)
 
 
 ## Refreshes scene-local attack counters and token references as a one-way
@@ -1857,6 +1868,10 @@ func _on_attack_roll_dice() -> void:
 		return
 	if roll_result.is_empty():
 		return
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null \
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return
 	_apply_dice_roll_result(roll_result)
 
 
@@ -1877,17 +1892,13 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 	var damage: int = _calc_attack_damage(_state.dice_results)
 	_log.info("Dice rolled: %d dice, %d damage." % [
 			_state.dice_results.size(), damage])
-	# Check CF token for reroll.
-	if _attack_exec_has_cf_token():
-		_pending_reroll_rule_id = \
-				RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN
-		if _get_panel():
-			_get_panel().show_cf_token_section()
-		_log.info("CF token available — offering reroll.")
+	var attack: CurrentAttackState = _current_attack()
+	if attack != null \
+			and attack.attacker_kind == CurrentAttackState.KIND_SHIP:
 		return
 	if _try_offer_swarm_reroll():
 		return
-	# No token — show confirm.
+	# Squadron attackers retain their procedural post-roll confirmation path.
 	_attack_exec_show_confirm()
 
 
@@ -1895,8 +1906,14 @@ func _apply_dice_roll_result(roll_result: Dictionary) -> void:
 ## G4.6.5 — async dice resolution for network clients.
 func _on_network_dice_result(result: Dictionary) -> void:
 	if _state == null or not is_in_exec_mode() \
-			or not _state.dice_results.is_empty():
-		return # Already have results or no active attack.
+			or _flow_fsm.current_step != AttackFlowFSM.Step.ROLL:
+		return
+	var attack: CurrentAttackState = _current_attack()
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return
+	# Synchronous canonical projection may already have populated the scene dice
+	# cache. The derived Roll -> Modify handoff is a separate presentation step.
 	_apply_dice_roll_result(result)
 
 
@@ -1924,12 +1941,6 @@ func _play_dice_roll_sfx() -> void:
 	else:
 		# Capital ship attack — turbolaser salvo.
 		SfxManager.play_sfx("turbolasers")
-
-## Checks whether the activated ship has a CF command token.
-## Requirements: AE-CF-010.
-func _attack_exec_has_cf_token() -> bool:
-	return _dice_resolver.has_cf_token(_state.exec_ship_token)
-
 
 func _try_offer_swarm_reroll() -> bool:
 	if _state.swarm_reroll_used or not _is_swarm_reroll_available():
@@ -1984,34 +1995,18 @@ func _publish_swarm_payload(available: bool) -> void:
 		SwarmKeyword.PAYLOAD_DIE_INDICES: indices,
 	})
 
-## Called when the player selects a die and confirms reroll (CF token).
-## Requirements: AE-CF-011, AE-CF-012, AE-CF-014.
+## Legacy modifier-panel callback retained only for procedural Swarm.
 func _on_attack_cf_token_reroll(die_index: int) -> void:
-	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
-		_on_attack_swarm_reroll(die_index)
+	if _pending_reroll_rule_id != SwarmKeyword.RULE_ID:
 		return
-	if die_index < 0 or die_index >= _state.dice_results.size():
-		return
-	var result: Dictionary = GameManager.submit_reroll_attack_die(
-			_get_attacker_player(), die_index, _state.dice_results,
-			RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN)
-	if _is_waiting_for_remote_command_result(result) or result.is_empty():
-		return
-	_apply_attack_modifier_result(result)
+	_on_attack_swarm_reroll(die_index)
 
-## Called when the player skips the CF token reroll.
-## Requirements: AE-CF-013.
+## Legacy modifier-panel skip callback retained only for procedural Swarm.
 func _on_attack_cf_token_skipped() -> void:
-	if _pending_reroll_rule_id == SwarmKeyword.RULE_ID:
-		var swarm_result: Dictionary = GameManager.submit_skip_attack_modifier(
-				_get_attacker_player(), SwarmKeyword.RULE_ID)
-		if not _is_waiting_for_remote_command_result(swarm_result) \
-				and not swarm_result.is_empty():
-			_apply_attack_modifier_result(swarm_result)
+	if _pending_reroll_rule_id != SwarmKeyword.RULE_ID:
 		return
 	var result: Dictionary = GameManager.submit_skip_attack_modifier(
-			_get_attacker_player(),
-			RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN)
+			_get_attacker_player(), SwarmKeyword.RULE_ID)
 	if not _is_waiting_for_remote_command_result(result) \
 			and not result.is_empty():
 		_apply_attack_modifier_result(result)
@@ -2032,7 +2027,8 @@ func _on_attack_swarm_reroll(die_index: int) -> void:
 
 func _apply_attack_modifier_result(result: Dictionary) -> void:
 	var source: String = str(result.get("source_rule_id", ""))
-	if source.is_empty() or _pending_reroll_rule_id != source:
+	if source != SwarmKeyword.RULE_ID \
+			or _pending_reroll_rule_id != source:
 		return
 	_sync_scene_from_current_attack()
 	var die_index: int = int(result.get("die_index", -1))
@@ -2042,8 +2038,7 @@ func _apply_attack_modifier_result(result: Dictionary) -> void:
 			_get_panel().update_die_result(die_index, new_result)
 		_get_panel().hide_cf_token_section()
 	_pending_reroll_rule_id = ""
-	if source == SwarmKeyword.RULE_ID:
-		_publish_swarm_payload(false)
+	_publish_swarm_payload(false)
 	_fsm_patch_payload({"dice_results": _state.dice_results.duplicate(true)})
 	_attack_exec_show_confirm()
 

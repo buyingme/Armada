@@ -1,6 +1,9 @@
 ## Unit tests for [UIProjector] (Phase I4 pilot — HUD).
 extends GutTest
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+
 
 func _make_state_with_flow(flow_type: Constants.InteractionFlow,
 		controller: int) -> GameState:
@@ -197,6 +200,43 @@ func test_default_intent_values() -> void:
 	assert_false(intent.needs_waiting_overlay)
 	assert_false(intent.should_begin_command_dial_flow)
 	assert_false(intent.should_begin_passive_squadron_observer)
+	assert_eq(intent.attack_dice_results, [])
+
+
+func test_attack_dice_projection_uses_canonical_state_not_stale_flow() -> void:
+	var gs := GameState.new()
+	gs.initialize()
+	gs.current_phase = Constants.GamePhase.SHIP
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0,
+			Constants.Visibility.ALL,
+			{"dice_results": [{
+				"color": int(Constants.DiceColor.BLUE),
+				"face": int(Constants.DiceFace.HIT),
+			}]})
+	var expected: Array[Dictionary] = [{
+		"color": int(Constants.DiceColor.BLUE),
+		"face": int(Constants.DiceFace.ACCURACY),
+	}]
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(gs, {
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_pool": {"BLUE": 1},
+		"dice_results": expected,
+	}))
+
+	var intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+
+	assert_eq(intent.attack_dice_results, expected,
+			"CurrentAttackState must drive the displayed attack dice.")
+	assert_eq(int((intent.payload["dice_results"] as Array)[0]["face"]),
+			int(Constants.DiceFace.HIT),
+			"The older flow payload remains a separate derived snapshot.")
+	intent.attack_dice_results[0]["face"] = int(Constants.DiceFace.BLANK)
+	assert_eq(int(gs.current_attack_state.dice_results[0]["face"]),
+			int(Constants.DiceFace.ACCURACY),
+			"Projected dice must not mutate canonical attack state.")
 
 
 # ---------------------------------------------------------------------------

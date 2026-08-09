@@ -363,3 +363,33 @@ shall expand beyond the originally failing state. It shall verify:
 A documented justification is required when any of this coverage is omitted.
 This prevents a correction at one state from introducing an adjacent-state
 regression.
+
+### Presentation Interaction Preservation
+
+For presentation-mediated choices, including parameterized rule and defense
+interactions, implementation and verification shall preserve the complete live
+interaction boundary:
+
+- Parameter collection remains local and non-authoritative until the player
+  completes the required parameters and submits one complete replayable semantic
+  command. A complete parameter-free decline may submit immediately.
+- After an accepted command, presentation is re-derived from authoritative
+  state before the next player decision. Expired prompts and controls are
+  dismissed.
+- A projection refresh must preserve or reconstruct any still-valid player
+  interaction. It must not replace active controls with non-interactive output
+  or retain controls for an interaction that has ended.
+- Presentation may cache transient prompts, selections, or projected command
+  intents, but those values never authorize gameplay, decide continuation, or
+  replace command validation against authoritative state.
+- Derived or cached presentation data shall not be used as proof that a
+  semantic or interaction lifecycle transition has already occurred.
+- For interaction-sensitive command results, verification shall cover both
+  synchronous/local and deferred/network result paths and confirm that they
+  reach the same derived next interaction state.
+
+Live-route evidence shall cover interaction entry, local parameter collection,
+semantic command submission, accepted-result projection, the next interaction,
+and lifecycle exit. It shall also exercise a projection refresh while the
+interaction is active. Replay and baseline verification remain required where
+applicable, but do not substitute for this live presentation-route evidence.

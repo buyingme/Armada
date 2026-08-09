@@ -365,7 +365,7 @@ func test_load_rejects_unsigned_save() -> void:
 # Version rejection
 # ---------------------------------------------------------------------------
 
-func test_load_rejects_unsupported_version() -> void:
+func test_load_rejects_pre_activation_version_one() -> void:
 	var gs: GameState = _make_game_state()
 	_manager.save_game(gs, TEST_SAVE)
 	var path: String = SaveManagerScript.SAVE_DIR + "/" + TEST_SAVE \
@@ -376,13 +376,13 @@ func test_load_rejects_unsupported_version() -> void:
 	var json: JSON = JSON.new()
 	json.parse(raw)
 	var data: Dictionary = json.data
-	data["header"]["save_format_version"] = 999
+	data["header"]["save_format_version"] = 1
 	var f2: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	f2.store_string(JSON.stringify(data, "\t"))
 	f2.close()
 	var result: Dictionary = _manager.load_game(TEST_SAVE)
 	assert_false(result["ok"],
-			"Save with future version should fail to load")
+			"A version-1 pre-activation save must fail before reconstruction")
 	assert_eq(result["reason"], "version_unsupported",
 			"Reason should be version_unsupported")
 

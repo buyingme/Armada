@@ -34,8 +34,8 @@ static func register() -> void:
 
 
 static func enumerate_timing_window_sources(game_state: GameState,
-		timing_state: TimingWindowState) -> Variant:
-	var source: Dictionary = pending_source(game_state, timing_state)
+		_timing_state: TimingWindowState) -> Variant:
+	var source: Dictionary = _authoritative_source(game_state)
 	if source.is_empty():
 		return []
 	return [{
@@ -95,19 +95,43 @@ static func derive_timing_window_opportunities(game_state: GameState,
 	return [opportunity] if not opportunity.is_empty() else null
 
 
-## Concentrate Fire token information is public; interaction remains limited
-## to the authoritative timing-window controller by UIProjector.
-static func project_timing_window_opportunity(_game_state: GameState,
-		_timing_state: TimingWindowState,
+## Concentrate Fire token information is public. Fully formed die choices are
+## transient projection data exposed only to the authoritative controller by
+## UIProjector; the command still revalidates every selected-die field.
+static func project_timing_window_opportunity(game_state: GameState,
+		timing_state: TimingWindowState,
 		opportunity: Dictionary,
 		_viewer_player: int) -> Dictionary:
 	if str(opportunity.get(
-			TimingWindowOpportunity.KEY_CAPABILITY_ID, "")) != CAPABILITY_ID:
+		TimingWindowOpportunity.KEY_CAPABILITY_ID, "")) != CAPABILITY_ID:
 		return {}
+	var source: Dictionary = pending_source(game_state, timing_state)
+	if source.is_empty():
+		return {}
+	var base_intent: Dictionary = (opportunity.get(
+		TimingWindowOpportunity.KEY_USE_INTENT, {}) as Dictionary).duplicate(true)
+	var choices: Array[Dictionary] = []
+	for die_index: int in range(
+			game_state.current_attack_state.dice_results.size()):
+		var selected: Dictionary = game_state.current_attack_state.dice_results[
+				die_index]
+		var intent: Dictionary = base_intent.duplicate(true)
+		var intent_payload: Dictionary = (intent.get(
+				TimingWindowOpportunity.INTENT_KEY_PAYLOAD, {}) \
+				as Dictionary).duplicate(true)
+		intent_payload["die_index"] = die_index
+		intent_payload["expected_color"] = int(selected.get("color", -1))
+		intent_payload["expected_face"] = int(selected.get("face", -1))
+		intent[TimingWindowOpportunity.INTENT_KEY_PAYLOAD] = intent_payload
+		choices.append({
+			"label": "Die %d to reroll" % (die_index + 1),
+			"intent": intent,
+		})
 	return {
 		"visible": true,
 		"source_visible": true,
 		"display_key": DISPLAY_KEY,
+		"use_choices": choices,
 	}
 
 
@@ -144,13 +168,7 @@ static func pending_source(game_state: GameState,
 			or not ship.command_tokens.has_token(
 				Constants.CommandType.CONCENTRATE_FIRE):
 		return {}
-	var ship_id: String = attacking_ship_identity(attack)
-	return {
-		"ship": ship,
-		PAYLOAD_ATTACK_ID: attack.attack_id,
-		PAYLOAD_ATTACKING_SHIP_ID: ship_id,
-		"runtime_source_id": token_source_identity(ship_id),
-	}
+	return _authoritative_source(game_state)
 
 
 ## Validates the common identity and ownership boundary for use and decline.
@@ -220,3 +238,22 @@ static func token_source_identity(attacking_ship_id: String) -> String:
 		attacking_ship_id,
 		int(Constants.CommandType.CONCENTRATE_FIRE),
 	]
+
+
+static func _authoritative_source(game_state: GameState) -> Dictionary:
+	if game_state == null:
+		return {}
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var ship_id: String = attacking_ship_identity(attack)
+	if ship_id.is_empty():
+		return {}
+	var ship: ShipInstance = game_state.get_ship(
+			attack.attacker_player, attack.attacker_index)
+	if ship == null:
+		return {}
+	return {
+		"ship": ship,
+		PAYLOAD_ATTACK_ID: attack.attack_id,
+		PAYLOAD_ATTACKING_SHIP_ID: ship_id,
+		"runtime_source_id": token_source_identity(ship_id),
+	}

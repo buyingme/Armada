@@ -40,6 +40,10 @@ func validate(game_state: GameState) -> String:
 		return "Stale current-attack identity."
 	if attack.stage != CurrentAttackState.STAGE_PRE_ROLL:
 		return "Current attack is not ready to roll."
+	if attack.attacker_kind == CurrentAttackState.KIND_SHIP \
+			and (game_state.timing_window_state == null \
+					or game_state.timing_window_state.active):
+		return "Ship attack roll requires an inactive timing lifecycle."
 	if not attack.obstruction_resolved:
 		return "Obstruction choice is unresolved."
 	if attack.cf_dial_resolution == CurrentAttackState.RESOLUTION_PENDING:

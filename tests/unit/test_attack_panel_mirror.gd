@@ -317,6 +317,42 @@ func test_evade_section_opens_when_evade_active_flag_set() -> void:
 			"evade_die_confirmed must be disconnected after close().")
 
 
+func test_active_network_evade_survives_canonical_dice_refresh() -> void:
+	var payload: Dictionary = {
+		"attacker_kind": "ship",
+		"attacker_name": "Demolisher",
+		"defender_name": "CR90",
+		"defender_player": 1,
+		"defender_ship_index": 0,
+		"defender_zone": Constants.HullZone.FRONT,
+		"evade_active": true,
+		"evade_range_band": Constants.RANGE_BAND_LONG,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+	}
+	_mirror.apply_flow(payload,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	var panel: AttackSimPanel = _mirror.get_panel()
+	var original_die: TextureRect = panel._dice_textures[0]
+	var refreshed: Dictionary = payload.duplicate(true)
+	refreshed["dice_results"] = [{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.CRITICAL),
+	}]
+
+	_mirror.apply_flow(refreshed,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+
+	assert_ne(panel._dice_textures[0], original_die,
+			"The network mirror must display the refreshed canonical die.")
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_STOP,
+			"The defender's active Evade input must survive mirror refresh.")
+	assert_eq(panel.evade_die_confirmed.get_connections().size(), 1)
+
+
 func test_redirect_section_opens_when_redirect_active_flag_set() -> void:
 	# Phase I6b-3 R4: when the attacker peer publishes
 	# `redirect_active=true` (with a non-empty `redirect_adjacent_zones`

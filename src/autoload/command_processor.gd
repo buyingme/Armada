@@ -381,7 +381,7 @@ func create_replay() -> GameReplay:
 	if game_state == null:
 		_log.warn("create_replay: no active game state.")
 		return null
-	# Slice 8A only has a production reconstruction seam for full-history
+	# Production currently has a reconstruction seam only for full-history
 	# replay capture. A non-zero history start requires an accepted canonical
 	# initial state paired with the cursor; do not emit an unpaired artifact.
 	if (_history.is_empty() and _next_sequence > 0) \

@@ -43,13 +43,6 @@ func validate(game_state: GameState) -> String:
 		return "Missing source_rule_id."
 	if source_rule_id == SwarmKeyword.RULE_ID:
 		return _validate_swarm_skip(game_state, attack)
-	if source_rule_id == RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN:
-		if game_state.timing_window_state != null \
-				and game_state.timing_window_state.active:
-			return "Active timing lifecycle requires the shared Concentrate Fire command."
-		return "" if attack.cf_token_resolution \
-				== CurrentAttackState.RESOLUTION_PENDING \
-				else "No Concentrate Fire token reroll is pending."
 	return "Unsupported attack modifier skip: %s." % source_rule_id
 
 
@@ -57,12 +50,6 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var attack: CurrentAttackState = game_state.current_attack_state
 	var source_rule_id: String = str(payload.get("source_rule_id", ""))
-	if source_rule_id == RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN:
-		var replacement: CurrentAttackState = attack.with_patch({
-			"cf_token_resolution": CurrentAttackState.RESOLUTION_DECLINED,
-		})
-		if replacement == null or not game_state.set_current_attack_state(replacement):
-			return {}
 	return {"attack_id": attack.attack_id, "source_rule_id": source_rule_id}
 
 

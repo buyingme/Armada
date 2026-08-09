@@ -706,7 +706,10 @@
 		},
 		{
 			"payload": {
-				"attack_id": "attack:71"
+				"lifecycle_id": "attack_modify:72",
+				"source_id": "attack:71",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 1,
 			"sequence": 73,
@@ -724,7 +727,7 @@
 		{
 			"payload": {
 				"attack_id": "attack:71",
-				"defender_index": 1,
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					0,
@@ -753,7 +756,7 @@
 		{
 			"payload": {
 				"attack_id": "attack:71",
-				"defender_index": 1,
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"die_index": 0,
 				"expected_color": 0,
@@ -1067,7 +1070,10 @@
 		},
 		{
 			"payload": {
-				"attack_id": "attack:106"
+				"lifecycle_id": "attack_modify:107",
+				"source_id": "attack:106",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
 			"sequence": 108,
@@ -1126,7 +1132,10 @@
 		},
 		{
 			"payload": {
-				"attack_id": "attack:112"
+				"lifecycle_id": "attack_modify:113",
+				"source_id": "attack:112",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
 			"sequence": 114,
@@ -1146,7 +1155,7 @@
 		{
 			"payload": {
 				"attack_id": "attack:112",
-				"defender_index": 0,
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					1
@@ -1355,7 +1364,7 @@
 		{
 			"payload": {
 				"attack_id": "attack:132",
-				"defender_index": 1,
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"selected_indices": [],
 				"ship_index": 1
@@ -1434,7 +1443,7 @@
 		{
 			"payload": {
 				"attack_id": "attack:140",
-				"defender_index": 1,
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"selected_indices": [],
 				"ship_index": 1
@@ -1583,12 +1592,12 @@
 			0,
 			1
 		],
-		"format_version": 3,
+		"format_version": 4,
 		"godot_version": "4.5.1-stable (official)",
 		"initial_command_sequence": 0,
 		"initiative_player": 0,
 		"rng_seed": "-6569657915017778666",
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-08-04T07:18:39"
+		"timestamp": "2026-08-06T07:09:57"
 	}
 }

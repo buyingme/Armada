@@ -21,8 +21,22 @@ const COMMAND_APPLICABILITY: GDScript = preload(
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
 
+
+class ProcessorSubmitter:
+	extends CommandSubmitter
+
+	var processor: Node = null
+
+	func _init(p_processor: Node) -> void:
+		processor = p_processor
+
+	func submit(command: GameCommand) -> Dictionary:
+		return processor.submit_deferred_followups(command)
+
+
 var _saved_registry: Dictionary = {}
 var _saved_state: GameState = null
+var _saved_submitter: CommandSubmitter = null
 var _state: GameState = null
 var _processor: Node = null
 
@@ -30,12 +44,14 @@ var _processor: Node = null
 func before_each() -> void:
 	_saved_registry = GameCommand._registry.duplicate()
 	_saved_state = GameManager.current_game_state
+	_saved_submitter = GameManager.get_command_submitter()
 	RuleRegistry.clear()
 	_state = _make_state()
 	GameManager.current_game_state = _state
 	_processor = PROCESSOR_SCRIPT.new()
 	add_child_autofree(_processor)
 	assert_true(_processor.restore_next_sequence(3))
+	GameManager.set_command_submitter(ProcessorSubmitter.new(_processor))
 	RULE.register()
 
 
@@ -43,6 +59,7 @@ func after_each() -> void:
 	RuleRegistry.clear()
 	GameCommand._registry = _saved_registry
 	GameManager.current_game_state = _saved_state
+	GameManager.set_command_submitter(_saved_submitter)
 
 
 func test_derives_one_optional_blocker_per_runtime_h9_source() -> void:
@@ -55,6 +72,52 @@ func test_derives_one_optional_blocker_per_runtime_h9_source() -> void:
 	assert_eq(opportunities.size(), 2)
 	assert_ne((opportunities[0] as Dictionary).get(OPPORTUNITY.KEY_ID),
 			(opportunities[1] as Dictionary).get(OPPORTUNITY.KEY_ID))
+
+
+func test_ineligible_h9_source_enumerates_but_derives_no_opportunity() -> void:
+	var state: GameState = _make_state({
+		"dice_results": [
+			_die(Constants.DiceColor.RED, Constants.DiceFace.ACCURACY),
+		],
+	})
+	var runtime_upgrade: Dictionary = _h9_source(state)
+	var card_state: Dictionary = (runtime_upgrade.get("card_state") \
+			as Dictionary).duplicate(true)
+	card_state["disabled"] = true
+	card_state["readied"] = false
+	runtime_upgrade["card_state"] = card_state
+
+	var sources: Array = RULE.enumerate_timing_window_sources(
+			state, state.timing_window_state)
+	assert_eq(sources.size(), 1)
+	var source: Dictionary = sources[0] as Dictionary
+	var runtime_upgrade_id: String = str(runtime_upgrade.get(
+			"runtime_upgrade_id", ""))
+	assert_eq(source.get(OPPORTUNITY.KEY_RUNTIME_SOURCE_ID), runtime_upgrade_id)
+	var derived: Variant = RULE.derive_timing_window_opportunities(
+			state,
+			state.timing_window_state,
+			RULE.SOURCE_OWNER_KIND,
+			runtime_upgrade_id)
+	assert_typeof(derived, TYPE_ARRAY)
+	assert_true((derived as Array).is_empty())
+	assert_true(_opportunities(state).is_empty())
+
+
+func test_h9_source_enumeration_orders_runtime_ids_deterministically() -> void:
+	var state: GameState = _make_state({"h9_count": 0})
+	var later: Dictionary = _add_h9(state, "z-source", 0)
+	var earlier: Dictionary = _add_h9(state, "a-source", 1)
+	var sources: Array = RULE.enumerate_timing_window_sources(
+			state, state.timing_window_state)
+
+	assert_eq(sources.size(), 2)
+	assert_eq((sources[0] as Dictionary).get(
+			OPPORTUNITY.KEY_RUNTIME_SOURCE_ID),
+			earlier.get("runtime_upgrade_id"))
+	assert_eq((sources[1] as Dictionary).get(
+			OPPORTUNITY.KEY_RUNTIME_SOURCE_ID),
+			later.get("runtime_upgrade_id"))
 
 
 func test_source_and_dice_legality_are_derived_from_authoritative_state() -> void:
@@ -343,7 +406,7 @@ func test_projection_is_public_and_controller_receives_one_choice_per_eligible_d
 	assert_false(observer_h9.has("decline_intent"))
 
 
-func test_generic_panel_renders_and_emits_exact_h9_die_choice_intent() -> void:
+func test_generic_panel_collects_h9_die_before_emitting_exact_intent() -> void:
 	var projected: Dictionary = UIProjector.project(_state, 0).timing_window
 	var opportunities: Array = projected.get("opportunities", []) as Array
 	var projected_h9: Dictionary = _projected_h9(projected)
@@ -351,18 +414,88 @@ func test_generic_panel_renders_and_emits_exact_h9_die_choice_intent() -> void:
 	var expected_intent: Dictionary = (use_choices[0] as Dictionary).get(
 			"intent", {}) as Dictionary
 	var panel := AttackSimPanel.new()
+	var adapter := CommandRouterAdapter.new()
 	add_child_autofree(panel)
+	add_child_autofree(adapter)
 	watch_signals(panel)
+	panel.timing_window_use_requested.connect(
+			adapter.submit_timing_window_intent)
 	panel.show_timing_window_opportunities(opportunities, true)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
 
 	var use_button: Button = panel.find_child(
-			"TimingUseButton_0_0", true, false) as Button
+			"TimingUseButton_0", true, false) as Button
 	assert_not_null(use_button)
 	use_button.pressed.emit()
+	assert_signal_not_emitted(panel, "timing_window_use_requested")
+	assert_true(_processor.serialize_history().is_empty())
+	assert_true(use_button.disabled)
+	assert_eq(panel._dice_textures[0].mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(panel._dice_textures[1].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE)
+	var original_die: TextureRect = panel._dice_textures[0]
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+	assert_ne(panel._dice_textures[0], original_die,
+			"Canonical projection should rebuild H9 dice.")
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_STOP,
+			"H9 parameter collection must survive canonical refresh.")
+	assert_eq(panel._dice_textures[1].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE)
+
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._on_die_clicked(click, panel._dice_textures[1])
+	assert_signal_not_emitted(panel, "timing_window_use_requested")
+	assert_true(_processor.serialize_history().is_empty())
+	panel._dice_textures[0].gui_input.emit(click)
 	assert_signal_emitted(panel, "timing_window_use_requested")
 	assert_eq(get_signal_parameters(
 			panel, "timing_window_use_requested"), [expected_intent])
-	assert_true(use_button.disabled)
+	assert_eq(_history_types(_processor.serialize_history()), [USE_COMMAND.TYPE])
+	assert_eq(_state.current_attack_state.dice_results[0],
+			_die(Constants.DiceColor.RED, Constants.DiceFace.ACCURACY))
+	assert_eq(RULE.resolution_guard(_h9_source(_state)).get(
+			RULE.GUARD_RESOLUTION), RULE.RESOLUTION_USED)
+	assert_true(panel._timing_window_die_intents.is_empty())
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE,
+			"Accepted H9 input must not be restored after refresh.")
+
+
+func test_generic_panel_h9_decline_submits_without_parameter_mode() -> void:
+	var projected: Dictionary = UIProjector.project(_state, 0).timing_window
+	var opportunities: Array = projected.get("opportunities", []) as Array
+	var projected_h9: Dictionary = _projected_h9(projected)
+	var expected_intent: Dictionary = projected_h9.get(
+			"decline_intent", {}) as Dictionary
+	var panel := AttackSimPanel.new()
+	var adapter := CommandRouterAdapter.new()
+	add_child_autofree(panel)
+	add_child_autofree(adapter)
+	watch_signals(panel)
+	panel.timing_window_decline_requested.connect(
+			adapter.submit_timing_window_intent)
+	panel.show_timing_window_opportunities(opportunities, true)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+
+	var decline_button: Button = panel.find_child(
+			"TimingDeclineButton_0", true, false) as Button
+	assert_not_null(decline_button)
+	decline_button.pressed.emit()
+	assert_signal_emitted(panel, "timing_window_decline_requested")
+	assert_eq(get_signal_parameters(
+			panel, "timing_window_decline_requested"), [expected_intent])
+	assert_eq(_history_types(_processor.serialize_history()), [
+		DECLINE_COMMAND.TYPE,
+	])
+	assert_eq(RULE.resolution_guard(_h9_source(_state)).get(
+			RULE.GUARD_RESOLUTION), RULE.RESOLUTION_DECLINED)
+	assert_true(panel._timing_window_die_intents.is_empty())
 
 
 func test_commands_are_attack_modify_only_and_round_trip_integer_payloads() -> void:
@@ -384,7 +517,7 @@ func test_commands_are_attack_modify_only_and_round_trip_integer_payloads() -> v
 		assert_typeof(restored.payload[field], TYPE_INT)
 
 
-func test_roll_dice_keeps_production_opening_disabled_and_versions_unchanged() -> void:
+func test_roll_dice_activates_ship_window_and_compatibility_boundary() -> void:
 	var state: GameState = _make_state({
 		"stage": CurrentAttackState.STAGE_PRE_ROLL,
 		"open_window": false,
@@ -397,10 +530,20 @@ func test_roll_dice_keeps_production_opening_disabled_and_versions_unchanged() -
 	add_child_autofree(processor)
 	assert_false(processor.submit(RollDiceCommand.new(
 			0, {"attack_id": "attack:0"})).is_empty())
-	assert_false(state.timing_window_state.active)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 1)
-	assert_eq(GameReplay.FORMAT_VERSION, 3)
-	assert_eq(ConfirmAttackDiceCommand.new(0, {"attack_id": "attack:0"}) \
+	assert_true(state.timing_window_state.active)
+	assert_eq(state.timing_window_state.lifecycle_id, "attack_modify:0")
+	var opportunities: Array = _opportunities(state)
+	assert_eq(opportunities.size(), 1)
+	_assert_h9_opportunity(opportunities[0] as Dictionary)
+	var projected: Dictionary = UIProjector.project(state, 0).timing_window
+	assert_eq(projected.get("timing_window_id"),
+			TimingWindowDefinitions.ATTACK_MODIFY)
+	assert_true(bool(projected.get("is_interactive", false)))
+	assert_false(_projected_h9(projected).is_empty())
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
+	assert_eq(GameReplay.FORMAT_VERSION, 4)
+	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION)
+	assert_ne(ConfirmAttackDiceCommand.new(0, {"attack_id": "attack:0"}) \
 			.validate(state), "")
 
 

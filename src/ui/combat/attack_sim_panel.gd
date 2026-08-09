@@ -254,6 +254,10 @@ var _counter_skip_button: Button = null
 ## presentation data only and are rebuilt after every authoritative result.
 var _timing_window_container: VBoxContainer = null
 var _timing_window_rows: VBoxContainer = null
+## Complete projected command intents indexed by eligible canonical die index
+## while the player is making one local timing-window parameter choice.
+## This is transient presentation state only and is never serialized.
+var _timing_window_die_intents: Dictionary = {}
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -461,6 +465,7 @@ func show_timing_window_opportunities(
 		visible = true
 	if _timing_window_container == null or _timing_window_rows == null:
 		return
+	_clear_timing_window_parameter_selection()
 	_clear_timing_window_rows()
 	for index: int in range(opportunities.size()):
 		var raw: Variant = opportunities[index]
@@ -475,6 +480,7 @@ func show_timing_window_opportunities(
 func hide_timing_window_opportunities() -> void:
 	if _timing_window_container == null:
 		return
+	_clear_timing_window_parameter_selection()
 	_clear_timing_window_rows()
 	_timing_window_container.visible = false
 
@@ -930,18 +936,14 @@ func _build_timing_window_row(
 			and bool(opportunity.get("is_interactive", false))
 	var use_choices: Array = opportunity.get("use_choices", []) as Array
 	if can_interact and not use_choices.is_empty():
-		for choice_index: int in range(use_choices.size()):
-			var choice: Dictionary = use_choices[choice_index] as Dictionary
-			var choice_intent: Variant = choice.get("intent")
-			if not choice_intent is Dictionary:
-				continue
-			var choice_button: Button = Button.new()
-			choice_button.name = "TimingUseButton_%d_%d" % [index, choice_index]
-			choice_button.text = str(choice.get("label", "Use"))
-			choice_button.tooltip_text = display_key
-			choice_button.pressed.connect(_on_timing_window_use.bind(
-					(choice_intent as Dictionary).duplicate(true)))
-			row.add_child(choice_button)
+		var use_button: Button = Button.new()
+		use_button.name = "TimingUseButton_%d" % index
+		use_button.text = "Use"
+		use_button.tooltip_text = display_key
+		use_button.pressed.connect(
+				_on_timing_window_parameter_use.bind(
+						use_choices.duplicate(true), display_key))
+		row.add_child(use_button)
 	elif can_interact and opportunity.get("use_intent") is Dictionary:
 		var use_button: Button = Button.new()
 		use_button.name = "TimingUseButton_%d" % index
@@ -973,6 +975,36 @@ func _clear_timing_window_rows() -> void:
 func _on_timing_window_use(intent: Dictionary) -> void:
 	disable_timing_window_actions()
 	timing_window_use_requested.emit(intent.duplicate(true))
+
+
+## Accepts a parameterized opportunity locally, then waits for one eligible die
+## click. No semantic command is submitted until that click supplies the final
+## parameter through one already-complete projected command intent.
+func _on_timing_window_parameter_use(
+		use_choices: Array,
+		display_key: String) -> void:
+	var die_intents: Dictionary = {}
+	for raw_choice: Variant in use_choices:
+		if not raw_choice is Dictionary:
+			continue
+		var intent: Variant = (raw_choice as Dictionary).get("intent")
+		if not intent is Dictionary:
+			continue
+		var payload: Variant = (intent as Dictionary).get("payload")
+		if not payload is Dictionary \
+				or typeof((payload as Dictionary).get("die_index")) != TYPE_INT:
+			continue
+		var die_index: int = int((payload as Dictionary).get("die_index", -1))
+		if die_index < 0 or die_intents.has(die_index):
+			continue
+		die_intents[die_index] = (intent as Dictionary).duplicate(true)
+	if die_intents.is_empty():
+		return
+	disable_timing_window_actions()
+	_timing_window_die_intents = die_intents
+	_set_prompt("Attack", "Select an eligible die for %s." %
+			display_key.replace(".", " ").capitalize())
+	_set_timing_window_dice_clickable()
 
 
 func _on_timing_window_decline(intent: Dictionary) -> void:
@@ -1064,6 +1096,7 @@ func _reset_selection_state() -> void:
 	_defense_selected_indices.clear()
 	_dice_textures.clear()
 	_selected_reroll_index = -1
+	_timing_window_die_intents.clear()
 
 
 ## Called when the Done button is pressed (sim mode).
@@ -1252,6 +1285,13 @@ func hide_roll_button() -> void:
 func show_dice_results(results: Array[Dictionary]) -> void:
 	if _dice_container == null:
 		return
+	var evade_was_interactive: bool = false
+	if _evade_mode:
+		for tex_rect: TextureRect in _dice_textures:
+			if tex_rect != null \
+					and tex_rect.mouse_filter == Control.MOUSE_FILTER_STOP:
+				evade_was_interactive = true
+				break
 	_clear_dice_images()
 	_dice_textures.clear()
 	_selected_reroll_index = -1
@@ -1265,6 +1305,23 @@ func show_dice_results(results: Array[Dictionary]) -> void:
 		_dice_container.add_child(tex_rect)
 		_dice_textures.append(tex_rect)
 	_dice_container.visible = true
+	_restore_die_interaction_after_refresh(evade_was_interactive)
+
+
+## Restores only transient input affordances after canonical dice are rebuilt.
+## Gameplay legality remains owned and revalidated by the submitted command.
+func _restore_die_interaction_after_refresh(
+		evade_was_interactive: bool) -> void:
+	if not _timing_window_die_intents.is_empty():
+		_set_timing_window_dice_clickable()
+		return
+	if _evade_mode:
+		_set_dice_clickable(evade_was_interactive)
+		_clear_die_selection_highlights()
+		for tex_rect: TextureRect in _dice_textures:
+			if tex_rect != null:
+				tex_rect.modulate = Color(0.7, 1.0, 1.0, 1.0)
+		return
 	if _cf_token_container != null and _cf_token_container.visible:
 		_set_dice_clickable(true)
 
@@ -2019,6 +2076,38 @@ func _set_dice_clickable(clickable: bool) -> void:
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+## Makes only the dice represented by the selected timing-window opportunity
+## interactive. The complete semantic intent remains local until one die is
+## clicked, then is emitted exactly once through the generic timing route.
+func _set_timing_window_dice_clickable() -> void:
+	_clear_die_selection_highlights()
+	for die_index: int in range(_dice_textures.size()):
+		var tex_rect: TextureRect = _dice_textures[die_index]
+		if tex_rect == null:
+			continue
+		var eligible: bool = _timing_window_die_intents.has(die_index)
+		if eligible:
+			if not tex_rect.gui_input.is_connected(_on_die_clicked):
+				tex_rect.gui_input.connect(
+						_on_die_clicked.bind(tex_rect))
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_STOP
+			tex_rect.modulate = Color(0.7, 1.0, 1.0, 1.0)
+		else:
+			if tex_rect.gui_input.is_connected(_on_die_clicked):
+				tex_rect.gui_input.disconnect(
+						_on_die_clicked.bind(tex_rect))
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tex_rect.modulate = Color(0.5, 0.5, 0.5, 1.0)
+
+
+func _clear_timing_window_parameter_selection() -> void:
+	if _timing_window_die_intents.is_empty():
+		return
+	_timing_window_die_intents.clear()
+	_set_dice_clickable(false)
+	_clear_die_selection_highlights()
+
+
 ## Called when a die image is clicked during reroll or evade selection.
 func _on_die_clicked(event: InputEvent,
 		tex_rect: TextureRect) -> void:
@@ -2029,6 +2118,16 @@ func _on_die_clicked(event: InputEvent,
 		return
 	var index: int = tex_rect.get_meta("die_index", -1)
 	if index < 0:
+		return
+	if not _timing_window_die_intents.is_empty():
+		if not _timing_window_die_intents.has(index):
+			return
+		var intent: Dictionary = (_timing_window_die_intents.get(index) \
+				as Dictionary).duplicate(true)
+		_timing_window_die_intents.clear()
+		_set_dice_clickable(false)
+		_clear_die_selection_highlights()
+		timing_window_use_requested.emit(intent)
 		return
 	if _evade_mode:
 		# Evade: immediate confirm on click.

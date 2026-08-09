@@ -198,8 +198,7 @@ func test_network_mirror_and_replay_preserve_order_without_synthesis() -> void:
 
 
 func test_real_host_stream_orders_timing_commands_before_continuation() -> void:
-	var initial: GameState = _make_state(["source-a", "source-b"])
-	var authority_state: GameState = GameState.deserialize(initial.serialize())
+	var authority_state: GameState = _make_state(["source-a", "source-b"])
 	GameManager.current_game_state = authority_state
 	GameManager.is_game_active = true
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
@@ -229,7 +228,7 @@ func test_real_host_stream_orders_timing_commands_before_continuation() -> void:
 			"The authoritative broadcast must preserve assigned sequences.")
 	var authority_final: Dictionary = authority_state.serialize()
 
-	var client_state: GameState = GameState.deserialize(initial.serialize())
+	var client_state: GameState = _make_state(["source-a", "source-b"])
 	GameManager.current_game_state = client_state
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1

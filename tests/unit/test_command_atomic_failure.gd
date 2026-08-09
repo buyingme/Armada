@@ -115,36 +115,6 @@ func test_select_evade_failure_restores_rng_and_attack() -> void:
 	assert_engine_error(1)
 
 
-func test_reroll_failure_restores_rng_token_and_attack() -> void:
-	var attacker: ShipInstance = _add_ship(0)
-	_add_ship(1)
-	assert_true(attacker.command_tokens.add_token(
-			Constants.CommandType.CONCENTRATE_FIRE))
-	_install_attack({
-		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
-		"dice_results": [_red_hit()],
-		"cf_token_resolution": CurrentAttackState.RESOLUTION_PENDING,
-	})
-	var before_attack: Dictionary = _attack_snapshot()
-	var before_rng: int = _state.rng.get_state()
-	var before_tokens: Dictionary = attacker.command_tokens.serialize()
-	_state.reject_current_attack_updates = true
-	var command := RerollAttackDieCommand.new(0, {
-		"attack_id": _attack_id(),
-		"die_index": 0,
-		"expected_color": int(Constants.DiceColor.RED),
-		"expected_face": int(Constants.DiceFace.HIT),
-		"source_rule_id": RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN,
-	})
-
-	assert_eq(_processor.submit(command), {})
-	assert_eq(_attack_snapshot(), before_attack)
-	assert_eq(_state.rng.get_state(), before_rng)
-	assert_eq(attacker.command_tokens.serialize(), before_tokens)
-	_assert_stream_unchanged(command)
-	assert_engine_error(1)
-
-
 func test_shared_concentrate_fire_failure_restores_rng_token_and_attack() -> void:
 	var attacker: ShipInstance = _add_ship(0)
 	_add_ship(1)

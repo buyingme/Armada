@@ -13,6 +13,10 @@ const MODAL_ROUTER_SCRIPT: GDScript = preload(
 		"res://src/scenes/game_board/modal_router.gd")
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
+const H9_USE: GDScript = preload(
+		"res://src/core/commands/use_h9_command.gd")
+const CF_USE: GDScript = preload(
+		"res://src/core/commands/use_concentrate_fire_token_reroll_command.gd")
 
 
 class StubShipActivationController:
@@ -108,6 +112,8 @@ class StubAttackExecutor:
 
 	var owns_ship_attack_step: bool = false
 	var deactivate_calls: int = 0
+	var refresh_dice_calls: int = 0
+	var last_dice_results: Array[Dictionary] = []
 
 
 	func owns_authoritative_ship_attack_presentation() -> bool:
@@ -116,6 +122,43 @@ class StubAttackExecutor:
 
 	func deactivate_primary_presentation() -> void:
 		deactivate_calls += 1
+
+
+	func refresh_current_attack_dice_projection() -> void:
+		refresh_dice_calls += 1
+		var state: GameState = GameManager.current_game_state
+		if state != null and state.current_attack_state != null:
+			last_dice_results = state.current_attack_state.dice_results
+
+
+class StubProjectionAttackPanelController:
+	extends AttackPanelController
+
+	var events: Array[String] = []
+	var last_dice_results: Array[Dictionary] = []
+
+
+	func close_mirror() -> void:
+		events.append("mirror")
+
+
+	func sync_mirror_from_flow(
+			_flow: InteractionFlow,
+			attack_dice_results: Array[Dictionary] = []) -> void:
+		events.append("mirror")
+		last_dice_results = attack_dice_results.duplicate(true)
+
+
+	func sync_current_attack_dice_projection(
+			attack_dice_results: Array[Dictionary]) -> void:
+		events.append("dice")
+		last_dice_results = attack_dice_results.duplicate(true)
+
+
+	func sync_timing_window_projection(
+			_timing_window: Dictionary,
+			_submit_fn: Callable) -> void:
+		events.append("timing")
 
 
 class StubCommandSubmitter:
@@ -623,6 +666,87 @@ func test_route_command_result_network_non_attacker_syncs_mirror() -> void:
 			"Mirror sync should receive the Counter attacker from the flow.")
 
 
+func test_network_mirror_uses_canonical_dice_over_stale_flow_payload() -> void:
+	var mirror: StubAttackPanelMirror = StubAttackPanelMirror.new()
+	_create_router(Callable(), null, null, Callable(), Callable(), mirror)
+	NetworkManager._local_player_index = 1
+	var expected: Array[Dictionary] = [{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.ACCURACY),
+	}]
+	GameManager.current_game_state = _state_with_attack_modify_flow(0, expected)
+
+	_router.route_command_result(H9_USE.new(0, {}), {})
+
+	assert_eq(mirror.last_payload.get("dice_results", []), expected,
+			"Passive peers must render canonical post-H9 dice, not stale flow dice.")
+
+
+func test_hot_seat_refreshes_dice_before_next_timing_projection() -> void:
+	_create_router(Callable())
+	var controller := StubProjectionAttackPanelController.new()
+	add_child_autofree(controller)
+	_router._attack_panel_controller = controller
+	var expected: Array[Dictionary] = [{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.ACCURACY),
+	}]
+	GameManager.current_game_state = _state_with_attack_modify_flow(0, expected)
+
+	_router.route_command_result(H9_USE.new(0, {}), {})
+
+	assert_eq(controller.events, ["mirror", "dice", "timing"],
+			"Canonical dice must render before the next choice is actionable.")
+	assert_eq(controller.last_dice_results, expected)
+	controller.events.clear()
+	_router.route_command_result(CF_USE.new(0, {}), {})
+	assert_eq(controller.events, ["mirror", "dice", "timing"],
+			"Concentrate Fire must use the same projection-before-continuation path.")
+	assert_eq(controller.last_dice_results, expected)
+
+
+func test_attack_modify_rejection_reprojects_canonical_state() -> void:
+	_create_router(Callable())
+	var controller := StubProjectionAttackPanelController.new()
+	add_child_autofree(controller)
+	_router._attack_panel_controller = controller
+	var expected: Array[Dictionary] = [{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.HIT),
+	}]
+	GameManager.current_game_state = _state_with_attack_modify_flow(0, expected)
+
+	_router._on_command_rejected(H9_USE.new(0, {}), "stale intent")
+
+	assert_eq(controller.events, ["mirror", "dice", "timing"],
+			"Rejected local intent must restore controls from canonical projection.")
+	assert_eq(controller.last_dice_results, expected)
+	controller.events.clear()
+	_router._on_network_command_rejected(
+			CF_USE.new(0, {}), "stale intent")
+	assert_eq(controller.events, ["mirror", "dice", "timing"],
+			"Rejected network intent must use the same projection recovery.")
+
+
+func test_attacker_projection_invalidates_executor_dice_cache() -> void:
+	var executor := StubAttackExecutor.new()
+	add_child_autofree(executor)
+	var controller := AttackPanelController.new()
+	add_child_autofree(controller)
+	controller.initialize(executor, null, null)
+	var expected: Array[Dictionary] = [{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.ACCURACY),
+	}]
+	GameManager.current_game_state = _state_with_attack_modify_flow(0, expected)
+
+	controller.sync_current_attack_dice_projection(expected)
+
+	assert_eq(executor.refresh_dice_calls, 1,
+			"The attacker scene cache must refresh from CurrentAttackState.")
+	assert_eq(executor.last_dice_results, expected)
+
+
 func test_close_mirror_delegates_to_attack_panel_mirror() -> void:
 	# Arrange
 	var controller: Variant = _new_attack_panel_controller()
@@ -792,6 +916,36 @@ func _state_with_attack_flow(attacker_player: int) -> GameState:
 			"attacker_player": attacker_player,
 			"target_kind": "squadron",
 	}
+	return state
+
+
+func _state_with_attack_modify_flow(
+		attacker_player: int,
+		dice_results: Array[Dictionary]) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	var defender_player: int = 1 - attacker_player
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"attacker_player": attacker_player,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"defender_player": defender_player,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"dice_results": dice_results,
+	}))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			attacker_player,
+			Constants.Visibility.ALL,
+			{
+				"attacker_player": attacker_player,
+				"dice_results": [{
+					"color": int(Constants.DiceColor.RED),
+					"face": int(Constants.DiceFace.HIT),
+				}],
+			})
 	return state
 
 

@@ -21,8 +21,22 @@ const DECLINE_COMMAND: GDScript = preload(
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
 
+
+class ProcessorSubmitter:
+	extends CommandSubmitter
+
+	var processor: Node = null
+
+	func _init(p_processor: Node) -> void:
+		processor = p_processor
+
+	func submit(command: GameCommand) -> Dictionary:
+		return processor.submit_deferred_followups(command)
+
+
 var _saved_registry: Dictionary = {}
 var _saved_state: GameState = null
+var _saved_submitter: CommandSubmitter = null
 var _state: GameState = null
 var _processor: Node = null
 
@@ -30,12 +44,14 @@ var _processor: Node = null
 func before_each() -> void:
 	_saved_registry = GameCommand._registry.duplicate()
 	_saved_state = GameManager.current_game_state
+	_saved_submitter = GameManager.get_command_submitter()
 	RuleRegistry.clear()
 	_state = _make_pending_state()
 	GameManager.current_game_state = _state
 	_processor = PROCESSOR_SCRIPT.new()
 	add_child_autofree(_processor)
 	assert_true(_processor.restore_next_sequence(2))
+	GameManager.set_command_submitter(ProcessorSubmitter.new(_processor))
 	RULE.register()
 
 
@@ -43,6 +59,7 @@ func after_each() -> void:
 	RuleRegistry.clear()
 	GameCommand._registry = _saved_registry
 	GameManager.current_game_state = _saved_state
+	GameManager.set_command_submitter(_saved_submitter)
 
 
 func test_derives_one_canonical_optional_blocker_when_legacy_choice_is_legal() -> void:
@@ -65,6 +82,29 @@ func test_derives_one_canonical_optional_blocker_when_legacy_choice_is_legal() -
 	assert_eq((opportunity.get(OPPORTUNITY.KEY_DECLINE_INTENT) as Dictionary).get(
 			OPPORTUNITY.INTENT_KEY_COMMAND_TYPE),
 			DECLINE_COMMAND.TYPE)
+
+
+func test_resolved_source_enumerates_but_derives_no_opportunity() -> void:
+	var attack: CurrentAttackState = _state.current_attack_state
+	assert_true(_state.set_current_attack_state(attack.with_patch({
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_DECLINED,
+	})))
+	var sources: Array = RULE.enumerate_timing_window_sources(
+			_state, _state.timing_window_state)
+	assert_eq(sources.size(), 1)
+	var source: Dictionary = sources[0] as Dictionary
+	var runtime_source_id: String = str(source.get(
+			OPPORTUNITY.KEY_RUNTIME_SOURCE_ID, ""))
+	assert_false(runtime_source_id.is_empty())
+	var derived: Variant = RULE.derive_timing_window_opportunities(
+			_state,
+			_state.timing_window_state,
+			RULE.SOURCE_OWNER_KIND,
+			runtime_source_id)
+	assert_typeof(derived, TYPE_ARRAY)
+	assert_true((derived as Array).is_empty())
+	assert_true((ORCHESTRATOR.derive_current_opportunities(
+			_state).get(ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).is_empty())
 
 
 func test_use_spends_one_token_rerolls_selected_die_and_then_continues() -> void:
@@ -166,25 +206,62 @@ func test_ship_without_concentrate_fire_token_derives_no_opportunity() -> void:
 	assert_true(attacker.command_tokens.spend_token(
 			Constants.CommandType.CONCENTRATE_FIRE))
 
+	var sources: Array = RULE.enumerate_timing_window_sources(
+			_state, _state.timing_window_state)
+	assert_eq(sources.size(), 1)
+	var runtime_source_id: String = str((sources[0] as Dictionary).get(
+			OPPORTUNITY.KEY_RUNTIME_SOURCE_ID, ""))
+	var derived: Variant = RULE.derive_timing_window_opportunities(
+			_state,
+			_state.timing_window_state,
+			RULE.SOURCE_OWNER_KIND,
+			runtime_source_id)
+	assert_typeof(derived, TYPE_ARRAY)
+	assert_true((derived as Array).is_empty())
 	assert_true((ORCHESTRATOR.derive_current_opportunities(
 			_state).get(ORCHESTRATOR.KEY_OPPORTUNITIES, []) as Array).is_empty())
 
 
-func test_normal_roll_does_not_open_production_window_for_ship_or_squadron() -> void:
-	for attacker_kind: String in [
-		CurrentAttackState.KIND_SHIP,
-		CurrentAttackState.KIND_SQUADRON,
-	]:
-		var state: GameState = _make_roll_state(attacker_kind)
-		GameManager.current_game_state = state
-		var processor: Node = PROCESSOR_SCRIPT.new()
-		add_child_autofree(processor)
-		var result: Dictionary = processor.submit(RollDiceCommand.new(0, {
-			"attack_id": state.current_attack_state.attack_id,
-		}))
-		assert_false(result.is_empty())
-		assert_false(state.timing_window_state.active,
-				"Slice 8B-1 must not connect the production opener.")
+func test_normal_roll_opens_production_window_only_for_ship_attacker() -> void:
+	var ship_state: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP)
+	GameManager.current_game_state = ship_state
+	var ship_processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(ship_processor)
+	assert_false(ship_processor.submit(RollDiceCommand.new(0, {
+		"attack_id": ship_state.current_attack_state.attack_id,
+	})).is_empty())
+	assert_true(ship_state.timing_window_state.active)
+	assert_eq(ship_state.timing_window_state.lifecycle_id, "attack_modify:0")
+
+	var squadron_state: GameState = _make_roll_state(
+			CurrentAttackState.KIND_SQUADRON)
+	GameManager.current_game_state = squadron_state
+	var squadron_processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(squadron_processor)
+	assert_false(squadron_processor.submit(RollDiceCommand.new(0, {
+		"attack_id": squadron_state.current_attack_state.attack_id,
+	})).is_empty())
+	assert_false(squadron_state.timing_window_state.active)
+
+
+func test_rejected_repeat_roll_cannot_open_or_replace_production_window() -> void:
+	var state: GameState = _make_roll_state(CurrentAttackState.KIND_SHIP)
+	GameManager.current_game_state = state
+	var processor: Node = PROCESSOR_SCRIPT.new()
+	add_child_autofree(processor)
+	assert_false(processor.submit(RollDiceCommand.new(0, {
+		"attack_id": state.current_attack_state.attack_id,
+	})).is_empty())
+	var before: Dictionary = state.serialize()
+	var lifecycle_id: String = state.timing_window_state.lifecycle_id
+
+	assert_eq(processor.submit(RollDiceCommand.new(0, {
+		"attack_id": state.current_attack_state.attack_id,
+	})), {})
+	assert_eq(state.serialize(), before)
+	assert_eq(state.timing_window_state.lifecycle_id, lifecycle_id)
+	assert_eq(processor.get_next_sequence(), 1)
+	assert_engine_error(1)
 
 
 func test_projection_is_public_but_only_attacker_receives_command_intents() -> void:
@@ -192,15 +269,118 @@ func test_projection_is_public_but_only_attacker_receives_command_intents() -> v
 	var observer: Dictionary = UIProjector.project(_state, 1).timing_window
 	var owner_opportunities: Array = owner.get("opportunities", [])
 	var observer_opportunities: Array = observer.get("opportunities", [])
+	var owner_opportunity: Dictionary = owner_opportunities[0] as Dictionary
 
 	assert_eq(owner_opportunities.size(), 1)
 	assert_eq(observer_opportunities.size(), 1)
 	assert_true(bool(owner.get("is_interactive", false)))
 	assert_false(bool(observer.get("is_interactive", true)))
-	assert_true((owner_opportunities[0] as Dictionary).has("use_intent"))
-	assert_true((owner_opportunities[0] as Dictionary).has("decline_intent"))
+	assert_false(owner_opportunity.has("use_intent"))
+	assert_eq((owner_opportunity.get("use_choices", []) as Array).size(),
+			_state.current_attack_state.dice_results.size())
+	for die_index: int in range(
+			_state.current_attack_state.dice_results.size()):
+		var choice: Dictionary = (owner_opportunity.get(
+				"use_choices", []) as Array)[die_index] as Dictionary
+		var payload: Dictionary = ((choice.get("intent") as Dictionary).get(
+				"payload") as Dictionary)
+		var selected: Dictionary = _state.current_attack_state.dice_results[
+				die_index]
+		assert_eq(payload.get("die_index"), die_index)
+		assert_eq(payload.get("expected_color"), selected.get("color"))
+		assert_eq(payload.get("expected_face"), selected.get("face"))
+	assert_true(owner_opportunity.has("decline_intent"))
 	assert_false((observer_opportunities[0] as Dictionary).has("use_intent"))
+	assert_false((observer_opportunities[0] as Dictionary).has("use_choices"))
 	assert_false((observer_opportunities[0] as Dictionary).has("decline_intent"))
+
+
+func test_live_panel_collects_cf_die_before_submitting_complete_use() -> void:
+	var projected: Dictionary = UIProjector.project(_state, 0).timing_window
+	var opportunities: Array = projected.get("opportunities", []) as Array
+	var opportunity: Dictionary = opportunities[0] as Dictionary
+	var use_choices: Array = opportunity.get("use_choices", []) as Array
+	var expected_intent: Dictionary = (use_choices[1] as Dictionary).get(
+			"intent", {}) as Dictionary
+	var panel := AttackSimPanel.new()
+	var adapter := CommandRouterAdapter.new()
+	add_child_autofree(panel)
+	add_child_autofree(adapter)
+	watch_signals(panel)
+	panel.timing_window_use_requested.connect(
+			adapter.submit_timing_window_intent)
+	panel.show_timing_window_opportunities(opportunities, true)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+
+	var use_button: Button = panel.find_child(
+			"TimingUseButton_0", true, false) as Button
+	assert_not_null(use_button)
+	use_button.pressed.emit()
+	assert_signal_not_emitted(panel, "timing_window_use_requested")
+	assert_true(_processor.serialize_history().is_empty())
+	assert_true(use_button.disabled)
+	assert_eq(panel._dice_textures[0].mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(panel._dice_textures[1].mouse_filter, Control.MOUSE_FILTER_STOP)
+	var original_die: TextureRect = panel._dice_textures[0]
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+	assert_ne(panel._dice_textures[0], original_die,
+			"Canonical projection should rebuild Concentrate Fire dice.")
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_STOP,
+			"Concentrate Fire parameter collection must survive refresh.")
+	assert_eq(panel._dice_textures[1].mouse_filter, Control.MOUSE_FILTER_STOP)
+
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._dice_textures[1].gui_input.emit(click)
+	assert_signal_emitted(panel, "timing_window_use_requested")
+	assert_eq(get_signal_parameters(
+			panel, "timing_window_use_requested"), [expected_intent])
+	assert_eq(_history_types(_processor.serialize_history()), [USE_COMMAND.TYPE])
+	assert_eq(_state.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_USED)
+	assert_true(panel._timing_window_die_intents.is_empty())
+	assert_eq(panel._dice_textures[1].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+	assert_eq(panel._dice_textures[1].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE,
+			"Accepted Concentrate Fire input must stay dismissed after refresh.")
+	panel._on_die_clicked(click, panel._dice_textures[0])
+	assert_eq(_history_types(_processor.serialize_history()), [USE_COMMAND.TYPE],
+			"A committed parameter choice cannot submit another command.")
+
+
+func test_live_panel_cf_decline_submits_immediately_without_parameter_mode() -> void:
+	var projected: Dictionary = UIProjector.project(_state, 0).timing_window
+	var opportunities: Array = projected.get("opportunities", []) as Array
+	var opportunity: Dictionary = opportunities[0] as Dictionary
+	var expected_intent: Dictionary = opportunity.get(
+			"decline_intent", {}) as Dictionary
+	var panel := AttackSimPanel.new()
+	var adapter := CommandRouterAdapter.new()
+	add_child_autofree(panel)
+	add_child_autofree(adapter)
+	watch_signals(panel)
+	panel.timing_window_decline_requested.connect(
+			adapter.submit_timing_window_intent)
+	panel.show_timing_window_opportunities(opportunities, true)
+	panel.show_dice_results(_state.current_attack_state.dice_results)
+
+	var decline_button: Button = panel.find_child(
+			"TimingDeclineButton_0", true, false) as Button
+	assert_not_null(decline_button)
+	decline_button.pressed.emit()
+	assert_signal_emitted(panel, "timing_window_decline_requested")
+	assert_eq(get_signal_parameters(
+			panel, "timing_window_decline_requested"), [expected_intent])
+	assert_eq(_history_types(_processor.serialize_history()), [
+		DECLINE_COMMAND.TYPE,
+	])
+	assert_eq(_state.current_attack_state.cf_token_resolution,
+			CurrentAttackState.RESOLUTION_DECLINED)
+	assert_true(panel._timing_window_die_intents.is_empty())
 
 
 func test_shared_commands_have_attack_modify_applicability_only() -> void:
@@ -220,13 +400,11 @@ func test_shared_commands_have_attack_modify_applicability_only() -> void:
 
 func test_legacy_concentrate_fire_commands_cannot_bypass_active_shared_window() -> void:
 	var use_payload: Dictionary = _use_payload(_state, 0)
-	use_payload["source_rule_id"] = \
-			RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN
+	use_payload["source_rule_id"] = "concentrate_fire_token"
 	var legacy_use := RerollAttackDieCommand.new(0, use_payload)
 	var legacy_decline := SkipAttackModifierCommand.new(0, {
 		"attack_id": _state.current_attack_state.attack_id,
-		"source_rule_id":
-				RerollAttackDieCommand.SOURCE_CONCENTRATE_FIRE_TOKEN,
+		"source_rule_id": "concentrate_fire_token",
 	})
 
 	assert_ne(legacy_use.validate(_state), "")

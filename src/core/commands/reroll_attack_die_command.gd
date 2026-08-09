@@ -14,9 +14,6 @@ class_name RerollAttackDieCommand
 extends GameCommand
 
 
-const SOURCE_CONCENTRATE_FIRE_TOKEN: String = "concentrate_fire_token"
-
-
 ## Registers this command type with the [GameCommand] factory.
 static func register() -> void:
 	GameCommand.register_type("reroll_attack_die", func(player: int,
@@ -63,8 +60,6 @@ func validate(game_state: GameState) -> String:
 	var source_rule_id: String = str(payload.get("source_rule_id", ""))
 	if source_rule_id == SwarmKeyword.RULE_ID:
 		return _validate_swarm_reroll(game_state)
-	if source_rule_id == SOURCE_CONCENTRATE_FIRE_TOKEN:
-		return _validate_concentrate_fire_token(game_state, attack)
 	return "Unsupported attack reroll source."
 
 
@@ -79,23 +74,12 @@ func execute(game_state: GameState) -> Dictionary:
 	var new_face: Constants.DiceFace = Dice.roll_die(color, game_state.rng)
 	var new_result: Dictionary = {"color": color, "face": new_face}
 	dice_results[die_index] = new_result
-	var patch: Dictionary = {"dice_results": dice_results}
-	var spends_cf_token: bool = str(payload.get("source_rule_id", "")) \
-			== SOURCE_CONCENTRATE_FIRE_TOKEN
-	if spends_cf_token:
-		patch["cf_token_resolution"] = CurrentAttackState.RESOLUTION_USED
-	var replacement: CurrentAttackState = attack.with_patch(patch)
+	var replacement: CurrentAttackState = attack.with_patch({
+		"dice_results": dice_results,
+	})
 	if replacement == null or not game_state.set_current_attack_state(replacement):
 		game_state.rng.set_state(rng_state)
 		return {}
-	if spends_cf_token:
-		var ship: ShipInstance = game_state.get_ship(
-				attack.attacker_player, attack.attacker_index)
-		if not ship.command_tokens.spend_token(
-				Constants.CommandType.CONCENTRATE_FIRE):
-			game_state.set_current_attack_state(attack)
-			game_state.rng.set_state(rng_state)
-			return {}
 	return {
 		"attack_id": attack.attack_id,
 		"die_index": die_index,
@@ -121,24 +105,6 @@ func _validate_swarm_reroll(game_state: GameState) -> String:
 	if not _is_swarm_eligible_from_state(game_state, attacker, target):
 		return "Swarm reroll is not eligible."
 	return ""
-
-
-func _validate_concentrate_fire_token(game_state: GameState,
-		attack: CurrentAttackState) -> String:
-	if game_state.timing_window_state != null \
-			and game_state.timing_window_state.active:
-		return "Active timing lifecycle requires the shared Concentrate Fire command."
-	if attack.attacker_kind != CurrentAttackState.KIND_SHIP \
-			or attack.cf_token_resolution != CurrentAttackState.RESOLUTION_PENDING:
-		return "Concentrate Fire token reroll is not pending."
-	var ship: ShipInstance = game_state.get_ship(
-			attack.attacker_player, attack.attacker_index)
-	if ship == null or ship.command_tokens == null \
-			or not ship.command_tokens.has_token(Constants.CommandType.CONCENTRATE_FIRE):
-		return "No Concentrate Fire token is available."
-	return ""
-
-
 func _is_swarm_eligible_from_state(game_state: GameState,
 		attacker: SquadronInstance,
 		target: SquadronInstance) -> bool:

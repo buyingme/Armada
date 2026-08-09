@@ -57,6 +57,12 @@ func initialize(
 func _exit_tree() -> void:
 	if CommandProcessor.command_executed.is_connected(_on_command_executed):
 		CommandProcessor.command_executed.disconnect(_on_command_executed)
+	if CommandProcessor.command_rejected.is_connected(_on_command_rejected):
+		CommandProcessor.command_rejected.disconnect(_on_command_rejected)
+	if GameManager.network_command_rejected.is_connected(
+			_on_network_command_rejected):
+		GameManager.network_command_rejected.disconnect(
+				_on_network_command_rejected)
 
 
 ## Applies controller reactions and projection-driven modal routing for one
@@ -76,13 +82,44 @@ func route_command_result(command: GameCommand, result: Dictionary) -> void:
 
 
 func _connect_command_signal() -> void:
-	if CommandProcessor.command_executed.is_connected(_on_command_executed):
-		return
-	CommandProcessor.command_executed.connect(_on_command_executed)
+	if not CommandProcessor.command_executed.is_connected(_on_command_executed):
+		CommandProcessor.command_executed.connect(_on_command_executed)
+	if not CommandProcessor.command_rejected.is_connected(_on_command_rejected):
+		CommandProcessor.command_rejected.connect(_on_command_rejected)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_command_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_command_rejected)
 
 
 func _on_command_executed(command: GameCommand, result: Dictionary) -> void:
 	route_command_result(command, result)
+
+
+func _on_command_rejected(command: GameCommand, _reason: String) -> void:
+	_refresh_rejected_attack_modify_projection(command)
+
+
+func _on_network_command_rejected(
+		command: GameCommand, _reason: String) -> void:
+	_refresh_rejected_attack_modify_projection(command)
+
+
+func _refresh_rejected_attack_modify_projection(command: GameCommand) -> void:
+	if command == null or command.command_type not in [
+			"use_concentrate_fire_token_reroll",
+			"decline_concentrate_fire_token_reroll",
+			"use_h9",
+			"decline_h9",
+	]:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	if _panel_mgr == null or game_state == null:
+		return
+	var intent: UIProjector.UIIntent = UIProjector.project(
+			game_state, _local_viewer(game_state))
+	_apply_hud_intent(intent)
+	_dispatch_modal_intent(intent, game_state, command)
 
 
 func _route_to_command_reactions(command: GameCommand, result: Dictionary) -> void:
@@ -114,7 +151,8 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
-	_sync_attack_panel_mirror(game_state)
+	_sync_attack_panel_mirror(game_state, intent.attack_dice_results)
+	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
 
@@ -206,13 +244,24 @@ func _is_displacement_place_intent(intent: UIProjector.UIIntent) -> bool:
 			and intent.modal_kind == Constants.ModalKind.DISPLACEMENT
 
 
-func _sync_attack_panel_mirror(game_state: GameState) -> void:
+func _sync_attack_panel_mirror(
+		game_state: GameState,
+		attack_dice_results: Array[Dictionary]) -> void:
 	if _attack_panel_controller == null:
 		return
 	if not _is_network_peer():
 		_attack_panel_controller.close_mirror()
 		return
-	_attack_panel_controller.sync_mirror_from_flow(game_state.interaction_flow)
+	_attack_panel_controller.sync_mirror_from_flow(
+			game_state.interaction_flow, attack_dice_results)
+
+
+func _drive_current_attack_dice(
+		attack_dice_results: Array[Dictionary]) -> void:
+	if _attack_panel_controller == null:
+		return
+	_attack_panel_controller.sync_current_attack_dice_projection(
+			attack_dice_results)
 
 
 func _drive_timing_window_panel(timing_window: Dictionary) -> void:

@@ -729,7 +729,7 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
@@ -759,7 +759,7 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
@@ -779,39 +779,22 @@
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Victory II-class Star Destroyer",
-					"attacker_player": 1,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "CR90 Corvette A",
-					"defender_player": 0,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 3
-					},
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:75",
+				"source_id": "attack:72",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 1,
 			"sequence": 76,
-			"type": "publish_attack_flow"
+			"type": "confirm_attack_dice"
 		},
 		{
 			"payload": {
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
+					"accuracy_count": 1.0,
+					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
 					"attacker_name": "Victory II-class Star Destroyer",
@@ -841,7 +824,8 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
@@ -853,68 +837,13 @@
 		},
 		{
 			"payload": {
-				"attack_id": "attack:72"
-			},
-			"player": 1,
-			"sequence": 78,
-			"type": "confirm_attack_dice"
-		},
-		{
-			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Victory II-class Star Destroyer",
-					"attacker_player": 1,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "CR90 Corvette A",
-					"defender_player": 0,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 3
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 4
-						},
-						{
-							"color": 0,
-							"face": 2
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
-			},
-			"player": 1,
-			"sequence": 79,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
 				"attack_id": "attack:72",
 				"locked_tokens": [
 					2
 				]
 			},
 			"player": 1,
-			"sequence": 80,
+			"sequence": 78,
 			"type": "commit_accuracy"
 		},
 		{
@@ -922,7 +851,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -953,15 +882,15 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 81,
+			"sequence": 79,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -969,7 +898,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -979,13 +908,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -1028,8 +957,8 @@
 					],
 					"modified_damage": 1,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -1037,13 +966,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 82,
+			"sequence": 80,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
 				"attack_id": "attack:72",
-				"defender_index": 0,
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					1
@@ -1051,7 +980,7 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 83,
+			"sequence": 81,
 			"type": "commit_defense"
 		},
 		{
@@ -1065,7 +994,7 @@
 				"token_index": 1
 			},
 			"player": 0,
-			"sequence": 84,
+			"sequence": 82,
 			"type": "spend_defense_token"
 		},
 		{
@@ -1073,7 +1002,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -1083,13 +1012,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -1134,8 +1063,8 @@
 					],
 					"modified_damage": 1,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -1143,13 +1072,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 85,
+			"sequence": 83,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
 				"attack_id": "attack:72",
-				"defender_index": 0,
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"die_index": 2,
 				"expected_color": 0,
@@ -1158,7 +1087,7 @@
 				"token_index": 1
 			},
 			"player": 0,
-			"sequence": 86,
+			"sequence": 84,
 			"type": "select_evade_die"
 		},
 		{
@@ -1166,7 +1095,7 @@
 				"attack_id": "attack:72"
 			},
 			"player": 1,
-			"sequence": 87,
+			"sequence": 85,
 			"type": "resolve_damage"
 		},
 		{
@@ -1174,7 +1103,7 @@
 				"attack_id": "attack:72"
 			},
 			"player": 1,
-			"sequence": 88,
+			"sequence": 86,
 			"type": "complete_attack"
 		},
 		{
@@ -1182,7 +1111,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -1192,13 +1121,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -1239,8 +1168,8 @@
 					],
 					"modified_damage": 0,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -1248,7 +1177,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 89,
+			"sequence": 87,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1256,7 +1185,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -1266,13 +1195,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -1314,8 +1243,8 @@
 					],
 					"modified_damage": 0,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -1323,7 +1252,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 90,
+			"sequence": 88,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1336,7 +1265,7 @@
 				"step_id": 0
 			},
 			"player": 1,
-			"sequence": 91,
+			"sequence": 89,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1345,7 +1274,7 @@
 				"step_id": "maneuver_step"
 			},
 			"player": 1,
-			"sequence": 92,
+			"sequence": 90,
 			"type": "advance_activation_step"
 		},
 		{
@@ -1354,7 +1283,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 93,
+			"sequence": 91,
 			"type": "set_speed"
 		},
 		{
@@ -1363,7 +1292,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 94,
+			"sequence": 92,
 			"type": "set_speed"
 		},
 		{
@@ -1381,7 +1310,7 @@
 				]
 			},
 			"player": 1,
-			"sequence": 95,
+			"sequence": 93,
 			"type": "execute_maneuver"
 		},
 		{
@@ -1396,7 +1325,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 96,
+			"sequence": 94,
 			"type": "start_displacement"
 		},
 		{
@@ -1411,7 +1340,7 @@
 				]
 			},
 			"player": 0,
-			"sequence": 97,
+			"sequence": 95,
 			"type": "commit_displacement"
 		},
 		{
@@ -1420,7 +1349,7 @@
 				"step_id": "activation_done"
 			},
 			"player": 1,
-			"sequence": 98,
+			"sequence": 96,
 			"type": "advance_activation_step"
 		},
 		{
@@ -1428,7 +1357,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 99,
+			"sequence": 97,
 			"type": "end_activation"
 		},
 		{
@@ -1437,7 +1366,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 100,
+			"sequence": 98,
 			"type": "reveal_dial"
 		},
 		{
@@ -1445,7 +1374,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 101,
+			"sequence": 99,
 			"type": "activate_ship"
 		},
 		{
@@ -1454,7 +1383,7 @@
 				"step_id": "squadron_step"
 			},
 			"player": 0,
-			"sequence": 102,
+			"sequence": 100,
 			"type": "advance_activation_step"
 		},
 		{
@@ -1464,7 +1393,7 @@
 				"squadron_index": 0
 			},
 			"player": 0,
-			"sequence": 103,
+			"sequence": 101,
 			"type": "move_squadron"
 		},
 		{
@@ -1482,7 +1411,7 @@
 				"range_band": "close"
 			},
 			"player": 0,
-			"sequence": 104,
+			"sequence": 102,
 			"type": "begin_attack"
 		},
 		{
@@ -1505,14 +1434,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 105,
+			"sequence": 103,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1535,22 +1464,22 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 106,
+			"sequence": 104,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:104"
+				"attack_id": "attack:102"
 			},
 			"player": 0,
-			"sequence": 107,
+			"sequence": 105,
 			"type": "roll_dice"
 		},
 		{
@@ -1573,14 +1502,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 108,
+			"sequence": 106,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1621,7 +1550,66 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"target_kind": "squadron",
+					"target_squadron_index": 1
+				},
+				"step_id": 18
+			},
+			"player": 0,
+			"sequence": 107,
+			"type": "publish_attack_flow"
+		},
+		{
+			"payload": {
+				"attack_id": "attack:102"
+			},
+			"player": 0,
+			"sequence": 108,
+			"type": "confirm_attack_dice"
+		},
+		{
+			"payload": {
+				"controller_player": 0,
+				"final": false,
+				"flow_payload": {
+					"accuracy_count": 1.0,
+					"accuracy_spend_blocked": false,
+					"attack_kind": "standard",
+					"attacker_kind": "squadron",
+					"attacker_name": "X-wing Squadron",
+					"attacker_player": 0,
+					"attacker_squadron_index": 0,
+					"attacker_zone": -1,
+					"attacker_zone_name": "",
+					"defender_name": "TIE Fighter Squadron",
+					"defender_player": 1,
+					"defender_zone": -1,
+					"dice_pool": {
+						"BLUE": 4
+					},
+					"dice_results": [
+						{
+							"color": 1,
+							"face": 4
+						},
+						{
+							"color": 1,
+							"face": 1
+						},
+						{
+							"color": 1,
+							"face": 1
+						},
+						{
+							"color": 1,
+							"face": 2
+						}
+					],
+					"is_obstructed": false,
+					"range_band": "close",
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
@@ -1633,189 +1621,27 @@
 		},
 		{
 			"payload": {
-				"attack_id": "attack:104"
-			},
-			"player": 0,
-			"sequence": 110,
-			"type": "confirm_attack_dice"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "squadron",
-					"attacker_name": "X-wing Squadron",
-					"attacker_player": 0,
-					"attacker_squadron_index": 0,
-					"attacker_zone": -1,
-					"attacker_zone_name": "",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 4
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 2
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 1
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 111,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:104",
+				"attack_id": "attack:102",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 112,
+			"sequence": 110,
 			"type": "commit_accuracy"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "squadron",
-					"attacker_name": "X-wing Squadron",
-					"attacker_player": 0,
-					"attacker_squadron_index": 0,
-					"attacker_zone": -1,
-					"attacker_zone_name": "",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 4
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 2
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 1
-				},
-				"step_id": 20
+				"attack_id": "attack:102"
 			},
 			"player": 0,
-			"sequence": 113,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:104"
-			},
-			"player": 0,
-			"sequence": 114,
+			"sequence": 111,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "squadron",
-					"attacker_name": "X-wing Squadron",
-					"attacker_player": 0,
-					"attacker_squadron_index": 0,
-					"attacker_zone": -1,
-					"attacker_zone_name": "",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 4
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 2
-						}
-					],
-					"final_damage": 2,
-					"is_obstructed": false,
-					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 1
-				},
-				"step_id": 20
+				"attack_id": "attack:102"
 			},
 			"player": 0,
-			"sequence": 115,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:104"
-			},
-			"player": 0,
-			"sequence": 116,
+			"sequence": 112,
 			"type": "complete_attack"
 		},
 		{
@@ -1828,7 +1654,7 @@
 				"step_id": 0
 			},
 			"player": 0,
-			"sequence": 117,
+			"sequence": 113,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1838,7 +1664,7 @@
 				"squadron_index": 3
 			},
 			"player": 0,
-			"sequence": 118,
+			"sequence": 114,
 			"type": "move_squadron"
 		},
 		{
@@ -1856,7 +1682,7 @@
 				"range_band": "close"
 			},
 			"player": 0,
-			"sequence": 119,
+			"sequence": 115,
 			"type": "begin_attack"
 		},
 		{
@@ -1879,14 +1705,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 120,
+			"sequence": 116,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1909,22 +1735,22 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 121,
+			"sequence": 117,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:119"
+				"attack_id": "attack:115"
 			},
 			"player": 0,
-			"sequence": 122,
+			"sequence": 118,
 			"type": "roll_dice"
 		},
 		{
@@ -1947,14 +1773,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 123,
+			"sequence": 119,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -1995,22 +1821,22 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 124,
+			"sequence": 120,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:119"
+				"attack_id": "attack:115"
 			},
 			"player": 0,
-			"sequence": 125,
+			"sequence": 121,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -2018,7 +1844,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -2053,143 +1879,40 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 126,
+			"sequence": 122,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:119",
+				"attack_id": "attack:115",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 127,
+			"sequence": 123,
 			"type": "commit_accuracy"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "squadron",
-					"attacker_name": "X-wing Squadron",
-					"attacker_player": 0,
-					"attacker_squadron_index": 3,
-					"attacker_zone": -1,
-					"attacker_zone_name": "",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 4
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 1
-				},
-				"step_id": 20
+				"attack_id": "attack:115"
 			},
 			"player": 0,
-			"sequence": 128,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:119"
-			},
-			"player": 0,
-			"sequence": 129,
+			"sequence": 124,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "squadron",
-					"attacker_name": "X-wing Squadron",
-					"attacker_player": 0,
-					"attacker_squadron_index": 3,
-					"attacker_zone": -1,
-					"attacker_zone_name": "",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 4
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 1
-						}
-					],
-					"final_damage": 3,
-					"is_obstructed": false,
-					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 1
-				},
-				"step_id": 20
+				"attack_id": "attack:115"
 			},
 			"player": 0,
-			"sequence": 130,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:119"
-			},
-			"player": 0,
-			"sequence": 131,
+			"sequence": 125,
 			"type": "complete_attack"
 		},
 		{
@@ -2202,7 +1925,7 @@
 				"step_id": 0
 			},
 			"player": 0,
-			"sequence": 132,
+			"sequence": 126,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2211,7 +1934,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 133,
+			"sequence": 127,
 			"type": "spend_dial"
 		},
 		{
@@ -2220,7 +1943,7 @@
 				"step_id": "repair_step"
 			},
 			"player": 0,
-			"sequence": 134,
+			"sequence": 128,
 			"type": "advance_activation_step"
 		},
 		{
@@ -2229,7 +1952,7 @@
 				"step_id": "attack_step"
 			},
 			"player": 0,
-			"sequence": 135,
+			"sequence": 129,
 			"type": "advance_activation_step"
 		},
 		{
@@ -2242,7 +1965,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 136,
+			"sequence": 130,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2260,7 +1983,7 @@
 				"range_band": "long"
 			},
 			"player": 0,
-			"sequence": 137,
+			"sequence": 131,
 			"type": "begin_attack"
 		},
 		{
@@ -2283,14 +2006,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 138,
+			"sequence": 132,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2313,104 +2036,33 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 139,
+			"sequence": 133,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:137"
+				"attack_id": "attack:131"
 			},
 			"player": 0,
-			"sequence": 140,
+			"sequence": 134,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 3
-					},
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:134",
+				"source_id": "attack:131",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
-			"sequence": 141,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 3
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 4
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 142,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:137"
-			},
-			"player": 0,
-			"sequence": 143,
+			"sequence": 135,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -2418,7 +2070,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -2449,26 +2101,26 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 144,
+			"sequence": 136,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:137",
+				"attack_id": "attack:131",
 				"locked_tokens": [
 					0
 				]
 			},
 			"player": 0,
-			"sequence": 145,
+			"sequence": 137,
 			"type": "commit_accuracy"
 		},
 		{
@@ -2476,7 +2128,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -2507,15 +2159,15 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 146,
+			"sequence": 138,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2523,7 +2175,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -2533,13 +2185,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -2582,8 +2234,8 @@
 					],
 					"modified_damage": 1,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -2591,13 +2243,13 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 147,
+			"sequence": 139,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:137",
-				"defender_index": 0,
+				"attack_id": "attack:131",
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					1
@@ -2605,12 +2257,12 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 148,
+			"sequence": 140,
 			"type": "commit_defense"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:137",
+				"attack_id": "attack:131",
 				"defender_index": 0,
 				"defender_kind": "ship",
 				"expected_token_type": 1,
@@ -2619,7 +2271,7 @@
 				"token_index": 1
 			},
 			"player": 1,
-			"sequence": 149,
+			"sequence": 141,
 			"type": "spend_defense_token"
 		},
 		{
@@ -2627,7 +2279,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -2637,13 +2289,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -2688,12 +2340,12 @@
 					"range_band": "long",
 					"redirect_active": true,
 					"redirect_adjacent_zones": [
-						1,
-						2
+						1.0,
+						2.0
 					],
 					"redirect_remaining": 1,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -2701,200 +2353,35 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 150,
+			"sequence": 142,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:137",
+				"attack_id": "attack:131",
 				"expected_shields": 3,
 				"ship_index": 0,
 				"token_index": 1,
 				"zone": 1
 			},
 			"player": 1,
-			"sequence": 151,
+			"sequence": 143,
 			"type": "select_redirect_zone"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 2,
-					"defender_squadron_index": -1,
-					"defender_zone": 0,
-					"defense_tokens": [
-						{
-							"state": 0,
-							"type": 2
-						},
-						{
-							"state": 0,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"RED": 3
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 4
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"is_obstructed": false,
-					"locked_tokens": [
-						0
-					],
-					"modified_damage": 0,
-					"range_band": "long",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 19
+				"attack_id": "attack:131"
 			},
 			"player": 0,
-			"sequence": 152,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:137"
-			},
-			"player": 0,
-			"sequence": 153,
+			"sequence": 144,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 2,
-					"defender_squadron_index": -1,
-					"defender_zone": 0,
-					"defense_tokens": [
-						{
-							"state": 0,
-							"type": 2
-						},
-						{
-							"state": 0,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"RED": 3
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 4
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [
-						0
-					],
-					"modified_damage": 0,
-					"range_band": "long",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 19
+				"attack_id": "attack:131"
 			},
 			"player": 0,
-			"sequence": 154,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:137"
-			},
-			"player": 0,
-			"sequence": 155,
+			"sequence": 145,
 			"type": "complete_attack"
 		},
 		{
@@ -2902,7 +2389,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -2912,13 +2399,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -2965,8 +2452,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -2974,7 +2461,7 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 156,
+			"sequence": 146,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2987,7 +2474,7 @@
 				"step_id": 0
 			},
 			"player": 0,
-			"sequence": 157,
+			"sequence": 147,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -2996,7 +2483,7 @@
 				"step_id": "maneuver_step"
 			},
 			"player": 0,
-			"sequence": 158,
+			"sequence": 148,
 			"type": "advance_activation_step"
 		},
 		{
@@ -3016,7 +2503,7 @@
 				]
 			},
 			"player": 0,
-			"sequence": 159,
+			"sequence": 149,
 			"type": "execute_maneuver"
 		},
 		{
@@ -3025,7 +2512,7 @@
 				"step_id": "activation_done"
 			},
 			"player": 0,
-			"sequence": 160,
+			"sequence": 150,
 			"type": "advance_activation_step"
 		},
 		{
@@ -3033,7 +2520,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 161,
+			"sequence": 151,
 			"type": "end_activation"
 		},
 		{
@@ -3041,7 +2528,7 @@
 				"next_phase": 3
 			},
 			"player": 0,
-			"sequence": 162,
+			"sequence": 152,
 			"type": "advance_phase"
 		},
 		{
@@ -3049,7 +2536,7 @@
 				"squadron_index": 1
 			},
 			"player": 0,
-			"sequence": 163,
+			"sequence": 153,
 			"type": "activate_squadron"
 		},
 		{
@@ -3059,7 +2546,7 @@
 				"squadron_index": 1
 			},
 			"player": 0,
-			"sequence": 164,
+			"sequence": 154,
 			"type": "move_squadron"
 		},
 		{
@@ -3067,7 +2554,7 @@
 				"squadron_index": 2
 			},
 			"player": 0,
-			"sequence": 165,
+			"sequence": 155,
 			"type": "activate_squadron"
 		},
 		{
@@ -3077,7 +2564,7 @@
 				"squadron_index": 2
 			},
 			"player": 0,
-			"sequence": 166,
+			"sequence": 156,
 			"type": "move_squadron"
 		},
 		{
@@ -3085,7 +2572,7 @@
 				"squadron_index": 4
 			},
 			"player": 1,
-			"sequence": 167,
+			"sequence": 157,
 			"type": "activate_squadron"
 		},
 		{
@@ -3095,7 +2582,7 @@
 				"squadron_index": 4
 			},
 			"player": 1,
-			"sequence": 168,
+			"sequence": 158,
 			"type": "move_squadron"
 		},
 		{
@@ -3103,7 +2590,7 @@
 				"squadron_index": 5
 			},
 			"player": 1,
-			"sequence": 169,
+			"sequence": 159,
 			"type": "activate_squadron"
 		},
 		{
@@ -3111,7 +2598,7 @@
 				"reason": "voluntary"
 			},
 			"player": 1,
-			"sequence": 170,
+			"sequence": 160,
 			"type": "skip_attack"
 		},
 		{
@@ -3119,7 +2606,7 @@
 				"squadron_index": 5
 			},
 			"player": 1,
-			"sequence": 171,
+			"sequence": 161,
 			"type": "complete_squadron_activation"
 		},
 		{
@@ -3127,7 +2614,7 @@
 				"squadron_index": 2
 			},
 			"player": 1,
-			"sequence": 172,
+			"sequence": 162,
 			"type": "activate_squadron"
 		},
 		{
@@ -3137,7 +2624,7 @@
 				"squadron_index": 2
 			},
 			"player": 1,
-			"sequence": 173,
+			"sequence": 163,
 			"type": "move_squadron"
 		},
 		{
@@ -3145,7 +2632,7 @@
 				"squadron_index": 0
 			},
 			"player": 1,
-			"sequence": 174,
+			"sequence": 164,
 			"type": "activate_squadron"
 		},
 		{
@@ -3163,7 +2650,7 @@
 				"range_band": "close"
 			},
 			"player": 1,
-			"sequence": 175,
+			"sequence": 165,
 			"type": "begin_attack"
 		},
 		{
@@ -3186,14 +2673,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 16
 			},
 			"player": 1,
-			"sequence": 176,
+			"sequence": 166,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3216,22 +2703,22 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 17
 			},
 			"player": 1,
-			"sequence": 177,
+			"sequence": 167,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175"
+				"attack_id": "attack:165"
 			},
 			"player": 1,
-			"sequence": 178,
+			"sequence": 168,
 			"type": "roll_dice"
 		},
 		{
@@ -3254,14 +2741,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 1,
-			"sequence": 179,
+			"sequence": 169,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3290,22 +2777,22 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 1,
-			"sequence": 180,
+			"sequence": 170,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175"
+				"attack_id": "attack:165"
 			},
 			"player": 1,
-			"sequence": 181,
+			"sequence": 171,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -3313,7 +2800,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3336,24 +2823,24 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 18
 			},
 			"player": 1,
-			"sequence": 182,
+			"sequence": 172,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175",
+				"attack_id": "attack:165",
 				"locked_tokens": []
 			},
 			"player": 1,
-			"sequence": 183,
+			"sequence": 173,
 			"type": "commit_accuracy"
 		},
 		{
@@ -3361,7 +2848,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3384,15 +2871,15 @@
 					],
 					"is_obstructed": false,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 1
 				},
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 184,
+			"sequence": 174,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3400,7 +2887,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3410,13 +2897,13 @@
 					"attacker_zone": -1,
 					"attacker_zone_name": "",
 					"blocked_defense_token_indices": [],
-					"defender_index": 1,
+					"defender_index": 1.0,
 					"defender_kind": "ship",
 					"defender_name": "Nebulon-B Escort Frigate",
 					"defender_player": 0,
 					"defender_ship_index": 1,
 					"defender_speed": 3,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -3449,8 +2936,8 @@
 					"locked_tokens": [],
 					"modified_damage": 1,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 1
@@ -3458,13 +2945,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 185,
+			"sequence": 175,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175",
-				"defender_index": 1,
+				"attack_id": "attack:165",
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					0
@@ -3472,12 +2959,12 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 186,
+			"sequence": 176,
 			"type": "commit_defense"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175",
+				"attack_id": "attack:165",
 				"defender_index": 1,
 				"defender_kind": "ship",
 				"expected_token_type": 0,
@@ -3486,7 +2973,7 @@
 				"token_index": 0
 			},
 			"player": 0,
-			"sequence": 187,
+			"sequence": 177,
 			"type": "spend_defense_token"
 		},
 		{
@@ -3494,7 +2981,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3504,13 +2991,13 @@
 					"attacker_zone": -1,
 					"attacker_zone_name": "",
 					"blocked_defense_token_indices": [],
-					"defender_index": 1,
+					"defender_index": 1.0,
 					"defender_kind": "ship",
 					"defender_name": "Nebulon-B Escort Frigate",
 					"defender_player": 0,
 					"defender_ship_index": 1,
 					"defender_speed": 3,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -3545,8 +3032,8 @@
 					"locked_tokens": [],
 					"modified_damage": 1,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 1
@@ -3554,13 +3041,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 188,
+			"sequence": 178,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175",
-				"defender_index": 1,
+				"attack_id": "attack:165",
+				"defender_index": 1.0,
 				"defender_kind": "ship",
 				"die_index": 0,
 				"expected_color": 1,
@@ -3569,23 +3056,23 @@
 				"token_index": 0
 			},
 			"player": 0,
-			"sequence": 189,
+			"sequence": 179,
 			"type": "select_evade_die"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175"
+				"attack_id": "attack:165"
 			},
 			"player": 1,
-			"sequence": 190,
+			"sequence": 180,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:175"
+				"attack_id": "attack:165"
 			},
 			"player": 1,
-			"sequence": 191,
+			"sequence": 181,
 			"type": "complete_attack"
 		},
 		{
@@ -3593,7 +3080,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3603,13 +3090,13 @@
 					"attacker_zone": -1,
 					"attacker_zone_name": "",
 					"blocked_defense_token_indices": [],
-					"defender_index": 1,
+					"defender_index": 1.0,
 					"defender_kind": "ship",
 					"defender_name": "Nebulon-B Escort Frigate",
 					"defender_player": 0,
 					"defender_ship_index": 1,
 					"defender_speed": 3,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -3644,8 +3131,8 @@
 					"locked_tokens": [],
 					"modified_damage": 0,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 1
@@ -3653,7 +3140,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 192,
+			"sequence": 182,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3661,7 +3148,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "squadron",
@@ -3671,13 +3158,13 @@
 					"attacker_zone": -1,
 					"attacker_zone_name": "",
 					"blocked_defense_token_indices": [],
-					"defender_index": 1,
+					"defender_index": 1.0,
 					"defender_kind": "ship",
 					"defender_name": "Nebulon-B Escort Frigate",
 					"defender_player": 0,
 					"defender_ship_index": 1,
 					"defender_speed": 3,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -3713,8 +3200,8 @@
 					"locked_tokens": [],
 					"modified_damage": 0,
 					"range_band": "close",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 1
@@ -3722,7 +3209,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 193,
+			"sequence": 183,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3735,7 +3222,7 @@
 				"step_id": 0
 			},
 			"player": 1,
-			"sequence": 194,
+			"sequence": 184,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3743,7 +3230,7 @@
 				"squadron_index": 0
 			},
 			"player": 1,
-			"sequence": 195,
+			"sequence": 185,
 			"type": "complete_squadron_activation"
 		},
 		{
@@ -3751,7 +3238,7 @@
 				"squadron_index": 3
 			},
 			"player": 1,
-			"sequence": 196,
+			"sequence": 186,
 			"type": "activate_squadron"
 		},
 		{
@@ -3761,7 +3248,7 @@
 				"squadron_index": 3
 			},
 			"player": 1,
-			"sequence": 197,
+			"sequence": 187,
 			"type": "move_squadron"
 		},
 		{
@@ -3769,7 +3256,7 @@
 				"next_phase": 4
 			},
 			"player": 1,
-			"sequence": 198,
+			"sequence": 188,
 			"type": "advance_phase"
 		},
 		{
@@ -3777,7 +3264,7 @@
 
 			},
 			"player": 1,
-			"sequence": 199,
+			"sequence": 189,
 			"type": "status_phase_cleanup"
 		},
 		{
@@ -3785,7 +3272,7 @@
 
 			},
 			"player": 1,
-			"sequence": 200,
+			"sequence": 190,
 			"type": "start_round"
 		},
 		{
@@ -3796,7 +3283,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 201,
+			"sequence": 191,
 			"type": "assign_dials"
 		},
 		{
@@ -3807,7 +3294,7 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 202,
+			"sequence": 192,
 			"type": "assign_dials"
 		},
 		{
@@ -3818,7 +3305,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 203,
+			"sequence": 193,
 			"type": "assign_dials"
 		},
 		{
@@ -3826,7 +3313,7 @@
 				"next_phase": 2
 			},
 			"player": 0,
-			"sequence": 204,
+			"sequence": 194,
 			"type": "advance_phase"
 		},
 		{
@@ -3835,7 +3322,7 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 205,
+			"sequence": 195,
 			"type": "reveal_dial"
 		},
 		{
@@ -3843,7 +3330,7 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 206,
+			"sequence": 196,
 			"type": "activate_ship"
 		},
 		{
@@ -3852,7 +3339,7 @@
 				"step_id": "repair_step"
 			},
 			"player": 0,
-			"sequence": 207,
+			"sequence": 197,
 			"type": "advance_activation_step"
 		},
 		{
@@ -3861,7 +3348,7 @@
 				"step_id": "attack_step"
 			},
 			"player": 0,
-			"sequence": 208,
+			"sequence": 198,
 			"type": "advance_activation_step"
 		},
 		{
@@ -3874,7 +3361,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 209,
+			"sequence": 199,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -3892,7 +3379,7 @@
 				"range_band": "long"
 			},
 			"player": 0,
-			"sequence": 210,
+			"sequence": 200,
 			"type": "begin_attack"
 		},
 		{
@@ -3915,23 +3402,23 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 211,
+			"sequence": 201,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
+				"attack_id": "attack:200",
 				"color": "RED"
 			},
 			"player": 0,
-			"sequence": 212,
+			"sequence": 202,
 			"type": "use_concentrate_fire_dial"
 		},
 		{
@@ -3954,104 +3441,33 @@
 					},
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 213,
+			"sequence": 203,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210"
+				"attack_id": "attack:200"
 			},
 			"player": 0,
-			"sequence": 214,
+			"sequence": 204,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "CR90 Corvette A",
-					"attacker_player": 0,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 2
-					},
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:204",
+				"source_id": "attack:200",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
-			"sequence": 215,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "CR90 Corvette A",
-					"attacker_player": 0,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_zone": 0,
-					"dice_pool": {
-						"RED": 2
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 216,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:210"
-			},
-			"player": 0,
-			"sequence": 217,
+			"sequence": 205,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -4059,7 +3475,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -4090,24 +3506,24 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 218,
+			"sequence": 206,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
+				"attack_id": "attack:200",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 219,
+			"sequence": 207,
 			"type": "commit_accuracy"
 		},
 		{
@@ -4115,7 +3531,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -4146,15 +3562,15 @@
 					],
 					"is_obstructed": false,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 220,
+			"sequence": 208,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -4162,7 +3578,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -4172,13 +3588,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -4219,8 +3635,8 @@
 					"locked_tokens": [],
 					"modified_damage": 2,
 					"range_band": "long",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -4228,13 +3644,13 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 221,
+			"sequence": 209,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
-				"defender_index": 0,
+				"attack_id": "attack:200",
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					0,
@@ -4243,12 +3659,12 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 222,
+			"sequence": 210,
 			"type": "commit_defense"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
+				"attack_id": "attack:200",
 				"defender_index": 0,
 				"defender_kind": "ship",
 				"expected_token_type": 2,
@@ -4257,12 +3673,12 @@
 				"token_index": 0
 			},
 			"player": 1,
-			"sequence": 223,
+			"sequence": 211,
 			"type": "spend_defense_token"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
+				"attack_id": "attack:200",
 				"defender_index": 0,
 				"defender_kind": "ship",
 				"expected_token_type": 1,
@@ -4271,7 +3687,7 @@
 				"token_index": 1
 			},
 			"player": 1,
-			"sequence": 224,
+			"sequence": 212,
 			"type": "spend_defense_token"
 		},
 		{
@@ -4279,7 +3695,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -4289,13 +3705,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -4338,12 +3754,12 @@
 					"range_band": "long",
 					"redirect_active": true,
 					"redirect_adjacent_zones": [
-						1,
-						2
+						1.0,
+						2.0
 					],
 					"redirect_remaining": 1,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -4351,196 +3767,35 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 225,
+			"sequence": 213,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:210",
+				"attack_id": "attack:200",
 				"expected_shields": 3,
 				"ship_index": 0,
 				"token_index": 1,
 				"zone": 2
 			},
 			"player": 1,
-			"sequence": 226,
+			"sequence": 214,
 			"type": "select_redirect_zone"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 0,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "CR90 Corvette A",
-					"attacker_player": 0,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 2,
-					"defender_squadron_index": -1,
-					"defender_zone": 0,
-					"defense_tokens": [
-						{
-							"state": 0,
-							"type": 2
-						},
-						{
-							"state": 0,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"RED": 2
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "long",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 19
+				"attack_id": "attack:200"
 			},
 			"player": 0,
-			"sequence": 227,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:210"
-			},
-			"player": 0,
-			"sequence": 228,
+			"sequence": 215,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 0,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "CR90 Corvette A",
-					"attacker_player": 0,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 2,
-					"defender_squadron_index": -1,
-					"defender_zone": 0,
-					"defense_tokens": [
-						{
-							"state": 0,
-							"type": 2
-						},
-						{
-							"state": 0,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"RED": 2
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 0,
-							"face": 0
-						},
-						{
-							"color": 0,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "long",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 19
+				"attack_id": "attack:200"
 			},
 			"player": 0,
-			"sequence": 229,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:210"
-			},
-			"player": 0,
-			"sequence": 230,
+			"sequence": 216,
 			"type": "complete_attack"
 		},
 		{
@@ -4548,7 +3803,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -4558,13 +3813,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 2,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -4609,8 +3864,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -4618,7 +3873,7 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 231,
+			"sequence": 217,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -4631,7 +3886,7 @@
 				"step_id": 0
 			},
 			"player": 0,
-			"sequence": 232,
+			"sequence": 218,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -4640,7 +3895,7 @@
 				"step_id": "maneuver_step"
 			},
 			"player": 0,
-			"sequence": 233,
+			"sequence": 219,
 			"type": "advance_activation_step"
 		},
 		{
@@ -4648,7 +3903,7 @@
 				"did_overlap": false,
 				"pos_x": 0.658749446162471,
 				"pos_y": 0.569095639829282,
-				"rotation_deg": -0.00000233366691065285,
+				"rotation_deg": -0.00000233366691065,
 				"ship_index": 0,
 				"speed": 1,
 				"speed_delta": 0,
@@ -4658,7 +3913,7 @@
 				]
 			},
 			"player": 0,
-			"sequence": 234,
+			"sequence": 220,
 			"type": "execute_maneuver"
 		},
 		{
@@ -4667,7 +3922,7 @@
 				"step_id": "activation_done"
 			},
 			"player": 0,
-			"sequence": 235,
+			"sequence": 221,
 			"type": "advance_activation_step"
 		},
 		{
@@ -4675,7 +3930,7 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 236,
+			"sequence": 222,
 			"type": "end_activation"
 		},
 		{
@@ -4684,7 +3939,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 237,
+			"sequence": 223,
 			"type": "reveal_dial"
 		},
 		{
@@ -4692,7 +3947,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 238,
+			"sequence": 224,
 			"type": "activate_ship"
 		},
 		{
@@ -4701,7 +3956,7 @@
 				"step_id": "repair_step"
 			},
 			"player": 1,
-			"sequence": 239,
+			"sequence": 225,
 			"type": "advance_activation_step"
 		},
 		{
@@ -4712,7 +3967,7 @@
 				"zone": "RIGHT"
 			},
 			"player": 1,
-			"sequence": 240,
+			"sequence": 226,
 			"type": "repair_action"
 		},
 		{
@@ -4721,7 +3976,7 @@
 				"token_type": 3
 			},
 			"player": 1,
-			"sequence": 241,
+			"sequence": 227,
 			"type": "spend_token"
 		},
 		{
@@ -4730,7 +3985,7 @@
 				"step_id": "attack_step"
 			},
 			"player": 1,
-			"sequence": 242,
+			"sequence": 228,
 			"type": "advance_activation_step"
 		},
 		{
@@ -4739,7 +3994,7 @@
 				"step_id": "attack_step"
 			},
 			"player": 1,
-			"sequence": 243,
+			"sequence": 229,
 			"type": "advance_activation_step"
 		},
 		{
@@ -4752,7 +4007,7 @@
 				"step_id": 16
 			},
 			"player": 1,
-			"sequence": 244,
+			"sequence": 230,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -4770,7 +4025,7 @@
 				"range_band": "medium"
 			},
 			"player": 1,
-			"sequence": 245,
+			"sequence": 231,
 			"type": "begin_attack"
 		},
 		{
@@ -4794,23 +4049,23 @@
 					},
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 16
 			},
 			"player": 1,
-			"sequence": 246,
+			"sequence": 232,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245",
+				"attack_id": "attack:231",
 				"color": "RED"
 			},
 			"player": 1,
-			"sequence": 247,
+			"sequence": 233,
 			"type": "use_concentrate_fire_dial"
 		},
 		{
@@ -4834,122 +4089,33 @@
 					},
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 17
 			},
 			"player": 1,
-			"sequence": 248,
+			"sequence": 234,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245"
+				"attack_id": "attack:231"
 			},
 			"player": 1,
-			"sequence": 249,
+			"sequence": 235,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Victory II-class Star Destroyer",
-					"attacker_player": 1,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "CR90 Corvette A",
-					"defender_player": 0,
-					"defender_zone": 0,
-					"dice_pool": {
-						"BLUE": 3,
-						"RED": 3
-					},
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:235",
+				"source_id": "attack:231",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 1,
-			"sequence": 250,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Victory II-class Star Destroyer",
-					"attacker_player": 1,
-					"attacker_ship_index": 0,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "CR90 Corvette A",
-					"defender_player": 0,
-					"defender_zone": 0,
-					"dice_pool": {
-						"BLUE": 3,
-						"RED": 3
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 1
-						},
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 0,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 4
-						},
-						{
-							"color": 1,
-							"face": 2
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "ship",
-					"target_ship_index": 0
-				},
-				"step_id": 18
-			},
-			"player": 1,
-			"sequence": 251,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:245"
-			},
-			"player": 1,
-			"sequence": 252,
+			"sequence": 236,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -4957,7 +4123,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5005,26 +4171,26 @@
 					],
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 18
 			},
 			"player": 1,
-			"sequence": 253,
+			"sequence": 237,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245",
+				"attack_id": "attack:231",
 				"locked_tokens": [
 					2
 				]
 			},
 			"player": 1,
-			"sequence": 254,
+			"sequence": 238,
 			"type": "commit_accuracy"
 		},
 		{
@@ -5032,7 +4198,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5080,15 +4246,15 @@
 					],
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0
 				},
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 255,
+			"sequence": 239,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5096,7 +4262,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5106,13 +4272,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -5172,8 +4338,8 @@
 					],
 					"modified_damage": 6,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -5181,13 +4347,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 256,
+			"sequence": 240,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245",
-				"defender_index": 0,
+				"attack_id": "attack:231",
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					1
@@ -5195,12 +4361,12 @@
 				"ship_index": 0
 			},
 			"player": 0,
-			"sequence": 257,
+			"sequence": 241,
 			"type": "commit_defense"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245",
+				"attack_id": "attack:231",
 				"defender_index": 0,
 				"defender_kind": "ship",
 				"expected_token_type": 0,
@@ -5209,7 +4375,7 @@
 				"token_index": 1
 			},
 			"player": 0,
-			"sequence": 258,
+			"sequence": 242,
 			"type": "spend_defense_token"
 		},
 		{
@@ -5217,7 +4383,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5227,13 +4393,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -5295,8 +4461,8 @@
 					],
 					"modified_damage": 6,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -5304,13 +4470,13 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 259,
+			"sequence": 243,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245",
-				"defender_index": 0,
+				"attack_id": "attack:231",
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"die_index": 6,
 				"expected_color": 1,
@@ -5319,23 +4485,23 @@
 				"token_index": 1
 			},
 			"player": 0,
-			"sequence": 260,
+			"sequence": 244,
 			"type": "select_evade_die"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245"
+				"attack_id": "attack:231"
 			},
 			"player": 1,
-			"sequence": 261,
+			"sequence": 245,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:245"
+				"attack_id": "attack:231"
 			},
 			"player": 1,
-			"sequence": 262,
+			"sequence": 246,
 			"type": "complete_attack"
 		},
 		{
@@ -5343,7 +4509,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5353,13 +4519,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -5421,8 +4587,8 @@
 					],
 					"modified_damage": 6,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -5430,7 +4596,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 263,
+			"sequence": 247,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5438,7 +4604,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5448,13 +4614,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "CR90 Corvette A",
 					"defender_player": 0,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 0,
 					"defense_tokens": [
 						{
@@ -5517,8 +4683,8 @@
 					],
 					"modified_damage": 6,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0
@@ -5526,7 +4692,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 264,
+			"sequence": 248,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5534,7 +4700,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5544,13 +4710,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "",
 					"defender_player": -1,
 					"defender_ship_index": -1,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": -1,
 					"defense_tokens": [],
 					"dice_pool": {
@@ -5571,8 +4737,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "",
 					"target_ship_index": -1,
@@ -5581,7 +4747,7 @@
 				"step_id": 19
 			},
 			"player": 1,
-			"sequence": 265,
+			"sequence": 249,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5589,7 +4755,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -5599,13 +4765,13 @@
 					"attacker_zone": 0,
 					"attacker_zone_name": "FRONT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "",
 					"defender_player": -1,
 					"defender_ship_index": -1,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": -1,
 					"defense_tokens": [],
 					"dice_pool": {
@@ -5626,8 +4792,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"spent_defense_token_types": [],
 					"target_kind": "",
 					"target_ship_index": -1,
@@ -5636,7 +4802,7 @@
 				"step_id": 16
 			},
 			"player": 1,
-			"sequence": 266,
+			"sequence": 250,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5644,7 +4810,7 @@
 				"reason": "voluntary"
 			},
 			"player": 1,
-			"sequence": 267,
+			"sequence": 251,
 			"type": "skip_attack"
 		},
 		{
@@ -5657,7 +4823,7 @@
 				"step_id": 0
 			},
 			"player": 1,
-			"sequence": 268,
+			"sequence": 252,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5666,7 +4832,7 @@
 				"step_id": "maneuver_step"
 			},
 			"player": 1,
-			"sequence": 269,
+			"sequence": 253,
 			"type": "advance_activation_step"
 		},
 		{
@@ -5675,7 +4841,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 270,
+			"sequence": 254,
 			"type": "set_speed"
 		},
 		{
@@ -5684,7 +4850,7 @@
 				"token_type": 0
 			},
 			"player": 1,
-			"sequence": 271,
+			"sequence": 255,
 			"type": "spend_token"
 		},
 		{
@@ -5703,7 +4869,7 @@
 				]
 			},
 			"player": 1,
-			"sequence": 272,
+			"sequence": 256,
 			"type": "execute_maneuver"
 		},
 		{
@@ -5722,7 +4888,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 273,
+			"sequence": 257,
 			"type": "start_displacement"
 		},
 		{
@@ -5743,7 +4909,7 @@
 				]
 			},
 			"player": 0,
-			"sequence": 274,
+			"sequence": 258,
 			"type": "commit_displacement"
 		},
 		{
@@ -5752,7 +4918,7 @@
 				"step_id": "activation_done"
 			},
 			"player": 1,
-			"sequence": 275,
+			"sequence": 259,
 			"type": "advance_activation_step"
 		},
 		{
@@ -5760,7 +4926,7 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 276,
+			"sequence": 260,
 			"type": "end_activation"
 		},
 		{
@@ -5769,7 +4935,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 277,
+			"sequence": 261,
 			"type": "reveal_dial"
 		},
 		{
@@ -5777,7 +4943,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 278,
+			"sequence": 262,
 			"type": "convert_dial_to_token"
 		},
 		{
@@ -5786,7 +4952,7 @@
 				"step_id": "repair_step"
 			},
 			"player": 0,
-			"sequence": 279,
+			"sequence": 263,
 			"type": "advance_activation_step"
 		},
 		{
@@ -5795,7 +4961,7 @@
 				"step_id": "attack_step"
 			},
 			"player": 0,
-			"sequence": 280,
+			"sequence": 264,
 			"type": "advance_activation_step"
 		},
 		{
@@ -5808,7 +4974,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 281,
+			"sequence": 265,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5826,7 +4992,7 @@
 				"range_band": "medium"
 			},
 			"player": 0,
-			"sequence": 282,
+			"sequence": 266,
 			"type": "begin_attack"
 		},
 		{
@@ -5849,14 +5015,14 @@
 					},
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 5
 				},
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 283,
+			"sequence": 267,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -5879,100 +5045,33 @@
 					},
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
+					"ship_target_attacks_this_round": 0.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 5
 				},
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 284,
+			"sequence": 268,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:282"
+				"attack_id": "attack:266"
 			},
 			"player": 0,
-			"sequence": 285,
+			"sequence": 269,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "squadron",
-					"target_squadron_index": 5
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:269",
+				"source_id": "attack:266",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
-			"sequence": 286,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"target_kind": "squadron",
-					"target_squadron_index": 5
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 287,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:282"
-			},
-			"player": 0,
-			"sequence": 288,
+			"sequence": 270,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -5980,7 +5079,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6007,127 +5106,40 @@
 					],
 					"is_obstructed": false,
 					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_squadron_index": 5
 				},
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 289,
+			"sequence": 271,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:282",
+				"attack_id": "attack:266",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 290,
+			"sequence": 272,
 			"type": "commit_accuracy"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 5
-				},
-				"step_id": 20
+				"attack_id": "attack:266"
 			},
 			"player": 0,
-			"sequence": 291,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:282"
-			},
-			"player": 0,
-			"sequence": 292,
+			"sequence": 273,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_zone": -1,
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"final_damage": 0,
-					"is_obstructed": false,
-					"range_band": "medium",
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_squadron_index": 5
-				},
-				"step_id": 20
+				"attack_id": "attack:266"
 			},
 			"player": 0,
-			"sequence": 293,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:282"
-			},
-			"player": 0,
-			"sequence": 294,
+			"sequence": 274,
 			"type": "complete_attack"
 		},
 		{
@@ -6135,7 +5147,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6163,8 +5175,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "",
 					"target_ship_index": -1,
 					"target_squadron_index": -1
@@ -6172,7 +5184,7 @@
 				"step_id": 20
 			},
 			"player": 0,
-			"sequence": 295,
+			"sequence": 275,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6180,7 +5192,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6208,8 +5220,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "",
 					"target_ship_index": -1,
 					"target_squadron_index": -1
@@ -6217,7 +5229,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 296,
+			"sequence": 276,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6235,7 +5247,7 @@
 				"range_band": "close"
 			},
 			"player": 0,
-			"sequence": 297,
+			"sequence": 277,
 			"type": "begin_attack"
 		},
 		{
@@ -6243,7 +5255,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6271,8 +5283,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_ship_index": -1,
 					"target_squadron_index": 0
@@ -6280,7 +5292,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 298,
+			"sequence": 278,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6288,7 +5300,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6316,8 +5328,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_ship_index": -1,
 					"target_squadron_index": 0
@@ -6325,122 +5337,26 @@
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 299,
+			"sequence": 279,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:297"
+				"attack_id": "attack:277"
 			},
 			"player": 0,
-			"sequence": 300,
+			"sequence": 280,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": -1,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "close",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_ship_index": -1,
-					"target_squadron_index": 0
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:280",
+				"source_id": "attack:277",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
-			"sequence": 301,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": -1,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "close",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_ship_index": -1,
-					"target_squadron_index": 0
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 302,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:297"
-			},
-			"player": 0,
-			"sequence": 303,
+			"sequence": 281,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -6448,7 +5364,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6485,8 +5401,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "squadron",
 					"target_ship_index": -1,
 					"target_squadron_index": 0
@@ -6494,140 +5410,32 @@
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 304,
+			"sequence": 282,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:297",
+				"attack_id": "attack:277",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 305,
+			"sequence": 283,
 			"type": "commit_accuracy"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": -1,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "close",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_ship_index": -1,
-					"target_squadron_index": 0
-				},
-				"step_id": 20
+				"attack_id": "attack:277"
 			},
 			"player": 0,
-			"sequence": 306,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:297"
-			},
-			"player": 0,
-			"sequence": 307,
+			"sequence": 284,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 0,
-					"attacker_zone_name": "FRONT",
-					"defender_name": "TIE Fighter Squadron",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": -1,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 2
-					},
-					"dice_results": [
-						{
-							"color": 1,
-							"face": 1
-						},
-						{
-							"color": 1,
-							"face": 4
-						}
-					],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 1,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "close",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "squadron",
-					"target_ship_index": -1,
-					"target_squadron_index": 0
-				},
-				"step_id": 20
+				"attack_id": "attack:277"
 			},
 			"player": 0,
-			"sequence": 308,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:297"
-			},
-			"player": 0,
-			"sequence": 309,
+			"sequence": 285,
 			"type": "complete_attack"
 		},
 		{
@@ -6635,7 +5443,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6663,8 +5471,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "",
 					"target_ship_index": -1,
 					"target_squadron_index": -1
@@ -6672,7 +5480,7 @@
 				"step_id": 20
 			},
 			"player": 0,
-			"sequence": 310,
+			"sequence": 286,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6680,7 +5488,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6708,8 +5516,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "",
 					"target_ship_index": -1,
 					"target_squadron_index": -1
@@ -6717,7 +5525,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 311,
+			"sequence": 287,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6735,7 +5543,7 @@
 				"range_band": "medium"
 			},
 			"player": 0,
-			"sequence": 312,
+			"sequence": 288,
 			"type": "begin_attack"
 		},
 		{
@@ -6743,7 +5551,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6772,8 +5580,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0,
 					"target_squadron_index": -1
@@ -6781,7 +5589,7 @@
 				"step_id": 16
 			},
 			"player": 0,
-			"sequence": 313,
+			"sequence": 289,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -6789,7 +5597,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 1,
+					"accuracy_count": 1.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6818,8 +5626,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 1.0,
 					"target_kind": "ship",
 					"target_ship_index": 0,
 					"target_squadron_index": -1
@@ -6827,124 +5635,26 @@
 				"step_id": 17
 			},
 			"player": 0,
-			"sequence": 314,
+			"sequence": 290,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312"
+				"attack_id": "attack:288"
 			},
 			"player": 0,
-			"sequence": 315,
+			"sequence": 291,
 			"type": "roll_dice"
 		},
 		{
 			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 2,
-					"attacker_zone_name": "RIGHT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": 3,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 1,
-						"RED": 1
-					},
-					"dice_results": [],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "medium",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "ship",
-					"target_ship_index": 0,
-					"target_squadron_index": -1
-				},
-				"step_id": 18
+				"lifecycle_id": "attack_modify:291",
+				"source_id": "attack:288",
+				"source_type": "current_attack",
+				"timing_window_id": "attack_modify"
 			},
 			"player": 0,
-			"sequence": 316,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"controller_player": 0,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 1,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 2,
-					"attacker_zone_name": "RIGHT",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": -1,
-					"defender_zone": 3,
-					"defense_tokens": [],
-					"dice_pool": {
-						"BLUE": 1,
-						"RED": 1
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 1
-						}
-					],
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "medium",
-					"redirect_active": false,
-					"redirect_adjacent_zones": [],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 1,
-					"target_kind": "ship",
-					"target_ship_index": 0,
-					"target_squadron_index": -1
-				},
-				"step_id": 18
-			},
-			"player": 0,
-			"sequence": 317,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:312"
-			},
-			"player": 0,
-			"sequence": 318,
+			"sequence": 292,
 			"type": "confirm_attack_dice"
 		},
 		{
@@ -6952,7 +5662,7 @@
 				"controller_player": 0,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -6990,8 +5700,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0,
 					"target_squadron_index": -1
@@ -6999,16 +5709,16 @@
 				"step_id": 18
 			},
 			"player": 0,
-			"sequence": 319,
+			"sequence": 293,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312",
+				"attack_id": "attack:288",
 				"locked_tokens": []
 			},
 			"player": 0,
-			"sequence": 320,
+			"sequence": 294,
 			"type": "commit_accuracy"
 		},
 		{
@@ -7016,7 +5726,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -7054,8 +5764,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"target_kind": "ship",
 					"target_ship_index": 0,
 					"target_squadron_index": -1
@@ -7063,7 +5773,7 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 321,
+			"sequence": 295,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -7071,7 +5781,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -7081,13 +5791,13 @@
 					"attacker_zone": 2,
 					"attacker_zone_name": "RIGHT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 3,
 					"defense_tokens": [
 						{
@@ -7131,8 +5841,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0,
@@ -7141,13 +5851,13 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 322,
+			"sequence": 296,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312",
-				"defender_index": 0,
+				"attack_id": "attack:288",
+				"defender_index": 0.0,
 				"defender_kind": "ship",
 				"selected_indices": [
 					2
@@ -7155,12 +5865,12 @@
 				"ship_index": 0
 			},
 			"player": 1,
-			"sequence": 323,
+			"sequence": 297,
 			"type": "commit_defense"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312",
+				"attack_id": "attack:288",
 				"defender_index": 0,
 				"defender_kind": "ship",
 				"expected_token_type": 1,
@@ -7169,7 +5879,7 @@
 				"token_index": 2
 			},
 			"player": 1,
-			"sequence": 324,
+			"sequence": 298,
 			"type": "spend_defense_token"
 		},
 		{
@@ -7177,7 +5887,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -7187,13 +5897,13 @@
 					"attacker_zone": 2,
 					"attacker_zone_name": "RIGHT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 3,
 					"defense_tokens": [
 						{
@@ -7236,12 +5946,12 @@
 					"range_band": "medium",
 					"redirect_active": true,
 					"redirect_adjacent_zones": [
-						1,
-						2
+						1.0,
+						2.0
 					],
 					"redirect_remaining": 2,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0,
@@ -7250,19 +5960,19 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 325,
+			"sequence": 299,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312",
+				"attack_id": "attack:288",
 				"expected_shields": 2,
 				"ship_index": 0,
 				"token_index": 2,
 				"zone": 1
 			},
 			"player": 1,
-			"sequence": 326,
+			"sequence": 300,
 			"type": "select_redirect_zone"
 		},
 		{
@@ -7270,7 +5980,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -7280,13 +5990,13 @@
 					"attacker_zone": 2,
 					"attacker_zone_name": "RIGHT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 3,
 					"defense_tokens": [
 						{
@@ -7329,12 +6039,12 @@
 					"range_band": "medium",
 					"redirect_active": true,
 					"redirect_adjacent_zones": [
-						1,
-						2
+						1.0,
+						2.0
 					],
 					"redirect_remaining": 1,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0,
@@ -7343,197 +6053,35 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 327,
+			"sequence": 301,
 			"type": "publish_attack_flow"
 		},
 		{
 			"payload": {
-				"attack_id": "attack:312",
+				"attack_id": "attack:288",
 				"expected_shields": 3,
 				"ship_index": 0,
 				"token_index": 2,
 				"zone": 2
 			},
 			"player": 1,
-			"sequence": 328,
+			"sequence": 302,
 			"type": "select_redirect_zone"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 0,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 2,
-					"attacker_zone_name": "RIGHT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 1,
-					"defender_squadron_index": -1,
-					"defender_zone": 3,
-					"defense_tokens": [
-						{
-							"state": 1,
-							"type": 2
-						},
-						{
-							"state": 1,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"BLUE": 1,
-						"RED": 1
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "medium",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0,
-					"target_squadron_index": -1
-				},
-				"step_id": 19
+				"attack_id": "attack:288"
 			},
 			"player": 0,
-			"sequence": 329,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:312"
-			},
-			"player": 0,
-			"sequence": 330,
+			"sequence": 303,
 			"type": "resolve_damage"
 		},
 		{
 			"payload": {
-				"controller_player": 1,
-				"final": false,
-				"flow_payload": {
-					"accuracy_count": 0,
-					"accuracy_spend_blocked": false,
-					"attack_kind": "standard",
-					"attacker_kind": "ship",
-					"attacker_name": "Nebulon-B Escort Frigate",
-					"attacker_player": 0,
-					"attacker_ship_index": 1,
-					"attacker_zone": 2,
-					"attacker_zone_name": "RIGHT",
-					"blocked_defense_token_indices": [],
-					"defender_index": 0,
-					"defender_kind": "ship",
-					"defender_name": "Victory II-class Star Destroyer",
-					"defender_player": 1,
-					"defender_ship_index": 0,
-					"defender_speed": 1,
-					"defender_squadron_index": -1,
-					"defender_zone": 3,
-					"defense_tokens": [
-						{
-							"state": 1,
-							"type": 2
-						},
-						{
-							"state": 1,
-							"type": 1
-						},
-						{
-							"state": 0,
-							"type": 1
-						}
-					],
-					"dice_pool": {
-						"BLUE": 1,
-						"RED": 1
-					},
-					"dice_results": [
-						{
-							"color": 0,
-							"face": 2
-						},
-						{
-							"color": 1,
-							"face": 1
-						}
-					],
-					"ecm_authorized_indices": [],
-					"ecm_choice": {
-
-					},
-					"evade_active": false,
-					"evade_range_band": "",
-					"final_damage": 0,
-					"is_obstructed": false,
-					"locked_tokens": [],
-					"modified_damage": 0,
-					"range_band": "medium",
-					"redirect_active": true,
-					"redirect_adjacent_zones": [
-						1,
-						2
-					],
-					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
-					"spent_defense_token_types": [],
-					"target_kind": "ship",
-					"target_ship_index": 0,
-					"target_squadron_index": -1
-				},
-				"step_id": 19
+				"attack_id": "attack:288"
 			},
 			"player": 0,
-			"sequence": 331,
-			"type": "publish_attack_flow"
-		},
-		{
-			"payload": {
-				"attack_id": "attack:312"
-			},
-			"player": 0,
-			"sequence": 332,
+			"sequence": 304,
 			"type": "complete_attack"
 		},
 		{
@@ -7541,7 +6089,7 @@
 				"controller_player": 1,
 				"final": false,
 				"flow_payload": {
-					"accuracy_count": 0,
+					"accuracy_count": 0.0,
 					"accuracy_spend_blocked": false,
 					"attack_kind": "standard",
 					"attacker_kind": "ship",
@@ -7551,13 +6099,13 @@
 					"attacker_zone": 2,
 					"attacker_zone_name": "RIGHT",
 					"blocked_defense_token_indices": [],
-					"defender_index": 0,
+					"defender_index": 0.0,
 					"defender_kind": "ship",
 					"defender_name": "Victory II-class Star Destroyer",
 					"defender_player": 1,
 					"defender_ship_index": 0,
 					"defender_speed": 1,
-					"defender_squadron_index": -1,
+					"defender_squadron_index": -1.0,
 					"defender_zone": 3,
 					"defense_tokens": [
 						{
@@ -7601,8 +6149,8 @@
 					"redirect_active": false,
 					"redirect_adjacent_zones": [],
 					"redirect_remaining": 0,
-					"ship_target_attacks_this_round": 0,
-					"spendable_accuracy_count": 0,
+					"ship_target_attacks_this_round": 0.0,
+					"spendable_accuracy_count": 0.0,
 					"spent_defense_token_types": [],
 					"target_kind": "ship",
 					"target_ship_index": 0,
@@ -7611,7 +6159,7 @@
 				"step_id": 19
 			},
 			"player": 0,
-			"sequence": 333,
+			"sequence": 305,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -7624,7 +6172,7 @@
 				"step_id": 0
 			},
 			"player": 0,
-			"sequence": 334,
+			"sequence": 306,
 			"type": "publish_attack_flow"
 		},
 		{
@@ -7633,7 +6181,7 @@
 				"step_id": "maneuver_step"
 			},
 			"player": 0,
-			"sequence": 335,
+			"sequence": 307,
 			"type": "advance_activation_step"
 		},
 		{
@@ -7642,7 +6190,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 336,
+			"sequence": 308,
 			"type": "set_speed"
 		},
 		{
@@ -7651,7 +6199,7 @@
 				"token_type": 0
 			},
 			"player": 0,
-			"sequence": 337,
+			"sequence": 309,
 			"type": "spend_token"
 		},
 		{
@@ -7670,7 +6218,7 @@
 				]
 			},
 			"player": 0,
-			"sequence": 338,
+			"sequence": 310,
 			"type": "execute_maneuver"
 		},
 		{
@@ -7679,7 +6227,7 @@
 				"step_id": "activation_done"
 			},
 			"player": 0,
-			"sequence": 339,
+			"sequence": 311,
 			"type": "advance_activation_step"
 		},
 		{
@@ -7687,7 +6235,7 @@
 				"ship_index": 1
 			},
 			"player": 0,
-			"sequence": 340,
+			"sequence": 312,
 			"type": "end_activation"
 		},
 		{
@@ -7695,7 +6243,7 @@
 				"next_phase": 3
 			},
 			"player": 0,
-			"sequence": 341,
+			"sequence": 313,
 			"type": "advance_phase"
 		}
 	],
@@ -7705,12 +6253,12 @@
 			0,
 			1
 		],
-		"format_version": 3,
+		"format_version": 4,
 		"godot_version": "4.5.1-stable (official)",
 		"initial_command_sequence": 0,
 		"initiative_player": 0,
 		"rng_seed": "30671017",
 		"scenario_id": "learning_scenario",
-		"timestamp": "2026-08-04T20:21:50"
+		"timestamp": "2026-08-06T07:16:53"
 	}
 }

@@ -196,6 +196,13 @@ class ContinueFixtureWindowCommand extends GameCommand:
 		return ""
 
 	func execute(game_state: GameState) -> Dictionary:
+		var attack: CurrentAttackState = game_state.current_attack_state
+		var replacement: CurrentAttackState = attack.with_patch({
+			"stage": CurrentAttackState.STAGE_ACCURACY,
+		})
+		if replacement == null \
+				or not game_state.set_current_attack_state(replacement):
+			return {}
 		game_state.objectives[COMPLETED_KEY] = true
 		game_state.objectives[PARTICIPANT.RESOLVED_KEY] = {}
 		return {"success": true, "fixture_continued": true}

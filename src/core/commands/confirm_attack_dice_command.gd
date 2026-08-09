@@ -47,7 +47,7 @@ func validate(game_state: GameState) -> String:
 		return "Concentrate Fire token choice is unresolved."
 	if game_state.timing_window_state.active:
 		return _validate_active_continuation(game_state, attack)
-	return _validate_inactive_direct_context()
+	return _validate_inactive_direct_context(attack)
 
 
 ## Echoes the attack identity for the attack pipeline reaction.
@@ -67,7 +67,9 @@ func execute(game_state: GameState) -> Dictionary:
 	}
 
 
-func _validate_inactive_direct_context() -> String:
+func _validate_inactive_direct_context(attack: CurrentAttackState) -> String:
+	if attack.attacker_kind != CurrentAttackState.KIND_SQUADRON:
+		return "Ship Attack Modify requires a matching active timing lifecycle."
 	for key: String in [
 		TimingWindowOrchestrator.COMMAND_KEY_TIMING_WINDOW_ID,
 		TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID,

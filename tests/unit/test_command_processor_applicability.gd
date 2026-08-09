@@ -5,6 +5,8 @@ extends GutTest
 
 
 const CmdProcessor: GDScript = preload("res://src/autoload/command_processor.gd")
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
 
 var _processor: Node
 var _state: GameState
@@ -141,9 +143,16 @@ func test_submit_roll_dice_allowed_from_ship_phase_legacy_flow() -> void:
 	_set_phase_and_flow(Constants.GamePhase.SHIP,
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.ACTIVATION_MODAL_OPEN)
-	var cmd := _ScopedCommand.new("roll_dice")
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
+		"stage": CurrentAttackState.STAGE_PRE_ROLL,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+	}))
+	var cmd := RollDiceCommand.new(0, {
+		"attack_id": _state.current_attack_state.attack_id,
+	})
 	var result: Dictionary = _processor.submit(cmd)
-	assert_eq(result.get("ok", false), true,
+	assert_false(result.is_empty(),
 			"Attack commands prevalidated by AttackExecutor remain phase-scoped.")
 
 

@@ -30,6 +30,10 @@ const COMMAND_KEY_LIFECYCLE_ID: String = "lifecycle_id"
 const COMMAND_KEY_SOURCE_ID: String = "source_id"
 const COMMAND_KEY_SOURCE_TYPE: String = "source_type"
 
+const ATTACK_MODIFY_OPENING_COMMAND_TYPE: String = "roll_dice"
+const ATTACK_MODIFY_RESUME_POINT: String = "attack_after_modify"
+const CURRENT_ATTACK_SOURCE_TYPE: String = "current_attack"
+
 
 ## Opens a known window with identity derived from the accepted command sequence.
 static func open_window(game_state: GameState,
@@ -124,6 +128,10 @@ static func process_successful_command(game_state: GameState,
 		execution_mode: String) -> Dictionary:
 	if not _is_valid_execution_mode(execution_mode):
 		return _failure("Unknown timing-window execution mode.")
+	var opening: Dictionary = _open_production_attack_modify_after_roll(
+			game_state, command)
+	if not bool(opening.get(KEY_OK, false)):
+		return opening
 	if game_state == null or game_state.timing_window_state == null \
 			or not game_state.timing_window_state.active:
 		return _success_without_continuation(false)
@@ -181,6 +189,12 @@ static func validate_reconstructed_state(game_state: GameState) -> Dictionary:
 		return _failure("Missing authoritative timing-window state.")
 	var timing_state: TimingWindowState = game_state.timing_window_state
 	if not timing_state.active:
+		var attack: CurrentAttackState = game_state.current_attack_state
+		if attack != null and attack.active \
+				and attack.attacker_kind == CurrentAttackState.KIND_SHIP \
+				and attack.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+			return _failure(
+					"Ship Attack Modify requires an active timing lifecycle.")
 		return _success_without_continuation(false)
 	var definition: Dictionary = DEFINITIONS.get_definition(
 			timing_state.timing_window_id)
@@ -526,10 +540,10 @@ static func _attack_modify_context_reason(game_state: GameState,
 static func _attack_modify_owner_reason(game_state: GameState,
 		context: Dictionary, controller_player: int) -> String:
 	if str(context.get(TimingWindowState.CONTINUATION_KEY_RESUME_POINT, "")) \
-			!= "attack_after_modify" \
+			!= ATTACK_MODIFY_RESUME_POINT \
 			or str(context.get(
 					TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE, "")) \
-					!= "current_attack":
+					!= CURRENT_ATTACK_SOURCE_TYPE:
 		return "Attack Modify continuation context is inconsistent."
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
@@ -544,6 +558,40 @@ static func _attack_modify_owner_reason(game_state: GameState,
 	if controller_player != attack.attacker_player:
 		return "Attack Modify controller conflicts with the current attack."
 	return ""
+
+
+static func _open_production_attack_modify_after_roll(
+		game_state: GameState,
+		command: GameCommand) -> Dictionary:
+	if command == null \
+			or command.command_type != ATTACK_MODIFY_OPENING_COMMAND_TYPE:
+		return _success_without_continuation(false)
+	if game_state == null or game_state.timing_window_state == null:
+		return _failure("Missing authoritative timing-window state.")
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+		return _failure("Accepted attack roll has no Attack Modify state.")
+	if attack.attacker_kind != CurrentAttackState.KIND_SHIP:
+		return _success_without_continuation(false)
+	var definition: Dictionary = DEFINITIONS.get_definition(
+			DEFINITIONS.ATTACK_MODIFY)
+	var context: Dictionary = {
+		TimingWindowState.CONTINUATION_KEY_ID: str(definition.get(
+				DEFINITIONS.KEY_CONTINUATION_COMMAND_TYPE, "")),
+		TimingWindowState.CONTINUATION_KEY_RESUME_POINT:
+				ATTACK_MODIFY_RESUME_POINT,
+		TimingWindowState.CONTINUATION_KEY_SOURCE_ID: attack.attack_id,
+		TimingWindowState.CONTINUATION_KEY_SOURCE_TYPE:
+				CURRENT_ATTACK_SOURCE_TYPE,
+		TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER:
+				attack.attacker_player,
+	}
+	return open_window(
+			game_state,
+			DEFINITIONS.ATTACK_MODIFY,
+			command.sequence,
+			context)
 
 
 static func _has_blocking_opportunity(opportunities: Array) -> bool:

@@ -41,21 +41,24 @@ static func register() -> void:
 
 
 static func enumerate_timing_window_sources(game_state: GameState,
-		timing_state: TimingWindowState) -> Variant:
-	var attack_source: Dictionary = _attacking_ship_source(
-			game_state, timing_state)
-	if attack_source.is_empty():
+		_timing_state: TimingWindowState) -> Variant:
+	var ship: ShipInstance = _authoritative_attacking_ship(game_state)
+	if ship == null:
 		return []
-	var ship: ShipInstance = attack_source.get("ship") as ShipInstance
 	var sources: Array[Dictionary] = []
 	for runtime_upgrade: Dictionary in ship.runtime_upgrades:
-		if not _is_h9_source_on_ship(runtime_upgrade, ship):
+		if not _is_matching_h9_source_on_ship(runtime_upgrade, ship):
 			continue
 		sources.append({
 			TimingWindowOpportunity.KEY_SOURCE_OWNER_KIND: SOURCE_OWNER_KIND,
 			TimingWindowOpportunity.KEY_RUNTIME_SOURCE_ID:
 					str(runtime_upgrade.get("runtime_upgrade_id", "")),
 		})
+	sources.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get(
+				TimingWindowOpportunity.KEY_RUNTIME_SOURCE_ID, "")) \
+				< str(right.get(
+					TimingWindowOpportunity.KEY_RUNTIME_SOURCE_ID, "")))
 	return sources
 
 
@@ -359,21 +362,36 @@ static func _attacking_ship_source(game_state: GameState,
 				TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER, -1)) \
 					!= attack.attacker_player:
 		return {}
-	var ship: ShipInstance = game_state.get_ship(
-			attack.attacker_player, attack.attacker_index)
+	var ship: ShipInstance = _authoritative_attacking_ship(game_state)
 	if ship == null or ship.is_destroyed():
 		return {}
 	return {"ship": ship, "attack": attack}
 
 
+static func _authoritative_attacking_ship(game_state: GameState) -> ShipInstance:
+	if game_state == null:
+		return null
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack == null or not attack.active \
+			or attack.attacker_kind != CurrentAttackState.KIND_SHIP:
+		return null
+	return game_state.get_ship(attack.attacker_player, attack.attacker_index)
+
+
+static func _is_matching_h9_source_on_ship(runtime_upgrade: Dictionary,
+		ship: ShipInstance) -> bool:
+	return not runtime_upgrade.is_empty() and ship != null \
+			and not str(runtime_upgrade.get("runtime_upgrade_id", "")).is_empty() \
+			and str(runtime_upgrade.get("data_key", "")) == DATA_KEY \
+			and int(runtime_upgrade.get("owner_player_id", -1)) \
+					== ship.owner_player \
+			and str(runtime_upgrade.get("source_roster_entry_id", "")) \
+					== ship.roster_entry_id
+
+
 static func _is_h9_source_on_ship(runtime_upgrade: Dictionary,
 		ship: ShipInstance) -> bool:
-	if runtime_upgrade.is_empty() or ship == null \
-			or str(runtime_upgrade.get("data_key", "")) != DATA_KEY \
-			or int(runtime_upgrade.get("owner_player_id", -1)) \
-					!= ship.owner_player \
-			or str(runtime_upgrade.get("source_roster_entry_id", "")) \
-					!= ship.roster_entry_id:
+	if not _is_matching_h9_source_on_ship(runtime_upgrade, ship):
 		return false
 	var card_state: Dictionary = _dict_from(
 			runtime_upgrade.get("card_state", {}))

@@ -109,6 +109,11 @@ class UIIntent extends RefCounted:
 	## derived on every call and never owns legality, lifecycle, or completion.
 	var timing_window: Dictionary = {}
 
+	## Fresh display copy of the canonical current-attack dice. Presentation
+	## consumes this instead of retaining an older InteractionFlow payload.
+	## The copy is non-authoritative and may never be used for validation.
+	var attack_dice_results: Array[Dictionary] = []
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -124,6 +129,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	if state == null:
 		return intent
 	intent.timing_window = _project_timing_window(state, viewer_player)
+	intent.attack_dice_results = _project_attack_dice_results(state)
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return intent
@@ -142,6 +148,14 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 			else {}
 	intent.affordances = _affordances_for(state, flow, viewer_player)
 	return intent
+
+
+static func _project_attack_dice_results(
+		state: GameState) -> Array[Dictionary]:
+	var attack: CurrentAttackState = state.current_attack_state
+	if attack == null or not attack.active:
+		return []
+	return attack.dice_results
 
 
 ## Projects an active-player transition without branching in the scene layer.

@@ -556,6 +556,67 @@ func test_evade_die_click_emits_signal() -> void:
 			"evade_die_confirmed should be emitted on die click")
 
 
+func test_evade_die_interaction_survives_canonical_dice_refresh() -> void:
+	var dice: Array[Dictionary] = [
+		{"color": Constants.DiceColor.RED,
+				"face": Constants.DiceFace.HIT},
+		{"color": Constants.DiceColor.BLUE,
+				"face": Constants.DiceFace.ACCURACY},
+	]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	var original_die: TextureRect = _panel._dice_textures[0]
+	watch_signals(_panel)
+
+	_panel.show_dice_results([dice[1]])
+
+	assert_eq(_panel._dice_textures.size(), 1,
+			"Canonical refresh should replace the displayed dice pool.")
+	assert_ne(_panel._dice_textures[0], original_die)
+	assert_eq(_panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_STOP,
+			"Refreshed Evade dice must remain interactive.")
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	_panel._dice_textures[0].gui_input.emit(click)
+	assert_signal_emitted_with_parameters(
+			_panel, "evade_die_confirmed", [0])
+
+
+func test_passive_evade_refresh_remains_noninteractive() -> void:
+	var dice: Array[Dictionary] = [{
+		"color": Constants.DiceColor.RED,
+		"face": Constants.DiceFace.HIT,
+	}]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG, false)
+
+	_panel.show_dice_results(dice)
+
+	assert_true(_panel._evade_mode)
+	assert_eq(_panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE,
+			"A passive peer must not gain Evade input after refresh.")
+
+
+func test_expired_evade_interaction_is_not_restored_by_refresh() -> void:
+	var dice: Array[Dictionary] = [{
+		"color": Constants.DiceColor.RED,
+		"face": Constants.DiceFace.HIT,
+	}]
+	_panel.show_dice_results(dice)
+	_panel.show_evade_die_selection(Constants.RANGE_BAND_LONG)
+	_panel.hide_evade_die_selection()
+
+	_panel.show_dice_results(dice)
+
+	assert_false(_panel._evade_mode)
+	assert_eq(_panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_IGNORE,
+			"A completed Evade interaction must stay dismissed.")
+
+
 # =========================================================================
 # Brace Pending Indicator
 # =========================================================================

@@ -1,13 +1,9 @@
-## Slice 8A Model C-S protocol evidence for one canonical individual attack.
+## Model C-S production protocol evidence for one canonical individual attack.
 extends GutTest
 
 
 const PROCESSOR_SCRIPT: GDScript = preload(
 		"res://src/autoload/command_processor.gd")
-const COMMANDS: GDScript = preload(
-		"res://tests/fixtures/timing_window_command_fixtures.gd")
-const PARTICIPANT: GDScript = preload(
-		"res://tests/fixtures/timing_window_participant_fixture.gd")
 const SAVE_MANAGER_SCRIPT: GDScript = preload(
 		"res://src/autoload/save_game_manager.gd")
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
@@ -16,6 +12,10 @@ const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 const REPLAY_DRIVER_SCRIPT: GDScript = preload(
 		"res://src/autoload/replay_driver.gd")
+const CF_RULE: GDScript = preload(
+		"res://src/core/effects/rules/concentrate_fire_token.gd")
+const CF_DECLINE: GDScript = preload(
+		"res://src/core/commands/decline_concentrate_fire_token_reroll_command.gd")
 
 const SHIP_KEY: String = "cr90_corvette_a"
 const SQUADRON_KEY: String = "x_wing_squadron"
@@ -50,6 +50,7 @@ func before_each() -> void:
 	GameLogger.min_level = GameLogger.Level.WARNING
 	_broadcast_results.clear()
 	RuleRegistry.clear()
+	ConfirmAttackDiceCommand.register()
 	CommandProcessor.reset()
 
 
@@ -75,7 +76,7 @@ func after_each() -> void:
 	GameManager._reset_network_result_ordering()
 
 
-func test_local_semantic_sequence_is_atomic_and_production_timing_inert() -> void:
+func test_local_semantic_sequence_opens_and_completes_production_timing() -> void:
 	var state: GameState = _make_state()
 	var processor: Node = _make_processor(state)
 	var begin_result: Dictionary = processor.submit(
@@ -89,9 +90,9 @@ func test_local_semantic_sequence_is_atomic_and_production_timing_inert() -> voi
 			RollDiceCommand.new(0, {"attack_id": "attack:0"}))
 	assert_false(roll_result.is_empty())
 	assert_eq(state.current_attack_state.stage,
-			CurrentAttackState.STAGE_ATTACK_MODIFY)
+			CurrentAttackState.STAGE_ACCURACY)
 	assert_false(state.timing_window_state.active,
-			"Slice 8A must not activate the production ATTACK_MODIFY opener.")
+			"A blocker-free production lifecycle must confirm and close once.")
 	_assert_finish_attack(processor, state, "attack:0")
 	assert_eq(_history_types(processor.serialize_history()), [
 		"begin_attack", "roll_dice", "confirm_attack_dice",
@@ -414,6 +415,56 @@ func test_remote_attacker_host_defender_generates_defense_continuation() -> void
 	_assert_network_evade_redirect_topology(1, 0)
 
 
+func test_bug_014_refreshed_evade_click_submits_semantic_command_once() -> void:
+	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+	NetworkManager.role = NetworkManager.Role.NONE
+	NetworkManager._local_player_index = -1
+	var state: GameState = _make_state()
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	CommandProcessor.reset()
+	var submitter := LocalCommandSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	var begin: Dictionary = submitter.submit(
+			BeginAttackCommand.new(0, _ship_attack_payload()))
+	assert_false(begin.is_empty())
+	_submit_through_accuracy(CommandProcessor, state)
+	var defender: ShipInstance = state.get_ship(1, 0)
+	var evade_index: int = _defense_token_index(
+			defender, Constants.DefenseToken.EVADE)
+	assert_gte(evade_index, 0)
+	assert_false(submitter.submit(CommitDefenseCommand.new(1, {
+		"attack_id": state.current_attack_state.attack_id,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": 0,
+		"ship_index": 0,
+		"selected_indices": [evade_index],
+	})).is_empty())
+	assert_eq(CommandProcessor.get_history()[-1].command_type,
+			"spend_defense_token")
+
+	var panel := AttackSimPanel.new()
+	add_child_autofree(panel)
+	panel.show_initial_attack_exec("Defender")
+	panel.show_dice_results(state.current_attack_state.dice_results)
+	panel.show_evade_die_selection(state.current_attack_state.range_band)
+	panel.evade_die_confirmed.connect(func(die_index: int) -> void:
+		GameManager.submit_select_evade_die(defender, die_index))
+	panel.show_dice_results(state.current_attack_state.dice_results)
+	assert_eq(panel._dice_textures[0].mouse_filter,
+			Control.MOUSE_FILTER_STOP)
+
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._dice_textures[0].gui_input.emit(click)
+	var history_types: Array[String] = _history_types(
+			CommandProcessor.serialize_history())
+	assert_eq(history_types.count("select_evade_die"), 1)
+	assert_true(state.current_attack_state.is_inactive(),
+			"The accepted Evade command must continue through attack completion.")
+
+
 func test_begin_attack_rejects_tampered_authoritative_entry_facts() -> void:
 	var state: GameState = _make_state()
 	var valid: Dictionary = _ship_attack_payload()
@@ -434,6 +485,45 @@ func test_begin_attack_rejects_tampered_authoritative_entry_facts() -> void:
 			"Target ownership is validated by authoritative fleet state.")
 
 
+func test_reconstruction_rejects_inactive_ship_attack_modify_only() -> void:
+	var ship_state: GameState = _make_state()
+	ship_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0, Constants.Visibility.ALL, {"attacker_player": 0})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(ship_state, {
+		"attack_id": "attack:40",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+	}))
+	assert_null(GameState.deserialize(ship_state.serialize()),
+			"A stale pre-activation ship snapshot must fail before projection.")
+
+	var squadron_state: GameState = _make_state()
+	squadron_state.current_phase = Constants.GamePhase.SQUADRON
+	squadron_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_MODIFY,
+			0, Constants.Visibility.ALL, {"attacker_player": 0})
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(squadron_state, {
+		"attack_id": "attack:41",
+		"stage": CurrentAttackState.STAGE_ATTACK_MODIFY,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.BLUE),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+	}))
+	assert_not_null(GameState.deserialize(squadron_state.serialize()),
+			"The accepted inactive squadron confirmation path must reconstruct.")
+
+
 func test_stale_or_duplicate_commands_leave_state_and_cursor_unchanged() -> void:
 	var state: GameState = _make_state()
 	var processor: Node = _make_processor(state)
@@ -448,36 +538,34 @@ func test_stale_or_duplicate_commands_leave_state_and_cursor_unchanged() -> void
 	assert_eq(processor.submit(ConfirmAttackDiceCommand.new(0, {
 		"attack_id": "attack:stale",
 	})), {})
-	assert_eq(processor.get_next_sequence(), 2)
+	assert_eq(processor.get_next_sequence(), 3)
 	assert_eq(state.serialize(), before)
 	assert_engine_error(2,
 			"Both rejected commands should diagnose without advancing authority.")
 
 
-func test_shared_test_opened_lifecycle_continues_same_canonical_attack() -> void:
-	COMMANDS.register()
-	assert_true(COMMANDS.register_participant())
+func test_production_opened_lifecycle_continues_same_canonical_attack() -> void:
+	CF_RULE.register()
+	CF_DECLINE.register()
 	var state: GameState = _make_state()
+	assert_true(state.get_ship(0, 0).command_tokens.add_token(
+			Constants.CommandType.CONCENTRATE_FIRE))
 	var processor: Node = _make_processor(state)
 	processor.submit(BeginAttackCommand.new(0, _ship_attack_payload()))
 	processor.submit(RollDiceCommand.new(0, {"attack_id": "attack:0"}))
+	assert_true(state.timing_window_state.active)
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,
 			0, Constants.Visibility.ALL, {"attacker_player": 0})
-	state.objectives[PARTICIPANT.SOURCES_KEY] = ["source-a"]
-	state.objectives[PARTICIPANT.RESOLVED_KEY] = {}
-
-	processor.submit(COMMANDS.make_open())
-	processor.submit(COMMANDS.make_resolution(
-			COMMANDS.USE_TYPE, state, "source-a"))
+	processor.submit(CF_DECLINE.new(0, _cf_identity_payload(state)))
 	assert_eq(state.current_attack_state.attack_id, "attack:0")
 	assert_eq(state.current_attack_state.stage,
 			CurrentAttackState.STAGE_ACCURACY)
 	assert_true(state.timing_window_state.is_inactive())
 	assert_eq(_history_types(processor.serialize_history()), [
-		"begin_attack", "roll_dice", COMMANDS.OPEN_TYPE,
-		COMMANDS.USE_TYPE, COMMANDS.CONTINUATION_TYPE,
+		"begin_attack", "roll_dice", CF_DECLINE.TYPE,
+		ConfirmAttackDiceCommand.TYPE,
 	])
 
 
@@ -502,10 +590,10 @@ func test_host_client_mirror_and_replay_preserve_identity_and_state() -> void:
 	assert_eq(_history_sequences(authoritative_history), [0, 1, 2, 3, 4, 5, 6])
 	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
 	var replay_file := GameReplay.new()
-	replay_file.capture_header("slice-8a-pre-activation", 8108, [0, 1], 0, 0)
+	replay_file.capture_header("twi-002-production", 8108, [0, 1], 0, 0)
 	replay_file.set_commands(authoritative_history)
 	assert_not_null(GameReplay.deserialize(replay_file.serialize()),
-			"The pre-activation semantic history must load as format 3.")
+			"The production semantic history must load as format 4.")
 	var authority_final: Dictionary = authority_state.serialize()
 
 	var client_state: GameState = GameState.deserialize(initial.serialize())
@@ -678,7 +766,7 @@ func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void
 			"Production GameReplay persistence must succeed.")
 
 	var loaded: GameReplay = GameReplay.load_from_file(TEST_REPLAY_PATH)
-	assert_not_null(loaded, "The persisted format-3 replay must load.")
+	assert_not_null(loaded, "The persisted format-4 replay must load.")
 	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
 	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED,
 			"The exact 64-bit replay seed must survive disk JSON.")
@@ -790,16 +878,12 @@ func test_ecm_completion_cleanup_matches_hotseat_host_mirror_and_replay() -> voi
 	assert_eq(_history_types(replay.serialize_history()), ["complete_attack"])
 
 
-func test_save_load_and_reconnect_resume_pre_activation_stages_and_cursor() -> void:
+func test_save_load_and_reconnect_resume_production_stages_and_cursor() -> void:
 	var state: GameState = _make_state()
 	GameManager.current_game_state = state
 	CommandProcessor.reset()
 	CommandProcessor.submit(BeginAttackCommand.new(0, _ship_attack_payload()))
 	CommandProcessor.submit(RollDiceCommand.new(0, {"attack_id": "attack:0"}))
-	_assert_round_trip_stage(state, CurrentAttackState.STAGE_ATTACK_MODIFY)
-	CommandProcessor.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": "attack:0",
-	}))
 	_assert_round_trip_stage(state, CurrentAttackState.STAGE_ACCURACY)
 	CommandProcessor.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": "attack:0", "locked_tokens": [],
@@ -815,7 +899,7 @@ func test_save_load_and_reconnect_resume_pre_activation_stages_and_cursor() -> v
 	assert_eq(metadata.save_format_version, SaveGameMetadata.CURRENT_VERSION)
 	assert_eq(metadata.next_command_sequence, 4)
 	assert_true(GameManager.start_new_game_from_state(
-			restored, "slice-8a-pre-activation", metadata.next_command_sequence))
+			restored, "twi-002-production", metadata.next_command_sequence))
 	assert_eq(CommandProcessor.get_next_sequence(), 4)
 	assert_eq(GameManager._next_network_result_sequence, 4)
 	assert_eq(restored.current_attack_state.stage,
@@ -826,9 +910,10 @@ func test_save_load_and_reconnect_resume_pre_activation_stages_and_cursor() -> v
 
 func _assert_finish_attack(processor: Node, state: GameState,
 		attack_id: String) -> void:
-	assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": attack_id,
-	})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
+			"attack_id": attack_id,
+		})).is_empty())
 	assert_false(processor.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": attack_id, "locked_tokens": [],
 	})).is_empty())
@@ -844,8 +929,10 @@ func _submit_full_attack(submitter: Variant) -> void:
 			0, _ship_attack_payload())).is_empty())
 	assert_false(submitter.submit(RollDiceCommand.new(
 			0, {"attack_id": "attack:0"})).is_empty())
-	assert_false(submitter.submit(ConfirmAttackDiceCommand.new(
-			0, {"attack_id": "attack:0"})).is_empty())
+	if GameManager.current_game_state.current_attack_state.stage \
+			== CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(submitter.submit(ConfirmAttackDiceCommand.new(
+				0, {"attack_id": "attack:0"})).is_empty())
 	assert_false(submitter.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": "attack:0", "locked_tokens": [],
 	})).is_empty())
@@ -860,9 +947,10 @@ func _submit_through_accuracy(processor: Node, state: GameState) -> void:
 	assert_false(processor.submit(RollDiceCommand.new(0, {
 		"attack_id": attack_id,
 	})).is_empty())
-	assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": attack_id,
-	})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
+			"attack_id": attack_id,
+		})).is_empty())
 	assert_false(processor.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": attack_id,
 		"locked_tokens": [],
@@ -879,9 +967,10 @@ func _submit_resolved_attack(processor: Variant, state: GameState,
 	assert_false(processor.submit(RollDiceCommand.new(0, {
 		"attack_id": attack_id,
 	})).is_empty())
-	assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": attack_id,
-	})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(processor.submit(ConfirmAttackDiceCommand.new(0, {
+			"attack_id": attack_id,
+		})).is_empty())
 	assert_false(processor.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": attack_id,
 		"locked_tokens": [],
@@ -906,9 +995,11 @@ func _submit_standard_attack(submitter: Variant, payload: Dictionary,
 	assert_false(submitter.submit(RollDiceCommand.new(0, {
 		"attack_id": attack_id,
 	})).is_empty())
-	assert_false(submitter.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": attack_id,
-	})).is_empty())
+	if GameManager.current_game_state.current_attack_state.stage \
+			== CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(submitter.submit(ConfirmAttackDiceCommand.new(0, {
+			"attack_id": attack_id,
+		})).is_empty())
 	assert_false(submitter.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": attack_id,
 		"locked_tokens": [],
@@ -933,9 +1024,11 @@ func _submit_replacement_unique_attack(
 	assert_false(submitter.submit(RollDiceCommand.new(0, {
 		"attack_id": attack_id,
 	})).is_empty())
-	assert_false(submitter.submit(ConfirmAttackDiceCommand.new(0, {
-		"attack_id": attack_id,
-	})).is_empty())
+	if GameManager.current_game_state.current_attack_state.stage \
+			== CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(submitter.submit(ConfirmAttackDiceCommand.new(0, {
+			"attack_id": attack_id,
+		})).is_empty())
 	assert_false(submitter.submit(CommitAccuracyCommand.new(0, {
 		"attack_id": attack_id,
 		"locked_tokens": [],
@@ -946,6 +1039,24 @@ func _submit_replacement_unique_attack(
 		"defender_index": 0,
 		"selected_indices": [0],
 	})).is_empty())
+
+
+func _cf_identity_payload(state: GameState) -> Dictionary:
+	var attack: CurrentAttackState = state.current_attack_state
+	var ship_id: String = CF_RULE.attacking_ship_identity(attack)
+	return {
+		TimingWindowOrchestrator.COMMAND_KEY_TIMING_WINDOW_ID:
+				state.timing_window_state.timing_window_id,
+		TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID:
+				state.timing_window_state.lifecycle_id,
+		TimingWindowOpportunity.KEY_SOURCE_OWNER_KIND:
+				CF_RULE.SOURCE_OWNER_KIND,
+		TimingWindowOpportunity.KEY_RUNTIME_SOURCE_ID:
+				CF_RULE.token_source_identity(ship_id),
+		TimingWindowOpportunity.KEY_SEMANTIC_KEY: CF_RULE.SEMANTIC_KEY,
+		CF_RULE.PAYLOAD_ATTACK_ID: attack.attack_id,
+		CF_RULE.PAYLOAD_ATTACKING_SHIP_ID: ship_id,
+	}
 
 
 func _assert_network_evade_redirect_topology(
@@ -1040,8 +1151,9 @@ func _submit_evade_redirect_decisions(
 	assert_false(submitter.submit(RollDiceCommand.new(attacker_player, {
 		"attack_id": attack_id,
 	})).is_empty())
-	assert_false(submitter.submit(ConfirmAttackDiceCommand.new(
-			attacker_player, {"attack_id": attack_id})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(submitter.submit(ConfirmAttackDiceCommand.new(
+				attacker_player, {"attack_id": attack_id})).is_empty())
 	assert_false(submitter.submit(CommitAccuracyCommand.new(attacker_player, {
 		"attack_id": attack_id,
 		"locked_tokens": [],

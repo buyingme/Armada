@@ -172,8 +172,8 @@ func react_to_command_rejection(
 ## Opens or closes the [AttackPanelMirror] on the non-attacker peer based on
 ## canonical attack ownership and the authoritative [InteractionFlow].
 ##
-## The same [AttackSimPanel] UI is rendered on the non-attacker peer,
-## populated entirely from [member InteractionFlow.payload]. Only
+## The same [AttackSimPanel] UI is rendered on the non-attacker peer from a
+## derived flow payload whose dice are refreshed from CurrentAttackState. Only
 ## defender-owned command inputs are connected on that mirror.
 ##
 ## The mirror is the sole interactive attack presentation when the
@@ -183,7 +183,9 @@ func react_to_command_rejection(
 ##
 ## Hot-seat is filtered out by the network-peer guard at the call site in
 ## [ModalRouter].
-func sync_mirror_from_flow(flow: InteractionFlow) -> void:
+func sync_mirror_from_flow(
+		flow: InteractionFlow,
+		attack_dice_results: Array[Dictionary] = []) -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
 		return
 	var is_attack: bool = (flow != null
@@ -206,8 +208,20 @@ func sync_mirror_from_flow(flow: InteractionFlow) -> void:
 		return
 	if _attack_executor != null:
 		_attack_executor.deactivate_primary_presentation()
+	var projected_payload: Dictionary = flow.payload.duplicate(true)
+	projected_payload["dice_results"] = attack_dice_results.duplicate(true)
 	_panel_mgr.attack_panel_mirror.apply_flow(
-			flow.payload, int(flow.step_id))
+			projected_payload, int(flow.step_id))
+
+
+## Refreshes the attacker-owned panel from canonical CurrentAttackState before
+## any newly-derived timing-window choice becomes actionable. The executor's
+## scene state remains a one-way presentation cache.
+func sync_current_attack_dice_projection(
+		_attack_dice_results: Array[Dictionary]) -> void:
+	if _attack_executor == null or not _owns_active_canonical_attack():
+		return
+	_attack_executor.refresh_current_attack_dice_projection()
 
 
 func _owns_active_canonical_attack() -> bool:

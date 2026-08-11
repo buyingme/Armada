@@ -886,7 +886,7 @@ static func _collect_incoming_squad_threats_to_ship(
 # =========================================================================
 
 ## Builds outgoing targets for one friendly squadron.
-## Squadrons have 360° arc and attack at distance 1 (close range).
+## Squadrons have 360° arc and attack at distance 1.
 ## Requirements: TL-LIST-011, TL-RNG-003, AC-TL-30–32.
 ## Rules Reference: "Firing Arc" — "Each squadron has a 360° firing arc."
 ## Rules Reference: "Attack Range" — "Each squadron's attack range is distance 1."
@@ -943,11 +943,12 @@ static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
 			squad.pos, squad.radius, edge)
 	var dist: float = range_result["distance"]
 	var cp: Vector2 = range_result["def_pt"]
+	var distance_band: int = GameScale.get_distance_band(dist)
 	var band: String = GameScale.get_range_band(dist)
-	log.debug("  squad '%s' -> ship '%s' %s dist=%.1f band=%s" % [
+	log.debug("  squad '%s' -> ship '%s' %s dist=%.1f distance=%d range=%s" % [
 			squad.squad_name, es.ship_name,
-			_hz_key(def_hz), dist, band])
-	if band != Constants.RANGE_BAND_CLOSE:
+			_hz_key(def_hz), dist, distance_band, band])
+	if distance_band != 1:
 		return null
 	var def_los: Vector2 = es.los_pts.get(_hz_key(def_hz), es.pos)
 	var bodies: Array = _get_intervening_squad_bodies(es, all_ship_bodies)
@@ -1001,10 +1002,11 @@ static func _collect_squad_vs_squads(log: GameLogger, squad: SquadInfo,
 	for enemy_sq: Variant in enemy_squads:
 		var esq: SquadInfo = enemy_sq as SquadInfo
 		var dist: float = _measure_squad_to_squad_distance(squad, esq)
+		var distance_band: int = GameScale.get_distance_band(dist)
 		var band: String = GameScale.get_range_band(dist)
-		log.debug("  squad '%s' -> squad '%s' dist=%.1f band=%s" % [
-				squad.squad_name, esq.squad_name, dist, band])
-		if band != Constants.RANGE_BAND_CLOSE:
+		log.debug("  squad '%s' -> squad '%s' dist=%.1f distance=%d range=%s" % [
+				squad.squad_name, esq.squad_name, dist, distance_band, band])
+		if distance_band != 1:
 			continue
 		var bodies: Array = []
 		for body_entry: Variant in all_ship_bodies:

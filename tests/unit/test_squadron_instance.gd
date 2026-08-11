@@ -144,7 +144,7 @@ func test_reset_activation() -> void:
 
 # --- TWI-003 Slice 1 owner-local action substrate ---
 
-func test_activation_action_defaults_are_inactive_and_not_serialized() -> void:
+func test_activation_action_defaults_serialize_on_owner() -> void:
 	assert_false(_instance.has_activation_action_state())
 	assert_true(_instance.is_activation_action_state_valid())
 	assert_false(_instance.has_remaining_move_action(false))
@@ -155,8 +155,8 @@ func test_activation_action_defaults_are_inactive_and_not_serialized() -> void:
 			"activation_id", "activation_context",
 			"commanding_ship_player", "commanding_ship_index",
 			"move_action_committed", "attack_action_disposition"]:
-		assert_false(serialized.has(key),
-				"Slice 1 must not serialize '%s'." % key)
+		assert_true(serialized.has(key),
+				"Slice 2 must serialize owner field '%s'." % key)
 
 
 func test_initialize_squadron_phase_action_state_has_stable_identity() -> void:

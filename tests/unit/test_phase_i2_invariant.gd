@@ -38,6 +38,21 @@ func _make_ship_with_dial(state: GameState, player: int,
 	return state.player_states[player].ships.size() - 1
 
 
+func _establish_ship_boundary(state: GameState, player: int,
+		ship_index: int) -> ShipInstance:
+	var ship: ShipInstance = state.get_ship(player, ship_index)
+	assert_true(ship.establish_ship_activation("ship-activation:test"))
+	return ship
+
+
+func _prepare_normal_completion(ship: ShipInstance) -> void:
+	assert_true(ship.consume_unreached_squadron_command_opportunity(
+			ship.ship_activation_identity, true))
+	assert_true(ship.open_maneuver_opportunity(ship.ship_activation_identity))
+	assert_true(ship.consume_open_maneuver_opportunity(
+			ship.ship_activation_identity))
+
+
 # ---------------------------------------------------------------------------
 # AdvancePhaseCommand
 # ---------------------------------------------------------------------------
@@ -86,6 +101,7 @@ func test_activate_ship_sets_activation_modal_open() -> void:
 	var idx: int = _make_ship_with_dial(s, 0)
 	var cmd: ActivateShipCommand = ActivateShipCommand.new(0,
 			{"ship_index": idx})
+	cmd.sequence = 3
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
 			Constants.InteractionFlow.SHIP_ACTIVATION)
@@ -104,6 +120,7 @@ func test_convert_dial_to_token_sets_activation_modal_open() -> void:
 	var idx: int = _make_ship_with_dial(s, 1, Constants.CommandType.NAVIGATE)
 	var cmd: ConvertDialToTokenCommand = ConvertDialToTokenCommand.new(1,
 			{"ship_index": idx})
+	cmd.sequence = 4
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
 			Constants.InteractionFlow.SHIP_ACTIVATION)
@@ -120,6 +137,8 @@ func test_convert_dial_to_token_sets_activation_modal_open() -> void:
 func test_execute_maneuver_sets_maneuver_step() -> void:
 	var s: GameState = _make_state()
 	var idx: int = _make_ship_with_dial(s, 0)
+	var ship: ShipInstance = _establish_ship_boundary(s, 0, idx)
+	assert_true(ship.open_maneuver_opportunity(ship.ship_activation_identity))
 	var cmd: ExecuteManeuverCommand = ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
 		"speed": 1,
@@ -127,6 +146,7 @@ func test_execute_maneuver_sets_maneuver_step() -> void:
 		"pos_x": 0.5,
 		"pos_y": 0.5,
 		"rotation_deg": 0.0,
+		"ship_activation_identity": ship.ship_activation_identity,
 	})
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
@@ -143,8 +163,11 @@ func test_execute_maneuver_sets_maneuver_step() -> void:
 func test_end_activation_p0_passes_to_p1_for_select() -> void:
 	var s: GameState = _make_state()
 	var idx: int = _make_ship_with_dial(s, 0)
+	var ship: ShipInstance = _establish_ship_boundary(s, 0, idx)
+	_prepare_normal_completion(ship)
 	var cmd: EndActivationCommand = EndActivationCommand.new(0,
-			{"ship_index": idx})
+			{"ship_index": idx,
+				"ship_activation_identity": ship.ship_activation_identity})
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
 			Constants.InteractionFlow.SHIP_ACTIVATION)
@@ -157,8 +180,11 @@ func test_end_activation_p0_passes_to_p1_for_select() -> void:
 func test_end_activation_p1_passes_to_p0() -> void:
 	var s: GameState = _make_state()
 	var idx: int = _make_ship_with_dial(s, 1)
+	var ship: ShipInstance = _establish_ship_boundary(s, 1, idx)
+	_prepare_normal_completion(ship)
 	var cmd: EndActivationCommand = EndActivationCommand.new(1,
-			{"ship_index": idx})
+			{"ship_index": idx,
+				"ship_activation_identity": ship.ship_activation_identity})
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.controller_player, 0)
 
@@ -169,11 +195,15 @@ func test_end_activation_p1_passes_to_p0() -> void:
 
 func test_activate_squadron_sets_action_choice() -> void:
 	var s: GameState = _make_state(Constants.GamePhase.SQUADRON, 0)
+	assert_true(s.initialize_squadron_phase_progress(0))
 	var sq: SquadronInstance = SquadronInstance.new()
 	sq.owner_player = 0
 	s.player_states[0].squadrons.append(sq)
 	var cmd: ActivateSquadronCommand = ActivateSquadronCommand.new(0,
-			{"squadron_index": 0})
+			{"squadron_index": 0,
+				"activation_context":
+						SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE})
+	cmd.sequence = 5
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
 			Constants.InteractionFlow.SQUADRON_ACTIVATION)
@@ -190,10 +220,13 @@ func test_activate_squadron_sets_action_choice() -> void:
 func test_advance_activation_step_maneuver_step() -> void:
 	var s: GameState = _make_state()
 	var idx: int = _make_ship_with_dial(s, 0)
+	var ship: ShipInstance = _establish_ship_boundary(s, 0, idx)
+	ship.begin_attack_step()
 	var cmd: AdvanceActivationStepCommand = \
 			AdvanceActivationStepCommand.new(0, {
 		"ship_index": idx,
 		"step_id": "maneuver_step",
+		"ship_activation_identity": ship.ship_activation_identity,
 	})
 	cmd.execute(s)
 	assert_eq(s.interaction_flow.flow_type,
@@ -211,7 +244,9 @@ func test_advance_activation_step_maneuver_step() -> void:
 func test_flow_set_by_command_survives_state_round_trip() -> void:
 	var s: GameState = _make_state()
 	var idx: int = _make_ship_with_dial(s, 0)
-	ActivateShipCommand.new(0, {"ship_index": idx}).execute(s)
+	var cmd := ActivateShipCommand.new(0, {"ship_index": idx})
+	cmd.sequence = 6
+	cmd.execute(s)
 	var clone: GameState = GameState.deserialize(s.serialize())
 	assert_true(clone.interaction_flow.equals(s.interaction_flow),
 			"Command-driven flow must round-trip through serialize().")

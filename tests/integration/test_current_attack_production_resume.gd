@@ -298,10 +298,12 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 
 	await get_tree().process_frame
 	assert_true(state.current_attack_state.is_inactive())
-	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
-	assert_eq(CommandProcessor.get_next_sequence(), 35)
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
+			"advance_activation_step"])
+	assert_eq(CommandProcessor.get_next_sequence(), 36)
 	await get_tree().process_frame
-	assert_eq(_history_types(), ["resolve_damage", "complete_attack"],
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
+			"advance_activation_step"],
 			"Deferred production resume must remain single-shot.")
 
 
@@ -573,6 +575,37 @@ func test_save_load_reconstructs_inactive_second_normal_attack() -> void:
 	manager.free()
 
 
+func test_production_save_load_reconstructs_commanded_post_skip_projection() \
+		-> void:
+	var source: GameState = _command_squadron_projection_state(true)
+	GameManager.current_game_state = source
+	assert_true(CommandProcessor.restore_next_sequence(49))
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	assert_true(manager.save_game(source, TEST_SAVE))
+	var loaded: Dictionary = manager.load_game(TEST_SAVE)
+	assert_true(bool(loaded.get("ok", false)))
+	var restored: GameState = loaded.get("state") as GameState
+	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			metadata.next_command_sequence))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(metadata.save_format_version, SaveGameMetadata.CURRENT_VERSION)
+	assert_true(modal.is_command_mode())
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_eq(modal.get_selected_token().get_squadron_instance(),
+			restored.get_squadron(0, 0))
+	assert_eq(restored.get_squadron(0, 0).attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_true(_history_types().is_empty())
+	manager.delete_save(TEST_SAVE)
+	manager.free()
+
+
 func test_reconnect_resume_is_passive_and_uses_filtered_canonical_state() -> void:
 	var server_state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
 		"attack_id": "attack:14",
@@ -667,6 +700,233 @@ func test_reconnect_reconstructs_inactive_second_normal_attack() -> void:
 	assert_true(_history_types().is_empty())
 
 
+func test_filtered_reconnect_reconstructs_phase_pre_begin_projection() -> void:
+	var server_state: GameState = _phase_squadron_projection_state(false)
+	var filtered: Dictionary = StateFilter.filter_for_player(
+			server_state.serialize(), 1)
+	var client_state: GameState = GameState.deserialize(filtered)
+	assert_not_null(client_state)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 50))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_eq(modal.get_selected_token().get_squadron_instance(),
+			client_state.get_squadron(0, 0))
+	assert_false(modal._is_interactable,
+			"A reconnecting non-controller gets projection, not authority.")
+	assert_eq(CommandProcessor.get_next_sequence(), 50)
+	assert_true(_history_types().is_empty())
+
+
+func test_filtered_reconnect_reconstructs_commanded_post_skip_projection() \
+		-> void:
+	var server_state: GameState = _command_squadron_projection_state(true)
+	var filtered: Dictionary = StateFilter.filter_for_player(
+			server_state.serialize(), 1)
+	var client_state: GameState = GameState.deserialize(filtered)
+	assert_not_null(client_state)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 51))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_true(modal.is_command_mode())
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_eq(modal.get_selected_token().get_squadron_instance(),
+			client_state.get_squadron(0, 0))
+	assert_true(modal._has_attacked)
+	assert_false(modal._is_interactable,
+			"A reconnecting non-controller gets projection, not authority.")
+	assert_eq(CommandProcessor.get_next_sequence(), 51)
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_ship_pre_begin_projection_from_owner() -> void:
+	var state: GameState = _ship_declaration_projection_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 51))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(1, 0)
+
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.ATTACK))
+	assert_true(board._ship_activation_controller.is_activation_modal_open())
+	assert_true(board._panel_mgr.activation_modal._is_interactable,
+			"The canonical ship owner must remain interactive despite stale flow.")
+	assert_true(state.current_attack_state.is_inactive())
+	assert_true(_history_types().is_empty(),
+			"Reconstruction must not synthesize a semantic command.")
+
+
+func test_scene_recreation_restores_ship_post_skip_maneuver_projection() -> void:
+	var state: GameState = _ship_declaration_projection_state(true)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 53))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(1, 0)
+
+	assert_false(ship.attack_step_active)
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.MANEUVER))
+	assert_true(board._ship_activation_controller.is_activation_modal_open())
+	assert_true(board._panel_mgr.activation_modal._is_interactable,
+			"The canonical ship owner must control post-Skip Maneuver.")
+	assert_true(_history_types().is_empty())
+
+
+func test_ship_reconstruction_gives_non_owner_read_only_mirror_despite_stale_flow() \
+		-> void:
+	for post_skip: bool in [false, true]:
+		var state: GameState = _ship_declaration_projection_state(post_skip)
+		# The fixture's stale flow names player 0, while canonical ship owner is 1.
+		PlayMode.set_mode(PlayMode.Mode.NETWORK)
+		NetworkManager.role = NetworkManager.Role.CLIENT
+		NetworkManager._local_player_index = 0
+		assert_true(GameManager.start_new_game_from_state(
+				state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+				70 + int(post_skip)))
+		var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+		add_child_autofree(board)
+
+		assert_true(board._ship_activation_controller.is_activation_modal_open())
+		assert_false(board._panel_mgr.activation_modal._is_interactable,
+				"A stale flow controller must not make the non-owner interactive.")
+		assert_true(_history_types().is_empty())
+		board.queue_free()
+		await get_tree().process_frame
+
+
+func test_scene_recreation_restores_phase_squadron_pre_begin_projection() -> void:
+	var state: GameState = _phase_squadron_projection_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 55))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(GameManager.get_activating_squadron(), squadron)
+	assert_eq(modal.get_selected_token().get_squadron_instance(), squadron)
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(modal.visible)
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_phase_squadron_active_begin_continuation() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:56",
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"dice_results": [_hit_die()],
+	})
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 57))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ATTACKING)
+	assert_false(modal.visible)
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_phase_squadron_post_skip_projection() -> void:
+	var state: GameState = _phase_squadron_projection_state(true)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 59))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(squadron.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_eq(modal.get_selected_token().get_squadron_instance(), squadron)
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(modal._has_attacked)
+	assert_false(modal._has_moved)
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_commanded_squadron_pre_begin_projection() \
+		-> void:
+	var state: GameState = _command_squadron_projection_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 60))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_true(modal.is_command_mode())
+	assert_eq(modal.get_selected_token().get_squadron_instance(), squadron)
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_eq(squadron.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_AVAILABLE)
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_commanded_squadron_active_begin_continuation() \
+		-> void:
+	var state: GameState = _command_squadron_active_begin_state()
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 61))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_true(state.current_attack_state.active)
+	assert_true(modal.is_command_mode())
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ATTACKING)
+	assert_false(modal.visible)
+	assert_true(board._attack_executor.is_in_exec_mode())
+	assert_true(_history_types().is_empty())
+
+
+func test_scene_recreation_restores_commanded_squadron_post_skip_projection() -> void:
+	var state: GameState = _command_squadron_projection_state(true)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 61))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.SQUADRON))
+	assert_true(modal.is_command_mode())
+	assert_eq(modal.get_selected_token().get_squadron_instance(), squadron)
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_true(modal._has_attacked)
+	assert_false(modal._has_moved)
+	assert_true(_history_types().is_empty())
+
+
 func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	var state: GameState = _player_one_ship_attack_state()
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
@@ -688,7 +948,6 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	assert_not_null(vsd_token)
 
 	controller.on_dial_ship_activated(vsd_token, vsd)
-	controller.submit_activation_step("squadron_step")
 	controller.submit_activation_step("repair_step")
 	controller.submit_activation_step("attack_step")
 	assert_true(board._activation_ctx.is_active())
@@ -701,8 +960,8 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	board._panel_mgr.activation_modal._on_attack_pressed()
 
 	assert_eq(_command_count(
-			submitter.accepted_commands, "publish_attack_flow"), 1,
-			"The pre-Begin flow publication must be accepted.")
+			submitter.accepted_commands, "publish_attack_flow"), 0,
+			"Transient pre-Begin presentation must publish no semantic command.")
 	assert_true(state.current_attack_state.is_inactive())
 	var primary: AttackSimPanel = selector.get_panel()
 	assert_not_null(primary)
@@ -1068,6 +1327,8 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 	configured["stage"] = stage
 	var attacker_kind: String = str(configured.get(
 			"attacker_kind", CurrentAttackState.KIND_SHIP))
+	if attacker_kind == CurrentAttackState.KIND_SQUADRON:
+		state.current_phase = Constants.GamePhase.SQUADRON
 	if stage == CurrentAttackState.STAGE_ATTACK_MODIFY \
 			and attacker_kind == CurrentAttackState.KIND_SHIP:
 		configured["cf_token_resolution"] = \
@@ -1095,6 +1356,140 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 					TimingWindowState.CONTINUATION_KEY_OWNER_PLAYER:
 							state.current_attack_state.attacker_player,
 				}).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)))
+	return state
+
+
+func _ship_declaration_projection_state(post_skip: bool) -> GameState:
+	var state: GameState = _player_one_ship_attack_state()
+	var ship: ShipInstance = state.get_ship(1, 0)
+	assert_true(ship.establish_ship_activation(
+			"ship-activation:projection"))
+	assert_true(ship.consume_unreached_squadron_command_opportunity(
+			ship.ship_activation_identity, true))
+	ship.begin_attack_step()
+	if post_skip:
+		ship.end_attack_step()
+		assert_true(ship.open_maneuver_opportunity(
+				ship.ship_activation_identity))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT,
+			0, Constants.Visibility.ALL, {"stale_projection": true})
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+func _phase_squadron_projection_state(post_skip: bool) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
+	state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
+	assert_true(state.initialize_squadron_phase_progress(0))
+	var data: SquadronData = AssetLoader.load_squadron_data(
+			DECOY_SQUADRON_KEY).duplicate(true) as SquadronData
+	if post_skip:
+		data.keywords.append({"name": "Rogue"})
+	var squadron := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY, data, 0)
+	squadron.pos_x = 0.5
+	squadron.pos_y = 0.52
+	squadron.roster_entry_id = "projection-squadron"
+	state.get_player_state(0).squadrons.append(squadron)
+	var enemy := SquadronInstance.create_from_data(
+			"tie_fighter_squadron",
+			AssetLoader.load_squadron_data("tie_fighter_squadron"), 1)
+	enemy.pos_x = 0.5
+	enemy.pos_y = 0.48
+	enemy.roster_entry_id = "projection-target"
+	state.get_player_state(1).squadrons.append(enemy)
+	assert_true(squadron.initialize_activation_action_state(
+			"squadron-activation:projection",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	if post_skip:
+		assert_true(squadron.commit_attack_action_declined(
+				squadron.activation_id, true))
+	state.interaction_flow = InteractionFlow.empty()
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+func _command_squadron_projection_state(post_skip: bool) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
+	state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
+	var ship := ShipInstance.create_from_data(
+			DECOY_SHIP_KEY,
+			AssetLoader.load_ship_data(DECOY_SHIP_KEY), 2, 0)
+	ship.pos_x = 0.5
+	ship.pos_y = 0.55
+	ship.roster_entry_id = "projection-command-ship"
+	assert_true(ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON], 1))
+	assert_false(ship.command_dial_stack.reveal_top().is_empty())
+	assert_true(ship.establish_ship_activation(
+			"ship-activation:command-projection"))
+	assert_true(ship.open_squadron_command_opportunity(
+			ship.ship_activation_identity))
+	assert_true(ship.commit_squadron_command_activation(
+			ship.ship_activation_identity))
+	state.get_player_state(0).ships.append(ship)
+	var squadron := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	squadron.pos_x = 0.5
+	squadron.pos_y = 0.51
+	squadron.roster_entry_id = "projection-command-squadron"
+	state.get_player_state(0).squadrons.append(squadron)
+	assert_true(squadron.initialize_activation_action_state(
+			"squadron-activation:command-projection",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 0))
+	if post_skip:
+		assert_true(squadron.commit_attack_action_declined(
+				squadron.activation_id, false))
+	state.interaction_flow = InteractionFlow.empty()
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+func _command_squadron_active_begin_state() -> GameState:
+	var state: GameState = _command_squadron_projection_state(false)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	var defender := SquadronInstance.create_from_data(
+			"tie_fighter_squadron",
+			AssetLoader.load_squadron_data("tie_fighter_squadron"), 1)
+	defender.pos_x = 0.5
+	defender.pos_y = 0.48
+	defender.roster_entry_id = "projection-command-target"
+	state.get_player_state(1).squadrons.append(defender)
+	assert_true(attacker.commit_attack_action_begun(
+			attacker.activation_id, false))
+	var attack := CurrentAttackState.new()
+	assert_true(attack.configure_active("attack:61", {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": 1,
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_index": 0,
+		"defender_zone": -1,
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": Constants.RANGE_BAND_CLOSE,
+		"obstructed": false,
+		"obstruction_resolved": true,
+		"dice_pool": {"BLUE": 1},
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+	}))
+	assert_true(state.set_current_attack_state(attack))
+	state.interaction_flow = InteractionFlow.empty()
+	assert_true(state.validate_declaration_adjacent_state())
 	return state
 
 
@@ -1138,6 +1533,8 @@ func _player_one_ship_attack_state() -> GameState:
 func _inactive_ship_continuation_state(step_six: bool) -> GameState:
 	var state: GameState = _player_one_ship_attack_state()
 	var attacker: ShipInstance = state.get_ship(1, 0)
+	assert_true(attacker.establish_ship_activation(
+			"ship-activation:inactive-continuation"))
 	attacker.begin_attack_step()
 	if step_six:
 		_add_rebel_squadron(state, 0.49, 0.55, "step-six-a")

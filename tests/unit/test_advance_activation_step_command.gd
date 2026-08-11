@@ -5,6 +5,7 @@ extends GutTest
 
 
 var _state: GameState
+const ACTIVATION_ID: String = "ship-activation:test"
 
 
 func _make_ship_data() -> ShipData:
@@ -23,7 +24,16 @@ func _add_ship(player: int) -> int:
 			"test_ship", _make_ship_data(), 2, player)
 	var ps: PlayerState = _state.get_player_state(player)
 	ps.ships.append(ship)
+	assert_true(ship.establish_ship_activation(ACTIVATION_ID))
 	return ps.ships.size() - 1
+
+
+func _payload(ship_index: int, step_id: String) -> Dictionary:
+	return {
+		"ship_index": ship_index,
+		"step_id": step_id,
+		"ship_activation_identity": ACTIVATION_ID,
+	}
 
 
 func before_each() -> void:
@@ -39,10 +49,8 @@ func after_each() -> void:
 
 func test_validate_accepts_repair_step_for_existing_ship() -> void:
 	var idx: int = _add_ship(0)
-	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": idx,
-		"step_id": "repair_step",
-	})
+	var cmd := AdvanceActivationStepCommand.new(
+			0, _payload(idx, "repair_step"))
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid ship activation step transition.")
 
@@ -50,30 +58,24 @@ func test_validate_accepts_repair_step_for_existing_ship() -> void:
 func test_validate_rejects_non_ship_phase() -> void:
 	var idx: int = _add_ship(0)
 	_state.current_phase = Constants.GamePhase.COMMAND
-	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": idx,
-		"step_id": "repair_step",
-	})
+	var cmd := AdvanceActivationStepCommand.new(
+			0, _payload(idx, "repair_step"))
 	assert_ne(cmd.validate(_state), "",
 			"Should reject transitions outside Ship Phase.")
 
 
 func test_validate_rejects_invalid_step_id() -> void:
 	var idx: int = _add_ship(0)
-	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": idx,
-		"step_id": "unknown_step",
-	})
+	var cmd := AdvanceActivationStepCommand.new(
+			0, _payload(idx, "unknown_step"))
 	assert_ne(cmd.validate(_state), "",
 			"Should reject unknown interaction step ids.")
 
 
 func test_execute_returns_step_payload_for_timeline() -> void:
 	var ship_index: int = _add_ship(0)
-	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": ship_index,
-		"step_id": "attack_step",
-	})
+	var cmd := AdvanceActivationStepCommand.new(
+			0, _payload(ship_index, "attack_step"))
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("ship_index", -1), ship_index,
 			"Execute should echo ship_index for timeline consumers.")
@@ -97,10 +99,8 @@ func test_maneuver_step_closes_attack_progress_without_erasing_history() -> void
 	ship.begin_attack_step()
 	ship.commit_attack(Constants.HullZone.FRONT, 1,
 			CurrentAttackState.KIND_SHIP, 0)
-	var cmd := AdvanceActivationStepCommand.new(0, {
-		"ship_index": ship_index,
-		"step_id": "maneuver_step",
-	})
+	var cmd := AdvanceActivationStepCommand.new(
+			0, _payload(ship_index, "maneuver_step"))
 	cmd.execute(_state)
 
 	assert_false(ship.attack_step_active)

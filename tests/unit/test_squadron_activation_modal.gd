@@ -69,6 +69,8 @@ func _start_squadron_phase_game() -> void:
 	GameManager.start_new_game()
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SQUADRON
+	assert_true(GameManager.current_game_state \
+			.initialize_squadron_phase_progress(0))
 	GameManager.current_game_state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SQUADRON_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
@@ -94,6 +96,13 @@ func _make_resolver() -> SquadronCommandResolver:
 			[Constants.CommandType.SQUADRON,
 			Constants.CommandType.NAVIGATE], 1)
 	ship.command_dial_stack.reveal_top()
+	assert_true(ship.establish_ship_activation("ship-activation:modal"))
+	assert_true(ship.open_squadron_command_opportunity(
+			"ship-activation:modal"))
+	if GameManager.current_game_state != null \
+			and GameManager.current_game_state.current_phase \
+					== Constants.GamePhase.SHIP:
+		GameManager.current_game_state.get_player_state(0).ships.append(ship)
 	var hw: float = GameScale.small_base_width_px * 0.5
 	var hl: float = GameScale.small_base_length_px * 0.5
 	return SquadronCommandResolver.create(
@@ -568,7 +577,15 @@ func test_click_different_squadron_after_action_finishes_activation() -> void:
 	token_a.position = Vector2.ZERO
 	token_b.position = Vector2.ZERO
 	var resolver: SquadronCommandResolver = _make_resolver()
-	resolver.use_activation()
+	var command_ship: ShipInstance = resolver.get_ship()
+	assert_true(inst_a.initialize_activation_action_state(
+			"squadron-activation:modal",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, GameManager.current_game_state.find_ship_index(command_ship)))
+	assert_true(inst_a.commit_attack_action_begun(
+			"squadron-activation:modal", false))
+	assert_true(command_ship.commit_squadron_command_activation(
+			"ship-activation:modal"))
 	_modal.visible = true
 	_modal._is_interactable = true
 	_modal._is_command_mode = true
@@ -601,6 +618,7 @@ func test_attack_pressed_command_mode_spends_one_activation() -> void:
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
 	var inst: SquadronInstance = _make_instance(0)
+	GameManager.current_game_state.get_player_state(0).squadrons.append(inst)
 	var resolver: SquadronCommandResolver = _make_resolver()
 	_modal.visible = true
 	_modal._is_interactable = true

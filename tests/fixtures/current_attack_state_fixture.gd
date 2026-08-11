@@ -75,9 +75,61 @@ static func install(game_state: GameState,
 		patch["damage_stage"] = CurrentAttackState.DAMAGE_RESOLVED
 	if not patch.is_empty():
 		state = state.with_patch(patch)
-	if state == null or not game_state.set_current_attack_state(state):
+	if state == null \
+			or not _prepare_declaration_adjacent_owner(game_state, state) \
+			or not game_state.set_current_attack_state(state):
 		return null
 	return game_state.current_attack_state
+
+
+## Installs the accepted adjacent owner state that a production Begin would
+## already have committed. This keeps timing/attack fixtures representative of
+## the complete TWI-003 state rather than reconstructing authority from flow.
+static func _prepare_declaration_adjacent_owner(
+		game_state: GameState, attack: CurrentAttackState) -> bool:
+	if attack.attack_kind != SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD:
+		return true
+	if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+		var ship: ShipInstance = game_state.get_ship(
+				attack.attacker_player, attack.attacker_index)
+		if ship == null:
+			return false
+		if not ship.has_active_ship_activation() \
+				and not ship.establish_ship_activation(
+						"ship-activation:fixture:%s" % attack.attack_id):
+			return false
+		ship.begin_attack_step()
+		if ship.committed_attack_count == 0:
+			ship.commit_attack(attack.attacker_zone,
+					attack.defender_player, attack.defender_kind,
+					attack.defender_index)
+		return ship.attack_step_active
+	if attack.attacker_kind != CurrentAttackState.KIND_SQUADRON \
+			or game_state.current_phase != Constants.GamePhase.SQUADRON:
+		return false
+	var squadron: SquadronInstance = game_state.get_squadron(
+			attack.attacker_player, attack.attacker_index)
+	if squadron == null:
+		return false
+	if not game_state.has_squadron_phase_controller() \
+			and not game_state.initialize_squadron_phase_progress(
+					attack.attacker_player):
+		return false
+	var activation_id: String = "squadron-activation:fixture:%s" % \
+			attack.attack_id
+	if not squadron.has_activation_action_state() \
+			and not squadron.initialize_activation_action_state(
+					activation_id,
+					SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE):
+		return false
+	if squadron.attack_action_disposition \
+			== SquadronInstance.ATTACK_ACTION_AVAILABLE:
+		return squadron.commit_attack_action_begun(
+				squadron.activation_id,
+				squadron.squadron_data != null \
+						and squadron.squadron_data.has_keyword("Rogue"))
+	return squadron.attack_action_disposition \
+			== SquadronInstance.ATTACK_ACTION_BEGUN
 
 
 static func _ensure_entity(game_state: GameState, kind: String,

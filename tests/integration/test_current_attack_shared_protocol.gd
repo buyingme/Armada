@@ -2,6 +2,12 @@
 extends GutTest
 
 
+const SHIP_ACTIVATION_ID: String = "ship-activation:fixture"
+const SQUADRON_ACTIVATION_ID: String = "squadron-activation:fixture"
+const CONTEXT_NON_ROGUE_PHASE: String = "non_rogue_squadron_phase"
+const CONTEXT_ROGUE_PHASE: String = "rogue_squadron_phase"
+
+
 const PROCESSOR_SCRIPT: GDScript = preload(
 		"res://src/autoload/command_processor.gd")
 const SAVE_MANAGER_SCRIPT: GDScript = preload(
@@ -12,6 +18,8 @@ const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 const REPLAY_DRIVER_SCRIPT: GDScript = preload(
 		"res://src/autoload/replay_driver.gd")
+const GAME_BOARD_SCENE: PackedScene = preload(
+		"res://src/scenes/game_board/game_board.tscn")
 const CF_RULE: GDScript = preload(
 		"res://src/core/effects/rules/concentrate_fire_token.gd")
 const CF_DECLINE: GDScript = preload(
@@ -273,8 +281,10 @@ func test_bug_002_progress_matches_hotseat_host_client_replay_and_restore() -> v
 	assert_eq(replay_state.serialize(), authority_final)
 	assert_eq(replay.serialize_history(), authority_history)
 
+	var persistence_data: Dictionary = authority_final.duplicate(true)
+	persistence_data["interaction_flow"] = InteractionFlow.empty().serialize()
 	var restored: GameState = GameState.deserialize(
-			JSON.parse_string(JSON.stringify(authority_final)))
+			JSON.parse_string(JSON.stringify(persistence_data)))
 	assert_not_null(restored)
 	assert_eq(restored.get_ship(0, 0).attack_progress_snapshot(),
 			authority_state.get_ship(0, 0).attack_progress_snapshot())
@@ -593,7 +603,7 @@ func test_host_client_mirror_and_replay_preserve_identity_and_state() -> void:
 	replay_file.capture_header("twi-002-production", 8108, [0, 1], 0, 0)
 	replay_file.set_commands(authoritative_history)
 	assert_not_null(GameReplay.deserialize(replay_file.serialize()),
-			"The production semantic history must load as format 4.")
+			"The production semantic history must load as format 5.")
 	var authority_final: Dictionary = authority_state.serialize()
 
 	var client_state: GameState = GameState.deserialize(initial.serialize())
@@ -745,6 +755,177 @@ func test_squadron_to_ship_matches_hotseat_host_client_and_replay() -> void:
 	assert_eq(CanonicalJson.hash(replay_state.serialize()), hotseat_hash)
 
 
+func test_all_declaration_contexts_match_filtered_host_client_replay() \
+		-> void:
+	var capture: Callable = Callable(self, "_capture_network_result")
+	if not NetworkManager.command_result_received.is_connected(capture):
+		NetworkManager.command_result_received.connect(capture)
+	for context: String in _declaration_protocol_contexts():
+		for begin: bool in [true, false]:
+			var initial: GameState = _make_declaration_protocol_state(context)
+			var initial_data: Dictionary = initial.serialize()
+			var payload: Dictionary = _declaration_protocol_payload(
+					initial, context, begin)
+
+			PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+			NetworkManager.role = NetworkManager.Role.NONE
+			var hotseat_state: GameState = GameState.deserialize(initial_data)
+			_apply_protocol_static_context(hotseat_state, context)
+			assert_eq(_declaration_protocol_snapshot(hotseat_state, context),
+					_declaration_protocol_snapshot(initial, context))
+			var hotseat: Node = _make_processor(hotseat_state)
+			var hotseat_command: GameCommand = BeginAttackCommand.new(0, payload) \
+					if begin else SkipAttackCommand.new(0, payload)
+			assert_false(hotseat.submit(hotseat_command).is_empty())
+			var hotseat_history: Array[Dictionary] = hotseat.serialize_history()
+			var hotseat_final: Dictionary = hotseat_state.serialize()
+
+			var authority_state: GameState = GameState.deserialize(initial_data)
+			_apply_protocol_static_context(authority_state, context)
+			assert_eq(_declaration_protocol_snapshot(authority_state, context),
+					_declaration_protocol_snapshot(initial, context))
+			GameManager.current_game_state = authority_state
+			GameManager.is_game_active = true
+			PlayMode.set_mode(PlayMode.Mode.NETWORK)
+			NetworkManager.role = NetworkManager.Role.SERVER
+			NetworkManager._local_player_index = 0
+			CommandProcessor.reset()
+			GameManager._reset_network_result_ordering()
+			_broadcast_results.clear()
+			var host := NetworkHostCommandSubmitter.new()
+			GameManager.set_command_submitter(host)
+			var host_command: GameCommand = BeginAttackCommand.new(0, payload) \
+					if begin else SkipAttackCommand.new(0, payload)
+			assert_false(host.submit(host_command).is_empty())
+			var authoritative_history: Array[Dictionary] = \
+					_broadcast_command_data()
+			var authority_final: Dictionary = authority_state.serialize()
+			assert_eq(authoritative_history, hotseat_history)
+			assert_eq(authority_final, hotseat_final)
+
+			var filtered_initial: Dictionary = StateFilter.filter_for_player(
+					initial_data, 1)
+			var client_state: GameState = GameState.deserialize(filtered_initial)
+			assert_not_null(client_state)
+			_apply_protocol_static_context(client_state, context)
+			assert_eq(_declaration_protocol_snapshot(client_state, context),
+					_declaration_protocol_snapshot(initial, context))
+			GameManager.current_game_state = client_state
+			NetworkManager.role = NetworkManager.Role.CLIENT
+			NetworkManager._local_player_index = 1
+			CommandProcessor.reset()
+			GameManager._reset_network_result_ordering()
+			GameManager.set_command_submitter(NetworkCommandSubmitter.new())
+			for index: int in range(_broadcast_results.size()):
+				_apply_broadcast_to_client(index)
+			assert_true(client_state.validate_declaration_adjacent_state())
+			assert_eq(_declaration_protocol_snapshot(client_state, context),
+					_declaration_protocol_snapshot(authority_state, context))
+			assert_eq(CommandProcessor.serialize_history(), authoritative_history)
+
+			var replay_state: GameState = GameState.deserialize(initial_data)
+			_apply_protocol_static_context(replay_state, context)
+			assert_eq(_declaration_protocol_snapshot(replay_state, context),
+					_declaration_protocol_snapshot(initial, context))
+			var replay: Node = _make_processor(replay_state)
+			for command_data: Dictionary in authoritative_history:
+				assert_false(replay.submit_replay(
+						GameCommand.deserialize(command_data)).is_empty())
+			assert_eq(replay_state.serialize(), authority_final)
+			var replay_file := GameReplay.new()
+			replay_file.capture_header("twi-003-%s" % context, 8841,
+					[0, 1], 0, 0)
+			replay_file.set_commands(authoritative_history)
+			assert_not_null(GameReplay.deserialize(replay_file.serialize()))
+
+
+func test_declaration_state_matrix_round_trips_save_filter_and_reconnect() \
+		-> void:
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	for context: String in _declaration_protocol_contexts():
+		for outcome: String in ["before_begin", "after_begin", "after_skip"]:
+			var source: GameState = _make_declaration_protocol_state(context)
+			GameManager.current_game_state = source
+			GameManager.is_game_active = true
+			PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+			NetworkManager.role = NetworkManager.Role.NONE
+			NetworkManager._local_player_index = -1
+			CommandProcessor.reset()
+			if outcome != "before_begin":
+				var begin: bool = outcome == "after_begin"
+				var command: GameCommand = BeginAttackCommand.new(
+						0, _declaration_protocol_payload(source, context, true)) \
+						if begin else SkipAttackCommand.new(
+								0, _declaration_protocol_payload(
+										source, context, false))
+				assert_false(CommandProcessor.submit(command).is_empty())
+			var expected: Dictionary = _declaration_protocol_snapshot(
+					source, context)
+			var next_sequence: int = CommandProcessor.get_next_sequence()
+
+			assert_true(manager.save_game(source, TEST_SAVE))
+			var loaded: Dictionary = manager.load_game(TEST_SAVE)
+			assert_true(bool(loaded.get("ok", false)))
+			var restored: GameState = loaded.get("state") as GameState
+			_apply_protocol_static_context(restored, context)
+			_assert_declaration_protocol_snapshot(
+					restored, context, expected, "%s %s save/load" % [
+						context, outcome])
+
+			var filtered: Dictionary = StateFilter.filter_for_player(
+					source.serialize(), 1)
+			var reconnect: GameState = GameState.deserialize(filtered)
+			assert_not_null(reconnect)
+			_apply_protocol_static_context(reconnect, context)
+			PlayMode.set_mode(PlayMode.Mode.NETWORK)
+			NetworkManager.role = NetworkManager.Role.CLIENT
+			NetworkManager._local_player_index = 1
+			assert_true(GameManager.start_new_game_from_state(
+					reconnect, "twi-003-%s-%s" % [context, outcome],
+					next_sequence))
+			_assert_declaration_protocol_snapshot(
+					GameManager.current_game_state, context, expected,
+					"%s %s filtered reconnect" % [context, outcome])
+			assert_true(CommandProcessor.serialize_history().is_empty(),
+					"Reconnect must not synthesize a semantic command.")
+			manager.delete_save(TEST_SAVE)
+	manager.free()
+
+
+func test_packed_scene_recreation_derives_every_declaration_outcome() -> void:
+	for context: String in _declaration_protocol_contexts():
+		for outcome: String in ["before_begin", "after_begin", "after_skip"]:
+			var state: GameState = _make_declaration_protocol_state(context)
+			GameManager.current_game_state = state
+			GameManager.is_game_active = true
+			PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
+			NetworkManager.role = NetworkManager.Role.NONE
+			NetworkManager._local_player_index = -1
+			CommandProcessor.reset()
+			if outcome != "before_begin":
+				var begin: bool = outcome == "after_begin"
+				var command: GameCommand = BeginAttackCommand.new(
+						0, _declaration_protocol_payload(state, context, true)) \
+						if begin else SkipAttackCommand.new(
+								0, _declaration_protocol_payload(
+										state, context, false))
+				assert_false(CommandProcessor.submit(command).is_empty())
+				assert_eq(_history_types(CommandProcessor.serialize_history()),
+						[BeginAttackCommand.TYPE if begin else "skip_attack"])
+			var next_sequence: int = CommandProcessor.get_next_sequence()
+			assert_true(GameManager.start_new_game_from_state(
+					state, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+					next_sequence))
+			var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+			add_child(board)
+			_assert_declaration_scene_projection(
+					board, state, context, outcome)
+			assert_true(CommandProcessor.serialize_history().is_empty(),
+					"Packed-scene reconstruction must not synthesize commands.")
+			board.queue_free()
+			await get_tree().process_frame
+
+
 func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void:
 	var authority_state: GameState = _make_state()
 	authority_state.rng = GameRng.new(EXACT_REPLAY_SEED)
@@ -766,7 +947,7 @@ func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void
 			"Production GameReplay persistence must succeed.")
 
 	var loaded: GameReplay = GameReplay.load_from_file(TEST_REPLAY_PATH)
-	assert_not_null(loaded, "The persisted format-4 replay must load.")
+	assert_not_null(loaded, "The persisted format-5 replay must load.")
 	assert_typeof(loaded.header["rng_seed"], TYPE_INT)
 	assert_eq(loaded.header["rng_seed"], EXACT_REPLAY_SEED,
 			"The exact 64-bit replay seed must survive disk JSON.")
@@ -1256,6 +1437,8 @@ func _make_state() -> GameState:
 			var squadron: SquadronInstance = _make_squadron(owner)
 			_set_protocol_position(ship, squadron, owner, index)
 			if owner == 0 and index == 0:
+				assert_true(ship.establish_ship_activation(
+						SHIP_ACTIVATION_ID))
 				ship.begin_attack_step()
 			state.player_states[owner].ships.append(ship)
 			state.player_states[owner].squadrons.append(squadron)
@@ -1285,13 +1468,18 @@ func _make_cross_kind_state(attacker_kind: String,
 		var ship: ShipInstance = _make_ship_with_key(ATTACKER_SHIP_KEY, 0)
 		ship.pos_x = 0.50
 		ship.pos_y = 0.65
+		assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
 		ship.begin_attack_step()
 		state.get_player_state(0).ships.append(ship)
 	else:
+		assert_true(state.initialize_squadron_phase_progress(0))
 		var squadron: SquadronInstance = _make_squadron_with_key(
 				ATTACKER_SQUADRON_KEY, 0)
 		squadron.pos_x = 0.50
 		squadron.pos_y = 0.58
+		assert_true(squadron.initialize_activation_action_state(
+				SQUADRON_ACTIVATION_ID,
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
 		state.get_player_state(0).squadrons.append(squadron)
 	if defender_kind == CurrentAttackState.KIND_SHIP:
 		var ship: ShipInstance = _make_ship_with_key(SHIP_KEY, 1)
@@ -1306,6 +1494,242 @@ func _make_cross_kind_state(attacker_kind: String,
 		squadron.pos_y = 0.50
 		state.get_player_state(1).squadrons.append(squadron)
 	return state
+
+
+func _make_commanded_squadron_protocol_state() -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.rng = GameRng.new(8841)
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.initialize()
+	var ship := ShipInstance.create_from_data(
+			SHIP_KEY, AssetLoader.load_ship_data(SHIP_KEY), 2, 0)
+	ship.pos_x = 0.50
+	ship.pos_y = 0.60
+	assert_true(ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON], 1))
+	assert_false(ship.command_dial_stack.reveal_top().is_empty())
+	assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
+	assert_true(ship.open_squadron_command_opportunity(SHIP_ACTIVATION_ID))
+	assert_true(ship.commit_squadron_command_activation(SHIP_ACTIVATION_ID))
+	state.get_player_state(0).ships.append(ship)
+	var attacker := SquadronInstance.create_from_data(
+			SQUADRON_KEY, AssetLoader.load_squadron_data(SQUADRON_KEY), 0)
+	attacker.pos_x = 0.50
+	attacker.pos_y = 0.55
+	assert_true(attacker.initialize_activation_action_state(
+			SQUADRON_ACTIVATION_ID,
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 0))
+	state.get_player_state(0).squadrons.append(attacker)
+	var defender := SquadronInstance.create_from_data(
+			ATTACKER_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(ATTACKER_SQUADRON_KEY), 1)
+	defender.pos_x = 0.50
+	defender.pos_y = 0.48
+	state.get_player_state(1).squadrons.append(defender)
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP, 0)
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+func _declaration_protocol_contexts() -> Array[String]:
+	return [
+		SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+		CONTEXT_NON_ROGUE_PHASE,
+		CONTEXT_ROGUE_PHASE,
+		SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+	]
+
+
+func _make_declaration_protocol_state(context: String) -> GameState:
+	var state: GameState
+	match context:
+		SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+			state = _make_cross_kind_state(
+					CurrentAttackState.KIND_SHIP,
+					CurrentAttackState.KIND_SHIP, SQUADRON_KEY)
+		SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+			state = _make_commanded_squadron_protocol_state()
+		CONTEXT_NON_ROGUE_PHASE, CONTEXT_ROGUE_PHASE:
+			state = _make_cross_kind_state(
+					CurrentAttackState.KIND_SQUADRON,
+					CurrentAttackState.KIND_SQUADRON, SQUADRON_KEY)
+			_apply_protocol_static_context(state, context)
+		_:
+			assert_true(false, "Unsupported declaration protocol context.")
+			return null
+	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+func _apply_protocol_static_context(state: GameState, context: String) -> void:
+	if state == null or context != CONTEXT_ROGUE_PHASE:
+		return
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	if squadron == null or SquadronKeywordRuleHelper.has_keyword(
+			squadron, "Rogue"):
+		return
+	# The test catalog has no Rogue fixture. Supply that static rule fact to each
+	# independently reconstructed peer; canonical runtime state is never repaired
+	# from a presentation cache.
+	var rogue_data: SquadronData = squadron.squadron_data.duplicate(true) \
+			as SquadronData
+	rogue_data.keywords.append({"name": "Rogue"})
+	squadron.squadron_data = rogue_data
+
+
+func _declaration_protocol_payload(state: GameState, context: String,
+		begin: bool) -> Dictionary:
+	if context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		return _commanded_squadron_protocol_payload(state, begin)
+	if not begin:
+		if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+			return {
+				"reason": "voluntary",
+				"declaration_context": SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+				"ship_index": 0,
+				"ship_activation_identity": SHIP_ACTIVATION_ID,
+			}
+		var squadron: SquadronInstance = state.get_squadron(0, 0)
+		return {
+			"reason": "voluntary",
+			"declaration_context":
+					SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+			"squadron_index": 0,
+			"activation_id": squadron.activation_id,
+			"activation_context": squadron.activation_context,
+		}
+	var attacker_kind: String = CurrentAttackState.KIND_SHIP \
+			if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK \
+			else CurrentAttackState.KIND_SQUADRON
+	var payload: Dictionary = _first_authoritative_payload(
+			state, attacker_kind, attacker_kind)
+	assert_false(payload.is_empty())
+	return payload
+
+
+func _declaration_protocol_snapshot(
+		state: GameState, context: String) -> Dictionary:
+	var snapshot: Dictionary = {
+		"current_attack": state.current_attack_state.serialize(),
+		"phase_controller": state.squadron_phase_controller_player,
+		"phase_committed": state.squadron_phase_activations_committed,
+		# Route payload is presentation data and may be normalized by JSON. The
+		# production route identity/controller must still agree with canonical
+		# owners after each distribution boundary.
+		"projected_route": {
+			"flow_type": state.interaction_flow.flow_type,
+			"step_id": state.interaction_flow.step_id,
+			"controller_player": state.interaction_flow.controller_player,
+		},
+	}
+	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+		var ship: ShipInstance = state.get_ship(0, 0)
+		snapshot["ship_activation"] = ship.ship_activation_boundary_snapshot()
+		snapshot["attack_progress"] = ship.attack_progress_snapshot()
+		return snapshot
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	snapshot["squadron_action"] = squadron.activation_action_state_snapshot()
+	snapshot["activated"] = squadron.activated_this_round
+	snapshot["movement_remains"] = squadron.has_remaining_move_action(
+			context == CONTEXT_ROGUE_PHASE)
+	if context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		snapshot["ship_activation"] = state.get_ship(
+				0, 0).ship_activation_boundary_snapshot()
+	return snapshot
+
+
+func _assert_declaration_protocol_snapshot(state: GameState, context: String,
+		expected: Dictionary, evidence_label: String) -> void:
+	var actual: Dictionary = _declaration_protocol_snapshot(state, context)
+	for key: Variant in expected.keys():
+		assert_eq(actual.get(key), expected.get(key),
+				"%s must preserve %s." % [evidence_label, str(key)])
+
+
+func _assert_declaration_scene_projection(board: GameBoard, state: GameState,
+		context: String, outcome: String) -> void:
+	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+		assert_eq(GameManager.get_activating_ship(), state.get_ship(0, 0))
+		if outcome == "after_begin":
+			assert_true(state.current_attack_state.active)
+			assert_true(board._attack_executor.is_in_exec_mode())
+			return
+		assert_true(
+				board._ship_activation_controller.is_activation_modal_open())
+		assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+				ShipActivationState.Step.ATTACK \
+				if outcome == "before_begin" \
+				else ShipActivationState.Step.MANEUVER))
+		return
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	assert_eq(modal.is_command_mode(), context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			"%s %s must reconstruct the correct activation mode." % [
+				context, outcome])
+	if outcome == "after_begin":
+		assert_true(state.current_attack_state.active)
+		assert_eq(modal.get_state(), SquadronActivationModal.State.ATTACKING)
+		assert_true(board._attack_executor.is_in_exec_mode())
+		return
+	assert_true(state.current_attack_state.is_inactive())
+	if outcome == "after_skip" and context == CONTEXT_NON_ROGUE_PHASE:
+		assert_true(squadron.activated_this_round)
+		assert_eq(modal.get_state(),
+				SquadronActivationModal.State.WAITING_FOR_SELECTION)
+		assert_null(modal.get_selected_token())
+		return
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE)
+	assert_eq(modal.get_selected_token().get_squadron_instance(), squadron)
+	if outcome == "after_skip":
+		assert_eq(squadron.attack_action_disposition,
+				SquadronInstance.ATTACK_ACTION_DECLINED)
+		assert_true(modal._has_attacked)
+
+
+func _commanded_squadron_protocol_payload(state: GameState,
+		begin: bool) -> Dictionary:
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	if not begin:
+		return {
+			"reason": "voluntary",
+			"declaration_context": SquadronInstance \
+					.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			"squadron_index": 0,
+			"activation_id": squadron.activation_id,
+			"activation_context": squadron.activation_context,
+			"ship_activation_identity": SHIP_ACTIVATION_ID,
+		}
+	var candidates: Array[Dictionary] = TargetingListBuilder \
+			.authoritative_squadron_target_entries(state, 0, 0)
+	assert_false(candidates.is_empty())
+	var candidate: Dictionary = candidates[0]
+	return {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": int(candidate.get("target_owner", -1)),
+		"defender_kind": str(candidate.get("target_kind", "")),
+		"defender_index": int(candidate.get("target_index", -1)),
+		"defender_zone": int(candidate.get("target_zone", -1)),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate.get("range_band", "")),
+		"obstructed": bool(candidate.get("obstructed", false)),
+		"dice_pool": (candidate.get("dice", {}) as Dictionary).duplicate(true),
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
+	}
 
 
 func _make_network_topology_state(
@@ -1326,6 +1750,7 @@ func _make_network_topology_state(
 			ATTACKER_SHIP_KEY, attacker_player)
 	attacker.pos_x = 0.50
 	attacker.pos_y = 0.65
+	assert_true(attacker.establish_ship_activation(SHIP_ACTIVATION_ID))
 	attacker.begin_attack_step()
 	var defender: ShipInstance = _make_ship_with_key(
 			SHIP_KEY, defender_player)
@@ -1371,6 +1796,7 @@ func _first_ship_payload_for_players(
 						SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
 				"range_band": str(entry.get("range_band", "")),
 				"obstructed": bool(entry.get("obstructed", false)),
+				"ship_activation_identity": SHIP_ACTIVATION_ID,
 			}
 	return {}
 
@@ -1433,7 +1859,7 @@ func _authoritative_payload_for(state: GameState, attacker_kind: String,
 			1, defender_kind, 0, defender_zone)
 	if entry.is_empty():
 		return {}
-	return {
+	var payload: Dictionary = {
 		"attacker_player": 0,
 		"attacker_kind": attacker_kind,
 		"attacker_index": 0,
@@ -1446,6 +1872,13 @@ func _authoritative_payload_for(state: GameState, attacker_kind: String,
 		"range_band": str(entry.get("range_band", "")),
 		"obstructed": bool(entry.get("obstructed", false)),
 	}
+	if attacker_kind == CurrentAttackState.KIND_SHIP:
+		payload["ship_activation_identity"] = SHIP_ACTIVATION_ID
+	else:
+		payload["activation_id"] = SQUADRON_ACTIVATION_ID
+		payload["activation_context"] = \
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
+	return payload
 
 
 func _two_same_zone_squadron_candidates(
@@ -1553,6 +1986,7 @@ func _payload_from_ship_candidate(candidate: Dictionary) -> Dictionary:
 		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
 		"range_band": str(candidate.get("range_band", "")),
 		"obstructed": bool(candidate.get("obstructed", false)),
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 	}
 
 
@@ -1662,6 +2096,7 @@ func _ship_attack_payload(defender_index: int = 0) -> Dictionary:
 		"attack_kind": "standard",
 		"range_band": Constants.RANGE_BAND_CLOSE,
 		"obstructed": false,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 	}
 
 

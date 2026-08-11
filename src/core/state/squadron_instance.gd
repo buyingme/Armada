@@ -41,9 +41,7 @@ var current_hull: int = 0
 ## Rules Reference: SU-025 — activation sliders display the blue (unactivated) side.
 var activated_this_round: bool = false
 
-## Behavior-inert owner-local action history for one retained activation.
-## These fields intentionally remain outside serialization and live commands
-## until the authoritative declaration cutover.
+## Canonical owner-local action history for one retained activation.
 var activation_id: String = ""
 var activation_context: String = ACTIVATION_CONTEXT_INACTIVE
 var commanding_ship_player: int = -1
@@ -147,6 +145,7 @@ func suffer_damage(amount: int) -> int:
 ## Resets the activated flag for a new round.
 func reset_activation() -> void:
 	activated_this_round = false
+	reset_activation_action_state()
 
 
 ## Returns whether retained canonical action history exists.
@@ -418,6 +417,12 @@ func serialize() -> Dictionary:
 		"fleet_points": fleet_points,
 		"current_hull": current_hull,
 		"activated_this_round": activated_this_round,
+		"activation_id": activation_id,
+		"activation_context": activation_context,
+		"commanding_ship_player": commanding_ship_player,
+		"commanding_ship_index": commanding_ship_index,
+		"move_action_committed": move_action_committed,
+		"attack_action_disposition": attack_action_disposition,
 		"is_engaged": is_engaged,
 		"owner_player": owner_player,
 		"pos_x": pos_x,
@@ -443,6 +448,14 @@ static func deserialize(
 	inst.current_hull = int(data.get("current_hull", 0))
 	inst.activated_this_round = data.get(
 			"activated_this_round", false) as bool
+	inst.activation_id = str(data.get("activation_id", ""))
+	inst.activation_context = str(data.get(
+			"activation_context", ACTIVATION_CONTEXT_INACTIVE))
+	inst.commanding_ship_player = int(data.get("commanding_ship_player", -1))
+	inst.commanding_ship_index = int(data.get("commanding_ship_index", -1))
+	inst.move_action_committed = bool(data.get("move_action_committed", false))
+	inst.attack_action_disposition = str(data.get(
+			"attack_action_disposition", ATTACK_ACTION_INACTIVE))
 	inst.is_engaged = data.get("is_engaged", false) as bool
 	inst.owner_player = int(data.get("owner_player", 0))
 	inst.pos_x = float(data.get("pos_x", 0.0))
@@ -454,5 +467,7 @@ static func deserialize(
 		inst.defense_tokens.append({
 			"type": int(td["type"]) as Constants.DefenseToken,
 			"state": int(td["state"]) as Constants.DefenseTokenState,
-		})
+			})
+	if not inst.is_activation_action_state_valid():
+		return null
 	return inst

@@ -9,11 +9,18 @@ class RecordingSubmitter:
 	extends CommandSubmitter
 
 	var submitted_commands: Array[GameCommand] = []
+	var execute_locally: bool = false
+	var result_to_return: Dictionary = {"recorded": true}
 
 
 	func submit(command: GameCommand) -> Dictionary:
 		submitted_commands.append(command)
-		return {"recorded": true}
+		if execute_locally:
+			var game_state: GameState = GameManager.current_game_state
+			if game_state == null or not command.validate(game_state).is_empty():
+				return {}
+			return command.execute(game_state)
+		return result_to_return.duplicate(true)
 
 
 class StubAttackExecutor:
@@ -143,9 +150,12 @@ func test_sync_activation_step_from_flow_passive_peer_does_not_submit() -> void:
 			"Passive peer should mirror the authoritative Repair step.")
 
 
-func test_sync_activation_step_from_flow_no_attack_targets_submits_maneuver_step() -> void:
+func test_sync_activation_step_from_flow_no_targets_waits_for_accepted_skip() \
+		-> void:
 	var ship: ShipInstance = _create_ship(0)
 	_start_activation_for_ship(ship)
+	ship.begin_attack_step()
+	_submitter.execute_locally = true
 	var flow: InteractionFlow = _attack_flow(0, 0)
 	GameManager.current_game_state.interaction_flow = flow
 
@@ -153,15 +163,45 @@ func test_sync_activation_step_from_flow_no_attack_targets_submits_maneuver_step
 	await get_tree().process_frame
 
 	assert_eq(_submitter.submitted_commands.size(), 1,
-			"Controller should submit one deferred advance from Attack to Maneuver.")
+			"Controller should submit one deferred no-active Skip.")
 	var command: GameCommand = _submitter.submitted_commands[0]
-	assert_true(command is AdvanceActivationStepCommand,
-			"Deferred command should be an AdvanceActivationStepCommand.")
-	assert_eq(command.payload.get("step_id", ""), "maneuver_step",
-			"No-target projected Attack step should advance to maneuver_step.")
+	assert_true(command is SkipAttackCommand,
+			"Deferred command should be the supported semantic Skip.")
+	assert_eq(command.payload.get("reason", ""), "no_targets")
+	assert_false(ship.attack_step_active,
+			"Accepted Skip must consume the Attack-step opportunity.")
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	_controller.sync_activation_step_from_flow(
+			GameManager.current_game_state.interaction_flow)
 	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
 			ShipActivationState.Step.MANEUVER,
-			"Local activation state should advance to MANEUVER after the skip.")
+			"Presentation should project Maneuver only after accepted Skip.")
+
+
+func test_sync_activation_step_from_flow_rejected_no_target_skip_preserves_attack() \
+		-> void:
+	var ship: ShipInstance = _create_ship(0)
+	_start_activation_for_ship(ship)
+	ship.begin_attack_step()
+	_submitter.result_to_return = {}
+	var flow: InteractionFlow = _attack_flow(0, 0)
+	GameManager.current_game_state.interaction_flow = flow
+	var boundary_before: Dictionary = ship.ship_activation_boundary_snapshot()
+	var progress_before: Dictionary = ship.attack_progress_snapshot()
+
+	_controller.sync_activation_step_from_flow(flow)
+	await get_tree().process_frame
+
+	assert_eq(_submitter.submitted_commands.size(), 1)
+	assert_true(_submitter.submitted_commands[0] is SkipAttackCommand)
+	assert_eq(ship.ship_activation_boundary_snapshot(), boundary_before)
+	assert_eq(ship.attack_progress_snapshot(), progress_before)
+	assert_eq(_activation_ctx.ship_activation_state.get_current_step(),
+			ShipActivationState.Step.ATTACK,
+			"Rejected automatic Skip must not tear down or advance presentation.")
+	assert_engine_error(1,
+			"Rejected automatic no-target Skip should be diagnosed once.")
 
 
 func test_sync_activation_step_from_flow_attack_targets_does_not_submit() -> void:
@@ -193,6 +233,8 @@ func _create_ship(owner_player: int) -> ShipInstance:
 
 
 func _start_activation_for_ship(ship: ShipInstance) -> void:
+	assert_true(ship.establish_ship_activation(
+			"ship-activation:controller"))
 	GameManager.current_game_state = _game_state_with_ship(ship)
 	_ship_token = ShipToken.new()
 	_ship_token.bind_instance(ship)

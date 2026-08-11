@@ -37,6 +37,40 @@ func _add_ship(player: int) -> int:
 	return ps.ships.size() - 1
 
 
+func _open_ship_declaration(player: int = 0) -> Dictionary:
+	var ship_index: int = _add_ship(player)
+	var ship: ShipInstance = _state.get_ship(player, ship_index)
+	assert_true(ship.establish_ship_activation("ship-activation:test"))
+	ship.begin_attack_step()
+	return {
+		"declaration_context": SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+		"ship_index": ship_index,
+		"ship_activation_identity": ship.ship_activation_identity,
+	}
+
+
+func _open_squadron_phase_declaration(player: int = 0) -> Dictionary:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	assert_true(_state.initialize_squadron_phase_progress(player))
+	var data := SquadronData.new()
+	data.hull = 3
+	data.speed = 3
+	data.anti_squadron_armament = {"BLUE": 1}
+	var squadron: SquadronInstance = SquadronInstance.create_from_data(
+			"test_squadron", data, player)
+	_state.get_player_state(player).squadrons.append(squadron)
+	assert_true(squadron.initialize_activation_action_state(
+			"squadron-activation:test",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	return {
+		"declaration_context":
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+		"squadron_index": 0,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+
+
 func before_each() -> void:
 	_state = GameState.new()
 	_state.initialize()
@@ -526,13 +560,15 @@ func test_redirect_zone_serialize_roundtrip() -> void:
 # ======================================================================
 
 func test_skip_attack_validate_ok() -> void:
-	var cmd := SkipAttackCommand.new(0, {"reason": "voluntary"})
+	var payload: Dictionary = _open_ship_declaration()
+	payload["reason"] = "voluntary"
+	var cmd := SkipAttackCommand.new(0, payload)
 	assert_eq(cmd.validate(_state), "",
 			"Should accept skip in Ship Phase.")
 
 
 func test_skip_attack_validate_ok_no_reason() -> void:
-	var cmd := SkipAttackCommand.new(0, {})
+	var cmd := SkipAttackCommand.new(0, _open_ship_declaration())
 	assert_eq(cmd.validate(_state), "",
 			"Should accept skip with no explicit reason.")
 
@@ -545,14 +581,17 @@ func test_skip_attack_validate_wrong_phase() -> void:
 
 
 func test_skip_attack_validate_ok_squadron_phase() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
-	var cmd := SkipAttackCommand.new(0, {"reason": "voluntary"})
+	var payload: Dictionary = _open_squadron_phase_declaration()
+	payload["reason"] = "voluntary"
+	var cmd := SkipAttackCommand.new(0, payload)
 	assert_eq(cmd.validate(_state), "",
 			"Should accept skip in Squadron Phase.")
 
 
 func test_skip_attack_execute_returns_skip() -> void:
-	var cmd := SkipAttackCommand.new(0, {"reason": "no_targets"})
+	var payload: Dictionary = _open_ship_declaration()
+	payload["reason"] = "no_targets"
+	var cmd := SkipAttackCommand.new(0, payload)
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(result.get("skipped", false),
 			"Execute should return skipped=true.")
@@ -561,7 +600,7 @@ func test_skip_attack_execute_returns_skip() -> void:
 
 
 func test_skip_attack_execute_default_reason() -> void:
-	var cmd := SkipAttackCommand.new(0, {})
+	var cmd := SkipAttackCommand.new(0, _open_ship_declaration())
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("reason", ""), "voluntary",
 			"Default reason should be 'voluntary'.")

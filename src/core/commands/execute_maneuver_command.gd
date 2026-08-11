@@ -55,9 +55,18 @@ func validate(game_state: GameState) -> String:
 			player_index, payload.get("ship_index", -1))
 	if ship == null:
 		return "Ship not found."
-	var flow_error: String = _validate_activation_flow(game_state)
-	if flow_error != "":
-		return flow_error
+	if ship.is_destroyed():
+		return "Ship is destroyed."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	var activation_identity: String = str(payload.get(
+			"ship_activation_identity", ""))
+	if activation_identity.is_empty() \
+			or activation_identity != ship.ship_activation_identity:
+		return "Stale or missing ship activation identity."
+	if ship.maneuver_opportunity_disposition \
+			!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return "Maneuver opportunity is not open."
 	var speed: int = payload.get("speed", -1)
 	if speed < 0:
 		return "Invalid speed."
@@ -76,33 +85,6 @@ func validate(game_state: GameState) -> String:
 		return "Missing final rotation."
 	return ""
 
-
-func _validate_activation_flow(game_state: GameState) -> String:
-	var flow: InteractionFlow = game_state.interaction_flow
-	if flow == null or flow.flow_type != Constants.InteractionFlow.SHIP_ACTIVATION:
-		return ""
-	if _is_legacy_activation_open_step(flow.step_id):
-		return ""
-	if flow.step_id != Constants.InteractionStep.MANEUVER_STEP:
-		return "Maneuver command submitted outside Maneuver step."
-	if flow.controller_player != player_index:
-		return "Maneuver command submitted by non-controller player."
-	var flow_ship_index: int = int(flow.payload.get("ship_index", -1))
-	var command_ship_index: int = int(payload.get("ship_index", -1))
-	if flow_ship_index >= 0 and flow_ship_index != command_ship_index:
-		return "Maneuver command submitted for inactive ship."
-	return ""
-
-
-func _is_legacy_activation_open_step(
-		step_id: Constants.InteractionStep) -> bool:
-	return step_id == Constants.InteractionStep.NONE \
-			or step_id == Constants.InteractionStep.WAIT_FOR_SHIP_SELECT \
-			or step_id == Constants.InteractionStep.ACTIVATION_MODAL_OPEN \
-			or step_id == Constants.InteractionStep.REVEAL_DIAL \
-			or step_id == Constants.InteractionStep.SPEND_DIAL
-
-
 ## Updates the ship's normalised position and rotation in [GameState]
 ## and returns the maneuver data for the presentation layer to apply.
 func execute(game_state: GameState) -> Dictionary:
@@ -111,16 +93,31 @@ func execute(game_state: GameState) -> Dictionary:
 	var new_x: float = float(payload.get("pos_x", 0.0))
 	var new_y: float = float(payload.get("pos_y", 0.0))
 	var new_rot: float = float(payload.get("rotation_deg", 0.0))
-	if ship != null:
-		ship.pos_x = new_x
-		ship.pos_y = new_y
-		ship.rotation_deg = new_rot
+	if ship == null:
+		return {}
+	var old_x: float = ship.pos_x
+	var old_y: float = ship.pos_y
+	var old_rot: float = ship.rotation_deg
+	var boundary_before: Dictionary = ship.ship_activation_boundary_snapshot()
+	ship.pos_x = new_x
+	ship.pos_y = new_y
+	ship.rotation_deg = new_rot
+	if not ship.consume_open_maneuver_opportunity(
+			str(payload.get("ship_activation_identity", ""))) \
+			or not game_state.validate_declaration_adjacent_state():
+		ship.pos_x = old_x
+		ship.pos_y = old_y
+		ship.rotation_deg = old_rot
+		ship.restore_ship_activation_boundary(boundary_before)
+		return {}
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.MANEUVER_STEP,
 			game_state,
-			{"active_player": player_index},
-			Constants.Visibility.ALL)
+			{"active_player": player_index}, Constants.Visibility.ALL,
+			{"ship_index": payload.get("ship_index", -1),
+				"ship_activation_identity": payload.get(
+						"ship_activation_identity", "")})
 	return {
 		"ship_index": payload.get("ship_index", -1),
 		"speed": payload.get("speed", 0),
@@ -131,6 +128,8 @@ func execute(game_state: GameState) -> Dictionary:
 		"yaw_bonus_joint": int(payload.get("yaw_bonus_joint", -1)),
 		"did_overlap": bool(payload.get("did_overlap", false)),
 		"speed_delta": int(payload.get("speed_delta", 0)),
+		"ship_activation_identity": payload.get(
+				"ship_activation_identity", ""),
 	}
 
 

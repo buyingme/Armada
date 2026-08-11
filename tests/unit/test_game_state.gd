@@ -6,6 +6,10 @@ extends GutTest
 
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
+const SHIP_KEY_CR90: String = "cr90_corvette_a"
+const SQUAD_KEY_X_WING: String = "x_wing_squadron"
+const TEST_SHIP_ACTIVATION_ID: String = "ship-activation:aggregate"
+const TEST_SQUADRON_ACTIVATION_ID: String = "squadron-activation:aggregate"
 
 
 const TimingWindowStateScript: GDScript = preload(
@@ -64,7 +68,7 @@ func test_initialize_creates_inactive_timing_window_state() -> void:
 
 # --- TWI-003 Slice 1 owner-local substrate ---
 
-func test_squadron_phase_progress_defaults_are_inactive_and_not_serialized() -> void:
+func test_squadron_phase_progress_defaults_serialize_on_game_state() -> void:
 	var state := GameState.new()
 	state.initialize()
 
@@ -73,8 +77,8 @@ func test_squadron_phase_progress_defaults_are_inactive_and_not_serialized() -> 
 			GameState.SQUADRON_PHASE_CONTROLLER_INACTIVE)
 	assert_eq(state.squadron_phase_activations_committed, 0)
 	assert_true(state.validate_squadron_phase_progress())
-	assert_false(state.serialize().has("squadron_phase_controller_player"))
-	assert_false(state.serialize().has("squadron_phase_activations_committed"))
+	assert_true(state.serialize().has("squadron_phase_controller_player"))
+	assert_true(state.serialize().has("squadron_phase_activations_committed"))
 
 
 func test_squadron_phase_progress_validates_controller_phase_and_limit() -> void:
@@ -168,6 +172,77 @@ func test_ship_activation_aggregate_rejects_two_active_owners() -> void:
 	assert_true(second_ship.establish_ship_activation("ship-activation:2"))
 
 	assert_false(state.validate_ship_activation_identity_aggregate())
+
+
+func test_deserialize_rejects_active_phase_squadron_after_capacity_committed() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	assert_true(state.initialize_squadron_phase_progress(0))
+	var squadron := SquadronInstance.create_from_data(
+			SQUAD_KEY_X_WING,
+			AssetLoader.load_squadron_data(SQUAD_KEY_X_WING), 0)
+	state.player_states[0].squadrons.append(squadron)
+	assert_true(squadron.initialize_activation_action_state(
+			TEST_SQUADRON_ACTIVATION_ID,
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(state.validate_declaration_adjacent_state())
+
+	var serialized: Dictionary = state.serialize()
+	serialized["squadron_phase_activations_committed"] = \
+			Constants.SQUADRONS_PER_ACTIVATION
+
+	assert_null(GameState.deserialize(serialized),
+			"An active squadron cannot exist after the phase capacity was committed.")
+
+
+func test_deserialize_rejects_active_command_squadron_without_ship_commit() -> void:
+	var serialized: Dictionary = _serialized_active_command_squadron_state()
+	var ship_data: Dictionary = serialized["player_states"][0]["ships"][0]
+	ship_data["squadron_command_activations_committed"] = 0
+
+	assert_null(GameState.deserialize(serialized),
+			"The commanding ship must own the committed activation.")
+
+
+func test_deserialize_rejects_active_command_squadron_over_live_capacity() -> void:
+	var serialized: Dictionary = _serialized_active_command_squadron_state()
+	var ship_data: Dictionary = serialized["player_states"][0]["ships"][0]
+	ship_data["squadron_command_activations_committed"] = 2
+
+	assert_null(GameState.deserialize(serialized),
+			"Committed command activations cannot exceed re-derived capacity.")
+
+
+func _serialized_active_command_squadron_state() -> Dictionary:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	var ship := ShipInstance.create_from_data(
+			SHIP_KEY_CR90, AssetLoader.load_ship_data(SHIP_KEY_CR90), 2, 0)
+	ship.command_dial_stack.assign_dials([
+		Constants.CommandType.SQUADRON], 1)
+	ship.command_dial_stack.reveal_top()
+	state.player_states[0].ships.append(ship)
+	assert_true(ship.establish_ship_activation(TEST_SHIP_ACTIVATION_ID))
+	assert_true(ship.open_squadron_command_opportunity(
+			TEST_SHIP_ACTIVATION_ID))
+	assert_true(ship.commit_squadron_command_activation(
+			TEST_SHIP_ACTIVATION_ID))
+	var squadron := SquadronInstance.create_from_data(
+			SQUAD_KEY_X_WING,
+			AssetLoader.load_squadron_data(SQUAD_KEY_X_WING), 0)
+	state.player_states[0].squadrons.append(squadron)
+	assert_true(squadron.initialize_activation_action_state(
+			TEST_SQUADRON_ACTIVATION_ID,
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 0))
+	assert_true(state.validate_declaration_adjacent_state())
+	var serialized: Dictionary = state.serialize()
+	assert_not_null(GameState.deserialize(serialized.duplicate(true)),
+			"The canonical positive control must reconstruct.")
+	return serialized
 
 
 # --- Player State Access ---

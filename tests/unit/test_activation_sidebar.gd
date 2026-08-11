@@ -84,14 +84,14 @@ func test_refresh_from_authoritative_state_rebuilds_when_unit_count_changes() ->
 			"Sidebar should rebuild entries when authoritative unit count changes.")
 
 
-func test_refresh_from_authoritative_state_highlights_game_manager_active_unit() -> void:
+func test_refresh_from_authoritative_state_highlights_canonical_active_unit() -> void:
 	# Arrange
 	var data: Dictionary = _make_state_with_units()
 	var state: GameState = data["state"]
 	var rebel_ship: ShipInstance = data["rebel_ship"]
 	GameManager.current_game_state = state
-	GameManager._activating_ship = rebel_ship
-	GameManager._activating_squadron = null
+	assert_true(rebel_ship.establish_ship_activation(
+			"ship-activation:sidebar"))
 	_sidebar.populate(state)
 	# Act
 	_sidebar.refresh_from_authoritative_state(state)

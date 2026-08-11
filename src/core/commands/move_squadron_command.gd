@@ -47,6 +47,17 @@ func validate(game_state: GameState) -> String:
 		return "Squadron not found."
 	if sq.is_destroyed():
 		return "Squadron is destroyed."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	var activation_identity: String = str(payload.get("activation_id", ""))
+	if activation_identity.is_empty() \
+			or activation_identity != sq.activation_id:
+		return "Stale or missing squadron activation identity."
+	var context_error: String = _validate_activation_context(game_state, sq)
+	if not context_error.is_empty():
+		return context_error
+	if not sq.has_remaining_move_action(_is_rogue(sq)):
+		return "Squadron movement is not available."
 	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing target position."
 	if not _can_move_under_engagement_rules(game_state, sq):
@@ -73,11 +84,59 @@ func execute(game_state: GameState) -> Dictionary:
 			player_index, payload.get("squadron_index", -1))
 	var new_x: float = float(payload.get("pos_x", 0.0))
 	var new_y: float = float(payload.get("pos_y", 0.0))
-	if sq != null:
-		sq.pos_x = new_x
-		sq.pos_y = new_y
+	if sq == null:
+		return {}
+	var action_before: Dictionary = sq.activation_action_state_snapshot()
+	var old_x: float = sq.pos_x
+	var old_y: float = sq.pos_y
+	if not sq.commit_move_action(
+			str(payload.get("activation_id", "")), _is_rogue(sq)):
+		return {}
+	sq.pos_x = new_x
+	sq.pos_y = new_y
+	if not game_state.validate_declaration_adjacent_state():
+		sq.pos_x = old_x
+		sq.pos_y = old_y
+		sq.restore_activation_action_state(action_before)
+		return {}
 	return {
 		"squadron_index": payload.get("squadron_index", -1),
 		"pos_x": new_x,
 		"pos_y": new_y,
+		"activation_id": sq.activation_id,
+		"activation_context": sq.activation_context,
 	}
+
+
+func _validate_activation_context(game_state: GameState,
+		squadron: SquadronInstance) -> String:
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		if game_state.current_phase != Constants.GamePhase.SQUADRON:
+			return "Squadron activation is not in Squadron Phase."
+		if player_index != game_state.squadron_phase_controller_player:
+			return "Squadron movement belongs to the canonical controller."
+		return ""
+	if squadron.activation_context \
+			!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.current_phase != Constants.GamePhase.SHIP:
+		return "Squadron activation context is invalid."
+	var ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	if ship == null or ship.owner_player != player_index:
+		return "Commanding ship is unavailable."
+	if str(payload.get("ship_activation_identity", "")) \
+			!= ship.ship_activation_identity \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return "Ship Squadron-command opportunity does not match."
+	var capacity: int = SquadronCommandResolver.authoritative_capacity(ship)
+	if ship.squadron_command_activations_committed <= 0 \
+			or ship.squadron_command_activations_committed > capacity:
+		return "Commanding ship activation budget is invalid."
+	return ""
+
+
+func _is_rogue(squadron: SquadronInstance) -> bool:
+	return squadron.squadron_data != null \
+			and squadron.squadron_data.has_keyword("Rogue")

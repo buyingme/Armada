@@ -107,9 +107,9 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 	GameManager.current_game_state = previous_state
 
 
-func test_timing_window_activation_uses_replay_format_four() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 4,
-			"TWI-002 production activation histories use replay format 4")
+func test_twi_003_cutover_uses_replay_format_five() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 5,
+			"TWI-003 production activation histories use replay format 5")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 
@@ -272,7 +272,7 @@ func test_deserialize_accepts_contiguous_reconstructed_sequence_column() -> void
 
 
 func test_deserialize_rejects_every_non_current_semantic_format() -> void:
-	for format: int in [1, 2, 3, 99]:
+	for format: int in [1, 2, 3, 4, 99]:
 		var data: Dictionary = _make_replay(1).serialize()
 		(data["header"] as Dictionary)["format_version"] = format
 		(data["commands"] as Array)[0]["type"] = "unknown_before_apply"

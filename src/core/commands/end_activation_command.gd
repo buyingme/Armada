@@ -41,6 +41,15 @@ func validate(game_state: GameState) -> String:
 		return "Ship not found."
 	if ship.activated_this_round:
 		return "Ship already activated."
+	if ship.is_destroyed():
+		return "Ship is destroyed."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	var identity: String = str(payload.get("ship_activation_identity", ""))
+	if identity.is_empty() or identity != ship.ship_activation_identity:
+		return "Stale or missing ship activation identity."
+	if not ship.can_complete_ship_activation_normally(identity):
+		return "Ship activation obligations are not consumed."
 	return ""
 
 
@@ -49,6 +58,17 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
+	if ship == null:
+		return {}
+	var identity: String = str(payload.get("ship_activation_identity", ""))
+	var boundary_before: Dictionary = ship.ship_activation_boundary_snapshot()
+	if not ship.complete_ship_activation_boundary_normally(identity):
+		return {}
+	ship.activated_this_round = true
+	if not game_state.validate_declaration_adjacent_state():
+		ship.activated_this_round = false
+		ship.restore_ship_activation_boundary(boundary_before)
+		return {}
 	var revealed: Dictionary = \
 			ship.command_dial_stack.get_revealed_dial()
 	var spent_command: int = -1
@@ -57,7 +77,6 @@ func execute(game_state: GameState) -> Dictionary:
 				ship.command_dial_stack.spend_revealed()
 		if not spent.is_empty():
 			spent_command = int(spent.get("command", -1))
-	ship.activated_this_round = true
 	var next_active_player: int = Constants.PLAYER_COUNT - 1 - player_index
 	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
@@ -66,4 +85,5 @@ func execute(game_state: GameState) -> Dictionary:
 			{"active_player": next_active_player},
 			Constants.Visibility.ALL)
 	return {"spent_command": spent_command,
-			"ship_index": payload.get("ship_index", -1)}
+			"ship_index": payload.get("ship_index", -1),
+			"ship_activation_identity": identity}

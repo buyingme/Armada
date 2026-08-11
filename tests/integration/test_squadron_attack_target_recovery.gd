@@ -125,6 +125,180 @@ func test_exact_owner_local_ties_have_distinct_nebulon_legality() -> void:
 			obstruction_bodies))
 
 
+func test_bug_005_inside_distance_one_previews_and_begins_both_pairings() \
+		-> void:
+	_assert_production_distance_thresholds_are_distinct()
+	for defender_kind: String in [
+		CurrentAttackState.KIND_SQUADRON,
+		CurrentAttackState.KIND_SHIP,
+	]:
+		CommandProcessor.reset()
+		var state: GameState = _make_distance_boundary_state(
+				defender_kind, 179.0)
+		_install_state(state)
+		var candidates: Array[Dictionary] = \
+				TargetingListBuilder.authoritative_squadron_target_entries(
+						state, 0, 0)
+		assert_eq(candidates.size(), 1,
+				"Preview must expose the exact inside-distance-1 %s target." \
+						% defender_kind)
+		if candidates.size() != 1:
+			continue
+		var payload: Dictionary = _squadron_begin_payload(
+				state, candidates[0])
+		var result: Dictionary = CommandProcessor.submit(
+				BeginAttackCommand.new(0, payload))
+		assert_false(result.is_empty(),
+				"Begin must accept the same inside-distance-1 target as Preview.")
+		assert_true(state.current_attack_state.active)
+		assert_eq(state.current_attack_state.defender_kind, defender_kind)
+		assert_eq(state.get_squadron(0, 0).attack_action_disposition,
+				SquadronInstance.ATTACK_ACTION_BEGUN)
+		assert_eq(_history_types(), [BeginAttackCommand.TYPE])
+
+
+func test_bug_005_close_only_interval_rejects_preview_and_begin_both_pairings() \
+		-> void:
+	_assert_production_distance_thresholds_are_distinct()
+	for defender_kind: String in [
+		CurrentAttackState.KIND_SQUADRON,
+		CurrentAttackState.KIND_SHIP,
+	]:
+		CommandProcessor.reset()
+		var state: GameState = _make_distance_boundary_state(
+				defender_kind, 183.0)
+		_install_state(state)
+		var owner_before: Dictionary = state.get_squadron(
+				0, 0).activation_action_state_snapshot()
+		var candidates: Array[Dictionary] = \
+				TargetingListBuilder.authoritative_squadron_target_entries(
+						state, 0, 0)
+		assert_true(candidates.is_empty(),
+				"Preview must reject a target outside distance 1 but in close range.")
+		var payload: Dictionary = _forged_close_only_begin_payload(
+				state, defender_kind)
+		assert_eq(CommandProcessor.submit(
+				BeginAttackCommand.new(0, payload)), {})
+		assert_true(state.current_attack_state.is_inactive())
+		assert_eq(state.get_squadron(
+				0, 0).activation_action_state_snapshot(), owner_before)
+		assert_true(_history_types().is_empty())
+		assert_eq(CommandProcessor.get_next_sequence(), 0)
+	assert_engine_error(2,
+			"Both close-only Begin attempts must fail authoritative revalidation.")
+
+
+func test_all_four_declaration_skip_rows_are_preview_independent() -> void:
+	var without_preview: Dictionary = {}
+	for previewed: bool in [false, true]:
+		for context: String in [
+			SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+			"non_rogue_squadron_phase",
+			"rogue_squadron_phase",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+		]:
+			CommandProcessor.reset()
+			var fixture: Dictionary = _make_declaration_skip_fixture(context)
+			var state: GameState = fixture.get("state") as GameState
+			var payload: Dictionary = fixture.get("payload", {}) as Dictionary
+			_install_state(state)
+			var before_preview: Dictionary = state.serialize()
+			if previewed:
+				var candidates: Array[Dictionary] = []
+				if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+					candidates = \
+							TargetingListBuilder.authoritative_ship_target_entries(
+									state, 0, 0)
+				else:
+					candidates = TargetingListBuilder \
+							.authoritative_squadron_target_entries(state, 0, 0)
+				assert_false(candidates.is_empty(),
+						"Preview fixture must expose a replaceable candidate.")
+				assert_eq(state.serialize(), before_preview,
+						"Preview query must not mutate canonical owners.")
+			var result: Dictionary = CommandProcessor.submit(
+					SkipAttackCommand.new(0, payload))
+			assert_false(result.is_empty())
+			assert_true(state.current_attack_state.is_inactive())
+			assert_eq(_history_types(), [SkipAttackCommand.new().command_type])
+			var outcome: Dictionary = _declaration_skip_outcome(
+					state, result, context)
+			var restored: GameState = GameState.deserialize(
+					JSON.parse_string(JSON.stringify(state.serialize())))
+			assert_not_null(restored,
+					"Every post-Skip row must reconstruct from canonical owners.")
+			if restored != null:
+				if context == "rogue_squadron_phase":
+					restored.get_squadron(0, 0).squadron_data = \
+							state.get_squadron(0, 0).squadron_data
+				assert_eq(CanonicalJson.hash(_declaration_skip_outcome(
+						restored, result, context)), CanonicalJson.hash(outcome),
+						"Post-Skip reconstruction must preserve the %s row." \
+								% context)
+			if previewed:
+				assert_eq(outcome, without_preview.get(context, {}),
+						"Preview must not alter the %s Skip row." % context)
+			else:
+				without_preview[context] = outcome
+
+
+func test_all_squadron_declaration_contexts_begin_with_exact_owner_transition() \
+		-> void:
+	for context: String in [
+		"non_rogue_squadron_phase",
+		"rogue_squadron_phase",
+		SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+	]:
+		CommandProcessor.reset()
+		var fixture: Dictionary = _make_declaration_skip_fixture(context)
+		var state: GameState = fixture.get("state") as GameState
+		_install_state(state)
+		var candidates: Array[Dictionary] = TargetingListBuilder \
+				.authoritative_squadron_target_entries(state, 0, 0)
+		assert_false(candidates.is_empty(),
+				"The %s Begin row must have an authoritative candidate." % context)
+		if candidates.is_empty():
+			continue
+		var payload: Dictionary = _squadron_begin_payload(
+				state, candidates[0])
+		var result: Dictionary = CommandProcessor.submit(
+				BeginAttackCommand.new(0, payload))
+		assert_false(result.is_empty(),
+				"The %s Begin row must be accepted." % context)
+		assert_true(state.current_attack_state.active)
+		assert_eq(_history_types(), [BeginAttackCommand.TYPE])
+		var squadron: SquadronInstance = state.get_squadron(0, 0)
+		assert_eq(squadron.attack_action_disposition,
+				SquadronInstance.ATTACK_ACTION_BEGUN)
+		assert_false(squadron.activated_this_round,
+				"An active attack has not completed its activation.")
+		var rogue: bool = context == "rogue_squadron_phase"
+		var independent_actions: bool = rogue or context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND
+		assert_eq(squadron.has_remaining_move_action(rogue),
+				independent_actions,
+				"Rogue and commanded squadrons retain unused movement.")
+		if context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+			var ship: ShipInstance = state.get_ship(0, 0)
+			assert_eq(ship.squadron_command_opportunity_disposition,
+					ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+			assert_eq(ship.squadron_command_activations_committed, 1)
+		var restored: GameState = GameState.deserialize(
+				JSON.parse_string(JSON.stringify(state.serialize())))
+		assert_not_null(restored,
+				"The %s post-Begin owners must reconstruct." % context)
+		if restored != null:
+			if rogue:
+				restored.get_squadron(0, 0).squadron_data = \
+						squadron.squadron_data
+			assert_eq(restored.get_squadron(
+					0, 0).activation_action_state_snapshot(),
+					squadron.activation_action_state_snapshot())
+			assert_eq(restored.current_attack_state.serialize(),
+					state.current_attack_state.serialize())
+
+
 func test_production_selection_never_previews_non_candidate_nebulon_zone() -> void:
 	var state: GameState = _make_forensic_state()
 	_install_state(state)
@@ -281,6 +455,43 @@ func test_legal_squadron_target_still_accepts_normal_begin_path() -> void:
 	assert_eq(CommandProcessor.get_next_sequence(), 117)
 	assert_eq(_history_types(), ["activate_squadron", "begin_attack"])
 	assert_true(selector.get_state().exec_mode)
+
+
+func test_post_begin_destroyed_squadron_completes_through_production_callback() \
+		-> void:
+	var state: GameState = _make_forensic_state()
+	_install_state(state)
+	assert_true(CommandProcessor.restore_next_sequence(115))
+	var composition: Dictionary = _make_composition(state)
+	var controller: SquadronPhaseController = composition["controller"]
+	var selector: TargetSelector = composition["selector"]
+	var executor: AttackExecutor = composition["executor"]
+	var modal: SquadronActivationModal = controller.get_modal()
+	var attacker: SquadronInstance = state.get_squadron(1, 5)
+	var attacker_token: SquadronToken = _token_for_squadron(attacker)
+	var defender_token: ShipToken = _token_for_ship(state.get_ship(0, 1))
+
+	_activate_through_controller(controller, attacker_token)
+	modal._on_attack_pressed()
+	selector._try_select_target_ship_zone(
+			defender_token, Constants.HullZone.FRONT)
+	executor._on_declaration_confirm()
+	assert_true(state.current_attack_state.active)
+	assert_eq(attacker.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_BEGUN)
+
+	# Counter is a protected post-Begin effect. Its already-covered production
+	# damage route may destroy this attacker before the enclosing callback runs.
+	attacker.mark_destroyed()
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	executor._finish_attack_execution()
+
+	assert_true(attacker.is_destroyed())
+	assert_true(attacker.activated_this_round,
+			"The existing closure boundary must accept the destroyed attacker.")
+	assert_false(controller.is_in_attacking_state())
+	assert_eq(_history_types(), ["activate_squadron", "begin_attack",
+			CompleteSquadronActivationCommand.TYPE])
 
 
 func test_declaration_skip_with_preview_records_no_begin() -> void:
@@ -501,6 +712,7 @@ func _make_forensic_state() -> GameState:
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SQUADRON_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT, 1)
+	assert_true(state.initialize_squadron_phase_progress(1))
 	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
 	state.get_player_state(1).faction = Constants.Faction.GALACTIC_EMPIRE
 
@@ -529,10 +741,237 @@ func _make_forensic_state() -> GameState:
 	return state
 
 
+func _make_distance_boundary_state(defender_kind: String,
+		edge_distance_px: float) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.initiative_player = 0
+	assert_true(state.initialize_squadron_phase_progress(0))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SQUADRON_ACTIVATION,
+			Constants.InteractionStep.ACTION_CHOICE, 0)
+	var attacker: SquadronInstance = _make_squadron(
+			"x_wing_squadron", 0)
+	var attacker_px := Vector2(700.0, 1000.0)
+	_place_squadron(attacker, attacker_px)
+	assert_true(attacker.initialize_activation_action_state(
+			"squadron-activation:distance-boundary",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	state.get_player_state(0).squadrons.append(attacker)
+	var squadron_radius: float = GameScale.squadron_base_diameter_px * 0.5
+	if defender_kind == CurrentAttackState.KIND_SQUADRON:
+		var defender: SquadronInstance = _make_squadron(
+				"tie_fighter_squadron", 1)
+		_place_squadron(defender, Vector2(
+				attacker_px.x + GameScale.squadron_base_diameter_px \
+						+ edge_distance_px,
+				attacker_px.y))
+		state.get_player_state(1).squadrons.append(defender)
+	else:
+		var defender: ShipInstance = _make_ship(CR90_KEY, 1)
+		var defender_px := Vector2(1100.0, attacker_px.y)
+		var base_size: Vector2 = GameScale.get_base_size(
+				defender.ship_data.ship_size)
+		attacker_px = Vector2(defender_px.x,
+				defender_px.y - base_size.y * 0.5 \
+						- squadron_radius - edge_distance_px)
+		_place_squadron(attacker, attacker_px)
+		_place_ship(defender, defender_px, 0.0)
+		state.get_player_state(1).ships.append(defender)
+	return state
+
+
+func _make_declaration_skip_fixture(context: String) -> Dictionary:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 1
+	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+		state.current_phase = Constants.GamePhase.SHIP
+		var attacker: ShipInstance = _make_ship(VICTORY_KEY, 0)
+		_place_ship(attacker, Vector2(1080.0, 1250.0), 0.0)
+		assert_true(attacker.establish_ship_activation(
+				"ship-activation:skip-matrix"))
+		attacker.begin_attack_step()
+		state.get_player_state(0).ships.append(attacker)
+		var defender: ShipInstance = _make_ship(CR90_KEY, 1)
+		_place_ship(defender, Vector2(1080.0, 900.0), 180.0)
+		state.get_player_state(1).ships.append(defender)
+		state.interaction_flow = InteractionFlow.make(
+				Constants.InteractionFlow.SHIP_ACTIVATION,
+				Constants.InteractionStep.ATTACK_STEP, 0)
+		return {
+			"state": state,
+			"payload": {
+				"reason": "voluntary",
+				"declaration_context": context,
+				"ship_index": 0,
+				"ship_activation_identity": attacker.ship_activation_identity,
+			},
+		}
+	var attacker_data: SquadronData = AssetLoader.load_squadron_data(
+			"x_wing_squadron")
+	if context == "rogue_squadron_phase":
+		attacker_data.keywords.append({"name": "Rogue"})
+	var attacker: SquadronInstance = SquadronInstance.create_from_data(
+			"x_wing_squadron", attacker_data, 0)
+	_place_squadron(attacker, Vector2(1000.0, 1000.0))
+	state.get_player_state(0).squadrons.append(attacker)
+	var defender: SquadronInstance = _make_squadron(TIE_KEY, 1)
+	_place_squadron(defender, Vector2(1000.0, 850.0))
+	state.get_player_state(1).squadrons.append(defender)
+	var declaration_context: String = \
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
+	var ship_identity: String = ""
+	if context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		state.current_phase = Constants.GamePhase.SHIP
+		declaration_context = context
+		var commanding_ship: ShipInstance = _make_ship(VICTORY_KEY, 0)
+		_place_ship(commanding_ship, Vector2(1000.0, 1200.0), 0.0)
+		var dials: Array[int] = []
+		for _index: int in range(
+				commanding_ship.command_dial_stack.get_dials_needed()):
+			dials.append(Constants.CommandType.SQUADRON)
+		assert_true(commanding_ship.command_dial_stack.assign_dials(dials, 1))
+		assert_false(commanding_ship.command_dial_stack.reveal_top().is_empty())
+		assert_true(commanding_ship.establish_ship_activation(
+				"ship-activation:command-skip-matrix"))
+		ship_identity = commanding_ship.ship_activation_identity
+		assert_true(commanding_ship.open_squadron_command_opportunity(
+				ship_identity))
+		state.get_player_state(0).ships.append(commanding_ship)
+		assert_true(attacker.initialize_activation_action_state(
+				"squadron-activation:command-skip-matrix",
+				declaration_context, 0, 0))
+		assert_true(commanding_ship.commit_squadron_command_activation(
+				ship_identity))
+		state.interaction_flow = InteractionFlow.make(
+				Constants.InteractionFlow.SHIP_ACTIVATION,
+				Constants.InteractionStep.SQUADRON_STEP, 0)
+	else:
+		state.current_phase = Constants.GamePhase.SQUADRON
+		assert_true(state.initialize_squadron_phase_progress(0))
+		assert_true(attacker.initialize_activation_action_state(
+				"squadron-activation:phase-skip-matrix",
+				declaration_context))
+		state.interaction_flow = InteractionFlow.make(
+				Constants.InteractionFlow.SQUADRON_ACTIVATION,
+				Constants.InteractionStep.ACTION_CHOICE, 0)
+	var payload: Dictionary = {
+		"reason": "voluntary",
+		"declaration_context": declaration_context,
+		"squadron_index": 0,
+		"activation_id": attacker.activation_id,
+		"activation_context": attacker.activation_context,
+	}
+	if not ship_identity.is_empty():
+		payload["ship_activation_identity"] = ship_identity
+	return {"state": state, "payload": payload}
+
+
+func _declaration_skip_outcome(state: GameState, result: Dictionary,
+		context: String) -> Dictionary:
+	var flow: InteractionFlow = state.interaction_flow
+	var outcome: Dictionary = {
+		"result": result.duplicate(true),
+		"flow": {
+			"flow_type": int(flow.flow_type),
+			"step_id": int(flow.step_id),
+			"controller_player": flow.controller_player,
+			"ship_activation_identity": str(flow.payload.get(
+					"ship_activation_identity", "")),
+			"activation_id": str(flow.payload.get("activation_id", "")),
+		},
+		"phase_controller": state.squadron_phase_controller_player,
+		"phase_count": state.squadron_phase_activations_committed,
+	}
+	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
+		var ship: ShipInstance = state.get_ship(0, 0)
+		outcome["ship_boundary"] = ship.ship_activation_boundary_snapshot()
+		outcome["attack_progress"] = ship.attack_progress_snapshot()
+		return outcome
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	outcome["squadron_action"] = squadron.activation_action_state_snapshot()
+	outcome["activated"] = squadron.activated_this_round
+	outcome["movement_remains"] = squadron.has_remaining_move_action(
+			context == "rogue_squadron_phase")
+	if context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		outcome["ship_boundary"] = state.get_ship(
+				0, 0).ship_activation_boundary_snapshot()
+	return outcome
+
+
+func _squadron_begin_payload(state: GameState,
+		candidate: Dictionary) -> Dictionary:
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	var payload: Dictionary = {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": int(candidate.get("target_owner", -1)),
+		"defender_kind": str(candidate.get("target_kind", "")),
+		"defender_index": int(candidate.get("target_index", -1)),
+		"defender_zone": int(candidate.get("target_zone", -1)),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate.get("range_band", "")),
+		"obstructed": bool(candidate.get("obstructed", false)),
+		"dice_pool": (candidate.get("dice", {}) as Dictionary).duplicate(true),
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		var commanding_ship: ShipInstance = state.get_ship(
+				squadron.commanding_ship_player, squadron.commanding_ship_index)
+		payload["ship_activation_identity"] = \
+				commanding_ship.ship_activation_identity
+	return payload
+
+
+func _forged_close_only_begin_payload(state: GameState,
+		defender_kind: String) -> Dictionary:
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	return {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": 1,
+		"defender_kind": defender_kind,
+		"defender_index": 0,
+		"defender_zone": -1 \
+				if defender_kind == CurrentAttackState.KIND_SQUADRON \
+				else int(Constants.HullZone.FRONT),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": Constants.RANGE_BAND_CLOSE,
+		"obstructed": false,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+
+
+func _assert_production_distance_thresholds_are_distinct() -> void:
+	assert_eq(GameScale.distance_bands_px[0], 181.0)
+	assert_eq(GameScale.range_close_px, 292.0)
+	assert_lt(GameScale.distance_bands_px[0], GameScale.range_close_px)
+	assert_eq(GameScale.get_distance_band(179.0), 1)
+	assert_eq(GameScale.get_distance_band(183.0), 2)
+	assert_eq(GameScale.get_range_band(179.0), Constants.RANGE_BAND_CLOSE)
+	assert_eq(GameScale.get_range_band(183.0), Constants.RANGE_BAND_CLOSE)
+
+
 func _make_replacement_state(unique_target: bool) -> GameState:
 	var state: GameState = _make_forensic_state()
 	state.current_phase = Constants.GamePhase.SHIP
-	state.get_ship(0, 1).begin_attack_step()
+	state.clear_squadron_phase_progress()
+	var attacker: ShipInstance = state.get_ship(0, 1)
+	assert_true(attacker.establish_ship_activation(
+			"ship-activation:replacement"))
+	attacker.begin_attack_step()
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SHIP_SELECT, 0)

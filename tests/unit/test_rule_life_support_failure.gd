@@ -83,7 +83,7 @@ func test_convert_dial_to_token_rejected_by_validator() -> void:
 func test_convert_dial_to_token_execute_blocks_without_legacy_registry() -> void:
 	var ship: ShipInstance = _state.get_ship(OWNER_PLAYER, SHIP_INDEX)
 	_add_life_support_failure(ship)
-	var result: Dictionary = _make_convert_command().execute(_state)
+	var result: Dictionary = _make_convert_command(true).execute(_state)
 	assert_true(result.get("token_blocked", false),
 			"Direct command execution should still consult RuleRegistry blockers.")
 	assert_eq(ship.command_tokens.get_token_count(), 0,
@@ -92,7 +92,7 @@ func test_convert_dial_to_token_execute_blocks_without_legacy_registry() -> void
 
 func test_convert_dial_to_token_allows_ship_without_card() -> void:
 	var ship: ShipInstance = _state.get_ship(OWNER_PLAYER, SHIP_INDEX)
-	var result: Dictionary = _make_convert_command().execute(_state)
+	var result: Dictionary = _make_convert_command(true).execute(_state)
 	assert_true(result.get("token_added", false),
 			"Ships without Life Support Failure should gain the converted token.")
 	assert_eq(ship.command_tokens.get_token_count(), 1,
@@ -105,7 +105,7 @@ func test_blocker_applies_after_save_load_without_legacy_effect() -> void:
 	var restored: GameState = GameState.deserialize(_state.serialize())
 	GameManager.current_game_state = restored
 	var restored_ship: ShipInstance = restored.get_ship(OWNER_PLAYER, SHIP_INDEX)
-	var result: Dictionary = _make_convert_command().execute(restored)
+	var result: Dictionary = _make_convert_command(true).execute(restored)
 	assert_true(result.get("token_blocked", false),
 			"RuleRegistry blocker should still apply after save/load rebuild.")
 	assert_eq(restored_ship.command_tokens.get_token_count(), 0,
@@ -162,8 +162,13 @@ func _make_ship(owner_player: int) -> ShipInstance:
 	return ship
 
 
-func _make_convert_command() -> ConvertDialToTokenCommand:
-	return ConvertDialToTokenCommand.new(OWNER_PLAYER, {"ship_index": SHIP_INDEX})
+func _make_convert_command(assign_sequence: bool = false) \
+		-> ConvertDialToTokenCommand:
+	var command := ConvertDialToTokenCommand.new(
+			OWNER_PLAYER, {"ship_index": SHIP_INDEX})
+	if assign_sequence:
+		command.sequence = 0
+	return command
 
 
 func _add_life_support_failure(ship: ShipInstance) -> DamageCard:

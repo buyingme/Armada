@@ -9,6 +9,9 @@
 extends GutTest
 
 
+const ACTIVATION_ID: String = "ship-activation:resolver-test"
+
+
 # ---------------------------------------------------------------------------
 # Helper — build a ShipInstance with configurable Squadron resources
 # ---------------------------------------------------------------------------
@@ -55,6 +58,9 @@ func _make_ship(
 func _create_resolver(ship: ShipInstance,
 		ship_pos: Vector2,
 		ship_rot: float = 0.0) -> SquadronCommandResolver:
+	if not ship.has_active_ship_activation():
+		assert_true(ship.establish_ship_activation(ACTIVATION_ID))
+		assert_true(ship.open_squadron_command_opportunity(ACTIVATION_ID))
 	var hw: float = GameScale.small_base_width_px * 0.5
 	var hl: float = GameScale.small_base_length_px * 0.5
 	return SquadronCommandResolver.create(ship, ship_pos, ship_rot, hw, hl)
@@ -123,13 +129,13 @@ func test_vsd_squadron_value_three_dial() -> void:
 # ---------------------------------------------------------------------------
 
 
-func test_use_activation_decrements_remaining() -> void:
+func test_canonical_commit_decrements_projected_remaining() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var resolver: SquadronCommandResolver = _create_resolver(
 			ship, Vector2.ZERO)
 	assert_eq(resolver.get_remaining_activations(), 2,
 			"Initially 2 remaining")
-	var ok: bool = resolver.use_activation()
+	var ok: bool = ship.commit_squadron_command_activation(ACTIVATION_ID)
 	assert_true(ok, "First use should succeed")
 	assert_eq(resolver.get_remaining_activations(), 1,
 			"1 remaining after first use")
@@ -138,27 +144,38 @@ func test_use_activation_decrements_remaining() -> void:
 	assert_false(resolver.is_done(), "Not done yet")
 
 
-func test_use_activation_returns_false_when_done() -> void:
+func test_resolver_reports_done_from_canonical_owner() -> void:
 	var ship: ShipInstance = _make_ship(1, false, true)
 	var resolver: SquadronCommandResolver = _create_resolver(
 			ship, Vector2.ZERO)
-	resolver.use_activation()
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
 	assert_true(resolver.is_done(), "Should be done after 1 use")
-	var ok: bool = resolver.use_activation()
-	assert_false(ok,
-			"Should return false when all activations are used")
+	assert_eq(resolver.get_remaining_activations(), 0)
 
 
 func test_is_done_true_after_all_used() -> void:
 	var ship: ShipInstance = _make_ship(2, true, false)
 	var resolver: SquadronCommandResolver = _create_resolver(
 			ship, Vector2.ZERO)
-	resolver.use_activation()
-	resolver.use_activation()
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
 	assert_true(resolver.is_done(),
 			"Should be done after using all 2 activations")
 	assert_eq(resolver.get_remaining_activations(), 0,
 			"0 remaining when done")
+
+
+func test_recreated_resolver_projects_same_canonical_budget() -> void:
+	var ship: ShipInstance = _make_ship(3, true, false)
+	var first: SquadronCommandResolver = _create_resolver(
+			ship, Vector2(500, 500))
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
+	assert_eq(first.get_remaining_activations(), 2)
+	var recreated: SquadronCommandResolver = _create_resolver(
+			ship, Vector2(500, 500))
+	assert_eq(recreated.get_activations_used(), 1,
+			"Resolver recreation must not reset committed use.")
+	assert_eq(recreated.get_remaining_activations(), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +264,7 @@ func test_finalize_spends_token() -> void:
 	assert_true(ship.command_tokens.has_token(
 			Constants.CommandType.SQUADRON),
 			"Token should exist before finalize")
-	resolver.use_activation()
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
 	var result: Dictionary = resolver.finalize()
 	assert_true(result.has("token_type"),
 			"finalize() should report token spend (CM-022)")
@@ -282,7 +299,7 @@ func test_finalize_spends_both_dial_and_token() -> void:
 	var resolver: SquadronCommandResolver = _create_resolver(
 			ship, Vector2.ZERO)
 	# Use at least one activation so the token counts as spent.
-	resolver.use_activation()
+	assert_true(ship.commit_squadron_command_activation(ACTIVATION_ID))
 	var result: Dictionary = resolver.finalize()
 	# Dial is NOT spent directly — caller submits SpendDialCommand.
 	assert_true(result.get("dial_spent", false),

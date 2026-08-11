@@ -3,6 +3,7 @@ class_name BeginAttackCommand
 extends GameCommand
 
 const TYPE: String = "begin_attack"
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 
 var _log: GameLogger = GameLogger.new("BeginAttackCommand")
 
@@ -22,9 +23,14 @@ func validate(game_state: GameState) -> String:
 	if game_state.current_phase != Constants.GamePhase.SHIP \
 			and game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return "Not in Ship or Squadron Phase."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
 	var identity_error: String = _validate_identity(game_state)
 	if identity_error != "":
 		return identity_error
+	var context_error: String = _validate_declaration_context(game_state)
+	if context_error != "":
+		return context_error
 	var progress_error: String = _validate_ship_attack_progress(game_state)
 	if progress_error != "":
 		return progress_error
@@ -87,6 +93,8 @@ func execute(game_state: GameState) -> Dictionary:
 	if not state.configure_active(attack_id, values):
 		return {}
 	var progress_snapshot: Dictionary = {}
+	var squadron: SquadronInstance = _standard_attacker_squadron(game_state)
+	var action_snapshot: Dictionary = {}
 	if ship != null:
 		_log.debug("Begin before authoritative progress commit: %s" %
 				JSON.stringify(ship.attack_progress_snapshot()))
@@ -96,14 +104,41 @@ func execute(game_state: GameState) -> Dictionary:
 				int(payload.get("defender_player", -1)),
 				str(payload.get("defender_kind", "")),
 				int(payload.get("defender_index", -1)))
+	elif squadron != null:
+		action_snapshot = squadron.activation_action_state_snapshot()
+		if not squadron.commit_attack_action_begun(
+				str(payload.get("activation_id", "")),
+				_is_rogue(squadron)):
+			return {}
 	if not game_state.set_current_attack_state(state):
 		if ship != null:
 			ship.restore_attack_progress(progress_snapshot)
+		if squadron != null:
+			squadron.restore_activation_action_state(action_snapshot)
+		return {}
+	if not game_state.validate_declaration_adjacent_state():
+		game_state.set_current_attack_state(CurrentAttackState.inactive())
+		if ship != null:
+			ship.restore_attack_progress(progress_snapshot)
+		if squadron != null:
+			squadron.restore_activation_action_state(action_snapshot)
 		return {}
 	if ship != null:
 		_log.debug("Begin after authoritative progress commit: %s" %
 				JSON.stringify(ship.attack_progress_snapshot()))
-	return {"attack_id": attack_id, "dice_pool": pool.duplicate(true)}
+	if _canonical_attack_kind() \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD:
+		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.ATTACK,
+				Constants.InteractionStep.ATTACK_DECLARE,
+				game_state,
+				{"attacker_player": player_index},
+				Constants.Visibility.ALL,
+				{"attack_id": attack_id})
+	return {"attack_id": attack_id, "dice_pool": pool.duplicate(true),
+			"activation_id": str(payload.get("activation_id", "")),
+			"ship_activation_identity": str(payload.get(
+					"ship_activation_identity", ""))}
 
 
 func _validate_ship_attack_progress(game_state: GameState) -> String:
@@ -119,6 +154,61 @@ func _validate_ship_attack_progress(game_state: GameState) -> String:
 			int(payload.get("defender_index", -1)))
 
 
+func _validate_declaration_context(game_state: GameState) -> String:
+	if _canonical_attack_kind() \
+			== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return ""
+	var attacker_kind: String = str(payload.get("attacker_kind", ""))
+	if attacker_kind == CurrentAttackState.KIND_SHIP:
+		var ship: ShipInstance = game_state.get_ship(
+				int(payload.get("attacker_player", -1)),
+				int(payload.get("attacker_index", -1)))
+		if ship == null or not ship.attack_step_active:
+			return "No active authoritative ship Attack-step opportunity."
+		var expected_identity: String = str(payload.get(
+				"ship_activation_identity", ""))
+		if expected_identity.is_empty() \
+				or expected_identity != ship.ship_activation_identity:
+			return "Stale or missing ship activation identity."
+		return ""
+	if attacker_kind != CurrentAttackState.KIND_SQUADRON:
+		return "Unsupported declaration attacker context."
+	var squadron: SquadronInstance = _standard_attacker_squadron(game_state)
+	if squadron == null or squadron.activated_this_round:
+		return "No active authoritative squadron declaration opportunity."
+	if str(payload.get("activation_id", "")) != squadron.activation_id \
+			or str(payload.get("activation_context", "")) \
+					!= squadron.activation_context:
+		return "Stale or wrong-context squadron activation identity."
+	if not squadron.has_remaining_attack_action(_is_rogue(squadron)):
+		return "Squadron attack action is not available."
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		if game_state.current_phase != Constants.GamePhase.SQUADRON \
+				or player_index != game_state.squadron_phase_controller_player:
+			return "Squadron declaration belongs to the canonical controller."
+		return ""
+	if squadron.activation_context \
+			!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.current_phase != Constants.GamePhase.SHIP:
+		return "Squadron declaration context is invalid."
+	var commanding_ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	if commanding_ship == null or commanding_ship.owner_player != player_index:
+		return "Commanding ship is unavailable."
+	if str(payload.get("ship_activation_identity", "")) \
+			!= commanding_ship.ship_activation_identity \
+			or commanding_ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return "Ship Squadron-command opportunity does not match."
+	var capacity: int = SquadronCommandResolver.authoritative_capacity(
+			commanding_ship)
+	if commanding_ship.squadron_command_activations_committed <= 0 \
+			or commanding_ship.squadron_command_activations_committed > capacity:
+		return "Commanding ship activation budget is invalid."
+	return ""
+
+
 func _tracked_attacker_ship(game_state: GameState) -> ShipInstance:
 	if not _coordinates_ship_attack_progress():
 		return null
@@ -126,6 +216,22 @@ func _tracked_attacker_ship(game_state: GameState) -> ShipInstance:
 			int(payload.get("attacker_player", -1)),
 			int(payload.get("attacker_index", -1)))
 	return ship if ship != null and ship.attack_step_active else null
+
+
+func _standard_attacker_squadron(game_state: GameState) -> SquadronInstance:
+	if _canonical_attack_kind() \
+			!= SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD \
+			or str(payload.get("attacker_kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON:
+		return null
+	return game_state.get_squadron(
+			int(payload.get("attacker_player", -1)),
+			int(payload.get("attacker_index", -1)))
+
+
+func _is_rogue(squadron: SquadronInstance) -> bool:
+	return squadron != null and squadron.squadron_data != null \
+			and squadron.squadron_data.has_keyword("Rogue")
 
 
 func _coordinates_ship_attack_progress() -> bool:

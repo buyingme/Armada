@@ -64,20 +64,15 @@ var active_player: int = 0
 ## -1 means no player is assigning (phase not active or both done).
 var _command_assigning_player: int = -1
 
-## The ship currently being activated during Ship Phase.
-## Set when a command dial is dropped on a ship; cleared on End Activation.
+## Read-only presentation mirror of the canonical active ship boundary.
 ## Requirements: UI-024, UI-026.
 var _activating_ship: ShipInstance = null
 
-## The squadron currently being activated during Squadron Phase, or null.
-## Set when a squadron token is clicked; cleared after move+attack resolves.
+## Read-only presentation mirror of canonical squadron action state.
 ## Requirements: SQ-006.
 var _activating_squadron: SquadronInstance = null
 
-## How many squadrons the active player has activated in the current turn
-## during the Squadron Phase.  Each turn activates exactly 2 squadrons
-## (or fewer if the player has fewer remaining).
-## Resets when the active player changes.
+## Read-only presentation mirror of canonical Squadron Phase progress.
 ## Requirements: SQ-002.
 var _squadrons_activated_this_turn: int = 0
 
@@ -402,6 +397,9 @@ func start_new_game_from_state(
 		return false
 	if next_command_sequence < 0:
 		_log.error("Loaded command sequence cursor is invalid.")
+		return false
+	if not state.validate_declaration_adjacent_state():
+		_log.error("Loaded declaration-adjacent state is inconsistent.")
 		return false
 	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
 	if not bool(reconciliation.get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
@@ -924,7 +922,9 @@ func get_command_assigning_player() -> int:
 ## Returns the ship currently being activated, or null.
 ## Requirements: UI-024, UI-026.
 func get_activating_ship() -> ShipInstance:
-	return _activating_ship
+	if current_game_state != null:
+		return current_game_state.get_active_ship_activation()
+	return null
 
 
 ## Starts a ship's activation by revealing its top command dial.
@@ -933,15 +933,14 @@ func get_activating_ship() -> ShipInstance:
 ## [param ship] — the ship to activate.
 ## Returns the command result, or an empty dictionary on validation failure.
 func activate_ship(ship: ShipInstance) -> Dictionary:
-	if _activating_ship != null:
-		_log.warn("Cannot activate — already activating a ship.")
-		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ActivateShipCommand.new(ship.owner_player,
 			{"ship_index": ship_index})
 	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return {}
+	if _is_network_client():
+		return result
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 	_log.info("Ship activated: %s (command: %d)" % [
@@ -955,9 +954,6 @@ func activate_ship(ship: ShipInstance) -> Dictionary:
 ## reveal a dial this round."
 func activate_ship_without_command(ship: ShipInstance,
 		reason: String = "") -> Dictionary:
-	if _activating_ship != null:
-		_log.warn("Cannot activate without command — already activating.")
-		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ActivateShipCommand.new(ship.owner_player, {
 		"ship_index": ship_index,
@@ -967,6 +963,8 @@ func activate_ship_without_command(ship: ShipInstance,
 	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return {}
+	if _is_network_client():
+		return result
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
 	_log.info("Ship activated without command: %s (%s)." % [
@@ -990,15 +988,14 @@ func activate_ship_without_command(ship: ShipInstance,
 ## Returns a dictionary with "command" (CommandType), "token_added" (bool),
 ## and "needs_discard" (bool), or an empty dictionary on failure.
 func activate_ship_as_token(ship: ShipInstance) -> Dictionary:
-	if _activating_ship != null:
-		_log.warn("Cannot activate — already activating a ship.")
-		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := ConvertDialToTokenCommand.new(ship.owner_player,
 			{"ship_index": ship_index})
 	var result: Dictionary = _submitter.submit(cmd)
 	if result.is_empty():
 		return {}
+	if _is_network_client():
+		return result
 
 	_activating_ship = ship
 	EventBus.command_dials_changed.emit(ship)
@@ -1152,8 +1149,15 @@ func submit_move_squadron(squadron: SquadronInstance,
 	if not current_game_state:
 		return {}
 	var sq_index: int = current_game_state.find_squadron_index(squadron)
-	var cmd := MoveSquadronCommand.new(squadron.owner_player,
-			{"squadron_index": sq_index, "pos_x": norm_x, "pos_y": norm_y})
+	var payload: Dictionary = {
+		"squadron_index": sq_index,
+		"pos_x": norm_x,
+		"pos_y": norm_y,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+	_decorate_commanding_ship_identity(payload, squadron)
+	var cmd := MoveSquadronCommand.new(squadron.owner_player, payload)
 	return _submitter.submit(cmd)
 
 
@@ -1164,9 +1168,90 @@ func submit_complete_squadron_activation(
 	if not current_game_state or squadron == null:
 		return {}
 	var sq_index: int = current_game_state.find_squadron_index(squadron)
-	var cmd := CompleteSquadronActivationCommand.new(squadron.owner_player,
-			{"squadron_index": sq_index})
-	return _submitter.submit(cmd)
+	var payload: Dictionary = {
+		"squadron_index": sq_index,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+	}
+	_decorate_commanding_ship_identity(payload, squadron)
+	var cmd := CompleteSquadronActivationCommand.new(
+			squadron.owner_player, payload)
+	var result: Dictionary = _submitter.submit(cmd)
+	if not result.is_empty() and not _is_network_client():
+		_apply_squadron_progress_projection(result)
+	return result
+
+
+func _decorate_commanding_ship_identity(payload: Dictionary,
+		squadron: SquadronInstance) -> void:
+	if squadron == null or squadron.activation_context \
+			!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		return
+	payload["commanding_ship_player"] = squadron.commanding_ship_player
+	payload["commanding_ship_index"] = squadron.commanding_ship_index
+	var ship: ShipInstance = current_game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	if ship != null:
+		payload["ship_activation_identity"] = ship.ship_activation_identity
+
+
+func _decorate_attack_activation_identity(payload: Dictionary) -> void:
+	if current_game_state == null \
+			or SquadronKeywordRuleHelper.attack_kind_from_payload(payload) \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_COUNTER:
+		return
+	var attacker_player: int = int(payload.get("attacker_player", -1))
+	var attacker_index: int = int(payload.get("attacker_index", -1))
+	if str(payload.get("attacker_kind", "")) \
+			== CurrentAttackState.KIND_SHIP:
+		var ship: ShipInstance = current_game_state.get_ship(
+				attacker_player, attacker_index)
+		if ship != null:
+			payload["ship_activation_identity"] = ship.ship_activation_identity
+		return
+	var squadron: SquadronInstance = current_game_state.get_squadron(
+			attacker_player, attacker_index)
+	if squadron == null:
+		return
+	payload["activation_id"] = squadron.activation_id
+	payload["activation_context"] = squadron.activation_context
+	_decorate_commanding_ship_identity(payload, squadron)
+
+
+## Builds direct semantic identity for a no-active declaration Skip from the
+## unique canonical owner. InteractionFlow and scene caches are not consulted.
+func _declaration_identity_for_player(player: int) -> Dictionary:
+	if current_game_state == null:
+		return {}
+	var squadron: SquadronInstance = \
+			current_game_state.get_active_squadron_activation()
+	if squadron != null and squadron.owner_player == player \
+			and squadron.attack_action_disposition \
+					== SquadronInstance.ATTACK_ACTION_AVAILABLE:
+		var squadron_payload: Dictionary = {
+			"declaration_context": squadron.activation_context,
+			"squadron_index":
+					current_game_state.find_squadron_index(squadron),
+			"activation_id": squadron.activation_id,
+			"activation_context": squadron.activation_context,
+		}
+		_decorate_commanding_ship_identity(squadron_payload, squadron)
+		return squadron_payload
+	for player_state: PlayerState in current_game_state.player_states:
+		if player_state == null:
+			continue
+		for raw_ship: Variant in player_state.ships:
+			if not (raw_ship is ShipInstance):
+				continue
+			var ship: ShipInstance = raw_ship as ShipInstance
+			if ship.owner_player == player and ship.attack_step_active \
+					and ship.has_active_ship_activation():
+				return {
+					"declaration_context": SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+					"ship_index": current_game_state.find_ship_index(ship),
+					"ship_activation_identity": ship.ship_activation_identity,
+				}
+	return {}
 
 
 ## Submits a [StartDisplacementCommand] opening the squadron-displacement
@@ -1244,7 +1329,8 @@ func submit_execute_maneuver(ship: ShipInstance, speed: int,
 		"rotation_deg": rotation_deg,
 		"yaw_bonus_joint": yaw_bonus_joint,
 		"did_overlap": did_overlap,
-		"speed_delta": speed_delta})
+		"speed_delta": speed_delta,
+		"ship_activation_identity": ship.ship_activation_identity})
 	return _submitter.submit(cmd)
 
 
@@ -1268,8 +1354,9 @@ func submit_roll_dice(player: int,
 func submit_begin_attack(player: int, attack_context: Dictionary) -> Dictionary:
 	if not current_game_state:
 		return {}
-	return _submitter.submit(BeginAttackCommand.new(
-			player, attack_context.duplicate(true)))
+	var payload: Dictionary = attack_context.duplicate(true)
+	_decorate_attack_activation_identity(payload)
+	return _submitter.submit(BeginAttackCommand.new(player, payload))
 
 
 func submit_attack_pool_choice(player: int, choice_kind: String,
@@ -1575,8 +1662,14 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 		if current_game_state.timing_window_state.active:
 			payload[TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID] = \
 					current_game_state.timing_window_state.lifecycle_id
+	elif reason != "squadron_done":
+		payload.merge(_declaration_identity_for_player(player), true)
 	var cmd := SkipAttackCommand.new(player, payload)
-	return _submitter.submit(cmd)
+	var result: Dictionary = _submitter.submit(cmd)
+	if not result.is_empty() and not _is_network_client() \
+			and bool(result.get("declaration_skip", false)):
+		_apply_squadron_progress_projection(result)
+	return result
 
 
 func submit_complete_attack(player: int) -> Dictionary:
@@ -1646,7 +1739,8 @@ func submit_advance_activation_step(ship: ShipInstance,
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
 	var cmd := AdvanceActivationStepCommand.new(ship.owner_player,
-			{"ship_index": ship_index, "step_id": step_id})
+			{"ship_index": ship_index, "step_id": step_id,
+				"ship_activation_identity": ship.ship_activation_identity})
 	return _submitter.submit(cmd)
 
 
@@ -1887,17 +1981,22 @@ func _on_activation_ended() -> void:
 	# Ship Phase: spend revealed dial and mark ship as activated.
 	# Routes through EndActivationCommand for history tracking.
 	if current_game_state.current_phase == Constants.GamePhase.SHIP:
-		if _activating_ship != null:
+		var canonical_ship: ShipInstance = \
+				current_game_state.get_active_ship_activation()
+		if canonical_ship != null:
 			var ship_index: int = current_game_state.find_ship_index(
-					_activating_ship)
+					canonical_ship)
 			var cmd := EndActivationCommand.new(
-					_activating_ship.owner_player,
-					{"ship_index": ship_index})
+					canonical_ship.owner_player,
+					{"ship_index": ship_index,
+						"ship_activation_identity":
+								canonical_ship.ship_activation_identity})
 			var result: Dictionary = _submitter.submit(cmd)
-			if not result.is_empty():
-				EventBus.command_dials_changed.emit(_activating_ship)
-				_log.info("Ship activation ended: %s" \
-						% _activating_ship.data_key)
+			if result.is_empty() or _is_network_client():
+				return
+			EventBus.command_dials_changed.emit(canonical_ship)
+			_log.info("Ship activation ended: %s" \
+					% canonical_ship.data_key)
 			_activating_ship = null
 
 	match current_game_state.current_phase:
@@ -1944,24 +2043,9 @@ func _advance_squadron_phase_turn() -> void:
 	# Network client: server drives turn changes.  G4.6.5 A9.
 	if _is_network_client():
 		return
-	var next: int = 1 - active_player
-	var next_has: bool = _has_unactivated_squadrons(next)
-	var curr_has: bool = _has_unactivated_squadrons(active_player)
-
-	if not next_has and not curr_has:
-		advance_phase()
-		return
-
-	if next_has:
-		if not curr_has:
-			_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % active_player)
-		_squadrons_activated_this_turn = 0
-		_set_active_player(next)
-	elif curr_has:
-		_log.info("auto_pass(player=%d, phase=Squadron) — no unactivated squadrons" % next)
-		_squadrons_activated_this_turn = 0
-		_set_active_player(active_player)
-	else:
+	_sync_squadron_progress_projection()
+	if current_game_state.squadron_phase_controller_player \
+			== GameState.SQUADRON_PHASE_CONTROLLER_INACTIVE:
 		advance_phase()
 
 
@@ -1988,18 +2072,22 @@ func _has_unactivated_ships(player_index: int) -> bool:
 ## simply resetting to [member GameState.initiative_player] would let
 ## the wrong peer act when the initiative player has already activated.
 ##
-## Trusts [member InteractionFlow.controller_player] when valid (0 or 1),
-## otherwise falls back to [member GameState.initiative_player].  The
-## interaction-flow field is the canonical source of "whose turn /
-## sub-step is this" — every command that mutates state writes it, so
-## any save taken mid-game records the correct controller.
+## Derives from canonical phase/activation owners; InteractionFlow remains a
+## replaceable presentation route and never restores controller authority.
 func _derive_active_player_from_state(state: GameState) -> int:
 	if state == null:
 		return 0
-	if state.interaction_flow != null:
-		var ctrl: int = state.interaction_flow.controller_player
-		if ctrl == 0 or ctrl == 1:
-			return ctrl
+	if state.current_phase == Constants.GamePhase.SQUADRON \
+			and state.has_squadron_phase_controller():
+		return state.squadron_phase_controller_player
+	if state.current_phase == Constants.GamePhase.SHIP:
+		for player_state: PlayerState in state.player_states:
+			if player_state == null:
+				continue
+			for raw_ship: Variant in player_state.ships:
+				if raw_ship is ShipInstance \
+						and (raw_ship as ShipInstance).has_active_ship_activation():
+					return (raw_ship as ShipInstance).owner_player
 	return state.initiative_player
 
 
@@ -2023,19 +2111,8 @@ func _enable_network_file_logging_if_needed() -> void:
 ## Returns true if the given player has at least one unactivated squadron.
 ## Requirements: TF-009 — auto-pass detection.
 func _has_unactivated_squadrons(player_index: int) -> bool:
-	if not current_game_state:
-		return false
-	var ps: PlayerState = current_game_state.get_player_state(player_index)
-	if ps == null:
-		return false
-	for sq: Variant in ps.squadrons:
-		if sq is SquadronInstance:
-			var sqi: SquadronInstance = sq as SquadronInstance
-			if sqi.is_destroyed():
-				continue
-			if not sqi.activated_this_round:
-				return true
-	return false
+	return current_game_state != null \
+			and current_game_state.has_unactivated_squadrons(player_index)
 
 
 ## Called when a handoff overlay or banner is dismissed.
@@ -2072,9 +2149,7 @@ func _begin_squadron_phase() -> void:
 		_log.info("Squadron Phase: no squadrons to activate — auto-skip.")
 		advance_phase()
 		return
-	_squadrons_activated_this_turn = 0
-	_activating_squadron = null
-	_set_active_player(init)
+	_sync_squadron_progress_projection()
 	_log.info("Squadron Phase: initiative player %d activates first." % init)
 
 
@@ -2085,22 +2160,14 @@ func _begin_squadron_phase() -> void:
 func activate_squadron(squadron: SquadronInstance) -> void:
 	if not is_game_active or not current_game_state:
 		return
-	if _activating_squadron != null:
-		_log.warn("activate_squadron: already activating a squadron.")
-		return
-	if squadron.owner_player != active_player:
-		_log.warn("activate_squadron: squadron not owned by active player.")
-		return
 	var sq_index: int = current_game_state.find_squadron_index(
 			squadron)
 	var cmd := ActivateSquadronCommand.new(squadron.owner_player,
-			{"squadron_index": sq_index})
-	# Network client: set optimistically before submit so the modal
-	# sees the correct state immediately.  The broadcast will confirm.
-	if _is_network_client():
-		_activating_squadron = squadron
+			{"squadron_index": sq_index,
+				"activation_context":
+						SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE})
 	var result: Dictionary = _submitter.submit(cmd)
-	if result.is_empty() and not _is_network_client():
+	if result.is_empty() or _is_network_client():
 		return
 	_activating_squadron = squadron
 	_log.info("Squadron activated: %s (player %d, turn count %d)" % [
@@ -2108,9 +2175,33 @@ func activate_squadron(squadron: SquadronInstance) -> void:
 			_squadrons_activated_this_turn + 1])
 
 
+## Commits a selected command-mode squadron only when its first semantic
+## action is accepted. Candidate selection itself remains transient.
+func activate_commanded_squadron(squadron: SquadronInstance,
+		commanding_ship: ShipInstance) -> Dictionary:
+	if not current_game_state or squadron == null or commanding_ship == null:
+		return {}
+	var squadron_index: int = current_game_state.find_squadron_index(squadron)
+	var ship_index: int = current_game_state.find_ship_index(commanding_ship)
+	var cmd := ActivateSquadronCommand.new(squadron.owner_player, {
+		"squadron_index": squadron_index,
+		"activation_context":
+				SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+		"commanding_ship_player": commanding_ship.owner_player,
+		"commanding_ship_index": ship_index,
+		"ship_activation_identity": commanding_ship.ship_activation_identity,
+	})
+	var result: Dictionary = _submitter.submit(cmd)
+	if not result.is_empty() and not _is_network_client():
+		_activating_squadron = squadron
+	return result
+
+
 ## Returns the squadron currently being activated, or null.
 func get_activating_squadron() -> SquadronInstance:
-	return _activating_squadron
+	if current_game_state != null:
+		return current_game_state.get_active_squadron_activation()
+	return null
 
 
 ## Called when a squadron finishes its activation (move and/or attack done).
@@ -2123,18 +2214,32 @@ func _on_squadron_activation_ended(squadron: RefCounted) -> void:
 	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
 		return
 	if squadron is SquadronInstance:
-		var sq: SquadronInstance = squadron as SquadronInstance
-		sq.activated_this_round = true
-		_log.info("Squadron activation ended: %s" % sq.data_key)
-	# Network client: activation counting is handled by
-	# _handle_remote_move/activate_squadron when the broadcast arrives.
-	if _is_network_client():
+		_log.info("Squadron activation ended: %s" %
+				(squadron as SquadronInstance).data_key)
+	_sync_squadron_progress_projection()
+
+
+## Mirrors accepted canonical Squadron Phase progress into legacy presentation
+## caches. These values never authorize or mutate gameplay.
+func _sync_squadron_progress_projection() -> void:
+	if current_game_state == null:
 		return
-	_activating_squadron = null
-	_squadrons_activated_this_turn += 1
-	# SQ-002: each player activates up to 2 squadrons per turn.
-	if _squadrons_activated_this_turn >= Constants.SQUADRONS_PER_ACTIVATION \
-			or not _has_unactivated_squadrons(active_player):
+	_squadrons_activated_this_turn = \
+			current_game_state.squadron_phase_activations_committed
+	_activating_squadron = current_game_state.get_active_squadron_activation()
+	var controller: int = current_game_state.squadron_phase_controller_player
+	if controller >= 0 and controller < Constants.PLAYER_COUNT:
+		_set_active_player(controller)
+
+
+## Applies presentation/turn routing only after an accepted completion or
+## declaration Skip result has committed all canonical owners.
+func _apply_squadron_progress_projection(result: Dictionary) -> void:
+	_sync_squadron_progress_projection()
+	if current_game_state == null \
+			or current_game_state.current_phase != Constants.GamePhase.SQUADRON:
+		return
+	if bool(result.get("phase_complete", false)) and not _is_network_client():
 		_advance_squadron_phase_turn()
 
 
@@ -2448,7 +2553,7 @@ func _handle_remote_command_effects(
 		"select_redirect_zone":
 			_handle_remote_select_redirect_zone(cmd, result)
 		"skip_attack":
-			pass # Attack executor handles display from result.
+			_handle_remote_skip_attack(result)
 		"publish_attack_flow":
 			# Phase I6b-3 follow-up: pure flow-snapshot command.
 			# CommandProcessor.execute() has already written the
@@ -2648,33 +2753,22 @@ func _handle_remote_move_squadron(cmd: GameCommand) -> void:
 	var is_local: bool = not NetworkManager.is_server() \
 			and cmd.player_index == NetworkManager.get_local_player_index()
 	var sq: SquadronInstance = _find_squadron_from_command(cmd)
-	# Ship Phase move_squadron commands come from the squadron-command
-	# step. Mirror activated_this_round on passive peers so both sides
-	# compute identical Squadron-Phase auto-pass decisions. Skip only
-	# squadron-phase turn-advance bookkeeping while still in Ship Phase.
-	if current_game_state \
-			and current_game_state.current_phase == Constants.GamePhase.SHIP:
-		if sq:
-			sq.activated_this_round = true
-			if not is_local:
-				EventBus.squadron_repositioned_remotely.emit(sq)
-		return
 	if sq:
-		sq.activated_this_round = true
 		if not is_local:
 			EventBus.squadron_repositioned_remotely.emit(sq)
-	_activating_squadron = null
-	_finish_remote_squadron_activation(cmd.player_index)
 
 
 ## Mirrors Squadron Phase activation completion when no movement command was
 ## submitted, e.g. an engaged squadron attacked or skipped movement.
 func _handle_remote_complete_squadron_activation(cmd: GameCommand) -> void:
 	var sq: SquadronInstance = _find_squadron_from_command(cmd)
-	if sq:
-		sq.activated_this_round = true
-	_activating_squadron = null
-	_finish_remote_squadron_activation(cmd.player_index)
+	if sq != null:
+		_log.info("Mirrored squadron activation completion: %s" % sq.data_key)
+	_apply_squadron_progress_projection({
+		"phase_complete": current_game_state.current_phase \
+				== Constants.GamePhase.SQUADRON \
+				and not current_game_state.has_squadron_phase_controller(),
+	})
 
 
 ## Phase I6b-4d: Mirror commit_displacement — snap each repositioned
@@ -2720,41 +2814,14 @@ func _handle_remote_end_activation(cmd: GameCommand) -> void:
 ## player's commands; the local player's activations are tracked via
 ## the optimistic set in [method activate_squadron].
 func _handle_remote_activate_squadron(cmd: GameCommand) -> void:
-	var is_local: bool = not NetworkManager.is_server() \
-			and cmd.player_index == NetworkManager.get_local_player_index()
-	# Remote player: a new activate_squadron means the previous one
-	# finished (skip path — no move_squadron was sent).
-	if not is_local and _activating_squadron != null:
-		_activating_squadron.activated_this_round = true
-		_activating_squadron = null
-		_finish_remote_squadron_activation(cmd.player_index)
 	var sq: SquadronInstance = _find_squadron_from_command(cmd)
 	if sq:
 		_activating_squadron = sq
 
 
-## Shared helper: increments remote squadron activation counter and
-## advances the squadron-phase turn when the per-turn limit is reached.
-func _finish_remote_squadron_activation(remote_player: int) -> void:
-	if current_game_state == null:
-		return
-	if current_game_state.current_phase != Constants.GamePhase.SQUADRON:
-		return
-	if remote_player < 0 or remote_player >= Constants.PLAYER_COUNT:
-		return
-	# Recover from rare turn-tracker drift: remote squadron lifecycle
-	# must always advance from the command author's turn.
-	if active_player != remote_player:
-		_log.warn("Remote squadron turn mismatch (active=%d, remote=%d) — resync." % [
-				active_player, remote_player])
-		_set_active_player(remote_player)
-	_squadrons_activated_this_turn += 1
-	if _squadrons_activated_this_turn >= Constants.SQUADRONS_PER_ACTIVATION \
-			or not _has_unactivated_squadrons(active_player):
-		if NetworkManager.is_server():
-			_advance_squadron_phase_turn()
-		else:
-			_advance_squadron_phase_turn_client()
+func _handle_remote_skip_attack(result: Dictionary) -> void:
+	if bool(result.get("declaration_skip", false)):
+		_apply_squadron_progress_projection(result)
 
 
 ## B13: Mirror spend_token side effects on client.
@@ -3021,17 +3088,7 @@ func _advance_ship_phase_turn_client() -> void:
 ## Same as _advance_squadron_phase_turn but without calling advance_phase
 ## (server handles that).
 func _advance_squadron_phase_turn_client() -> void:
-	var next: int = 1 - active_player
-	var next_has: bool = _has_unactivated_squadrons(next)
-	var curr_has: bool = _has_unactivated_squadrons(active_player)
-	if not next_has and not curr_has:
-		return # Server will broadcast advance_phase.
-	if next_has:
-		_squadrons_activated_this_turn = 0
-		_set_active_player(next)
-	elif curr_has:
-		_squadrons_activated_this_turn = 0
-		_set_active_player(active_player)
+	_sync_squadron_progress_projection()
 
 
 ## Client-side squadron-phase begin.
@@ -3040,10 +3097,7 @@ func _advance_squadron_phase_turn_client() -> void:
 func _begin_squadron_phase_client() -> void:
 	if not current_game_state:
 		return
-	_squadrons_activated_this_turn = 0
-	_activating_squadron = null
-	var init: int = current_game_state.initiative_player
-	_set_active_player(init)
+	_sync_squadron_progress_projection()
 
 
 ## Looks up the [ShipInstance] referenced by a command's payload.

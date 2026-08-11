@@ -364,6 +364,58 @@ func _prepare_activation_context(token: ShipToken,
 		_panel_mgr.activation_sidebar.highlight_active(ship)
 
 
+## Rebuilds the enclosing scene-local activation context from ADR-006 owners.
+## Returns true for a valid owner even when it does not encode one of the
+## declaration-adjacent steps handled by TWI-003.
+func restore_canonical_activation_context(ship: ShipInstance,
+		token: ShipToken) -> bool:
+	if ship == null or token == null or token.get_ship_instance() != ship \
+			or not ship.has_active_ship_activation():
+		return false
+	var step: int = -1
+	if ship.maneuver_opportunity_disposition \
+			== ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		step = ShipActivationState.Step.MANEUVER
+	elif ship.attack_step_active:
+		step = ShipActivationState.Step.ATTACK
+	elif ship.squadron_command_opportunity_disposition \
+			== ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		step = ShipActivationState.Step.SQUADRON
+	if step < 0:
+		return true
+	var activation: ShipActivationState = ShipActivationState.create(ship)
+	activation.set_current_step(step as ShipActivationState.Step)
+	_activation_ctx.set_active(token, activation)
+	GameManager._activating_ship = ship
+	if _panel_mgr.activation_sidebar != null:
+		_panel_mgr.activation_sidebar.highlight_active(ship)
+	return true
+
+
+## Rebuilds an already-committed command-squadron projection without running
+## selection validation or submitting activation commands.
+func restore_command_squadron_activation(instance: SquadronInstance,
+		attack_in_flight: bool) -> bool:
+	if _activation_ctx.ship_activation_state == null \
+			or _activation_ctx.activating_ship_token == null \
+			or instance == null:
+		return false
+	var ship: ShipInstance = _activation_ctx.ship_activation_state.get_ship()
+	var ship_token: ShipToken = _activation_ctx.activating_ship_token
+	if ship == null \
+			or instance.commanding_ship_player != ship.owner_player \
+			or GameManager.current_game_state.find_ship_index(ship) \
+					!= instance.commanding_ship_index:
+		return false
+	var resolver: SquadronCommandResolver = \
+			_create_squadron_command_resolver(ship, ship_token)
+	if resolver.is_empty():
+		return false
+	_hide_activation_ui_for_squadron_command()
+	return _squadron_phase_controller.restore_command_activation(
+			resolver, ship_token, instance, attack_in_flight)
+
+
 func _clear_activation_context_after_rejection() -> void:
 	_activation_ctx.clear()
 	if _panel_mgr.activation_sidebar:
@@ -554,7 +606,8 @@ func _auto_advance_unavailable_repair_if_current() -> void:
 	_on_repair_done()
 
 
-## Defers no-target Attack skips so the authoritative flow advances by command.
+## Defers no-target Attack skips so the declaration opportunity is consumed by
+## the authoritative no-active Skip transaction.
 func _queue_unavailable_attack_auto_advance(flow: InteractionFlow) -> void:
 	if flow.step_id != Constants.InteractionStep.ATTACK_STEP:
 		_attack_auto_advance_pending = false
@@ -581,8 +634,14 @@ func _auto_advance_unavailable_attack_if_current() -> void:
 		return
 	if not _should_auto_advance_unavailable_attack(flow):
 		return
-	_log.info("No attack targets in projected Attack step — auto-advancing.")
-	_advance_activation_to_maneuver()
+	var ship: ShipInstance = _current_activating_ship()
+	if ship == null:
+		return
+	_log.info("No attack targets in projected Attack step — submitting Skip.")
+	var result: Dictionary = GameManager.submit_skip_attack(
+			ship.owner_player, "no_targets")
+	if result.is_empty():
+		_log.warn("Automatic no-target Skip was rejected; Attack remains open.")
 
 
 func _should_auto_advance_unavailable_repair(flow: InteractionFlow) -> bool:
@@ -809,17 +868,20 @@ func _open_activation_modal_mirror() -> void:
 ## Returns whether the local player may interact with ActivationModal
 ## controls.
 ##
-## Phase I6d: routes through [UIProjector] so hot-seat and network share
-## the same authority projection.  In hot-seat the local viewer is always
-## the active player, so [member UIIntent.is_interactive] is [code]true[/code]
-## whenever a flow is active.  Pre-flow (game start, between rounds), falls
-## back to [code]active_player == local[/code] which preserves the prior
-## permissive behaviour.
+## An active ADR-006 ship owner determines the controller for both hot-seat and
+## network projection. When there is no canonical ship activation, the older
+## non-activation presentation paths retain their flow/active-player fallback.
 func _is_local_activation_modal_controller() -> bool:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return true
 	var local: int = _local_viewer()
+	# The retained ADR-006 owner is authoritative whenever a ship activation is
+	# active, including load/reconnect reconstruction. InteractionFlow may be a
+	# stale presentation snapshot and must not reverse controller affordance.
+	var active_ship: ShipInstance = gs.get_active_ship_activation()
+	if active_ship != null:
+		return active_ship.owner_player == local
 	var flow: InteractionFlow = gs.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return GameManager.get_active_player() == local
@@ -1220,6 +1282,16 @@ func _on_attack_exec_completed() -> void:
 
 
 func _advance_activation_to_maneuver() -> void:
+	var ship: ShipInstance = null
+	if _activation_ctx.ship_activation_state != null:
+		ship = _activation_ctx.ship_activation_state.get_ship()
+	# A no-active declaration Skip already performed the authoritative
+	# Attack-to-Maneuver transition. Do not synthesize an extra advancement
+	# command from scene teardown.
+	if ship != null and not ship.attack_step_active \
+			and ship.maneuver_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return
 	if _activation_ctx.ship_activation_state:
 		_activation_ctx.ship_activation_state.advance_step()
 	submit_activation_step("maneuver_step")

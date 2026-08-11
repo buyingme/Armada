@@ -139,13 +139,12 @@ func test_submit_complete_squadron_activation_allowed_in_ship_phase() -> void:
 			"Ship-phase Squadron command completions should pass applicability.")
 
 
-func test_submit_roll_dice_allowed_from_ship_phase_legacy_flow() -> void:
+func test_submit_roll_dice_allowed_from_ship_phase_canonical_attack() -> void:
 	_set_phase_and_flow(Constants.GamePhase.SHIP,
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.ACTIVATION_MODAL_OPEN)
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(_state, {
 		"stage": CurrentAttackState.STAGE_PRE_ROLL,
-		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
 		"defender_kind": CurrentAttackState.KIND_SHIP,
 	}))
 	var cmd := RollDiceCommand.new(0, {

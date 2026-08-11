@@ -63,6 +63,72 @@ func test_explicit_execution_failure_rejects_without_history_or_cursor_advance()
 			"Explicit execution failure should produce one rejection diagnostic.")
 
 
+func test_begin_attack_failure_restores_current_attack_and_ship_owner() -> void:
+	var fixture: Dictionary = _prepare_ship_declaration()
+	var ship: ShipInstance = fixture.get("ship") as ShipInstance
+	var payload: Dictionary = fixture.get("payload", {}) as Dictionary
+	assert_not_null(ship)
+	assert_false(payload.is_empty())
+	var before_attack: Dictionary = _attack_snapshot()
+	var before_progress: Dictionary = ship.attack_progress_snapshot()
+	var before_boundary: Dictionary = ship.ship_activation_boundary_snapshot()
+	_state.reject_declaration_adjacent_on_call = 2
+	var command := BeginAttackCommand.new(0, payload)
+
+	assert_eq(_processor.submit(command), {})
+	assert_eq(_attack_snapshot(), before_attack)
+	assert_eq(ship.attack_progress_snapshot(), before_progress)
+	assert_eq(ship.ship_activation_boundary_snapshot(), before_boundary)
+	_assert_stream_unchanged(command)
+	assert_engine_error(1)
+
+
+func test_declaration_skip_failure_restores_ship_progress_and_boundary() -> void:
+	var fixture: Dictionary = _prepare_ship_declaration()
+	var ship: ShipInstance = fixture.get("ship") as ShipInstance
+	assert_not_null(ship)
+	var before_progress: Dictionary = ship.attack_progress_snapshot()
+	var before_boundary: Dictionary = ship.ship_activation_boundary_snapshot()
+	_state.reject_declaration_adjacent_on_call = 2
+	var command := SkipAttackCommand.new(0, {
+		"reason": "no_targets",
+		"declaration_context": SkipAttackCommand.CONTEXT_SHIP_ATTACK,
+		"ship_index": 0,
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+
+	assert_eq(_processor.submit(command), {})
+	assert_eq(ship.attack_progress_snapshot(), before_progress)
+	assert_eq(ship.ship_activation_boundary_snapshot(), before_boundary)
+	assert_true(_state.current_attack_state.is_inactive())
+	_assert_stream_unchanged(command)
+	assert_engine_error(1)
+
+
+func test_phase_non_rogue_begin_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(false, false, true)
+
+
+func test_phase_non_rogue_skip_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(false, false, false)
+
+
+func test_phase_rogue_begin_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(true, false, true)
+
+
+func test_phase_rogue_skip_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(true, false, false)
+
+
+func test_commanded_squadron_begin_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(false, true, true)
+
+
+func test_commanded_squadron_skip_failure_restores_all_owners() -> void:
+	_assert_squadron_declaration_failure(false, true, false)
+
+
 func test_roll_dice_failure_restores_rng_attack_and_attack_count() -> void:
 	_add_ship(0)
 	_add_ship(1)
@@ -468,6 +534,175 @@ func _red_hit() -> Dictionary:
 	}
 
 
+func _prepare_ship_declaration() -> Dictionary:
+	var attacker_key: String = "victory_ii_class_star_destroyer"
+	var defender_key: String = "cr90_corvette_a"
+	var attacker := ShipInstance.create_from_data(
+			attacker_key, AssetLoader.load_ship_data(attacker_key), 2, 0)
+	attacker.pos_x = 0.50
+	attacker.pos_y = 0.65
+	var defender := ShipInstance.create_from_data(
+			defender_key, AssetLoader.load_ship_data(defender_key), 2, 1)
+	defender.pos_x = 0.50
+	defender.pos_y = 0.46
+	defender.rotation_deg = 180.0
+	_state.get_player_state(0).ships.append(attacker)
+	_state.get_player_state(1).ships.append(defender)
+	assert_true(attacker.establish_ship_activation(
+			"ship-activation:atomic"))
+	attacker.begin_attack_step()
+	_state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP, 0)
+	var candidates: Array[Dictionary] = \
+			TargetingListBuilder.authoritative_ship_target_entries(
+					_state, 0, 0)
+	for candidate: Dictionary in candidates:
+		if str(candidate.get("target_kind", "")) \
+				!= CurrentAttackState.KIND_SHIP:
+			continue
+		return {
+			"ship": attacker,
+			"payload": {
+				"attacker_player": 0,
+				"attacker_kind": CurrentAttackState.KIND_SHIP,
+				"attacker_index": 0,
+				"attacker_zone": int(candidate.get("attacker_zone", -1)),
+				"defender_player": 1,
+				"defender_kind": CurrentAttackState.KIND_SHIP,
+				"defender_index": 0,
+				"defender_zone": int(candidate.get("target_zone", -1)),
+				"attack_kind":
+						SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": str(candidate.get("range_band", "")),
+				"obstructed": bool(candidate.get("obstructed", false)),
+				"ship_activation_identity":
+						attacker.ship_activation_identity,
+			},
+		}
+	return {}
+
+
+func _assert_squadron_declaration_failure(rogue: bool,
+		command_context: bool, begin: bool) -> void:
+	var fixture: Dictionary = _prepare_squadron_declaration(
+			rogue, command_context)
+	var squadron: SquadronInstance = fixture.get("squadron") \
+			as SquadronInstance
+	var ship: ShipInstance = fixture.get("ship") as ShipInstance
+	var before_attack: Dictionary = _attack_snapshot()
+	var before_action: Dictionary = \
+			squadron.activation_action_state_snapshot()
+	var before_activated: bool = squadron.activated_this_round
+	var before_phase: Dictionary = _state.squadron_phase_progress_snapshot()
+	var before_ship: Dictionary = ship.ship_activation_boundary_snapshot() \
+			if ship != null else {}
+	var before_flow: Dictionary = _state.interaction_flow.serialize()
+	_state.reject_declaration_adjacent_on_call = 2
+	var command: GameCommand = BeginAttackCommand.new(
+			0, fixture.get("begin_payload", {})) \
+			if begin else SkipAttackCommand.new(
+					0, fixture.get("skip_payload", {}))
+
+	assert_eq(_processor.submit(command), {})
+	assert_eq(_attack_snapshot(), before_attack)
+	assert_eq(squadron.activation_action_state_snapshot(), before_action)
+	assert_eq(squadron.activated_this_round, before_activated)
+	assert_eq(_state.squadron_phase_progress_snapshot(), before_phase)
+	if ship != null:
+		assert_eq(ship.ship_activation_boundary_snapshot(), before_ship)
+	assert_eq(_state.interaction_flow.serialize(), before_flow)
+	_assert_stream_unchanged(command)
+	assert_engine_error(1)
+
+
+func _prepare_squadron_declaration(rogue: bool,
+		command_context: bool) -> Dictionary:
+	var attacker_data: SquadronData = AssetLoader.load_squadron_data(
+			"x_wing_squadron").duplicate(true) as SquadronData
+	if rogue:
+		attacker_data.keywords.append({"name": "Rogue"})
+	var attacker := SquadronInstance.create_from_data(
+			"x_wing_squadron", attacker_data, 0)
+	attacker.pos_x = 0.50
+	attacker.pos_y = 0.50
+	_state.get_player_state(0).squadrons.append(attacker)
+	var defender := SquadronInstance.create_from_data(
+			"tie_fighter_squadron",
+			AssetLoader.load_squadron_data("tie_fighter_squadron"), 1)
+	defender.pos_x = 0.50
+	defender.pos_y = 0.43
+	_state.get_player_state(1).squadrons.append(defender)
+	var ship: ShipInstance = null
+	var context: String = \
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
+	if command_context:
+		_state.current_phase = Constants.GamePhase.SHIP
+		ship = ShipInstance.create_from_data(
+				"victory_ii_class_star_destroyer",
+				AssetLoader.load_ship_data(
+						"victory_ii_class_star_destroyer"), 2, 0)
+		var dials: Array[int] = []
+		for _index: int in range(
+				ship.command_dial_stack.get_dials_needed()):
+			dials.append(Constants.CommandType.SQUADRON)
+		assert_true(ship.command_dial_stack.assign_dials(dials, 1))
+		assert_false(ship.command_dial_stack.reveal_top().is_empty())
+		assert_true(ship.establish_ship_activation(
+				"ship-activation:atomic-squadron"))
+		assert_true(ship.open_squadron_command_opportunity(
+				ship.ship_activation_identity))
+		assert_true(ship.commit_squadron_command_activation(
+				ship.ship_activation_identity))
+		_state.get_player_state(0).ships.append(ship)
+		context = SquadronInstance \
+				.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND
+		assert_true(attacker.initialize_activation_action_state(
+				"squadron-activation:atomic-command", context, 0, 0))
+	else:
+		_state.current_phase = Constants.GamePhase.SQUADRON
+		assert_true(_state.initialize_squadron_phase_progress(0))
+		assert_true(attacker.initialize_activation_action_state(
+				"squadron-activation:atomic-phase", context))
+	var candidates: Array[Dictionary] = TargetingListBuilder \
+			.authoritative_squadron_target_entries(_state, 0, 0)
+	assert_false(candidates.is_empty())
+	var candidate: Dictionary = candidates[0]
+	var begin_payload: Dictionary = {
+		"attacker_player": 0,
+		"attacker_kind": CurrentAttackState.KIND_SQUADRON,
+		"attacker_index": 0,
+		"attacker_zone": -1,
+		"defender_player": int(candidate.get("target_owner", -1)),
+		"defender_kind": str(candidate.get("target_kind", "")),
+		"defender_index": int(candidate.get("target_index", -1)),
+		"defender_zone": int(candidate.get("target_zone", -1)),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate.get("range_band", "")),
+		"obstructed": bool(candidate.get("obstructed", false)),
+		"dice_pool": (candidate.get("dice", {}) as Dictionary).duplicate(true),
+		"activation_id": attacker.activation_id,
+		"activation_context": context,
+	}
+	var skip_payload: Dictionary = {
+		"reason": "voluntary",
+		"declaration_context": context,
+		"squadron_index": 0,
+		"activation_id": attacker.activation_id,
+		"activation_context": context,
+	}
+	if ship != null:
+		begin_payload["ship_activation_identity"] = ship.ship_activation_identity
+		skip_payload["ship_activation_identity"] = ship.ship_activation_identity
+	assert_true(_state.validate_declaration_adjacent_state())
+	return {
+		"squadron": attacker,
+		"ship": ship,
+		"begin_payload": begin_payload,
+		"skip_payload": skip_payload,
+	}
+
+
 func _assert_stream_unchanged(command: GameCommand) -> void:
 	assert_eq(_processor.get_command_count(), 0)
 	assert_eq(_processor.get_next_sequence(), 0)
@@ -478,6 +713,15 @@ func _assert_stream_unchanged(command: GameCommand) -> void:
 class FaultInjectGameState extends GameState:
 	var reject_current_attack_updates: bool = false
 	var reject_timing_window_updates: bool = false
+	var reject_declaration_adjacent_on_call: int = -1
+	var declaration_adjacent_validation_calls: int = 0
+
+	func validate_declaration_adjacent_state() -> bool:
+		declaration_adjacent_validation_calls += 1
+		if declaration_adjacent_validation_calls \
+				== reject_declaration_adjacent_on_call:
+			return false
+		return super.validate_declaration_adjacent_state()
 
 	func set_current_attack_state(value: CurrentAttackState) -> bool:
 		if reject_current_attack_updates:

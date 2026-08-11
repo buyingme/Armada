@@ -49,6 +49,18 @@ func validate(game_state: GameState) -> String:
 	if target != expected:
 		return "Phase %d is not the expected next phase (%d)." % [
 				target, expected]
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	if game_state.get_active_squadron_activation() != null:
+		return "Cannot advance phase during a squadron activation."
+	if game_state.current_phase == Constants.GamePhase.SHIP:
+		for player_state: PlayerState in game_state.player_states:
+			if player_state == null:
+				continue
+			for raw_ship: Variant in player_state.ships:
+				if raw_ship is ShipInstance \
+						and (raw_ship as ShipInstance).has_active_ship_activation():
+					return "Cannot advance phase during a ship activation."
 	return ""
 
 
@@ -57,18 +69,44 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var prev: int = int(game_state.current_phase)
 	var target: int = payload.get("next_phase", prev)
+	var phase_progress_before: Dictionary = \
+			game_state.squadron_phase_progress_snapshot()
+	var flow_before: InteractionFlow = InteractionFlow.deserialize(
+			game_state.interaction_flow.serialize()) \
+			if game_state.interaction_flow != null else InteractionFlow.new()
 	game_state.current_phase = target as Constants.GamePhase
+	if prev == int(Constants.GamePhase.SQUADRON):
+		game_state.clear_squadron_phase_progress()
 	match target:
 		Constants.GamePhase.SHIP:
 			_enter_ship_phase_flow(game_state)
 		Constants.GamePhase.SQUADRON:
+			if not game_state.initialize_squadron_phase_progress(
+					game_state.initiative_player):
+				_restore_phase_transaction(game_state, prev,
+						phase_progress_before, flow_before)
+				return {}
 			game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
 					Constants.InteractionFlow.SQUADRON_ACTIVATION,
 					Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
 					game_state,
 					{"active_player": game_state.initiative_player},
 					Constants.Visibility.ALL)
-	return {"previous_phase": prev, "new_phase": target}
+	if not game_state.validate_declaration_adjacent_state():
+		_restore_phase_transaction(game_state, prev,
+				phase_progress_before, flow_before)
+		return {}
+	return {"previous_phase": prev, "new_phase": target,
+			"controller_player":
+					game_state.squadron_phase_controller_player}
+
+
+static func _restore_phase_transaction(game_state: GameState,
+		previous_phase: int, phase_progress: Dictionary,
+		flow: InteractionFlow) -> void:
+	game_state.current_phase = previous_phase as Constants.GamePhase
+	game_state.restore_squadron_phase_progress(phase_progress)
+	game_state.interaction_flow = flow
 
 
 static func _enter_ship_phase_flow(game_state: GameState) -> void:

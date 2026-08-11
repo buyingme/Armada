@@ -28,7 +28,9 @@ extends RefCounted
 ## rotations are intentionally absent.
 const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"activate_ship": ["ship_index"],
-	"activate_squadron": ["squadron_index"],
+	"activate_squadron": [
+		"squadron_index", "commanding_ship_player", "commanding_ship_index",
+	],
 	"advance_activation_step": ["ship_index"],
 	"advance_phase": ["next_phase"],
 	"assign_dials": ["ship_index"],
@@ -38,7 +40,9 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	],
 	"commit_defense": ["ship_index"],
 	"commit_setup_deployment": ["owner_player", "speed"],
-	"complete_squadron_activation": ["squadron_index"],
+	"complete_squadron_activation": [
+		"squadron_index", "commanding_ship_player", "commanding_ship_index",
+	],
 	"convert_dial_to_token": ["ship_index"],
 	"counter_choice": [
 		"counter_attacker_player", "counter_attacker_squadron_index",
@@ -51,7 +55,9 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 	"execute_maneuver": [
 		"ship_index", "speed", "yaw_bonus_joint", "speed_delta",
 	],
-	"move_squadron": ["squadron_index"],
+	"move_squadron": [
+		"squadron_index", "commanding_ship_player", "commanding_ship_index",
+	],
 	"overlap_damage": ["ship_index", "other_owner", "other_ship_index"],
 	"persistent_effect_damage": ["owner_player", "ship_index"],
 	"publish_attack_flow": [
@@ -75,6 +81,10 @@ const _INTEGER_PAYLOAD_FIELDS: Dictionary = {
 		"ship_index", "zone", "expected_shields", "token_index",
 	],
 	"set_speed": ["ship_index", "new_speed"],
+	"skip_attack": [
+		"ship_index", "squadron_index",
+		"commanding_ship_player", "commanding_ship_index",
+	],
 	"spend_defense_token": [
 		"ship_index", "token_index", "expected_token_type",
 	],

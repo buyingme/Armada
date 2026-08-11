@@ -1266,8 +1266,6 @@ func _finalize_ready_sequence() -> bool:
 		_block_after_active_attack_reconstruction_failure(attack_resume)
 		return false
 	_initialize_ship_activation_controller()
-	if has_attack_reconstruction:
-		_ship_activation_controller.dismiss_activation_modal_for_attack()
 	_create_command_router_adapter()
 	_connect_signals()
 	_connect_panel_signals()
@@ -1276,15 +1274,16 @@ func _finalize_ready_sequence() -> bool:
 	queue_redraw()
 	_on_phase_changed(GameManager.get_current_phase())
 	_on_active_player_changed(GameManager.get_active_player())
-	# Phase setup intentionally clears stale activation UI/context. Restore the
-	# serialized enclosing Attack step only after that generic cleanup.
-	if not has_active_attack and has_attack_reconstruction \
-			and not _restore_inactive_attack_activation_context(attack_resume):
+	# Phase setup intentionally clears stale activation UI/context. Rebuild the
+	# purpose-specific presentation only after canonical state is installed.
+	if not _restore_declaration_adjacent_projection(has_active_attack):
 		_block_after_active_attack_reconstruction_failure({
 			AttackExecutor.RESUME_KEY_REASON:
-					"Enclosing ship activation reconstruction failed.",
+					"Declaration-adjacent projection reconstruction failed.",
 		})
 		return false
+	if has_attack_reconstruction:
+		_ship_activation_controller.dismiss_activation_modal_for_attack()
 	if bool(attack_resume.get(AttackExecutor.RESUME_KEY_OK, false)):
 		_attack_panel_controller.sync_mirror_from_flow(
 				attack_resume.get(AttackExecutor.RESUME_KEY_FLOW) as InteractionFlow)
@@ -1353,23 +1352,46 @@ func _resume_active_attack_from_state() -> Dictionary:
 	return result
 
 
-## Rebuilds only the runtime activation context required to consume a
-## reconstructed declaration. The ShipInstance remains the serialized owner of
-## progress; this context is a scene projection and submits no command.
-func _restore_inactive_attack_activation_context(
-		plan: Dictionary) -> bool:
-	var ship: ShipInstance = plan.get(
-			AttackExecutor.RESUME_KEY_ACTIVATING_SHIP) as ShipInstance
-	var token: ShipToken = plan.get(
-			AttackExecutor.RESUME_KEY_ACTIVATING_SHIP_TOKEN) as ShipToken
-	if ship == null or token == null or token.get_ship_instance() != ship:
+## Rebuilds only purpose-specific scene/application projection from canonical
+## owners. InteractionFlow is not consulted and no semantic command is emitted.
+func _restore_declaration_adjacent_projection(
+		has_active_attack: bool) -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or not game_state.validate_declaration_adjacent_state():
 		return false
-	var activation := ShipActivationState.create(ship)
-	activation.set_current_step(ShipActivationState.Step.ATTACK)
-	_activation_ctx.set_active(token, activation)
-	GameManager._activating_ship = ship
-	if _panel_mgr.activation_sidebar != null:
-		_panel_mgr.activation_sidebar.highlight_active(ship)
+	var active_ship: ShipInstance = game_state.get_active_ship_activation()
+	if active_ship != null:
+		var ship_token: ShipToken = _find_ship_token_for_instance(active_ship)
+		if not _ship_activation_controller.restore_canonical_activation_context(
+				active_ship, ship_token):
+			return false
+	var active_squadron: SquadronInstance = \
+			game_state.get_active_squadron_activation()
+	var attack: CurrentAttackState = game_state.current_attack_state
+	var squadron_attack_in_flight: bool = has_active_attack \
+			and attack != null \
+			and attack.attacker_kind == CurrentAttackState.KIND_SQUADRON \
+			and active_squadron != null \
+			and attack.attacker_player == active_squadron.owner_player \
+			and game_state.find_squadron_index(active_squadron) \
+					== attack.attacker_index
+	if active_squadron != null:
+		if active_squadron.activation_context \
+				== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+			if not _squadron_phase_controller.restore_phase_activation(
+					game_state, active_squadron,
+					squadron_attack_in_flight):
+				return false
+		else:
+			if active_ship == null \
+					or not _ship_activation_controller \
+							.restore_command_squadron_activation(
+									active_squadron,
+									squadron_attack_in_flight):
+				return false
+	elif active_ship != null and not has_active_attack \
+			and _activation_ctx.ship_activation_state != null:
+		_ship_activation_controller.open_modal_from_interaction_state()
 	return true
 
 

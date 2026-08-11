@@ -70,7 +70,7 @@ func after_each() -> void:
 	GameManager._reset_network_result_ordering()
 
 
-func test_save_load_and_reconnect_rederive_pending_choice_at_version_two() -> void:
+func test_save_load_and_reconnect_rederive_pending_choice_at_version_three() -> void:
 	var state: GameState = _make_pending_state()
 	GameManager.current_game_state = state
 	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
@@ -88,9 +88,9 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_two() -> vo
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 2)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
-	assert_eq(GameReplay.FORMAT_VERSION, 4)
+	assert_eq(metadata.save_format_version, 3)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 3)
+	assert_eq(GameReplay.FORMAT_VERSION, 5)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq((ORCHESTRATOR.derive_current_opportunities(restored).get(
@@ -119,7 +119,7 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_two() -> vo
 	manager.free()
 
 
-func test_host_client_and_format_four_replay_preserve_use_and_continuation() -> void:
+func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> void:
 	var initial: GameState = _make_pending_state()
 	var initial_data: Dictionary = initial.serialize()
 	var authority_state: GameState = GameState.deserialize(initial_data)
@@ -151,7 +151,7 @@ func test_host_client_and_format_four_replay_preserve_use_and_continuation() -> 
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 4)
+			"format_version"), 5)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize(initial_data)

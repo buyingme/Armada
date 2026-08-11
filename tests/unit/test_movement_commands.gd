@@ -7,6 +7,8 @@ extends GutTest
 
 
 var _state: GameState
+const SHIP_ACTIVATION_ID: String = "ship-activation:movement-test"
+const SQUADRON_ACTIVATION_ID: String = "squadron-activation:movement-test"
 
 
 ## Creates a minimal ShipData with a navigation chart.
@@ -15,6 +17,7 @@ func _make_ship_data() -> ShipData:
 	data.hull = 5
 	data.max_speed = 3
 	data.command_value = 2
+	data.squadron_value = 2
 	data.shields = {"FRONT": 3, "LEFT": 2, "RIGHT": 2, "REAR": 1}
 	data.defense_tokens = []
 	# Nav chart: speed 1 = [1], speed 2 = [1, 1], speed 3 = [0, 1, 1]
@@ -29,6 +32,15 @@ func _add_ship(player: int) -> int:
 			"test_ship", _make_ship_data(), 2, player)
 	var ps: PlayerState = _state.get_player_state(player)
 	ps.ships.append(ship)
+	if _state.current_phase == Constants.GamePhase.SHIP:
+		ship.command_dial_stack.assign_dials(
+				[Constants.CommandType.SQUADRON,
+					Constants.CommandType.NAVIGATE], 1)
+		ship.command_dial_stack.reveal_top()
+		assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
+		assert_true(ship.consume_unreached_squadron_command_opportunity(
+				SHIP_ACTIVATION_ID, true))
+		assert_true(ship.open_maneuver_opportunity(SHIP_ACTIVATION_ID))
 	return ps.ships.size() - 1
 
 
@@ -43,6 +55,26 @@ func _add_squadron(player: int) -> int:
 			"test_squad", data, player)
 	var ps: PlayerState = _state.get_player_state(player)
 	ps.squadrons.append(sq)
+	if _state.current_phase == Constants.GamePhase.SQUADRON:
+		if not _state.has_squadron_phase_controller():
+			assert_true(_state.initialize_squadron_phase_progress(player))
+		assert_true(sq.initialize_activation_action_state(
+				SQUADRON_ACTIVATION_ID,
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	elif _state.current_phase == Constants.GamePhase.SHIP:
+		var ship_index: int = _add_ship(player)
+		var ship: ShipInstance = _state.get_ship(player, ship_index)
+		assert_true(ship.clear_ship_activation_boundary_exceptionally(
+				SHIP_ACTIVATION_ID))
+		assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
+		assert_true(ship.open_squadron_command_opportunity(
+				SHIP_ACTIVATION_ID))
+		assert_true(sq.initialize_activation_action_state(
+				SQUADRON_ACTIVATION_ID,
+				SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+				player, ship_index))
+		assert_true(ship.commit_squadron_command_activation(
+				SHIP_ACTIVATION_ID))
 	return ps.squadrons.size() - 1
 
 
@@ -86,6 +118,8 @@ func test_move_squadron_validate_ok_squadron_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.5,
 		"pos_y": 0.3,
 	})
@@ -98,6 +132,8 @@ func test_move_squadron_validate_ok_ship_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.5,
 		"pos_y": 0.3,
 	})
@@ -110,6 +146,8 @@ func test_move_squadron_validate_wrong_phase() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.5,
 		"pos_y": 0.3,
 	})
@@ -135,6 +173,8 @@ func test_move_squadron_validate_destroyed() -> void:
 	sq.mark_destroyed()
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.5,
 		"pos_y": 0.3,
 	})
@@ -147,6 +187,8 @@ func test_move_squadron_validate_missing_target() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 	})
 	assert_ne(cmd.validate(_state), "",
 			"Should reject missing target position.")
@@ -157,6 +199,8 @@ func test_move_squadron_execute_returns_position() -> void:
 	var idx: int = _add_squadron(0)
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.421,
 		"pos_y": 0.913,
 	})
@@ -177,6 +221,8 @@ func test_move_squadron_execute_updates_instance() -> void:
 			"pos_x should default to 0.")
 	var cmd := MoveSquadronCommand.new(0, {
 		"squadron_index": idx,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"pos_x": 0.6,
 		"pos_y": 0.85,
 	})
@@ -216,6 +262,7 @@ func test_execute_maneuver_validate_ok() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
 		"pos_x": 0.5,
@@ -226,7 +273,7 @@ func test_execute_maneuver_validate_ok() -> void:
 			"Should accept valid maneuver.")
 
 
-func test_execute_maneuver_validate_rejects_non_maneuver_flow() -> void:
+func test_execute_maneuver_ignores_misleading_flow_when_owner_is_open() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)
 	_state.interaction_flow = InteractionFlow.make(
@@ -237,6 +284,7 @@ func test_execute_maneuver_validate_rejects_non_maneuver_flow() -> void:
 			{"ship_index": idx})
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
 		"pos_x": 0.5,
@@ -244,12 +292,11 @@ func test_execute_maneuver_validate_rejects_non_maneuver_flow() -> void:
 		"rotation_deg": 28.6,
 	})
 
-	assert_eq(cmd.validate(_state),
-			"Maneuver command submitted outside Maneuver step.",
-			"Should reject maneuver before the authoritative Maneuver step.")
+	assert_eq(cmd.validate(_state), "",
+			"InteractionFlow cannot override the canonical open Maneuver owner.")
 
 
-func test_execute_maneuver_validate_accepts_activation_open_replay_flow() -> void:
+func test_execute_maneuver_accepts_canonical_owner_with_stale_projection() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)
 	_state.interaction_flow = InteractionFlow.make(
@@ -260,6 +307,7 @@ func test_execute_maneuver_validate_accepts_activation_open_replay_flow() -> voi
 			{"ship_index": idx})
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
 		"pos_x": 0.5,
@@ -268,7 +316,7 @@ func test_execute_maneuver_validate_accepts_activation_open_replay_flow() -> voi
 	})
 
 	assert_eq(cmd.validate(_state), "",
-			"Legacy replay entries at activation-open should remain valid.")
+			"Canonical opportunity, not a stale projection, authorizes execution.")
 
 
 func test_execute_maneuver_validate_speed_zero() -> void:
@@ -276,6 +324,7 @@ func test_execute_maneuver_validate_speed_zero() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 0,
 		"yaw_clicks": [],
 		"pos_x": 0.5,
@@ -291,6 +340,7 @@ func test_execute_maneuver_validate_wrong_phase() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
 		"pos_x": 0.5,
@@ -320,6 +370,7 @@ func test_execute_maneuver_validate_invalid_speed() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": - 1,
 		"yaw_clicks": [0],
 		"pos_x": 0.5,
@@ -337,6 +388,7 @@ func test_execute_maneuver_validate_exceeds_yaw_limits() -> void:
 	# Provide yaw_clicks = [0, 3] — exceeds limit.
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 3],
 		"pos_x": 0.5,
@@ -355,6 +407,7 @@ func test_execute_maneuver_yaw_bonus_joint_allows_one_extra_click() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 3,
 		"yaw_clicks": [1, 1, 0],
 		"pos_x": 0.5,
@@ -372,6 +425,7 @@ func test_execute_maneuver_yaw_bonus_does_not_grant_two_extra() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 3,
 		"yaw_clicks": [2, 1, 0],
 		"pos_x": 0.5,
@@ -389,6 +443,7 @@ func test_execute_maneuver_yaw_bonus_only_helps_targeted_joint() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 3,
 		"yaw_clicks": [1, 1, 0],
 		"pos_x": 0.5,
@@ -406,6 +461,7 @@ func test_execute_maneuver_validate_wrong_joint_count() -> void:
 	# Speed 2 requires 2 joints, provide 3.
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 0, 1],
 		"pos_x": 0.5,
@@ -421,6 +477,7 @@ func test_execute_maneuver_validate_missing_position() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 1,
 		"yaw_clicks": [0],
 	})
@@ -433,6 +490,7 @@ func test_execute_maneuver_validate_missing_rotation() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 1,
 		"yaw_clicks": [0],
 		"pos_x": 0.5,
@@ -448,6 +506,7 @@ func test_execute_maneuver_validate_locked_joint_zero_yaw() -> void:
 	# Speed 3: nav chart = [0, 1, 1]. Joint 0 has max_yaw = 0 (locked).
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 3,
 		"yaw_clicks": [0, 0, 1],
 		"pos_x": 0.5,
@@ -464,6 +523,7 @@ func test_execute_maneuver_validate_locked_joint_nonzero() -> void:
 	# Speed 3: nav chart = [0, 1, 1]. Joint 0 locked, try to turn at it.
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 3,
 		"yaw_clicks": [1, 0, 0],
 		"pos_x": 0.5,
@@ -479,6 +539,7 @@ func test_execute_maneuver_execute_returns_data() -> void:
 	var idx: int = _add_ship(0)
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, -1],
 		"pos_x": 0.75,
@@ -515,6 +576,7 @@ func test_execute_maneuver_execute_updates_instance() -> void:
 			"pos_x should default to 0.")
 	var cmd := ExecuteManeuverCommand.new(0, {
 		"ship_index": idx,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
 		"speed": 2,
 		"yaw_clicks": [0, 1],
 		"pos_x": 0.489,

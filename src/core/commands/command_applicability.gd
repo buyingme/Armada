@@ -79,7 +79,7 @@ static var _DECLARATIONS: Dictionary = {
 	"end_activation": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP]},
 	"activate_squadron": {KEY_SCOPE: Constants.CommandScope.PHASE,
-			KEY_PHASES: [Constants.GamePhase.SQUADRON]},
+			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"complete_squadron_activation": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"move_squadron": {KEY_SCOPE: Constants.CommandScope.PHASE,

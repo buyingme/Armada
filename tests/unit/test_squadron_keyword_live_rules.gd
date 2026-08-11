@@ -25,6 +25,7 @@ func test_move_squadron_validate_heavy_engager_allows_move() -> void:
 	var state: GameState = _state_with_engagement([""], ["Heavy"])
 	var command := MoveSquadronCommand.new(0, {
 		"squadron_index": 0, "pos_x": 0.6, "pos_y": 0.5,
+		"activation_id": state.get_squadron(0, 0).activation_id,
 	})
 	assert_eq(command.validate(state), "",
 			"Heavy enemies should not prevent squadron movement.")
@@ -34,6 +35,7 @@ func test_move_squadron_validate_non_heavy_engager_blocks_move() -> void:
 	var state: GameState = _state_with_engagement([""], [""])
 	var command := MoveSquadronCommand.new(0, {
 		"squadron_index": 0, "pos_x": 0.6, "pos_y": 0.5,
+		"activation_id": state.get_squadron(0, 0).activation_id,
 	})
 	assert_ne(command.validate(state), "",
 			"Non-Heavy enemies should still prevent squadron movement.")
@@ -48,6 +50,7 @@ func test_move_squadron_validate_obstructed_non_heavy_allows_move() -> void:
 					state.get_squadron(1, 0))))
 	var command := MoveSquadronCommand.new(0, {
 		"squadron_index": 0, "pos_x": 0.6, "pos_y": 0.5,
+		"activation_id": state.get_squadron(0, 0).activation_id,
 	})
 	assert_eq(command.validate(state), "",
 			"Obstructed non-Heavy enemies should not prevent movement.")
@@ -204,7 +207,12 @@ func _state_with_engagement(p0_keywords: Array[String],
 	var state: GameState = GameState.new()
 	state.initialize()
 	state.current_phase = Constants.GamePhase.SQUADRON
-	_add_squadron(state, 0, p0_keywords, 0.50, 0.50)
+	assert_true(state.initialize_squadron_phase_progress(0))
+	var active: SquadronInstance = _add_squadron(
+			state, 0, p0_keywords, 0.50, 0.50)
+	assert_true(active.initialize_activation_action_state(
+			"squadron-activation:keyword-live",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
 	_add_squadron(state, 1, p1_keywords, 0.55, 0.50)
 	return state
 

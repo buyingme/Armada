@@ -319,7 +319,7 @@ func test_discard_invalid_index_no_crash() -> void:
 
 # --- Activation ---
 
-func test_ship_activation_boundary_defaults_are_inactive_and_not_serialized() -> void:
+func test_ship_activation_boundary_defaults_serialize_on_owner() -> void:
 	assert_false(_instance.has_active_ship_activation())
 	assert_true(_instance.validate_ship_activation_boundary())
 	assert_eq(_instance.squadron_command_opportunity_disposition,
@@ -333,8 +333,8 @@ func test_ship_activation_boundary_defaults_are_inactive_and_not_serialized() ->
 			"squadron_command_opportunity_disposition",
 			"maneuver_opportunity_disposition",
 			"squadron_command_activations_committed"]:
-		assert_false(serialized.has(key),
-				"Slice 1 must not serialize '%s'." % key)
+		assert_true(serialized.has(key),
+				"Slice 2 must serialize owner field '%s'." % key)
 
 
 func test_establish_ship_activation_initializes_stable_boundary() -> void:
@@ -488,9 +488,10 @@ func test_ship_activation_validation_rejects_invalid_owner_local_shapes() -> voi
 func test_destroyed_ship_cannot_retain_active_activation_boundary() -> void:
 	assert_true(_instance.establish_ship_activation("ship-activation:10"))
 	_instance.mark_destroyed()
-	assert_false(_instance.validate_ship_activation_boundary())
-	assert_true(_instance.clear_ship_activation_boundary_exceptionally(
-			"ship-activation:10"))
+	assert_false(_instance.has_active_ship_activation(),
+			"Destruction must clear the boundary without fabricating consumption.")
+	assert_eq(_instance.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_INACTIVE)
 	assert_true(_instance.validate_ship_activation_boundary())
 
 func test_reset_activation() -> void:

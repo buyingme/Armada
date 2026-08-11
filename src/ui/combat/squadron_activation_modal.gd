@@ -375,6 +375,30 @@ func select_squadron_remote(token: SquadronToken,
 	return true
 
 
+## Rebuilds presentation for an already-canonical activation after load or
+## reconnect. This path never validates selection by submitting a command;
+## the installed GameState has already established the activation identity.
+func restore_canonical_activation(token: SquadronToken,
+		instance: SquadronInstance, attack_in_flight: bool) -> bool:
+	if not visible or _state != State.WAITING_FOR_SELECTION:
+		return false
+	if token == null or instance == null \
+			or not instance.has_activation_action_state() \
+			or instance.activated_this_round:
+		return false
+	if attack_in_flight \
+			and instance.attack_action_disposition \
+					!= SquadronInstance.ATTACK_ACTION_BEGUN:
+		return false
+	_apply_squadron_selection(token, instance)
+	if attack_in_flight:
+		# BEGUN records accepted declaration, not completed attack execution.
+		# The production completion signal will set this after resumed combat.
+		_has_attacked = false
+		_transition_to(State.ATTACKING)
+	return true
+
+
 ## Returns the current state (for testing).
 func get_state() -> State:
 	return _state
@@ -435,7 +459,7 @@ func _validate_squadron_selection(
 	if instance.is_destroyed():
 		_show_error("That squadron has been destroyed.")
 		return null
-	if instance.owner_player != GameManager.active_player:
+	if instance.owner_player != _canonical_selection_controller():
 		_show_error("Not your squadron.")
 		return null
 	if instance.activated_this_round:
@@ -473,12 +497,16 @@ func _apply_squadron_selection(token: SquadronToken,
 	# In command mode, ALL squadrons can move and attack (CM-021).
 	# In phase mode, only Rogue squadrons can do both.
 	_allow_move_and_attack = _is_command_mode or _has_rogue
-	_has_moved = false
-	_has_attacked = false
+	_has_moved = instance.move_action_committed
+	_has_attacked = instance.attack_action_disposition \
+			in [SquadronInstance.ATTACK_ACTION_BEGUN,
+					SquadronInstance.ATTACK_ACTION_DECLINED]
 	# Defaults — game_board overrides via set_action_availability().
 	_can_move = not _is_engaged
 	_has_targets = true
-	_activation_slot_committed = false
+	_activation_slot_committed = _is_command_mode \
+			and instance.has_activation_action_state() \
+			and not instance.activated_this_round
 	_log.info("Selected squadron: %s (engaged=%s, move_and_attack=%s)" % [
 			instance.data_key, str(_is_engaged),
 			str(_allow_move_and_attack)])
@@ -493,8 +521,18 @@ func _commit_command_activation_if_needed() -> bool:
 	if _command_resolver == null:
 		_show_error("No Squadron command is active.")
 		return false
-	if not _command_resolver.use_activation():
+	if _selected_instance != null \
+			and _selected_instance.has_activation_action_state() \
+			and not _selected_instance.activated_this_round:
+		_activation_slot_committed = true
+		return true
+	var result: Dictionary = GameManager.activate_commanded_squadron(
+			_selected_instance, _command_resolver.get_ship())
+	if result.is_empty():
 		_show_error("No Squadron command activations remaining.")
+		return false
+	if bool(result.get("awaiting_remote", false)):
+		_show_error("Waiting for authoritative activation confirmation.")
 		return false
 	_activation_slot_committed = true
 	return true
@@ -885,7 +923,9 @@ func _get_active_faction_name() -> String:
 	var gs: GameState = GameManager.current_game_state
 	if gs == null:
 		return ""
-	var player: int = GameManager.active_player
+	var player: int = _canonical_selection_controller()
+	if player < 0:
+		player = GameManager.active_player
 	var ps: PlayerState = gs.get_player_state(player)
 	if ps == null:
 		return ""
@@ -896,6 +936,26 @@ func _get_active_faction_name() -> String:
 			return "Galactic Empire"
 		_:
 			return "Player %d" % player
+
+
+## Derives the semantic controller from canonical owners. GameManager's active
+## player remains a presentation projection and cannot authorize selection.
+func _canonical_selection_controller() -> int:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return -1
+	if _is_command_mode and _command_ship_token != null \
+			and _command_ship_token.has_method("get_ship_instance"):
+		var commanding_ship: ShipInstance = \
+				_command_ship_token.get_ship_instance() as ShipInstance
+		if commanding_ship != null:
+			return commanding_ship.owner_player
+	if _is_command_mode and _command_resolver != null \
+			and _command_resolver.get_ship() != null:
+		return _command_resolver.get_ship().owner_player
+	if game_state.current_phase == Constants.GamePhase.SQUADRON:
+		return game_state.squadron_phase_controller_player
+	return -1
 
 
 func _get_squadron_name() -> String:

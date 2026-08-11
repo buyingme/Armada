@@ -901,9 +901,10 @@ func start_ship_attack(ship_token: ShipToken) -> void:
 	_target_selector.dismiss_other_tools_requested.emit()
 	_target_selector.dismiss()
 	_init_ship_attack_state(ship_token)
-	_flow_fsm.begin(GameManager.current_game_state,
+	# Preview is transient. Keep the canonical Ship Activation / Attack-step
+	# route unchanged until Begin or Skip is accepted.
+	_flow_fsm.begin(null,
 			_get_attacker_player(), -1, {})
-	_publish_flow_snapshot()
 	_target_selector.enter_attacker_selection(true, _get_ship_name())
 	_wire_attack_done_and_panel_signals()
 	var panel: AttackSimPanel = _get_panel()
@@ -931,16 +932,25 @@ func _wire_attack_done_and_panel_signals() -> void:
 
 
 ## Auto-skip branch of [method start_ship_attack]: submits a
-## [SkipAttackCommand] with reason `"no_targets"` and tears down the
-## panel.  Rules Reference: "Attack", p.2 — a ship is not required to
-## attack.
+## [SkipAttackCommand] with reason `"no_targets"` and waits for acceptance
+## before any presentation teardown.
 func _auto_skip_ship_attack(panel: AttackSimPanel) -> void:
 	_log.info("No valid targets from any hull zone — auto-skipping.")
-	GameManager.submit_skip_attack(
+	_pending_declaration_command = "skip_attack"
+	_target_selector.set_declaration_submission_pending(true)
+	_pending_finish_after_skip = true
+	var result: Dictionary = GameManager.submit_skip_attack(
 			_get_attacker_player(), "no_targets")
-	if panel:
-		panel.hide_skip_attack_button()
-	_finish_attack_execution()
+	if _is_waiting_for_remote_command_result(result):
+		return
+	if result.is_empty():
+		_pending_finish_after_skip = false
+		_restore_declaration_after_rejection(
+				"Automatic declaration Skip was rejected.")
+		if panel:
+			panel.show_skip_attack_button()
+		return
+	apply_skip_attack_result(result)
 
 ## Initialises attack execution state for a ship attacker.
 func _init_ship_attack_state(ship_token: ShipToken) -> void:

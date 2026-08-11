@@ -311,7 +311,7 @@ func test_activation_ended_after_token_convert_marks_activated() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship_as_token(ship)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	assert_true(ship.activated_this_round,
 			"Ship should be marked activated after End Activation")
 
@@ -320,7 +320,7 @@ func test_activation_ended_after_token_convert_clears_activating() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship_as_token(ship)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	assert_null(GameManager.get_activating_ship(),
 			"Activating ship should be cleared after End Activation")
 
@@ -332,7 +332,7 @@ func test_activation_ended_after_token_convert_does_not_double_spend() -> void:
 	# Dial was already spent by activate_ship_as_token.
 	assert_eq(ship.command_dial_stack.get_spent_history().size(), 1,
 			"Should have 1 spent dial before End Activation")
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	# Should still be exactly 1 — no double-spend.
 	assert_eq(ship.command_dial_stack.get_spent_history().size(), 1,
 			"Should still have 1 spent dial (no double-spend)")
@@ -344,7 +344,7 @@ func test_activation_ended_after_token_convert_advances_turn() -> void:
 	_setup_game_in_ship_phase([rebel], [imperial])
 	GameManager.activate_ship_as_token(rebel)
 	_active_player_changes.clear()
-	EventBus.activation_ended.emit()
+	_complete_active_ship(rebel)
 	assert_true(_active_player_changes.size() >= 1,
 			"activation_ended should advance turn to next player")
 	assert_eq(_active_player_changes[-1], 1,
@@ -376,7 +376,7 @@ func test_full_cycle_token_convert_then_board_drop() -> void:
 
 	# Player 0: convert dial to token.
 	GameManager.activate_ship_as_token(rebel)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(rebel)
 	assert_true(rebel.activated_this_round,
 			"Rebel ship should be activated")
 	assert_true(rebel.command_tokens.has_token(Constants.CommandType.NAVIGATE),
@@ -386,7 +386,7 @@ func test_full_cycle_token_convert_then_board_drop() -> void:
 
 	# Player 1: normal board drop activation.
 	GameManager.activate_ship(imperial)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(imperial)
 
 	# Both done — phase cascades.
 	assert_eq(GameManager.get_current_phase(),
@@ -560,6 +560,19 @@ func _create_ship_with_dials(player: int, dial_count: int) -> ShipInstance:
 		cmds.append(Constants.CommandType.NAVIGATE)
 	ship.command_dial_stack.assign_dials(cmds, 1)
 	return ship
+
+
+func _complete_active_ship(ship: ShipInstance) -> void:
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "repair_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "attack_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "maneuver_step").is_empty())
+	assert_false(GameManager.submit_execute_maneuver(
+			ship, 0, [], ship.pos_x, ship.pos_y,
+			ship.rotation_deg).is_empty())
+	EventBus.activation_ended.emit()
 
 
 ## Creates a ShipInstance with a specific command value (may differ from

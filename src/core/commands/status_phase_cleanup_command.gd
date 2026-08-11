@@ -42,6 +42,23 @@ func validate(game_state: GameState) -> String:
 		return base
 	if game_state.current_phase != Constants.GamePhase.STATUS:
 		return "Status phase cleanup can only run during STATUS phase."
+	if not game_state.validate_ship_activation_identity_aggregate():
+		return "Ship activation boundary aggregate is invalid."
+	var active_squadrons: int = 0
+	for player_state: PlayerState in game_state.player_states:
+		if player_state == null:
+			continue
+		for raw_squadron: Variant in player_state.squadrons:
+			if not (raw_squadron is SquadronInstance) \
+					or not (raw_squadron as SquadronInstance) \
+							.is_activation_action_state_valid():
+				return "Squadron activation state is invalid."
+			var squadron: SquadronInstance = raw_squadron as SquadronInstance
+			if squadron.has_activation_action_state() \
+					and not squadron.activated_this_round:
+				active_squadrons += 1
+	if active_squadrons > 1:
+		return "Squadron activation aggregate is not unique."
 	return ""
 
 
@@ -92,6 +109,8 @@ func _cleanup_ships(game_state: GameState, ps: PlayerState,
 			continue
 		var si: ShipInstance = s as ShipInstance
 		if si.is_destroyed():
+			# Destroyed ships bypass reset_activation(), so clear any stale facts.
+			si.reset_ship_activation_boundary()
 			continue
 		if _is_token_ready_blocked(game_state, si):
 			result["ships_blocked"].append(si.data_key)
@@ -112,6 +131,8 @@ func _cleanup_squadrons(ps: PlayerState,
 			continue
 		var sqi: SquadronInstance = sq as SquadronInstance
 		if sqi.is_destroyed():
+			# Destroyed squadrons bypass reset_activation(), so clear history here.
+			sqi.reset_activation_action_state()
 			continue
 		sqi.ready_defense_tokens()
 		sqi.reset_activation()

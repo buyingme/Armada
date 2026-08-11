@@ -540,8 +540,8 @@ func test_roll_dice_activates_ship_window_and_compatibility_boundary() -> void:
 			TimingWindowDefinitions.ATTACK_MODIFY)
 	assert_true(bool(projected.get("is_interactive", false)))
 	assert_false(_projected_h9(projected).is_empty())
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 2)
-	assert_eq(GameReplay.FORMAT_VERSION, 4)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 3)
+	assert_eq(GameReplay.FORMAT_VERSION, 5)
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION)
 	assert_ne(ConfirmAttackDiceCommand.new(0, {"attack_id": "attack:0"}) \
 			.validate(state), "")
@@ -559,6 +559,8 @@ func _make_state(options: Dictionary = {}) -> GameState:
 			"defender_kind", CurrentAttackState.KIND_SHIP))
 	var stage: String = str(options.get(
 			"stage", CurrentAttackState.STAGE_ATTACK_MODIFY))
+	if attacker_kind == CurrentAttackState.KIND_SQUADRON:
+		state.current_phase = Constants.GamePhase.SQUADRON
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_MODIFY,

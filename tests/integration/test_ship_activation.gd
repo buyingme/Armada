@@ -146,7 +146,7 @@ func test_activation_ended_spends_revealed_dial() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship(ship)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	var revealed: Dictionary = ship.command_dial_stack.get_revealed_dial()
 	assert_true(revealed.is_empty(),
 			"Revealed dial should be spent after activation_ended")
@@ -156,7 +156,7 @@ func test_activation_ended_marks_ship_activated() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship(ship)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	assert_true(ship.activated_this_round,
 			"Ship should be marked activated after activation_ended")
 
@@ -165,7 +165,7 @@ func test_activation_ended_clears_activating_ship() -> void:
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship(ship)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	assert_null(GameManager.get_activating_ship(),
 			"Activating ship should be cleared after activation_ended")
 
@@ -175,7 +175,7 @@ func test_activation_ended_emits_dials_changed() -> void:
 	_setup_game_in_ship_phase([ship], [_create_ship_with_dials(1, 1)])
 	GameManager.activate_ship(ship)
 	_dials_changed_ships.clear()
-	EventBus.activation_ended.emit()
+	_complete_active_ship(ship)
 	assert_true(_dials_changed_ships.has(ship),
 			"command_dials_changed should fire on activation_ended")
 
@@ -186,7 +186,7 @@ func test_activation_ended_advances_turn() -> void:
 	_setup_game_in_ship_phase([rebel], [imperial])
 	GameManager.activate_ship(rebel)
 	_active_player_changes.clear()
-	EventBus.activation_ended.emit()
+	_complete_active_ship(rebel)
 	assert_true(_active_player_changes.size() >= 1,
 			"activation_ended should advance turn to next player")
 	assert_eq(_active_player_changes[-1], 1,
@@ -204,7 +204,7 @@ func test_full_ship_phase_cycle_both_players_activate() -> void:
 
 	# Player 0 (initiative) activates.
 	GameManager.activate_ship(rebel)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(rebel)
 	# Rebel's dial was spent (appears in spent history; no cascade yet).
 	assert_eq(rebel.command_dial_stack.get_spent_history().size(), 1,
 			"Rebel ship should have 1 spent dial after End Activation")
@@ -213,7 +213,7 @@ func test_full_ship_phase_cycle_both_players_activate() -> void:
 
 	# Player 1 activates.
 	GameManager.activate_ship(imperial)
-	EventBus.activation_ended.emit()
+	_complete_active_ship(imperial)
 
 	# Both done — phase cascades through Squadron+Status to next round.
 	# Status Phase clears spent history, so we verify round/phase instead.
@@ -385,6 +385,19 @@ func _create_ship_with_dials(player: int, dial_count: int) -> ShipInstance:
 		cmds.append(Constants.CommandType.NAVIGATE)
 	ship.command_dial_stack.assign_dials(cmds, 1)
 	return ship
+
+
+func _complete_active_ship(ship: ShipInstance) -> void:
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "repair_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "attack_step").is_empty())
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "maneuver_step").is_empty())
+	assert_false(GameManager.submit_execute_maneuver(
+			ship, 0, [], ship.pos_x, ship.pos_y,
+			ship.rotation_deg).is_empty())
+	EventBus.activation_ended.emit()
 
 
 ## Sets up a game in Ship Phase with the given rebel and imperial ships.

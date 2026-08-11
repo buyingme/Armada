@@ -28,9 +28,7 @@ var player_states: Array[PlayerState] = []
 ## The initiative player index (0 or 1).
 var initiative_player: int = 0
 
-## Behavior-inert canonical substrate for Squadron Phase turn progress.
-## These owner-local facts are intentionally not serialized or consumed by
-## production flow until the authoritative declaration cutover.
+## Canonical Squadron Phase turn progress.
 var squadron_phase_controller_player: int = SQUADRON_PHASE_CONTROLLER_INACTIVE
 var squadron_phase_activations_committed: int = 0
 
@@ -162,8 +160,7 @@ func has_squadron_phase_controller() -> bool:
 			!= SQUADRON_PHASE_CONTROLLER_INACTIVE
 
 
-## Validates only the owner-local Squadron Phase controller/count substrate.
-## The inactive default remains valid in every phase so Slice 1 is behavior-inert.
+## Validates the owner-local Squadron Phase controller/count state.
 func validate_squadron_phase_progress() -> bool:
 	return _squadron_phase_progress_values_are_valid(
 			squadron_phase_controller_player,
@@ -193,6 +190,170 @@ func restore_squadron_phase_progress(snapshot: Dictionary) -> bool:
 	return true
 
 
+## Initializes the canonical Squadron Phase controller/count at phase entry.
+func initialize_squadron_phase_progress(controller: int) -> bool:
+	if current_phase != Constants.GamePhase.SQUADRON \
+			or controller < 0 or controller >= Constants.PLAYER_COUNT:
+		return false
+	squadron_phase_controller_player = controller
+	squadron_phase_activations_committed = 0
+	return validate_squadron_phase_progress()
+
+
+## Clears the canonical Squadron Phase controller/count at phase exit.
+func clear_squadron_phase_progress() -> void:
+	squadron_phase_controller_player = SQUADRON_PHASE_CONTROLLER_INACTIVE
+	squadron_phase_activations_committed = 0
+
+
+## Commits one completed Squadron Phase activation and derives the next
+## controller from canonical round eligibility. The caller owns rollback of
+## this owner-local mutation together with the completing SquadronInstance.
+func commit_squadron_phase_activation(controller: int) -> Dictionary:
+	if current_phase != Constants.GamePhase.SQUADRON \
+			or controller != squadron_phase_controller_player \
+			or squadron_phase_activations_committed \
+					>= Constants.SQUADRONS_PER_ACTIVATION:
+		return {}
+	squadron_phase_activations_committed += 1
+	var same_has: bool = has_unactivated_squadrons(controller)
+	var other: int = Constants.PLAYER_COUNT - 1 - controller
+	var other_has: bool = has_unactivated_squadrons(other)
+	var phase_complete: bool = false
+	if squadron_phase_activations_committed \
+			< Constants.SQUADRONS_PER_ACTIVATION and same_has:
+		pass
+	elif other_has:
+		squadron_phase_controller_player = other
+		squadron_phase_activations_committed = 0
+	elif same_has:
+		# The opponent auto-passes; the same player begins a fresh turn.
+		squadron_phase_activations_committed = 0
+	else:
+		clear_squadron_phase_progress()
+		phase_complete = true
+	if not validate_squadron_phase_progress():
+		return {}
+	return {
+		"controller_player": squadron_phase_controller_player,
+		"activations_committed": squadron_phase_activations_committed,
+		"phase_complete": phase_complete,
+	}
+
+
+## Returns whether a player controls at least one surviving unactivated
+## squadron. This is the canonical eligibility input for phase handoff.
+func has_unactivated_squadrons(player_index: int) -> bool:
+	if player_index < 0 or player_index >= Constants.PLAYER_COUNT:
+		return false
+	var player_state: PlayerState = get_player_state(player_index)
+	if player_state == null:
+		return false
+	for raw_squadron: Variant in player_state.squadrons:
+		if raw_squadron is SquadronInstance:
+			var squadron: SquadronInstance = raw_squadron as SquadronInstance
+			if not squadron.is_destroyed() \
+					and not squadron.activated_this_round:
+				return true
+	return false
+
+
+## Returns the unique active (not yet round-complete) squadron activation, or
+## null when none exists. Invalid duplicate states are rejected separately by
+## [method validate_declaration_adjacent_state].
+func get_active_squadron_activation() -> SquadronInstance:
+	var active: SquadronInstance = null
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			continue
+		for raw_squadron: Variant in player_state.squadrons:
+			if not (raw_squadron is SquadronInstance):
+				continue
+			var squadron: SquadronInstance = raw_squadron as SquadronInstance
+			if not squadron.has_activation_action_state() \
+					or squadron.activated_this_round:
+				continue
+			if active != null:
+				return null
+			active = squadron
+	return active
+
+
+## Validates every TWI-003 owner and the cross-owner references/uniqueness
+## required before save, reconnect, replay, or mirror state is installed.
+func validate_declaration_adjacent_state() -> bool:
+	if not validate_squadron_phase_progress() \
+			or not validate_ship_activation_identity_aggregate():
+		return false
+	var active_squadron: SquadronInstance = null
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			continue
+		for raw_squadron: Variant in player_state.squadrons:
+			if not (raw_squadron is SquadronInstance):
+				return false
+			var squadron: SquadronInstance = raw_squadron as SquadronInstance
+			if not squadron.is_activation_action_state_valid():
+				return false
+			if squadron.activation_context \
+					== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+				var commanding_ship: ShipInstance = get_ship(
+						squadron.commanding_ship_player,
+						squadron.commanding_ship_index)
+				if commanding_ship == null \
+						or squadron.commanding_ship_player != squadron.owner_player:
+					return false
+			if not squadron.has_activation_action_state() \
+					or squadron.activated_this_round:
+				continue
+			if active_squadron != null:
+				return false
+			active_squadron = squadron
+			if squadron.activation_context \
+					== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+				if current_phase != Constants.GamePhase.SQUADRON \
+						or squadron.owner_player \
+								!= squadron_phase_controller_player \
+						or squadron_phase_activations_committed \
+								>= Constants.SQUADRONS_PER_ACTIVATION:
+					return false
+			else:
+				var active_ship: ShipInstance = get_ship(
+						squadron.commanding_ship_player,
+						squadron.commanding_ship_index)
+				var command_capacity: int = \
+						SquadronCommandResolver.authoritative_capacity(active_ship)
+				if current_phase != Constants.GamePhase.SHIP \
+						or active_ship == null \
+						or not active_ship.has_active_ship_activation() \
+						or active_ship.squadron_command_opportunity_disposition \
+								!= ShipInstance.ACTIVATION_DISPOSITION_OPEN \
+						or active_ship.squadron_command_activations_committed <= 0 \
+						or active_ship.squadron_command_activations_committed \
+								> command_capacity:
+					return false
+	var attack: CurrentAttackState = _current_attack_state
+	if attack != null and attack.active \
+			and attack.attack_kind \
+					== SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD:
+		if attack.attacker_kind == CurrentAttackState.KIND_SHIP:
+			var attacker_ship: ShipInstance = get_ship(
+					attack.attacker_player, attack.attacker_index)
+			if attacker_ship == null \
+					or not attacker_ship.has_active_ship_activation() \
+					or not attacker_ship.attack_step_active:
+				return false
+		elif attack.attacker_kind == CurrentAttackState.KIND_SQUADRON:
+			var attacker_squadron: SquadronInstance = get_squadron(
+					attack.attacker_player, attack.attacker_index)
+			if attacker_squadron == null \
+					or attacker_squadron != active_squadron \
+					or attacker_squadron.attack_action_disposition \
+							!= SquadronInstance.ATTACK_ACTION_BEGUN:
+				return false
+	return true
+
+
 ## Read-only aggregate validation for the ADR-006 cross-fleet uniqueness rule.
 ## ShipInstance remains the sole writable owner of each activation identity.
 func validate_ship_activation_identity_aggregate() -> bool:
@@ -210,6 +371,26 @@ func validate_ship_activation_identity_aggregate() -> bool:
 				if active_count > 1:
 					return false
 	return true
+
+
+## Returns the unique ship carrying the active ADR-006 boundary, or null.
+## Callers must treat a null result as inactive or invalid; this method never
+## reconstructs authority from presentation state.
+func get_active_ship_activation() -> ShipInstance:
+	var active_ship: ShipInstance = null
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			continue
+		for raw_ship: Variant in player_state.ships:
+			if not (raw_ship is ShipInstance):
+				continue
+			var ship: ShipInstance = raw_ship as ShipInstance
+			if not ship.has_active_ship_activation():
+				continue
+			if active_ship != null:
+				return null
+			active_ship = ship
+	return active_ship
 
 
 ## Records one ship-targeting attack for [param ship] in the current round.
@@ -249,6 +430,10 @@ func serialize() -> Dictionary:
 		"current_round": current_round,
 		"current_phase": int(current_phase),
 		"initiative_player": initiative_player,
+		"squadron_phase_controller_player":
+				squadron_phase_controller_player,
+		"squadron_phase_activations_committed":
+				squadron_phase_activations_committed,
 		"objectives": objectives.duplicate(true),
 		"player_states": [],
 		"damage_deck": damage_deck.serialize() if damage_deck else {},
@@ -269,10 +454,16 @@ func serialize() -> Dictionary:
 ## Ship/squadron reconstruction inside each PlayerState is left to the
 ## caller because it requires template look-ups (ShipData / SquadronData).
 static func deserialize(data: Dictionary) -> GameState:
+	if not _serialized_declaration_fields_are_complete(data):
+		return null
 	var state := GameState.new()
 	state.current_round = data.get("current_round", 0)
 	state.current_phase = int(data.get("current_phase", 0)) as Constants.GamePhase
 	state.initiative_player = data.get("initiative_player", 0)
+	state.squadron_phase_controller_player = int(
+			data["squadron_phase_controller_player"])
+	state.squadron_phase_activations_committed = int(
+			data["squadron_phase_activations_committed"])
 	var objective_data: Variant = data.get("objectives", {})
 	if objective_data is Dictionary:
 		state.objectives = (objective_data as Dictionary).duplicate(true)
@@ -313,6 +504,8 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._timing_window_state = _new_timing_window_state()
 	if not state.validate_current_attack_references():
 		return null
+	if not state.validate_declaration_adjacent_state():
+		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):
 		return null
@@ -324,6 +517,41 @@ static func deserialize(data: Dictionary) -> GameState:
 					"validate_reconstructed_state", state)).is_empty():
 		return null
 	return state
+
+
+static func _serialized_declaration_fields_are_complete(
+		data: Dictionary) -> bool:
+	if not data.has("squadron_phase_controller_player") \
+			or not data.has("squadron_phase_activations_committed"):
+		return false
+	var raw_players: Variant = data.get("player_states", [])
+	if not (raw_players is Array):
+		return false
+	for raw_player: Variant in raw_players as Array:
+		if not (raw_player is Dictionary):
+			return false
+		var player_data: Dictionary = raw_player as Dictionary
+		for raw_ship: Variant in player_data.get("ships", []):
+			if not (raw_ship is Dictionary):
+				return false
+			for key: String in [
+					"ship_activation_identity",
+					"squadron_command_opportunity_disposition",
+					"maneuver_opportunity_disposition",
+					"squadron_command_activations_committed"]:
+				if not (raw_ship as Dictionary).has(key):
+					return false
+		for raw_squadron: Variant in player_data.get("squadrons", []):
+			if not (raw_squadron is Dictionary):
+				return false
+			for key: String in [
+					"activation_id", "activation_context",
+					"commanding_ship_player", "commanding_ship_index",
+					"move_action_committed",
+					"attack_action_disposition"]:
+				if not (raw_squadron as Dictionary).has(key):
+					return false
+	return true
 
 
 func set_timing_window_state(value: TimingWindowState) -> bool:

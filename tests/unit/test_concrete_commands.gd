@@ -8,6 +8,8 @@ extends GutTest
 
 
 var _state: GameState
+const SHIP_ACTIVATION_ID: String = "ship-activation:test"
+const SQUADRON_ACTIVATION_ID: String = "squadron-activation:test"
 
 
 ## Creates a minimal ShipData for test fixtures.
@@ -16,6 +18,7 @@ func _make_ship_data(command_value: int = 2) -> ShipData:
 	data.hull = 4
 	data.max_speed = 3
 	data.command_value = command_value
+	data.squadron_value = 2
 	data.shields = {"front": 2, "left": 1, "right": 1, "rear": 1}
 	data.defense_tokens = []
 	data.navigation_chart = [[1], [1, 1], [0, 1, 1]]
@@ -42,6 +45,69 @@ func _add_squadron(player: int) -> int:
 	var ps: PlayerState = _state.get_player_state(player)
 	ps.squadrons.append(sq)
 	return ps.squadrons.size() - 1
+
+
+func _enter_squadron_phase(controller: int = 0) -> void:
+	_state.current_phase = Constants.GamePhase.SQUADRON
+	assert_true(_state.initialize_squadron_phase_progress(controller))
+
+
+func _prepare_ship_normal_completion(player: int, ship_index: int) -> ShipInstance:
+	var ship: ShipInstance = _state.get_ship(player, ship_index)
+	assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
+	assert_true(ship.consume_unreached_squadron_command_opportunity(
+			SHIP_ACTIVATION_ID, true))
+	assert_true(ship.open_maneuver_opportunity(SHIP_ACTIVATION_ID))
+	assert_true(ship.consume_open_maneuver_opportunity(SHIP_ACTIVATION_ID))
+	return ship
+
+
+func _phase_activation_payload(squadron_index: int) -> Dictionary:
+	return {
+		"squadron_index": squadron_index,
+		"activation_context":
+				SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE,
+	}
+
+
+func _prepare_phase_completion(squadron_index: int) -> Dictionary:
+	var squadron: SquadronInstance = _state.get_squadron(0, squadron_index)
+	assert_true(squadron.initialize_activation_action_state(
+			SQUADRON_ACTIVATION_ID,
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(squadron.commit_attack_action_declined(
+			SQUADRON_ACTIVATION_ID, false))
+	return {
+		"squadron_index": squadron_index,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"activation_context": squadron.activation_context,
+	}
+
+
+func _prepare_command_completion(squadron_index: int) -> Dictionary:
+	var ship_index: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	ship.command_dial_stack.assign_dials(
+			[Constants.CommandType.SQUADRON,
+				Constants.CommandType.NAVIGATE], 1)
+	ship.command_dial_stack.reveal_top()
+	assert_true(ship.establish_ship_activation(SHIP_ACTIVATION_ID))
+	assert_true(ship.open_squadron_command_opportunity(SHIP_ACTIVATION_ID))
+	var squadron: SquadronInstance = _state.get_squadron(0, squadron_index)
+	assert_true(squadron.initialize_activation_action_state(
+			SQUADRON_ACTIVATION_ID,
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, ship_index))
+	assert_true(ship.commit_squadron_command_activation(SHIP_ACTIVATION_ID))
+	assert_true(squadron.commit_move_action(SQUADRON_ACTIVATION_ID, false))
+	assert_true(squadron.commit_attack_action_declined(
+			SQUADRON_ACTIVATION_ID, false))
+	return {
+		"squadron_index": squadron_index,
+		"activation_id": SQUADRON_ACTIVATION_ID,
+		"activation_context": squadron.activation_context,
+		"ship_activation_identity": SHIP_ACTIVATION_ID,
+	}
 
 
 func before_each() -> void:
@@ -204,6 +270,7 @@ func test_activate_ship_execute_reveals_dial() -> void:
 			[Constants.CommandType.NAVIGATE,
 			Constants.CommandType.REPAIR], 1)
 	var cmd := ActivateShipCommand.new(0, {"ship_index": idx})
+	cmd.sequence = 10
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("command", -1),
 			int(Constants.CommandType.NAVIGATE),
@@ -222,6 +289,7 @@ func test_activate_ship_skip_reveal_opens_activation_without_command() -> void:
 		ActivateShipCommand.PAYLOAD_SKIP_REVEAL: true,
 		ActivateShipCommand.PAYLOAD_REASON: CrewPanic.EFFECT_ID,
 	})
+	cmd.sequence = 11
 	assert_eq(cmd.validate(_state), "",
 			"Skip-reveal activation should allow an empty dial stack.")
 	var result: Dictionary = cmd.execute(_state)
@@ -251,7 +319,9 @@ func test_activate_ship_serialize_roundtrip() -> void:
 func test_end_activation_validate_ok() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)
-	var cmd := EndActivationCommand.new(0, {"ship_index": idx})
+	var ship: ShipInstance = _prepare_ship_normal_completion(0, idx)
+	var cmd := EndActivationCommand.new(0, {"ship_index": idx,
+		"ship_activation_identity": ship.ship_activation_identity})
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid end-activation.")
 
@@ -281,7 +351,9 @@ func test_end_activation_execute_spends_dial_marks_activated() -> void:
 			[Constants.CommandType.NAVIGATE,
 			Constants.CommandType.REPAIR], 1)
 	ship.command_dial_stack.reveal_top()
-	var cmd := EndActivationCommand.new(0, {"ship_index": idx})
+	ship = _prepare_ship_normal_completion(0, idx)
+	var cmd := EndActivationCommand.new(0, {"ship_index": idx,
+		"ship_activation_identity": ship.ship_activation_identity})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("spent_command", -1),
 			int(Constants.CommandType.NAVIGATE),
@@ -296,8 +368,9 @@ func test_end_activation_execute_no_revealed_dial() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_ship(0)
 	# Ship has unspent dials but none revealed.
-	var ship: ShipInstance = _state.get_ship(0, idx)
-	var cmd := EndActivationCommand.new(0, {"ship_index": idx})
+	var ship: ShipInstance = _prepare_ship_normal_completion(0, idx)
+	var cmd := EndActivationCommand.new(0, {"ship_index": idx,
+		"ship_activation_identity": ship.ship_activation_identity})
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("spent_command", -1), -1,
 			"Should return -1 when no dial to spend.")
@@ -357,6 +430,7 @@ func test_convert_dial_execute_adds_token() -> void:
 			[Constants.CommandType.NAVIGATE,
 			Constants.CommandType.REPAIR], 1)
 	var cmd := ConvertDialToTokenCommand.new(0, {"ship_index": idx})
+	cmd.sequence = 12
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("command", -1),
 			int(Constants.CommandType.NAVIGATE),
@@ -380,6 +454,7 @@ func test_convert_dial_execute_duplicate_discards() -> void:
 	# Pre-add a NAVIGATE token so the conversion produces a duplicate.
 	ship.command_tokens.add_token(Constants.CommandType.NAVIGATE)
 	var cmd := ConvertDialToTokenCommand.new(0, {"ship_index": idx})
+	cmd.sequence = 13
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(result.get("duplicate", false),
 			"Should flag as duplicate.")
@@ -403,10 +478,9 @@ func test_convert_dial_serialize_roundtrip() -> void:
 # ======================================================================
 
 func test_activate_squadron_validate_ok() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
-	var cmd := ActivateSquadronCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := ActivateSquadronCommand.new(0, _phase_activation_payload(idx))
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid squadron activation.")
 
@@ -421,7 +495,7 @@ func test_activate_squadron_validate_wrong_phase() -> void:
 
 
 func test_activate_squadron_validate_already_activated() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
 	var sq: SquadronInstance = \
 			_state.get_player_state(0).squadrons[idx] as SquadronInstance
@@ -433,7 +507,7 @@ func test_activate_squadron_validate_already_activated() -> void:
 
 
 func test_activate_squadron_validate_bad_index() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var cmd := ActivateSquadronCommand.new(0, {
 		"squadron_index": 99})
 	assert_ne(cmd.validate(_state), "",
@@ -441,10 +515,10 @@ func test_activate_squadron_validate_bad_index() -> void:
 
 
 func test_activate_squadron_execute_returns_index() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
-	var cmd := ActivateSquadronCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := ActivateSquadronCommand.new(0, _phase_activation_payload(idx))
+	cmd.sequence = 14
 	var result: Dictionary = cmd.execute(_state)
 	assert_eq(result.get("squadron_index", -1), idx,
 			"Execute should return squadron index.")
@@ -467,10 +541,10 @@ func test_activate_squadron_serialize_roundtrip() -> void:
 # ======================================================================
 
 func test_complete_squadron_activation_validate_ok() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
-	var cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := CompleteSquadronActivationCommand.new(
+			0, _prepare_phase_completion(idx))
 	assert_eq(cmd.validate(_state), "",
 			"Should accept valid activation completion marker.")
 
@@ -478,43 +552,44 @@ func test_complete_squadron_activation_validate_ok() -> void:
 func test_complete_squadron_activation_validate_ok_ship_phase() -> void:
 	_state.current_phase = Constants.GamePhase.SHIP
 	var idx: int = _add_squadron(0)
-	var cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := CompleteSquadronActivationCommand.new(
+			0, _prepare_command_completion(idx))
 	assert_eq(cmd.validate(_state), "",
 			"Ship-phase Squadron commands need the same completion marker.")
 
 
 func test_complete_squadron_activation_allows_destroyed_squadron() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
 	var squadron: SquadronInstance = \
 			_state.get_player_state(0).squadrons[idx] as SquadronInstance
 	squadron.current_hull = 0
-	var cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := CompleteSquadronActivationCommand.new(
+			0, _prepare_phase_completion(idx))
 	assert_eq(cmd.validate(_state), "",
 			"Counter can destroy the activating squadron before completion sync.")
 
 
-func test_complete_squadron_activation_allows_already_activated_echo() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+func test_complete_squadron_activation_rejects_already_activated_echo() -> void:
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
 	var squadron: SquadronInstance = \
 			_state.get_player_state(0).squadrons[idx] as SquadronInstance
+	var payload: Dictionary = _prepare_phase_completion(idx)
 	squadron.activated_this_round = true
-	var cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": idx})
-	assert_eq(cmd.validate(_state), "",
-			"Authoritative echoes may arrive after local optimistic completion.")
+	var cmd := CompleteSquadronActivationCommand.new(
+			0, payload)
+	assert_ne(cmd.validate(_state), "",
+			"Duplicate completion must reject; clients do not complete optimistically.")
 
 
 func test_complete_squadron_activation_execute_marks_activated() -> void:
-	_state.current_phase = Constants.GamePhase.SQUADRON
+	_enter_squadron_phase()
 	var idx: int = _add_squadron(0)
 	var squadron: SquadronInstance = \
 			_state.get_player_state(0).squadrons[idx] as SquadronInstance
-	var cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": idx})
+	var cmd := CompleteSquadronActivationCommand.new(
+			0, _prepare_phase_completion(idx))
 	var result: Dictionary = cmd.execute(_state)
 	assert_true(squadron.activated_this_round,
 			"Completion marker should mark the squadron activated.")

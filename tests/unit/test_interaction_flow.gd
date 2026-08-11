@@ -221,13 +221,13 @@ func test_game_state_round_trip_preserves_flow() -> void:
 
 
 func test_game_state_deserialize_missing_flow_uses_default() -> void:
-	var data: Dictionary = {
-		"current_round": 1,
-		"current_phase": 0,
-		"initiative_player": 0,
-		"player_states": [],
-	}
+	var source := GameState.new()
+	source.initialize()
+	source.current_round = 1
+	var data: Dictionary = source.serialize()
+	data.erase("interaction_flow")
 	var clone: GameState = GameState.deserialize(data)
+	assert_not_null(clone)
 	assert_not_null(clone.interaction_flow)
 	assert_eq(clone.interaction_flow.flow_type,
 			Constants.InteractionFlow.NONE)

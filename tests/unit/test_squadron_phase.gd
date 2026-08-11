@@ -29,6 +29,7 @@ func _setup_game(p0_count: int, p1_count: int) -> void:
 	# Advance to squadron phase: COMMAND → SHIP → SQUADRON.
 	# Mark all ships as activated (there are none, so just advance).
 	gs.current_phase = Constants.GamePhase.SQUADRON
+	assert_true(gs.initialize_squadron_phase_progress(gs.initiative_player))
 	gs.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SQUADRON_ACTIVATION,
 			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
@@ -36,6 +37,11 @@ func _setup_game(p0_count: int, p1_count: int) -> void:
 	GameManager.active_player = gs.initiative_player
 	GameManager._squadrons_activated_this_turn = 0
 	GameManager._activating_squadron = null
+
+
+func _activate_and_decline(squadron: SquadronInstance) -> Dictionary:
+	GameManager.activate_squadron(squadron)
+	return GameManager.submit_skip_attack(squadron.owner_player, "voluntary")
 
 
 func after_each() -> void:
@@ -118,9 +124,8 @@ func test_squadron_activation_ended_marks_activated() -> void:
 	_setup_game(2, 2)
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	var sq: SquadronInstance = ps.squadrons[0] as SquadronInstance
-	GameManager.activate_squadron(sq)
-	# Simulate activation ending.
-	EventBus.squadron_activation_ended.emit(sq)
+	var result: Dictionary = _activate_and_decline(sq)
+	assert_false(result.is_empty())
 	assert_true(sq.activated_this_round,
 			"Squadron should be marked as activated after activation ends")
 	assert_null(GameManager.get_activating_squadron(),
@@ -134,37 +139,31 @@ func test_two_activations_then_turn_switches() -> void:
 	GameManager._begin_squadron_phase()
 	var ps0: PlayerState = gs.get_player_state(0)
 	# Activate first squadron.
-	GameManager.activate_squadron(ps0.squadrons[0] as SquadronInstance)
-	EventBus.squadron_activation_ended.emit(ps0.squadrons[0])
+	assert_false(_activate_and_decline(
+			ps0.squadrons[0] as SquadronInstance).is_empty())
 	# After 1 activation, still player 0's turn (need 2).
 	assert_eq(GameManager.active_player, 0,
 			"After 1 activation, should still be player 0")
 	# Activate second squadron.
-	GameManager.activate_squadron(ps0.squadrons[1] as SquadronInstance)
-	EventBus.squadron_activation_ended.emit(ps0.squadrons[1])
+	assert_false(_activate_and_decline(
+			ps0.squadrons[1] as SquadronInstance).is_empty())
 	# After 2 activations, turn should switch to player 1.
 	assert_eq(GameManager.active_player, 1,
 			"After 2 activations, turn should pass to player 1 (SQ-002)")
 
 
-func test_remote_completion_markers_switch_squadron_turn() -> void:
+func test_remote_completion_projection_does_not_mutate_canonical_state() -> void:
 	_setup_game(2, 2)
 	var player_state: PlayerState = \
 			GameManager.current_game_state.get_player_state(0)
-	var first_cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": 0})
-	var second_cmd := CompleteSquadronActivationCommand.new(0, {
-		"squadron_index": 1})
+	var first_cmd := CompleteSquadronActivationCommand.new(
+			0, {"squadron_index": 0})
 	GameManager._handle_remote_complete_squadron_activation(first_cmd)
+	assert_false((player_state.squadrons[0] as SquadronInstance) \
+			.activated_this_round,
+			"A mirror handler must not synthesize canonical completion.")
 	assert_eq(GameManager.active_player, 0,
-			"One remote completion should keep the same Squadron turn.")
-	GameManager._handle_remote_complete_squadron_activation(second_cmd)
-	assert_true((player_state.squadrons[0] as SquadronInstance).activated_this_round,
-			"Remote completion should mark the first squadron activated.")
-	assert_true((player_state.squadrons[1] as SquadronInstance).activated_this_round,
-			"Remote completion should mark the second squadron activated.")
-	assert_eq(GameManager.active_player, 1,
-			"Two remote completion markers should pass the Squadron turn.")
+			"Projection must derive the existing canonical controller.")
 
 
 func test_auto_pass_when_no_squadrons_left() -> void:
@@ -174,8 +173,8 @@ func test_auto_pass_when_no_squadrons_left() -> void:
 	GameManager._begin_squadron_phase()
 	var ps0: PlayerState = gs.get_player_state(0)
 	# Player 0 activates their only squadron.
-	GameManager.activate_squadron(ps0.squadrons[0] as SquadronInstance)
-	EventBus.squadron_activation_ended.emit(ps0.squadrons[0])
+	assert_false(_activate_and_decline(
+			ps0.squadrons[0] as SquadronInstance).is_empty())
 	# Player 0 has no more squadrons — auto-pass to player 1.
 	assert_eq(GameManager.active_player, 1,
 			"Player 1 should become active after player 0 auto-passes (TF-009)")
@@ -189,13 +188,11 @@ func test_phase_ends_when_all_activated() -> void:
 	# Player 0 activates.
 	var sq0: SquadronInstance = \
 			gs.get_player_state(0).squadrons[0] as SquadronInstance
-	GameManager.activate_squadron(sq0)
-	EventBus.squadron_activation_ended.emit(sq0)
+	assert_false(_activate_and_decline(sq0).is_empty())
 	# Player 1 activates.
 	var sq1: SquadronInstance = \
 			gs.get_player_state(1).squadrons[0] as SquadronInstance
-	GameManager.activate_squadron(sq1)
-	EventBus.squadron_activation_ended.emit(sq1)
+	assert_false(_activate_and_decline(sq1).is_empty())
 	# Both done — phase should advance past SQUADRON.
 	assert_ne(gs.current_phase, Constants.GamePhase.SQUADRON,
 			"Phase should advance after all squadrons activated")

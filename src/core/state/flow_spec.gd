@@ -91,7 +91,8 @@ const _SPEC: Dictionary = {
 		Constants.InteractionStep.SQUADRON_STEP: {
 			"controller_role": Constants.ControllerRole.ACTIVE_PLAYER,
 			"modals": [Constants.ModalKind.SQUADRON],
-			"allowed_commands": ["advance_activation_step", "spend_dial",
+			"allowed_commands": ["advance_activation_step", "activate_squadron",
+					"spend_dial",
 					"spend_token", "move_squadron",
 					"complete_squadron_activation", "publish_attack_flow"],
 			"transitions": {"advance_activation_step": "REPAIR_STEP"},
@@ -110,7 +111,7 @@ const _SPEC: Dictionary = {
 		Constants.InteractionStep.ATTACK_STEP: {
 			"controller_role": Constants.ControllerRole.ACTIVE_PLAYER,
 			"modals": [Constants.ModalKind.ACTIVATION],
-			"allowed_commands": ["publish_attack_flow", "skip_attack",
+			"allowed_commands": ["begin_attack", "publish_attack_flow", "skip_attack",
 					"advance_activation_step"],
 			"transitions": {"publish_attack_flow": "ATTACK/ATTACK_DECLARE"},
 			"source": SOURCE_COMMAND_PRODUCED,
@@ -165,7 +166,7 @@ const _SPEC: Dictionary = {
 		Constants.InteractionStep.SQUAD_ATTACK: {
 			"controller_role": Constants.ControllerRole.ACTIVE_PLAYER,
 			"modals": [Constants.ModalKind.SQUADRON],
-			"allowed_commands": ["publish_attack_flow", "skip_attack"],
+			"allowed_commands": ["begin_attack", "publish_attack_flow", "skip_attack"],
 			"transitions": {"publish_attack_flow": "ATTACK/ATTACK_DECLARE"},
 			"source": SOURCE_PROJECTION_ONLY,
 			"rule_citation": "RRG Squadron Attacks, p.19.",

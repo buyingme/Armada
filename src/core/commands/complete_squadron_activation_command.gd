@@ -13,6 +13,7 @@ extends GameCommand
 
 
 const TYPE: String = "complete_squadron_activation"
+const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 
 
 ## Registers this command type with the [GameCommand] factory.
@@ -37,15 +38,67 @@ func validate(game_state: GameState) -> String:
 	var squadron: SquadronInstance = _get_squadron(game_state)
 	if squadron == null:
 		return "Squadron not found."
+	if squadron.activated_this_round:
+		return "Squadron activation is already complete."
+	if game_state.current_attack_state.active:
+		return "Cannot complete a squadron while its attack is active."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	if str(payload.get("activation_id", "")) != squadron.activation_id \
+			or str(payload.get("activation_context", "")) \
+					!= squadron.activation_context:
+		return "Stale or wrong-context squadron activation identity."
+	if not squadron.is_activation_action_complete(_is_rogue(squadron)):
+		return "Squadron still has an available action."
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		if game_state.current_phase != Constants.GamePhase.SQUADRON \
+				or player_index != game_state.squadron_phase_controller_player:
+			return "Squadron completion belongs to the canonical controller."
+	else:
+		var ship_error: String = _validate_commanding_ship(game_state, squadron)
+		if not ship_error.is_empty():
+			return ship_error
 	return ""
 
 
 ## Marks the squadron activated and echoes its identity.
 func execute(game_state: GameState) -> Dictionary:
 	var squadron: SquadronInstance = _get_squadron(game_state)
-	if squadron != null:
-		squadron.activated_this_round = true
-	return {"squadron_index": int(payload.get("squadron_index", -1))}
+	if squadron == null:
+		return {}
+	var activated_before: bool = squadron.activated_this_round
+	var phase_before: Dictionary = game_state.squadron_phase_progress_snapshot()
+	squadron.activated_this_round = true
+	var phase_result: Dictionary = {}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		phase_result = game_state.commit_squadron_phase_activation(player_index)
+		if phase_result.is_empty():
+			squadron.activated_this_round = activated_before
+			game_state.restore_squadron_phase_progress(phase_before)
+			return {}
+	if not game_state.validate_declaration_adjacent_state():
+		squadron.activated_this_round = activated_before
+		game_state.restore_squadron_phase_progress(phase_before)
+		return {}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.SQUADRON_ACTIVATION,
+				Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT,
+				game_state,
+				{"active_player": int(phase_result.get(
+						"controller_player", -1))},
+				Constants.Visibility.ALL)
+	var result: Dictionary = {
+		"squadron_index": int(payload.get("squadron_index", -1)),
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"activation_complete": true,
+	}
+	result.merge(phase_result, true)
+	return result
 
 
 func _is_legal_phase(phase: Constants.GamePhase) -> bool:
@@ -61,3 +114,30 @@ func _get_squadron(game_state: GameState) -> SquadronInstance:
 	if index < 0 or index >= player_state.squadrons.size():
 		return null
 	return player_state.squadrons[index] as SquadronInstance
+
+
+func _validate_commanding_ship(game_state: GameState,
+		squadron: SquadronInstance) -> String:
+	if game_state.current_phase != Constants.GamePhase.SHIP \
+			or squadron.activation_context \
+					!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		return "Squadron activation context is invalid."
+	var ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+	if ship == null or ship.owner_player != player_index:
+		return "Commanding ship is unavailable."
+	if str(payload.get("ship_activation_identity", "")) \
+			!= ship.ship_activation_identity \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN:
+		return "Ship Squadron-command opportunity does not match."
+	var capacity: int = SquadronCommandResolver.authoritative_capacity(ship)
+	if ship.squadron_command_activations_committed <= 0 \
+			or ship.squadron_command_activations_committed > capacity:
+		return "Commanding ship activation budget is invalid."
+	return ""
+
+
+func _is_rogue(squadron: SquadronInstance) -> bool:
+	return squadron.squadron_data != null \
+			and squadron.squadron_data.has_keyword("Rogue")

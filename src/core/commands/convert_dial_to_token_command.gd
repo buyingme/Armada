@@ -40,8 +40,21 @@ func validate(game_state: GameState) -> String:
 			player_index, payload.get("ship_index", -1))
 	if ship == null:
 		return "Ship not found."
+	if ship.is_destroyed():
+		return "Ship is destroyed."
 	if ship.activated_this_round:
 		return "Ship already activated this round."
+	if not game_state.validate_declaration_adjacent_state():
+		return "Declaration-adjacent state is invalid."
+	for player_state: PlayerState in game_state.player_states:
+		if player_state == null:
+			continue
+		for raw_ship: Variant in player_state.ships:
+			if raw_ship is ShipInstance \
+					and (raw_ship as ShipInstance).has_active_ship_activation():
+				return "Another ship activation is active."
+	if game_state.get_active_squadron_activation() != null:
+		return "A squadron activation is active."
 	if ship.command_dial_stack == null:
 		return "Ship has no dial stack."
 	if ship.command_dial_stack.get_hidden_count() == 0 \
@@ -59,19 +72,21 @@ func validate(game_state: GameState) -> String:
 func execute(game_state: GameState) -> Dictionary:
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, payload.get("ship_index", -1))
-	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
-			Constants.InteractionFlow.SHIP_ACTIVATION,
-			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
-			game_state,
-			{"active_player": player_index},
-			Constants.Visibility.ALL,
-			{"ship_index": payload.get("ship_index", -1)})
+	if sequence < 0 or ship == null:
+		return {}
+	var boundary_before: Dictionary = ship.ship_activation_boundary_snapshot()
+	var identity: String = "ship-activation:%d" % sequence
+	if not ship.establish_ship_activation(identity) \
+			or not game_state.validate_declaration_adjacent_state():
+		ship.restore_ship_activation_boundary(boundary_before)
+		return {}
 	# Reveal if not already revealed.
 	var dial: Dictionary = \
 			ship.command_dial_stack.get_revealed_dial()
 	if dial.is_empty():
 		dial = ship.command_dial_stack.reveal_top()
 	if dial.is_empty():
+		ship.restore_ship_activation_boundary(boundary_before)
 		return {"command": - 1, "token_added": false,
 				"token_blocked": false}
 	var cmd_type: int = int(dial.get("command", 0))
@@ -79,10 +94,12 @@ func execute(game_state: GameState) -> Dictionary:
 	ship.command_dial_stack.spend_revealed()
 	# Rules Reference: "Life Support Failure" card text.
 	if _is_token_gain_blocked(game_state, ship):
+		_open_activation_flow(game_state)
 		return {"command": cmd_type, "token_added": false,
 				"duplicate": false, "overflow": false,
 				"token_blocked": true,
-				"ship_index": payload.get("ship_index", -1)}
+				"ship_index": payload.get("ship_index", -1),
+				"ship_activation_identity": identity}
 	# Add the token.
 	var add_result: Dictionary = \
 			ship.command_tokens.force_add_token(cmd_type)
@@ -91,6 +108,7 @@ func execute(game_state: GameState) -> Dictionary:
 	# Auto-discard duplicate.
 	if duplicate:
 		ship.command_tokens.remove_token(cmd_type)
+	_open_activation_flow(game_state)
 	return {
 		"command": cmd_type,
 		"token_added": true,
@@ -98,7 +116,18 @@ func execute(game_state: GameState) -> Dictionary:
 		"overflow": overflow,
 		"token_blocked": false,
 		"ship_index": payload.get("ship_index", -1),
+		"ship_activation_identity": identity,
 	}
+
+
+func _open_activation_flow(game_state: GameState) -> void:
+	game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ACTIVATION_MODAL_OPEN,
+			game_state,
+			{"active_player": player_index},
+			Constants.Visibility.ALL,
+			{"ship_index": payload.get("ship_index", -1)})
 
 ## Checks if a damage card rule blocks command-token gain.
 func _is_token_gain_blocked(game_state: GameState,

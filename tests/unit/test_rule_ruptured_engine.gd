@@ -116,6 +116,7 @@ func _observe(result_patch: Dictionary) -> Array[GameCommand]:
 func _execute_maneuver_command() -> ExecuteManeuverCommand:
 	return ExecuteManeuverCommand.new(0, {
 		"ship_index": 0,
+		"ship_activation_identity": _ship.ship_activation_identity,
 		"speed": 2,
 		"yaw_clicks": [0, 0],
 		"pos_x": 0.25,
@@ -133,7 +134,14 @@ func _make_state() -> GameState:
 	state.current_phase = Constants.GamePhase.SHIP
 	state.damage_deck = DamageDeck.new()
 	state.damage_deck.initialize()
-	state.get_player_state(0).ships.append(_make_ship())
+	var ship: ShipInstance = _make_ship()
+	assert_true(ship.establish_ship_activation(
+			"ship-activation:ruptured-engine"))
+	assert_true(ship.consume_unreached_squadron_command_opportunity(
+			ship.ship_activation_identity, true))
+	assert_true(ship.open_maneuver_opportunity(
+			ship.ship_activation_identity))
+	state.get_player_state(0).ships.append(ship)
 	return state
 
 

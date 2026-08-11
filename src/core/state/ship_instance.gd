@@ -98,9 +98,8 @@ var faceup_damage: Array = []
 ## Rules Reference: SP-001 — each ship activates once per round.
 var activated_this_round: bool = false
 
-## Behavior-inert ADR-006 owner-local ship-activation boundary.
-## These fields intentionally remain outside serialization and live commands
-## until the authoritative declaration cutover.
+## Authoritative ADR-006 owner-local ship-activation boundary.
+## Purpose-specific commands establish and advance these serialized facts.
 var ship_activation_identity: String = ""
 var squadron_command_opportunity_disposition: String = \
 		ACTIVATION_DISPOSITION_INACTIVE
@@ -213,6 +212,8 @@ func is_destroyed() -> bool:
 ## returns the cards to the deck.
 ## Rules Reference: DM-003.
 func mark_destroyed() -> void:
+	if has_active_ship_activation():
+		_reset_ship_activation_boundary_values()
 	_destroyed = true
 
 
@@ -645,6 +646,7 @@ func reset_activation() -> void:
 	committed_attack_count = 0
 	used_attack_hull_zones.clear()
 	end_anti_squadron_attack()
+	reset_ship_activation_boundary()
 	_log_attack_progress("reset_activation")
 
 
@@ -814,6 +816,12 @@ func serialize() -> Dictionary:
 		"anti_squadron_attack_zone": anti_squadron_attack_zone,
 		"anti_squadron_target_history":
 				anti_squadron_target_history.duplicate(true),
+		"ship_activation_identity": ship_activation_identity,
+		"squadron_command_opportunity_disposition":
+				squadron_command_opportunity_disposition,
+		"maneuver_opportunity_disposition": maneuver_opportunity_disposition,
+		"squadron_command_activations_committed":
+				squadron_command_activations_committed,
 		"owner_player": owner_player,
 		"destroyed": _destroyed,
 		"command_dial_stack": command_dial_stack.serialize() \
@@ -861,10 +869,22 @@ static func deserialize(
 			inst.anti_squadron_target_history.append(
 					_make_squadron_target_ref(
 							int(target_data.get("owner", -1)),
-							int(target_data.get("index", -1))))
+								int(target_data.get("index", -1))))
+	inst.ship_activation_identity = str(data.get(
+			"ship_activation_identity", ""))
+	inst.squadron_command_opportunity_disposition = str(data.get(
+			"squadron_command_opportunity_disposition",
+			ACTIVATION_DISPOSITION_INACTIVE))
+	inst.maneuver_opportunity_disposition = str(data.get(
+			"maneuver_opportunity_disposition",
+			ACTIVATION_DISPOSITION_INACTIVE))
+	inst.squadron_command_activations_committed = int(data.get(
+			"squadron_command_activations_committed", 0))
 	inst.owner_player = int(data.get("owner_player", 0))
 	inst._log_attack_progress("deserialize")
 	inst._destroyed = data.get("destroyed", false) as bool
+	if not inst.validate_ship_activation_boundary():
+		return null
 	inst.runtime_upgrades = _deserialize_runtime_upgrades(
 			data.get("runtime_upgrades", []))
 	# Defense tokens

@@ -14,6 +14,8 @@ const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 const CURRENT_ATTACK_STATE: GDScript = preload(
 		"res://src/core/state/current_attack_state.gd")
 
+const SQUADRON_PHASE_CONTROLLER_INACTIVE: int = -1
+
 ## The current round number (1-based, max defined by Constants.MAX_ROUNDS).
 var current_round: int = 0
 
@@ -25,6 +27,12 @@ var player_states: Array[PlayerState] = []
 
 ## The initiative player index (0 or 1).
 var initiative_player: int = 0
+
+## Behavior-inert canonical substrate for Squadron Phase turn progress.
+## These owner-local facts are intentionally not serialized or consumed by
+## production flow until the authoritative declaration cutover.
+var squadron_phase_controller_player: int = SQUADRON_PHASE_CONTROLLER_INACTIVE
+var squadron_phase_activations_committed: int = 0
 
 ## The selected objective cards for this game.
 var objectives: Dictionary = {}
@@ -75,6 +83,8 @@ func initialize() -> void:
 	current_round = 0
 	current_phase = Constants.GamePhase.SETUP
 	initiative_player = 0
+	squadron_phase_controller_player = SQUADRON_PHASE_CONTROLLER_INACTIVE
+	squadron_phase_activations_committed = 0
 	if rng == null:
 		rng = GameRng.new()
 	interaction_flow = InteractionFlow.new()
@@ -144,6 +154,62 @@ func get_squadron(player_index: int,
 	if squadron_index < 0 or squadron_index >= ps.squadrons.size():
 		return null
 	return ps.squadrons[squadron_index] as SquadronInstance
+
+
+## Returns whether the owner-local Squadron Phase progress is active.
+func has_squadron_phase_controller() -> bool:
+	return squadron_phase_controller_player \
+			!= SQUADRON_PHASE_CONTROLLER_INACTIVE
+
+
+## Validates only the owner-local Squadron Phase controller/count substrate.
+## The inactive default remains valid in every phase so Slice 1 is behavior-inert.
+func validate_squadron_phase_progress() -> bool:
+	return _squadron_phase_progress_values_are_valid(
+			squadron_phase_controller_player,
+			squadron_phase_activations_committed)
+
+
+## Returns a JSON-safe snapshot for later atomic command rollback.
+func squadron_phase_progress_snapshot() -> Dictionary:
+	return {
+		"squadron_phase_controller_player": squadron_phase_controller_player,
+		"squadron_phase_activations_committed":
+				squadron_phase_activations_committed,
+	}
+
+
+## Restores a snapshot produced by [method squadron_phase_progress_snapshot].
+func restore_squadron_phase_progress(snapshot: Dictionary) -> bool:
+	if not snapshot.has("squadron_phase_controller_player") \
+			or not snapshot.has("squadron_phase_activations_committed"):
+		return false
+	var controller: int = int(snapshot["squadron_phase_controller_player"])
+	var committed: int = int(snapshot["squadron_phase_activations_committed"])
+	if not _squadron_phase_progress_values_are_valid(controller, committed):
+		return false
+	squadron_phase_controller_player = controller
+	squadron_phase_activations_committed = committed
+	return true
+
+
+## Read-only aggregate validation for the ADR-006 cross-fleet uniqueness rule.
+## ShipInstance remains the sole writable owner of each activation identity.
+func validate_ship_activation_identity_aggregate() -> bool:
+	var active_count: int = 0
+	for player_state: PlayerState in player_states:
+		if player_state == null:
+			continue
+		for ship: ShipInstance in player_state.ships:
+			if ship == null:
+				continue
+			if not ship.validate_ship_activation_boundary():
+				return false
+			if ship.has_active_ship_activation():
+				active_count += 1
+				if active_count > 1:
+					return false
+	return true
 
 
 ## Records one ship-targeting attack for [param ship] in the current round.
@@ -367,3 +433,14 @@ static func _deserialize_attack_counts(raw_counts: Variant) -> Dictionary:
 	for raw_key: Variant in saved_counts.keys():
 		counts[str(raw_key)] = int(saved_counts[raw_key])
 	return counts
+
+
+func _squadron_phase_progress_values_are_valid(
+		controller: int, committed: int) -> bool:
+	if committed < 0 or committed > Constants.SQUADRONS_PER_ACTIVATION:
+		return false
+	if controller == SQUADRON_PHASE_CONTROLLER_INACTIVE:
+		return committed == 0
+	if controller < 0 or controller >= Constants.PLAYER_COUNT:
+		return false
+	return current_phase == Constants.GamePhase.SQUADRON

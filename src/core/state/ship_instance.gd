@@ -40,6 +40,11 @@ const RUNTIME_UPGRADE_CARD_STATE_FIELDS: Array[String] = [
 	"readied",
 ]
 
+const ACTIVATION_DISPOSITION_INACTIVE: String = ""
+const ACTIVATION_DISPOSITION_UNREACHED: String = "UNREACHED"
+const ACTIVATION_DISPOSITION_OPEN: String = "OPEN"
+const ACTIVATION_DISPOSITION_CONSUMED: String = "CONSUMED"
+
 ## The data-key used to look up the ship's static data and token PNG.
 var data_key: String = ""
 
@@ -92,6 +97,16 @@ var faceup_damage: Array = []
 ## Whether this ship has been activated this round.
 ## Rules Reference: SP-001 — each ship activates once per round.
 var activated_this_round: bool = false
+
+## Behavior-inert ADR-006 owner-local ship-activation boundary.
+## These fields intentionally remain outside serialization and live commands
+## until the authoritative declaration cutover.
+var ship_activation_identity: String = ""
+var squadron_command_opportunity_disposition: String = \
+		ACTIVATION_DISPOSITION_INACTIVE
+var maneuver_opportunity_disposition: String = \
+		ACTIVATION_DISPOSITION_INACTIVE
+var squadron_command_activations_committed: int = 0
 
 ## Authoritative, activation-local progress for this ship's Attack step.
 ## BeginAttackCommand commits these facts; scene attack state only projects them.
@@ -337,6 +352,178 @@ func get_runtime_upgrade(runtime_upgrade_id: String) -> Dictionary:
 	return found
 
 
+## Returns whether this ship owns an active ADR-006 activation identity.
+func has_active_ship_activation() -> bool:
+	return not ship_activation_identity.is_empty()
+
+
+## Validates the complete owner-local ADR-006 representation.
+func validate_ship_activation_boundary() -> bool:
+	return _ship_activation_boundary_values_are_valid(
+			ship_activation_identity,
+			squadron_command_opportunity_disposition,
+			maneuver_opportunity_disposition,
+			squadron_command_activations_committed,
+			_destroyed)
+
+
+## Establishes one stable activation identity with inactive opportunities.
+func establish_ship_activation(identity: String) -> bool:
+	if identity.is_empty() \
+			or not validate_ship_activation_boundary() \
+			or has_active_ship_activation() \
+			or _destroyed:
+		return false
+	ship_activation_identity = identity
+	squadron_command_opportunity_disposition = \
+			ACTIVATION_DISPOSITION_UNREACHED
+	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_UNREACHED
+	squadron_command_activations_committed = 0
+	return true
+
+
+## Opens the Squadron-command opportunity from UNREACHED.
+func open_squadron_command_opportunity(
+		expected_activation_identity: String) -> bool:
+	if not _matches_ship_activation(expected_activation_identity) \
+			or squadron_command_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_UNREACHED:
+		return false
+	squadron_command_opportunity_disposition = ACTIVATION_DISPOSITION_OPEN
+	return true
+
+
+## Consumes an already-open Squadron-command opportunity.
+func consume_open_squadron_command_opportunity(
+		expected_activation_identity: String) -> bool:
+	if not _matches_ship_activation(expected_activation_identity) \
+			or squadron_command_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_OPEN:
+		return false
+	squadron_command_opportunity_disposition = ACTIVATION_DISPOSITION_CONSUMED
+	return true
+
+
+## Performs the accepted caller-validated UNREACHED -> CONSUMED bypass.
+func consume_unreached_squadron_command_opportunity(
+		expected_activation_identity: String,
+		caller_validated_bypass: bool) -> bool:
+	if not caller_validated_bypass \
+			or not _matches_ship_activation(expected_activation_identity) \
+			or squadron_command_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_UNREACHED:
+		return false
+	squadron_command_opportunity_disposition = ACTIVATION_DISPOSITION_CONSUMED
+	return true
+
+
+## Opens the mandatory Maneuver opportunity from UNREACHED.
+func open_maneuver_opportunity(
+		expected_activation_identity: String) -> bool:
+	if not _matches_ship_activation(expected_activation_identity) \
+			or maneuver_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_UNREACHED:
+		return false
+	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_OPEN
+	return true
+
+
+## Records normal Maneuver execution through OPEN -> CONSUMED only.
+func consume_open_maneuver_opportunity(
+		expected_activation_identity: String) -> bool:
+	if not _matches_ship_activation(expected_activation_identity) \
+			or maneuver_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_OPEN:
+		return false
+	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_CONSUMED
+	return true
+
+
+## Commits one commanded-squadron activation while the opportunity is OPEN.
+func commit_squadron_command_activation(
+		expected_activation_identity: String) -> bool:
+	if not _matches_ship_activation(expected_activation_identity) \
+			or squadron_command_opportunity_disposition \
+					!= ACTIVATION_DISPOSITION_OPEN:
+		return false
+	squadron_command_activations_committed += 1
+	return true
+
+
+## Returns whether normal completion may clear the surviving activation.
+func can_complete_ship_activation_normally(
+		expected_activation_identity: String) -> bool:
+	return _matches_ship_activation(expected_activation_identity) \
+			and squadron_command_opportunity_disposition \
+					== ACTIVATION_DISPOSITION_CONSUMED \
+			and maneuver_opportunity_disposition \
+					== ACTIVATION_DISPOSITION_CONSUMED
+
+
+## Clears the boundary only after both normal-completion obligations pass.
+func complete_ship_activation_boundary_normally(
+		expected_activation_identity: String) -> bool:
+	if not can_complete_ship_activation_normally(
+			expected_activation_identity):
+		return false
+	_reset_ship_activation_boundary_values()
+	return true
+
+
+## Clears an exceptional terminal boundary without fabricating Maneuver use.
+func clear_ship_activation_boundary_exceptionally(
+		expected_activation_identity: String) -> bool:
+	if expected_activation_identity.is_empty() \
+			or ship_activation_identity != expected_activation_identity:
+		return false
+	_reset_ship_activation_boundary_values()
+	return true
+
+
+## Defensive owner-local reset for the accepted round-cleanup boundary.
+func reset_ship_activation_boundary() -> void:
+	_reset_ship_activation_boundary_values()
+
+
+## Returns a JSON-safe snapshot for later atomic command rollback.
+func ship_activation_boundary_snapshot() -> Dictionary:
+	return {
+		"ship_activation_identity": ship_activation_identity,
+		"squadron_command_opportunity_disposition":
+				squadron_command_opportunity_disposition,
+		"maneuver_opportunity_disposition": maneuver_opportunity_disposition,
+		"squadron_command_activations_committed":
+				squadron_command_activations_committed,
+	}
+
+
+## Restores a snapshot produced by [method ship_activation_boundary_snapshot].
+func restore_ship_activation_boundary(snapshot: Dictionary) -> bool:
+	for key: String in [
+			"ship_activation_identity",
+			"squadron_command_opportunity_disposition",
+			"maneuver_opportunity_disposition",
+			"squadron_command_activations_committed"]:
+		if not snapshot.has(key):
+			return false
+	var identity: String = str(snapshot["ship_activation_identity"])
+	var squadron_disposition: String = str(
+			snapshot["squadron_command_opportunity_disposition"])
+	var maneuver_disposition: String = str(
+			snapshot["maneuver_opportunity_disposition"])
+	var committed: int = int(
+			snapshot["squadron_command_activations_committed"])
+	if not _ship_activation_boundary_values_are_valid(
+			identity, squadron_disposition, maneuver_disposition,
+			committed, _destroyed):
+		return false
+	ship_activation_identity = identity
+	squadron_command_opportunity_disposition = squadron_disposition
+	maneuver_opportunity_disposition = maneuver_disposition
+	squadron_command_activations_committed = committed
+	return true
+
+
 ## Opens this ship's Attack step. Repeated projection of the same step is
 ## idempotent and cannot erase already-committed attack progress.
 func begin_attack_step() -> void:
@@ -526,6 +713,43 @@ static func _parse_defense_token(name: String) -> Constants.DefenseToken:
 
 static func _make_squadron_target_ref(owner: int, index: int) -> Dictionary:
 	return {"owner": owner, "index": index}
+
+
+func _matches_ship_activation(expected_activation_identity: String) -> bool:
+	return not expected_activation_identity.is_empty() \
+			and ship_activation_identity == expected_activation_identity \
+			and validate_ship_activation_boundary()
+
+
+func _reset_ship_activation_boundary_values() -> void:
+	ship_activation_identity = ""
+	squadron_command_opportunity_disposition = \
+			ACTIVATION_DISPOSITION_INACTIVE
+	maneuver_opportunity_disposition = ACTIVATION_DISPOSITION_INACTIVE
+	squadron_command_activations_committed = 0
+
+
+static func _ship_activation_boundary_values_are_valid(identity: String,
+		squadron_disposition: String, maneuver_disposition: String,
+		committed: int, destroyed: bool) -> bool:
+	if identity.is_empty():
+		return squadron_disposition == ACTIVATION_DISPOSITION_INACTIVE \
+				and maneuver_disposition == ACTIVATION_DISPOSITION_INACTIVE \
+				and committed == 0
+	if destroyed or committed < 0:
+		return false
+	var valid_dispositions: Array[String] = [
+		ACTIVATION_DISPOSITION_UNREACHED,
+		ACTIVATION_DISPOSITION_OPEN,
+		ACTIVATION_DISPOSITION_CONSUMED,
+	]
+	if squadron_disposition not in valid_dispositions \
+			or maneuver_disposition not in valid_dispositions:
+		return false
+	# A positive commitment proves the opportunity was opened. It may remain
+	# after the opportunity is later consumed, but it is invalid while UNREACHED.
+	return committed == 0 \
+			or squadron_disposition != ACTIVATION_DISPOSITION_UNREACHED
 
 
 static func _build_runtime_upgrade_instance(owner_player_id: int,

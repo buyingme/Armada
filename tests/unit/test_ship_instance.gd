@@ -319,6 +319,180 @@ func test_discard_invalid_index_no_crash() -> void:
 
 # --- Activation ---
 
+func test_ship_activation_boundary_defaults_are_inactive_and_not_serialized() -> void:
+	assert_false(_instance.has_active_ship_activation())
+	assert_true(_instance.validate_ship_activation_boundary())
+	assert_eq(_instance.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_INACTIVE)
+	assert_eq(_instance.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_INACTIVE)
+	assert_eq(_instance.squadron_command_activations_committed, 0)
+	var serialized: Dictionary = _instance.serialize()
+	for key: String in [
+			"ship_activation_identity",
+			"squadron_command_opportunity_disposition",
+			"maneuver_opportunity_disposition",
+			"squadron_command_activations_committed"]:
+		assert_false(serialized.has(key),
+				"Slice 1 must not serialize '%s'." % key)
+
+
+func test_establish_ship_activation_initializes_stable_boundary() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_eq(_instance.ship_activation_identity, "ship-activation:10")
+	assert_eq(_instance.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+	assert_eq(_instance.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+	assert_eq(_instance.squadron_command_activations_committed, 0)
+	assert_true(_instance.validate_ship_activation_boundary())
+
+	assert_false(_instance.establish_ship_activation("ship-activation:11"))
+	assert_eq(_instance.ship_activation_identity, "ship-activation:10",
+			"Stable activation identity must not change before clear.")
+
+
+func test_squadron_command_opportunity_has_guarded_monotonic_transitions() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_false(_instance.consume_unreached_squadron_command_opportunity(
+			"ship-activation:10", false),
+			"Direct bypass requires caller-validated semantic authority.")
+	assert_true(_instance.open_squadron_command_opportunity(
+			"ship-activation:10"))
+	assert_false(_instance.open_squadron_command_opportunity(
+			"ship-activation:10"))
+	assert_true(_instance.consume_open_squadron_command_opportunity(
+			"ship-activation:10"))
+	assert_false(_instance.open_squadron_command_opportunity(
+			"ship-activation:10"), "Consumed opportunity must not reopen.")
+
+
+func test_squadron_command_unreached_bypass_requires_explicit_guard() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_true(_instance.consume_unreached_squadron_command_opportunity(
+			"ship-activation:10", true))
+	assert_eq(_instance.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_true(_instance.validate_ship_activation_boundary())
+
+
+func test_command_activation_count_commits_only_while_opportunity_is_open() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_false(_instance.commit_squadron_command_activation(
+			"ship-activation:10"))
+	assert_eq(_instance.squadron_command_activations_committed, 0,
+			"Count must not open the opportunity itself.")
+	assert_true(_instance.open_squadron_command_opportunity(
+			"ship-activation:10"))
+	assert_true(_instance.commit_squadron_command_activation(
+			"ship-activation:10"))
+	assert_eq(_instance.squadron_command_activations_committed, 1)
+	assert_true(_instance.consume_open_squadron_command_opportunity(
+			"ship-activation:10"))
+	assert_false(_instance.commit_squadron_command_activation(
+			"ship-activation:10"))
+	assert_true(_instance.validate_ship_activation_boundary(),
+			"Committed history remains valid after the opportunity closes.")
+
+
+func test_maneuver_requires_unreached_open_consumed_progression() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_false(_instance.consume_open_maneuver_opportunity(
+			"ship-activation:10"),
+			"Normal Maneuver cannot bypass UNREACHED.")
+	assert_true(_instance.open_maneuver_opportunity("ship-activation:10"))
+	assert_true(_instance.consume_open_maneuver_opportunity(
+			"ship-activation:10"))
+	assert_false(_instance.open_maneuver_opportunity("ship-activation:10"))
+
+
+func test_normal_completion_requires_both_consumed_then_clears() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_false(_instance.can_complete_ship_activation_normally(
+			"ship-activation:10"))
+	assert_true(_instance.consume_unreached_squadron_command_opportunity(
+			"ship-activation:10", true))
+	assert_true(_instance.open_maneuver_opportunity("ship-activation:10"))
+	assert_false(_instance.can_complete_ship_activation_normally(
+			"ship-activation:10"),
+			"An OPEN Maneuver opportunity blocks normal completion.")
+	assert_true(_instance.consume_open_maneuver_opportunity(
+			"ship-activation:10"))
+	assert_true(_instance.can_complete_ship_activation_normally(
+			"ship-activation:10"))
+	assert_true(_instance.complete_ship_activation_boundary_normally(
+			"ship-activation:10"))
+	assert_false(_instance.has_active_ship_activation())
+	assert_true(_instance.validate_ship_activation_boundary())
+
+
+func test_exceptional_clear_does_not_fabricate_maneuver_consumption() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_eq(_instance.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+	assert_false(_instance.complete_ship_activation_boundary_normally(
+			"ship-activation:10"))
+	assert_true(_instance.clear_ship_activation_boundary_exceptionally(
+			"ship-activation:10"))
+	assert_eq(_instance.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_INACTIVE,
+			"Exceptional clear removes the boundary; it does not record execution.")
+	assert_false(_instance.has_active_ship_activation())
+
+
+func test_ship_activation_snapshot_restore_preserves_bug_002_progress() -> void:
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 3)
+	var attack_snapshot: Dictionary = _instance.attack_progress_snapshot()
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	assert_true(_instance.open_squadron_command_opportunity(
+			"ship-activation:10"))
+	var boundary_snapshot: Dictionary = \
+			_instance.ship_activation_boundary_snapshot()
+	assert_true(_instance.commit_squadron_command_activation(
+			"ship-activation:10"))
+
+	assert_true(_instance.restore_ship_activation_boundary(boundary_snapshot))
+	assert_eq(_instance.ship_activation_boundary_snapshot(), boundary_snapshot)
+	assert_eq(_instance.attack_progress_snapshot(), attack_snapshot,
+			"ADR-006 rollback must leave BUG-002 progress byte-for-byte exact.")
+
+
+func test_ship_activation_reset_does_not_reset_bug_002_progress() -> void:
+	_instance.begin_attack_step()
+	_instance.commit_attack(Constants.HullZone.REAR, 1,
+			CurrentAttackState.KIND_SQUADRON, 4)
+	var attack_snapshot: Dictionary = _instance.attack_progress_snapshot()
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+
+	_instance.reset_ship_activation_boundary()
+	assert_false(_instance.has_active_ship_activation())
+	assert_eq(_instance.attack_progress_snapshot(), attack_snapshot)
+
+
+func test_ship_activation_validation_rejects_invalid_owner_local_shapes() -> void:
+	_instance.ship_activation_identity = "ship-activation:10"
+	assert_false(_instance.validate_ship_activation_boundary(),
+			"Active identity cannot use inactive disposition sentinels.")
+	_instance.reset_ship_activation_boundary()
+	_instance.squadron_command_activations_committed = -1
+	assert_false(_instance.validate_ship_activation_boundary())
+	_instance.reset_ship_activation_boundary()
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	_instance.squadron_command_activations_committed = 1
+	assert_false(_instance.validate_ship_activation_boundary(),
+			"Positive count is invalid before Squadron opportunity opens.")
+
+
+func test_destroyed_ship_cannot_retain_active_activation_boundary() -> void:
+	assert_true(_instance.establish_ship_activation("ship-activation:10"))
+	_instance.mark_destroyed()
+	assert_false(_instance.validate_ship_activation_boundary())
+	assert_true(_instance.clear_ship_activation_boundary_exceptionally(
+			"ship-activation:10"))
+	assert_true(_instance.validate_ship_activation_boundary())
+
 func test_reset_activation() -> void:
 	_instance.activated_this_round = true
 	_instance.begin_attack_step()

@@ -142,6 +142,159 @@ func test_reset_activation() -> void:
 			"Activation flag should be reset")
 
 
+# --- TWI-003 Slice 1 owner-local action substrate ---
+
+func test_activation_action_defaults_are_inactive_and_not_serialized() -> void:
+	assert_false(_instance.has_activation_action_state())
+	assert_true(_instance.is_activation_action_state_valid())
+	assert_false(_instance.has_remaining_move_action(false))
+	assert_false(_instance.has_remaining_attack_action(false))
+	assert_false(_instance.is_activation_action_complete(false))
+	var serialized: Dictionary = _instance.serialize()
+	for key: String in [
+			"activation_id", "activation_context",
+			"commanding_ship_player", "commanding_ship_index",
+			"move_action_committed", "attack_action_disposition"]:
+		assert_false(serialized.has(key),
+				"Slice 1 must not serialize '%s'." % key)
+
+
+func test_initialize_squadron_phase_action_state_has_stable_identity() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_eq(_instance.activation_id, "squadron-activation:10")
+	assert_eq(_instance.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_AVAILABLE)
+	assert_eq(_instance.commanding_ship_player, -1)
+	assert_eq(_instance.commanding_ship_index, -1)
+	assert_true(_instance.is_activation_action_state_valid())
+
+	assert_false(_instance.initialize_activation_action_state(
+			"squadron-activation:11",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_eq(_instance.activation_id, "squadron-activation:10",
+			"Identity must remain stable until reset.")
+
+
+func test_activation_context_requires_exact_commanding_ship_reference() -> void:
+	assert_false(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND))
+	assert_false(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE, 0, 1))
+	assert_false(_instance.initialize_activation_action_state(
+			"squadron-activation:10", "unsupported_context"))
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 2))
+	assert_true(_instance.is_activation_action_state_valid())
+
+
+func test_non_rogue_move_commits_once_and_completes_action_sequence() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(_instance.has_remaining_move_action(false))
+	assert_true(_instance.has_remaining_attack_action(false))
+	assert_true(_instance.commit_move_action("squadron-activation:10", false))
+	assert_false(_instance.commit_move_action("squadron-activation:10", false))
+	assert_false(_instance.has_remaining_move_action(false))
+	assert_false(_instance.has_remaining_attack_action(false))
+	assert_true(_instance.is_activation_action_complete(false))
+	assert_false(_instance.commit_attack_action_begun(
+			"squadron-activation:10", false),
+			"A non-Rogue attack must not become available after movement.")
+
+
+func test_attack_disposition_commits_available_to_one_terminal_value() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(_instance.commit_attack_action_begun(
+			"squadron-activation:10", false))
+	assert_eq(_instance.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_BEGUN)
+	assert_false(_instance.commit_attack_action_declined(
+			"squadron-activation:10", false))
+	assert_false(_instance.commit_attack_action_begun(
+			"squadron-activation:10", false))
+	assert_true(_instance.is_activation_action_complete(false))
+
+
+func test_rogue_actions_remain_independent_until_both_are_committed() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(_instance.commit_attack_action_declined(
+			"squadron-activation:10", true))
+	assert_true(_instance.has_remaining_move_action(true))
+	assert_false(_instance.is_activation_action_complete(true))
+	assert_true(_instance.commit_move_action("squadron-activation:10", true))
+	assert_true(_instance.is_activation_action_complete(true))
+
+
+func test_commanded_squadron_actions_remain_independent() -> void:
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 2))
+	assert_true(_instance.commit_move_action("squadron-activation:10", false))
+	assert_true(_instance.has_remaining_attack_action(false))
+	assert_true(_instance.commit_attack_action_declined(
+			"squadron-activation:10", false))
+	assert_true(_instance.is_activation_action_complete(false))
+
+
+func test_activation_action_snapshot_restore_is_exact_and_owner_local() -> void:
+	_instance.current_hull = 2
+	_instance.is_engaged = true
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, 2))
+	assert_true(_instance.commit_move_action("squadron-activation:10", false))
+	var snapshot: Dictionary = _instance.activation_action_state_snapshot()
+
+	assert_true(_instance.commit_attack_action_declined(
+			"squadron-activation:10", false))
+	assert_true(_instance.restore_activation_action_state(snapshot))
+	assert_eq(_instance.activation_action_state_snapshot(), snapshot)
+	assert_eq(_instance.current_hull, 2)
+	assert_true(_instance.is_engaged)
+
+
+func test_activation_action_reset_clears_only_new_owner_fields() -> void:
+	_instance.current_hull = 2
+	assert_true(_instance.initialize_activation_action_state(
+			"squadron-activation:10",
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE))
+	assert_true(_instance.commit_attack_action_declined(
+			"squadron-activation:10", false))
+	_instance.activated_this_round = true
+
+	_instance.reset_activation_action_state()
+	assert_true(_instance.is_activation_action_state_valid())
+	assert_false(_instance.has_activation_action_state())
+	assert_eq(_instance.current_hull, 2)
+	assert_true(_instance.activated_this_round,
+			"Owner-local reset must not change unrelated activation facts.")
+
+
+func test_activation_action_validation_rejects_partial_or_invalid_state() -> void:
+	_instance.activation_id = "squadron-activation:10"
+	assert_false(_instance.is_activation_action_state_valid())
+	_instance.reset_activation_action_state()
+	_instance.activation_context = \
+			SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE
+	assert_false(_instance.is_activation_action_state_valid())
+	_instance.reset_activation_action_state()
+	_instance.move_action_committed = true
+	assert_false(_instance.is_activation_action_state_valid())
+
+
 # --- Serialization round-trip ---
 
 func test_serialize_contains_expected_keys() -> void:

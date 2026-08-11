@@ -62,6 +62,114 @@ func test_initialize_creates_inactive_timing_window_state() -> void:
 			"Fresh GameState timing-window state should be inactive")
 
 
+# --- TWI-003 Slice 1 owner-local substrate ---
+
+func test_squadron_phase_progress_defaults_are_inactive_and_not_serialized() -> void:
+	var state := GameState.new()
+	state.initialize()
+
+	assert_false(state.has_squadron_phase_controller())
+	assert_eq(state.squadron_phase_controller_player,
+			GameState.SQUADRON_PHASE_CONTROLLER_INACTIVE)
+	assert_eq(state.squadron_phase_activations_committed, 0)
+	assert_true(state.validate_squadron_phase_progress())
+	assert_false(state.serialize().has("squadron_phase_controller_player"))
+	assert_false(state.serialize().has("squadron_phase_activations_committed"))
+
+
+func test_squadron_phase_progress_validates_controller_phase_and_limit() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.squadron_phase_controller_player = 1
+	state.squadron_phase_activations_committed = \
+			Constants.SQUADRONS_PER_ACTIVATION
+	assert_true(state.validate_squadron_phase_progress())
+
+	state.squadron_phase_activations_committed = \
+			Constants.SQUADRONS_PER_ACTIVATION + 1
+	assert_false(state.validate_squadron_phase_progress())
+	state.squadron_phase_activations_committed = -1
+	assert_false(state.validate_squadron_phase_progress())
+	state.squadron_phase_activations_committed = 0
+	state.squadron_phase_controller_player = Constants.PLAYER_COUNT
+	assert_false(state.validate_squadron_phase_progress())
+	state.squadron_phase_controller_player = \
+			GameState.SQUADRON_PHASE_CONTROLLER_INACTIVE - 1
+	assert_false(state.validate_squadron_phase_progress())
+	state.squadron_phase_controller_player = 0
+	state.current_phase = Constants.GamePhase.SHIP
+	assert_false(state.validate_squadron_phase_progress())
+
+
+func test_inactive_squadron_phase_progress_cannot_expose_committed_count() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.squadron_phase_activations_committed = 1
+
+	assert_false(state.has_squadron_phase_controller())
+	assert_false(state.validate_squadron_phase_progress())
+
+
+func test_squadron_phase_progress_snapshot_restore_is_exact() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.squadron_phase_controller_player = 0
+	state.squadron_phase_activations_committed = 1
+	var snapshot: Dictionary = state.squadron_phase_progress_snapshot()
+
+	state.squadron_phase_controller_player = 1
+	state.squadron_phase_activations_committed = 2
+	assert_true(state.restore_squadron_phase_progress(snapshot))
+	assert_eq(state.squadron_phase_progress_snapshot(), snapshot)
+
+
+func test_squadron_phase_progress_validation_ignores_interaction_route() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SQUADRON
+	state.squadron_phase_controller_player = 0
+	state.squadron_phase_activations_committed = 1
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.MANEUVER_STEP,
+			1)
+
+	assert_true(state.validate_squadron_phase_progress(),
+			"Owner validation must not consult derived route/controller payloads.")
+
+
+func test_ship_activation_aggregate_accepts_zero_or_one_active_owner() -> void:
+	var state := GameState.new()
+	state.initialize()
+	var first_ship := ShipInstance.new()
+	var second_ship := ShipInstance.new()
+	state.player_states[0].ships.append(first_ship)
+	state.player_states[1].ships.append(second_ship)
+
+	assert_true(state.validate_ship_activation_identity_aggregate())
+	assert_true(first_ship.establish_ship_activation("ship-activation:1"))
+	var owner_snapshot: Dictionary = first_ship.ship_activation_boundary_snapshot()
+	assert_true(state.validate_ship_activation_identity_aggregate())
+	assert_eq(first_ship.ship_activation_boundary_snapshot(), owner_snapshot,
+			"Aggregate validation must be read-only.")
+
+
+func test_ship_activation_aggregate_rejects_two_active_owners() -> void:
+	var state := GameState.new()
+	state.initialize()
+	var first_ship := ShipInstance.new()
+	var second_ship := ShipInstance.new()
+	state.player_states[0].ships.append(first_ship)
+	state.player_states[1].ships.append(second_ship)
+	assert_true(first_ship.establish_ship_activation("ship-activation:1"))
+	assert_true(second_ship.establish_ship_activation("ship-activation:2"))
+
+	assert_false(state.validate_ship_activation_identity_aggregate())
+
+
 # --- Player State Access ---
 
 func test_get_player_state_valid_index() -> void:

@@ -29,6 +29,11 @@ signal move_commit_requested(squadron_token: SquadronToken)
 ## Player clicked "Attack" — game board should open the attack executor.
 signal attack_requested(squadron_token: SquadronToken)
 
+## Player declined the currently available pre-Begin attack opportunity.
+## The controller submits the authoritative declaration Skip and reports its
+## result back before presentation advances.
+signal declaration_skip_requested(squadron_instance: SquadronInstance)
+
 ## A single squadron activation is done (move, attack, or skip completed).
 ## The game board should emit [code]EventBus.squadron_activation_ended[/code].
 signal activation_done(squadron_instance: SquadronInstance)
@@ -133,6 +138,10 @@ var _has_targets: bool = true
 ## In network mode, non-controller peers keep visibility but lose interactivity.
 var _is_interactable: bool = true
 
+## Transient one-submission gate while a declaration Skip awaits authority.
+## This is presentation state only and never represents action progress.
+var _declaration_skip_pending: bool = false
+
 
 # ---------------------------------------------------------------------------
 # UI elements
@@ -189,6 +198,7 @@ func open_for_turn(activation_num: int, max_act: int) -> void:
 	_has_moved = false
 	_has_attacked = false
 	_activation_slot_committed = false
+	_declaration_skip_pending = false
 	_is_command_mode = false
 	_command_resolver = null
 	_command_ship_token = null
@@ -214,6 +224,7 @@ func open_for_command(resolver: SquadronCommandResolver,
 	_has_moved = false
 	_has_attacked = false
 	_activation_slot_committed = false
+	_declaration_skip_pending = false
 	_transition_to(State.WAITING_FOR_SELECTION)
 	visible = true
 	_log.info("Opened for squadron command: activation %d of %d." % [
@@ -324,6 +335,7 @@ func close_modal() -> void:
 	_command_resolver = null
 	_command_ship_token = null
 	_activation_slot_committed = false
+	_declaration_skip_pending = false
 	_state = State.WAITING_FOR_SELECTION
 	visible = false
 
@@ -396,6 +408,29 @@ func restore_canonical_activation(token: SquadronToken,
 		# The production completion signal will set this after resumed combat.
 		_has_attacked = false
 		_transition_to(State.ATTACKING)
+	return true
+
+
+## Applies the authoritative result of the declaration Skip requested by this
+## modal. Rejection retains the interaction; acceptance derives the next
+## presentation state from canonical squadron action state.
+func apply_declaration_skip_result(instance: SquadronInstance,
+		result: Dictionary, rejection_reason: String = "") -> bool:
+	if instance == null or instance != _selected_instance:
+		return false
+	_declaration_skip_pending = false
+	if result.is_empty() or not bool(result.get("declaration_skip", false)):
+		_show_error(rejection_reason if not rejection_reason.is_empty() \
+				else "Skip was rejected.")
+		_apply_interactable_state()
+		return false
+	_has_moved = instance.move_action_committed
+	_has_attacked = instance.attack_action_disposition \
+			!= SquadronInstance.ATTACK_ACTION_AVAILABLE
+	if bool(result.get("activation_complete", false)):
+		_finish_activation()
+	else:
+		_transition_to(State.ACTION_CHOICE)
 	return true
 
 
@@ -507,6 +542,7 @@ func _apply_squadron_selection(token: SquadronToken,
 	_activation_slot_committed = _is_command_mode \
 			and instance.has_activation_action_state() \
 			and not instance.activated_this_round
+	_declaration_skip_pending = false
 	_log.info("Selected squadron: %s (engaged=%s, move_and_attack=%s)" % [
 			instance.data_key, str(_is_engaged),
 			str(_allow_move_and_attack)])
@@ -551,6 +587,7 @@ func _finish_activation() -> void:
 	_has_moved = false
 	_has_attacked = false
 	_activation_slot_committed = false
+	_declaration_skip_pending = false
 	# In command mode, check if more activations remain.
 	if _is_command_mode and _command_resolver != null:
 		if _command_resolver.is_done():
@@ -585,6 +622,7 @@ func _clear_command_preview_selection() -> void:
 	_has_moved = false
 	_has_attacked = false
 	_activation_slot_committed = false
+	_declaration_skip_pending = false
 	selection_cleared.emit()
 	_transition_to(State.WAITING_FOR_SELECTION)
 
@@ -870,7 +908,8 @@ func _update_action_buttons() -> void:
 		if _has_attacked or not _is_engaged:
 			can_skip = true
 	_skip_button.visible = true
-	_skip_button.disabled = (not can_skip) or (not _is_interactable)
+	_skip_button.disabled = (not can_skip) or (not _is_interactable) \
+			or _declaration_skip_pending
 	if not can_skip:
 		_skip_button.tooltip_text = "Engaged — must attack an engaged enemy"
 	else:
@@ -890,19 +929,22 @@ func _update_action_buttons() -> void:
 
 ## Applies the current interactable state to visible action controls.
 func _apply_interactable_state() -> void:
+	if _state == State.ACTION_CHOICE:
+		_update_action_buttons()
 	_apply_button_interactable(_move_button)
 	_apply_button_interactable(_attack_button)
 	_apply_button_interactable(_done_button)
 	_apply_button_interactable(_commit_move_button)
 	if _close_button:
-		_close_button.disabled = not _is_interactable
+		_close_button.disabled = not _is_interactable \
+				or _declaration_skip_pending
 
 
 ## Applies button disabled state if the button exists and is visible.
 func _apply_button_interactable(btn: Button) -> void:
 	if btn == null or not btn.visible:
 		return
-	btn.disabled = not _is_interactable
+	btn.disabled = not _is_interactable or _declaration_skip_pending
 
 
 func _get_skip_button_text() -> String:
@@ -913,9 +955,12 @@ func _get_skip_button_text() -> String:
 
 ## Returns true when action handlers should early-return for passive peers.
 func _is_action_blocked(action_name: String) -> bool:
-	if _is_interactable:
+	if _is_interactable and not _declaration_skip_pending:
 		return false
-	_log.info("%s ignored: modal not interactable for local peer." % action_name)
+	var reason: String = "declaration Skip is pending" \
+			if _declaration_skip_pending \
+			else "modal not interactable for local peer"
+	_log.info("%s ignored: %s." % [action_name, reason])
 	return true
 
 
@@ -1014,6 +1059,16 @@ func _on_skip_pressed() -> void:
 		_clear_command_preview_selection()
 		return
 	_log.info("Skip pressed for %s" % _get_squadron_name())
+	# An available attack disposition is the accepted no-active declaration
+	# Skip boundary. Keep the modal open until the existing semantic command
+	# accepts; post-Begin closure continues through activation_done unchanged.
+	if _selected_instance != null \
+			and _selected_instance.attack_action_disposition \
+					== SquadronInstance.ATTACK_ACTION_AVAILABLE:
+		_declaration_skip_pending = true
+		_apply_interactable_state()
+		declaration_skip_requested.emit(_selected_instance)
+		return
 	_finish_activation()
 
 

@@ -117,6 +117,8 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_squadron_move_commit)
 	_squadron_modal.attack_requested.connect(
 			_on_squadron_attack_requested)
+	_squadron_modal.declaration_skip_requested.connect(
+			_on_squadron_declaration_skip_requested)
 	_squadron_modal.activation_done.connect(
 			_on_squadron_activation_done)
 	_squadron_modal.command_done.connect(_on_squadron_command_done)
@@ -151,6 +153,10 @@ func create_ui(layer: CanvasLayer, register_resizable: Callable) -> void:
 			_on_command_executed_advance_after_activation_progress):
 		CommandProcessor.command_executed.connect(
 				_on_command_executed_advance_after_activation_progress)
+	if not GameManager.network_command_rejected.is_connected(
+			_on_network_declaration_skip_rejected):
+		GameManager.network_command_rejected.connect(
+				_on_network_declaration_skip_rejected)
 
 
 ## Returns the [SquadronActivationModal] instance (for external signal
@@ -458,9 +464,50 @@ func _on_command_executed_advance_after_activation_progress(command: GameCommand
 			command.player_index,
 			_squadron_activation_count,
 			str(command.payload)])
+	_apply_local_declaration_skip_result(command, result)
 	if not _should_advance_passive_squadron_modal(command):
 		return
 	_advance_passive_squadron_modal()
+
+
+## Advances the controller's own modal only after its accepted declaration
+## Skip has mutated canonical owners. Passive peers use the existing mirror
+## advancement below instead of emitting local completion intent.
+func _apply_local_declaration_skip_result(command: GameCommand,
+		result: Dictionary) -> void:
+	if command.command_type != "skip_attack" \
+			or not bool(result.get("declaration_skip", false)):
+		return
+	var local: int = NetworkManager.get_local_player_index()
+	if local >= 0 and command.player_index != local:
+		return
+	var instance: SquadronInstance = _squadron_from_declaration_command(command)
+	if instance != null and _squadron_modal != null:
+		_squadron_modal.apply_declaration_skip_result(instance, result)
+
+
+func _squadron_from_declaration_command(
+		command: GameCommand) -> SquadronInstance:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or command == null:
+		return null
+	var instance: SquadronInstance = game_state.get_squadron(
+			command.player_index,
+			int(command.payload.get("squadron_index", -1)))
+	if instance == null \
+			or str(command.payload.get("activation_id", "")) \
+					!= instance.activation_id:
+		return null
+	return instance
+
+
+func _on_network_declaration_skip_rejected(
+		command: GameCommand, reason: String) -> void:
+	if command == null or command.command_type != "skip_attack":
+		return
+	var instance: SquadronInstance = _squadron_from_declaration_command(command)
+	if instance != null and _squadron_modal != null:
+		_squadron_modal.apply_declaration_skip_result(instance, {}, reason)
 
 
 func _should_advance_passive_squadron_modal(command: GameCommand) -> bool:
@@ -610,6 +657,26 @@ func _on_squadron_attack_requested(token: SquadronToken) -> void:
 	if inst:
 		key = inst.data_key
 	_log.info("Squadron attack requested for %s." % key)
+
+
+## Submits the existing TWI-003 no-active declaration Skip. The modal remains
+## pending until command_executed applies the authoritative result; a local
+## rejection restores the same interaction without completion fallback.
+func _on_squadron_declaration_skip_requested(
+		instance: SquadronInstance) -> void:
+	if instance == null:
+		return
+	var result: Dictionary = GameManager.submit_skip_attack(
+			instance.owner_player, "voluntary")
+	if result.is_empty():
+		_squadron_modal.apply_declaration_skip_result(
+				instance, {}, "Skip was rejected by authoritative validation.")
+		return
+	if bool(result.get("awaiting_remote", false)):
+		return
+	# Local command execution normally applied presentation synchronously via
+	# command_executed. This idempotent fallback covers alternate submitters.
+	_squadron_modal.apply_declaration_skip_result(instance, result)
 
 
 ## Called when a single squadron activation is done.

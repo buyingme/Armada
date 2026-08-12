@@ -67,17 +67,44 @@ The corresponding production log shows that after the player presses Skip, the a
 ## Resolution
 
 Root cause:
-TBD
+`SquadronActivationModal._on_skip_pressed()` treated a pre-Begin Skip as local
+activation completion and called `_finish_activation()` directly. That emitted
+`activation_done`, so `SquadronPhaseController` submitted
+`CompleteSquadronActivationCommand` without first submitting the semantic
+transition that consumed the available action. The accepted
+`ActivateSquadronCommand` had correctly initialized the canonical
+`SquadronInstance` with `move_action_committed = false` and
+`attack_action_disposition = "available"`; completion therefore correctly
+rejected the request with `Squadron still has an available action.` The modal
+had already advanced its presentation to DONE, leaving canonical Squadron
+Phase progress unchanged and producing the deadlock.
 
 Fix:
-TBD
+Pre-Begin Skip now emits transient declaration-Skip intent. The Squadron Phase
+controller submits the existing TWI-003 `SkipAttackCommand` through
+`GameManager.submit_skip_attack()` and advances the modal only after the
+authoritative result is accepted. The modal keeps a one-submission pending gate
+and restores the same interaction on rejection. For the reproduced non-Rogue
+Squadron Phase context, accepted Skip atomically records
+`attack_action_disposition = "declined"`, completes the activation, advances
+the canonical Squadron Phase count, and derives the next selection route.
+Protected post-Begin closure continues to use the existing
+`CompleteSquadronActivationCommand` path unchanged.
 
 Verification:
 
-- Add a regression reproducing Squadron Phase activation followed by skipped movement through the production interaction path.
-- Verify that the required authoritative transition is submitted and accepted.
-- Verify that canonical squadron activation/action state progresses correctly.
-- Verify that the activation can continue or complete according to the remaining legal actions.
-- Verify that the next eligible squadron can subsequently be activated.
-- Verify replay contains the expected semantic command sequence.
-- Verify hot-seat behavior and relevant network/replay paths remain consistent.
+- Production modal/controller regression reproduces `can_move = true` with no
+  legal attack targets, proves completion rejects before the action transition,
+  presses the real modal Skip, and records accepted
+  `activate_squadron -> skip_attack` history.
+- The regression verifies canonical attack disposition is declined, movement
+  remains uncommitted, activation completion and Squadron Phase count commit,
+  format-5 replay captures the same semantic sequence, and the next eligible
+  squadron can be activated.
+- Active-client mirror regression verifies the modal stays pending without
+  local canonical mutation and advances only after the authoritative
+  `skip_attack` result is applied.
+- Focused modal, Squadron Phase, movement, concrete-command, applicability,
+  production-resume, shared-protocol, replay, and ordered-network-result suites
+  pass.
+- Full repository suite passes: 4,026 tests and 13,256 assertions.

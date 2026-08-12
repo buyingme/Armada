@@ -350,10 +350,10 @@ func test_notify_attack_cancelled_returns_to_action_choice() -> void:
 
 
 # ===========================================================================
-# Skip — activation_done signal
+# Skip — semantic declaration intent
 # ===========================================================================
 
-func test_skip_emits_activation_done() -> void:
+func test_pre_begin_skip_emits_declaration_intent_not_completion() -> void:
 	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)
 	GameManager.active_player = 0
@@ -364,8 +364,12 @@ func test_skip_emits_activation_done() -> void:
 	_modal.handle_squadron_click(token)
 	watch_signals(_modal)
 	_modal._on_skip_pressed()
-	assert_signal_emitted(_modal, "activation_done",
-			"Skip should emit activation_done signal")
+	assert_signal_emitted(_modal, "declaration_skip_requested",
+			"Pre-Begin Skip should request the existing semantic command.")
+	assert_signal_not_emitted(_modal, "activation_done",
+			"Presentation must not request completion before Skip accepts.")
+	assert_eq(_modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE,
+			"The declaration interaction remains while Skip is pending.")
 
 
 # ===========================================================================
@@ -481,6 +485,8 @@ func test_skip_handler_blocked_when_not_interactable() -> void:
 	_modal._on_skip_pressed()
 	assert_signal_not_emitted(_modal, "activation_done",
 			"activation_done should not emit when modal is non-interactable.")
+	assert_signal_not_emitted(_modal, "declaration_skip_requested",
+			"Passive presentation must not submit declaration Skip.")
 
 
 # ===========================================================================

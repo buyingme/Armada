@@ -337,6 +337,97 @@ func test_production_selection_never_previews_non_candidate_nebulon_zone() -> vo
 	assert_eq(_history_types(), ["activate_squadron"])
 
 
+func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
+	var state: GameState = _make_forensic_state()
+	_install_state(state)
+	var composition: Dictionary = _make_composition(state)
+	var controller: SquadronPhaseController = composition["controller"]
+	var modal: SquadronActivationModal = controller.get_modal()
+	var skipped: SquadronInstance = state.get_squadron(1, 0)
+	var skipped_token: SquadronToken = _token_for_squadron(skipped)
+
+	_activate_through_controller(controller, skipped_token)
+	assert_true(modal._move_button.visible,
+			"The reproduced squadron must have a legal movement action.")
+	assert_false(modal._attack_button.visible,
+			"The reproduced squadron must have no legal attack targets.")
+	assert_eq(CompleteSquadronActivationCommand.new(1, {
+		"squadron_index": 0,
+		"activation_id": skipped.activation_id,
+		"activation_context": skipped.activation_context,
+	}).validate(state), "Squadron still has an available action.",
+			"Completion must reject before the semantic action transition.")
+
+	modal._on_skip_pressed()
+
+	assert_eq(skipped.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_false(skipped.move_action_committed)
+	assert_true(skipped.activated_this_round)
+	assert_eq(state.squadron_phase_activations_committed, 1)
+	assert_eq(_history_types(), ["activate_squadron", "skip_attack"])
+	assert_false(_history_types().has(
+			CompleteSquadronActivationCommand.TYPE),
+			"Accepted declaration Skip completes this non-Rogue row atomically.")
+	assert_eq(modal.get_state(),
+			SquadronActivationModal.State.WAITING_FOR_SELECTION)
+
+	var replay: GameReplay = CommandProcessor.create_replay()
+	assert_not_null(replay,
+			"Production replay capture must include the repaired progression.")
+	if replay != null:
+		var replay_data: Dictionary = replay.serialize()
+		assert_eq((replay_data["header"] as Dictionary)["format_version"], 5)
+		assert_not_null(GameReplay.deserialize(replay_data))
+		assert_eq((replay.commands[0] as Dictionary)["type"],
+				"activate_squadron")
+		assert_eq((replay.commands[1] as Dictionary)["type"], "skip_attack")
+
+	var next_token: SquadronToken = _token_for_squadron(
+			state.get_squadron(1, 1))
+	assert_true(controller.try_handle_squadron_click(next_token),
+			"The next eligible squadron must be activatable.")
+	assert_eq(_history_types(), [
+		"activate_squadron", "skip_attack", "activate_squadron"])
+
+
+func test_bug_018_network_controller_waits_for_authoritative_skip_result() \
+		-> void:
+	var state: GameState = _make_forensic_state()
+	_install_state(state)
+	var composition: Dictionary = _make_composition(state)
+	var controller: SquadronPhaseController = composition["controller"]
+	var modal: SquadronActivationModal = controller.get_modal()
+	var skipped: SquadronInstance = state.get_squadron(1, 0)
+	_activate_through_controller(controller, _token_for_squadron(skipped))
+
+	var submitter := AwaitingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	modal._on_skip_pressed()
+
+	assert_eq(submitter.submitted.size(), 1)
+	assert_eq(submitter.submitted[0].command_type, "skip_attack")
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE,
+			"Client presentation must wait for authoritative acceptance.")
+	assert_eq(skipped.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_AVAILABLE)
+	assert_false(skipped.activated_this_round)
+
+	var mirrored: GameCommand = submitter.submitted[0]
+	mirrored.sequence = CommandProcessor.get_next_sequence()
+	assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+
+	assert_eq(skipped.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_true(skipped.activated_this_round)
+	assert_eq(modal.get_state(),
+			SquadronActivationModal.State.WAITING_FOR_SELECTION)
+	assert_eq(_history_types(), ["activate_squadron", "skip_attack"])
+
+
 func test_rejected_begin_recovers_then_deselect_and_skip_progresses() -> void:
 	var state: GameState = _make_forensic_state()
 	_install_state(state)

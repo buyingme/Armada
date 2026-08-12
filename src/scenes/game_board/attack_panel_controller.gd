@@ -131,7 +131,7 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		_attack_executor.apply_counter_choice_result(result)
 		return
 	if command.command_type == "roll_dice":
-		_attack_executor.apply_remote_counter_roll_result(command, result)
+		_attack_executor.apply_roll_result(command, result)
 		return
 	if command.command_type == "reroll_attack_die":
 		_attack_executor.apply_remote_counter_reroll_result(command, result)

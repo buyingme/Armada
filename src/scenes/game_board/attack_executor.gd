@@ -1880,7 +1880,8 @@ func _on_attack_roll_dice() -> void:
 		return
 	var attack: CurrentAttackState = _current_attack()
 	if attack == null \
-			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY:
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY \
+			or _flow_fsm.current_step != AttackFlowFSM.Step.ROLL:
 		return
 	_apply_dice_roll_result(roll_result)
 
@@ -3339,12 +3340,15 @@ func apply_counter_choice_result(result: Dictionary) -> void:
 	_attack_exec_finalize_after_delay()
 
 
-## Applies a remote Counter roll result to the attack pipeline.
-func apply_remote_counter_roll_result(command: GameCommand,
+## Projects one accepted roll result into the active attack presentation.
+func apply_roll_result(command: GameCommand,
 		result: Dictionary) -> void:
-	if not _is_counter_pipeline_command(command):
+	var attack: CurrentAttackState = _current_attack()
+	if command == null or attack == null or not attack.active:
 		return
-	if not _state.dice_results.is_empty():
+	if command.player_index != attack.attacker_player \
+			or attack.stage != CurrentAttackState.STAGE_ATTACK_MODIFY \
+			or _flow_fsm.current_step != AttackFlowFSM.Step.ROLL:
 		return
 	_apply_dice_roll_result(result)
 

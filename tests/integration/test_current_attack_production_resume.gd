@@ -82,6 +82,49 @@ class AuthenticatedExecutingSubmitter:
 		return result
 
 
+class NetworkStreamExecutingSubmitter:
+	extends CommandSubmitter
+
+	var authenticated_player: int = 0
+	var accepted_stream: Array[Dictionary] = []
+	var peer_player_rejections: Array[GameCommand] = []
+	var processor_rejections: Array[GameCommand] = []
+	var _submission_depth: int = 0
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		if command.player_index != authenticated_player:
+			peer_player_rejections.append(command)
+			return {}
+		_submission_depth += 1
+		var result: Dictionary = CommandProcessor.submit_deferred_followups(
+				command)
+		if result.is_empty():
+			processor_rejections.append(command)
+		else:
+			accepted_stream.append({
+				"command": command.serialize(),
+				"result": result.duplicate(true),
+			})
+		_submission_depth -= 1
+		if _submission_depth == 0:
+			CommandProcessor.drain_observer_followups(
+					Callable(self, "_submit_followup"))
+		return result
+
+
+	func ordered_stream() -> Array[Dictionary]:
+		var ordered: Array[Dictionary] = accepted_stream.duplicate(true)
+		ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int((a.get("command") as Dictionary).get("sequence", -1)) \
+					< int((b.get("command") as Dictionary).get("sequence", -1)))
+		return ordered
+
+
+	func _submit_followup(command: GameCommand) -> void:
+		submit(command)
+
+
 func before_each() -> void:
 	_saved_registry = GameCommand._registry.duplicate()
 	_saved_state = GameManager.current_game_state
@@ -105,6 +148,8 @@ func before_each() -> void:
 	H9_DECLINE.register()
 	RollDiceCommand.register()
 	ConfirmAttackDiceCommand.register()
+	CommitAccuracyCommand.register()
+	PublishAttackFlowCommand.register()
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	GameManager.set_command_submitter(LocalCommandSubmitter.new())
@@ -1054,6 +1099,96 @@ func test_hotseat_and_network_roll_reach_same_derived_interaction() -> void:
 			"Accepted RollDice must derive the same actionable next interaction.")
 
 
+func test_zero_opportunity_network_roll_hands_defense_to_defender_client() \
+		-> void:
+	var state: GameState = _zero_opportunity_roll_state()
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	var host_submitter := NetworkStreamExecutingSubmitter.new()
+	GameManager.set_command_submitter(host_submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var host_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(host_board)
+	var host_executor: AttackExecutor = host_board._attack_executor
+	var host_panel: AttackSimPanel = host_board._target_selector.get_panel()
+	assert_eq(host_executor._flow_fsm.current_step, AttackFlowFSM.Step.ROLL)
+	assert_true(host_panel._roll_button.visible)
+	# A connected client starts from the same deterministic setup/RNG state;
+	# later command-result projection remains viewer-specific.
+	var client_initial_data: Dictionary = state.serialize()
+
+	host_panel._roll_button.pressed.emit()
+
+	assert_eq(state.current_attack_state.stage,
+			CurrentAttackState.STAGE_DEFENSE)
+	assert_eq(state.current_attack_state.defense_stage,
+			CurrentAttackState.DEFENSE_PENDING)
+	assert_eq(state.current_attack_state.defender_player, 1)
+	assert_eq(host_executor._flow_fsm.current_step,
+			AttackFlowFSM.Step.DEFENSE_TOKENS,
+			"The accepted roll must project every lifecycle step before Defense.")
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	assert_eq(state.interaction_flow.controller_player, 1,
+			"The canonical defender must control the published Defense step.")
+	assert_true(host_submitter.peer_player_rejections.is_empty())
+	assert_true(host_submitter.processor_rejections.is_empty())
+	var authoritative_stream: Array[Dictionary] = \
+			host_submitter.ordered_stream()
+	assert_true(_stream_has_type(authoritative_stream, "roll_dice"))
+	assert_true(_stream_has_type(
+			authoritative_stream, "confirm_attack_dice"))
+	assert_true(_stream_has_type(authoritative_stream, "commit_accuracy"))
+
+	host_board.queue_free()
+	await get_tree().process_frame
+	CommandProcessor.reset()
+	GameManager._reset_network_result_ordering()
+	var client_state: GameState = GameState.deserialize(client_initial_data)
+	assert_not_null(client_state)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	var client_submitter := AuthenticatedRecordingSubmitter.new()
+	client_submitter.authenticated_player = 1
+	GameManager.set_command_submitter(client_submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			client_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 0))
+	var client_board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(client_board)
+	for entry: Dictionary in authoritative_stream:
+		var command: GameCommand = GameCommand.deserialize(
+				entry.get("command") as Dictionary)
+		assert_not_null(command)
+		assert_true(GameManager._apply_network_command_result(
+				command, entry.get("result") as Dictionary))
+	await get_tree().process_frame
+
+	var mirror: AttackPanelMirror = client_board._panel_mgr.attack_panel_mirror
+	assert_eq(client_state.current_attack_state.stage,
+			CurrentAttackState.STAGE_DEFENSE)
+	assert_eq(client_state.current_attack_state.defender_player, 1)
+	assert_eq(client_state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS)
+	assert_eq(client_state.interaction_flow.controller_player, 1)
+	assert_true(mirror.is_open(),
+			"The defender client must receive the published attack handoff.")
+	assert_true(mirror._defense_signal_connected,
+			"Player 1 must receive the interactive defense-token controls.")
+	assert_false(client_board._attack_executor.is_in_exec_mode(),
+			"The defender mirror must not become the canonical attack owner.")
+	assert_true(client_submitter.submitted_commands.is_empty(),
+			"Mirroring the authoritative stream must synthesize no commands.")
+	mirror.get_panel().defense_tokens_done.emit()
+	assert_eq(client_submitter.submitted_commands.size(), 1)
+	var defense_command: GameCommand = client_submitter.submitted_commands[0]
+	assert_eq(defense_command.command_type, "commit_defense")
+	assert_eq(defense_command.player_index, 1)
+	assert_eq(defense_command.payload.get("attack_id"), "attack:0")
+	assert_true(client_submitter.peer_player_rejections.is_empty())
+
+
 func test_network_client_real_panel_constructs_h9_use() -> void:
 	_assert_network_timing_intent(H9_RULE.CAPABILITY_ID, H9_USE.TYPE, false)
 
@@ -1242,6 +1377,23 @@ func _roll_state() -> GameState:
 	assert_true(attacker.command_tokens.add_token(
 			Constants.CommandType.CONCENTRATE_FIRE))
 	return state
+
+
+func _zero_opportunity_roll_state() -> GameState:
+	return _state_at(CurrentAttackState.STAGE_PRE_ROLL, {
+		"attack_id": "attack:0",
+		"dice_pool": {"RED": 1},
+		"cf_dial_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+		"cf_token_resolution": CurrentAttackState.RESOLUTION_UNAVAILABLE,
+	})
+
+
+func _stream_has_type(stream: Array[Dictionary], command_type: String) -> bool:
+	for entry: Dictionary in stream:
+		var command_data: Dictionary = entry.get("command") as Dictionary
+		if str(command_data.get("type", "")) == command_type:
+			return true
+	return false
 
 
 func _roll_interaction_snapshot(context: Dictionary) -> Dictionary:

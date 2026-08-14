@@ -35,6 +35,29 @@ const _SCALE_CONFIG: Dictionary = {
 	},
 }
 
+const _DISTANCE_ONE_SHORTER_THAN_CLOSE_CONFIG: Dictionary = {
+	"ruler_total_length_px": 720,
+	"range_bands": {
+		"close": {"max_px": 294},
+		"medium": {"max_px": 442},
+		"long": {"max_px": 720},
+	},
+	"distance_bands_px": [181, 294, 434, 577, 720],
+	"base_graphics": {
+		"small_ship": {
+			"base_region_width_px": 103,
+			"base_region_length_px": 171,
+		},
+		"medium_ship": {
+			"base_region_width_px": 148,
+			"base_region_length_px": 243,
+		},
+		"squadron_base": {
+			"base_region_diameter_px": 82,
+		},
+	},
+}
+
 
 # =========================================================================
 # Helpers
@@ -484,6 +507,27 @@ func test_incoming_threats_excludes_squadron_beyond_distance_1() -> void:
 			"Enemy squadron beyond distance 1 is not an incoming threat")
 
 
+func test_distance_2_close_squadron_is_not_incoming_ship_threat() -> void:
+	GameScale.initialise_from_dict(_DISTANCE_ONE_SHORTER_THAN_CLOSE_CONFIG)
+	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
+			"CR90", 0, Vector2(500, 500), 0.0)
+	# Nearest base-edge distance is 200 px: distance 2, but still "close".
+	var squad: TargetingListBuilder.SquadInfo = _make_squad(
+			"TIE Fighter", 1, Vector2(500, 250))
+	squad.battery_armament = {"BLUE": 1}
+	var measured: float = TargetingListBuilder._measure_squad_to_ship_distance(
+			squad, friendly)
+	assert_eq(GameScale.get_distance_band(measured), 2)
+	assert_eq(GameScale.get_range_band(measured), Constants.RANGE_BAND_CLOSE)
+
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[friendly], [squad], 0)
+	var ship_result: TargetingListBuilder.ShipTargetingResult = \
+			build_result.ship_results[0]
+	assert_eq(ship_result.incoming.size(), 0,
+			"Close must not substitute for distance 1 in squadron legality.")
+
+
 func test_incoming_threats_excludes_squadron_without_battery() -> void:
 	# Arrange — enemy squadron at close range but no battery armament.
 	var friendly: TargetingListBuilder.ShipInfo = _make_ship(
@@ -886,6 +930,27 @@ func test_squad_no_incoming_threat_when_enemy_squad_far() -> void:
 	var sq_result: TargetingListBuilder.SquadTargetingResult = build_result.squad_results[0]
 	assert_eq(sq_result.incoming.size(), 0,
 			"No threats when enemy squadron is far away")
+
+
+func test_distance_2_close_squadron_is_not_incoming_squadron_threat() -> void:
+	GameScale.initialise_from_dict(_DISTANCE_ONE_SHORTER_THAN_CLOSE_CONFIG)
+	var friendly: TargetingListBuilder.SquadInfo = _make_squad(
+			"X-wing", 0, Vector2(500, 500))
+	friendly.battery_armament = {"BLUE": 1}
+	var enemy: TargetingListBuilder.SquadInfo = _make_squad(
+			"TIE", 1, Vector2(500, 280))
+	enemy.anti_squadron_armament = {"BLUE": 3}
+	var measured: float = TargetingListBuilder._measure_squad_to_squad_distance(
+			enemy, friendly)
+	assert_eq(GameScale.get_distance_band(measured), 2)
+	assert_eq(GameScale.get_range_band(measured), Constants.RANGE_BAND_CLOSE)
+
+	var build_result: TargetingListBuilder.BuildResult = TargetingListBuilder.build(
+			[], [friendly, enemy], 0)
+	var sq_result: TargetingListBuilder.SquadTargetingResult = \
+			build_result.squad_results[0]
+	assert_eq(sq_result.incoming.size(), 0,
+			"Distance-2 close squadrons must not be projected as legal threats.")
 
 
 # =========================================================================

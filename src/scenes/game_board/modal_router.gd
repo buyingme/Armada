@@ -295,7 +295,8 @@ func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent,
 				_ship_activation_controller.open_squadron_command_from_interaction_state()
 		_:
 			if intent.modal_kind == Constants.ModalKind.ACTIVATION \
-					and _is_activation_modal_open_command(command):
+					and (_is_activation_modal_open_command(command) \
+							or _is_ship_skip_maneuver_projection(intent, command)):
 				_open_activation_modal_from_intent()
 
 
@@ -314,6 +315,17 @@ func _is_activation_modal_open_command(command: GameCommand) -> bool:
 		"activate_ship", "convert_dial_to_token", "advance_activation_step":
 			return true
 	return false
+
+
+func _is_ship_skip_maneuver_projection(intent: UIProjector.UIIntent,
+		command: GameCommand) -> bool:
+	if command == null or command.command_type != "skip_attack" \
+			or intent.step_id != Constants.InteractionStep.MANEUVER_STEP:
+		return false
+	var ship: ShipInstance = GameManager.get_activating_ship()
+	return ship != null and not ship.attack_step_active \
+			and ship.maneuver_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_OPEN
 
 
 func _open_activation_modal_from_intent() -> void:

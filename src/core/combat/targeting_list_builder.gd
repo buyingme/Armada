@@ -860,7 +860,7 @@ static func _check_ship_threat_from_zone(
 
 
 ## Collects squadron-to-ship incoming threats and appends to [param out].
-## Squadrons attack at distance 1 (close range) with 360° arc.
+## Squadrons attack at distance 1 with 360° arc.
 ## Requirements: TL-LIST-008.
 static func _collect_incoming_squad_threats_to_ship(
 		friendly: ShipInfo, enemy_squads: Array, out: Array) -> void:
@@ -869,8 +869,7 @@ static func _collect_incoming_squad_threats_to_ship(
 		if sq.battery_armament.is_empty():
 			continue
 		var dist: float = _measure_squad_to_ship_distance(sq, friendly)
-		var band: String = GameScale.get_range_band(dist)
-		if band != Constants.RANGE_BAND_CLOSE:
+		if not is_squadron_attack_distance_legal(dist):
 			continue
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = friendly.ship_name
@@ -948,7 +947,7 @@ static func _check_squad_vs_ship_zone(log: GameLogger, squad: SquadInfo,
 	log.debug("  squad '%s' -> ship '%s' %s dist=%.1f distance=%d range=%s" % [
 			squad.squad_name, es.ship_name,
 			_hz_key(def_hz), dist, distance_band, band])
-	if distance_band != 1:
+	if not is_squadron_attack_distance_legal(dist):
 		return null
 	var def_los: Vector2 = es.los_pts.get(_hz_key(def_hz), es.pos)
 	var bodies: Array = _get_intervening_squad_bodies(es, all_ship_bodies)
@@ -1006,7 +1005,7 @@ static func _collect_squad_vs_squads(log: GameLogger, squad: SquadInfo,
 		var band: String = GameScale.get_range_band(dist)
 		log.debug("  squad '%s' -> squad '%s' dist=%.1f distance=%d range=%s" % [
 				squad.squad_name, esq.squad_name, dist, distance_band, band])
-		if distance_band != 1:
+		if not is_squadron_attack_distance_legal(dist):
 			continue
 		var bodies: Array = []
 		for body_entry: Variant in all_ship_bodies:
@@ -1114,8 +1113,7 @@ static func _collect_squad_threats_to_squad(log: GameLogger,
 		if esq.anti_squadron_armament.is_empty():
 			continue
 		var dist: float = _measure_squad_to_squad_distance(esq, squad)
-		var band: String = GameScale.get_range_band(dist)
-		if band != Constants.RANGE_BAND_CLOSE:
+		if not is_squadron_attack_distance_legal(dist):
 			continue
 		var threat: ThreatEntry = ThreatEntry.new()
 		threat.friendly_name = squad.squad_name
@@ -1131,6 +1129,12 @@ static func _collect_squad_threats_to_squad(log: GameLogger,
 # =========================================================================
 # Helpers
 # =========================================================================
+
+## Squadron attacks use the distance ruler, not ship range-band labels.
+## This predicate is shared by outgoing legality and incoming projections.
+static func is_squadron_attack_distance_legal(distance_px: float) -> bool:
+	return GameScale.get_distance_band(distance_px) == 1
+
 
 ## Measures distance from a squadron's base edge to the nearest point on a
 ## ship's base (any hull zone). Uses [code]RangeFinder.measure_range_squad_to_ship()[/code].

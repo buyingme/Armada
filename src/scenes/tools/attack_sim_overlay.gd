@@ -5,7 +5,7 @@
 ## in world space alongside tokens.
 ##
 ## For hull zone selection: draws two firing arc boundary lines and a LOS marker.
-## For squadron selection: draws a close-range circle.
+## For squadron selection: draws a distance-1 attack circle.
 ## When a target is selected: draws a target LOS marker, a colour-coded
 ## LOS line, and a colour-coded range measurement line between attacker
 ## and target.
@@ -36,7 +36,7 @@ const LOS_MARKER_COLOUR: Color = Color(1.0, 1.0, 0.0, 0.6)
 ## Radius of the LOS marker circle in pixels (6 px diameter → 3 px radius).
 const LOS_MARKER_RADIUS: float = 3.0
 
-## Colour for squadron close-range circle — white, 30 % opacity.
+## Colour for the squadron distance-1 circle — white, 30 % opacity.
 ## Requirements: AS-VIS-010.
 const SQUAD_CIRCLE_COLOUR: Color = Color(1.0, 1.0, 1.0, 0.3)
 
@@ -216,7 +216,7 @@ func clear() -> void:
 
 
 ## Clears only the target-related visuals (marker + LOS line).
-## Attacker visuals (arc lines, LOS marker, close-range circle) are kept.
+## Attacker visuals (arc lines, LOS marker, distance-1 circle) are kept.
 ## Requirements: AS-TGT-020.
 func clear_target() -> void:
 	_draw_target_marker = false
@@ -308,7 +308,7 @@ func _draw() -> void:
 			_draw_arc_lines()
 		_draw_los_marker()
 	if _draw_squadron:
-		_draw_close_range_circle()
+		_draw_distance_one_circle()
 	if _draw_target_marker:
 		_draw_target_los_marker()
 	if _draw_los_line:
@@ -336,8 +336,8 @@ func _draw_los_marker() -> void:
 	draw_circle(_los_position, LOS_MARKER_RADIUS, LOS_MARKER_COLOUR)
 
 
-## Draws the close-range circle around a squadron.
-func _draw_close_range_circle() -> void:
+## Draws the distance-1 attack circle around a squadron.
+func _draw_distance_one_circle() -> void:
 	draw_arc(_squad_centre, _squad_circle_radius, 0.0, TAU,
 			CIRCLE_SEGMENTS, SQUAD_CIRCLE_COLOUR, SQUAD_CIRCLE_WIDTH, true)
 

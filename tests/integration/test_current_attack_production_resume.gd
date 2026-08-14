@@ -59,6 +59,17 @@ class AuthenticatedRecordingSubmitter:
 		return {"submitted": true}
 
 
+class AwaitingRecordingSubmitter:
+	extends CommandSubmitter
+
+	var submitted_commands: Array[GameCommand] = []
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		submitted_commands.append(command)
+		return {"awaiting_remote": true}
+
+
 class AuthenticatedExecutingSubmitter:
 	extends CommandSubmitter
 
@@ -836,6 +847,195 @@ func test_scene_recreation_restores_ship_post_skip_maneuver_projection() -> void
 	assert_true(_history_types().is_empty())
 
 
+func test_live_zero_attack_skip_projects_canonical_maneuver_boundary() -> void:
+	var state: GameState = _ship_declaration_projection_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 53))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var activation_modal: ActivationModal = board._panel_mgr.activation_modal
+
+	activation_modal._on_attack_pressed()
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_not_null(panel)
+	assert_true(panel._skip_attack_button.visible,
+			"Voluntary Skip remains available before BeginAttack commitment.")
+	assert_false(board._ship_activation_controller.is_activation_modal_open())
+
+	panel.skip_attack_pressed.emit()
+
+	assert_true(state.current_attack_state.is_inactive())
+	assert_false(ship.attack_step_active)
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.MANEUVER_STEP)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.MANEUVER))
+	assert_true(board._ship_activation_controller.is_activation_modal_open(),
+			"Accepted canonical Skip must project usable Maneuver interaction.")
+	assert_true(activation_modal._is_interactable)
+	assert_false(GameManager.submit_execute_maneuver(
+			ship, 0, [], ship.pos_x, ship.pos_y,
+			ship.rotation_deg).is_empty(),
+			"The projected interaction must use the canonical OPEN opportunity.")
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_false(GameManager.submit_advance_activation_step(
+			ship, "activation_done").is_empty())
+	EventBus.activation_ended.emit()
+	assert_true(ship.activated_this_round,
+			"Maneuver and End Activation must complete normally after Skip.")
+	assert_eq(_history_types().count("execute_maneuver"), 1)
+	assert_eq(_history_types().count("end_activation"), 1)
+
+
+func test_network_owner_waits_then_projects_mirrored_skip_to_maneuver() -> void:
+	var state: GameState = _ship_declaration_projection_state(false)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	var submitter := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 57))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var activation_modal: ActivationModal = board._panel_mgr.activation_modal
+
+	activation_modal._on_attack_pressed()
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	panel.skip_attack_pressed.emit()
+	assert_eq(submitter.submitted_commands.size(), 1)
+	var mirrored: GameCommand = submitter.submitted_commands[0]
+	assert_eq(mirrored.command_type, "skip_attack")
+	assert_eq(mirrored.payload.get("reason"), "voluntary")
+	assert_true(ship.attack_step_active,
+			"A network client must wait for the authoritative result.")
+	assert_false(board._ship_activation_controller.is_activation_modal_open())
+
+	mirrored.sequence = CommandProcessor.get_next_sequence()
+	assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+
+	assert_false(ship.attack_step_active)
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.MANEUVER_STEP)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.MANEUVER))
+	assert_true(board._ship_activation_controller.is_activation_modal_open())
+	assert_true(activation_modal._is_interactable,
+			"The authenticated canonical ship owner controls Maneuver.")
+
+
+func test_live_remaining_attack_skip_projects_same_maneuver_boundary() -> void:
+	var state: GameState = _inactive_ship_continuation_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 55))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var ship: ShipInstance = state.get_ship(1, 0)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_not_null(panel)
+	assert_true(panel._skip_attack_button.visible,
+			"The remaining uncommitted attack opportunity may be declined.")
+	assert_true(panel.skip_attack_pressed.is_connected(
+			Callable(board._attack_executor, "_on_attack_skip")),
+			"Reconstructed continuation must wire the usable Skip intent.")
+	var used_zone_candidate: Dictionary = {}
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 1, 0):
+		if int(candidate.get("attacker_zone", -1)) \
+				== int(Constants.HullZone.FRONT):
+			used_zone_candidate = candidate
+			break
+	assert_false(used_zone_candidate.is_empty(),
+			"The fixture must expose a forged candidate from the used hull zone.")
+	var second_begin: Dictionary = CommandProcessor.submit(
+			BeginAttackCommand.new(1, {
+				"attacker_player": 1,
+				"attacker_kind": CurrentAttackState.KIND_SHIP,
+				"attacker_index": 0,
+				"attacker_zone": int(used_zone_candidate.get(
+						"attacker_zone", -1)),
+				"defender_player": int(used_zone_candidate.get(
+						"target_owner", -1)),
+				"defender_kind": str(used_zone_candidate.get(
+						"target_kind", "")),
+				"defender_index": int(used_zone_candidate.get(
+						"target_index", -1)),
+				"defender_zone": int(used_zone_candidate.get(
+						"target_zone", -1)),
+				"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+				"range_band": str(used_zone_candidate.get("range_band", "")),
+				"obstructed": bool(used_zone_candidate.get("obstructed", false)),
+				"ship_activation_identity": ship.ship_activation_identity,
+			}))
+	assert_engine_error(1,
+			"The rejected second Begin should diagnose the used hull zone.")
+	assert_true(second_begin.is_empty())
+	assert_true(state.current_attack_state.is_inactive())
+	assert_true(ship.attack_step_active)
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_UNREACHED)
+
+	panel.skip_attack_pressed.emit()
+
+	assert_eq(ship.committed_attack_count, 1)
+	assert_eq(ship.used_attack_hull_zones,
+			[int(Constants.HullZone.FRONT)])
+	assert_false(ship.attack_step_active)
+	assert_eq(ship.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_true(board._activation_ctx.ship_activation_state.is_at_step(
+			ShipActivationState.Step.MANEUVER))
+	assert_true(board._ship_activation_controller.is_activation_modal_open())
+
+
+func test_game_manager_does_not_rewrite_post_commit_voluntary_skip() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_PRE_ROLL, {
+		"attack_id": "attack:57",
+		"attacker_player": 0,
+		"dice_pool": {"BLUE": 2},
+	})
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 58))
+	var attack_before: Dictionary = state.current_attack_state.serialize()
+	var history_before: int = CommandProcessor.get_command_count()
+
+	var result: Dictionary = GameManager.submit_skip_attack(0, "voluntary")
+	assert_engine_error(1,
+			"Authoritative rejection should be reported without state mutation.")
+
+	assert_true(result.is_empty(),
+			"A forged post-commit voluntary Skip must fail authoritatively.")
+	assert_eq(state.current_attack_state.serialize(), attack_before,
+			"Rejection must preserve canonical attack and dice state.")
+	assert_eq(CommandProcessor.get_command_count(), history_before,
+			"Rejected commands must not enter replay history.")
+
+
+func test_post_commit_resume_does_not_project_voluntary_skip() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_PRE_ROLL, {
+		"attack_id": "attack:59",
+		"attacker_player": 0,
+		"dice_pool": {"BLUE": 2},
+	})
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 60))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+
+	assert_true(state.current_attack_state.active)
+	assert_not_null(panel)
+	assert_false(panel._skip_attack_button.visible,
+			"Voluntary Skip must not be projected after BeginAttack commitment.")
+
+
 func test_ship_reconstruction_gives_non_owner_read_only_mirror_despite_stale_flow() \
 		-> void:
 	for post_skip: bool in [false, true]:
@@ -972,6 +1172,156 @@ func test_scene_recreation_restores_commanded_squadron_post_skip_projection() ->
 	assert_true(_history_types().is_empty())
 
 
+func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
+		-> void:
+	var state: GameState = _command_squadron_projection_state(false)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.ship_data = ship.ship_data.duplicate(true) as ShipData
+	ship.ship_data.squadron_value = 2
+	var second := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	second.pos_x = 0.44
+	second.pos_y = 0.51
+	second.roster_entry_id = "projection-command-squadron-2"
+	state.get_player_state(0).squadrons.append(second)
+	var enemy_data: SquadronData = AssetLoader.load_squadron_data(
+			"tie_fighter_squadron").duplicate(true) as SquadronData
+	enemy_data.keywords.append({"name": "Heavy"})
+	var enemy := SquadronInstance.create_from_data(
+			"tie_fighter_squadron", enemy_data, 1)
+	enemy.pos_x = 0.5
+	enemy.pos_y = 0.46
+	enemy.roster_entry_id = "projection-command-target"
+	state.get_player_state(1).squadrons.append(enemy)
+	assert_false(TargetingListBuilder.authoritative_squadron_target_entries(
+			state, 0, 0).is_empty())
+	assert_false(TargetingListBuilder.authoritative_squadron_target_entries(
+			state, 0, 1).is_empty())
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 63))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var controller: SquadronPhaseController = board._squadron_phase_controller
+	var modal: SquadronActivationModal = controller.get_modal()
+	var first: SquadronInstance = state.get_squadron(0, 0)
+	var first_token: SquadronToken = modal.get_selected_token()
+	var observed: Dictionary = {}
+	CommandProcessor.command_executed.connect(
+			func(command: GameCommand, _result: Dictionary) -> void:
+				if command.command_type != "move_squadron":
+					return
+				observed["complete_error"] = \
+						CompleteSquadronActivationCommand.new(0, {
+							"squadron_index": 0,
+							"activation_id": first.activation_id,
+							"activation_context": first.activation_context,
+						}).validate(state)
+				observed["dial_still_revealed"] = not ship.command_dial_stack \
+						.get_revealed_dial().is_empty(),
+			CONNECT_ONE_SHOT)
+
+	modal._on_move_pressed()
+	first_token.global_position += Vector2(-300.0, -100.0)
+	controller._commit_squadron_placement(first_token)
+
+	assert_eq(observed.get("complete_error", ""),
+			"Squadron still has an available action.",
+			"Move alone must not make CompleteSquadronActivation legal.")
+	assert_true(bool(observed.get("dial_still_revealed", false)),
+			"The command dial must remain until canonical command completion.")
+	assert_true(first.move_action_committed)
+	assert_true(TargetingListBuilder.authoritative_squadron_target_entries(
+			state, 0, 0).is_empty(),
+			"Post-movement target availability must be re-derived.")
+	assert_eq(first.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_true(first.activated_this_round)
+	assert_eq(modal.get_state(),
+			SquadronActivationModal.State.WAITING_FOR_SELECTION,
+			"Accepted Skip should expose the remaining command capacity.")
+	assert_eq(_history_types().count("skip_attack"), 1)
+	assert_eq(_history_types().count(
+			CompleteSquadronActivationCommand.TYPE), 0)
+	assert_eq(_history_types().count("spend_dial"), 0)
+
+	var second_token: SquadronToken = _board_squadron_token(board, second)
+	assert_true(controller.try_handle_squadron_click(second_token),
+			"A second commanded squadron remains selectable within capacity.")
+	modal._on_move_pressed()
+	second_token.global_position += Vector2(450.0, -100.0)
+	controller._commit_squadron_placement(second_token)
+
+	assert_true(second.move_action_committed)
+	assert_eq(second.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_true(second.activated_this_round)
+	assert_eq(ship.squadron_command_activations_committed, 2)
+	assert_eq(_history_types().count("skip_attack"), 2)
+	assert_eq(_history_types().count(
+			CompleteSquadronActivationCommand.TYPE), 0)
+	assert_eq(_history_types().count("spend_dial"), 1,
+			"Final command completion must spend the dial exactly once.")
+	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty())
+
+
+func test_network_commanded_no_target_waits_for_mirrored_skip() -> void:
+	var state: GameState = _command_squadron_projection_state(false)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	assert_true(squadron.commit_move_action(squadron.activation_id, false))
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 0
+	var submitter := AwaitingRecordingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 67))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	modal._has_moved = false
+	modal._has_targets = false
+	modal._state = SquadronActivationModal.State.MOVING
+
+	modal.notify_move_completed()
+
+	assert_eq(submitter.submitted_commands.size(), 1)
+	var mirrored_skip: GameCommand = submitter.submitted_commands[0]
+	assert_eq(mirrored_skip.command_type, "skip_attack")
+	assert_eq(mirrored_skip.payload.get("reason"), "no_targets")
+	assert_true(modal._declaration_skip_pending)
+	assert_eq(modal.get_state(), SquadronActivationModal.State.MOVING,
+			"Network presentation must wait for authoritative Skip acceptance.")
+	assert_eq(squadron.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_AVAILABLE)
+	assert_false(ship.command_dial_stack.get_revealed_dial().is_empty())
+
+	mirrored_skip.sequence = CommandProcessor.get_next_sequence()
+	assert_false(CommandProcessor.submit_mirror(mirrored_skip).is_empty())
+	assert_eq(squadron.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_DECLINED)
+	assert_true(squadron.activated_this_round)
+	assert_eq(submitter.submitted_commands.size(), 3,
+			"Accepted final Skip should request one dial spend and one next step.")
+	assert_eq(submitter.submitted_commands[1].command_type, "spend_dial")
+	assert_eq(submitter.submitted_commands[2].command_type,
+			"advance_activation_step")
+	assert_false(ship.command_dial_stack.get_revealed_dial().is_empty(),
+			"The dial remains until the server mirrors its spend command.")
+
+	for index: int in range(1, submitter.submitted_commands.size()):
+		var mirrored: GameCommand = submitter.submitted_commands[index]
+		mirrored.sequence = CommandProcessor.get_next_sequence()
+		assert_false(CommandProcessor.submit_mirror(mirrored).is_empty())
+	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty())
+	assert_eq(_history_types().count("skip_attack"), 1)
+	assert_eq(_history_types().count("spend_dial"), 1)
+	assert_eq(_history_types().count(
+			CompleteSquadronActivationCommand.TYPE), 0)
+
+
 func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	var state: GameState = _player_one_ship_attack_state()
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
@@ -1019,6 +1369,8 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 			"The activation owner must retain the sole pre-Begin presentation.")
 	assert_false(mirror.is_open(),
 			"The pre-Begin mirror must remain passive or closed.")
+	assert_true(primary._skip_attack_button.visible,
+			"Voluntary Skip remains projected before attack commitment.")
 
 	var attacker_zone: int = _select_first_legal_attacker_zone(
 			selector, vsd_token)
@@ -1041,6 +1393,8 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	assert_true(state.current_attack_state.active)
 	assert_eq(state.current_attack_state.attacker_player, 1)
 	assert_true(executor.is_in_exec_mode())
+	assert_false(primary._skip_attack_button.visible,
+			"BeginAttack commitment must retire voluntary Skip projection.")
 	assert_false(mirror.is_open())
 	assert_true(submitter.peer_player_rejections.is_empty(),
 			"No wrong-peer command may originate from player 1.")
@@ -1320,6 +1674,8 @@ func _network_roll_context() -> Dictionary:
 	assert_true(executor.is_in_exec_mode())
 	assert_eq(executor._flow_fsm.current_step, AttackFlowFSM.Step.ROLL)
 	assert_true(panel._roll_button.visible)
+	assert_false(panel._skip_attack_button.visible,
+			"Network projection must also retire voluntary Skip after Begin.")
 	assert_true(executor._state.dice_results.is_empty())
 
 	var roll := RollDiceCommand.new(0, {"attack_id": "attack:0"})
@@ -1723,6 +2079,14 @@ func _board_ship_token(board: GameBoard,
 		ship: ShipInstance) -> ShipToken:
 	for token: ShipToken in board.get_ship_tokens():
 		if token.get_ship_instance() == ship:
+			return token
+	return null
+
+
+func _board_squadron_token(board: GameBoard,
+		squadron: SquadronInstance) -> SquadronToken:
+	for token: SquadronToken in board.get_squadron_tokens():
+		if token.get_squadron_instance() == squadron:
 			return token
 	return null
 

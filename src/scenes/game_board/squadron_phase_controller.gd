@@ -663,11 +663,11 @@ func _on_squadron_attack_requested(token: SquadronToken) -> void:
 ## pending until command_executed applies the authoritative result; a local
 ## rejection restores the same interaction without completion fallback.
 func _on_squadron_declaration_skip_requested(
-		instance: SquadronInstance) -> void:
+		instance: SquadronInstance, reason: String) -> void:
 	if instance == null:
 		return
 	var result: Dictionary = GameManager.submit_skip_attack(
-			instance.owner_player, "voluntary")
+			instance.owner_player, reason)
 	if result.is_empty():
 		_squadron_modal.apply_declaration_skip_result(
 				instance, {}, "Skip was rejected by authoritative validation.")

@@ -144,10 +144,37 @@ Do not assume BUG-005 is fully unrelated merely because its direct regression te
 ## Resolution
 
 Root cause:
-TBD
+
+The reported legal-target omission is not supported by the attached
+reproduction once entity identity is correlated. The log audits six
+same-named TIE Fighter squadrons without owner/index labels. The distance-1
+FRONT/RIGHT hits quoted in the report were calculated for a different,
+already-activated TIE; the selected active TIE's own target build did not
+contain that legal candidate. Its `targets=false` projection therefore agreed
+with its owner/index-local authoritative list. This corrects the initial
+assessment: no conversion step was dropping a distance-1 target for the
+captured active squadron.
+
+The required all-consumer audit did establish a separate production
+inconsistency in the same rule surface. Outgoing gameplay target construction
+(used by Squadron Phase, commanded squadrons, post-movement derivation, and
+`BeginAttackCommand` validation) used distance band 1, while both incoming
+planning/threat collectors used ship range band `close`. Those incoming
+consumers falsely reported distance-2-but-close squadron attacks as legal.
 
 Fix:
-TBD
+
+Added one shared `TargetingListBuilder.is_squadron_attack_distance_legal()`
+predicate based on `GameScale.get_distance_band(distance_px) == 1` and routed
+all four squadron outgoing/incoming target consumers through it. Gameplay and
+planning/debug projections therefore reuse one rule seam. The Attack
+Simulator already draws its squadron radius from `distance_bands_px[0]`; its
+private naming and documentation now say “distance 1” rather than “close” so
+it does not communicate the wrong range model.
+
+No targeting state or presentation became authoritative. Begin validation
+continues to rebuild targets from canonical board geometry, and no independent
+UI targeting rule was introduced.
 
 ## Verification
 
@@ -162,3 +189,35 @@ After repair, verify explicitly:
 - Attack Simulator uses or clearly displays the same squadron distance-1 legality;
 - moving a squadron causes target availability to be re-derived correctly;
 - Hot-Seat and Network produce equivalent legal-target availability.
+
+Implemented regression evidence:
+
+- Existing boundary tests exercise squadron → ship and squadron → squadron at
+  distance 1 and prove both target offering and accepted `BeginAttackCommand`.
+- Existing paired boundary tests use distance 2 while still classified
+  `close` and prove both preview omission and forged Begin rejection.
+- New incoming-threat tests use a scale where distance 1 ends at 181 px while
+  close ends at 294 px, and prove distance-2/close squadron → ship and
+  squadron → squadron threats are rejected.
+- Normal Squadron Phase and commanded-squadron production tests use the same
+  authoritative list builder. The BUG-022 production test additionally proves
+  target availability is re-derived after movement.
+- Exact owner/index and duplicate-name target recovery tests remain green,
+  directly guarding the identity ambiguity present in the original evidence.
+- Attack Simulator focused tests passed (29/29); targeting builder tests
+  passed (35/35); production target recovery passed (16/16).
+- Full repository suite: 4038/4038 passed.
+- Phase-K architecture lint: 0 violations (4 existing allow-listed branches).
+
+Forensic evidence note: the original manual capture cannot prove the title's
+claimed same-squadron omission because its diagnostics omit identity. That
+historical limitation remains recorded and is not changed by later successful
+verification. The real audited defect was the inconsistent distance-rule
+consumer, and its shared distance-1 repair is covered automatically.
+
+Project Owner manual verification:
+
+- Verified resolved in Hot-Seat mode on 2026-08-14.
+- Legal distance-1 squadron attack targets are offered and can be attacked.
+
+Final status: resolved, architecture-audited, and manually verified.

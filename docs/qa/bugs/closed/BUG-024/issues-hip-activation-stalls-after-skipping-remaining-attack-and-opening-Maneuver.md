@@ -139,10 +139,45 @@ Keep separate unless investigation proves a common root cause.
 ## Resolution
 
 Root cause:
-TBD
+
+`SkipAttackCommand` already performed the correct canonical transition: it
+retired the ship Attack step, opened the `ShipInstance` Maneuver opportunity,
+and projected Ship Activation / Maneuver. During the same
+`CommandProcessor.command_executed` fan-out, `AttackExecutor` handled the Skip
+before `ModalRouter`. Its `_finish_attack_execution()` unconditionally ended
+and published its local attack flow, thereby clearing the command-authored
+Maneuver projection. `ModalRouter` then observed no flow and had nothing to
+reconstruct.
+
+A related reconstruction defect affected the one-attack continuation: the
+executor attempted to wire panel signals before `TargetSelector` had ensured
+the projected panel existed. A reconstructed remaining Skip could therefore
+be visible but unusable.
+
+Exact failing production path:
+
+1. a legitimate `SkipAttackCommand` executes and opens canonical Maneuver;
+2. the Attack Executor's command-result handler dismisses attack presentation;
+3. executor teardown calls its flow end/publish operation and overwrites the
+   accepted Maneuver projection with NONE;
+4. `ModalRouter` runs later in the same command signal and cannot open the
+   activation modal, although the active `ShipInstance` still has Maneuver
+   OPEN.
 
 Fix:
-TBD
+
+Attack Executor teardown now preserves a command-authored Maneuver projection
+only when all canonical guards agree: the active ship's Attack step is
+inactive, its Maneuver opportunity is OPEN, and interaction intent is exactly
+Ship Activation / Maneuver. `ModalRouter` reopens activation presentation for
+an accepted `skip_attack` only at that same guarded boundary. Inactive
+one-attack reconstruction now creates the projected panel before wiring its
+signals.
+
+The repair does not advance or mutate activation state from presentation.
+`ShipInstance` remains the activation-boundary owner; the command-owned
+transition remains the only reason Maneuver is OPEN; InteractionFlow is used
+only as derived routing intent.
 
 ## Verification
 
@@ -159,3 +194,35 @@ After repair, verify:
 - Hot-Seat and Network behave equivalently;
 - replay reproduces the same progression;
 - save/load and reconnect during the post-Skip Maneuver boundary reconstruct the Maneuver interaction correctly.
+
+Implemented regression evidence:
+
+- `test_live_zero_attack_skip_projects_canonical_maneuver_boundary` proves a
+  pre-Begin ship Skip opens Maneuver, projects an interactive modal, executes
+  Maneuver, and completes End Activation.
+- `test_live_remaining_attack_skip_projects_same_maneuver_boundary` starts
+  after one completed attack, proves a forged second Begin is rejected without
+  changing canonical progress, then proves the legitimate remaining Skip
+  reaches the same Maneuver boundary with a wired control.
+- Existing normal two-attack completion tests reach Maneuver without Skip.
+- Scene-recreation tests prove the OPEN post-Skip boundary reconstructs from
+  `ShipInstance`, including read-only non-owner projection.
+- `test_network_owner_waits_then_projects_mirrored_skip_to_maneuver` proves a
+  client does not advance optimistically and receives usable Maneuver only
+  after the authoritative mirrored Skip.
+- Command history assertions prove Maneuver execution and End Activation each
+  complete once; replay/save/reconnect attack-boundary suites remain green.
+- Focused production-resume tests passed (43/43), ship activation tests passed
+  (21/21), reconnection tests passed (7/7), and replay-order tests passed
+  (3/3).
+- Full repository suite: 4038/4038 passed.
+- Phase-K architecture lint: 0 violations (4 existing allow-listed branches).
+
+Project Owner manual verification:
+
+- Verified resolved in Hot-Seat mode on 2026-08-14.
+- Accepted Skip proceeds from the canonical OPEN Maneuver opportunity into
+  usable Maneuver presentation.
+- Maneuver and the remainder of ship activation complete normally.
+
+Final status: resolved, architecture-audited, and manually verified.

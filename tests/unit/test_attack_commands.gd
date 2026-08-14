@@ -588,6 +588,20 @@ func test_skip_attack_validate_ok_squadron_phase() -> void:
 			"Should accept skip in Squadron Phase.")
 
 
+func test_active_attack_rejects_forged_voluntary_skip_without_mutation() -> void:
+	_install_roll_attack({"BLUE": 2})
+	var before: Dictionary = _state.current_attack_state.serialize()
+	var cmd := SkipAttackCommand.new(0, {
+		"attack_id": _attack_id(),
+		"reason": "voluntary",
+	})
+
+	assert_ne(cmd.validate(_state), "",
+			"Voluntary Skip ends at BeginAttack commitment.")
+	assert_eq(_state.current_attack_state.serialize(), before,
+			"Rejected validation must preserve the attack and authoritative dice pool.")
+
+
 func test_skip_attack_execute_returns_skip() -> void:
 	var payload: Dictionary = _open_ship_declaration()
 	payload["reason"] = "no_targets"

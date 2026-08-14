@@ -429,6 +429,7 @@ func _render_inactive_ship_continuation(
 	_target_selector.dismiss()
 	_reset_exec_state()
 	_init_ship_attack_state(ship_token)
+	_target_selector.ensure_panel_for_projection()
 	_wire_attack_done_and_panel_signals()
 	if continuation == CompleteAttackCommand.CONTINUATION_SQUADRON:
 		_target_selector._select_attacker_ship_zone(
@@ -802,7 +803,7 @@ func _render_resume_projection(plan: Dictionary) -> void:
 			_state.attacker_name, _state.attacker_zone_name,
 			_state.defender_name, _state.defender_zone_name,
 			DicePool.format_pool(_state.dice_pool), _state.range_band)
-	panel.show_skip_attack_button()
+	panel.hide_skip_attack_button()
 	if not _state.dice_results.is_empty():
 		panel.show_dice_results(_state.dice_results)
 	match str(plan.get(RESUME_KEY_TRANSITION, "")):
@@ -1073,6 +1074,8 @@ func _finish_attack_execution() -> void:
 	var game_state: GameState = GameManager.current_game_state
 	var was_pre_begin_squadron_selection: bool = \
 			_pre_begin_squadron_selection
+	var preserve_ship_maneuver_projection: bool = \
+			_has_open_ship_maneuver_projection(game_state)
 	assert(game_state == null or not game_state.current_attack_state.active,
 			"Attack execution cannot end while CurrentAttackState is active.")
 	assert(game_state == null or not game_state.timing_window_state.active,
@@ -1082,12 +1085,27 @@ func _finish_attack_execution() -> void:
 	_reset_exec_state()
 	# A pre-Begin squadron skip completes the enclosing procedural action but
 	# never owned canonical attack flow, so it must not clear that flow.
-	if not was_pre_begin_squadron_selection:
+	if not was_pre_begin_squadron_selection \
+			and not preserve_ship_maneuver_projection:
 		_flow_fsm.end(GameManager.current_game_state)
 	_flow_fsm.reset()
-	if not was_pre_begin_squadron_selection:
+	if not was_pre_begin_squadron_selection \
+			and not preserve_ship_maneuver_projection:
 		_publish_flow_snapshot()
 	attack_exec_completed.emit()
+
+
+func _has_open_ship_maneuver_projection(game_state: GameState) -> bool:
+	if game_state == null or game_state.interaction_flow == null \
+			or game_state.interaction_flow.flow_type \
+					!= Constants.InteractionFlow.SHIP_ACTIVATION \
+			or game_state.interaction_flow.step_id \
+					!= Constants.InteractionStep.MANEUVER_STEP:
+		return false
+	var ship: ShipInstance = GameManager.get_activating_ship()
+	return ship != null and not ship.attack_step_active \
+			and ship.maneuver_opportunity_disposition \
+					== ShipInstance.ACTIVATION_DISPOSITION_OPEN
 
 ## Builds a [CombatParticipants] from the current attacker/target state.
 func _build_current_participants() -> CombatParticipants:
@@ -1477,7 +1495,7 @@ func apply_begin_attack_result(_result: Dictionary) -> void:
 	_sync_scene_from_current_attack()
 	var gather_context: EffectContext = _derive_gather_dice_context()
 	_publish_attack_declare_patch(range_band)
-	_get_panel().show_skip_attack_button()
+	_get_panel().hide_skip_attack_button()
 	if _handle_attack_pool_die_choice(gather_context):
 		return
 	# Empty pool guard: if no dice remain after gather-dice hooks, the

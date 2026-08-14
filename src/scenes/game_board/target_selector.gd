@@ -583,7 +583,7 @@ func _handle_squadron_click(token: SquadronToken) -> void:
 	_show_squadron_visuals(token)
 
 
-## Creates the visual aids for a squadron attacker: close-range circle.
+## Creates the visual aids for a squadron attacker: distance-1 attack circle.
 ## Requirements: AS-VIS-010.
 func _show_squadron_visuals(token: SquadronToken) -> void:
 	# Clear any previous visuals.

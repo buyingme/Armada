@@ -153,10 +153,40 @@ Track it separately unless investigation proves that the exact same production d
 ## Resolution
 
 Root cause:
-TBD
+
+`SquadronActivationModal.notify_move_completed()` treated “no target after
+move” as activation completion and called `_finish_activation()` directly.
+Movement does not consume an AVAILABLE canonical attack action, so the
+resulting `CompleteSquadronActivationCommand` correctly rejected the
+incomplete `SquadronInstance`. The modal/controller continuation nevertheless
+continued its local completion path, which could finalize the ship's Squadron
+command, spend its dial, and request the next ship step without an accepted
+semantic resolution of the squadron attack opportunity.
+
+Exact failing production path:
+
+1. `MoveSquadronCommand` commits the commanded squadron's move.
+2. target availability is re-derived as empty while
+   `attack_action_disposition` remains `AVAILABLE`.
+3. `notify_move_completed()` directly emits activation completion.
+4. `CompleteSquadronActivationCommand` rejects “Squadron still has an
+   available action.”
+5. presentation proceeds optimistically; the replay can therefore record
+   `spend_dial` without an accepted declaration Skip/completion boundary.
 
 Fix:
-TBD
+
+The automatic no-target branch now uses the existing TWI-003/BUG-018
+declaration Skip route with reason `no_targets`. The modal becomes pending,
+the controller submits `SkipAttackCommand`, and presentation advances only
+when the authoritative result has declined the canonical attack action. A
+rejection restores the same interaction. The explicit Skip button continues
+to use the same path with reason `voluntary`.
+
+No completion validation was weakened. No command, canonical field, FSM, or
+owner was added: `SquadronInstance` remains the action owner,
+`SkipAttackCommand` remains the semantic transition, and dial spending still
+follows accepted ship-command completion.
 
 ## Verification
 
@@ -174,3 +204,37 @@ After repair, verify:
 - Hot-Seat and Network behavior are equivalent;
 - replay records the complete semantic progression;
 - save/load and reconnect preserve any active commanded-squadron activation correctly.
+
+Implemented regression evidence:
+
+- `test_command_move_without_target_requests_skip_before_completion` proves
+  the modal requests semantic Skip, remains pending, does not emit completion,
+  and does not mutate the AVAILABLE canonical action.
+- `test_commanded_move_no_target_waits_for_skip_and_preserves_capacity`
+  exercises the production board in Hot-Seat: movement re-derives no targets,
+  premature Complete remains invalid, the dial remains revealed, the first
+  accepted Skip exposes a second commanded squadron, and final command
+  completion spends the dial exactly once.
+- `test_network_commanded_no_target_waits_for_mirrored_skip` proves a network
+  client remains pending until the mirrored Skip, then requests dial spend and
+  ship continuation; the dial is not consumed before its mirrored command.
+- Command history assertions prove accepted sequences contain the declaration
+  Skips, never an optimistic `complete_squadron_activation`, and spend the dial
+  only at final valid completion.
+- Existing BUG-018 save/replay/network declaration-Skip tests and commanded
+  target-present attack tests remain green.
+- Focused suites passed, including `test_squadron_activation_modal.gd`
+  (37/37), `test_current_attack_production_resume.gd` (43/43), and
+  `test_squadron_attack_target_recovery.gd` (16/16).
+- Full repository suite: 4038/4038 passed.
+- Phase-K architecture lint: 0 violations (4 existing allow-listed branches).
+
+Project Owner manual verification:
+
+- Verified resolved in Hot-Seat mode on 2026-08-14.
+- A commanded squadron that moves and has no target resolves the remaining
+  attack opportunity through the accepted declaration Skip path.
+- The next commanded squadron can be activated when capacity remains, and the
+  ship continues through its activation normally.
+
+Final status: resolved, architecture-audited, and manually verified.

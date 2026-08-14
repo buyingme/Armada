@@ -32,7 +32,8 @@ signal attack_requested(squadron_token: SquadronToken)
 ## Player declined the currently available pre-Begin attack opportunity.
 ## The controller submits the authoritative declaration Skip and reports its
 ## result back before presentation advances.
-signal declaration_skip_requested(squadron_instance: SquadronInstance)
+signal declaration_skip_requested(
+		squadron_instance: SquadronInstance, reason: String)
 
 ## A single squadron activation is done (move, attack, or skip completed).
 ## The game board should emit [code]EventBus.squadron_activation_ended[/code].
@@ -286,9 +287,11 @@ func notify_move_completed() -> void:
 		if _has_attacked:
 			_finish_activation()
 		elif not _has_targets:
-			# No valid attack targets at new position — auto-finish.
-			_log.info("No targets after move — auto-finishing activation.")
-			_finish_activation()
+			# Moving does not consume an available attack action. Resolve the
+			# remaining opportunity through the same authoritative declaration
+			# Skip used by the explicit button, and wait for its result.
+			_log.info("No targets after move — requesting declaration Skip.")
+			_request_declaration_skip("no_targets")
 		else:
 			# Can still attack.
 			_transition_to(State.ACTION_CHOICE)
@@ -1065,11 +1068,17 @@ func _on_skip_pressed() -> void:
 	if _selected_instance != null \
 			and _selected_instance.attack_action_disposition \
 					== SquadronInstance.ATTACK_ACTION_AVAILABLE:
-		_declaration_skip_pending = true
-		_apply_interactable_state()
-		declaration_skip_requested.emit(_selected_instance)
+		_request_declaration_skip("voluntary")
 		return
 	_finish_activation()
+
+
+func _request_declaration_skip(reason: String) -> void:
+	if _selected_instance == null or _declaration_skip_pending:
+		return
+	_declaration_skip_pending = true
+	_apply_interactable_state()
+	declaration_skip_requested.emit(_selected_instance, reason)
 
 
 func _on_commit_move_pressed() -> void:

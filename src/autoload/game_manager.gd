@@ -1657,8 +1657,6 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 	var attack: CurrentAttackState = current_game_state.current_attack_state
 	if attack.active:
 		payload["attack_id"] = attack.attack_id
-		if reason not in SkipAttackCommand.TERMINAL_REASONS:
-			payload["reason"] = "cancelled"
 		if current_game_state.timing_window_state.active:
 			payload[TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID] = \
 					current_game_state.timing_window_state.lifecycle_id

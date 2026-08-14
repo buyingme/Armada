@@ -509,6 +509,50 @@ func test_notify_move_completed_finishes_activation() -> void:
 			"Non-Rogue should go to DONE after move completed")
 
 
+func test_command_move_without_target_requests_skip_before_completion() -> void:
+	GameManager.start_new_game()
+	GameManager.current_game_state.current_phase = Constants.GamePhase.SHIP
+	GameManager.active_player = 0
+	var inst: SquadronInstance = _make_instance(0)
+	GameManager.current_game_state.get_player_state(0).squadrons.append(inst)
+	var resolver: SquadronCommandResolver = _make_resolver()
+	var command_ship: ShipInstance = resolver.get_ship()
+	var ship_index: int = GameManager.current_game_state.find_ship_index(
+			command_ship)
+	assert_true(inst.initialize_activation_action_state(
+			"squadron-activation:no-target",
+			SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND,
+			0, ship_index))
+	assert_true(inst.commit_move_action(
+			"squadron-activation:no-target", false))
+	assert_true(command_ship.commit_squadron_command_activation(
+			"ship-activation:modal"))
+	_modal.visible = true
+	_modal._is_interactable = true
+	_modal._is_command_mode = true
+	_modal._allow_move_and_attack = true
+	_modal._command_resolver = resolver
+	_modal._selected_token = _make_token(inst)
+	_modal._selected_instance = inst
+	_modal._activation_slot_committed = true
+	_modal._state = SquadronActivationModal.State.MOVING
+	_modal._has_targets = false
+	watch_signals(_modal)
+
+	_modal.notify_move_completed()
+
+	assert_signal_emitted(_modal, "declaration_skip_requested",
+			"The unused canonical attack action must be resolved semantically.")
+	assert_signal_not_emitted(_modal, "activation_done",
+			"Presentation must not complete before declaration Skip accepts.")
+	assert_eq(_modal.get_state(), SquadronActivationModal.State.MOVING,
+			"The current interaction remains pending on command authority.")
+	assert_true(_modal._declaration_skip_pending)
+	assert_eq(inst.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_AVAILABLE,
+			"The modal must not mutate the canonical attack action.")
+
+
 func test_cancel_move_returns_to_action_choice() -> void:
 	_start_squadron_phase_game()
 	var inst: SquadronInstance = _make_instance(0)

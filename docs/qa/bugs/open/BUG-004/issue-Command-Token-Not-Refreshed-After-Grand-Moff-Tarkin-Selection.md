@@ -38,6 +38,11 @@ The captured state shows:
 - the interaction has returned to the normal Ship Phase;
 - the UI has not refreshed to display the updated command token.
 
+20260814: manual retesting confirms that bug is still present. hot-set has been tested.
+game_20260814_122718.log
+replay_20260814_122914.json
+annotation_20260814_122857_001.json
+
 ## Resolution
 
 Root cause:

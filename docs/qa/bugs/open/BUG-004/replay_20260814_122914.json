@@ -1,0 +1,115 @@
+{
+	"commands": [
+		{
+			"payload": {
+
+			},
+			"player": 0,
+			"sequence": 0,
+			"type": "start_round"
+		},
+		{
+			"payload": {
+				"commands": [
+					0
+				],
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 1,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"commands": [
+					0,
+					1,
+					2
+				],
+				"ship_index": 0
+			},
+			"player": 1,
+			"sequence": 2,
+			"type": "assign_dials"
+		},
+		{
+			"payload": {
+				"next_phase": 2
+			},
+			"player": 1,
+			"sequence": 3,
+			"type": "advance_phase"
+		},
+		{
+			"payload": {
+				"command": 0,
+				"runtime_upgrade_id": "1:ship:debug-imperial-vsd-2:upgrade:debug-tarkin-commander-0"
+			},
+			"player": 1,
+			"sequence": 4,
+			"type": "tarkin_choice"
+		},
+		{
+			"payload": {
+				"action": "reveal",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 5,
+			"type": "reveal_dial"
+		},
+		{
+			"payload": {
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 6,
+			"type": "convert_dial_to_token"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"step_id": "repair_step"
+			},
+			"player": 0,
+			"sequence": 7,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0,
+				"step_id": "attack_step"
+			},
+			"player": 0,
+			"sequence": 8,
+			"type": "advance_activation_step"
+		},
+		{
+			"payload": {
+				"declaration_context": "ship_attack",
+				"reason": "no_targets",
+				"ship_activation_identity": "ship-activation:6",
+				"ship_index": 0
+			},
+			"player": 0,
+			"sequence": 9,
+			"type": "skip_attack"
+		}
+	],
+	"header": {
+		"app_version": "0.1.0",
+		"factions": [
+			0,
+			1
+		],
+		"format_version": 5,
+		"godot_version": "4.5.1-stable (official)",
+		"initial_command_sequence": 0,
+		"initiative_player": 0,
+		"rng_seed": "4652581512690110111",
+		"scenario_id": "debug_scenario",
+		"timestamp": "2026-08-14T10:29:14"
+	}
+}

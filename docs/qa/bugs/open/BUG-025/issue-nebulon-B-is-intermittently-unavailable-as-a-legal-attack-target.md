@@ -111,6 +111,35 @@ TIE can successfully target the Nebulon-B.
 This points toward an intermittent or geometry/state-dependent defect in the
 common targeting pipeline or a Nebulon-B-specific target representation.
 
+### Historical BUG-010 evidence
+
+Earlier annotations recorded the same broader targeting symptom during a
+Victory II-class Star Destroyer activation.
+
+In the first capture:
+
+- the VSD could not attack the Nebulon-B Escort Frigate from its side arc;
+- during the same activation the VSD could attack the CR90 Corvette A from its
+  front arc;
+- the CR90 attack proceeded normally.
+
+In a subsequent capture:
+
+- the VSD still could not attack the Nebulon-B from the side arc;
+- the player therefore skipped the remaining attack.
+
+Evidence:
+
+- `annotation_20260804_221509_003.json`
+- `annotation_20260804_221913_004.json`
+
+This historical evidence strengthens the hypothesis that the defect involves
+Nebulon-B target representation, hull-zone geometry, or target aggregation
+rather than a general attack-flow failure.
+
+It also establishes that the problem predates the later squadron-targeting
+observations and can occur in normal ship → ship attacks.
+
 ## Relationship to BUG-023
 
 BUG-023 audited squadron attack distance semantics and corrected an inconsistency
@@ -160,6 +189,16 @@ For squadron attacks, continue to enforce the separate invariant:
 For ship attacks, normal ship range-band and firing-arc rules apply.
 
 Do not merge those two range models while looking for the common defect.
+
+Explicitly compare:
+
+- VSD side arc → Nebulon-B;
+- VSD front arc → CR90;
+- other VSD arcs → Nebulon-B;
+- other ships/arcs → Nebulon-B.
+
+Determine whether the failure is tied to the Nebulon-B as a whole or only to
+specific attacker/defender hull-zone combinations.
 
 ## Resolution
 

@@ -1,110 +1,5 @@
 
 
-===== FILE: docs/qa/bugs/open/BUG-003/issue-cant-skip-after-commit.md =====
-
-# BUG-003 — Attack Can Be Skipped After Commitment
-
-Severity: High
-Area: Attack Execution
-Layer: Command Flow
-
-## Expected
-
-An attack may be skipped or cancelled only before it reaches its commitment point.
-
-After the attack has been confirmed and dice have been rolled:
-
-- the attack must continue through its remaining resolution steps;
-- the Skip Attack action must no longer be projected;
-- any attempted skip command must be rejected by the authoritative command flow.
-
-## Actual
-
-The player can still skip an attack after it has been confirmed and the attack dice have been rolled.
-
-This allows an already committed attack with authoritative dice results to be abandoned before resolution is complete.
-
-## Reproduction
-
-1. Activate a squadron and select a legal target.
-2. Confirm the attack.
-3. Roll the attack dice.
-4. Attempt to skip the attack during the attack-modification stage.
-
-Result: The attack can still be skipped after dice have been rolled.
-
-Frequency: Always
-
-## Evidence
-
-annotation_20260729_065933_002.json
-
-The captured state shows:
-
-- an active attack with ID attack:70;
-- the attacker and defender already selected;
-- obstruction resolved;
-- four blue dice rolled;
-- authoritative dice results present;
-- attack stage attack_modify;
-- interaction-flow step 18.
-
-## Investigation Hint
-
-The issue is visible after the attack transitions from pre_roll to attack_modify.
-
-Inspect how the availability and authorization of the Skip Attack action are derived after dice results become authoritative.
-
-## Resolution
-
-Root cause:
-
-Fix:
-
-Verification:
-
-- Confirm and roll dice for an attack.
-- Verify that Skip Attack is no longer projected after the attack becomes committed.
-- Verify that a skip command submitted during attack_modify is rejected.
-- Verify that rejecting the command does not alter the attack state or dice results.
-- Verify that the attack can continue through normal resolution.
-- Verify the behavior for both ship and squadron attacks.
-
-## Layer Definition
-
-### Rules
-
-Game mechanics or rules behave incorrectly.
-
-### Command Flow
-
-Commands, interactions, or game progression execute incorrectly, become unavailable, remain available when invalid, or occur in the wrong order.
-
-### Projection
-
-Displayed game information or available actions differ from the authoritative game state.
-
-### Presentation
-
-Visual elements, text, layout, or UI controls behave incorrectly without affecting the underlying game state.
-
-### Architecture
-
-The defect appears to originate from system ownership, lifecycle, or architectural responsibilities.
-
-### Serialization
-
-Save, load, reconnect, replay, or persisted game state behaves incorrectly.
-
-### Networking
-
-Remote synchronization, visibility, or multiplayer state differs from the authoritative game state.
-
-### Performance
-
-The game exhibits excessive loading time, poor responsiveness, frame drops, freezes, or resource issues.
-
-
 ===== FILE: docs/qa/bugs/open/BUG-004/issue-Command-Token-Not-Refreshed-After-Grand-Moff-Tarkin-Selection.md =====
 
 # BUG-004 — Command Token Not Refreshed After Grand Moff Tarkin Selection
@@ -296,6 +191,394 @@ Remote synchronization, visibility, or multiplayer state differs from the author
 ### Performance
 
 The game exhibits excessive loading time, poor responsiveness, frame drops, freezes, or resource issues.
+
+
+===== FILE: docs/qa/bugs/open/BUG-007/issue-Destroyed-squadron-position-still-blocks-later-squadron-placement.md =====
+
+# BUG-007 — Destroyed squadron position still blocks later squadron placement
+
+Severity: Medium
+Area: Squadron Displacement / Placement
+Layer: Gameplay / Geometry
+
+## Expected
+
+Once a squadron is destroyed and removed from play, its former board position
+must no longer participate in placement, overlap, collision, or displacement
+validation.
+
+A displaced squadron should be allowed to occupy that location if no other
+currently active ship, squadron, obstacle, or applicable placement rule blocks it.
+
+## Actual
+
+After a squadron is destroyed, another squadron being displaced cannot be
+placed in the location previously occupied by the destroyed squadron.
+
+The destroyed squadron therefore appears to continue influencing placement
+legality even though it is no longer an active game piece.
+
+## Reproduction
+
+Observed once.
+
+1. Destroy a squadron.
+2. Later cause another squadron to be displaced.
+3. Attempt to place the displaced squadron in the former position of the
+   destroyed squadron.
+
+Result:
+
+- the position is rejected / unavailable;
+- the destroyed squadron's former location appears to remain blocked.
+
+## Evidence
+
+- `annotation_20260804_220955_001.json`
+
+The captured canonical state includes a TIE Fighter Squadron with:
+
+- `current_hull = 0`
+- `destroyed = true`
+
+The annotation records:
+
+`I realized that after displacing a squadron the squadron cannot be placed in a spot where there was a destroyed squadron before.`
+
+## Initial Assessment
+
+Root cause is unknown.
+
+Likely investigation areas include:
+
+- displacement placement validation;
+- squadron overlap/collision queries;
+- board-object enumeration used by placement legality;
+- whether destroyed squadrons remain in scene-level spatial collections;
+- whether gameplay geometry queries filter by `destroyed`;
+- stale collision shapes or scene nodes after destruction.
+
+The fix should not remove destroyed squadrons from canonical history if the game
+still needs them for replay/save/history purposes.
+
+Instead, destroyed entities should be excluded from live spatial occupancy and
+placement legality wherever the rules require them to be out of play.
+
+## Relationship to BUG-006
+
+BUG-006 and BUG-007 may share a lower-level destroyed-entity filtering problem,
+but they represent different failures.
+
+BUG-006:
+- destroyed squadrons reappear after save/load reconstruction.
+
+BUG-007:
+- destroyed squadrons affect live displacement/placement legality.
+
+Keep them separate unless investigation proves one common root cause and one
+repair closes both.
+
+## Resolution
+
+Root cause:
+TBD
+
+Fix:
+TBD
+
+## Verification
+
+After repair, verify:
+
+- destroyed squadron positions no longer block displacement placement;
+- living squadrons still block placement where appropriate;
+- ships and obstacles still participate correctly in placement legality;
+- destroying a squadron removes it from live spatial occupancy immediately;
+- save/load does not reintroduce destroyed spatial blockers;
+- replay and network mirrors produce equivalent placement legality;
+- BUG-006 behavior is checked separately.
+
+
+===== FILE: docs/qa/bugs/open/BUG-008/issue-Range-overlay-remains-visible-on-client-after-host-fleet-command-completes.md =====
+
+# BUG-008 — Range overlay remains visible on client after host fleet command completes
+
+Severity: Low–Medium
+Area: Network / Range Overlay
+Layer: Presentation / Projection
+
+## Expected
+
+When a fleet command or related interaction that displays the range overlay is
+completed, the range overlay should be dismissed on all clients where it was
+shown.
+
+The client presentation should reflect that the interaction requiring the
+range overlay has ended.
+
+## Actual
+
+During network play, after the fleet command is executed by the host, the range
+overlay remains visible on the other player's client.
+
+In the observed case, the Imperial client continued displaying the range
+overlay after the host had completed the fleet-command interaction.
+
+Gameplay otherwise appeared to continue.
+
+## Reproduction
+
+Observed during network play.
+
+1. Start a network game.
+2. Reach a situation in which a fleet command displays the range overlay.
+3. Execute/complete the fleet command on the host.
+4. Observe the other player's client.
+
+Result:
+
+- the host completes the fleet-command interaction;
+- the range overlay remains visible on the client.
+
+## Evidence
+
+- `annotation_20260804_221320_002.json`
+
+Annotation:
+
+`I relize another bug. after fleet command has been executed by the host, the
+range overlay will not vanish on the client (in this case imperial) screen.`
+
+The captured state is in Round 3 Ship Phase after gameplay has continued,
+supporting the interpretation that this is primarily stale client presentation
+rather than an obvious canonical game-flow stall.
+
+## Initial Assessment
+
+Root cause is unknown.
+
+This should be treated as a presentation/projection lifecycle defect unless
+investigation produces evidence of an underlying canonical-state problem.
+
+Likely investigation areas include:
+
+- network handling of fleet-command completion;
+- range-overlay dismissal events;
+- host versus mirrored-client presentation cleanup;
+- whether accepted command/result projection dismisses the overlay locally but
+  fails to perform equivalent cleanup on the remote client;
+- lifecycle cleanup when the interaction that requested the range overlay ends.
+
+### Architecture Constraint
+
+The range overlay is presentation/tool state and must not become canonical
+gameplay state merely to repair this synchronization defect.
+
+In particular, the repair must not introduce concepts such as
+`range_overlay_visible`, equivalent UI visibility state, or range-tool
+lifecycle state into `GameState` or another authoritative gameplay owner solely
+for network synchronization.
+
+Range measurement is a player-side tool. Its presentation does not require
+semantic command representation or deterministic replication merely because
+Hot-Seat and Network presentation differ.
+
+The preferred repair direction is therefore:
+
+authoritative gameplay transition
+→ accepted/mirrored result
+→ derived presentation lifecycle
+→ local overlay cleanup
+
+The client should derive that the interaction requiring the overlay has ended
+and dismiss its local presentation accordingly.
+
+If investigation shows that an existing canonical gameplay fact required to
+derive this cleanup is missing, stop and report that architectural finding
+rather than introducing new authoritative presentation state as part of the
+bug fix.
+
+## Resolution
+
+Root cause:
+TBD
+
+Fix:
+TBD
+
+## Verification
+
+After repair, verify:
+
+- overlay appears correctly when required on the host;
+- overlay appears correctly when required on the client;
+- completing the interaction dismisses it on the host;
+- completing the interaction dismisses it on the client;
+- dismissal occurs after authoritative/mirrored completion rather than through
+  optimistic canonical mutation;
+- subsequent range-overlay interactions can still be opened normally;
+- Hot-Seat behavior remains unchanged;
+- replay/reconnect does not leave a stale overlay visible.
+
+
+===== FILE: docs/qa/bugs/open/BUG-009/issue-Destroyed-ship-is-not-removed-immediately-on-defender-client.md =====
+
+# BUG-009 — Destroyed ship is not removed immediately on defender client
+
+Severity: Medium
+Area: Network / Ship Destruction
+Layer: Presentation / Projection
+
+## Expected
+
+When a ship is destroyed by an accepted attack:
+
+1. canonical game state must mark the ship destroyed;
+2. all peers must receive the authoritative result;
+3. the destroyed ship must be removed or otherwise shown as destroyed on both
+   attacker and defender screens without requiring another gameplay event or
+   manual refresh.
+
+The defender's local presentation must derive from the same accepted canonical
+state as the attacker.
+
+## Actual
+
+The CR90 Corvette A reached destruction during an attack.
+
+On the attacker's screen, the CR90 was correctly shown as destroyed.
+
+On the defender's screen, the CR90 was not shown as destroyed immediately.
+
+The first observation therefore appeared to show a ship surviving at zero hull,
+but a follow-up observation established that destruction had occurred
+canonically and was already visible to the attacker.
+
+The defect is therefore a stale defender/client presentation rather than an
+obvious failure of canonical destruction.
+
+## Reproduction
+
+Observed during network play.
+
+1. Attack the CR90 until the attack destroys it.
+2. Observe the attacker screen.
+3. Observe the defender screen immediately after the accepted destruction.
+
+Result:
+
+- attacker: CR90 is shown destroyed;
+- defender: CR90 remains visible / does not immediately reflect destruction.
+
+## Evidence
+
+- `annotation_20260804_221638_001.json`
+- `annotation_20260804_221817_002.json`
+
+### First observation
+
+The first annotation states:
+
+`Another bug the CR90 was not destroyed at 0 hull.`
+
+The captured state already contains:
+
+- `destroyed = true` for the CR90;
+- lethal accumulated damage;
+- no active `CurrentAttackState`.
+
+This means the canonical snapshot itself does not support the interpretation
+that destruction failed.
+
+### Follow-up observation
+
+The second annotation clarifies:
+
+`on the attacker screen the CR90 was actually destroyed. only on defender
+screen this is not showing up right away.`
+
+This narrows the issue to presentation/projection synchronization on the
+defender side.
+
+## Initial Assessment
+
+The evidence strongly suggests a remote/client presentation refresh defect.
+
+Likely investigation areas include:
+
+- mirrored attack/damage result handling;
+- destruction notification propagation;
+- ship-scene removal or visibility refresh on the defending client;
+- whether local attack resolution emits a destruction/ship-refresh signal that
+  the mirrored client path does not emit;
+- ordering between canonical damage installation and presentation refresh;
+- whether destruction is projected only after a later unrelated board refresh.
+
+The canonical `destroyed` state must remain authoritative.
+
+Do not repair this by introducing separate client-owned destruction state or UI
+state into `GameState`.
+
+### Architecture Constraint
+
+Ship destruction is canonical gameplay state.
+
+The repair should therefore follow:
+
+authoritative damage/destruction command
+→ accepted/mirrored canonical state
+→ derived ship presentation refresh/removal
+
+The defender client must not independently infer, predict, or authoritatively
+mark destruction.
+
+Likewise, presentation state such as `ship_visible`, `destroyed_marker_visible`,
+or equivalent UI flags should not become new canonical gameplay fields solely
+to fix this refresh issue.
+
+If investigation shows that the canonical destruction result itself is not
+being distributed correctly, stop and report that separately rather than
+masking the problem with local UI mutation.
+
+## Relationship to BUG-019
+
+BUG-009 and BUG-019 may share a presentation-refresh seam.
+
+BUG-009:
+- accepted ship destruction is not reflected immediately on the defender client.
+
+BUG-019:
+- ship damage display does not refresh immediately after collision damage.
+
+Both suggest that some remote damage/destruction paths may fail to trigger the
+same presentation refresh used by local paths.
+
+Keep the issues separate for traceability, but investigate them together when
+the Presentation / Projection batch is implemented.
+
+## Resolution
+
+Root cause:
+TBD
+
+Fix:
+TBD
+
+## Verification
+
+After repair, verify:
+
+- lethal attack marks the ship destroyed canonically;
+- attacker presentation updates immediately;
+- defender presentation updates immediately;
+- destroyed ship is removed/hidden consistently on both peers;
+- no duplicate destruction processing occurs;
+- non-lethal damage still refreshes correctly;
+- destruction caused by attack, collision, critical effect, and other damage
+  transactions all use the correct projection path;
+- Hot-Seat behavior remains correct;
+- replay/reconnect reconstruct destroyed ships correctly;
+- BUG-019 regression remains green.
 
 
 ===== FILE: docs/qa/bugs/open/BUG-013/issue-Stale-Attack-Modify-UI-remains-visible-after-successful-command-completion.md =====
@@ -728,493 +1011,209 @@ Open the Grand Moff Tarkin modal repeatedly across multiple rounds and verify th
 Also check other reusable modal dialogs to determine whether the same position drift occurs more generally.
 
 
-===== FILE: docs/qa/bugs/open/BUG-022/issue-ship-Squadron-Command-stalls-after-commanded-squadron-has-no-attack-target.md =====
+===== FILE: docs/qa/bugs/open/BUG-025/issue-nebulon-B-is-intermittently-unavailable-as-a-legal-attack-target.md =====
 
-# BUG-022 — Ship Squadron Command stalls after commanded squadron has no attack target
+# BUG-025 — Nebulon-B is intermittently unavailable as a legal attack target
 
 Severity: High
-Area: Ship Squadron Command / Squadron Activation
-Layer: Command Flow
+Area: Combat / Targeting
+Layer: Rules / Target Availability
 
 ## Expected
 
-When a squadron is activated through a ship's Squadron command and moves but has no legal attack target:
+Whenever the Nebulon-B Escort Frigate is a legal attack target according to the
+applicable attack rules, it must be offered consistently to the attacker.
 
-1. the unused attack action must be resolved through the appropriate authoritative semantic path;
-2. the squadron activation must complete only after its canonical action state is complete;
-3. if additional Squadron-command activations remain, the player must be able to activate the next eligible squadron;
-4. only after the Squadron command is legitimately complete may the command dial/token be spent and the ship activation advance to the next step.
+This applies independently to:
 
-Presentation must wait for accepted canonical transitions and must not end the Squadron command after a rejected completion command.
+- ship → ship attacks;
+- squadron → ship attacks.
+
+Target availability must be derived from the current attacker, defender,
+geometry, firing arc/range or squadron distance rule, LOS, and applicable rule
+state.
+
+Equivalent legal attack situations must not depend on stale presentation,
+previous attackers, previous target evaluations, or ship-specific target-list
+artifacts.
 
 ## Actual
 
-After a squadron activated through a ship's Squadron command moves and has no legal attack target, the modal attempts to auto-finish the squadron activation.
+The Nebulon-B Escort Frigate is intermittently unavailable as an attack target.
 
-`CompleteSquadronActivationCommand` is correctly rejected because the squadron still has an available attack action.
+The defect is not limited to squadron attacks.
 
-Despite that rejection, presentation continues as though the squadron or Squadron command has completed.
+Observed during the same broader manual test sequence:
 
-Depending on the interaction sequence:
+1. an Imperial TIE Fighter Squadron could not attack the Nebulon-B and had to
+   skip;
+2. another TIE Fighter Squadron later could attack the Nebulon-B;
+3. the Victory II-class Star Destroyer also reached a situation where the
+   Nebulon-B could not be attacked;
+4. Rebel squadron → Victory II attacks worked normally.
 
-- the next eligible commanded squadron cannot be activated; or
-- the Squadron command is ended prematurely;
-- the command dial is spent;
-- the ship activation attempts to advance to Repair;
-- that `advance_activation_step` command is then rejected because declaration-adjacent canonical state is still invalid.
-
-The game becomes stalled because the canonical ship/squadron activation remains incomplete while the UI required to continue it is no longer available.
+The common symptom is therefore increasingly associated with target discovery
+or target legality involving the Nebulon-B, rather than one particular attack
+type.
 
 ## Reproduction
 
-Reproduced twice.
+Reproduced through multiple independent observations.
 
-### Reproduction 1
+### Squadron case
 
-1. Activate the Nebulon-B Escort Frigate.
-2. Resolve a Squadron command.
-3. Activate and resolve the first commanded X-wing.
-4. Activate a second commanded X-wing.
-5. Move the squadron to a position with no legal attack target.
-6. Allow the modal to process the no-target state.
+1. Reach Squadron Phase.
+2. Activate an Imperial TIE Fighter Squadron near the Nebulon-B.
+3. Attempt to attack the Nebulon-B.
 
-Result:
+Observed:
+- Nebulon-B is not offered as an attack target;
+- player must skip.
 
-- the activation modal disappears / progression becomes unusable;
-- the game does not proceed correctly;
-- the next required ship-activation interaction is unavailable.
+A later TIE Fighter activation can attack the Nebulon-B successfully.
 
-### Reproduction 2
+### Ship case
 
-1. Activate the Nebulon-B and enter its Squadron command.
-2. Activate a commanded X-wing.
-3. Move it where no legal attack target is available.
-4. Observe the automatic completion attempt.
-5. Attempt to continue or end the Squadron command.
+1. Reach Ship Phase.
+2. Activate the Victory II-class Star Destroyer.
+3. Attempt to declare the Nebulon-B Escort Frigate as target.
 
-Result:
+Observed:
+- the VSD cannot attack the Nebulon-B.
 
-- squadron completion is rejected because an attack action remains canonically available;
-- the modal can nevertheless proceed toward ending the Squadron command;
-- the ship activation then stalls.
+This establishes that the symptom is not limited to squadron targeting.
 
 ## Evidence
 
-- `annotation_20260814_125821_001.json`
-- `annotation_20260814_132727_001.json`
-- `game_20260814_125441.log`
-- `game_20260814_132516.log`
-- `replay_20260814_125834.json`
+- annotation: `the tie squaron could not attck the neb-b again. I had to skip`
+- annotation: `The second tie squadron could attack the neb-B. very strange...`
+- annotation: `I cannot attack the neb-b with the VSD!`
+- associated gameplay replay/log evidence where available.
 
-### Canonical-state evidence
+### Ship-case canonical evidence
 
-At the first captured stalled state:
+The VSD failure capture is:
 
-- Ship Phase is active.
-- Nebulon-B has:
-  - active `ship_activation_identity`;
-  - `squadron_command_opportunity_disposition = "OPEN"`;
-  - `squadron_command_activations_committed = 2`;
-  - Maneuver remains `UNREACHED`.
-- The second commanded X-wing has:
-  - `activation_context = "ship_squadron_command"`;
-  - active squadron activation identity;
-  - `move_action_committed = true`;
-  - `attack_action_disposition = "available"`;
-  - `activated_this_round = false`.
+- Round 2;
+- Ship Phase;
+- no active `CurrentAttackState`;
+- VSD alive;
+- Nebulon-B alive;
+- VSD and Nebulon-B both present in canonical game state.
 
-The canonical state therefore still represents an incomplete commanded-squadron activation even though the presentation required to continue it has disappeared.
+The annotation explicitly records:
 
-The second reproduction captures the same basic state with one committed Squadron-command activation and an active second squadron whose movement is committed but attack action remains available.
+`I cannot attack the neb-b with the VSD!`
 
-### Log evidence
+This is independent evidence that the target-availability defect extends beyond
+squadron attacks.
 
-The production log exposes the failing sequence:
+## Evidence significance
 
-`No targets after move — auto-finishing activation.`
+The combined observations provide an important cross-context comparison.
 
-followed by:
+The defect cannot currently be explained simply as:
 
-`Command rejected [complete_squadron_activation]: Squadron still has an available action.`
+- squadron distance-1 handling;
+- a generic squadron → ship attack failure;
+- a faction-specific squadron problem.
 
-In one reproduction presentation then continues with:
+Both a squadron and a ship can fail to acquire the Nebulon-B as a target.
 
-- Squadron command finalized;
-- `spend_dial` accepted;
-- Squadron command signals completion;
-- ship activation advances locally toward Repair;
-- authoritative `advance_activation_step` rejects with:
-  `Declaration-adjacent state is invalid.`
+At the same time, other attackers can successfully target ships, and another
+TIE can successfully target the Nebulon-B.
 
-This demonstrates that presentation progresses after a failed semantic completion rather than waiting for an accepted canonical result.
+This points toward an intermittent or geometry/state-dependent defect in the
+common targeting pipeline or a Nebulon-B-specific target representation.
 
-### Replay evidence
+### Historical BUG-010 evidence
 
-The replay records:
+Earlier annotations recorded the same broader targeting symptom during a
+Victory II-class Star Destroyer activation.
 
-- sequence 74 — `activate_squadron`
-- sequence 75 — `move_squadron`
-- sequence 76 — `spend_dial`
+In the first capture:
 
-There is no accepted `skip_attack` or `complete_squadron_activation` between movement of the second squadron and spending the Squadron dial.
+- the VSD could not attack the Nebulon-B Escort Frigate from its side arc;
+- during the same activation the VSD could attack the CR90 Corvette A from its
+  front arc;
+- the CR90 attack proceeded normally.
 
-The recorded command history therefore confirms that the commanded squadron's remaining attack action was never semantically resolved before the Squadron command was treated as complete.
+In a subsequent capture:
+
+- the VSD still could not attack the Nebulon-B from the side arc;
+- the player therefore skipped the remaining attack.
+
+Evidence:
+
+- `annotation_20260804_221509_003.json`
+- `annotation_20260804_221913_004.json`
+
+This historical evidence strengthens the hypothesis that the defect involves
+Nebulon-B target representation, hull-zone geometry, or target aggregation
+rather than a general attack-flow failure.
+
+It also establishes that the problem predates the later squadron-targeting
+observations and can occur in normal ship → ship attacks.
+
+## Relationship to BUG-023
+
+BUG-023 audited squadron attack distance semantics and corrected an inconsistency
+where some consumers treated ship-style `close` range as equivalent to squadron
+distance 1.
+
+BUG-025 is different and broader.
+
+The new ship → ship reproduction proves that BUG-025 cannot be explained solely
+by squadron distance-1 handling.
+
+Do not reopen BUG-023 automatically.
+
+Its distance-1 invariant must remain protected while BUG-025 investigates the
+broader target-discovery path.
 
 ## Initial Assessment
 
-The immediate failing behavior appears to be the commanded-squadron equivalent of a pre-Begin/no-target declaration exit problem.
+Root cause is unknown.
 
-After movement with no legal attack target, presentation attempts to complete the squadron directly even though canonical state still contains an available attack action.
+The new VSD reproduction substantially changes the investigation priority.
 
-The correct semantic path likely needs to resolve/decline that remaining attack opportunity before squadron completion, rather than weakening `CompleteSquadronActivationCommand`.
-
-A second defect may be present in the presentation lifecycle: after the completion command is rejected, the modal still progresses toward Squadron-command completion and can spend the dial / request the next ship activation step.
-
-Do not assume these are separate root causes until the complete command/result path has been investigated.
-
-## Relationship to BUG-018
-
-BUG-022 is closely related conceptually to BUG-018 but occurs in a different gameplay context.
-
-BUG-018 repaired pre-Begin Skip during Squadron Phase.
-
-BUG-022 occurs during `ship_squadron_command` activation and additionally demonstrates premature Squadron-command completion/dial spending after an unsuccessful squadron-completion transition.
-
-Track it separately unless investigation proves that the exact same production defect remains incompletely generalized.
-
-## Resolution
-
-Root cause:
-TBD
-
-Fix:
-TBD
-
-## Verification
-
-After repair, verify:
-
-- a commanded squadron that moves and has no legal attack target resolves its unused attack opportunity through an accepted semantic command;
-- `CompleteSquadronActivationCommand` is not weakened to accept incomplete canonical action state;
-- after the first commanded squadron completes, another eligible commanded squadron can be activated when command capacity remains;
-- after the final commanded squadron completes, the Squadron command closes exactly once;
-- the Squadron dial/token is spent only after valid command completion;
-- the ship then advances canonically to the next activation step;
-- a rejected squadron command cannot cause optimistic modal progression or dial spending;
-- ship-commanded squadrons that do have legal attack targets remain able to attack normally;
-- early voluntary termination of the Squadron command remains valid where allowed;
-- Hot-Seat and Network behavior are equivalent;
-- replay records the complete semantic progression;
-- save/load and reconnect preserve any active commanded-squadron activation correctly.
-
-
-===== FILE: docs/qa/bugs/open/BUG-023/issue-legal-squadron-attack-target-is-not-offered-during-Squadron-Phase.md =====
-
-# BUG-023 — Legal distance-1 squadron attack target is not offered during Squadron Phase
-
-Severity: High
-Area: Squadron Phase / Targeting
-Layer: Projection / Command Flow
-
-## Expected
-
-When a squadron is activated during the Squadron Phase and has a legal target at **distance 1**:
-
-1. the legal target must be detected by the production targeting logic;
-2. the squadron activation UI must present the Attack option;
-3. the player must be able to select the legal target and begin the attack;
-4. Move and Attack availability must reflect the squadron's canonical action state and the same distance-1 targeting rules used by command validation.
-
-Important rule distinction:
-
-**Squadron attacks are legal only at distance 1.**
-
-This must not be treated as equivalent to the ship-attack range band `close`. A target may be at close range while still being at distance 2 and therefore illegal for a squadron attack.
-
-## Actual
-
-A TIE Fighter Squadron is activated during the Squadron Phase.
-
-The production targeting diagnostics identify a hull zone of the Nebulon-B Escort Frigate at:
-
-- `distance = 1`
-- `range = close`
-
-and explicitly accept it as a valid target:
-
-`-> HIT ship 'Nebulon-B Escort Frigate' zone=FRONT`
-
-However, the Squadron Phase controller subsequently reports:
-
-`can_move=true, targets=false`
-
-and the activation UI offers only movement.
-
-The player therefore cannot begin an otherwise legal distance-1 squadron attack.
-
-## Reproduction
-
-Observed once.
-
-1. Reach the Squadron Phase.
-2. Activate the TIE Fighter Squadron shown in the evidence.
-3. The Nebulon-B Escort Frigate has at least one hull zone at distance 1.
-4. Observe the available squadron actions.
-
-Result:
-
-- production targeting identifies a valid distance-1 target;
-- the Squadron Phase activation UI reports no attack targets;
-- Attack cannot be selected.
-
-## Evidence
-
-- `annotation_20260814_130328_001.json`
-- `game_20260814_130128.log`
-
-### Canonical-state evidence
-
-At the captured state:
-
-- phase = Squadron Phase;
-- controller = Player 1;
-- active squadron is a TIE Fighter Squadron;
-- `activation_context = "squadron_phase"`;
-- `attack_action_disposition = "available"`;
-- `move_action_committed = false`;
-- `activated_this_round = false`.
-
-The canonical action state therefore still permits the squadron to perform an attack if a legal distance-1 target exists.
-
-### Production targeting evidence
-
-For the relevant TIE Fighter, the log records:
-
-Nebulon-B FRONT:
-
-- distance ≈ 82 px
-- `distance=1`
-- `range=close`
-- accepted:
-  `-> HIT ship 'Nebulon-B Escort Frigate' zone=FRONT`
-
-Other hull zones demonstrate why `close` must not be used as the squadron legality criterion.
-
-For example, Nebulon-B REAR is reported as:
-
-- `distance=2`
-- `range=close`
-
-This is still close range in ship-range terminology, but it is **not legal squadron attack distance**.
-
-Despite the valid FRONT distance-1 target, the Squadron Phase controller then reports:
-
-`Squadron overlay shown for tie_fighter_squadron (can_move=true, targets=false).`
-
-This demonstrates a mismatch between legal distance-1 target discovery and the action availability projected to the player.
-
-### Attack Simulator evidence
-
-The Attack Simulator visually identifies the Nebulon-B as being at `close` range.
-
-This is supporting geometrical evidence only.
-
-It must **not** be used as proof of squadron attack legality unless the simulator also evaluates the explicit distance-1 rule. `close` and `distance 1` are not interchangeable.
-
-The simulator should itself be reviewed to ensure that squadron attack planning communicates and applies distance-1 legality rather than ship-style close-range legality.
-
-## Initial Assessment
-
-The evidence suggests a mismatch between production distance-1 target discovery and the Squadron Phase action-availability projection.
-
-The targeting diagnostics clearly distinguish:
-
-- discrete squadron attack distance (`distance=1`, `distance=2`, etc.);
-- ship-style range bands (`close`, `medium`, `long`).
-
-The repair must preserve this distinction.
+Investigate the shared targeting pipeline before making attack-type-specific
+changes.
 
 Potential investigation areas include:
 
-- whether Squadron Phase target availability accidentally filters by `range == close` instead of `distance == 1`;
-- whether valid distance-1 ship hull-zone results are lost when converting targeting-builder results into squadron activation targets;
-- whether different consumers use inconsistent range representations;
-- whether the Attack Simulator applies ship-style range-band logic to squadron attacks.
+- Nebulon-B hull-zone geometry;
+- firing-arc and LOS calculations against the Nebulon-B;
+- ship target aggregation from individual hull-zone candidates;
+- transformation/rotation handling for the Nebulon-B model;
+- target-list construction shared between ship and squadron attackers;
+- stale target caches or previous attacker state;
+- attacker/defender owner + entity-index identity;
+- inconsistent filtering between candidate discovery and final presentation;
+- whether one invalid hull-zone result incorrectly removes otherwise valid
+  hull-zone candidates;
+- differences between preview target discovery and authoritative BeginAttack
+  validation.
 
-## Relationship to BUG-005
+For squadron attacks, continue to enforce the separate invariant:
 
-BUG-023 is closely related to the same range-model distinction addressed by BUG-005.
+**squadron attack legality = distance 1**
 
-BUG-005 concerned squadron attacks being allowed beyond distance 1 because close-range classification was used too broadly.
+`close` must not be substituted for distance 1.
 
-BUG-023 concerns a legal distance-1 target being omitted from normal Squadron Phase attack availability.
+For ship attacks, normal ship range-band and firing-arc rules apply.
 
-Investigation should explicitly audit all squadron attack consumers to ensure they use **distance 1**, not generic `close` range, as the legality criterion.
+Do not merge those two range models while looking for the common defect.
 
-Do not assume BUG-005 is fully unrelated merely because its direct regression tests pass; BUG-023 may expose another consumer of the old range-band model.
+Explicitly compare:
 
-## Resolution
+- VSD side arc → Nebulon-B;
+- VSD front arc → CR90;
+- other VSD arcs → Nebulon-B;
+- other ships/arcs → Nebulon-B.
 
-Root cause:
-TBD
-
-Fix:
-TBD
-
-## Verification
-
-After repair, verify explicitly:
-
-- squadron → ship attack is available at distance 1;
-- squadron → squadron attack is available at distance 1;
-- distance 2 is rejected even when ship-style range is `close`;
-- all greater distances are rejected;
-- normal Squadron Phase projection and BeginAttack validation use the same distance-1 predicate;
-- commanded-squadron attacks use the same predicate;
-- Attack Simulator uses or clearly displays the same squadron distance-1 legality;
-- moving a squadron causes target availability to be re-derived correctly;
-- Hot-Seat and Network produce equivalent legal-target availability.
-
-
-===== FILE: docs/qa/bugs/open/BUG-024/issues-hip-activation-stalls-after-skipping-remaining-attack-and-opening-Maneuver.md =====
-
-# BUG-024 — Ship activation stalls after skipping remaining attack and opening Maneuver
-
-Severity: High
-Area: Ship Activation / Attack → Maneuver
-Layer: Command Flow / Projection
-
-## Expected
-
-After a ship completes one attack and then legitimately skips its remaining attack opportunity:
-
-1. the Attack step must end canonically;
-2. the Maneuver opportunity must open;
-3. the ship activation presentation must advance to Maneuver;
-4. the Maneuver tool / controls must become available;
-5. after executing the Maneuver, the ship activation must be able to complete normally.
-
-The UI must derive the next step from the accepted canonical activation state and must not lose the active ship context after a successful Skip.
-
-## Actual
-
-During CR90 activation:
-
-1. the first attack completes successfully;
-2. the player proceeds to a possible second attack;
-3. an attempted second target is rejected as illegal;
-4. the player then skips the remaining attack opportunity;
-5. `SkipAttackCommand` is accepted;
-6. canonical state opens the Maneuver opportunity;
-7. the Attack Executor closes;
-8. the ship activation does not present the Maneuver step.
-
-The game stalls.
-
-The CR90 remains the active ship activation, so clicking the ship's dial again is rejected as not eligible, but no usable Maneuver interaction is available to continue the activation.
-
-## Reproduction
-
-Observed once.
-
-1. Activate the CR90 Corvette A.
-2. Complete one legal attack.
-3. Proceed to the remaining attack opportunity.
-4. Attempt/select another target if available.
-5. Skip the remaining attack opportunity.
-6. Observe the ship activation after Skip is accepted.
-
-Result:
-
-- Attack UI closes;
-- Maneuver does not become usable/visible;
-- ship remains canonically active;
-- game cannot continue normally.
-
-## Evidence
-
-- `annotation_20260814_133210_001.json`
-- `game_20260814_132858.log`
-
-### Canonical-state evidence
-
-At the captured stalled state:
-
-- phase = Ship Phase;
-- `current_attack_state.active = false`;
-- CR90:
-  - `ship_activation_identity = "ship-activation:242"`;
-  - `committed_attack_count = 1`;
-  - `attack_step_active = false`;
-  - `squadron_command_opportunity_disposition = "CONSUMED"`;
-  - `maneuver_opportunity_disposition = "OPEN"`;
-  - `activated_this_round = false`.
-
-This is consistent with an active ship activation that has completed/skipped Attack and is now canonically waiting for Maneuver.
-
-However:
-
-- `interaction_flow` is inactive;
-- no Maneuver interaction is available.
-
-The authoritative activation state and presentation are therefore out of sync.
-
-### Log evidence
-
-The relevant production sequence is:
-
-- first attack already committed;
-- later second `begin_attack` attempt rejects:
-  `Attack target is not legal from authoritative board state.`
-- player selects Skip;
-- `SkipAttackCommand` executes successfully;
-- ship Attack step changes from active to inactive;
-- Attack Executor reports:
-  `Attack execution done — completing attack step.`
-- Attack Executor is dismissed;
-- Ship activation reports:
-  `Attack exec completed — advancing activation step.`
-
-No accepted Maneuver-opening/continuation presentation follows.
-
-Later attempts to interact with the CR90 dial report:
-
-`not eligible (... activating=true)`
-
-confirming that the application still considers the CR90 activation active even though its continuation UI is missing.
-
-## Initial Assessment
-
-The semantic Skip appears to be correct.
-
-The canonical `ShipInstance` state already contains the expected post-Skip result:
-
-`maneuver_opportunity_disposition = "OPEN"`
-
-The defect therefore appears to be in the continuation/projection from accepted post-Skip activation state into the Maneuver presentation.
-
-Potential investigation areas include:
-
-- post-`SkipAttackCommand` continuation handling;
-- `AttackExecutor` completion callback;
-- `ShipActivationController` reconstruction/advancement after Attack Executor dismissal;
-- differences between:
-  - skipping Attack before any attack;
-  - completing one attack and skipping the second opportunity;
-  - completing all available attacks normally;
-- stale/transient activation step state after an unsuccessful second Begin attempt.
-
-Do not repair by mutating canonical ship activation state from the scene/controller. Maneuver must remain derived from the accepted `ShipInstance` activation boundary.
-
-## Relationship to existing issues
-
-BUG-024 is related to BUG-003 but represents a different failure mode.
-
-BUG-003 concerns the legality/presentation of Skip after attack commitment.
-
-BUG-024 concerns failure to continue into Maneuver after a legitimate Skip has already been accepted and the canonical Maneuver opportunity is OPEN.
-
-Keep separate unless investigation proves a common root cause.
+Determine whether the failure is tied to the Nebulon-B as a whole or only to
+specific attacker/defender hull-zone combinations.
 
 ## Resolution
 
@@ -1226,19 +1225,35 @@ TBD
 
 ## Verification
 
-After repair, verify:
+After repair, verify at minimum:
 
-- ship with no attack performed can skip Attack and reach Maneuver correctly;
-- ship can complete one attack, skip its remaining attack opportunity, and reach Maneuver;
-- completing all available attacks normally reaches Maneuver;
-- a rejected second `BeginAttack` followed by a legal Skip does not lose activation context;
-- Maneuver is projected only when canonical `maneuver_opportunity_disposition == OPEN`;
-- executing Maneuver consumes the opportunity;
-- End Activation succeeds afterward;
-- presentation does not synthesize semantic progression;
-- Hot-Seat and Network behave equivalently;
-- replay reproduces the same progression;
-- save/load and reconnect during the post-Skip Maneuver boundary reconstruct the Maneuver interaction correctly.
+### Ship → ship
+
+- VSD can attack a legal Nebulon-B hull zone;
+- different Nebulon-B orientations are handled correctly;
+- different attacking VSD hull zones produce correct candidate sets;
+- illegal arc/range/LOS combinations remain rejected.
+
+### Squadron → ship
+
+- TIE → Nebulon-B is offered whenever a legal distance-1 target exists;
+- distance 2 remains illegal even if ship-style range is `close`;
+- multiple identical TIE Fighters are evaluated independently.
+
+### Cross-context consistency
+
+- one attacker cannot leave stale targeting state affecting the next attacker;
+- target discovery and authoritative BeginAttack validation agree;
+- Nebulon-B behaves consistently as a target for ships and squadrons;
+- other ship types remain unaffected;
+- Hot-Seat and Network produce the same target set;
+- replay/save/load/reconnect preserve equivalent targeting behavior;
+- BUG-005 and BUG-023 regressions remain green.
+
+## Status
+
+Open — reproduced across both squadron → ship and ship → ship attack contexts.
+Exact root cause remains unknown.
 
 
 ===== FILE: docs/qa/bugs/verify/BUG-011/issue-network-replay-rng-bootstrap-repair-plan.md =====

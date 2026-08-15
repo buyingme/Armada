@@ -99,8 +99,8 @@ static func is_point_in_arc(
 
 
 ## Returns true if **any** portion of the defending hull-zone edge (polyline)
-## is inside the attacker's firing arc.  Samples representative points along
-## each segment of the polyline.
+## is inside the attacker's firing arc.  Exact boundary intersections protect
+## narrow legal portions between the representative sample points.
 ## Requirements: TL-ARC-003, HZ-EDGE-001.
 ## [param def_edge] — world-space polyline (2+ points, consecutive segments).
 ## [param atk_zone] — the attacking hull zone enum.
@@ -112,12 +112,54 @@ static func is_hull_zone_edge_in_arc(
 	for seg_idx: int in range(def_edge.size() - 1):
 		var seg_start: Vector2 = def_edge[seg_idx]
 		var seg_end: Vector2 = def_edge[seg_idx + 1]
+		if not _edge_arc_boundary_intersections(
+				seg_start, seg_end, atk_zone, atk_arc_pts).is_empty():
+			return true
 		for i: int in range(EDGE_SAMPLE_COUNT + 1):
 			var t: float = float(i) / float(EDGE_SAMPLE_COUNT)
 			var pt: Vector2 = seg_start.lerp(seg_end, t)
 			if is_point_in_arc(pt, atk_zone, atk_arc_pts):
 				return true
 	return false
+
+
+## Returns exact intersections between one finite hull edge and the two
+## infinite rays that bound an attacker's firing arc.
+static func _edge_arc_boundary_intersections(
+		seg_start: Vector2,
+		seg_end: Vector2,
+		atk_zone: Constants.HullZone,
+		atk_arc_pts: Dictionary) -> Array[Vector2]:
+	var keys: Dictionary = _ARC_KEYS[atk_zone]
+	var result: Array[Vector2] = []
+	for suffix: String in ["a", "b"]:
+		var ray_start: Vector2 = atk_arc_pts[keys["inner_%s" % suffix]]
+		var ray_through: Vector2 = atk_arc_pts[keys["outer_%s" % suffix]]
+		var intersection: Variant = _segment_ray_intersection(
+				seg_start, seg_end, ray_start, ray_through - ray_start)
+		if intersection != null and is_point_in_arc(
+				intersection as Vector2, atk_zone, atk_arc_pts):
+			result.append(intersection as Vector2)
+	return result
+
+
+## Returns the intersection of a finite segment and a forward infinite ray,
+## or null when they do not intersect.
+static func _segment_ray_intersection(
+		seg_start: Vector2,
+		seg_end: Vector2,
+		ray_start: Vector2,
+		ray_direction: Vector2) -> Variant:
+	var segment_direction: Vector2 = seg_end - seg_start
+	var cross: float = segment_direction.cross(ray_direction)
+	if absf(cross) < 1e-8:
+		return null
+	var diff: Vector2 = ray_start - seg_start
+	var segment_t: float = diff.cross(ray_direction) / cross
+	var ray_t: float = diff.cross(segment_direction) / cross
+	if segment_t < 0.0 or segment_t > 1.0 or ray_t < 0.0:
+		return null
+	return seg_start + segment_direction * segment_t
 
 
 ## Returns true if **any** portion of a squadron's circular base is inside
@@ -302,35 +344,8 @@ static func measure_attack_range_ship(
 		def_edge: Array[Vector2],
 		atk_zone: Constants.HullZone,
 		atk_arc_pts: Dictionary) -> float:
-	var best: float = INF
-	var count: int = EDGE_SAMPLE_COUNT
-	# Sample points on each defender segment; keep only in-arc points.
-	for seg_idx: int in range(def_edge.size() - 1):
-		var d_a: Vector2 = def_edge[seg_idx]
-		var d_b: Vector2 = def_edge[seg_idx + 1]
-		for i: int in range(count + 1):
-			var t: float = float(i) / float(count)
-			var def_pt: Vector2 = d_a.lerp(d_b, t)
-			if not is_point_in_arc(def_pt, atk_zone, atk_arc_pts):
-				continue
-			var cp: Vector2 = closest_point_on_polyline(def_pt, atk_edge)
-			var d: float = cp.distance_to(def_pt)
-			if d < best:
-				best = d
-	# Also check attacker edge vertices → closest in-arc defender point.
-	for atk_pt: Vector2 in atk_edge:
-		for seg_idx2: int in range(def_edge.size() - 1):
-			var d_a2: Vector2 = def_edge[seg_idx2]
-			var d_b2: Vector2 = def_edge[seg_idx2 + 1]
-			for j: int in range(count + 1):
-				var t2: float = float(j) / float(count)
-				var def_pt2: Vector2 = d_a2.lerp(d_b2, t2)
-				if not is_point_in_arc(def_pt2, atk_zone, atk_arc_pts):
-					continue
-				var d2: float = atk_pt.distance_to(def_pt2)
-				if d2 < best:
-					best = d2
-	return best
+	return float(measure_attack_range_ship_endpoints(
+			atk_edge, def_edge, atk_zone, atk_arc_pts)["distance"])
 
 
 ## Measures the attack range from a hull zone to a squadron base,
@@ -412,6 +427,15 @@ static func _scan_def_edge_forward(
 	for seg_idx: int in range(def_edge.size() - 1):
 		var d_a: Vector2 = def_edge[seg_idx]
 		var d_b: Vector2 = def_edge[seg_idx + 1]
+		for boundary_pt: Vector2 in _edge_arc_boundary_intersections(
+				d_a, d_b, atk_zone, atk_arc_pts):
+			var boundary_cp: Vector2 = closest_point_on_polyline(
+					boundary_pt, atk_edge)
+			var boundary_distance: float = boundary_cp.distance_to(boundary_pt)
+			if boundary_distance < result["distance"]:
+				result["distance"] = boundary_distance
+				result["atk_pt"] = boundary_cp
+				result["def_pt"] = boundary_pt
 		for i: int in range(count + 1):
 			var t: float = float(i) / float(count)
 			var def_pt: Vector2 = d_a.lerp(d_b, t)

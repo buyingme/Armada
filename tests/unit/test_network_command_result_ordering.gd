@@ -26,6 +26,7 @@ func before_each() -> void:
 	AssignDialCommand.register()
 	AdvancePhaseCommand.register()
 	TarkinChoiceCommand.register()
+	SelectRedirectZoneCommand.register()
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._local_player_index = 1
@@ -230,6 +231,41 @@ func test_network_rejection_releases_gate_without_entering_ordered_history() -> 
 			GameManager, "network_command_rejected")
 	assert_eq((args[0] as GameCommand).command_type, "assign_dials")
 	assert_eq(args[1], "Controlled authoritative rejection.")
+
+
+func test_bug_030_host_defender_projects_accepted_redirect_shields() -> void:
+	var state: GameState = _install_client_state(false)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	var defender: ShipInstance = state.get_ship(0, 0)
+	var zone_name: String = Constants.hull_zone_to_string(
+			Constants.HullZone.LEFT)
+	var shields_before: int = int(defender.current_shields.get(zone_name, 0))
+	assert_eq(defender.reduce_shields(zone_name, 1), 1,
+			"Fixture models the command-owned mutation before broadcast.")
+	var canonical_after_command: Dictionary = defender.serialize()
+	var command := SelectRedirectZoneCommand.new(0, {
+		"ship_index": 0,
+		"zone": int(Constants.HullZone.LEFT),
+	})
+	watch_signals(EventBus)
+
+	GameManager._on_network_command_result(command.serialize(), {
+		"zone_name": zone_name,
+		"new_shields": shields_before - 1,
+		"ship_index": 0,
+	})
+
+	assert_signal_emitted_with_parameters(EventBus, "ship_shields_changed", [
+			defender, zone_name, shields_before - 1])
+	assert_eq(defender.serialize(), canonical_after_command,
+			"Accepted-result projection must not repeat shield mutation.")
+	assert_eq(CommandProcessor.get_command_count(), 0,
+			"Projection must create no replay or semantic command entry.")
+	GameManager._on_network_command_rejection(
+			command.serialize(), "Controlled rejection after accepted fixture.")
+	assert_signal_emit_count(EventBus, "ship_shields_changed", 1,
+			"Rejected results must not optimistically refresh shields.")
 
 
 func _install_client_state(with_tarkin: bool) -> GameState:

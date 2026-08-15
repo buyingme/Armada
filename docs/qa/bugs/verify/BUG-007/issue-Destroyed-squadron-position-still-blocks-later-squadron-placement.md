@@ -127,10 +127,35 @@ repair closes both.
 ## Resolution
 
 Root cause:
-TBD
+
+The canonical destroyed record was correct and is intentionally retained.
+Most typed movement paths already excluded destroyed instances, including
+`SquadronMover`, Squadron Phase position construction, and the displacement
+controller. The remaining live board token-movement path did not:
+`GameBoard._build_other_squad_circles()` enumerated every `SquadronToken` in
+the scene and passed each retained position to `TokenMover` without consulting
+the bound `SquadronInstance.destroyed` state. A destroyed token that remained
+in the live scene therefore still became a spatial circle and blocked a later
+placement. The analogous ship-descriptor builder had the same missing
+removed-from-play filter.
+
+This is distinct from BUG-006. BUG-006 concerned reconstruction and already
+prevents destroyed records from becoming active tokens after load. BUG-007 was
+the live enumeration of a retained token. The issue was independently
+reproduced more than once; the second capture is currently stored as
+`docs/qa/bugs/closed/BUG-027/annotation_20260815_081759_002.json`.
 
 Fix:
-TBD
+
+The live `GameBoard` spatial descriptor builders now omit a bound ship or
+squadron whose canonical instance reports `is_destroyed()`. Living pieces are
+still included unchanged. No entity, position, or destruction history is
+deleted, and no presentation state participates in gameplay authority.
+
+The filter is at the scene-to-live-geometry boundary: canonical destruction
+state remains owned by `ShipInstance`/`SquadronInstance`, while the derived
+spatial query consumes only pieces still in play. Save/replay formats are
+unchanged.
 
 ## Verification
 
@@ -143,3 +168,28 @@ After repair, verify:
 - save/load does not reintroduce destroyed spatial blockers;
 - replay and network mirrors produce equivalent placement legality;
 - BUG-006 behavior is checked separately.
+
+Implemented regressions prove:
+
+- a living squadron remains in the live occupancy list;
+- a destroyed squadron with a retained canonical position is excluded;
+- living ships remain blockers and destroyed ships follow the same
+  removed-from-play spatial rule;
+- the destroyed squadron remains present and destroyed in canonical
+  serialization and after `GameState` round-trip;
+- the BUG-006 save fixtures still retain destroyed records while reconstructing
+  only surviving board tokens;
+- `SquadronMover` continues to reject living-squadron overlap and ignore
+  destroyed squadrons.
+
+Verification on 2026-08-15:
+
+- `test_game_board_scenario_bootstrap.gd`: 9/9 passed;
+- `test_squadron_mover.gd`: 6/6 passed;
+- full suite: 237 scripts, 4064/4064 tests, 13645 assertions passed;
+- Phase-K architecture lint: 0 violations, with 4 existing allow-listed
+  branches;
+- `git diff --check`: passed.
+
+Status: repaired and moved to verification; Project Owner manual verification
+of the reproduced displacement/placement scenario remains required.

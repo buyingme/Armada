@@ -12,6 +12,9 @@ class_name LineOfSightChecker
 extends RefCounted
 
 
+const _BOUNDARY_CROSS_EPSILON: float = 1e-5
+
+
 ## Result of a LOS trace.
 ## [param has_los]       — true if line of sight exists.
 ## [param obstructed]    — true if LOS is obstructed (but still valid).
@@ -316,7 +319,10 @@ static func _los_blocked_by_arc_boundaries(
 	for i: int in range(0, _ARC_BOUNDARY_PAIRS.size(), 2):
 		var inner: Vector2 = arc_pts[_ARC_BOUNDARY_PAIRS[i]]
 		var outer: Vector2 = arc_pts[_ARC_BOUNDARY_PAIRS[i + 1]]
-		if _segments_intersect(seg_start, seg_end, inner, outer):
+		var intersection_t: float = _segment_intersection_t(
+				seg_start, seg_end, inner, outer)
+		if intersection_t > _BOUNDARY_CROSS_EPSILON \
+				and intersection_t < 1.0 - _BOUNDARY_CROSS_EPSILON:
 			return true
 	return false
 

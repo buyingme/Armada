@@ -228,10 +228,49 @@ specific attacker/defender hull-zone combinations.
 ## Resolution
 
 Root cause:
-TBD
+
+Two geometry defects in the shared authoritative target pipeline produced the
+cross-context symptom; neither was a Nebulon-B data special case or a stale
+target cache.
+
+1. Ship hull-zone arc/range checks used ten fixed sample points per defending
+   hull-edge segment. At the historical VSD side-arc coordinates, a narrow
+   legal portion of the rotated Nebulon-B edge lay between those points. Arc
+   discovery returned false (and range measurement could return `INF`) even
+   though the finite edge crossed the VSD's firing-arc boundary.
+2. Squadron-to-ship range/LOS validation treated any inclusive intersection
+   with a defending arc-boundary segment as crossing another hull zone. A path
+   that legally ended on the Nebulon-B hull-zone boundary was therefore
+   rejected as `range path blocked`. This is the failure shown by the exact TIE
+   coordinates in the reproduction log.
+
+Forensic correction: the 2026-08-15 ship capture supports the player's report,
+but its captured geometry projects the Nebulon-B into the already-used VSD
+FRONT arc, not a demonstrably legal side arc. It does not by itself prove side
+arc legality. The earlier 2026-08-04 coordinates do reproduce the narrow legal
+VSD RIGHT-arc case and are the ship regression source. Historical BUG-010
+evidence and all later reports remain preserved.
 
 Fix:
-TBD
+
+`RangeFinder` now tests exact finite hull-edge intersections with the two
+infinite firing-arc boundary rays and includes valid boundary points in the
+existing endpoint range measurement. The non-endpoint ship range API delegates
+to that same endpoint result, removing the former disagreement without adding
+a second rule.
+
+`LineOfSightChecker` now classifies only a strict interior intersection as
+crossing a hull-zone boundary. Merely terminating the legal range/LOS path on
+the target boundary is not treated as passing through another hull zone.
+
+All consumers continue through the existing `TargetingListBuilder` /
+`AttackTargetResolver` seam. `BeginAttackCommand` still re-derives and validates
+the same authoritative entry; no UI targeting rule, Nebulon-B exception,
+cache, protocol field, or new geometry authority was introduced.
+
+Squadron legality remains the existing shared DISTANCE-1 predicate. Ship
+`close` range is not used as a substitute: the protected distance-2-but-close
+squadron cases remain rejected.
 
 ## Verification
 
@@ -258,9 +297,48 @@ After repair, verify at minimum:
 - other ship types remain unaffected;
 - Hot-Seat and Network produce the same target set;
 - replay/save/load/reconnect preserve equivalent targeting behavior;
+
+Implemented regressions prove:
+
+- the historical VSD RIGHT-arc → Nebulon-B geometry is projected and accepted
+  by authoritative Begin at defender rotations 35°, 45°, and 55°;
+- a CR90 at the same legal geometry remains a control target;
+- a forged illegal attacker arc and an out-of-range state are rejected without
+  stale target leakage;
+- the exact previously failing TIE position now projects the Nebulon-B FRONT
+  zone and authoritative Begin accepts that same entry;
+- a second TIE control retains its FRONT/RIGHT entries;
+- an exact hull-edge/arc-boundary interval narrower than the old sample gap is
+  detected and measured;
+- a path ending on a hull-zone boundary is legal while existing true-crossing,
+  wrong-arc, LOS, and range rejections remain protected;
+- squadron distance 1 to ship/squadron remains legal, while distance 2 even
+  when ship-classified `close` remains illegal;
+- Squadron Phase, shared target-list, direct Begin validation, network mirror,
+  replay, save/load, and reconnect suites remain consistent.
+
+Verification on 2026-08-15:
+
+- `test_squadron_attack_target_recovery.gd`: 18/18 passed;
+- `test_range_finder.gd`: 49/49 passed;
+- `test_line_of_sight_checker.gd`: 43/43 passed;
+- `test_targeting_list_builder.gd`: 35/35 passed;
+- `test_attack_target_resolver.gd`: 24/24 passed;
+- `test_attack_commands.gd`: 64/64 passed;
+- `test_current_attack_shared_protocol.gd`: 25/25 passed;
+- full suite: 237 scripts, 4064/4064 tests, 13645 assertions passed;
+- Phase-K architecture lint: 0 violations, with 4 existing allow-listed
+  branches;
+- `git diff --check`: passed.
+
+Status: repaired and moved to verification; Project Owner manual verification
+of the reported VSD and TIE target scenarios remains required.
 - BUG-005 and BUG-023 regressions remain green.
 
 ## Status
 
-Open — reproduced across both squadron → ship and ship → ship attack contexts.
-Exact root cause remains unknown.
+Verification — repaired across both squadron → ship and ship → ship attack
+contexts. The earlier open assessment that the exact root cause was unknown is
+preserved above as investigation history and is superseded by the confirmed
+geometry causes in the Resolution section. Project Owner manual verification
+remains required.

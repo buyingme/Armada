@@ -607,6 +607,10 @@ func test_mirrored_ship_result_remains_until_local_acknowledgement() -> void:
 		"attacker_kind": "ship",
 		"attacker_name": "Victory II",
 		"defender_name": "CR90",
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
 	}, Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE)
 	_mirror.apply_damage_result({
 		"target_type": "ship",
@@ -618,6 +622,10 @@ func test_mirrored_ship_result_remains_until_local_acknowledgement() -> void:
 
 	assert_true(_mirror.is_awaiting_result_acknowledgement())
 	assert_true(_mirror.is_open())
+	assert_eq(_mirror.get_panel()._confirm_button.text,
+			"Acknowledge Result")
+	assert_true(_mirror.get_panel()._dice_container.visible,
+			"Mirrored final dice must remain visible before acknowledgement.")
 	assert_true(_mirror.get_panel()._damage_info_container.visible)
 	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
 			"2 shield")
@@ -633,6 +641,10 @@ func test_mirrored_anti_squadron_result_is_inspectable() -> void:
 		"attacker_kind": "ship",
 		"attacker_name": "Nebulon-B",
 		"defender_name": "TIE Fighter",
+		"dice_results": [{
+			"color": int(Constants.DiceColor.BLUE),
+			"face": int(Constants.DiceFace.HIT),
+		}],
 	}, Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE)
 	_mirror.apply_damage_result({
 		"target_type": "squadron",
@@ -642,6 +654,10 @@ func test_mirrored_anti_squadron_result_is_inspectable() -> void:
 	_mirror.show_resolved_result()
 
 	assert_true(_mirror.is_awaiting_result_acknowledgement())
+	assert_eq(_mirror.get_panel()._confirm_button.text,
+			"Acknowledge Result")
+	assert_true(_mirror.get_panel()._dice_container.visible,
+			"Mirrored anti-squadron dice must remain inspectable.")
 	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
 			"2 damage")
 	assert_string_contains(_mirror.get_panel()._damage_info_label.text,

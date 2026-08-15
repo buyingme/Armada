@@ -171,3 +171,205 @@ The acknowledgement itself must not cause, commit, or repeat damage.
 - Acknowledgement only dismisses the local result presentation and resumes the
   appropriate enclosing presentation/continuation.
 - Hot-Seat and Network behavior remain consistent.
+
+## Refinement Implementation — 2026-08-15
+
+### Confirmed refinement root cause
+
+The failed manual ship case exposed a second presentation boundary in the
+original repair. `AttackExecutor.apply_complete_attack_result()` would retain
+the result only while its transient synchronous-submit flag was set, or while
+reconstructing an attack. A normal accepted ship `complete_attack` result could
+arrive through the production `command_executed` route after that flag was no
+longer set, so the executor returned without opening the final inspection
+stage. The anti-squadron/reconstruction route happened to satisfy the other
+branch, which explains the inconsistent manual result.
+
+The result presenter also labelled the final local action `Confirm Result` and
+replaced the existing result body with a generic sentence. That replacement
+made the completed result less useful and did not express the Project Owner's
+required presentation-only acknowledgement language.
+
+Canonical attack completion and damage application were already correct. The
+defect remained entirely in accepted-result correlation and local presentation.
+
+### Refinement implemented
+
+- A live completed result is now correlated to the already-applied damage by
+  the existing attack identity before the inspection stage is shown. It no
+  longer depends only on the transient submit flag. The correlation reads
+  accepted result data and presentation memory; it authorizes no gameplay.
+- The final button is labelled `Acknowledge Result`.
+- Entering the acknowledgement stage no longer overwrites the final result
+  body. Final dice and the already-applied ship or squadron damage remain
+  visible together until acknowledgement.
+- Acknowledgement still emits only the local `result_confirmed` presentation
+  signal. It submits no semantic command, changes no `CurrentAttackState`,
+  repeats no damage or `CompleteAttackCommand`, creates no replay entry, and
+  adds no serialized state.
+- The passive network mirror uses the same panel behavior and dismisses only
+  its local presentation.
+
+This preserves `CurrentAttackState` and the attack commands as canonical
+owners. The executor and mirror retain only transient reconstructable
+presentation lifecycle state.
+
+### Refinement verification
+
+Focused regressions now prove:
+
+- an accepted live ship completion opens the inspection stage even when the
+  transient submit flag is absent;
+- ship and anti-squadron final dice and resulting damage are visible before
+  acknowledgement on the active and mirrored presentations;
+- the button text is exactly `Acknowledge Result`;
+- result presentation and acknowledgement do not mutate canonical attack
+  state, submit a command, add replay history, or duplicate completion/damage;
+- existing H9/Concentrate Fire, post-Begin completion, Hot-Seat projection,
+  network mirror, save/load, reconnect, and replay behavior remains protected.
+
+Verification on 2026-08-15:
+
+- `test_attack_sim_panel.gd`: 65/65 passed;
+- `test_attack_panel_mirror.gd`: 24/24 passed;
+- `test_current_attack_production_resume.gd`: 45/45 passed;
+- `test_current_attack_shared_protocol.gd`: 25/25 passed;
+- full suite: 237 scripts, 4064/4064 tests, 13645 assertions passed;
+- Phase-K architecture lint: 0 violations, with 4 existing allow-listed
+  branches;
+- `git diff --check`: passed.
+
+Status: implementation refined after the failed 2026-08-15 manual review;
+Project Owner manual Hot-Seat and Network verification is still required.
+
+
+## Project Owner Manual Verification — Second Refinement Required
+
+Result: FAILED / CONTINUATION SEMANTICS INCOMPLETE
+
+Manual Hot-Seat verification confirms that ship and squadron attack result
+presentation is now substantially more consistent.
+
+The remaining defect is the acknowledgement/continuation contract.
+
+### Positive result
+
+Ship and squadron attacks now use the same general final-result presentation.
+
+`Acknowledge Result` can appear and the final attack result can be displayed.
+
+This common presentation direction is accepted.
+
+### Remaining defect
+
+The acknowledgement currently behaves as transient local presentation.
+
+Observed behavior:
+
+- `Acknowledge Result` may appear only briefly;
+- gameplay can continue automatically without the button being pressed;
+- in another Hot-Seat observation the acknowledgement did not appear at all.
+
+This does not satisfy the required interaction.
+
+### Authoritative Requirement
+
+After an attack has been resolved canonically, the complete final result must
+remain visible until all required viewers have explicitly acknowledged it.
+
+For Hot-Seat:
+
+1. Show the complete resolved attack result.
+2. Show an `Acknowledge Result` button.
+3. Do not continue the enclosing game flow.
+4. Continue only after the Hot-Seat user presses `Acknowledge Result`.
+
+Exactly one acknowledgement is required.
+
+For Network:
+
+1. Show the same complete resolved result to both players.
+2. Each player has their own `Acknowledge Result` button.
+3. Each player may acknowledge independently.
+4. One player's acknowledgement must not dismiss the other player's result.
+5. Gameplay must not continue until BOTH players have acknowledged the result.
+
+The requirement applies equally to:
+
+- ship → ship attacks;
+- ship → squadron / anti-squadron attacks;
+- squadron attacks where the same final-result lifecycle applies.
+
+### Result Presentation Requirement
+
+Before acknowledgement is possible, the displayed result must already contain
+the resolved outcome, including:
+
+- final dice/result;
+- resulting shield/hull damage for ships where applicable;
+- resulting hull damage for squadrons where applicable.
+
+Acknowledgement must never cause the damage to be applied or become visible.
+
+Damage is already resolved gameplay state.
+
+### Continuation Requirement
+
+`Acknowledge Result` is not another attack decision and must not repeat attack
+resolution.
+
+However, acknowledgement now participates in the continuation contract because
+gameplay is explicitly blocked until the required acknowledgement set is
+complete.
+
+The implementation must therefore provide deterministic acknowledgement state
+appropriate to the active play mode:
+
+- Hot-Seat: one required acknowledgement;
+- Network: acknowledgement from both players.
+
+Do not implement this as an uncoordinated local UI flag if gameplay progression
+depends on it.
+
+The acknowledgement mechanism must support correct:
+
+- Hot-Seat behavior;
+- host/client synchronization;
+- reconnect/reconstruction if acknowledgement is pending;
+- replay/deterministic command progression where required by accepted
+  architecture.
+
+### Architecture Note
+
+The previous implementation treated result acknowledgement as purely local,
+transient presentation state.
+
+That assumption is superseded by this clarified Project Owner requirement.
+
+Because acknowledgement gates continuation in Network play, the next
+implementation must determine the correct accepted architecture surface for
+this synchronization barrier.
+
+Do not introduce ad-hoc GameState UI flags, client-local continuation authority,
+or optimistic continuation.
+
+If satisfying the requirement requires a new semantic acknowledgement command,
+purpose-specific synchronized interaction state, or another architecture
+decision not already permitted by accepted authority, stop and report the
+finding rather than improvising a parallel ownership model.
+
+### Refined Acceptance Criteria
+
+- Ship and squadron attack result handling is equivalent where applicable.
+- Complete resolved damage is visible before acknowledgement.
+- Result presentation remains visible indefinitely until acknowledgement.
+- Button text is exactly `Acknowledge Result`.
+- Hot-Seat requires exactly one acknowledgement.
+- Network requires independent acknowledgement from both players.
+- First network acknowledgement does not dismiss the other player's result.
+- Gameplay does not continue after only one network player acknowledges.
+- Gameplay continues exactly once after all required acknowledgements exist.
+- Acknowledgement never reapplies attack or damage resolution.
+- No duplicate `CompleteAttackCommand` is submitted.
+- Pending acknowledgement survives/reconstructs correctly where required.
+- Network/replay/reconnect behavior remains deterministic.

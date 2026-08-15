@@ -20,6 +20,8 @@ const COMPARISON_TIE_5_PX := Vector2(820.0, 900.0)
 const FORENSIC_NEBULON_NORM := Vector2(
 		0.305568892867477, 0.448125429506655)
 const FORENSIC_VICTORY_PX := Vector2(1036.4, 780.8)
+const BUG_025_VICTORY_PX := Vector2(1037.8625, 736.1537)
+const BUG_025_NEBULON_PX := Vector2(660.0288, 967.9509)
 
 var _saved_state: GameState = null
 var _saved_active: bool = false
@@ -87,7 +89,7 @@ func after_each() -> void:
 	GameScale._load_scale_config()
 
 
-func test_exact_owner_local_ties_have_distinct_nebulon_legality() -> void:
+func test_bug_025_forensic_tie_and_control_tie_target_nebulon() -> void:
 	var state: GameState = _make_forensic_state()
 	_install_state(state)
 	var composition: Dictionary = _make_composition(state)
@@ -108,8 +110,9 @@ func test_exact_owner_local_ties_have_distinct_nebulon_legality() -> void:
 	var tie_5_candidates: Array[Dictionary] = \
 			TargetingListBuilder.authoritative_squadron_target_entries(
 					state, 1, 5)
-	assert_eq(_nebulon_zones(tie_0_candidates), [],
-			"Forensic TIE index 0 has no legal Nebulon hull zone.")
+	assert_eq(_nebulon_zones(tie_0_candidates), [
+			int(Constants.HullZone.FRONT)],
+			"The reproduced distance-1 TIE must recover the Nebulon FRONT zone.")
 	assert_eq(_nebulon_zones(tie_5_candidates), [
 			int(Constants.HullZone.FRONT), int(Constants.HullZone.RIGHT)],
 			"Identical TIE index 5 retains legal FRONT/RIGHT candidates.")
@@ -117,12 +120,85 @@ func test_exact_owner_local_ties_have_distinct_nebulon_legality() -> void:
 	var all_squads: Array[Dictionary] = \
 			controller._build_all_squadron_positions()
 	var obstruction_bodies: Array = controller._build_obstruction_bodies()
-	assert_false(controller._squadron_has_valid_targets(
+	assert_true(controller._squadron_has_valid_targets(
 			tie_0, _token_for_squadron(tie_0), all_squads,
-			obstruction_bodies))
+			obstruction_bodies),
+			"Squadron Phase projection must use the repaired shared legality.")
 	assert_true(controller._squadron_has_valid_targets(
 			tie_5, _token_for_squadron(tie_5), all_squads,
 			obstruction_bodies))
+
+
+func test_bug_025_victory_side_arc_projects_and_begins_nebulon() -> void:
+	for defender_rotation: float in [35.0, 45.0, 55.0]:
+		CommandProcessor.reset()
+		var state: GameState = _make_bug_025_ship_state(
+				NEBULON_KEY, BUG_025_NEBULON_PX, defender_rotation)
+		_install_state(state)
+		var candidates: Array[Dictionary] = \
+				TargetingListBuilder.authoritative_ship_target_entries(
+						state, 1, 0)
+		var side_candidates: Array[Dictionary] = _ship_target_candidates(
+				candidates, Constants.HullZone.RIGHT, 0, 0)
+		assert_false(side_candidates.is_empty(),
+				"VSD RIGHT arc must offer the Nebulon at %.0f degrees." \
+						% defender_rotation)
+		if side_candidates.is_empty():
+			continue
+		var result: Dictionary = CommandProcessor.submit(BeginAttackCommand.new(
+				1, _ship_begin_payload(state, side_candidates[0])))
+		assert_false(result.is_empty(),
+				"Begin must accept the same VSD side-arc candidate as projection.")
+		assert_true(state.current_attack_state.active)
+		assert_eq(state.current_attack_state.attacker_zone,
+				int(Constants.HullZone.RIGHT))
+		assert_eq(state.current_attack_state.defender_player, 0)
+		assert_eq(state.current_attack_state.defender_index, 0)
+		assert_eq(_history_types(), [BeginAttackCommand.TYPE])
+
+
+func test_bug_025_ship_controls_reject_illegal_arc_and_clear_between_states() \
+		-> void:
+	var control_state: GameState = _make_bug_025_ship_state(
+			CR90_KEY, BUG_025_NEBULON_PX, 45.0)
+	_install_state(control_state)
+	var control_candidates: Array[Dictionary] = _ship_target_candidates(
+			TargetingListBuilder.authoritative_ship_target_entries(
+					control_state, 1, 0),
+			Constants.HullZone.RIGHT, 0, 0)
+	assert_false(control_candidates.is_empty(),
+			"A non-Nebulon ship at the same legal geometry remains a control target.")
+
+	CommandProcessor.reset()
+	var illegal_state: GameState = _make_bug_025_ship_state(
+			NEBULON_KEY, BUG_025_NEBULON_PX, 45.0)
+	_install_state(illegal_state)
+	var legal_candidates: Array[Dictionary] = _ship_target_candidates(
+			TargetingListBuilder.authoritative_ship_target_entries(
+					illegal_state, 1, 0),
+			Constants.HullZone.RIGHT, 0, 0)
+	assert_false(legal_candidates.is_empty())
+	if legal_candidates.is_empty():
+		return
+	var forged_payload: Dictionary = _ship_begin_payload(
+			illegal_state, legal_candidates[0])
+	forged_payload["attacker_zone"] = int(Constants.HullZone.LEFT)
+	assert_eq(CommandProcessor.submit(
+			BeginAttackCommand.new(1, forged_payload)), {},
+			"Authoritative Begin must still reject an illegal attacker arc.")
+	assert_true(illegal_state.current_attack_state.is_inactive())
+	assert_true(_history_types().is_empty())
+	assert_engine_error(1,
+			"The forged illegal arc must fail authoritative target validation.")
+
+	var far_state: GameState = _make_bug_025_ship_state(
+			NEBULON_KEY, Vector2(200.0, 2000.0), 45.0)
+	_install_state(far_state)
+	assert_true(_ship_target_candidates(
+			TargetingListBuilder.authoritative_ship_target_entries(
+					far_state, 1, 0),
+			Constants.HullZone.RIGHT, 0, 0).is_empty(),
+			"A new attacker query must not retain the previous target list.")
 
 
 func test_bug_005_inside_distance_one_previews_and_begins_both_pairings() \
@@ -299,7 +375,8 @@ func test_all_squadron_declaration_contexts_begin_with_exact_owner_transition() 
 					state.current_attack_state.serialize())
 
 
-func test_production_selection_never_previews_non_candidate_nebulon_zone() -> void:
+func test_bug_025_production_selection_and_begin_accept_forensic_nebulon() \
+		-> void:
 	var state: GameState = _make_forensic_state()
 	_install_state(state)
 	assert_true(CommandProcessor.restore_next_sequence(115))
@@ -315,30 +392,37 @@ func test_production_selection_never_previews_non_candidate_nebulon_zone() -> vo
 	_activate_through_controller(controller, tie_0_token)
 	assert_eq(state.find_squadron_index(
 			GameManager.get_activating_squadron()), 0)
-	assert_false(modal._attack_button.visible,
-			"Action availability must fail closed for exact TIE index 0.")
+	assert_true(modal._attack_button.visible,
+			"Action availability must expose the repaired legal target.")
 	var enclosing_flow: Dictionary = state.interaction_flow.serialize()
 
-	# Exercise the same production composition defensively even if a stale
-	# caller attempted to enter attack selection despite the hidden action.
-	executor.start_squadron_attack(tie_0_token)
+	modal._on_attack_pressed()
 	selector._try_select_target_ship_zone(
 			nebulon_token, Constants.HullZone.FRONT)
-	selector._try_select_target_ship_zone(
-			nebulon_token, Constants.HullZone.RIGHT)
 
-	assert_false(selector.has_declaration_candidate())
-	assert_null(selector.get_state().defender_ship)
+	assert_true(selector.has_declaration_candidate())
+	assert_eq(selector.get_state().defender_ship, nebulon_token)
 	assert_true(state.current_attack_state.is_inactive())
 	assert_false(state.timing_window_state.active)
 	assert_eq(state.interaction_flow.serialize(), enclosing_flow,
-			"Transient target selection must not replace enclosing flow.")
+			"Transient target selection must not replace enclosing flow before Begin.")
 	assert_eq(CommandProcessor.get_next_sequence(), 116)
 	assert_eq(_history_types(), ["activate_squadron"])
+
+	executor._on_declaration_confirm()
+
+	assert_true(state.current_attack_state.active,
+			"Authoritative Begin must accept the same repaired target projection.")
+	assert_eq(state.current_attack_state.attacker_index, 0)
+	assert_eq(state.current_attack_state.defender_index, 1)
+	assert_eq(state.current_attack_state.defender_zone,
+			int(Constants.HullZone.FRONT))
+	assert_eq(_history_types(), ["activate_squadron", "begin_attack"])
 
 
 func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 	var state: GameState = _make_forensic_state()
+	_place_squadron(state.get_squadron(1, 0), Vector2(1900.0, 200.0))
 	_install_state(state)
 	var composition: Dictionary = _make_composition(state)
 	var controller: SquadronPhaseController = composition["controller"]
@@ -832,6 +916,31 @@ func _make_forensic_state() -> GameState:
 	return state
 
 
+func _make_bug_025_ship_state(defender_key: String,
+		defender_position: Vector2, defender_rotation: float) -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	state.current_round = 3
+	state.current_phase = Constants.GamePhase.SHIP
+	state.initiative_player = 1
+	var defender: ShipInstance = _make_ship(defender_key, 0)
+	_place_ship(defender, defender_position, defender_rotation)
+	state.get_player_state(0).ships.append(defender)
+	var attacker: ShipInstance = _make_ship(VICTORY_KEY, 1)
+	_place_ship(attacker, BUG_025_VICTORY_PX, 157.5)
+	assert_true(attacker.establish_ship_activation(
+			"ship-activation:bug-025"))
+	attacker.begin_attack_step()
+	state.get_player_state(1).ships.append(attacker)
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.ATTACK_STEP, 1,
+			Constants.Visibility.ALL, {
+				"ship_activation_identity": attacker.ship_activation_identity,
+			})
+	return state
+
+
 func _make_distance_boundary_state(defender_kind: String,
 		edge_distance_px: float) -> GameState:
 	var state := GameState.new()
@@ -1021,6 +1130,26 @@ func _squadron_begin_payload(state: GameState,
 		payload["ship_activation_identity"] = \
 				commanding_ship.ship_activation_identity
 	return payload
+
+
+func _ship_begin_payload(state: GameState,
+		candidate: Dictionary) -> Dictionary:
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	return {
+		"attacker_player": 1,
+		"attacker_kind": CurrentAttackState.KIND_SHIP,
+		"attacker_index": 0,
+		"attacker_zone": int(candidate.get("attacker_zone", -1)),
+		"defender_player": int(candidate.get("target_owner", -1)),
+		"defender_kind": str(candidate.get("target_kind", "")),
+		"defender_index": int(candidate.get("target_index", -1)),
+		"defender_zone": int(candidate.get("target_zone", -1)),
+		"attack_kind": SquadronKeywordRuleHelper.ATTACK_KIND_STANDARD,
+		"range_band": str(candidate.get("range_band", "")),
+		"obstructed": bool(candidate.get("obstructed", false)),
+		"dice_pool": (candidate.get("dice", {}) as Dictionary).duplicate(true),
+		"ship_activation_identity": attacker.ship_activation_identity,
+	}
 
 
 func _forged_close_only_begin_payload(state: GameState,
@@ -1241,6 +1370,24 @@ func _nebulon_zones(candidates: Array[Dictionary]) -> Array[int]:
 			zones.append(int(candidate.get("target_zone", -1)))
 	zones.sort()
 	return zones
+
+
+func _ship_target_candidates(candidates: Array[Dictionary],
+		attacker_zone: Constants.HullZone,
+		target_owner: int, target_index: int) -> Array[Dictionary]:
+	var matches: Array[Dictionary] = []
+	for candidate: Dictionary in candidates:
+		if int(candidate.get("attacker_zone", -1)) != int(attacker_zone):
+			continue
+		if str(candidate.get("target_kind", "")) \
+				!= CurrentAttackState.KIND_SHIP:
+			continue
+		if int(candidate.get("target_owner", -1)) != target_owner:
+			continue
+		if int(candidate.get("target_index", -1)) != target_index:
+			continue
+		matches.append(candidate)
+	return matches
 
 
 func _register_controlled_begin_blocker() -> void:

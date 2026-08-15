@@ -478,6 +478,16 @@ func test_arc_boundary_los_clear_when_not_crossing_any_boundary() -> void:
 			"LOS approaching REAR from behind should NOT cross arc boundaries")
 
 
+func test_arc_boundary_touch_at_target_endpoint_is_not_a_crossing() -> void:
+	var def_pos: Vector2 = Vector2(500, 300)
+	var arc_pts: Dictionary = _make_arc_pts(def_pos, 0.0)
+	var endpoint: Vector2 = arc_pts["outer_point_front_left"]
+	var start: Vector2 = endpoint + Vector2(-120.0, 0.0)
+	assert_false(LineOfSightChecker._los_blocked_by_arc_boundaries(
+			start, endpoint, arc_pts),
+			"A range/LOS path may terminate on a legal hull-zone boundary.")
+
+
 func test_arc_boundary_los_blocked_crossing_front_left_boundary() -> void:
 	## LOS line from the left side to the FRONT zone.
 	## The line crosses the front_left boundary → blocked.

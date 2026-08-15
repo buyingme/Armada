@@ -97,6 +97,35 @@ class DestroyedShipProjectionBoard:
 		return token
 
 
+class LiveSpatialBoard:
+	extends GameBoard
+
+	func _ready() -> void:
+		pass
+
+	func setup_capture() -> void:
+		_token_container = Node2D.new()
+		add_child(_token_container)
+
+	func add_squadron(instance: SquadronInstance,
+			at: Vector2) -> SquadronToken:
+		var token := SquadronToken.new()
+		token.position = at
+		token._radius_px = GameScale.squadron_base_diameter_px * 0.5
+		token.bind_instance(instance)
+		_token_container.add_child(token)
+		return token
+
+	func add_ship(instance: ShipInstance, at: Vector2) -> ShipToken:
+		var token := ShipToken.new()
+		token.position = at
+		token._half_w = 35.0
+		token._half_l = 60.0
+		token.bind_instance(instance)
+		_token_container.add_child(token)
+		return token
+
+
 var _previous_game_state: GameState = null
 var _previous_is_game_active: bool = false
 var _previous_active_player: int = 0
@@ -298,6 +327,62 @@ func test_bug_006_destroyed_save_records_are_not_active_board_tokens() -> void:
 		assert_eq(_destroyed_squadron_count(state.serialize()),
 				expected_destroyed_squadrons,
 				"Canonical serialization must retain destroyed squadron records.")
+
+
+func test_bug_007_destroyed_records_do_not_enter_live_spatial_occupancy() \
+		-> void:
+	GameScale._load_scale_config()
+	var state := GameState.new()
+	state.initialize()
+	var squadron_data: SquadronData = AssetLoader.load_squadron_data(
+			"tie_fighter_squadron")
+	var moving: SquadronInstance = SquadronInstance.create_from_data(
+			"tie_fighter_squadron", squadron_data, 1)
+	var living_blocker: SquadronInstance = SquadronInstance.create_from_data(
+			"tie_fighter_squadron", squadron_data, 1)
+	var destroyed_blocker: SquadronInstance = SquadronInstance.create_from_data(
+			"tie_fighter_squadron", squadron_data, 1)
+	destroyed_blocker.mark_destroyed()
+	state.get_player_state(1).squadrons.append_array([
+			moving, living_blocker, destroyed_blocker])
+
+	var ship_data: ShipData = AssetLoader.load_ship_data("cr90_corvette_a")
+	var living_ship: ShipInstance = ShipInstance.create_from_data(
+			"cr90_corvette_a", ship_data, 2, 0)
+	var destroyed_ship: ShipInstance = ShipInstance.create_from_data(
+			"cr90_corvette_a", ship_data, 2, 0)
+	destroyed_ship.mark_destroyed()
+	state.get_player_state(0).ships.append_array([living_ship, destroyed_ship])
+
+	var board := LiveSpatialBoard.new()
+	add_child_autofree(board)
+	board.setup_capture()
+	var moving_token: SquadronToken = board.add_squadron(
+			moving, Vector2(400.0, 400.0))
+	board.add_squadron(living_blocker, Vector2(500.0, 400.0))
+	board.add_squadron(destroyed_blocker, Vector2(600.0, 400.0))
+	board.add_ship(living_ship, Vector2(500.0, 600.0))
+	board.add_ship(destroyed_ship, Vector2(700.0, 600.0))
+
+	var squadron_occupancy: Array = board._build_other_squad_circles(
+			moving_token)
+	var ship_occupancy: Array = board._build_other_ship_rects(moving_token)
+	assert_eq(squadron_occupancy.size(), 1,
+			"Only the living squadron may block live placement.")
+	assert_eq((squadron_occupancy[0] as Dictionary)["position"],
+			Vector2(500.0, 400.0))
+	assert_eq(ship_occupancy.size(), 1,
+			"Destroyed ships follow the same removed-from-play geometry rule.")
+	assert_eq((ship_occupancy[0] as Dictionary)["position"],
+			Vector2(500.0, 600.0))
+	assert_true(destroyed_blocker.is_destroyed())
+	assert_eq(_destroyed_squadron_count(state.serialize()), 1,
+			"The filtered squadron remains in canonical serialized history.")
+	var restored: GameState = GameState.deserialize(state.serialize())
+	assert_not_null(restored)
+	if restored != null:
+		assert_true(restored.get_squadron(1, 2).is_destroyed(),
+				"Save/load must retain destruction without restoring occupancy.")
 
 
 func test_remote_lethal_hull_projection_removes_destroyed_ship_token() -> void:

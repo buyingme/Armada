@@ -3977,16 +3977,19 @@ func _attack_exec_finalize_attack() -> void:
 	_finalize_completed_attack()
 
 
-func apply_complete_attack_result(_result: Dictionary) -> void:
+func apply_complete_attack_result(result: Dictionary) -> void:
 	if _pending_counter_begin:
 		_pending_counter_begin = false
 		_begin_counter_attack()
 		return
-	if _reconstructed_current_attack \
-			and not _pending_finalize_after_completion:
-		_present_completed_attack_result()
+	if _awaiting_result_acknowledgement:
 		return
-	if not _pending_finalize_after_completion:
+	var completed_attack_id: String = str(result.get("attack_id", ""))
+	var accepted_live_completion: bool = not completed_attack_id.is_empty() \
+			and completed_attack_id == _applied_damage_attack_id
+	if not _pending_finalize_after_completion \
+			and not _reconstructed_current_attack \
+			and not accepted_live_completion:
 		return
 	_pending_finalize_after_completion = false
 	_present_completed_attack_result()

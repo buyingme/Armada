@@ -370,7 +370,57 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 			"advance_activation_step"],
 			"Deferred production resume must remain single-shot.")
 	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
-			1, "Confirm Result must not repeat canonical attack completion.")
+			1, "Acknowledge Result must not repeat canonical attack completion.")
+
+
+func test_live_ship_completion_presents_result_without_transient_submit_flag() \
+		-> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:37",
+		"dice_results": [_hit_die()],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	var executor: AttackExecutor = _make_composition(state)
+	var panel: AttackSimPanel = \
+			executor._target_selector.ensure_panel_for_projection()
+	executor._connect_attack_panel_signals()
+	panel.show_initial_attack_exec("Victory II")
+	panel.show_target_selected(
+			"Victory II", "FRONT", "CR90", "FRONT", "Clear",
+			Constants.RANGE_BAND_CLOSE)
+	panel.show_dice_results([_hit_die()])
+	panel.show_damage_info("FRONT: 2 shield, 1 card(s) | Hull 3/4")
+	var displayed_result: String = panel.get_body_text()
+	var canonical_before: Dictionary = CurrentAttackState.inactive().serialize()
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	executor._state.exec_mode = true
+	executor._applied_damage_attack_id = "attack:37"
+	executor._pending_finalize_after_completion = false
+	var history_before: Array[String] = _history_types()
+
+	executor.apply_complete_attack_result({
+		"attack_id": "attack:37",
+		"completed": true,
+	})
+
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"An accepted live ship completion must not depend on a transient flag.")
+	assert_eq(panel._confirm_button.text, "Acknowledge Result")
+	assert_eq(panel.get_body_text(), displayed_result)
+	assert_true(panel._dice_container.visible)
+	assert_true(panel._damage_info_container.visible)
+	assert_string_contains(panel._damage_info_label.text, "2 shield")
+	assert_eq(state.current_attack_state.serialize(), canonical_before)
+	assert_eq(_history_types(), history_before,
+			"Presenting the result must submit no semantic command.")
+
+	panel._on_confirm_pressed()
+
+	assert_eq(state.current_attack_state.serialize(), canonical_before)
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
+			0, "Acknowledgement must not duplicate canonical attack completion.")
 
 
 func test_real_game_board_anti_squadron_result_waits_for_acknowledgement() -> void:

@@ -589,6 +589,9 @@ func _build_other_ship_rects(exclude: Node) -> Array:
 			continue
 		if child is ShipToken:
 			var ship: ShipToken = child as ShipToken
+			var ship_instance: ShipInstance = ship.get_ship_instance()
+			if ship_instance != null and ship_instance.is_destroyed():
+				continue
 			result.append({
 				"position": ship.position,
 				"rotation": ship.rotation,
@@ -605,6 +608,10 @@ func _build_other_squad_circles(exclude: Node) -> Array:
 			continue
 		if child is SquadronToken:
 			var squad: SquadronToken = child as SquadronToken
+			var squad_instance: SquadronInstance = \
+					squad.get_squadron_instance()
+			if squad_instance != null and squad_instance.is_destroyed():
+				continue
 			result.append({
 				"position": squad.position,
 				"radius": squad.get_radius_px(),

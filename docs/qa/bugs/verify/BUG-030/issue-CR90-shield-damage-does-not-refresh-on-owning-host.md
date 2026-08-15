@@ -128,10 +128,40 @@ Both peers should ultimately render the same accepted canonical state.
 ## Resolution
 
 Root cause:
-TBD
+
+The captured asymmetry was specifically the defender-owned Redirect shield
+path, not a general failure of canonical damage resolution. The accepted
+`SelectRedirectZoneCommand` correctly reduced the host-owned defender's
+canonical shields. The server's accepted-result handler then skipped ordinary
+host-local commands because their semantic mutation had already executed
+inline. That assumption was incorrect for presentation: the inline Redirect
+path intentionally performs no UI work, while the mirrored client result calls
+`_handle_remote_select_redirect_zone()` and emits
+`EventBus.ship_shields_changed`. The client refreshed; the defender-host did
+not.
+
+Exact failing path:
+
+`SelectRedirectZoneCommand.execute()` mutates the host defender's
+`ShipInstance` → accepted result is broadcast →
+`GameManager._on_network_command_result()` sees a host-local player index and
+skips result projection → no local shield refresh signal → host card/token
+presentation remains stale. The client takes the mirrored handler and refreshes
+correctly.
 
 Fix:
-TBD
+
+The existing server accepted-result gate now routes
+`select_redirect_zone` through the existing remote-effect projector even when
+the defender is the local host. That projector only resolves the already
+canonical ship reference and emits `ship_shields_changed` with the accepted
+result value. It performs no shield mutation.
+
+The repair is deliberately command-specific rather than a new refresh layer.
+`ShipInstance` remains the shield owner; `SelectRedirectZoneCommand` remains the
+only mutation; the event remains a one-way board/card presentation refresh. No
+network state, replay entry, prediction, compatibility bridge, or serialized
+field was added.
 
 ## Verification
 
@@ -148,3 +178,27 @@ After repair, verify:
 - Hot-Seat behavior remains correct;
 - replay/save/reconnect reconstruction displays canonical shield state;
 - existing BUG-019 and BUG-027 regression behavior remains intact.
+
+Implemented regression evidence models the production host boundary after the
+command-owned shield mutation and proves:
+
+- the accepted host-local Redirect result emits exactly one shield refresh for
+  the canonical defender instance;
+- projection does not reduce shields again and creates no command/replay
+  history;
+- a rejected result does not optimistically emit another refresh;
+- existing client mirrored-result, Repair, collision/damage, board-token, and
+  ship-card refresh suites remain green.
+
+Verification on 2026-08-15:
+
+- `test_network_command_result_ordering.gd`: 9/9 passed;
+- `test_attack_commands.gd`: 64/64 passed;
+- `test_current_attack_shared_protocol.gd`: 25/25 passed;
+- full suite: 237 scripts, 4064/4064 tests, 13645 assertions passed;
+- Phase-K architecture lint: 0 violations, with 4 existing allow-listed
+  branches;
+- `git diff --check`: passed.
+
+Status: repaired and moved to verification; Project Owner manual Network
+verification with the Rebel host as Redirecting defender remains required.

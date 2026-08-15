@@ -167,6 +167,25 @@ func test_hull_zone_edge_in_arc_polyline_returns_true_when_lip_in_arc() -> void:
 	assert_true(result, "Polyline with corners in FRONT arc should return true")
 
 
+func test_hull_zone_edge_exact_boundary_intersection_between_samples() -> void:
+	var pos: Vector2 = Vector2(500, 500)
+	var arc_pts: Dictionary = _make_arc_pts(pos, 0.0)
+	# Close to the arc origin, the legal interval is narrower than the gap
+	# between the fixed representative samples.  Neither segment endpoint nor
+	# any legacy sample lies inside the FRONT sector.
+	var def_edge: Array[Vector2] = [
+		Vector2(300, 495), Vector2(700, 495)]
+	assert_true(RangeFinder.is_hull_zone_edge_in_arc(
+			def_edge, Constants.HullZone.FRONT, arc_pts),
+			"Exact arc-boundary intersections must recover the narrow legal edge.")
+	var atk_edge: Array[Vector2] = [
+		Vector2(480, 465), Vector2(520, 465)]
+	var measurement: Dictionary = RangeFinder.measure_attack_range_ship_endpoints(
+			atk_edge, def_edge, Constants.HullZone.FRONT, arc_pts)
+	assert_lt(float(measurement.get("distance", INF)), INF,
+			"Range measurement must use the same exact legal edge portion.")
+
+
 # =========================================================================
 # is_squadron_in_arc
 # =========================================================================

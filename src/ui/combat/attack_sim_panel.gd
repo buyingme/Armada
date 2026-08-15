@@ -1496,12 +1496,10 @@ func show_result_confirmation() -> void:
 	hide_cf_token_section()
 	hide_roll_button()
 	hide_skip_attack_button()
-	if _body_label:
-		_body_label.text = "Attack resolved. Review the final result."
 	if _confirm_button:
 		_confirm_is_declaration = false
 		_confirm_is_result = true
-		_confirm_button.text = "Confirm Result"
+		_confirm_button.text = "Acknowledge Result"
 		_confirm_button.disabled = false
 		_confirm_button.visible = true
 	visible = true

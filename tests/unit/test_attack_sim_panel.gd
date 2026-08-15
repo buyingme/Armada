@@ -647,7 +647,7 @@ func test_long_attack_result_title_wraps_without_shifting_modal() -> void:
 			"The result modal must stay horizontally centred.")
 
 
-func test_confirm_result_is_distinct_and_presentation_only() -> void:
+func test_acknowledge_result_is_distinct_and_presentation_only() -> void:
 	_panel.show_initial_attack_exec("CR90 Corvette A")
 	_panel.show_confirm_button()
 	assert_eq(_panel._confirm_button.text, "Commit Attack",
@@ -657,11 +657,14 @@ func test_confirm_result_is_distinct_and_presentation_only() -> void:
 		"face": int(Constants.DiceFace.HIT),
 	}])
 	_panel.show_damage_info("FRONT: 1 shield, 0 card(s)")
+	var result_body: String = _panel.get_body_text()
 	_panel.show_result_confirmation()
 	watch_signals(_panel)
 
 	assert_true(_panel.is_awaiting_result_confirmation())
-	assert_eq(_panel._confirm_button.text, "Confirm Result")
+	assert_eq(_panel._confirm_button.text, "Acknowledge Result")
+	assert_eq(_panel.get_body_text(), result_body,
+			"Acknowledgement must not replace the completed result text.")
 	assert_true(_panel._dice_container.visible,
 			"Final dice must remain visible for inspection.")
 	assert_true(_panel._damage_info_container.visible,

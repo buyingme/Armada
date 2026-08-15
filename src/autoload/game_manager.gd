@@ -2413,8 +2413,14 @@ func _on_network_command_result(
 		# peer authored [code]resolve_damage[/code] / [code]spend_defense_token[/code]
 		# for the host-owned defender — see I6b-3 R2 follow-up).
 		var remote_authored: bool = bool(result.get("__remote_authored", false))
+		# Redirect mutates the defender's canonical shields.  When the host is
+		# that defender the accepted broadcast is also its presentation refresh
+		# boundary; the inline command path intentionally performs no UI work.
+		var needs_host_projection: bool = \
+				cmd.command_type == "select_redirect_zone"
 		if cmd.player_index != NetworkManager.get_local_player_index() \
-				or remote_authored:
+				or remote_authored \
+				or needs_host_projection:
 			_handle_remote_command_effects(cmd, result)
 		return
 	_queue_network_command_result(cmd, result)

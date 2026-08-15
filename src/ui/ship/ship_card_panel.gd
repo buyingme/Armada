@@ -149,6 +149,8 @@ func add_ship_entry(instance: ShipInstance) -> void:
 	entry_container.add_child(damage_col)
 	_register_entry(entry_container, instance, left, cmd_token_col,
 			damage_col)
+	if instance.is_destroyed():
+		_ghost_entry(_entries.back())
 
 
 ## Builds the left column: defense tokens, dial gap, and dial stack.
@@ -870,6 +872,9 @@ func _on_damage_overview_from_display(ship_instance: RefCounted) -> void:
 func _on_damage_cards_changed(ship_instance: RefCounted,
 		_card: RefCounted, _is_faceup: bool) -> void:
 	_refresh_damage_for_ship(ship_instance)
+	if ship_instance is ShipInstance \
+			and (ship_instance as ShipInstance).is_destroyed():
+		_ghost_entry_for_instance(ship_instance as ShipInstance)
 
 
 ## Called when a damage card is repaired/discarded — refreshes the
@@ -900,4 +905,11 @@ func _refresh_damage_for_ship(ship_instance: RefCounted) -> void:
 					entry["instance"] as ShipInstance,
 					scale_factor)
 			_refresh_panel_position()
+			return
+
+
+func _ghost_entry_for_instance(instance: ShipInstance) -> void:
+	for entry: Dictionary in _entries:
+		if entry["instance"] == instance:
+			_ghost_entry(entry)
 			return

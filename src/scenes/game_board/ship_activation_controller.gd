@@ -500,6 +500,12 @@ func sync_activation_step_from_flow(flow: InteractionFlow) -> void:
 		return
 	if _activation_ctx.ship_activation_state == null:
 		return
+	# Command-range tooling is local presentation. Once the accepted flow
+	# leaves Squadron, both the acting peer and mirrored observer retire their
+	# own overlay from the same canonical step boundary.
+	if flow.step_id != Constants.InteractionStep.SQUADRON_STEP \
+			and _squadron_phase_controller != null:
+		_squadron_phase_controller.dismiss_cmd_range_overlay()
 	_queue_unavailable_squadron_auto_advance(flow)
 	var target_step: int = -1
 	match flow.step_id:
@@ -1720,6 +1726,11 @@ func _apply_overlap_damage(result: OverlapResolver.ShipShipResult) -> void:
 	if cmd_result.is_empty():
 		_log.error("OverlapDamageCommand rejected.")
 		return
+	if bool(_is_pending_remote_result.call(cmd_result)):
+		# A network client waits for the mirrored command/result before reading
+		# canonical damage. Emitting here would refresh from the pre-command
+		# ShipInstance and leave the display stale until unrelated interaction.
+		return
 	# Emit signals for the moving ship.
 	_emit_overlap_signals(moving_inst,
 			_activation_ctx.activating_ship_token, cmd_result,
@@ -1753,8 +1764,10 @@ func _emit_overlap_signals(inst: ShipInstance, token: ShipToken,
 
 ## Fades out a destroyed ship token (visual only).
 func _fade_out_destroyed_token(token: Node2D) -> void:
-	if token == null:
+	if token == null or token.has_meta(&"destruction_fade_started"):
 		return
+	token.set_meta(&"destruction_fade_started", true)
+	token.set_process_unhandled_input(false)
 	var tween: Tween = token.create_tween()
 	tween.tween_property(token, "modulate:a", 0.0, 0.8)
 	tween.tween_callback(func() -> void:

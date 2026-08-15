@@ -339,6 +339,34 @@ func test_execute_recover_shields() -> void:
 			"Result should report new shield value")
 
 
+func test_mirrored_repair_projects_canonical_shield_result() -> void:
+	var idx: int = _add_ship(1)
+	var ship: ShipInstance = _state.get_ship(1, idx)
+	ship.current_shields["FRONT"] = 0
+	var cmd := RepairActionCommand.new(1, {
+		"action_type": "recover_shields",
+		"owner_player": 1,
+		"ship_index": idx,
+		"zone": "FRONT",
+	})
+	var result: Dictionary = cmd.execute(_state)
+	assert_eq(int(ship.current_shields["FRONT"]), 1,
+			"The accepted command must recover the canonical shield exactly once.")
+	var saved_state: GameState = GameManager.current_game_state
+	GameManager.current_game_state = _state
+	watch_signals(EventBus)
+
+	GameManager._handle_remote_command_effects(cmd, result)
+
+	assert_signal_emit_count(EventBus, "ship_shields_changed", 1,
+			"The mirrored accepted result must refresh the board shield label.")
+	assert_signal_emitted_with_parameters(EventBus, "ship_shields_changed",
+			[ship, "FRONT", 1])
+	assert_eq(int(ship.current_shields["FRONT"]), 1,
+			"Projection must not repeat the canonical Repair mutation.")
+	GameManager.current_game_state = saved_state
+
+
 # ======================================================================
 # Execute — repair_hull (facedown)
 # ======================================================================

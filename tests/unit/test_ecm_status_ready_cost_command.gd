@@ -231,6 +231,10 @@ func test_game_manager_ready_path_records_choice_then_start_round() -> void:
 			"GameManager should submit StartRoundCommand after final choice.")
 	assert_eq(_state.current_phase, Constants.GamePhase.COMMAND,
 			"Final ready choice should continue into Command Phase.")
+	assert_eq(_token_changed_ships, [_ship()],
+			"Accepted local ready cost must refresh the canonical token display once.")
+	assert_eq(_card_changed_ships, [_ship()],
+			"Accepted local ready cost must refresh the ECM card display once.")
 
 
 func test_game_manager_decline_path_records_choice_then_start_round() -> void:

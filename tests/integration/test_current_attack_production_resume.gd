@@ -354,6 +354,14 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 
 	await get_tree().process_frame
 	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(_history_types(), ["resolve_damage", "complete_attack"])
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"Canonical completion should leave the resolved result visible.")
+	assert_eq(CommandProcessor.get_next_sequence(), 35)
+
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
 			"advance_activation_step"])
 	assert_eq(CommandProcessor.get_next_sequence(), 36)
@@ -361,6 +369,35 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
 			"advance_activation_step"],
 			"Deferred production resume must remain single-shot.")
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
+			1, "Confirm Result must not repeat canonical attack completion.")
+
+
+func test_real_game_board_anti_squadron_result_waits_for_acknowledgement() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+		"attack_id": "attack:36",
+		"dice_results": [_hit_die()],
+		"defender_kind": CurrentAttackState.KIND_SQUADRON,
+		"defender_zone": -1,
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 37))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+
+	await get_tree().process_frame
+	assert_true(state.current_attack_state.is_inactive())
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"Anti-squadron damage must remain visible after canonical completion.")
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"), 1)
+
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
+	assert_false(panel.is_awaiting_result_confirmation())
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
+			1, "Anti-squadron acknowledgement must be presentation-only.")
 
 
 func test_real_game_board_ready_failure_remains_inert_and_single_shot() -> void:
@@ -1393,6 +1430,10 @@ func test_player_one_pre_begin_ship_attack_keeps_primary_until_begin() -> void:
 	assert_true(state.current_attack_state.active)
 	assert_eq(state.current_attack_state.attacker_player, 1)
 	assert_true(executor.is_in_exec_mode())
+	assert_false(primary._confirm_button.visible,
+			"Accepted BeginAttack must retire the declaration Confirm control.")
+	assert_true(primary._roll_button.visible,
+			"The committed pre-roll attack should expose its current Roll action.")
 	assert_false(primary._skip_attack_button.visible,
 			"BeginAttack commitment must retire voluntary Skip projection.")
 	assert_false(mirror.is_open())

@@ -1,4 +1,4 @@
-# BUG-013 — Stale Attack Modify UI remains visible after successful command completion
+# BUG-013 — Duplicate to UX-005 - Stale Attack Modify UI remains visible after successful command completion
 
 Severity: Medium
 
@@ -144,3 +144,43 @@ Attack Modify interactions shall follow this interaction model:
 7. Only after the player has seen the updated result may gameplay continue.
 
 This interaction model shall be applied consistently to all current and future parameterized Attack Modify effects.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause of the remaining defect:
+
+The parameterized timing-window prompt was written as plain panel text. After
+the player selected the H9 die, `_on_die_clicked()` consumed and cleared the
+local intent map. Later accepted-result cleanup returned early because that map
+was already empty, leaving the prompt text alive into Defense. The previously
+repaired authoritative die projection was not involved.
+
+Implemented fix:
+
+`AttackSimPanel` now tracks only the exact transient parameter-prompt string it
+created. Accepted timing-window cleanup retires that prompt even after the die
+intent was consumed, while an equality guard prevents it from overwriting a
+newer Defense/later-stage instruction.
+
+Architecture/ownership:
+
+The tracked string is reconstructable local presentation state. Parameter
+collection, the single complete semantic command, canonical dice mutation,
+validation, timing-window ownership, replay, and projection remain unchanged.
+
+Regression evidence:
+
+The production H9 panel regression
+`test_generic_panel_collects_h9_die_before_emitting_exact_intent` now proves
+the prompt appears during parameter collection, disappears after accepted H9
+completion, cannot survive into Defense, and does not disturb the corrected
+dice projection.
+
+Verification:
+
+- focused `test_h9_timing_window.gd`: 19/19 passed (280 assertions);
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: remaining presentation defect repaired by automated evidence; ready
+for Project Owner/manual verification.

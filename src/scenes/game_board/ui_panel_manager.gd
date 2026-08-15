@@ -461,6 +461,7 @@ func _connect_ui_signals() -> void:
 	get_tree().root.size_changed.connect(on_viewport_resized)
 	EventBus.game_ended.connect(show_game_end)
 	EventBus.ship_destroyed.connect(_on_score_changed)
+	EventBus.ship_hull_changed.connect(_on_ship_hull_score_projection_changed)
 	EventBus.squadron_destroyed.connect(_on_score_changed)
 	EventBus.damage_summary_requested.connect(
 			_on_damage_summary_requested)
@@ -555,6 +556,12 @@ func _on_damage_summary_dismissed() -> void:
 ## Called when a ship or squadron is destroyed — refreshes the HUD scores.
 func _on_score_changed(_token: Node) -> void:
 	update_phase_hud()
+
+
+func _on_ship_hull_score_projection_changed(
+		ship: RefCounted, _new_hull: int) -> void:
+	if ship is ShipInstance and (ship as ShipInstance).is_destroyed():
+		update_phase_hud()
 
 
 ## Handles the player confirming they want to quit. Transitions to the

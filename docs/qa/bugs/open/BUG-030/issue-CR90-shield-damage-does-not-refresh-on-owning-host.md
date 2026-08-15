@@ -1,0 +1,150 @@
+# BUG-030 — CR90 shield damage does not refresh on owning host
+
+Severity: Medium
+Area: Ship Damage / Network Presentation
+Layer: Presentation / Projection
+
+## Expected
+
+When a ship suffers shield damage, the updated shield values must be presented
+consistently on all relevant peers after the authoritative damage result has
+been accepted.
+
+In particular, the player owning the damaged ship must immediately see the
+updated shield values on their own host presentation.
+
+Hot-Seat, network host, and network client presentation should all derive the
+displayed shield state from the accepted canonical ShipInstance state.
+
+## Actual
+
+During network play, shield damage to the Rebel CR90 was displayed correctly
+on the Imperial player's client but was not displayed correctly on the Rebel
+player's host.
+
+The two peers therefore presented different shield state for the same
+canonically damaged ship.
+
+## Reproduction
+
+Observed once during network play.
+
+1. Rebel player is the network host and owns the CR90 Corvette A.
+2. Imperial player is the network client.
+3. The CR90 suffers damage affecting its shields.
+4. Observe the CR90 shield presentation on both peers.
+
+Result:
+
+- Imperial/client presentation shows the shield damage correctly.
+- Rebel/host presentation does not show the corresponding shield damage.
+- Canonical game state contains the reduced shield values.
+
+## Evidence
+
+- `annotation_20260815_151129_001.json`
+
+Annotation:
+
+`I realize another UI BUG. toe damage on the CR-90 Shields are not displayed
+on the rebel player (host). They are displayed on the imperial players screen
+(client) correctly.`
+
+The captured canonical state shows the Rebel CR90 with:
+
+- `current_hull = 4`
+- `FRONT = 2`
+- `LEFT = 0`
+- `REAR = 1`
+- `RIGHT = 0`
+- `destroyed = false`
+
+The game is in Round 3 Ship Phase.
+
+This is strong evidence that the observed problem is not simply missing
+canonical damage mutation: the canonical ShipInstance already contains the
+reduced shield values while the owning host presentation is reported as stale.
+
+## Initial Assessment
+
+This appears to be a presentation/projection defect rather than a damage-rule
+or canonical-state defect.
+
+The asymmetric result is particularly relevant:
+
+- the passive Imperial/client presentation receives and displays the changed
+  shield state correctly;
+- the Rebel/network-host presentation remains stale;
+- canonical state already contains the reduced shields.
+
+Investigation should therefore compare the accepted local/host damage-result
+projection path with the mirrored network-client projection path.
+
+Likely investigation areas include:
+
+- accepted ship-damage result handling on the authoritative host;
+- shield/hull refresh events emitted after local accepted damage commands;
+- mirrored-result refresh handling that may already work correctly;
+- ship-card and/or board-token shield presentation refresh;
+- whether the local authoritative route incorrectly assumes that canonical
+  mutation automatically refreshes presentation.
+
+The repair should project already-accepted canonical ShipInstance state into
+the local presentation. It should not introduce duplicate damage mutation,
+network-specific canonical state, or presentation-owned shield state.
+
+## Relationship to Earlier Presentation Bugs
+
+BUG-030 may be related to the accepted-result presentation/projection gaps
+previously found in BUG-019 and BUG-027.
+
+Those repairs should be inspected for an established projection pattern before
+introducing another refresh mechanism.
+
+Do not merge BUG-030 with an earlier issue unless investigation proves that
+the same remaining root cause and repair actually cover this case.
+
+## Architecture Constraint
+
+`ShipInstance` remains authoritative for shield and hull state.
+
+The fix must not:
+
+- mutate shield values from presentation code;
+- introduce a second shield-state owner;
+- synchronize presentation-only state through GameState;
+- duplicate damage resolution;
+- weaken command authority.
+
+The desired flow is:
+
+accepted authoritative damage
+→ canonical ShipInstance mutation
+→ accepted-result projection
+→ local host and remote client presentation refresh
+
+Both peers should ultimately render the same accepted canonical state.
+
+## Resolution
+
+Root cause:
+TBD
+
+Fix:
+TBD
+
+## Verification
+
+After repair, verify:
+
+- shield damage immediately refreshes on the damaged ship owner's network-host
+  presentation;
+- the remote client continues to display the same damage correctly;
+- hull damage refreshes consistently as well;
+- damage to ships owned by either host or client behaves equivalently;
+- ship-card and board-token presentation agree with canonical ShipInstance
+  state;
+- rejected or pending commands do not optimistically change displayed damage;
+- Hot-Seat behavior remains correct;
+- replay/save/reconnect reconstruction displays canonical shield state;
+- existing BUG-019 and BUG-027 regression behavior remains intact.

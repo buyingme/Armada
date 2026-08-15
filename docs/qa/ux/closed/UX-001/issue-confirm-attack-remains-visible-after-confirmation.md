@@ -86,3 +86,38 @@ Loading time, responsiveness, frame rate, stuttering, or delays negatively affec
 ### Accessibility
 
 Readability, contrast, font size, keyboard navigation, color dependence, or other usability barriers.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+After accepted `BeginAttack`, `AttackExecutor.apply_begin_attack_result()`
+retired voluntary Skip but never retired the declaration Confirm button.
+Clearing the transient target candidate did not rebuild that control, so
+"Confirm Attack" survived beside the committed pre-roll action.
+
+Implemented improvement:
+
+The accepted BeginAttack presentation boundary now hides declaration Confirm
+before projecting the applicable pre-roll choice or Roll Dice action.
+Authoritative `BeginAttackCommand` validation remains unchanged and continues
+to reject a repeated declaration while an attack is active.
+
+Architecture/ownership:
+
+The change hides an obsolete derived control only after accepted command
+state. `CurrentAttackState`, attack ownership, validation, and semantic command
+flow are unchanged.
+
+Regression evidence and verification:
+
+- the production-board regression proves one accepted BeginAttack, hidden
+  Confirm/Skip, visible Roll, and an active canonical attack;
+- existing direct-command tests continue to prove repeated Begin rejection;
+- focused `test_current_attack_production_resume.gd`: 43/43 passed (764
+  assertions);
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: implemented by automated evidence; ready for Project Owner/manual UX
+verification.

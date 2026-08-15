@@ -52,3 +52,41 @@ Verification:
 Open the Grand Moff Tarkin modal repeatedly across multiple rounds and verify that it remains centered each time.
 
 Also check other reusable modal dialogs to determine whether the same position drift occurs more generally.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+The defect is Tarkin-modal-specific. Rebuilding choices used deferred
+`queue_free()` while immediately adding a new set, allowing repeated projection
+opens in the same lifecycle/frame to leave both old and new controls in layout.
+Centering then used the fixed `custom_minimum_size` instead of the modal's
+actual combined content size, so the expanded control was positioned as if it
+were still 420 x 220 and appeared progressively right-shifted.
+
+Implemented fix:
+
+The Tarkin modal now removes old choices synchronously, computes its actual
+combined minimum size after rebuilding, sets that size, and centers that exact
+rectangle. No shared modal infrastructure was changed because investigation
+did not demonstrate a general modal defect.
+
+Architecture/ownership:
+
+This is local layout lifecycle only. No gameplay, projection authority,
+command, or canonical state changed.
+
+Regression evidence:
+
+`test_repeated_open_rebuilds_once_and_centres_actual_modal_size` proves repeated
+opens retain exactly one set of choices and both axes remain centered using the
+actual modal size.
+
+Verification:
+
+- focused `test_tarkin_choice_modal.gd`: 5/5 passed;
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: repaired by automated evidence; ready for Project Owner/manual
+multi-round verification.

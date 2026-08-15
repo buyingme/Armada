@@ -182,6 +182,9 @@ func connect_signals() -> void:
 		EventBus.activation_ended.connect(_on_activation_ended)
 	if not EventBus.ship_destroyed.is_connected(_on_ship_destroyed):
 		EventBus.ship_destroyed.connect(_on_ship_destroyed)
+	if not EventBus.ship_hull_changed.is_connected(
+			_on_ship_hull_projection_changed):
+		EventBus.ship_hull_changed.connect(_on_ship_hull_projection_changed)
 	if not EventBus.squadron_activated.is_connected(
 			_on_squadron_activated):
 		EventBus.squadron_activated.connect(_on_squadron_activated)
@@ -222,6 +225,9 @@ func disconnect_signals() -> void:
 		EventBus.activation_ended.disconnect(_on_activation_ended)
 	if EventBus.ship_destroyed.is_connected(_on_ship_destroyed):
 		EventBus.ship_destroyed.disconnect(_on_ship_destroyed)
+	if EventBus.ship_hull_changed.is_connected(
+			_on_ship_hull_projection_changed):
+		EventBus.ship_hull_changed.disconnect(_on_ship_hull_projection_changed)
 	if EventBus.squadron_activated.is_connected(
 			_on_squadron_activated):
 		EventBus.squadron_activated.disconnect(_on_squadron_activated)
@@ -490,6 +496,12 @@ func _on_activation_ended() -> void:
 ## Called when a ship is destroyed.
 func _on_ship_destroyed(ship_node: Node) -> void:
 	refresh_from_authoritative_state(GameManager.current_game_state)
+
+
+func _on_ship_hull_projection_changed(
+		ship: RefCounted, _new_hull: int) -> void:
+	if ship is ShipInstance and (ship as ShipInstance).is_destroyed():
+		refresh_from_authoritative_state(GameManager.current_game_state)
 
 
 ## Called when a squadron is activated.

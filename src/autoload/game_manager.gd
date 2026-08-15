@@ -1540,6 +1540,8 @@ func _submit_status_ready_cost_choice(command: GameCommand) -> Dictionary:
 	if not current_game_state or command == null:
 		return {}
 	var result: Dictionary = _submitter.submit(command)
+	if not result.is_empty() and not bool(result.get("awaiting_remote", false)):
+		project_ecm_ready_cost_result(result)
 	_maybe_start_round_after_status_ready_cost(result)
 	return result
 
@@ -2594,7 +2596,7 @@ func _handle_remote_command_effects(
 		"persistent_effect_damage":
 			pass # CommandRouterAdapter emits persistent-damage presentation events.
 		"repair_action":
-			_handle_remote_repair_action(cmd)
+			_handle_remote_repair_action(cmd, result)
 		"resolve_immediate_effect":
 			_handle_remote_immediate_effect(cmd, result)
 		"status_phase_cleanup":
@@ -2695,6 +2697,13 @@ func _handle_remote_convert_dial_to_token(
 ## Mirrors CAP-UPG-001 token side effects on remote peers after the
 ## authoritative TarkinChoiceCommand result has already mutated GameState.
 func _handle_remote_tarkin_choice(result: Dictionary) -> void:
+	project_tarkin_choice_result(result)
+
+
+## Projects an already-accepted Tarkin result into local ship-card visuals.
+## Both synchronous hot-seat/host submissions and mirrored client results use
+## this route; canonical token mutation remains owned by TarkinChoiceCommand.
+func project_tarkin_choice_result(result: Dictionary) -> void:
 	if current_game_state == null:
 		return
 	var owner_player: int = int(result.get("owner_player", -1))
@@ -2856,11 +2865,21 @@ func _handle_remote_use_ecm(result: Dictionary) -> void:
 
 
 func _handle_remote_ecm_ready_cost(result: Dictionary) -> void:
+	project_ecm_ready_cost_result(result)
+
+
+## Projects an accepted ECM Status ready-cost result from canonical ship state.
+## Local/hot-seat, remote-host, and mirrored-client paths share this seam.
+func project_ecm_ready_cost_result(result: Dictionary) -> void:
 	if current_game_state == null:
 		return
+	var owner_player: int = int(result.get("owner_player", -1))
+	var ship_index: int = int(result.get("ship_index", -1))
+	if owner_player < 0 or owner_player >= Constants.PLAYER_COUNT \
+			or ship_index < 0:
+		return
 	var ship: ShipInstance = current_game_state.get_ship(
-			int(result.get("owner_player", -1)),
-			int(result.get("ship_index", -1)))
+			owner_player, ship_index)
 	if ship == null:
 		return
 	if bool(result.get("token_spent", false)):
@@ -2947,7 +2966,10 @@ func _handle_remote_resolve_damage(
 				ship, faceup_cards, facedown_count,
 				ship.ship_data.ship_name)
 	if result.get("destroyed", false):
-		EventBus.ship_destroyed.emit(ship)
+		# The mirrored command already made ShipInstance destruction canonical.
+		# Board/card presentation retires from the hull projection above; do not
+		# pass a RefCounted instance through the token-typed semantic event.
+		EventBus.ship_hull_changed.emit(ship, 0)
 	_check_elimination()
 
 
@@ -2981,25 +3003,55 @@ func _find_squadron_from_damage_result(result: Dictionary) -> SquadronInstance:
 ## B20–B21: Mirror overlap/persistent damage side effects on client.
 func _handle_remote_damage_event(
 		cmd: GameCommand, result: Dictionary) -> void:
-	var ship: ShipInstance = _find_ship_from_command(cmd)
-	if ship == null:
-		return
-	if result.get("destroyed", false):
-		EventBus.ship_destroyed.emit(ship)
+	var moving_ship: ShipInstance = _find_ship_from_command(cmd)
+	var other_owner: int = int(result.get(
+			"other_owner", cmd.payload.get("other_owner", -1)))
+	var other_index: int = int(result.get(
+			"other_ship_index", cmd.payload.get("other_ship_index", -1)))
+	var other_ship: ShipInstance = null
+	if current_game_state != null:
+		other_ship = current_game_state.get_ship(other_owner, other_index)
+	_project_remote_overlap_ship(
+			moving_ship, result, "moving_hull")
+	_project_remote_overlap_ship(
+			other_ship, result, "other_hull")
 	_check_elimination()
 
 
-## B22: Mirror repair_action side effects on client.
-func _handle_remote_repair_action(cmd: GameCommand) -> void:
+## Refreshes one side of a mirrored overlap result from canonical ship state.
+func _project_remote_overlap_ship(
+		ship: ShipInstance,
+		result: Dictionary,
+		hull_key: String) -> void:
+	if ship == null:
+		return
+	EventBus.damage_card_dealt.emit(ship, null, false)
+	EventBus.ship_hull_changed.emit(ship, int(result.get(hull_key, 0)))
+
+
+## B22: Mirror accepted repair_action results into ship presentation.
+func _handle_remote_repair_action(
+		cmd: GameCommand, result: Dictionary) -> void:
 	var ship: ShipInstance = _find_ship_from_command(cmd)
 	if ship == null:
 		return
-	var action: String = cmd.payload.get("action_type", "")
+	var action: String = str(result.get(
+			"action_type", cmd.payload.get("action_type", "")))
 	match action:
-		"move_shields", "recover_shields":
-			EventBus.ship_defense_token_changed.emit(ship)
+		"move_shields":
+			EventBus.ship_shields_changed.emit(ship,
+					str(result.get("from_zone", cmd.payload.get("from_zone", ""))),
+					int(result.get("from_shields", 0)))
+			EventBus.ship_shields_changed.emit(ship,
+					str(result.get("to_zone", cmd.payload.get("to_zone", ""))),
+					int(result.get("to_shields", 0)))
+		"recover_shields":
+			EventBus.ship_shields_changed.emit(ship,
+					str(result.get("zone", cmd.payload.get("zone", ""))),
+					int(result.get("new_shields", 0)))
 		"repair_hull":
-			EventBus.command_dials_changed.emit(ship)
+			EventBus.ship_hull_changed.emit(ship,
+					int(result.get("new_hull", 0)))
 
 
 ## B23: Mirror resolve_immediate_effect side effects on client.
@@ -3062,7 +3114,7 @@ func _handle_remote_destroy_unit(
 	else:
 		var ship: ShipInstance = _find_ship_from_command(cmd)
 		if ship:
-			EventBus.ship_destroyed.emit(ship)
+			EventBus.ship_hull_changed.emit(ship, 0)
 	_check_elimination()
 
 

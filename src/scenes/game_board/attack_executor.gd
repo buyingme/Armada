@@ -155,6 +155,7 @@ var _pending_squadron_done_after_skip: bool = false
 var _pending_zero_squad_skip: bool = false
 var _defense_command_pending: bool = false
 var _defense_submit_in_progress: bool = false
+var _awaiting_result_acknowledgement: bool = false
 
 ## Reconstruction restores the active individual attack from CurrentAttackState
 ## and derives enclosing ship-attack progress from its ShipInstance owner.
@@ -1061,6 +1062,7 @@ func _reset_exec_state() -> void:
 	_pending_zero_squad_skip = false
 	_defense_command_pending = false
 	_defense_submit_in_progress = false
+	_awaiting_result_acknowledgement = false
 	_reconstructed_current_attack = false
 	_state.clear_all()
 
@@ -1342,6 +1344,8 @@ func _connect_attack_sequence_signals() -> void:
 		p.declaration_confirm_pressed.connect(_on_declaration_confirm)
 	if not p.confirm_pressed.is_connected(_on_attack_confirm):
 		p.confirm_pressed.connect(_on_attack_confirm)
+	if not p.result_confirmed.is_connected(_on_attack_result_confirmed):
+		p.result_confirmed.connect(_on_attack_result_confirmed)
 	if not p.skip_attack_pressed.is_connected(_on_attack_skip):
 		p.skip_attack_pressed.connect(_on_attack_skip)
 
@@ -1401,6 +1405,8 @@ func _disconnect_attack_sequence_signals(panel: AttackSimPanel) -> void:
 	_disconnect_panel_signal(panel.declaration_confirm_pressed,
 			_on_declaration_confirm)
 	_disconnect_panel_signal(panel.confirm_pressed, _on_attack_confirm)
+	_disconnect_panel_signal(panel.result_confirmed,
+			_on_attack_result_confirmed)
 	_disconnect_panel_signal(panel.skip_attack_pressed, _on_attack_skip)
 
 
@@ -1495,6 +1501,7 @@ func apply_begin_attack_result(_result: Dictionary) -> void:
 	_sync_scene_from_current_attack()
 	var gather_context: EffectContext = _derive_gather_dice_context()
 	_publish_attack_declare_patch(range_band)
+	_get_panel().hide_confirm_button()
 	_get_panel().hide_skip_attack_button()
 	if _handle_attack_pool_die_choice(gather_context):
 		return
@@ -3977,16 +3984,35 @@ func apply_complete_attack_result(_result: Dictionary) -> void:
 		return
 	if _reconstructed_current_attack \
 			and not _pending_finalize_after_completion:
-		_finalize_completed_attack()
+		_present_completed_attack_result()
 		return
 	if not _pending_finalize_after_completion:
 		return
 	_pending_finalize_after_completion = false
+	_present_completed_attack_result()
+
+
+## Presents the already-completed canonical result without performing another
+## gameplay mutation. The local acknowledgement only resumes presentation.
+func _present_completed_attack_result() -> void:
+	var panel: AttackSimPanel = _get_panel()
+	if panel == null:
+		_finalize_completed_attack()
+		return
+	_awaiting_result_acknowledgement = true
+	panel.show_result_confirmation()
+
+
+func _on_attack_result_confirmed() -> void:
+	if not _awaiting_result_acknowledgement:
+		return
+	_awaiting_result_acknowledgement = false
 	_finalize_completed_attack()
 
 
 func _finalize_completed_attack() -> void:
 	if _get_panel():
+		_get_panel().hide_confirm_button()
 		_get_panel().hide_damage_info()
 		_get_panel().hide_defense_section()
 		_get_panel().hide_accuracy_section()
@@ -4344,8 +4370,9 @@ func apply_skip_attack_result(result: Dictionary) -> void:
 ## Called when a ship or squadron is destroyed during an attack.
 ## Rules Reference: GF-004 — destroyed ships are removed from play.
 func _fade_out_token(token: Node2D) -> void:
-	if token == null:
+	if token == null or token.has_meta(&"destruction_fade_started"):
 		return
+	token.set_meta(&"destruction_fade_started", true)
 	# Disable input immediately so the token cannot be clicked during the
 	# fade animation.  Visibility is set to false after the tween.
 	token.set_process_unhandled_input(false)

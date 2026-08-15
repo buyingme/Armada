@@ -140,6 +140,31 @@ rather than a general attack-flow failure.
 It also establishes that the problem predates the later squadron-targeting
 observations and can occur in normal ship → ship attacks.
 
+### Additional Reproduction — 2026-08-15
+
+BUG-025 was reproduced again during Round 2 Ship Phase.
+
+Annotation:
+
+`It happened again, I could not attack the neb-B from the VSDside arc! I had to skip the attack.`
+
+Evidence:
+
+- `annotation_20260815_081520_001.json`
+
+At the captured state:
+
+- the Victory II-class Star Destroyer is the active ship;
+- its Attack step is active;
+- it has already committed one attack;
+- the Nebulon-B remains alive;
+- the player reports that the Nebulon-B cannot be selected from the VSD side arc;
+- the remaining attack therefore has to be skipped.
+
+This independently confirms the recurring VSD side-arc → Nebulon-B target-availability failure already recorded in the historical BUG-010 evidence.
+
+The repeated same-geometry symptom increases confidence that BUG-025 is tied to target geometry / hull-zone candidate derivation rather than a one-off presentation or stale-state event.
+
 ## Relationship to BUG-023
 
 BUG-023 audited squadron attack distance semantics and corrected an inconsistency

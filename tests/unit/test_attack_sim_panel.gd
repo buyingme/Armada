@@ -624,3 +624,50 @@ func test_hide_skip_also_hides_confirm() -> void:
 	_panel.hide_skip_attack_button()
 	assert_false(_panel._skip_confirm_container.visible,
 			"hide_skip_attack_button should also hide confirmation.")
+
+
+func test_long_attack_result_title_wraps_without_shifting_modal() -> void:
+	_panel.show_initial_attack_exec(
+			"Nebulon-B Escort Frigate with a deliberately long display name")
+	_panel.show_target_selected(
+			"Nebulon-B Escort Frigate with a deliberately long display name",
+			"FRONT",
+			"Victory II-class Star Destroyer with another long display name",
+			"LEFT", "Clear", Constants.RANGE_BAND_LONG)
+	_panel.show_damage_info("LEFT: 2 shield, 1 card(s) | Hull 7/8")
+	_panel.show_result_confirmation()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_almost_eq(_panel.size.x, _panel.custom_minimum_size.x, 1.0,
+			"Long result titles must wrap inside the intended modal width.")
+	var viewport_width: float = get_viewport().get_visible_rect().size.x
+	assert_almost_eq(_panel.position.x + _panel.size.x * 0.5,
+			viewport_width * 0.5, 1.0,
+			"The result modal must stay horizontally centred.")
+
+
+func test_confirm_result_is_distinct_and_presentation_only() -> void:
+	_panel.show_initial_attack_exec("CR90 Corvette A")
+	_panel.show_confirm_button()
+	assert_eq(_panel._confirm_button.text, "Commit Attack",
+			"Gameplay-changing confirmation should use Commit language.")
+	_panel.show_dice_results([{
+		"color": int(Constants.DiceColor.RED),
+		"face": int(Constants.DiceFace.HIT),
+	}])
+	_panel.show_damage_info("FRONT: 1 shield, 0 card(s)")
+	_panel.show_result_confirmation()
+	watch_signals(_panel)
+
+	assert_true(_panel.is_awaiting_result_confirmation())
+	assert_eq(_panel._confirm_button.text, "Confirm Result")
+	assert_true(_panel._dice_container.visible,
+			"Final dice must remain visible for inspection.")
+	assert_true(_panel._damage_info_container.visible,
+			"Resolved damage must remain visible for inspection.")
+	_panel._on_confirm_pressed()
+
+	assert_signal_emitted(_panel, "result_confirmed")
+	assert_signal_not_emitted(_panel, "confirm_pressed")
+	assert_signal_not_emitted(_panel, "declaration_confirm_pressed")

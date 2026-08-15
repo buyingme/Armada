@@ -23,7 +23,7 @@ legality even though it is no longer an active game piece.
 
 ## Reproduction
 
-Observed once.
+Reproduced at least twice during separate manual observations.
 
 1. Destroy a squadron.
 2. Later cause another squadron to be displaced.
@@ -48,6 +48,34 @@ The annotation records:
 
 `I realized that after displacing a squadron the squadron cannot be placed in a spot where there was a destroyed squadron before.`
 
+### Additional Reproduction — 2026-08-15
+
+BUG-007 was reproduced again during Round 2 Squadron Phase.
+
+Annotation:
+
+`Here it happened again. a destroyed tie squaron blocks my ie squaron move.`
+
+Evidence:
+
+- `annotation_20260815_081759_002.json`
+
+At the captured state:
+
+- the game is in Squadron Phase;
+- Player 1 is the canonical Squadron Phase controller;
+- one TIE Fighter Squadron is canonically destroyed:
+  - `current_hull = 0`
+  - `destroyed = true`
+- the destroyed squadron still has a retained canonical board position;
+- other TIE Fighter Squadrons are actively being moved/activated;
+- the player reports that the destroyed TIE's former position blocks another
+  TIE Fighter's movement/placement.
+
+This independently reproduces the original BUG-007 symptom and increases
+confidence that the problem is persistent rather than a one-off interaction
+failure.
+
 ## Initial Assessment
 
 Root cause is unknown.
@@ -66,6 +94,21 @@ still needs them for replay/save/history purposes.
 
 Instead, destroyed entities should be excluded from live spatial occupancy and
 placement legality wherever the rules require them to be out of play.
+
+The new reproduction makes destroyed-entity participation in live spatial
+queries the leading investigation area.
+
+The presence of a retained position on the destroyed SquadronInstance is not
+itself necessarily incorrect: canonical position/history may legitimately be
+retained for replay, scoring, save/load, or historical purposes.
+
+The important invariant is that an entity with `destroyed = true` must no
+longer contribute live spatial occupancy wherever the rules consider it
+removed from play.
+
+Investigation should therefore identify the exact placement/overlap query that
+still consumes the destroyed squadron rather than solving the problem by
+deleting its canonical position or removing it from serialized history.
 
 ## Relationship to BUG-006
 

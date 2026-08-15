@@ -16,6 +16,13 @@ const COMMAND_LABELS: Dictionary = {
 	Constants.CommandType.CONCENTRATE_FIRE: "Concentrate Fire",
 	Constants.CommandType.REPAIR: "Repair",
 }
+const COMMAND_ICON_FILENAMES: Dictionary = {
+	Constants.CommandType.NAVIGATE: "cmd_navigate.png",
+	Constants.CommandType.SQUADRON: "cmd_squadron.png",
+	Constants.CommandType.CONCENTRATE_FIRE: "cmd_concentrate_fire.png",
+	Constants.CommandType.REPAIR: "cmd_repair.png",
+}
+const COMMAND_ICON_SIZE: Vector2 = Vector2(48, 48)
 
 var _payload: Dictionary = {}
 var _is_interactive: bool = false
@@ -59,7 +66,13 @@ func runtime_upgrade_id() -> String:
 func centre_on_screen(viewport_size: Vector2 = Vector2.ZERO) -> void:
 	if viewport_size == Vector2.ZERO:
 		viewport_size = get_viewport_rect().size
-	position = (viewport_size - custom_minimum_size) * 0.5
+	reset_size()
+	var minimum: Vector2 = get_combined_minimum_size()
+	var modal_size: Vector2 = Vector2(
+			maxf(custom_minimum_size.x, minimum.x),
+			maxf(custom_minimum_size.y, minimum.y))
+	size = modal_size
+	position = (viewport_size - modal_size) * 0.5
 
 
 func _ensure_ui() -> void:
@@ -112,10 +125,10 @@ func _subtitle_text() -> String:
 
 func _rebuild_command_buttons() -> void:
 	for child: Node in _commands_box.get_children():
-		child.queue_free()
+		_commands_box.remove_child(child)
+		child.free()
 	for command: int in _available_commands():
-		var button: Button = _build_command_button(command)
-		_commands_box.add_child(button)
+		_commands_box.add_child(_build_command_choice(command))
 
 
 func _available_commands() -> Array[int]:
@@ -125,14 +138,28 @@ func _available_commands() -> Array[int]:
 	return commands
 
 
-func _build_command_button(command: int) -> Button:
+func _build_command_choice(command: int) -> VBoxContainer:
+	var choice: VBoxContainer = VBoxContainer.new()
+	choice.name = "CommandChoice_%d" % command
+	choice.alignment = BoxContainer.ALIGNMENT_CENTER
+	choice.add_theme_constant_override("separation", 4)
+	var icon: TextureRect = TextureRect.new()
+	icon.name = "CommandIcon_%d" % command
+	icon.custom_minimum_size = COMMAND_ICON_SIZE
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var filename: String = str(COMMAND_ICON_FILENAMES.get(command, ""))
+	if not filename.is_empty():
+		icon.texture = AssetLoader.load_texture("command_tokens/", filename)
+	choice.add_child(icon)
 	var button: Button = Button.new()
 	button.name = "CommandButton_%d" % command
 	button.text = str(COMMAND_LABELS.get(command, "Command %d" % command))
 	button.disabled = not _is_interactive
-	button.custom_minimum_size = Vector2(92, 36)
+	button.custom_minimum_size = Vector2(100, 36)
 	button.pressed.connect(_on_command_pressed.bind(command))
-	return button
+	choice.add_child(button)
+	return choice
 
 
 func _on_command_pressed(command: int) -> void:

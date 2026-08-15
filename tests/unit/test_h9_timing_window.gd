@@ -427,6 +427,8 @@ func test_generic_panel_collects_h9_die_before_emitting_exact_intent() -> void:
 			"TimingUseButton_0", true, false) as Button
 	assert_not_null(use_button)
 	use_button.pressed.emit()
+	assert_string_contains(panel.get_body_text(), "Select an eligible die",
+			"Parameterized H9 selection should present its transient prompt.")
 	assert_signal_not_emitted(panel, "timing_window_use_requested")
 	assert_true(_processor.serialize_history().is_empty())
 	assert_true(use_button.disabled)
@@ -461,10 +463,19 @@ func test_generic_panel_collects_h9_die_before_emitting_exact_intent() -> void:
 	assert_true(panel._timing_window_die_intents.is_empty())
 	assert_eq(panel._dice_textures[0].mouse_filter,
 			Control.MOUSE_FILTER_IGNORE)
+	panel.hide_timing_window_opportunities()
+	assert_false(panel.get_body_text().contains("Select an eligible die"),
+			"Accepted H9 completion must retire its parameter prompt even after "
+			+ "the local die intent has already been consumed.")
+	panel._set_prompt("Defense", "Spend defense tokens.")
+	panel.hide_timing_window_opportunities()
+	assert_eq(panel.get_body_text(), "Spend defense tokens.",
+			"Attack Modify cleanup must not overwrite a later-stage prompt.")
 	panel.show_dice_results(_state.current_attack_state.dice_results)
 	assert_eq(panel._dice_textures[0].mouse_filter,
 			Control.MOUSE_FILTER_IGNORE,
 			"Accepted H9 input must not be restored after refresh.")
+	await get_tree().process_frame
 
 
 func test_generic_panel_h9_decline_submits_without_parameter_mode() -> void:

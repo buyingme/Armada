@@ -813,6 +813,22 @@ func _find_ship_token_for_instance(ship: ShipInstance) -> ShipToken:
 	return null
 
 
+## Removes the board projection once an accepted hull update says that the
+## canonical ship is destroyed. The ShipInstance remains in GameState for
+## scoring, save/load, and replay; only its local token is retired here.
+func _on_ship_hull_projection_changed(
+		ship: RefCounted, _new_hull: int) -> void:
+	if not ship is ShipInstance:
+		return
+	var instance: ShipInstance = ship as ShipInstance
+	if not instance.is_destroyed():
+		return
+	var token: ShipToken = _find_ship_token_for_instance(instance)
+	if token == null or not token.visible:
+		return
+	_fade_out_destroyed_token(token)
+
+
 ## Snaps a ShipToken to the position stored in its ShipInstance model
 ## after a remote execute_maneuver command.  G4.6.5 BF-2.
 func _on_ship_repositioned_remotely(ship: ShipInstance) -> void:
@@ -906,8 +922,10 @@ func _find_card_panel_hit(screen_pos: Vector2) -> ShipInstance:
 
 ## Fades out a destroyed ship token (visual only).
 func _fade_out_destroyed_token(token: Node2D) -> void:
-	if token == null:
+	if token == null or token.has_meta(&"destruction_fade_started"):
 		return
+	token.set_meta(&"destruction_fade_started", true)
+	token.set_process_unhandled_input(false)
 	var tween: Tween = token.create_tween()
 	tween.tween_property(token, "modulate:a", 0.0, 0.8)
 	tween.tween_callback(func() -> void:
@@ -1425,6 +1443,7 @@ func _connect_board_core_signals() -> void:
 
 func _connect_board_damage_and_remote_signals() -> void:
 	EventBus.damage_card_dealt.connect(_on_damage_card_dealt)
+	EventBus.ship_hull_changed.connect(_on_ship_hull_projection_changed)
 	EventBus.ship_repositioned_remotely.connect(
 			_on_ship_repositioned_remotely)
 	EventBus.squadron_repositioned_remotely.connect(
@@ -1478,11 +1497,15 @@ func _refresh_activation_sidebar_ui() -> void:
 
 func _spawn_loaded_tokens_for_player(ps: PlayerState) -> void:
 	for ship: ShipInstance in ps.ships:
+		_panel_mgr.add_ship_to_card_panel(ship)
+		if ship.is_destroyed():
+			continue
 		var placement: TokenPlacement = _placement_from_ship(ship)
 		var token: ShipToken = _spawn_ship_token(placement)
 		token.bind_instance(ship)
-		_panel_mgr.add_ship_to_card_panel(ship)
 	for squad: SquadronInstance in ps.squadrons:
+		if squad.is_destroyed():
+			continue
 		var sq_placement: TokenPlacement = _placement_from_squadron(squad)
 		var sq_token: SquadronToken = _spawn_squadron_token(sq_placement)
 		sq_token.bind_instance(squad)

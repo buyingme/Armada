@@ -7,13 +7,34 @@
 extends GutTest
 
 
+const CURRENT_ATTACK_FIXTURE: GDScript = preload(
+		"res://tests/fixtures/current_attack_state_fixture.gd")
+const ECM_SCRIPT: GDScript = preload(
+		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
+
+
+class CapturingSubmitter:
+	extends CommandSubmitter
+
+	var submitted: Array[GameCommand] = []
+
+
+	func submit(command: GameCommand) -> Dictionary:
+		submitted.append(command)
+		return {"accepted": true}
+
+
 var _mirror: AttackPanelMirror = null
 var _layer: CanvasLayer = null
 var _saved_local_player_index: int = -1
+var _saved_game_state: GameState = null
+var _saved_submitter: CommandSubmitter = null
 
 
 func before_each() -> void:
 	_saved_local_player_index = NetworkManager._local_player_index
+	_saved_game_state = GameManager.current_game_state
+	_saved_submitter = GameManager.get_command_submitter()
 	NetworkManager._local_player_index = -1
 	_mirror = AttackPanelMirror.new()
 	_layer = CanvasLayer.new()
@@ -28,6 +49,8 @@ func after_each() -> void:
 	_mirror = null
 	_layer = null
 	NetworkManager._local_player_index = _saved_local_player_index
+	GameManager.current_game_state = _saved_game_state
+	GameManager.set_command_submitter(_saved_submitter)
 
 
 func _free_node(node: Node) -> void:
@@ -519,3 +542,107 @@ func test_clearing_defender_drops_target_title() -> void:
 	assert_string_contains(_mirror.get_panel().get_body_text(),
 			"hull zone",
 			"Body should revert to the initial-attack prompt.")
+
+
+func test_network_ecm_defense_commit_uses_canonical_token_order() -> void:
+	var state := GameState.new()
+	state.initialize()
+	state.current_phase = Constants.GamePhase.SHIP
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS, 1)
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_DEFENSE,
+		"dice_results": [{
+			"color": int(Constants.DiceColor.RED),
+			"face": int(Constants.DiceFace.HIT),
+		}],
+		"accuracy_locked_tokens": [1],
+		"defense_stage": CurrentAttackState.DEFENSE_PENDING,
+	}))
+	GameManager.current_game_state = state
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.roster_entry_id = "bug-016-defender"
+	var runtime_upgrade: Dictionary = defender.add_runtime_upgrade(
+			"electronic_countermeasures", "bug-016-ecm",
+			"DEFENSIVE_RETROFIT", 0)
+	var use_ecm := UseECMCommand.new(1, {
+		"attack_id": state.current_attack_state.attack_id,
+		"runtime_upgrade_id": str(runtime_upgrade.get(
+				"runtime_upgrade_id", "")),
+	})
+	assert_eq(use_ecm.validate(state), "")
+	use_ecm.execute(state)
+	assert_false(ECM_SCRIPT.pending_authorization(
+			runtime_upgrade).is_empty(),
+			"The network regression must exercise an active ECM authorization.")
+	var evade_index: int = -1
+	var redirect_index: int = -1
+	for index: int in range(defender.defense_tokens.size()):
+		var token_type: int = int(defender.defense_tokens[index].get("type", -1))
+		if token_type == Constants.DefenseToken.EVADE:
+			evade_index = index
+		elif token_type == Constants.DefenseToken.REDIRECT:
+			redirect_index = index
+	assert_gte(evade_index, 0)
+	assert_gte(redirect_index, 0)
+	var submitter := CapturingSubmitter.new()
+	GameManager.set_command_submitter(submitter)
+	_mirror.get_panel()._defense_selected_indices = [
+			redirect_index, evade_index]
+
+	_mirror._on_defense_tokens_done()
+
+	assert_eq(submitter.submitted.size(), 1)
+	assert_eq(submitter.submitted[0].command_type, "commit_defense")
+	assert_eq(submitter.submitted[0].payload.get("selected_indices", []),
+			[evade_index, redirect_index],
+			"The defender mirror must canonicalize click order before submit.")
+	assert_eq(submitter.submitted[0].validate(state), "",
+			"The first ECM-enabled defense commit must validate authoritatively.")
+
+
+func test_mirrored_ship_result_remains_until_local_acknowledgement() -> void:
+	_mirror.apply_flow({
+		"attacker_kind": "ship",
+		"attacker_name": "Victory II",
+		"defender_name": "CR90",
+	}, Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE)
+	_mirror.apply_damage_result({
+		"target_type": "ship",
+		"hull_zone": "FRONT",
+		"shield_absorbed": 2,
+		"cards_added": 1,
+	})
+	_mirror.show_resolved_result()
+
+	assert_true(_mirror.is_awaiting_result_acknowledgement())
+	assert_true(_mirror.is_open())
+	assert_true(_mirror.get_panel()._damage_info_container.visible)
+	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
+			"2 shield")
+	_mirror.get_panel()._on_confirm_pressed()
+
+	assert_false(_mirror.is_awaiting_result_acknowledgement())
+	assert_false(_mirror.is_open(),
+			"Passive acknowledgement must close only the local mirror.")
+
+
+func test_mirrored_anti_squadron_result_is_inspectable() -> void:
+	_mirror.apply_flow({
+		"attacker_kind": "ship",
+		"attacker_name": "Nebulon-B",
+		"defender_name": "TIE Fighter",
+	}, Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE)
+	_mirror.apply_damage_result({
+		"target_type": "squadron",
+		"actual_damage": 2,
+		"new_hull": 1,
+	})
+	_mirror.show_resolved_result()
+
+	assert_true(_mirror.is_awaiting_result_acknowledgement())
+	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
+			"2 damage")
+	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
+			"Hull 1")

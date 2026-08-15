@@ -17,6 +17,7 @@ var _local_player: int = -1
 var _title_label: Label = null
 var _subtitle_label: Label = null
 var _choice_box: VBoxContainer = null
+var _centering_viewport_size: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -50,7 +51,15 @@ func choice_count() -> int:
 func centre_on_screen(viewport_size: Vector2 = Vector2.ZERO) -> void:
 	if viewport_size == Vector2.ZERO:
 		viewport_size = get_viewport_rect().size
-	position = (viewport_size - custom_minimum_size) * 0.5
+	_centering_viewport_size = viewport_size
+	reset_size()
+	call_deferred("_apply_centred_position")
+
+
+func _apply_centred_position() -> void:
+	if not visible or _centering_viewport_size == Vector2.ZERO:
+		return
+	position = (_centering_viewport_size - size) * 0.5
 
 
 func _choices_from_intent(intent: UIProjector.UIIntent) -> Array[Dictionary]:

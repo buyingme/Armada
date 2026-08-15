@@ -126,3 +126,50 @@ Remote synchronization, visibility, or multiplayer state differs from the author
 ### Performance
 
 The game exhibits excessive loading time, poor responsiveness, frame drops, freezes, or resource issues.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+`GameBoard._spawn_loaded_tokens_for_player()` instantiated every serialized
+`SquadronInstance` without consulting the canonical destroyed state. The save
+records were correct; active board reconstruction failed to filter them.
+
+Exact production failure path:
+
+load/seed state -> `PlayerState.deserialize()` retains `destroyed=true` ->
+loaded-state board loop unconditionally creates and binds a `SquadronToken` ->
+destroyed squadron becomes active/selectable presentation again.
+
+Implemented fix:
+
+- Loaded-state reconstruction now skips board-token instantiation for
+  canonically destroyed squadrons while instantiating every survivor normally.
+- The identical board-piece rule is applied to destroyed ships in the same
+  reconstruction loop; their canonical records and ship-card history remain,
+  with destroyed cards ghosted rather than presented as active pieces.
+- No entity is removed from `PlayerState` or serialized state.
+
+Architecture/ownership:
+
+`ShipInstance`/`SquadronInstance.is_destroyed()` remain the sole source of
+truth. The board only filters its reconstructable token projection. Save and
+replay formats are unchanged.
+
+Regression evidence:
+
+`test_bug_006_destroyed_save_records_are_not_active_board_tokens` exercises
+both supplied BUG-006 saves and proves destroyed records remain serialized,
+survivors reconstruct, and no spawned/selectable token is destroyed.
+`test_loaded_destroyed_ship_entry_is_ghosted_immediately` covers the audited
+ship boundary.
+
+Verification:
+
+- focused `test_game_board_scenario_bootstrap.gd`: 8/8 passed;
+- focused `test_ship_card_panel.gd`: 25/25 passed;
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: repaired by automated evidence; ready for Project Owner/manual load
+verification with both supplied Hot-Seat and Network saves.

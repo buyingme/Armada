@@ -436,8 +436,11 @@ func _submit_tarkin_choice(choice_payload: Dictionary) -> void:
 		return
 	choice_payload["runtime_upgrade_id"] = \
 			_tarkin_choice_modal.runtime_upgrade_id()
-	GameManager.get_command_submitter().submit(
+	var result: Dictionary = GameManager.get_command_submitter().submit(
 			TarkinChoiceCommand.new(_tarkin_controller(), choice_payload))
+	if result.is_empty() or bool(result.get("awaiting_remote", false)):
+		return
+	GameManager.project_tarkin_choice_result(result)
 
 
 func _tarkin_controller() -> int:

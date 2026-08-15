@@ -116,3 +116,43 @@ After repair, verify:
 - subsequent range-overlay interactions can still be opened normally;
 - Hot-Seat behavior remains unchanged;
 - replay/reconnect does not leave a stale overlay visible.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+The ship-command range overlay was opened locally by
+`SquadronPhaseController.open_for_command()` and dismissed by the local
+`squadron_command_done` callback. A passive network peer did not execute that
+local callback. Although its accepted mirrored `InteractionFlow` left
+`SQUADRON_STEP`, `ShipActivationController.sync_activation_step_from_flow()`
+did not retire the peer's transient command overlay.
+
+Implemented fix:
+
+When an accepted/mirrored ship-activation projection is no longer at
+`SQUADRON_STEP`, each peer asks its local `SquadronPhaseController` to dismiss
+the command range overlay. A later command can create a fresh overlay normally.
+
+Architecture Constraint compliance:
+
+The repair derives cleanup from the existing accepted `InteractionFlow` step
+and mutates only the local overlay node. No `range_overlay_visible`, canonical
+tool lifecycle, semantic command, network field, or serialized UI state was
+introduced. `InteractionFlow` remains projection/routing state, not gameplay
+or activation authority.
+
+Regression evidence:
+
+`test_command_range_overlay_retires_from_accepted_step_on_each_peer` proves
+overlay creation, retention during the Squadron step, Hot-Seat dismissal,
+passive network-client dismissal, and subsequent reuse.
+
+Verification:
+
+- focused `test_ship_activation_controller.gd`: 8/8 passed;
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: repaired by automated evidence; ready for Project Owner/manual Network
+verification.

@@ -165,11 +165,12 @@ class StubCommandSubmitter:
 	extends CommandSubmitter
 
 	var submitted_commands: Array[GameCommand] = []
+	var result_to_return: Dictionary = {"submitted": true}
 
 
 	func submit(command: GameCommand) -> Dictionary:
 		submitted_commands.append(command)
-		return {"submitted": true}
+		return result_to_return.duplicate(true)
 
 
 var _router: ModalRouter = null
@@ -530,6 +531,59 @@ func test_route_command_result_tarkin_modal_submits_choice_command() -> void:
 			"Submitted command should preserve the selected command.")
 
 
+func test_accepted_tarkin_choice_refreshes_hotseat_and_mirrored_ship_cards() -> void:
+	_create_router(Callable())
+	var state: GameState = _state_with_tarkin_flow()
+	state.initialize()
+	state.interaction_flow = _state_with_tarkin_flow().interaction_flow
+	var ship: ShipInstance = _create_projectable_ship(1)
+	state.player_states[1].ships.append(ship)
+	GameManager.current_game_state = state
+	var ship_panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(ship_panel)
+	ship_panel.setup(Constants.Faction.GALACTIC_EMPIRE, false, 1)
+	ship_panel.add_ship_entry(ship)
+	_router.route_command_result(null, {})
+	var accepted: Dictionary = {
+		"owner_player": 1,
+		"command": int(Constants.CommandType.REPAIR),
+		"grants": [{
+			"ship_index": 0,
+			"token_added": true,
+			"token_blocked": false,
+			"duplicate": false,
+			"overflow": false,
+		}],
+	}
+	_submitter.result_to_return = accepted
+	ship.command_tokens.force_add_token(Constants.CommandType.REPAIR)
+	watch_signals(EventBus)
+
+	(_tarkin_modal().find_child(
+			"CommandButton_3", true, false) as Button).pressed.emit()
+	assert_signal_emit_count(EventBus, "command_tokens_changed", 1,
+			"Synchronous accepted Tarkin selection should refresh immediately.")
+	assert_eq((ship_panel._entries[0]["cmd_token_col"] \
+			as VBoxContainer).get_child_count(), 1,
+			"Accepted canonical token should appear without card magnification.")
+
+	# Repeated round use follows the same accepted-result projection.
+	(_tarkin_modal().find_child(
+			"CommandButton_3", true, false) as Button).pressed.emit()
+	assert_signal_emit_count(EventBus, "command_tokens_changed", 2,
+			"Repeated accepted Tarkin use should refresh again without magnification.")
+
+	# The existing mirrored result route shares the same projector.
+	GameManager._handle_remote_tarkin_choice(accepted)
+	assert_signal_emit_count(EventBus, "command_tokens_changed", 3,
+			"Mirrored accepted Tarkin selection should refresh the network peer.")
+	var params: Array = get_signal_parameters(
+			EventBus, "command_tokens_changed", 0)
+	assert_eq(params, [ship],
+			"Refresh must identify the canonical affected ShipInstance.")
+	await get_tree().process_frame
+
+
 func test_route_command_result_ecm_ready_cost_opens_status_modal() -> void:
 	_create_router(Callable())
 	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
@@ -547,6 +601,34 @@ func test_route_command_result_ecm_ready_cost_opens_status_modal() -> void:
 			"The modal should consume one projected ECM ready-cost choice.")
 	assert_false(ready_button.disabled,
 			"Hot-seat should allow the ECM owner to choose ready or decline.")
+
+
+func test_ecm_ready_cost_modal_centres_from_actual_rendered_size() -> void:
+	_create_router(Callable())
+	GameManager.current_game_state = _state_with_ecm_ready_cost_flow()
+	_router.route_command_result(null, {})
+	var modal: Control = _ecm_ready_cost_modal() as Control
+	var viewport_size := Vector2(1280, 720)
+
+	modal.call("centre_on_screen", viewport_size)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_almost_eq(modal.position.x + modal.size.x * 0.5,
+			viewport_size.x * 0.5, 1.0,
+			"ECM ready-cost modal must center its actual rendered width.")
+	assert_almost_eq(modal.position.y + modal.size.y * 0.5,
+			viewport_size.y * 0.5, 1.0,
+			"ECM ready-cost modal must center its actual rendered height.")
+	# A second opening/centering must not accumulate any offset.
+	modal.call("centre_on_screen", viewport_size)
+	await get_tree().process_frame
+	assert_almost_eq(modal.position.x + modal.size.x * 0.5,
+			viewport_size.x * 0.5, 1.0,
+			"Repeated ECM prompts must remain centered without drift.")
+	assert_almost_eq(modal.position.y + modal.size.y * 0.5,
+			viewport_size.y * 0.5, 1.0,
+			"Repeated ECM prompts must remain centered without drift.")
 
 
 func test_route_command_result_ecm_ready_modal_submits_ready_command() -> void:
@@ -846,6 +928,21 @@ func _create_ship(owner_player: int) -> ShipInstance:
 	var ship: ShipInstance = ShipInstance.new()
 	ship.owner_player = owner_player
 	return ship
+
+
+func _create_projectable_ship(owner_player: int) -> ShipInstance:
+	var data: ShipData = ShipData.new()
+	data.ship_name = "Tarkin Test Ship"
+	data.faction = Constants.Faction.GALACTIC_EMPIRE
+	data.ship_size = Constants.ShipSize.MEDIUM
+	data.hull = 8
+	data.command_value = 3
+	data.max_speed = 3
+	data.navigation_chart = [[1], [1, 1], [1, 1, 1]]
+	data.shields = {"front": 3, "left": 3, "right": 3, "rear": 2}
+	data.defense_tokens = []
+	return ShipInstance.create_from_data(
+			"tarkin_test_ship", data, 1, owner_player)
 
 
 func _create_squadron(owner_player: int) -> SquadronInstance:

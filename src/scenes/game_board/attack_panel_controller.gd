@@ -63,6 +63,7 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		return
 	if not _is_attack_pipeline_command(command):
 		return
+	_project_terminal_mirror_result(command, result)
 	if _attack_executor == null:
 		return
 	if not _owns_active_canonical_attack() \
@@ -152,6 +153,16 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 		_attack_executor.apply_skip_attack_result(result)
 
 
+func _project_terminal_mirror_result(
+		command: GameCommand, result: Dictionary) -> void:
+	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
+		return
+	if command.command_type == "resolve_damage":
+		_panel_mgr.attack_panel_mirror.apply_damage_result(result)
+	elif command.command_type == "complete_attack":
+		_panel_mgr.attack_panel_mirror.show_resolved_result()
+
+
 ## Routes a targeted authoritative rejection back to the transient declaration
 ## coordinator. No projection or modal transition is synthesized.
 func react_to_command_rejection(
@@ -187,6 +198,8 @@ func sync_mirror_from_flow(
 		flow: InteractionFlow,
 		attack_dice_results: Array[Dictionary] = []) -> void:
 	if _panel_mgr == null or _panel_mgr.attack_panel_mirror == null:
+		return
+	if _panel_mgr.attack_panel_mirror.is_awaiting_result_acknowledgement():
 		return
 	var is_attack: bool = (flow != null
 			and flow.flow_type == Constants.InteractionFlow.ATTACK)

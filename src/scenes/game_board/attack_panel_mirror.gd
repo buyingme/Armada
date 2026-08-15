@@ -120,6 +120,10 @@ var _swarm_signal_connected: bool = false
 ## True once the remote dice-confirm signal is connected.
 var _confirm_signal_connected: bool = false
 
+## True while this peer is inspecting a completed attack result. This is
+## transient local presentation and never authorizes gameplay progression.
+var _awaiting_result_acknowledgement: bool = false
+
 ## Phase I6b-3 R5: lazily-created modal shown on the chooser peer when
 ## a damage card with a player choice is dealt.  Owned and parented to
 ## [member _modal_layer] (created in [method setup]).
@@ -178,6 +182,43 @@ func get_panel() -> AttackSimPanel:
 ## Returns true if the mirror panel is currently open.
 func is_open() -> bool:
 	return _is_open and _panel != null and _panel.visible
+
+
+func is_awaiting_result_acknowledgement() -> bool:
+	return _awaiting_result_acknowledgement
+
+
+## Projects an accepted ResolveDamageCommand result for the passive peer.
+func apply_damage_result(result: Dictionary) -> void:
+	if not is_open() or result.is_empty():
+		return
+	var target_type: String = str(result.get("target_type", ""))
+	if target_type == "squadron":
+		_panel.show_damage_info("Squadron: %d damage → Hull %d" % [
+				int(result.get("actual_damage", 0)),
+				int(result.get("new_hull", 0)),
+		])
+	elif target_type == "ship":
+		_panel.show_damage_info("%s: %d shield, %d card(s)" % [
+				str(result.get("hull_zone", "Ship")),
+				int(result.get("shield_absorbed", 0)),
+				int(result.get("cards_added", 0)),
+		])
+
+
+## Keeps the mirrored result visible after canonical attack completion. The
+## acknowledgement closes only this peer's local presentation.
+func show_resolved_result() -> void:
+	if not is_open():
+		return
+	_awaiting_result_acknowledgement = true
+	_panel.show_result_confirmation()
+	if not _panel.result_confirmed.is_connected(_on_result_confirmed):
+		_panel.result_confirmed.connect(_on_result_confirmed)
+
+
+func _on_result_confirmed() -> void:
+	close()
 
 
 ## Opens (if needed) and refreshes the mirror panel from the published
@@ -907,7 +948,12 @@ func _on_defense_tokens_done() -> void:
 	if def_inst == null:
 		_log.warn("Defense commit: canonical defender not found.")
 		return
-	var result: Dictionary = GameManager.submit_commit_defense(def_inst, selected)
+	var defense_tokens: Array[Dictionary] = []
+	defense_tokens.assign(def_inst.get("defense_tokens") as Array)
+	var canonical: Array[int] = AttackFlowExecutor.new() \
+			.sort_defense_tokens_canonical(selected, defense_tokens)
+	var result: Dictionary = GameManager.submit_commit_defense(
+			def_inst, canonical)
 	if result.is_empty():
 		_log.warn("Defense commit command rejected — controls remain enabled.")
 		return
@@ -952,6 +998,9 @@ func _current_defender_ship() -> ShipInstance:
 func close() -> void:
 	if _panel == null:
 		return
+	_awaiting_result_acknowledgement = false
+	if _panel.result_confirmed.is_connected(_on_result_confirmed):
+		_panel.result_confirmed.disconnect(_on_result_confirmed)
 	if _defense_signal_connected:
 		if _panel.defense_tokens_done.is_connected(_on_defense_tokens_done):
 			_panel.defense_tokens_done.disconnect(_on_defense_tokens_done)

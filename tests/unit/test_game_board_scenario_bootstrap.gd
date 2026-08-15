@@ -38,6 +38,65 @@ class SetupPromptBoard:
 		applied_perspective_player = player_index
 
 
+class LoadedEntityPanelCapture:
+	extends UIPanelManager
+
+	var card_ships: Array[ShipInstance] = []
+
+	func add_ship_to_card_panel(ship: ShipInstance) -> void:
+		card_ships.append(ship)
+
+
+class LoadedEntityBoardCapture:
+	extends GameBoard
+
+	var spawned_ships: Array[ShipInstance] = []
+	var spawned_squadrons: Array[SquadronInstance] = []
+
+	func _ready() -> void:
+		pass
+
+	func setup_capture() -> void:
+		_token_container = Node2D.new()
+		add_child(_token_container)
+		_panel_mgr = LoadedEntityPanelCapture.new()
+		add_child(_panel_mgr)
+
+	func _spawn_ship_token(_placement: TokenPlacement) -> ShipToken:
+		var token: ShipToken = ShipToken.new()
+		_token_container.add_child(token)
+		return token
+
+	func _spawn_squadron_token(_placement: TokenPlacement) -> SquadronToken:
+		var token: SquadronToken = SquadronToken.new()
+		_token_container.add_child(token)
+		return token
+
+	func capture_spawned_instances() -> void:
+		for child: Node in _token_container.get_children():
+			if child is ShipToken:
+				spawned_ships.append((child as ShipToken).get_ship_instance())
+			elif child is SquadronToken:
+				spawned_squadrons.append(
+						(child as SquadronToken).get_squadron_instance())
+
+
+class DestroyedShipProjectionBoard:
+	extends GameBoard
+
+	func _ready() -> void:
+		pass
+
+	func setup_capture(instance: ShipInstance) -> ShipToken:
+		_token_container = Node2D.new()
+		add_child(_token_container)
+		var token: ShipToken = ShipToken.new()
+		token.bind_instance(instance)
+		_token_container.add_child(token)
+		_connect_board_damage_and_remote_signals()
+		return token
+
+
 var _previous_game_state: GameState = null
 var _previous_is_game_active: bool = false
 var _previous_active_player: int = 0
@@ -203,6 +262,97 @@ func test_setup_turn_prompt_obstacle_placement_keeps_setup_handoff_expected() ->
 			"Setup obstacle prompt should apply the active setup player's perspective.")
 	assert_eq(_handoff_phase_label(board), "Setup",
 			"Obstacle placement prompt should keep the generic setup phase text.")
+
+
+func test_bug_006_destroyed_save_records_are_not_active_board_tokens() -> void:
+	for filename: String in [
+		"NEWLearningScenario_HotSeat_R3_Ship.json",
+		"NEW_LearningScenario_Network_R3_Ship.json",
+	]:
+		var state: GameState = _load_bug_006_state(filename)
+		assert_not_null(state, "%s should deserialize." % filename)
+		if state == null:
+			continue
+		var expected_alive_squadrons: int = 0
+		var expected_destroyed_squadrons: int = 0
+		for player: PlayerState in state.player_states:
+			for squadron: SquadronInstance in player.squadrons:
+				if squadron.is_destroyed():
+					expected_destroyed_squadrons += 1
+				else:
+					expected_alive_squadrons += 1
+		var board: LoadedEntityBoardCapture = LoadedEntityBoardCapture.new()
+		add_child_autofree(board)
+		board.setup_capture()
+		for player: PlayerState in state.player_states:
+			board._spawn_loaded_tokens_for_player(player)
+		board.capture_spawned_instances()
+
+		assert_gt(expected_destroyed_squadrons, 0,
+				"BUG-006 evidence must contain a destroyed squadron.")
+		assert_eq(board.spawned_squadrons.size(), expected_alive_squadrons,
+				"Only surviving squadrons should reconstruct as board pieces.")
+		for squadron: SquadronInstance in board.spawned_squadrons:
+			assert_false(squadron.is_destroyed(),
+					"Active/selectable token projection must exclude destroyed records.")
+		assert_eq(_destroyed_squadron_count(state.serialize()),
+				expected_destroyed_squadrons,
+				"Canonical serialization must retain destroyed squadron records.")
+
+
+func test_remote_lethal_hull_projection_removes_destroyed_ship_token() -> void:
+	var data: ShipData = ShipData.new()
+	data.hull = 1
+	data.max_speed = 1
+	data.command_value = 1
+	data.navigation_chart = [[0]]
+	data.shields = {"front": 0, "left": 0, "right": 0, "rear": 0}
+	data.defense_tokens = []
+	var instance: ShipInstance = ShipInstance.create_from_data(
+			"remote_destroyed", data, 0, 1)
+	instance.mark_destroyed()
+	var board: DestroyedShipProjectionBoard = \
+			DestroyedShipProjectionBoard.new()
+	add_child_autofree(board)
+	var token: ShipToken = board.setup_capture(instance)
+
+	EventBus.ship_hull_changed.emit(instance, 0)
+	await get_tree().create_timer(0.85).timeout
+
+	assert_false(token.visible,
+			"Defender peer should retire a canonically destroyed ship token "
+			+ "without prediction or duplicate semantic destruction.")
+
+
+func _load_bug_006_state(filename: String) -> GameState:
+	for workflow: String in ["open", "in_progress", "verify", "closed"]:
+		var path: String = "res://docs/qa/bugs/%s/BUG-006/%s" % [
+				workflow, filename]
+		if not FileAccess.file_exists(path):
+			continue
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if parsed is Dictionary:
+			var body: Dictionary = (parsed as Dictionary).get("state", {})
+			var state: GameState = GameState.new()
+			state.initialize()
+			state.player_states.clear()
+			for player: Variant in body.get("player_states", []):
+				if player is Dictionary:
+					state.player_states.append(PlayerState.deserialize(player))
+			return state
+	return null
+
+
+func _destroyed_squadron_count(serialized_state: Dictionary) -> int:
+	var count: int = 0
+	for player: Variant in serialized_state.get("player_states", []):
+		if not player is Dictionary:
+			continue
+		for squadron: Variant in (player as Dictionary).get("squadrons", []):
+			if squadron is Dictionary \
+					and bool((squadron as Dictionary).get("destroyed", false)):
+				count += 1
+	return count
 
 
 func _setup_package() -> FleetSetupPackage:

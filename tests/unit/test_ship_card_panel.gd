@@ -269,6 +269,25 @@ func test_entry_stores_cmd_token_col() -> void:
 			"cmd_token_col should be a VBoxContainer")
 
 
+func test_accepted_token_spend_refresh_removes_stale_command_token() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("ecm_ready_cost_ship", data, 0)
+	assert_true(inst.command_tokens.add_token(Constants.CommandType.REPAIR))
+	panel.add_ship_entry(inst)
+	var command_tokens: VBoxContainer = panel._entries[0]["cmd_token_col"]
+	assert_eq(command_tokens.get_child_count(), 1)
+
+	assert_true(inst.command_tokens.spend_token(Constants.CommandType.REPAIR))
+	EventBus.command_tokens_changed.emit(inst)
+
+	assert_eq(command_tokens.get_child_count(), 0,
+			"Accepted canonical spending must immediately remove the stale token.")
+
+
 func test_entry_stores_left_col() -> void:
 	var panel: ShipCardPanel = ShipCardPanel.new()
 	add_child_autofree(panel)
@@ -353,6 +372,39 @@ func test_ghost_entry_idempotent() -> void:
 			panel._entries[0]["container"] as HBoxContainer).get_child_count()
 	assert_eq(child_count_after, child_count_before,
 			"Calling _ghost_entry twice should not add duplicate DESTROYED label")
+
+
+func test_loaded_destroyed_ship_entry_is_ghosted_immediately() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("destroyed_load", data, 0)
+	inst.mark_destroyed()
+
+	panel.add_ship_entry(inst)
+
+	assert_true(panel._entries[0].get("ghosted", false),
+			"Destroyed canonical records should remain visible for history/scoring "
+			+ "but never look like an active ship card.")
+
+
+func test_accepted_lethal_damage_projection_ghosts_without_magnification() -> void:
+	var panel: ShipCardPanel = ShipCardPanel.new()
+	add_child_autofree(panel)
+	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
+	var data: ShipData = _make_ship_data(
+			Constants.Faction.REBEL_ALLIANCE, ["evade"])
+	var inst: ShipInstance = _make_instance("destroyed_remote", data, 0)
+	panel.add_ship_entry(inst)
+	inst.mark_destroyed()
+
+	panel._on_damage_cards_changed(inst, null, false)
+
+	assert_true(panel._entries[0].get("ghosted", false),
+			"Accepted damage projection should ghost a canonically destroyed ship "
+			+ "without reopening or magnifying its card.")
 
 
 func test_is_ship_phase_eligible_false_when_destroyed() -> void:

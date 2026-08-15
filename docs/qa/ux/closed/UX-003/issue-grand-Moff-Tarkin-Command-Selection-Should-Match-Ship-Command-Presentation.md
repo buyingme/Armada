@@ -42,3 +42,34 @@ Verification:
 - Open the Grand Moff Tarkin command-selection dialog.
 - Compare it with the ship command-selection dialog.
 - Verify that both dialogs present command tokens and command buttons using the same layout.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+`TarkinChoiceModal` built each command as a text-only button and did not use the
+existing command-token assets or the standard icon-above-action hierarchy.
+
+Implemented improvement:
+
+Each Tarkin command choice now uses the existing command-token PNG mapping,
+an icon above the semantic command button, centered choice columns, and
+consistent spacing. The existing `TarkinChoiceCommand` submission signals and
+payload are unchanged.
+
+Architecture/ownership:
+
+Only presentation construction changed. Asset/component consistency did not
+cause gameplay refactoring and introduced no UI-owned command state.
+
+Regression evidence and verification:
+
+- `test_command_choices_reuse_token_graphics_and_standard_hierarchy` proves
+  the expected graphic and layout hierarchy;
+- existing interactive/passive and semantic submission tests remain passing;
+- focused Tarkin modal/router suites: 5/5 and 28/28 passed;
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: implemented by automated evidence; ready for Project Owner/manual UX
+comparison.

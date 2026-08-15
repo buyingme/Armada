@@ -50,9 +50,13 @@ signal counter_attack_requested()
 ## Emitted when the player skips an optional Counter attack.
 signal counter_attack_skipped()
 
-## Emitted when the player presses "Confirm" to finalise the attack.
+## Emitted when the player presses "Commit Attack" to finalise attack choices.
 ## Requirements: AE-CONF-001.
 signal confirm_pressed()
+
+## Emitted when a fully resolved, already-completed attack result is
+## acknowledged. This is presentation-only and never submits a command.
+signal result_confirmed()
 
 ## Emitted when the player explicitly confirms the current transient
 ## declaration candidate. Distinct from later dice confirmation.
@@ -176,10 +180,12 @@ var _cf_token_buttons: HBoxContainer = null
 var _cf_token_reroll_button: Button = null
 ## "Skip" button inside CF token section.
 var _cf_token_skip_button: Button = null
-## "Confirm" button — finalises the attack.
+## Shared commit/result button — finalises choices or acknowledges a result.
 var _confirm_button: Button = null
 ## Whether the shared visual button currently represents declaration Confirm.
 var _confirm_is_declaration: bool = false
+## Whether the shared Confirm button currently acknowledges a final result.
+var _confirm_is_result: bool = false
 ## "Skip Attack" button — skips the entire attack.
 var _skip_attack_button: Button = null
 ## Confirmation prompt shown after pressing "Skip Attack".
@@ -258,6 +264,7 @@ var _timing_window_rows: VBoxContainer = null
 ## while the player is making one local timing-window parameter choice.
 ## This is transient presentation state only and is never serialized.
 var _timing_window_die_intents: Dictionary = {}
+var _timing_window_parameter_prompt: String = ""
 
 ## Array of TextureRects showing die face images.
 var _dice_textures: Array[TextureRect] = []
@@ -435,6 +442,7 @@ func get_dice_count_text() -> String:
 func close() -> void:
 	visible = false
 	_attack_execution_mode = false
+	_confirm_is_result = false
 	_clear_content()
 
 
@@ -514,6 +522,10 @@ func _request_deferred_layout() -> void:
 ## Resets size + offsets on the next frame so the panel shrinks to fit
 ## only its visible children.
 func _deferred_layout_reset() -> void:
+	var panel_w: float = custom_minimum_size.x
+	size.x = panel_w
+	offset_left = -panel_w * 0.5
+	offset_right = panel_w * 0.5
 	size.y = 0
 	offset_top = -40.0
 	offset_bottom = -40.0
@@ -591,6 +603,8 @@ func _build_title_body_labels() -> VBoxContainer:
 	_title_label.add_theme_font_size_override("font_size", 16)
 	_title_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.add_child(_title_label)
 	_body_label = Label.new()
 	_body_label.add_theme_font_size_override("font_size", 13)
@@ -757,7 +771,7 @@ func _build_confirm_skip_section() -> VBoxContainer:
 	var section: VBoxContainer = VBoxContainer.new()
 	section.add_theme_constant_override("separation", 8)
 	_confirm_button = Button.new()
-	_confirm_button.text = "Confirm"
+	_confirm_button.text = "Commit Attack"
 	_confirm_button.custom_minimum_size = Vector2(100.0, 32.0)
 	_confirm_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_confirm_button.visible = false
@@ -1002,8 +1016,9 @@ func _on_timing_window_parameter_use(
 		return
 	disable_timing_window_actions()
 	_timing_window_die_intents = die_intents
-	_set_prompt("Attack", "Select an eligible die for %s." %
-			display_key.replace(".", " ").capitalize())
+	_timing_window_parameter_prompt = "Select an eligible die for %s." % \
+			display_key.replace(".", " ").capitalize()
+	_set_prompt("Attack", _timing_window_parameter_prompt)
 	_set_timing_window_dice_clickable()
 
 
@@ -1091,12 +1106,14 @@ func _null_defense_step_refs() -> void:
 ## Resets selection/state tracking variables.
 func _reset_selection_state() -> void:
 	_confirm_is_declaration = false
+	_confirm_is_result = false
 	_accuracy_locked_indices.clear()
 	_accuracy_budget = 0
 	_defense_selected_indices.clear()
 	_dice_textures.clear()
 	_selected_reroll_index = -1
 	_timing_window_die_intents.clear()
+	_timing_window_parameter_prompt = ""
 
 
 ## Called when the Done button is pressed (sim mode).
@@ -1435,12 +1452,13 @@ func _on_counter_skip() -> void:
 # Phase 6b-2 — Confirm / Skip Attack
 # =========================================================================
 
-## Shows the "Confirm" button.
+## Shows the gameplay-changing attack-choice commit button.
 ## Requirements: AE-CONF-001.
 func show_confirm_button() -> void:
 	if _confirm_button:
 		_confirm_is_declaration = false
-		_confirm_button.text = "Confirm"
+		_confirm_is_result = false
+		_confirm_button.text = "Commit Attack"
 		_confirm_button.disabled = false
 		_confirm_button.visible = true
 
@@ -1450,6 +1468,7 @@ func show_confirm_button() -> void:
 func show_declaration_confirm_button() -> void:
 	if _confirm_button:
 		_confirm_is_declaration = true
+		_confirm_is_result = false
 		_confirm_button.text = "Confirm Attack"
 		_confirm_button.disabled = false
 		_confirm_button.visible = true
@@ -1461,6 +1480,37 @@ func hide_confirm_button() -> void:
 		_confirm_button.visible = false
 		_confirm_button.disabled = false
 	_confirm_is_declaration = false
+	_confirm_is_result = false
+
+
+## Shows a presentation-only acknowledgement after CompleteAttackCommand has
+## already succeeded. Final dice and damage information remain visible.
+func show_result_confirmation() -> void:
+	hide_timing_window_opportunities()
+	hide_counter_section()
+	hide_accuracy_section()
+	hide_defense_section()
+	hide_redirect_section()
+	hide_cf_dial_section()
+	hide_obstruction_section()
+	hide_cf_token_section()
+	hide_roll_button()
+	hide_skip_attack_button()
+	if _body_label:
+		_body_label.text = "Attack resolved. Review the final result."
+	if _confirm_button:
+		_confirm_is_declaration = false
+		_confirm_is_result = true
+		_confirm_button.text = "Confirm Result"
+		_confirm_button.disabled = false
+		_confirm_button.visible = true
+	visible = true
+	_request_deferred_layout()
+
+
+func is_awaiting_result_confirmation() -> bool:
+	return _confirm_is_result and _confirm_button != null \
+			and _confirm_button.visible
 
 
 ## Disables or restores declaration controls while Begin or declaration Skip
@@ -1497,6 +1547,9 @@ func _on_confirm_pressed() -> void:
 	SfxManager.play_sfx("droid_sound")
 	if _confirm_is_declaration:
 		declaration_confirm_pressed.emit()
+	elif _confirm_is_result:
+		_confirm_button.disabled = true
+		result_confirmed.emit()
 	else:
 		confirm_pressed.emit()
 
@@ -2101,11 +2154,17 @@ func _set_timing_window_dice_clickable() -> void:
 
 
 func _clear_timing_window_parameter_selection() -> void:
-	if _timing_window_die_intents.is_empty():
-		return
-	_timing_window_die_intents.clear()
-	_set_dice_clickable(false)
-	_clear_die_selection_highlights()
+	if not _timing_window_die_intents.is_empty():
+		_timing_window_die_intents.clear()
+		_set_dice_clickable(false)
+		_clear_die_selection_highlights()
+	if not _timing_window_parameter_prompt.is_empty():
+		# Accepted command projection may already have installed the next-stage
+		# instruction. Retire only the exact transient parameter prompt that
+		# this panel created; never overwrite a newer canonical projection.
+		if get_body_text() == _timing_window_parameter_prompt:
+			_set_prompt("Attack", "Resolve available modifiers.")
+		_timing_window_parameter_prompt = ""
 
 
 ## Called when a die image is clicked during reroll or evade selection.

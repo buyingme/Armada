@@ -7,6 +7,7 @@ extends GutTest
 
 
 var _state: GameState
+var _saved_game_state: GameState
 
 
 ## Creates a minimal ShipData for testing.
@@ -39,6 +40,7 @@ func _make_card_data(title: String = "Test Card") -> Dictionary:
 
 
 func before_each() -> void:
+	_saved_game_state = GameManager.current_game_state
 	_state = GameState.new()
 	_state.initialize()
 	_state.current_round = 1
@@ -51,6 +53,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	GameManager.current_game_state = _saved_game_state
 	GameCommand._registry.erase("set_speed")
 	GameCommand._registry.erase("overlap_damage")
 	GameCommand._registry.erase("persistent_effect_damage")
@@ -290,6 +293,38 @@ func test_overlap_execute_moving_destroyed() -> void:
 			"Moving ship should be destroyed (5 damage vs 5 hull)")
 	assert_true(moving.is_destroyed(),
 			"Moving ship should be marked destroyed")
+
+
+func test_mirrored_overlap_result_refreshes_both_ship_presentations() -> void:
+	var moving_index: int = _add_ship(0)
+	var other_index: int = _add_ship(1)
+	var moving: ShipInstance = _state.get_ship(0, moving_index)
+	var other: ShipInstance = _state.get_ship(1, other_index)
+	var command := OverlapDamageCommand.new(0, {
+		"ship_index": moving_index,
+		"other_owner": 1,
+		"other_ship_index": other_index,
+		"moving_card": _make_card_data("Moving"),
+		"other_card": _make_card_data("Other"),
+	})
+	var result: Dictionary = command.execute(_state)
+	GameManager.current_game_state = _state
+	watch_signals(EventBus)
+
+	GameManager._handle_remote_damage_event(command, result)
+
+	assert_signal_emit_count(EventBus, "damage_card_dealt", 2,
+			"Mirrored collision should refresh both damage-card columns.")
+	assert_signal_emit_count(EventBus, "ship_hull_changed", 2,
+			"Mirrored collision should refresh both hull projections.")
+	assert_eq(get_signal_parameters(EventBus, "damage_card_dealt", 0)[0],
+			moving)
+	assert_eq(get_signal_parameters(EventBus, "damage_card_dealt", 1)[0],
+			other)
+	assert_eq(get_signal_parameters(EventBus, "ship_hull_changed", 0),
+			[moving, 4])
+	assert_eq(get_signal_parameters(EventBus, "ship_hull_changed", 1),
+			[other, 4])
 
 
 # ======================================================================

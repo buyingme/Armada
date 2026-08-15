@@ -154,3 +154,53 @@ After repair, verify:
 - Hot-Seat behavior remains correct;
 - replay/reconnect reconstruct destroyed ships correctly;
 - BUG-019 regression remains green.
+
+## Implementation Update — 2026-08-14
+
+Confirmed root cause:
+
+Mirrored `ResolveDamageCommand` correctly installed canonical damage and
+destruction, but remote presentation attempted to send a `ShipInstance`
+through the token-typed `ship_destroyed` event. `GameBoard` had no canonical
+instance destruction-refresh route, so the defender's board token remained.
+The card/sidebar/score refreshes were likewise tied to the local token event.
+
+Exact production failure path:
+
+lethal attack accepted on authority -> mirror executes and marks defender
+`ShipInstance` destroyed -> remote handler has the canonical instance but no
+usable board-token refresh -> defender presentation stays active until an
+unrelated rebuild.
+
+Implemented fix:
+
+- Accepted/mirrored hull projection now drives board-token retirement by
+  resolving the local token from the canonical `ShipInstance`.
+- Ship card, activation sidebar, and phase HUD re-read canonical state at the
+  same projection boundary.
+- Loaded destroyed ships are not recreated as board pieces.
+- A transient token-node marker makes the local and mirrored fade routes
+  idempotent; it is never consulted for gameplay authorization.
+
+Architecture Constraint compliance:
+
+Destruction remains command-owned canonical `ShipInstance` state. The repair
+does not predict destruction, add client-owned visibility/destruction state,
+or submit a semantic transition from presentation.
+
+Regression evidence:
+
+- `test_remote_lethal_hull_projection_removes_destroyed_ship_token` proves the
+  defender-side token is retired from canonical destruction.
+- `test_accepted_lethal_damage_projection_ghosts_without_magnification`
+  proves immediate card projection.
+- BUG-019 mirrored collision refresh and pending-result regressions also pass.
+
+Verification:
+
+- focused board/card/damage suites: 8/8, 25/25, and 29/29 passed;
+- full repository suite: 4,048/4,048 passed (13,507 assertions);
+- architecture lint and `git diff --check`: passed.
+
+Status: repaired by automated evidence; ready for Project Owner/manual
+attacker/defender Network verification.

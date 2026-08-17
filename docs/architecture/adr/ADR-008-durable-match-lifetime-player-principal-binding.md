@@ -1,9 +1,13 @@
 # ADR-008: Durable Match-Lifetime Player-to-Principal Binding
 
-Status: Draft
+Status: Accepted
 
 ADR-ID: ADR-008
 Title: Durable Match-Lifetime Player-to-Principal Binding
+
+Accepted by: Project Owner
+
+Accepted date: 2026-08-17
 
 Decision owner: Project Owner
 

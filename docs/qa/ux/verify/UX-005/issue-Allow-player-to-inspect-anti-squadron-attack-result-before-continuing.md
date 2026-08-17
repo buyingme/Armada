@@ -156,6 +156,33 @@ The desired lifecycle is:
 
 The acknowledgement itself must not cause, commit, or repeat damage.
 
+### Positive reference — Network defender result presentation
+
+A further manual Network observation identified an existing presentation path
+that already demonstrates the intended final-result UX substantially better.
+
+On the defending player's Network screen, the final attack-result modal is
+presented in the desired form.
+
+This defender-side presentation should be treated as the current positive UX
+reference when implementing the common result-inspection lifecycle.
+
+The remaining presentations should be compared against that reference,
+especially:
+
+- the Network attacker presentation;
+- the Hot-Seat presentation;
+- equivalent ship and squadron result paths where applicable.
+
+This is implementation evidence, not a requirement to preserve the current
+defender-side implementation structure. The implementation should first
+determine why the defender path produces the desired presentation and whether
+the same presentation mechanism can be reused or unified safely.
+
+The authoritative acknowledgement and continuation requirements below remain
+unchanged. A visually correct defender modal does not by itself prove that the
+underlying synchronization/continuation semantics are correct.
+
 ### Refined Acceptance Criteria
 
 - Both ship attacks and anti-squadron attacks use the same final

@@ -6,6 +6,38 @@ architecture migration period.
 It is not an architecture decision and does not replace ADRs, contracts, or
 tests.
 
+## Context Routing
+
+Classify the task before loading context. Choose the minimum sufficient context
+for its intent and affected behavior or authority; file type or location alone
+does not determine risk.
+
+| Route | Use when | Initial context |
+| --- | --- | --- |
+| Routine | The task is local and does not affect architecture authority or behavior governed by it. | `AGENTS.md` and task-local context. |
+| Bounded Architecture | The affected behavior and applicable accepted authority are clear and contained. | `AGENTS.md` and only the applicable accepted authority and implementation evidence. |
+| Uncertain/High-Risk Architecture | Authority, behavior, impact, or evidence is uncertain, cross-cutting, or high-risk. | `AGENTS.md` and the authority and evidence needed to resolve the uncertainty. |
+
+Escalate uncertainty conservatively. For the uncertain/high-risk route, use
+`DOCUMENT_AUTHORITY.md` to resolve conflicts and request owner guidance if
+authority remains unresolved.
+
+An accepted implementation workbook with unambiguous accepted status and
+applicable scope is the authoritative execution specification for that scope.
+For implementation, it and `AGENTS.md` may be the initial context. It does not
+replace the document-authority hierarchy. Load additional authority only when
+the workbook requires it, routing requires it, implementation evidence
+conflicts with it, authority is ambiguous or contradictory, or a required
+invariant cannot be resolved from it.
+
+Do not create a new Codex task solely because work moves to another workflow
+stage. Keep deliberately independent or high-risk verification gates separate
+when that independence provides meaningful defect-detection value.
+
+Use the least costly model capability that can reliably meet the task's quality
+and risk requirements. Keep agent output concise unless additional detail has
+decision value.
+
 ## Identifier System
 
 Use these IDs in architecture-sensitive work:
@@ -26,16 +58,12 @@ work summary.
 
 ## Workflow for Architecture-Sensitive Changes
 
-For every architecture-sensitive change:
+For bounded or uncertain/high-risk architecture changes, after context routing:
 
 1. Identify affected architecture areas and boundary candidates.
-2. Check `docs/architecture/ARCHITECTURE_ROADMAP.md`.
-3. Identify related architecture tasks.
-4. Check accepted ADRs for the topic.
-5. Check contracts for behavioral invariants.
-6. Check context packs for current implementation evidence.
-7. Check `docs/REALITY_GAP_REGISTER.md`.
-8. Decide whether the work is safe, needs owner decision, needs tests, or needs
+2. Load only the roadmap, accepted ADRs, contracts, context packs, reality-gap
+   register, and related tasks required by the applicable route.
+3. Decide whether the work is safe, needs owner decision, needs tests, or needs
    a new architecture task.
 
 Architecture-sensitive changes include:

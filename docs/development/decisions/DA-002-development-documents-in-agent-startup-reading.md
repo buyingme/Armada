@@ -4,6 +4,7 @@
 > **Authority:** Development Architecture Decision
 > **Audience:** Project Owner, AI Agents
 > **Date:** 2026-06-27
+> **Amended:** 2026-08-18
 
 ---
 
@@ -14,44 +15,50 @@ The project now distinguishes between two related but separate documentation are
 - Software Architecture: how the Armada software is structured.
 - Development Architecture: how the project is developed with human and AI assistance.
 
-`AGENTS.md` already defines startup reading for architecture-sensitive work. It currently focuses on software architecture documents only.
-
-With the introduction of `AI_DEVELOPMENT_PRINCIPLES.md` and `AI_DEVELOPMENT_PROCESS.md`, AI agents also need to understand the development process before performing architecture-sensitive work.
+The previous decision required a complete startup-reading set for every
+architecture-sensitive task. That approach is consistent but loads more context
+than many tasks require.
 
 ---
 
 ## Decision
 
-`AGENTS.md` shall include the development architecture documents in the mandatory startup reading for architecture-sensitive work.
+This decision amends, rather than supersedes, the prior DA-002 direction.
 
-The startup reading should include:
+Agent startup context shall use three-level routing:
 
-1. `ARCHITECTURE.md`
-2. `docs/development/AI_DEVELOPMENT_PRINCIPLES.md`
-3. `docs/development/AI_DEVELOPMENT_PROCESS.md`
-4. `.ai/instructions/AI_STARTUP_GUARDRAILS.md`
-5. `docs/architecture/DOCUMENT_AUTHORITY.md`
-6. `docs/architecture/ARCHITECTURE_ROADMAP.md`
-7. `docs/architecture/CODEX_WORKFLOW.md`
+1. Routine.
+2. Bounded Architecture.
+3. Uncertain/High-Risk Architecture.
 
-The development documents do not replace the software architecture documents.
+Classify the task before loading context and select the minimum sufficient
+context for its intent and affected behavior or authority. File type or
+location alone does not determine risk. Uncertainty escalates conservatively;
+unresolved authority requires Project Owner guidance.
 
-They define how AI-assisted development work is performed.
+An accepted implementation workbook with unambiguous accepted status and scope
+is the authoritative execution specification for implementation within that
+scope. `AGENTS.md` and that workbook may form the minimum initial context. The
+workbook does not replace or override the existing document-authority hierarchy.
+Additional authority is loaded only when required by the workbook or routing,
+when evidence conflicts with it, when authority is ambiguous or contradictory,
+or when a required invariant cannot be resolved from it.
+
+A workflow-stage transition alone does not require a new Codex task.
+Deliberately independent or high-risk verification gates remain separate when
+their independence provides meaningful defect-detection value.
+
+Agents shall use the least costly model capability that can reliably satisfy
+the task's quality and risk requirements, and produce concise output unless
+additional detail provides decision value.
 
 ---
 
 ## Rationale
 
-Architecture-sensitive work depends on two independent information sources:
-
-• Software Architecture
-• Development Architecture
-
-Both are required to execute architecture-sensitive work consistently.
-
-If agents do not read the development process documents at startup, different AI sessions may apply different working assumptions.
-
-Adding these documents to startup reading keeps agent behaviour aligned with the project’s development architecture.
+Routing preserves the existing authority model while reducing unnecessary
+context loading. It makes escalation explicit for tasks whose behavior or
+authority impact requires broader evidence.
 
 ---
 
@@ -59,26 +66,25 @@ Adding these documents to startup reading keeps agent behaviour aligned with the
 
 ### Positive
 
-- AI agents receive consistent process guidance before architecture-sensitive work.
+- AI agents receive context proportionate to task risk.
 - Owner authority is reinforced before implementation begins.
-- Development architecture becomes visible to every agent session.
-- The risk of prompt-specific or tool-specific working styles is reduced.
+- Accepted implementation workbooks can be executed efficiently within their
+  accepted scope.
 
 ### Trade-offs
 
-- Startup reading becomes slightly longer.
-- Very small tasks may require more initial orientation.
-- Development process documents must remain lightweight to avoid startup overhead.
+- Correct classification is required before context loading.
+- High-risk or uncertain work still requires broader authority review.
 
 ---
 
 ## Implementation Guidance
 
-Update `AGENTS.md` only.
+Update `AGENTS.md`, `.ai/instructions/AI_STARTUP_GUARDRAILS.md`, and
+`docs/architecture/CODEX_WORKFLOW.md` consistently.
 
-Do not change software architecture rules.
-
-Do not change accepted ADRs, Contracts, Context Packs, or Rule Capability Packages.
+This decision does not change software architecture rules or the authority of
+accepted ADRs, Contracts, Context Packs, or Rule Capability Packages.
 
 ---
 
@@ -88,3 +94,5 @@ Do not change accepted ADRs, Contracts, Context Packs, or Rule Capability Packag
 - `docs/development/AI_DEVELOPMENT_PRINCIPLES.md`
 - `docs/development/AI_DEVELOPMENT_PROCESS.md`
 - `docs/architecture/DOCUMENT_AUTHORITY.md`
+- `.ai/instructions/AI_STARTUP_GUARDRAILS.md`
+- `docs/architecture/CODEX_WORKFLOW.md`

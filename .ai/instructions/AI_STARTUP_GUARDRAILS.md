@@ -4,8 +4,6 @@ Purpose:
 
 This document provides a lightweight startup checklist for AI agents.
 
-Architecture orientation begins with `ARCHITECTURE.md`.
-
 This document supplements, but does not replace, the architecture documentation.
 
 This project is actively evolving.
@@ -24,22 +22,21 @@ Rules for AI agents:
 - Preserve local patterns unless the roadmap specifies a migration path.
 - Do not introduce new architectural patterns without an owner decision.
 
-Before architecture-sensitive changes:
+Before changes, classify the task and load minimum sufficient context using the
+three-level routing model in `docs/architecture/CODEX_WORKFLOW.md`. Task intent
+and affected behavior or authority determine the route; file location alone
+does not.
 
-1. Read `ARCHITECTURE.md`.
-2. Follow the reading guidance provided there.
-3. Read `docs/architecture/DOCUMENT_AUTHORITY.md`.
-4. Read `docs/architecture/ARCHITECTURE_ROADMAP.md`.
-5. Read the relevant accepted ADRs.
-6. Read the relevant accepted Contracts.
-7. Read the relevant Context Packs.
-8. If the area is still under clarification, consult `docs/REALITY_GAP_REGISTER.md`.
+For architecture work, use the accepted authority and implementation evidence
+applicable to the route. Escalate uncertainty conservatively. If authority
+remains unresolved, stop and ask the owner for guidance.
+
+Apply the accepted-workbook fast path only as defined in DA-002 and
+`CODEX_WORKFLOW.md`; it remains subject to the existing document-authority
+hierarchy.
 
 If documentation and code conflict and no documented migration path exists,
 stop and ask for owner guidance.
-
-When `ARCHITECTURE.md` and another orientation document differ,
-`ARCHITECTURE.md` is the preferred entry point.
 
 Architecture authority is still determined by
 `docs/architecture/DOCUMENT_AUTHORITY.md`.

@@ -6,27 +6,25 @@ This file provides lightweight startup instructions for AI agents.
 
 It is not an architecture document.
 
-Architecture orientation always begins with `ARCHITECTURE.md`.
-
-Development process orientation is provided by
-docs/development/AI_DEVELOPMENT_PRINCIPLES.md
-and
-docs/development/AI_DEVELOPMENT_PROCESS.md.
-
 ## Startup Reading
 
-For architecture-sensitive work, read these first:
+Classify the task before loading context. Use the three-level routing model in
+`docs/architecture/CODEX_WORKFLOW.md` and the decision in
+`docs/development/decisions/DA-002-development-documents-in-agent-startup-reading.md`.
 
-1. `ARCHITECTURE.md`
-2. `docs/development/AI_DEVELOPMENT_PRINCIPLES.md`
-3. `docs/development/AI_DEVELOPMENT_PROCESS.md`
-4. `.ai/instructions/AI_STARTUP_GUARDRAILS.md`
-5. `docs/architecture/DOCUMENT_AUTHORITY.md`
-6. `docs/architecture/ARCHITECTURE_ROADMAP.md`
-7. `docs/architecture/CODEX_WORKFLOW.md`
+Start with this file and the minimum additional context for the classified
+task. Do not automatically load the former complete startup-reading set.
 
-Then read the accepted ADRs, Contracts, Context Packs, and Rule Capability
-Packages relevant to the files being changed.
+For bounded architecture work, load only the applicable accepted authority and
+implementation evidence. For uncertain or high-risk architecture work, load
+the authority needed to resolve the uncertainty; stop and ask the owner when it
+remains unresolved.
+
+When an accepted implementation workbook has unambiguous status and applicable
+scope, this file and that workbook may be the initial implementation context.
+The workbook does not override the document-authority hierarchy; add authority
+documents when the workbook, routing triggers, conflicting evidence, ambiguity,
+or an unresolved invariant requires them.
 
 ## Architecture Rules
 

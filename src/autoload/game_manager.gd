@@ -227,7 +227,10 @@ func consume_next_setup_match_type(default_match_type_id: String) -> String:
 func bootstrap_game(default_scenario_id: String) -> void:
 	var config: Dictionary
 	if PlayMode.is_network():
-		config = NetworkManager.get_pending_game_config()
+		config = NetworkManager.consume_pending_game_config()
+		if config.is_empty():
+			_log.error("Network bootstrap rejected: authoritative config is missing.")
+			return
 		var network_setup_package: FleetSetupPackage = consume_next_setup_package()
 		if network_setup_package != null:
 			config["setup_package"] = network_setup_package.to_hashed_dict()
@@ -246,6 +249,12 @@ func bootstrap_game(default_scenario_id: String) -> void:
 	if ReplayDriver.pending_replay_seed != 0 and not PlayMode.is_network():
 		config["rng_seed"] = ReplayDriver.pending_replay_seed
 		ReplayDriver.pending_replay_seed = 0
+	if ReplayDriver.enabled and not PlayMode.is_network():
+		config["match_player_control_binding"] = \
+			ReplayDriver.consume_pending_replay_binding()
+	if not _install_construction_binding(config):
+		_log.error("Game bootstrap rejected: match player-control binding is invalid.")
+		return
 	var setup_package_from_config: FleetSetupPackage = _setup_package_from_config(config)
 	if setup_package_from_config != null:
 		start_new_game_from_setup_package(setup_package_from_config, config)
@@ -265,18 +274,29 @@ func start_new_game(config: Dictionary = {}) -> void:
 		_fail_network_replay_rng_bootstrap(str(replay_bootstrap.get(
 				"reason", "Network replay RNG configuration is invalid.")))
 		return
-	CommandProcessor.reset()
-	_reset_network_result_ordering()
-	current_game_state = GameState.new()
+	var binding: MatchPlayerControlBinding = _binding_from_config(config)
+	if binding == null:
+		_log.error("New game rejected: match player-control binding is required.")
+		return
+	var candidate := GameState.new()
 	# Inject a deterministic seed before initialize() if provided.
 	var seed_value: int = config.get("rng_seed", 0) as int
 	if seed_value != 0:
-		current_game_state.rng = GameRng.new(seed_value)
-	current_game_state.initialize()
-	if not _complete_network_replay_rng_bootstrap(
-			current_game_state, replay_bootstrap):
-		current_game_state = null
+		candidate.rng = GameRng.new(seed_value)
+	candidate.initialize()
+	if not candidate.install_match_player_control_binding(binding):
+		_log.error("New game rejected: binding installation failed.")
 		return
+	if not _complete_network_replay_rng_bootstrap(
+			candidate, replay_bootstrap):
+		return
+	if not candidate.validate_for_live_installation():
+		_log.error("New game rejected: live-install validation failed.")
+		return
+	CommandProcessor.reset()
+	_reset_network_result_ordering()
+	current_game_state = candidate
+	_install_local_principal_submitter(candidate)
 	is_game_active = true
 	active_player = current_game_state.initiative_player
 	_activating_ship = null
@@ -311,11 +331,12 @@ func start_new_game_from_setup_package(
 		_log.error("Setup-package bootstrap rejected. %s" % _setup_bootstrap_error_text(result))
 		return result
 	var built_state: GameState = result.get("state") as GameState
-	current_game_state = built_state
 	if not _complete_network_replay_rng_bootstrap(
 			built_state, replay_bootstrap):
-		current_game_state = null
 		return {"ok": false, "reason": "Network replay RNG installation failed."}
+	if not built_state.validate_for_live_installation():
+		return {"ok": false, "reason": "Setup state cannot be installed live."}
+	_install_local_principal_submitter(built_state)
 	_install_setup_package_state(built_state, package, config)
 	return result
 
@@ -398,7 +419,10 @@ func start_new_game_from_state(
 	if next_command_sequence < 0:
 		_log.error("Loaded command sequence cursor is invalid.")
 		return false
-	if not state.validate_declaration_adjacent_state():
+	if not PlayMode.is_network() and not _is_hot_seat_binding(state):
+		_log.error("Loaded Hot-Seat state does not have the supported binding shape.")
+		return false
+	if not state.validate_for_live_installation():
 		_log.error("Loaded declaration-adjacent state is inconsistent.")
 		return false
 	var reconciliation: Dictionary = TIMING_WINDOW_ORCHESTRATOR.reconcile(state)
@@ -411,6 +435,7 @@ func start_new_game_from_state(
 		return false
 	_reset_network_result_ordering()
 	current_game_state = state
+	_install_local_principal_submitter(state)
 	if current_game_state.interaction_flow == null:
 		current_game_state.interaction_flow = InteractionFlow.new()
 	is_game_active = true
@@ -459,6 +484,49 @@ func _install_setup_package_state(
 	SaveGameManager.mark_clean()
 
 
+func _install_construction_binding(config: Dictionary) -> bool:
+	if _binding_from_config(config) != null:
+		return true
+	if ReplayDriver.enabled:
+		config["match_player_control_binding"] = \
+			ReplayDriver.consume_pending_replay_binding()
+		return _binding_from_config(config) != null
+	if PlayMode.is_network():
+		return false
+	var binding: MatchPlayerControlBinding = \
+		MatchPlayerControlBinding.create_hot_seat_human()
+	if binding == null:
+		return false
+	config["match_player_control_binding"] = binding.serialize()
+	return true
+
+
+func _binding_from_config(config: Dictionary) -> MatchPlayerControlBinding:
+	var raw_binding: Variant = config.get("match_player_control_binding", null)
+	if not (raw_binding is Dictionary):
+		return null
+	return MatchPlayerControlBinding.deserialize(raw_binding as Dictionary)
+
+
+func _install_local_principal_submitter(state: GameState) -> void:
+	if PlayMode.is_network() or state == null:
+		return
+	var principal_id: String = state.principal_id_for_player(0)
+	if principal_id.is_empty():
+		return
+	_submitter = LocalCommandSubmitter.new(principal_id)
+
+
+func _is_hot_seat_binding(state: GameState) -> bool:
+	if state == null:
+		return false
+	var humans: Array[String] = state.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN)
+	return humans.size() == 1 \
+			and state.principal_controls_player(humans[0], 0) \
+			and state.principal_controls_player(humans[0], 1)
+
+
 ## Completes the active setup-package setup and starts round one.
 ## Placement UI must commit normalized obstacle/deployment payloads before
 ## calling this method; the command validates that setup is complete.
@@ -468,7 +536,7 @@ func complete_setup_and_start_round() -> Dictionary:
 	if _is_network_client():
 		return {"success": false, "reason": "Server controls setup completion."}
 	var cmd: GameCommand = StartRoundCommand.new(active_player, {})
-	var result: Dictionary = _submitter.submit(cmd)
+	var result: Dictionary = _submitter.submit_authoritative(cmd)
 	if not result.has("new_round"):
 		return result
 	_after_start_round_command()
@@ -662,7 +730,7 @@ func _assign_fixed_commands_to_ship(ship: ShipInstance,
 	var cmd := AssignDialCommand.new(ship.owner_player, {
 			"ship_index": ship_index,
 			"commands": typed_cmds})
-	var result: Dictionary = _submitter.submit(cmd)
+	var result: Dictionary = _submitter.submit_authoritative(cmd)
 	if result.get("success", false):
 		_log.info("Auto-assigned round 1 commands: %s = %s" % [
 				ship.data_key, str(typed_cmds)])
@@ -708,7 +776,7 @@ func advance_phase() -> void:
 		var cmd := AdvancePhaseCommand.new(
 				active_player,
 				{"next_phase": int(next_phase)})
-		_submitter.submit(cmd)
+		_submitter.submit_authoritative(cmd)
 		EventBus.phase_changed.emit(next_phase)
 		# Initialise per-phase state.
 		match next_phase:
@@ -736,7 +804,7 @@ func _start_round() -> void:
 	# Route round/phase mutation through command for replay determinism.
 	var cmd := StartRoundCommand.new(
 			active_player, {})
-	_submitter.submit(cmd)
+	_submitter.submit_authoritative(cmd)
 	_after_start_round_command()
 
 
@@ -1991,7 +2059,7 @@ func _on_activation_ended() -> void:
 					{"ship_index": ship_index,
 						"ship_activation_identity":
 								canonical_ship.ship_activation_identity})
-			var result: Dictionary = _submitter.submit(cmd)
+			var result: Dictionary = _submitter.submit_authoritative(cmd)
 			if result.is_empty() or _is_network_client():
 				return
 			EventBus.command_dials_changed.emit(canonical_ship)
@@ -2270,7 +2338,7 @@ func _begin_status_phase() -> void:
 ## does NOT change; the first player retains it for the entire game.
 func _perform_status_phase_cleanup() -> void:
 	var cmd := StatusPhaseCleanupCommand.new(active_player, {})
-	var result: Dictionary = _submitter.submit(cmd)
+	var result: Dictionary = _submitter.submit_authoritative(cmd)
 
 	# Emit UI events so visuals stay in sync.
 	for i: int in range(Constants.PLAYER_COUNT):
@@ -2362,7 +2430,7 @@ func _on_ship_destroyed(ship: Node) -> void:
 		"owner_player": owner_player,
 		"ship_index": idx,
 	})
-	_submitter.submit(cmd)
+	_submitter.submit_authoritative(cmd)
 
 
 ## Called when any squadron is destroyed.  Squadrons alone never trigger

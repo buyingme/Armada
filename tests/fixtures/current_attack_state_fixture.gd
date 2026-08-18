@@ -9,6 +9,13 @@ const SQUADRON_KEY: String = "x_wing_squadron"
 
 static func install(game_state: GameState,
 		options: Dictionary = {}) -> CurrentAttackState:
+	# All fixture states represent a live match unless a test explicitly builds
+	# a rejection case. Install the accepted Hot-Seat topology once at this
+	# shared seam so serialization/reconstruction tests exercise the complete
+	# MATCH-001 state rather than an obsolete unbound shape.
+	if game_state != null and not game_state.has_valid_match_player_control_binding():
+		game_state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
 	var attacker_kind: String = str(options.get("attacker_kind", "ship"))
 	var attacker_player: int = int(options.get("attacker_player", 0))
 	var attacker_index: int = int(options.get("attacker_index", 0))

@@ -26,7 +26,7 @@ extends Node
 # ---------------------------------------------------------------------------
 
 ## Current protocol version.  Incremented whenever the message format changes.
-const PROTOCOL_VERSION: int = 1
+const PROTOCOL_VERSION: int = 2
 
 ## Interval (seconds) between keepalive pings.
 const HEARTBEAT_INTERVAL_SEC: float = 5.0
@@ -158,6 +158,9 @@ var _local_player_index: int = -1
 ## Set by [method broadcast_game_config] (server) or [method _receive_game_config]
 ## (client).  Consumed by [GameBoard._ready].  G4.6.5.2/3.
 var _pending_game_config: Dictionary = {}
+
+## Host-local association with a canonical match principal. Never serialized.
+var _host_match_principal_id: String = ""
 
 ## Server-side sync gate for the Command Phase.
 ## Holds [AssignDialCommand] results until both players have submitted all
@@ -318,7 +321,83 @@ func get_local_lan_ip() -> String:
 ## Contains [code]rng_seed[/code] and [code]scenario_id[/code].
 ## Consumed by [GameBoard._ready] after scene transition.  G4.6.5.2/3.
 func get_pending_game_config() -> Dictionary:
-	return _pending_game_config
+	return _pending_game_config.duplicate(true)
+
+
+## Returns and clears the one-shot authoritative bootstrap configuration.
+func consume_pending_game_config() -> Dictionary:
+	var config: Dictionary = _pending_game_config.duplicate(true)
+	_pending_game_config = {}
+	return config
+
+
+## Associates the initial complete lobby with an already-created binding.
+func establish_initial_match_principal_associations(
+		binding: MatchPlayerControlBinding, lobby: LobbyState) -> bool:
+	if connection_state != ConnectionState.LOBBY or binding == null \
+			or not binding.is_valid() or lobby == null or not lobby.can_start() \
+			or not _host_match_principal_id.is_empty() or peers.is_empty():
+		return false
+	var slots: Dictionary = {}
+	for player: Dictionary in lobby.players:
+		var player_index: int = int(player.get("player_index", -1))
+		var peer_id: int = int(player.get("peer_id", -1))
+		if player_index < 0 or player_index >= Constants.PLAYER_COUNT \
+				or slots.has(player_index):
+			return false
+		slots[player_index] = peer_id
+	if slots.size() != Constants.PLAYER_COUNT:
+		return false
+	var host_principal: String = binding.principal_id_for_player(_local_player_index)
+	if host_principal.is_empty():
+		return false
+	var updated_peer_ids: Array[int] = []
+	for player_index: int in range(Constants.PLAYER_COUNT):
+		var peer_id: int = int(slots[player_index])
+		if peer_id == 1:
+			continue
+		if not peers.has(peer_id) or peers[peer_id].has("match_principal_id"):
+			return false
+		var principal_id: String = binding.principal_id_for_player(player_index)
+		if principal_id.is_empty():
+			return false
+		peers[peer_id]["match_principal_id"] = principal_id
+		updated_peer_ids.append(peer_id)
+	_host_match_principal_id = host_principal
+	return true
+
+
+func clear_match_principal_associations() -> void:
+	_host_match_principal_id = ""
+	for peer_id: Variant in peers.keys():
+		peers[peer_id].erase("match_principal_id")
+
+
+func host_principal_controls_player(player_index: int) -> bool:
+	return GameManager.current_game_state != null \
+			and GameManager.current_game_state.principal_controls_player(
+				_host_match_principal_id, player_index)
+
+
+func can_install_loaded_binding(state: GameState) -> bool:
+	if role != Role.SERVER or connection_state != ConnectionState.IN_GAME \
+			or state == null or GameManager.current_game_state == null \
+			or _host_match_principal_id.is_empty():
+		return false
+	if GameManager.current_game_state.serialize().get(
+			"match_player_control_binding", {}) != state.serialize().get(
+			"match_player_control_binding", {}):
+		return false
+	if not state.principal_controls_player(
+			_host_match_principal_id, _local_player_index):
+		return false
+	for info: Dictionary in peers.values():
+		var principal_id: String = str(info.get("match_principal_id", ""))
+		var player_index: int = int(info.get("player_index", -1))
+		if principal_id.is_empty() \
+				or not state.principal_controls_player(principal_id, player_index):
+			return false
+	return true
 
 
 ## Returns the current connection state as a human-readable name.
@@ -587,6 +666,15 @@ func send_command_to_server(data: Dictionary) -> void:
 	_submit_command_to_server.rpc_id(1, data)
 
 
+## Client-side accepted-history submission. This is available only to the
+## CLI replay harness; it deliberately does not represent a live principal.
+func send_replay_command_to_server(data: Dictionary) -> void:
+	if role != Role.CLIENT or not ReplayDriver.is_network_replay_bootstrap_active():
+		_log.warn("send_replay_command_to_server() rejected outside network replay.")
+		return
+	_submit_replay_command_to_server.rpc_id(1, data)
+
+
 ## Client → Server: receives a command submission from a client.
 ## The server deserializes, validates, executes via [CommandProcessor],
 ## and broadcasts the result to all peers.
@@ -605,14 +693,14 @@ func _submit_command_to_server(data: Dictionary) -> void:
 	if cmd == null:
 		_log.warn("Failed to deserialize command from peer %d." % sender_id)
 		return
-	# Verify the command's player_index matches the peer's assigned slot.
-	var expected_player: int = peers[sender_id].get("player_index", -1)
-	if cmd.player_index != expected_player:
-		_log.warn("Peer %d claims player %d but is assigned %d — rejecting [%s]." % [
-				sender_id, cmd.player_index, expected_player,
-				cmd.command_type])
+	var principal_id: String = str(peers[sender_id].get("match_principal_id", ""))
+	if GameManager.current_game_state == null \
+			or not GameManager.current_game_state.principal_controls_player(
+				principal_id, cmd.player_index):
+		_log.warn("Peer %d has no matching principal association for [%s]." % [
+				sender_id, cmd.command_type])
 		_send_command_rejection(sender_id, data,
-				"Submitting player does not match the authenticated peer.")
+				"Submitting principal is not authorized for this player.")
 		return
 	_begin_rejection_capture(cmd)
 	var result: Dictionary
@@ -651,6 +739,45 @@ func _submit_command_to_server(data: Dictionary) -> void:
 			_drain_server_observer_followups()
 		return
 	# --- Normal path: broadcast immediately ---
+	_broadcast_command_result.rpc(cmd_data, result)
+	_drain_server_observer_followups()
+
+
+## Client -> Server: applies one accepted replay-history command. Network
+## replay harness peers are transport routing only and intentionally have no
+## live principal association (MATCH-001 §6.1).
+@rpc("any_peer", "reliable")
+func _submit_replay_command_to_server(data: Dictionary) -> void:
+	if role != Role.SERVER or not ReplayDriver.is_network_replay_bootstrap_active():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if not peers.has(sender_id):
+		_log.warn("Replay command from unknown peer %d — ignoring." % sender_id)
+		return
+	var cmd: GameCommand = GameCommand.deserialize(data)
+	if cmd == null:
+		_log.warn("Failed to deserialize replay command from peer %d." % sender_id)
+		return
+	_begin_rejection_capture(cmd)
+	var result: Dictionary = CommandProcessor.submit_replay_deferred_followups(cmd)
+	var rejection_reason: String = _end_rejection_capture()
+	if result.is_empty():
+		_log.info("Replay command [%s] from peer %d rejected by validation." % [
+				cmd.command_type, sender_id])
+		_send_command_rejection(sender_id, data, rejection_reason)
+		return
+	result["__remote_authored"] = true
+	var cmd_data: Dictionary = cmd.serialize()
+	if _sync_gate.is_active() and cmd.command_type == "assign_dials":
+		_sync_gate.hold(cmd_data, result)
+		if _all_dials_assigned(cmd.player_index):
+			_sync_gate.mark_ready(cmd.player_index)
+		if _sync_gate.is_open():
+			for entry: Dictionary in _sync_gate.release():
+				_broadcast_command_result.rpc(
+						entry["command_data"], entry["result"])
+			_drain_server_observer_followups()
+		return
 	_broadcast_command_result.rpc(cmd_data, result)
 	_drain_server_observer_followups()
 
@@ -745,15 +872,17 @@ func start_game() -> void:
 ## Must be called BEFORE [method start_game] and scene transition so clients
 ## receive the config before [GameBoard._ready] fires.
 ## G4.6.5.2.
-func broadcast_game_config(rng_seed: int, scenario_id: String) -> void:
+func broadcast_game_config(rng_seed: int, scenario_id: String,
+		binding_data: Dictionary = {}) -> void:
 	if role != Role.SERVER:
 		_log.warn("broadcast_game_config() called but not server.")
 		return
 	_pending_game_config = {
 		"rng_seed": rng_seed,
 		"scenario_id": scenario_id,
+		"match_player_control_binding": binding_data.duplicate(true),
 	}
-	_receive_game_config.rpc(rng_seed, scenario_id)
+	_receive_game_config.rpc(rng_seed, scenario_id, binding_data)
 	_log.info("Broadcast game config: seed=%d, scenario='%s'." % [
 			rng_seed, scenario_id])
 
@@ -762,7 +891,7 @@ func broadcast_game_config(rng_seed: int, scenario_id: String) -> void:
 ## The package remains player-indexed core JSON; no transport peer ids are added.
 func broadcast_setup_package_config(
 		rng_seed: int,
-		package: FleetSetupPackage) -> void:
+		package: FleetSetupPackage, binding_data: Dictionary = {}) -> void:
 	if role != Role.SERVER:
 		_log.warn("broadcast_setup_package_config() called but not server.")
 		return
@@ -770,8 +899,9 @@ func broadcast_setup_package_config(
 		_log.warn("broadcast_setup_package_config() called with null package.")
 		return
 	var package_data: Dictionary = package.to_hashed_dict()
-	_pending_game_config = _setup_package_config(rng_seed, package_data)
-	_receive_setup_package_config.rpc(rng_seed, package_data)
+	_pending_game_config = _setup_package_config(rng_seed, package_data,
+			binding_data)
+	_receive_setup_package_config.rpc(rng_seed, package_data, binding_data)
 	_log.info("Broadcast setup package config: seed=%d, hash=%s." % [
 			rng_seed, package.canonical_hash().substr(0, 12)])
 
@@ -779,10 +909,12 @@ func broadcast_setup_package_config(
 ## Server → All: delivers game configuration before scene transition.
 ## G4.6.5.3.
 @rpc("authority", "reliable")
-func _receive_game_config(rng_seed: int, scenario_id: String) -> void:
+func _receive_game_config(rng_seed: int, scenario_id: String,
+		binding_data: Dictionary = {}) -> void:
 	_pending_game_config = {
 		"rng_seed": rng_seed,
 		"scenario_id": scenario_id,
+		"match_player_control_binding": binding_data.duplicate(true),
 	}
 	_log.info("Received game config: seed=%d, scenario='%s'." % [
 			rng_seed, scenario_id])
@@ -792,18 +924,21 @@ func _receive_game_config(rng_seed: int, scenario_id: String) -> void:
 @rpc("authority", "reliable")
 func _receive_setup_package_config(
 		rng_seed: int,
-		package_data: Dictionary) -> void:
-	_pending_game_config = _setup_package_config(rng_seed, package_data)
+		package_data: Dictionary, binding_data: Dictionary = {}) -> void:
+	_pending_game_config = _setup_package_config(rng_seed, package_data,
+			binding_data)
 	_log.info("Received setup package config: seed=%d, hash=%s." % [
 			rng_seed, str(package_data.get("package_hash", "")).substr(0, 12)])
 
 
-func _setup_package_config(rng_seed: int, package_data: Dictionary) -> Dictionary:
+func _setup_package_config(rng_seed: int, package_data: Dictionary,
+		binding_data: Dictionary) -> Dictionary:
 	var package: FleetSetupPackage = FleetSetupPackage.deserialize(package_data)
 	return {
 		"rng_seed": rng_seed,
 		"scenario_id": package.scenario_id,
 		"setup_package": package_data.duplicate(true),
+		"match_player_control_binding": binding_data.duplicate(true),
 	}
 
 
@@ -952,6 +1087,7 @@ func _cleanup() -> void:
 	_last_heartbeat.clear()
 	_local_player_index = -1
 	_pending_game_config = {}
+	_host_match_principal_id = ""
 	_active_port = 0
 	if _peer:
 		multiplayer.multiplayer_peer = null

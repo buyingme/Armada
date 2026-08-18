@@ -6,6 +6,11 @@
 ## network authority path drain the same generated follow-up sequence.
 extends GutTest
 
+const TEST_BINDING: Dictionary = {
+	"principals": [{"principal_id": "mp-00000000-0000-4000-8000-000000000001", "kind": "HUMAN"}],
+	"player_principal_ids": ["mp-00000000-0000-4000-8000-000000000001", "mp-00000000-0000-4000-8000-000000000001"],
+}
+
 
 const BaselineTraceScript: GDScript = preload(
 		"res://src/autoload/baseline_trace.gd")
@@ -106,6 +111,8 @@ func _run_hot_seat_order_scenario() -> Dictionary:
 func _make_attack_roll_state() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_phase = Constants.GamePhase.SHIP
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
@@ -187,6 +194,7 @@ func _make_replay(commands: Array[Dictionary]) -> GameReplay:
 		],
 		"initiative_player": 0,
 		"initial_command_sequence": 0,
+		"match_player_control_binding": TEST_BINDING,
 	}
 	replay.set_commands(commands)
 	return replay

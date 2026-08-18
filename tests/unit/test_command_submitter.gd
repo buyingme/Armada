@@ -125,6 +125,23 @@ func test_network_submit_returns_awaiting_sentinel() -> void:
 			"Should warn about send_command_to_server with wrong role.")
 
 
+func test_network_replay_submit_player_one_uses_replay_route() -> void:
+	var submitter := NetworkCommandSubmitter.new()
+	var cmd := _TestNoopCmd.new(1, {})
+	# Network replay uses its accepted-history transport seam rather than the
+	# live principal-authorized submission path. The non-client test fixture
+	# makes that replay-only route reject before attempting an RPC.
+	var result: Dictionary = submitter.submit_replay(cmd)
+	assert_true(result.get("awaiting_remote", false),
+			"Player 1 replay submission should await its authoritative result.")
+	assert_true(submitter.is_awaiting_response(),
+			"Player 1 replay submission should occupy the replay awaiting slot.")
+	assert_eq(submitter._awaiting_command_type, TEST_COMMAND_TYPE,
+			"Replay submission should track the submitted command type.")
+	assert_engine_error(1,
+			"Replay route should reject outside an active network replay.")
+
+
 func test_network_is_awaiting_after_submit() -> void:
 	var submitter := NetworkCommandSubmitter.new()
 	assert_false(submitter.is_awaiting_response(),

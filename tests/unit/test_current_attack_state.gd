@@ -172,6 +172,7 @@ func test_missing_legacy_state_reconstructs_only_without_active_attack_flow() ->
 func _game_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SHIP
 	return state
 

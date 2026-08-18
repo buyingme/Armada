@@ -200,6 +200,7 @@ func test_equals_detects_payload_difference() -> void:
 func test_game_state_initialize_creates_default_flow() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	assert_not_null(state.interaction_flow,
 			"GameState.initialize() must create an InteractionFlow.")
 	assert_eq(state.interaction_flow.flow_type,
@@ -209,6 +210,7 @@ func test_game_state_initialize_creates_default_flow() -> void:
 func test_game_state_round_trip_preserves_flow() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,
 			Constants.InteractionStep.REVEAL_DIAL,
@@ -223,6 +225,7 @@ func test_game_state_round_trip_preserves_flow() -> void:
 func test_game_state_deserialize_missing_flow_uses_default() -> void:
 	var source := GameState.new()
 	source.initialize()
+	source.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	source.current_round = 1
 	var data: Dictionary = source.serialize()
 	data.erase("interaction_flow")
@@ -240,6 +243,7 @@ func test_game_state_deserialize_missing_flow_uses_default() -> void:
 func test_state_filter_strips_owner_payload_from_non_controller() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
@@ -261,6 +265,7 @@ func test_state_filter_strips_owner_payload_from_non_controller() -> void:
 func test_state_filter_keeps_owner_payload_for_controller() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
 			Constants.InteractionStep.ATTACK_DEFENSE_TOKENS,
@@ -278,6 +283,7 @@ func test_state_filter_keeps_owner_payload_for_controller() -> void:
 func test_state_filter_keeps_all_visibility_payload() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.COMMAND_PHASE,
 			Constants.InteractionStep.SELECT_DIALS,

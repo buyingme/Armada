@@ -34,9 +34,24 @@ static func build_game_state(
 	if not bool(runtime.get("ok", false)):
 		return _build_result(false, null, validation, "")
 	var state: GameState = _create_initialized_state(config)
+	var binding_data: Variant = config.get("match_player_control_binding", null)
+	if not (binding_data is Dictionary):
+		validation.add_error(RULE_RUNTIME_RESULT,
+				"Match player-control binding is required.", [], [])
+		return _build_result(false, null, validation, "")
+	var binding: MatchPlayerControlBinding = \
+		MatchPlayerControlBinding.deserialize(binding_data as Dictionary)
+	if binding == null or not state.install_match_player_control_binding(binding):
+		validation.add_error(RULE_RUNTIME_RESULT,
+				"Match player-control binding is invalid.", [], [])
+		return _build_result(false, null, validation, "")
 	_attach_package_runtime(state, package, runtime)
 	_attach_setup_payload(state, package)
 	_initialize_damage_deck(state)
+	if not state.validate_for_live_installation():
+		validation.add_error(RULE_RUNTIME_RESULT,
+				"Setup state cannot be installed live.", [], [])
+		return _build_result(false, null, validation, "")
 	return _build_result(true, state, validation, package.canonical_hash())
 
 

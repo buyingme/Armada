@@ -2,6 +2,11 @@
 ## These tests prove lifecycle infrastructure only and make no CAP claim.
 extends GutTest
 
+const TEST_BINDING: Dictionary = {
+	"principals": [{"principal_id": "mp-00000000-0000-4000-8000-000000000001", "kind": "HUMAN"}],
+	"player_principal_ids": ["mp-00000000-0000-4000-8000-000000000001", "mp-00000000-0000-4000-8000-000000000001"],
+}
+
 
 const PROCESSOR_SCRIPT: GDScript = preload(
 		"res://src/autoload/command_processor.gd")
@@ -204,6 +209,8 @@ func test_real_host_stream_orders_timing_commands_before_continuation() -> void:
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
 	NetworkManager._local_player_index = 0
+	NetworkManager._host_match_principal_id = \
+			authority_state.principal_id_for_player(0)
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	var host_submitter: NetworkHostCommandSubmitter = \
@@ -320,6 +327,8 @@ func _make_state(public_source_ids: Array[String],
 	var state: GameState = GameState.new()
 	state.rng = GameRng.new(7007)
 	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.deserialize(TEST_BINDING))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.interaction_flow = InteractionFlow.make(
@@ -379,7 +388,9 @@ func _apply_broadcast_to_client(index: int) -> void:
 
 func _make_replay(commands: Array[Dictionary]) -> GameReplay:
 	var replay: GameReplay = GameReplay.new()
-	replay.capture_header("timing-window-fixture", 7007, [0, 1], 0)
+	replay.capture_header("timing-window-fixture", 7007, [0, 1], 0, 0,
+			(GameManager.current_game_state as GameState).serialize().get(
+				"match_player_control_binding", {}))
 	replay.set_commands(commands)
 	return replay
 

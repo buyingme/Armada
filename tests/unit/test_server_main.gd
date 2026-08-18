@@ -10,6 +10,11 @@
 ## directly.  HMAC tests use GameReplay (RefCounted) with test keys.
 extends GutTest
 
+const TEST_BINDING: Dictionary = {
+	"principals": [{"principal_id": "mp-00000000-0000-4000-8000-000000000001", "kind": "HUMAN"}],
+	"player_principal_ids": ["mp-00000000-0000-4000-8000-000000000001", "mp-00000000-0000-4000-8000-000000000001"],
+}
+
 
 # ======================================================================
 # Constants
@@ -41,7 +46,8 @@ func _make_replay(cmd_count: int = 3) -> GameReplay:
 	var replay := GameReplay.new()
 	replay.capture_header("learning_scenario", 42,
 			[Constants.Faction.REBEL_ALLIANCE,
-			Constants.Faction.GALACTIC_EMPIRE], 0)
+			Constants.Faction.GALACTIC_EMPIRE], 0, 0,
+			TEST_BINDING)
 	var cmds: Array[Dictionary] = []
 	for i: int in range(cmd_count):
 		cmds.append({

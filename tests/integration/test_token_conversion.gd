@@ -598,7 +598,7 @@ func _create_ship_with_dials_and_command_value(
 ## Sets up a game in Ship Phase with the given rebel and imperial ships.
 func _setup_game_in_ship_phase(
 		rebel_ships: Array, imperial_ships: Array) -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	for ship: Variant in rebel_ships:
 		if ship is ShipInstance:

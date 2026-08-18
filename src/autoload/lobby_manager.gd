@@ -145,6 +145,20 @@ func request_start_game() -> void:
 		return
 	var rng_seed: int = int(seed_selection.get("rng_seed", 0))
 	var scenario_id: String = _selected_scenario_id()
+	var binding: MatchPlayerControlBinding = null
+	if ReplayDriver.is_network_replay_bootstrap_active():
+		binding = MatchPlayerControlBinding.deserialize(
+				ReplayDriver.get_pending_replay_binding())
+	else:
+		binding = MatchPlayerControlBinding.create_two_human()
+		if binding != null and not NetworkManager.establish_initial_match_principal_associations(
+				binding, current_lobby):
+			NetworkManager.clear_match_principal_associations()
+			binding = null
+	if binding == null:
+		lobby_error.emit("Match principal binding could not be established.")
+		return
+	var binding_data: Dictionary = binding.serialize()
 	if SETUP_MATCH_OPTIONS_SCRIPT.is_setup_match_type(scenario_id):
 		if not can_start_setup_match():
 			lobby_error.emit("Both players must choose valid fleets before starting.")
@@ -153,12 +167,13 @@ func request_start_game() -> void:
 		if setup_package == null:
 			lobby_error.emit("Setup package draft is unavailable.")
 			return
-		NetworkManager.broadcast_setup_package_config(rng_seed, setup_package)
+		NetworkManager.broadcast_setup_package_config(
+				rng_seed, setup_package, binding_data)
 		_notify_game_start.rpc()
 		NetworkManager.start_game()
 		game_starting.emit()
 		return
-	NetworkManager.broadcast_game_config(rng_seed, scenario_id)
+	NetworkManager.broadcast_game_config(rng_seed, scenario_id, binding_data)
 	_notify_game_start.rpc()
 	NetworkManager.start_game()
 	game_starting.emit()
@@ -195,6 +210,10 @@ func host_load_save(state: GameState, meta: SaveGameMetadata) -> void:
 		return
 	if state == null or meta == null:
 		_log.error("host_load_save() called with null state/meta.")
+		return
+	if not NetworkManager.can_install_loaded_binding(state):
+		_log.warn("Network save load rejected: no same-match live entitlement.")
+		lobby_error.emit("Network saves can only load into their existing live match.")
 		return
 	# Two valid call sites: from the lobby (current_lobby exists and is
 	# Ready) or mid-session (no/stale lobby, but a peer is connected).
@@ -519,6 +538,14 @@ func _receive_loaded_state(
 	if state == null:
 		_log.error("Failed to deserialise host's loaded state.")
 		lobby_error.emit("Failed to deserialise loaded game from host.")
+		return
+	if NetworkManager.connection_state != NetworkManager.ConnectionState.IN_GAME \
+			or GameManager.current_game_state == null \
+			or GameManager.current_game_state.serialize().get(
+				"match_player_control_binding", {}) != state.serialize().get(
+				"match_player_control_binding", {}):
+		_log.error("Loaded host snapshot has no same-match live binding.")
+		lobby_error.emit("Loaded network state is not authorized for this match.")
 		return
 	var meta: SaveGameMetadata = SaveGameMetadata.from_dict(meta_dict)
 	var cursor_result: Dictionary = SaveGameManager.reconstruction_cursor_for(

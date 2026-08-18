@@ -19,7 +19,7 @@ func _make_replay(cmd_count: int = 3) -> GameReplay:
 	var replay := GameReplay.new()
 	replay.capture_header("learning_scenario", 42,
 			[Constants.Faction.REBEL_ALLIANCE,
-			Constants.Faction.GALACTIC_EMPIRE], 0)
+			Constants.Faction.GALACTIC_EMPIRE], 0, 0, _binding())
 	var cmds: Array[Dictionary] = []
 	for i: int in range(cmd_count):
 		cmds.append({
@@ -41,6 +41,10 @@ func _temp_path(replay_name: String = "test_replay") -> String:
 func _cleanup_file(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+
+func _binding() -> Dictionary:
+	return MatchPlayerControlBinding.create_hot_seat_human().serialize()
 
 
 # ======================================================================
@@ -107,9 +111,9 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 	GameManager.current_game_state = previous_state
 
 
-func test_twi_003_cutover_uses_replay_format_five() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 5,
-			"TWI-003 production activation histories use replay format 5")
+func test_match_001_cutover_uses_replay_format_six() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 6,
+			"MATCH-001 principal bindings require replay format 6")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 
@@ -313,7 +317,7 @@ func test_disk_roundtrip_preserves_exact_seed_and_declared_numeric_types() -> vo
 	var original := GameReplay.new()
 	original.capture_header("slice-8a-numeric-schema", EXACT_REPLAY_SEED,
 			[Constants.Faction.REBEL_ALLIANCE,
-			Constants.Faction.GALACTIC_EMPIRE], 0)
+			Constants.Faction.GALACTIC_EMPIRE], 0, 0, _binding())
 	original.set_commands([
 		{
 			"type": "begin_attack",

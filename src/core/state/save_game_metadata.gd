@@ -36,7 +36,7 @@ extends RefCounted
 
 ## Current header schema version.  Bump on any breaking change to the
 ## header or to [method GameState.serialize] / [method GameState.deserialize].
-const CURRENT_VERSION: int = 3
+const CURRENT_VERSION: int = 4
 
 ## Allowed values for [member game_mode].
 const MODE_HOT_SEAT: String = "hot_seat"

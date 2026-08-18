@@ -3,12 +3,21 @@
 ## Unit tests for FB13 setup-package to GameState bootstrap.
 extends GutTest
 
+const TEST_BINDING: Dictionary = {
+	"principals": [
+		{"principal_id": "mp-00000000-0000-4000-8000-000000000001", "kind": "HUMAN"},
+		{"principal_id": "mp-00000000-0000-4000-8000-000000000002", "kind": "HUMAN"},
+	],
+	"player_principal_ids": ["mp-00000000-0000-4000-8000-000000000001", "mp-00000000-0000-4000-8000-000000000002"],
+}
+
 
 func test_build_game_state_valid_package_expected() -> void:
 	var package: FleetSetupPackage = _package_with_deployments()
 
 	var result: Dictionary = FleetSetupBootstrapper.build_game_state(
-			package, {"rng_seed": 12345})
+			package, {"rng_seed": 12345,
+				"match_player_control_binding": TEST_BINDING})
 	var state: GameState = result.get("state") as GameState
 	var rebel_ship: ShipInstance = state.get_ship(0, 0)
 	var imperial_squadron: SquadronInstance = state.get_squadron(1, 0)
@@ -38,9 +47,11 @@ func test_build_game_state_same_package_and_seed_hash_expected() -> void:
 	var package: FleetSetupPackage = _package_with_deployments()
 
 	var first: Dictionary = FleetSetupBootstrapper.build_game_state(
-			package, {"rng_seed": 6789})
+			package, {"rng_seed": 6789,
+				"match_player_control_binding": TEST_BINDING})
 	var second: Dictionary = FleetSetupBootstrapper.build_game_state(
-			FleetSetupPackage.deserialize(package.serialize()), {"rng_seed": 6789})
+			FleetSetupPackage.deserialize(package.serialize()), {"rng_seed": 6789,
+				"match_player_control_binding": TEST_BINDING})
 	var first_state: GameState = first.get("state") as GameState
 	var second_state: GameState = second.get("state") as GameState
 

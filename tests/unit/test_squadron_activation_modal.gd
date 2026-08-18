@@ -66,7 +66,7 @@ func before_each() -> void:
 
 
 func _start_squadron_phase_game() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SQUADRON
 	assert_true(GameManager.current_game_state \
@@ -510,7 +510,7 @@ func test_notify_move_completed_finishes_activation() -> void:
 
 
 func test_command_move_without_target_requests_skip_before_completion() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = Constants.GamePhase.SHIP
 	GameManager.active_player = 0
 	var inst: SquadronInstance = _make_instance(0)
@@ -576,7 +576,7 @@ func test_cancel_move_returns_to_action_choice() -> void:
 ## Clicking another squadron in command mode before moving/attacking is only
 ## a preview switch. It must not spend command activation budget.
 func test_click_different_squadron_command_preview_no_spend() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -613,7 +613,7 @@ func test_click_different_squadron_command_preview_no_spend() -> void:
 ## After a squadron has committed to a real action, clicking another squadron
 ## finishes the current activation before previewing the next one.
 func test_click_different_squadron_after_action_finishes_activation() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -663,7 +663,7 @@ func test_click_different_squadron_after_action_finishes_activation() -> void:
 
 
 func test_attack_pressed_command_mode_spends_one_activation() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -687,7 +687,7 @@ func test_attack_pressed_command_mode_spends_one_activation() -> void:
 
 
 func test_back_pressed_command_preview_clears_without_spend() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -718,7 +718,7 @@ func test_back_pressed_command_preview_clears_without_spend() -> void:
 
 ## Clicking the SAME squadron in ACTION_CHOICE (command mode) is ignored.
 func test_click_same_squadron_in_action_choice_returns_false() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -771,7 +771,7 @@ func test_click_different_squadron_turn_mode_returns_false() -> void:
 ## activated_this_round flag is set and it cannot be re-activated in the
 ## Squadron Phase.  Reproduces the bug from annotation_20260509_182355.
 func test_close_after_attack_emits_activation_done() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0
@@ -804,7 +804,7 @@ func test_close_after_attack_emits_activation_done() -> void:
 ## When the player closes the modal in command mode WITHOUT any action
 ## taken, no activation_done should fire (nothing to commit).
 func test_close_with_no_action_does_not_emit_activation_done() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.current_game_state.current_phase = \
 			Constants.GamePhase.SHIP
 	GameManager.active_player = 0

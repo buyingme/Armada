@@ -20,6 +20,7 @@ func _make_state(phase: Constants.GamePhase = Constants.GamePhase.SHIP,
 		initiative: int = 0) -> GameState:
 	var s: GameState = GameState.new()
 	s.initialize()
+	s.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	s.current_phase = phase
 	s.initiative_player = initiative
 	return s

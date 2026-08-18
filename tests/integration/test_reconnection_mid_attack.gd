@@ -34,6 +34,8 @@ const TimingWindowStateScript: GDScript = preload(
 func _server_state_mid_attack() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SHIP
 	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
 		"attack_id": "attack:0",
@@ -149,6 +151,8 @@ func test_reconnect_filter_strips_owner_only_payload_for_opponent() -> void:
 	# guarantee.  Use an OWNER-visible flow (e.g. command-dial selection).
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.COMMAND_PHASE,
 			Constants.InteractionStep.SELECT_DIALS,
@@ -171,6 +175,8 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 	# command runs.
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
 
 	var intent: UIProjector.UIIntent = _project_after_reconnect(state, 0)
 
@@ -185,6 +191,8 @@ func test_reconnect_no_flow_yields_empty_intent() -> void:
 func test_reconnect_before_begin_restores_no_preview_or_active_attack() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SHIP
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SHIP_ACTIVATION,

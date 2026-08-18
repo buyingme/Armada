@@ -47,13 +47,13 @@ func _on_command_phase_complete() -> void:
 # --- Active Player Tracking ---
 
 func test_start_game_sets_active_player_to_initiative() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.active_player, 0,
 			"Active player should be initiative player (0) at game start")
 
 
 func test_active_player_changed_signal_fires_on_start() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_true(_active_player_changes.size() >= 1,
 			"active_player_changed should fire on game start")
 	assert_eq(_active_player_changes[0], 0,
@@ -61,7 +61,7 @@ func test_active_player_changed_signal_fires_on_start() -> void:
 
 
 func test_get_active_player_returns_current() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.get_active_player(), 0,
 			"get_active_player should return 0")
 
@@ -69,13 +69,13 @@ func test_get_active_player_returns_current() -> void:
 # --- Sequential Command Phase (Hot-Seat) ---
 
 func test_command_phase_sets_assigning_player_to_initiative() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.get_command_assigning_player(), 0,
 			"Initiative player (0) should assign dials first")
 
 
 func test_command_dials_submitted_hand_off_to_second_player() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_active_player_changes.clear()
 	# Player 0 submits dials.
 	EventBus.command_dials_submitted.emit(0)
@@ -88,7 +88,7 @@ func test_command_dials_submitted_hand_off_to_second_player() -> void:
 
 
 func test_both_players_submitted_completes_command_phase() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	assert_eq(_command_phase_complete_count, 1,
@@ -98,7 +98,7 @@ func test_both_players_submitted_completes_command_phase() -> void:
 
 
 func test_command_assigning_player_reset_after_complete() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	assert_eq(GameManager.get_command_assigning_player(), -1,
@@ -110,7 +110,7 @@ func test_command_assigning_player_reset_after_complete() -> void:
 ## command_dials_submitted (whose handler also calls the check), causing
 ## Command → Ship → Squadron in a single frame.
 func test_picker_confirmed_path_does_not_double_advance_phase() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Give each player exactly one ship with command_value 1.
 	var gs: GameState = GameManager.current_game_state
 	var rebel_ship: ShipInstance = ShipInstance.new()
@@ -148,7 +148,7 @@ func test_picker_confirmed_path_does_not_double_advance_phase() -> void:
 
 
 func test_picker_confirmed_accepts_network_pending_result() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var submitter := _AwaitingSubmitter.new()
 	GameManager.set_command_submitter(submitter)
 	var ship: ShipInstance = _add_command_ship(1, "NetworkPending")
@@ -167,7 +167,7 @@ func test_picker_confirmed_accepts_network_pending_result() -> void:
 # --- Ship Phase Turn Management ---
 
 func test_ship_phase_starts_with_initiative_player() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_active_player_changes.clear()
 	# Skip to ship phase.
 	EventBus.command_dials_submitted.emit(0)
@@ -182,7 +182,7 @@ func test_ship_phase_starts_with_initiative_player() -> void:
 
 
 func test_activation_ended_advances_turn() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Advance to Ship Phase.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
@@ -198,7 +198,7 @@ func test_activation_ended_advances_turn() -> void:
 # --- Auto-Pass Detection ---
 
 func test_has_unactivated_ships_true_when_ships_exist() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_ships()
 	assert_true(GameManager._has_unactivated_ships(0),
 			"Should detect unactivated ships for player 0")
@@ -207,7 +207,7 @@ func test_has_unactivated_ships_true_when_ships_exist() -> void:
 
 
 func test_has_unactivated_ships_false_when_all_activated() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_ships()
 	# Mark all player 0's ships as activated.
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
@@ -219,7 +219,7 @@ func test_has_unactivated_ships_false_when_all_activated() -> void:
 
 
 func test_auto_pass_when_no_ships() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# No ships registered — both players should auto-pass.
 	assert_false(GameManager._has_unactivated_ships(0),
 			"No ships means no unactivated ships")
@@ -228,14 +228,14 @@ func test_auto_pass_when_no_ships() -> void:
 
 
 func test_has_unactivated_squadrons_true_when_squadrons_exist() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_squadrons()
 	assert_true(GameManager._has_unactivated_squadrons(0),
 			"Should detect unactivated squadrons for player 0")
 
 
 func test_has_unactivated_squadrons_false_when_all_activated() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_squadrons()
 	var ps: PlayerState = GameManager.current_game_state.get_player_state(0)
 	for sq: Variant in ps.squadrons:
@@ -246,7 +246,7 @@ func test_has_unactivated_squadrons_false_when_all_activated() -> void:
 
 
 func test_ship_phase_auto_pass_cascades_to_next_round() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Skip to ship phase with no ships at all.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
@@ -261,7 +261,7 @@ func test_ship_phase_auto_pass_cascades_to_next_round() -> void:
 
 
 func test_squadron_phase_auto_passes_to_status_and_beyond() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Skip to ship phase.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
@@ -277,7 +277,7 @@ func test_squadron_phase_auto_passes_to_status_and_beyond() -> void:
 # --- Initiative ---
 
 func test_initiative_player_is_zero_by_default() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.current_game_state.initiative_player, 0,
 			"Initiative player should default to 0")
 
@@ -285,7 +285,7 @@ func test_initiative_player_is_zero_by_default() -> void:
 # --- Squadron Phase Placeholder ---
 
 func test_squadron_phase_marks_all_squadrons_activated() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_ships()
 	_add_test_squadrons()
 	# Advance to Ship Phase.
@@ -314,7 +314,7 @@ func test_squadron_phase_marks_all_squadrons_activated() -> void:
 # --- Status Phase Placeholder ---
 
 func test_status_phase_readies_exhausted_defense_tokens() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_ships_with_tokens()
 	# Exhaust a token.
 	var ship: ShipInstance = (
@@ -336,7 +336,7 @@ func test_status_phase_readies_exhausted_defense_tokens() -> void:
 
 
 func test_status_phase_resets_ship_activation() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	_add_test_ships()
 	var ship: ShipInstance = (
 			GameManager.current_game_state.get_player_state(0).ships[0]
@@ -351,7 +351,7 @@ func test_status_phase_resets_ship_activation() -> void:
 
 
 func test_status_phase_preserves_initiative() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.current_game_state.initiative_player, 0,
 			"Initiative should start with player 0")
 	# Advance through full round.
@@ -363,7 +363,7 @@ func test_status_phase_preserves_initiative() -> void:
 
 
 func test_initiative_stays_after_two_rounds() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Round 1 → round 2.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
@@ -381,7 +381,7 @@ func test_initiative_stays_after_two_rounds() -> void:
 # --- Full Round Cycle ---
 
 func test_full_round_cycle_reaches_round_2() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.get_current_round(), 1,
 			"Should start at round 1")
 	# Complete round 1.
@@ -396,7 +396,7 @@ func test_full_round_cycle_reaches_round_2() -> void:
 
 
 func test_game_ends_after_six_rounds() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Burn through 6 rounds.
 	for _r: int in range(6):
 		# In round N, initiative player may differ; submit both.
@@ -408,7 +408,7 @@ func test_game_ends_after_six_rounds() -> void:
 
 
 func test_round_3_initiative_player_assigns_first() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Round 1 complete.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)

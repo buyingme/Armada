@@ -245,7 +245,7 @@ func test_can_start_dial_drag_false_in_command_phase() -> void:
 	add_child_autofree(panel)
 	panel.setup(Constants.Faction.REBEL_ALLIANCE, true, 0)
 	var ship: ShipInstance = _create_ship_with_dials(0, 1)
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Phase is COMMAND by default after start_new_game.
 	GameManager.current_game_state.get_player_state(0).ships.append(ship)
 	assert_false(panel._can_start_dial_drag(ship),
@@ -403,7 +403,7 @@ func _complete_active_ship(ship: ShipInstance) -> void:
 ## Sets up a game in Ship Phase with the given rebel and imperial ships.
 func _setup_game_in_ship_phase(
 		rebel_ships: Array, imperial_ships: Array) -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	for ship: Variant in rebel_ships:
 		if ship is ShipInstance:

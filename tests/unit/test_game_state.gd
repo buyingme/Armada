@@ -177,6 +177,7 @@ func test_ship_activation_aggregate_rejects_two_active_owners() -> void:
 func test_deserialize_rejects_active_phase_squadron_after_capacity_committed() -> void:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	state.current_phase = Constants.GamePhase.SQUADRON
 	assert_true(state.initialize_squadron_phase_progress(0))
 	var squadron := SquadronInstance.create_from_data(
@@ -217,6 +218,7 @@ func test_deserialize_rejects_active_command_squadron_over_live_capacity() -> vo
 func _serialized_active_command_squadron_state() -> Dictionary:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	var ship := ShipInstance.create_from_data(
@@ -284,6 +286,7 @@ func test_get_non_initiative_player_state() -> void:
 func test_serialize_round_trip() -> void:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	state.current_round = 3
 	state.current_phase = Constants.GamePhase.SHIP
 	state.initiative_player = 1
@@ -300,6 +303,7 @@ func test_serialize_round_trip() -> void:
 func test_serialize_round_trip_preserves_objectives() -> void:
 	var state: GameState = GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	state.objectives = {
 		"selected_objective": {"data_key": "obj_ass_opening_salvo"},
 		"setup_package_hash": "abc123",
@@ -321,6 +325,7 @@ func test_timing_window_state_default_is_inactive() -> void:
 func test_serialize_round_trip_preserves_inactive_timing_window_state() -> void:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 
 	var restored := GameState.deserialize(state.serialize())
 
@@ -354,6 +359,7 @@ func test_timing_window_state_serializes_json_safe_values() -> void:
 func test_missing_timing_window_state_deserializes_inactive() -> void:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	var data := state.serialize()
 	data.erase("timing_window_state")
 
@@ -705,6 +711,36 @@ func test_legacy_attack_flow_without_current_attack_state_rejects() -> void:
 
 # --- Player State ---
 
+func test_adr_007_entry_gate_a_reads_human_principal_shapes_from_game_state() -> void:
+	var hot_seat := GameState.new()
+	hot_seat.initialize()
+	assert_true(hot_seat.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
+	assert_eq(hot_seat.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN).size(), 1)
+
+	var network := GameState.new()
+	network.initialize()
+	assert_true(network.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
+	assert_eq(network.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN).size(), 2)
+
+	var mixed := GameState.new()
+	mixed.initialize()
+	assert_true(mixed.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_new(["HUMAN", "AUTOMATED"], [0, 1])))
+	assert_eq(mixed.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN).size(), 1)
+
+	var automated := GameState.new()
+	automated.initialize()
+	assert_true(automated.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_new(["AUTOMATED", "AUTOMATED"], [0, 1])))
+	assert_eq(automated.get_distinct_controlling_principal_ids(
+			MatchPlayerControlBinding.KIND_HUMAN), [])
+
+
 func test_player_state_default_faction() -> void:
 	var ps := PlayerState.new()
 	assert_eq(ps.faction, Constants.Faction.REBEL_ALLIANCE, "Default faction should be Rebel Alliance")
@@ -742,6 +778,7 @@ func _make_active_timing_window(
 func _make_active_attack_game_state(sequence: int) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	_install_test_binding(state)
 	state.current_phase = Constants.GamePhase.SHIP
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.ATTACK,
@@ -766,6 +803,11 @@ func _make_active_attack_game_state(sequence: int) -> GameState:
 				"owner_player": 0,
 			})), "Fixture should install a reconstructable attack lifecycle")
 	return state
+
+
+func _install_test_binding(state: GameState) -> void:
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 
 
 func _is_json_safe(value: Variant) -> bool:

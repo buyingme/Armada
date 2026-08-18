@@ -381,6 +381,9 @@ func create_replay() -> GameReplay:
 	if game_state == null:
 		_log.warn("create_replay: no active game state.")
 		return null
+	if not game_state.has_valid_match_player_control_binding():
+		_log.warn("create_replay: active game state has no valid principal binding.")
+		return null
 	# Production currently has a reconstruction seam only for full-history
 	# replay capture. A non-zero history start requires an accepted canonical
 	# initial state paired with the cursor; do not emit an unpaired artifact.
@@ -402,7 +405,8 @@ func create_replay() -> GameReplay:
 			rng_seed,
 			factions,
 			game_state.initiative_player,
-			0)
+			0,
+			game_state.serialize().get("match_player_control_binding", {}))
 	replay.set_commands(serialize_history())
 	return replay
 

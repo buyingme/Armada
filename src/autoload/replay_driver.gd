@@ -74,6 +74,9 @@ var enabled: bool = false
 ## game-config path and consumes it after authoritative RNG installation.
 var pending_replay_seed: int = 0
 
+## Validated replay-header binding, consumed by the next match bootstrap.
+var pending_replay_binding: Dictionary = {}
+
 ## Loaded replay payload.  Null until [method _ready] succeeds.
 var _replay: GameReplay = null
 
@@ -121,6 +124,8 @@ func _ready() -> void:
 	# first frame.  Hot-seat consumes the value directly; network replay
 	# supplies the same accepted value through the lobby game-config path.
 	pending_replay_seed = int(_replay.header.get("rng_seed", 0))
+	pending_replay_binding = (_replay.header.get(
+			"match_player_control_binding", {}) as Dictionary).duplicate(true)
 	LoggingMode.enabled = true
 	BaselineTrace.output_path_override = _baseline_output
 	BaselineTrace._maybe_enable()
@@ -186,6 +191,16 @@ func get_pending_network_replay_seed() -> int:
 	if not is_network_replay_bootstrap_active():
 		return 0
 	return pending_replay_seed
+
+
+func get_pending_replay_binding() -> Dictionary:
+	return pending_replay_binding.duplicate(true)
+
+
+func consume_pending_replay_binding() -> Dictionary:
+	var binding: Dictionary = pending_replay_binding.duplicate(true)
+	pending_replay_binding = {}
+	return binding
 
 
 ## Validates one received network game-config seed against the accepted replay

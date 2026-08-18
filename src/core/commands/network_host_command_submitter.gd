@@ -20,9 +20,23 @@ var _log: GameLogger = GameLogger.new("NetworkHostCommandSubmitter")
 ## Executes the command locally and broadcasts the result to clients.
 ## Returns the execution result (non-empty on success).
 func submit(command: GameCommand) -> Dictionary:
+	if not NetworkManager.host_principal_controls_player(command.player_index):
+		_log.warn("Host principal is not authorized for command [%s]." %
+				command.command_type)
+		return {}
 	var result: Dictionary = CommandProcessor.submit_deferred_followups(command)
 	if result.is_empty():
 		_log.warn("Command [%s] rejected by validation." %
+				command.command_type)
+		return result
+	NetworkManager.handle_host_command(command, result)
+	return result
+
+
+func submit_authoritative(command: GameCommand) -> Dictionary:
+	var result: Dictionary = CommandProcessor.submit_deferred_followups(command)
+	if result.is_empty():
+		_log.warn("Authoritative command [%s] rejected by validation." %
 				command.command_type)
 		return result
 	NetworkManager.handle_host_command(command, result)

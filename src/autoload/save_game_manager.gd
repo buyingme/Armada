@@ -142,6 +142,9 @@ func save_game(
 	if _is_network_client():
 		_log.warn("save_game refused on network client (host-only).")
 		return false
+	if not game_state.validate_for_live_installation():
+		_log.error("save_game refused: live state has no valid principal binding.")
+		return false
 	if not _ensure_save_dir():
 		return false
 	if _should_save_from_checkpoint(meta):

@@ -27,6 +27,7 @@ func test_host_load_save_refused_when_not_server() -> void:
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
 	var meta: SaveGameMetadata = SaveGameMetadata.new()
 	meta.scenario_id = "learning_scenario"
 	meta.display_name = "test"
@@ -54,6 +55,7 @@ func test_host_load_save_refused_when_lobby_not_startable() -> void:
 	NetworkManager.peers.clear()
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
 	var meta: SaveGameMetadata = SaveGameMetadata.new()
 	meta.scenario_id = "learning_scenario"
 	meta.display_name = "test"
@@ -69,14 +71,22 @@ func test_load_state_received_signal_emittable() -> void:
 	# body directly; full RPC delivery is covered by MT-J.7.
 	var src: GameState = GameState.new()
 	src.initialize()
+	src.install_match_player_control_binding(MatchPlayerControlBinding.create_two_human())
 	src.current_round = 4
+	src.current_phase = Constants.GamePhase.SHIP
+	GameManager.current_game_state = GameState.deserialize(src.serialize())
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager.connection_state = NetworkManager.ConnectionState.IN_GAME
 	var dict: Dictionary = src.serialize()
 	watch_signals(LobbyManager)
 	LobbyManager._receive_loaded_state(
-			dict, "learning_scenario", {})
-	assert_signal_emitted(LobbyManager, "load_state_received",
-			"load_state_received should fire on RPC body.")
-	assert_signal_emitted(LobbyManager, "game_starting",
-			"game_starting should fire after install.")
-	assert_eq(GameManager.current_game_state.current_round, 4,
-			"Loaded state should be installed on the receiver.")
+			dict, "learning_scenario", {
+			"save_format_version": SaveGameMetadata.CURRENT_VERSION,
+			"scenario_id": "learning_scenario",
+			"game_mode": SaveGameMetadata.MODE_NETWORK,
+			"display_name": "network-load",
+		})
+	assert_signal_emitted(LobbyManager, "lobby_error",
+			"Synthetic RPC delivery without a live same-match entitlement must fail closed.")
+	assert_signal_not_emitted(LobbyManager, "load_state_received")
+	assert_signal_not_emitted(LobbyManager, "game_starting")

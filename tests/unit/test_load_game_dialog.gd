@@ -41,6 +41,7 @@ func _save_with_mode(name: String, mode: String) -> void:
 func _make_state() -> GameState:
 	var gs: GameState = GameState.new()
 	gs.initialize()
+	gs.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	gs.current_round = 2
 	gs.current_phase = Constants.GamePhase.SHIP
 	gs.initiative_player = 0

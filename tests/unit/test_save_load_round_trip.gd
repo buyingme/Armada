@@ -75,6 +75,8 @@ func _accuracy_spend_blocked(attacker: ShipInstance) -> bool:
 func _make_populated_state() -> GameState:
 	var gs: GameState = GameState.new()
 	gs.initialize()
+	assert_true(gs.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	gs.current_round = 4
 	gs.current_phase = Constants.GamePhase.SHIP
 	gs.initiative_player = 1

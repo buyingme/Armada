@@ -130,6 +130,7 @@ func _execute_maneuver_command() -> ExecuteManeuverCommand:
 func _make_state() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.damage_deck = DamageDeck.new()

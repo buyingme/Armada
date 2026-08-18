@@ -1732,6 +1732,8 @@ func test_live_authority_resume_drains_one_deterministic_terminal_chain() -> voi
 		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
 	})
 	GameManager.current_game_state = state
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			state.principal_id_for_player(0)))
 	assert_true(CommandProcessor.restore_next_sequence(17))
 	var executor: AttackExecutor = _make_composition(state)
 	var plan: Dictionary = executor.resume_current_attack(
@@ -1917,6 +1919,8 @@ func _assert_network_timing_intent(
 func _state_at(stage: String, options: Dictionary) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8108)
@@ -1981,6 +1985,8 @@ func _ship_declaration_projection_state(post_skip: bool) -> GameState:
 func _phase_squadron_projection_state(post_skip: bool) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SQUADRON
 	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
@@ -2017,6 +2023,8 @@ func _phase_squadron_projection_state(post_skip: bool) -> GameState:
 func _command_squadron_projection_state(post_skip: bool) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.get_player_state(0).faction = Constants.Faction.REBEL_ALLIANCE
@@ -2095,6 +2103,8 @@ func _command_squadron_active_begin_state() -> GameState:
 func _player_one_ship_attack_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.initiative_player = 1

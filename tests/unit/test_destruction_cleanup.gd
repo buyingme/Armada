@@ -27,7 +27,7 @@ func get_ship_instance() -> RefCounted:
 
 
 func before_each() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Attach a DamageDeck to the game state for cleanup testing.
 	var deck: DamageDeck = DamageDeck.new()
 	deck.initialize()

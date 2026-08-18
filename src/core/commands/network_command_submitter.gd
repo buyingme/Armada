@@ -58,7 +58,12 @@ func submit(command: GameCommand) -> Dictionary:
 
 
 func submit_replay(command: GameCommand) -> Dictionary:
-	return submit(command)
+	var data: Dictionary = command.serialize()
+	NetworkManager.send_replay_command_to_server(data)
+	_awaiting = true
+	_in_flight_count += 1
+	_awaiting_command_type = command.command_type
+	return AWAITING_REMOTE_RESULT.duplicate()
 
 
 ## Returns [code]true[/code] when waiting for the server's response.

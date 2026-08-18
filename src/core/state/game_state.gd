@@ -13,6 +13,8 @@ const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 const CURRENT_ATTACK_STATE: GDScript = preload(
 		"res://src/core/state/current_attack_state.gd")
+const MATCH_PLAYER_CONTROL_BINDING: GDScript = preload(
+		"res://src/core/state/match_player_control_binding.gd")
 
 const SQUADRON_PHASE_CONTROLLER_INACTIVE: int = -1
 
@@ -65,6 +67,9 @@ var current_attack_state: CurrentAttackState:
 	get:
 		return _clone_current_attack_state(_current_attack_state)
 
+## Immutable match-lifetime player-to-principal authority.
+var _match_player_control_binding: MatchPlayerControlBinding = null
+
 ## Per-round count of ship-targeting attacks performed by each ship.
 ## Keys are `round:owner_player:ship_index`; values are ints.
 ## Used by Coolant Discharge and serialized for save/replay determinism.
@@ -88,6 +93,7 @@ func initialize() -> void:
 	interaction_flow = InteractionFlow.new()
 	_timing_window_state = _new_timing_window_state()
 	_current_attack_state = _new_current_attack_state()
+	_match_player_control_binding = null
 	objectives.clear()
 	ship_target_attack_counts.clear()
 	player_states.clear()
@@ -354,6 +360,50 @@ func validate_declaration_adjacent_state() -> bool:
 	return true
 
 
+## Validates all state required before this candidate is published live.
+func validate_for_live_installation() -> bool:
+	return has_valid_match_player_control_binding() \
+			and validate_declaration_adjacent_state()
+
+
+## Installs the immutable binding once, cloning through its canonical boundary.
+func install_match_player_control_binding(
+		binding: MatchPlayerControlBinding) -> bool:
+	if _match_player_control_binding != null or binding == null:
+		return false
+	var canonical: MatchPlayerControlBinding = \
+			MATCH_PLAYER_CONTROL_BINDING.deserialize(binding.serialize())
+	if canonical == null:
+		return false
+	_match_player_control_binding = canonical
+	return has_valid_match_player_control_binding()
+
+
+func has_valid_match_player_control_binding() -> bool:
+	return _match_player_control_binding != null \
+			and _match_player_control_binding.is_valid() \
+			and _match_player_control_binding.serialize().get(
+				"player_principal_ids", []).size() == player_states.size()
+
+
+func principal_id_for_player(player_index: int) -> String:
+	if _match_player_control_binding == null:
+		return ""
+	return _match_player_control_binding.principal_id_for_player(player_index)
+
+
+func principal_controls_player(principal_id: String, player_index: int) -> bool:
+	return _match_player_control_binding != null \
+			and _match_player_control_binding.controls_player(
+				principal_id, player_index)
+
+
+func get_distinct_controlling_principal_ids(kind: String = "") -> Array[String]:
+	if _match_player_control_binding == null:
+		return []
+	return _match_player_control_binding.distinct_principal_ids(kind)
+
+
 ## Read-only aggregate validation for the ADR-006 cross-fleet uniqueness rule.
 ## ShipInstance remains the sole writable owner of each activation identity.
 func validate_ship_activation_identity_aggregate() -> bool:
@@ -444,6 +494,8 @@ func serialize() -> Dictionary:
 		"current_attack_state": _current_attack_state.serialize()
 					if _current_attack_state else _new_current_attack_state().serialize(),
 		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
+		"match_player_control_binding": _match_player_control_binding.serialize()
+					if _match_player_control_binding else {},
 	}
 	for player_state: PlayerState in player_states:
 		data["player_states"].append(player_state.serialize())
@@ -455,6 +507,13 @@ func serialize() -> Dictionary:
 ## caller because it requires template look-ups (ShipData / SquadronData).
 static func deserialize(data: Dictionary) -> GameState:
 	if not _serialized_declaration_fields_are_complete(data):
+		return null
+	var binding_data: Variant = data.get("match_player_control_binding", null)
+	if not (binding_data is Dictionary):
+		return null
+	var binding: MatchPlayerControlBinding = \
+		MATCH_PLAYER_CONTROL_BINDING.deserialize(binding_data as Dictionary)
+	if binding == null:
 		return null
 	var state := GameState.new()
 	state.current_round = data.get("current_round", 0)
@@ -469,6 +528,8 @@ static func deserialize(data: Dictionary) -> GameState:
 		state.objectives = (objective_data as Dictionary).duplicate(true)
 	for player_state_data: Variant in data.get("player_states", []):
 		state.player_states.append(PlayerState.deserialize(player_state_data))
+	if not state.install_match_player_control_binding(binding):
+		return null
 	state.ship_target_attack_counts = _deserialize_attack_counts(
 			data.get("ship_target_attack_counts", {}))
 	var deck_data: Dictionary = data.get("damage_deck", {})
@@ -504,7 +565,7 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._timing_window_state = _new_timing_window_state()
 	if not state.validate_current_attack_references():
 		return null
-	if not state.validate_declaration_adjacent_state():
+	if not state.validate_for_live_installation():
 		return null
 	if not bool(TIMING_WINDOW_ORCHESTRATOR.validate_reconstructed_state(
 			state).get(TIMING_WINDOW_ORCHESTRATOR.KEY_OK, false)):

@@ -14,6 +14,12 @@ const TIMING_WINDOW_ORCHESTRATOR: GDScript = preload(
 		"res://src/core/timing_windows/timing_window_orchestrator.gd")
 const CURRENT_ATTACK_FIXTURE: GDScript = preload(
 		"res://tests/fixtures/current_attack_state_fixture.gd")
+var _test_signing_key: PackedByteArray = PackedByteArray([
+	0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+	0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+	0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+	0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
+])
 
 var _manager: Node = null
 
@@ -23,6 +29,7 @@ func before_each() -> void:
 	# (Saves still write to the shared res://saves/ dir; we use a unique
 	# TEST_SAVE filename to avoid collisions and clean up in after_each.)
 	_manager = SaveManagerScript.new()
+	_manager._signing_key = _test_signing_key
 	CommandProcessor.reset()
 
 
@@ -38,6 +45,8 @@ func after_each() -> void:
 func _make_game_state() -> GameState:
 	var gs: GameState = GameState.new()
 	gs.initialize()
+	assert_true(gs.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	gs.current_round = 3
 	gs.current_phase = Constants.GamePhase.SHIP
 	gs.initiative_player = 1

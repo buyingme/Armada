@@ -102,7 +102,7 @@ func _get_log_content() -> String:
 # ---------------------------------------------------------------------------
 
 func test_game_start_logs_round_and_phase() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var content: String = _get_log_content()
 	assert_string_contains(content, "round_started(1)",
 			"Should log round_started(1)")
@@ -111,14 +111,14 @@ func test_game_start_logs_round_and_phase() -> void:
 
 
 func test_game_start_logs_active_player() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var content: String = _get_log_content()
 	assert_string_contains(content, "active_player_changed(0)",
 			"Should log active_player_changed(0) at game start")
 
 
 func test_command_submit_logs_submission() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	var content: String = _get_log_content()
 	assert_string_contains(content, "command_dials_submitted(player=0)",
@@ -126,7 +126,7 @@ func test_command_submit_logs_submission() -> void:
 
 
 func test_both_submit_logs_command_phase_complete() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	var content: String = _get_log_content()
@@ -135,7 +135,7 @@ func test_both_submit_logs_command_phase_complete() -> void:
 
 
 func test_ship_phase_transition_logged() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	var content: String = _get_log_content()
@@ -144,7 +144,7 @@ func test_ship_phase_transition_logged() -> void:
 
 
 func test_handoff_accepted_logged() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.handoff_accepted.emit()
 	var content: String = _get_log_content()
 	assert_string_contains(content, "handoff_accepted",
@@ -152,7 +152,7 @@ func test_handoff_accepted_logged() -> void:
 
 
 func test_activation_ended_logged() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)
 	# Now in Ship Phase — emit activation_ended.
@@ -163,7 +163,7 @@ func test_activation_ended_logged() -> void:
 
 
 func test_game_ended_logged() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.end_game("round_6")
 	var content: String = _get_log_content()
 	assert_string_contains(content, "game_ended",
@@ -171,7 +171,7 @@ func test_game_ended_logged() -> void:
 
 
 func test_full_flow_produces_ordered_log_sequence() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# Command Phase: both players submit.
 	EventBus.command_dials_submitted.emit(0)
 	EventBus.command_dials_submitted.emit(1)

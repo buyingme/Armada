@@ -461,7 +461,7 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 			"Production replay capture must include the repaired progression.")
 	if replay != null:
 		var replay_data: Dictionary = replay.serialize()
-		assert_eq((replay_data["header"] as Dictionary)["format_version"], 5)
+		assert_eq((replay_data["header"] as Dictionary)["format_version"], 6)
 		assert_not_null(GameReplay.deserialize(replay_data))
 		assert_eq((replay.commands[0] as Dictionary)["type"],
 				"activate_squadron")
@@ -881,6 +881,8 @@ func test_network_client_keeps_confirmed_candidate_until_begin_result() -> void:
 func _make_forensic_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SQUADRON
 	state.initiative_player = 0
@@ -920,6 +922,8 @@ func _make_bug_025_ship_state(defender_key: String,
 		defender_position: Vector2, defender_rotation: float) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 3
 	state.current_phase = Constants.GamePhase.SHIP
 	state.initiative_player = 1
@@ -945,6 +949,8 @@ func _make_distance_boundary_state(defender_kind: String,
 		edge_distance_px: float) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SQUADRON
 	state.initiative_player = 0
@@ -986,6 +992,8 @@ func _make_distance_boundary_state(defender_kind: String,
 func _make_declaration_skip_fixture(context: String) -> Dictionary:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	if context == SkipAttackCommand.CONTEXT_SHIP_ATTACK:
 		state.current_phase = Constants.GamePhase.SHIP
@@ -1262,6 +1270,8 @@ func _install_state(state: GameState) -> void:
 	GameManager.current_game_state = state
 	GameManager.is_game_active = true
 	GameManager.active_player = 1
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			state.principal_id_for_player(GameManager.active_player)))
 	GameManager._activating_squadron = null
 	GameManager._squadrons_activated_this_turn = 0
 

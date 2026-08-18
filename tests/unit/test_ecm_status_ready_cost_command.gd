@@ -215,7 +215,8 @@ func test_start_round_blocked_until_ready_cost_choice_resolved_then_clears_guard
 
 
 func test_game_manager_ready_path_records_choice_then_start_round() -> void:
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			_state.principal_id_for_player(1)))
 
 	var result: Dictionary = GameManager.submit_ready_ecm_runtime(
 			1, ECM_RUNTIME_ID)
@@ -238,7 +239,8 @@ func test_game_manager_ready_path_records_choice_then_start_round() -> void:
 
 
 func test_game_manager_decline_path_records_choice_then_start_round() -> void:
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			_state.principal_id_for_player(1)))
 
 	var result: Dictionary = GameManager.submit_decline_ecm_ready_runtime(
 			1, ECM_RUNTIME_ID)
@@ -257,7 +259,8 @@ func test_game_manager_decline_path_records_choice_then_start_round() -> void:
 
 
 func test_game_manager_waits_for_all_ecm_ready_cost_choices() -> void:
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			_state.principal_id_for_player(1)))
 	var second_runtime_id: String = _add_exhausted_ecm_ship_to_state(
 			_state, 1, "defender-2", "ecm-2")
 	_state.interaction_flow.payload = \
@@ -556,6 +559,7 @@ func test_status_cleanup_regression_and_payload_generation() -> void:
 func _make_status_state(has_repair_token: bool = true) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_round = 2
 	state.current_phase = Constants.GamePhase.STATUS
 	var ship: ShipInstance = _add_ship_to_state(state, 1, "defender")

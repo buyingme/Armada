@@ -70,7 +70,7 @@ func test_start_new_game_from_setup_package_installs_state_expected() -> void:
 	var package: FleetSetupPackage = _package_with_deployments()
 
 	var result: Dictionary = GameManager.start_new_game_from_setup_package(
-			package, {"rng_seed": 2468})
+			package, _config({"rng_seed": 2468}))
 	var state: GameState = GameManager.current_game_state
 	var rebel_ship: ShipInstance = state.get_ship(0, 0)
 
@@ -104,7 +104,7 @@ func test_start_new_game_from_setup_package_installs_state_expected() -> void:
 
 func test_complete_setup_and_start_round_enters_command_expected() -> void:
 	var package: FleetSetupPackage = _package_with_completed_placements()
-	GameManager.start_new_game_from_setup_package(package, {"rng_seed": 2468})
+	GameManager.start_new_game_from_setup_package(package, _config({"rng_seed": 2468}))
 
 	var result: Dictionary = GameManager.complete_setup_and_start_round()
 	var setup_state: Dictionary = GameManager.current_game_state.objectives.get(
@@ -128,7 +128,7 @@ func test_start_new_game_from_setup_package_client_mode_waits_expected() -> void
 	var package: FleetSetupPackage = _package_with_deployments()
 
 	var result: Dictionary = GameManager.start_new_game_from_setup_package(
-			package, {"rng_seed": 2468, "client_mode": true})
+			package, _config({"rng_seed": 2468, "client_mode": true}))
 	var state: GameState = GameManager.current_game_state
 
 	assert_true(result.get("ok", false), "Client package bootstrap should pass")
@@ -141,7 +141,8 @@ func test_start_new_game_from_setup_package_client_mode_waits_expected() -> void
 
 
 func test_submit_setup_obstacle_placement_updates_live_state_expected() -> void:
-	GameManager.start_new_game_from_setup_package(_package_with_deployments(), {"rng_seed": 2468})
+	GameManager.start_new_game_from_setup_package(
+			_package_with_deployments(), _config({"rng_seed": 2468}))
 
 	var result: Dictionary = GameManager.submit_setup_obstacle_placement(
 			"asteroid_1", 0.22, 0.44, 10.0)
@@ -160,7 +161,8 @@ func test_submit_setup_obstacle_placement_updates_live_state_expected() -> void:
 
 func test_submit_setup_deployment_placement_updates_live_state_expected() -> void:
 	GameManager.start_new_game_from_setup_package(
-			_package_with_obstacles_and_pending_ship_deployment(), {"rng_seed": 2468})
+			_package_with_obstacles_and_pending_ship_deployment(),
+			_config({"rng_seed": 2468}))
 
 	var result: Dictionary = GameManager.submit_setup_deployment_placement(
 			0, "ship", "rebel-ship-1", 0.61, 0.88, 180.0, 3)
@@ -178,6 +180,13 @@ func test_submit_setup_deployment_placement_updates_live_state_expected() -> voi
 		"Deployment submit should update the live ship speed.")
 	assert_eq(deployments.size(), 2,
 		"Deployment submit should update the existing setup deployment payload.")
+
+
+func _config(values: Dictionary) -> Dictionary:
+	var config: Dictionary = values.duplicate(true)
+	config["match_player_control_binding"] = \
+		MatchPlayerControlBinding.create_hot_seat_human().serialize()
+	return config
 
 
 func _package_with_obstacles_and_pending_ship_deployment() -> FleetSetupPackage:

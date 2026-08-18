@@ -11,7 +11,7 @@ extends GutTest
 ## [param p0_count] — number of squadrons for player 0.
 ## [param p1_count] — number of squadrons for player 1.
 func _setup_game(p0_count: int, p1_count: int) -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	gs.initiative_player = 0
 	for player_idx: int in range(2):

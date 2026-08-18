@@ -75,35 +75,35 @@ func _on_game_ended(details: Dictionary) -> void:
 # --- Tests ---
 
 func test_start_new_game_emits_game_started() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_true(_game_started, "Should emit game_started signal")
 
 
 func test_start_new_game_sets_active() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_true(GameManager.is_game_active, "Game should be active")
 
 
 func test_start_new_game_starts_round_one() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.get_current_round(), 1, "Should be round 1")
 
 
 func test_start_new_game_begins_with_command_phase() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.COMMAND,
 		"Should start with COMMAND phase")
 
 
 func test_advance_phase_command_to_ship() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.advance_phase()
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP,
 		"Should advance from COMMAND to SHIP")
 
 
 func test_advance_phase_full_cycle() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# COMMAND → SHIP (manual) → SQUADRON (auto-pass) → STATUS (auto-cleanup) → COMMAND (round 2)
 	GameManager.advance_phase() # SHIP
 	assert_eq(GameManager.get_current_phase(), Constants.GamePhase.SHIP)
@@ -115,7 +115,7 @@ func test_advance_phase_full_cycle() -> void:
 
 
 func test_game_ends_after_six_rounds() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 
 	# Play through 6 full rounds.
 	# Each round: advance_phase() twice (COMMAND→SHIP, SHIP→cascade→COMMAND).
@@ -131,7 +131,7 @@ func test_game_ends_after_six_rounds() -> void:
 
 
 func test_end_game_emits_signal_with_winner() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	GameManager.end_game("round_6")
 	assert_true(_game_ended, "Should emit game_ended signal")
 	assert_eq(_game_ended_details.get("reason"), "round_6",
@@ -139,7 +139,7 @@ func test_end_game_emits_signal_with_winner() -> void:
 
 
 func test_phase_changed_signals_fired() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	# start_new_game fires COMMAND
 	assert_eq(_phase_changed_phases.size(), 1)
 	assert_eq(_phase_changed_phases[0], Constants.GamePhase.COMMAND)
@@ -150,7 +150,7 @@ func test_phase_changed_signals_fired() -> void:
 
 
 func test_round_started_signal_count() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	assert_eq(_round_started_count, 1, "Should have 1 round_started after new game")
 
 	# Complete round 1: COMMAND→SHIP, then SHIP→cascade→COMMAND (round 2).

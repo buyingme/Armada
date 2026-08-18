@@ -249,6 +249,8 @@ func test_bug_002_progress_matches_hotseat_host_client_replay_and_restore() -> v
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
 	NetworkManager._local_player_index = 0
+	NetworkManager._host_match_principal_id = authority_state.principal_id_for_player(
+			0)
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	_broadcast_results.clear()
@@ -417,11 +419,11 @@ func test_unique_squadron_defense_tokens_survive_ship_and_squadron_attacks() -> 
 					"resolve_damage", "complete_attack"])
 
 
-func test_host_attacker_remote_defender_generates_defense_continuation() -> void:
+func test_host_attacker_remote_defender_rejects_remote_defense_submission() -> void:
 	_assert_network_evade_redirect_topology(0, 1)
 
 
-func test_remote_attacker_host_defender_generates_defense_continuation() -> void:
+func test_remote_attacker_host_defender_rejects_remote_defense_submission() -> void:
 	_assert_network_evade_redirect_topology(1, 0)
 
 
@@ -433,7 +435,8 @@ func test_bug_014_refreshed_evade_click_submits_semantic_command_once() -> void:
 	GameManager.current_game_state = state
 	GameManager.is_game_active = true
 	CommandProcessor.reset()
-	var submitter := LocalCommandSubmitter.new()
+	var submitter := LocalCommandSubmitter.new(
+			state.principal_id_for_player(0))
 	GameManager.set_command_submitter(submitter)
 	var begin: Dictionary = submitter.submit(
 			BeginAttackCommand.new(0, _ship_attack_payload()))
@@ -600,10 +603,11 @@ func test_host_client_mirror_and_replay_preserve_identity_and_state() -> void:
 	assert_eq(_history_sequences(authoritative_history), [0, 1, 2, 3, 4, 5, 6])
 	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
 	var replay_file := GameReplay.new()
-	replay_file.capture_header("twi-002-production", 8108, [0, 1], 0, 0)
+	replay_file.capture_header("twi-002-production", 8108, [0, 1], 0, 0,
+			initial.serialize().get("match_player_control_binding", {}))
 	replay_file.set_commands(authoritative_history)
 	assert_not_null(GameReplay.deserialize(replay_file.serialize()),
-			"The production semantic history must load as format 5.")
+			"The production semantic history must load as format 6.")
 	var authority_final: Dictionary = authority_state.serialize()
 
 	var client_state: GameState = GameState.deserialize(initial.serialize())
@@ -834,7 +838,8 @@ func test_all_declaration_contexts_match_filtered_host_client_replay() \
 			assert_eq(replay_state.serialize(), authority_final)
 			var replay_file := GameReplay.new()
 			replay_file.capture_header("twi-003-%s" % context, 8841,
-					[0, 1], 0, 0)
+					[0, 1], 0, 0,
+					initial.serialize().get("match_player_control_binding", {}))
 			replay_file.set_commands(authoritative_history)
 			assert_not_null(GameReplay.deserialize(replay_file.serialize()))
 
@@ -934,7 +939,8 @@ func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void
 	GameManager.is_game_active = true
 	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
 	NetworkManager.role = NetworkManager.Role.NONE
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			authority_state.principal_id_for_player(0)))
 	CommandProcessor.reset()
 	_submit_full_attack(GameManager.get_command_submitter())
 	var authority_final: Dictionary = authority_state.serialize()
@@ -975,7 +981,8 @@ func test_production_disk_replay_is_exact_and_replay_driver_compatible() -> void
 	assert_eq(replay_state.rng.initial_seed, driver.pending_replay_seed,
 			"Replay bootstrap seed must equal the exact persisted authority.")
 	GameManager.current_game_state = replay_state
-	GameManager.set_command_submitter(LocalCommandSubmitter.new())
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			replay_state.principal_id_for_player(0)))
 	CommandProcessor.reset()
 	assert_true(CommandProcessor.restore_next_sequence(
 			int(loaded.header["initial_command_sequence"])))
@@ -1019,6 +1026,7 @@ func test_ecm_completion_cleanup_matches_hotseat_host_mirror_and_replay() -> voi
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
 	NetworkManager._local_player_index = 0
+	NetworkManager._host_match_principal_id = authority_state.principal_id_for_player(0)
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	GameManager.set_command_submitter(NetworkHostCommandSubmitter.new())
@@ -1106,6 +1114,10 @@ func _assert_finish_attack(processor: Node, state: GameState,
 
 
 func _submit_full_attack(submitter: Variant) -> void:
+	if submitter is NetworkHostCommandSubmitter \
+			and GameManager.current_game_state != null:
+		NetworkManager._host_match_principal_id = \
+			GameManager.current_game_state.principal_id_for_player(0)
 	assert_false(submitter.submit(BeginAttackCommand.new(
 			0, _ship_attack_payload())).is_empty())
 	assert_false(submitter.submit(RollDiceCommand.new(
@@ -1140,6 +1152,8 @@ func _submit_through_accuracy(processor: Node, state: GameState) -> void:
 
 func _submit_resolved_attack(processor: Variant, state: GameState,
 		payload: Dictionary) -> void:
+	if processor is NetworkHostCommandSubmitter:
+		NetworkManager._host_match_principal_id = state.principal_id_for_player(0)
 	var begin: Dictionary = processor.submit(BeginAttackCommand.new(0, payload))
 	assert_false(begin.is_empty())
 	if begin.is_empty():
@@ -1170,6 +1184,10 @@ func _submit_resolved_attack(processor: Variant, state: GameState,
 
 func _submit_standard_attack(submitter: Variant, payload: Dictionary,
 		commit_ship_defense: bool) -> void:
+	if submitter is NetworkHostCommandSubmitter \
+			and GameManager.current_game_state != null:
+		NetworkManager._host_match_principal_id = \
+			GameManager.current_game_state.principal_id_for_player(0)
 	var begin: Dictionary = submitter.submit(BeginAttackCommand.new(0, payload))
 	assert_false(begin.is_empty())
 	var attack_id: String = str(begin.get("attack_id", ""))
@@ -1186,6 +1204,9 @@ func _submit_standard_attack(submitter: Variant, payload: Dictionary,
 		"locked_tokens": [],
 	})).is_empty())
 	if commit_ship_defense:
+		if submitter is NetworkHostCommandSubmitter:
+			NetworkManager._host_match_principal_id = \
+					GameManager.current_game_state.principal_id_for_player(1)
 		assert_false(submitter.submit(CommitDefenseCommand.new(1, {
 			"attack_id": attack_id,
 			"defender_kind": CurrentAttackState.KIND_SHIP,
@@ -1242,81 +1263,52 @@ func _cf_identity_payload(state: GameState) -> Dictionary:
 
 func _assert_network_evade_redirect_topology(
 		attacker_player: int, defender_player: int) -> void:
-	var initial: GameState = _make_network_topology_state(
+	var state: GameState = _make_network_topology_state(
 			attacker_player, defender_player)
-	var initial_data: Dictionary = initial.serialize()
 	var payload: Dictionary = _first_ship_payload_for_players(
-			initial, attacker_player, defender_player)
+			state, attacker_player, defender_player)
 	assert_false(payload.is_empty())
-	var registrar: Node = _make_processor(initial)
+	var registrar: Node = _make_processor(state)
 	assert_not_null(registrar,
-			"Production command factories must be registered for mirroring.")
-
-	PlayMode.set_mode(PlayMode.Mode.HOT_SEAT)
-	NetworkManager.role = NetworkManager.Role.NONE
-	NetworkManager._local_player_index = -1
-	var hotseat_state: GameState = GameState.deserialize(initial_data)
-	GameManager.current_game_state = hotseat_state
-	CommandProcessor.reset()
-	var hotseat_submitter := LocalCommandSubmitter.new()
-	GameManager.set_command_submitter(hotseat_submitter)
-	_submit_evade_redirect_decisions(
-			hotseat_submitter, hotseat_state, payload,
-			attacker_player, defender_player)
-	var hotseat_history: Array[Dictionary] = \
-			CommandProcessor.serialize_history()
-	var hotseat_final: Dictionary = hotseat_state.serialize()
-	var hotseat_hash: String = CanonicalJson.hash(hotseat_final)
-
-	var authority_state: GameState = GameState.deserialize(initial_data)
-	GameManager.current_game_state = authority_state
+			"Production command factories must be registered for authority checks.")
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
-	NetworkManager._local_player_index = 0
+	NetworkManager._local_player_index = attacker_player
+	NetworkManager._host_match_principal_id = state.principal_id_for_player(
+			attacker_player)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
 	CommandProcessor.reset()
-	GameManager._reset_network_result_ordering()
-	_broadcast_results.clear()
 	var host_submitter := NetworkHostCommandSubmitter.new()
 	GameManager.set_command_submitter(host_submitter)
-	var capture: Callable = Callable(self, "_capture_network_result")
-	if not NetworkManager.command_result_received.is_connected(capture):
-		NetworkManager.command_result_received.connect(capture)
-	_submit_evade_redirect_decisions(
-			host_submitter, authority_state, payload,
-			attacker_player, defender_player)
-	var authoritative_history: Array[Dictionary] = \
-			CommandProcessor.serialize_history()
-	var authority_final: Dictionary = authority_state.serialize()
-	assert_eq(authoritative_history, hotseat_history)
-	assert_eq(authority_final, hotseat_final)
-	assert_eq(CanonicalJson.hash(authority_final), hotseat_hash)
-	assert_eq(_broadcast_command_data(), authoritative_history)
-
-	var client_state: GameState = GameState.deserialize(initial_data)
-	GameManager.current_game_state = client_state
-	NetworkManager.role = NetworkManager.Role.CLIENT
-	NetworkManager._local_player_index = 1
-	CommandProcessor.reset()
-	GameManager._reset_network_result_ordering()
-	GameManager.set_command_submitter(NetworkCommandSubmitter.new())
-	for index: int in range(_broadcast_results.size()):
-		_apply_broadcast_to_client(index)
-	assert_eq(CommandProcessor.serialize_history(), authoritative_history)
-	assert_eq(client_state.serialize(), authority_final)
-	assert_eq(CanonicalJson.hash(client_state.serialize()), hotseat_hash)
-	assert_eq(CommandProcessor.get_pending_observer_followup_count(), 0,
-			"A passive client must never retain a synthesized follow-up.")
-
-	var replay_state: GameState = GameState.deserialize(initial_data)
-	var replay: Node = _make_processor(replay_state)
-	for command_data: Dictionary in authoritative_history:
-		assert_false(replay.submit_replay(
-				GameCommand.deserialize(command_data)).is_empty())
-	assert_eq(replay.serialize_history(), authoritative_history)
-	assert_eq(replay_state.serialize(), authority_final)
-	assert_eq(CanonicalJson.hash(replay_state.serialize()), hotseat_hash)
-	assert_eq(replay.get_pending_observer_followup_count(), 0,
-			"Replay must consume recorded continuation commands only.")
+	var begin: Dictionary = host_submitter.submit(
+			BeginAttackCommand.new(attacker_player, payload))
+	assert_false(begin.is_empty())
+	var attack_id: String = str(begin.get("attack_id", ""))
+	assert_false(host_submitter.submit(RollDiceCommand.new(attacker_player, {
+		"attack_id": attack_id,
+	})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(host_submitter.submit(ConfirmAttackDiceCommand.new(
+				attacker_player, {"attack_id": attack_id})).is_empty())
+	assert_false(host_submitter.submit(CommitAccuracyCommand.new(attacker_player, {
+		"attack_id": attack_id,
+		"locked_tokens": [],
+	})).is_empty())
+	var defender: ShipInstance = state.get_ship(defender_player, 0)
+	var evade_index: int = _defense_token_index(
+			defender, Constants.DefenseToken.EVADE)
+	assert_gte(evade_index, 0)
+	assert_true(host_submitter.submit(CommitDefenseCommand.new(defender_player, {
+		"attack_id": attack_id,
+		"defender_kind": CurrentAttackState.KIND_SHIP,
+		"defender_index": 0,
+		"ship_index": 0,
+		"selected_indices": [evade_index],
+	})).is_empty(),
+			"The host principal must not submit a remote player's defense command.")
+	assert_engine_error(1,
+			"Rejected remote-player submission must diagnose the authorization boundary.")
 
 
 func _submit_evade_redirect_decisions(
@@ -1339,6 +1331,9 @@ func _submit_evade_redirect_decisions(
 		"attack_id": attack_id,
 		"locked_tokens": [],
 	})).is_empty())
+	if submitter is NetworkHostCommandSubmitter:
+		NetworkManager._host_match_principal_id = \
+				state.principal_id_for_player(defender_player)
 	var defender: ShipInstance = state.get_ship(defender_player, 0)
 	var evade_index: int = _defense_token_index(
 			defender, Constants.DefenseToken.EVADE)
@@ -1363,6 +1358,9 @@ func _submit_evade_redirect_decisions(
 	_assert_resume_decision(state, AttackExecutor.RESUME_EVADE,
 			defender_player)
 
+	if submitter is NetworkHostCommandSubmitter:
+		NetworkManager._host_match_principal_id = \
+				state.principal_id_for_player(defender_player)
 	assert_false(GameManager.submit_select_evade_die(
 			defender, 0).is_empty())
 	assert_eq(_history_types(CommandProcessor.serialize_history()).slice(-2),
@@ -1370,6 +1368,9 @@ func _submit_evade_redirect_decisions(
 	_assert_resume_decision(state, AttackExecutor.RESUME_REDIRECT,
 			defender_player)
 
+	if submitter is NetworkHostCommandSubmitter:
+		NetworkManager._host_match_principal_id = \
+				state.principal_id_for_player(defender_player)
 	assert_false(GameManager.submit_redirect_done(defender).is_empty())
 	var expected: Array[String] = [
 		"begin_attack", "roll_dice", "confirm_attack_dice",
@@ -1418,6 +1419,8 @@ func _defense_token_index(
 
 func _make_processor(state: GameState) -> Node:
 	GameManager.current_game_state = state
+	if state != null:
+		NetworkManager._host_match_principal_id = state.principal_id_for_player(0)
 	var processor: Node = PROCESSOR_SCRIPT.new()
 	add_child_autofree(processor)
 	return processor
@@ -1426,6 +1429,7 @@ func _make_processor(state: GameState) -> Node:
 func _make_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	_install_hot_seat_binding(state)
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8108)
@@ -1449,6 +1453,7 @@ func _make_cross_kind_state(attacker_kind: String,
 		defender_kind: String, defender_squadron_key: String) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	_install_hot_seat_binding(state)
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP \
 			if attacker_kind == CurrentAttackState.KIND_SHIP \
@@ -1499,6 +1504,7 @@ func _make_cross_kind_state(attacker_kind: String,
 func _make_commanded_squadron_protocol_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	_install_hot_seat_binding(state)
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8841)
@@ -1737,6 +1743,8 @@ func _make_network_topology_state(
 		defender_player: int) -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(8841)
@@ -1811,6 +1819,11 @@ func _make_replacement_protocol_state() -> GameState:
 	unique.pos_y = 0.56
 	state.get_player_state(1).squadrons.append(unique)
 	return state
+
+
+func _install_hot_seat_binding(state: GameState) -> void:
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 
 
 func _first_authoritative_payload(state: GameState,

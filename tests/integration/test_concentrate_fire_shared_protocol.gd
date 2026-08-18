@@ -88,9 +88,9 @@ func test_save_load_and_reconnect_rederive_pending_choice_at_version_three() -> 
 	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
 	assert_not_null(restored)
 	assert_not_null(metadata)
-	assert_eq(metadata.save_format_version, 3)
-	assert_eq(SaveGameMetadata.CURRENT_VERSION, 3)
-	assert_eq(GameReplay.FORMAT_VERSION, 5)
+	assert_eq(metadata.save_format_version, 4)
+	assert_eq(SaveGameMetadata.CURRENT_VERSION, 4)
+	assert_eq(GameReplay.FORMAT_VERSION, 6)
 	assert_eq(UIProjector.project(restored, 0).timing_window,
 			expected_projection)
 	assert_eq((ORCHESTRATOR.derive_current_opportunities(restored).get(
@@ -128,6 +128,7 @@ func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> 
 	PlayMode.set_mode(PlayMode.Mode.NETWORK)
 	NetworkManager.role = NetworkManager.Role.SERVER
 	NetworkManager._local_player_index = 0
+	NetworkManager._host_match_principal_id = authority_state.principal_id_for_player(0)
 	CommandProcessor.reset()
 	GameManager._reset_network_result_ordering()
 	var host := NetworkHostCommandSubmitter.new()
@@ -147,11 +148,12 @@ func test_host_client_and_format_five_replay_preserve_use_and_continuation() -> 
 
 	var replay_file := GameReplay.new()
 	replay_file.capture_header(
-			"twi-002-production", 9917, [0, 1], 0, 0)
+			"twi-002-production", 9917, [0, 1], 0, 0,
+			initial.serialize().get("match_player_control_binding", {}))
 	replay_file.set_commands(authoritative_history)
 	var replay_data: Dictionary = replay_file.serialize()
 	assert_eq((replay_data.get("header", {}) as Dictionary).get(
-			"format_version"), 5)
+			"format_version"), 6)
 	assert_not_null(GameReplay.deserialize(replay_data))
 
 	var client_state: GameState = GameState.deserialize(initial_data)
@@ -194,6 +196,8 @@ func _make_processor(state: GameState) -> Node:
 func _make_pending_state() -> GameState:
 	var state := GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.rng = GameRng.new(9917)

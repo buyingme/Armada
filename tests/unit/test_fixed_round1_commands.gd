@@ -134,7 +134,7 @@ func test_parse_command_name_case_insensitive() -> void:
 
 ## Helper: creates a minimal GameState with ships that have dial stacks.
 func _setup_game_with_ships() -> Dictionary:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 
 	var rebel_ship: ShipInstance = ShipInstance.new()
@@ -324,7 +324,7 @@ func test_start_new_game_resets_flag() -> void:
 	assert_true(GameManager.fixed_commands_applied, "Precondition: flag set")
 
 	# Act
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 
 	# Assert
 	assert_false(GameManager.fixed_commands_applied,

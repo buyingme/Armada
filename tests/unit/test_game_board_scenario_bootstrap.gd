@@ -187,7 +187,8 @@ func after_each() -> void:
 func test_bootstrap_or_load_board_state_spawns_network_pending_scenario() -> void:
 	PlayMode.current_mode = PlayMode.Mode.NETWORK
 	NetworkManager.role = NetworkManager.Role.SERVER
-	NetworkManager._receive_game_config(12345, LobbyState.SCENARIO_DEBUG_ID)
+	NetworkManager._receive_game_config(12345, LobbyState.SCENARIO_DEBUG_ID,
+			MatchPlayerControlBinding.create_two_human().serialize())
 	var board: ScenarioCaptureBoard = ScenarioCaptureBoard.new()
 	autofree(board)
 
@@ -204,10 +205,13 @@ func test_network_replay_bootstrap_installs_exact_rng_and_consumes_seed() -> voi
 	PlayMode.current_mode = PlayMode.Mode.NETWORK
 	NetworkManager.role = NetworkManager.Role.CLIENT
 	NetworkManager._receive_game_config(
-			REPLAY_SEED, LobbyState.SCENARIO_DEBUG_ID)
+			REPLAY_SEED, LobbyState.SCENARIO_DEBUG_ID,
+			MatchPlayerControlBinding.create_two_human().serialize())
 	ReplayDriver.enabled = true
 	ReplayDriver._connect_target = "127.0.0.1:7350"
 	ReplayDriver.pending_replay_seed = REPLAY_SEED
+	ReplayDriver.pending_replay_binding = \
+			MatchPlayerControlBinding.create_two_human().serialize()
 
 	GameManager.bootstrap_game(LobbyState.SCENARIO_LEARNING_ID)
 
@@ -334,6 +338,7 @@ func test_bug_007_destroyed_records_do_not_enter_live_spatial_occupancy() \
 	GameScale._load_scale_config()
 	var state := GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	var squadron_data: SquadronData = AssetLoader.load_squadron_data(
 			"tie_fighter_squadron")
 	var moving: SquadronInstance = SquadronInstance.create_from_data(
@@ -420,6 +425,7 @@ func _load_bug_006_state(filename: String) -> GameState:
 			var body: Dictionary = (parsed as Dictionary).get("state", {})
 			var state: GameState = GameState.new()
 			state.initialize()
+			state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 			state.player_states.clear()
 			for player: Variant in body.get("player_states", []):
 				if player is Dictionary:
@@ -466,6 +472,7 @@ func _setup_prompt_state(
 		controller_player: int) -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_phase = Constants.GamePhase.SETUP
 	state.interaction_flow = InteractionFlow.make(
 			Constants.InteractionFlow.SETUP,

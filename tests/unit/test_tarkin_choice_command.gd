@@ -399,6 +399,8 @@ func test_remote_tarkin_choice_decline_emits_no_token_side_effects() -> void:
 func _make_tarkin_state() -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_hot_seat_human()))
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.COMMAND
 	state.initiative_player = 0

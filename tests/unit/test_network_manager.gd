@@ -5,6 +5,10 @@
 ## G4 Network Plan: §3 — G4.1 tests
 extends GutTest
 
+func before_each() -> void:
+	NetworkManager.connection_state = NetworkManager.ConnectionState.DISCONNECTED
+	NetworkManager.role = NetworkManager.Role.NONE
+
 
 # ---------------------------------------------------------------------------
 # Constants

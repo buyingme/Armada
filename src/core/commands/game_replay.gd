@@ -29,7 +29,7 @@ extends RefCounted
 
 
 ## Current replay file format version. Increment when the schema changes.
-const FORMAT_VERSION: int = 5
+const FORMAT_VERSION: int = 6
 
 ## Format version that introduced HMAC signing support.
 const SIGNED_FORMAT_VERSION: int = FORMAT_VERSION
@@ -67,7 +67,8 @@ func _init() -> void:
 ## [param initiative_player] — which player has initiative (0 or 1).
 func capture_header(scenario_id: String, rng_seed: int,
 		factions: Array, initiative_player: int = 0,
-		initial_command_sequence: int = 0) -> void:
+		initial_command_sequence: int = 0,
+		match_player_control_binding: Dictionary = {}) -> void:
 	header = {
 		"format_version": FORMAT_VERSION,
 		"scenario_id": scenario_id,
@@ -75,6 +76,7 @@ func capture_header(scenario_id: String, rng_seed: int,
 		"factions": factions,
 		"initiative_player": initiative_player,
 		"initial_command_sequence": initial_command_sequence,
+		"match_player_control_binding": match_player_control_binding.duplicate(true),
 		"timestamp": Time.get_datetime_string_from_system(true),
 		"app_version": ProjectSettings.get_setting(
 				"application/config/version", "unknown"),
@@ -96,7 +98,10 @@ func get_command_count() -> int:
 ## Returns [code]true[/code] if the replay contains a valid header
 ## and at least one command.
 func is_valid() -> bool:
-	return header.has("format_version") and header.has("rng_seed")
+	return header.has("format_version") and header.has("rng_seed") \
+			and header.get("match_player_control_binding") is Dictionary \
+			and MatchPlayerControlBinding.deserialize(
+				header.get("match_player_control_binding") as Dictionary) != null
 
 
 ## Serializes the full replay (header + commands) to a dictionary
@@ -127,6 +132,13 @@ static func deserialize(data: Dictionary) -> GameReplay:
 	var exact_seed: Variant = _exact_decimal_integer(raw_header.get("rng_seed"))
 	if initial_value == null or int(initial_value) < 0 or exact_seed == null:
 		return null
+	var raw_binding: Variant = raw_header.get("match_player_control_binding", null)
+	if not (raw_binding is Dictionary):
+		return null
+	var binding: MatchPlayerControlBinding = MatchPlayerControlBinding.deserialize(
+			raw_binding as Dictionary)
+	if binding == null:
+		return null
 	var initial_sequence: int = int(initial_value)
 	var raw_commands: Array = data.get("commands") as Array
 	var replay := GameReplay.new()
@@ -134,6 +146,7 @@ static func deserialize(data: Dictionary) -> GameReplay:
 	replay.header["format_version"] = int(format_value)
 	replay.header["initial_command_sequence"] = initial_sequence
 	replay.header["rng_seed"] = int(exact_seed)
+	replay.header["match_player_control_binding"] = binding.serialize()
 	if not _canonicalize_header_integer(replay.header, "initiative_player") \
 			or not _canonicalize_header_integer_array(replay.header, "factions"):
 		return null

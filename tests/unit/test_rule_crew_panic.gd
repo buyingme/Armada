@@ -92,6 +92,7 @@ func test_save_load_rebuild_has_no_legacy_effect_but_projects_rule() -> void:
 func _make_ship_activation_state(controller: int) -> GameState:
 	var state: GameState = GameState.new()
 	state.initialize()
+	state.install_match_player_control_binding(MatchPlayerControlBinding.create_hot_seat_human())
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
 	state.interaction_flow = InteractionFlow.make(

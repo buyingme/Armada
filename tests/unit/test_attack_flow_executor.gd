@@ -76,7 +76,7 @@ func test_compute_attack_identity_patch_without_gamestate_returns_base_fields() 
 
 
 func test_compute_attack_identity_patch_ship_attacker_sets_kind_and_player() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	var ps: PlayerState = gs.get_player_state(0)
 	var ship: ShipInstance = _make_ship_instance(0)
@@ -100,7 +100,7 @@ func test_compute_attack_identity_patch_ship_attacker_sets_kind_and_player() -> 
 
 
 func test_compute_attack_identity_patch_squadron_target_sets_target_kind() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	var ps: PlayerState = gs.get_player_state(1)
 	var squad: SquadronInstance = _make_squadron_instance(1)
@@ -210,7 +210,7 @@ func test_reset_for_confirm_sets_defense_defaults() -> void:
 
 
 func test_build_defense_payload_contains_expected_keys() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	var ps: PlayerState = gs.get_player_state(1)
 	var ship: ShipInstance = _make_ship_instance(1)
@@ -248,7 +248,7 @@ func test_build_defense_payload_contains_expected_keys() -> void:
 
 
 func test_build_defense_payload_includes_blocked_token_indices() -> void:
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var gs: GameState = GameManager.current_game_state
 	var ps: PlayerState = gs.get_player_state(1)
 	var ship: ShipInstance = _make_ship_instance(1)

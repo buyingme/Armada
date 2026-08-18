@@ -75,7 +75,7 @@ func _make_ship(cost: int, hull: int, owner: int) -> ShipInstance:
 ## Destroys a ship by filling it with facedown damage cards.
 func _destroy_ship(si: ShipInstance) -> void:
 	for i: int in range(si.ship_data.hull - si.facedown_damage.size()):
-		si.facedown_damage.append(RefCounted.new())
+		si.facedown_damage.append(DamageCard.create("Ship", "Test damage"))
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ func _destroy_ship(si: ShipInstance) -> void:
 
 func test_all_ships_destroyed_ends_game_immediately() -> void:
 	# Arrange — player 0 has one ship; player 1 has one ship.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0: ShipInstance = _make_ship(50, 4, 0)
 	var si1: ShipInstance = _make_ship(60, 4, 1)
 	GameManager.current_game_state.player_states[0].ships.append(si0)
@@ -105,7 +105,7 @@ func test_all_ships_destroyed_ends_game_immediately() -> void:
 
 func test_squadrons_alone_do_not_prevent_elimination() -> void:
 	# Arrange — player 0 has one ship (destroyed) + one squadron (alive).
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0: ShipInstance = _make_ship(50, 4, 0)
 	_destroy_ship(si0)
 	var sq0: SquadronInstance = SquadronInstance.new()
@@ -127,7 +127,7 @@ func test_squadrons_alone_do_not_prevent_elimination() -> void:
 
 func test_partial_destruction_game_continues() -> void:
 	# Arrange — player 0 has two ships, only one destroyed.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0a: ShipInstance = _make_ship(50, 4, 0)
 	var si0b: ShipInstance = _make_ship(60, 4, 0)
 	_destroy_ship(si0a)
@@ -145,7 +145,7 @@ func test_partial_destruction_game_continues() -> void:
 func test_elimination_scores_computed() -> void:
 	# Arrange — player 0 eliminated. Player 0 had destroyed a 30-point
 	# enemy squadron before dying.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0: ShipInstance = _make_ship(50, 4, 0)
 	_destroy_ship(si0)
 	GameManager.current_game_state.player_states[0].ships.append(si0)
@@ -171,7 +171,7 @@ func test_elimination_scores_computed() -> void:
 
 func test_mutual_destruction_handled() -> void:
 	# Arrange — both players have exactly 1 ship, both destroyed.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0: ShipInstance = _make_ship(50, 4, 0)
 	var si1: ShipInstance = _make_ship(60, 4, 1)
 	_destroy_ship(si0)
@@ -192,7 +192,7 @@ func test_mutual_destruction_handled() -> void:
 
 func test_round6_scoring_determines_winner() -> void:
 	# Arrange — play through 6 rounds with some destroyed units.
-	GameManager.start_new_game()
+	GameManager.start_new_game({"match_player_control_binding": MatchPlayerControlBinding.create_hot_seat_human().serialize()})
 	var si0: ShipInstance = _make_ship(50, 4, 0)
 	var si1: ShipInstance = _make_ship(73, 4, 1)
 	_destroy_ship(si1) # Player 1's ship destroyed.

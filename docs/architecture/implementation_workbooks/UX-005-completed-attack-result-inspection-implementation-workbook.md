@@ -191,11 +191,30 @@ Modify `CompleteAttackCommand.execute()` as one rollback-safe transaction:
    no existing inspection;
 2. copy terminal attack/outcome evidence and derive the sorted HUMAN set once;
 3. build/validate an inspection only when that set is non-empty;
-4. retain current anti-squadron exhaustion and rule-cleanup behavior;
+4. retain rule-cleanup behavior, but for an anti-squadron attack do not close
+   the enclosing anti-squadron target iteration when a completed-result
+   inspection is created; in the exhausted-iteration case,
+   `ShipInstance.end_anti_squadron_attack()` is deferred to the existing
+   `SkipAttackCommand(squadron_done)` consumer transaction in accordance with
+   PAC-OD-007 and CON-007;
 5. atomically install inspection (if any), retire `CurrentAttackState`, and
    commit existing adjacent owner changes; and
 6. restore current attack, inspection absence, and affected ship snapshot on
    any failure; return `{}` and record no command.
+
+For the anti-squadron exhausted-iteration path, the state between
+`CompleteAttackCommand` and release is intentionally canonical: the individual
+attack is terminally complete and `CurrentAttackState` is retired, the
+completed-result inspection exists, and the enclosing anti-squadron iteration
+remains open. `SkipAttackCommand(squadron_done)` subsequently validates that
+state and the matching satisfied inspection, then atomically closes the
+iteration and consumes the inspection.
+
+Implementation must verify that this intermediate state satisfies existing
+`ShipInstance` invariants. If `end_anti_squadron_attack()` contains cleanup
+that is required merely to keep canonical state valid before acknowledgement,
+stop for architecture clarification rather than silently splitting or
+duplicating that behavior.
 
 An empty HUMAN derivation retires normally and creates no inspection. No state
 may expose a retired attack with overtaken continuation, or an inspection while
@@ -419,6 +438,11 @@ Focused evidence must cover:
   round trips, strict v4/v6 rejection, and protocol mismatch;
 - ADR-001/CON-001, ADR-005/CON-005/TEST-003, ADR-006/CON-006, TWI-003,
   MATCH-001, current-attack shared protocol, and attack-panel resume regression.
+- anti-squadron terminal completion leaves the enclosing iteration canonical
+  and open while inspection is pending/satisfied; exhausted-iteration
+  `SkipAttackCommand(squadron_done)` performs
+  `end_anti_squadron_attack()` exactly once while atomically consuming the
+  inspection; failure leaves both iteration and inspection unchanged;
 
 Run focused unit/integration suites, protected current-attack/timing-window/
 network/replay/save suites, `./scripts/run_tests.sh`,

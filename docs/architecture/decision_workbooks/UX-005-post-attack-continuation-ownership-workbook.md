@@ -544,6 +544,77 @@ avoiding premature abstraction.
 - Failure to establish that mapping is an architecture stop, not permission
   for local invention.
 
+### PAC-OD-007 — Anti-Squadron Iteration Close Ownership
+
+**Decision**
+
+`CompleteAttackCommand` owns terminal completion of the individual
+anti-squadron attack only. It SHALL NOT close the enclosing anti-squadron
+target iteration when a completed-result inspection is required.
+
+When the anti-squadron target iteration is exhausted, the existing
+`SkipAttackCommand(squadron_done)` transaction owns
+`ShipInstance.end_anti_squadron_attack()` after the completed-result
+inspection has become satisfied.
+
+That transaction SHALL validate the matching satisfied inspection and
+atomically:
+
+1. close the anti-squadron iteration through the existing
+   `ShipInstance.end_anti_squadron_attack()` mutation;
+2. consume the completed-result inspection; and
+3. commit the existing `squadron_done` consequences.
+
+If another eligible anti-squadron target remains, the next target remains a
+derived opportunity and the selected existing `BeginAttackCommand` is the next
+mutation, consistent with CON-007.
+
+**Rationale**
+
+The completed-result inspection is an authoritative barrier between terminal
+completion of one individual attack and enclosing gameplay progression.
+Closing the anti-squadron iteration inside `CompleteAttackCommand` would
+advance enclosing progression before acknowledgement satisfaction and would
+leave `SkipAttackCommand(squadron_done)` without clear ownership of the
+mutation that CON-007 assigns to it.
+
+Keeping individual attack completion separate from iteration closure gives
+the exhausted anti-squadron path one existing semantic owner and provides a
+natural atomic exact-once consumption point for the inspection.
+
+**Implementation cost**
+
+Low to moderate. The existing iteration-close mutation must move from the
+terminal individual-attack path to the already-existing
+`SkipAttackCommand(squadron_done)` path, with affected tests adjusted to the
+new transaction boundary.
+
+**Scalability**
+
+High. The decision preserves the general rule that terminal completion of an
+individual action does not prematurely mutate its enclosing iteration or
+activation. It does not introduce a generic continuation abstraction or new
+canonical owner.
+
+**Risks / constraints**
+
+- Do not duplicate `end_anti_squadron_attack()` across both commands.
+- Verify that keeping the anti-squadron iteration open while the inspection is
+  pending leaves `ShipInstance` in a valid canonical state.
+- Presentation code must tolerate the valid intermediate state of:
+  completed individual attack + open anti-squadron iteration + pending or
+  satisfied inspection.
+- Replay, mirror, save/load, and reconnect must observe the same transaction
+  boundary.
+- Failure of `SkipAttackCommand(squadron_done)` must leave both the iteration
+  and satisfied inspection unchanged.
+- If moving the mutation reveals that `end_anti_squadron_attack()` currently
+  performs cleanup required for canonical validity before acknowledgement,
+  implementation must stop rather than split that cleanup implicitly.
+
+**Owner acceptance**
+
+Accepted by Project Owner on 2026-08-18.
 
 ## 9. Accepted Direction
 

@@ -3,7 +3,7 @@
 Contract ID: CON-007
 Title: Post-Attack Continuation Release Contract
 Status: Accepted
-Derived From: ADR-007 and PAC-OD-001 through PAC-OD-006
+Derived From: ADR-007 and PAC-OD-001 through PAC-OD-007
 Related ADRs: ADR-001, ADR-006, ADR-007
 Related Contracts: CON-001, CON-006
 Related Evidence: MA-ATTACK-001
@@ -77,6 +77,14 @@ submit, or perform subsequent gameplay progression.
 CON-007-BOUNDARY-003: A completed-result inspection SHALL block subsequent
 gameplay progression until it is satisfied. Satisfaction makes release
 eligible; it does not itself consume the inspection.
+
+CON-007-BOUNDARY-004: For ship anti-squadron attacks, terminal completion of
+an individual attack SHALL NOT close the enclosing anti-squadron target
+iteration while a completed-result inspection is required. In the exhausted
+iteration case, the existing `SkipAttackCommand(squadron_done)` transaction
+SHALL own the corresponding `ShipInstance.end_anti_squadron_attack()` mutation
+after acknowledgement satisfaction and SHALL consume the matching inspection
+atomically with that mutation.
 
 ## 3. Ownership And Release Convention
 
@@ -245,3 +253,4 @@ CON-007 does not:
 | PAC-OD-004 — preserved canonical owners | Sections 3 and 4 |
 | PAC-OD-005 — CommandProcessor sole live seam | Sections 5 and 7 |
 | PAC-OD-006 — supported contexts and architecture stop | Sections 4 and 8 |
+| PAC-OD-007 — anti-squadron iteration close ownership | Sections 2, 4, and 6 |

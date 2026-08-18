@@ -503,9 +503,11 @@ Tradeoffs:
 
 ## 13. Implementation Obligations
 
-After acceptance and before semantic implementation begins, a follow-up
-implementation workbook Entry Gate SHALL establish both of these evidence
-proofs.
+After acceptance and before semantic implementation begins, a follow-up implementation workbook Entry Gate SHALL establish that accepted architecture and existing repository seams are sufficient to implement both dependencies below without introducing a new authoritative owner, continuation architecture, or other unapproved semantic mechanism.
+
+The Entry Gate distinguishes architecture/readiness evidence from post-implementation conformance evidence. Behavior explicitly authorized by this ADR and its accepted supporting contracts is not required to exist in production code for the pre-implementation Entry Gate to pass. Where the required behavior is itself part of the authorized implementation, the Entry Gate SHALL instead prove that an accepted owner, transaction boundary, and integration seam exist through which that behavior can be implemented without additional architecture invention.
+
+Production-path evidence that the implemented behavior satisfies the required atomicity, exact-once, replay, mirror, save/load, and reconnect semantics SHALL be provided during implementation verification before final acceptance.
 
 Human-principal source proof:
 
@@ -525,30 +527,20 @@ or generic participant state in `GameState`. Only the immutable,
 inspection-scoped required-principal set may be stored after it has been
 validly derived.
 
-Continuation-release proof:
+Continuation-release readiness proof:
 
-For every applicable ship and squadron attack context, the Entry Gate SHALL
-identify and prove:
+For every applicable ship and squadron attack context, the pre-implementation Entry Gate SHALL identify and prove:
 
-1. the existing replayable semantic transaction that performs the next
-   gameplay mutation after the inspection barrier releases;
-2. the existing authoritative release or submission seam that invokes or
-   enables that transaction after live acknowledgement satisfaction, load of
-   satisfied-but-unconsumed inspection state, and reconnect of
-   satisfied-but-unconsumed inspection state;
-3. that live Network execution originates semantic continuation only from the
-   authoritative side;
-4. that passive mirrors do not synthesize continuation;
-5. that replay does not auto-submit or synthesize live continuation in
-   addition to the recorded replay command stream; and
-6. that inspection consumption remains atomic and exactly once with that
-   existing continuation transaction.
+1. the existing replayable semantic transaction that performs, or is the accepted transaction for, the next gameplay mutation after the inspection barrier releases;
+2. the existing authoritative release, submission, or post-success integration seam through which inspection-aware continuation evaluation can be implemented;
+3. that the identified seam permits live Network continuation to originate only from the authoritative side;
+4. that the identified architecture permits passive mirrors to remain non-synthesizing;
+5. that the identified architecture permits replay to remain driven by recorded authoritative command history rather than independently synthesizing live continuation; and
+6. that the identified transaction boundary permits inspection retirement to be coupled atomically and exactly once to successful continuation without introducing a new continuation owner or second continuation architecture.
 
-If any applicable context lacks those existing mappings, requires a new
-continuation owner, or requires a second continuation architecture,
-implementation SHALL stop for architecture clarification. These are evidence
-obligations for the existing continuation seams claimed by this ADR; they do
-not specify or authorize new continuation mechanics.
+The Entry Gate does not require inspection-aware release or inspection consumption to already exist in production code where those behaviors are explicitly authorized implementation work under this ADR. Their actual atomic, exact-once behavior is a post-implementation verification obligation.
+
+If any applicable context lacks those existing mappings, requires a new continuation owner, or requires a second continuation architecture, implementation SHALL stop for architecture clarification. Absence of inspection-aware release behavior that this ADR explicitly authorizes for implementation is not by itself an Entry Gate failure, provided the required accepted owner, transaction boundary, and integration seam have been established. These are readiness obligations for the continuation architecture claimed by this ADR; they do not independently authorize new continuation mechanics.
 
 After those Entry Gate proofs pass, the follow-up implementation workbook
 SHALL:
@@ -712,11 +704,7 @@ OD-001 through OD-015 resolve ownership and product semantics. No further
 Project Owner product decision is currently required to make this Draft
 reviewable.
 
-Semantic implementation is nevertheless conditional on the Section 13 Entry
-Gate proving both the authoritative human-principal source and every applicable
-existing continuation-release mapping. Failure to prove either dependency is
-an architecture stop, not permission for local invention. This evidence
-condition does not reopen or weaken the resolved Owner decisions.
+Semantic implementation remains conditional on the Section 13 pre-implementation Entry Gate proving both the authoritative human-principal source and sufficient accepted continuation-release ownership, transaction boundaries, and integration seams for every applicable context. The Entry Gate establishes implementation readiness; it does not require behavior explicitly authorized for implementation by this ADR to already exist. Post-implementation verification must then prove the resulting production behavior, including atomic exact-once release and the required replay, mirror, save/load, and reconnect semantics. Failure of the readiness proof is an architecture stop, not permission for local invention. This evidence condition does not reopen or weaken the resolved Owner decisions.
 
 One implementation allocation remains intentionally unresolved: the concrete
 save and replay version values and the exact accept/migrate/reject disposition

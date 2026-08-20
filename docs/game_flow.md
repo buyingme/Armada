@@ -1,4 +1,15 @@
-# Game Flow Master Document
+STATUS: LEGACY / HISTORICAL REFERENCE
+
+This document records the interaction-flow model established during the
+Phase M/N refactoring effort.
+
+It must not be treated as authoritative evidence of current AS-IS
+interaction behavior or as TO-BE architecture.
+
+For current AT-002 interaction-flow discovery, see:
+docs/architecture/discovery/...
+
+# Game Flow Master Document (created around 2026-05)
 
 > Current human-readable reference for `FlowSpec`, command applicability, and
 > rule/runtime ownership. Phase M originally drafted this document before

@@ -113,8 +113,9 @@ C# migration should not normally be combined with an unrelated architectural mig
 | Priority | Critical |
 | Status | Partially completed - current-attack scope accepted in `ADR-001`; broader interaction-flow scope remains open |
 | Inputs | `RG-003`, `RG-004`, `RG-014`; `BC-003`; `BC-010`; `BC-007`; `docs/game_flow.md`; `FlowSpec`; `UIProjector`; attack-flow code |
-| Outputs | `ADR-001` accepted for current-attack projection and routing boundaries; remaining `BC-003` outputs must not reopen that decision |
+| Outputs | `ADR-001` accepted for current-attack projection and routing boundaries; high-level AS-IS active-gameplay interaction discovery preserved in [`AT-002-active-gameplay-interaction-map.md`](discovery/AT-002-active-gameplay-interaction-map.md); remaining `BC-003` outputs must not reopen that decision |
 | Dependencies | `ADR-001` constrains all current-attack work; remaining `AT-001` scope may constrain other flow topics |
+| Recommended next discovery | Ship Phase / Ship Activation detailed decomposition; see [`AT-002-active-gameplay-interaction-map.md`](discovery/AT-002-active-gameplay-interaction-map.md) |
 
 ### AT-003 - Rule and Validation Surface Decision
 

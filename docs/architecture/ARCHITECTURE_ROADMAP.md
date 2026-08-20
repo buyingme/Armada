@@ -38,7 +38,7 @@ Rules:
 | --- | --- | --- | --- | --- | --- |
 | Live Game State Authority (`BC-001`) | Current-attack ownership and semantic mutation are accepted in `ADR-001`; broader live-state scope remains open | High | Medium | ADR ACCEPTED (CURRENT-ATTACK SCOPE) | Use `ADR-001` for current-attack work; continue remaining `BC-001` analysis separately |
 | Command Processing and Applicability (`BC-002`) | Command spine exists; invariant coverage needs to be mapped | High | High | TRIAGED | Add test coverage plan before broad changes |
-| Interaction Flow and UI Projection (`BC-003`) | `ADR-001` resolves current-attack authority and prohibits scene/projection authority; broader non-attack flow scope remains open | High | High | ADR ACCEPTED (CURRENT-ATTACK SCOPE) | Use `ADR-001` for current-attack work; continue remaining `BC-003` analysis separately |
+| Interaction Flow and UI Projection (`BC-003`) | `ADR-001` resolves current-attack authority; `ADR-010` establishes decision-equivalent recovery while preserving non-authoritative presentation; broader interaction-flow scope remains open | High | High | ADR ACCEPTED (PARTIAL SCOPE) | Use `ADR-001` and `ADR-010` for applicable work; continue remaining `BC-003` analysis separately |
 | Setup Flow and Setup Package (`BC-004`) | Existing step-level setup contract exists; architecture context still spread across docs/code | High | Medium | TRIAGED | Create setup context pack |
 | Rule and Validation Surfaces (`BC-005`) | Hybrid rule behavior exists; intended rule ownership unresolved | High | High | TRIAGED | Owner decision before new broad rule patterns |
 | Game Component Rule Extension (`BC-005A`) | Expansion path for upgrades/objectives/special rules is not fully accepted | High | High | TRIAGED | Create ADR or context pack before feature work that adds behavior-changing rules |
@@ -111,9 +111,9 @@ C# migration should not normally be combined with an unrelated architectural mig
 | --- | --- |
 | Type | ADR |
 | Priority | Critical |
-| Status | Partially completed - current-attack scope accepted in `ADR-001`; broader interaction-flow scope remains open |
+| Status | Partially completed - current-attack scope accepted in `ADR-001`; decision-equivalent recovery accepted in `ADR-010`; broader interaction-flow scope remains open |
 | Inputs | `RG-003`, `RG-004`, `RG-014`; `BC-003`; `BC-010`; `BC-007`; `docs/game_flow.md`; `FlowSpec`; `UIProjector`; attack-flow code |
-| Outputs | `ADR-001` accepted for current-attack projection and routing boundaries; high-level AS-IS active-gameplay interaction discovery preserved in [`AT-002-active-gameplay-interaction-map.md`](discovery/AT-002-active-gameplay-interaction-map.md); remaining `BC-003` outputs must not reopen that decision |
+| Outputs | `ADR-001` accepted for current-attack projection and routing boundaries; `ADR-010` establishes decision-equivalent recovery; high-level AS-IS active-gameplay interaction discovery preserved in [`AT-002-active-gameplay-interaction-map.md`](discovery/AT-002-active-gameplay-interaction-map.md); remaining `BC-003` outputs must not reopen accepted decisions |
 | Dependencies | `ADR-001` constrains all current-attack work; remaining `AT-001` scope may constrain other flow topics |
 | Recommended next discovery | Ship Phase / Ship Activation detailed decomposition; see [`AT-002-active-gameplay-interaction-map.md`](discovery/AT-002-active-gameplay-interaction-map.md) |
 

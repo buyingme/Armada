@@ -223,6 +223,30 @@ func begin_activation_flow() -> void:
 			GameManager.active_player)
 
 
+## Reprojects the existing Squadron Phase selection after an authoritative
+## completion returns control to the canonical WAIT_FOR_SQUAD_SELECT state.
+## This is presentation-only: it neither selects a squadron nor advances play.
+func restore_phase_selection_from_interaction_state(game_state: GameState) \
+		-> bool:
+	if game_state == null \
+			or game_state.current_phase != Constants.GamePhase.SQUADRON \
+			or game_state.interaction_flow.flow_type \
+					!= Constants.InteractionFlow.SQUADRON_ACTIVATION \
+			or game_state.interaction_flow.step_id \
+					!= Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT \
+			or not game_state.has_squadron_phase_controller():
+		return false
+	_squadron_activation_count = \
+			game_state.squadron_phase_activations_committed
+	_remove_squadron_overlay()
+	if _squadron_modal:
+		_squadron_modal.open_for_turn(
+				_squadron_activation_count + 1,
+				Constants.SQUADRONS_PER_ACTIVATION)
+		_squadron_modal.set_interactable(_modal_interactable)
+	return true
+
+
 ## Opens the squadron modal in command mode for the given ship.
 ## Called from the activation flow's squadron step.
 ## Requirements: CM-020–CM-022.

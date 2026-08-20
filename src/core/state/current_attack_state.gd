@@ -85,6 +85,7 @@ const _KEYS: Array[String] = [
 	"pending_evade",
 	"redirect_allocations",
 	"damage_stage",
+	"resolved_outcome",
 ]
 
 var _data: Dictionary = _inactive_data()
@@ -173,6 +174,9 @@ var redirect_allocations: Array[Dictionary]:
 var damage_stage: String:
 	get:
 		return str(_data["damage_stage"])
+var resolved_outcome: Dictionary:
+	get:
+		return (_data["resolved_outcome"] as Dictionary).duplicate(true)
 
 
 func configure_active(id: String, values: Dictionary) -> bool:
@@ -287,9 +291,12 @@ static func _validated_data(raw: Dictionary) -> Dictionary:
 	var effects: Variant = _validated_effects(normalized["resolved_defense_effects"])
 	var evade: Variant = _validated_evade(normalized["pending_evade"])
 	var redirects: Variant = _validated_redirects(normalized["redirect_allocations"])
+	var outcome: Variant = _validated_resolved_outcome(
+			normalized["resolved_outcome"])
 	if pool == null or pool_choices == null or dice == null \
 			or locks == null or committed == null \
-			or effects == null or evade == null or redirects == null:
+			or effects == null or evade == null or redirects == null \
+			or outcome == null:
 		return {}
 	normalized["dice_pool"] = pool
 	normalized["resolved_pool_choices"] = pool_choices
@@ -299,6 +306,7 @@ static func _validated_data(raw: Dictionary) -> Dictionary:
 	normalized["resolved_defense_effects"] = effects
 	normalized["pending_evade"] = evade
 	normalized["redirect_allocations"] = redirects
+	normalized["resolved_outcome"] = outcome
 	if not _validate_stage_semantics(normalized):
 		return {}
 	return normalized.duplicate(true)
@@ -370,6 +378,12 @@ static func _validate_stage_semantics(data: Dictionary) -> bool:
 		return false
 	if str(data["damage_stage"]) == DAMAGE_RESOLVED \
 			and stage_value != STAGE_RESOLVED:
+		return false
+	if stage_value == STAGE_RESOLVED \
+			and (data["resolved_outcome"] as Dictionary).is_empty():
+		return false
+	if stage_value != STAGE_RESOLVED \
+			and not (data["resolved_outcome"] as Dictionary).is_empty():
 		return false
 	return true
 
@@ -517,6 +531,12 @@ static func _validated_redirects(raw: Variant) -> Variant:
 	return result
 
 
+static func _validated_resolved_outcome(raw: Variant) -> Variant:
+	if not (raw is Dictionary):
+		return null
+	return (raw as Dictionary).duplicate(true)
+
+
 static func _normalized_integral(raw: Variant) -> Variant:
 	if typeof(raw) == TYPE_INT:
 		return int(raw)
@@ -585,6 +605,7 @@ static func _inactive_data() -> Dictionary:
 		"pending_evade": {},
 		"redirect_allocations": [],
 		"damage_stage": DAMAGE_PENDING,
+		"resolved_outcome": {},
 	}
 
 

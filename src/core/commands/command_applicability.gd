@@ -141,6 +141,8 @@ static var _DECLARATIONS: Dictionary = {
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"complete_attack": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
+	"acknowledge_attack_result": {KEY_SCOPE: Constants.CommandScope.PHASE,
+			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"resolve_immediate_effect": {KEY_SCOPE: Constants.CommandScope.PHASE,
 			KEY_PHASES: [Constants.GamePhase.SHIP, Constants.GamePhase.SQUADRON]},
 	"persistent_effect_damage": {KEY_SCOPE: Constants.CommandScope.PHASE,

@@ -10,6 +10,8 @@ const ECM_SCRIPT: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/defensive_retrofit/electronic_countermeasures.gd")
 const H9_RULE: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
+const COMPLETED_ATTACK_INSPECTION: GDScript = preload(
+		"res://src/core/state/completed_attack_inspection.gd")
 
 var _log: GameLogger = GameLogger.new("CompleteAttackCommand")
 
@@ -33,6 +35,10 @@ func validate(game_state: GameState) -> String:
 		return "Attack completion belongs to the attacker."
 	if game_state.timing_window_state.active:
 		return "Cannot complete while a timing window is active."
+	if game_state.has_completed_attack_inspection():
+		return "A completed attack inspection is already pending."
+	if attack.resolved_outcome.is_empty():
+		return "Current attack has no terminal resolved outcome."
 	return ""
 
 func execute(game_state: GameState) -> Dictionary:
@@ -45,9 +51,24 @@ func execute(game_state: GameState) -> Dictionary:
 	var exhaust_squadron_iteration: bool = ship != null \
 			and ship.anti_squadron_attack_zone >= 0 \
 			and not _has_remaining_squadron_target(game_state, attack, ship)
+	var required_ids: Array[String] = \
+		game_state.get_distinct_controlling_principal_ids(
+				MatchPlayerControlBinding.KIND_HUMAN)
+	var inspection: CompletedAttackInspection = null
+	if not required_ids.is_empty():
+		inspection = COMPLETED_ATTACK_INSPECTION.create_from_attack(
+				attack, attack.resolved_outcome, required_ids)
+		if inspection == null:
+			return {}
 	if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
 		return {}
-	if exhaust_squadron_iteration:
+	if inspection != null and not game_state.install_completed_attack_inspection(
+				inspection):
+		game_state.set_current_attack_state(attack)
+		return {}
+	# PAC-OD-007 retains an exhausted anti-squadron iteration while a result
+	# inspection is pending. SkipAttackCommand(squadron_done) closes it later.
+	if exhaust_squadron_iteration and inspection == null:
 		ship.end_anti_squadron_attack()
 	var cleared: Array[String] = ECM_SCRIPT.clear_attack_state(
 			game_state, attack_id)
@@ -56,6 +77,7 @@ func execute(game_state: GameState) -> Dictionary:
 	var result: Dictionary = {
 		"attack_id": attack_id,
 		"completed": true,
+		"inspection_id": inspection.inspection_id() if inspection != null else "",
 		"ecm_cleared_runtime_upgrade_ids": cleared,
 		"h9_cleared_runtime_upgrade_ids": h9_cleared,
 	}

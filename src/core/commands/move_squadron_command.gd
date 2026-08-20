@@ -38,6 +38,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_inspection_consumer(
+				str(payload.get("completed_attack_inspection_id", "")))
+	if inspection_reason != "":
+		return inspection_reason
 	if game_state.current_phase != Constants.GamePhase.SQUADRON \
 			and game_state.current_phase != Constants.GamePhase.SHIP:
 		return "Not in Squadron or Ship Phase."
@@ -60,26 +65,16 @@ func validate(game_state: GameState) -> String:
 		return "Squadron movement is not available."
 	if not payload.has("pos_x") or not payload.has("pos_y"):
 		return "Missing target position."
-	if not _can_move_under_engagement_rules(game_state, sq):
+	if not game_state.can_squadron_move_under_engagement_rules(sq):
 		return "Engaged by a non-Heavy squadron."
 	return ""
-
-
-func _can_move_under_engagement_rules(game_state: GameState,
-		squadron: SquadronInstance) -> bool:
-	var all_squadrons: Array[Dictionary] = \
-			SquadronKeywordRuleHelper.positions_from_state(game_state)
-	var obstruction_bodies: Array = \
-			EngagementResolver.obstruction_bodies_from_state(game_state)
-	var squadron_pos: Vector2 = \
-			SquadronKeywordRuleHelper.position_from_state(squadron)
-	return SquadronKeywordRuleHelper.can_move_with_heavy_rule(
-			squadron, squadron_pos, all_squadrons, obstruction_bodies)
 
 
 ## Updates the squadron's normalised position in [GameState] and returns
 ## the movement data for the presentation layer to apply.
 func execute(game_state: GameState) -> Dictionary:
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
 	var sq: SquadronInstance = game_state.get_squadron(
 			player_index, payload.get("squadron_index", -1))
 	var new_x: float = float(payload.get("pos_x", 0.0))
@@ -95,6 +90,12 @@ func execute(game_state: GameState) -> Dictionary:
 	sq.pos_x = new_x
 	sq.pos_y = new_y
 	if not game_state.validate_declaration_adjacent_state():
+		sq.pos_x = old_x
+		sq.pos_y = old_y
+		sq.restore_activation_action_state(action_before)
+		return {}
+	if not inspection_id.is_empty() \
+			and not game_state.consume_completed_attack_inspection(inspection_id):
 		sq.pos_x = old_x
 		sq.pos_y = old_y
 		sq.restore_activation_action_state(action_before)

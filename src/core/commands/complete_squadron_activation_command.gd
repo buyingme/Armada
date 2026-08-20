@@ -11,7 +11,6 @@
 class_name CompleteSquadronActivationCommand
 extends GameCommand
 
-
 const TYPE: String = "complete_squadron_activation"
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 
@@ -33,6 +32,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_inspection_consumer(
+				str(payload.get("completed_attack_inspection_id", "")))
+	if inspection_reason != "":
+		return inspection_reason
 	if not _is_legal_phase(game_state.current_phase):
 		return "Not in Squadron or Ship Phase."
 	var squadron: SquadronInstance = _get_squadron(game_state)
@@ -48,7 +52,7 @@ func validate(game_state: GameState) -> String:
 			or str(payload.get("activation_context", "")) \
 					!= squadron.activation_context:
 		return "Stale or wrong-context squadron activation identity."
-	if not squadron.is_activation_action_complete(_is_rogue(squadron)):
+	if not game_state.is_squadron_activation_action_complete(squadron):
 		return "Squadron still has an available action."
 	if squadron.activation_context \
 			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
@@ -64,8 +68,11 @@ func validate(game_state: GameState) -> String:
 
 ## Marks the squadron activated and echoes its identity.
 func execute(game_state: GameState) -> Dictionary:
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
 	var squadron: SquadronInstance = _get_squadron(game_state)
-	if squadron == null:
+	if squadron == null \
+			or not game_state.is_squadron_activation_action_complete(squadron):
 		return {}
 	var activated_before: bool = squadron.activated_this_round
 	var phase_before: Dictionary = game_state.squadron_phase_progress_snapshot()
@@ -82,6 +89,11 @@ func execute(game_state: GameState) -> Dictionary:
 		squadron.activated_this_round = activated_before
 		game_state.restore_squadron_phase_progress(phase_before)
 		return {}
+	if not inspection_id.is_empty() \
+			and not game_state.consume_completed_attack_inspection(inspection_id):
+		squadron.activated_this_round = activated_before
+		game_state.restore_squadron_phase_progress(phase_before)
+		return {}
 	if squadron.activation_context \
 			== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
 		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
@@ -91,6 +103,20 @@ func execute(game_state: GameState) -> Dictionary:
 				{"active_player": int(phase_result.get(
 						"controller_player", -1))},
 				Constants.Visibility.ALL)
+	else:
+		# This existing consumer is the terminal commanded-squadron mutation.
+		# Once it has atomically consumed a completed-result inspection, restore
+		# the enclosing ship-command projection rather than retaining the retired
+		# individual attack flow.  It creates no further progression command.
+		game_state.interaction_flow = FLOW_SPEC_SCRIPT.make_interaction_flow(
+				Constants.InteractionFlow.SHIP_ACTIVATION,
+				Constants.InteractionStep.SQUADRON_STEP,
+				game_state,
+				{"active_player": player_index},
+				Constants.Visibility.ALL,
+				{"ship_index": squadron.commanding_ship_index,
+					"ship_activation_identity": str(payload.get(
+							"ship_activation_identity", ""))})
 	var result: Dictionary = {
 		"squadron_index": int(payload.get("squadron_index", -1)),
 		"activation_id": squadron.activation_id,
@@ -136,8 +162,3 @@ func _validate_commanding_ship(game_state: GameState,
 			or ship.squadron_command_activations_committed > capacity:
 		return "Commanding ship activation budget is invalid."
 	return ""
-
-
-func _is_rogue(squadron: SquadronInstance) -> bool:
-	return squadron.squadron_data != null \
-			and squadron.squadron_data.has_keyword("Rogue")

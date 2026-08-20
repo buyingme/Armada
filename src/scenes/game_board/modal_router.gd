@@ -16,6 +16,7 @@ const ECM_READY_COST_MODAL_SCRIPT: GDScript = preload(
 var _panel_mgr: UIPanelManager = null
 var _attack_panel_controller: AttackPanelController = null
 var _ship_activation_controller: ShipActivationController = null
+var _squadron_phase_controller: SquadronPhaseController = null
 var _displacement_controller: DisplacementController = null
 var _tarkin_choice_modal: TarkinChoiceModal = null
 var _ecm_ready_cost_modal: Variant = null
@@ -33,9 +34,10 @@ var _log: GameLogger = GameLogger.new("ModalRouter")
 ## attacker-side defender response routing.
 func initialize(
 		panel_mgr: UIPanelManager,
-		attack_panel_controller: AttackPanelController,
-		ship_activation_controller: ShipActivationController,
-		displacement_controller: DisplacementController,
+	attack_panel_controller: AttackPanelController,
+	ship_activation_controller: ShipActivationController,
+	squadron_phase_controller: SquadronPhaseController,
+	displacement_controller: DisplacementController,
 		activation_ctx: ActivationContext,
 		find_ship_token_fn: Callable,
 		find_squadron_token_fn: Callable,
@@ -44,6 +46,7 @@ func initialize(
 	_panel_mgr = panel_mgr
 	_attack_panel_controller = attack_panel_controller
 	_ship_activation_controller = ship_activation_controller
+	_squadron_phase_controller = squadron_phase_controller
 	_displacement_controller = displacement_controller
 	_activation_ctx = activation_ctx
 	_find_ship_token_fn = find_ship_token_fn
@@ -151,10 +154,25 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
 	_drive_activation_modal(intent, game_state.interaction_flow, command)
+	_drive_squadron_phase_activation(intent, game_state)
 	_sync_attack_panel_mirror(game_state, intent.attack_dice_results)
 	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
+
+
+## Reprojects the existing Squadron Phase selection only from its canonical
+## WAIT_FOR_SQUAD_SELECT result. It never selects a squadron or advances the
+## phase; command and GameState ownership remain unchanged.
+func _drive_squadron_phase_activation(intent: UIProjector.UIIntent,
+		game_state: GameState) -> void:
+	if _squadron_phase_controller == null or game_state == null:
+		return
+	if intent.flow_type != Constants.InteractionFlow.SQUADRON_ACTIVATION \
+			or intent.step_id != Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT:
+		return
+	_squadron_phase_controller.restore_phase_selection_from_interaction_state(
+			game_state)
 
 
 func _drive_tarkin_choice_modal(intent: UIProjector.UIIntent) -> void:
@@ -291,7 +309,7 @@ func _drive_ship_activation_lifecycle(intent: UIProjector.UIIntent,
 		Constants.InteractionStep.WAIT_FOR_SHIP_SELECT:
 			_ship_activation_controller.close_modal_from_interaction_state()
 		Constants.InteractionStep.SQUADRON_STEP:
-			if _is_activation_modal_open_command(command):
+			if _is_squadron_command_projection_command(command):
 				_ship_activation_controller.open_squadron_command_from_interaction_state()
 		_:
 			if intent.modal_kind == Constants.ModalKind.ACTIVATION \
@@ -315,6 +333,17 @@ func _is_activation_modal_open_command(command: GameCommand) -> bool:
 		"activate_ship", "convert_dial_to_token", "advance_activation_step":
 			return true
 	return false
+
+
+## A completed commanded squadron returns to the already-open Squadron-command
+## opportunity.  This is presentation recovery from ShipInstance's canonical
+## OPEN disposition and committed count; it must not submit a second step
+## transition.
+func _is_squadron_command_projection_command(command: GameCommand) -> bool:
+	return _is_activation_modal_open_command(command) \
+			or (command != null \
+					and command.command_type \
+							== CompleteSquadronActivationCommand.TYPE)
 
 
 func _is_ship_skip_maneuver_projection(intent: UIProjector.UIIntent,

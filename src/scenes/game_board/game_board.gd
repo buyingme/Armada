@@ -1040,9 +1040,10 @@ func _create_command_router_adapter() -> void:
 	_command_router_adapter.initialize(
 			_panel_mgr,
 			_attack_panel_controller,
-			_debug_controller,
-			_ship_activation_controller,
-			_displacement_controller,
+		_debug_controller,
+		_ship_activation_controller,
+		_squadron_phase_controller,
+		_displacement_controller,
 			_activation_ctx,
 			_find_ship_token_for_instance,
 			_find_squadron_token_for_instance)
@@ -1320,6 +1321,9 @@ func _finalize_ready_sequence() -> bool:
 						"submit_timing_window_intent"))
 		if has_active_attack:
 			_schedule_active_attack_resume(attack_resume)
+	# The state and projection are now fully reconstructed. A satisfied durable
+	# inspection may release exactly one existing consumer on live authority.
+	GameManager.release_reconstructed_completed_attack_inspection()
 	return true
 
 

@@ -461,7 +461,10 @@ func test_bug_018_modal_skip_commits_action_then_allows_next_squadron() -> void:
 			"Production replay capture must include the repaired progression.")
 	if replay != null:
 		var replay_data: Dictionary = replay.serialize()
-		assert_eq((replay_data["header"] as Dictionary)["format_version"], 6)
+		assert_eq((replay_data["header"] as Dictionary)["format_version"],
+				GameReplay.FORMAT_VERSION,
+				"UX-005 replay cutover applies even though this declaration skip " \
+				+ "does not create a completed-attack acknowledgement.")
 		assert_not_null(GameReplay.deserialize(replay_data))
 		assert_eq((replay.commands[0] as Dictionary)["type"],
 				"activate_squadron")

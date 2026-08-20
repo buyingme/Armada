@@ -32,11 +32,21 @@ static func process_successful_command(game_state: GameState,
 		return _failure("Unknown current-attack execution mode.")
 	if game_state == null or command == null:
 		return _success()
-	var continuation: GameCommand = _derive_followup(
-			game_state, command, result)
+	var continuation: GameCommand = _derive_followup(game_state, command, result)
 	if execution_mode != MODE_LIVE_AUTHORITY:
 		continuation = null
 	return _success(continuation)
+
+
+## Re-evaluates only the durable completed-result release state after a fully
+## validated save/load or reconnect installation. It intentionally returns an
+## existing consumer command or no command; it never records a synthetic
+## acknowledgement or continuation descriptor.
+static func derive_reconstructed_inspection_release(
+		game_state: GameState) -> GameCommand:
+	if game_state == null:
+		return null
+	return _derive_inspection_release(game_state)
 
 
 static func _derive_followup(game_state: GameState,
@@ -44,7 +54,7 @@ static func _derive_followup(game_state: GameState,
 		result: Dictionary) -> GameCommand:
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack == null or not attack.active:
-		return null
+		return _derive_inspection_release(game_state)
 	if command.command_type in [
 		"commit_accuracy",
 		"commit_defense",
@@ -62,6 +72,116 @@ static func _derive_followup(game_state: GameState,
 			and attack.stage == CurrentAttackState.STAGE_RESOLVED:
 		return _build_complete_attack(attack)
 	return null
+
+
+static func _derive_inspection_release(game_state: GameState) -> GameCommand:
+	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
+	if inspection == null or not inspection.is_satisfied():
+		return null
+	var data: Dictionary = inspection.serialize()
+	var attacker: Dictionary = data.get("attacker", {}) as Dictionary
+	var attacker_kind: String = str(attacker.get("kind", ""))
+	var attacker_player: int = int(attacker.get("player", -1))
+	var attacker_index: int = int(attacker.get("index", -1))
+	if attacker_kind == CurrentAttackState.KIND_SHIP:
+		return _derive_ship_inspection_release(
+				game_state, inspection, attacker_player, attacker_index)
+	if attacker_kind == CurrentAttackState.KIND_SQUADRON:
+		return _derive_squadron_inspection_release(
+				game_state, inspection, attacker_player, attacker_index)
+	return null
+
+
+static func _derive_ship_inspection_release(game_state: GameState,
+		inspection: CompletedAttackInspection, player: int,
+		ship_index: int) -> GameCommand:
+	var ship: ShipInstance = game_state.get_ship(player, ship_index)
+	if ship == null or not ship.has_active_ship_activation() \
+			or not ship.attack_step_active:
+		return null
+	var identity: String = inspection.inspection_id()
+	if ship.anti_squadron_attack_zone >= 0:
+		if _has_remaining_anti_squadron_target(game_state, ship, player, ship_index):
+			return null
+		return SkipAttackCommand.new(player, {
+			"reason": "squadron_done",
+			"ship_index": ship_index,
+			"completed_attack_inspection_id": identity,
+		})
+	if ship.committed_attack_count < 2 \
+			and _has_remaining_normal_ship_target(game_state, ship,
+				player, ship_index):
+		return null
+	return AdvanceActivationStepCommand.new(player, {
+		"ship_index": ship_index,
+		"step_id": "maneuver_step",
+		"ship_activation_identity": ship.ship_activation_identity,
+		"completed_attack_inspection_id": identity,
+	})
+
+
+## Reuses the authoritative declaration candidates used by BeginAttackCommand
+## and the live target selector. Nominal attack capacity alone is not enough:
+## unused hull zones must still have a legal ship-to-ship declaration.
+static func _has_remaining_normal_ship_target(game_state: GameState,
+		ship: ShipInstance, player: int, ship_index: int) -> bool:
+	if game_state == null or ship == null:
+		return false
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(
+					game_state, player, ship_index):
+		if str(candidate.get("target_kind", "")) \
+				!= CurrentAttackState.KIND_SHIP:
+			continue
+		if int(candidate.get("attacker_zone", -1)) \
+			in ship.used_attack_hull_zones:
+			continue
+		return true
+	return false
+
+
+static func _derive_squadron_inspection_release(game_state: GameState,
+		inspection: CompletedAttackInspection, player: int,
+		squadron_index: int) -> GameCommand:
+	var squadron: SquadronInstance = game_state.get_squadron(player, squadron_index)
+	if squadron == null or squadron.activated_this_round \
+			or not game_state.is_squadron_activation_action_complete(squadron):
+		return null
+	var payload: Dictionary = {
+		"squadron_index": squadron_index,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"completed_attack_inspection_id": inspection.inspection_id(),
+	}
+	if squadron.activation_context \
+			== SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		var ship: ShipInstance = game_state.get_ship(
+			squadron.commanding_ship_player, squadron.commanding_ship_index)
+		if ship == null:
+			return null
+		payload["commanding_ship_player"] = squadron.commanding_ship_player
+		payload["commanding_ship_index"] = squadron.commanding_ship_index
+		payload["ship_activation_identity"] = ship.ship_activation_identity
+	return CompleteSquadronActivationCommand.new(player, payload)
+
+
+static func _has_remaining_anti_squadron_target(game_state: GameState,
+		ship: ShipInstance, player: int, ship_index: int) -> bool:
+	for candidate: Dictionary in \
+		TargetingListBuilder.authoritative_ship_target_entries(
+				game_state, player, ship_index):
+		if int(candidate.get("attacker_zone", -1)) \
+				!= ship.anti_squadron_attack_zone \
+			or str(candidate.get("target_kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		var owner: int = int(candidate.get("target_owner", -1))
+		var index: int = int(candidate.get("target_index", -1))
+		var squadron: SquadronInstance = game_state.get_squadron(owner, index)
+		if squadron != null and not squadron.is_destroyed() \
+				and not ship.has_anti_squadron_target(owner, index):
+			return true
+	return false
 
 
 static func _derive_defense_followup(game_state: GameState,

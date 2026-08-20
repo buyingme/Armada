@@ -196,12 +196,8 @@ func test_bug_002_step6_decline_retains_legal_different_zone_attack() -> void:
 	_submit_resolved_attack(processor, state, first)
 	var first_zone: int = int(first.get("attacker_zone", -1))
 
-	var declined: Dictionary = processor.submit(SkipAttackCommand.new(0, {
-		"reason": "squadron_done",
-		"ship_index": 0,
-	}))
-	assert_eq(declined.get("continuation", ""),
-			CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK)
+	_submit_resolved_attack(processor, state,
+			_payload_from_ship_candidate(same_zone[1]))
 	assert_eq(ship.committed_attack_count, 1)
 	assert_eq(ship.anti_squadron_attack_zone, -1)
 	assert_ne(BeginAttackCommand.new(0, first).validate(state), "",
@@ -311,11 +307,18 @@ func test_bug_002_second_anti_squadron_attack_can_repeat_surviving_target() -> v
 			int(first.get("defender_index", -1)))
 	assert_false(target.is_destroyed(),
 			"The selected target must survive for the second-attack regression.")
-	if ship.anti_squadron_attack_zone >= 0:
-		assert_false(processor.submit(SkipAttackCommand.new(0, {
-			"reason": "squadron_done",
-			"ship_index": 0,
-		})).is_empty())
+	var first_zone: int = int(first.get("attacker_zone", -1))
+	var remaining: Dictionary = _remaining_anti_squadron_candidate(
+			state, ship, first_zone)
+	assert_false(remaining.is_empty(),
+			"The fixture must expose the other same-zone squadron before "
+			+"the different-zone regression.")
+	if not remaining.is_empty():
+		_submit_resolved_attack(processor, state,
+				_payload_from_ship_candidate(remaining))
+	assert_eq(ship.anti_squadron_attack_zone, -1,
+			"The exhausted first iteration closes through its acknowledged "
+			+"squadron_done consumer transaction.")
 
 	assert_eq(BeginAttackCommand.new(0, second).validate(state), "",
 			"A different-zone attack may target the same surviving squadron.")
@@ -1154,7 +1157,13 @@ func _submit_resolved_attack(processor: Variant, state: GameState,
 		payload: Dictionary) -> void:
 	if processor is NetworkHostCommandSubmitter:
 		NetworkManager._host_match_principal_id = state.principal_id_for_player(0)
-	var begin: Dictionary = processor.submit(BeginAttackCommand.new(0, payload))
+	var begin_payload: Dictionary = payload.duplicate(true)
+	var prior_inspection: CompletedAttackInspection = \
+			state.completed_attack_inspection
+	if prior_inspection != null and prior_inspection.is_satisfied():
+		begin_payload["completed_attack_inspection_id"] = \
+			prior_inspection.inspection_id()
+	var begin: Dictionary = processor.submit(BeginAttackCommand.new(0, begin_payload))
 	assert_false(begin.is_empty())
 	if begin.is_empty():
 		return
@@ -1180,6 +1189,11 @@ func _submit_resolved_attack(processor: Variant, state: GameState,
 			"selected_indices": [],
 		})).is_empty())
 	assert_true(state.current_attack_state.is_inactive())
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	if inspection != null:
+		assert_false(processor.submit(AcknowledgeAttackResultCommand.new(0, {
+			"inspection_id": inspection.inspection_id(),
+		})).is_empty())
 
 
 func _submit_standard_attack(submitter: Variant, payload: Dictionary,
@@ -1982,6 +1996,21 @@ func _different_zone_candidate(state: GameState, used_zone: int,
 						int(candidate.get("target_owner", -1)),
 						int(candidate.get("target_index", -1)))
 		if target != null and not bool(target.call("is_destroyed")):
+			return candidate.duplicate(true)
+	return {}
+
+
+func _remaining_anti_squadron_candidate(state: GameState, ship: ShipInstance,
+		zone: int) -> Dictionary:
+	for candidate: Dictionary in \
+		TargetingListBuilder.authoritative_ship_target_entries(state, 0, 0):
+		if int(candidate.get("attacker_zone", -1)) != zone \
+				or str(candidate.get("target_kind", "")) \
+						!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		var owner: int = int(candidate.get("target_owner", -1))
+		var index: int = int(candidate.get("target_index", -1))
+		if not ship.has_anti_squadron_target(owner, index):
 			return candidate.duplicate(true)
 	return {}
 

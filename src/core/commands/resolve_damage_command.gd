@@ -133,6 +133,15 @@ func _execute_ship(game_state: GameState,
 	var replacement: CurrentAttackState = attack.with_patch({
 		"stage": CurrentAttackState.STAGE_RESOLVED,
 		"damage_stage": CurrentAttackState.DAMAGE_RESOLVED,
+		"resolved_outcome": {
+			"target_kind": CurrentAttackState.KIND_SHIP,
+			"affected_zone": int(attack.defender_zone),
+			"final_damage": damage,
+			"shield_absorbed": shield_damage,
+			"post_resolution_shields": int(ship.current_shields.get(hull_zone, 0)) - shield_damage,
+			"hull_damage": remaining,
+			"destroyed": destroyed,
+		},
 	})
 	if replacement == null:
 		_restore_damage_deck(game_state, deck_snapshot)
@@ -196,6 +205,13 @@ func _execute_squadron(game_state: GameState,
 	var replacement: CurrentAttackState = attack.with_patch({
 		"stage": CurrentAttackState.STAGE_RESOLVED,
 		"damage_stage": CurrentAttackState.DAMAGE_RESOLVED,
+		"resolved_outcome": {
+			"target_kind": CurrentAttackState.KIND_SQUADRON,
+			"requested_hull_damage": hull_damage,
+			"actual_hull_damage": actual_damage,
+			"post_resolution_hull": sq.current_hull - actual_damage,
+			"destroyed": destroyed,
+		},
 	})
 	if replacement == null:
 		return {}

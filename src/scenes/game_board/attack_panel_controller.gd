@@ -61,6 +61,18 @@ func initialize(
 func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
 		return
+	if command.command_type == AcknowledgeAttackResultCommand.TYPE:
+		_recover_satisfied_ship_attack_presentation()
+		return
+	if _is_post_attack_presentation_recovery_command(command):
+		if not _owns_active_canonical_attack():
+			_attack_executor.deactivate_primary_presentation()
+		return
+	if command.command_type == "skip_attack" \
+			and str(command.payload.get("reason", "")) == "squadron_done":
+		if not _owns_active_canonical_attack():
+			_attack_executor.deactivate_primary_presentation()
+		return
 	if not _is_attack_pipeline_command(command):
 		return
 	_project_terminal_mirror_result(command, result)
@@ -302,6 +314,33 @@ func _is_attack_pipeline_command(command: GameCommand) -> bool:
 		"reroll_attack_die", "skip_attack_modifier", "confirm_attack_dice",
 		"resolve_damage", "complete_attack", "skip_attack",
 	]
+
+
+## These existing consumer commands have already performed any authorised
+## semantic continuation.  Their result may only clear the retired attack
+## presentation; it must not submit or infer further gameplay progression.
+func _is_post_attack_presentation_recovery_command(command: GameCommand) -> bool:
+	return command.command_type in [
+		CompleteSquadronActivationCommand.TYPE,
+		"advance_activation_step",
+	]
+
+
+## A normal ship attack with another legal declaration has a derived-only
+## CON-007 release.  Reuse the existing canonical-state projection recovery
+## after the final acknowledgement; no command is selected or submitted here.
+func _recover_satisfied_ship_attack_presentation() -> void:
+	if _attack_executor == null or _target_selector == null:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection == null or not inspection.is_satisfied():
+		return
+	_attack_executor.resume_inactive_ship_attack_continuation(
+				Callable(_target_selector, "ship_token_for_instance"))
 
 
 ## Closes the read-only [AttackPanelMirror] if it exists.

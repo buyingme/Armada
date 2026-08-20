@@ -29,7 +29,7 @@ extends RefCounted
 
 
 ## Current replay file format version. Increment when the schema changes.
-const FORMAT_VERSION: int = 6
+const FORMAT_VERSION: int = 7
 
 ## Format version that introduced HMAC signing support.
 const SIGNED_FORMAT_VERSION: int = FORMAT_VERSION

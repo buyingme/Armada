@@ -45,6 +45,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_inspection_consumer(
+				str(payload.get("completed_attack_inspection_id", "")))
+	if inspection_reason != "":
+		return inspection_reason
 	var phase: Constants.GamePhase = game_state.current_phase
 	if phase != Constants.GamePhase.SHIP and phase != Constants.GamePhase.SQUADRON:
 		return "Not in Ship or Squadron Phase."
@@ -54,6 +59,12 @@ func validate(game_state: GameState) -> String:
 			var ship: ShipInstance = _squadron_iteration_ship(game_state)
 			if ship == null:
 				return "No active anti-squadron continuation."
+			if not str(payload.get(
+					"completed_attack_inspection_id", "")).is_empty():
+				var context_reason: String = \
+					_validate_squadron_done_inspection(game_state, ship)
+				if context_reason != "":
+					return context_reason
 			return ""
 		return _validate_declaration_skip(game_state)
 	if attack.attack_id != str(payload.get("attack_id", "")):
@@ -75,11 +86,14 @@ func validate(game_state: GameState) -> String:
 
 ## Retires an active cancelled attack, or records a non-attack skip.
 func execute(game_state: GameState) -> Dictionary:
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
 	var attack: CurrentAttackState = game_state.current_attack_state
 	var attack_id: String = attack.attack_id
 	var cleared: Array[String] = []
 	var h9_cleared: Array[String] = []
 	var continuation: String = ""
+	var result: Dictionary = {}
 	if attack.active:
 		if not game_state.set_current_attack_state(CurrentAttackState.inactive()):
 			return {}
@@ -95,13 +109,22 @@ func execute(game_state: GameState) -> Dictionary:
 		var ship: ShipInstance = _squadron_iteration_ship(game_state)
 		if ship == null:
 			return {}
+		var progress_before: Dictionary = ship.attack_progress_snapshot()
 		ship.end_anti_squadron_attack()
+		if not inspection_id.is_empty() \
+			and not game_state.consume_completed_attack_inspection(inspection_id):
+			ship.restore_attack_progress(progress_before)
+			return {}
 		continuation = CompleteAttackCommand.CONTINUATION_NORMAL_ATTACK \
 				if ship.committed_attack_count < 2 \
 				else CompleteAttackCommand.CONTINUATION_ATTACK_STEP_COMPLETE
 	else:
-		return _execute_declaration_skip(game_state)
-	var result: Dictionary = {
+		result = _execute_declaration_skip(game_state)
+		if result.is_empty() or (not inspection_id.is_empty() \
+				and not game_state.consume_completed_attack_inspection(inspection_id)):
+			return {}
+		return result
+	result = {
 		"attack_id": attack_id,
 		"skipped": true,
 		"reason": payload.get("reason", "voluntary"),
@@ -303,3 +326,42 @@ func _squadron_iteration_ship(game_state: GameState) -> ShipInstance:
 			or ship.anti_squadron_attack_zone < 0:
 		return null
 	return ship
+
+
+func _validate_squadron_done_inspection(game_state: GameState,
+		ship: ShipInstance) -> String:
+	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
+	if inspection == null:
+		return "No completed attack inspection is pending."
+	var data: Dictionary = inspection.serialize()
+	var attacker: Dictionary = data.get("attacker", {}) as Dictionary
+	var defender: Dictionary = data.get("defender", {}) as Dictionary
+	if str(attacker.get("kind", "")) != CurrentAttackState.KIND_SHIP \
+			or int(attacker.get("player", -1)) != player_index \
+			or int(attacker.get("index", -1)) \
+				!= int(payload.get("ship_index", -1)) \
+			or str(defender.get("kind", "")) != CurrentAttackState.KIND_SQUADRON:
+		return "Completed inspection does not match this anti-squadron iteration."
+	if _has_remaining_squadron_target(game_state, ship):
+		return "An eligible anti-squadron target remains."
+	return ""
+
+
+func _has_remaining_squadron_target(game_state: GameState,
+		ship: ShipInstance) -> bool:
+	var ship_index: int = int(payload.get("ship_index", -1))
+	for candidate: Dictionary in \
+		TargetingListBuilder.authoritative_ship_target_entries(
+				game_state, player_index, ship_index):
+		if int(candidate.get("attacker_zone", -1)) \
+				!= ship.anti_squadron_attack_zone \
+			or str(candidate.get("target_kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		var owner: int = int(candidate.get("target_owner", -1))
+		var index: int = int(candidate.get("target_index", -1))
+		var squadron: SquadronInstance = game_state.get_squadron(owner, index)
+		if squadron != null and not squadron.is_destroyed() \
+				and not ship.has_anti_squadron_target(owner, index):
+			return true
+	return false

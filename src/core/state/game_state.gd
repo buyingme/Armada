@@ -15,6 +15,8 @@ const CURRENT_ATTACK_STATE: GDScript = preload(
 		"res://src/core/state/current_attack_state.gd")
 const MATCH_PLAYER_CONTROL_BINDING: GDScript = preload(
 		"res://src/core/state/match_player_control_binding.gd")
+const COMPLETED_ATTACK_INSPECTION: GDScript = preload(
+		"res://src/core/state/completed_attack_inspection.gd")
 
 const SQUADRON_PHASE_CONTROLLER_INACTIVE: int = -1
 
@@ -67,6 +69,13 @@ var current_attack_state: CurrentAttackState:
 	get:
 		return _clone_current_attack_state(_current_attack_state)
 
+## The sole canonical completed-result acknowledgement barrier.
+var _completed_attack_inspection: CompletedAttackInspection = null
+
+var completed_attack_inspection: CompletedAttackInspection:
+	get:
+		return _clone_completed_attack_inspection(_completed_attack_inspection)
+
 ## Immutable match-lifetime player-to-principal authority.
 var _match_player_control_binding: MatchPlayerControlBinding = null
 
@@ -79,6 +88,7 @@ var ship_target_attack_counts: Dictionary = {}
 func _init() -> void:
 	_timing_window_state = _new_timing_window_state()
 	_current_attack_state = _new_current_attack_state()
+	_completed_attack_inspection = null
 
 
 ## Initializes a new game state with default values.
@@ -93,6 +103,7 @@ func initialize() -> void:
 	interaction_flow = InteractionFlow.new()
 	_timing_window_state = _new_timing_window_state()
 	_current_attack_state = _new_current_attack_state()
+	_completed_attack_inspection = null
 	_match_player_control_binding = null
 	objectives.clear()
 	ship_target_attack_counts.clear()
@@ -109,6 +120,49 @@ func get_player_state(player_index: int) -> PlayerState:
 		return player_states[player_index]
 	push_error("Invalid player index: %d" % player_index)
 	return null
+
+
+## Returns whether an otherwise uncommitted squadron move is legal under the
+## canonical engagement/Heavy rule.  Callers retain ownership of their action
+## sequencing; this is the shared state-derived legality surface used by move
+## validation and completed-attack release.
+func can_squadron_move_under_engagement_rules(squadron: SquadronInstance) -> bool:
+	if squadron == null:
+		return false
+	var all_squadrons: Array[Dictionary] = \
+			SquadronKeywordRuleHelper.positions_from_state(self)
+	var obstruction_bodies: Array = \
+			EngagementResolver.obstruction_bodies_from_state(self)
+	var squadron_pos: Vector2 = \
+			SquadronKeywordRuleHelper.position_from_state(squadron)
+	return SquadronKeywordRuleHelper.can_move_with_heavy_rule(
+			squadron, squadron_pos, all_squadrons, obstruction_bodies)
+
+
+## Returns whether this squadron still has a move it can legally take.  The
+## retained action facts remain owned by SquadronInstance; engagement legality
+## is derived from the current canonical board state.
+func has_legal_remaining_squadron_move_action(
+		squadron: SquadronInstance) -> bool:
+	if squadron == null:
+		return false
+	var is_rogue: bool = squadron.squadron_data != null \
+			and squadron.squadron_data.has_keyword("Rogue")
+	return squadron.has_remaining_move_action(is_rogue) \
+			and can_squadron_move_under_engagement_rules(squadron)
+
+
+## Resolves completion eligibility from retained squadron action state and
+## canonical movement legality.  A move prohibited by engagement is not a
+## remaining legal action.
+func is_squadron_activation_action_complete(squadron: SquadronInstance) -> bool:
+	if squadron == null or not squadron.has_activation_action_state() \
+			or not squadron.is_activation_action_state_valid():
+		return false
+	var is_rogue: bool = squadron.squadron_data != null \
+			and squadron.squadron_data.has_keyword("Rogue")
+	return not has_legal_remaining_squadron_move_action(squadron) \
+			and not squadron.has_remaining_attack_action(is_rogue)
 
 
 ## Returns the state for the player who has initiative.
@@ -363,7 +417,8 @@ func validate_declaration_adjacent_state() -> bool:
 ## Validates all state required before this candidate is published live.
 func validate_for_live_installation() -> bool:
 	return has_valid_match_player_control_binding() \
-			and validate_declaration_adjacent_state()
+			and validate_declaration_adjacent_state() \
+			and validate_completed_attack_inspection()
 
 
 ## Installs the immutable binding once, cloning through its canonical boundary.
@@ -402,6 +457,117 @@ func get_distinct_controlling_principal_ids(kind: String = "") -> Array[String]:
 	if _match_player_control_binding == null:
 		return []
 	return _match_player_control_binding.distinct_principal_ids(kind)
+
+
+func has_completed_attack_inspection() -> bool:
+	return _completed_attack_inspection != null
+
+
+func install_completed_attack_inspection(
+		inspection: CompletedAttackInspection) -> bool:
+	if _completed_attack_inspection != null or inspection == null \
+			or _current_attack_state == null or _current_attack_state.active:
+		return false
+	var canonical: CompletedAttackInspection = \
+		COMPLETED_ATTACK_INSPECTION.deserialize(inspection.serialize())
+	if canonical == null:
+		return false
+	_completed_attack_inspection = canonical
+	if validate_completed_attack_inspection():
+		return true
+	_completed_attack_inspection = null
+	return false
+
+
+func acknowledge_completed_attack_inspection(inspection_id: String,
+		principal_id: String) -> bool:
+	if _completed_attack_inspection == null \
+			or _completed_attack_inspection.inspection_id() != inspection_id:
+		return false
+	var previous: CompletedAttackInspection = _completed_attack_inspection
+	var replacement: CompletedAttackInspection = \
+		_completed_attack_inspection.acknowledged_by(principal_id)
+	if replacement == null:
+		return false
+	_completed_attack_inspection = replacement
+	if validate_completed_attack_inspection():
+		return true
+	_completed_attack_inspection = previous
+	return false
+
+
+func consume_completed_attack_inspection(inspection_id: String) -> bool:
+	if _completed_attack_inspection == null \
+			or _completed_attack_inspection.inspection_id() != inspection_id \
+			or not _completed_attack_inspection.is_satisfied():
+		return false
+	_completed_attack_inspection = null
+	return true
+
+
+## Used only by a consumer transaction to restore its own pre-mutation state.
+func restore_completed_attack_inspection_for_rollback(
+		inspection: CompletedAttackInspection) -> bool:
+	if _completed_attack_inspection != null or inspection == null:
+		return false
+	var canonical: CompletedAttackInspection = \
+		COMPLETED_ATTACK_INSPECTION.deserialize(inspection.serialize())
+	if canonical == null:
+		return false
+	_completed_attack_inspection = canonical
+	return true
+
+
+## Atomically admits the selected next attack while consuming the satisfied
+## inspection that authorises it. Only BeginAttackCommand uses this boundary.
+func replace_satisfied_inspection_with_current_attack(inspection_id: String,
+		value: CurrentAttackState) -> bool:
+	if value == null or not value.is_valid() or not value.active \
+			or not _validate_current_attack_references_for(value):
+		return false
+	var replacement: CurrentAttackState = _new_current_attack_state()
+	if not replacement.load_from_serialized(value.serialize()):
+		return false
+	if not consume_completed_attack_inspection(inspection_id):
+		return false
+	_current_attack_state = replacement
+	return true
+
+
+func validate_completed_attack_inspection_consumer(
+		inspection_id: String) -> String:
+	if _completed_attack_inspection == null:
+		return "" if inspection_id.is_empty() \
+			else "Completed attack inspection identity is stale."
+	if not _completed_attack_inspection.is_satisfied():
+		return "Completed attack result acknowledgement is outstanding."
+	if inspection_id != _completed_attack_inspection.inspection_id():
+		return "Completed attack inspection identity does not match."
+	return ""
+
+
+func validate_completed_attack_inspection() -> bool:
+	if _completed_attack_inspection == null:
+		return true
+	if _current_attack_state == null or _current_attack_state.active \
+			or not _completed_attack_inspection.is_valid():
+		return false
+	var serialized: Dictionary = _completed_attack_inspection.serialize()
+	for raw_reference: Variant in [
+			serialized.get("attacker", {}), serialized.get("defender", {}),
+	]:
+		if not (raw_reference is Dictionary):
+			return false
+		var reference: Dictionary = raw_reference as Dictionary
+		if not _current_attack_entity_exists(str(reference.get("kind", "")),
+				int(reference.get("player", -1)), int(reference.get("index", -1))):
+			return false
+	for principal_id: String in _completed_attack_inspection.required_principal_ids():
+		if _match_player_control_binding == null \
+			or _match_player_control_binding.principal_kind(principal_id) \
+					!= MatchPlayerControlBinding.KIND_HUMAN:
+			return false
+	return true
 
 
 ## Read-only aggregate validation for the ADR-006 cross-fleet uniqueness rule.
@@ -493,6 +659,8 @@ func serialize() -> Dictionary:
 					if _timing_window_state else _new_timing_window_state().serialize(),
 		"current_attack_state": _current_attack_state.serialize()
 					if _current_attack_state else _new_current_attack_state().serialize(),
+		"completed_attack_inspection": _completed_attack_inspection.serialize()
+					if _completed_attack_inspection else {},
 		"ship_target_attack_counts": ship_target_attack_counts.duplicate(true),
 		"match_player_control_binding": _match_player_control_binding.serialize()
 					if _match_player_control_binding else {},
@@ -551,6 +719,17 @@ static func deserialize(data: Dictionary) -> GameState:
 		state._current_attack_state = current_attack
 	else:
 		state._current_attack_state = _new_current_attack_state()
+	if not data.has("completed_attack_inspection") \
+			or not (data.get("completed_attack_inspection") is Dictionary):
+		return null
+	var inspection_data: Dictionary = data.get("completed_attack_inspection") \
+			as Dictionary
+	if not inspection_data.is_empty():
+		var inspection: CompletedAttackInspection = \
+			COMPLETED_ATTACK_INSPECTION.deserialize(inspection_data)
+		if inspection == null:
+			return null
+		state._completed_attack_inspection = inspection
 	if state.interaction_flow != null \
 			and state.interaction_flow.flow_type == Constants.InteractionFlow.ATTACK \
 			and not state._current_attack_state.active:
@@ -583,7 +762,8 @@ static func deserialize(data: Dictionary) -> GameState:
 static func _serialized_declaration_fields_are_complete(
 		data: Dictionary) -> bool:
 	if not data.has("squadron_phase_controller_player") \
-			or not data.has("squadron_phase_activations_committed"):
+			or not data.has("squadron_phase_activations_committed") \
+			or not data.has("completed_attack_inspection"):
 		return false
 	var raw_players: Variant = data.get("player_states", [])
 	if not (raw_players is Array):
@@ -632,6 +812,8 @@ func set_current_attack_state(value: CurrentAttackState) -> bool:
 	if not replacement.load_from_serialized(value.serialize()):
 		return false
 	if not _validate_current_attack_references_for(replacement):
+		return false
+	if replacement.active and _completed_attack_inspection != null:
 		return false
 	_current_attack_state = replacement
 	return true
@@ -712,6 +894,13 @@ static func _clone_current_attack_state(value: CurrentAttackState):
 	if value != null:
 		clone.load_from_serialized(value.serialize())
 	return clone
+
+
+static func _clone_completed_attack_inspection(
+		value: CompletedAttackInspection):
+	if value == null:
+		return null
+	return COMPLETED_ATTACK_INSPECTION.deserialize(value.serialize())
 
 
 static func _deserialize_attack_counts(raw_counts: Variant) -> Dictionary:

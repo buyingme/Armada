@@ -80,6 +80,8 @@ static func install(game_state: GameState,
 				"redirect_allocations", []) as Array).duplicate(true)
 	if stage == CurrentAttackState.STAGE_RESOLVED:
 		patch["damage_stage"] = CurrentAttackState.DAMAGE_RESOLVED
+		patch["resolved_outcome"] = (options.get("resolved_outcome",
+				_resolved_outcome(values)) as Dictionary).duplicate(true)
 	if not patch.is_empty():
 		state = state.with_patch(patch)
 	if state == null \
@@ -168,3 +170,23 @@ static func _dice(options: Dictionary) -> Array[Dictionary]:
 	for entry: Variant in configured:
 		result.append((entry as Dictionary).duplicate(true))
 	return result
+
+
+static func _resolved_outcome(values: Dictionary) -> Dictionary:
+	if str(values.get("defender_kind", "")) == CurrentAttackState.KIND_SHIP:
+		return {
+			"target_kind": CurrentAttackState.KIND_SHIP,
+			"affected_zone": int(values.get("defender_zone", Constants.HullZone.FRONT)),
+			"final_damage": 1,
+			"shield_absorbed": 0,
+			"post_resolution_shields": 0,
+			"hull_damage": 1,
+			"destroyed": false,
+		}
+	return {
+		"target_kind": CurrentAttackState.KIND_SQUADRON,
+		"requested_hull_damage": 1,
+		"actual_hull_damage": 1,
+		"post_resolution_hull": 0,
+		"destroyed": false,
+	}

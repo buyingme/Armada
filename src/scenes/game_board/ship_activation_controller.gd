@@ -765,6 +765,14 @@ func open_squadron_command_from_interaction_state() -> void:
 	if resolver.is_empty():
 		_advance_unavailable_squadron_command()
 		return
+	# CompleteSquadronActivationCommand restores the enclosing Squadron-step
+	# projection for both the remaining-capacity and terminal cases.  At the
+	# terminal boundary the canonical resolver is already done; finalize the
+	# existing command opportunity instead of reopening a third selection.
+	if resolver.is_done():
+		_squadron_phase_controller.hide_ui()
+		_complete_unavailable_squadron_command(ship, resolver)
+		return
 	if not _has_eligible_squadron_in_range(ship, resolver):
 		_complete_unavailable_squadron_command(ship, resolver)
 		return

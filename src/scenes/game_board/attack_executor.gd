@@ -148,14 +148,12 @@ var _pre_begin_squadron_selection: bool = false
 ## Prevents duplicate presentation reactions to one resolved attack.
 var _applied_damage_attack_id: String = ""
 
-var _pending_finalize_after_completion: bool = false
 var _pending_counter_begin: bool = false
 var _pending_finish_after_skip: bool = false
 var _pending_squadron_done_after_skip: bool = false
 var _pending_zero_squad_skip: bool = false
 var _defense_command_pending: bool = false
 var _defense_submit_in_progress: bool = false
-var _awaiting_result_acknowledgement: bool = false
 
 ## Reconstruction restores the active individual attack from CurrentAttackState
 ## and derives enclosing ship-attack progress from its ShipInstance owner.
@@ -1055,14 +1053,12 @@ func _reset_exec_state() -> void:
 	_pending_declaration_command = ""
 	_pre_begin_squadron_selection = false
 	_applied_damage_attack_id = ""
-	_pending_finalize_after_completion = false
 	_pending_counter_begin = false
 	_pending_finish_after_skip = false
 	_pending_squadron_done_after_skip = false
 	_pending_zero_squad_skip = false
 	_defense_command_pending = false
 	_defense_submit_in_progress = false
-	_awaiting_result_acknowledgement = false
 	_reconstructed_current_attack = false
 	_state.clear_all()
 
@@ -2222,6 +2218,16 @@ func apply_accuracy_result(_result: Dictionary) -> void:
 	_state.accuracy_step = false
 	_log.info("Accuracy confirmed: locked tokens %s." % [
 			str(_state.locked_tokens)])
+	# CommitAccuracyCommand's post-success seam owns the deterministic
+	# resolve_damage follow-up when it has already established DEFENSE_COMPLETE.
+	# In hot-seat this result callback is synchronous, so submitting here would
+	# race the queued canonical follow-up.
+	var attack: CurrentAttackState = _current_attack()
+	if attack != null \
+			and attack.defense_stage == CurrentAttackState.DEFENSE_COMPLETE:
+		if _get_panel():
+			_get_panel().hide_defense_section()
+		return
 	_attack_exec_start_defense()
 
 # ===========================================================================
@@ -3041,6 +3047,14 @@ func _sort_defense_tokens_canonical(
 func _process_next_defense_commit() -> void:
 	var attack: CurrentAttackState = _current_attack()
 	if attack == null or not attack.active:
+		return
+	# CommitDefenseCommand's authoritative post-success seam owns the
+	# deterministic resolve_damage follow-up.  In hot-seat the command signal
+	# is synchronous, so this callback can re-enter after that follow-up has
+	# already advanced the canonical defense stage.
+	if attack.defense_stage == CurrentAttackState.DEFENSE_COMPLETE:
+		if _get_panel():
+			_get_panel().hide_defense_section()
 		return
 	var token_index: int = _next_canonical_defense_token(attack)
 	if token_index < 0:
@@ -3952,11 +3966,13 @@ func _ensure_choice_modal() -> void:
 	add_child(layer)
 	layer.add_child(_opponent_choice_modal)
 
-## Waits briefly to show the damage info, then proceeds to finalize.
+## Proceeds to canonical terminal completion after presentation-side damage
+## effects finish. Result inspection is now owned by GameState, so no timer
+## may advance the lifecycle.
 func _attack_exec_finalize_after_delay() -> void:
-	# Small delay so the player can see the damage info.
-	var timer: SceneTreeTimer = get_tree().create_timer(1.2)
-	timer.timeout.connect(_attack_exec_finalize_attack)
+	# CurrentAttackContinuation queues CompleteAttackCommand from the accepted
+	# damage/choice command. This presentation helper must not race that seam.
+	pass
 
 ## Finalises the attack: records the zone as fired, checks for follow-up
 ## attacks (two-hull-zone rule, squadron Step 6 loop).
@@ -3966,12 +3982,10 @@ func _attack_exec_finalize_after_delay() -> void:
 func _attack_exec_finalize_attack() -> void:
 	var attack: CurrentAttackState = _current_attack()
 	if attack != null and attack.active:
-		_pending_finalize_after_completion = true
 		var result: Dictionary = GameManager.submit_complete_attack(
 				attack.attacker_player)
 		if not _is_waiting_for_remote_command_result(result) \
-				and not result.is_empty() \
-				and _pending_finalize_after_completion:
+				and not result.is_empty():
 			apply_complete_attack_result(result)
 		return
 	_finalize_completed_attack()
@@ -3982,35 +3996,66 @@ func apply_complete_attack_result(result: Dictionary) -> void:
 		_pending_counter_begin = false
 		_begin_counter_attack()
 		return
-	if _awaiting_result_acknowledgement:
-		return
 	var completed_attack_id: String = str(result.get("attack_id", ""))
 	var accepted_live_completion: bool = not completed_attack_id.is_empty() \
 			and completed_attack_id == _applied_damage_attack_id
-	if not _pending_finalize_after_completion \
-			and not _reconstructed_current_attack \
-			and not accepted_live_completion:
+	if not _reconstructed_current_attack and not accepted_live_completion:
 		return
-	_pending_finalize_after_completion = false
 	_present_completed_attack_result()
 
 
-## Presents the already-completed canonical result without performing another
-## gameplay mutation. The local acknowledgement only resumes presentation.
+## Presents the completed canonical result. GameState alone decides whether
+## this viewer may acknowledge it; the panel never advances the attack.
 func _present_completed_attack_result() -> void:
+	var inspection_id: String = _local_pending_inspection_id()
+	if inspection_id.is_empty():
+		if GameManager.current_game_state == null \
+				or GameManager.current_game_state.completed_attack_inspection == null:
+			_finalize_completed_attack()
+			return
+		var waiting_panel: AttackSimPanel = _get_panel()
+		if waiting_panel != null:
+			waiting_panel.hide_confirm_button()
+		return
 	var panel: AttackSimPanel = _get_panel()
 	if panel == null:
-		_finalize_completed_attack()
 		return
-	_awaiting_result_acknowledgement = true
 	panel.show_result_confirmation()
 
 
 func _on_attack_result_confirmed() -> void:
-	if not _awaiting_result_acknowledgement:
+	var inspection_id: String = _local_pending_inspection_id()
+	if inspection_id.is_empty():
 		return
-	_awaiting_result_acknowledgement = false
-	_finalize_completed_attack()
+	var result: Dictionary = GameManager.submit_acknowledge_attack_result(
+				_local_result_viewer_player(), inspection_id)
+	if not _is_waiting_for_remote_command_result(result) and not result.is_empty():
+		var panel: AttackSimPanel = _get_panel()
+		if panel != null:
+			panel.hide_confirm_button()
+
+
+func _local_result_viewer_player() -> int:
+	var network_player: int = NetworkManager.get_local_player_index()
+	if network_player >= 0:
+		return network_player
+	return GameManager.get_active_player()
+
+
+func _local_pending_inspection_id() -> String:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return ""
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection == null:
+		return ""
+	var principal_id: String = game_state.principal_id_for_player(
+			_local_result_viewer_player())
+	if principal_id.is_empty() or not inspection.required_principal_ids().has(
+			principal_id) or inspection.has_received(principal_id):
+		return ""
+	return inspection.inspection_id()
 
 
 func _finalize_completed_attack() -> void:

@@ -363,25 +363,133 @@ func test_real_game_board_schedules_one_deterministic_continuation() -> void:
 	panel._on_confirm_pressed()
 	await get_tree().process_frame
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
-			"advance_activation_step"])
+			"acknowledge_attack_result"])
 	assert_eq(CommandProcessor.get_next_sequence(), 36)
+	assert_not_null(state.completed_attack_inspection,
+			"A derived second normal declaration retains the satisfied inspection "+
+			"until BeginAttackCommand consumes it.")
+	assert_true(state.completed_attack_inspection.is_satisfied())
+	assert_eq(state.interaction_flow.flow_type, Constants.InteractionFlow.ATTACK)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DECLARE,
+			"Acknowledgement must rebuild the derived normal declaration, not "+
+			"leave the retired result flow installed.")
+	assert_true(board._attack_executor.is_selecting(),
+			"The stale completed-result presentation must yield to the next legal "+
+			"normal-attack selection.")
 	await get_tree().process_frame
 	assert_eq(_history_types(), ["resolve_damage", "complete_attack",
-			"advance_activation_step"],
-			"Deferred production resume must remain single-shot.")
+			"acknowledge_attack_result"],
+			"Acknowledgement must not synthesize an unselected continuation.")
 	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"),
 			1, "Acknowledge Result must not repeat canonical attack completion.")
 
 
+func test_normal_acknowledgement_retains_only_a_legal_second_attack() -> void:
+	var state: GameState = _satisfied_inactive_normal_ship_state(false)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	GameManager.active_player = 0
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE])
+	assert_not_null(state.completed_attack_inspection)
+	assert_true(state.completed_attack_inspection.is_satisfied())
+	assert_true(CurrentAttackContinuation._has_remaining_normal_ship_target(
+			state, state.get_ship(0, 0), 0, 0))
+	assert_null(CurrentAttackContinuation.derive_reconstructed_inspection_release(
+			state),
+			"A legal second target keeps the satisfied inspection pending for the derived declaration.")
+
+
+func test_normal_acknowledgement_advances_when_no_second_attack_is_legal() \
+		-> void:
+	var state: GameState = _satisfied_inactive_normal_ship_state(true)
+	GameManager.current_game_state = state
+	GameManager.is_game_active = true
+	GameManager.active_player = 0
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE,
+			"advance_activation_step"])
+	assert_false(CurrentAttackContinuation._has_remaining_normal_ship_target(
+			state, state.get_ship(0, 0), 0, 0))
+	assert_null(state.completed_attack_inspection,
+			"The terminal maneuver continuation consumes the satisfied inspection.")
+	assert_eq(state.get_ship(0, 0).maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_false(_history_types().has("skip_attack"),
+			"No manual redundant Skip Attack is required.")
+
+
+func test_phase_squadron_acknowledgement_reprojects_next_selection() -> void:
+	var state: GameState = _satisfied_inactive_phase_squadron_state(true)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 40))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE,
+			CompleteSquadronActivationCommand.TYPE])
+	assert_null(state.completed_attack_inspection)
+	assert_true(state.get_squadron(0, 0).activated_this_round)
+	assert_eq(state.squadron_phase_activations_committed, 1)
+	assert_eq(state.interaction_flow.flow_type,
+			Constants.InteractionFlow.SQUADRON_ACTIVATION)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.WAIT_FOR_SQUAD_SELECT)
+	assert_true(modal.visible,
+			"The processor-owned completion must reproject the remaining selection.")
+	assert_eq(modal.get_state(), SquadronActivationModal.State.WAITING_FOR_SELECTION)
+	assert_false(board._attack_executor.is_active())
+
+
+func test_phase_squadron_acknowledgement_uses_existing_terminal_phase_path() \
+		-> void:
+	var state: GameState = _satisfied_inactive_phase_squadron_state(false)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 41))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	assert_eq(_history_types().slice(0, 3), [
+			AcknowledgeAttackResultCommand.TYPE,
+			CompleteSquadronActivationCommand.TYPE,
+			"advance_phase",
+	])
+	assert_eq(_history_types().count("advance_phase"), 1,
+			"Terminal phase continuation must release exactly once.")
+	assert_null(state.completed_attack_inspection)
+	assert_false(state.has_squadron_phase_controller())
+	assert_ne(state.current_phase, Constants.GamePhase.SQUADRON)
+	assert_false(board._squadron_phase_controller.is_modal_visible(),
+			"Terminal canonical phase state must not reopen an impossible selection.")
+	assert_false(board._attack_executor.is_active())
+
+
 func test_live_ship_completion_presents_result_without_transient_submit_flag() \
 		-> void:
-	var state: GameState = _state_at(CurrentAttackState.STAGE_DEFENSE, {
+	var state: GameState = _state_at(CurrentAttackState.STAGE_RESOLVED, {
 		"attack_id": "attack:37",
 		"dice_results": [_hit_die()],
-		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
 	})
 	GameManager.current_game_state = state
 	GameManager.is_game_active = true
+	GameManager.active_player = 0
 	var executor: AttackExecutor = _make_composition(state)
 	var panel: AttackSimPanel = \
 			executor._target_selector.ensure_panel_for_projection()
@@ -394,10 +502,17 @@ func test_live_ship_completion_presents_result_without_transient_submit_flag() \
 	panel.show_damage_info("FRONT: 2 shield, 1 card(s) | Hull 3/4")
 	var displayed_result: String = panel.get_body_text()
 	var canonical_before: Dictionary = CurrentAttackState.inactive().serialize()
+	var terminal_attack: CurrentAttackState = state.current_attack_state
+	var inspection: CompletedAttackInspection = \
+		CompletedAttackInspection.create_from_attack(
+				terminal_attack, terminal_attack.resolved_outcome,
+				state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN))
+	assert_not_null(inspection)
 	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	assert_true(state.install_completed_attack_inspection(inspection))
 	executor._state.exec_mode = true
 	executor._applied_damage_attack_id = "attack:37"
-	executor._pending_finalize_after_completion = false
 	var history_before: Array[String] = _history_types()
 
 	executor.apply_complete_attack_result({
@@ -679,6 +794,86 @@ func test_save_load_reconstructs_inactive_step_six_continuation() -> void:
 	assert_true(_history_types().is_empty())
 	manager.delete_save(TEST_SAVE)
 	manager.free()
+
+
+func test_post_ack_anti_squadron_projection_excludes_history_target() -> void:
+	var state: GameState = _satisfied_inactive_anti_state(true)
+	GameManager.current_game_state = state
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 42))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	await get_tree().process_frame
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
+			"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+	var history_after_ack: Array[String] = _history_types()
+
+	var executor: AttackExecutor = board._attack_executor
+	var selector: TargetSelector = board._target_selector
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var first: SquadronInstance = state.get_squadron(0, 0)
+	var second: SquadronInstance = state.get_squadron(0, 1)
+	var first_token: SquadronToken = _board_squadron_token(board, first)
+	var second_token: SquadronToken = _board_squadron_token(board, second)
+	assert_eq(attacker.anti_squadron_attack_zone, Constants.HullZone.FRONT)
+	assert_true(attacker.has_anti_squadron_target(0, 0))
+	assert_eq(executor._state.attacked_squads, [first_token])
+
+	selector.handle_squadron_click(first_token)
+	assert_null(selector.build_current_participants().def_squad,
+			"The history target must not be selectable after reconstruction.")
+	selector.handle_squadron_click(second_token)
+	assert_eq(selector.build_current_participants().def_squad, second_token,
+			"A distinct legal squadron must remain selectable.")
+	assert_eq(executor._state.attacker_zone, Constants.HullZone.FRONT)
+	assert_eq(_history_types(), history_after_ack,
+			"Reprojecting the remaining target must submit no command.")
+
+
+func test_post_ack_anti_squadron_exhaustion_closes_iteration_once() -> void:
+	var state: GameState = _satisfied_inactive_anti_state(false)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 44))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
+			"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types().count("skip_attack"), 1)
+	assert_eq(_history_types().count("end_anti_squadron_attack"), 0,
+			"Iteration closure remains owned by SkipAttackCommand execution.")
+	assert_null(state.completed_attack_inspection)
+	assert_eq(state.get_ship(1, 0).anti_squadron_attack_zone, -1)
+	assert_false(board._attack_executor.is_target_selecting(),
+			"Exhausted anti-squadron iteration must not reopen an empty selector.")
+
+
+func test_passive_and_replay_anti_squadron_acknowledgements_do_not_synthesize() \
+		-> void:
+	for has_remaining: bool in [true, false]:
+		for mode: String in [CurrentAttackContinuation.MODE_NETWORK_MIRROR,
+				CurrentAttackContinuation.MODE_REPLAY]:
+			var state: GameState = _satisfied_inactive_anti_state(has_remaining)
+			var inspection: CompletedAttackInspection = \
+					state.completed_attack_inspection
+			assert_true(state.acknowledge_completed_attack_inspection(
+					inspection.inspection_id(), state.principal_id_for_player(1)))
+			var processed: Dictionary = \
+					CurrentAttackContinuation.process_successful_command(
+							state, AcknowledgeAttackResultCommand.new(1, {
+									"inspection_id": inspection.inspection_id(),
+							}), {}, mode)
+			assert_null(processed.get(CurrentAttackContinuation.KEY_CONTINUATION),
+					"%s must not synthesize anti-squadron follow-up (%s)." % [
+							mode, "remaining" if has_remaining else "exhausted"])
+			assert_true(state.completed_attack_inspection.is_satisfied())
 
 
 func test_save_load_reconstructs_inactive_second_normal_attack() -> void:
@@ -1352,6 +1547,192 @@ func test_commanded_move_no_target_waits_for_skip_and_preserves_capacity() \
 	assert_true(ship.command_dial_stack.get_revealed_dial().is_empty())
 
 
+func test_commanded_squadron_completion_reopens_existing_opportunity() -> void:
+	var state: GameState = _command_squadron_projection_state(true)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.ship_data = ship.ship_data.duplicate(true) as ShipData
+	ship.ship_data.squadron_value = 2
+	var second := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	second.pos_x = 0.45
+	second.pos_y = 0.52
+	second.roster_entry_id = "commanded-completion-second"
+	state.get_player_state(0).squadrons.append(second)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 64))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var first: SquadronInstance = state.get_squadron(0, 0)
+	assert_true(first.commit_move_action(first.activation_id, false),
+			"Fixture completes the first commanded squadron's remaining move.")
+	var completion := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 0,
+		"activation_id": first.activation_id,
+		"activation_context": first.activation_context,
+		"commanding_ship_player": 0,
+		"commanding_ship_index": 0,
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+	assert_false(CommandProcessor.submit(completion).is_empty())
+	assert_true(first.activated_this_round)
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_eq(_history_types().count("advance_activation_step"), 0,
+			"Returning to an open Squadron command must not re-enter the step.")
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(ship.squadron_command_activations_committed, 1)
+	assert_eq(state.interaction_flow.step_id, Constants.InteractionStep.SQUADRON_STEP)
+	assert_true(board._squadron_phase_controller.is_command_mode())
+	var second_token: SquadronToken = _board_squadron_token(board, second)
+	assert_true(board._squadron_phase_controller.try_handle_squadron_click(
+			second_token),
+			"The remaining capacity must be projected as the same open command.")
+	second_token.global_position += Vector2(450.0, -100.0)
+	var second_instance: SquadronInstance = second_token.get_squadron_instance()
+	assert_false(GameManager.activate_commanded_squadron(second_instance, ship).is_empty(),
+			"The selected remaining squadron must establish its canonical activation.")
+	assert_true(second_instance.commit_move_action(second_instance.activation_id, false),
+			"Fixture completes the second commanded squadron's remaining move.")
+	assert_true(second_instance.commit_attack_action_declined(
+			second_instance.activation_id, false),
+			"Fixture completes the second commanded squadron's attack action.")
+	var second_completion := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 1,
+		"activation_id": second_instance.activation_id,
+		"activation_context": second_instance.activation_context,
+		"commanding_ship_player": 0,
+		"commanding_ship_index": 0,
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+	assert_false(CommandProcessor.submit(second_completion).is_empty())
+	assert_eq(_history_types().count("activate_squadron"), 1)
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 2)
+	assert_eq(ship.squadron_command_activations_committed, 2)
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED,
+			"The open opportunity closes only after its final legal activation.")
+	assert_eq(_history_types().count("advance_activation_step"), 1,
+			"Terminal command recovery must advance through the existing Repair path once.")
+	assert_ne(state.interaction_flow.step_id, Constants.InteractionStep.SQUADRON_STEP)
+	assert_eq(_history_types().count("advance_activation_step"), 1,
+			"Only the normal Squadron-to-Repair transition follows completion.")
+	assert_false(board._squadron_phase_controller.is_command_mode(),
+			"Terminal Squadron capacity must not reopen a third-selection modal.")
+	assert_false(board._attack_executor.is_active(),
+			"No retired attack presentation may survive commanded completion.")
+
+
+func test_token_commanded_attack_acknowledgement_completes_when_move_is_blocked() \
+		-> void:
+	var state: GameState = _satisfied_inactive_commanded_attack_state(false, true)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 1)
+	assert_false(state.has_legal_remaining_squadron_move_action(squadron),
+			"The non-Heavy engagement must prohibit the retained move.")
+	assert_true(state.is_squadron_activation_action_complete(squadron))
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 65))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types().slice(0, 2), [
+			AcknowledgeAttackResultCommand.TYPE,
+			CompleteSquadronActivationCommand.TYPE,
+	])
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_null(state.completed_attack_inspection,
+			"The terminal completion consumes the satisfied inspection once.")
+	assert_true(squadron.activated_this_round)
+	assert_eq(ship.squadron_command_activations_committed, 1)
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_ne(state.interaction_flow.step_id, Constants.InteractionStep.SQUADRON_STEP,
+			"Terminal completion must leave the already-reached Squadron step.")
+	assert_eq(_history_types().count("spend_token"), 1,
+			"The token-only terminal command finalizes its resource once.")
+	assert_false(board._squadron_phase_controller.is_command_mode())
+
+
+func test_dial_commanded_attack_acknowledgement_retains_legal_move_interaction() \
+		-> void:
+	var state: GameState = _satisfied_inactive_commanded_attack_state(true)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	var squadron: SquadronInstance = state.get_squadron(0, 0)
+	assert_true(state.has_legal_remaining_squadron_move_action(squadron),
+			"Heavy engagement leaves the commanded squadron's move legal.")
+	assert_false(state.is_squadron_activation_action_complete(squadron))
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 66))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var modal: SquadronActivationModal = \
+			board._squadron_phase_controller.get_modal()
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE])
+	assert_not_null(state.completed_attack_inspection)
+	assert_true(state.completed_attack_inspection.is_satisfied())
+	assert_false(squadron.activated_this_round)
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_true(board._squadron_phase_controller.is_command_mode())
+	assert_eq(modal.get_state(), SquadronActivationModal.State.ACTION_CHOICE,
+			"The existing commanded action interaction remains available for Move.")
+	assert_false(board._attack_executor.is_active())
+
+
+func test_passive_and_replay_acknowledgements_do_not_synthesize_blocked_move_completion() \
+		-> void:
+	for mode: String in [CurrentAttackContinuation.MODE_NETWORK_MIRROR,
+			CurrentAttackContinuation.MODE_REPLAY]:
+		var state: GameState = _satisfied_inactive_commanded_attack_state(false, true)
+		var inspection: CompletedAttackInspection = state.completed_attack_inspection
+		assert_true(state.acknowledge_completed_attack_inspection(
+				inspection.inspection_id(), state.principal_id_for_player(0)))
+		var processed: Dictionary = CurrentAttackContinuation.process_successful_command(
+				state, AcknowledgeAttackResultCommand.new(0, {
+					"inspection_id": inspection.inspection_id(),
+				}), {}, mode)
+		assert_null(processed.get(CurrentAttackContinuation.KEY_CONTINUATION),
+				"%s must consume recorded completion instead of synthesizing it." % mode)
+		assert_not_null(state.completed_attack_inspection)
+		assert_true(state.completed_attack_inspection.is_satisfied())
+
+
+func test_real_hotseat_no_defense_accuracy_submits_one_resolve_damage() -> void:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_ACCURACY, {
+		"attack_id": "attack:67",
+		"dice_results": [_accuracy_die(), _hit_die()],
+	})
+	state.get_ship(1, 0).defense_tokens.clear()
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 67))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	board._attack_executor._state.accuracy_step = true
+
+	assert_false(GameManager.submit_commit_accuracy(0, []).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types().count("commit_accuracy"), 1)
+	assert_eq(_history_types().count("resolve_damage"), 1,
+			"Only CommandProcessor's queued follow-up may resolve no-defense damage.")
+	assert_eq(_history_types().count("complete_attack"), 1)
+
+
 func test_network_commanded_no_target_waits_for_mirrored_skip() -> void:
 	var state: GameState = _command_squadron_projection_state(false)
 	var ship: ShipInstance = state.get_ship(0, 0)
@@ -1962,6 +2343,65 @@ func _state_at(stage: String, options: Dictionary) -> GameState:
 	return state
 
 
+func _satisfied_inactive_normal_ship_state(no_legal_target: bool) -> GameState:
+	var state: GameState = _state_at(CurrentAttackState.STAGE_RESOLVED, {
+		"attack_id": "attack:38",
+		"dice_results": [_hit_die()],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	})
+	var attack: CurrentAttackState = state.current_attack_state
+	var inspection: CompletedAttackInspection = \
+		CompletedAttackInspection.create_from_attack(
+				attack, attack.resolved_outcome,
+				state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN))
+	assert_not_null(inspection)
+	if no_legal_target:
+		var defender: ShipInstance = state.get_ship(1, 0)
+		defender.pos_x = 0.95
+		defender.pos_y = 0.05
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	assert_true(state.install_completed_attack_inspection(inspection))
+	return state
+
+
+func _satisfied_inactive_phase_squadron_state(
+		add_remaining_squadron: bool) -> GameState:
+	var state: GameState = _phase_squadron_projection_state(true)
+	var completed: SquadronInstance = state.get_squadron(0, 0)
+	assert_true(completed.commit_move_action(completed.activation_id, true))
+	if add_remaining_squadron:
+		var remaining := SquadronInstance.create_from_data(
+				DECOY_SQUADRON_KEY,
+				AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+		remaining.pos_x = 0.45
+		remaining.pos_y = 0.52
+		remaining.roster_entry_id = "phase-completed-remaining"
+		state.get_player_state(0).squadrons.append(remaining)
+	else:
+		state.get_squadron(1, 0).activated_this_round = true
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.deserialize({
+				"inspection_id": "completed:phase-completed",
+				"source_attack_id": "phase-completed",
+				"attacker": {"kind": CurrentAttackState.KIND_SQUADRON,
+						"player": 0, "index": 0, "zone": -1},
+				"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+						"player": 1, "index": 0, "zone": -1},
+				"attack_kind": "standard",
+				"dice_results": [_hit_die()],
+				"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+						"requested_hull_damage": 1, "actual_hull_damage": 1,
+						"post_resolution_hull": 2, "destroyed": false},
+				"required_principal_ids": state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN),
+				"received_principal_ids": [],
+			})
+	assert_not_null(inspection)
+	assert_true(state.install_completed_attack_inspection(inspection))
+	return state
+
+
 func _ship_declaration_projection_state(post_skip: bool) -> GameState:
 	var state: GameState = _player_one_ship_attack_state()
 	var ship: ShipInstance = state.get_ship(1, 0)
@@ -2020,7 +2460,8 @@ func _phase_squadron_projection_state(post_skip: bool) -> GameState:
 	return state
 
 
-func _command_squadron_projection_state(post_skip: bool) -> GameState:
+func _command_squadron_projection_state(post_skip: bool,
+		token_only: bool = false) -> GameState:
 	var state := GameState.new()
 	state.initialize()
 	assert_true(state.install_match_player_control_binding(
@@ -2035,9 +2476,13 @@ func _command_squadron_projection_state(post_skip: bool) -> GameState:
 	ship.pos_x = 0.5
 	ship.pos_y = 0.55
 	ship.roster_entry_id = "projection-command-ship"
-	assert_true(ship.command_dial_stack.assign_dials(
-			[Constants.CommandType.SQUADRON], 1))
+	assert_true(ship.command_dial_stack.assign_dials([
+			Constants.CommandType.NAVIGATE if token_only \
+				else Constants.CommandType.SQUADRON,
+	], 1))
 	assert_false(ship.command_dial_stack.reveal_top().is_empty())
+	if token_only:
+		ship.command_tokens.add_token(Constants.CommandType.SQUADRON)
 	assert_true(ship.establish_ship_activation(
 			"ship-activation:command-projection"))
 	assert_true(ship.open_squadron_command_opportunity(
@@ -2064,8 +2509,8 @@ func _command_squadron_projection_state(post_skip: bool) -> GameState:
 	return state
 
 
-func _command_squadron_active_begin_state() -> GameState:
-	var state: GameState = _command_squadron_projection_state(false)
+func _command_squadron_active_begin_state(token_only: bool = false) -> GameState:
+	var state: GameState = _command_squadron_projection_state(false, token_only)
 	var attacker: SquadronInstance = state.get_squadron(0, 0)
 	var defender := SquadronInstance.create_from_data(
 			"tie_fighter_squadron",
@@ -2097,6 +2542,42 @@ func _command_squadron_active_begin_state() -> GameState:
 	assert_true(state.set_current_attack_state(attack))
 	state.interaction_flow = InteractionFlow.empty()
 	assert_true(state.validate_declaration_adjacent_state())
+	return state
+
+
+## Builds the post-complete canonical state produced by a real commanded
+## squadron attack. The Heavy toggle isolates the authoritative movement-rule
+## branch while the acknowledgement still traverses CommandProcessor.
+func _satisfied_inactive_commanded_attack_state(
+		move_is_legal: bool, token_only: bool = false) -> GameState:
+	var state: GameState = _command_squadron_active_begin_state(token_only)
+	var attacker: SquadronInstance = state.get_squadron(0, 0)
+	var defender: SquadronInstance = state.get_squadron(1, 0)
+	if move_is_legal:
+		defender.squadron_data = defender.squadron_data.duplicate(true) \
+				as SquadronData
+		defender.squadron_data.keywords.append({"name": "Heavy"})
+	var attack: CurrentAttackState = state.current_attack_state
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.create_from_attack(
+					attack, {"target_kind": CurrentAttackState.KIND_SQUADRON,
+						"requested_hull_damage": 1, "actual_hull_damage": 1,
+						"post_resolution_hull": defender.current_hull,
+						"destroyed": false},
+					state.get_distinct_controlling_principal_ids(
+							MatchPlayerControlBinding.KIND_HUMAN))
+	assert_not_null(inspection)
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	assert_true(state.install_completed_attack_inspection(inspection))
+	var ship: ShipInstance = state.get_ship(0, 0)
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.SHIP_ACTIVATION,
+			Constants.InteractionStep.SQUADRON_STEP,
+			0, Constants.Visibility.ALL,
+			{"ship_index": 0,
+				"ship_activation_identity": ship.ship_activation_identity})
+	assert_eq(attacker.attack_action_disposition,
+			SquadronInstance.ATTACK_ACTION_BEGUN)
 	return state
 
 
@@ -2161,6 +2642,32 @@ func _inactive_ship_continuation_state(step_six: bool) -> GameState:
 				0)
 	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
 	state.interaction_flow = InteractionFlow.empty()
+	return state
+
+
+func _satisfied_inactive_anti_state(has_remaining_target: bool) -> GameState:
+	var state: GameState = _inactive_ship_continuation_state(true)
+	if not has_remaining_target:
+		state.get_player_state(0).squadrons.remove_at(1)
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.deserialize({
+				"inspection_id": "completed:attack:anti-resume",
+				"source_attack_id": "attack:anti-resume",
+				"attacker": {"kind": CurrentAttackState.KIND_SHIP,
+						"player": 1, "index": 0, "zone": Constants.HullZone.FRONT},
+				"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+						"player": 0, "index": 0, "zone": -1},
+				"attack_kind": "standard",
+				"dice_results": [_hit_die()],
+				"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+						"requested_hull_damage": 1, "actual_hull_damage": 1,
+						"post_resolution_hull": 2, "destroyed": false},
+				"required_principal_ids": state.get_distinct_controlling_principal_ids(
+						MatchPlayerControlBinding.KIND_HUMAN),
+				"received_principal_ids": [],
+			})
+	assert_not_null(inspection)
+	assert_true(state.install_completed_attack_inspection(inspection))
 	return state
 
 

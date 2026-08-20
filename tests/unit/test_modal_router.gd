@@ -254,6 +254,7 @@ func test_command_router_adapter_initializes_modal_router_from_script_preload() 
 			null,
 			null,
 			null,
+			null,
 			Callable(self, "_find_test_ship_token"),
 			Callable(self, "_find_test_squadron_token"))
 
@@ -895,6 +896,7 @@ func _create_router(command_reaction_fn: Callable,
 			_panel_mgr,
 			attack_panel_controller,
 			ship_activation_controller,
+			null,
 			displacement_controller,
 			null,
 			find_ship_token_fn,

@@ -620,20 +620,14 @@ func test_mirrored_ship_result_remains_until_local_acknowledgement() -> void:
 	})
 	_mirror.show_resolved_result()
 
-	assert_true(_mirror.is_awaiting_result_acknowledgement())
+	assert_false(_mirror.is_awaiting_result_acknowledgement(),
+			"A mirror without canonical inspection has no local release affordance.")
 	assert_true(_mirror.is_open())
-	assert_eq(_mirror.get_panel()._confirm_button.text,
-			"Acknowledge Result")
 	assert_true(_mirror.get_panel()._dice_container.visible,
 			"Mirrored final dice must remain visible before acknowledgement.")
 	assert_true(_mirror.get_panel()._damage_info_container.visible)
 	assert_string_contains(_mirror.get_panel()._damage_info_label.text,
 			"2 shield")
-	_mirror.get_panel()._on_confirm_pressed()
-
-	assert_false(_mirror.is_awaiting_result_acknowledgement())
-	assert_false(_mirror.is_open(),
-			"Passive acknowledgement must close only the local mirror.")
 
 
 func test_mirrored_anti_squadron_result_is_inspectable() -> void:
@@ -653,9 +647,7 @@ func test_mirrored_anti_squadron_result_is_inspectable() -> void:
 	})
 	_mirror.show_resolved_result()
 
-	assert_true(_mirror.is_awaiting_result_acknowledgement())
-	assert_eq(_mirror.get_panel()._confirm_button.text,
-			"Acknowledge Result")
+	assert_false(_mirror.is_awaiting_result_acknowledgement())
 	assert_true(_mirror.get_panel()._dice_container.visible,
 			"Mirrored anti-squadron dice must remain inspectable.")
 	assert_string_contains(_mirror.get_panel()._damage_info_label.text,

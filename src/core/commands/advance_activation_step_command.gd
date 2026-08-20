@@ -46,6 +46,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_inspection_consumer(
+				str(payload.get("completed_attack_inspection_id", "")))
+	if inspection_reason != "":
+		return inspection_reason
 	if game_state.current_phase != Constants.GamePhase.SHIP:
 		return "Not in Ship Phase."
 	var ship: ShipInstance = game_state.get_ship(
@@ -93,6 +98,8 @@ func validate(game_state: GameState) -> String:
 
 ## Advances one authoritative, purpose-specific ship-activation opportunity.
 func execute(game_state: GameState) -> Dictionary:
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
 	var step_id_str: String = payload.get("step_id", "")
 	var ship: ShipInstance = game_state.get_ship(
 			player_index, int(payload.get("ship_index", -1)))
@@ -126,6 +133,11 @@ func execute(game_state: GameState) -> Dictionary:
 		"activation_done":
 			ship.end_attack_step()
 	if not transition_ok or not game_state.validate_declaration_adjacent_state():
+		ship.restore_ship_activation_boundary(boundary_before)
+		ship.restore_attack_progress(progress_before)
+		return {}
+	if not inspection_id.is_empty() \
+			and not game_state.consume_completed_attack_inspection(inspection_id):
 		ship.restore_ship_activation_boundary(boundary_before)
 		ship.restore_attack_progress(progress_before)
 		return {}

@@ -400,3 +400,34 @@ finding rather than improvising a parallel ownership model.
 - No duplicate `CompleteAttackCommand` is submitted.
 - Pending acknowledgement survives/reconstructs correctly where required.
 - Network/replay/reconnect behavior remains deterministic.
+
+## Implementation Evidence — 2026-08-18
+
+The accepted UX-005 semantic cutover is implemented. `CompleteAttackCommand`
+retires only the individual anti-squadron attack; the exhausted iteration is
+closed by `SkipAttackCommand(squadron_done)`, which atomically consumes the
+matching satisfied inspection with `end_anti_squadron_attack()`. Failed
+consumer execution restores both the iteration state and the satisfied
+inspection.
+
+Automated evidence:
+
+- focused unit command/state/save/replay/projection/presentation suites:
+  528 tests passed, 1,907 assertions;
+- focused current-attack, timing-window, shared protocol, reconnect, and
+  network-transport integration suites: 97 tests passed, 2,183 assertions;
+- Phase-K architecture lint: 0 violations (4 existing allow-listed branches);
+- `git diff --check`: passed.
+
+Compatibility cutover is active: save metadata v5, replay format v7, and
+network protocol v3. The existing v6 replay baseline fixtures were deliberately
+not relabelled. `run_baseline_traces.sh --all` correctly rejects them; valid
+UX-005 Hot-Seat and Network recordings must be generated, reviewed, and
+promoted through the approved Replay Baseline Workflow before final acceptance.
+
+Full repository verification on 2026-08-19 completed with 238 scripts,
+4,069/4,069 tests, and 13,766 assertions passing.
+
+Status: implementation evidence recorded; remains in verification pending
+approved v7 baseline promotion and Project Owner manual Hot-Seat and two-human
+Network verification.

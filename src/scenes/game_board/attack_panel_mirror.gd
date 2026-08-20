@@ -120,10 +120,6 @@ var _swarm_signal_connected: bool = false
 ## True once the remote dice-confirm signal is connected.
 var _confirm_signal_connected: bool = false
 
-## True while this peer is inspecting a completed attack result. This is
-## transient local presentation and never authorizes gameplay progression.
-var _awaiting_result_acknowledgement: bool = false
-
 ## Phase I6b-3 R5: lazily-created modal shown on the chooser peer when
 ## a damage card with a player choice is dealt.  Owned and parented to
 ## [member _modal_layer] (created in [method setup]).
@@ -185,7 +181,7 @@ func is_open() -> bool:
 
 
 func is_awaiting_result_acknowledgement() -> bool:
-	return _awaiting_result_acknowledgement
+	return not _local_pending_inspection_id().is_empty()
 
 
 ## Projects an accepted ResolveDamageCommand result for the passive peer.
@@ -207,18 +203,42 @@ func apply_damage_result(result: Dictionary) -> void:
 
 
 ## Keeps the mirrored result visible after canonical attack completion. The
-## acknowledgement closes only this peer's local presentation.
+## visible acknowledgement submits the canonical command for this peer.
 func show_resolved_result() -> void:
 	if not is_open():
 		return
-	_awaiting_result_acknowledgement = true
+	if _local_pending_inspection_id().is_empty():
+		_panel.hide_confirm_button()
+		return
 	_panel.show_result_confirmation()
 	if not _panel.result_confirmed.is_connected(_on_result_confirmed):
 		_panel.result_confirmed.connect(_on_result_confirmed)
 
 
 func _on_result_confirmed() -> void:
-	close()
+	var inspection_id: String = _local_pending_inspection_id()
+	if inspection_id.is_empty():
+		return
+	GameManager.submit_acknowledge_attack_result(
+			NetworkManager.get_local_player_index(), inspection_id)
+
+
+func _local_pending_inspection_id() -> String:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return ""
+	var inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection
+	if inspection == null:
+		return ""
+	var local_player: int = NetworkManager.get_local_player_index()
+	if local_player < 0:
+		return ""
+	var principal_id: String = game_state.principal_id_for_player(local_player)
+	if principal_id.is_empty() or not inspection.required_principal_ids().has(
+			principal_id) or inspection.has_received(principal_id):
+		return ""
+	return inspection.inspection_id()
 
 
 ## Opens (if needed) and refreshes the mirror panel from the published
@@ -998,7 +1018,6 @@ func _current_defender_ship() -> ShipInstance:
 func close() -> void:
 	if _panel == null:
 		return
-	_awaiting_result_acknowledgement = false
 	if _panel.result_confirmed.is_connected(_on_result_confirmed):
 		_panel.result_confirmed.disconnect(_on_result_confirmed)
 	if _defense_signal_connected:

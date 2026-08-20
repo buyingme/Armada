@@ -883,8 +883,23 @@ func _validate_target_squadron_click(
 		if escort_reject != "":
 			return escort_reject
 	# Already-attacked guard (Step 6, AE-SQ-002).
-	if _state.exec_mode and token in _state.attacked_squads:
-		return _reject_already_attacked_squad(token)
+	if _state.exec_mode and _state.attacker_ship \
+			and _state.attacked_squads.size() > 0:
+		var anti_candidate: Dictionary = \
+				_resolve_authoritative_anti_squadron_candidate(token)
+		if anti_candidate.is_empty():
+			var game_state: GameState = GameManager.current_game_state
+			var ship: ShipInstance = _state.attacker_ship.get_ship_instance()
+			var target: SquadronInstance = token.get_squadron_instance()
+			if game_state != null and ship != null and target != null \
+					and game_state.find_ship_index(ship) >= 0 \
+					and ship.has_anti_squadron_target(
+							target.owner_player, game_state.find_squadron_index(target)):
+				return _reject_already_attacked_squad(token)
+			return _reject_target(
+					"Attack exec: squadron is not an authoritative candidate.",
+					"That squadron is not a legal target.",
+					"not_authoritative_candidate")
 	if _is_standard_squadron_execution():
 		var candidate: Dictionary = _resolve_authoritative_squadron_candidate(
 				null, token, -1)
@@ -895,6 +910,33 @@ func _validate_target_squadron_click(
 					"not_authoritative_candidate")
 		_authoritative_squadron_candidate = candidate
 	return ""
+
+
+## Resolves the remaining anti-squadron target through the same canonical
+## geometry/LOS/range surface used by BeginAttackCommand.  The caller applies
+## the activation-local history guard before accepting the candidate.
+func _resolve_authoritative_anti_squadron_candidate(
+		token: SquadronToken) -> Dictionary:
+	var game_state: GameState = GameManager.current_game_state
+	var ship: ShipInstance = _state.attacker_ship.get_ship_instance() \
+			if _state.attacker_ship != null else null
+	var target: SquadronInstance = token.get_squadron_instance() \
+			if token != null else null
+	if game_state == null or ship == null or target == null:
+		return {}
+	var ship_index: int = game_state.find_ship_index(ship)
+	var target_index: int = game_state.find_squadron_index(target)
+	if ship_index < 0 or target_index < 0:
+		return {}
+	if ship.anti_squadron_attack_zone < 0:
+		return {}
+	if ship.has_anti_squadron_target(target.owner_player, target_index):
+		return {}
+	return TargetingListBuilder.authoritative_attack_entry(
+			game_state, ship.owner_player, CurrentAttackState.KIND_SHIP,
+			ship_index, ship.anti_squadron_attack_zone,
+			target.owner_player, CurrentAttackState.KIND_SQUADRON,
+			target_index, -1)
 
 
 func _is_standard_squadron_execution() -> bool:

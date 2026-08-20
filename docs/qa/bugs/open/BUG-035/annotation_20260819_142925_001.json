@@ -1,0 +1,982 @@
+{
+	"annotation": "Squdron is good now. however I get prompted to mak a second attck with the VSD even though no suitable targets are in sight. I need to skip the attack run to proceed.",
+	"counter": 1,
+	"game_state": {
+		"completed_attack_inspection": {
+			"attack_kind": "standard",
+			"attacker": {
+				"index": 0,
+				"kind": "ship",
+				"player": 1,
+				"zone": 0
+			},
+			"defender": {
+				"index": 1,
+				"kind": "ship",
+				"player": 0,
+				"zone": 2
+			},
+			"dice_results": [
+				{
+					"color": 0,
+					"face": 0
+				},
+				{
+					"color": 0,
+					"face": 1
+				}
+			],
+			"inspection_id": "completed:attack:101",
+			"outcome": {
+				"affected_zone": 2,
+				"destroyed": false,
+				"final_damage": 1,
+				"hull_damage": 0,
+				"post_resolution_shields": 0,
+				"shield_absorbed": 1,
+				"target_kind": "ship"
+			},
+			"received_principal_ids": [
+				"mp-ef8d27d1-ea74-4fdc-b105-9bd4012aea8b"
+			],
+			"required_principal_ids": [
+				"mp-ef8d27d1-ea74-4fdc-b105-9bd4012aea8b"
+			],
+			"source_attack_id": "attack:101"
+		},
+		"current_attack_state": {
+			"accuracy_complete": false,
+			"accuracy_locked_tokens": [],
+			"active": false,
+			"attack_id": "",
+			"attack_kind": "",
+			"attacker_index": -1,
+			"attacker_kind": "",
+			"attacker_player": -1,
+			"attacker_zone": -1,
+			"cf_dial_resolution": "unavailable",
+			"cf_token_resolution": "unavailable",
+			"committed_defense_tokens": [],
+			"damage_stage": "pending",
+			"defender_index": -1,
+			"defender_kind": "",
+			"defender_player": -1,
+			"defender_zone": -1,
+			"defense_stage": "pending",
+			"dice_pool": {
+
+			},
+			"dice_results": [],
+			"obstructed": false,
+			"obstruction_resolved": false,
+			"pending_evade": {
+
+			},
+			"range_band": "",
+			"redirect_allocations": [],
+			"resolved_defense_effects": [],
+			"resolved_outcome": {
+
+			},
+			"resolved_pool_choices": [],
+			"stage": "inactive"
+		},
+		"current_phase": 2,
+		"current_round": 2,
+		"damage_deck": {
+			"discard_pile": [],
+			"draw_pile": [
+				{
+					"effect_id": "targeter_disruption",
+					"effect_text": "While attacking, you cannot resolve critical effects.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Targeter Disruption",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "crew_panic",
+					"effect_text": "Before you reveal a command dial, you must either suffer 1 damage or discard that dial. If you discard it, do not reveal a dial this round.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Crew Panic",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "faulty_countermeasures",
+					"effect_text": "You cannot spend exhausted defense tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Faulty Countermeasures",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "damaged_munitions",
+					"effect_text": "When attacking a ship, before you roll your attack pool, remove 1 die of your choice.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Damaged Munitions",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "blinded_gunners",
+					"effect_text": "While attacking, you cannot spend accuracy icons.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Blinded Gunners",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "faulty_countermeasures",
+					"effect_text": "You cannot spend exhausted defense tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Faulty Countermeasures",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "capacitor_failure",
+					"effect_text": "If a hull zone has no remaining shields, you cannot recover shields in it nor move shields to it. If that hull zone is defending, you cannot spend Redirect tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Capacitor Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "damaged_controls",
+					"effect_text": "When you overlap a ship or obstacle, deal 1 facedown damage card to your ship (in addition to all other obstacle effects).",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Damaged Controls",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "thruster_fissure",
+					"effect_text": "When you change your speed by 1 or more, suffer 1 damage.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Thruster Fissure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "life_support_failure",
+					"effect_text": "Discard all of your command tokens. You cannot have any command tokens.",
+					"is_faceup": false,
+					"timing": "immediate_persistent",
+					"title": "Life Support Failure",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "injured_crew",
+					"effect_text": "Choose and discard 1 of your defense tokens. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Injured Crew",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "injured_crew",
+					"effect_text": "Choose and discard 1 of your defense tokens. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Injured Crew",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "power_failure",
+					"effect_text": "Your engineering value is reduced to half its value, rounded down.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Power Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "power_failure",
+					"effect_text": "Your engineering value is reduced to half its value, rounded down.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Power Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "compartment_fire",
+					"effect_text": "You cannot ready your defense tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Compartment Fire",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "depowered_armament",
+					"effect_text": "You cannot attack at long range.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Depowered Armament",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "thrust_control_malfunction",
+					"effect_text": "The yaw value for the last adjustable joint at your current speed is reduced by 1.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Thrust Control Malfunction",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "life_support_failure",
+					"effect_text": "Discard all of your command tokens. You cannot have any command tokens.",
+					"is_faceup": false,
+					"timing": "immediate_persistent",
+					"title": "Life Support Failure",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "injured_crew",
+					"effect_text": "Choose and discard 1 of your defense tokens. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Injured Crew",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "depowered_armament",
+					"effect_text": "You cannot attack at long range.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Depowered Armament",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "damaged_controls",
+					"effect_text": "When you overlap a ship or obstacle, deal 1 facedown damage card to your ship (in addition to all other obstacle effects).",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Damaged Controls",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "capacitor_failure",
+					"effect_text": "If a hull zone has no remaining shields, you cannot recover shields in it nor move shields to it. If that hull zone is defending, you cannot spend Redirect tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Capacitor Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "shield_failure",
+					"effect_text": "Your opponent may choose up to 2 of your hull zones. Each of the chosen hull zones loses 1 shield. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Shield Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "projector_misaligned",
+					"effect_text": "Your hull zone with the most remaining shields loses all of its shields. If multiple hull zones are tied, choose between the tied hull zones. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Projector Misaligned",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "thrust_control_malfunction",
+					"effect_text": "The yaw value for the last adjustable joint at your current speed is reduced by 1.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Thrust Control Malfunction",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "disengaged_fire_control",
+					"effect_text": "When declaring the target of an attack, you cannot choose a target against whom the attack would be obstructed.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Disengaged Fire Control",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "damaged_munitions",
+					"effect_text": "When attacking a ship, before you roll your attack pool, remove 1 die of your choice.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Damaged Munitions",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "ruptured_engine",
+					"effect_text": "After you execute a maneuver, if the speed on your speed dial is greater than 1, suffer 1 damage.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Ruptured Engine",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "ruptured_engine",
+					"effect_text": "After you execute a maneuver, if the speed on your speed dial is greater than 1, suffer 1 damage.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Ruptured Engine",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "compartment_fire",
+					"effect_text": "You cannot ready your defense tokens.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Compartment Fire",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "disengaged_fire_control",
+					"effect_text": "When declaring the target of an attack, you cannot choose a target against whom the attack would be obstructed.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Disengaged Fire Control",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "shield_failure",
+					"effect_text": "Your opponent may choose up to 2 of your hull zones. Each of the chosen hull zones loses 1 shield. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Shield Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "injured_crew",
+					"effect_text": "Choose and discard 1 of your defense tokens. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Injured Crew",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "comm_noise",
+					"effect_text": "Your opponent may either reduce your speed by 1 or choose a new command on your top command dial. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Comm Noise",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "targeter_disruption",
+					"effect_text": "While attacking, you cannot resolve critical effects.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Targeter Disruption",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "projector_misaligned",
+					"effect_text": "Your hull zone with the most remaining shields loses all of its shields. If multiple hull zones are tied, choose between the tied hull zones. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Projector Misaligned",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "crew_panic",
+					"effect_text": "Before you reveal a command dial, you must either suffer 1 damage or discard that dial. If you discard it, do not reveal a dial this round.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Crew Panic",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "blinded_gunners",
+					"effect_text": "While attacking, you cannot spend accuracy icons.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Blinded Gunners",
+					"trait_type": "Crew"
+				},
+				{
+					"effect_id": "structural_damage",
+					"effect_text": "Deal 1 facedown damage card to your ship. Then flip this card facedown.",
+					"is_faceup": false,
+					"timing": "immediate",
+					"title": "Structural Damage",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "point_defense_failure",
+					"effect_text": "When attacking a squadron, before you roll your attack pool, remove 1 die of your choice.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Point-Defense Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "point_defense_failure",
+					"effect_text": "When attacking a squadron, before you roll your attack pool, remove 1 die of your choice.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Point-Defense Failure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "coolant_discharge",
+					"effect_text": "Only one attack you perform each round can target a ship.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Coolant Discharge",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "thruster_fissure",
+					"effect_text": "When you change your speed by 1 or more, suffer 1 damage.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Thruster Fissure",
+					"trait_type": "Ship"
+				},
+				{
+					"effect_id": "coolant_discharge",
+					"effect_text": "Only one attack you perform each round can target a ship.",
+					"is_faceup": false,
+					"timing": "persistent",
+					"title": "Coolant Discharge",
+					"trait_type": "Ship"
+				}
+			]
+		},
+		"initiative_player": 0,
+		"interaction_flow": {
+			"controller_player": 1,
+			"flow_type": 4,
+			"payload": {
+
+			},
+			"step_id": 16,
+			"visible_to": 0
+		},
+		"match_player_control_binding": {
+			"player_principal_ids": [
+				"mp-ef8d27d1-ea74-4fdc-b105-9bd4012aea8b",
+				"mp-ef8d27d1-ea74-4fdc-b105-9bd4012aea8b"
+			],
+			"principals": [
+				{
+					"kind": "HUMAN",
+					"principal_id": "mp-ef8d27d1-ea74-4fdc-b105-9bd4012aea8b"
+				}
+			]
+		},
+		"objectives": {
+
+		},
+		"player_states": [
+			{
+				"faction": 0,
+				"fleet_points": 0,
+				"player_index": 0,
+				"score": 0,
+				"ships": [
+					{
+						"activated_this_round": false,
+						"anti_squadron_attack_zone": -1,
+						"anti_squadron_target_history": [],
+						"attack_step_active": false,
+						"command_dial_stack": {
+							"command_value": 1,
+							"dials": [
+								{
+									"command": 0.0,
+									"round": 2.0,
+									"state": "hidden"
+								}
+							],
+							"spent_history": []
+						},
+						"command_tokens": {
+							"max_tokens": 1,
+							"tokens": [
+								3
+							]
+						},
+						"committed_attack_count": 0,
+						"current_hull": 4,
+						"current_shields": {
+							"FRONT": 2,
+							"LEFT": 2,
+							"REAR": 1,
+							"RIGHT": 2
+						},
+						"current_speed": 2,
+						"data_key": "cr90_corvette_a",
+						"defense_tokens": [
+							{
+								"state": 0,
+								"type": 0
+							},
+							{
+								"state": 0,
+								"type": 0
+							},
+							{
+								"state": 0,
+								"type": 1
+							}
+						],
+						"destroyed": false,
+						"facedown_damage": [],
+						"faceup_damage": [],
+						"fleet_points": 44,
+						"maneuver_opportunity_disposition": "",
+						"owner_player": 0,
+						"pos_x": 0.688999995478877,
+						"pos_y": 0.721175525806568,
+						"roster_entry_id": "",
+						"rotation_deg": 0.0,
+						"runtime_upgrades": [],
+						"ship_activation_identity": "",
+						"squadron_command_activations_committed": 0,
+						"squadron_command_opportunity_disposition": "",
+						"used_attack_hull_zones": []
+					},
+					{
+						"activated_this_round": true,
+						"anti_squadron_attack_zone": -1,
+						"anti_squadron_target_history": [],
+						"attack_step_active": false,
+						"command_dial_stack": {
+							"command_value": 2,
+							"dials": [
+								{
+									"command": 1.0,
+									"round": 2.0,
+									"state": "hidden"
+								}
+							],
+							"spent_history": [
+								{
+									"command": 1.0,
+									"round": 1.0
+								}
+							]
+						},
+						"command_tokens": {
+							"max_tokens": 2,
+							"tokens": [
+								0
+							]
+						},
+						"committed_attack_count": 0,
+						"current_hull": 5,
+						"current_shields": {
+							"FRONT": 3,
+							"LEFT": 1,
+							"REAR": 2,
+							"RIGHT": 0
+						},
+						"current_speed": 2,
+						"data_key": "nebulon_b_escort_frigate",
+						"defense_tokens": [
+							{
+								"state": 1,
+								"type": 0
+							},
+							{
+								"state": 0,
+								"type": 2
+							},
+							{
+								"state": 0,
+								"type": 2
+							}
+						],
+						"destroyed": false,
+						"facedown_damage": [],
+						"faceup_damage": [],
+						"fleet_points": 57,
+						"maneuver_opportunity_disposition": "",
+						"owner_player": 0,
+						"pos_x": 0.305999981915509,
+						"pos_y": 0.588351101345486,
+						"roster_entry_id": "",
+						"rotation_deg": 0.0,
+						"runtime_upgrades": [],
+						"ship_activation_identity": "",
+						"squadron_command_activations_committed": 0,
+						"squadron_command_opportunity_disposition": "",
+						"used_attack_hull_zones": []
+					}
+				],
+				"squadrons": [
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 5,
+						"data_key": "x_wing_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 13,
+						"is_engaged": false,
+						"move_action_committed": false,
+						"owner_player": 0,
+						"pos_x": 0.403576095015914,
+						"pos_y": 0.714080641004774,
+						"roster_entry_id": "",
+						"rotation_deg": 0.0
+					},
+					{
+						"activated_this_round": true,
+						"activation_context": "ship_squadron_command",
+						"activation_id": "squadron-activation:70",
+						"attack_action_disposition": "begun",
+						"commanding_ship_index": 1,
+						"commanding_ship_player": 0,
+						"current_hull": 5,
+						"data_key": "x_wing_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 13,
+						"is_engaged": false,
+						"move_action_committed": true,
+						"owner_player": 0,
+						"pos_x": 0.321221641257957,
+						"pos_y": 0.518891624168113,
+						"roster_entry_id": "",
+						"rotation_deg": 2.9
+					},
+					{
+						"activated_this_round": true,
+						"activation_context": "ship_squadron_command",
+						"activation_id": "squadron-activation:80",
+						"attack_action_disposition": "begun",
+						"commanding_ship_index": 1,
+						"commanding_ship_player": 0,
+						"current_hull": 5,
+						"data_key": "x_wing_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 13,
+						"is_engaged": true,
+						"move_action_committed": true,
+						"owner_player": 0,
+						"pos_x": 0.364027743869358,
+						"pos_y": 0.473551601833767,
+						"roster_entry_id": "",
+						"rotation_deg": 0.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 5,
+						"data_key": "x_wing_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 13,
+						"is_engaged": false,
+						"move_action_committed": false,
+						"owner_player": 0,
+						"pos_x": 0.455253205475984,
+						"pos_y": 0.69046297426577,
+						"roster_entry_id": "",
+						"rotation_deg": 0.0
+					}
+				]
+			},
+			{
+				"faction": 1,
+				"fleet_points": 0,
+				"player_index": 1,
+				"score": 0,
+				"ships": [
+					{
+						"activated_this_round": false,
+						"anti_squadron_attack_zone": -1,
+						"anti_squadron_target_history": [],
+						"attack_step_active": true,
+						"command_dial_stack": {
+							"command_value": 3,
+							"dials": [
+								{
+									"command": 2.0,
+									"round": 1.0,
+									"state": "hidden"
+								},
+								{
+									"command": 1.0,
+									"round": 2.0,
+									"state": "hidden"
+								}
+							],
+							"spent_history": [
+								{
+									"command": 0.0,
+									"round": 1.0
+								}
+							]
+						},
+						"command_tokens": {
+							"max_tokens": 3,
+							"tokens": [
+								3,
+								0
+							]
+						},
+						"committed_attack_count": 1,
+						"current_hull": 8,
+						"current_shields": {
+							"FRONT": 3,
+							"LEFT": 3,
+							"REAR": 1,
+							"RIGHT": 3
+						},
+						"current_speed": 2,
+						"data_key": "victory_ii_class_star_destroyer",
+						"defense_tokens": [
+							{
+								"state": 0,
+								"type": 2
+							},
+							{
+								"state": 0,
+								"type": 1
+							},
+							{
+								"state": 0,
+								"type": 1
+							}
+						],
+						"destroyed": false,
+						"facedown_damage": [],
+						"faceup_damage": [],
+						"fleet_points": 85,
+						"maneuver_opportunity_disposition": "UNREACHED",
+						"owner_player": 1,
+						"pos_x": 0.488999995478877,
+						"pos_y": 0.255824449327257,
+						"roster_entry_id": "",
+						"rotation_deg": -179.999991348578,
+						"runtime_upgrades": [],
+						"ship_activation_identity": "ship-activation:98",
+						"squadron_command_activations_committed": 0,
+						"squadron_command_opportunity_disposition": "CONSUMED",
+						"used_attack_hull_zones": [
+							0
+						]
+					}
+				],
+				"squadrons": [
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 0,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": true,
+						"fleet_points": 8,
+						"is_engaged": true,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.333940067997685,
+						"pos_y": 0.41823405513057,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 2,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 8,
+						"is_engaged": true,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.386818101671007,
+						"pos_y": 0.40563956366645,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 3,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 8,
+						"is_engaged": true,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.350437842475043,
+						"pos_y": 0.369915686713325,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 3,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 8,
+						"is_engaged": false,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.560208751537182,
+						"pos_y": 0.386515695077402,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 3,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 8,
+						"is_engaged": false,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.619605339898003,
+						"pos_y": 0.384131028917101,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					},
+					{
+						"activated_this_round": false,
+						"activation_context": "",
+						"activation_id": "",
+						"attack_action_disposition": "",
+						"commanding_ship_index": -1,
+						"commanding_ship_player": -1,
+						"current_hull": 3,
+						"data_key": "tie_fighter_squadron",
+						"defense_tokens": [],
+						"destroyed": false,
+						"fleet_points": 8,
+						"is_engaged": false,
+						"move_action_committed": false,
+						"owner_player": 1,
+						"pos_x": 0.583260543258102,
+						"pos_y": 0.350004803692853,
+						"roster_entry_id": "",
+						"rotation_deg": 180.0
+					}
+				]
+			}
+		],
+		"rng": {
+			"initial_seed": 8801969529620603904,
+			"state": 4014722349898870673
+		},
+		"ship_target_attack_counts": {
+			"2:1:0": 1
+		},
+		"squadron_phase_activations_committed": 0,
+		"squadron_phase_controller_player": -1,
+		"timing_window_state": {
+			"active": false,
+			"continuation_context": {
+
+			},
+			"controller_player": -1,
+			"lifecycle_id": "",
+			"lifecycle_stage": "",
+			"status": "inactive",
+			"timing_window_id": ""
+		}
+	},
+	"phase": "SHIP",
+	"round": 2,
+	"timestamp": "2026-08-19T14:29:25"
+}

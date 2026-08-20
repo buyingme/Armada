@@ -18,6 +18,11 @@ func validate(game_state: GameState) -> String:
 	var base: String = super.validate(game_state)
 	if base != "":
 		return base
+	var inspection_reason: String = \
+		game_state.validate_completed_attack_inspection_consumer(
+				str(payload.get("completed_attack_inspection_id", "")))
+	if inspection_reason != "":
+		return inspection_reason
 	if game_state.current_attack_state.active:
 		return "Another current attack is active."
 	if game_state.current_phase != Constants.GamePhase.SHIP \
@@ -52,6 +57,10 @@ func validate(game_state: GameState) -> String:
 	return ""
 
 func execute(game_state: GameState) -> Dictionary:
+	var inspection_id: String = str(payload.get(
+			"completed_attack_inspection_id", ""))
+	var inspection_before: CompletedAttackInspection = \
+		game_state.completed_attack_inspection
 	var ship: ShipInstance = _tracked_attacker_ship(game_state)
 	if _coordinates_ship_attack_progress() and ship == null:
 		_log.debug("Rejected execution without an active authoritative ship " \
@@ -110,7 +119,11 @@ func execute(game_state: GameState) -> Dictionary:
 				str(payload.get("activation_id", "")),
 				_is_rogue(squadron)):
 			return {}
-	if not game_state.set_current_attack_state(state):
+	var installed: bool = game_state.set_current_attack_state(state) \
+			if inspection_id.is_empty() \
+			else game_state.replace_satisfied_inspection_with_current_attack(
+					inspection_id, state)
+	if not installed:
 		if ship != null:
 			ship.restore_attack_progress(progress_snapshot)
 		if squadron != null:
@@ -118,6 +131,9 @@ func execute(game_state: GameState) -> Dictionary:
 		return {}
 	if not game_state.validate_declaration_adjacent_state():
 		game_state.set_current_attack_state(CurrentAttackState.inactive())
+		if inspection_before != null:
+			game_state.restore_completed_attack_inspection_for_rollback(
+					inspection_before)
 		if ship != null:
 			ship.restore_attack_progress(progress_snapshot)
 		if squadron != null:

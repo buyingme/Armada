@@ -107,6 +107,7 @@ func _ready() -> void:
 	SelectRedirectZoneCommand.register()
 	SkipAttackCommand.register()
 	CompleteAttackCommand.register()
+	AcknowledgeAttackResultCommand.register()
 	# Tier 3 — movement commands.
 	MoveSquadronCommand.register()
 	ExecuteManeuverCommand.register()
@@ -207,12 +208,36 @@ func submit_replay_deferred_followups(command: GameCommand) -> Dictionary:
 ## Returns an empty string when the command may continue, otherwise the
 ## rejection reason that should be emitted to callers.
 func preflight(command: GameCommand, game_state: GameState) -> String:
+	var inspection_reason: String = _check_completed_attack_inspection(
+			command, game_state)
+	if inspection_reason != "":
+		return inspection_reason
 	var applicability: Dictionary = _check_applicability(command, game_state)
 	if not bool(applicability.get(
 			COMMAND_APPLICABILITY_SCRIPT.KEY_ALLOWED, false)):
 		return str(applicability.get(
 				COMMAND_APPLICABILITY_SCRIPT.KEY_REASON, ""))
 	return _check_rule_validators(command, game_state)
+
+
+func _check_completed_attack_inspection(command: GameCommand,
+		game_state: GameState) -> String:
+	if command == null or game_state == null:
+		return ""
+	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
+	if inspection == null:
+		return ""
+	if command.command_type == AcknowledgeAttackResultCommand.TYPE:
+		return ""
+	if not inspection.is_satisfied():
+		return "Completed attack result acknowledgement is outstanding."
+	if command.command_type not in [
+		"begin_attack", "skip_attack", "move_squadron",
+		"complete_squadron_activation", "advance_activation_step",
+	]:
+		return "Completed attack inspection blocks unrelated progression."
+	return game_state.validate_completed_attack_inspection_consumer(
+			str(command.payload.get("completed_attack_inspection_id", "")))
 
 
 ## Drains observer follow-up commands in FIFO order.

@@ -114,6 +114,10 @@ class UIIntent extends RefCounted:
 	## The copy is non-authoritative and may never be used for validation.
 	var attack_dice_results: Array[Dictionary] = []
 
+	## Public, immutable completed-result evidence. Presentation derives its
+	## acknowledgement/waiting surface from this canonical projection only.
+	var completed_attack_inspection: Dictionary = {}
+
 
 ## Computes a [UIIntent] for [param viewer_player] from [param state].
 ##
@@ -130,6 +134,8 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 		return intent
 	intent.timing_window = _project_timing_window(state, viewer_player)
 	intent.attack_dice_results = _project_attack_dice_results(state)
+	intent.completed_attack_inspection = _project_completed_attack_inspection(
+			state, viewer_player, intent)
 	var flow: InteractionFlow = state.interaction_flow
 	if flow == null or flow.flow_type == Constants.InteractionFlow.NONE:
 		return intent
@@ -146,7 +152,7 @@ static func project(state: GameState, viewer_player: int) -> UIIntent:
 	intent.modal_kind = _modal_kind_for(spec)
 	intent.payload = flow.payload.duplicate(true) if flow.payload != null \
 			else {}
-	intent.affordances = _affordances_for(state, flow, viewer_player)
+	intent.affordances.merge(_affordances_for(state, flow, viewer_player), true)
 	return intent
 
 
@@ -156,6 +162,24 @@ static func _project_attack_dice_results(
 	if attack == null or not attack.active:
 		return []
 	return attack.dice_results
+
+
+static func _project_completed_attack_inspection(state: GameState,
+		viewer_player: int, intent: UIIntent) -> Dictionary:
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	if inspection == null:
+		return {}
+	var data: Dictionary = inspection.serialize()
+	intent.attack_dice_results = data.get("dice_results", []) as Array[Dictionary]
+	var principal_id: String = state.principal_id_for_player(viewer_player)
+	if inspection.required_principal_ids().has(principal_id):
+		if inspection.has_received(principal_id):
+			intent.affordances["attack_result_waiting"] = true
+		else:
+			intent.affordances["acknowledge_attack_result"] = {
+				"inspection_id": inspection.inspection_id(),
+			}
+	return data
 
 
 ## Projects an active-player transition without branching in the scene layer.

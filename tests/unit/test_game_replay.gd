@@ -111,9 +111,9 @@ func test_create_replay_rejects_unpaired_reconstructed_cursor() -> void:
 	GameManager.current_game_state = previous_state
 
 
-func test_match_001_cutover_uses_replay_format_six() -> void:
-	assert_eq(GameReplay.FORMAT_VERSION, 6,
-			"MATCH-001 principal bindings require replay format 6")
+func test_ux_005_cutover_uses_replay_format_seven() -> void:
+	assert_eq(GameReplay.FORMAT_VERSION, 7,
+			"UX-005 acknowledgement semantics require replay format 7")
 	assert_eq(GameReplay.SIGNED_FORMAT_VERSION, GameReplay.FORMAT_VERSION,
 			"Signing must not create a second semantic replay format")
 

@@ -127,6 +127,8 @@ func _is_network_client() -> bool:
 
 
 func _ready() -> void:
+	CommandProcessor.command_executed.connect(
+			_on_local_squadron_phase_progress_committed)
 	EventBus.command_dials_submitted.connect(_on_command_dials_submitted)
 	EventBus.command_picker_confirmed.connect(_on_command_picker_confirmed)
 	EventBus.activation_ended.connect(_on_activation_ended)
@@ -1225,6 +1227,7 @@ func submit_move_squadron(squadron: SquadronInstance,
 		"activation_context": squadron.activation_context,
 	}
 	_decorate_commanding_ship_identity(payload, squadron)
+	_decorate_completed_attack_inspection_consumer(payload)
 	var cmd := MoveSquadronCommand.new(squadron.owner_player, payload)
 	return _submitter.submit(cmd)
 
@@ -1242,12 +1245,10 @@ func submit_complete_squadron_activation(
 		"activation_context": squadron.activation_context,
 	}
 	_decorate_commanding_ship_identity(payload, squadron)
+	_decorate_completed_attack_inspection_consumer(payload)
 	var cmd := CompleteSquadronActivationCommand.new(
 			squadron.owner_player, payload)
-	var result: Dictionary = _submitter.submit(cmd)
-	if not result.is_empty() and not _is_network_client():
-		_apply_squadron_progress_projection(result)
-	return result
+	return _submitter.submit(cmd)
 
 
 func _decorate_commanding_ship_identity(payload: Dictionary,
@@ -1261,6 +1262,15 @@ func _decorate_commanding_ship_identity(payload: Dictionary,
 			squadron.commanding_ship_player, squadron.commanding_ship_index)
 	if ship != null:
 		payload["ship_activation_identity"] = ship.ship_activation_identity
+
+
+func _decorate_completed_attack_inspection_consumer(payload: Dictionary) -> void:
+	if current_game_state == null:
+		return
+	var inspection: CompletedAttackInspection = \
+		current_game_state.completed_attack_inspection
+	if inspection != null and inspection.is_satisfied():
+		payload["completed_attack_inspection_id"] = inspection.inspection_id()
 
 
 func _decorate_attack_activation_identity(payload: Dictionary) -> void:
@@ -1424,6 +1434,7 @@ func submit_begin_attack(player: int, attack_context: Dictionary) -> Dictionary:
 		return {}
 	var payload: Dictionary = attack_context.duplicate(true)
 	_decorate_attack_activation_identity(payload)
+	_decorate_completed_attack_inspection_consumer(payload)
 	return _submitter.submit(BeginAttackCommand.new(player, payload))
 
 
@@ -1732,12 +1743,9 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 					current_game_state.timing_window_state.lifecycle_id
 	elif reason != "squadron_done":
 		payload.merge(_declaration_identity_for_player(player), true)
+	_decorate_completed_attack_inspection_consumer(payload)
 	var cmd := SkipAttackCommand.new(player, payload)
-	var result: Dictionary = _submitter.submit(cmd)
-	if not result.is_empty() and not _is_network_client() \
-			and bool(result.get("declaration_skip", false)):
-		_apply_squadron_progress_projection(result)
-	return result
+	return _submitter.submit(cmd)
 
 
 func submit_complete_attack(player: int) -> Dictionary:
@@ -1746,6 +1754,30 @@ func submit_complete_attack(player: int) -> Dictionary:
 	return _submitter.submit(CompleteAttackCommand.new(player, {
 		"attack_id": current_game_state.current_attack_state.attack_id,
 	}))
+
+
+func submit_acknowledge_attack_result(player: int,
+		inspection_id: String) -> Dictionary:
+	if not current_game_state:
+		return {}
+	return _submitter.submit(AcknowledgeAttackResultCommand.new(player, {
+		"inspection_id": inspection_id,
+	}))
+
+
+## Invokes the existing post-success consumer derivation once after a complete
+## canonical state has been installed and its projection rebuilt. Passive
+## mirrors do not synthesize commands; host submission preserves ordered
+## broadcast before any resulting follow-up drain.
+func release_reconstructed_completed_attack_inspection() -> Dictionary:
+	if current_game_state == null or _is_network_client():
+		return {}
+	var followup: GameCommand = \
+		CurrentAttackContinuation.derive_reconstructed_inspection_release(
+				current_game_state)
+	if followup == null:
+		return {}
+	return _submitter.submit(followup)
 
 
 func _next_unresolved_defense_token(attack: CurrentAttackState,
@@ -1806,9 +1838,10 @@ func submit_advance_activation_step(ship: ShipInstance,
 	if not current_game_state or ship == null:
 		return {}
 	var ship_index: int = current_game_state.find_ship_index(ship)
-	var cmd := AdvanceActivationStepCommand.new(ship.owner_player,
-			{"ship_index": ship_index, "step_id": step_id,
-				"ship_activation_identity": ship.ship_activation_identity})
+	var payload: Dictionary = {"ship_index": ship_index, "step_id": step_id,
+		"ship_activation_identity": ship.ship_activation_identity}
+	_decorate_completed_attack_inspection_consumer(payload)
+	var cmd := AdvanceActivationStepCommand.new(ship.owner_player, payload)
 	return _submitter.submit(cmd)
 
 
@@ -2311,6 +2344,25 @@ func _apply_squadron_progress_projection(result: Dictionary) -> void:
 		_advance_squadron_phase_turn()
 
 
+## Applies the existing Squadron Phase post-completion projection at the
+## command-success seam, including processor-owned attack-result follow-ups.
+## Network mirrors retain their established result handler and never synthesize
+## the authoritative phase advance here.
+func _on_local_squadron_phase_progress_committed(
+		command: GameCommand, result: Dictionary) -> void:
+	if _is_network_client() or command == null:
+		return
+	if command.command_type == CompleteSquadronActivationCommand.TYPE \
+			and str(result.get("activation_context", "")) \
+					== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		_apply_squadron_progress_projection(result)
+	elif command.command_type == "skip_attack" \
+			and bool(result.get("declaration_skip", false)) \
+			and str(result.get("declaration_context", "")) \
+					== SquadronInstance.ACTIVATION_CONTEXT_SQUADRON_PHASE:
+		_apply_squadron_progress_projection(result)
+
+
 ## Begins the Status Phase.
 ## Performs end-of-round cleanup (ready tokens, reset activations, flip
 ## initiative) then auto-advances to the next round.
@@ -2657,7 +2709,7 @@ func _handle_remote_command_effects(
 				"decline_concentrate_fire_token_reroll", \
 				"use_h9", "decline_h9", \
 				"confirm_attack_dice", \
-				"counter_choice":
+				"counter_choice", "acknowledge_attack_result":
 			# Marker commands — the attack pipeline reacts through
 			# CommandProcessor.command_executed on the peer that owns it.
 			pass

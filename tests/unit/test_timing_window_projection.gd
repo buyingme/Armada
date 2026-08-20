@@ -303,6 +303,7 @@ func _make_live_route() -> Dictionary:
 			null,
 			null,
 			null,
+			null,
 			Callable(),
 			Callable())
 	return {

@@ -879,6 +879,12 @@ func test_non_attack_skip_does_not_clean_ecm_runtime_state() -> void:
 
 
 func test_terminal_cleanup_allows_later_ecm_without_flow_publication() -> void:
+	# This cleanup regression does not exercise player acknowledgement. Use the
+	# accepted zero-HUMAN topology so terminal completion has no inspection to
+	# release before the fixture installs its independently canonical later attack.
+	_state = _make_state(MatchPlayerControlBinding.create_new(
+			[MatchPlayerControlBinding.KIND_AUTOMATED], [0, 0]))
+	GameManager.current_game_state = _state
 	var first_attack_id: String = _attack_id()
 	_use_ecm().execute(_state)
 	_install_attack(first_attack_id, CurrentAttackState.STAGE_RESOLVED,
@@ -1052,11 +1058,14 @@ func test_flow_spec_allows_ecm_commands_at_defense_token_step() -> void:
 			"DeclineECMCommand should be legal in the defense-token step.")
 
 
-func _make_state() -> GameState:
+func _make_state(binding: MatchPlayerControlBinding = null) -> GameState:
 	var state := GameState.new()
 	state.initialize()
 	state.current_round = 1
 	state.current_phase = Constants.GamePhase.SHIP
+	if binding != null:
+		assert_true(state.install_match_player_control_binding(binding),
+				"ECM fixture requires a valid explicit principal binding.")
 	_add_ship_to_state(state, 0, "cr90_corvette_a", "attacker")
 	var defender: ShipInstance = _add_ship_to_state(
 			state, 1, "victory_ii_class_star_destroyer", "defender")

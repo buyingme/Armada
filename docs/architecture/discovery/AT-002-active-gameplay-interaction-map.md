@@ -127,3 +127,5 @@ Completion / transition
 
 1. **Ship Phase / Ship Activation** — it links phase progression, activation ownership, local `ActivationContext`, command-backed steps, the shared Attack Flow, displacement, and multiple presentation recovery paths.
 2. **Command Phase** — it exposes the split between canonical phase state, `GameManager` runtime coordination, handoff UI, and controller-owned dial-picker state.
+
+The completed Ship Phase / Ship Activation follow-on discovery is preserved in [AT-002 Ship Phase / Ship Activation Interaction Map](AT-002-ship-activation-interaction-map.md).

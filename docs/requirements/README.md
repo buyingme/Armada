@@ -8,6 +8,7 @@ This directory contains the formal requirements for the Star Wars: Armada digita
 |----------|-------------|
 | [MVP Learning Scenario](mvp_learning_scenario.md) | Complete requirements for the Learning Scenario (MVP milestone) |
 | [Future Stage Requirements](future_stages.md) | Requirements for post-MVP features that influence architecture |
+| [Ship Activation Gameplay Interaction](gameplay_interactions/ship_activation_interaction.md) | Draft player-facing requirements for Ship Phase / Ship Activation |
 
 ## Methodology
 

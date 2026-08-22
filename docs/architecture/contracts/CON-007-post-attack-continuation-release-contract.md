@@ -2,14 +2,16 @@
 
 Contract ID: CON-007
 Title: Post-Attack Continuation Release Contract
-Status: Accepted
+Status: Accepted, Accepted Update
 Derived From: ADR-007 and PAC-OD-001 through PAC-OD-007
 Related ADRs: ADR-001, ADR-006, ADR-007
 Related Contracts: CON-001, CON-006
+Related Decision Workbooks: ODR-001, accepted ODR-002
 Related Evidence: MA-ATTACK-001
 
 Accepted by: Project Owner
 Accepted date: 2026-08-18
+Accepted update date: 2026-08-22
 Supersedes: None
 Superseded by: None
 
@@ -42,6 +44,11 @@ existing context-specific progression that follows it. Attack declaration is
 governed by CON-006; active attack lifecycle and mutation are governed by
 ADR-001 and CON-001; ship activation facts are governed by ADR-006.
 
+For that post-Attack release only, CON-007 explicitly adopts the ODR-001
+composed-return convergence principle. This is an outcome requirement for the
+existing release boundary; it does not introduce an implementation mechanism
+or repository-wide adoption.
+
 ## 2. Terms And Semantic Boundary
 
 **Terminal attack completion** is the accepted terminal transaction for one
@@ -66,6 +73,28 @@ continuation object or state machine.
 after release, if one is required. It remains owned by its existing canonical
 owner and transaction.
 
+**Child completion** is completion or termination of an interaction nested
+within an enclosing gameplay interaction hierarchy. Consumption of a
+completed-result inspection by its authorized consumer may accompany child
+completion, but is not enclosing completion.
+
+**Enclosing completion** is completion of the applicable enclosing gameplay
+interaction at its existing purpose-specific owner boundary. Release
+consumption alone is not enclosing completion.
+
+**Applicable enclosing purpose-specific owner** is the existing owner boundary
+whose canonical eligibility must be re-evaluated after a child interaction
+terminates or changes. It does not imply a universal parent chain or transfer
+ownership to CON-007.
+
+**Stable outcome** is either a legal gameplay decision requiring controller
+input that is live and recoverable from authoritative state, or authoritative
+gameplay in a state requiring no further immediate authoritative transition.
+A consumed inspection, executed consumer, closed modal, restored UI, or
+isolated intermediate mutation is not, by itself, a stable outcome. A state is
+not stable when accepted gameplay rules require another immediate automatic
+transition.
+
 CON-007-BOUNDARY-001: `CompleteAttackCommand` SHALL remain terminal attack
 completion. It SHALL NOT own enclosing ship activation, squadron activation,
 Squadron-command progression, or a general post-attack continuation.
@@ -85,6 +114,12 @@ iteration case, the existing `SkipAttackCommand(squadron_done)` transaction
 SHALL own the corresponding `ShipInstance.end_anti_squadron_attack()` mutation
 after acknowledgement satisfaction and SHALL consume the matching inspection
 atomically with that mutation.
+
+CON-007-BOUNDARY-005: Completion or termination of a child interaction,
+including its authorized release consumption, SHALL NOT by itself complete the
+enclosing gameplay interaction hierarchy. `SkipAttackCommand(reason:
+squadron_done)` SHALL remain child iteration termination only; it SHALL NOT
+decide Ship Attack continuation or advance a ship directly to Maneuver.
 
 ## 3. Ownership And Release Convention
 
@@ -116,17 +151,30 @@ only the already-applicable context-specific semantic transaction. It SHALL
 NOT substitute a generic post-attack transaction or make a scene, modal,
 timer, `InteractionFlow`, or presentation callback a progression owner.
 
+CON-007-RELEASE-004: After an authorized release consumer terminates or
+changes a child interaction, evaluation SHALL re-derive canonical eligibility
+through every applicable enclosing purpose-specific owner boundary until a
+stable outcome is reached. Existing commands and accepted transitions SHALL
+perform any required mutation. This clause SHALL name no new owner and SHALL
+NOT infer a universal parent chain.
+
+CON-007-RELEASE-005: The convergence obligation in CON-007-RELEASE-004
+adopts the ODR-001 composed-return convergence principle only at this
+post-Attack release boundary. It SHALL preserve the at-most-one release rule
+and derived-only choices and SHALL NOT create an implementation mechanism,
+canonical continuation fact, or new progression owner.
+
 ## 4. Supported Context Mapping
 
 The following is a conceptual mapping to existing continuation paths. It does
 not prescribe APIs, payloads, field layouts, or serialization schemas.
 
-| Context | Canonical facts used at release | Existing continuation path | Derived, non-mutating outcome |
-| --- | --- | --- | --- |
-| Normal ship attack | Activating `ShipInstance` attack-step facts, committed normal-attack count, and used hull zones | When the ship Attack boundary is complete, the existing `AdvanceActivationStepCommand` ship Attack-to-Maneuver transition | A further legal normal declaration remains a canonical-state-derived opportunity. |
-| Ship anti-squadron attack / iteration | The same `ShipInstance`'s locked anti-squadron zone and canonical target history, together with current target eligibility | The existing `SkipAttackCommand` `squadron_done` branch closes an exhausted iteration; the existing ship Attack-to-Maneuver transition remains applicable when the Attack boundary is then complete | An eligible untargeted squadron remains a derived next target opportunity; post-iteration normal-attack availability remains derived where legal. |
-| Squadron Phase squadron attack | `SquadronInstance` activation/action history and canonical Squadron Phase progress in `GameState` | The existing `CompleteSquadronActivationCommand` completes an exhausted squadron activation and applies its existing phase/turn-control consequence | A remaining independent squadron movement action, including the applicable Rogue case, remains derived. |
-| Ship-commanded squadron attack | `SquadronInstance` activation/action history plus the commanding `ShipInstance`'s activation identity, open Squadron-command opportunity, and committed count | The existing `CompleteSquadronActivationCommand` completes the commanded squadron; the existing Squadron-command path continues from the commanding ship, and its existing activation-step path proceeds when that opportunity is exhausted | A remaining commanded-squadron movement action or another eligible Squadron-command choice remains derived. |
+| Context | Canonical facts used at release | Existing continuation path | Derived, non-mutating outcome | Convergence result / applicable enclosing owner boundary |
+| --- | --- | --- | --- | --- |
+| Normal ship attack | Activating `ShipInstance` attack-step facts, committed normal-attack count, and used hull zones | When the ship Attack boundary is complete, the existing `AdvanceActivationStepCommand` ship Attack-to-Maneuver transition | A further legal normal declaration remains a canonical-state-derived opportunity. | The enclosing Ship Attack opportunity re-evaluates to another declaration, its valid stable result, or the existing Maneuver transition where immediately required. |
+| Ship anti-squadron attack / iteration | The same `ShipInstance`'s locked anti-squadron zone and canonical target history, together with current target eligibility | The existing `SkipAttackCommand` `squadron_done` branch closes an exhausted iteration; the existing ship Attack-to-Maneuver transition remains applicable when the Attack boundary is then complete | An eligible untargeted squadron remains a derived next target opportunity; post-iteration normal-attack availability remains derived where legal. | The enclosing Ship Attack opportunity re-evaluates after iteration termination to another declaration, its valid stable result, or the existing Maneuver transition where immediately required. |
+| Squadron Phase squadron attack | `SquadronInstance` activation/action history and canonical Squadron Phase progress in `GameState` | The existing `CompleteSquadronActivationCommand` completes an exhausted squadron activation and applies its existing phase/turn-control consequence | A remaining independent squadron movement action, including the applicable Rogue case, remains derived. | The existing Squadron Activation owner re-evaluates to its next recoverable action or completion through its accepted existing path to a stable result. |
+| Ship-commanded squadron attack | `SquadronInstance` activation/action history plus the commanding `ShipInstance`'s activation identity, open Squadron-command opportunity, and committed count | The existing `CompleteSquadronActivationCommand` completes the commanded squadron; the existing Squadron-command path continues from the commanding ship, and its existing activation-step path proceeds when that opportunity is exhausted | A remaining commanded-squadron movement action or another eligible Squadron-command choice remains derived. | The existing Squadron Command owner re-evaluates to another commanded-squadron choice or its exhausted result, then the existing enclosing ship-activation path re-evaluates to a stable result. |
 
 CON-007-CONTEXT-001: The mapping above SHALL be proven separately for every
 supported context. Similarity between contexts SHALL NOT be used to infer a
@@ -158,6 +206,13 @@ accepted command results.
 CON-007-SEAM-004: The release evaluator SHALL select no transaction where
 canonical state provides only a non-mutating next opportunity. It SHALL not
 manufacture a no-op command solely to represent that opportunity.
+
+CON-007-SEAM-005: After post-success release, the seam MAY continue bounded
+evaluation through already-applicable existing purpose-specific semantic
+transactions until the applicable existing owner boundaries reach a stable
+outcome. It SHALL NOT own parent semantics, completion criteria, progression
+policy, a hierarchy model, or canonical continuation state, and SHALL NOT
+create a continuation command, queue, descriptor, FSM, manager, or controller.
 
 ## 6. Exact-Once And Failure Semantics
 
@@ -201,6 +256,15 @@ CON-007-DIST-004: Non-mutating next opportunities SHALL be re-derived from
 canonical state after replay, mirror application, load, and reconnect. They
 SHALL NOT be persisted or transmitted as continuation descriptors.
 
+CON-007-DIST-005: Convergence evaluation SHALL remain subject to the same
+authoritative-history, live-authority, and reconstruction restrictions in this
+section. Replay SHALL NOT synthesize convergence transactions; passive mirrors
+SHALL NOT independently converge; and save/load and reconnect SHALL install
+and validate canonical inspection and owner state before the same bounded
+authoritative evaluation. Derived live decisions SHALL be re-derived from
+canonical state and SHALL NOT be persisted or transmitted as continuation
+descriptors.
+
 ## 8. Entry Gate B Evidence Boundary
 
 The architecture direction in PAC-OD-001 through PAC-OD-006 is resolved and
@@ -216,6 +280,8 @@ Section 4:
 4. atomic inspection consumption with the selected mutation; and
 5. duplicate rejection and unchanged satisfied inspection on continuation
    failure.
+6. re-evaluation by the applicable existing enclosing purpose-specific owner
+   and a final stable-outcome assertion.
 
 MA-ATTACK-001 and current code are implementation evidence only. They do not
 establish this proof and do not override the accepted ADRs or this Contract
@@ -225,10 +291,13 @@ The smallest targeted Gate B verification after Contract acceptance is one
 four-context seam trace: for each Section 4 context, follow a satisfied
 inspection through the `CommandProcessor` post-success seam in live-authority,
 replay, passive-mirror, and satisfied-state reconstruction modes. The trace
-must identify the concrete existing transaction or derived-only outcome and
-show exactly-once atomic consumption where a transaction mutates gameplay. A
-single unmapped context, independent synthesis path, or non-atomic consumption
-is a Gate B failure and an architecture stop under ADR-007.
+must identify the concrete existing transaction or derived-only outcome, show
+exactly-once atomic consumption where a transaction mutates gameplay, and
+prove that the terminal hierarchy outcome is either a recoverable live legal
+decision or a stable authoritative state with no immediate required
+transition. A single unmapped context, independent synthesis path,
+non-atomic consumption, or unresolved intermediate child completion is a Gate
+B failure and an architecture stop under ADR-007.
 
 ## 9. Explicit Non-Goals
 
@@ -239,9 +308,18 @@ CON-007 does not:
   schemas;
 - create a UX-005 implementation workbook or authorize implementation;
 - revise attack declaration, timing-window, active-attack, ship activation, or
-  squadron ownership; or
+  squadron ownership;
 - define a generic continuation framework, queue, descriptor, FSM, controller,
   or new canonical owner.
+- create a generic continuation architecture, manager, hierarchy stack, or
+  canonical continuation state;
+- create commands, APIs, command families, or state;
+- authorize production implementation, production-code edits, test
+  implementation, or migration execution;
+- automatically adopt composed-return convergence for other interaction
+  families; or
+- repair BUG-035, which remains deferred to a later authorized implementation
+  task.
 
 ## 10. Traceability
 
@@ -254,3 +332,5 @@ CON-007 does not:
 | PAC-OD-005 — CommandProcessor sole live seam | Sections 5 and 7 |
 | PAC-OD-006 — supported contexts and architecture stop | Sections 4 and 8 |
 | PAC-OD-007 — anti-squadron iteration close ownership | Sections 2, 4, and 6 |
+| ODR-001 — composed-return convergence principle | Sections 1–5, 7, and 8 |
+| Accepted ODR-002 — CON-007 convergence refinement direction | Sections 1–5 and 7–9 |

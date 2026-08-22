@@ -1,9 +1,12 @@
 # ODR-002-CON-007 Composed-Return Convergence Contract Refinement Workbook
 
-**Status:** Draft decision execution workbook
+**Status:** Accepted decision execution workbook
 **Decision basis:** Accepted ODR-002, applying accepted ODR-001
 **Target:** Minimal additive refinement of accepted CON-007
 **Contract-edit authorization:** Contract refinement only; no production implementation is authorized by this workbook.
+
+Accepted by: Project Owner
+Accepted date: 2026-08-22
 
 ## 1. Purpose and accepted architectural basis
 

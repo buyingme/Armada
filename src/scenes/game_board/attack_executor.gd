@@ -428,7 +428,15 @@ func _render_inactive_ship_continuation(
 	_target_selector.dismiss()
 	_reset_exec_state()
 	_init_ship_attack_state(ship_token)
-	_target_selector.ensure_panel_for_projection()
+	var declaration_panel: AttackSimPanel = \
+			_target_selector.ensure_panel_for_projection()
+	if declaration_panel == null:
+		return _resume_failure(
+			"Canonical ship attack continuation has no declaration panel.")
+	# `dismiss()` retains the panel node but clears its transient widget tree.
+	# Rebuild the ordinary ship-declaration surface before wiring the existing
+	# callbacks and restoring the locked anti-squadron target selection.
+	declaration_panel.show_initial_attack_exec(_get_ship_name())
 	_wire_attack_done_and_panel_signals()
 	if continuation == CompleteAttackCommand.CONTINUATION_SQUADRON:
 		_target_selector._select_attacker_ship_zone(

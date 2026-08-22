@@ -159,8 +159,7 @@ Captured ship-attack state additionally proves that:
 
 ## Resolution
 
-Status: Repaired and automated verification complete; manual Hot-Seat
-confirmation appropriate.
+Status: Open — automated repairs have corrected several individual recovery branches, including the remaining anti-squadron declaration path, but manual convergence still fails at the terminal anti-squadron return to the enclosing Ship Attack opportunity.
 
 Root cause:
 Two distinct release outcomes had correct canonical command state but missing
@@ -1049,3 +1048,113 @@ This indicates that the latest anti-squadron recovery repair has not yet achieve
 No further BUG-035 repair is attempted at this point.
 
 BUG-035 remains open. Further implementation work is deliberately deferred while the broader active-gameplay interaction/UI behavior is specified under the remaining `BC-003 / AT-002` architecture scope. This specification work should establish the intended hierarchical relationship between canonical gameplay state, available interaction/decision state, and presentation state before additional local recovery paths are added.
+
+### Manual Retest After Declaration-Reconstruction Repair — Terminal Anti-Squadron Return Still Stalls
+
+A new Hot-Seat manual retest on 2026-08-21 shows that the latest BUG-035 declaration-reconstruction repair made real progress but did not achieve full manual convergence.
+
+Evidence:
+
+- `annotation_20260821_215806_001.json`
+- `game_20260821_215440.log`
+
+#### What now works
+
+The previously failing remaining-target declaration path now succeeds manually.
+
+During the Victory II anti-squadron attack sequence:
+
+1. the first anti-squadron attack completes and is acknowledged;
+2. the locked FRONT anti-squadron iteration is reconstructed;
+3. a different remaining legal X-wing can be selected;
+4. the declaration can be committed;
+5. a second authoritative `BeginAttackCommand` executes;
+6. the second anti-squadron attack resolves and is acknowledged.
+
+Relevant command sequence:
+
+- first anti-squadron `begin_attack` — seq 101
+- first `complete_attack` — seq 106
+- first `acknowledge_attack_result` — seq 107
+- second anti-squadron `begin_attack` — seq 108
+- second `complete_attack` — seq 113
+- second `acknowledge_attack_result` — seq 114
+
+This manually confirms that the repaired remaining-target → selection → declaration-confirm → second `BeginAttackCommand` path now works.
+
+#### Residual failure
+
+After the second attack is acknowledged, the anti-squadron iteration correctly detects that no further legal target remains and executes:
+
+- `skip_attack` — seq 115
+
+This is the accepted terminal `squadron_done` consumer for the anti-squadron iteration.
+
+The log then records:
+
+- anti-squadron state cleared;
+- `TargetSelector` dismissed;
+- `AttackExecutor` dismissed;
+
+but no subsequent Ship Attack continuation or Maneuver transition occurs.
+
+Gameplay stalls.
+
+The annotation snapshot confirms:
+
+- `completed_attack_inspection` is empty;
+- `CurrentAttackState` is inactive;
+- `anti_squadron_attack_zone == -1`;
+- `anti_squadron_target_history` is empty;
+- the Victory II remains `attack_step_active == true`;
+- `committed_attack_count == 1`;
+- FRONT remains recorded in `used_attack_hull_zones`;
+- `maneuver_opportunity_disposition == "UNREACHED"`.
+
+Therefore the individual attack and anti-squadron iteration have terminated, but the enclosing Ship Attack opportunity has not resumed or completed.
+
+#### Updated failure boundary
+
+The current residual failure is now:
+
+second anti-squadron attack
+→ completion
+→ acknowledgement
+→ anti-squadron target exhaustion
+→ `SkipAttackCommand(reason: squadron_done)`
+→ anti-squadron iteration terminates
+→ MISSING: enclosing Ship Attack opportunity continuation
+
+After `squadron_done`, the enclosing Ship Attack opportunity must be re-evaluated from authoritative gameplay state.
+
+It must then either:
+
+- expose another legal ship Attack declaration if one exists; or
+- complete/leave the Attack opportunity through the accepted semantic path when no legal attack remains, allowing the activation to proceed to Maneuver.
+
+In this reproduction no further legal VSD attack target was available, so the expected result was progression out of the Attack opportunity toward Maneuver.
+
+#### Implication for automated coverage
+
+The previous regression proved the repaired child interaction:
+
+acknowledgement
+→ remaining anti-squadron target
+→ select
+→ confirm
+→ second `BeginAttackCommand`
+
+That coverage was necessary but insufficient for full BUG-035 convergence.
+
+Future regression coverage must also prove the composed parent return:
+
+terminal anti-squadron `squadron_done`
+→ enclosing Ship Attack opportunity re-evaluation
+→ another legal declaration OR accepted Attack completion
+→ Maneuver when no legal attack remains
+
+A test that stops after proving exactly one `squadron_done` does not by itself prove correct continuation of the enclosing Ship Attack interaction.
+
+Do not repair this by adding a presentation callback that directly advances the ship. The next investigation must establish the accepted owner of the post-`squadron_done` Ship Attack re-evaluation and preserve ADR-010 / CON-007 / SAI-050 decision-equivalent recovery.
+
+BUG-035 remains OPEN.

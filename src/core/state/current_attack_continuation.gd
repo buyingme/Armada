@@ -54,6 +54,9 @@ static func _derive_followup(game_state: GameState,
 		result: Dictionary) -> GameCommand:
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack == null or not attack.active:
+		if command.command_type == "skip_attack" \
+				and str(command.payload.get("reason", "")) == "squadron_done":
+			return _derive_post_squadron_done_ship_return(game_state, command)
 		return _derive_inspection_release(game_state)
 	if command.command_type in [
 		"commit_accuracy",
@@ -120,9 +123,35 @@ static func _derive_ship_inspection_release(game_state: GameState,
 	})
 
 
+## `squadron_done` is the atomic child-iteration consumer.  Once it has
+## consumed the completed-result inspection, re-evaluate only the enclosing
+## Ship Attack owner from durable ship state.  A remaining normal declaration
+## is derived-only; the existing Maneuver transaction is selected only when no
+## declaration remains.
+static func _derive_post_squadron_done_ship_return(game_state: GameState,
+		command: GameCommand) -> GameCommand:
+	var player: int = command.player_index
+	var ship_index: int = int(command.payload.get("ship_index", -1))
+	var ship: ShipInstance = game_state.get_ship(player, ship_index)
+	if ship == null or not ship.has_active_ship_activation() \
+			or not ship.attack_step_active \
+			or ship.anti_squadron_attack_zone >= 0:
+		return null
+	if ship.committed_attack_count < 2 \
+			and _has_remaining_normal_ship_target(game_state, ship, player, ship_index):
+		return null
+	return AdvanceActivationStepCommand.new(player, {
+		"ship_index": ship_index,
+		"step_id": "maneuver_step",
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+
+
 ## Reuses the authoritative declaration candidates used by BeginAttackCommand
 ## and the live target selector. Nominal attack capacity alone is not enough:
-## unused hull zones must still have a legal ship-to-ship declaration.
+## an unused hull zone must still have a legal ordinary ship declaration.  A
+## completed anti-squadron iteration does not prohibit a different unused zone
+## from legally targeting a surviving squadron.
 static func _has_remaining_normal_ship_target(game_state: GameState,
 		ship: ShipInstance, player: int, ship_index: int) -> bool:
 	if game_state == null or ship == null:
@@ -130,9 +159,6 @@ static func _has_remaining_normal_ship_target(game_state: GameState,
 	for candidate: Dictionary in \
 			TargetingListBuilder.authoritative_ship_target_entries(
 					game_state, player, ship_index):
-		if str(candidate.get("target_kind", "")) \
-				!= CurrentAttackState.KIND_SHIP:
-			continue
 		if int(candidate.get("attacker_zone", -1)) \
 			in ship.used_attack_hull_zones:
 			continue

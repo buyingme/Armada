@@ -4,18 +4,24 @@ Status: Accepted and updated implementation workbook
 Accepted by: Project Owner
 Accepted date: 2026-08-21
 Accepted update date: 2026-08-22
+Accepted second update date: 2026-08-22
 
-Amendment basis: Owner-directed BUG-035 convergence re-entry, 2026-08-22
+Amendment basis: Owner-directed BUG-035 convergence re-entry and accepted
+ship-commanded Squadron terminal route-coverage finding, 2026-08-22
 
 Purpose: sole branch-complete implementation specification for the remaining
 BUG-035 repair. It preserves the accepted anti-squadron declaration
-reconstruction repair and adds only the proven composed-return convergence
-repair required by refined CON-007.
+reconstruction repair, the implemented Ship Attack composed-return repair, and
+adds only the newly proven ship-commanded Squadron terminal convergence slice
+required by refined CON-007.
 
 Scope: after a completed ship anti-squadron attack is acknowledged, restore a
 remaining legal squadron declaration where one exists, then continue an
 exhausted anti-squadron iteration through the existing enclosing Ship Attack
-owner until a stable outcome. This workbook does not change shared Attack
+owner until a stable outcome. Also, after a terminal ship-commanded Squadron
+Attack, return from the completed squadron activation through existing
+Squadron Command and Ship Activation ownership without making presentation
+machinery semantic authority. This workbook does not change shared Attack
 completion, completed-result ownership, declaration semantics, or Ship
 Activation ownership.
 
@@ -48,6 +54,7 @@ diagnosis and required result are:
 | Declaration reconstruction | The current `attack_executor.gd` repair rebuilds the ordinary declaration surface, allowing selection → declaration Confirm → second `BeginAttackCommand`. | Valid pre-existing candidate implementation; preserve unless concrete evidence proves it invalid. |
 | Exhausted anti-squadron iteration | `SkipAttackCommand(reason: squadron_done)` ends the iteration and atomically consumes the matching inspection. | Correct child transaction; it does not complete Ship Attack. |
 | Enclosing Ship Attack return | After `squadron_done`, the existing continuation evaluation stops because inspection-driven release has ended. | Remaining BUG-035 convergence defect. |
+| Ship-commanded Squadron terminal return | `CompleteSquadronActivationCommand` correctly completes the child and restores a Squadron-step projection, but terminal command completion is then inferred by `InteractionFlow` → `ModalRouter` → `ShipActivationController` → scene-local `SquadronCommandResolver`. | Proven CON-007 route gap. Presentation reconstruction may use those facilities; semantic terminal progression may not depend on them. |
 
 The already-working path is not reopened or redesigned:
 
@@ -107,6 +114,37 @@ The existing `AdvanceActivationStepCommand` owns the Ship Attack-to-Maneuver
 mutation. `squadron_done` must neither substitute for it nor directly advance
 the ship.
 
+### 2.4 Ship-commanded Squadron Attack composed return
+
+The child and parent return chain is purpose-specific and bounded:
+
+```text
+Squadron Attack completes
+→ enclosing Squadron Activation re-evaluates
+→ CompleteSquadronActivationCommand when that activation is terminal
+→ enclosing Squadron Command re-evaluates canonical remaining capacity and eligibility
+→ live command remains: recoverable commanded-squadron decision
+→ terminal command: existing authoritative Ship Activation transition
+→ enclosing Ship Activation determines its next applicable step
+→ stable outcome
+```
+
+`CompleteSquadronActivationCommand` remains the existing child completion
+transaction. It does not itself advance directly to Repair. Squadron Command
+canonically determines only whether its opportunity remains live or is
+terminal; it does not mutate Ship Activation or hard-code a successor step.
+When terminal, the existing Ship Activation
+`AdvanceActivationStepCommand(repair_step)`, validated from the active
+`ShipInstance` identity and purpose-specific opportunity facts, performs the
+parent mutation and owns the next applicable step.
+
+Presentation reconstruction may use `InteractionFlow`, `ModalRouter`,
+controllers, tokens, overlays, and `SquadronCommandResolver` geometry/caches
+to expose a stable decision. Those facilities SHALL NOT establish whether
+Squadron Command is live or terminal, consume it, finalize resources, or
+advance its parent. The current terminal controller/modal route violates this
+boundary and is the sole newly authorized repair slice.
+
 ## 3. Concrete Evidence And Repair Seam
 
 ### Remaining composed-return seam
@@ -160,6 +198,47 @@ Attack declaration only after semantic evaluation establishes it. Presentation
 must not decide legal Ship Attack continuation or submit a progression
 transaction.
 
+### Commanded-Squadron terminal seam
+
+The route-coverage audit established that the existing authoritative facts are
+sufficient without new state: the commanding `ShipInstance` owns the active
+activation identity, Squadron-command opportunity disposition, and committed
+activation count; `SquadronCommandResolver.authoritative_capacity(ship)`
+derives capacity from those existing game facts. `ActivateSquadronCommand`,
+`BeginAttackCommand`, and `CompleteSquadronActivationCommand` already validate
+the same commanded-Squadron boundary.
+
+`CompleteSquadronActivationCommand` is the existing terminal child mutation.
+`AdvanceActivationStepCommand` is the existing authoritative Ship Activation
+transition: its `repair_step` branch consumes the already-open
+Squadron-command opportunity and validates that no commanded squadron
+activation remains active. The present controller path chooses that existing
+transaction only after a scene-local resolver reports terminal state. That is
+the defect, not an absence of a command or canonical owner.
+
+`CommandProcessor` remains the sole live-authority post-success
+release/convergence seam. Following an accepted ship-commanded
+`CompleteSquadronActivationCommand`, its existing deferred post-success path
+SHALL invoke one bounded GameManager evaluator. That evaluator SHALL read only
+canonical `GameState`/`ShipInstance` facts and existing authoritative
+capacity/range queries, and return either no transaction while a legal
+commanded-squadron decision remains or the fully identified existing
+`AdvanceActivationStepCommand(repair_step)` when Squadron Command is terminal.
+`CommandProcessor` alone SHALL enqueue that returned existing transaction
+through its established live-authority submission path.
+
+The GameManager evaluator is a purpose-specific canonical query invoked only
+from that processor-owned seam. It is not an independent continuation owner,
+callback-driven semantic progression path, or owner of Squadron Command or
+Ship Activation semantics. It SHALL not use `InteractionFlow`, `ModalRouter`,
+scene tokens, `ShipActivationState`, controller state, or
+`SquadronCommandResolver` instance caches as semantic inputs.
+
+The repair MUST leave `CurrentAttackContinuation` responsible only for its
+previously accepted anti-squadron post-`squadron_done` convergence work and
+completed-attack release through `CompleteSquadronActivationCommand`; it has
+no role in the newly added commanded-Squadron terminal evaluation.
+
 ## 4. Authorized Scope
 
 | File | Authorized boundary | Permitted change |
@@ -167,16 +246,19 @@ transaction.
 | `src/scenes/game_board/attack_executor.gd` | Existing inactive ship declaration reconstruction | Preserve the current pre-existing panel/signal repair. Do not redesign it unless new concrete evidence invalidates it. |
 | `src/core/state/current_attack_continuation.gd` | Existing post-success release derivation | Add only the bounded post-`squadron_done` Ship Attack re-evaluation needed for Sections 2.2 and 2.3, using existing canonical facts and transactions. |
 | Existing derived-decision presentation bridge, only if proved necessary | Projection of the Section 2.2 normal declaration | Reconstruct the canonical derived choice without semantic mutation or command submission. Do not pre-authorize unrelated controllers or target-selection code. |
+| `src/autoload/command_processor.gd` | Sole CON-007 live-authority post-success seam | Add only the bounded ship-commanded completion hook in its existing deferred post-success path: invoke the GameManager canonical evaluator after an accepted ship-commanded `CompleteSquadronActivationCommand`, and enqueue only its returned existing `AdvanceActivationStepCommand(repair_step)`. No generic continuation, parent-policy, or additional progression semantics are authorized. |
+| `src/autoload/game_manager.gd` | Bounded canonical query used by the processor-owned seam | Add only a purpose-specific evaluator invoked from the authorized `CommandProcessor` hook. It derives live-versus-terminal Squadron Command status from existing canonical facts and returns no transaction or the existing fully identified Ship Activation transition; it neither submits nor enqueues a command and remains independent of all presentation inputs. |
+| `src/scenes/game_board/ship_activation_controller.gd` | Existing command-mode Squadron projection | Remove or neutralize only the terminal semantic submission/finalization branch that currently follows `InteractionFlow`/modal/controller-local resolver state. Retain derived modal, overlay, and recoverable-choice projection; do not move semantic progression into another controller. |
 | `tests/integration/test_current_attack_production_resume.gd` and directly applicable existing BUG-035 tests | Stable-outcome regression coverage | Extend assertions and add only focused branch fixtures needed by Sections 2 and 5. |
 
-`src/autoload/command_processor.gd` is not pre-authorized. It may be changed
-only if implementation evidence proves that the existing post-success seam
-cannot invoke the bounded evaluation through `CurrentAttackContinuation`.
-
-Not authorized: `GameState`, command classes, Ship Activation state/commands,
-`CurrentAttackState`, contracts, ADRs, requirements, generic continuation
-infrastructure, or unrelated presentation/controller code. A material
-production-file expansion beyond this table is a stop.
+Not authorized: `GameState`, `ShipInstance`, command classes, Ship Activation
+state/commands, `CurrentAttackState`, contracts, ADRs, requirements, generic
+continuation infrastructure, or unrelated presentation/controller code.
+`CurrentAttackContinuation` is not authorized except for the previously
+accepted narrow BUG-035 convergence changes already specified in this
+workbook. `CommandProcessor` is not authorized except for the exact bounded
+post-success hook listed in this table. A material production-file expansion
+beyond this table is a stop.
 
 The current dirty BUG-035 changes are pre-existing candidate implementation
 work, not a baseline to reset. Implementation shall distinguish preserved valid
@@ -233,6 +315,52 @@ outcomes:
 Focused tests shall also prove exact-once behavior: no duplicate Skip,
 `AdvanceActivationStepCommand`, Begin, or inspection consumption.
 
+### Commanded-Squadron terminal regression
+
+Add real production-path coverage adjacent to the existing commanded-Squadron
+completed-attack fixtures. The terminal proof is canonical owner state and an
+accepted existing semantic transition, never modal closure, resolver
+completion, controller callback execution, or Repair-panel visibility.
+
+The capacity-remains branch SHALL prove:
+
+```text
+Attack completes
+→ completed-result acknowledgement
+→ CompleteSquadronActivationCommand exactly once
+→ canonical Squadron Command re-evaluation
+→ another eligible commanded-squadron decision is recoverable
+→ no synthetic parent-progression command
+→ stable live decision
+```
+
+The capacity-terminal branch SHALL prove:
+
+```text
+Attack completes
+→ completed-result acknowledgement
+→ CompleteSquadronActivationCommand exactly once
+→ canonical Squadron Command terminal result
+→ existing authoritative Ship Activation transition
+  AdvanceActivationStepCommand(repair_step) exactly once
+→ Ship Activation re-evaluates its next applicable step
+→ stable authoritative outcome
+```
+
+Both branches SHALL assert the active ship identity, opportunity disposition,
+committed count, authoritative capacity, commanded-squadron activation state,
+and command history needed to establish the result. The terminal branch SHALL
+prove that the existing Ship Activation transition is accepted from canonical
+state and that no immediate further semantic transition is required. It SHALL
+not assert Repair as a controller-selected destination.
+
+Coverage SHALL include live authority, passive mirror, replay, and
+save/load-or-reconnect reconstruction for every mutating terminal leg. Only
+live authority may derive/submit the existing transaction; mirrors and replay
+apply the ordered accepted command stream without synthesis; reconstruction
+must re-derive from installed canonical state rather than controller or modal
+state.
+
 ## 6. Invariants And Prohibited Fixes
 
 Do not:
@@ -247,6 +375,12 @@ Do not:
   one exhausted-iteration `squadron_done` consumer;
 - redesign shared Attack Flow, introduce caller-specific completion
   architecture, or broaden into Squadron Phase / unrelated Attack work.
+- permit `InteractionFlow`, `ModalRouter`, a controller callback, scene token,
+  `ShipActivationState`, or `SquadronCommandResolver` instance state to decide
+  commanded-Squadron terminality or submit its parent progression; or
+- make Squadron Activation advance directly to Repair, make Squadron Command
+  hard-code a Ship Activation successor, or bypass the existing Ship
+  Activation transition.
 
 ## 7. Verification Matrix
 
@@ -262,10 +396,10 @@ gameplay with no further immediate required transition.
 | Ship anti-squadron: legal same-zone target | Valid intermediate evidence | Preserve declaration reconstruction proof and connect it to the applicable stable outcome. |
 | Ship anti-squadron: exhausted, normal Ship Attack remains | Must be extended | Add the Section 2.2 recovered-normal-declaration stable assertion. |
 | Ship anti-squadron: exhausted, no Ship Attack remains | Must be extended | Add the Section 2.3 exact-once Maneuver `OPEN` stable assertion. |
-| Squadron Phase: remaining action / allocation remains | Valid intermediate evidence | Verify the existing owner exposes the live next action or allocation decision. |
+| Squadron Phase: remaining action / allocation remains | Convergence-complete evidence | Preserve the existing owner live-action/allocation assertion; do not reopen without contrary evidence. |
 | Squadron Phase: terminal allocation/handoff | Convergence-complete evidence | Preserve accepted terminal phase/handoff assertion. |
-| Ship-commanded Squadron: remaining action / capacity remains | Valid intermediate evidence | Verify the existing Squadron Command owner exposes the recoverable live choice. |
-| Ship-commanded Squadron: terminal command return | Valid intermediate evidence | Verify the existing commanding-ship path reaches its next applicable owner-derived stable state. |
+| Ship-commanded Squadron: remaining action / capacity remains | Convergence-complete canonical/recoverable evidence | Preserve the recoverable live choice assertion; no parent-progression command may be synthesized. |
+| Ship-commanded Squadron: terminal command return | Incomplete: route audit proved controller/modal-dependent semantic bypass | Add the Section 5 commanded-Squadron terminal stable-outcome regression and remove the bypass before declaring this context convergence-complete. |
 
 Existing tests that already prove the refined terminal result shall be retained,
 not rewritten. Tests that stop at a consumer command, modal state, or child
@@ -283,6 +417,11 @@ For every mutating leg:
 - derived decisions are not persisted or transmitted as continuation
   descriptors.
 
+For the commanded-Squadron terminal leg specifically, presentation recovery
+must consume the canonical result after the live-authority transaction; it may
+not become the source of that transaction. A passive mirror must not rely on a
+local controller or modal to complete the command opportunity.
+
 Regression coverage shall preserve atomic inspection consumption with the
 selected mutating consumer, rejected duplicate/stale behavior, and no
 presentation-owned semantic progression.
@@ -295,7 +434,9 @@ presentation-owned semantic progression.
 
 Run the full GUT suite, Phase-K architecture lint, and `git diff --check`.
 Manual QA remains useful for Hot-Seat remaining-target → second Begin, exhausted
-target → one `squadron_done`, and Network confirmation after automated checks.
+target → one `squadron_done`, commanded-Squadron remaining-capacity recovery,
+commanded-Squadron terminal return without modal-driven progression, and Network
+confirmation after automated checks.
 
 ## 8. Stop Gates And Completion
 
@@ -309,17 +450,36 @@ Stop implementation and request direction rather than improvising if:
 5. accepted CON-007 ownership cannot be preserved; or
 6. a material production-file expansion beyond Section 4 is required.
 
-No stop gate is currently triggered.
+For the commanded-Squadron slice, also stop if:
+
+7. Squadron Command terminal/live status cannot be derived from the existing
+   canonical commanding-ship and squadron facts;
+8. the existing Ship Activation
+   `AdvanceActivationStepCommand(repair_step)` cannot validate from that
+   terminal canonical state;
+9. Ship Activation cannot determine its next applicable step without
+   controller transient state; or
+10. repair would transfer purpose-specific Squadron Command or Ship Activation
+    semantics into `CurrentAttackContinuation` or `CommandProcessor`.
+
+The processor-owned invocation path and authorized file scope above resolve the
+two pre-amendment audit gates. No stop gate is currently triggered on the
+available route-coverage evidence; implementation SHALL stop if that evidence
+is contradicted at the authorized seam.
 
 Completion requires the preserved remaining-target regression, both exhausted
-iteration branches, the four-context stable-outcome review, applicable
+iteration branches, the commanded-Squadron capacity-remains and terminal
+stable-outcome branches, the four-context stable-outcome review, applicable
 live/mirror/replay/reconstruction checks, the required suites, applicable
 architecture or documentation lint, and `git diff --check` to pass. Manual QA
-must cover both terminal anti-squadron branches and confirm no stale attack
-presentation remains after their stable outcome.
+must cover both terminal anti-squadron branches, both commanded-Squadron
+branches, and confirm no stale attack presentation remains after their stable
+outcome.
 
 ```text
 acknowledge_attack_result → [no synthetic command] → BeginAttackCommand
 acknowledge_attack_result → SkipAttackCommand(squadron_done) → derived normal declaration
 acknowledge_attack_result → SkipAttackCommand(squadron_done) → AdvanceActivationStepCommand(maneuver_step)
+acknowledge_attack_result → CompleteSquadronActivationCommand → derived commanded-squadron decision
+acknowledge_attack_result → CompleteSquadronActivationCommand → existing Ship Activation transition
 ```

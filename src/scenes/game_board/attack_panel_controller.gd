@@ -72,6 +72,10 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 			and str(command.payload.get("reason", "")) == "squadron_done":
 		if not _owns_active_canonical_attack():
 			_attack_executor.deactivate_primary_presentation()
+		# Let the command processor finish its bounded enclosing-owner
+		# re-evaluation first.  If that derives no command, the canonical normal
+		# declaration is recoverable through the existing projection seam.
+		call_deferred("_recover_post_squadron_done_ship_attack_presentation")
 		return
 	if not _is_attack_pipeline_command(command):
 		return
@@ -338,6 +342,23 @@ func _recover_satisfied_ship_attack_presentation() -> void:
 	var inspection: CompletedAttackInspection = \
 			game_state.completed_attack_inspection
 	if inspection == null or not inspection.is_satisfied():
+		return
+	_attack_executor.resume_inactive_ship_attack_continuation(
+				Callable(_target_selector, "ship_token_for_instance"))
+
+
+## `squadron_done` consumes its inspection as the anti-squadron child closes.
+## After the existing command seam has re-evaluated the enclosing owner, a
+## remaining normal Ship Attack is a derived-only live decision.  This method
+## projects it without deciding legality or submitting a command.
+func _recover_post_squadron_done_ship_attack_presentation() -> void:
+	if _attack_executor == null or _target_selector == null:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var attack: CurrentAttackState = game_state.current_attack_state
+	if attack != null and attack.active:
 		return
 	_attack_executor.resume_inactive_ship_attack_continuation(
 				Callable(_target_selector, "ship_token_for_instance"))

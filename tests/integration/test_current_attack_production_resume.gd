@@ -804,10 +804,11 @@ func test_post_ack_anti_squadron_projection_excludes_history_target() -> void:
 	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
 	add_child_autofree(board)
 	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_not_null(board._command_router_adapter)
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
-	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
-			"inspection_id": inspection.inspection_id(),
-	})).is_empty())
+	assert_false(GameManager.submit_acknowledge_attack_result(
+			1, inspection.inspection_id()).is_empty())
 	await get_tree().process_frame
 	var history_after_ack: Array[String] = _history_types()
 
@@ -831,10 +832,60 @@ func test_post_ack_anti_squadron_projection_excludes_history_target() -> void:
 	assert_eq(executor._state.attacker_zone, Constants.HullZone.FRONT)
 	assert_eq(_history_types(), history_after_ack,
 			"Reprojecting the remaining target must submit no command.")
+	var panel: AttackSimPanel = selector.get_panel()
+	assert_not_null(panel)
+	assert_true(selector.has_declaration_candidate(),
+			"A legal reconstructed target must install the ordinary declaration candidate.")
+	assert_true(panel._confirm_button.visible,
+			"A legal reconstructed target must expose declaration Confirm.")
+	assert_true(panel._confirm_is_declaration,
+			"The reconstructed Confirm must be declaration confirmation, not result or dice confirmation.")
+	assert_false(panel._confirm_button.disabled)
+
+	panel._on_confirm_pressed()
+
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1,
+			"Declaration Confirm must submit exactly one accepted second BeginAttackCommand.")
+	assert_true(state.current_attack_state.active)
+	assert_eq(state.current_attack_state.attacker_player, attacker.owner_player)
+	assert_eq(state.current_attack_state.attacker_kind, CurrentAttackState.KIND_SHIP)
+	assert_eq(state.current_attack_state.attacker_index, state.find_ship_index(attacker))
+	assert_eq(state.current_attack_state.attacker_zone, Constants.HullZone.FRONT)
+	assert_eq(state.current_attack_state.defender_player, second.owner_player)
+	assert_eq(state.current_attack_state.defender_kind, CurrentAttackState.KIND_SQUADRON)
+	assert_eq(state.current_attack_state.defender_index, state.find_squadron_index(second))
+	assert_false(state.current_attack_state.range_band.is_empty())
+	assert_false(state.current_attack_state.dice_pool.is_empty())
+	assert_null(state.completed_attack_inspection,
+			"Only accepted Begin may consume the satisfied inspection for the derived declaration.")
+	assert_false(_history_types().has("skip_attack"),
+			"A remaining legal target must not introduce an unrelated continuation command.")
+
+	_resolve_active_unopposed_attack(1)
+	var second_inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(second_inspection)
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
+			"inspection_id": second_inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 1)
+	assert_eq(_history_types().count("skip_attack"), 1,
+			"The exhausted second anti-squadron iteration closes exactly once.")
+	assert_eq(_history_types().count("advance_activation_step"), 1,
+			"The enclosing Ship Attack must converge through one Maneuver transition.")
+	assert_eq(state.get_ship(1, 0).maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_null(state.completed_attack_inspection)
 
 
-func test_post_ack_anti_squadron_exhaustion_closes_iteration_once() -> void:
+func test_post_ack_anti_squadron_exhaustion_recovers_normal_ship_attack() -> void:
 	var state: GameState = _satisfied_inactive_anti_state(false)
+	var defender: ShipInstance = state.get_ship(0, 0)
+	defender.pos_x = 0.65
+	defender.pos_y = 0.42
+	assert_true(CurrentAttackContinuation._has_remaining_normal_ship_target(
+			state, state.get_ship(1, 0), 1, 0),
+			"Fixture must retain a legal unused-zone normal Ship Attack.")
 	var inspection: CompletedAttackInspection = state.completed_attack_inspection
 	assert_true(GameManager.start_new_game_from_state(
 			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 44))
@@ -847,12 +898,49 @@ func test_post_ack_anti_squadron_exhaustion_closes_iteration_once() -> void:
 	await get_tree().process_frame
 
 	assert_eq(_history_types().count("skip_attack"), 1)
+	assert_eq(_history_types().count("advance_activation_step"), 0,
+			"A recoverable normal declaration must not synthesize gameplay progression.")
 	assert_eq(_history_types().count("end_anti_squadron_attack"), 0,
 			"Iteration closure remains owned by SkipAttackCommand execution.")
 	assert_null(state.completed_attack_inspection)
 	assert_eq(state.get_ship(1, 0).anti_squadron_attack_zone, -1)
+	await get_tree().process_frame
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.ATTACK_DECLARE)
+	assert_true(board._attack_executor.is_selecting(),
+			"The enclosing Ship Attack must recover its legal normal declaration.")
 	assert_false(board._attack_executor.is_target_selecting(),
-			"Exhausted anti-squadron iteration must not reopen an empty selector.")
+			"The recovered normal declaration starts at its ordinary attacker selection.")
+
+
+func test_post_ack_anti_squadron_exhaustion_advances_to_maneuver_once() -> void:
+	var state: GameState = _satisfied_inactive_anti_state(false)
+	var defender: ShipInstance = state.get_ship(0, 0)
+	defender.pos_x = 0.95
+	defender.pos_y = 0.05
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 45))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(1, {
+			"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types().count("skip_attack"), 1)
+	assert_eq(_history_types().count("advance_activation_step"), 1,
+			"Only the existing Ship Attack-to-Maneuver transaction may advance the ship.")
+	assert_null(state.completed_attack_inspection,
+			"The child Skip consumes the matching inspection exactly once.")
+	assert_eq(state.get_ship(1, 0).anti_squadron_attack_zone, -1)
+	assert_eq(state.get_ship(1, 0).maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.MANEUVER_STEP)
+	assert_false(board._attack_executor.is_active(),
+			"No stale attack presentation may remain after the stable Maneuver return.")
 
 
 func test_passive_and_replay_anti_squadron_acknowledgements_do_not_synthesize() \
@@ -2744,6 +2832,25 @@ func _command_count(commands: Array[GameCommand],
 		if command.command_type == command_type:
 			count += 1
 	return count
+
+
+func _resolve_active_unopposed_attack(attacker_player: int) -> void:
+	var state: GameState = GameManager.current_game_state
+	var attack_id: String = state.current_attack_state.attack_id
+	assert_false(CommandProcessor.submit(RollDiceCommand.new(attacker_player, {
+		"attack_id": attack_id,
+	})).is_empty())
+	if state.current_attack_state.stage == CurrentAttackState.STAGE_ATTACK_MODIFY:
+		assert_false(CommandProcessor.submit(
+				ConfirmAttackDiceCommand.new(attacker_player, {
+					"attack_id": attack_id,
+				})).is_empty())
+	if state.current_attack_state.active:
+		assert_false(CommandProcessor.submit(CommitAccuracyCommand.new(attacker_player, {
+			"attack_id": attack_id,
+			"locked_tokens": [],
+		})).is_empty())
+	assert_true(state.current_attack_state.is_inactive())
 
 
 func _ensure_cross_kind_decoys(state: GameState) -> void:

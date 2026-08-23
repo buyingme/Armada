@@ -4356,21 +4356,19 @@ func _show_next_attack_panel() -> void:
 		_get_panel().show_skip_attack_button()
 
 ## Called when the player presses "Skip Attack".
-## During hull zone selection: ends the attack step immediately.
-## During the Step 6 squadron loop: ends the loop and proceeds to
-## the next hull zone (or finishes if both are done).
+## During hull zone selection or a live Step 6 declaration: ends the optional
+## remaining Ship Attack opportunity.  Only an exhausted Step 6 iteration uses
+## its distinct [code]squadron_done[/code] child-termination transaction.
 ## Requirements: AE-SKIP-001, AE-SKIP-002, AE-SQ-006.
 func _on_attack_skip() -> void:
 	if not _pending_declaration_command.is_empty():
 		return
-	# If we're in the Step 6 squadron loop (attacked >=1 squadron and
-	# still target-selecting for the next one), treat as "done with
-	# this hull zone's anti-squadron attacks."
 	var ship: ShipInstance = _authoritative_attack_ship()
 	if ship != null and ship.anti_squadron_attack_zone >= 0 and \
-			_target_selector.is_target_selecting():
+			_target_selector.is_target_selecting() \
+			and not _has_remaining_authoritative_anti_squadron_target(ship):
 		_log.info(
-				"Squadron loop skipped — moving to next hull zone.")
+				"Exhausted squadron loop skipped — closing the iteration.")
 		var game_state: GameState = GameManager.current_game_state
 		var ship_index: int = game_state.find_ship_index(ship) \
 				if game_state != null else -1
@@ -4404,6 +4402,33 @@ func _on_attack_skip() -> void:
 		return
 	if _pending_finish_after_skip:
 		apply_skip_attack_result(result)
+
+
+## Queries the existing authoritative targeting surface to distinguish a live
+## Step 6 declaration opportunity from an exhausted iteration.  Targeting
+## legality remains owned by TargetingListBuilder; the history guard is the
+## existing activation-local ShipInstance fact.
+func _has_remaining_authoritative_anti_squadron_target(
+		ship: ShipInstance) -> bool:
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null or ship == null:
+		return false
+	var ship_index: int = game_state.find_ship_index(ship)
+	if ship_index < 0:
+		return false
+	for candidate: Dictionary in \
+			TargetingListBuilder.authoritative_ship_target_entries(
+					game_state, ship.owner_player, ship_index):
+		if int(candidate.get("attacker_zone", -1)) \
+				!= ship.anti_squadron_attack_zone \
+			or str(candidate.get("target_kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		if not ship.has_anti_squadron_target(
+				int(candidate.get("target_owner", -1)),
+				int(candidate.get("target_index", -1))):
+			return true
+	return false
 
 
 func apply_skip_attack_result(result: Dictionary) -> void:

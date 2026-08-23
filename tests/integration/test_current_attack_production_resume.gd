@@ -878,6 +878,77 @@ func test_post_ack_anti_squadron_projection_excludes_history_target() -> void:
 	assert_null(state.completed_attack_inspection)
 
 
+func test_post_ack_anti_squadron_voluntary_finish_uses_ship_declaration_skip() \
+		-> void:
+	var state: GameState = _satisfied_inactive_anti_state(true)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 421))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(inspection)
+	assert_false(GameManager.submit_acknowledge_attack_result(
+			1, inspection.inspection_id()).is_empty())
+	await get_tree().process_frame
+
+	var attacker: ShipInstance = state.get_ship(1, 0)
+	var remaining_target: SquadronInstance = state.get_squadron(0, 1)
+	var entries: Array[Dictionary] = \
+			TargetingListBuilder.authoritative_ship_target_entries(state, 1, 0)
+	var has_remaining_target: bool = false
+	for entry: Dictionary in entries:
+		if int(entry.get("attacker_zone", -1)) \
+				!= attacker.anti_squadron_attack_zone \
+			or str(entry.get("target_kind", "")) \
+					!= CurrentAttackState.KIND_SQUADRON:
+			continue
+		if int(entry.get("target_owner", -1)) == remaining_target.owner_player \
+				and int(entry.get("target_index", -1)) \
+					== state.find_squadron_index(remaining_target):
+			has_remaining_target = true
+			break
+	assert_true(has_remaining_target,
+			"The fresh recovered decision must retain a distinct legal squadron.")
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+	assert_not_null(panel)
+	assert_true(panel._skip_attack_button.visible,
+			"The recovered pre-Begin decision must expose voluntary finish.")
+	assert_true(state.current_attack_state.is_inactive())
+	assert_eq(_command_count(CommandProcessor.get_history(), "begin_attack"), 0)
+
+	panel.skip_attack_pressed.emit()
+
+	var history: Array[GameCommand] = CommandProcessor.get_history()
+	assert_eq(_command_count(history, "skip_attack"), 1)
+	assert_eq(_command_count(history, "begin_attack"), 0,
+			"Voluntary finish must occur before any second BeginAttackCommand.")
+	var squadron_done_count: int = 0
+	for command: GameCommand in history:
+		if command.command_type == "skip_attack" \
+				and str(command.payload.get("reason", "")) == "squadron_done":
+			squadron_done_count += 1
+	assert_eq(squadron_done_count, 0)
+	assert_true(state.current_attack_state.is_inactive(),
+			"Voluntary finish must not create a new CurrentAttackState.")
+	assert_null(state.completed_attack_inspection,
+			"The ordinary declaration Skip consumes the satisfied inspection once.")
+	assert_false(history.is_empty())
+	var skip: GameCommand = history.back()
+	assert_eq(skip.command_type, "skip_attack")
+	assert_eq(str(skip.payload.get("reason", "")), "voluntary")
+	assert_eq(str(skip.payload.get("declaration_context", "")),
+			SkipAttackCommand.CONTEXT_SHIP_ATTACK)
+	assert_eq(str(skip.payload.get("completed_attack_inspection_id", "")),
+			inspection.inspection_id())
+	assert_false(attacker.attack_step_active)
+	assert_eq(attacker.maneuver_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(state.interaction_flow.step_id,
+			Constants.InteractionStep.MANEUVER_STEP)
+
+
 func test_post_ack_anti_squadron_exhaustion_recovers_normal_ship_attack() -> void:
 	var state: GameState = _satisfied_inactive_anti_state(false)
 	var defender: ShipInstance = state.get_ship(0, 0)

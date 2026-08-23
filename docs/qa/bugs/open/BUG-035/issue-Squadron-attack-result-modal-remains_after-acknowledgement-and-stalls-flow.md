@@ -1157,4 +1157,65 @@ A test that stops after proving exactly one `squadron_done` does not by itself p
 
 Do not repair this by adding a presentation callback that directly advances the ship. The next investigation must establish the accepted owner of the post-`squadron_done` Ship Attack re-evaluation and preserve ADR-010 / CON-007 / SAI-050 decision-equivalent recovery.
 
-BUG-035 remains OPEN.
+### Manual Retest — Active Anti-Squadron Attack Cannot Be Skipped
+
+A further Hot-Seat manual retest exposed an additional anti-squadron Attack
+edge that requires classification before BUG-035 can be accepted.
+
+Evidence:
+
+- `annotation_20260822_180028_001.json`
+
+During a Victory II-class Star Destroyer anti-squadron attack from its front
+hull zone, the player cannot skip/cancel the currently active attack against an
+X-wing squadron.
+
+The captured canonical state shows:
+
+- `CurrentAttackState.active == true`;
+- `attack_id == "attack:258"`;
+- the attacker is a ship;
+- the defender is a squadron;
+- the attack uses the front hull zone;
+- `stage == "pre_roll"`;
+- the attack pool contains one blue die;
+- no completed-result inspection is active.
+
+This differs from the previously repaired post-Attack anti-squadron
+continuation cases. The captured attack has already entered an active
+`CurrentAttackState`; it is not a completed child attack returning to the
+anti-squadron iteration.
+
+The observation therefore raises a narrower Attack-lifecycle question:
+
+> After an anti-squadron attack declaration has been committed and
+> `CurrentAttackState` is active but dice have not yet been rolled, is the player
+> permitted to cancel/skip that individual attack?
+
+This must not be inferred from the presence or absence of a UI Skip action.
+
+Before any implementation change, the current behavior must be checked against
+the accepted Attack declaration/commitment semantics, especially CON-006 and
+the accepted Ship Activation Attack requirements.
+
+The investigation must distinguish:
+
+1. declining/skipping an Attack opportunity before declaration commitment;
+2. declining further anti-squadron attacks between completed individual attacks;
+3. cancelling an already committed individual anti-squadron attack while its
+   `CurrentAttackState` is active at `pre_roll`.
+
+Possible dispositions after investigation:
+
+- if accepted authority already requires cancellation at this point, treat this
+  as a remaining BUG-035-adjacent Attack-lifecycle implementation edge;
+- if accepted authority forbids cancellation after declaration commitment,
+  classify the observed behavior as expected and consider only whether
+  presentation should communicate that commitment more clearly;
+- if accepted authority does not define the case, stop for an Owner decision
+  rather than inventing cancellation semantics.
+
+No repair is authorized from this observation alone.
+
+BUG-035 remains open pending this classification and completion of the remaining
+manual QA.

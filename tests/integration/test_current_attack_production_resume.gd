@@ -1711,6 +1711,108 @@ func test_commanded_squadron_completion_reopens_existing_opportunity() -> void:
 			"No retired attack presentation may survive commanded completion.")
 
 
+func test_commanded_attack_acknowledgement_recovers_remaining_capacity() -> void:
+	var state: GameState = _satisfied_inactive_commanded_attack_state(false)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.ship_data = ship.ship_data.duplicate(true) as ShipData
+	ship.ship_data.squadron_value = 2
+	var second := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	second.pos_x = 0.45
+	second.pos_y = 0.52
+	second.roster_entry_id = "commanded-acknowledgement-second"
+	state.get_player_state(0).squadrons.append(second)
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 2)
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 68))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	await get_tree().process_frame
+
+	assert_eq(_history_types(), [AcknowledgeAttackResultCommand.TYPE,
+			CompleteSquadronActivationCommand.TYPE])
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_eq(_history_types().count("advance_activation_step"), 0,
+			"Remaining commanded capacity must not synthesize parent progression.")
+	assert_null(state.completed_attack_inspection)
+	assert_eq(GameManager.get_activating_ship(), ship)
+	assert_null(state.get_active_squadron_activation())
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+	assert_eq(ship.squadron_command_activations_committed, 1)
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 2)
+	assert_true(board._squadron_phase_controller.is_command_mode())
+	var second_token: SquadronToken = _board_squadron_token(board, second)
+	assert_true(board._squadron_phase_controller.try_handle_squadron_click(
+			second_token),
+			"Canonical remaining capacity must recover the next legal command.")
+
+
+func test_commanded_attack_terminal_when_capacity_remains_without_candidate() \
+		-> void:
+	var state: GameState = _satisfied_inactive_commanded_attack_state(false)
+	var ship: ShipInstance = state.get_ship(0, 0)
+	ship.ship_data = ship.ship_data.duplicate(true) as ShipData
+	ship.ship_data.squadron_value = 2
+	var out_of_range := SquadronInstance.create_from_data(
+			DECOY_SQUADRON_KEY,
+			AssetLoader.load_squadron_data(DECOY_SQUADRON_KEY), 0)
+	out_of_range.pos_x = 0.95
+	out_of_range.pos_y = 0.05
+	out_of_range.roster_entry_id = "commanded-terminal-out-of-range"
+	state.get_player_state(0).squadrons.append(out_of_range)
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 2)
+	assert_false(SquadronCommandResolver.is_squadron_in_authoritative_range(
+			ship, out_of_range))
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 69))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	var rejected_repair: Array[String] = []
+	var rejection_callback: Callable = func(command: GameCommand, reason: String) -> void:
+		if command.command_type == "advance_activation_step" \
+				and str(command.payload.get("step_id", "")) == "repair_step":
+			rejected_repair.append(reason)
+	CommandProcessor.command_rejected.connect(rejection_callback)
+
+	assert_false(CommandProcessor.submit(AcknowledgeAttackResultCommand.new(0, {
+		"inspection_id": inspection.inspection_id(),
+	})).is_empty())
+	if CommandProcessor.command_rejected.is_connected(rejection_callback):
+		CommandProcessor.command_rejected.disconnect(rejection_callback)
+	await get_tree().process_frame
+
+	assert_eq(_history_types().slice(0, 3), [
+			AcknowledgeAttackResultCommand.TYPE,
+			CompleteSquadronActivationCommand.TYPE,
+			"advance_activation_step",
+	])
+	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_eq(_history_activation_step_count("repair_step"), 1,
+			"Only CommandProcessor's queued parent return may select Repair.")
+	assert_true(rejected_repair.is_empty(),
+			"No redundant controller-originated Repair transition may be rejected.")
+	assert_eq(_history_types().count("spend_dial"), 0,
+			"The controller must not finalize the commanded dial on this return.")
+	assert_eq(_history_types().count("spend_token"), 0,
+			"The controller must not finalize a commanded token on this return.")
+	assert_null(state.completed_attack_inspection)
+	assert_null(state.get_active_squadron_activation())
+	assert_eq(ship.squadron_command_activations_committed, 1)
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 2)
+	assert_eq(state.interaction_flow.step_id, Constants.InteractionStep.ATTACK_STEP,
+			"Ship Activation must reach its next applicable stable state.")
+
+
 func test_token_commanded_attack_acknowledgement_completes_when_move_is_blocked() \
 		-> void:
 	var state: GameState = _satisfied_inactive_commanded_attack_state(false, true)
@@ -1731,21 +1833,27 @@ func test_token_commanded_attack_acknowledgement_completes_when_move_is_blocked(
 	})).is_empty())
 	await get_tree().process_frame
 
-	assert_eq(_history_types().slice(0, 2), [
+	assert_eq(_history_types().slice(0, 3), [
 			AcknowledgeAttackResultCommand.TYPE,
 			CompleteSquadronActivationCommand.TYPE,
+			"advance_activation_step",
 	])
 	assert_eq(_history_types().count(CompleteSquadronActivationCommand.TYPE), 1)
+	assert_eq(str((CommandProcessor.get_history()[2] as GameCommand).payload.get(
+			"step_id", "")), "repair_step")
+	assert_eq(_history_activation_step_count("repair_step"), 1,
+			"The parent return must select Repair exactly once.")
 	assert_null(state.completed_attack_inspection,
 			"The terminal completion consumes the satisfied inspection once.")
 	assert_true(squadron.activated_this_round)
 	assert_eq(ship.squadron_command_activations_committed, 1)
 	assert_eq(ship.squadron_command_opportunity_disposition,
 			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
-	assert_ne(state.interaction_flow.step_id, Constants.InteractionStep.SQUADRON_STEP,
-			"Terminal completion must leave the already-reached Squadron step.")
-	assert_eq(_history_types().count("spend_token"), 1,
-			"The token-only terminal command finalizes its resource once.")
+	assert_eq(SquadronCommandResolver.authoritative_capacity(ship), 1)
+	assert_eq(state.interaction_flow.step_id, Constants.InteractionStep.ATTACK_STEP,
+			"Ship Activation re-evaluates the unavailable Repair step to a stable next state.")
+	assert_eq(_history_types().count("spend_token"), 0,
+			"Presentation must not finalize resources during the terminal return.")
 	assert_false(board._squadron_phase_controller.is_command_mode())
 
 
@@ -1798,6 +1906,112 @@ func test_passive_and_replay_acknowledgements_do_not_synthesize_blocked_move_com
 				"%s must consume recorded completion instead of synthesizing it." % mode)
 		assert_not_null(state.completed_attack_inspection)
 		assert_true(state.completed_attack_inspection.is_satisfied())
+
+
+func test_mirror_and_replay_apply_recorded_commanded_terminal_return_only() \
+		-> void:
+	for mode: String in ["mirror", "replay"]:
+		CommandProcessor.reset()
+		var state: GameState = _command_squadron_projection_state(true)
+		var ship: ShipInstance = state.get_ship(0, 0)
+		var squadron: SquadronInstance = state.get_squadron(0, 0)
+		assert_true(squadron.commit_move_action(squadron.activation_id, false))
+		GameManager.current_game_state = state
+		GameManager.is_game_active = true
+		GameManager.active_player = 0
+		var completion := CompleteSquadronActivationCommand.new(0, {
+			"squadron_index": 0,
+			"activation_id": squadron.activation_id,
+			"activation_context": squadron.activation_context,
+			"commanding_ship_player": 0,
+			"commanding_ship_index": 0,
+			"ship_activation_identity": ship.ship_activation_identity,
+		})
+		completion.sequence = CommandProcessor.get_next_sequence()
+		var completion_result: Dictionary = \
+			CommandProcessor.submit_mirror(completion) if mode == "mirror" \
+			else CommandProcessor.submit_replay(completion)
+		assert_false(completion_result.is_empty())
+		assert_eq(_history_types(), [CompleteSquadronActivationCommand.TYPE])
+		assert_eq(_history_activation_step_count("repair_step"), 0,
+				"%s must not synthesize the parent transition." % mode)
+		assert_eq(ship.squadron_command_opportunity_disposition,
+				ShipInstance.ACTIVATION_DISPOSITION_OPEN)
+
+		var recorded_return := AdvanceActivationStepCommand.new(0, {
+			"ship_index": 0,
+			"step_id": "repair_step",
+			"ship_activation_identity": ship.ship_activation_identity,
+		})
+		recorded_return.sequence = CommandProcessor.get_next_sequence()
+		var return_result: Dictionary = \
+			CommandProcessor.submit_mirror(recorded_return) if mode == "mirror" \
+			else CommandProcessor.submit_replay(recorded_return)
+		assert_false(return_result.is_empty())
+		assert_eq(_history_activation_step_count("repair_step"), 1)
+		assert_eq(ship.squadron_command_opportunity_disposition,
+				ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+		assert_eq(state.interaction_flow.step_id,
+				Constants.InteractionStep.REPAIR_STEP)
+
+
+func test_save_load_and_reconnect_reconstruct_commanded_terminal_return() -> void:
+	var source: GameState = _command_squadron_projection_state(true)
+	var squadron: SquadronInstance = source.get_squadron(0, 0)
+	assert_true(squadron.commit_move_action(squadron.activation_id, false))
+	GameManager.current_game_state = source
+	GameManager.is_game_active = true
+	GameManager.active_player = 0
+	var ship: ShipInstance = source.get_ship(0, 0)
+	var completion := CompleteSquadronActivationCommand.new(0, {
+		"squadron_index": 0,
+		"activation_id": squadron.activation_id,
+		"activation_context": squadron.activation_context,
+		"commanding_ship_player": 0,
+		"commanding_ship_index": 0,
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+	assert_false(CommandProcessor.submit(completion).is_empty())
+	assert_eq(_history_activation_step_count("repair_step"), 1)
+	assert_eq(ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+
+	var manager: Node = SAVE_MANAGER_SCRIPT.new()
+	assert_true(manager.save_game(source, TEST_SAVE))
+	var loaded: Dictionary = manager.load_game(TEST_SAVE)
+	assert_true(bool(loaded.get("ok", false)))
+	var restored: GameState = loaded.get("state") as GameState
+	var metadata: SaveGameMetadata = loaded.get("meta") as SaveGameMetadata
+	assert_true(GameManager.start_new_game_from_state(
+			restored, LearningScenarioSetup.DEFAULT_SCENARIO_ID,
+			metadata.next_command_sequence))
+	assert_true(_history_types().is_empty(),
+			"Save/load applies the recorded terminal return without synthesis.")
+	var restored_ship: ShipInstance = restored.get_ship(0, 0)
+	assert_eq(restored_ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(restored_ship.squadron_command_activations_committed, 1)
+	assert_eq(restored.interaction_flow.step_id,
+			Constants.InteractionStep.REPAIR_STEP)
+
+	var filtered: Dictionary = StateFilter.filter_for_player(source.serialize(), 1)
+	var reconnect_state: GameState = GameState.deserialize(filtered)
+	assert_not_null(reconnect_state)
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			reconnect_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 2))
+	assert_true(_history_types().is_empty(),
+			"Reconnect derives the recorded stable state without a controller submit.")
+	var reconnect_ship: ShipInstance = reconnect_state.get_ship(0, 0)
+	assert_not_null(reconnect_ship)
+	assert_eq(reconnect_ship.squadron_command_opportunity_disposition,
+			ShipInstance.ACTIVATION_DISPOSITION_CONSUMED)
+	assert_eq(reconnect_state.interaction_flow.step_id,
+			Constants.InteractionStep.REPAIR_STEP)
+	manager.delete_save(TEST_SAVE)
+	manager.free()
 
 
 func test_real_hotseat_no_defense_accuracy_submits_one_resolve_damage() -> void:
@@ -2830,6 +3044,15 @@ func _command_count(commands: Array[GameCommand],
 	var count: int = 0
 	for command: GameCommand in commands:
 		if command.command_type == command_type:
+			count += 1
+	return count
+
+
+func _history_activation_step_count(step_id: String) -> int:
+	var count: int = 0
+	for command: GameCommand in CommandProcessor.get_history():
+		if command.command_type == "advance_activation_step" \
+				and str(command.payload.get("step_id", "")) == step_id:
 			count += 1
 	return count
 

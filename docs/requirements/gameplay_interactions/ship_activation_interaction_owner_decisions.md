@@ -6,6 +6,8 @@
 
 Accepted by: Project Owner
 Accepted date: 2026-08-21
+Amended: 2026-08-23 following Owner clarification during BUG-035 manual QA
+Accepted update date: 2026-08-23
 
 ## 1. Purpose and authority
 
@@ -585,14 +587,13 @@ After an individual attack completes, control returns to the enclosing ship Atta
               BeginAttackCommand
                      │
                      ▼
-          authoritative attack established
+          individual attack committed
+        (must proceed through Attack Flow)
                      │
                      ▼
               Shared Attack Flow
                      │
                      ├─ roll attack dice
-                     │    └─ thereafter attack
-                     │       cannot be voluntarily abandoned
                      │
                      ▼
               attack completes
@@ -616,13 +617,12 @@ The existence of another legal attack does not force the player to make it.
 
 ---
 
-## D-SA-052 — Attack declaration and dice-roll commitment semantics
+## D-SA-052 — Attack declaration commitment semantics
 
 ### Decision
 
-Pre-confirmation target/arc exploration is reversible.
-
-Before confirming an attack declaration, the player may:
+Before an individual Attack is committed through acceptance of
+`BeginAttackCommand`, target/arc exploration is reversible. The player may:
 
 - inspect a potential target;
 - inspect a potential attacking arc;
@@ -632,12 +632,19 @@ Before confirming an attack declaration, the player may:
 
 Confirming the attack declaration follows the accepted Attack declaration
 lifecycle governed by CON-006. `BeginAttackCommand` establishes the
-authoritative attack and creates `CurrentAttackState`.
+authoritative attack and creates `CurrentAttackState`. Its acceptance is the
+voluntary-abandonment commitment boundary.
 
-Rolling the attack dice does not establish the authoritative attack
-boundary. Instead, it establishes the later gameplay commitment that the
-already-declared attack must proceed through the governed Attack Flow
-rather than being voluntarily abandoned in favor of another attack.
+After `BeginAttackCommand` has been accepted, the individual Attack may not
+be voluntarily abandoned and must proceed through its governed Attack Flow,
+except where applicable authoritative rule authority explicitly provides
+otherwise. Rolling attack dice is a governed downstream Attack-Flow step, not
+the voluntary-abandonment commitment boundary.
+
+After a completed anti-squadron child Attack, the controlling player may
+decline further individual Attacks in that iteration without committing
+another `BeginAttackCommand`. The enclosing Ship Attack opportunity then
+continues according to the existing shared Attack authority.
 
 The detailed declaration lifecycle and Attack Flow remain delegated to
 the accepted Attack architecture and contracts.
@@ -660,11 +667,15 @@ Target / arc exploration
      (`CurrentAttackState`)
               │
               ▼
-        Roll attack dice
+   voluntary abandonment no longer
+   permitted; attack proceeds through
+        governed Attack Flow
               │
               ▼
-   attack must proceed to valid
-           completion
+        Shared Attack Flow
+              │
+              ▼
+        Roll attack dice
 ```
 
 ---
@@ -1248,7 +1259,7 @@ The refinement should:
 2. revise the existing Ship-selection/Activation-entry distinction around inspection versus activation commitment;
 3. refine Squadron Command around sequential shared Squadron Activations and source priority;
 4. refine Repair around sequential actions, source priority, and transient Engineering capability;
-5. preserve delegation to the existing shared Attack authority while documenting reversible pre-confirmation attack exploration, CON-006 declaration commitment through `BeginAttackCommand`, and mandatory continuation once attack dice have been rolled;
+5. preserve delegation to the existing shared Attack authority while documenting reversible pre-commit attack exploration, CON-006 voluntary-abandonment commitment through accepted `BeginAttackCommand`, mandatory continuation after that acceptance, and post-completion anti-squadron iteration decline without another Begin;
 6. restructure Maneuver around Determine Course and Execute Maneuver;
 7. move Squadron displacement beneath Maneuver overlap resolution rather than keeping it as a peer Ship Activation step;
 8. add ship-overlap and obstacle-overlap requirements at the appropriate hierarchical level;

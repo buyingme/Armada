@@ -1765,6 +1765,67 @@ func submit_acknowledge_attack_result(player: int,
 	}))
 
 
+## Returns the existing Ship Activation transition only after a completed
+## ship-commanded Squadron activation leaves no canonical command decision.
+## CommandProcessor owns live submission; this evaluator never reads
+## presentation state or submits a command itself.
+func derive_commanded_squadron_terminal_transition(game_state: GameState,
+		completion: GameCommand) -> GameCommand:
+	if game_state == null or completion == null \
+			or completion.command_type != CompleteSquadronActivationCommand.TYPE \
+			or str(completion.payload.get("activation_context", "")) \
+					!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND \
+			or game_state.current_phase != Constants.GamePhase.SHIP:
+		return null
+	var ship_player: int = int(completion.payload.get(
+			"commanding_ship_player", -1))
+	var ship_index: int = int(completion.payload.get(
+			"commanding_ship_index", -1))
+	var ship: ShipInstance = game_state.get_ship(ship_player, ship_index)
+	if ship == null or ship.is_destroyed() \
+			or ship.owner_player != completion.player_index \
+			or str(completion.payload.get("ship_activation_identity", "")) \
+					!= ship.ship_activation_identity \
+			or not ship.has_active_ship_activation() \
+			or ship.squadron_command_opportunity_disposition \
+					!= ShipInstance.ACTIVATION_DISPOSITION_OPEN \
+			or game_state.get_active_squadron_activation() != null:
+		return null
+	var capacity: int = SquadronCommandResolver.authoritative_capacity(ship)
+	if capacity <= 0 or ship.squadron_command_activations_committed <= 0 \
+			or ship.squadron_command_activations_committed > capacity:
+		return null
+	if ship.squadron_command_activations_committed < capacity \
+			and _has_eligible_commanded_squadron(game_state, ship):
+		return null
+	return AdvanceActivationStepCommand.new(ship.owner_player, {
+		"ship_index": ship_index,
+		"step_id": "repair_step",
+		"ship_activation_identity": ship.ship_activation_identity,
+	})
+
+
+## Mirrors the existing ActivateSquadronCommand eligibility boundary using
+## model-space authoritative facts only.  Candidate choice remains owned by
+## Squadron Command presentation after this query reports a live decision.
+func _has_eligible_commanded_squadron(game_state: GameState,
+		ship: ShipInstance) -> bool:
+	var player_state: PlayerState = game_state.get_player_state(ship.owner_player)
+	if player_state == null:
+		return false
+	for raw_squadron: Variant in player_state.squadrons:
+		if not (raw_squadron is SquadronInstance):
+			continue
+		var squadron: SquadronInstance = raw_squadron as SquadronInstance
+		if squadron.is_destroyed() or squadron.activated_this_round \
+				or squadron.has_activation_action_state():
+			continue
+		if SquadronCommandResolver.is_squadron_in_authoritative_range(
+				ship, squadron):
+			return true
+	return false
+
+
 ## Invokes the existing post-success consumer derivation once after a complete
 ## canonical state has been installed and its projection rebuilt. Passive
 ## mirrors do not synthesize commands; host submission preserves ordered

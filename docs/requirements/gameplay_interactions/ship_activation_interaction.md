@@ -9,6 +9,7 @@
 
 Accepted by: Project Owner
 Accepted date: 2026-08-21
+Accepted update date: 2026-08-23
 
 ## 1. Purpose and authority
 
@@ -193,14 +194,22 @@ deferred to a child requirements specification.
   rule-capability authority determine declaration legality and continuation.
 - **Completion / result:** Pre-confirmation exploration is transient.
   Confirmation submits the CON-006 `BeginAttackCommand`, which creates
-  authoritative `CurrentAttackState`; an accepted Skip consumes the
-  declaration opportunity without creating one. The detailed shared Attack
-  Flow remains delegated. Once that flow rolls attack dice, the already
-  declared attack may not be voluntarily abandoned and must reach its governed
-  completion. After an individual attack completes, the enclosing Attack
-  opportunity determines any further legal declaration or finish.
-- **Recovery:** SAI-001 SHALL recover each live declaration/Skip decision,
-  controller, authoritative legality source, and continuation semantics.
+  authoritative `CurrentAttackState`; its acceptance is the individual
+  Attack's voluntary-abandonment commitment boundary. Before that acceptance,
+  the controller may abandon the uncommitted candidate or decline the
+  remaining optional Attack opportunity as applicable. After that acceptance,
+  the individual Attack may not be voluntarily abandoned and SHALL proceed
+  through its governed shared Attack Flow, except where applicable
+  authoritative rule authority explicitly provides otherwise. An accepted
+  Skip consumes the declaration opportunity without creating a current attack.
+  The detailed shared Attack Flow remains delegated. After an individual
+  Attack completes, including an anti-squadron child Attack, the enclosing
+  Attack opportunity determines any further legal declaration or finish; the
+  controller may decline further anti-squadron individual Attacks without
+  committing another `BeginAttackCommand`.
+- **Recovery:** SAI-001 SHALL recover each live pre-commit declaration or
+  decline decision, controller, authoritative legality source, and
+  post-completion continuation semantics.
   Candidate target/arc information before confirmation is not recoverable
   gameplay state.
 - **Transient presentation:** Candidate previews, target/arc aids, dice

@@ -309,13 +309,37 @@ func _enqueue_post_success_continuation(game_state: GameState,
 			game_state, command, result, execution_mode)
 	var attack: GameCommand = _attack_continuation(
 			game_state, command, result, execution_mode)
+	var commanded_squadron: GameCommand = \
+			_commanded_squadron_completion_continuation(
+					game_state, command, execution_mode)
 	if timing != null and attack != null:
+		_log.warn("Conflicting post-success continuations after [%s]." %
+				command.command_type)
+	elif (timing != null or attack != null) and commanded_squadron != null:
 		_log.warn("Conflicting post-success continuations after [%s]." %
 				command.command_type)
 	elif timing != null:
 		_observer_followups.append(timing)
 	elif attack != null:
 		_observer_followups.append(attack)
+	elif commanded_squadron != null:
+		_observer_followups.append(commanded_squadron)
+
+
+## Bounded CON-007 composed-return seam for a completed ship-commanded
+## Squadron activation.  GameManager derives only the canonical terminal
+## result; this processor remains the sole live-authority submitter.
+func _commanded_squadron_completion_continuation(game_state: GameState,
+		command: GameCommand,
+		execution_mode: String) -> GameCommand:
+	if execution_mode != TIMING_WINDOW_ORCHESTRATOR.MODE_LIVE_AUTHORITY \
+			or command == null \
+			or command.command_type != CompleteSquadronActivationCommand.TYPE \
+			or str(command.payload.get("activation_context", "")) \
+					!= SquadronInstance.ACTIVATION_CONTEXT_SHIP_SQUADRON_COMMAND:
+		return null
+	return GameManager.derive_commanded_squadron_terminal_transition(
+			game_state, command)
 
 
 func _timing_continuation(game_state: GameState,

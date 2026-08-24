@@ -1733,7 +1733,10 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 	if not current_game_state:
 		return {}
 	var payload: Dictionary = {"reason": reason}
-	if reason == "squadron_done":
+	if reason in [
+		SkipAttackCommand.REASON_SQUADRON_DONE,
+		SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+	]:
 		payload["ship_index"] = ship_index
 	var attack: CurrentAttackState = current_game_state.current_attack_state
 	if attack.active:
@@ -1741,7 +1744,10 @@ func submit_skip_attack(player: int, reason: String = "voluntary",
 		if current_game_state.timing_window_state.active:
 			payload[TimingWindowOrchestrator.COMMAND_KEY_LIFECYCLE_ID] = \
 					current_game_state.timing_window_state.lifecycle_id
-	elif reason != "squadron_done":
+	elif reason not in [
+		SkipAttackCommand.REASON_SQUADRON_DONE,
+		SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+	]:
 		payload.merge(_declaration_identity_for_player(player), true)
 	_decorate_completed_attack_inspection_consumer(payload)
 	var cmd := SkipAttackCommand.new(player, payload)

@@ -5,8 +5,10 @@
 ##
 ## Payload:
 ##   "reason" — optional human-readable reason for the skip
-##              (e.g. "no_targets", "voluntary", "squadron_done").
-##   "ship_index" — required stable attacker identity for "squadron_done".
+##              (e.g. "no_targets", "voluntary", "squadron_done",
+##              "anti_squadron_voluntary_done").
+##   "ship_index" — required stable attacker identity for anti-squadron
+##              child-finish reasons.
 ##
 ## Rules Reference: "Attack", p.2 —
 ## "A ship can perform up to two attacks during its activation."
@@ -20,6 +22,9 @@ const H9_RULE: GDScript = preload(
 		"res://src/core/effects/rules/upgrades/turbolasers/h9_turbolasers.gd")
 const FLOW_SPEC_SCRIPT: GDScript = preload("res://src/core/state/flow_spec.gd")
 const CONTEXT_SHIP_ATTACK: String = "ship_attack"
+const REASON_SQUADRON_DONE: String = "squadron_done"
+const REASON_ANTI_SQUADRON_VOLUNTARY_DONE: String = \
+		"anti_squadron_voluntary_done"
 const TERMINAL_REASONS: Array[String] = [
 	"cancelled",
 	"flow_replaced",
@@ -55,14 +60,19 @@ func validate(game_state: GameState) -> String:
 		return "Not in Ship or Squadron Phase."
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if not attack.active:
-		if str(payload.get("reason", "")) == "squadron_done":
+		var reason: String = str(payload.get("reason", ""))
+		if reason == REASON_SQUADRON_DONE \
+				or reason == REASON_ANTI_SQUADRON_VOLUNTARY_DONE:
 			var ship: ShipInstance = _squadron_iteration_ship(game_state)
 			if ship == null:
 				return "No active anti-squadron continuation."
-			if not str(payload.get(
-					"completed_attack_inspection_id", "")).is_empty():
+			if reason == REASON_ANTI_SQUADRON_VOLUNTARY_DONE \
+					or not str(payload.get(
+							"completed_attack_inspection_id", "")).is_empty():
 				var context_reason: String = \
-					_validate_squadron_done_inspection(game_state, ship)
+						_validate_anti_squadron_child_finish_inspection(
+								game_state, ship,
+								reason == REASON_SQUADRON_DONE)
 				if context_reason != "":
 					return context_reason
 			return ""
@@ -105,7 +115,10 @@ func execute(game_state: GameState) -> Dictionary:
 				return {}
 		cleared = ECM_SCRIPT.clear_attack_state(game_state, attack_id)
 		h9_cleared = H9_RULE.clear_attack_guards(game_state, attack_id)
-	elif str(payload.get("reason", "")) == "squadron_done":
+	elif str(payload.get("reason", "")) in [
+		REASON_SQUADRON_DONE,
+		REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+	]:
 		var ship: ShipInstance = _squadron_iteration_ship(game_state)
 		if ship == null:
 			return {}
@@ -328,8 +341,8 @@ func _squadron_iteration_ship(game_state: GameState) -> ShipInstance:
 	return ship
 
 
-func _validate_squadron_done_inspection(game_state: GameState,
-		ship: ShipInstance) -> String:
+func _validate_anti_squadron_child_finish_inspection(game_state: GameState,
+		ship: ShipInstance, require_target_exhaustion: bool) -> String:
 	var inspection: CompletedAttackInspection = game_state.completed_attack_inspection
 	if inspection == null:
 		return "No completed attack inspection is pending."
@@ -342,7 +355,8 @@ func _validate_squadron_done_inspection(game_state: GameState,
 				!= int(payload.get("ship_index", -1)) \
 			or str(defender.get("kind", "")) != CurrentAttackState.KIND_SQUADRON:
 		return "Completed inspection does not match this anti-squadron iteration."
-	if _has_remaining_squadron_target(game_state, ship):
+	if require_target_exhaustion \
+			and _has_remaining_squadron_target(game_state, ship):
 		return "An eligible anti-squadron target remains."
 	return ""
 

@@ -55,7 +55,10 @@ static func _derive_followup(game_state: GameState,
 	var attack: CurrentAttackState = game_state.current_attack_state
 	if attack == null or not attack.active:
 		if command.command_type == "skip_attack" \
-				and str(command.payload.get("reason", "")) == "squadron_done":
+				and str(command.payload.get("reason", "")) in [
+					SkipAttackCommand.REASON_SQUADRON_DONE,
+					SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+				]:
 			return _derive_post_squadron_done_ship_return(game_state, command)
 		return _derive_inspection_release(game_state)
 	if command.command_type in [

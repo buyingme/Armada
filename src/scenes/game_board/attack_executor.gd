@@ -4365,16 +4365,22 @@ func _on_attack_skip() -> void:
 		return
 	var ship: ShipInstance = _authoritative_attack_ship()
 	if ship != null and ship.anti_squadron_attack_zone >= 0 and \
-			_target_selector.is_target_selecting() \
-			and not _has_remaining_authoritative_anti_squadron_target(ship):
-		_log.info(
-				"Exhausted squadron loop skipped — closing the iteration.")
+			_target_selector.is_target_selecting():
+		var has_remaining_target: bool = \
+				_has_remaining_authoritative_anti_squadron_target(ship)
+		_log.info("%s squadron loop skipped — closing the iteration." % [
+				"Voluntary" if has_remaining_target else "Exhausted",
+		])
 		var game_state: GameState = GameManager.current_game_state
 		var ship_index: int = game_state.find_ship_index(ship) \
 				if game_state != null else -1
 		_pending_squadron_done_after_skip = true
 		var loop_skip: Dictionary = GameManager.submit_skip_attack(
-				_get_attacker_player(), "squadron_done", ship_index)
+				_get_attacker_player(),
+				SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE \
+						if has_remaining_target \
+						else SkipAttackCommand.REASON_SQUADRON_DONE,
+				ship_index)
 		if _is_waiting_for_remote_command_result(loop_skip):
 			return
 		if loop_skip.is_empty():

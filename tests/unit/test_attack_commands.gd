@@ -641,6 +641,40 @@ func test_skip_attack_serialize_roundtrip() -> void:
 			"Stable Step 6 attacker identity should round-trip.")
 
 
+func test_voluntary_anti_squadron_child_finish_serialize_roundtrip() -> void:
+	var cmd := SkipAttackCommand.new(0, {
+		"reason": SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+		"ship_index": 2,
+		"completed_attack_inspection_id": "completed:attack:child-finish",
+	})
+	var restored: GameCommand = GameCommand.deserialize(cmd.serialize())
+	assert_not_null(restored)
+	assert_eq(restored.player_index, 0)
+	assert_eq(restored.payload.get("reason", ""),
+			SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE)
+	assert_eq(restored.payload.get("ship_index", -1), 2)
+	assert_eq(restored.payload.get("completed_attack_inspection_id", ""),
+			"completed:attack:child-finish")
+	assert_false(restored.payload.has("controller"),
+			"Controller provenance remains command-side, not payload state.")
+
+
+func test_voluntary_anti_squadron_child_finish_requires_inspection() -> void:
+	var ship_index: int = _add_ship(0)
+	var ship: ShipInstance = _state.get_ship(0, ship_index)
+	ship.begin_attack_step()
+	ship.commit_attack(Constants.HullZone.FRONT, 1,
+			CurrentAttackState.KIND_SQUADRON, 0)
+	var before: Dictionary = ship.attack_progress_snapshot()
+	var cmd := SkipAttackCommand.new(0, {
+		"reason": SkipAttackCommand.REASON_ANTI_SQUADRON_VOLUNTARY_DONE,
+		"ship_index": ship_index,
+	})
+	assert_ne(cmd.validate(_state), "")
+	assert_eq(ship.attack_progress_snapshot(), before,
+			"A missing inspection must not close the child iteration.")
+
+
 func test_squadron_done_skip_closes_iteration_and_retains_second_attack() -> void:
 	var ship_index: int = _add_ship(0)
 	var ship: ShipInstance = _state.get_ship(0, ship_index)

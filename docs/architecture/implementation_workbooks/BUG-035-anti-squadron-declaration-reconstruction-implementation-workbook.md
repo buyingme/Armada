@@ -6,11 +6,14 @@ Accepted date: 2026-08-21
 Accepted update date: 2026-08-22
 Accepted second update date: 2026-08-22
 Accepted third update date: 2026-08-23
+Accepted fourth update date: 2026-08-25
 
 Amendment basis: Owner-directed BUG-035 convergence re-entry, accepted
 ship-commanded Squadron terminal route-coverage finding (2026-08-22), and
 Owner-accepted clarification of pre-commit Attack decline / Begin commitment
-semantics discovered during Hot-Seat manual QA (2026-08-23).
+semantics discovered during Hot-Seat manual QA (2026-08-23), and the
+two-human Network completed-result acknowledgement/recovery diagnosis
+(2026-08-24).
 
 Purpose: sole branch-complete implementation specification for the remaining
 BUG-035 repair. It preserves the accepted anti-squadron declaration
@@ -19,6 +22,9 @@ the accepted ship-commanded Squadron terminal convergence slice required by
 refined CON-007. It additionally incorporates the manual-QA finding that the
 remaining optional anti-squadron Attack opportunity must be voluntarily
 finishable before another individual `BeginAttackCommand` is accepted.
+It additionally incorporates the bounded Network result-presentation defect:
+a pending canonical completed-result inspection must take presentation
+precedence over a stale Attack-flow or transient Attack-panel surface.
 
 Scope: after a completed ship anti-squadron attack is acknowledged, restore a
 remaining legal squadron declaration where one exists and also expose the
@@ -30,7 +36,9 @@ activation through existing Squadron Command and Ship Activation ownership
 without making presentation machinery semantic authority. This workbook does
 not redefine shared Attack completion, completed-result ownership,
 `BeginAttackCommand` declaration commitment, post-Begin abandonment semantics,
-or Ship Activation ownership.
+or Ship Activation ownership. It authorizes only canonical-inspection-derived
+acknowledgement/waiting presentation and its reconstruction; it does not alter
+acknowledgement entitlement, validation, mutation, release, or continuation.
 
 ## 1. Authority, Problem, And Outcome
 
@@ -46,8 +54,14 @@ Binding authority, in precedence order:
 - accepted [Ship Activation interaction requirements](../../requirements/gameplay_interactions/ship_activation_interaction.md), especially SAI-001 and SAI-050.
 
 Implementation evidence includes the BUG-035 issue history and latest manual
-reproduction, the current pre-existing dirty BUG-035 working tree, and the
-2026-08-22 convergence re-entry audit.
+reproduction, the current pre-existing dirty BUG-035 working tree, the
+2026-08-22 convergence re-entry audit, and the 2026-08-24 two-human Network
+capture at `saves/annotations/annotation_20260824_195041_001.json`. The
+diagnosis establishes that player 0 is the host and attacking player, player
+1 has already acknowledged, the host's distinct required principal remains
+outstanding, `CurrentAttackState` is inactive, and the canonical inspection is
+valid. `logs/game_20260824_195122.log` records the corresponding host/lobby
+player-to-peer assignment.
 
 BUG-035 is an implementation defect against those authorities. The accepted
 diagnosis and required result are:
@@ -63,6 +77,7 @@ diagnosis and required result are:
 | Enclosing Ship Attack return | After `squadron_done`, the existing continuation evaluation stops because inspection-driven release has ended. | Remaining BUG-035 convergence defect. |
 | Ship-commanded Squadron terminal return | `CompleteSquadronActivationCommand` correctly completes the child and restores a Squadron-step projection, but terminal command completion is then inferred by `InteractionFlow` → `ModalRouter` → `ShipActivationController` → scene-local `SquadronCommandResolver`. | Proven CON-007 route gap. Presentation reconstruction may use those facilities; semantic terminal progression may not depend on them. |
 | Voluntary finish with another legal anti-squadron target | Manual QA showed that an individual attack cannot be voluntarily abandoned after accepted Begin, which is expected under clarified SAI-050; the remaining defect is the pre-commit interaction boundary. | Before another `BeginAttackCommand` is accepted, the controller must be able to decline/finish the remaining optional anti-squadron Attack opportunity without creating a new `CurrentAttackState`. This is distinct from exhausted `squadron_done` and from active-Attack cancellation. |
+| Two-human Network partial result acknowledgement | `CompleteAttackCommand` correctly retires the attack and installs a two-principal inspection; `UIProjector` correctly derives `acknowledge_attack_result` for the host's outstanding principal. The captured host retains `InteractionFlow.ATTACK / ATTACK_RESOLVE_DAMAGE` and a stale `Commit Attack` control because the projector affordance has no `ModalRouter` result-presentation consumer/reconstruction path. | Presentation/recovery defect. The canonical inspection is sufficient and correct; it must override stale flow/panel presentation without changing acknowledgement or continuation semantics. |
 
 The already-working path is not reopened or redesigned:
 
@@ -77,6 +92,33 @@ completed anti-squadron Attack
 ```
 
 ## 2. Required Branch-Complete Behavior
+
+### 2.0 Completed-result acknowledgement presentation and recovery
+
+When a canonical `completed_attack_inspection` is pending, its local
+principal-derived result presentation SHALL take precedence over any stale
+`InteractionFlow` Attack step, Attack modal, or transient Attack-panel button.
+For the local gameplay player, projection SHALL derive exactly one of:
+
+1. an actionable **Acknowledge Result** surface when that player's canonical
+   principal is required and has not yet acknowledged; or
+2. a non-actionable waiting/dismissed result surface when that principal has
+   already acknowledged or is not required.
+
+This applies after an accepted `CompleteAttackCommand`, after ordered Network
+mirror application, and when presentation is rebuilt from already-installed
+canonical state (including scene rebuild, save/load, and reconnect). A stale
+Attack `InteractionFlow` may remain implementation evidence or a transient
+projection input, but SHALL NOT suppress, relabel, wire, or make actionable a
+different result decision.
+
+The result control SHALL submit only the existing
+`AcknowledgeAttackResultCommand` with the canonical inspection identity and
+the locally entitled gameplay player. It SHALL NOT acknowledge optimistically,
+derive a principal from a peer ID, player index alone, controller cache, or
+panel state, consume an inspection, release a continuation, or submit an
+attack/declaration/commit command. Existing command validation, principal
+binding, CON-007 release, and exact-once consumption remain unchanged.
 
 ### 2.1 Remaining anti-squadron target
 
@@ -276,17 +318,65 @@ previously accepted anti-squadron post-`squadron_done` convergence work and
 completed-attack release through `CompleteSquadronActivationCommand`; it has
 no role in the newly added commanded-Squadron terminal evaluation.
 
+### Network completed-result presentation/recovery seam
+
+The 2026-08-24 capture is a two-human Network partial-acknowledgement state,
+not a canonical or transport-order defect. The required principals are derived
+from the accepted match player/control binding; the player-1 principal is
+already received, while the host/player-0 principal remains required and
+outstanding. The host is also the attacking player in this reproduction, but
+that coincidence is not a source of entitlement.
+
+`CompleteAttackCommand` has correctly retired `CurrentAttackState` and
+installed `completed:attack:223`. `UIProjector._project_completed_attack_inspection()`
+then derives the host's `acknowledge_attack_result` affordance from that
+inspection and `GameState.principal_id_for_player(local_player)`. The captured
+`InteractionFlow.ATTACK / ATTACK_RESOLVE_DAMAGE` is stale presentation state.
+`ModalRouter._dispatch_modal_intent()` presently does not consume the result
+affordance, leaving the primary Attack panel's previous `Commit Attack`
+semantics visible. That control follows its normal attack-confirm callback and
+cannot progress while the inspection remains outstanding.
+
+The repair SHALL add one projection-only precedence/recovery handoff:
+
+```text
+canonical completed_attack_inspection + local principal entitlement
+→ UIProjector result affordance / waiting state
+→ ModalRouter result-presentation dispatch
+→ existing primary-panel or mirror result surface
+→ existing AcknowledgeAttackResultCommand submission
+```
+
+The handoff SHALL run for accepted command-result routing and for initial
+presentation reconstruction after canonical state is installed. It may reuse
+existing result-panel controls and signal bindings, but it SHALL not depend on
+an active `CurrentAttackState`, an Attack-flow step, an executor-local damage
+identity, a mirror being already open, or another transient callback having
+run. It SHALL suppress/replace stale attack controls only as presentation;
+it SHALL not clear or mutate `InteractionFlow` merely to make the UI correct.
+
+Reliable ordered Network command application remains unchanged. The host
+already applies the authoritative command locally and clients apply accepted
+commands by sequence; no ordering workaround, synthetic command, or
+peer-specific canonical state is authorized. Passive mirrors and replay remain
+non-synthesizing: only an entitled human's explicit acknowledgement may add a
+received principal.
+
 ## 4. Authorized Scope
 
 | File | Authorized boundary | Permitted change |
 | --- | --- | --- |
 | `src/scenes/game_board/attack_executor.gd` | Existing inactive ship declaration reconstruction | Preserve the current pre-existing panel/signal repair. For Section 2.1A, expose the existing authoritative pre-commit voluntary finish/decline choice on the recovered anti-squadron declaration surface if this is the proven presentation seam. Do not create a second semantic Skip path or redesign the declaration lifecycle. |
+| `src/core/network/ui_projector.gd` | Existing completed-inspection local-affordance projection | Preserve canonical principal-derived acknowledgement/waiting derivation. Refine only the result intent data if required for the `ModalRouter` to select an existing result surface; do not project peer identity as entitlement or add presentation-owned lifecycle state. |
+| `src/scenes/game_board/modal_router.gd` | Existing command-result and current-state modal projection dispatch | Add only the Section 2.0 precedence/recovery dispatch from canonical completed-inspection intent to an existing result-presentation endpoint. It must run after accepted command application and during reconstruction, before stale Attack-flow presentation can retain an actionable control. It neither submits nor selects semantic commands. |
+| `src/scenes/game_board/attack_panel_controller.gd` and `src/scenes/game_board/attack_executor.gd`, only if required by the proven existing result endpoint | Existing primary/mirror result-panel presentation and signal binding | Expose or invoke the existing result acknowledgement/waiting surface for the locally entitled principal. Do not introduce a second panel lifecycle, mutate canonical state, infer entitlement from local controller state, or change ordinary declaration/dice Confirm behavior outside precedence while an inspection is pending. |
+| `src/scenes/game_board/game_board.gd`, only if required by the existing ready/reconstruction invocation boundary | Existing post-install presentation reconstruction | Invoke the existing `ModalRouter` projection path once after canonical state and local viewer identity are installed. Do not add a second reconstruction owner, submission path, or release evaluator. |
 | `src/core/state/current_attack_continuation.gd` | Existing post-success release derivation | Add only the bounded post-`squadron_done` Ship Attack re-evaluation needed for Sections 2.2 and 2.3, using existing canonical facts and transactions. |
 | Existing derived-decision presentation bridge, only if proved necessary | Projection of the Section 2.1A voluntary-finish choice and Section 2.2 normal declaration | Reconstruct the canonical derived choices without semantic mutation. For Section 2.1A, invoke only the already-applicable authoritative no-active-Attack Skip/decline transaction when the controller chooses to finish; do not create a second decline mutation path. Do not pre-authorize unrelated controllers or target-selection code. |
 | `src/autoload/command_processor.gd` | Sole CON-007 live-authority post-success seam | Add only the bounded ship-commanded completion hook in its existing deferred post-success path: invoke the GameManager canonical evaluator after an accepted ship-commanded `CompleteSquadronActivationCommand`, and enqueue only its returned existing `AdvanceActivationStepCommand(repair_step)`. No generic continuation, parent-policy, or additional progression semantics are authorized. |
 | `src/autoload/game_manager.gd` | Bounded canonical query used by the processor-owned seam | Add only a purpose-specific evaluator invoked from the authorized `CommandProcessor` hook. It derives live-versus-terminal Squadron Command status from existing canonical facts and returns no transaction or the existing fully identified Ship Activation transition; it neither submits nor enqueues a command and remains independent of all presentation inputs. |
 | `src/scenes/game_board/ship_activation_controller.gd` | Existing command-mode Squadron projection | Remove or neutralize only the terminal semantic submission/finalization branch that currently follows `InteractionFlow`/modal/controller-local resolver state. Retain derived modal, overlay, and recoverable-choice projection; do not move semantic progression into another controller. |
-| `tests/integration/test_current_attack_production_resume.gd` and directly applicable existing BUG-035 tests | Stable-outcome regression coverage | Extend assertions and add only focused branch fixtures needed by Sections 2 and 5. |
+| `tests/integration/test_current_attack_production_resume.gd`, `tests/integration/test_current_attack_shared_protocol.gd`, and directly applicable panel/router tests | Stable-outcome and result-presentation regression coverage | Extend assertions and add only the focused two-human Network partial-acknowledgement and reconstruction fixtures in Sections 2.0 and 5. |
 
 Not authorized: `GameState`, `ShipInstance`, command classes, Ship Activation
 state/commands, `CurrentAttackState`, contracts, ADRs, requirements, generic
@@ -378,6 +468,48 @@ outcomes:
 Focused tests shall also prove exact-once behavior: no duplicate Skip,
 `AdvanceActivationStepCommand`, Begin, or inspection consumption.
 
+### Two-human Network completed-result acknowledgement regression
+
+Add one focused real-GameBoard or equivalent fully composed host/client command
+stream regression from the diagnosed state. It SHALL use two distinct HUMAN
+principals and preserve the actual role arrangement: host/player 0 is the ship
+attacker and remaining acknowledger; client/player 1 is the squadron defender
+and has already acknowledged.
+
+The regression SHALL prove, in order:
+
+1. accepted `CompleteAttackCommand` retires `CurrentAttackState` and installs
+   one canonical inspection with both required principal IDs;
+2. the client/player-1 acknowledgement is accepted through the ordinary
+   Network command path, adding only player 1's principal to the received set;
+3. the host/player-0 principal remains outstanding and is established from
+   canonical binding, not host peer identity or a controller/player-index
+   shortcut;
+4. a stale `InteractionFlow.ATTACK / ATTACK_RESOLVE_DAMAGE` and prior primary
+   **Commit Attack** presentation cannot suppress the host's result decision;
+5. host projection exposes enabled **Acknowledge Result**, wired to the
+   existing result acknowledgement signal/path, and does not expose an
+   actionable declaration, dice, or `Commit Attack` control;
+6. pressing that control submits exactly one
+   `AcknowledgeAttackResultCommand` for player 0 and the matching inspection;
+7. command validation adds only player 0's principal, yielding the expected
+   satisfied inspection and the existing CON-007 release/convergence behavior;
+   and
+8. no acknowledgement is synthesized by either peer, no duplicate
+   acknowledgement or continuation occurs, and no stale control submits an
+   attack-confirm command.
+
+Paired reconstruction coverage SHALL install the same pending, partially
+acknowledged canonical inspection before presentation is built, with no active
+attack and with stale/empty Attack flow variants. It SHALL prove that scene
+rebuild and the applicable save/load or reconnect path re-derive the remaining
+host acknowledgement surface from canonical inspection/principal facts. The
+already-acknowledged client reconstructs only waiting/dismissed presentation.
+Neither reconstruction path may submit an acknowledgement, consume/release the
+inspection, or rely on persisted panel/controller state. Replay SHALL retain
+the same pending/partial ordering from recorded history and likewise shall not
+synthesize acknowledgement.
+
 ### Commanded-Squadron terminal regression
 
 Add real production-path coverage adjacent to the existing commanded-Squadron
@@ -467,6 +599,7 @@ gameplay with no further immediate required transition.
 | Squadron Phase: terminal allocation/handoff | Convergence-complete evidence | Preserve accepted terminal phase/handoff assertion. |
 | Ship-commanded Squadron: remaining action / capacity remains | Convergence-complete canonical/recoverable evidence | Preserve the recoverable live choice assertion; no parent-progression command may be synthesized. |
 | Ship-commanded Squadron: terminal command return | Incomplete: route audit proved controller/modal-dependent semantic bypass | Add the Section 5 commanded-Squadron terminal stable-outcome regression and remove the bypass before declaring this context convergence-complete. |
+| Two-human Network: host is remaining result acknowledger after client acknowledgement | New manual-QA diagnosis; canonical state and command path are valid, but host result presentation is stale | Add the Section 2.0/Section 5 composed result-presentation regression, including stale `ATTACK_RESOLVE_DAMAGE` precedence and exactly one host acknowledgement. |
 
 Existing tests that already prove the refined terminal result shall be retained,
 not rewritten. Tests that stop at a consumer command, modal state, or child
@@ -492,6 +625,15 @@ local controller or modal to complete the command opportunity.
 Regression coverage shall preserve atomic inspection consumption with the
 selected mutating consumer, rejected duplicate/stale behavior, and no
 presentation-owned semantic progression.
+
+For the pending completed-result presentation leg specifically, distribution
+coverage SHALL prove that canonical inspection/principal entitlement is
+installed before local result projection; that a required, outstanding local
+principal receives the acknowledgement surface; that an already-received
+principal receives no duplicate action; and that reconstruction does not
+synthesize acknowledgement or release. This is a decision-equivalent recovery
+obligation under ADR-010, ADR-007, CON-007, and the applicable TEST-003
+network/reconnect evidence categories, not a new continuation protocol.
 
 ### Required existing suites
 
@@ -539,6 +681,18 @@ For the commanded-Squadron slice, also stop if:
 14. repair would transfer purpose-specific Squadron Command or Ship Activation
     semantics into `CurrentAttackContinuation` or `CommandProcessor`.
 
+For the Network completed-result presentation/recovery slice, also stop if:
+
+15. canonical inspection plus the accepted match player/control binding cannot
+    determine the local acknowledgement/waiting presentation;
+16. the existing `AcknowledgeAttackResultCommand` and result-panel submission
+    path cannot be reused without adding a command, principal source, or
+    presentation-owned semantic mutation;
+17. precedence over stale Attack flow would require clearing or changing
+    canonical `InteractionFlow`, attack, inspection, or continuation state; or
+18. a material production-file expansion beyond the Section 4 result
+    projection/reconstruction seam is required.
+
 The processor-owned invocation path and authorized file scope above resolve the
 two pre-amendment audit gates. No stop gate is currently triggered on the
 available route-coverage evidence; implementation SHALL stop if that evidence
@@ -548,11 +702,14 @@ Completion requires the preserved remaining-target regression, the
 Section 2.1A voluntary pre-commit finish regression, both exhausted iteration
 branches, the commanded-Squadron capacity-remains and terminal stable-outcome
 branches, the four-context stable-outcome review, applicable
-live/mirror/replay/reconstruction checks, the required suites, applicable
+live/mirror/replay/reconstruction checks, the two-human Network
+host-remaining-acknowledger result/reconstruction regression, the required suites, applicable
 architecture or documentation lint, and `git diff --check` to pass. Manual QA must cover the voluntary pre-commit anti-squadron finish with a
 legal target still remaining, both terminal anti-squadron branches, both
 commanded-Squadron branches, and confirm no stale attack presentation remains
-after their stable outcome.
+after their stable outcome. Manual QA must also cover a two-human Network
+result in which one player has already acknowledged and the host remains the
+entitled acknowledger.
 
 ```text
 acknowledge_attack_result → [derived remaining-target choice] → BeginAttackCommand
@@ -561,4 +718,5 @@ acknowledge_attack_result → SkipAttackCommand(squadron_done) → derived norma
 acknowledge_attack_result → SkipAttackCommand(squadron_done) → AdvanceActivationStepCommand(maneuver_step)
 acknowledge_attack_result → CompleteSquadronActivationCommand → derived commanded-squadron decision
 acknowledge_attack_result → CompleteSquadronActivationCommand → existing Ship Activation transition
+complete_attack → [client acknowledgement] → [host canonical acknowledgement surface] → acknowledge_attack_result → existing CON-007 release
 ```

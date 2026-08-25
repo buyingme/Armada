@@ -136,6 +136,9 @@ class StubProjectionAttackPanelController:
 
 	var events: Array[String] = []
 	var last_dice_results: Array[Dictionary] = []
+	var completed_result_calls: int = 0
+	var completed_result_actionable: bool = false
+	var completed_result_waiting: bool = false
 
 
 	func close_mirror() -> void:
@@ -159,6 +162,14 @@ class StubProjectionAttackPanelController:
 			_timing_window: Dictionary,
 			_submit_fn: Callable) -> void:
 		events.append("timing")
+
+
+	func sync_completed_attack_result_projection(
+			_inspection: Dictionary, acknowledge_actionable: bool,
+			waiting: bool) -> void:
+		completed_result_calls += 1
+		completed_result_actionable = acknowledge_actionable
+		completed_result_waiting = waiting
 
 
 class StubCommandSubmitter:
@@ -280,6 +291,49 @@ func test_route_command_result_controller_flow_updates_hud_status() -> void:
 	# Assert
 	assert_eq(_panel_mgr._network_status_text, "make your choices",
 			"HUD status should be projected from the current UIIntent.")
+
+
+func test_completed_result_precedes_stale_attack_modal_dispatch() -> void:
+	var controller := StubProjectionAttackPanelController.new()
+	_attack_panel_controller = controller
+	add_child(controller)
+	_create_router(Callable())
+	_router._attack_panel_controller = controller
+	var state: GameState = GameState.new()
+	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
+	var host_principal: String = state.principal_id_for_player(0)
+	var client_principal: String = state.principal_id_for_player(1)
+	var required_principals: Array[String] = [host_principal, client_principal]
+	required_principals.sort()
+	var inspection: CompletedAttackInspection = CompletedAttackInspection.deserialize({
+		"inspection_id": "completed:attack:router",
+		"source_attack_id": "attack:router",
+		"attacker": {"kind": CurrentAttackState.KIND_SHIP,
+				"player": 0, "index": 0, "zone": Constants.HullZone.FRONT},
+		"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+				"player": 1, "index": 0, "zone": -1},
+		"attack_kind": "standard", "dice_results": [],
+		"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+				"requested_hull_damage": 0, "actual_hull_damage": 0,
+				"post_resolution_hull": 3, "destroyed": false},
+		"required_principal_ids": required_principals,
+		"received_principal_ids": [client_principal],
+	})
+	state._completed_attack_inspection = inspection
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE, 0)
+	GameManager.current_game_state = state
+
+	_router.route_command_result(null, {})
+
+	assert_eq(controller.completed_result_calls, 1)
+	assert_true(controller.completed_result_actionable)
+	assert_false(controller.completed_result_waiting)
+	assert_eq(controller.events, [],
+			"Stale attack-flow dispatch must not run after result precedence.")
 
 
 func test_route_command_result_invokes_command_reaction_callback() -> void:

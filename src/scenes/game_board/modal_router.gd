@@ -84,6 +84,21 @@ func route_command_result(command: GameCommand, result: Dictionary) -> void:
 	_dispatch_modal_intent(intent, game_state, command)
 
 
+## Rebuilds projection-driven presentation after canonical state and the local
+## viewer identity are installed.  It does not react to, submit, or derive a
+## gameplay command.
+func reconstruct_presentation() -> void:
+	if _panel_mgr == null:
+		return
+	var game_state: GameState = GameManager.current_game_state
+	if game_state == null:
+		return
+	var intent: UIProjector.UIIntent = UIProjector.project(
+			game_state, _local_viewer(game_state))
+	_apply_hud_intent(intent)
+	_dispatch_modal_intent(intent, game_state, null)
+
+
 func _connect_command_signal() -> void:
 	if not CommandProcessor.command_executed.is_connected(_on_command_executed):
 		CommandProcessor.command_executed.connect(_on_command_executed)
@@ -150,6 +165,8 @@ func _apply_hud_intent(intent: UIProjector.UIIntent) -> void:
 
 func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 		game_state: GameState, command: GameCommand) -> void:
+	if _drive_completed_attack_result(intent):
+		return
 	_drive_tarkin_choice_modal(intent)
 	_drive_ecm_ready_cost_modal(intent)
 	_drive_displacement_modal(intent, command)
@@ -159,6 +176,26 @@ func _dispatch_modal_intent(intent: UIProjector.UIIntent,
 	_drive_current_attack_dice(intent.attack_dice_results)
 	_drive_timing_window_panel(intent.timing_window)
 	_apply_activation_affordances(intent)
+
+
+## A pending canonical result is presentation precedence over any stale Attack
+## flow or panel state.  UIProjector has already derived the local principal's
+## actionable or waiting decision; this router only forwards it to the existing
+## result-panel endpoint.
+func _drive_completed_attack_result(intent: UIProjector.UIIntent) -> bool:
+	if intent.completed_attack_inspection.is_empty() \
+			or _attack_panel_controller == null:
+		return false
+	var acknowledgement: Dictionary = intent.affordances.get(
+			"acknowledge_attack_result", {}) as Dictionary
+	var actionable: bool = not acknowledgement.is_empty()
+	var waiting: bool = bool(intent.affordances.get(
+			"attack_result_waiting", false))
+	if not actionable and not waiting:
+		return false
+	_attack_panel_controller.sync_completed_attack_result_projection(
+			intent.completed_attack_inspection, actionable, waiting)
+	return true
 
 
 ## Reprojects the existing Squadron Phase selection only from its canonical

@@ -239,6 +239,54 @@ func test_attack_dice_projection_uses_canonical_state_not_stale_flow() -> void:
 			"Projected dice must not mutate canonical attack state.")
 
 
+func test_completed_result_projection_overrides_stale_attack_flow_by_principal() -> void:
+	var gs: GameState = GameState.new()
+	gs.initialize()
+	assert_true(gs.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
+	var host_principal: String = gs.principal_id_for_player(0)
+	var client_principal: String = gs.principal_id_for_player(1)
+	var required_principals: Array[String] = [host_principal, client_principal]
+	required_principals.sort()
+	var inspection: CompletedAttackInspection = CompletedAttackInspection.deserialize({
+		"inspection_id": "completed:attack:projection",
+		"source_attack_id": "attack:projection",
+		"attacker": {"kind": CurrentAttackState.KIND_SHIP,
+				"player": 0, "index": 0, "zone": Constants.HullZone.FRONT},
+		"defender": {"kind": CurrentAttackState.KIND_SQUADRON,
+				"player": 1, "index": 0, "zone": -1},
+		"attack_kind": "standard",
+		"dice_results": [{"color": int(Constants.DiceColor.BLUE),
+				"face": int(Constants.DiceFace.HIT)}],
+		"outcome": {"target_kind": CurrentAttackState.KIND_SQUADRON,
+				"requested_hull_damage": 1, "actual_hull_damage": 1,
+				"post_resolution_hull": 2, "destroyed": false},
+		"required_principal_ids": required_principals,
+		"received_principal_ids": [client_principal],
+	})
+	assert_not_null(inspection)
+	# The projector contract needs only canonical inspection data and binding;
+	# entity fixtures are intentionally outside this projection unit test.
+	gs._completed_attack_inspection = inspection
+	gs.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			0, Constants.Visibility.ALL, {"stale": true})
+
+	var host_intent: UIProjector.UIIntent = UIProjector.project(gs, 0)
+	var client_intent: UIProjector.UIIntent = UIProjector.project(gs, 1)
+
+	assert_eq((host_intent.affordances.get(
+			"acknowledge_attack_result", {}) as Dictionary).get("inspection_id"),
+			"completed:attack:projection")
+	assert_false(bool(host_intent.affordances.get("attack_result_waiting", false)))
+	assert_true(bool(client_intent.affordances.get("attack_result_waiting", false)))
+	assert_false(client_intent.affordances.has("acknowledge_attack_result"))
+	assert_eq(host_intent.completed_attack_inspection,
+			inspection.serialize(),
+			"Result projection must come from canonical inspection, not stale flow.")
+
+
 # ---------------------------------------------------------------------------
 # Phase L5 — active-player turn-transition projection
 # ---------------------------------------------------------------------------

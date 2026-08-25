@@ -8,6 +8,8 @@ Accepted second update date: 2026-08-22
 Accepted third update date: 2026-08-23
 Accepted fourth update date: 2026-08-25
 
+2026-08-25: Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
+
 Amendment basis: Owner-directed BUG-035 convergence re-entry, accepted
 ship-commanded Squadron terminal route-coverage finding (2026-08-22), and
 Owner-accepted clarification of pre-commit Attack decline / Begin commitment

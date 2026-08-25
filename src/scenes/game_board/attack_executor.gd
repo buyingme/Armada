@@ -1013,7 +1013,10 @@ func deactivate_primary_presentation() -> void:
 	if panel != null and panel.attack_done_pressed.is_connected(
 			_finish_attack_execution):
 		panel.attack_done_pressed.disconnect(_finish_attack_execution)
-	if _target_selector != null and _target_selector.is_active():
+	# Projection-created completed-result panels deliberately do not enter
+	# selector mode.  They still share TargetSelector's panel lifecycle, so
+	# teardown must not depend on transient selection state.
+	if _target_selector != null:
 		dismiss()
 	_reset_exec_state()
 	_flow_fsm.reset()
@@ -4029,6 +4032,48 @@ func _present_completed_attack_result() -> void:
 	if panel == null:
 		return
 	panel.show_result_confirmation()
+
+
+## Rebuilds the existing result panel from a canonical completed-result
+## projection.  The caller has already derived whether this local viewer may
+## acknowledge; this method only renders that decision and keeps the existing
+## result-confirmed submission signal/path.
+func present_completed_attack_result_projection(
+		inspection: Dictionary, acknowledge_actionable: bool) -> void:
+	if inspection.is_empty() or _target_selector == null:
+		return
+	# A result inspection exists only after CurrentAttackState has retired.
+	# Clear any stale executor-local selection before rebuilding the result
+	# surface; this is presentation cleanup, not a gameplay transition.
+	if _target_selector.is_active():
+		deactivate_primary_presentation()
+	var panel: AttackSimPanel = _target_selector.ensure_panel_for_projection()
+	if panel == null:
+		return
+	_connect_attack_panel_signals()
+	panel.show_initial_attack_exec("Completed Attack")
+	panel.show_dice_results(inspection.get("dice_results", []) as Array[Dictionary])
+	panel.show_damage_info(_completed_attack_result_summary(inspection))
+	if acknowledge_actionable:
+		panel.show_result_confirmation()
+	else:
+		# Reuse the result surface's stale-control cleanup for a non-actionable
+		# waiting/dismissed projection, then suppress only its acknowledgement.
+		panel.show_result_confirmation()
+		panel.hide_confirm_button()
+
+
+func _completed_attack_result_summary(inspection: Dictionary) -> String:
+	var outcome: Dictionary = inspection.get("outcome", {}) as Dictionary
+	if str(outcome.get("target_kind", "")) == "ship":
+		return "Resolved ship damage: %d shield, %d hull" % [
+				int(outcome.get("shield_absorbed", 0)),
+				int(outcome.get("hull_damage", 0)),
+		]
+	return "Resolved squadron damage: %d hull (remaining %d)" % [
+			int(outcome.get("actual_hull_damage", 0)),
+			int(outcome.get("post_resolution_hull", 0)),
+	]
 
 
 func _on_attack_result_confirmed() -> void:

@@ -1321,6 +1321,14 @@ func _finalize_ready_sequence() -> bool:
 						"submit_timing_window_intent"))
 		if has_active_attack:
 			_schedule_active_attack_resume(attack_resume)
+	# Completed-result presentation is independently recoverable after canonical
+	# state and local viewer identity have been installed.  This invokes only the
+	# ModalRouter projection path; it does not mutate or release gameplay state.
+	var pending_inspection: CompletedAttackInspection = \
+			game_state.completed_attack_inspection if game_state != null else null
+	if _command_router_adapter != null and pending_inspection != null \
+			and not pending_inspection.is_satisfied():
+		_command_router_adapter.reconstruct_presentation()
 	# The state and projection are now fully reconstructed. A satisfied durable
 	# inspection may release exactly one existing consumer on live authority.
 	GameManager.release_reconstructed_completed_attack_inspection()

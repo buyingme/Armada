@@ -565,6 +565,96 @@ func test_real_game_board_anti_squadron_result_waits_for_acknowledgement() -> vo
 			1, "Anti-squadron acknowledgement must be presentation-only.")
 
 
+func test_network_host_remaining_result_acknowledges_once_and_tears_down_projection() \
+		-> void:
+	var state: GameState = _pending_two_human_result_state()
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.SERVER
+	NetworkManager._local_player_index = 0
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 72))
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_not_null(inspection)
+	var client_ack := AcknowledgeAttackResultCommand.new(1, {
+		"inspection_id": inspection.inspection_id(),
+	})
+	client_ack.sequence = 72
+	assert_false(CommandProcessor.submit_mirror(client_ack).is_empty())
+	assert_false(state.completed_attack_inspection.is_satisfied())
+	assert_true(state.completed_attack_inspection.has_received(
+			state.principal_id_for_player(1)))
+	assert_false(state.completed_attack_inspection.has_received(
+			state.principal_id_for_player(0)))
+	GameManager.set_command_submitter(LocalCommandSubmitter.new(
+			state.principal_id_for_player(0)))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+
+	assert_not_null(panel)
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"The host's outstanding canonical principal must receive the result action.")
+	assert_eq(panel._confirm_button.text, "Acknowledge Result")
+	assert_false(panel._confirm_is_declaration)
+	var commands_before: int = _command_count(
+			CommandProcessor.get_history(), AcknowledgeAttackResultCommand.TYPE)
+	panel._on_confirm_pressed()
+	await get_tree().process_frame
+
+	assert_eq(_command_count(CommandProcessor.get_history(),
+			AcknowledgeAttackResultCommand.TYPE), commands_before + 1)
+	assert_false(panel.visible,
+			"Final acknowledgement must tear down a projection-created result panel.")
+	assert_false(panel.is_awaiting_result_confirmation())
+	assert_false(board._attack_executor.is_active())
+	assert_eq(_command_count(CommandProcessor.get_history(), "complete_attack"), 0,
+			"Acknowledgement must not recreate or repeat attack completion.")
+
+
+func test_network_waiting_peer_reconstructs_non_actionable_result_surface() -> void:
+	var state: GameState = _pending_two_human_result_state()
+	var inspection: CompletedAttackInspection = state.completed_attack_inspection
+	assert_true(state.acknowledge_completed_attack_inspection(
+			inspection.inspection_id(), state.principal_id_for_player(1)))
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 1
+	assert_true(GameManager.start_new_game_from_state(
+			state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 74))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+
+	assert_not_null(panel)
+	assert_true(panel.visible)
+	assert_false(panel.is_awaiting_result_confirmation(),
+			"An already-acknowledged principal may inspect but must not acknowledge again.")
+	assert_false(panel._confirm_button.visible)
+	assert_eq(_history_types(), [])
+
+
+func test_reconnect_reconstructs_pending_two_human_result_for_host() -> void:
+	var server_state: GameState = _pending_two_human_result_state()
+	var inspection: CompletedAttackInspection = server_state.completed_attack_inspection
+	assert_true(server_state.acknowledge_completed_attack_inspection(
+			inspection.inspection_id(), server_state.principal_id_for_player(1)))
+	PlayMode.set_mode(PlayMode.Mode.NETWORK)
+	NetworkManager.role = NetworkManager.Role.CLIENT
+	NetworkManager._local_player_index = 0
+	assert_true(GameManager.start_new_game_from_state(
+			server_state, LearningScenarioSetup.DEFAULT_SCENARIO_ID, 76))
+	var board: GameBoard = GAME_BOARD_SCENE.instantiate() as GameBoard
+	add_child_autofree(board)
+	var panel: AttackSimPanel = board._target_selector.get_panel()
+
+	assert_not_null(panel)
+	assert_true(panel.is_awaiting_result_confirmation(),
+			"Reconnect rebuild must re-derive host entitlement from canonical principals.")
+	assert_eq(panel._confirm_button.text, "Acknowledge Result")
+	assert_eq(_history_types(), [],
+			"Reconstruction must not synthesize acknowledgement or release.")
+
+
 func test_real_game_board_ready_failure_remains_inert_and_single_shot() -> void:
 	var state: GameState = _state_at(CurrentAttackState.STAGE_ATTACK_MODIFY, {
 		"attack_id": "attack:34",
@@ -3003,6 +3093,42 @@ func _satisfied_inactive_normal_ship_state(no_legal_target: bool) -> GameState:
 		defender.pos_y = 0.05
 	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
 	assert_true(state.install_completed_attack_inspection(inspection))
+	return state
+
+
+func _pending_two_human_result_state() -> GameState:
+	var state := GameState.new()
+	state.initialize()
+	assert_true(state.install_match_player_control_binding(
+			MatchPlayerControlBinding.create_two_human()))
+	state.current_round = 1
+	state.current_phase = Constants.GamePhase.SHIP
+	state.rng = GameRng.new(8172)
+	state.damage_deck = DamageDeck.new()
+	state.damage_deck.initialize()
+	assert_not_null(CURRENT_ATTACK_FIXTURE.install(state, {
+		"stage": CurrentAttackState.STAGE_RESOLVED,
+		"attack_id": "attack:72",
+		"dice_results": [_hit_die()],
+		"defense_stage": CurrentAttackState.DEFENSE_COMPLETE,
+	}))
+	var attacker: ShipInstance = state.get_ship(0, 0)
+	var defender: ShipInstance = state.get_ship(1, 0)
+	defender.pos_x = 0.95
+	defender.pos_y = 0.05
+	var attack: CurrentAttackState = state.current_attack_state
+	var inspection: CompletedAttackInspection = \
+			CompletedAttackInspection.create_from_attack(
+					attack, attack.resolved_outcome,
+					state.get_distinct_controlling_principal_ids(
+							MatchPlayerControlBinding.KIND_HUMAN))
+	assert_not_null(inspection)
+	assert_true(state.set_current_attack_state(CurrentAttackState.inactive()))
+	assert_true(state.install_completed_attack_inspection(inspection))
+	state.interaction_flow = InteractionFlow.make(
+			Constants.InteractionFlow.ATTACK,
+			Constants.InteractionStep.ATTACK_RESOLVE_DAMAGE,
+			attacker.owner_player, Constants.Visibility.ALL, {"stale": true})
 	return state
 
 

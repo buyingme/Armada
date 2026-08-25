@@ -4,6 +4,9 @@ Severity: High
 Area: Completed-attack result acknowledgement / post-attack continuation
 Layer: Command Flow
 
+2026-08-25 status:
+Implementation checkpoint: automated workbook acceptance complete; final two-human Network manual QA pending. No known automated BUG-035 gap remains. Manual acceptance deferred while prerequisite test/recovery infrastructure is repaired.
+
 ## Expected
 
 After a completed attack result is acknowledged, the canonical completed-attack
@@ -1219,3 +1222,5 @@ No repair is authorized from this observation alone.
 
 BUG-035 remains open pending this classification and completion of the remaining
 manual QA.
+
+continuation in the implementation workbook

@@ -92,6 +92,14 @@ func submit_timing_window_intent(intent: Dictionary) -> Dictionary:
 	return submitter.submit(command)
 
 
+## Forwards one post-install presentation reconstruction to the existing modal
+## router.  The router only projects canonical state and never performs a
+## semantic follow-up.
+func reconstruct_presentation() -> void:
+	if _modal_router != null:
+		_modal_router.reconstruct_presentation()
+
+
 func _create_modal_router(
 		panel_mgr: UIPanelManager,
 		attack_panel_controller: AttackPanelController,

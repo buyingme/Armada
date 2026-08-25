@@ -171,6 +171,11 @@ static func _project_completed_attack_inspection(state: GameState,
 		return {}
 	var data: Dictionary = inspection.serialize()
 	intent.attack_dice_results = data.get("dice_results", []) as Array[Dictionary]
+	# A satisfied inspection is governed by the existing CON-007 release and
+	# derived-decision recovery paths. Result presentation precedence applies
+	# only while an acknowledgement remains outstanding.
+	if inspection.is_satisfied():
+		return data
 	var principal_id: String = state.principal_id_for_player(viewer_player)
 	if inspection.required_principal_ids().has(principal_id):
 		if inspection.has_received(principal_id):
@@ -179,6 +184,12 @@ static func _project_completed_attack_inspection(state: GameState,
 			intent.affordances["acknowledge_attack_result"] = {
 				"inspection_id": inspection.inspection_id(),
 			}
+	else:
+		# A viewer that is not one of the inspection's required principals may
+		# inspect the canonical result, but never receives an acknowledgement
+		# action.  Keep this explicit so result presentation has one canonical
+		# non-actionable outcome rather than falling back to stale attack UI.
+		intent.affordances["attack_result_waiting"] = true
 	return data
 
 

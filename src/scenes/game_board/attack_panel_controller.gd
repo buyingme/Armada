@@ -62,6 +62,14 @@ func react_to_command(command: GameCommand, result: Dictionary) -> void:
 	if command == null:
 		return
 	if command.command_type == AcknowledgeAttackResultCommand.TYPE:
+		# Once the final acknowledgement is accepted, the result surface is no
+		# longer the pending canonical decision.  Clear it before the existing
+		# CON-007 presentation recovery reprojects any derived next choice.
+		var inspection: CompletedAttackInspection = \
+				GameManager.current_game_state.completed_attack_inspection \
+				if GameManager.current_game_state != null else null
+		if inspection == null or inspection.is_satisfied():
+			_attack_executor.deactivate_primary_presentation()
 		_recover_satisfied_ship_attack_presentation()
 		return
 	if _is_post_attack_presentation_recovery_command(command):
@@ -254,6 +262,20 @@ func sync_current_attack_dice_projection(
 	if _attack_executor == null or not _owns_active_canonical_attack():
 		return
 	_attack_executor.refresh_current_attack_dice_projection()
+
+
+## Applies the completed-result decision already derived by [UIProjector].
+## This is intentionally presentation-only: the existing AttackExecutor panel
+## signal remains responsible only for submitting AcknowledgeAttackResultCommand.
+func sync_completed_attack_result_projection(
+		inspection: Dictionary, acknowledge_actionable: bool,
+		waiting: bool) -> void:
+	if _attack_executor == null or inspection.is_empty():
+		return
+	if not acknowledge_actionable and not waiting:
+		return
+	_attack_executor.present_completed_attack_result_projection(
+			inspection, acknowledge_actionable)
 
 
 func _owns_active_canonical_attack() -> bool:

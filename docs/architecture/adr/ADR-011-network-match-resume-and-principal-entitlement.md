@@ -1,12 +1,11 @@
 # ADR-011: Network Match Resume and Principal Entitlement
 
-Status: Draft
+Status: Accepted
 
 ADR-ID: ADR-011
 Title: Network Match Resume and Principal Entitlement
 
 Accepted by: Project Owner
-
 Accepted date: 2026-08-26
 
 
@@ -37,17 +36,17 @@ Related:
 - RG-013
 - RG-016
 
-## Draft Note
+## Acceptance Note
 
 This ADR translates the accepted Project Owner decisions in ODR-003 into
 durable normative architecture. ODR-003 is binding Owner decision evidence and
-its settled decisions are not reopened by this draft.
+its settled decisions are not reopened by this accepted ADR.
 
-This ADR remains Draft until accepted by the Project Owner. It authorizes no
-implementation by itself and does not create an implementation workbook or
-contract. Accepted MATCH-001 behavior remains the implemented fail-closed
-boundary until separately authorized implementation replaces the applicable
-restriction.
+This ADR was accepted by the Project Owner on 2026-08-26. It authorizes no
+implementation by itself and does not create or accept an implementation
+workbook or contract. Accepted MATCH-001 behavior remains the implemented
+fail-closed boundary until separately authorized implementation replaces the
+applicable restriction.
 
 ## 1. Context and scope
 

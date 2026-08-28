@@ -104,7 +104,7 @@ The lobby screen opens with:
 - *“Hosting on `<your LAN IP>`:`<port>`”* — share this line with the
   other player.
 - A diagnostics row: *State: LOBBY | Role: SERVER | Peers: 0 |
-  Protocol v1*. Peers will increase to 1 once the client connects.
+  Protocol v4*. Peers will increase to 1 once the client connects.
 
 ---
 
@@ -130,8 +130,7 @@ row updates to *Peers: 1* as well.
 ## 7. Start Playing
 
 1. Both players click **Ready** in the lobby.
-2. The host clicks **Start Game** (or **Load Game** to resume a
-   previous network save).
+2. For a new match, the host clicks **Start Game**.
 3. The board scene loads on both Macs and play begins.
 
 ---
@@ -140,11 +139,109 @@ row updates to *Peers: 1* as well.
 
 - Each player only controls their own ships and squadrons; modal
   prompts appear only on the player who needs to act.
-- The host's machine is the source of truth. If it crashes or quits,
-  the session ends. (Reconnect is a planned feature; not yet
-  available.)
+- The host's machine is the source of truth.
 - All commands are deterministic: a replay file is written on both
   Macs and they should match.
+
+### Save and resume a Network match
+
+> **Architecture update (2026-08-27):** Fresh-session Network resume no
+> longer requires a resume credential or proof that the same human returned.
+> Credential-based MATCH-002 controls still present in the current working tree
+> are transitional implementation evidence, not the accepted product workflow.
+> Treat fresh-session resume as unavailable until the replacement assignment
+> flow is implemented and accepted.
+
+#### Save while the match is live
+
+Only the host sees **Save Game** and **Load Game** in the in-game menu. The
+host opens the menu, chooses **Save Game**, enters a name, and clicks **Save**.
+The host can also use the Network **Resume Last Checkpoint** entry later. The
+save stays on the host; the other player receives a save notification but does
+not receive a copy of the save file.
+
+#### Load in the same live match versus resume in a new session
+
+**Same live match.** While the original Network match is still running, the
+host may use **Load Game** to load an earlier save/checkpoint from that same
+match. This retains the existing association rules: the saved player binding
+must exactly match the live match and its existing players must still be
+associated. It is not a new-session resume and does not reassign players.
+
+**Fresh session.** Once the Network session has ended, the accepted requirement
+is to stage the save and explicitly assign the connected humans to the two
+saved player sides before the board becomes live. Either human may control
+either saved side. The assignment must not be inferred from host/client role,
+lobby order, player name, profile, or peer ID.
+
+#### Accepted fresh-session resume flow
+
+1. The host creates a lobby and the other participant joins.
+2. The host selects the Network save or checkpoint. The restored game remains
+   staged and is not yet playable.
+3. The host explicitly assigns itself and the connected participant to the two
+   saved player sides. The host can choose either side.
+4. The game checks that every saved side and every participating endpoint
+   appears exactly once. Missing, duplicate, or competing assignments block
+   publication.
+5. Each endpoint receives only the view allowed for its assigned side and
+   acknowledges the restored state.
+6. Only then does the board become live. The canonical player identities and
+   saved player-to-principal binding are unchanged; only the current-session
+   human controllers are new.
+
+A different person may take either saved side. No credential transfer or proof
+of being the original player is required by the accepted architecture.
+
+#### Reconnect to a still-live match
+
+If a player disconnects but the host remains live, reconnect to that same host
+with **Join Game**. The host waits for the old association to be confirmed
+gone, explicitly assigns the now-unoccupied side to the connected endpoint,
+and sends that side's filtered current state. The host does not reload the save
+or restart the match. Input for that side remains unavailable until the
+reconnecting device has installed and acknowledged the current state.
+
+Do not try to reconnect before the disconnect has been confirmed. If two
+endpoints would be assigned to the same side while one is still associated,
+the new assignment is rejected and the incumbent stays in control.
+
+#### Two-player example
+
+1. Ada hosts, Bo joins, both press **Ready**, and Ada presses **Start Game**.
+2. Ada and Bo play. Ada opens the in-game menu, chooses **Save Game**, names
+   the save, and presses **Save**.
+3. They both close the Network session.
+4. Later, Ada starts **Host Game** and Bo uses **Join Game**.
+5. Ada chooses **Load Game**, selects the Network save, and presses **Load**.
+6. Before publication, Ada explicitly chooses which saved side she will
+   control and assigns Bo to the other side. They may swap the sides they
+   controlled in the original session.
+7. Once both installations acknowledge their correctly filtered restored
+   state, they continue from the saved next decision.
+
+#### Restrictions and compatibility
+
+- Save portability is separate from side assignment. Removing credentials does
+  not make a copied save valid on another installation. Until portability is
+  separately decided and implemented, use the original save-owning
+  installation.
+- Missing, duplicate, incomplete, or competing assignments fail closed: no
+  partial board is published, no side is inferred, and no saved player mapping
+  changes.
+- Hot-Seat saving/loading is unchanged. It can still be loaded from the main
+  menu; it cannot be loaded from a Network lobby or during a Network session.
+- Cross-host/cloud save portability, active-controller takeover,
+  absent-player continuation, shared control, and bot substitution are not
+  part of this decision.
+
+#### Current UI limits
+
+The accepted assignment workflow is not implemented or manually accepted yet.
+The current working tree may still show credential-related controls and status
+such as **Resume Capabilities**, **Import Capability**, or **Waiting for
+entitlement**. Those belong to the superseded MATCH-002 design and should not be
+treated as the final fresh-resume UX.
 
 ---
 
@@ -159,6 +256,9 @@ row updates to *Peers: 1* as well.
 | Host sees "(no LAN IP)" in lobby | No active LAN interface (Wi-Fi off, Ethernet unplugged) | Connect to Wi-Fi or plug in Ethernet, then re-host. |
 | "Invalid port (1–65535)" toast | Empty or out-of-range port field | Re-enter a valid number; default is `7350`. |
 | Both connect but ships look out of sync | Mixed app versions | Re-install identical builds on both Macs. |
+| Network save is shown as not resumable | The accepted explicit-assignment flow is not implemented, the save is unsupported, or the save is on a foreign installation | Use same-live-match load where applicable. Treat fresh-session resume as unavailable until the replacement flow is implemented and accepted. |
+| **Waiting for entitlement** / capability controls appear | The current working tree still contains the superseded MATCH-002 credential workflow | Do not rely on that workflow as the accepted product behavior. No credential is required by the amended architecture. |
+| Reconnect assignment is rejected | The old endpoint is still associated, disconnect is not confirmed, or the side already has a controller | Keep the incumbent or wait for confirmed association loss before explicit reassignment. |
 
 ---
 
@@ -168,9 +268,10 @@ row updates to *Peers: 1* as well.
 |---|---|
 | Default port | `7350` |
 | Required ports open on host | `7350/UDP` (or your custom port) |
-| Network protocol | ENet over UDP |
+| Network protocol | ENet over UDP, protocol 4 |
 | Required machines | 2 Macs on the same LAN subnet |
 | Session save | Host machine only, under `saves/` |
+| Fresh-resume authority | Explicit host assignment of each connected human to one saved side before publication; implementation pending |
 
 ---
 

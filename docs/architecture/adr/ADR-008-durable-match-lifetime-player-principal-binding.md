@@ -297,6 +297,17 @@ under the existing replay compatibility authority.
 
 ## 9. Transport Changes And Reconnect Stop
 
+**Narrow supersession note (2026-08-27):** Amended
+[ADR-011](ADR-011-network-match-resume-and-principal-entitlement.md) supersedes
+only this section's anticipated requirement for match-scoped proof of
+fresh-session or replacement-peer human continuity. ADR-011 now accepts
+explicit, host-authoritative, session-local assignment after the applicable
+completeness, exclusivity, publication, and confirmed-association-loss gates.
+The requirements below that preserve the canonical principal and immutable
+gameplay-player mapping, keep transient association distinct, and fail closed
+without rebinding or active-association eviction remain authoritative. ADR-008
+is not otherwise superseded.
+
 The principal records and gameplay-player mapping survive transport changes.
 Disconnecting a peer must not delete, replace, or redefine a principal.
 Reconnect reconstruction preserves or restores the same binding wherever

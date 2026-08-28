@@ -1,25 +1,22 @@
-# ODR-003: Network Match Resume and Replacement-Principal Entitlement
+# ODR-003: Network Match Resume and Session-Local Controller Assignment
 
 **Status:** Accepted
 
 Accepted by: Project Owner
-Accepted date: 2026-08-26
+
+Original accepted date: 2026-08-26
+
+Amended by Project Owner: 2026-08-27
 
 **ODR ID:** ODR-003
 
-**Date:** 2026-08-25
-
 **Decision owner:** Project Owner
-
-**Decisions recorded:** 2026-08-25
 
 **Implementation authorization:** None
 
-**Implementation workbook:** Not created; these decisions authorize no
-implementation by themselves
-
-**Desired capability:** Resume a saved Network match in a new Network session
-while preserving durable player-principal authority.
+**Desired capability:** Resume a saved Network match in a fresh Network
+session by explicitly assigning the connected humans to the saved canonical
+player sides before the restored match becomes live.
 
 **Affected architecture areas:** BC-006, BC-007, BC-008
 
@@ -27,548 +24,309 @@ while preserving durable player-principal authority.
 
 **Related architecture tasks:** AT-006, AT-008, AT-009
 
-**Primary accepted authority:** ADR-008, ADR-010, accepted MATCH-001
-
-## 1. Purpose and decision boundary
-
-This workbook records the Project Owner's resolved architecture decisions for
-the smallest policy set required before implementation architecture can be
-specified for fresh-session Network resume.
-
-The current restriction is not treated as a defect. Historical Phase J7
-behavior allowed a ready fresh lobby to load a Network save, but MATCH-001
-deliberately replaced that behavior with a fail-closed gate after durable
-player-principal binding became authoritative. A saved match now identifies
-the durable principals controlling its gameplay players, while a new Network
-session has no accepted proof that any newly connected peer is entitled to
-assume one of those principals.
-
-The problem is therefore not how to deserialize or broadcast a saved
-`GameState`. Those paths already exist. The architecture question resolved by
-this workbook is:
-
-> How may a new transient Network peer become authoritatively associated with
-> an existing saved HUMAN match principal without deriving authority from the
-> peer, lobby slot, display name, profile, principal identifier, or possession
-> of public canonical state?
-
-This workbook selects the architecture-level entitlement, participation, and
-association policies in Section 6. It does not select an implementation,
-credential format, cryptographic mechanism, storage design, RPC sequence,
-class design, or file plan. Those remain downstream work and receive no
-implementation authorization from this record.
-
-## 2. Authority and evidence posture
-
-### 2.1 Accepted authority
-
-1. **ADR-008 — Durable Match-Lifetime Player-to-Principal Binding**
-   establishes one immutable `GameState`-owned binding, distinguishes gameplay
-   players, match principals, and transport peers, and requires replacement or
-   reconnect entitlement to fail closed until a separate accepted authority
-   defines proof, validator, and failure behavior.
-2. **ADR-010 — Gameplay Interaction Decision-Equivalent Recovery** requires
-   equivalent authoritative gameplay situations to yield equivalent
-   actionable decision semantics after save/load and reconnect. It does not
-   authorize synthetic progression or make presentation authoritative.
-3. **Accepted MATCH-001** implements ADR-008's current boundary. It permits an
-   in-session Network load only when the loaded binding exactly matches the
-   live binding and all existing transient associations remain valid. It
-   explicitly blocks fresh-lobby Network load, disconnected-peer
-   reassociation, replacement, takeover, and rebinding pending the downstream
-   proof, validator, and failure decisions now recorded in Section 6. The
-   current implementation block remains until applicable normative architecture
-   and authorized implementation replace it.
-4. **Document authority and workflow** keep accepted ADRs above workbooks,
-   current code as implementation evidence, and historical plans as
-   non-normative context.
-
-Before these Owner decisions, no accepted authority defined a Network-session
-credential, replacement policy, takeover policy, or cross-host
-save-portability promise. This workbook records Owner direction for later
-normative architecture; it does not amend ADR-008, ADR-010, or MATCH-001 by
-itself.
-
-### 2.2 Current implementation evidence
-
-- `GameState` serializes, deserializes, and validates the canonical
-  `match_player_control_binding` before live installation.
-- `NetworkManager` stores host and peer principal associations only in
-  transient runtime state. Remote command authorization resolves the current
-  peer to that host-held association and then asks the canonical binding
-  whether the principal controls the command's gameplay player.
-- Disconnect removes the peer record and therefore its transient association;
-  it does not mutate the canonical principal binding.
-- `LobbyManager.host_load_save()` currently requires
-  `NetworkManager.can_install_loaded_binding()`. That gate requires an
-  `IN_GAME` session, the exact current saved binding, and still-valid host and
-  peer associations. A ready fresh lobby is therefore insufficient.
-- `SaveGameManager` verifies the save envelope with an installation-local HMAC
-  key. That signature detects accidental or unauthorized save editing within
-  the current trust boundary; it neither authenticates a peer nor currently
-  makes a save portable to a different installation.
-- `StateFilter` can reconstruct a filtered client mirror while preserving the
-  non-secret principal binding. `UIProjector` re-derives presentation from
-  reconstructed state. No production reconnect/snapshot transport currently
-  performs the complete reconnect flow.
-
-### 2.3 Historical evidence only
-
-The Phase J7 record in `docs/implementation_plan.md` and the related current UI
-seams show that lobby-originated Network load and host-to-client loaded-state
-broadcast previously worked. They are useful evidence that the state-load and
-scene-rebuild seams exist. They do not answer principal entitlement and cannot
-override ADR-008 or accepted MATCH-001.
-
-The archived G4 Network plan describes planned reconnect snapshots, session
-tokens, and late join. Those proposals are likewise non-normative and must not
-be treated as an accepted credential or reconnect design.
-
-## 3. Required conceptual separation
-
-The resolved architecture and any later implementation must preserve these six
-distinct concepts:
-
-| Concept | Meaning and lifetime | Authority | Must not be confused with |
-| --- | --- | --- | --- |
-| Durable gameplay principal identity | The match-scoped HUMAN or AUTOMATED controller identity that remains bound to one or more gameplay players for the match lifetime | Canonical `GameState` binding under ADR-008 | A human account, a peer, a lobby seat, or an entitlement credential |
-| Entitlement to assume a saved principal | Possession of the accepted match-scoped capability for an already-existing HUMAN principal | Validated by the authoritative resume host under OD-1 before it establishes a transient association | Principal ID visibility, save possession, display name, player index, or gameplay legality |
-| Transient peer/session identity | A current endpoint and its live session membership and association | Authoritative Network host for the current session only | Durable gameplay identity or proof that survives session loss |
-| Canonical saved state | The durable gameplay facts needed to reconstruct the match, including the immutable principal binding and decision-relevant state | `GameState` plus the accepted save envelope and reconstruction cursor | Credentials, current connections, lobby readiness, modal instances, or peer associations |
-| Reconstructed Network/session state | Newly established host/peer roles, validated peer-to-principal associations, transport ordering state, and other runtime services needed around the restored canonical state | Rebuilt for the new session; never a second gameplay-state owner | Saved gameplay state or an opportunity to rebind principals |
-| Re-derived presentation | Viewer-specific UI intent, camera, modals, waiting state, and other presentation derived after reconstruction | Non-authoritative projection under ADR-010 and existing owners | Entitlement, gameplay legality, or canonical progression |
-
-The saved principal is never replaced by this capability. Under OD-2, a human
-who deliberately receives the accepted capability may assume the same existing
-principal. This transfer changes neither principal identity nor the canonical
-gameplay-player-to-principal mapping.
-
-## 4. Non-negotiable architecture constraints
-
-The resolved Owner decisions operate within these boundaries. Later work may
-not relax them without an explicit superseding Owner decision and the
-applicable normative architecture process.
-
-1. The canonical `match_player_control_binding` is restored exactly and remains
-   immutable. Resume never creates, deletes, or rebinds a principal.
-2. A `principal_id` is an identifier, not a secret or proof.
-3. ENet peer ID, assigned player index, lobby slot, readiness, display name,
-   connected membership, `PlayerProfile.client_id`, lobby password, UI state,
-   and current presentation/controller state are not sufficient entitlement
-   proof, individually or in combination.
-4. The save's integrity signature proves only what its accepted save authority
-   defines. It does not prove that a connecting peer controls a saved
-   principal.
-5. The authoritative host validates entitlement and establishes the transient
-   association before accepting player-originated commands for that principal.
-   A client assertion cannot authorize itself.
-6. Invalid, missing, ambiguous, duplicated, or competing claims fail closed.
-   A valid capability does not evict an active association. Failure cannot
-   manufacture a principal, silently assign a vacant slot, or change the saved
-   mapping.
-7. Host authority over the session does not automatically grant the host
-   authority over the other saved HUMAN principal.
-8. Canonical gameplay state and the reconstruction cursor are validated before
-   live publication. Session reconstruction cannot repair invalid gameplay
-   state by synthetic commands or inferred progression.
-9. A recovered live gameplay decision is derived from accepted canonical
-   owners. Presentation may be rebuilt, but it cannot invent, consume,
-   complete, or make the decision legal.
-10. Credentials or bearer proofs must not enter public canonical state,
-    filtered client snapshots, replay payloads, display labels, or logs merely
-    because principal identifiers are present there.
-
-## 5. Capability success boundary
-
-A deliberate fresh-session resume is architecturally successful only when this
-ordering can be satisfied without bypass:
-
-```text
-Authenticated/validated save artifact
-        -> exact canonical gameplay reconstruction
-        -> immutable saved principal binding preserved
-        -> accepted entitlement validation for every saved HUMAN principal
-        -> new transient peer-to-existing-principal associations
-        -> reconstructed Network/session runtime state
-        -> canonical state published as live
-        -> next legal gameplay decision or accepted stable state recovered
-        -> viewer-specific presentation re-derived
-```
-
-The order is conceptual, not an RPC specification. Preparation may stage state
-and claims before publication, but no principal-dependent gameplay input may be
-accepted until all applicable gates succeed.
-
-Decision-equivalent recovery requires restoration of the accepted command
-sequence/reconstruction cursor and every canonical fact needed to determine
-the next legal decision. Reopening a modal, replaying a UI callback, advancing
-the phase to escape an unrecoverable point, or submitting a synthetic command
-only to recreate presentation is not equivalent recovery.
-
-## 6. Smallest coherent Owner decision set
-
-The questions in the request collapse into three resolved decisions.
-Credential syntax, cryptographic primitives, RPC payloads, UI steps, and file
-layout follow only after these policy decisions.
-
-### OD-1 — Entitlement proof, trust boundary, scope, and portability tier
-
-**Owner question**
-
-What category of evidence proves that a peer may assume an existing saved HUMAN
-principal, what is its scope, which authority validates it, what persistence
-boundaries constrain it, and what portability tier must the MVP support?
-
-These axes were evaluated together because persistence boundaries and
-validation authority depend on whether entitlement must survive multiple
-saves, host restart, or host migration.
-
-#### Alternatives
-
-| Alternative | Description | Benefits | Costs and risks | Assessment |
-| --- | --- | --- | --- | --- |
-| A. Match-scoped principal capability | Each HUMAN principal has distinct proof material valid for the saved match across its checkpoints/saves. A claimant presents proof; the authoritative host validates it against protected resume material separate from canonical gameplay state. | Matches ADR-008's match-scoped principal lifetime; unifies ordinary reconnect and fresh-session resume; avoids accounts; does not make peer identity durable | Requires secure issuance, retention, validation, loss behavior, and a portability choice; bearer-style proof may be transferable | **Selected by Owner** |
-| B. Save-scoped capability | Every save/checkpoint creates new proof tied only to that artifact | Natural artifact boundary; revocation by choosing a later save may be possible | Multiple saves create multiple entitlement sets; ordinary reconnect and deliberate resume diverge; stale saves complicate claims; easy to conflate save possession with authority | Not selected |
-| C. Installation/profile identity | Treat `PlayerProfile.client_id` or a derived installation identifier as proof | Small apparent implementation cost | Explicitly disallowed as sufficient proof by ADR-008/MATCH-001; client supplied; device replacement and portability semantics are wrong | Rejected by accepted authority |
-| D. Lobby/host assertion | A ready slot, display name, lobby password, or host choice establishes entitlement | Simple UX | Recreates the vulnerability the fail-closed boundary prevents; host can silently seize the remote principal | Rejected for proof |
-| E. Global account identity | Bind match principals to authenticated accounts | Strong non-transferable person-level continuity is possible | Becomes an account/authentication system, introduces cross-match identity, and exceeds repository evidence and this scope | Deferred/out of scope unless separately authorized |
-
-#### Resolved Owner decision and rationale
-
-The Project Owner selects **A: one match-scoped entitlement capability per
-HUMAN principal**, validated by the authoritative resume host before it
-establishes a transient peer-to-existing-principal association. Proof material
-remains separate from the public canonical `GameState` and from transient
-peer/session identifiers. Scope it to the match, not to one save file, so the
-same accepted entitlement concept can serve deliberate resume and ordinary
-reconnect.
-
-The MVP portability tier is **the original host installation**. This
-fits the current installation-local save-integrity trust boundary and avoids
-making host-key export, cross-device trust transfer, or a portable
-self-verifying entitlement part of the first implementation. Cross-host and
-cross-install resume remain explicitly deferred.
-
-Match scope aligns the entitlement lifetime with ADR-008's match-scoped
-principals and avoids separate proof semantics for each checkpoint or save.
-Limiting the MVP to the original host installation avoids prematurely
-designing cross-host trust transfer. This decision does not determine whether
-the capability is a code, token, key pair, challenge-response proof, or another
-construction.
-
-#### Persistence safety boundary for this decision
-
-- The canonical save may continue to persist non-secret principal IDs, kinds,
-  and gameplay-player mapping.
-- A non-secret credential identifier or verifier may be persisted only in a
-  protected, explicitly defined resume-metadata boundary if the accepted
-  mechanism requires it. It is not canonical gameplay state.
-- A reusable bearer secret must not be placed in the public `GameState`,
-  distributed client snapshots, replay headers, logs, or display metadata.
-- Any future cross-host portability decision must define how the new host
-  obtains trustworthy validator material without turning public save
-  possession into unintended entitlement.
-
-**Owner selection:** A — Match-scoped principal capability; original host
-installation MVP.
-
-### OD-2 — Participation, absence, delegation, and host replacement policy
-
-**Owner question**
-
-Which saved HUMAN principals must have an entitled claimant before the resumed
-match becomes live, and may entitlement be delegated or newly granted to a
-replacement human when an original claimant is absent?
-
-This consolidates “must original players return,” absent-player behavior,
-replacement humans, and host-authorized takeover. They are one participation
-policy: each changes who may exercise an unchanged saved principal.
-
-#### Alternatives
-
-| Alternative | Description | Benefits | Costs and risks | Assessment |
-| --- | --- | --- | --- | --- |
-| A. Full entitled participation, no host override | Every saved HUMAN principal must have one validly entitled claimant before live publication. The host cannot grant the other principal or bypass proof. | Smallest fail-closed MVP; clear atomic start gate; no paused live session or takeover semantics | Lost proof or absent claimant blocks resume; does not support host-mediated substitution | **Selected with B** |
-| B. Capability-holder substitution | Any person holding a principal's accepted proof may assume it, including a replacement human to whom the proof was deliberately transferred | Supports replacement without accounts or rebinding; proof remains the authority | A bearer capability cannot prove the same physical human returned; transfer/loss and social handling need clear UX | **Selected with A** |
-| C. Host-authorized replacement/takeover | The host may issue or replace entitlement for an absent principal | Flexible recovery when a player is unavailable | Gives one player power over another principal; requires explicit consent, audit, revocation, and competing-claim rules; host identity alone is insufficient proof under ADR-008 | Deferred |
-| D. Partial live resume | Start with one or more HUMAN principals absent; gameplay waits whenever an absent principal owns the next decision | Allows observation and staged arrival | Requires an absent/waiting lifecycle, late association, quit/forfeit policy, and UI behavior; can strand the session | Defer for MVP |
-| E. Account-bound original-person return | Only the same globally authenticated people may return | Strongest interpretation of “original principals return” | Requires account identity and recovery policy; outside this workbook | Out of scope |
-
-#### Resolved Owner decision and rationale
-
-The Project Owner selects **A+B**. Every saved HUMAN principal must have exactly
-one validly entitled claimant before the restored match is published live. The
-host must prove entitlement for its own saved principal and cannot grant,
-manufacture, or bypass entitlement for another HUMAN principal merely by
-hosting.
-
-Possession of the accepted principal capability establishes entitlement, not
-physical-person identity. Its current holder may deliberately transfer it to
-another human, allowing that person to assume the same existing principal.
-The system therefore does not claim that the same physical human returned.
-Deliberate transfer neither rebinds the canonical gameplay-player-to-principal
-mapping nor gives the host a power to manufacture or award entitlement.
-
-Requiring one entitled claimant for every HUMAN principal before publication
-keeps the MVP fail closed and avoids introducing an absent-player lifecycle.
-Host-mediated takeover, partial resume, absent-player progression, forfeit,
-and bot substitution remain deferred.
-
-**Owner selection:** A+B — Full entitled participation with deliberate
-capability-holder substitution and no host override.
-
-### OD-3 — Exclusive association, competing claims, and continuity semantics
-
-**Owner question**
-
-May more than one live peer be associated with a HUMAN principal, how are
-competing valid-looking claims handled, and should ordinary reconnect and
-fresh-session resume use the same entitlement-to-association rule?
-
-#### Alternatives
-
-| Alternative | Description | Benefits | Costs and risks | Assessment |
-| --- | --- | --- | --- | --- |
-| A. One active association; reject competition | At most one current peer is associated with each HUMAN principal. A competing claim fails closed while that association is active. After confirmed disconnect/session loss, the same proof may establish a new association. | Preserves clear command provenance; no silent eviction or takeover; same rule works for reconnect and resume | Needs precise active/stale session boundaries and retry UX | **Selected by Owner** |
-| B. Proof-based incumbent eviction | A new valid claim automatically replaces the current association | Helps a genuine player recover from a stale connection | A copied/stolen proof can evict the incumbent; ordering and race semantics become security policy | Defer |
-| C. Host arbitrates competing claimants | Host selects which claimant controls the principal | Simple operational fallback | Makes host discretion a second authority and enables takeover without stronger evidence | Not selected |
-| D. Multiple peers share one principal | Multiple current peers may submit for the same HUMAN principal | Cooperative control | Changes command provenance, acknowledgement cardinality assumptions, UX, and abuse surface; not required for resume | Out of scope |
-
-#### Resolved Owner decision and rationale
-
-The Project Owner selects **A**. Each HUMAN principal may have at most one
-active peer association. Use one entitlement-validation and association
-standard for:
-
-- a peer reconnecting to a still-running authoritative host;
-- peers joining a newly created session that is staging a saved match; and
-- a replacement endpoint presenting already-accepted entitlement for the same
-  existing principal.
-
-The flows may differ in bootstrap ordering, but they use the same proof
-standard. A session identifier or old peer ID may correlate a retry; it never
-becomes durable gameplay identity or replaces the accepted proof.
-
-While an association is active, a competing claim fails closed even if it
-presents a valid copy of the capability. The host does not arbitrate between
-claimants, and the new claimant does not evict the incumbent. After confirmed
-disconnect or session loss, accepted entitlement may establish a new transient
-association to the same principal. This preserves command provenance and
-prevents copied proof from becoming an automatic takeover mechanism.
-
-Exact stale-connection detection, retry timing, credential rotation, and proof-
-loss recovery remain deferred implementation or later-policy questions.
-
-**Owner selection:** A — One active association; competing claims fail closed;
-reconnect and fresh-session resume share one entitlement standard.
-
-## 7. Decision dependency and next workflow sequence
-
-The Project Owner resolved the decisions in this dependency order:
-
-1. **OD-1 — proof, trust, scope, and portability.** This determines what
-   evidence persists across session loss and what the resume host validates.
-2. **OD-2 — participation and substitution.** Given capability possession as
-   proof, this decides who must present it and permits deliberate transfer
-   without host-granted takeover.
-3. **OD-3 — exclusivity and arbitration.** Given eligible claimants, this
-   decides how current associations and competing claims behave.
-4. Next, draft the normative ADR or other accepted normative artifact required
-   by the repository authority model from these Owner decisions.
-5. Only after that normative architecture is accepted may an implementation
-   workbook specify storage, protocol, UI, migration, tests, and rollout.
-
-The resulting language intentionally refers to an entitled capability holder,
-not “the original physical player,” because OD-1 proves capability possession
-rather than physical-person identity.
-
-## 8. Cross-capability dependencies and consequences
-
-| Concern | Consequence of the resolved decisions |
+**Primary accepted authority:** ADR-008, ADR-010, accepted MATCH-001, and
+ADR-011 as amended from this record
+
+## 1. Amendment purpose and decision boundary
+
+The Project Owner has replaced the persistent-human-entitlement requirement
+recorded in the original ODR-003 decision with explicit session-local
+controller assignment for fresh-session Network resume.
+
+The credential workflow proved disproportionately complex from the user's
+perspective. Persistent proof that a resumed human is the original human is not
+a current product requirement. A different human may control a saved canonical
+player side. The canonical side identity and its saved match-principal binding
+still matter and SHALL NOT be rewritten merely to describe that different
+human.
+
+This amendment decides the smallest policy change required for fresh-session
+Network resume and same-live-session reconnect. It does not create a generic
+controller, participant, bot, account, identity, or session framework. It does
+not authorize implementation.
+
+The original RSA capability/verifier/credential direction, later elaborated in
+MATCH-002, is superseded as a product requirement. MATCH-002 is superseded as
+an executable implementation workbook and remains useful only as historical
+implementation and seam evidence. A separately accepted replacement workbook
+must define any future implementation; MATCH-002 SHALL NOT be amended or
+re-refined into that replacement. Its implemented mechanism does not preserve
+a requirement that the Owner has removed.
+
+## 2. Authority retained from ADR-008 and MATCH-001
+
+This refinement retains the following accepted architecture:
+
+1. `GameState` owns one complete, immutable, match-lifetime
+   player-to-principal binding.
+2. Gameplay player identity, match-principal identity, current human
+   controller, and transport endpoint are distinct concepts.
+3. Loading restores the saved principal records and gameplay-player mapping
+   exactly. Fresh resume does not create, delete, replace, reclassify, or rebind
+   a canonical principal.
+4. A Network peer, lobby slot, host/client role, display name, profile ID,
+   readiness flag, or UI state is not durable canonical gameplay identity.
+5. Transient Network association and command admission remain host-authoritative
+   session concerns. Gameplay legality remains with existing canonical
+   validators.
+6. Invalid or incomplete canonical state and incomplete or conflicting live
+   associations fail closed before publication or principal-dependent input.
+7. Hot-Seat keeps one HUMAN principal controlling both gameplay players;
+   two-human Network keeps two distinct saved HUMAN principals. Structural
+   AUTOMATED support remains unchanged and does not authorize bot behavior.
+8. Replay reconstructs historical canonical identity without fabricating live
+   peers or live controller assignments.
+
+For fresh-session resume, a saved HUMAN principal is a durable, match-scoped
+canonical control identity. Its `HUMAN` classification does not assert that the
+same physical person must control it in every later session. The session-local
+assignment says which connected human currently exercises that unchanged
+canonical authority.
+
+## 3. Supersession of the original ODR-003 decisions
+
+### OD-1 — Persistent entitlement proof, trust, scope, and portability
+
+**Superseded:**
+
+- one match-scoped capability per HUMAN principal;
+- claimant proof of capability possession;
+- host validation of a credential, verifier, or equivalent persistent-human
+  entitlement before assignment;
+- credential secrecy, issuance, transfer, storage, recovery, or cryptographic
+  mechanism as a fresh-resume product requirement; and
+- using the same persistent proof standard for fresh resume and reconnect.
+
+**Retained:**
+
+- canonical principal identity is not inferred from current peer or UI facts;
+- the authoritative host owns current-session associations and command
+  admission;
+- transient associations and any session bootstrap metadata remain outside
+  canonical gameplay state; and
+- save integrity remains distinct from controller assignment.
+
+**Portability disposition:** the original-host-installation restriction is no
+longer required to validate human continuity or controller entitlement.
+However, this refinement does not make save artifacts portable. Current
+installation-local save-integrity and file-access constraints remain the
+supported boundary until a separate Owner decision authorizes and defines
+cross-installation or new-host save portability.
+
+### OD-2 — Participation, absence, substitution, and host authority
+
+**Superseded:**
+
+- requiring an entitled capability holder for every saved HUMAN principal;
+- capability transfer as the means by which a different human may control a
+  saved side; and
+- the prohibition on host assignment of another saved HUMAN principal.
+
+**Retained and refined:**
+
+- every saved human-controlled Network side must have exactly one connected
+  human controller before live publication;
+- partial fresh resume and absent-human progression remain outside this narrow
+  decision;
+- a different human may be assigned without canonical rebinding; and
+- the authoritative session host is the sole authority that establishes the
+  complete current-session assignment. The host must explicitly assign its own
+  endpoint too; hosting does not automatically select a gameplay side.
+
+### OD-3 — Exclusivity, competing assignment, and reconnect
+
+**Retained:**
+
+- at most one active session association per saved HUMAN principal/player side;
+- competing or duplicate assignment fails closed;
+- an active controller is not silently evicted by another endpoint; and
+- disconnect changes transient association only, never canonical identity.
+
+**Superseded and refined:**
+
+- reconnect no longer requires the fresh-resume credential standard;
+- after confirmed loss of an association, the authoritative host may
+  explicitly assign the now-unoccupied saved side to a connected endpoint;
+- the returning human may be the prior human or a different human; and
+- host/client role, the freed lobby slot, or a reused peer/profile/name value
+  never performs that assignment automatically.
+
+## 4. Fresh-session authority model
+
+### 4.1 Canonical saved authority
+
+The validated save supplies the exact canonical gameplay state, including the
+saved gameplay players, match principals, principal kinds, and immutable
+player-to-principal mapping. Those facts remain authoritative for gameplay,
+save/load, replay, filtering, acknowledgement cardinality, and command
+authorization.
+
+Resume SHALL NOT rewrite a saved principal ID or mapping because the human
+assigned to a side differs from the human who controlled it when the save was
+created.
+
+### 4.2 Session-local controller assignment
+
+A session-local controller assignment represents only this proposition:
+
+> For this authoritative Network session, this connected human endpoint may
+> submit player-originated input for this saved canonical player side, through
+> the unchanged saved principal bound to that side.
+
+It does not represent durable human identity, return of the original person,
+ownership of the save, a global account, a principal replacement, a principal
+kind change, or gameplay legality.
+
+The association is transient host-held Network state. It may be staged during
+resume, becomes authoritative for the resumed session only at the successful
+pre-publication assignment commit, and ends when the session or applicable
+endpoint association ends.
+
+### 4.3 Assignment authority and ordering
+
+The authoritative session host SHALL:
+
+1. validate the save and reconstruct the complete canonical candidate without
+   publishing it;
+2. identify the saved human-controlled canonical player sides from that
+   candidate;
+3. explicitly assign each participating connected human endpoint to one saved
+   side, including an explicit assignment for the host endpoint;
+4. validate the complete assignment set for completeness and exclusivity;
+5. establish the corresponding transient endpoint-to-existing-principal
+   associations as one pre-publication commit;
+6. distribute only the filtered state authorized by those assignments and
+   complete the required installation/readiness handshake; and
+7. publish the restored match and enable player-originated command admission
+   only after every publication gate succeeds.
+
+The host may choose either saved side for itself. Client arrival order, lobby
+slot, readiness order, player index, display name, profile identity, and
+host/client role SHALL NOT select a side automatically. UI selection and
+confirmation mechanics remain implementation design.
+
+### 4.4 Completeness, exclusivity, and failure
+
+For the current two-human Network shape, the pre-publication assignment is a
+one-to-one mapping between the two participating connected human endpoints and
+the two saved human-controlled canonical player sides:
+
+- every saved human-controlled side has exactly one assigned endpoint;
+- every participating endpoint is assigned to exactly one saved side;
+- no endpoint or side appears twice; and
+- no unassigned, ambiguous, duplicated, or competing assignment is published.
+
+Any failure discards or keeps the candidate staged without changing the live
+canonical state. No partial board, player-originated input, or side-specific
+hidden information may be published through an incomplete or conflicting
+assignment.
+
+This is deliberately not generalized to other participant cardinalities,
+shared Network control, spectators, absent players, or bots.
+
+## 5. Reconnect after publication
+
+When an endpoint disconnects from the live resumed session:
+
+1. the host removes or invalidates only its transient association;
+2. canonical gameplay state, saved principal records, and player mapping remain
+   unchanged;
+3. command input for the unoccupied side remains closed;
+4. while an incumbent association is still active or disconnect is not
+   confirmed, a competing assignment fails without eviction; and
+5. after confirmed association loss, the host may explicitly assign that
+   unoccupied side to a connected endpoint and restore its correctly filtered
+   current state before reopening command admission for the side.
+
+Reconnect is therefore continuity of a session-local side association, not
+proof of continuity of a person. It does not reload or republish the host's
+canonical match.
+
+## 6. Cross-capability consequences
+
+| Concern | Decision consequence |
 | --- | --- |
-| Deliberate save/resume | The save restores the exact canonical binding and gameplay state; a new session establishes fresh associations only after validating the match-scoped proof. Saving must not silently rotate or invalidate match-scoped entitlement. |
-| Ordinary reconnect | Uses the same proof-to-existing-principal rule as fresh-session resume. The live host may already hold canonical state, but prior peer ID or freed slot remains insufficient. |
-| Replacement peers | A new endpoint may replace a disconnected endpoint only by proving entitlement to the same saved principal. Endpoint replacement never means principal replacement. |
-| Replacement humans | Deliberate transfer of the accepted capability lets another human assume the same existing principal. Capability possession, not physical-person identity, establishes entitlement; canonical binding does not change. |
-| Competing claims/takeover | Must fail closed without rebinding or eviction. One active association remains authoritative; a second claimant cannot evict it and the host cannot choose between claimants. |
-| Absent players | Any saved HUMAN principal without one entitled claimant blocks live publication. Partial resume and absent-player progression are deferred. |
-| Host authority | The host validates proof and owns transient associations and authoritative command admission. Hosting does not entitle the host to the remote principal, alter canonical binding, or bypass gameplay legality. |
-| Save portability | The MVP supports only the original host installation. Cross-install or new-host resume remains deferred and would require explicit trust transfer or independently verifiable resume material; it cannot be inferred from copying the save file. |
-| Decision-equivalent recovery | Restore the command cursor and canonical lifecycle facts, then derive the same next legal gameplay decision or stable state. Presentation is rebuilt; gameplay is not advanced merely to make reconstruction easier. |
-| Automated principals | No human peer entitlement proof is required merely because an AUTOMATED principal exists. Bot execution and substitution remain separate architecture/product decisions. |
-| Save/replay separation | Entitlement is a live admission concern. Replays may preserve principal labels for historical semantics but must not carry reusable live resume secrets or fabricate live human associations. |
+| Hot-Seat | Unchanged. Hot-Seat has one canonical HUMAN principal controlling both sides and needs no Network fresh-resume assignment protocol. |
+| Same-live-match Network load | Unchanged. An earlier save may load only under the accepted exact-binding/current-association gate. It is not fresh-session assignment and does not reshuffle controllers. |
+| Replay | Unchanged. Replay restores the saved binding as historical authority and uses replay submission provenance; it creates no live human assignment or credential. |
+| Hidden information | The complete staged assignment determines which filtered view each endpoint may receive. No endpoint receives another side's hidden information because of host/client role, lobby order, or an incomplete assignment. |
+| Command authorization | The host resolves the submitting endpoint through the committed session association, then uses the unchanged canonical binding to verify control of `command.player_index`, then applies existing gameplay legality. |
+| Decision-equivalent recovery | Canonical cursor and gameplay facts restore the same next decision or accepted stable state. Assignment and presentation do not synthesize gameplay progression. |
+| Automated principals | No change. This decision neither assigns humans to AUTOMATED principals nor defines bot execution, substitution, kind mutation, or a generic controller framework. |
+| Eventual controller independence | Preserving canonical player/principal identity separately from a transient human association remains compatible with later bot/controller decisions, but creates none. |
+| Original host installation | Not required by human-controller policy. It remains the current supported save trust/file boundary only; portability is a separate decision. |
 
-## 9. MVP boundary and safe deferrals
+## 7. Explicit non-goals
 
-### 9.1 Accepted MVP requirements
+This decision does not define or authorize:
 
-The resolved decisions require the smallest coherent MVP to preserve all of
-the following:
-
-1. Resume only current-format Network saves that already contain the valid
-   canonical principal binding and whatever separately accepted entitlement
-   metadata the future mechanism requires.
-2. Support the original save-owning host installation only.
-3. Use one match-scoped proof per saved HUMAN principal.
-4. Require every saved HUMAN principal to have exactly one entitled claimant
-   before live publication.
-5. Require the host to prove its local principal entitlement as well as
-   validating remote claimants.
-6. Permit at most one active peer association per HUMAN principal.
-7. Reject missing, invalid, ambiguous, duplicate, and competing claims without
-   state mutation or partial live installation.
-8. Apply the same proof standard to fresh-session resume and ordinary reconnect.
-9. Preserve the saved canonical binding exactly and reconstruct session state
-   around it.
-10. Recover the next legal gameplay decision or stable state without synthetic
-    progression and re-derive presentation from authoritative state.
-11. Permit deliberate transfer of a principal capability to another human
-    without treating that transfer as principal rebinding or host-granted
-    takeover.
-
-### 9.2 Capabilities safe to defer
-
-- loading saves created before entitlement material exists;
-- cross-install, cross-device, cloud, or new-host save portability;
-- global accounts, federated identity, passwords, email, or account recovery;
-- host-mediated entitlement grant, unilateral takeover, or entitlement
-  revocation;
-- partial resume with absent HUMAN principals;
-- multiple peers sharing one principal;
-- spectators and late join unrelated to taking a saved principal;
-- credential rotation, expiry, recovery after loss, and administrative audit;
-- bot substitution, automated decision execution, or human/automated kind
-  changes;
-- seamless UX, invite systems, matchmaking, and general session management;
-- legacy save migration when no equivalent entitlement evidence exists.
-
-Deferral means fail closed or remain unsupported. It must not produce a weaker
-fallback such as assigning by lobby slot, name, profile, or host choice.
-
-## 10. Non-goals
-
-This workbook does not design or authorize:
-
-- a general account, authentication, identity-provider, or matchmaking system;
-- a general participant, multiplayer-session, lobby, invite, or social graph
+- a generic controller, participant, account, identity, lobby, or session
   framework;
-- a replacement or rebinding API for the canonical player-principal mapping;
-- changes to gameplay legality, turns, initiative, activation, timing windows,
-  attack ownership, acknowledgement, or continuation rules;
-- a credential format, cryptographic algorithm, key-management system, RPC,
-  protocol version, command payload, database, sidecar file, or class layout;
-- save-format allocation, compatibility migration, rollout sequencing, or
-  implementation tests;
-- replay authentication or treating replay execution as live principal control;
-- production reconnect transport, spectators, late join, disconnect timers,
-  forfeit, or bot takeover; or
-- production code, test changes, or an implementation workbook.
+- bot behavior, bot substitution, human/automated kind changes, or AI-vs-AI
+  product support;
+- spectators, late join unrelated to replacing a disconnected controller,
+  shared control, absent-player progression, forfeit, or takeover;
+- host eviction of an actively associated controller;
+- cross-host, cross-installation, cross-device, cloud, or copied-save
+  portability;
+- save-format migration, save-integrity redesign, RPC/API shape, protocol
+  version, UI layout, class/file ownership, or test design; or
+- production code, tests, or repair of MATCH-002.
 
-## 11. Stop conditions for later architecture and implementation work
+## 8. Implementation evidence disposition
 
-Stop and return to the Project Owner if a proposed direction would require any
-of the following without an explicit accepted decision:
+MATCH-002 may be mined for evidence about:
 
-1. deriving entitlement from principal ID, player index, peer ID, session ID,
-   lobby slot, readiness, display name, profile/client ID, lobby password,
-   connected membership, UI state, save possession, or save signature alone;
-2. storing reusable proof secrets in canonical `GameState`, shared snapshots,
-   replay artifacts, logs, or presentation payloads;
-3. changing the saved principal records or gameplay-player mapping;
-4. allowing the host to grant, manufacture, bypass, replace, or revoke
-   entitlement for another HUMAN principal by discretion;
-5. permitting a competing claimant to evict an active association;
-6. publishing a partially validated restored state as live;
-7. advancing canonical gameplay synthetically to reach an easier resume point;
-8. introducing a global account or general session framework;
-9. expanding `GameManager` with a new responsibility category before BC-006 /
-   RG-007 authority is resolved or an accepted narrow architecture assigns the
-   work elsewhere;
-10. treating historical J7 or G4 plans as current authority; or
-11. claiming implementation readiness without explicit entitlement,
-    network-load, save/load, reconnect, competing-claim, and
-    decision-equivalent recovery verification obligations.
+- staged candidate reconstruction and atomic publication seams;
+- host-held transient associations and command-admission closure;
+- filtered client installation and acknowledgement;
+- same-live-match load separation;
+- reconnect snapshot delivery;
+- decision-equivalent recovery; and
+- verification scenarios for completeness, competition, hidden information,
+  exact-once publication, replay, and Hot-Seat regression.
 
-## 12. Evidence gaps that remain after this workbook
+Its RSA keys, capability vault, verifier registry, challenge-response protocol,
+credential import/export UX, proof-loss behavior, and credential-driven
+compatibility requirements are superseded implementation choices and SHALL NOT
+be carried forward merely because they exist in the working tree.
 
-These implementation-evidence and downstream-design gaps do not reopen the
-three resolved Owner decisions, but they must be closed before implementation
-architecture or acceptance gates are finalized:
+## 9. Resolved Owner decision record
 
-1. No production reconnect/snapshot flow currently proves end-to-end session
-   reconstruction. Existing tests prove filtered state reconstruction and
-   projection, not transport reauthentication or principal reassociation.
-2. The repository has no implementation design for secure credential issuance,
-   storage, validation, or redaction within the selected match-scoped model.
-3. Cross-host and cross-install trust transfer remains deliberately deferred.
-   Current save verification is installation-local, consistent with the MVP.
-4. Stale-connection detection, retry timing, credential rotation, proof-loss
-   recovery, and any future revocation mechanism remain unspecified. Their
-   implementation must preserve fail-closed claims and exclusive association.
-5. Current user-facing Network setup documentation still describes lobby load
-   of a previous Network save, while accepted MATCH-001 and current load gates
-   intentionally reject a fresh-session load. This is a documentation drift
-   item under RG-016, not evidence that the restriction should be relaxed.
-6. Test coverage exists for the fail-closed restriction and reconstruction
-   components, but RG-013 remains applicable until a later test strategy maps
-   the accepted entitlement and resume invariants end to end.
-
-## 13. Resolved Owner decision record
-
-The Project Owner records these selections:
-
-| Decision | Owner selection | Resulting architecture policy |
+| Decision | Amended Owner selection | Resulting policy |
 | --- | --- | --- |
-| OD-1 — proof/trust/scope/portability | **A** | One match-scoped capability per HUMAN principal; authoritative resume-host validation; original-host-installation MVP; cross-host/cross-install portability deferred |
-| OD-2 — participation/substitution | **A+B** | Exactly one entitled claimant per saved HUMAN principal before live publication; deliberate capability transfer may authorize a replacement human; no host-granted entitlement, rebinding, partial resume, absent-player progression, forfeit, or bot substitution |
-| OD-3 — exclusivity/arbitration/continuity | **A** | At most one active peer association per HUMAN principal; competing claims fail closed without eviction or host arbitration; reconnect and fresh-session resume share the same entitlement standard |
+| OD-1 — human continuity and proof | **Persistent human continuity not required** | No credential/capability proof requirement for fresh resume or reconnect; canonical saved identity remains exact. |
+| OD-2 — assignment and participation | **Explicit host-authoritative pre-publication assignment** | Every connected participant is explicitly assigned to exactly one saved human-controlled side; every such side is assigned before publication; host/client role does not choose. |
+| OD-3 — exclusivity and reconnect | **One active session association per side** | Duplicate/competing assignment fails closed; after confirmed loss, the host may explicitly assign the unoccupied side without canonical rebinding. |
+| OD-4 — original installation and portability | **Separate from controller policy** | The controller policy does not require the original installation, but this amendment does not authorize portable saves; the current supported save-trust boundary remains until separately decided. |
 
-All architecture-level Owner decisions in this workbook are resolved.
-Credential format, cryptographic mechanism, storage implementation, RPC design,
-stale-connection detection, retry timing, credential rotation, proof-loss
-recovery, and cross-host portability remain downstream implementation or
-explicitly deferred capability questions; they must not be treated as license
-to redesign OD-1, OD-2, or OD-3.
+No additional Owner decision is required for this narrow decision-layer
+refinement. A separate Owner decision is required only if a later step intends
+to add cross-installation/new-host save portability, active-controller
+eviction, absent-player progression, shared control, or bot substitution.
 
-## 14. Authority and evidence consulted
+## 10. Rationale preserved
 
-### Governance
+- The credential workflow proved disproportionately complex for users and for
+  implementation.
+- Persistent proof that the resumed human is the original human is not a
+  current product requirement.
+- Canonical game-side and match-principal identity remain necessary for
+  gameplay authority, durability, replay, filtering, and command provenance.
+- Explicit assignment is preferred over host-to-Player-0/client-to-Player-1
+  coupling.
+- The selected model simplifies UX and implementation without moving canonical
+  gameplay authority into the lobby, peer, or presentation layer.
+
+## 11. Authority and evidence consulted
 
 - `AGENTS.md`
 - `docs/architecture/CODEX_WORKFLOW.md`
 - `docs/architecture/DOCUMENT_AUTHORITY.md`
-- `docs/architecture/ARCHITECTURE_ROADMAP.md`
-- `docs/ARCHITECTURE_BOUNDARY_CANDIDATES.md`
-- `docs/ARCHITECTURE_DECISION_TRIAGE.md`
-- `docs/REALITY_GAP_REGISTER.md`
-- `docs/development/decisions/DA-002-development-documents-in-agent-startup-reading.md`
-
-### Accepted architecture and decision input
-
 - `docs/architecture/adr/ADR-008-durable-match-lifetime-player-principal-binding.md`
 - `docs/architecture/adr/ADR-010-gameplay-interaction-decision-equivalent-recovery.md`
+- `docs/architecture/adr/ADR-011-network-match-resume-and-principal-entitlement.md`
 - `docs/architecture/implementation_workbooks/MATCH-001-player-principal-binding-owner-decisions.md`
 - `docs/architecture/implementation_workbooks/MATCH-001-player-principal-binding-implementation-workbook.md`
-
-### Current implementation and focused tests
-
-- `src/core/state/game_state.gd`
-- `src/autoload/network_manager.gd`
-- `src/autoload/lobby_manager.gd`
-- `src/autoload/save_game_manager.gd`
-- `src/core/state/save_game_metadata.gd`
-- `src/autoload/game_manager.gd`
-- `src/core/network/state_filter.gd`
-- `src/core/network/ui_projector.gd`
-- `src/autoload/player_profile.gd`
-- `tests/unit/test_lobby_manager_load.gd`
-- `tests/unit/test_save_game_manager.gd`
-- `tests/integration/test_reconnection_mid_attack.gd`
-
-### Historical/non-normative evidence
-
-- `docs/implementation_plan.md`, especially Phase J7
-- `docs/old/g4_network_plan.md`
-- `docs/qa/bugs/closed/BUG-001/issue_network-save-load-session-bootstrap.md`
-- `docs/setup_network_game.md` as current user-facing evidence, not entitlement
-  authority
+- `docs/architecture/implementation_workbooks/MATCH-002-network-match-resume-and-principal-reassociation-implementation-workbook.md`
+- `docs/setup_network_game.md`

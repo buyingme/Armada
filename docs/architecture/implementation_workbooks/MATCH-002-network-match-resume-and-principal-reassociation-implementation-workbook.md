@@ -1,31 +1,47 @@
 # MATCH-002: Network Match Resume and Principal Reassociation Implementation Workbook
 
-Status: Accepted; implementation-ready
+Status: Superseded; historical implementation/design evidence only; not
+executable and not implementation-ready
 Accepted by: Project Owner
 Accepted date: 2026-07-26
-
-before implementation
+Superseded by Owner direction: 2026-08-27
+Superseding authority:
+[ADR-011](../adr/ADR-011-network-match-resume-and-principal-entitlement.md), as
+amended 2026-08-27
 
 Date: 2026-08-26
 
-Purpose: define the smallest coherent implementation cutover that restores a
-current-format Network save in a fresh Network session on the original
-save-owning host installation and reassociates entitled endpoints with the
-unchanged saved HUMAN principals.
+Historical purpose: define the smallest coherent implementation cutover that
+restores a current-format Network save in a fresh Network session on the
+original save-owning host installation and reassociates entitled endpoints
+with the unchanged saved HUMAN principals.
 
-This workbook changes no production code, tests, accepted architecture, or
-requirements. It authorizes no implementation until accepted.
+This workbook is preserved only as historical implementation/design and seam
+evidence. Its credential, RSA capability, verifier-registry, challenge-proof,
+credential UX, and credential-driven compatibility strategy conflicts with
+amended ADR-011 and SHALL NOT be used for further implementation, repair, or
+acceptance. It authorizes no implementation. A separately accepted replacement
+implementation workbook is required before implementing the explicit
+session-local assignment architecture.
+
+> **Historical-reading rule:** All following sections are retained only as a
+> historical snapshot. Any imperative, authorization, PASS, strategy, gate,
+> acceptance, implementation, or execution wording below is void for current
+> work. No current or future implementation task may use this workbook as an
+> execution specification. Current implementation authority must come from a
+> separately accepted replacement workbook under amended ADR-011.
 
 ## 1. Classification, Authority, And Entry Result
 
-Classification: **Bounded Architecture**. Accepted ADR-011 fixes entitlement,
+Historical classification: **Bounded Architecture**. The 2026-08-26 version of
+ADR-011 fixed entitlement,
 participation, exclusivity, portability, and publication behavior. The current
 repository contains the canonical binding, save/load, Network admission,
 association, state-filtering, installation, and decision-recovery seams needed
 for the bounded MVP. No new Owner decision or general session/identity owner is
 required.
 
-Normative authority, in precedence order:
+Historical normative authority, in precedence order:
 
 - accepted [ADR-011](../adr/ADR-011-network-match-resume-and-principal-entitlement.md);
 - accepted [ADR-008](../adr/ADR-008-durable-match-lifetime-player-principal-binding.md)
@@ -40,14 +56,14 @@ Normative authority, in precedence order:
 
 [ODR-003](../decision_workbooks/ODR-003-network-match-resume-and-replacement-principal-entitlement.md)
 was consulted only for historical Owner rationale and its implementation-evidence
-inventory. All downstream requirements in this workbook derive from ADR-011
-and the other accepted authority above.
+inventory. At original acceptance, all downstream requirements in this workbook
+derived from ADR-011 and the other accepted authority above.
 
-ADR-011 records Accepted status, Project Owner acceptance, and an acceptance
-date of 2026-08-26. Its stale Draft Note was corrected as a separate governance
-metadata change before this workbook refinement. This workbook treats ADR-011's
-settled decision text as governing and does not reopen, reinterpret, or redesign
-it. MATCH-002 remains Draft and requires separate Project Owner acceptance.
+The 2026-08-26 version of ADR-011 recorded the credential-entitlement direction
+from which this workbook was derived. The Project Owner amended ADR-011 on
+2026-08-27, superseding that direction and this workbook's executable status.
+The amended ADR-011 governs. MATCH-002 must remain historical and must not be
+used as the implementation specification for the replacement architecture.
 
 Applicable roadmap traceability:
 
@@ -70,14 +86,15 @@ Applicable roadmap traceability:
 | A secure-enough bounded capability mechanism is selectable downstream | **PASS** | Godot supplies local key generation, public-key signing/verification, secure random bytes, and the repository already supplies HMAC integrity helpers and local per-install storage patterns. A match-scoped key capability avoids transmitting a reusable bearer secret and does not require accounts, identity providers, or cross-host trust. |
 | Ordinary reconnect has a production snapshot transport | **GAP CLOSED BY MATCH-002 SCOPE** | The current transport accepts handshakes and drops associations on disconnect, but has no production reassociation/snapshot RPC. Adding one entitlement-gated, filtered snapshot path to `NetworkManager` is necessary and bounded. |
 
-**Overall entry result: PASS.** The missing behavior is authorized
-implementation work, not an unresolved architecture decision. Section 14
-remains a mandatory stop gate during implementation.
+**Historical overall entry result: PASS.** At original acceptance, the missing
+behavior was considered authorized implementation work rather than an
+unresolved architecture decision. Section 14 was a mandatory stop gate during
+that historical implementation planning.
 
 ## 2. Selected MVP Strategy
 
-Implement MATCH-002 as a narrow extension of the current Network load and
-command-admission boundaries:
+At original acceptance, MATCH-002 proposed a narrow extension of the then
+current Network load and command-admission boundaries:
 
 1. Give each newly created Network HUMAN principal one independently generated,
    match-scoped asymmetric key capability.
@@ -999,8 +1016,9 @@ requires any of the following:
 - a materially new architectural owner, autoload service, general participant/
   identity/session framework, or new `GameManager` responsibility category;
 - a production change to `GameManager` or `StateFilter` despite the existing
-  installation/filtering seams, unless the workbook is first re-refined with
-  concrete evidence, authorized scope, and corresponding regression coverage;
+  installation/filtering seams, which under the superseded direction would
+  have required workbook refinement with concrete evidence, authorized scope,
+  and corresponding regression coverage;
 - same-OS-user extraction resistance, hardware-backed or OS-keychain custody,
   or clone-resistant installation identity beyond the explicitly bounded HMAC
   integrity and application-data storage model;
@@ -1015,8 +1033,9 @@ transport.
 
 ## 15. Exit Gate
 
-MATCH-002 is implementation-ready only while all of these statements remain
-true:
+At its original acceptance, MATCH-002 was considered implementation-ready only
+while all of these historical statements remained true. They no longer define
+an executable exit gate after the 2026-08-27 supersession:
 
 1. The original host installation can validate the current save and exact
    integrity-protected verifier registry under the explicit Section 4.2 threat
@@ -1044,7 +1063,9 @@ true:
    in Section 12 pass.
 10. No Section 14 stop gate is triggered.
 
-No additional Owner decision is required for the selected match fingerprint,
-asymmetric capability, protected original-install registry, two-phase staging,
-protocol allocation, or no-save-format-bump choices. Acceptance of this
-workbook is still required before implementation begins.
+Under the superseded direction, no additional Owner decision was considered
+necessary for the selected match fingerprint, asymmetric capability, protected
+original-install registry, two-phase staging, protocol allocation, or
+no-save-format-bump choices. Those choices are now historical only and SHALL
+NOT be implemented or repaired. A separately accepted replacement workbook is
+required before implementation of amended ADR-011 begins.
